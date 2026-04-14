@@ -22,3 +22,11 @@ Note: these fixtures are confined to the test target of this Swift
 package. They are not part of any of the published library products
 (`SheetMusic`, `SheetMusicCore`, `SheetMusicMSCX`, `SheetMusicMIDI`) and
 are not redistributed when the package is consumed via SwiftPM.
+
+The midi01.mscz fixture is simply a ZIP-archived copy of midi01.mscx —
+same GPL-3.0 provenance, no additional content. Produced with:
+
+    zip -qX9 midi01.mscz score.mscx
+
+where score.mscx is a byte-identical copy of midi01.mscx renamed to
+the default MuseScore main-file name.
