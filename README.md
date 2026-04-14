@@ -16,7 +16,7 @@ The package is split into focused libraries; pick what you need.
 |---|---|
 | `SheetMusic` | **Umbrella.** Re-exports the libraries below + a small convenience façade. Most consumers want this. |
 | `SheetMusicCore` | Score data model (Score, Part, Measure, Voice, Note, Chord, …) and the shared error type. No format I/O. |
-| `SheetMusicMSCX` | mscx file format parsing (and, in future, writing). |
+| `SheetMusicMSCX` | MuseScore file I/O: `.mscx` parsing and `.mscz` read/write (main score only). |
 | `SheetMusicMIDI` | In-memory MIDI model, score → MIDI rendering, SMF read/write. |
 
 Future libraries on the roadmap: `SheetMusicUI` (SwiftUI score views),
