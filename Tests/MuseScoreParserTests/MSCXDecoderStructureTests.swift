@@ -26,11 +26,16 @@ import Testing
         }
     }
 
-    @Test func decodeVoiceRejectsUnknownChild() {
-        let xml = "<voice><Tuplet/></voice>"
-        #expect(throws: MuseScoreParserError.self) {
-            let node = try XMLTreeParser.parse(Data(xml.utf8))
-            _ = try Voice.decode(node)
+    @Test func decodeVoiceSkipsUnknownChild() throws {
+        // The decoder is permissive: unknown elements are silently ignored so that
+        // mscx files using features we haven't promoted to first-class still parse.
+        let xml = "<voice><Tuplet/><Rest><durationType>quarter</durationType></Rest></voice>"
+        let node = try XMLTreeParser.parse(Data(xml.utf8))
+        let voice = try Voice.decode(node)
+        #expect(voice.elements.count == 1)
+        guard case .rest = voice.elements[0] else {
+            Issue.record("expected the rest to survive, got \(voice.elements)")
+            return
         }
     }
 
