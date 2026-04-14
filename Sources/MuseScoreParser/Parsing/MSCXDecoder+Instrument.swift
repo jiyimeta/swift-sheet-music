@@ -6,10 +6,13 @@ extension Instrument {
         // some scores omit both — fall back to "" rather than failing.
         let id = node.attributes["id"] ?? node.first("instrumentId")?.text ?? ""
         let articulations = try node.all("Articulation").map { try InstrumentArticulation.decode($0) }
-        guard let channelNode = node.first("Channel") else {
-            throw MuseScoreParserError.malformedScore(reason: "Instrument missing <Channel>")
+        let channelNodes = node.all("Channel")
+        let channels: [InstrumentChannel]
+        if channelNodes.isEmpty {
+            channels = [InstrumentChannel()]
+        } else {
+            channels = try channelNodes.map { try InstrumentChannel.decode($0) }
         }
-        let channel = try InstrumentChannel.decode(channelNode)
         return Instrument(
             id: id,
             longName: node.first("longName")?.text,
@@ -20,7 +23,7 @@ extension Instrument {
             minPitchAmateur: node.first("minPitchA").flatMap { Int($0.text) },
             maxPitchAmateur: node.first("maxPitchA").flatMap { Int($0.text) },
             articulations: articulations,
-            channel: channel
+            channels: channels
         )
     }
 }

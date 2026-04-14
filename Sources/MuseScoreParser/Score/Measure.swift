@@ -8,14 +8,21 @@ public struct Measure: Sendable, Equatable {
     /// Number of plays when this measure ends a repeat (`<endRepeat>N</endRepeat>`).
     /// `nil` means no end-of-repeat marker on this measure.
     public var endRepeatCount: Int?
+    /// `<measureRepeatCount>N</measureRepeatCount>`: this measure is the Nth one of
+    /// a multi-measure-repeat group. N=1 marks the group's first measure (which
+    /// also contains the explicit `<MeasureRepeat>` element); N=2 marks the second
+    /// (continuation) member of a 2-measure repeat group, and so on.
+    public var measureRepeatCount: Int?
 
     public init(
         voices: [Voice],
         startRepeat: Bool = false,
-        endRepeatCount: Int? = nil
+        endRepeatCount: Int? = nil,
+        measureRepeatCount: Int? = nil
     ) {
         self.voices = voices
         self.startRepeat = startRepeat
         self.endRepeatCount = endRepeatCount
+        self.measureRepeatCount = measureRepeatCount
     }
 }
