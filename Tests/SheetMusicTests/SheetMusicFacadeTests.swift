@@ -14,6 +14,16 @@ import Testing
         #expect(score.division == 480)
     }
 
+    @Test func loadScoreMSCXData() throws {
+        let url = try #require(
+            Bundle.module.url(forResource: "midi01", withExtension: "mscx")
+        )
+        let bytes = try Data(contentsOf: url)
+        let score = try SheetMusic.loadScore(mscxData: bytes)
+        #expect(score.parts.count == 1)
+        #expect(score.division == 480)
+    }
+
     @Test func loadScoreMSCXURL() throws {
         let url = try #require(
             Bundle.module.url(forResource: "midi01", withExtension: "mscx")
