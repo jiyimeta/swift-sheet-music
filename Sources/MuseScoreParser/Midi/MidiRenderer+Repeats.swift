@@ -1,10 +1,15 @@
 import Foundation
 
 extension MidiRenderer {
-    /// One measure-play in the unrolled playback order: `(originalMeasureIndex, tickOffsetForThisPlay)`.
+    /// One measure-play in the unrolled playback order.
+    /// `isIterationStart` is true for the first measure of a new repeat iteration
+    /// (i.e., immediately after a loop-back). The renderer uses this to re-emit
+    /// timeSig and reset tempo to default — matching MuseScore's behaviour of
+    /// restarting state at every section boundary.
     struct PlaybackEntry {
         var measureIndex: Int
         var tickOffset: Int
+        var isIterationStart: Bool
     }
 
     /// Build the unrolled playback sequence honouring `<startRepeat>` / `<endRepeat>`
@@ -26,6 +31,9 @@ extension MidiRenderer {
         var endRepeatHits: [Int: Int] = [:]
         var take = 1
         var index = 0
+        // The next measure to be appended marks the start of a new iteration
+        // when this is true (set after a loop-back).
+        var nextIsIterationStart = false
         // Safety belt — pathological scores shouldn't loop forever.
         var iterations = 0
         let maxIterations = (measures.count + 1) * 16
@@ -44,8 +52,13 @@ extension MidiRenderer {
                 inThisTake = true
             }
             if inThisTake {
-                plan.append(PlaybackEntry(measureIndex: index, tickOffset: tick))
+                plan.append(PlaybackEntry(
+                    measureIndex: index,
+                    tickOffset: tick,
+                    isIterationStart: nextIsIterationStart
+                ))
                 tick += measureTicks(measure: measure, division: division)
+                nextIsIterationStart = false
             }
 
             if let count = measure.endRepeatCount, count > 1 {
@@ -54,6 +67,7 @@ extension MidiRenderer {
                 if hits < count {
                     take += 1
                     index = segmentStart
+                    nextIsIterationStart = true
                     continue
                 }
             }
@@ -63,7 +77,10 @@ extension MidiRenderer {
     }
 
     /// Map each measure index to the volta endings (`[Int]`) that apply to it,
-    /// or absent if no volta covers it.
+    /// or absent if no volta covers it. mscx encodes volta extent as
+    /// `<next><location><measures>N</measures>` meaning "ends N measures away";
+    /// the volta covers the current measure plus N − 1 additional measures
+    /// (so N=1 covers just the anchor measure).
     private static func computeMeasureVoltas(_ measures: [Measure]) -> [Int: [Int]] {
         var result: [Int: [Int]] = [:]
         for (i, measure) in measures.enumerated() {
@@ -71,8 +88,8 @@ extension MidiRenderer {
                 for element in voice.elements {
                     guard case let .spanner(spanner) = element else { continue }
                     guard spanner.kind == .volta, !spanner.voltaEndings.isEmpty else { continue }
-                    let span = max(0, spanner.nextMeasuresOffset)
-                    for k in 0...span where i + k < measures.count {
+                    let measuresCovered = max(1, spanner.nextMeasuresOffset)
+                    for k in 0..<measuresCovered where i + k < measures.count {
                         result[i + k] = spanner.voltaEndings
                     }
                 }

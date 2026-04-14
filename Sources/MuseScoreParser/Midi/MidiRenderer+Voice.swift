@@ -31,6 +31,34 @@ extension MidiRenderer {
                 voiceIndex: voiceIndex
             )
 
+            // When a new iteration loops back to original measure 0 (e.g. volta
+            // playback returning to the top of the score), re-emit timeSig + reset
+            // tempo to default — matches MuseScore's exportmidi behaviour where
+            // each RepeatSegment whose first measure starts at tick 0 also emits
+            // those meta events at its utick start. Loops that repeat a measure
+            // mid-score (single-measure repeat) keep their existing state.
+            let isFreshSectionStart =
+                entry.isIterationStart && entry.measureIndex == 0 && entry.tickOffset > 0
+            if isFreshSectionStart {
+                if voiceIndex == 0 {
+                    let timeSig = firstTimeSignature(in: staff) ?? TimeSignature(numerator: 4, denominator: 4)
+                    let timeSigMeta = MetaEvent.timeSignature(
+                        numerator: timeSig.numerator,
+                        denominator: timeSig.denominator,
+                        clocksPerClick: 24,
+                        thirtySecondsPerQuarter: 8
+                    )
+                    events.append(TimedMidiEvent(tick: entry.tickOffset, event: .meta(timeSigMeta)))
+                    events.append(TimedMidiEvent(tick: entry.tickOffset, event: .meta(.tempo(
+                        microsecondsPerQuarter: defaultMicrosPerQuarter
+                    ))))
+                    currentTempoBps = 2.0
+                }
+                // Reset dynamic state too: starting a fresh section means notes
+                // play at the score's default (mf) velocity until a Dynamic re-asserts.
+                velocity = effectiveVelocity(forDynamic: nil, instrument: part.instrument)
+            }
+
             var localTick = entry.tickOffset
             for element in effectiveVoice.elements {
                 renderVoiceElement(
