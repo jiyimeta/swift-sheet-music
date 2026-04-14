@@ -2,13 +2,28 @@ import MuseScoreParser
 import SwiftUI
 
 struct ContentView: View {
-    @State private var statusMessage = "Waiting for .mscx file…"
+    @State private var statusMessage = "Loading bundled test.mscx…"
     @State private var generatedMIDIURL: URL?
+    @State private var scoreSummary: String?
 
     var body: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: 24) {
+            Image(systemName: "music.note")
+                .font(.system(size: 64))
+                .foregroundStyle(.tint)
+
             Text(statusMessage)
-            
+                .multilineTextAlignment(.center)
+                .padding(.horizontal)
+
+            if let summary = scoreSummary {
+                Text(summary)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal)
+            }
+
             if let url = generatedMIDIURL {
                 ShareLink(item: url) {
                     Label("Share MIDI File", systemImage: "square.and.arrow.up")
@@ -16,33 +31,40 @@ struct ContentView: View {
                 .buttonStyle(.borderedProminent)
             }
         }
-        .onOpenURL { url in
-            handleMSCX(url: url)
-        }
+        .padding()
+        .onOpenURL(perform: handleMSCX)
         .onAppear {
-            let url = Bundle.main.url(forResource: "test", withExtension: "mscx")!
-            handleMSCX(url: url)
+            if let bundled = Bundle.main.url(forResource: "test", withExtension: "mscx") {
+                handleMSCX(url: bundled)
+            } else {
+                statusMessage = "No bundled test.mscx found."
+            }
         }
     }
 
     private func handleMSCX(url: URL) {
         do {
-            let museScoreFile = try MuseScoreFile(mscxFileURL: url)
-
-            print("$$$ \(Self.self).\(#function)", museScoreFile.score)
+            let data = try Data(contentsOf: url)
+            let score = try MuseScoreParser.loadScore(mscxData: data)
+            let midiData = try MuseScoreParser.exportMIDI(score: score)
 
             let outputURL = FileManager.default.temporaryDirectory
                 .appendingPathComponent(url.deletingPathExtension().lastPathComponent)
                 .appendingPathExtension("mid")
-
-            try museScoreFile.exportMIDI(to: outputURL)
+            try midiData.write(to: outputURL)
 
             generatedMIDIURL = outputURL
-            statusMessage = "MIDI saved to \(outputURL.lastPathComponent)"
+            scoreSummary = """
+            \(score.parts.count) part\(score.parts.count == 1 ? "" : "s") · \
+            \(score.staves.count) staff/staves · \
+            division \(score.division) PPQ
+            MIDI: \(midiData.count) bytes
+            """
+            statusMessage = "Converted \(url.lastPathComponent)"
         } catch {
-            statusMessage = "MIDI write failed: \(error.localizedDescription)"
-            print("Error:", error)
             generatedMIDIURL = nil
+            scoreSummary = nil
+            statusMessage = "Conversion failed: \(error.localizedDescription)"
         }
     }
 }
