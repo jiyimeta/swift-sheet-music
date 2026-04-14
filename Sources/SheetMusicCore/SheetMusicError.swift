@@ -9,4 +9,11 @@ public enum SheetMusicError: Error, Sendable {
     case malformedScore(reason: String)
     /// A score element exists in the file but is not yet supported by the library.
     case unsupportedFeature(name: String, location: String?)
+    /// An `.mscz` / ZIP container is unreadable: bytes are not a valid ZIP,
+    /// the archive has no main `.mscx` entry, an entry failed to
+    /// decompress, or archive creation failed on the writer side.
+    case corruptedContainer(reason: String)
+    /// Wrapping for `Data(contentsOf:)` / `Data.write(to:)` failures in
+    /// the URL-based API overloads. The original error is preserved.
+    case ioError(url: URL, underlying: Error)
 }

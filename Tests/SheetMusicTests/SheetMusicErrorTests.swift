@@ -1,3 +1,4 @@
+import Foundation
 @testable import SheetMusic
 @testable import SheetMusicCore
 @testable import SheetMusicMIDI
@@ -13,5 +14,26 @@ import Testing
         }
         #expect(name == "Tuplet")
         #expect(location == "Voice")
+    }
+
+    @Test func corruptedContainerCarriesReason() {
+        let error = SheetMusicError.corruptedContainer(reason: "bad zip")
+        guard case .corruptedContainer(let reason) = error else {
+            Issue.record("expected corruptedContainer")
+            return
+        }
+        #expect(reason == "bad zip")
+    }
+
+    @Test func ioErrorPreservesURLAndUnderlying() {
+        let url = URL(fileURLWithPath: "/tmp/missing.mscz")
+        let underlying = NSError(domain: "TestDomain", code: 42)
+        let error = SheetMusicError.ioError(url: url, underlying: underlying)
+        guard case .ioError(let u, let e) = error else {
+            Issue.record("expected ioError")
+            return
+        }
+        #expect(u == url)
+        #expect((e as NSError).code == 42)
     }
 }
