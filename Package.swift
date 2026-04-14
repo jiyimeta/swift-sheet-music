@@ -32,6 +32,8 @@ let package = Package(
             resources: [
                 .copy("Resources/midi01.mscx"),
                 .copy("Resources/midi01-ref.mid"),
+                .copy("Resources/midi02.mscx"),
+                .copy("Resources/midi02-ref.mid"),
             ]
         ),
     ]
