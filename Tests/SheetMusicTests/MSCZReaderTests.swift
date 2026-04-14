@@ -50,6 +50,31 @@ import Testing
         }
     }
 
+    @Test func parseContentsOfURLMatchesDataOverload() throws {
+        let url = try #require(
+            Bundle.module.url(forResource: "midi01", withExtension: "mscz")
+        )
+        let viaData = try MSCZReader.parse(Data(contentsOf: url))
+        let viaURL = try MSCZReader.parse(contentsOf: url)
+        #expect(viaData == viaURL)
+    }
+
+    @Test func parseContentsOfMissingURLThrowsIOError() {
+        let missing = URL(fileURLWithPath: "/tmp/definitely-not-there.mscz")
+        do {
+            _ = try MSCZReader.parse(contentsOf: missing)
+            Issue.record("expected throw")
+        } catch let error as SheetMusicError {
+            guard case .ioError(let u, _) = error else {
+                Issue.record("wrong case: \(error)")
+                return
+            }
+            #expect(u == missing)
+        } catch {
+            Issue.record("unexpected error: \(error)")
+        }
+    }
+
     @Test func fallbackFileNameRenamedMainEntry() throws {
         // Zip only contains "renamed.mscx" at root — the rule-2 fallback
         // in MSCZReader should still locate it.

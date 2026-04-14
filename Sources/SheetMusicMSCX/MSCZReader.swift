@@ -31,8 +31,13 @@ public enum MSCZReader {
     /// Read `.mscz` bytes from a file URL and parse into a `Score`.
     /// I/O failures are wrapped in `SheetMusicError.ioError`.
     public static func parse(contentsOf url: URL) throws -> Score {
-        // Added in Task 5.
-        fatalError("filled in Task 5")
+        let data: Data
+        do {
+            data = try Data(contentsOf: url)
+        } catch {
+            throw SheetMusicError.ioError(url: url, underlying: error)
+        }
+        return try parse(data)
     }
 
     private static func resolveMainEntry(in archive: Archive) throws -> Entry {
