@@ -1,0 +1,54 @@
+swift-musescore-parser
+======================
+
+This Swift package implements parsing of MuseScore (.mscx) files and MIDI
+export. It is an unofficial implementation, not affiliated with or endorsed
+by MuseScore Limited / Muse Group.
+
+Source code license
+-------------------
+
+The Swift source code under `Sources/` is licensed under the MIT License
+(see LICENSE in the project root).
+
+The implementation is independently authored. Algorithms (e.g. arpeggio
+note timing, pause-aware tempo map handling, MeasureRepeat group
+resolution) were studied from the MuseScore C++ implementation
+(https://github.com/musescore/MuseScore, GPL-3.0) but no source code is
+copied; the Swift implementation was rewritten from scratch using the
+referenced behaviour as a specification. Inline doc comments occasionally
+cross-reference the originating MuseScore class or function for traceability.
+
+MuseScore is a trademark of Muse Group. Use of the name in this project's
+documentation and code identifiers is nominative (to indicate file format
+and behavioural compatibility) and does not imply affiliation.
+
+MuseScore submodule
+-------------------
+
+The `MuseScore/` git submodule references the upstream MuseScore source
+repository (GPL-3.0) for development convenience: it allows the Swift
+implementation to be cross-referenced against the C++ source. The
+submodule is **not** redistributed as part of this Swift package: SwiftPM
+consumers receive only the contents of `Sources/` (plus dependencies);
+the submodule is initialised on demand via `git submodule update --init`
+when cloning this repository for development.
+
+Test fixtures
+-------------
+
+The mscx and reference MIDI files under `Tests/MuseScoreParserTests/Resources/`
+are copies of test fixtures from the upstream MuseScore repository
+(`MuseScore/src/importexport/midi/tests/midiexport_data/`), used here to
+verify byte/semantic equivalence with MuseScore's own MIDI exporter output.
+These files are licensed under GPL-3.0; see
+`Tests/MuseScoreParserTests/Resources/LICENSE`.
+
+Because these fixtures are confined to the test target and are not
+distributed as part of the `MuseScoreParser` library product, they do not
+affect the licence of code that depends on this package.
+
+Third-party Swift dependencies
+------------------------------
+
+- ZIPFoundation — Apache 2.0 (https://github.com/weichsel/ZIPFoundation)
