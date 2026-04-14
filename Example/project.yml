@@ -1,4 +1,4 @@
-name: MuseScoreParserExample
+name: SheetMusicExample
 
 options:
   developmentLanguage: en
@@ -6,20 +6,21 @@ options:
     iOS: 16.0
 
 packages:
-  MuseScoreParser:
+  swift-sheet-music:
     path: ../
 
 targets:
-  MuseScoreParserExample:
+  SheetMusicExample:
     type: application
     platform: iOS
     settings:
       INFOPLIST_FILE: Info.plist
       TARGETED_DEVICE_FAMILY: 1
-      PRODUCT_BUNDLE_IDENTIFIER: com.dev.MuseScoreParserExample
+      PRODUCT_BUNDLE_IDENTIFIER: com.dev.SheetMusicExample
       MARKETING_VERSION: 1.0
       CURRENT_PROJECT_VERSION: 1
     sources:
-      - MuseScoreParserExample
+      - SheetMusicExample
     dependencies:
-      - package: MuseScoreParser
+      - package: swift-sheet-music
+        product: SheetMusic
