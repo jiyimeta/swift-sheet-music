@@ -2,9 +2,9 @@ import Foundation
 
 extension Instrument {
     static func decode(_ node: XMLNode) throws -> Instrument {
-        guard let id = node.attributes["id"] ?? node.first("instrumentId")?.text else {
-            throw MuseScoreParserError.malformedScore(reason: "Instrument missing id")
-        }
+        // Both `<Instrument id="...">` and `<Instrument><instrumentId>...` forms exist;
+        // some scores omit both — fall back to "" rather than failing.
+        let id = node.attributes["id"] ?? node.first("instrumentId")?.text ?? ""
         let articulations = try node.all("Articulation").map { try InstrumentArticulation.decode($0) }
         guard let channelNode = node.first("Channel") else {
             throw MuseScoreParserError.malformedScore(reason: "Instrument missing <Channel>")

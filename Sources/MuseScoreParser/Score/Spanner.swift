@@ -1,0 +1,34 @@
+import Foundation
+
+/// Generic spanner anchored at one tick and ending at a future tick (next measures away).
+/// Subtypes mscx encodes here: Volta, Slur, HairPin, Pedal, etc.
+/// For midi rendering we need at least Volta to drive repeat-list expansion.
+/// C++: `mu::engraving::Spanner`.
+public struct Spanner: Sendable, Equatable {
+    public enum Kind: String, Sendable {
+        case volta = "Volta"
+        case slur = "Slur"
+        case hairpin = "HairPin"
+        case pedal = "Pedal"
+        case ottava = "Ottava"
+        case textLine = "TextLine"
+        case other
+    }
+
+    public var kind: Kind
+    public var rawType: String                // original "type" attribute
+    public var nextMeasuresOffset: Int        // distance to the spanner end in measures
+    public var voltaEndings: [Int]            // for Volta: the take-numbers (1, 2, …)
+
+    public init(
+        kind: Kind,
+        rawType: String,
+        nextMeasuresOffset: Int = 0,
+        voltaEndings: [Int] = []
+    ) {
+        self.kind = kind
+        self.rawType = rawType
+        self.nextMeasuresOffset = nextMeasuresOffset
+        self.voltaEndings = voltaEndings
+    }
+}

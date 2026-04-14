@@ -2,9 +2,8 @@ import Foundation
 
 extension Part {
     static func decode(_ node: XMLNode) throws -> Part {
-        guard let id = node.attributes["id"] else {
-            throw MuseScoreParserError.malformedScore(reason: "Part missing id")
-        }
+        // mscx files often omit the Part id attribute; fall back to "" rather than failing.
+        let id = node.attributes["id"] ?? ""
         let staffDecls = try node.all("Staff").map { try StaffDeclaration.decode($0) }
         guard let instrNode = node.first("Instrument") else {
             throw MuseScoreParserError.malformedScore(reason: "Part missing <Instrument>")

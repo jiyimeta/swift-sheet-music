@@ -10,6 +10,11 @@ public struct InstrumentChannel: Sendable, Equatable {
     public var pan: Int
     public var reverb: Int
     public var chorus: Int
+    /// Explicit MIDI channel from `<midiChannel>`. nil means "use the default
+    /// (= staff index)" assigned by the renderer.
+    public var midiChannel: Int?
+    /// Explicit MIDI port from `<midiPort>`. nil means port 0.
+    public var midiPort: Int?
 
     public init(
         name: String? = nil,
@@ -18,7 +23,9 @@ public struct InstrumentChannel: Sendable, Equatable {
         volume: Int = 100,
         pan: Int = 64,
         reverb: Int = 0,
-        chorus: Int = 0
+        chorus: Int = 0,
+        midiChannel: Int? = nil,
+        midiPort: Int? = nil
     ) {
         self.name = name
         self.program = program
@@ -27,5 +34,7 @@ public struct InstrumentChannel: Sendable, Equatable {
         self.pan = pan
         self.reverb = reverb
         self.chorus = chorus
+        self.midiChannel = midiChannel
+        self.midiPort = midiPort
     }
 }
