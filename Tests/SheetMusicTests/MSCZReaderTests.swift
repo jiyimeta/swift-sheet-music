@@ -1,8 +1,8 @@
 import Foundation
-import ZIPFoundation
 @testable import SheetMusicCore
 @testable import SheetMusicMSCX
 import Testing
+import ZIPFoundation
 
 @Suite struct MSCZReaderTests {
     @Test func parseMatchesDirectMSCX() throws {
