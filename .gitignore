@@ -1,0 +1,15 @@
+.DS_Store
+/.build
+/Packages
+*.xcodeproj
+xcuserdata/
+DerivedData/
+.swiftpm/config/registries.json
+.swiftpm/xcode/package.xcworkspace/contents.xcworkspacedata
+.netrc
+/.claude
+# MuseScore submodule: declared in .gitmodules but not tracked in this commit
+# because the local .git/modules/MuseScore directory was lost. Re-initialise
+# manually with: git submodule add --force https://github.com/musescore/MuseScore MuseScore
+/MuseScore
+

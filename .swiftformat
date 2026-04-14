@@ -1,0 +1,11 @@
+--allman false
+--disable andOperator
+--disable extensionAccessControl
+--disable unusedArguments
+--lineaftermarks false
+--swiftversion 6.2
+--wraparguments before-first
+--wrapcollections before-first
+--wrapparameters before-first
+--xcodeindentation enabled
+
