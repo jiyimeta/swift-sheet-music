@@ -1,0 +1,66 @@
+import Foundation
+@testable import MuseScoreParser
+import Testing
+
+@Suite struct MSCXDecoderStructureTests {
+    @Test func decodeVoicePreservesOrder() throws {
+        let xml = """
+        <voice>
+          <KeySig><concertKey>1</concertKey></KeySig>
+          <TimeSig><sigN>4</sigN><sigD>4</sigD></TimeSig>
+          <Chord><durationType>quarter</durationType><Note><pitch>60</pitch><tpc>14</tpc></Note></Chord>
+          <Rest><durationType>quarter</durationType></Rest>
+        </voice>
+        """
+        let node = try XMLTreeParser.parse(Data(xml.utf8))
+        let voice = try Voice.decode(node)
+        #expect(voice.elements.count == 4)
+        guard
+            case .keySignature = voice.elements[0],
+            case .timeSignature = voice.elements[1],
+            case .chord = voice.elements[2],
+            case .rest = voice.elements[3]
+        else {
+            Issue.record("voice element order/types unexpected: \(voice.elements)")
+            return
+        }
+    }
+
+    @Test func decodeVoiceRejectsUnknownChild() {
+        let xml = "<voice><Tuplet/></voice>"
+        #expect(throws: MuseScoreParserError.self) {
+            let node = try XMLTreeParser.parse(Data(xml.utf8))
+            _ = try Voice.decode(node)
+        }
+    }
+
+    @Test func decodeMeasureWithSingleVoice() throws {
+        let xml = """
+        <Measure>
+          <voice>
+            <Rest><durationType>whole</durationType></Rest>
+          </voice>
+        </Measure>
+        """
+        let node = try XMLTreeParser.parse(Data(xml.utf8))
+        let measure = try Measure.decode(node)
+        #expect(measure.voices.count == 1)
+        #expect(measure.voices[0].elements.count == 1)
+    }
+
+    @Test func decodeStaffContent() throws {
+        let xml = """
+        <Staff id="1">
+          <Measure>
+            <voice>
+              <Rest><durationType>whole</durationType></Rest>
+            </voice>
+          </Measure>
+        </Staff>
+        """
+        let node = try XMLTreeParser.parse(Data(xml.utf8))
+        let staff = try StaffContent.decode(node)
+        #expect(staff.id == 1)
+        #expect(staff.measures.count == 1)
+    }
+}
