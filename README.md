@@ -1,20 +1,54 @@
-# swift-musescore-parser
+# swift-sheet-music
 
-A Swift package that parses MuseScore (`.mscx`) score files and exports
-them to Standard MIDI Files. Built from scratch in Swift, with no direct
-runtime dependency on the MuseScore application.
+A Swift package for working with engraved music notation: parsing
+MuseScore (`.mscx`) score files, modelling them as Swift value types, and
+exporting them to Standard MIDI Files. Built from scratch in Swift, with
+no direct runtime dependency on the MuseScore application.
 
-> **Status:** unofficial. Not affiliated with MuseScore Limited / Muse Group.
+> **Status:** unofficial. Not affiliated with MuseScore Limited / Muse Group,
+> nor with Apple's `MusicKit` framework (which is for Apple Music integration).
+
+## Libraries
+
+The package is split into focused libraries; pick what you need.
+
+| Product | Contents |
+|---|---|
+| `SheetMusic` | **Umbrella.** Re-exports the libraries below + a small convenience façade. Most consumers want this. |
+| `SheetMusicCore` | Score data model (Score, Part, Measure, Voice, Note, Chord, …) and the shared error type. No format I/O. |
+| `SheetMusicMSCX` | mscx file format parsing (and, in future, writing). |
+| `SheetMusicMIDI` | In-memory MIDI model, score → MIDI rendering, SMF read/write. |
+
+Future libraries on the roadmap: `SheetMusicUI` (SwiftUI score views),
+`SheetMusicPlayback` (AVAudioEngine MIDI player), and additional
+`SheetMusic<FormatName>` libraries (e.g. MusicXML, PDF) as they're added.
 
 ## Example
 
 ```swift
-import MuseScoreParser
+import SheetMusic
 
-let data = try Data(contentsOf: someMscxURL)
-let score = try MuseScoreParser.loadScore(mscxData: data)
-let midi  = try MuseScoreParser.exportMIDI(score: score)
+let data  = try Data(contentsOf: someMscxURL)
+let score = try SheetMusic.loadScore(mscxData: data)
+let midi  = try SheetMusic.exportMIDI(score: score)
 try midi.write(to: someOutputMIDIURL)
+```
+
+If you only need the score model:
+
+```swift
+import SheetMusicCore   // just the Score / Note / Measure / … types
+```
+
+If you only need parsing or only MIDI:
+
+```swift
+import SheetMusicMSCX
+let score = try MSCXParser.parse(mscxData)
+
+import SheetMusicMIDI
+let midiFile = try MidiRenderer.render(score: score)
+let bytes    = try MidiWriter.write(midiFile)
 ```
 
 ## Coverage
@@ -40,10 +74,10 @@ Major features supported by the renderer:
 ## Licensing
 
 - **Source code (`Sources/`)**: MIT — see [LICENSE](LICENSE).
-- **Test fixtures (`Tests/.../Resources/`)**: GPL-3.0, copied from the
-  upstream MuseScore repository — see
-  [Tests/MuseScoreParserTests/Resources/LICENSE](Tests/MuseScoreParserTests/Resources/LICENSE).
-- See [NOTICE](NOTICE) for the full provenance and trademark disclosure.
+- **Test fixtures (`Tests/SheetMusicTests/Resources/`)**: GPL-3.0, copied
+  from the upstream MuseScore repository — see
+  [Tests/SheetMusicTests/Resources/LICENSE](Tests/SheetMusicTests/Resources/LICENSE).
+- See [NOTICE](NOTICE) for full provenance and trademark disclosure.
 
 The Swift implementation is independently authored. Algorithms were
 studied from MuseScore's C++ source (referenced via the `MuseScore/` git
