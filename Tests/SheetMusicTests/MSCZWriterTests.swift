@@ -58,4 +58,36 @@ import Testing
             Issue.record("unexpected error: \(error)")
         }
     }
+
+    @Test func writeToURLThenReadBack() throws {
+        let mscx = try #require(
+            Bundle.module.url(forResource: "midi01", withExtension: "mscx")
+        )
+        let mscxData = try Data(contentsOf: mscx)
+
+        let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("mscz-writer-test-\(UUID().uuidString).mscz")
+        defer { try? FileManager.default.removeItem(at: tmp) }
+
+        try MSCZWriter.write(mscxData: mscxData, to: tmp)
+        let score = try MSCZReader.parse(contentsOf: tmp)
+        let direct = try MSCXParser.parse(mscxData)
+        #expect(score == direct)
+    }
+
+    @Test func writeToBadURLThrowsIOError() {
+        let bogus = URL(fileURLWithPath: "/nonexistent-dir-\(UUID().uuidString)/out.mscz")
+        do {
+            try MSCZWriter.write(mscxData: Data([0x3C, 0x78]), to: bogus)
+            Issue.record("expected throw")
+        } catch let error as SheetMusicError {
+            guard case .ioError(let u, _) = error else {
+                Issue.record("wrong case: \(error)")
+                return
+            }
+            #expect(u == bogus)
+        } catch {
+            Issue.record("unexpected error: \(error)")
+        }
+    }
 }

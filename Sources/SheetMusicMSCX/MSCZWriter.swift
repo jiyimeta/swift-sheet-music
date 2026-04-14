@@ -58,8 +58,12 @@ public enum MSCZWriter {
         to url: URL,
         mainFileName: String = "score.mscx"
     ) throws {
-        // Added in Task 7.
-        fatalError("filled in Task 7")
+        let bytes = try write(mscxData: mscxData, mainFileName: mainFileName)
+        do {
+            try bytes.write(to: url, options: .atomic)
+        } catch {
+            throw SheetMusicError.ioError(url: url, underlying: error)
+        }
     }
 
     private static func validate(mainFileName: String) throws {
