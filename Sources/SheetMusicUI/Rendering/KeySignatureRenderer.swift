@@ -24,9 +24,13 @@ enum KeySignatureRenderer {
             ? SMuFLGlyph.accidentalSharp
             : SMuFLGlyph.accidentalFlat
         let steps = isSharp ? sharpSteps : flatSteps
+        // Advance 1.4 sp between accidentals. A single sp causes visible
+        // overlap at 5+-accidental keys (a sharp glyph is ~1 sp wide but
+        // with serifs + optical side-bearing it needs more breathing room).
+        let advance = metrics.sp * 1.4
         for i in 0..<min(count, steps.count) {
             let step = steps[i]
-            let x = origin.x + CGFloat(i) * metrics.sp
+            let x = origin.x + CGFloat(i) * advance
             let y = origin.y - CGFloat(step) * metrics.sp / 2
             context.drawGlyph(
                 glyph,

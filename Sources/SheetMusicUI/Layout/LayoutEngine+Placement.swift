@@ -6,6 +6,12 @@ import SheetMusicCore
 extension LayoutEngine {
     /// Place elements of a measure in local measure coordinates.
     /// Returns the placed elements + the updated clef context.
+    ///
+    /// Layout strategy: non-timed leading elements (clef / key sig / time
+    /// sig) are stacked left-to-right at fixed widths. Timed elements
+    /// (chords and rests) are then positioned proportionally to their
+    /// tick offset within the measure so the content fills the full
+    /// stretched measure width.
     static func placeMeasureElements(
         measure: Measure,
         width: CGFloat,
@@ -15,9 +21,9 @@ extension LayoutEngine {
     ) -> (elements: [LayoutElement], clef: NotatedClef) {
         let staffMidY = metrics.staffHeight / 2 + metrics.sp * 2
         var out: [LayoutElement] = []
-        var x: CGFloat = metrics.sp * 2
         var currentClef = activeClef
-        // Detect a time signature declared within this measure (any voice).
+
+        // --- Scan: time signature and total ticks in the widest voice ---
         var measureTimeSig: TimeSignature?
         for voice in measure.voices {
             for el in voice.elements {
@@ -28,42 +34,67 @@ extension LayoutEngine {
             }
             if measureTimeSig != nil { break }
         }
+        // --- Pass 1: measure the header width (leading clef/key/time) ---
+        let headerEnd = headerWidth(
+            measure: measure, metrics: metrics, startPadding: metrics.sp * 2)
+        let trailingGap = metrics.sp * 3
+        let contentWidth = max(metrics.sp * 4, width - headerEnd - trailingGap)
+
+        // --- Pass 2: emit elements for each voice ---
         for voice in measure.voices {
-            var vx = x
-            // Maps a voice-element index → index into `out` for the
-            // emitted LayoutElement.chord. Used for post-hoc beam marking.
+            let voiceTotal = totalTicks(in: voice, division: division)
+            var vx: CGFloat = metrics.sp * 2
+            var tickCursor = 0
+            var inHeader = true
             var voiceChordOutIndex: [Int: Int] = [:]
+
+            /// x-coordinate for the next timed element based on tick.
+            func timedX() -> CGFloat {
+                guard voiceTotal > 0 else { return headerEnd + metrics.sp }
+                let fraction = CGFloat(tickCursor) / CGFloat(voiceTotal)
+                return headerEnd + metrics.sp + fraction * contentWidth
+            }
+
             for (voiceIdx, el) in voice.elements.enumerated() {
                 switch el {
                 case .clef(let clef):
                     currentClef = NotatedClef(rawType: clef.concertClefType)
+                    let clefX = inHeader ? vx : timedX()
                     out.append(.clef(
                         rawType: clef.concertClefType,
-                        origin: CGPoint(x: vx, y: staffMidY)))
-                    vx += metrics.sp * 3
+                        origin: CGPoint(x: clefX, y: staffMidY)))
+                    if inHeader { vx += metrics.sp * 3 }
                 case .keySignature(let key):
+                    let keyX = inHeader ? vx : timedX()
                     out.append(.keySignature(
                         sharps: max(0, key.concertKey),
                         flats: max(0, -key.concertKey),
-                        origin: CGPoint(x: vx, y: staffMidY)))
-                    vx += metrics.sp * CGFloat(abs(key.concertKey)) + metrics.sp
+                        origin: CGPoint(x: keyX, y: staffMidY)))
+                    if inHeader {
+                        vx += metrics.sp * (CGFloat(abs(key.concertKey)) + 1.5)
+                    }
                 case .timeSignature(let ts):
+                    let tsX = inHeader ? vx : timedX()
                     out.append(.timeSignature(
                         numerator: ts.numerator,
                         denominator: ts.denominator,
-                        origin: CGPoint(x: vx, y: staffMidY)))
-                    vx += metrics.sp * 3
+                        origin: CGPoint(x: tsX, y: staffMidY)))
+                    if inHeader { vx += metrics.sp * 3 }
                 case .barLine(let b):
+                    let barX = inHeader ? vx : timedX()
                     out.append(.barLine(
                         subtype: b.subtype,
-                        origin: CGPoint(x: vx, y: staffMidY)))
-                    vx += metrics.sp
+                        origin: CGPoint(x: barX, y: staffMidY)))
+                    if inHeader { vx += metrics.sp }
                 case .rest(let r):
+                    inHeader = false
                     out.append(.rest(
                         duration: r.duration,
-                        origin: CGPoint(x: vx, y: staffMidY)))
-                    vx += metrics.sp * 3
+                        origin: CGPoint(x: timedX(), y: staffMidY)))
+                    tickCursor += r.duration.ticks(division: division)
                 case .chord(let chord):
+                    inHeader = false
+                    let chordX = timedX()
                     let chordNotes = chord.notes.map { note -> LayoutChordNote in
                         let step = PitchStaffPosition.step(
                             midiPitch: note.pitch, tpc: note.tpc,
@@ -73,7 +104,7 @@ extension LayoutEngine {
                         return LayoutChordNote(
                             step: step,
                             accidental: note.accidental,
-                            origin: CGPoint(x: vx, y: y),
+                            origin: CGPoint(x: chordX, y: y),
                             tieForward: note.tieForward,
                             tieBack: note.tieBack,
                             hasGlissando: note.glissando != nil
@@ -86,7 +117,7 @@ extension LayoutEngine {
                         notes: chordNotes,
                         duration: chord.duration,
                         stem: stem,
-                        stemOrigin: CGPoint(x: vx, y: staffMidY),
+                        stemOrigin: CGPoint(x: chordX, y: staffMidY),
                         hasArpeggio: chord.arpeggio != nil,
                         arpeggioRawType: chord.arpeggio.flatMap(arpeggioSubtype),
                         isBeamed: false))
@@ -95,20 +126,24 @@ extension LayoutEngine {
                         let top = ys.min() ?? staffMidY
                         let bot = ys.max() ?? staffMidY
                         out.append(.arpeggioWiggle(
-                            top: CGPoint(x: vx, y: top),
-                            bottom: CGPoint(x: vx, y: bot),
+                            top: CGPoint(x: chordX, y: top),
+                            bottom: CGPoint(x: chordX, y: bot),
                             subtype: arpeggioSubtype(arp)
                         ))
                     }
-                    vx += metrics.sp * 3
+                    tickCursor += chord.duration.ticks(division: division)
                 case .dynamic(let d):
+                    // Dynamics sit below-left of the note they apply to
+                    // (i.e. the next timed element at the current tick).
+                    // Shift 1 sp left so the label doesn't overlap the
+                    // following chord's notehead or stem.
+                    let baseX = inHeader ? vx : timedX()
                     out.append(.textMark(
                         kind: .dynamic,
                         text: d.subtype,
                         origin: CGPoint(
-                            x: vx,
+                            x: baseX - metrics.sp,
                             y: staffMidY + metrics.sp * 4)))
-                    vx += metrics.sp * 2
                 case .tempo(let t):
                     let bpm = Int((t.beatsPerSecond * 60.0).rounded())
                     // "♩" is Unicode U+2669, rendered in the system text font,
@@ -118,31 +153,31 @@ extension LayoutEngine {
                         kind: .tempo,
                         text: "♩ = \(bpm)",
                         origin: CGPoint(
-                            x: vx,
+                            x: inHeader ? vx : timedX(),
                             y: staffMidY - metrics.sp * 4)))
-                    vx += metrics.sp * 2
                 case .fermata(let f):
-                    // Fermata attaches to the preceding chord/rest (which
-                    // already advanced vx), so emit at vx - sp and do NOT
-                    // advance vx further.
+                    // Fermata attaches to the preceding chord/rest; emit at
+                    // the last placed timed x (or header cursor if still in
+                    // header, though that's unusual).
+                    let lastChordX = lastChordOrRestX(in: out)
+                        ?? (inHeader ? vx : timedX())
                     out.append(.fermata(
                         subtype: f.subtype,
                         origin: CGPoint(
-                            x: vx - metrics.sp,
+                            x: lastChordX,
                             y: staffMidY - metrics.sp * 3)))
                 case .measureRepeat:
                     out.append(.measureRepeat(
                         count: 1,
                         origin: CGPoint(x: width / 2, y: staffMidY)))
                 case .spanner:
-                    // Spanners are resolved at system level in the
-                    // spanner-attach pass.
+                    // Resolved at system level in the spanner-attach pass.
                     break
                 }
             }
-            // Glissando emission pass: for each chord in this voice with a
-            // note carrying a glissando, pair it with the next chord in the
-            // same voice and emit a glissandoLine between their stemOrigins.
+
+            // Glissando emission pass: pair each glissando-bearing chord
+            // with the next chord in the same voice.
             let chordVoiceIndices = voiceChordOutIndex.keys.sorted()
             for (pairIdx, voiceIdx) in chordVoiceIndices.enumerated() {
                 guard case .chord(let chord) = voice.elements[voiceIdx] else {
@@ -171,14 +206,43 @@ extension LayoutEngine {
                     text: gliss.text
                 ))
             }
+
             // Beaming pass for this voice.
             let groups = beamGroups(
                 voice: voice,
                 timeSignature: measureTimeSig,
                 division: division)
             for group in groups {
-                var firstStemOrigin: CGPoint?
-                var lastStemOrigin: CGPoint?
+                // First, compute the beam y from the highest note across
+                // the whole group so all members share the same stem tip.
+                var memberXs: [CGFloat] = []
+                var memberNoteTops: [CGFloat] = []
+                var memberNoteBottoms: [CGFloat] = []
+                for memberIdx in group.memberIndices {
+                    guard let outIdx = voiceChordOutIndex[memberIdx],
+                          case .chord(let n, _, _, let so,
+                                      _, _, _) = out[outIdx]
+                    else { continue }
+                    memberXs.append(so.x)
+                    if let topY = n.map(\.origin.y).min() {
+                        memberNoteTops.append(topY)
+                    }
+                    if let botY = n.map(\.origin.y).max() {
+                        memberNoteBottoms.append(botY)
+                    }
+                }
+                guard let firstX = memberXs.first,
+                      let lastX = memberXs.last,
+                      let highestNote = memberNoteTops.min(),
+                      let lowestNote = memberNoteBottoms.max()
+                else { continue }
+                // v1 assumes all beamed groups are stem-up. (Median
+                // heuristic puts eighths below middle line up; explicit
+                // stem-down beam groups are a post-v1 concern.)
+                let beamY = highestNote - metrics.defaultStemLength
+                _ = lowestNote  // reserved for stem-down handling
+                // Rewrite each member chord to carry beamY in stemOrigin.y
+                // so StemRenderer can extend the stem to the shared beam.
                 for memberIdx in group.memberIndices {
                     guard let outIdx = voiceChordOutIndex[memberIdx],
                           case .chord(let n, let d, let s, let so,
@@ -188,27 +252,19 @@ extension LayoutEngine {
                         notes: n,
                         duration: d,
                         stem: s,
-                        stemOrigin: so,
+                        stemOrigin: CGPoint(x: so.x, y: beamY),
                         hasArpeggio: arp,
                         arpeggioRawType: art,
                         isBeamed: true)
-                    if firstStemOrigin == nil { firstStemOrigin = so }
-                    lastStemOrigin = so
                 }
-                if let f = firstStemOrigin, let l = lastStemOrigin {
-                    // Raise beam above the stem anchor so it sits near the
-                    // flag position. v1: fixed offset (refined in later
-                    // stages alongside stem-direction awareness).
-                    let beamY = f.y - metrics.defaultStemLength
-                    out.append(.beam(
-                        fromOrigin: CGPoint(x: f.x, y: beamY),
-                        toOrigin: CGPoint(x: l.x, y: beamY),
-                        levels: group.level))
-                }
+                out.append(.beam(
+                    fromOrigin: CGPoint(x: firstX, y: beamY),
+                    toOrigin: CGPoint(x: lastX, y: beamY),
+                    levels: group.level))
             }
-            x = max(x, vx)
         }
-        // Trailing bar line if the voice didn't already emit one.
+
+        // Trailing bar line if no voice emitted one.
         let hasExplicitBar = out.contains {
             if case .barLine = $0 { true } else { false }
         }
@@ -232,6 +288,63 @@ extension LayoutEngine {
         case 2, 4: return "down"
         default: return nil
         }
+    }
+
+    // MARK: - Placement helpers
+
+    /// Width consumed by the leading header (clef / key sig / time sig)
+    /// of the first voice that has such elements. Measured from the left
+    /// padding, inclusive of `startPadding`.
+    private static func headerWidth(
+        measure: Measure,
+        metrics: StaffMetrics,
+        startPadding: CGFloat
+    ) -> CGFloat {
+        var w = startPadding
+        let voice = measure.voices.first
+        guard let elements = voice?.elements else { return w }
+        for el in elements {
+            switch el {
+            case .clef: w += metrics.sp * 3
+            case .keySignature(let k):
+                w += metrics.sp * (CGFloat(abs(k.concertKey)) + 1.5)
+            case .timeSignature: w += metrics.sp * 3
+            case .chord, .rest:
+                return w   // first timed element ends the header
+            default:
+                continue
+            }
+        }
+        return w
+    }
+
+    private static func totalTicks(in voice: Voice, division: Int) -> Int {
+        voice.elements.reduce(0) { acc, el in
+            switch el {
+            case .chord(let c):
+                return acc + c.duration.ticks(division: division)
+            case .rest(let r):
+                return acc + r.duration.ticks(division: division)
+            default: return acc
+            }
+        }
+    }
+
+    /// Find the x coordinate of the most recently emitted chord or rest
+    /// in `elements`, for positioning attached marks like fermatas.
+    private static func lastChordOrRestX(
+        in elements: [LayoutElement]
+    ) -> CGFloat? {
+        for el in elements.reversed() {
+            switch el {
+            case .chord(_, _, _, let origin, _, _, _):
+                return origin.x
+            case .rest(_, let origin):
+                return origin.x
+            default: continue
+            }
+        }
+        return nil
     }
 }
 #endif

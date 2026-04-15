@@ -36,6 +36,22 @@ struct ScoreCanvas: View {
                 metrics: metrics
             )
         }
+        // Bracket connecting multiple staves of a single Part (piano grand
+        // staff and larger groupings). v1 draws one bracket spanning the
+        // full vertical extent of all staves.
+        if system.staffOrigins.count >= 2,
+           let top = system.staffOrigins.first,
+           let bot = system.staffOrigins.last {
+            let x = system.origin.x + top.x - metrics.sp * 0.5
+            StaffRenderer.drawBracket(
+                context: &context,
+                top: CGPoint(x: x, y: system.origin.y + top.y),
+                bottom: CGPoint(
+                    x: x,
+                    y: system.origin.y + bot.y + metrics.staffHeight),
+                metrics: metrics
+            )
+        }
         // Part labels (left of staves — origin.x is a small left margin;
         // offset by the staff-label-width reservation so text anchors to
         // the right just before staff start).
@@ -106,7 +122,8 @@ struct ScoreCanvas: View {
             RestRenderer.draw(
                 context: &context, duration: d,
                 origin: shift(p), metrics: metrics)
-        case .chord(let notes, let dur, let stem, _, _, _, let isBeamed):
+        case .chord(let notes, let dur, let stem, let stemOrigin,
+                     _, _, let isBeamed):
             // Shift note origins into absolute coords for the heads
             // and the stem renderer.
             let shiftedNotes = notes.map {
@@ -129,10 +146,14 @@ struct ScoreCanvas: View {
                         origin: n.origin, metrics: metrics)
                 }
             }
+            // For beamed chords, the placement pass stores the shared
+            // beam y into stemOrigin.y so every member's stem reaches
+            // the same horizontal beam bar.
+            let beamY: CGFloat? = isBeamed ? shift(stemOrigin).y : nil
             StemRenderer.draw(
                 context: &context, notes: shiftedNotes,
                 direction: stem, duration: dur,
-                isBeamed: isBeamed, metrics: metrics)
+                isBeamed: isBeamed, beamY: beamY, metrics: metrics)
         case .textMark(.dynamic, let text, let p):
             TextMarkRenderer.drawDynamic(
                 context: &context, text: text,

@@ -10,13 +10,12 @@ enum StemRenderer {
         direction: StemDirection,
         duration: NoteDuration,
         isBeamed: Bool,
+        beamY: CGFloat?,
         metrics: StaffMetrics
     ) {
         guard !notes.isEmpty else { return }
         // Whole notes are stemless.
         if case .whole = duration { return }
-        // Use one canonical note origin for the x anchor; stem y-range
-        // is derived from min/max notehead y.
         let xs = notes.map(\.origin.x)
         let ys = notes.map(\.origin.y)
         let headRadius = metrics.sp * 0.65
@@ -30,12 +29,15 @@ enum StemRenderer {
         switch direction {
         case .up:
             xStem = xMax + headRadius
-            startY = yTop - metrics.defaultStemLength
+            // For beamed chords, stems reach the shared beam y instead of
+            // each chord's own natural stem-top — otherwise stems would
+            // be truncated below the beam bar.
+            startY = beamY ?? (yTop - metrics.defaultStemLength)
             endY = yBot
         case .down:
             xStem = xMin - headRadius
             startY = yTop
-            endY = yBot + metrics.defaultStemLength
+            endY = beamY ?? (yBot + metrics.defaultStemLength)
         }
         var path = Path()
         path.move(to: CGPoint(x: xStem, y: startY))
