@@ -15,6 +15,11 @@ public struct Instrument: Sendable, Equatable {
     /// for simple instruments, multiple for instruments with playback flavours
     /// (e.g. violin = "normal", "pizzicato", "tremolo").
     public var channels: [InstrumentChannel]
+    /// `<useDrumset>1</useDrumset>` — true for drum kits and percussion. Causes
+    /// the renderer to route the part through GM channel 10 (0-indexed: 9), which
+    /// DAWs like Logic Pro auto-detect as percussion and dress with a drum kit
+    /// patch. C++: `mu::engraving::Instrument::useDrumset()`.
+    public var useDrumset: Bool
 
     /// Convenience accessor for the primary (= first) channel.
     public var channel: InstrumentChannel {
@@ -31,7 +36,8 @@ public struct Instrument: Sendable, Equatable {
         minPitchAmateur: Int? = nil,
         maxPitchAmateur: Int? = nil,
         articulations: [InstrumentArticulation] = [],
-        channels: [InstrumentChannel] = [InstrumentChannel()]
+        channels: [InstrumentChannel] = [InstrumentChannel()],
+        useDrumset: Bool = false
     ) {
         self.id = id
         self.longName = longName
@@ -43,5 +49,6 @@ public struct Instrument: Sendable, Equatable {
         self.maxPitchAmateur = maxPitchAmateur
         self.articulations = articulations
         self.channels = channels.isEmpty ? [InstrumentChannel()] : channels
+        self.useDrumset = useDrumset
     }
 }

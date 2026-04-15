@@ -18,7 +18,8 @@ enum MusicXMLNoteDecoder {
     static func decodeNote(
         node: XMLTreeNode,
         divisions: DivisionsContext,
-        existingVoiceElements: [VoiceElement]
+        existingVoiceElements: [VoiceElement],
+        drumTable: MusicXMLDrumTable = MusicXMLDrumTable()
     ) throws -> Decoded {
         let isRest = node.children.contains(where: { $0.name == "rest" })
         let isChord = node.children.contains(where: { $0.name == "chord" })
@@ -36,14 +37,27 @@ enum MusicXMLNoteDecoder {
             return .new(prefix + [.rest(Rest(duration: duration))])
         }
 
-        guard let pitchNode = node.first("pitch") else {
-            // Unpitched percussion notes can occur in `<unpitched>`; Phase 0
-            // fixtures don't cover them, so treat as malformed for now.
+        let midi: Int
+        let tpc: Int
+        if let pitchNode = node.first("pitch") {
+            (midi, tpc) = try PitchDecoder.decode(pitchNode)
+        } else if let unpitchedNode = node.first("unpitched") {
+            // Unpitched percussion: prefer the part's drum table (built from
+            // <score-part>'s <midi-instrument><midi-unpitched>) so the note
+            // plays the GM percussion pitch the composer intended. Fall back
+            // to the staff-position display pitch if no mapping is registered.
+            let instrumentRef = node.first("instrument")?.attributes["id"]
+            if let id = instrumentRef, let drumPitch = drumTable.pitchByInstrumentId[id] {
+                midi = drumPitch
+                tpc = 14   // unpitched notes have no tonal-pitch meaning
+            } else {
+                (midi, tpc) = try PitchDecoder.decodeUnpitched(unpitchedNode)
+            }
+        } else {
             throw SheetMusicError.malformedScore(
-                reason: "MusicXML: <note> has neither <pitch> nor <rest>"
+                reason: "MusicXML: <note> has neither <pitch>, <unpitched>, nor <rest>"
             )
         }
-        let (midi, tpc) = try PitchDecoder.decode(pitchNode)
         let accidental = decodeAccidental(node)
         let (tieForward, tieBack) = decodeTies(node)
         let note = Note(

@@ -29,6 +29,26 @@ enum PitchDecoder {
         return (midi, tpc)
     }
 
+    /// Decode a MusicXML `<unpitched>` block (`<display-step>` + `<display-octave>`)
+    /// into a MIDI pitch number. Used for percussion notation where the staff
+    /// position is purely visual; the actual drum sound is selected via
+    /// `<midi-unpitched>` on the part's `<score-instrument>` (not yet wired).
+    /// Returns a `(midi, tpc)` pair like `decode(pitchNode:)` so callers can
+    /// treat unpitched notes uniformly. TPC defaults to the natural TPC of the
+    /// display step (no accidentals are meaningful for unpitched notes).
+    static func decodeUnpitched(_ unpitchedNode: XMLTreeNode) throws -> (midi: Int, tpc: Int) {
+        let stepText = unpitchedNode.first("display-step")?.text ?? "C"
+        let octave = unpitchedNode.first("display-octave").flatMap { Int($0.text) } ?? 4
+        guard let semitoneOffset = stepSemitones[stepText] else {
+            throw SheetMusicError.malformedScore(
+                reason: "MusicXML: unknown <display-step>\(stepText)</display-step>"
+            )
+        }
+        let tpc = stepTpc[stepText] ?? 14
+        let midi = (octave + 1) * 12 + semitoneOffset
+        return (midi, tpc)
+    }
+
     /// Semitone offset inside the octave (C=0).
     private static let stepSemitones: [String: Int] = [
         "C": 0, "D": 2, "E": 4, "F": 5, "G": 7, "A": 9, "B": 11,

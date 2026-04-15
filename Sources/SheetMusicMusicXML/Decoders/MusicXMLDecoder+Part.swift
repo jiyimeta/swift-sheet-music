@@ -7,20 +7,27 @@ extension Part {
     /// actual `<part>` measures are walked separately by the Score decoder.
     /// `staffCount` must be ≥ 1 and controls how many `StaffDeclaration`s
     /// are emitted (1 for a single-staff part, 2 for piano, etc.).
+    /// Also returns the part's drum-mapping table (empty for non-percussion
+    /// parts) so the note decoder can resolve `<unpitched>` notes to GM
+    /// percussion pitches.
     static func decodeMusicXML(
         scorePart: XMLTreeNode,
         partId: String,
         staffCount: Int
-    ) throws -> Part {
+    ) throws -> (Part, MusicXMLDrumTable) {
         let name = scorePart.first("part-name")?.text
         let abbrev = scorePart.first("part-abbreviation")?.text
-        let instrument = decodeInstrument(scorePart: scorePart, name: name, abbrev: abbrev)
+        let drumTable = MusicXMLDrumTable.build(scorePart: scorePart)
+        let instrument = decodeInstrument(
+            scorePart: scorePart, name: name, abbrev: abbrev,
+            useDrumset: drumTable.isDrumset
+        )
         let count = max(1, staffCount)
         let declarations = Array(
             repeating: StaffDeclaration(staffType: "stdNormal", group: "pitched"),
             count: count
         )
-        return Part(
+        let part = Part(
             id: partId,
             // MuseScore 5.x stores the track name on Instrument, not Part,
             // so leave Part.trackName nil for parity with `*_ref.mscx`.
@@ -28,6 +35,7 @@ extension Part {
             instrument: instrument,
             staffDeclarations: declarations
         )
+        return (part, drumTable)
     }
 
     /// MusicXML nests instrument metadata in `<score-instrument>` and
@@ -39,7 +47,8 @@ extension Part {
     private static func decodeInstrument(
         scorePart: XMLTreeNode,
         name: String?,
-        abbrev: String?
+        abbrev: String?,
+        useDrumset: Bool
     ) -> Instrument {
         let scoreInstr = scorePart.first("score-instrument")
         let instrumentSound = scoreInstr?.first("instrument-sound")?.text
@@ -54,7 +63,8 @@ extension Part {
             longName: name,
             shortName: abbrev,
             trackName: trackName,
-            channels: [InstrumentChannel()]
+            channels: [InstrumentChannel()],
+            useDrumset: useDrumset
         )
     }
 }

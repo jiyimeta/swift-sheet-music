@@ -111,8 +111,15 @@ extension Score {
                     reason: "MusicXML: <part id='\(id)'> has no matching <score-part>"
                 )
             }
-            let walker = try MusicXMLMeasureWalker.decode(partNode: partNode)
-            let part = try Part.decodeMusicXML(
+            // Build the percussion table from the score-part header BEFORE
+            // walking measures — the walker must hand it to the note decoder
+            // so <unpitched> notes resolve to GM drum pitches.
+            let prelimDrumTable = MusicXMLDrumTable.build(scorePart: scorePart)
+            let walker = try MusicXMLMeasureWalker.decode(
+                partNode: partNode,
+                drumTable: prelimDrumTable
+            )
+            let (part, _) = try Part.decodeMusicXML(
                 scorePart: scorePart,
                 partId: id,
                 staffCount: walker.staffCount

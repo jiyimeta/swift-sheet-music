@@ -20,6 +20,9 @@ extension Instrument {
         let label = node.first("InstrumentLabel")
         let longName = label?.first("longName")?.text ?? node.first("longName")?.text
         let shortName = label?.first("shortName")?.text ?? node.first("shortName")?.text
+        // <useDrumset>1</useDrumset> marks the instrument as a percussion kit.
+        // The renderer routes drumset parts to GM channel 10 (0-indexed: 9).
+        let useDrumset = (node.first("useDrumset")?.text).flatMap { Int($0) } == 1
         return Instrument(
             id: id,
             longName: longName,
@@ -30,7 +33,8 @@ extension Instrument {
             minPitchAmateur: node.first("minPitchA").flatMap { Int($0.text) },
             maxPitchAmateur: node.first("maxPitchA").flatMap { Int($0.text) },
             articulations: articulations,
-            channels: channels
+            channels: channels,
+            useDrumset: useDrumset
         )
     }
 }
