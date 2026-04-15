@@ -61,9 +61,16 @@ extension MidiRenderer {
             }
 
             var localTick = entry.tickOffset
-            for element in effectiveVoice.elements {
+            var currentKey = firstKeySignature(in: staff)?.concertKey ?? 0
+            for (elementIndex, element) in effectiveVoice.elements.enumerated() {
+                if case let .keySignature(k) = element { currentKey = k.concertKey }
                 renderVoiceElement(
                     element,
+                    elementIndex: elementIndex,
+                    voiceElements: effectiveVoice.elements,
+                    measures: staff.measures,
+                    measureIndex: entry.measureIndex,
+                    currentKey: currentKey,
                     localTick: &localTick,
                     velocity: &velocity,
                     currentTempoBps: &currentTempoBps,
@@ -88,6 +95,11 @@ extension MidiRenderer {
     // swiftlint:disable:next function_parameter_count
     private static func renderVoiceElement(
         _ element: VoiceElement,
+        elementIndex: Int,
+        voiceElements: [VoiceElement],
+        measures: [Measure],
+        measureIndex: Int,
+        currentKey: Int,
         localTick: inout Int,
         velocity: inout Int,
         currentTempoBps: inout Double,
@@ -128,6 +140,15 @@ extension MidiRenderer {
         case let .rest(rest):
             localTick += rest.duration.ticks(division: division)
         case let .chord(chord):
+            let glissandoEndPitch = chord.notes.contains(where: { $0.glissando != nil })
+                ? MidiRenderer.glissandoEndPitch(
+                    voiceElements: voiceElements,
+                    afterElementIndex: elementIndex,
+                    measures: measures,
+                    measureIndex: measureIndex,
+                    voiceIndex: voiceIndex
+                )
+                : nil
             renderChord(
                 chord,
                 tick: localTick,
@@ -136,6 +157,8 @@ extension MidiRenderer {
                 instrument: instrument,
                 tempoBps: currentTempoBps,
                 division: division,
+                glissandoEndPitch: glissandoEndPitch,
+                currentKey: currentKey,
                 events: &events
             )
             localTick += chord.duration.ticks(division: division)
@@ -156,6 +179,8 @@ extension MidiRenderer {
         instrument: Instrument,
         tempoBps: Double,
         division: Int,
+        glissandoEndPitch: Int?,
+        currentKey: Int,
         events: inout [TimedMidiEvent]
     ) {
         let durationTicks = chord.duration.ticks(division: division)
@@ -183,10 +208,19 @@ extension MidiRenderer {
             let gatedTicks = durationTicks * gate / 100
             let offTick = tick + gatedTicks - 1
             for note in chord.notes {
-                emitNoteEvents(
-                    note: note, channel: channel, velocity: velocity,
-                    onTick: tick, offTick: offTick, events: &events
-                )
+                if let glissando = note.glissando, let endPitch = glissandoEndPitch {
+                    renderGlissandoNote(
+                        note: note, glissando: glissando, endPitch: endPitch,
+                        startTick: tick, durationTicks: durationTicks,
+                        velocity: velocity, channel: channel,
+                        currentKey: currentKey, events: &events
+                    )
+                } else {
+                    emitNoteEvents(
+                        note: note, channel: channel, velocity: velocity,
+                        onTick: tick, offTick: offTick, events: &events
+                    )
+                }
             }
         }
     }

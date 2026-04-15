@@ -64,6 +64,12 @@ public enum MidiWriter {
         case let .programChange(ch, program):
             encoder.appendUInt8(0xC0 | UInt8(ch & 0x0F))
             encoder.appendUInt8(UInt8(program & 0x7F))
+        case let .pitchBend(ch, value):
+            // 14-bit value split into 7-bit LSB then 7-bit MSB (MIDI spec §5.8).
+            let clamped = max(0, min(16383, value))
+            encoder.appendUInt8(0xE0 | UInt8(ch & 0x0F))
+            encoder.appendUInt8(UInt8(clamped & 0x7F))
+            encoder.appendUInt8(UInt8((clamped >> 7) & 0x7F))
         case let .meta(meta):
             try encodeMeta(meta, into: &encoder)
         case .endOfTrack:

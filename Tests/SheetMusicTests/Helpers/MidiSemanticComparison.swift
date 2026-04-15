@@ -143,9 +143,10 @@ enum MidiSemanticComparison {
         case .meta:           return 0
         case .programChange:  return 1
         case .controlChange:  return 2
-        case .noteOff:        return 3
-        case .noteOn:         return 4
-        case .endOfTrack:     return 5
+        case .pitchBend:      return 3
+        case .noteOff:        return 4
+        case .noteOn:         return 5
+        case .endOfTrack:     return 6
         }
     }
 
@@ -154,7 +155,8 @@ enum MidiSemanticComparison {
         case .noteOn(let ch, _, _),
              .noteOff(let ch, _, _),
              .controlChange(let ch, _, _),
-             .programChange(let ch, _):
+             .programChange(let ch, _),
+             .pitchBend(let ch, _):
             return ch
         case .meta, .endOfTrack:
             return -1
@@ -170,6 +172,8 @@ enum MidiSemanticComparison {
             return cc
         case .programChange(_, let p):
             return p
+        case .pitchBend(_, let value):
+            return value
         case .meta, .endOfTrack:
             return 0
         }
