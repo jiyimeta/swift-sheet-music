@@ -115,22 +115,31 @@ extension MidiRenderer {
         return ticks
     }
 
-    /// Resolve a voice that may be a measure-repeat marker into the actual notes
-    /// to play. See the inline comment in `groupRepeatMarker` for the full mscx
-    /// encoding model.
+    /// Resolve which notes to play for the given voice index of the given
+    /// measure. Returns `nil` only when neither the current measure nor any
+    /// referenced source measure has content for this voice.
+    ///
+    /// MuseScore detects measure-repeat at the **staff** level (`Measure::
+    /// isMeasureRepeatGroup(staffIdx)` in `compatmidirenderinternal.cpp:1314`):
+    /// when ANY voice of the measure carries the marker, EVERY voice of the
+    /// source measure is replayed. We mirror that here by searching all voices
+    /// for the marker rather than only the voice we're currently rendering.
     static func resolvedVoice(
-        voice: Voice,
         measureIndex: Int,
         staff: StaffContent,
         voiceIndex: Int
-    ) -> Voice {
-        if let rep = explicitMeasureRepeat(in: voice) {
+    ) -> Voice? {
+        let measure = staff.measures[measureIndex]
+        if let rep = explicitMeasureRepeatInAnyVoice(of: measure) {
             return chase(measureIndex: measureIndex - rep.numMeasures, staff: staff, voiceIndex: voiceIndex)
         }
         if let rep = groupRepeatMarker(measureIndex: measureIndex, staff: staff, voiceIndex: voiceIndex) {
             return chase(measureIndex: measureIndex - rep.numMeasures, staff: staff, voiceIndex: voiceIndex)
         }
-        return voice
+        if voiceIndex < measure.voices.count {
+            return measure.voices[voiceIndex]
+        }
+        return nil
     }
 
     /// Find the explicit `<MeasureRepeat>` marker that owns the repeat group
@@ -144,7 +153,8 @@ extension MidiRenderer {
     ///     K = the measure's 1-based position within the group.
     ///
     /// The group's anchor (its 1st measure) is at `measureIndex − (count − 1)`.
-    /// We walk forward from the anchor to find which member carries the marker.
+    /// We walk forward from the anchor to find which member carries the marker
+    /// — searching ALL voices because MuseScore detects repeat at the staff level.
     static func groupRepeatMarker(
         measureIndex: Int,
         staff: StaffContent,
@@ -158,8 +168,7 @@ extension MidiRenderer {
         while i < staff.measures.count {
             let measure = staff.measures[i]
             guard measure.measureRepeatCount == expectedCount else { break }
-            if voiceIndex < measure.voices.count,
-               let rep = explicitMeasureRepeat(in: measure.voices[voiceIndex]) {
+            if let rep = explicitMeasureRepeatInAnyVoice(of: measure) {
                 return rep
             }
             i += 1
@@ -171,6 +180,16 @@ extension MidiRenderer {
     static func explicitMeasureRepeat(in voice: Voice) -> MeasureRepeat? {
         for element in voice.elements {
             if case let .measureRepeat(rep) = element { return rep }
+        }
+        return nil
+    }
+
+    /// True if any voice of the measure carries a `<MeasureRepeat>` marker —
+    /// matches MuseScore's per-staff detection (any track in a staff makes
+    /// the whole staff a repeat group for playback).
+    static func explicitMeasureRepeatInAnyVoice(of measure: Measure) -> MeasureRepeat? {
+        for voice in measure.voices {
+            if let rep = explicitMeasureRepeat(in: voice) { return rep }
         }
         return nil
     }

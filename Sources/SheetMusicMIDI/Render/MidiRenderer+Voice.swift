@@ -20,17 +20,17 @@ extension MidiRenderer {
         var currentTempoBps = 2.0
 
         for entry in plan {
-            let measure = staff.measures[entry.measureIndex]
-            guard voiceIndex < measure.voices.count else { continue }
-            let voice = measure.voices[voiceIndex]
-
-            // Splice in the source measure's notes if this measure is a measure-repeat.
-            let effectiveVoice = resolvedVoice(
-                voice: voice,
+            // Splice in the source measure's notes if this measure is a
+            // measure-repeat. Returns nil only when neither the current
+            // measure nor any source measure has this voice — silent skip.
+            // We do NOT bail early on `voiceIndex >= measure.voices.count`:
+            // a measure that only has voice 0 may still need voice 1 played
+            // when it's a repeat-group whose source has voice 1.
+            guard let effectiveVoice = MidiRenderer.resolvedVoice(
                 measureIndex: entry.measureIndex,
                 staff: staff,
                 voiceIndex: voiceIndex
-            )
+            ) else { continue }
 
             // When a new iteration loops back to original measure 0 (e.g. volta
             // playback returning to the top of the score), re-emit timeSig + reset
