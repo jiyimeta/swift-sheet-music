@@ -48,25 +48,28 @@ public enum NoteDuration: Sendable, Equatable {
         }
     }
 
+    /// This duration expressed as a fraction of a whole note.
+    public var asFraction: Fraction {
+        switch self {
+        case .whole:           return Fraction(numerator: 1, denominator: 1)
+        case .half:            return Fraction(numerator: 1, denominator: 2)
+        case .quarter:         return Fraction(numerator: 1, denominator: 4)
+        case .eighth:          return Fraction(numerator: 1, denominator: 8)
+        case .sixteenth:       return Fraction(numerator: 1, denominator: 16)
+        case .thirtySecond:    return Fraction(numerator: 1, denominator: 32)
+        case .sixtyFourth:     return Fraction(numerator: 1, denominator: 64)
+        case .oneTwentyEighth: return Fraction(numerator: 1, denominator: 128)
+        case .twoFiftySixth:   return Fraction(numerator: 1, denominator: 256)
+        case let .fraction(f): return f
+        }
+    }
+
     /// Apply augmentation dots: each dot extends the duration by half of the prior length
     /// (1 dot = 1.5x, 2 dots = 1.75x, etc.). Returns a `.fraction` with the result.
     public func dotted(_ dots: Int) -> NoteDuration {
         precondition(dots >= 0, "dots must be non-negative")
         if dots == 0 { return self }
-        // Express base as a fraction of a whole note, then multiply by (2^(d+1) - 1) / 2^d.
-        let base: Fraction
-        switch self {
-        case .whole:        base = Fraction(numerator: 1, denominator: 1)
-        case .half:         base = Fraction(numerator: 1, denominator: 2)
-        case .quarter:      base = Fraction(numerator: 1, denominator: 4)
-        case .eighth:       base = Fraction(numerator: 1, denominator: 8)
-        case .sixteenth:    base = Fraction(numerator: 1, denominator: 16)
-        case .thirtySecond: base = Fraction(numerator: 1, denominator: 32)
-        case .sixtyFourth:  base = Fraction(numerator: 1, denominator: 64)
-        case .oneTwentyEighth: base = Fraction(numerator: 1, denominator: 128)
-        case .twoFiftySixth:   base = Fraction(numerator: 1, denominator: 256)
-        case let .fraction(f): base = f
-        }
+        let base = asFraction
         let factorNumerator = (1 << (dots + 1)) - 1
         let factorDenominator = 1 << dots
         let n = base.numerator * factorNumerator

@@ -65,21 +65,3 @@ enum MusicXMLDuration {
         return .fraction(Fraction(numerator: n, denominator: d))
     }
 }
-
-extension NoteDuration {
-    /// Return this duration as a Fraction of a whole note.
-    fileprivate var asFraction: Fraction {
-        switch self {
-        case .whole:           return Fraction(numerator: 1, denominator: 1)
-        case .half:            return Fraction(numerator: 1, denominator: 2)
-        case .quarter:         return Fraction(numerator: 1, denominator: 4)
-        case .eighth:          return Fraction(numerator: 1, denominator: 8)
-        case .sixteenth:       return Fraction(numerator: 1, denominator: 16)
-        case .thirtySecond:    return Fraction(numerator: 1, denominator: 32)
-        case .sixtyFourth:     return Fraction(numerator: 1, denominator: 64)
-        case .oneTwentyEighth: return Fraction(numerator: 1, denominator: 128)
-        case .twoFiftySixth:   return Fraction(numerator: 1, denominator: 256)
-        case let .fraction(f): return f
-        }
-    }
-}
