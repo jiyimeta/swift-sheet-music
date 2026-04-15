@@ -56,3 +56,16 @@ Third-party Swift dependencies
 ------------------------------
 
 - ZIPFoundation — Apache 2.0 (https://github.com/weichsel/ZIPFoundation)
+
+-----
+
+SheetMusicUI bundles the Bravura SMuFL font
+(`Sources/SheetMusicUI/Fonts/Resources/Bravura.otf`).
+
+Bravura is © Steinberg Media Technologies GmbH and is licensed under
+the SIL Open Font License, Version 1.1. See
+`Sources/SheetMusicUI/Fonts/Resources/Bravura.LICENSE.txt` for the
+full license text.
+
+Bravura is included in the `SheetMusicUI` library target only; it is
+not a dependency of any other library product in this package.

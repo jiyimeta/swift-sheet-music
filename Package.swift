@@ -23,6 +23,8 @@ let package = Package(
         .library(name: "SheetMusicMusicXML", targets: ["SheetMusicMusicXML"]),
         // MIDI: in-memory model, score → MIDI rendering, SMF read/write.
         .library(name: "SheetMusicMIDI", targets: ["SheetMusicMIDI"]),
+        // SwiftUI views for rendering a Score. macOS 15+ only.
+        .library(name: "SheetMusicUI", targets: ["SheetMusicUI"]),
     ],
     dependencies: [
         .package(url: "https://github.com/weichsel/ZIPFoundation.git", exact: "0.9.20"),
@@ -56,6 +58,11 @@ let package = Package(
             dependencies: ["SheetMusicCore"]
         ),
         .target(
+            name: "SheetMusicUI",
+            dependencies: ["SheetMusicCore"],
+            resources: [.copy("Fonts/Resources")]
+        ),
+        .target(
             name: "SheetMusic",
             dependencies: [
                 "SheetMusicCore",
@@ -72,6 +79,7 @@ let package = Package(
                 "SheetMusicMIDI",
                 "SheetMusicMSCX",
                 "SheetMusicMusicXML",
+                "SheetMusicUI",
                 "SheetMusicXMLTools",
                 "ZIPFoundation",   // MXLTestBuilder builds .mxl archives at test time
             ],
