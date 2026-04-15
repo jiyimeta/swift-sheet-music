@@ -1,5 +1,6 @@
 import Foundation
 import SheetMusicCore
+import SheetMusicXMLTools
 
 /// Public façade that turns mscx XML bytes into a `Score`.
 public enum MSCXParser {

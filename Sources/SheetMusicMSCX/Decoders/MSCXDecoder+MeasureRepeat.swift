@@ -1,8 +1,9 @@
 import Foundation
 import SheetMusicCore
+import SheetMusicXMLTools
 
 extension MeasureRepeat {
-    static func decode(_ node: XMLNode) throws -> MeasureRepeat {
+    static func decode(_ node: XMLTreeNode) throws -> MeasureRepeat {
         let num = Int(node.first("subtype")?.text ?? "1") ?? 1
         let durationText = node.first("durationType")?.text ?? "measure"
         let duration: NoteDuration

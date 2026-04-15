@@ -1,8 +1,9 @@
 import Foundation
 import SheetMusicCore
+import SheetMusicXMLTools
 
 extension Score {
-    static func decode(_ root: XMLNode) throws -> Score {
+    static func decode(_ root: XMLTreeNode) throws -> Score {
         guard root.name == "museScore" else {
             throw SheetMusicError.malformedScore(reason: "root is <\(root.name)>, expected <museScore>")
         }

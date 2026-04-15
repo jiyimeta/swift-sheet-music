@@ -1,8 +1,9 @@
 import Foundation
 import SheetMusicCore
+import SheetMusicXMLTools
 
 extension Voice {
-    static func decode(_ node: XMLNode) throws -> Voice {
+    static func decode(_ node: XMLTreeNode) throws -> Voice {
         var elements: [VoiceElement] = []
         elements.reserveCapacity(node.children.count)
         for child in node.children {

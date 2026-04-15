@@ -1,8 +1,9 @@
 import Foundation
 import SheetMusicCore
+import SheetMusicXMLTools
 
 extension Rest {
-    static func decode(_ node: XMLNode) throws -> Rest {
+    static func decode(_ node: XMLTreeNode) throws -> Rest {
         guard let durationText = node.first("durationType")?.text else {
             throw SheetMusicError.malformedScore(reason: "Rest missing <durationType>")
         }
@@ -10,7 +11,7 @@ extension Rest {
         return Rest(duration: duration)
     }
 
-    private static func duration(forDurationType type: String, node: XMLNode) throws -> NoteDuration {
+    private static func duration(forDurationType type: String, node: XMLTreeNode) throws -> NoteDuration {
         if type == "measure" {
             // Full-measure rest: <duration>N/D</duration> gives the actual time
             let text = node.first("duration")?.text ?? "4/4"

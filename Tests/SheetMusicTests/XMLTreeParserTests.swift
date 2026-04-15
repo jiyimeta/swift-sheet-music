@@ -3,6 +3,7 @@ import Foundation
 @testable import SheetMusicCore
 @testable import SheetMusicMIDI
 @testable import SheetMusicMSCX
+@testable import SheetMusicXMLTools
 import Testing
 
 @Suite struct XMLTreeParserTests {

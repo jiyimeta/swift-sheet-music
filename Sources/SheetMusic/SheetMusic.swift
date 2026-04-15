@@ -2,12 +2,14 @@ import Foundation
 @_exported import SheetMusicCore
 @_exported import SheetMusicMIDI
 @_exported import SheetMusicMSCX
+@_exported import SheetMusicMusicXML
 
 /// Top-level convenience façade for the SheetMusic family of libraries.
 ///
-/// `import SheetMusic` re-exports `SheetMusicCore`, `SheetMusicMSCX`, and
-/// `SheetMusicMIDI` so all public types of the typical "load mscx/mscz →
-/// export MIDI" pipeline are visible without per-library imports.
+/// `import SheetMusic` re-exports `SheetMusicCore`, `SheetMusicMSCX`,
+/// `SheetMusicMusicXML`, and `SheetMusicMIDI` so all public types of the
+/// typical "load score → export MIDI" pipeline are visible without
+/// per-library imports.
 public enum SheetMusic {
     /// Parse uncompressed `.mscx` bytes into a `Score`.
     public static func loadScore(mscxData: Data) throws -> Score {
@@ -17,6 +19,16 @@ public enum SheetMusic {
     /// Parse `.mscz` container bytes into a `Score` (main `.mscx` only).
     public static func loadScore(msczData: Data) throws -> Score {
         try MSCZReader.parse(msczData)
+    }
+
+    /// Parse uncompressed MusicXML bytes (`<score-partwise>` root) into a `Score`.
+    public static func loadScore(musicXMLData: Data) throws -> Score {
+        try MusicXMLParser.parse(musicXMLData)
+    }
+
+    /// Parse `.mxl` (zipped MusicXML) archive bytes into a `Score`.
+    public static func loadScore(mxlData: Data) throws -> Score {
+        try MusicXMLParser.parse(mxlData: mxlData)
     }
 
     /// Read an `.mscx` file and parse into a `Score`.

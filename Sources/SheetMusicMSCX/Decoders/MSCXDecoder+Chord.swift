@@ -1,8 +1,9 @@
 import Foundation
 import SheetMusicCore
+import SheetMusicXMLTools
 
 extension Chord {
-    static func decode(_ node: XMLNode) throws -> Chord {
+    static func decode(_ node: XMLTreeNode) throws -> Chord {
         guard
             let durationText = node.first("durationType")?.text,
             let baseDuration = NoteDuration(mscxName: durationText)

@@ -1,8 +1,9 @@
 import Foundation
 import SheetMusicCore
+import SheetMusicXMLTools
 
 extension Measure {
-    static func decode(_ node: XMLNode) throws -> Measure {
+    static func decode(_ node: XMLTreeNode) throws -> Measure {
         let startRepeat = node.children.contains(where: { $0.name == "startRepeat" })
         let endRepeatCount = node.first("endRepeat").flatMap { Int($0.text) }
         let measureRepeatCount = node.first("measureRepeatCount").flatMap { Int($0.text) }

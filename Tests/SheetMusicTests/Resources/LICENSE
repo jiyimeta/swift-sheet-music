@@ -1,12 +1,16 @@
-The mscx and MIDI files in this directory are copies of test fixtures
-taken from the upstream MuseScore repository:
+The mscx, MIDI and MusicXML files in this directory are copies of test
+fixtures taken from the upstream MuseScore repository:
 
   https://github.com/musescore/MuseScore
-  src/importexport/midi/tests/midiexport_data/
+  - Root fixtures (midi*, testArpeggio, testVolta*, …):
+      src/importexport/midi/tests/midiexport_data/
+  - musicxml/ subdirectory:
+      src/importexport/musicxml/tests/data/
 
 They are reproduced here to allow the swift-sheet-music test suite to
 verify equivalence of its MIDI export against MuseScore's own exporter
-output.
+output, and to exercise the MusicXML importer against MuseScore's own
+MusicXML round-trip reference files.
 
 These files are licensed under the GNU General Public License version 3
 (GPL-3.0), the same licence as the upstream MuseScore source code:

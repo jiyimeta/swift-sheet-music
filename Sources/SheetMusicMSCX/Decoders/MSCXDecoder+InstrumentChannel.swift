@@ -1,8 +1,9 @@
 import Foundation
 import SheetMusicCore
+import SheetMusicXMLTools
 
 extension InstrumentChannel {
-    static func decode(_ node: XMLNode) throws -> InstrumentChannel {
+    static func decode(_ node: XMLTreeNode) throws -> InstrumentChannel {
         var channel = InstrumentChannel()
         channel.name = node.attributes["name"]
         if let valueText = node.first("program")?.attributes["value"], let program = Int(valueText) {

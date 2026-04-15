@@ -1,8 +1,9 @@
 import Foundation
 import SheetMusicCore
+import SheetMusicXMLTools
 
 extension Part {
-    static func decode(_ node: XMLNode) throws -> Part {
+    static func decode(_ node: XMLTreeNode) throws -> Part {
         // mscx files often omit the Part id attribute; fall back to "" rather than failing.
         let id = node.attributes["id"] ?? ""
         let staffDecls = try node.all("Staff").map { try StaffDeclaration.decode($0) }

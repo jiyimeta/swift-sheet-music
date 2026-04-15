@@ -1,8 +1,9 @@
 import Foundation
 import SheetMusicCore
+import SheetMusicXMLTools
 
 extension Spanner {
-    static func decode(_ node: XMLNode) throws -> Spanner {
+    static func decode(_ node: XMLTreeNode) throws -> Spanner {
         let raw = node.attributes["type"] ?? ""
         let kind = Kind(rawValue: raw) ?? .other
 

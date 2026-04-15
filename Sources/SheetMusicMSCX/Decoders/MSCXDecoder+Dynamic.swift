@@ -1,5 +1,6 @@
 import Foundation
 import SheetMusicCore
+import SheetMusicXMLTools
 
 extension Dynamic {
     /// Default-to-mf-velocity table for symbolic dynamics when `<velocity>` is absent.
@@ -9,7 +10,7 @@ extension Dynamic {
         "mp": 64, "mf": 80, "f": 96, "ff": 112, "fff": 126, "ffff": 127, "fffff": 127,
     ]
 
-    static func decode(_ node: XMLNode) throws -> Dynamic {
+    static func decode(_ node: XMLTreeNode) throws -> Dynamic {
         let subtype = node.first("subtype")?.text ?? "mf"
         let velocity: Int
         if let vText = node.first("velocity")?.text, let v = Int(vText) {

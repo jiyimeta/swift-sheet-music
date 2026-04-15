@@ -1,10 +1,10 @@
 import Foundation
 import SheetMusicCore
 
-/// Parses XML bytes into an in-memory `XMLNode` tree.
+/// Parses XML bytes into an in-memory `XMLTreeNode` tree.
 public enum XMLTreeParser {
-    /// Parse the given XML bytes into a single root `XMLNode`.
-    public static func parse(_ data: Data) throws -> XMLNode {
+    /// Parse the given XML bytes into a single root `XMLTreeNode`.
+    public static func parse(_ data: Data) throws -> XMLTreeNode {
         let delegate = TreeBuildingDelegate()
         let parser = XMLParser(data: data)
         parser.delegate = delegate
@@ -29,8 +29,8 @@ public enum XMLTreeParser {
 }
 
 private final class TreeBuildingDelegate: NSObject, XMLParserDelegate {
-    var root: XMLNode?
-    var stack: [XMLNode] = []
+    var root: XMLTreeNode?
+    var stack: [XMLTreeNode] = []
     var error: Error?
 
     func parser(
@@ -40,7 +40,7 @@ private final class TreeBuildingDelegate: NSObject, XMLParserDelegate {
         qualifiedName qName: String?,
         attributes attributeDict: [String: String]
     ) {
-        let node = XMLNode(name: elementName, attributes: attributeDict, text: "", children: [])
+        let node = XMLTreeNode(name: elementName, attributes: attributeDict, text: "", children: [])
         stack.append(node)
     }
 
