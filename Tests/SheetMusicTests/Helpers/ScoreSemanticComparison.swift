@@ -122,6 +122,14 @@ enum ScoreSemanticComparison {
             msg += "voices.count produced=\(p) reference=\(r)"
             return msg
         }
+        if produced.markers != reference.markers {
+            msg += "markers:\n  produced=\(produced.markers)\n  reference=\(reference.markers)"
+            return msg
+        }
+        if produced.jumps != reference.jumps {
+            msg += "jumps:\n  produced=\(produced.jumps)\n  reference=\(reference.jumps)"
+            return msg
+        }
         for (v, pair) in zip(produced.voices, reference.voices).enumerated()
         where pair.0.elements != pair.1.elements {
             msg += "voices[\(v)].elements differ:"
@@ -156,6 +164,7 @@ enum ScoreSemanticComparison {
         case .dynamic(let d): return "dynamic(\(d))"
         case .spanner(let s): return "spanner(\(s.kind))"
         case .measureRepeat: return "measureRepeat"
+        case .fermata(let f): return "fermata(\(f.subtype))"
         }
     }
 

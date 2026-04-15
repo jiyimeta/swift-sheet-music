@@ -12,6 +12,7 @@ public struct Spanner: Sendable, Equatable {
         case pedal = "Pedal"
         case ottava = "Ottava"
         case textLine = "TextLine"
+        case glissando = "Glissando"
         case other
     }
 

@@ -13,16 +13,24 @@ public struct Measure: Sendable, Equatable {
     /// also contains the explicit `<MeasureRepeat>` element); N=2 marks the second
     /// (continuation) member of a 2-measure repeat group, and so on.
     public var measureRepeatCount: Int?
+    /// Measure-left `<Marker>` entries (Segno, Coda, Fine, To Coda).
+    public var markers: [Marker]
+    /// Measure-right `<Jump>` entries (D.C., D.S., D.C. al Coda, …).
+    public var jumps: [Jump]
 
     public init(
         voices: [Voice],
         startRepeat: Bool = false,
         endRepeatCount: Int? = nil,
-        measureRepeatCount: Int? = nil
+        measureRepeatCount: Int? = nil,
+        markers: [Marker] = [],
+        jumps: [Jump] = []
     ) {
         self.voices = voices
         self.startRepeat = startRepeat
         self.endRepeatCount = endRepeatCount
         self.measureRepeatCount = measureRepeatCount
+        self.markers = markers
+        self.jumps = jumps
     }
 }

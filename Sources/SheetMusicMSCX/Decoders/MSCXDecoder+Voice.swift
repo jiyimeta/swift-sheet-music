@@ -28,6 +28,9 @@ extension Voice {
                 elements.append(.spanner(try Spanner.decode(child)))
             case "MeasureRepeat":
                 elements.append(.measureRepeat(try MeasureRepeat.decode(child)))
+            case "Fermata":
+                let subtype = child.first("subtype")?.text ?? ""
+                elements.append(.fermata(Fermata(subtype: subtype)))
             default:
                 // Unknown elements are silently ignored. Decoder is permissive on purpose
                 // — once we see what features individual MIDI tests actually need, they

@@ -139,6 +139,11 @@ extension MidiRenderer {
                 events: &events
             )
             localTick += chord.duration.ticks(division: division)
+        case .fermata:
+            // Fermatas are a display-only annotation in our current Score;
+            // they don't affect MIDI output (MuseScore performs them via
+            // tempomap stretching — not replicated here).
+            break
         }
     }
 

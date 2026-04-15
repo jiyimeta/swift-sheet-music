@@ -7,7 +7,11 @@ import SheetMusicXMLTools
 /// the preceding chord (when the note carries `<chord/>`).
 enum MusicXMLNoteDecoder {
     enum Decoded {
-        case new(VoiceElement)
+        /// Append the given elements in order. Typical: a single Chord or Rest.
+        /// A fermata on the note prepends a `.fermata` element so it precedes
+        /// the chord/rest in the resulting voice, matching MuseScore's MSCX
+        /// layout where `<Fermata>` sits as a sibling just before its target.
+        case new([VoiceElement])
         case foldIntoLastChord(Note, NoteDuration)
     }
 
@@ -25,8 +29,11 @@ enum MusicXMLNoteDecoder {
             )
         }
 
+        let fermata = decodeFermata(node)
+        let prefix: [VoiceElement] = fermata.map { [.fermata($0)] } ?? []
+
         if isRest {
-            return .new(.rest(Rest(duration: duration)))
+            return .new(prefix + [.rest(Rest(duration: duration))])
         }
 
         guard let pitchNode = node.first("pitch") else {
@@ -54,7 +61,32 @@ enum MusicXMLNoteDecoder {
         let arpeggio = decodeArpeggio(node)
         let chord = Chord(duration: duration, notes: [note], arpeggio: arpeggio)
         _ = existingVoiceElements   // reserved for future use (e.g. tie backrefs)
-        return .new(.chord(chord))
+        return .new(prefix + [.chord(chord)])
+    }
+
+    /// MusicXML encodes fermatas under `<notations><fermata>`. The element's
+    /// text (if any) is the fermata shape ("normal", "square", "angled", …);
+    /// empty means normal. We map to MuseScore's `<subtype>` spelling.
+    private static func decodeFermata(_ node: XMLTreeNode) -> Fermata? {
+        guard let notations = node.first("notations") else { return nil }
+        guard let fermataNode = notations.first("fermata") else { return nil }
+        let shape = fermataNode.text
+        let placement = fermataNode.attributes["type"] ?? "upright"
+        let above = placement != "inverted"
+        let subtype: String
+        switch shape {
+        case "square":
+            subtype = above ? "fermataLongAbove" : "fermataLongBelow"
+        case "angled":
+            subtype = above ? "fermataShortAbove" : "fermataShortBelow"
+        case "double-square":
+            subtype = above ? "fermataVeryLongAbove" : "fermataVeryLongBelow"
+        case "double-angled":
+            subtype = above ? "fermataVeryShortAbove" : "fermataVeryShortBelow"
+        default:
+            subtype = above ? "fermataAbove" : "fermataBelow"
+        }
+        return Fermata(subtype: subtype)
     }
 
     /// MusicXML's `<tie type="start"/>` starts a tie; `<tie type="stop"/>`

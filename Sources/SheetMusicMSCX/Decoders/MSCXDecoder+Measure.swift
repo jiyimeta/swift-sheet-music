@@ -17,11 +17,36 @@ extension Measure {
             // <Measure> (no <voice> wrapper). Treat them as a single implicit voice.
             voices = [try Voice.decode(node)]
         }
+        let markers = node.all("Marker").map(decodeMarker)
+        let jumps = node.all("Jump").map(decodeJump)
+
         return Measure(
             voices: voices,
             startRepeat: startRepeat,
             endRepeatCount: endRepeatCount,
-            measureRepeatCount: measureRepeatCount
+            measureRepeatCount: measureRepeatCount,
+            markers: markers,
+            jumps: jumps
+        )
+    }
+
+    private static func decodeMarker(_ node: XMLTreeNode) -> Marker {
+        let markerType = node.first("markerType")?.text ?? ""
+        let label = node.first("label")?.text ?? ""
+        let text = node.first("text")?.text ?? ""
+        return Marker(
+            kind: Marker.Kind(rawValue: markerType) ?? .other,
+            label: label,
+            text: text
+        )
+    }
+
+    private static func decodeJump(_ node: XMLTreeNode) -> Jump {
+        Jump(
+            jumpTo: node.first("jumpTo")?.text ?? "",
+            playUntil: node.first("playUntil")?.text ?? "",
+            continueAt: node.first("continueAt")?.text ?? "",
+            text: node.first("text")?.text ?? ""
         )
     }
 }
