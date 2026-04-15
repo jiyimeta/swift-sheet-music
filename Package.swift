@@ -25,6 +25,9 @@ let package = Package(
         .library(name: "SheetMusicMIDI", targets: ["SheetMusicMIDI"]),
         // SwiftUI views for rendering a Score. macOS 15+ only.
         .library(name: "SheetMusicUI", targets: ["SheetMusicUI"]),
+        // Dev tool (not a consumer-facing product): renders sample
+        // Scores to PNG for visual inspection of ScoreView.
+        .executable(name: "render-previews", targets: ["RenderPreviews"]),
     ],
     dependencies: [
         .package(url: "https://github.com/weichsel/ZIPFoundation.git", exact: "0.9.20"),
@@ -70,6 +73,12 @@ let package = Package(
                 "SheetMusicMusicXML",
                 "SheetMusicMIDI",
             ]
+        ),
+        // Dev tool: renders a set of sample Scores to PNG for visual
+        // inspection. Not a published product — only for contributor use.
+        .executableTarget(
+            name: "RenderPreviews",
+            dependencies: ["SheetMusic", "SheetMusicUI"]
         ),
         .testTarget(
             name: "SheetMusicTests",

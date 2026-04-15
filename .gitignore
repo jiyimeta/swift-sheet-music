@@ -13,3 +13,4 @@ DerivedData/
 # manually with: git submodule add --force https://github.com/musescore/MuseScore MuseScore
 /MuseScore
 
+tmp/
