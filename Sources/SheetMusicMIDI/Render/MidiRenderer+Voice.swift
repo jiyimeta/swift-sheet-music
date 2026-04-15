@@ -173,21 +173,47 @@ extension MidiRenderer {
                 let note = chord.notes[noteIndex]
                 let onTick = tick + pairs[i].onOffset
                 let offTick = tick + pairs[i].offOffset
-                let on = MidiEvent.noteOn(channel: channel, pitch: note.pitch, velocity: velocity)
-                let off = MidiEvent.noteOff(channel: channel, pitch: note.pitch, velocity: 0)
-                events.append(TimedMidiEvent(tick: onTick, event: on))
-                events.append(TimedMidiEvent(tick: offTick, event: off))
+                emitNoteEvents(
+                    note: note, channel: channel, velocity: velocity,
+                    onTick: onTick, offTick: offTick, events: &events
+                )
             }
         } else {
             let gate = defaultArticulationGateTime(for: instrument)
             let gatedTicks = durationTicks * gate / 100
             let offTick = tick + gatedTicks - 1
             for note in chord.notes {
-                let on = MidiEvent.noteOn(channel: channel, pitch: note.pitch, velocity: velocity)
-                let off = MidiEvent.noteOff(channel: channel, pitch: note.pitch, velocity: 0)
-                events.append(TimedMidiEvent(tick: tick, event: on))
-                events.append(TimedMidiEvent(tick: offTick, event: off))
+                emitNoteEvents(
+                    note: note, channel: channel, velocity: velocity,
+                    onTick: tick, offTick: offTick, events: &events
+                )
             }
+        }
+    }
+
+    /// Emit note-on/off for a single note, respecting tie flags. For a tied chain
+    /// we want ONE combined event pair:
+    ///   - A note with `tieBack` set must not re-trigger: its note-on is suppressed
+    ///     because the preceding chord's note-on is still sounding.
+    ///   - A note with `tieForward` set must not release: its note-off is suppressed
+    ///     because the sound continues into the following chord.
+    /// Mirrors MuseScore's `Note::playTicksFraction()` which reports the full tied
+    /// span as the single sounding event.
+    private static func emitNoteEvents(
+        note: Note,
+        channel: Int,
+        velocity: Int,
+        onTick: Int,
+        offTick: Int,
+        events: inout [TimedMidiEvent]
+    ) {
+        if note.tieBack == nil {
+            let on = MidiEvent.noteOn(channel: channel, pitch: note.pitch, velocity: velocity)
+            events.append(TimedMidiEvent(tick: onTick, event: on))
+        }
+        if note.tieForward == nil {
+            let off = MidiEvent.noteOff(channel: channel, pitch: note.pitch, velocity: 0)
+            events.append(TimedMidiEvent(tick: offTick, event: off))
         }
     }
 
