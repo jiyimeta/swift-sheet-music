@@ -56,6 +56,27 @@ func run() throws {
         try writePNG(cg, to: url)
         print("wrote \(url.path) (\(cg.width)×\(cg.height))")
     }
+
+    // Smoke test: ScoreView with NO explicit frame must fall back to the
+    // score's natural size — this is what happens inside a ScrollView
+    // that proposes nil width/height. A broken ScoreView would collapse
+    // to ~10×10 here.
+    let scrollScore = Samples.cMajorScale
+    let noFrameView = ScoreView(score: scrollScore)
+        .padding()
+        .background(Color.white)
+    let noFrameRenderer = ImageRenderer(content: noFrameView)
+    noFrameRenderer.scale = 2
+    if let cg = noFrameRenderer.cgImage {
+        let url = outputDir.appendingPathComponent(
+            "99-unconstrained.png")
+        try writePNG(cg, to: url)
+        print("wrote \(url.path) (\(cg.width)×\(cg.height))")
+        if cg.width < 400 {
+            FileHandle.standardError.write(Data(
+                "WARNING: unconstrained ScoreView collapsed to \(cg.width)px wide — the ScrollView-compatible minWidth floor may have regressed.\n".utf8))
+        }
+    }
 }
 
 @available(macOS 15.0, *)

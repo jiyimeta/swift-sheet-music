@@ -4,6 +4,38 @@ import SheetMusicCore
 
 @available(macOS 15.0, *)
 extension LayoutEngine {
+    /// Width a single-system layout of `score` would occupy at its
+    /// uncompressed minimum. Sum of per-measure minimum widths + the
+    /// first-system part-label reservation.
+    ///
+    /// Used by `ScoreView` as the `minWidth` floor so the view doesn't
+    /// collapse when a parent proposes nil/tiny width (e.g. inside
+    /// `ScrollView([.vertical, .horizontal])`).
+    public static func naturalContentWidth(
+        score: Score, options: ScoreViewOptions
+    ) -> CGFloat {
+        let metrics = StaffMetrics(staffSize: options.staffSize)
+        let partLabelWidth: CGFloat = 80
+        guard let firstStaff = score.staves.first else {
+            return partLabelWidth + metrics.sp * 8
+        }
+        let measureCount = firstStaff.measures.count
+        guard measureCount > 0 else {
+            return partLabelWidth + metrics.sp * 8
+        }
+        var total: CGFloat = partLabelWidth
+        for i in 0..<measureCount {
+            let w = score.staves.map { staff -> CGFloat in
+                guard i < staff.measures.count else { return 0 }
+                return minimumMeasureWidth(
+                    measure: staff.measures[i],
+                    metrics: metrics)
+            }.max() ?? 0
+            total += w
+        }
+        return total
+    }
+
     static func minimumMeasureWidth(
         measure: Measure,
         metrics: StaffMetrics
