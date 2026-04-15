@@ -17,3 +17,26 @@ public enum SheetMusicError: Error, Sendable {
     /// the URL-based API overloads. The original error is preserved.
     case ioError(url: URL, underlying: Error)
 }
+
+/// Surface the case-specific reason via `localizedDescription` — without this,
+/// callers (and SwiftUI alerts that just print `error.localizedDescription`)
+/// only see "SheetMusicError error N" with no diagnostic payload.
+extension SheetMusicError: LocalizedError {
+    public var errorDescription: String? {
+        switch self {
+        case let .invalidXML(underlying):
+            return "Invalid XML: \(underlying.localizedDescription)"
+        case let .malformedScore(reason):
+            return reason
+        case let .unsupportedFeature(name, location):
+            if let location {
+                return "Unsupported feature \(name) at \(location)"
+            }
+            return "Unsupported feature \(name)"
+        case let .corruptedContainer(reason):
+            return "Corrupted archive: \(reason)"
+        case let .ioError(url, underlying):
+            return "I/O error reading \(url.lastPathComponent): \(underlying.localizedDescription)"
+        }
+    }
+}
