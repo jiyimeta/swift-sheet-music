@@ -1,3 +1,4 @@
+#if !os(macOS)
 import SheetMusic
 import SwiftUI
 
@@ -92,7 +93,4 @@ struct ContentView: View {
         }
     }
 }
-
-#Preview {
-    ContentView()
-}
+#endif

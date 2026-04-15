@@ -18,10 +18,11 @@ The package is split into focused libraries; pick what you need.
 | `SheetMusicCore` | Score data model (Score, Part, Measure, Voice, Note, Chord, …) and the shared error type. No format I/O. |
 | `SheetMusicMSCX` | MuseScore file I/O: `.mscx` parsing and `.mscz` read/write (main score only). |
 | `SheetMusicMIDI` | In-memory MIDI model, score → MIDI rendering, SMF read/write. |
+| `SheetMusicUI` | SwiftUI read-only notation viewer (macOS 15+), bundles Bravura SMuFL font (SIL OFL). |
 
-Future libraries on the roadmap: `SheetMusicUI` (SwiftUI score views),
-`SheetMusicPlayback` (AVAudioEngine MIDI player), and additional
-`SheetMusic<FormatName>` libraries (e.g. MusicXML, PDF) as they're added.
+Future libraries on the roadmap: `SheetMusicPlayback` (AVAudioEngine
+MIDI player), and additional `SheetMusic<FormatName>` libraries (e.g.
+PDF) as they're added.
 
 ## Example
 
@@ -49,6 +50,16 @@ let score = try MSCXParser.parse(mscxData)
 import SheetMusicMIDI
 let midiFile = try MidiRenderer.render(score: score)
 let bytes    = try MidiWriter.write(midiFile)
+```
+
+To display a score in SwiftUI (macOS 15+):
+
+```swift
+import SheetMusic
+import SheetMusicUI
+
+let score = try SheetMusic.loadScore(mscxData: data)
+ScoreView(score: score)
 ```
 
 ## Coverage

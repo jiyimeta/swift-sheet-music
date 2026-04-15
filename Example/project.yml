@@ -4,6 +4,7 @@ options:
   developmentLanguage: en
   deploymentTarget:
     iOS: 16.0
+    macOS: 15.0
 
 packages:
   swift-sheet-music:
@@ -20,7 +21,27 @@ targets:
       MARKETING_VERSION: 1.0
       CURRENT_PROJECT_VERSION: 1
     sources:
-      - SheetMusicExample
+      - path: SheetMusicExample
+        excludes:
+          - macOS
     dependencies:
       - package: swift-sheet-music
         product: SheetMusic
+
+  SheetMusicExampleMac:
+    type: application
+    platform: macOS
+    settings:
+      INFOPLIST_FILE: Info.plist
+      PRODUCT_BUNDLE_IDENTIFIER: com.dev.SheetMusicExample.Mac
+      MARKETING_VERSION: 1.0
+      CURRENT_PROJECT_VERSION: 1
+      CODE_SIGN_STYLE: Manual
+      CODE_SIGN_IDENTITY: "-"
+    sources:
+      - path: SheetMusicExample
+    dependencies:
+      - package: swift-sheet-music
+        product: SheetMusic
+      - package: swift-sheet-music
+        product: SheetMusicUI

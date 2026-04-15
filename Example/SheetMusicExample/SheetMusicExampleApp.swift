@@ -1,3 +1,4 @@
+#if !os(macOS)
 import SwiftUI
 
 @main
@@ -8,3 +9,4 @@ struct SheetMusicExampleApp: App {
         }
     }
 }
+#endif
