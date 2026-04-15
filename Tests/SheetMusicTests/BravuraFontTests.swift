@@ -10,12 +10,14 @@ struct BravuraFontTests {
         guard #available(macOS 15.0, *) else {
             return
         }
-        _ = BravuraFont.register
+        let ok = BravuraFont.register
+        #expect(ok, "BravuraFont.register returned false — the font was not installed")
         let font = CTFontCreateWithName(
             "Bravura" as CFString, 12, nil
         )
         let resolvedFamily = CTFontCopyFamilyName(font) as String
-        #expect(resolvedFamily == "Bravura")
+        #expect(resolvedFamily == "Bravura",
+                "CoreText resolved '\(resolvedFamily)' instead of 'Bravura' — glyphs will render as tofu")
     }
 }
 #endif
