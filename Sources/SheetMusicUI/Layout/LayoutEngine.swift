@@ -210,25 +210,29 @@ public enum LayoutEngine {
         }
         for (j, measureIdx) in measureRange.enumerated() {
             let w = widths[j]
+            let synthesizeClefHere = isFirstSystem && j == 0
+            let schedule = computeHeaderSchedule(
+                measureIdx: measureIdx,
+                staves: staves,
+                metrics: metrics,
+                synthesizeClefForAllStaves: synthesizeClefHere
+            )
             var aggregated: [LayoutElement] = []
             var markers: [LayoutElement] = []
             var jumps: [LayoutElement] = []
             for (staffIdx, staff) in staves.enumerated() {
                 guard measureIdx < staff.measures.count else { continue }
                 let m = staff.measures[measureIdx]
-                // Only inject a synthesized clef on the first system's
-                // first measure. Continuation systems would otherwise
-                // duplicate the clef glyph.
-                let synthClef: String? =
-                    (isFirstSystem && j == 0)
-                        ? defaultClefRawTypes[staffIdx]
-                        : nil
+                let synthClef: String? = synthesizeClefHere
+                    ? defaultClefRawTypes[staffIdx]
+                    : nil
                 let (els, newClef) = placeMeasureElements(
                     measure: m,
                     width: w,
                     metrics: metrics,
                     activeClef: clefs[staffIdx],
                     initialClefRawType: synthClef,
+                    headerSchedule: schedule,
                     division: context.score.division
                 )
                 clefs[staffIdx] = newClef

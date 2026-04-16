@@ -18,6 +18,7 @@ extension LayoutEngine {
         metrics: StaffMetrics,
         activeClef: NotatedClef,
         initialClefRawType: String? = nil,
+        headerSchedule: HeaderSchedule,
         division: Int
     ) -> (elements: [LayoutElement], clef: NotatedClef) {
         let staffMidY = metrics.staffHeight / 2 + metrics.sp * 2
@@ -52,22 +53,18 @@ extension LayoutEngine {
             synthesizeLeadingClef = false
         }
 
-        // --- Pass 1: measure the header width (leading clef/key/time) ---
-        var headerEnd = headerWidth(
-            measure: measure, metrics: metrics, startPadding: metrics.sp * 2)
-        if synthesizeLeadingClef {
-            // Reserve space for the synthesized clef that's about to be
-            // emitted — same width the real clef would consume.
-            headerEnd += metrics.sp * 3
-        }
+        // Content width uses the shared schedule, so timed elements in
+        // this staff align with timed elements in every other staff of
+        // the same system.
         let trailingGap = metrics.sp * 3
-        let contentWidth = max(metrics.sp * 4, width - headerEnd - trailingGap)
+        let contentWidth = max(
+            metrics.sp * 4,
+            width - headerSchedule.contentStartX - trailingGap)
 
         // --- Pass 2: emit elements for each voice ---
         var remainingSynthClef = synthesizeLeadingClef
         for voice in measure.voices {
             let voiceTotal = totalTicks(in: voice, division: division)
-            var vx: CGFloat = metrics.sp * 2
             var tickCursor = 0
             var inHeader = true
             var voiceChordOutIndex: [Int: Int] = [:]
@@ -77,49 +74,46 @@ extension LayoutEngine {
             if remainingSynthClef, let rawType = initialClefRawType {
                 out.append(.clef(
                     rawType: rawType,
-                    origin: CGPoint(x: vx, y: staffMidY)))
-                vx += metrics.sp * 3
+                    origin: CGPoint(
+                        x: headerSchedule.clefX, y: staffMidY)))
                 remainingSynthClef = false
             }
 
             /// x-coordinate for the next timed element based on tick.
             func timedX() -> CGFloat {
-                guard voiceTotal > 0 else { return headerEnd + metrics.sp }
+                guard voiceTotal > 0 else {
+                    return headerSchedule.contentStartX + metrics.sp
+                }
                 let fraction = CGFloat(tickCursor) / CGFloat(voiceTotal)
-                return headerEnd + metrics.sp + fraction * contentWidth
+                return headerSchedule.contentStartX
+                    + metrics.sp + fraction * contentWidth
             }
 
             for (voiceIdx, el) in voice.elements.enumerated() {
                 switch el {
                 case .clef(let clef):
                     currentClef = NotatedClef(rawType: clef.concertClefType)
-                    let clefX = inHeader ? vx : timedX()
+                    let clefX = inHeader ? headerSchedule.clefX : timedX()
                     out.append(.clef(
                         rawType: clef.concertClefType,
                         origin: CGPoint(x: clefX, y: staffMidY)))
-                    if inHeader { vx += metrics.sp * 3 }
                 case .keySignature(let key):
-                    let keyX = inHeader ? vx : timedX()
+                    let keyX = inHeader ? headerSchedule.keySigX : timedX()
                     out.append(.keySignature(
                         sharps: max(0, key.concertKey),
                         flats: max(0, -key.concertKey),
                         origin: CGPoint(x: keyX, y: staffMidY)))
-                    if inHeader {
-                        vx += metrics.sp * (CGFloat(abs(key.concertKey)) + 1.5)
-                    }
                 case .timeSignature(let ts):
-                    let tsX = inHeader ? vx : timedX()
+                    let tsX = inHeader ? headerSchedule.timeSigX : timedX()
                     out.append(.timeSignature(
                         numerator: ts.numerator,
                         denominator: ts.denominator,
                         origin: CGPoint(x: tsX, y: staffMidY)))
-                    if inHeader { vx += metrics.sp * 3 }
                 case .barLine(let b):
-                    let barX = inHeader ? vx : timedX()
+                    let barX = inHeader ? metrics.sp : timedX()
                     out.append(.barLine(
                         subtype: b.subtype,
                         origin: CGPoint(x: barX, y: staffMidY)))
-                    if inHeader { vx += metrics.sp }
                 case .rest(let r):
                     inHeader = false
                     out.append(.rest(
@@ -171,7 +165,9 @@ extension LayoutEngine {
                     // (i.e. the next timed element at the current tick).
                     // Shift 1 sp left so the label doesn't overlap the
                     // following chord's notehead or stem.
-                    let baseX = inHeader ? vx : timedX()
+                    let baseX = inHeader
+                        ? headerSchedule.contentStartX
+                        : timedX()
                     out.append(.textMark(
                         kind: .dynamic,
                         text: d.subtype,
@@ -183,18 +179,23 @@ extension LayoutEngine {
                     // "♩" is Unicode U+2669, rendered in the system text font,
                     // not a SMuFL/Bravura glyph — do not migrate to a SMuFL
                     // codepoint without also switching the renderer's font.
+                    let tempoX = inHeader
+                        ? headerSchedule.contentStartX
+                        : timedX()
                     out.append(.textMark(
                         kind: .tempo,
                         text: "♩ = \(bpm)",
                         origin: CGPoint(
-                            x: inHeader ? vx : timedX(),
+                            x: tempoX,
                             y: staffMidY - metrics.sp * 4)))
                 case .fermata(let f):
                     // Fermata attaches to the preceding chord/rest; emit at
                     // the last placed timed x (or header cursor if still in
                     // header, though that's unusual).
                     let lastChordX = lastChordOrRestX(in: out)
-                        ?? (inHeader ? vx : timedX())
+                        ?? (inHeader
+                            ? headerSchedule.contentStartX
+                            : timedX())
                     out.append(.fermata(
                         subtype: f.subtype,
                         origin: CGPoint(

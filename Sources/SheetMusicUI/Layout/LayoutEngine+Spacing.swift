@@ -4,6 +4,76 @@ import SheetMusicCore
 
 @available(macOS 15.0, *)
 extension LayoutEngine {
+    /// Per-measure shared header layout. All staves in a multi-staff
+    /// system use the same x-positions for clef / key sig / time sig
+    /// so that a drum or tab staff (which has no key signature) still
+    /// places its time signature at the same x as a pitched staff that
+    /// does. Without this, drum/tab time signatures would slide left
+    /// and break vertical alignment across the system.
+    struct HeaderSchedule: Sendable, Equatable {
+        let clefX: CGFloat
+        let keySigX: CGFloat
+        let timeSigX: CGFloat
+        let contentStartX: CGFloat
+    }
+
+    /// Compute the shared header schedule for `measureIdx` across all
+    /// staves. Each column's width is the max width consumed by any
+    /// staff that carries that element, so staves lacking an element
+    /// simply skip its slot (empty visual space).
+    static func computeHeaderSchedule(
+        measureIdx: Int,
+        staves: [StaffContent],
+        metrics: StaffMetrics,
+        synthesizeClefForAllStaves: Bool
+    ) -> HeaderSchedule {
+        var clefWidth: CGFloat = 0
+        var keySigWidth: CGFloat = 0
+        var timeSigWidth: CGFloat = 0
+
+        for staff in staves {
+            guard measureIdx < staff.measures.count else { continue }
+            let measure = staff.measures[measureIdx]
+            // On the first system, every staff draws a clef (either
+            // explicit or synthesized). Ensure the clef column is sized
+            // even when no staff has a literal <Clef>.
+            if synthesizeClefForAllStaves {
+                clefWidth = max(clefWidth, metrics.sp * 3)
+            }
+            let leading = measure.voices.first?.elements ?? []
+            for el in leading {
+                var stop = false
+                switch el {
+                case .clef:
+                    clefWidth = max(clefWidth, metrics.sp * 3)
+                case .keySignature(let k):
+                    keySigWidth = max(
+                        keySigWidth,
+                        metrics.sp * (CGFloat(abs(k.concertKey)) + 1.5))
+                case .timeSignature:
+                    timeSigWidth = max(timeSigWidth, metrics.sp * 3)
+                case .chord, .rest:
+                    stop = true
+                default:
+                    break
+                }
+                if stop { break }
+            }
+        }
+
+        let clefX = metrics.sp * 2
+        let keySigX = clefX + clefWidth
+        let timeSigX = keySigX + keySigWidth
+        let contentStartX = timeSigX + timeSigWidth
+            + (timeSigWidth > 0 ? metrics.sp * 0.5 : 0)
+        return HeaderSchedule(
+            clefX: clefX,
+            keySigX: keySigX,
+            timeSigX: timeSigX,
+            contentStartX: contentStartX
+        )
+    }
+
     /// Width a single-system layout of `score` would occupy at its
     /// uncompressed minimum. Sum of per-measure minimum widths + the
     /// first-system part-label reservation.
