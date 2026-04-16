@@ -3,18 +3,23 @@ import SwiftUI
 
 @available(macOS 15.0, *)
 extension GraphicsContext {
-    /// Draw a SMuFL glyph centered at `origin` using the Bravura font.
+    /// Draw a SMuFL glyph anchored at `origin` using the Bravura font.
+    /// Default anchor is `.center` for notehead-like glyphs. Flags,
+    /// rests, and clefs that need specific attachment points pass a
+    /// different anchor (e.g. `.topLeading` so the glyph's NW sits at
+    /// the stem tip).
     mutating func drawGlyph(
         _ glyph: Character,
         at origin: CGPoint,
         size: CGFloat,
-        color: Color = .primary
+        color: Color = .primary,
+        anchor: UnitPoint = .center
     ) {
         let text = Text(String(glyph))
             .font(.custom(BravuraFont.familyName, size: size))
             .foregroundColor(color)
         let resolved = resolve(text)
-        draw(resolved, at: origin, anchor: .center)
+        draw(resolved, at: origin, anchor: anchor)
     }
 
     /// Draw short text (dynamic markings, tempo labels).

@@ -190,6 +190,41 @@ enum Samples {
                 measures: [m(3, 4), m(6, 8), m(12, 8)])])
     }
 
+    // MARK: - 11 isolated flags (8ths / 16ths) up and down
+
+    static var isolatedFlags: Score {
+        // Isolated 8th / 16th / 32nd notes separated by rests so the
+        // beam-group detector treats them as loners and keeps the flag
+        // glyph on each note. Alternates stem-up (low notes, below
+        // middle line) and stem-down (high notes).
+        let smallRest = Rest(duration: .eighth)
+        let elements: [VoiceElement] = [
+            .clef(Clef(concertClefType: "G")),
+            .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+            // Stem up, 8th flag
+            .chord(Chord(duration: .eighth,
+                         notes: [Note(pitch: 60, tpc: 14)])),
+            .rest(smallRest),
+            // Stem up, 16th flag
+            .chord(Chord(duration: .sixteenth,
+                         notes: [Note(pitch: 62, tpc: 16)])),
+            .rest(smallRest),
+            .rest(Rest(duration: .sixteenth)),
+            // Stem down, 8th flag
+            .chord(Chord(duration: .eighth,
+                         notes: [Note(pitch: 72, tpc: 14)])),
+            .rest(smallRest),
+            // Stem down, 16th flag
+            .chord(Chord(duration: .sixteenth,
+                         notes: [Note(pitch: 74, tpc: 16)])),
+        ]
+        let m = Measure(voices: [Voice(elements: elements)])
+        return Score(
+            division: 480,
+            parts: [treblePart()],
+            staves: [StaffContent(id: 1, measures: [m])])
+    }
+
     // MARK: - 10 dynamics + tempo
 
     static var dynamicsTempo: Score {
