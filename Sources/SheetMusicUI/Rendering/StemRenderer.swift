@@ -92,7 +92,7 @@ enum StemRenderer {
         let tipY: CGFloat = direction == .up ? startY : endY
         context.drawGlyph(
             glyph,
-            at: CGPoint(x: stemX, y: tipY - metrics.sp),
+            at: CGPoint(x: stemX, y: tipY + metrics.sp * 0.5),
             size: metrics.glyphFontSize,
             anchor: .leading)
     }
