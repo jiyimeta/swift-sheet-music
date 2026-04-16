@@ -17,6 +17,13 @@ struct ScoreCanvas: View {
             height: max(document.size.height, 1),
             alignment: .topLeading
         )
+        // Score paper is always white with black ink, regardless of
+        // the host app's light/dark appearance. Forcing `.light` makes
+        // `Color.primary` inside the Canvas resolve to black, and the
+        // explicit white background keeps the page looking like paper
+        // even when the surrounding UI is dark.
+        .background(Color.white)
+        .environment(\.colorScheme, .light)
     }
 
     private func drawSystem(
