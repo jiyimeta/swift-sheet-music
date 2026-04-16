@@ -245,31 +245,69 @@ enum Samples {
             notes: [c4])
         let plain8th = Chord(duration: .eighth, notes: [c4])
         let elements: [VoiceElement] = [
-            .clef(Clef(concertClefType: "G")),
-            .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
-            // Triplet 8ths — should beam like 8ths (level 1, full beam)
-            .chord(tripletEighth),
-            .chord(tripletEighth),
-            .chord(tripletEighth),
-            // Two plain 8ths to fill a beat
-            .chord(plain8th),
-            .chord(plain8th),
-            // Quintuplet 16ths — should beam with 2 secondary bars
-            .chord(quintupletSixteenth),
-            .chord(quintupletSixteenth),
-            .chord(quintupletSixteenth),
-            .chord(quintupletSixteenth),
-            .chord(quintupletSixteenth),
-            // Septuplet 16ths
-            .chord(septupletSixteenth),
-            .chord(septupletSixteenth),
-            .chord(septupletSixteenth),
-            .chord(septupletSixteenth),
-            .chord(septupletSixteenth),
-            .chord(septupletSixteenth),
-            .chord(septupletSixteenth),
+            .clef(Clef(concertClefType: "G")),  // index 0
+            .timeSignature(TimeSignature(numerator: 4, denominator: 4)),  // 1
+            .chord(tripletEighth),   // 2  triplet start
+            .chord(tripletEighth),   // 3
+            .chord(tripletEighth),   // 4  triplet end
+            .chord(plain8th),        // 5
+            .chord(plain8th),        // 6
+            .chord(quintupletSixteenth),  // 7  quintuplet start
+            .chord(quintupletSixteenth),  // 8
+            .chord(quintupletSixteenth),  // 9
+            .chord(quintupletSixteenth),  // 10
+            .chord(quintupletSixteenth),  // 11 quintuplet end
+            .chord(septupletSixteenth),   // 12 septuplet start
+            .chord(septupletSixteenth),   // 13
+            .chord(septupletSixteenth),   // 14
+            .chord(septupletSixteenth),   // 15
+            .chord(septupletSixteenth),   // 16
+            .chord(septupletSixteenth),   // 17
+            .chord(septupletSixteenth),   // 18 septuplet end
         ]
-        let m = Measure(voices: [Voice(elements: elements)])
+        let tuplets = [
+            Tuplet(normalNotes: 2, actualNotes: 3,
+                   startIndex: 2, endIndex: 4),
+            Tuplet(normalNotes: 4, actualNotes: 5,
+                   startIndex: 7, endIndex: 11),
+            Tuplet(normalNotes: 4, actualNotes: 7,
+                   startIndex: 12, endIndex: 18),
+        ]
+        let m = Measure(voices: [
+            Voice(elements: elements, tuplets: tuplets),
+        ])
+        return Score(
+            division: 480,
+            parts: [treblePart()],
+            staves: [StaffContent(id: 1, measures: [m])])
+    }
+
+    // MARK: - 15 non-beamed tuplet (quarter-note triplet with bracket)
+
+    static var tupletBracket: Score {
+        let c4 = Note(pitch: 60, tpc: 14)
+        // Triplet quarter = quarter × 2/3 = Fraction(1/6)
+        let tripletQuarter = Chord(
+            duration: .fraction(Fraction(numerator: 1, denominator: 6)),
+            notes: [c4])
+        let halfNote = Chord(duration: .half, notes: [c4])
+        let elements: [VoiceElement] = [
+            .clef(Clef(concertClefType: "G")),  // 0
+            .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+                                                  // 1
+            // 3 triplet quarters → should get a bracket + "3"
+            .chord(tripletQuarter),               // 2
+            .chord(tripletQuarter),               // 3
+            .chord(tripletQuarter),               // 4
+            .chord(halfNote),                     // 5
+        ]
+        let tuplets = [
+            Tuplet(normalNotes: 2, actualNotes: 3,
+                   startIndex: 2, endIndex: 4),
+        ]
+        let m = Measure(voices: [
+            Voice(elements: elements, tuplets: tuplets),
+        ])
         return Score(
             division: 480,
             parts: [treblePart()],

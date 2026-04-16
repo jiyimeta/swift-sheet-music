@@ -77,6 +77,18 @@ public enum LayoutElement: Sendable, Equatable {
         bottom: CGPoint,
         subtype: String?
     )
+    /// Tuplet marking — bracket (when `hasBracket` is true) with a
+    /// number in the middle, or number alone (when beamed). `fromOrigin`
+    /// and `toOrigin` define the horizontal span of the first and last
+    /// tuplet members. `isAbove` controls which side of the staff it
+    /// sits on.
+    case tupletLabel(
+        fromOrigin: CGPoint,
+        toOrigin: CGPoint,
+        text: String,
+        hasBracket: Bool,
+        isAbove: Bool
+    )
 
     public enum TextMarkKind: Sendable, Equatable {
         case dynamic

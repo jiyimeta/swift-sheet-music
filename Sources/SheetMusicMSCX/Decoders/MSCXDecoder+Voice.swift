@@ -3,30 +3,55 @@ import SheetMusicCore
 import SheetMusicXMLTools
 
 extension Voice {
+    private struct OpenTuplet {
+        let ratio: Fraction
+        let firstElementIndex: Int
+    }
+
     static func decode(_ node: XMLTreeNode) throws -> Voice {
         var elements: [VoiceElement] = []
         elements.reserveCapacity(node.children.count)
-        // Stack of open tuplet ratios (normal/actual). Each <Tuplet> pushes,
-        // each <endTuplet/> pops. Chord/Rest durations are scaled by the
-        // product of every ratio on the stack — mirrors MuseScore's positional
-        // state machine in MeasureRead::readVoice.
-        var tupletStack: [Fraction] = []
+        var tuplets: [Tuplet] = []
+        // Stack of open tuplet ratios (normal/actual). Each <Tuplet>
+        // pushes, each <endTuplet/> pops. Chord/Rest durations are
+        // scaled by the product of every ratio on the stack — mirrors
+        // MuseScore's positional state machine in
+        // MeasureRead::readVoice. `firstElementIndex` records where
+        // the tuplet's first member landed so we can finalise a
+        // `Tuplet` range at `<endTuplet>`.
+        var tupletStack: [OpenTuplet] = []
+        func tupletFractions() -> [Fraction] {
+            tupletStack.map(\.ratio)
+        }
         for child in node.children {
             switch child.name {
             case "Chord":
                 var chord = try Chord.decode(child)
-                chord.duration = scaled(chord.duration, by: tupletStack)
+                chord.duration = scaled(
+                    chord.duration, by: tupletFractions())
                 elements.append(.chord(chord))
             case "Rest":
                 var rest = try Rest.decode(child)
-                rest.duration = scaled(rest.duration, by: tupletStack)
+                rest.duration = scaled(
+                    rest.duration, by: tupletFractions())
                 elements.append(.rest(rest))
             case "Tuplet":
                 if let ratio = tupletRatio(from: child) {
-                    tupletStack.append(ratio)
+                    tupletStack.append(OpenTuplet(
+                        ratio: ratio,
+                        firstElementIndex: elements.count))
                 }
             case "endTuplet":
-                _ = tupletStack.popLast()
+                if let top = tupletStack.popLast() {
+                    let endIndex = elements.count - 1
+                    if endIndex >= top.firstElementIndex {
+                        tuplets.append(Tuplet(
+                            normalNotes: top.ratio.numerator,
+                            actualNotes: top.ratio.denominator,
+                            startIndex: top.firstElementIndex,
+                            endIndex: endIndex))
+                    }
+                }
             case "KeySig":
                 elements.append(.keySignature(try KeySignature.decode(child)))
             case "TimeSig":
@@ -55,7 +80,7 @@ extension Voice {
                 continue
             }
         }
-        return Voice(elements: elements)
+        return Voice(elements: elements, tuplets: tuplets)
     }
 
     /// Parse a `<Tuplet>` element's ratio (normalNotes/actualNotes). A triplet's

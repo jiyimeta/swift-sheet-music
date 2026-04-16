@@ -368,6 +368,31 @@ extension LayoutEngine {
                     }
                 }
             }
+
+            // --- Tuplet brackets / numbers ---
+            //
+            // For each tuplet span in the voice, determine whether every
+            // member sits inside a single beam group (in which case
+            // MuseScore drops the bracket and shows just the number
+            // above/below the beam). Otherwise draw a square bracket
+            // with hooks.
+            for tuplet in voice.tuplets {
+                guard tuplet.startIndex >= 0,
+                      tuplet.endIndex < voice.elements.count,
+                      tuplet.startIndex <= tuplet.endIndex
+                else { continue }
+                emitTupletLabel(
+                    tuplet: tuplet,
+                    voice: voice,
+                    voiceChordOutIndex: voiceChordOutIndex,
+                    out: &out,
+                    beamGroups: beamGroups(
+                        voice: voice,
+                        timeSignature: measureTimeSig,
+                        division: division),
+                    staffMidY: staffMidY,
+                    metrics: metrics)
+            }
         }
 
         // Trailing bar line if no voice emitted one.
@@ -422,6 +447,113 @@ extension LayoutEngine {
             }
         }
         return w
+    }
+
+    /// Emit a `.tupletLabel` for one `Tuplet` span. Picks bracket vs
+    /// number-only based on whether every member sits inside the same
+    /// beam group (MuseScore's simplified auto-bracket rule).
+    private static func emitTupletLabel(
+        tuplet: Tuplet,
+        voice: Voice,
+        voiceChordOutIndex: [Int: Int],
+        out: inout [LayoutElement],
+        beamGroups: [BeamGroup],
+        staffMidY: CGFloat,
+        metrics: StaffMetrics
+    ) {
+        // Collect the out-array indices of members that are chords
+        // (rests have no stemOrigin to reference — we fall back to a
+        // per-member rest-scan if we need them).
+        var chordStemXs: [CGFloat] = []
+        var chordAnchorYs: [CGFloat] = []   // beam-side note y (outer note)
+        var chordStemsUp = 0
+        var chordCount = 0
+        var containsRest = false
+        for idx in tuplet.startIndex...tuplet.endIndex {
+            let el = voice.elements[idx]
+            switch el {
+            case .chord:
+                chordCount += 1
+            case .rest:
+                containsRest = true
+            default:
+                continue
+            }
+            guard let outIdx = voiceChordOutIndex[idx],
+                  case .chord(let notes, _, let stem, let so,
+                              _, _, _) = out[outIdx]
+            else { continue }
+            chordStemXs.append(so.x)
+            if stem == .up { chordStemsUp += 1 }
+            let anchorY: CGFloat
+            if stem == .up {
+                anchorY = notes.map(\.origin.y).min() ?? so.y
+            } else {
+                anchorY = notes.map(\.origin.y).max() ?? so.y
+            }
+            chordAnchorYs.append(anchorY)
+        }
+        guard !chordStemXs.isEmpty else { return }
+
+        // Determine whether the whole tuplet coincides exactly with
+        // one beam group. That's MuseScore's primary "drop the
+        // bracket" condition.
+        let isBeamedGroup = !containsRest
+            && beamGroups.contains { bg in
+                bg.memberIndices.first == tuplet.startIndex
+                && bg.memberIndices.last == tuplet.endIndex
+                && bg.memberIndices.count == chordCount
+            }
+
+        // Place the marking above stem-up groups, below stem-down.
+        let isAbove = chordStemsUp * 2 >= chordCount
+
+        // Horizontal span — first to last chord's stem x.
+        let fromX = chordStemXs.first!
+        let toX = chordStemXs.last!
+
+        // Vertical position:
+        // - Beamed: just above/below the beam (= stemOrigin.y for the
+        //   first and last members, already sloped).
+        // - Bracketed: clear of the outer anchor by stemLen + 2 sp.
+        let labelPad = metrics.sp * 1.5
+        let fromY: CGFloat
+        let toY: CGFloat
+        if isBeamedGroup {
+            // Use the chord's stemOrigin.y (which IS the beam y for
+            // beamed chords) as the reference line; offset outward so
+            // the number sits clear of the beam.
+            guard
+                let firstIdx = voiceChordOutIndex[tuplet.startIndex],
+                let lastIdx = voiceChordOutIndex[tuplet.endIndex],
+                case .chord(_, _, _, let firstSO, _, _, _) = out[firstIdx],
+                case .chord(_, _, _, let lastSO, _, _, _) = out[lastIdx]
+            else { return }
+            let outward: CGFloat = isAbove ? -labelPad : labelPad
+            fromY = firstSO.y + outward
+            toY = lastSO.y + outward
+        } else {
+            // Bracket sits past the outer anchor by a fixed amount.
+            let extremeY: CGFloat
+            if isAbove {
+                extremeY = chordAnchorYs.min() ?? staffMidY
+            } else {
+                extremeY = chordAnchorYs.max() ?? staffMidY
+            }
+            let outward: CGFloat = isAbove
+                ? -(metrics.defaultStemLength + labelPad)
+                : (metrics.defaultStemLength + labelPad)
+            fromY = extremeY + outward
+            toY = fromY  // flat bracket — MuseScore sometimes slopes,
+            //            but a flat bracket is the common case.
+        }
+
+        out.append(.tupletLabel(
+            fromOrigin: CGPoint(x: fromX, y: fromY),
+            toOrigin: CGPoint(x: toX, y: toY),
+            text: "\(tuplet.actualNotes)",
+            hasBracket: !isBeamedGroup,
+            isAbove: isAbove))
     }
 
     /// Emit a single beam bar for a run of consecutive members that

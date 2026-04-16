@@ -224,6 +224,15 @@ struct ScoreCanvas: View {
             JumpRenderer.draw(
                 context: &context, text: text,
                 origin: shift(p), metrics: metrics)
+        case .tupletLabel(let from, let to, let text,
+                          let bracket, let above):
+            TupletRenderer.draw(
+                context: &context,
+                from: shift(from), to: shift(to),
+                text: text,
+                hasBracket: bracket,
+                isAbove: above,
+                metrics: metrics)
         case .note:
             // `.note` case isn't emitted in v1 (chords carry notes via
             // LayoutChordNote). Reserved for future expansion.

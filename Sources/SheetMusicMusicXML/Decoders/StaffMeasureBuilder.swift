@@ -92,7 +92,9 @@ struct StaffMeasureBuilder {
             }
             final[targetIdx].append(.barLine(trailing))
         }
-        let builtVoices = final.isEmpty ? [Voice(elements: [])] : final.map(Voice.init)
+        let builtVoices = final.isEmpty
+            ? [Voice(elements: [])]
+            : final.map { Voice(elements: $0) }
         return Measure(
             voices: builtVoices,
             startRepeat: startRepeat,

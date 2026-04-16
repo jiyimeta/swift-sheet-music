@@ -394,6 +394,8 @@ public enum LayoutEngine {
             return [from.y, to.y]
         case .arpeggioWiggle(let top, let bot, _):
             return [top.y, bot.y]
+        case .tupletLabel(let from, let to, _, _, _):
+            return [from.y, to.y]
         }
     }
 
@@ -472,6 +474,13 @@ public enum LayoutEngine {
                 top: shift(top),
                 bottom: shift(bot),
                 subtype: subtype)
+        case .tupletLabel(let from, let to, let text, let bracket, let above):
+            return .tupletLabel(
+                fromOrigin: shift(from),
+                toOrigin: shift(to),
+                text: text,
+                hasBracket: bracket,
+                isAbove: above)
         case .note, .marker, .jump, .spannerSegment, .tieArc:
             return element
         }
