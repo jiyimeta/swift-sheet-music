@@ -1,4 +1,5 @@
 #if os(macOS)
+import CoreText
 import SheetMusicCore
 import SwiftUI
 
@@ -70,16 +71,21 @@ enum StemRenderer {
     }
 
     /// Place a flag glyph so its stem-attach anchor lands on the stem
-    /// tip.
+    /// tip, matching MuseScore's use of Bravura's `stemUpNW` /
+    /// `stemDownSW` glyph anchors.
     ///
-    /// SwiftUI Text anchors act on the font's line-metrics box
-    /// (ascent + descent), not on the glyph's ink bounds. With
-    /// `.leading` anchor the baseline sits at
-    /// `anchor_y + (ascent − descent) / 2`. Bravura at 4 sp em has
-    /// ascent ≈ 3 sp and descent ≈ 1 sp, so baseline ≈ anchor_y + sp.
-    /// We therefore offer `(tip_y − sp)` as the anchor to put the
-    /// baseline — and thus the flag's stem-attach origin — on the
-    /// stem tip in BOTH directions.
+    /// Bravura metadata values (in sp):
+    ///   flag8thUp.stemUpNW    = [0, -0.04]    (~0 → glyph origin)
+    ///   flag8thDown.stemDownSW = [0, 0.132]   (~0 → glyph origin)
+    /// In both cases the attach point sits essentially on the glyph's
+    /// baseline origin, so we draw the flag with its baseline on the
+    /// stem tip.
+    ///
+    /// SwiftUI `.topLeading` places the text-bounds TOP at the anchor
+    /// y; the baseline lives at `anchor_y + ascent`. Querying Bravura's
+    /// actual ascent via CoreText (instead of guessing from sp) is the
+    /// only way to position the flag precisely because the font's
+    /// line-metrics include padding above the glyph's ink.
     private static func drawFlag(
         context: inout GraphicsContext,
         glyph: Character,
@@ -90,11 +96,28 @@ enum StemRenderer {
         metrics: StaffMetrics
     ) {
         let tipY: CGFloat = direction == .up ? startY : endY
+        let font = cachedBravuraFont(size: metrics.glyphFontSize)
+        let ascent = CTFontGetAscent(font)
         context.drawGlyph(
             glyph,
-            at: CGPoint(x: stemX, y: tipY + metrics.sp * 0.5),
+            at: CGPoint(x: stemX, y: tipY - ascent),
             size: metrics.glyphFontSize,
-            anchor: .leading)
+            anchor: .topLeading)
+    }
+
+    // CTFont handle is shared per font-size. Creating CTFonts isn't
+    // free, so cache the most recent one — stem/flag drawing hits this
+    // on every chord.
+    private nonisolated(unsafe) static var cachedFont: CTFont?
+    private nonisolated(unsafe) static var cachedSize: CGFloat = 0
+
+    private static func cachedBravuraFont(size: CGFloat) -> CTFont {
+        if let font = cachedFont, cachedSize == size { return font }
+        let font = CTFontCreateWithName(
+            BravuraFont.familyName as CFString, size, nil)
+        cachedFont = font
+        cachedSize = size
+        return font
     }
 
     private static func flagGlyph(
