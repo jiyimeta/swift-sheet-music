@@ -158,8 +158,22 @@ extension LayoutEngine {
         case .fraction(let f):
             quarters = Double(f.numerator) / Double(f.denominator) * 4
         }
-        let base = metrics.spacePerQuarter * CGFloat(quarters)
-        return max(base, metrics.sp * 2)
+        let baseWidth = metrics.spacePerQuarter * CGFloat(quarters)
+        // Potentially-flagged durations (8th and shorter) need extra
+        // clearance so the flag glyph — which hangs ~1.1 sp past the
+        // stem x — doesn't crash into the next note. Non-flagged
+        // durations (quarter and longer, plus fractions that aren't
+        // clean dotted bases) just need enough room for a notehead.
+        let (base, _) = DurationInterpretation.split(dur)
+        let floor: CGFloat
+        switch base {
+        case .eighth, .sixteenth, .thirtySecond, .sixtyFourth,
+             .oneTwentyEighth, .twoFiftySixth:
+            floor = metrics.sp * 3
+        default:
+            floor = metrics.sp * 2
+        }
+        return max(baseWidth, floor)
     }
 }
 #endif
