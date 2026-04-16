@@ -248,47 +248,73 @@ extension LayoutEngine {
                 timeSignature: measureTimeSig,
                 division: division)
             for group in groups {
-                // Collect every note step in the group so the beam
-                // direction reflects the whole group's median — not
-                // each chord's own. A beam group must share one stem
-                // direction, otherwise stems tug against the beam.
-                var memberXs: [CGFloat] = []
-                var memberNoteTops: [CGFloat] = []
-                var memberNoteBottoms: [CGFloat] = []
+                // --- Phase 1: collect all note steps for direction ---
                 var groupSteps: [Int] = []
                 for memberIdx in group.memberIndices {
                     guard let outIdx = voiceChordOutIndex[memberIdx],
-                          case .chord(let n, _, _, let so,
-                                      _, _, _) = out[outIdx]
+                          case .chord(let n, _, _, _, _, _, _)
+                            = out[outIdx]
                     else { continue }
-                    memberXs.append(so.x)
                     groupSteps.append(contentsOf: n.map(\.step))
-                    if let topY = n.map(\.origin.y).min() {
-                        memberNoteTops.append(topY)
-                    }
-                    if let botY = n.map(\.origin.y).max() {
-                        memberNoteBottoms.append(botY)
-                    }
                 }
-                guard let firstX = memberXs.first,
-                      let lastX = memberXs.last,
-                      !memberNoteTops.isEmpty
-                else { continue }
+                guard groupSteps.count >= 2 else { continue }
                 let groupDirection = StemDirectionRule.direction(
                     for: groupSteps)
-                let beamY: CGFloat
-                switch groupDirection {
-                case .up:
-                    let highest = memberNoteTops.min() ?? 0
-                    beamY = highest - metrics.defaultStemLength
-                case .down:
-                    let lowest = memberNoteBottoms.max() ?? 0
-                    beamY = lowest + metrics.defaultStemLength
-                }
-                // Rewrite each member chord with the shared direction
-                // and the beamY stored in stemOrigin.y — StemRenderer
-                // extends the stem to that y when `isBeamed == true`.
+                let stemSideDx: CGFloat = metrics.sp * 0.59
+                    * (groupDirection == .up ? 1 : -1)
+
+                // --- Phase 2: per-member anchor info + levels ---
+                var memberStemXs: [CGFloat] = []
+                var anchorSteps: [Int] = []
+                var anchorYs: [CGFloat] = []
+                var memberLevels: [Int] = []
                 for memberIdx in group.memberIndices {
+                    guard let outIdx = voiceChordOutIndex[memberIdx],
+                          case .chord(let n, _, _, let so, _, _, _)
+                            = out[outIdx]
+                    else {
+                        memberLevels.append(0)
+                        continue
+                    }
+                    memberStemXs.append(so.x + stemSideDx)
+                    let anchorStep: Int
+                    let anchorY: CGFloat
+                    if groupDirection == .up {
+                        anchorStep = n.map(\.step).max() ?? 0
+                        anchorY = n.map(\.origin.y).min() ?? so.y
+                    } else {
+                        anchorStep = n.map(\.step).min() ?? 0
+                        anchorY = n.map(\.origin.y).max() ?? so.y
+                    }
+                    anchorSteps.append(anchorStep)
+                    anchorYs.append(anchorY)
+                    if case .chord(let c) = voice.elements[memberIdx] {
+                        memberLevels.append(beamLevel(c.duration))
+                    } else {
+                        memberLevels.append(0)
+                    }
+                }
+                guard memberStemXs.count >= 2 else { continue }
+
+                // --- Phase 3: sloped beam line ---
+                let line = computeBeamLine(
+                    anchorSteps: anchorSteps,
+                    anchorYs: anchorYs,
+                    stemXs: memberStemXs,
+                    direction: groupDirection,
+                    metrics: metrics)
+                let beamStartX = memberStemXs.first!
+                let beamEndX = memberStemXs.last!
+                let beamSpan = beamEndX - beamStartX
+                func beamYAt(_ x: CGFloat) -> CGFloat {
+                    guard beamSpan > 0 else { return line.startY }
+                    let t = (x - beamStartX) / beamSpan
+                    return line.startY + (line.endY - line.startY) * t
+                }
+                let memberStemYs = memberStemXs.map(beamYAt)
+
+                // --- Phase 4: rewrite each chord with its own beam y ---
+                for (i, memberIdx) in group.memberIndices.enumerated() {
                     guard let outIdx = voiceChordOutIndex[memberIdx],
                           case .chord(let n, let d, _, let so,
                                       let arp, let art, _) = out[outIdx]
@@ -297,32 +323,17 @@ extension LayoutEngine {
                         notes: n,
                         duration: d,
                         stem: groupDirection,
-                        stemOrigin: CGPoint(x: so.x, y: beamY),
+                        stemOrigin: CGPoint(
+                            x: so.x, y: memberStemYs[i]),
                         hasArpeggio: arp,
                         arpeggioRawType: art,
                         isBeamed: true)
                 }
-                // Beam endpoints sit on the STEM x, not the notehead x.
-                // StemRenderer puts the stem at noteX ± 0.59 sp depending
-                // on direction; the beam must follow the same offset or
-                // the bar appears shifted toward the noteheads.
-                let stemSideDx: CGFloat = metrics.sp * 0.59
-                    * (groupDirection == .up ? 1 : -1)
 
-                // Per-chord beam depth, so mixed-duration groups
-                // (dotted-8th + 16th, 8th + 16th + 16th, etc.) render
-                // correct secondary-beam spans.
-                var memberLevels: [Int] = []
-                for memberIdx in group.memberIndices {
-                    guard case .chord(let c) = voice.elements[memberIdx]
-                    else { memberLevels.append(0); continue }
-                    memberLevels.append(beamLevel(c.duration))
-                }
-                let memberStemXs = memberXs.map { $0 + stemSideDx }
+                // --- Phase 5: emit per-level beam runs ---
                 let maxLvl = memberLevels.max() ?? 0
-
+                guard maxLvl >= 1 else { continue }
                 for lvl in 1...maxLvl {
-                    // Find runs of consecutive members with level >= lvl.
                     var runStart: Int?
                     for i in 0..<memberLevels.count {
                         let hasThisLevel = memberLevels[i] >= lvl
@@ -333,8 +344,9 @@ extension LayoutEngine {
                                 start: start, end: i - 1,
                                 level: lvl,
                                 memberStemXs: memberStemXs,
+                                memberStemYs: memberStemYs,
                                 memberCount: memberLevels.count,
-                                beamY: beamY,
+                                beamYAt: beamYAt,
                                 direction: groupDirection,
                                 metrics: metrics,
                                 out: &out)
@@ -347,8 +359,9 @@ extension LayoutEngine {
                             end: memberLevels.count - 1,
                             level: lvl,
                             memberStemXs: memberStemXs,
+                            memberStemYs: memberStemYs,
                             memberCount: memberLevels.count,
-                            beamY: beamY,
+                            beamYAt: beamYAt,
                             direction: groupDirection,
                             metrics: metrics,
                             out: &out)
@@ -412,53 +425,52 @@ extension LayoutEngine {
     }
 
     /// Emit a single beam bar for a run of consecutive members that
-    /// share the given level. If the run covers multiple members the
-    /// bar spans the whole run. If it's a lone member the bar becomes
-    /// a partial "stub" pointing back toward the neighbouring note
-    /// (or forward if the lone member is the first in the group) —
-    /// this is how mixed figures like dotted-8th + 16th render the
-    /// extra secondary beam on the 16th only.
+    /// share the given level. Multi-member runs span from the first
+    /// member's stem tip to the last's; single-member runs become a
+    /// partial stub pointing back toward the neighbour (or forward if
+    /// the lone member is first in the group). All endpoints are
+    /// anchored to the sloped beam line via `beamYAt` so sloped beams
+    /// keep secondary bars parallel to the primary.
     private static func emitBeamRun(
         start: Int,
         end: Int,
         level: Int,
         memberStemXs: [CGFloat],
+        memberStemYs: [CGFloat],
         memberCount: Int,
-        beamY: CGFloat,
+        beamYAt: (CGFloat) -> CGFloat,
         direction: StemDirection,
         metrics: StaffMetrics,
         out: inout [LayoutElement]
     ) {
         if end > start {
             out.append(.beam(
-                fromOrigin: CGPoint(x: memberStemXs[start], y: beamY),
-                toOrigin: CGPoint(x: memberStemXs[end], y: beamY),
+                fromOrigin: CGPoint(
+                    x: memberStemXs[start],
+                    y: memberStemYs[start]),
+                toOrigin: CGPoint(
+                    x: memberStemXs[end],
+                    y: memberStemYs[end]),
                 direction: direction,
                 level: level))
             return
         }
-        // Single-member run → partial stub.
         let stubLen = metrics.sp * 1.5
         let x = memberStemXs[start]
         let fromX: CGFloat
         let toX: CGFloat
         if start > 0 {
-            // Has a preceding member in the group → stub points left.
             fromX = x - stubLen
             toX = x
         } else if end < memberCount - 1 {
-            // First member, but there's a following one → stub right.
             fromX = x
             toX = x + stubLen
         } else {
-            // Standalone single-member group — shouldn't emit a beam
-            // (beamGroups only collects groups of count >= 2), but
-            // guard defensively.
             return
         }
         out.append(.beam(
-            fromOrigin: CGPoint(x: fromX, y: beamY),
-            toOrigin: CGPoint(x: toX, y: beamY),
+            fromOrigin: CGPoint(x: fromX, y: beamYAt(fromX)),
+            toOrigin: CGPoint(x: toX, y: beamYAt(toX)),
             direction: direction,
             level: level))
     }
