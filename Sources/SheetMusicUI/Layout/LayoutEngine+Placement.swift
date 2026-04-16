@@ -302,9 +302,17 @@ extension LayoutEngine {
                         arpeggioRawType: art,
                         isBeamed: true)
                 }
+                // Beam endpoints sit on the STEM x, not the notehead x.
+                // StemRenderer puts the stem at noteX ± 0.59 sp depending
+                // on direction; the beam must follow the same offset or
+                // the bar appears shifted toward the noteheads.
+                let stemSideDx: CGFloat = metrics.sp * 0.59
+                    * (groupDirection == .up ? 1 : -1)
                 out.append(.beam(
-                    fromOrigin: CGPoint(x: firstX, y: beamY),
-                    toOrigin: CGPoint(x: lastX, y: beamY),
+                    fromOrigin: CGPoint(
+                        x: firstX + stemSideDx, y: beamY),
+                    toOrigin: CGPoint(
+                        x: lastX + stemSideDx, y: beamY),
                     levels: group.level,
                     direction: groupDirection))
             }

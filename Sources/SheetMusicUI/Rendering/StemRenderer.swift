@@ -70,12 +70,16 @@ enum StemRenderer {
     }
 
     /// Place a flag glyph so its stem-attach anchor lands on the stem
-    /// tip. SwiftUI Text anchors act on the font's line-metrics box
-    /// (ascent + descent), not on the glyph's ink bounds, so we anchor
-    /// `.leading` (left-center) and nudge vertically by ~1 sp — Bravura's
-    /// flag glyphs are drawn so their center roughly coincides with the
-    /// "one sp into the flag body from the stem tip" point, which is
-    /// what engraved scores show.
+    /// tip.
+    ///
+    /// SwiftUI Text anchors act on the font's line-metrics box
+    /// (ascent + descent), not on the glyph's ink bounds. With
+    /// `.leading` anchor the baseline sits at
+    /// `anchor_y + (ascent − descent) / 2`. Bravura at 4 sp em has
+    /// ascent ≈ 3 sp and descent ≈ 1 sp, so baseline ≈ anchor_y + sp.
+    /// We therefore offer `(tip_y − sp)` as the anchor to put the
+    /// baseline — and thus the flag's stem-attach origin — on the
+    /// stem tip in BOTH directions.
     private static func drawFlag(
         context: inout GraphicsContext,
         glyph: Character,
@@ -85,25 +89,12 @@ enum StemRenderer {
         endY: CGFloat,
         metrics: StaffMetrics
     ) {
-        switch direction {
-        case .up:
-            // Stem-up flag hangs below the stem top. Leading-anchor at
-            // ~1 sp below the stem tip puts the flag visual right of
-            // the stem with its top roughly at the stem top.
-            context.drawGlyph(
-                glyph,
-                at: CGPoint(x: stemX, y: startY + metrics.sp),
-                size: metrics.glyphFontSize,
-                anchor: .leading)
-        case .down:
-            // Stem-down flag rises above the stem bottom — mirror image
-            // of the up case.
-            context.drawGlyph(
-                glyph,
-                at: CGPoint(x: stemX, y: endY - metrics.sp),
-                size: metrics.glyphFontSize,
-                anchor: .leading)
-        }
+        let tipY: CGFloat = direction == .up ? startY : endY
+        context.drawGlyph(
+            glyph,
+            at: CGPoint(x: stemX, y: tipY - metrics.sp),
+            size: metrics.glyphFontSize,
+            anchor: .leading)
     }
 
     private static func flagGlyph(
