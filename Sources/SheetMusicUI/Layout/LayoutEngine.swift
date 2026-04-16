@@ -382,8 +382,9 @@ public enum LayoutEngine {
             var ys = notes.map(\.origin.y)
             ys.append(so.y)
             return ys
-        case .beam(let from, let to, _),
-             .spannerSegment(_, let from, let to, _, _, _),
+        case .beam(let from, let to, _, _):
+            return [from.y, to.y]
+        case .spannerSegment(_, let from, let to, _, _, _),
              .tieArc(let from, let to, _),
              .glissandoLine(let from, let to, _, _):
             return [from.y, to.y]
@@ -450,8 +451,24 @@ public enum LayoutEngine {
             return .fermata(subtype: s, origin: shift(p))
         case .measureRepeat(let c, let p):
             return .measureRepeat(count: c, origin: shift(p))
-        case .note, .beam, .marker, .jump, .spannerSegment,
-             .tieArc, .glissandoLine, .arpeggioWiggle:
+        case .beam(let from, let to, let levels, let direction):
+            return .beam(
+                fromOrigin: shift(from),
+                toOrigin: shift(to),
+                levels: levels,
+                direction: direction)
+        case .glissandoLine(let from, let to, let wavy, let text):
+            return .glissandoLine(
+                fromOrigin: shift(from),
+                toOrigin: shift(to),
+                wavy: wavy,
+                text: text)
+        case .arpeggioWiggle(let top, let bot, let subtype):
+            return .arpeggioWiggle(
+                top: shift(top),
+                bottom: shift(bot),
+                subtype: subtype)
+        case .note, .marker, .jump, .spannerSegment, .tieArc:
             return element
         }
     }

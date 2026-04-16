@@ -37,7 +37,12 @@ public enum LayoutElement: Sendable, Equatable {
         isBeamed: Bool
     )
     case rest(duration: NoteDuration, origin: CGPoint)
-    case beam(fromOrigin: CGPoint, toOrigin: CGPoint, levels: Int)
+    case beam(
+        fromOrigin: CGPoint,
+        toOrigin: CGPoint,
+        levels: Int,
+        direction: StemDirection
+    )
     case textMark(kind: TextMarkKind, text: String, origin: CGPoint)
     case fermata(subtype: String, origin: CGPoint)
     case marker(kind: Marker.Kind, text: String, origin: CGPoint)

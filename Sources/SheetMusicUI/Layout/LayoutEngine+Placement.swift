@@ -248,17 +248,21 @@ extension LayoutEngine {
                 timeSignature: measureTimeSig,
                 division: division)
             for group in groups {
-                // First, compute the beam y from the highest note across
-                // the whole group so all members share the same stem tip.
+                // Collect every note step in the group so the beam
+                // direction reflects the whole group's median — not
+                // each chord's own. A beam group must share one stem
+                // direction, otherwise stems tug against the beam.
                 var memberXs: [CGFloat] = []
                 var memberNoteTops: [CGFloat] = []
                 var memberNoteBottoms: [CGFloat] = []
+                var groupSteps: [Int] = []
                 for memberIdx in group.memberIndices {
                     guard let outIdx = voiceChordOutIndex[memberIdx],
                           case .chord(let n, _, _, let so,
                                       _, _, _) = out[outIdx]
                     else { continue }
                     memberXs.append(so.x)
+                    groupSteps.append(contentsOf: n.map(\.step))
                     if let topY = n.map(\.origin.y).min() {
                         memberNoteTops.append(topY)
                     }
@@ -268,25 +272,31 @@ extension LayoutEngine {
                 }
                 guard let firstX = memberXs.first,
                       let lastX = memberXs.last,
-                      let highestNote = memberNoteTops.min(),
-                      let lowestNote = memberNoteBottoms.max()
+                      !memberNoteTops.isEmpty
                 else { continue }
-                // v1 assumes all beamed groups are stem-up. (Median
-                // heuristic puts eighths below middle line up; explicit
-                // stem-down beam groups are a post-v1 concern.)
-                let beamY = highestNote - metrics.defaultStemLength
-                _ = lowestNote  // reserved for stem-down handling
-                // Rewrite each member chord to carry beamY in stemOrigin.y
-                // so StemRenderer can extend the stem to the shared beam.
+                let groupDirection = StemDirectionRule.direction(
+                    for: groupSteps)
+                let beamY: CGFloat
+                switch groupDirection {
+                case .up:
+                    let highest = memberNoteTops.min() ?? 0
+                    beamY = highest - metrics.defaultStemLength
+                case .down:
+                    let lowest = memberNoteBottoms.max() ?? 0
+                    beamY = lowest + metrics.defaultStemLength
+                }
+                // Rewrite each member chord with the shared direction
+                // and the beamY stored in stemOrigin.y — StemRenderer
+                // extends the stem to that y when `isBeamed == true`.
                 for memberIdx in group.memberIndices {
                     guard let outIdx = voiceChordOutIndex[memberIdx],
-                          case .chord(let n, let d, let s, let so,
+                          case .chord(let n, let d, _, let so,
                                       let arp, let art, _) = out[outIdx]
                     else { continue }
                     out[outIdx] = .chord(
                         notes: n,
                         duration: d,
-                        stem: s,
+                        stem: groupDirection,
                         stemOrigin: CGPoint(x: so.x, y: beamY),
                         hasArpeggio: arp,
                         arpeggioRawType: art,
@@ -295,7 +305,8 @@ extension LayoutEngine {
                 out.append(.beam(
                     fromOrigin: CGPoint(x: firstX, y: beamY),
                     toOrigin: CGPoint(x: lastX, y: beamY),
-                    levels: group.level))
+                    levels: group.level,
+                    direction: groupDirection))
             }
         }
 
