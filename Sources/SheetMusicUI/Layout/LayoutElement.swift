@@ -37,11 +37,16 @@ public enum LayoutElement: Sendable, Equatable {
         isBeamed: Bool
     )
     case rest(duration: NoteDuration, origin: CGPoint)
+    /// A single beam bar at `level` (1 = primary, 2 = first secondary,
+    /// …). A note group with mixed durations emits one `beam` per bar
+    /// per run of consecutive members that need that level, so that a
+    /// dotted-8th + 16th pair has one primary beam + one partial
+    /// secondary stub on the 16th (not two full beams across both).
     case beam(
         fromOrigin: CGPoint,
         toOrigin: CGPoint,
-        levels: Int,
-        direction: StemDirection
+        direction: StemDirection,
+        level: Int
     )
     case textMark(kind: TextMarkKind, text: String, origin: CGPoint)
     case fermata(subtype: String, origin: CGPoint)

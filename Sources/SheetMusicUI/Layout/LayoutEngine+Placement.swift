@@ -308,13 +308,52 @@ extension LayoutEngine {
                 // the bar appears shifted toward the noteheads.
                 let stemSideDx: CGFloat = metrics.sp * 0.59
                     * (groupDirection == .up ? 1 : -1)
-                out.append(.beam(
-                    fromOrigin: CGPoint(
-                        x: firstX + stemSideDx, y: beamY),
-                    toOrigin: CGPoint(
-                        x: lastX + stemSideDx, y: beamY),
-                    levels: group.level,
-                    direction: groupDirection))
+
+                // Per-chord beam depth, so mixed-duration groups
+                // (dotted-8th + 16th, 8th + 16th + 16th, etc.) render
+                // correct secondary-beam spans.
+                var memberLevels: [Int] = []
+                for memberIdx in group.memberIndices {
+                    guard case .chord(let c) = voice.elements[memberIdx]
+                    else { memberLevels.append(0); continue }
+                    memberLevels.append(beamLevel(c.duration))
+                }
+                let memberStemXs = memberXs.map { $0 + stemSideDx }
+                let maxLvl = memberLevels.max() ?? 0
+
+                for lvl in 1...maxLvl {
+                    // Find runs of consecutive members with level >= lvl.
+                    var runStart: Int?
+                    for i in 0..<memberLevels.count {
+                        let hasThisLevel = memberLevels[i] >= lvl
+                        if hasThisLevel && runStart == nil {
+                            runStart = i
+                        } else if !hasThisLevel, let start = runStart {
+                            emitBeamRun(
+                                start: start, end: i - 1,
+                                level: lvl,
+                                memberStemXs: memberStemXs,
+                                memberCount: memberLevels.count,
+                                beamY: beamY,
+                                direction: groupDirection,
+                                metrics: metrics,
+                                out: &out)
+                            runStart = nil
+                        }
+                    }
+                    if let start = runStart {
+                        emitBeamRun(
+                            start: start,
+                            end: memberLevels.count - 1,
+                            level: lvl,
+                            memberStemXs: memberStemXs,
+                            memberCount: memberLevels.count,
+                            beamY: beamY,
+                            direction: groupDirection,
+                            metrics: metrics,
+                            out: &out)
+                    }
+                }
             }
         }
 
@@ -370,6 +409,58 @@ extension LayoutEngine {
             }
         }
         return w
+    }
+
+    /// Emit a single beam bar for a run of consecutive members that
+    /// share the given level. If the run covers multiple members the
+    /// bar spans the whole run. If it's a lone member the bar becomes
+    /// a partial "stub" pointing back toward the neighbouring note
+    /// (or forward if the lone member is the first in the group) —
+    /// this is how mixed figures like dotted-8th + 16th render the
+    /// extra secondary beam on the 16th only.
+    private static func emitBeamRun(
+        start: Int,
+        end: Int,
+        level: Int,
+        memberStemXs: [CGFloat],
+        memberCount: Int,
+        beamY: CGFloat,
+        direction: StemDirection,
+        metrics: StaffMetrics,
+        out: inout [LayoutElement]
+    ) {
+        if end > start {
+            out.append(.beam(
+                fromOrigin: CGPoint(x: memberStemXs[start], y: beamY),
+                toOrigin: CGPoint(x: memberStemXs[end], y: beamY),
+                direction: direction,
+                level: level))
+            return
+        }
+        // Single-member run → partial stub.
+        let stubLen = metrics.sp * 1.5
+        let x = memberStemXs[start]
+        let fromX: CGFloat
+        let toX: CGFloat
+        if start > 0 {
+            // Has a preceding member in the group → stub points left.
+            fromX = x - stubLen
+            toX = x
+        } else if end < memberCount - 1 {
+            // First member, but there's a following one → stub right.
+            fromX = x
+            toX = x + stubLen
+        } else {
+            // Standalone single-member group — shouldn't emit a beam
+            // (beamGroups only collects groups of count >= 2), but
+            // guard defensively.
+            return
+        }
+        out.append(.beam(
+            fromOrigin: CGPoint(x: fromX, y: beamY),
+            toOrigin: CGPoint(x: toX, y: beamY),
+            direction: direction,
+            level: level))
     }
 
     /// True when the first voice's first element is a `<Clef>`. Used to

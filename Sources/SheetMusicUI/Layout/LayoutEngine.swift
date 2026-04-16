@@ -383,6 +383,10 @@ public enum LayoutEngine {
             ys.append(so.y)
             return ys
         case .beam(let from, let to, _, _):
+            // fromOrigin, toOrigin, direction, level — only endpoints
+            // contribute to the bbox at the primary-beam y; secondary
+            // bars stack a fraction of sp away and are accounted for
+            // by the generic glyphPad in elementYBounds.
             return [from.y, to.y]
         case .spannerSegment(_, let from, let to, _, _, _),
              .tieArc(let from, let to, _),
@@ -451,12 +455,12 @@ public enum LayoutEngine {
             return .fermata(subtype: s, origin: shift(p))
         case .measureRepeat(let c, let p):
             return .measureRepeat(count: c, origin: shift(p))
-        case .beam(let from, let to, let levels, let direction):
+        case .beam(let from, let to, let direction, let level):
             return .beam(
                 fromOrigin: shift(from),
                 toOrigin: shift(to),
-                levels: levels,
-                direction: direction)
+                direction: direction,
+                level: level)
         case .glissandoLine(let from, let to, let wavy, let text):
             return .glissandoLine(
                 fromOrigin: shift(from),

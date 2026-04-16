@@ -62,7 +62,11 @@ extension LayoutEngine {
     }
 
     static func beamLevel(_ dur: NoteDuration) -> Int {
-        switch dur {
+        // Unwrap a dotted duration (stored as `.fraction`) to its base
+        // — a dotted 8th beams like an 8th (level 1), not like a
+        // non-beamable fraction.
+        let (base, _) = DurationInterpretation.split(dur)
+        switch base {
         case .eighth: return 1
         case .sixteenth: return 2
         case .thirtySecond: return 3

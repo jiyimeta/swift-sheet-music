@@ -225,6 +225,35 @@ enum Samples {
             staves: [StaffContent(id: 1, measures: [m])])
     }
 
+    // MARK: - 13 mixed-duration beam groups
+
+    static var mixedBeams: Score {
+        let c4 = Note(pitch: 60, tpc: 14)
+        let e4 = Note(pitch: 64, tpc: 18)
+        let eighth = Chord(duration: .eighth, notes: [c4])
+        let sixteenth = Chord(duration: .sixteenth, notes: [e4])
+        let dotted8th = Chord(
+            duration: NoteDuration.eighth.dotted(1), notes: [c4])
+        let elements: [VoiceElement] = [
+            .clef(Clef(concertClefType: "G")),
+            .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+            // 8th + 16th + 16th (primary beam spans all; secondary beam
+            // only between the two 16ths)
+            .chord(eighth), .chord(sixteenth), .chord(sixteenth),
+            // 16th + 16th + 8th (mirror: secondary only on first pair)
+            .chord(sixteenth), .chord(sixteenth), .chord(eighth),
+            // dotted 8th + 16th (primary beam + partial stub on 16th)
+            .chord(dotted8th), .chord(sixteenth),
+            // 16th + dotted 8th (mirror: partial stub on leading 16th)
+            .chord(sixteenth), .chord(dotted8th),
+        ]
+        let m = Measure(voices: [Voice(elements: elements)])
+        return Score(
+            division: 480,
+            parts: [treblePart()],
+            staves: [StaffContent(id: 1, measures: [m])])
+    }
+
     // MARK: - 12 dotted durations (single + double dot)
 
     static var dottedDurations: Score {

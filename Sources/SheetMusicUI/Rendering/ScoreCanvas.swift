@@ -178,13 +178,13 @@ struct ScoreCanvas: View {
             TextMarkRenderer.drawTempo(
                 context: &context, text: text,
                 origin: shift(p), metrics: metrics)
-        case .beam(let from, let to, let levels, let direction):
+        case .beam(let from, let to, let direction, let level):
             BeamRenderer.draw(
                 context: &context,
                 from: shift(from),
                 to: shift(to),
-                levels: levels,
                 direction: direction,
+                level: level,
                 metrics: metrics)
         case .fermata(let subtype, let p):
             FermataRenderer.draw(

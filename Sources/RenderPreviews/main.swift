@@ -42,6 +42,7 @@ func run() throws {
         ("10-dynamics-tempo", Samples.dynamicsTempo, CGSize(width: 900, height: 240)),
         ("11-isolated-flags", Samples.isolatedFlags, CGSize(width: 900, height: 220)),
         ("12-dotted-durations", Samples.dottedDurations, CGSize(width: 900, height: 220)),
+        ("13-mixed-beams", Samples.mixedBeams, CGSize(width: 900, height: 220)),
     ]
 
     for (name, score, size) in samples {
