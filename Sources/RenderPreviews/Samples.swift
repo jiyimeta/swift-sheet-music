@@ -225,6 +225,57 @@ enum Samples {
             staves: [StaffContent(id: 1, measures: [m])])
     }
 
+    // MARK: - 14 tuplets (triplet + quintuplet + septuplet)
+
+    static var tuplets: Score {
+        let c4 = Note(pitch: 60, tpc: 14)
+        // Simulate what the decoder produces for tuplet notes — it
+        // scales each member's duration by (normal / actual).
+        // Triplet 8th = eighth × 2/3 = Fraction(1/12).
+        // Quintuplet 16th = sixteenth × 4/5 = Fraction(1/20).
+        // Septuplet 16th = sixteenth × 4/7 = Fraction(1/28).
+        let tripletEighth = Chord(
+            duration: .fraction(Fraction(numerator: 1, denominator: 12)),
+            notes: [c4])
+        let quintupletSixteenth = Chord(
+            duration: .fraction(Fraction(numerator: 1, denominator: 20)),
+            notes: [c4])
+        let septupletSixteenth = Chord(
+            duration: .fraction(Fraction(numerator: 1, denominator: 28)),
+            notes: [c4])
+        let plain8th = Chord(duration: .eighth, notes: [c4])
+        let elements: [VoiceElement] = [
+            .clef(Clef(concertClefType: "G")),
+            .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+            // Triplet 8ths — should beam like 8ths (level 1, full beam)
+            .chord(tripletEighth),
+            .chord(tripletEighth),
+            .chord(tripletEighth),
+            // Two plain 8ths to fill a beat
+            .chord(plain8th),
+            .chord(plain8th),
+            // Quintuplet 16ths — should beam with 2 secondary bars
+            .chord(quintupletSixteenth),
+            .chord(quintupletSixteenth),
+            .chord(quintupletSixteenth),
+            .chord(quintupletSixteenth),
+            .chord(quintupletSixteenth),
+            // Septuplet 16ths
+            .chord(septupletSixteenth),
+            .chord(septupletSixteenth),
+            .chord(septupletSixteenth),
+            .chord(septupletSixteenth),
+            .chord(septupletSixteenth),
+            .chord(septupletSixteenth),
+            .chord(septupletSixteenth),
+        ]
+        let m = Measure(voices: [Voice(elements: elements)])
+        return Score(
+            division: 480,
+            parts: [treblePart()],
+            staves: [StaffContent(id: 1, measures: [m])])
+    }
+
     // MARK: - 13 mixed-duration beam groups
 
     static var mixedBeams: Score {
