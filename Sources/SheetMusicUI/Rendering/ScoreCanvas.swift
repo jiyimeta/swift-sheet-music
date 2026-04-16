@@ -119,11 +119,19 @@ struct ScoreCanvas: View {
                 context: &context, subtype: s,
                 origin: shift(p), metrics: metrics)
         case .rest(let d, let p):
+            let (baseDur, dots) = DurationInterpretation.split(d)
             RestRenderer.draw(
-                context: &context, duration: d,
+                context: &context, duration: baseDur,
                 origin: shift(p), metrics: metrics)
+            DotRenderer.draw(
+                context: &context,
+                after: shift(p),
+                count: dots,
+                onStaffLine: true,
+                metrics: metrics)
         case .chord(let notes, let dur, let stem, let stemOrigin,
                      _, _, let isBeamed):
+            let (baseDur, dots) = DurationInterpretation.split(dur)
             // Shift note origins into absolute coords for the heads
             // and the stem renderer.
             let shiftedNotes = notes.map {
@@ -139,20 +147,28 @@ struct ScoreCanvas: View {
             for n in shiftedNotes {
                 NoteheadRenderer.drawHead(
                     context: &context, at: n.origin,
-                    duration: dur, metrics: metrics)
+                    duration: baseDur, metrics: metrics)
                 if let acc = n.accidental {
                     AccidentalRenderer.draw(
                         context: &context, accidental: acc,
                         origin: n.origin, metrics: metrics)
                 }
+                DotRenderer.draw(
+                    context: &context,
+                    after: n.origin,
+                    count: dots,
+                    onStaffLine: n.step.isMultiple(of: 2),
+                    metrics: metrics)
             }
             // For beamed chords, the placement pass stores the shared
             // beam y into stemOrigin.y so every member's stem reaches
             // the same horizontal beam bar.
             let beamY: CGFloat? = isBeamed ? shift(stemOrigin).y : nil
+            // Base duration drives stem/flag choice so a dotted 8th
+            // still gets the 8th flag (its raw duration is a fraction).
             StemRenderer.draw(
                 context: &context, notes: shiftedNotes,
-                direction: stem, duration: dur,
+                direction: stem, duration: baseDur,
                 isBeamed: isBeamed, beamY: beamY, metrics: metrics)
         case .textMark(.dynamic, let text, let p):
             TextMarkRenderer.drawDynamic(

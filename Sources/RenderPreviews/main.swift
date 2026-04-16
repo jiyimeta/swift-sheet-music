@@ -41,6 +41,7 @@ func run() throws {
         ("09-time-sigs",      Samples.timeSignatures, CGSize(width: 900, height: 180)),
         ("10-dynamics-tempo", Samples.dynamicsTempo, CGSize(width: 900, height: 240)),
         ("11-isolated-flags", Samples.isolatedFlags, CGSize(width: 900, height: 220)),
+        ("12-dotted-durations", Samples.dottedDurations, CGSize(width: 900, height: 220)),
     ]
 
     for (name, score, size) in samples {

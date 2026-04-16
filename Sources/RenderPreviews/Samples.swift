@@ -225,6 +225,41 @@ enum Samples {
             staves: [StaffContent(id: 1, measures: [m])])
     }
 
+    // MARK: - 12 dotted durations (single + double dot)
+
+    static var dottedDurations: Score {
+        let c4 = Note(pitch: 60, tpc: 14)
+        let elements: [VoiceElement] = [
+            .clef(Clef(concertClefType: "G")),
+            .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+            // dotted half (3 beats)
+            .chord(Chord(
+                duration: NoteDuration.half.dotted(1),
+                notes: [c4])),
+            .rest(Rest(duration: NoteDuration.quarter)),
+            // dotted quarter
+            .chord(Chord(
+                duration: NoteDuration.quarter.dotted(1),
+                notes: [c4])),
+            // dotted 8th
+            .chord(Chord(
+                duration: NoteDuration.eighth.dotted(1),
+                notes: [c4])),
+            .rest(Rest(duration: NoteDuration.sixteenth)),
+            // double-dotted quarter
+            .chord(Chord(
+                duration: NoteDuration.quarter.dotted(2),
+                notes: [c4])),
+            // dotted rest
+            .rest(Rest(duration: NoteDuration.quarter.dotted(1))),
+        ]
+        let m = Measure(voices: [Voice(elements: elements)])
+        return Score(
+            division: 480,
+            parts: [treblePart()],
+            staves: [StaffContent(id: 1, measures: [m])])
+    }
+
     // MARK: - 10 dynamics + tempo
 
     static var dynamicsTempo: Score {
