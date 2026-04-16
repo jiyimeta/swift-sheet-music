@@ -154,6 +154,20 @@ public enum LayoutEngine {
         // First system reserves wider space for long part names.
         let partLabelWidth: CGFloat = isFirstSystem ? 80 : 30
 
+        // Breathing room above the top staff and below the bottom staff
+        // so ledger-line notes, tempo text, ottavas, voltas, hairpins,
+        // and pedal marks don't clip. 8 sp ≈ 4 ledger positions + a
+        // comfortable margin for an inline text mark.
+        let topPad: CGFloat = metrics.sp * 8
+        let bottomPad: CGFloat = metrics.sp * 8
+
+        let staffOrigins: [CGPoint] = staves.enumerated().map { idx, _ in
+            CGPoint(
+                x: partLabelWidth,
+                y: topPad + CGFloat(idx) * staffSpacing
+            )
+        }
+
         // Per-staff labels. Stage 5 assumes staves align 1:1 with parts;
         // multi-staff-per-part (piano grand staff) is handled the same
         // way for now — each staff gets its own label.
@@ -170,19 +184,10 @@ public enum LayoutEngine {
                     ?? part?.trackName.map { String($0.prefix(3)) }
                     ?? ""
             }
-            let y = CGFloat(idx) * staffSpacing
-                + metrics.sp * 2
-                + metrics.staffHeight / 2
+            let y = staffOrigins[idx].y + metrics.staffHeight / 2
             return LayoutPartLabel(
                 text: text,
                 origin: CGPoint(x: 4, y: y)
-            )
-        }
-
-        let staffOrigins: [CGPoint] = staves.enumerated().map { idx, _ in
-            CGPoint(
-                x: partLabelWidth,
-                y: CGFloat(idx) * staffSpacing + metrics.sp * 2
             )
         }
 
@@ -236,7 +241,11 @@ public enum LayoutEngine {
                     division: context.score.division
                 )
                 clefs[staffIdx] = newClef
-                let yOffset = staffOrigins[staffIdx].y - staffOrigins[0].y
+                // Placement emits positions relative to "staff top at
+                // sp*2" (see `staffMidY` inside placeMeasureElements).
+                // Shift by the difference so placement coords end up in
+                // system coords.
+                let yOffset = staffOrigins[staffIdx].y - metrics.sp * 2
                 aggregated.append(contentsOf: els.map {
                     translate(element: $0, dy: yOffset)
                 })
@@ -246,13 +255,16 @@ public enum LayoutEngine {
                 // on both staves in MSCX; we draw it once above the top
                 // staff to match engraving convention.
                 if staffIdx == 0 {
+                    let staffTopY = staffOrigins[staffIdx].y
+                    let staffBottomY = staffTopY + metrics.staffHeight
                     for marker in m.markers {
                         let labelText = marker.text.isEmpty
                             ? marker.label : marker.text
                         markers.append(.marker(
                             kind: marker.kind,
                             text: labelText,
-                            origin: CGPoint(x: 4, y: yOffset - metrics.sp)
+                            origin: CGPoint(
+                                x: 4, y: staffTopY - metrics.sp)
                         ))
                     }
                     for jump in m.jumps {
@@ -260,9 +272,7 @@ public enum LayoutEngine {
                             text: jump.text,
                             origin: CGPoint(
                                 x: w - metrics.sp * 4,
-                                y: yOffset
-                                    + metrics.staffHeight
-                                    + metrics.sp
+                                y: staffBottomY + metrics.sp
                             )
                         ))
                     }
@@ -278,15 +288,119 @@ public enum LayoutEngine {
             xCursor += w
         }
 
-        let totalHeight = CGFloat(staves.count) * staffSpacing
-            + metrics.sp * 6
+        // Baseline height: top pad + all staves + bottom pad.
+        let baselineHeight =
+            topPad
+            + CGFloat(max(0, staves.count - 1)) * staffSpacing
+            + metrics.staffHeight
+            + bottomPad
+
+        // Extend to fit the actual bounding box of emitted elements so
+        // nothing clips when e.g. a note lands on the 5th ledger line
+        // above the top staff or a dynamic text hangs farther below the
+        // bottom staff than the baseline allowed.
+        let bbox = elementYBounds(
+            in: layoutMeasures,
+            metrics: metrics)
+        let bottomSlack = max(0, bbox.max - baselineHeight) + metrics.sp * 2
+        let totalHeight = baselineHeight + bottomSlack
+
+        // Content above y=0 (e.g. a tempo glyph above staff 0 when the
+        // existing topPad isn't quite enough) would clip against the
+        // document's top edge. If we see it, shift every element down
+        // and enlarge the system so the whole bounding box is visible.
+        let topShift = max(0, -bbox.min + metrics.sp * 2)
+        let adjustedMeasures = topShift > 0
+            ? layoutMeasures.map { shiftMeasure($0, dy: topShift) }
+            : layoutMeasures
+        let adjustedStaffOrigins = topShift > 0
+            ? staffOrigins.map { CGPoint(x: $0.x, y: $0.y + topShift) }
+            : staffOrigins
+        let adjustedLabels = topShift > 0
+            ? labels.map {
+                LayoutPartLabel(
+                    text: $0.text,
+                    origin: CGPoint(x: $0.origin.x, y: $0.origin.y + topShift))
+            }
+            : labels
+
         return LayoutSystem(
             origin: CGPoint(x: 0, y: systemOriginY),
-            size: CGSize(width: xCursor, height: totalHeight),
-            measures: layoutMeasures,
-            staffOrigins: staffOrigins,
-            partLabels: labels,
+            size: CGSize(width: xCursor, height: totalHeight + topShift),
+            measures: adjustedMeasures,
+            staffOrigins: adjustedStaffOrigins,
+            partLabels: adjustedLabels,
             spanners: []
+        )
+    }
+
+    /// Compute the y extent (min/max) of every placed element across all
+    /// measures of a system. Used to size the system so notes on far
+    /// ledger lines, tempo glyphs, dynamics, etc. don't clip.
+    private static func elementYBounds(
+        in measures: [LayoutMeasure],
+        metrics: StaffMetrics
+    ) -> (min: CGFloat, max: CGFloat) {
+        var minY = CGFloat.infinity
+        var maxY = -CGFloat.infinity
+        // Glyph metrics are anchored at their center; extend by one sp
+        // in every direction so the reported bounds cover the rendered
+        // pixels, not just the anchor point.
+        let glyphPad = metrics.sp
+        for measure in measures {
+            for el in measure.elements + measure.markers + measure.jumps {
+                for p in elementYPoints(el) {
+                    minY = min(minY, p - glyphPad)
+                    maxY = max(maxY, p + glyphPad)
+                }
+            }
+        }
+        if !minY.isFinite { minY = 0 }
+        if !maxY.isFinite { maxY = 0 }
+        return (minY, maxY)
+    }
+
+    /// y values contributed by a single LayoutElement.
+    private static func elementYPoints(
+        _ element: LayoutElement
+    ) -> [CGFloat] {
+        switch element {
+        case .clef(_, let p),
+             .keySignature(_, _, let p),
+             .timeSignature(_, _, let p),
+             .barLine(_, let p),
+             .rest(_, let p),
+             .textMark(_, _, let p),
+             .fermata(_, let p),
+             .marker(_, _, let p),
+             .jump(_, let p),
+             .measureRepeat(_, let p):
+            return [p.y]
+        case .note(_, _, _, _, let p, _, _, _):
+            return [p.y]
+        case .chord(let notes, _, _, let so, _, _, _):
+            var ys = notes.map(\.origin.y)
+            ys.append(so.y)
+            return ys
+        case .beam(let from, let to, _),
+             .spannerSegment(_, let from, let to, _, _, _),
+             .tieArc(let from, let to, _),
+             .glissandoLine(let from, let to, _, _):
+            return [from.y, to.y]
+        case .arpeggioWiggle(let top, let bot, _):
+            return [top.y, bot.y]
+        }
+    }
+
+    private static func shiftMeasure(
+        _ measure: LayoutMeasure, dy: CGFloat
+    ) -> LayoutMeasure {
+        LayoutMeasure(
+            origin: measure.origin,
+            width: measure.width,
+            elements: measure.elements.map { translate(element: $0, dy: dy) },
+            markers: measure.markers.map { translate(element: $0, dy: dy) },
+            jumps: measure.jumps.map { translate(element: $0, dy: dy) }
         )
     }
 
