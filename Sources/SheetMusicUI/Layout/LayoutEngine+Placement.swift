@@ -17,6 +17,7 @@ extension LayoutEngine {
         width: CGFloat,
         metrics: StaffMetrics,
         activeClef: NotatedClef,
+        initialClefRawType: String? = nil,
         division: Int
     ) -> (elements: [LayoutElement], clef: NotatedClef) {
         let staffMidY = metrics.staffHeight / 2 + metrics.sp * 2
@@ -34,19 +35,52 @@ extension LayoutEngine {
             }
             if measureTimeSig != nil { break }
         }
+        // --- Should we synthesize a leading clef? ---
+        //
+        // MuseScore omits explicit `<Clef>` in the first measure when the
+        // default is implied by the instrument (e.g. treble for voice,
+        // percussion for drums). Callers pass the staff's default raw
+        // type via `initialClefRawType` on the first system; if no
+        // explicit `.clef(...)` leads the voice, we synthesize one so
+        // the staff is readable.
+        let synthesizeLeadingClef: Bool
+        if let rawType = initialClefRawType,
+           !firstVoiceStartsWithClef(measure: measure) {
+            synthesizeLeadingClef = true
+            currentClef = NotatedClef(rawType: rawType)
+        } else {
+            synthesizeLeadingClef = false
+        }
+
         // --- Pass 1: measure the header width (leading clef/key/time) ---
-        let headerEnd = headerWidth(
+        var headerEnd = headerWidth(
             measure: measure, metrics: metrics, startPadding: metrics.sp * 2)
+        if synthesizeLeadingClef {
+            // Reserve space for the synthesized clef that's about to be
+            // emitted — same width the real clef would consume.
+            headerEnd += metrics.sp * 3
+        }
         let trailingGap = metrics.sp * 3
         let contentWidth = max(metrics.sp * 4, width - headerEnd - trailingGap)
 
         // --- Pass 2: emit elements for each voice ---
+        var remainingSynthClef = synthesizeLeadingClef
         for voice in measure.voices {
             let voiceTotal = totalTicks(in: voice, division: division)
             var vx: CGFloat = metrics.sp * 2
             var tickCursor = 0
             var inHeader = true
             var voiceChordOutIndex: [Int: Int] = [:]
+
+            // Emit the synthesized leading clef exactly once, at the top
+            // of the first voice to process it.
+            if remainingSynthClef, let rawType = initialClefRawType {
+                out.append(.clef(
+                    rawType: rawType,
+                    origin: CGPoint(x: vx, y: staffMidY)))
+                vx += metrics.sp * 3
+                remainingSynthClef = false
+            }
 
             /// x-coordinate for the next timed element based on tick.
             func timedX() -> CGFloat {
@@ -316,6 +350,17 @@ extension LayoutEngine {
             }
         }
         return w
+    }
+
+    /// True when the first voice's first element is a `<Clef>`. Used to
+    /// decide whether to synthesize an implicit opening clef.
+    private static func firstVoiceStartsWithClef(
+        measure: Measure
+    ) -> Bool {
+        guard let firstElement = measure.voices.first?.elements.first
+        else { return false }
+        if case .clef = firstElement { return true }
+        return false
     }
 
     private static func totalTicks(in voice: Voice, division: Int) -> Int {

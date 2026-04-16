@@ -22,6 +22,9 @@ enum ClefRenderer {
         case .alto, .tenor:
             glyph = SMuFLGlyph.cClef
             yOffset = 0
+        case .percussion:
+            glyph = SMuFLGlyph.percussionClef
+            yOffset = 0
         }
         context.drawGlyph(
             glyph,

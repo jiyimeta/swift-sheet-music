@@ -7,6 +7,10 @@ extension StaffDeclaration {
         let staffTypeNode = node.first("StaffType")
         let staffType = staffTypeNode?.first("name")?.text ?? "stdNormal"
         let group = staffTypeNode?.attributes["group"] ?? "pitched"
-        return StaffDeclaration(staffType: staffType, group: group)
+        let defaultClef = node.first("defaultClef")?.text
+        return StaffDeclaration(
+            staffType: staffType,
+            group: group,
+            defaultClefType: defaultClef)
     }
 }

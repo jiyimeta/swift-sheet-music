@@ -3,6 +3,7 @@ import AppKit
 import Foundation
 import SheetMusic
 import SheetMusicCore
+import SheetMusicMSCX
 import SheetMusicUI
 import SwiftUI
 
@@ -57,6 +58,32 @@ func run() throws {
         print("wrote \(url.path) (\(cg.width)×\(cg.height))")
     }
 
+    // Real-world check: parse Example/SheetMusicExample/test.mscx if
+    // present and render the first couple of systems. Useful for
+    // spot-checking synthesized clefs on staves that rely on MuseScore
+    // instrument defaults.
+    let examplePath = URL(fileURLWithPath:
+        "Example/SheetMusicExample/test.mscx")
+    if FileManager.default.fileExists(atPath: examplePath.path),
+       let data = try? Data(contentsOf: examplePath),
+       let realScore = try? SheetMusic.loadScore(mscxData: data) {
+        let trimmed = trimFirstMeasures(of: realScore, count: 2)
+        let realView = ScoreView(score: trimmed)
+            .frame(width: 1600, height: CGFloat(trimmed.staves.count * 120))
+            .padding(16)
+            .background(Color.white)
+        let realRenderer = ImageRenderer(content: realView)
+        realRenderer.scale = 2
+        if let cg = realRenderer.cgImage {
+            let url = outputDir.appendingPathComponent(
+                "90-real-mscx.png")
+            try writePNG(cg, to: url)
+            print("wrote \(url.path) (\(cg.width)×\(cg.height))")
+        }
+    } else {
+        print("skipped 90-real-mscx: Example/SheetMusicExample/test.mscx not readable")
+    }
+
     // Smoke test: ScoreView with NO explicit frame must fall back to the
     // score's natural size — this is what happens inside a ScrollView
     // that proposes nil width/height. A broken ScoreView would collapse
@@ -77,6 +104,22 @@ func run() throws {
                 "WARNING: unconstrained ScoreView collapsed to \(cg.width)px wide — the ScrollView-compatible minWidth floor may have regressed.\n".utf8))
         }
     }
+}
+
+/// Keep the first `count` measures of every staff so a large real-world
+/// score renders into a reasonable canvas.
+@available(macOS 15.0, *)
+func trimFirstMeasures(of score: Score, count: Int) -> Score {
+    let trimmedStaves = score.staves.map { staff in
+        StaffContent(
+            id: staff.id,
+            measures: Array(staff.measures.prefix(count)))
+    }
+    return Score(
+        division: score.division,
+        parts: score.parts,
+        staves: trimmedStaves,
+        metaTags: score.metaTags)
 }
 
 @available(macOS 15.0, *)

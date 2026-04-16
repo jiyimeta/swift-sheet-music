@@ -9,6 +9,7 @@ public enum NotatedClef: Sendable, Equatable {
     case bass            // F3 on line 4 (second from top)
     case alto            // C4 on middle line
     case tenor           // C4 on line 4
+    case percussion      // unpitched 5-line drum staff
 
     /// Parse a `Clef.concertClefType` string (MuseScore encoding).
     public init(rawType: String) {
@@ -17,6 +18,7 @@ public enum NotatedClef: Sendable, Equatable {
         case "F", "F8va", "F8vb", "bass":              self = .bass
         case "C3", "alto":                              self = .alto
         case "C4", "tenor":                             self = .tenor
+        case "PERC", "PERC2", "percussion":             self = .percussion
         default:                                        self = .treble
         }
     }
@@ -56,10 +58,11 @@ public enum PitchStaffPosition {
         let diatonicAbs = octave * 7 + diatonicFromC
         let midLineDiatonic: Int
         switch clef {
-        case .treble: midLineDiatonic = 4 * 7 + 6     // B4
-        case .bass:   midLineDiatonic = 3 * 7 + 1     // D3
-        case .alto:   midLineDiatonic = 4 * 7 + 0     // C4
-        case .tenor:  midLineDiatonic = 3 * 7 + 5     // A3
+        case .treble:     midLineDiatonic = 4 * 7 + 6     // B4
+        case .bass:       midLineDiatonic = 3 * 7 + 1     // D3
+        case .alto:       midLineDiatonic = 4 * 7 + 0     // C4
+        case .tenor:      midLineDiatonic = 3 * 7 + 5     // A3
+        case .percussion: midLineDiatonic = 4 * 7 + 6     // positional (B4)
         }
         return StaffStep(diatonicAbs - midLineDiatonic)
     }

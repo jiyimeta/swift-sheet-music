@@ -186,10 +186,28 @@ public enum LayoutEngine {
             )
         }
 
+        // Resolve each staff's default clef from its Part's declaration.
+        // MuseScore omits an explicit `<Clef>` in the first measure when
+        // the default is obvious (treble for pitched voice, PERC for
+        // percussion); without this resolution the staff renders with no
+        // clef glyph at all.
+        let defaultClefRawTypes: [String] =
+            staves.enumerated().map { idx, _ in
+                let part = idx < context.score.parts.count
+                    ? context.score.parts[idx] : nil
+                let decl = part?.staffDeclarations.first
+                if let declared = decl?.defaultClefType {
+                    return declared
+                }
+                if decl?.group == "percussion" { return "PERC" }
+                return "G"
+            }
+
         var layoutMeasures: [LayoutMeasure] = []
         var xCursor: CGFloat = partLabelWidth
-        var clefs: [NotatedClef] = Array(
-            repeating: .treble, count: staves.count)
+        var clefs: [NotatedClef] = defaultClefRawTypes.map {
+            NotatedClef(rawType: $0)
+        }
         for (j, measureIdx) in measureRange.enumerated() {
             let w = widths[j]
             var aggregated: [LayoutElement] = []
@@ -198,11 +216,19 @@ public enum LayoutEngine {
             for (staffIdx, staff) in staves.enumerated() {
                 guard measureIdx < staff.measures.count else { continue }
                 let m = staff.measures[measureIdx]
+                // Only inject a synthesized clef on the first system's
+                // first measure. Continuation systems would otherwise
+                // duplicate the clef glyph.
+                let synthClef: String? =
+                    (isFirstSystem && j == 0)
+                        ? defaultClefRawTypes[staffIdx]
+                        : nil
                 let (els, newClef) = placeMeasureElements(
                     measure: m,
                     width: w,
                     metrics: metrics,
                     activeClef: clefs[staffIdx],
+                    initialClefRawType: synthClef,
                     division: context.score.division
                 )
                 clefs[staffIdx] = newClef
