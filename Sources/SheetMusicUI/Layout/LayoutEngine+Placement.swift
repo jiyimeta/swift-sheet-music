@@ -63,12 +63,35 @@ extension LayoutEngine {
             width - headerSchedule.contentStartX - trailingGap)
 
         // --- Pass 2: emit elements for each voice ---
+        //
+        // Multi-voice detection (MuseScore's hasVoices): a measure
+        // uses multiple voices when more than one voice contains at
+        // least one chord. In that mode:
+        //  - Voice 0 / 2: stems forced UP
+        //  - Voice 1 / 3: stems forced DOWN
+        //  - Rest y offset: voice 0 stays normal, voice 1 shifts down
+        let voicesWithChords = measure.voices.filter { v in
+            v.elements.contains { if case .chord = $0 { true } else { false } }
+        }.count
+        let isMultiVoice = voicesWithChords > 1
+
         var remainingSynthClef = synthesizeLeadingClef
-        for voice in measure.voices {
+        for (voiceIdx, voice) in measure.voices.enumerated() {
             let voiceTotal = totalTicks(in: voice, division: division)
             var tickCursor = 0
             var inHeader = true
             var voiceChordOutIndex: [Int: Int] = [:]
+
+            // Forced stem direction for multi-voice measures.
+            let forcedStem: StemDirection? = isMultiVoice
+                ? (voiceIdx.isMultiple(of: 2) ? .up : .down)
+                : nil
+            // Rest y offset when multi-voice to avoid collision.
+            let restVoiceOffset: CGFloat = isMultiVoice
+                ? (voiceIdx.isMultiple(of: 2)
+                   ? -metrics.sp * 2
+                   :  metrics.sp * 2)
+                : 0
 
             // Emit the synthesized leading clef exactly once, at the top
             // of the first voice to process it.
@@ -122,18 +145,16 @@ extension LayoutEngine {
                     // Whole rest hangs from the 2nd line from the top
                     // (step +2). Half rest sits on the middle line
                     // (step 0 = staffMidY). Others center on the
-                    // middle line.
+                    // middle line. In multi-voice mode, offset by
+                    // restVoiceOffset so voices don't overlap.
                     let restY: CGFloat
                     switch restBase {
                     case .whole:
-                        restY = staffMidY - metrics.sp  // step +2
+                        restY = staffMidY - metrics.sp + restVoiceOffset
                     default:
-                        restY = staffMidY
+                        restY = staffMidY + restVoiceOffset
                     }
-                    // A whole-measure rest (whole note duration in a
-                    // non-whole-note time signature, or duration equal
-                    // to the whole measure) is centered horizontally
-                    // in the measure rather than placed at its tick.
+                    // A whole-measure rest is centered horizontally.
                     let isWholeRest = restBase == .whole
                     let restX: CGFloat
                     if isWholeRest {
@@ -193,8 +214,9 @@ extension LayoutEngine {
                             headType: note.headType
                         )
                     }
-                    let stem = StemDirectionRule.direction(
-                        for: chordNotes.map(\.step))
+                    let stem = forcedStem
+                        ?? StemDirectionRule.direction(
+                            for: chordNotes.map(\.step))
                     voiceChordOutIndex[voiceIdx] = out.count
                     out.append(.chord(
                         notes: chordNotes,
@@ -325,8 +347,8 @@ extension LayoutEngine {
                     groupSteps.append(contentsOf: n.map(\.step))
                 }
                 guard groupSteps.count >= 2 else { continue }
-                let groupDirection = StemDirectionRule.direction(
-                    for: groupSteps)
+                let groupDirection = forcedStem
+                    ?? StemDirectionRule.direction(for: groupSteps)
                 let stemSideDx: CGFloat = metrics.sp * 0.59
                     * (groupDirection == .up ? 1 : -1)
 
