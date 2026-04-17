@@ -167,6 +167,11 @@ struct ScoreCanvas: View {
                     onStaffLine: n.step.isMultiple(of: 2),
                     metrics: metrics)
             }
+            // Ledger lines for notes extending above/below the staff.
+            drawLedgerLines(
+                context: &context,
+                notes: shiftedNotes,
+                metrics: metrics)
             // For beamed chords, the placement pass stores the shared
             // beam y into stemOrigin.y so every member's stem reaches
             // the same horizontal beam bar.
@@ -244,6 +249,65 @@ struct ScoreCanvas: View {
             // `.note` case isn't emitted in v1 (chords carry notes via
             // LayoutChordNote). Reserved for future expansion.
             break
+        }
+    }
+    // MARK: - Ledger lines
+
+    /// Draw short horizontal lines through or near noteheads that sit
+    /// above (step > +4) or below (step < −4) the five-line staff.
+    /// Each ledger line sits on an even step position (a "line"
+    /// extension of the staff). Lines are drawn from the staff edge
+    /// outward to the most extreme note.
+    private func drawLedgerLines(
+        context: inout GraphicsContext,
+        notes: [LayoutChordNote],
+        metrics: StaffMetrics
+    ) {
+        guard let ref = notes.first else { return }
+        let allSteps = notes.map(\.step)
+        let maxStep = allSteps.max() ?? 0
+        let minStep = allSteps.min() ?? 0
+        guard maxStep > 4 || minStep < -4 else { return }
+
+        // Derive the staff-midline absolute y from any note.
+        let staffMidYAbs = ref.origin.y
+            + CGFloat(ref.step) * metrics.sp / 2
+        let chordX = ref.origin.x
+        let halfWidth = metrics.sp * 0.9
+        let lineWidth = metrics.staffLineThickness * 1.5
+
+        // Upper ledger lines
+        if maxStep > 4 {
+            let topEven = maxStep.isMultiple(of: 2)
+                ? maxStep : maxStep - 1
+            for ledgerStep in stride(from: 6, through: topEven, by: 2) {
+                let y = staffMidYAbs
+                    - CGFloat(ledgerStep) * metrics.sp / 2
+                var p = Path()
+                p.move(to: CGPoint(x: chordX - halfWidth, y: y))
+                p.addLine(to: CGPoint(
+                    x: chordX + halfWidth, y: y))
+                context.stroke(
+                    p, with: .color(.primary), lineWidth: lineWidth)
+            }
+        }
+
+        // Lower ledger lines
+        if minStep < -4 {
+            let botEven = minStep.isMultiple(of: 2)
+                ? minStep : minStep + 1
+            for ledgerStep in stride(
+                from: -6, through: botEven, by: -2
+            ) {
+                let y = staffMidYAbs
+                    - CGFloat(ledgerStep) * metrics.sp / 2
+                var p = Path()
+                p.move(to: CGPoint(x: chordX - halfWidth, y: y))
+                p.addLine(to: CGPoint(
+                    x: chordX + halfWidth, y: y))
+                context.stroke(
+                    p, with: .color(.primary), lineWidth: lineWidth)
+            }
         }
     }
 }
