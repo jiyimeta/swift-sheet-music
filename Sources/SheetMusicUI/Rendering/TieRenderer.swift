@@ -44,10 +44,10 @@ enum TieRenderer {
         let dy = endPt.y - startPt.y
         let ctrl1 = CGPoint(
             x: startPt.x + dx * 0.2,
-            y: startPt.y + dy * 0.2 + shoulderH * vertSign * -1)
+            y: startPt.y + dy * 0.2 + shoulderH * vertSign)
         let ctrl2 = CGPoint(
             x: startPt.x + dx * 0.8,
-            y: startPt.y + dy * 0.8 + shoulderH * vertSign * -1)
+            y: startPt.y + dy * 0.8 + shoulderH * vertSign)
 
         // Thickness offset — perpendicular to the tie baseline.
         // For roughly-horizontal ties, vertical ±midThickness is a
