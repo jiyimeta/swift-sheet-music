@@ -231,6 +231,15 @@ public enum LayoutEngine {
                 let synthClef: String? = synthesizeClefHere
                     ? defaultClefRawTypes[staffIdx]
                     : nil
+                // For percussion staves, pass the instrument's drum
+                // map so note positions use the per-pitch line
+                // rather than the pitched diatonic formula.
+                let part = staffIdx < context.score.parts.count
+                    ? context.score.parts[staffIdx] : nil
+                let drumMap: [Int: Int]? =
+                    part?.instrument.useDrumset == true
+                        ? part?.instrument.drumLineMap
+                        : nil
                 let (els, newClef) = placeMeasureElements(
                     measure: m,
                     width: w,
@@ -238,7 +247,8 @@ public enum LayoutEngine {
                     activeClef: clefs[staffIdx],
                     initialClefRawType: synthClef,
                     headerSchedule: schedule,
-                    division: context.score.division
+                    division: context.score.division,
+                    drumLineMap: drumMap
                 )
                 clefs[staffIdx] = newClef
                 // Placement emits positions relative to "staff top at

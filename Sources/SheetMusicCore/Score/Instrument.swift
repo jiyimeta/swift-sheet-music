@@ -20,6 +20,12 @@ public struct Instrument: Sendable, Equatable {
     /// DAWs like Logic Pro auto-detect as percussion and dress with a drum kit
     /// patch. C++: `mu::engraving::Instrument::useDrumset()`.
     public var useDrumset: Bool
+    /// Per-pitch staff-line mapping for drum instruments. Key = MIDI pitch
+    /// (35 = bass drum, 42 = hi-hat, etc.), value = MuseScore line number
+    /// (0 = top staff line, 4 = middle, 8 = bottom, negative = above staff).
+    /// Used by the UI to position drum noteheads instead of the pitched
+    /// diatonic formula.
+    public var drumLineMap: [Int: Int]
 
     /// Convenience accessor for the primary (= first) channel.
     public var channel: InstrumentChannel {
@@ -37,7 +43,8 @@ public struct Instrument: Sendable, Equatable {
         maxPitchAmateur: Int? = nil,
         articulations: [InstrumentArticulation] = [],
         channels: [InstrumentChannel] = [InstrumentChannel()],
-        useDrumset: Bool = false
+        useDrumset: Bool = false,
+        drumLineMap: [Int: Int] = [:]
     ) {
         self.id = id
         self.longName = longName
@@ -50,5 +57,6 @@ public struct Instrument: Sendable, Equatable {
         self.articulations = articulations
         self.channels = channels.isEmpty ? [InstrumentChannel()] : channels
         self.useDrumset = useDrumset
+        self.drumLineMap = drumLineMap
     }
 }

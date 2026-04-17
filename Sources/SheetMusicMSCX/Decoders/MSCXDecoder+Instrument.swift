@@ -23,6 +23,16 @@ extension Instrument {
         // <useDrumset>1</useDrumset> marks the instrument as a percussion kit.
         // The renderer routes drumset parts to GM channel 10 (0-indexed: 9).
         let useDrumset = (node.first("useDrumset")?.text).flatMap { Int($0) } == 1
+        // <Drum pitch="42"><line>5</line>…</Drum> — per-pitch staff
+        // line mapping for drum instruments.
+        var drumLineMap: [Int: Int] = [:]
+        for drum in node.all("Drum") {
+            guard let pitchStr = drum.attributes["pitch"],
+                  let pitch = Int(pitchStr),
+                  let lineStr = drum.first("line")?.text,
+                  let line = Int(lineStr) else { continue }
+            drumLineMap[pitch] = line
+        }
         return Instrument(
             id: id,
             longName: longName,
@@ -34,7 +44,8 @@ extension Instrument {
             maxPitchAmateur: node.first("maxPitchA").flatMap { Int($0.text) },
             articulations: articulations,
             channels: channels,
-            useDrumset: useDrumset
+            useDrumset: useDrumset,
+            drumLineMap: drumLineMap
         )
     }
 }

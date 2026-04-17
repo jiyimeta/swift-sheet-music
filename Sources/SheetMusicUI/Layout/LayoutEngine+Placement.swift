@@ -19,7 +19,8 @@ extension LayoutEngine {
         activeClef: NotatedClef,
         initialClefRawType: String? = nil,
         headerSchedule: HeaderSchedule,
-        division: Int
+        division: Int,
+        drumLineMap: [Int: Int]? = nil
     ) -> (elements: [LayoutElement], clef: NotatedClef) {
         let staffMidY = metrics.staffHeight / 2 + metrics.sp * 2
         var out: [LayoutElement] = []
@@ -166,10 +167,21 @@ extension LayoutEngine {
                     }
                     let chordX = timedX() - flagShift
                     let chordNotes = chord.notes.map { note -> LayoutChordNote in
-                        let step = PitchStaffPosition.step(
-                            midiPitch: note.pitch, tpc: note.tpc,
-                            clef: currentClef
-                        ).step
+                        // For percussion staves, use the drum map's
+                        // <line> value to position the notehead
+                        // instead of the pitched diatonic formula.
+                        // MuseScore line L maps to step = 4 − L
+                        // (line 0 = top = step +4, line 4 = middle
+                        // = step 0, line 8 = bottom = step −4).
+                        let step: Int
+                        if let drumLine = drumLineMap?[note.pitch] {
+                            step = 4 - drumLine
+                        } else {
+                            step = PitchStaffPosition.step(
+                                midiPitch: note.pitch, tpc: note.tpc,
+                                clef: currentClef
+                            ).step
+                        }
                         let y = staffMidY - CGFloat(step) * metrics.sp / 2
                         return LayoutChordNote(
                             step: step,
