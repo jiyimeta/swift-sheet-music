@@ -14,6 +14,10 @@ public struct Note: Sendable, Equatable {
     /// Glissando starting on this note and sweeping to the next chord's note.
     /// C++: `<Spanner type="Glissando">` attached to a `<Note>`.
     public var glissando: Glissando?
+    /// Notehead shape override (e.g. "cross" for hi-hat, "diamond" for
+    /// percussion rim, "triangle-down" for cowbell). When nil, the
+    /// standard notehead for the duration is used.
+    public var headType: String?
 
     public init(
         pitch: Int,
@@ -21,7 +25,8 @@ public struct Note: Sendable, Equatable {
         accidental: Accidental? = nil,
         tieForward: Int? = nil,
         tieBack: Int? = nil,
-        glissando: Glissando? = nil
+        glissando: Glissando? = nil,
+        headType: String? = nil
     ) {
         self.pitch = pitch
         self.tpc = tpc
@@ -29,5 +34,6 @@ public struct Note: Sendable, Equatable {
         self.tieForward = tieForward
         self.tieBack = tieBack
         self.glissando = glissando
+        self.headType = headType
     }
 }

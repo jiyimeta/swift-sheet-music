@@ -439,7 +439,8 @@ public enum LayoutEngine {
                     origin: shift($0.origin),
                     tieForward: $0.tieForward,
                     tieBack: $0.tieBack,
-                    hasGlissando: $0.hasGlissando
+                    hasGlissando: $0.hasGlissando,
+                    headType: $0.headType
                 )
             }
             return .chord(

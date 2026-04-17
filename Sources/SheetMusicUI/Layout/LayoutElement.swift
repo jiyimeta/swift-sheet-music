@@ -114,6 +114,7 @@ public struct LayoutChordNote: Sendable, Equatable {
     public let tieForward: Int?
     public let tieBack: Int?
     public let hasGlissando: Bool
+    public let headType: String?
 
     public init(
         step: Int,
@@ -121,7 +122,8 @@ public struct LayoutChordNote: Sendable, Equatable {
         origin: CGPoint,
         tieForward: Int?,
         tieBack: Int?,
-        hasGlissando: Bool
+        hasGlissando: Bool,
+        headType: String? = nil
     ) {
         self.step = step
         self.accidental = accidental
@@ -129,6 +131,7 @@ public struct LayoutChordNote: Sendable, Equatable {
         self.tieForward = tieForward
         self.tieBack = tieBack
         self.hasGlissando = hasGlissando
+        self.headType = headType
     }
 }
 

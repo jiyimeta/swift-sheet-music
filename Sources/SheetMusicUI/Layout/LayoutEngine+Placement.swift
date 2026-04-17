@@ -177,7 +177,8 @@ extension LayoutEngine {
                             origin: CGPoint(x: chordX, y: y),
                             tieForward: note.tieForward,
                             tieBack: note.tieBack,
-                            hasGlissando: note.glissando != nil
+                            hasGlissando: note.glissando != nil,
+                            headType: note.headType
                         )
                     }
                     let stem = StemDirectionRule.direction(

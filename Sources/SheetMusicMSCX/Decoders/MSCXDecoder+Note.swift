@@ -36,13 +36,15 @@ extension Note {
                 continue
             }
         }
+        let headType = node.first("head")?.text
         return Note(
             pitch: pitch,
             tpc: tpc,
             accidental: accidental,
             tieForward: tieForward,
             tieBack: tieBack,
-            glissando: glissando
+            glissando: glissando,
+            headType: headType
         )
     }
 

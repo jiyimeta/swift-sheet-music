@@ -148,13 +148,15 @@ struct ScoreCanvas: View {
                     origin: shift($0.origin),
                     tieForward: $0.tieForward,
                     tieBack: $0.tieBack,
-                    hasGlissando: $0.hasGlissando
+                    hasGlissando: $0.hasGlissando,
+                    headType: $0.headType
                 )
             }
             for n in shiftedNotes {
                 NoteheadRenderer.drawHead(
                     context: &context, at: n.origin,
-                    duration: baseDur, metrics: metrics)
+                    duration: baseDur, headType: n.headType,
+                    metrics: metrics)
                 if let acc = n.accidental {
                     AccidentalRenderer.draw(
                         context: &context, accidental: acc,

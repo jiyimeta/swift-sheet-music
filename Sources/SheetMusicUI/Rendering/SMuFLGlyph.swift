@@ -16,10 +16,21 @@ enum SMuFLGlyph {
     static let cClef: Character            = "\u{E05C}"
     static let percussionClef: Character   = "\u{E069}"
 
-    // Noteheads
+    // Noteheads — standard
     static let noteheadWhole: Character    = "\u{E0A2}"
     static let noteheadHalf: Character     = "\u{E0A3}"
     static let noteheadBlack: Character    = "\u{E0A4}"
+    // Noteheads — cross (x)
+    static let noteheadXWhole: Character   = "\u{E0AB}"
+    static let noteheadXHalf: Character    = "\u{E0AA}"
+    static let noteheadXBlack: Character   = "\u{E0A9}"
+    // Noteheads — diamond
+    static let noteheadDiamondWhole: Character = "\u{E0D8}"
+    static let noteheadDiamondHalf: Character  = "\u{E0D9}"
+    static let noteheadDiamondBlack: Character = "\u{E0DB}"
+    // Noteheads — triangle
+    static let noteheadTriangleUpBlack: Character    = "\u{E0BE}"
+    static let noteheadTriangleDownBlack: Character  = "\u{E0C7}"
 
     // Flags
     static let flag8thUp: Character        = "\u{E240}"
