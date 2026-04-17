@@ -45,22 +45,24 @@ struct ContentViewMac: View {
             if let score {
                 ScrollView([.vertical, .horizontal]) {
                     ScoreView(score: score)
-                        .scaleEffect(magnification)
+                        .scaleEffect(magnification, anchor: .topLeading)
                         .padding()
+                        .simultaneousGesture(
+                            MagnifyGesture()
+                                .onChanged { value in
+                                    magnification = steadyMagnification
+                                        * value.magnification
+                                }
+                                .onEnded { value in
+                                    steadyMagnification *=
+                                        value.magnification
+                                    steadyMagnification = min(
+                                        max(steadyMagnification, 0.25),
+                                        4.0)
+                                    magnification = steadyMagnification
+                                }
+                        )
                 }
-                .gesture(
-                    MagnifyGesture()
-                        .onChanged { value in
-                            magnification = steadyMagnification
-                                * value.magnification
-                        }
-                        .onEnded { value in
-                            steadyMagnification *= value.magnification
-                            steadyMagnification = min(
-                                max(steadyMagnification, 0.25), 4.0)
-                            magnification = steadyMagnification
-                        }
-                )
             } else {
                 ContentUnavailableView(
                     "No score loaded",
