@@ -149,23 +149,62 @@ public enum LayoutEngine {
     ) -> LayoutSystem {
         let metrics = context.metrics
         let staves = context.score.staves
-        // Vertical stacking: each staff gets staffHeight + 4 sp slack.
-        let staffSpacing = metrics.staffHeight + metrics.sp * 4
-        // First system reserves wider space for long part names.
         let partLabelWidth: CGFloat = isFirstSystem ? 80 : 30
 
-        // Breathing room above the top staff and below the bottom staff
-        // so ledger-line notes, tempo text, ottavas, voltas, hairpins,
-        // and pedal marks don't clip. 8 sp ≈ 4 ledger positions + a
-        // comfortable margin for an inline text mark.
         let topPad: CGFloat = metrics.sp * 8
         let bottomPad: CGFloat = metrics.sp * 8
+        let minGap: CGFloat = metrics.sp * 2
 
-        let staffOrigins: [CGPoint] = staves.enumerated().map { idx, _ in
-            CGPoint(
-                x: partLabelWidth,
-                y: topPad + CGFloat(idx) * staffSpacing
-            )
+        // --- Dynamic per-staff bottom padding ---
+        //
+        // Each staff needs enough room below its bottom line for
+        // lyrics, dynamics, pedal marks, etc. Scan the measure
+        // content within this system's range to estimate the extent.
+        let staffBottomPads: [CGFloat] = staves.enumerated().map { idx, staff in
+            var maxLyricsVerses = 0
+            for mIdx in measureRange {
+                guard mIdx < staff.measures.count else { continue }
+                for voice in staff.measures[mIdx].voices {
+                    for el in voice.elements {
+                        if case .chord(let c) = el {
+                            let nonEmpty = c.lyrics.filter { !$0.isEmpty }.count
+                            maxLyricsVerses = max(maxLyricsVerses, nonEmpty)
+                        }
+                    }
+                }
+            }
+            // Base slack (dynamics, hairpins, etc.).
+            let basePad: CGFloat = metrics.sp * 4
+            // Lyrics sit at staffMidY + 6 sp, each verse adds 2.5 sp.
+            let lyricsPad: CGFloat = maxLyricsVerses > 0
+                ? metrics.sp * 4 + CGFloat(maxLyricsVerses) * metrics.sp * 2.5
+                : 0
+            return max(basePad, lyricsPad)
+        }
+
+        // --- Dynamic per-staff top padding ---
+        //
+        // Space above the staff for tempo, ottava, high ledger lines.
+        // For the first staff, topPad is the system-level value;
+        // subsequent staves use a smaller overhead.
+        let staffTopPads: [CGFloat] = staves.enumerated().map { idx, _ in
+            // A staff can have tempo / markers / high notes above.
+            // For now, use a fixed estimate; per-element scanning is
+            // expensive and a 4 sp overhead covers common cases.
+            return idx == 0 ? 0 : metrics.sp * 2
+        }
+
+        // --- Compute staffOrigins from cumulative extent ---
+        var staffOrigins: [CGPoint] = []
+        var currentY: CGFloat = topPad
+        for idx in 0..<staves.count {
+            currentY += staffTopPads[idx]
+            staffOrigins.append(CGPoint(
+                x: partLabelWidth, y: currentY))
+            if idx < staves.count - 1 {
+                currentY += metrics.staffHeight
+                    + staffBottomPads[idx] + minGap
+            }
         }
 
         // Per-staff labels. Stage 5 assumes staves align 1:1 with parts;
@@ -298,12 +337,10 @@ public enum LayoutEngine {
             xCursor += w
         }
 
-        // Baseline height: top pad + all staves + bottom pad.
-        let baselineHeight =
-            topPad
-            + CGFloat(max(0, staves.count - 1)) * staffSpacing
+        // Baseline height: last staff's bottom + bottomPad.
+        let lastStaffBottom = (staffOrigins.last?.y ?? topPad)
             + metrics.staffHeight
-            + bottomPad
+        let baselineHeight = lastStaffBottom + bottomPad
 
         // Extend to fit the actual bounding box of emitted elements so
         // nothing clips when e.g. a note lands on the 5th ledger line
