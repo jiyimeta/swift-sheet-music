@@ -1,11 +1,10 @@
-#if os(macOS)
 import CoreGraphics
 
 /// Per-staff sizing derived from `ScoreViewOptions.staffSize`.
 ///
 /// MuseScore / engraving convention: one "staff space" (sp) = one line
 /// distance of a five-line staff. A staff is 4 sp tall.
-@available(macOS 15.0, *)
+@available(macOS 15.0, iOS 16.0, *)
 public struct StaffMetrics: Sendable, Equatable {
     /// Total height of the five-line staff, in points. Equals 4 × sp.
     public let staffHeight: CGFloat
@@ -29,4 +28,3 @@ public struct StaffMetrics: Sendable, Equatable {
     /// Tuned empirically; adjustable at stage 4's stretch pass.
     public var spacePerQuarter: CGFloat { sp * 4 }
 }
-#endif

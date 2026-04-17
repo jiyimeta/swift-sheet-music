@@ -1,7 +1,6 @@
-#if os(macOS)
 import SwiftUI
 
-@available(macOS 15.0, *)
+@available(macOS 15.0, iOS 16.0, *)
 enum SpannerRenderer {
     static func draw(
         context: inout GraphicsContext,
@@ -156,4 +155,3 @@ enum SpannerRenderer {
             lineWidth: metrics.sp * 0.1)
     }
 }
-#endif

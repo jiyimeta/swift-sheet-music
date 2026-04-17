@@ -1,4 +1,3 @@
-#if os(macOS)
 import SwiftUI
 
 /// Draws a tuplet marking — either a square bracket with hooks at each
@@ -12,7 +11,7 @@ import SwiftUI
 /// - `hasBracket == false` draws just the number.
 ///
 /// The label is drawn in an italic serif, matching engraved scores.
-@available(macOS 15.0, *)
+@available(macOS 15.0, iOS 16.0, *)
 enum TupletRenderer {
     static func draw(
         context: inout GraphicsContext,
@@ -82,4 +81,3 @@ enum TupletRenderer {
         return from.y + (to.y - from.y) * t
     }
 }
-#endif

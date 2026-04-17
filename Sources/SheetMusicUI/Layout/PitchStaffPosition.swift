@@ -1,9 +1,8 @@
-#if os(macOS)
 import SheetMusicCore
 
 /// Clef glyphs we currently place. Each clef anchors a reference pitch to
 /// a reference staff line, from which all other pitches are derived.
-@available(macOS 15.0, *)
+@available(macOS 15.0, iOS 16.0, *)
 public enum NotatedClef: Sendable, Equatable {
     case treble          // G4 on line 2 (second from bottom)
     case treble8va       // G clef, 8va alta — notes read 1 octave higher
@@ -40,7 +39,7 @@ public enum NotatedClef: Sendable, Equatable {
 ///
 /// `step` values of 0 = middle line. +1 = space above middle line.
 /// +2 = fourth line (from bottom). …etc. Each step = 0.5 sp vertically.
-@available(macOS 15.0, *)
+@available(macOS 15.0, iOS 16.0, *)
 public struct StaffStep: Sendable, Equatable {
     public let step: Int
     public init(_ step: Int) { self.step = step }
@@ -51,7 +50,7 @@ public struct StaffStep: Sendable, Equatable {
 /// TPC ("tonal pitch class", -1..33 in MuseScore convention) selects the
 /// diatonic spelling. Pitch alone is ambiguous (C♯ vs D♭). With TPC we can
 /// place the notehead on the correct diatonic line/space.
-@available(macOS 15.0, *)
+@available(macOS 15.0, iOS 16.0, *)
 public enum PitchStaffPosition {
     /// Tonal pitch class → diatonic step count from C (0=C, 1=D, …, 6=B).
     /// MuseScore TPC: -1 = F♭♭, 0 = C♭♭, 1 = G♭♭, …
@@ -103,4 +102,3 @@ public enum PitchStaffPosition {
         return naiveOctave
     }
 }
-#endif

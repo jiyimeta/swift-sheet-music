@@ -1,7 +1,6 @@
-#if os(macOS)
 import SwiftUI
 
-@available(macOS 15.0, *)
+@available(macOS 15.0, iOS 16.0, *)
 enum JumpRenderer {
     static func draw(
         context: inout GraphicsContext,
@@ -15,4 +14,3 @@ enum JumpRenderer {
             size: metrics.sp * 2.5, italic: true)
     }
 }
-#endif

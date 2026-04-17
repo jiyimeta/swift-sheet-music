@@ -1,7 +1,6 @@
-#if os(macOS)
 /// Bravura / SMuFL Private Use Area codepoints for the glyphs we draw.
 /// Values are the SMuFL standard: https://www.smufl.org/
-@available(macOS 15.0, *)
+@available(macOS 15.0, iOS 16.0, *)
 enum SMuFLGlyph {
     // Clefs
     static let gClef: Character            = "\u{E050}"
@@ -79,4 +78,3 @@ enum SMuFLGlyph {
     static let repeat2Bars: Character        = "\u{E501}"
     static let repeat4Bars: Character        = "\u{E502}"
 }
-#endif

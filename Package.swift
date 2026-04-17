@@ -63,7 +63,7 @@ let package = Package(
         .target(
             name: "SheetMusicUI",
             dependencies: ["SheetMusicCore"],
-            resources: [.copy("Fonts/Resources")]
+            resources: [.process("Fonts/Resources")]
         ),
         .target(
             name: "SheetMusic",

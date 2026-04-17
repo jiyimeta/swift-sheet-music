@@ -1,7 +1,6 @@
-#if os(macOS)
 import SwiftUI
 
-@available(macOS 15.0, *)
+@available(macOS 15.0, iOS 16.0, *)
 extension GraphicsContext {
     /// Draw a SMuFL glyph anchored at `origin` using the Bravura font.
     /// Default anchor is `.center` for notehead-like glyphs. Flags,
@@ -38,5 +37,5 @@ extension GraphicsContext {
         let resolved = resolve(styled)
         draw(resolved, at: origin, anchor: anchor)
     }
+
 }
-#endif

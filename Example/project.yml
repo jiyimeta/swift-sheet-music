@@ -27,6 +27,8 @@ targets:
     dependencies:
       - package: swift-sheet-music
         product: SheetMusic
+      - package: swift-sheet-music
+        product: SheetMusicUI
 
   SheetMusicExampleMac:
     type: application

@@ -1,7 +1,6 @@
-#if os(macOS)
 import CoreGraphics
 
-@available(macOS 15.0, *)
+@available(macOS 15.0, iOS 16.0, *)
 public struct LayoutMeasure: Sendable, Equatable {
     /// Measure-local origin within its `LayoutSystem`.
     public let origin: CGPoint
@@ -29,4 +28,3 @@ public struct LayoutMeasure: Sendable, Equatable {
         self.jumps = jumps
     }
 }
-#endif

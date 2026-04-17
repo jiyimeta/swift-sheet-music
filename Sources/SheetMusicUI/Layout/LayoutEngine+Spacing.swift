@@ -1,8 +1,7 @@
-#if os(macOS)
 import CoreGraphics
 import SheetMusicCore
 
-@available(macOS 15.0, *)
+@available(macOS 15.0, iOS 16.0, *)
 extension LayoutEngine {
     /// Per-measure shared header layout. All staves in a multi-staff
     /// system use the same x-positions for clef / key sig / time sig
@@ -194,4 +193,3 @@ extension LayoutEngine {
         return CGFloat(widest.count) * charWidth + padding
     }
 }
-#endif

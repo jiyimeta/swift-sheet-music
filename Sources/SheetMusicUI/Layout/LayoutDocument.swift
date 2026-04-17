@@ -1,7 +1,6 @@
-#if os(macOS)
 import CoreGraphics
 
-@available(macOS 15.0, *)
+@available(macOS 15.0, iOS 16.0, *)
 public struct LayoutDocument: Sendable, Equatable {
     public let size: CGSize
     public let systems: [LayoutSystem]
@@ -17,4 +16,3 @@ public struct LayoutDocument: Sendable, Equatable {
         self.metrics = metrics
     }
 }
-#endif

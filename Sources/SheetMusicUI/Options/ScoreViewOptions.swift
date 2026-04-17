@@ -1,9 +1,8 @@
-#if os(macOS)
 import CoreGraphics
 
 /// Tunable knobs for `ScoreView`. v1 intentionally keeps this small —
 /// layout is driven by the view's available width and these three values.
-@available(macOS 15.0, *)
+@available(macOS 15.0, iOS 16.0, *)
 public struct ScoreViewOptions: Sendable, Equatable {
     /// Height of one five-line staff in points. Defaults to 28 pt
     /// (roughly rastral 3).
@@ -25,4 +24,3 @@ public struct ScoreViewOptions: Sendable, Equatable {
         self.wrapToViewWidth = wrapToViewWidth
     }
 }
-#endif

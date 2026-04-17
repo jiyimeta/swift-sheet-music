@@ -1,7 +1,6 @@
-#if os(macOS)
 import SwiftUI
 
-@available(macOS 15.0, *)
+@available(macOS 15.0, iOS 16.0, *)
 enum ClefRenderer {
     static func draw(
         context: inout GraphicsContext,
@@ -51,4 +50,3 @@ enum ClefRenderer {
         )
     }
 }
-#endif

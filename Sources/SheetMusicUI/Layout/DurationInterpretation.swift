@@ -1,4 +1,3 @@
-#if os(macOS)
 import SheetMusicCore
 
 /// Decompose a `NoteDuration` into its base note length plus augmentation
@@ -7,7 +6,7 @@ import SheetMusicCore
 /// members by the tuplet ratio (e.g. a triplet 8th becomes
 /// `.fraction(1/12)`) — both lose the original visual base that the
 /// UI needs to pick a notehead, beam level, flag, or dot count.
-@available(macOS 15.0, *)
+@available(macOS 15.0, iOS 16.0, *)
 enum DurationInterpretation {
     /// Split a duration into its (base, dots) form.
     ///
@@ -106,4 +105,3 @@ enum DurationInterpretation {
         return a
     }
 }
-#endif

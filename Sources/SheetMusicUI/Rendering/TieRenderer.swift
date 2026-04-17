@@ -1,4 +1,3 @@
-#if os(macOS)
 import SwiftUI
 
 /// Draws a tie arc as a filled crescent — thin at the endpoints, thick
@@ -6,7 +5,7 @@ import SwiftUI
 /// `SlurTieLayout::computeBezier`: two cubic Béziers sharing start
 /// and end points form a closed shape that is zero-width at the tips
 /// and `midThickness × 2` wide at the shoulder.
-@available(macOS 15.0, *)
+@available(macOS 15.0, iOS 16.0, *)
 enum TieRenderer {
     static func draw(
         context: inout GraphicsContext,
@@ -77,4 +76,3 @@ enum TieRenderer {
         context.fill(path, with: .color(.primary))
     }
 }
-#endif

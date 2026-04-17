@@ -1,8 +1,7 @@
-#if os(macOS)
 import CoreGraphics
 import SheetMusicCore
 
-@available(macOS 15.0, *)
+@available(macOS 15.0, iOS 16.0, *)
 extension LayoutEngine {
     struct BeamGroup: Sendable, Equatable {
         /// Voice-element indices (into `voice.elements`) of the chords in
@@ -309,4 +308,3 @@ extension LayoutEngine {
         return BeamLine(startY: startY, endY: endY)
     }
 }
-#endif

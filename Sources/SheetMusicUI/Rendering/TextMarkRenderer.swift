@@ -1,7 +1,6 @@
-#if os(macOS)
 import SwiftUI
 
-@available(macOS 15.0, *)
+@available(macOS 15.0, iOS 16.0, *)
 enum TextMarkRenderer {
     /// Dynamic marking (pp, p, mf, f, ff, …). Italic, bold, below staff.
     static func drawDynamic(
@@ -31,4 +30,3 @@ enum TextMarkRenderer {
             italic: false)
     }
 }
-#endif

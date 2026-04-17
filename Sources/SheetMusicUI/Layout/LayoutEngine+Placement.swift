@@ -1,8 +1,7 @@
-#if os(macOS)
 import CoreGraphics
 import SheetMusicCore
 
-@available(macOS 15.0, *)
+@available(macOS 15.0, iOS 16.0, *)
 extension LayoutEngine {
     /// Place elements of a measure in local measure coordinates.
     /// Returns the placed elements + the updated clef context.
@@ -803,4 +802,3 @@ extension LayoutEngine {
         return nil
     }
 }
-#endif
