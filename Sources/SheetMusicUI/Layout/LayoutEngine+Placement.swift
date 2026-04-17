@@ -253,32 +253,44 @@ extension LayoutEngine {
                 }
             }
 
-            // Glissando emission pass: pair each glissando-bearing chord
-            // with the next chord in the same voice.
+            // Glissando emission pass: pair each glissando-bearing note
+            // with the corresponding note (same index) in the next chord
+            // of the same voice. Uses actual note origins (not stemOrigin)
+            // so the line slopes between the two different pitches.
             let chordVoiceIndices = voiceChordOutIndex.keys.sorted()
             for (pairIdx, voiceIdx) in chordVoiceIndices.enumerated() {
-                guard case .chord(let chord) = voice.elements[voiceIdx] else {
-                    continue
-                }
-                guard let gliss = chord.notes
-                    .first(where: { $0.glissando != nil })?
-                    .glissando else { continue }
+                guard case .chord(let chord) = voice.elements[voiceIdx]
+                else { continue }
+                guard let glissNoteIdx = chord.notes
+                    .firstIndex(where: { $0.glissando != nil }),
+                      let gliss = chord.notes[glissNoteIdx].glissando
+                else { continue }
                 let nextPairIdx = pairIdx + 1
                 guard nextPairIdx < chordVoiceIndices.count else { continue }
                 let nextVoiceIdx = chordVoiceIndices[nextPairIdx]
                 guard let fromOutIdx = voiceChordOutIndex[voiceIdx],
-                      let toOutIdx = voiceChordOutIndex[nextVoiceIdx] else {
-                    continue
-                }
-                guard case .chord(_, _, _, let fromStem, _, _, _) =
+                      let toOutIdx = voiceChordOutIndex[nextVoiceIdx]
+                else { continue }
+                guard case .chord(let fromNotes, _, _, _, _, _, _) =
                         out[fromOutIdx],
-                      case .chord(_, _, _, let toStem, _, _, _) =
-                        out[toOutIdx] else {
-                    continue
-                }
+                      case .chord(let toNotes, _, _, _, _, _, _) =
+                        out[toOutIdx]
+                else { continue }
+                let fromNote = glissNoteIdx < fromNotes.count
+                    ? fromNotes[glissNoteIdx]
+                    : fromNotes.last!
+                let toNote = glissNoteIdx < toNotes.count
+                    ? toNotes[glissNoteIdx]
+                    : toNotes.last!
+                // Offset x inward so the line starts past the from-
+                // notehead and ends before the to-notehead.
                 out.append(.glissandoLine(
-                    fromOrigin: fromStem,
-                    toOrigin: toStem,
+                    fromOrigin: CGPoint(
+                        x: fromNote.origin.x + metrics.sp * 0.8,
+                        y: fromNote.origin.y),
+                    toOrigin: CGPoint(
+                        x: toNote.origin.x - metrics.sp * 0.8,
+                        y: toNote.origin.y),
                     wavy: gliss.visualType == .wavy,
                     text: gliss.text
                 ))
