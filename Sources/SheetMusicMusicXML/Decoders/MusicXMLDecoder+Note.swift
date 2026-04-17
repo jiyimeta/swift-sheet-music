@@ -73,7 +73,10 @@ enum MusicXMLNoteDecoder {
         }
 
         let arpeggio = decodeArpeggio(node)
-        let chord = Chord(duration: duration, notes: [note], arpeggio: arpeggio)
+        let lyrics = decodeLyrics(node)
+        let chord = Chord(
+            duration: duration, notes: [note],
+            arpeggio: arpeggio, lyrics: lyrics)
         _ = existingVoiceElements   // reserved for future use (e.g. tie backrefs)
         return .new(prefix + [.chord(chord)])
     }
@@ -150,5 +153,18 @@ enum MusicXMLNoteDecoder {
         default:     subtype = 0
         }
         return Arpeggio(subtype: subtype)
+    }
+
+    /// MusicXML `<lyric>` children. `<lyric number="N"><text>…</text></lyric>`.
+    private static func decodeLyrics(_ node: XMLTreeNode) -> [String] {
+        var map: [Int: String] = [:]
+        for lyricNode in node.all("lyric") {
+            let verse = Int(lyricNode.attributes["number"] ?? "1") ?? 1
+            if let text = lyricNode.first("text")?.text {
+                map[verse - 1] = text   // MusicXML is 1-indexed
+            }
+        }
+        guard let maxVerse = map.keys.max() else { return [] }
+        return (0...maxVerse).map { map[$0] ?? "" }
     }
 }

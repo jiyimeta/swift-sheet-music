@@ -192,6 +192,12 @@ struct ScoreCanvas: View {
             TextMarkRenderer.drawTempo(
                 context: &context, text: text,
                 origin: shift(p), metrics: metrics)
+        case .textMark(.lyrics, let text, let p):
+            context.drawExpressionText(
+                text, at: shift(p),
+                size: metrics.sp * 2.2,
+                italic: false,
+                anchor: .center)
         case .beam(let from, let to, let direction, let level):
             BeamRenderer.draw(
                 context: &context,

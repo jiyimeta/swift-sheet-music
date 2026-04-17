@@ -236,6 +236,16 @@ extension LayoutEngine {
                             subtype: arpeggioSubtype(arp)
                         ))
                     }
+                    // Lyrics: emit below the staff, one line per verse.
+                    for (verseIdx, syllable) in chord.lyrics.enumerated() {
+                        guard !syllable.isEmpty else { continue }
+                        let lyricsY = staffMidY + metrics.sp * 6
+                            + CGFloat(verseIdx) * metrics.sp * 2.5
+                        out.append(.textMark(
+                            kind: .lyrics,
+                            text: syllable,
+                            origin: CGPoint(x: chordX, y: lyricsY)))
+                    }
                     tickCursor += chord.duration.ticks(division: division)
                 case .dynamic(let d):
                     // Dynamics sit below-left of the note they apply to

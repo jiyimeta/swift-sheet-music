@@ -93,6 +93,7 @@ public enum LayoutElement: Sendable, Equatable {
     public enum TextMarkKind: Sendable, Equatable {
         case dynamic
         case tempo
+        case lyrics
     }
 
     public enum SpannerKind: Sendable, Equatable {

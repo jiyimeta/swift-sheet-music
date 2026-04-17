@@ -7,10 +7,19 @@ public struct Chord: Sendable, Equatable {
     public var notes: [Note]
     /// Optional arpeggio that spreads the chord's notes in time.
     public var arpeggio: Arpeggio?
+    /// Lyrics syllable(s) attached to this chord, one per verse line.
+    /// Most scores use a single verse (index 0). C++: `mu::engraving::Lyrics`.
+    public var lyrics: [String]
 
-    public init(duration: NoteDuration, notes: [Note], arpeggio: Arpeggio? = nil) {
+    public init(
+        duration: NoteDuration,
+        notes: [Note],
+        arpeggio: Arpeggio? = nil,
+        lyrics: [String] = []
+    ) {
         self.duration = duration
         self.notes = notes
         self.arpeggio = arpeggio
+        self.lyrics = lyrics
     }
 }
