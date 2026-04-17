@@ -21,19 +21,15 @@ enum TieRenderer {
         above: Bool,
         metrics: StaffMetrics
     ) {
-        // Notehead half-extents (Bravura noteheadBlack ≈ 1.18 × 1.0 sp).
-        let headHalfW = metrics.sp * 0.5
         // Half-height + clearance so the arc clears the notehead ink.
         let headHalfH = metrics.sp * 0.6
         let vertSign: CGFloat = above ? -1 : 1
 
-        // Offset endpoints so the arc starts just past the notehead
-        // edge on the tie side.
         let startPt = CGPoint(
-            x: from.x + headHalfW,
+            x: from.x,
             y: from.y + headHalfH * vertSign)
         let endPt = CGPoint(
-            x: to.x - headHalfW,
+            x: to.x,
             y: to.y + headHalfH * vertSign)
 
         // Control point: midway horizontally, pulled further away from
