@@ -19,7 +19,7 @@ extension LayoutEngine {
         timeSignature: TimeSignature?,
         division: Int
     ) -> [BeamGroup] {
-        let beat = beatTicks(
+        let beat = beamGroupTicks(
             timeSignature: timeSignature, division: division)
         var tick = 0
         var groups: [BeamGroup] = []
@@ -78,15 +78,37 @@ extension LayoutEngine {
         }
     }
 
-    static func beatTicks(
+    /// The tick span within which beamable notes stay connected (the
+    /// "beam group" boundary). MuseScore's `Groups` class encodes
+    /// per-duration break points; we simplify to common practice:
+    ///
+    /// - **Compound meters** (6/8, 9/8, 12/8): dotted quarter
+    ///   (3 8ths per group).
+    /// - **4/4, 2/4, 2/2**: half note (4 8ths per group). This
+    ///   matches modern American engraving where the half-bar is
+    ///   the natural beam break, not the individual beat.
+    /// - **Other meters** (3/4, 5/4, 7/8, etc.): single beat.
+    static func beamGroupTicks(
         timeSignature: TimeSignature?, division: Int
     ) -> Int {
-        guard let ts = timeSignature else { return division }
-        // Compound meter (8-denom & 3/6/9/12 numerator): dotted quarter beat.
-        if ts.denominator == 8 && ts.numerator % 3 == 0 && ts.numerator > 0 {
+        guard let ts = timeSignature else { return division * 2 }
+
+        // Compound meter: group = dotted quarter.
+        if ts.denominator == 8
+            && ts.numerator % 3 == 0
+            && ts.numerator > 0 {
             return (division * 3) / 2
         }
-        return (division * 4) / max(1, ts.denominator)
+
+        let oneBeat = (division * 4) / max(1, ts.denominator)
+
+        // Duple / quadruple simple meters with half-note grouping.
+        switch (ts.numerator, ts.denominator) {
+        case (4, 4), (2, 4), (2, 2), (4, 8):
+            return oneBeat * 2
+        default:
+            return oneBeat
+        }
     }
 
     // MARK: - Beam slope
