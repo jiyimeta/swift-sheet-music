@@ -686,9 +686,23 @@ extension LayoutEngine {
             //            but a flat bracket is the common case.
         }
 
+        // Clamp so the bracket/number never falls inside the staff
+        // lines (placement-local: staff top = sp*2, bottom = sp*6).
+        let staffTop = metrics.sp * 2 - metrics.sp  // 1 sp above top line
+        let staffBot = metrics.sp * 6 + metrics.sp  // 1 sp below bot line
+        let clampedFromY: CGFloat
+        let clampedToY: CGFloat
+        if isAbove {
+            clampedFromY = min(fromY, staffTop)
+            clampedToY = min(toY, staffTop)
+        } else {
+            clampedFromY = max(fromY, staffBot)
+            clampedToY = max(toY, staffBot)
+        }
+
         out.append(.tupletLabel(
-            fromOrigin: CGPoint(x: fromX, y: fromY),
-            toOrigin: CGPoint(x: toX, y: toY),
+            fromOrigin: CGPoint(x: fromX, y: clampedFromY),
+            toOrigin: CGPoint(x: toX, y: clampedToY),
             text: "\(tuplet.actualNotes)",
             hasBracket: !isBeamedGroup,
             isAbove: isAbove))
