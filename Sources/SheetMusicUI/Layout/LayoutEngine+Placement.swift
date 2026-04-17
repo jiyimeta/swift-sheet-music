@@ -147,7 +147,24 @@ extension LayoutEngine {
                     tickCursor += r.duration.ticks(division: division)
                 case .chord(let chord):
                     inHeader = false
-                    let chordX = timedX()
+                    // Shift flagged notes left so the visual centre of
+                    // the notehead + flag combination sits on the tick
+                    // position. The flag extends ~1 sp right of the
+                    // stem; a 0.3 sp left-shift balances this. For
+                    // beamed chords the flag isn't drawn, but the
+                    // tiny shift is invisible and harmless.
+                    let (chordBase, _) = DurationInterpretation.split(
+                        chord.duration)
+                    let flagShift: CGFloat
+                    switch chordBase {
+                    case .eighth, .sixteenth, .thirtySecond,
+                         .sixtyFourth, .oneTwentyEighth,
+                         .twoFiftySixth:
+                        flagShift = metrics.sp * 0.3
+                    default:
+                        flagShift = 0
+                    }
+                    let chordX = timedX() - flagShift
                     let chordNotes = chord.notes.map { note -> LayoutChordNote in
                         let step = PitchStaffPosition.step(
                             midiPitch: note.pitch, tpc: note.tpc,
