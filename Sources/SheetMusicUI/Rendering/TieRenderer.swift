@@ -26,13 +26,19 @@ enum TieRenderer {
             x: to.x,
             y: to.y + headClearance * vertSign)
 
-        // Shoulder height scales with tie length (MuseScore formula:
-        // minShoulderHeight + 0.3 × sp × sqrt(length - 1)).
+        // Shoulder height scales with the square root of tie length so
+        // long ties flatten instead of ballooning. Values from
+        // MuseScore's styledef: tieMinShoulderHeight = 0.3 sp,
+        // tieMaxShoulderHeight = 2.0 sp.
+        let minShoulder = metrics.sp * 0.3
+        let maxShoulder = metrics.sp * 2.0
         let tieLen = abs(endPt.x - startPt.x)
-        let tieLenSp = max(tieLen / metrics.sp, 0.5)
-        let shoulderH = min(
-            metrics.sp * 0.4 + metrics.sp * 0.3 * sqrt(tieLenSp - 0.5),
-            metrics.sp * 3)
+        let tieLenSp = max(tieLen / metrics.sp, 1.0)
+        let shoulderH: CGFloat = {
+            let raw = minShoulder
+                + metrics.sp * 0.3 * sqrt(tieLenSp - 1)
+            return min(max(raw, minShoulder), maxShoulder)
+        }()
 
         // Mid-thickness (half the total width at the peak). MuseScore
         // uses ~0.15 sp for normal ties.
