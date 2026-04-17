@@ -103,38 +103,76 @@ extension LayoutEngine {
                 remainingSynthClef = false
             }
 
-            /// x-coordinate for the next timed element based on tick.
-            func timedX() -> CGFloat {
-                guard voiceTotal > 0 else {
+            // --- Weight-proportional x placement ---
+            //
+            // Pure tick-proportional placement gives equal horizontal
+            // density to every beat regardless of lyrics width. This
+            // causes long syllables ("can't") to overlap short ones
+            // ("say"). Instead, weight each timed element by
+            // max(tickWidth, lyricsWidth) and distribute the content
+            // width proportionally to those weights.
+            var elementWeights: [(voiceElementIdx: Int, weight: CGFloat)] = []
+            var totalWeight: CGFloat = 0
+            for (idx, el) in voice.elements.enumerated() {
+                switch el {
+                case .chord(let c):
+                    let tickW = durationWidth(c.duration, metrics: metrics)
+                    let lyricW = lyricsWidth(c.lyrics, metrics: metrics)
+                    let w = max(tickW, lyricW)
+                    elementWeights.append((idx, w))
+                    totalWeight += w
+                case .rest(let r):
+                    let w = durationWidth(r.duration, metrics: metrics)
+                    elementWeights.append((idx, w))
+                    totalWeight += w
+                default:
+                    break
+                }
+            }
+
+            var weightCursor: CGFloat = 0
+            var weightLookup: [Int: CGFloat] = [:]
+            for entry in elementWeights {
+                weightLookup[entry.voiceElementIdx] = weightCursor
+                weightCursor += entry.weight
+            }
+
+            /// x-coordinate for the current timed element.
+            /// Uses weight-proportional placement so lyrics-heavy chords
+            /// get more room than pure tick fractions would give.
+            func timedX(voiceElementIdx: Int) -> CGFloat {
+                guard totalWeight > 0 else {
                     return headerSchedule.contentStartX + metrics.sp
                 }
-                let fraction = CGFloat(tickCursor) / CGFloat(voiceTotal)
+                let wCursor = weightLookup[voiceElementIdx] ?? 0
+                let fraction = wCursor / totalWeight
                 return headerSchedule.contentStartX
                     + metrics.sp + fraction * contentWidth
             }
 
-            for (voiceIdx, el) in voice.elements.enumerated() {
+            for (voiceElemIdx, el) in voice.elements.enumerated() {
                 switch el {
                 case .clef(let clef):
                     currentClef = NotatedClef(rawType: clef.concertClefType)
-                    let clefX = inHeader ? headerSchedule.clefX : timedX()
+                    let clefX = inHeader ? headerSchedule.clefX
+                        : timedX(voiceElementIdx: voiceElemIdx)
                     out.append(.clef(
                         rawType: clef.concertClefType,
                         origin: CGPoint(x: clefX, y: staffMidY)))
                 case .keySignature(let key):
-                    let keyX = inHeader ? headerSchedule.keySigX : timedX()
+                    let keyX = inHeader ? headerSchedule.keySigX : timedX(voiceElementIdx: voiceElemIdx)
                     out.append(.keySignature(
                         sharps: max(0, key.concertKey),
                         flats: max(0, -key.concertKey),
                         origin: CGPoint(x: keyX, y: staffMidY)))
                 case .timeSignature(let ts):
-                    let tsX = inHeader ? headerSchedule.timeSigX : timedX()
+                    let tsX = inHeader ? headerSchedule.timeSigX : timedX(voiceElementIdx: voiceElemIdx)
                     out.append(.timeSignature(
                         numerator: ts.numerator,
                         denominator: ts.denominator,
                         origin: CGPoint(x: tsX, y: staffMidY)))
                 case .barLine(let b):
-                    let barX = inHeader ? metrics.sp : timedX()
+                    let barX = inHeader ? metrics.sp : timedX(voiceElementIdx: voiceElemIdx)
                     out.append(.barLine(
                         subtype: b.subtype,
                         origin: CGPoint(x: barX, y: staffMidY)))
@@ -161,7 +199,7 @@ extension LayoutEngine {
                         restX = (headerSchedule.contentStartX + width
                                  - metrics.sp * 3) / 2
                     } else {
-                        restX = timedX()
+                        restX = timedX(voiceElementIdx: voiceElemIdx)
                     }
                     out.append(.rest(
                         duration: r.duration,
@@ -186,7 +224,7 @@ extension LayoutEngine {
                     default:
                         flagShift = 0
                     }
-                    let chordX = timedX() - flagShift
+                    let chordX = timedX(voiceElementIdx: voiceElemIdx) - flagShift
                     let chordNotes = chord.notes.map { note -> LayoutChordNote in
                         // For percussion staves, use the drum map's
                         // <line> value to position the notehead
@@ -254,7 +292,7 @@ extension LayoutEngine {
                     // following chord's notehead or stem.
                     let baseX = inHeader
                         ? headerSchedule.contentStartX
-                        : timedX()
+                        : timedX(voiceElementIdx: voiceElemIdx)
                     out.append(.textMark(
                         kind: .dynamic,
                         text: d.subtype,
@@ -268,7 +306,7 @@ extension LayoutEngine {
                     // codepoint without also switching the renderer's font.
                     let tempoX = inHeader
                         ? headerSchedule.contentStartX
-                        : timedX()
+                        : timedX(voiceElementIdx: voiceElemIdx)
                     out.append(.textMark(
                         kind: .tempo,
                         text: "♩ = \(bpm)",
@@ -282,7 +320,7 @@ extension LayoutEngine {
                     let lastChordX = lastChordOrRestX(in: out)
                         ?? (inHeader
                             ? headerSchedule.contentStartX
-                            : timedX())
+                            : timedX(voiceElementIdx: voiceElemIdx))
                     out.append(.fermata(
                         subtype: f.subtype,
                         origin: CGPoint(

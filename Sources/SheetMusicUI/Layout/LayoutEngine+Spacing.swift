@@ -184,7 +184,7 @@ extension LayoutEngine {
     /// via CoreText would be more precise but expensive inside a tight
     /// layout loop). The font is ~2.2 sp; average character width ≈
     /// 1.0 sp.
-    private static func lyricsWidth(
+    static func lyricsWidth(
         _ lyrics: [String], metrics: StaffMetrics
     ) -> CGFloat {
         guard let widest = lyrics.max(by: { $0.count < $1.count }),
