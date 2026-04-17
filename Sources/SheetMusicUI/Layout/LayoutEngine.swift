@@ -29,6 +29,11 @@ public enum LayoutEngine {
             availableWidth: availableWidth
         )
         let systems = packSystems(context: context)
+        // Use the actual rendered system extent — not `availableWidth`,
+        // which may be larger than the content needs.
+        let totalWidth = systems.reduce(CGFloat(0)) { acc, system in
+            max(acc, system.origin.x + system.size.width)
+        }
         let totalHeight = systems.reduce(CGFloat(0)) { acc, system in
             max(acc, system.origin.y + system.size.height)
         }
@@ -39,8 +44,11 @@ public enum LayoutEngine {
             score: score,
             metrics: metrics
         )
+        // Add a small right margin so the last barline doesn't
+        // touch the canvas edge.
+        let docWidth = totalWidth + metrics.sp * 2
         let firstPass = LayoutDocument(
-            size: CGSize(width: availableWidth, height: totalHeight),
+            size: CGSize(width: docWidth, height: totalHeight),
             systems: systemsWithSpanners,
             metrics: metrics
         )
