@@ -126,7 +126,9 @@ extension LayoutEngine {
                 case .barLine:
                     w += metrics.sp
                 case .chord(let c):
-                    w += durationWidth(c.duration, metrics: metrics)
+                    let tickW = durationWidth(c.duration, metrics: metrics)
+                    let lyricW = lyricsWidth(c.lyrics, metrics: metrics)
+                    w += max(tickW, lyricW)
                 case .rest(let r):
                     w += durationWidth(r.duration, metrics: metrics)
                 case .dynamic, .tempo, .fermata,
@@ -174,6 +176,22 @@ extension LayoutEngine {
             floor = metrics.sp * 2
         }
         return max(baseWidth, floor)
+    }
+
+    /// Estimated minimum horizontal space needed by a chord's lyrics so
+    /// adjacent syllables don't overlap. Returns 0 when the chord has
+    /// no lyrics. Uses a rough per-character width estimate (measuring
+    /// via CoreText would be more precise but expensive inside a tight
+    /// layout loop). The font is ~2.2 sp; average character width ≈
+    /// 1.0 sp.
+    private static func lyricsWidth(
+        _ lyrics: [String], metrics: StaffMetrics
+    ) -> CGFloat {
+        guard let widest = lyrics.max(by: { $0.count < $1.count }),
+              !widest.isEmpty else { return 0 }
+        let charWidth = metrics.sp * 1.0
+        let padding = metrics.sp * 1.5
+        return CGFloat(widest.count) * charWidth + padding
     }
 }
 #endif
