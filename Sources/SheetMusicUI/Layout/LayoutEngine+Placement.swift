@@ -116,9 +116,34 @@ extension LayoutEngine {
                         origin: CGPoint(x: barX, y: staffMidY)))
                 case .rest(let r):
                     inHeader = false
+                    let (restBase, _) = DurationInterpretation.split(
+                        r.duration)
+                    // Whole rest hangs from the 2nd line from the top
+                    // (step +2). Half rest sits on the middle line
+                    // (step 0 = staffMidY). Others center on the
+                    // middle line.
+                    let restY: CGFloat
+                    switch restBase {
+                    case .whole:
+                        restY = staffMidY - metrics.sp  // step +2
+                    default:
+                        restY = staffMidY
+                    }
+                    // A whole-measure rest (whole note duration in a
+                    // non-whole-note time signature, or duration equal
+                    // to the whole measure) is centered horizontally
+                    // in the measure rather than placed at its tick.
+                    let isWholeRest = restBase == .whole
+                    let restX: CGFloat
+                    if isWholeRest {
+                        restX = (headerSchedule.contentStartX + width
+                                 - metrics.sp * 3) / 2
+                    } else {
+                        restX = timedX()
+                    }
                     out.append(.rest(
                         duration: r.duration,
-                        origin: CGPoint(x: timedX(), y: staffMidY)))
+                        origin: CGPoint(x: restX, y: restY)))
                     tickCursor += r.duration.ticks(division: division)
                 case .chord(let chord):
                     inHeader = false
