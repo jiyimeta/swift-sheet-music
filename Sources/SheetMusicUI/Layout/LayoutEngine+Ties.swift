@@ -25,7 +25,17 @@ extension LayoutEngine {
         var pairs: [TiePair] = []
         // For open ties: store (origin, above) so the arc direction is
         // consistent between the start note and the end note.
-        var open: [Int: (origin: CGPoint, above: Bool)] = [:]
+        // Keyed by (tieNumber, noteStep) — tieNumber alone is
+        // insufficient because every staff's note defaults to
+        // tieForward/tieBack = 1, so multi-staff ties would collide
+        // in a flat dictionary. Adding the step disambiguates because
+        // the same pitch on different staves maps to different steps
+        // (e.g. C4 in treble → step -6, C4 in bass → step +6).
+        struct TieKey: Hashable {
+            let number: Int
+            let step: Int
+        }
+        var open: [TieKey: (origin: CGPoint, above: Bool)] = [:]
         for system in document.systems {
             for measure in system.measures {
                 for el in measure.elements {
@@ -58,18 +68,23 @@ extension LayoutEngine {
                         } else {
                             above = stem == .down
                         }
-                        if let back = n.tieBack,
-                           let openTie = open[back] {
-                            pairs.append(TiePair(
-                                staff: 0,
-                                fromOrigin: openTie.origin,
-                                toOrigin: absolute,
-                                above: openTie.above
-                            ))
-                            open[back] = nil
+                        if let back = n.tieBack {
+                            let key = TieKey(
+                                number: back, step: n.step)
+                            if let openTie = open[key] {
+                                pairs.append(TiePair(
+                                    staff: 0,
+                                    fromOrigin: openTie.origin,
+                                    toOrigin: absolute,
+                                    above: openTie.above
+                                ))
+                                open[key] = nil
+                            }
                         }
                         if let fwd = n.tieForward {
-                            open[fwd] = (absolute, above)
+                            let key = TieKey(
+                                number: fwd, step: n.step)
+                            open[key] = (absolute, above)
                         }
                     }
                 }
