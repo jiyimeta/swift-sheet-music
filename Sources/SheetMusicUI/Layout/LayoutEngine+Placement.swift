@@ -57,7 +57,9 @@ extension LayoutEngine {
         // Content width uses the shared schedule, so timed elements in
         // this staff align with timed elements in every other staff of
         // the same system.
-        let trailingGap = metrics.sp * 3
+        // Reserve enough trailing space for the last element's body
+        // (flag, dot, lyrics) + the barline itself.
+        let trailingGap = metrics.sp * 5
         let contentWidth = max(
             metrics.sp * 4,
             width - headerSchedule.contentStartX - trailingGap)

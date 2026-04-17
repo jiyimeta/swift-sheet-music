@@ -111,7 +111,10 @@ extension LayoutEngine {
         metrics: StaffMetrics
     ) -> CGFloat {
         let leftPadding = metrics.sp * 3
-        let rightPadding = metrics.sp * 2
+        // Right padding must cover the last element's body (notehead +
+        // possible flag/dot/lyric) that extends past its x anchor, plus
+        // room for the trailing barline.
+        let rightPadding = metrics.sp * 5
         var maxVoiceWidth: CGFloat = 0
         for voice in measure.voices {
             var w: CGFloat = 0
