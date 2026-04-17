@@ -293,6 +293,8 @@ public enum LayoutEngine {
                     part?.instrument.useDrumset == true
                         ? part?.instrument.drumLineMap
                         : nil
+                let totalMeasures = staves.first?.measures.count ?? 0
+                let lastMeasure = measureIdx == totalMeasures - 1
                 let (els, newClef) = placeMeasureElements(
                     measure: m,
                     width: w,
@@ -301,7 +303,8 @@ public enum LayoutEngine {
                     initialClefRawType: synthClef,
                     headerSchedule: schedule,
                     division: context.score.division,
-                    drumLineMap: drumMap
+                    drumLineMap: drumMap,
+                    isLastMeasure: lastMeasure
                 )
                 clefs[staffIdx] = newClef
                 // Placement emits positions relative to "staff top at

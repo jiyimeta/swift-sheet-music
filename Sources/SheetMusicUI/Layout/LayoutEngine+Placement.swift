@@ -20,7 +20,8 @@ extension LayoutEngine {
         initialClefRawType: String? = nil,
         headerSchedule: HeaderSchedule,
         division: Int,
-        drumLineMap: [Int: Int]? = nil
+        drumLineMap: [Int: Int]? = nil,
+        isLastMeasure: Bool = false
     ) -> (elements: [LayoutElement], clef: NotatedClef) {
         let staffMidY = metrics.staffHeight / 2 + metrics.sp * 2
         var out: [LayoutElement] = []
@@ -534,12 +535,14 @@ extension LayoutEngine {
         }
 
         // Trailing bar line if no voice emitted one.
+        // The final measure of the score gets a "end" barline
+        // (thin + thick) per standard engraving convention.
         let hasExplicitBar = out.contains {
             if case .barLine = $0 { true } else { false }
         }
         if !hasExplicitBar {
             out.append(.barLine(
-                subtype: nil,
+                subtype: isLastMeasure ? "end" : nil,
                 origin: CGPoint(
                     x: width - metrics.sp / 2,
                     y: staffMidY)))
