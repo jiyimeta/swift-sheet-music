@@ -93,12 +93,18 @@ public enum LayoutEngine {
         var cursor = 0
         var isFirstSystem = true
         while cursor < measureCount {
+            // Part-label width depends on whether this is the first
+            // system — the first shows long names, subsequent short.
+            let labelW: CGFloat = isFirstSystem ? 80 : 30
+            // The CONTENT area starts after the label; measures must
+            // fit within availableWidth − labelW.
+            let contentAvail = context.availableWidth - labelW
             var widthSoFar: CGFloat = 0
             let systemStart = cursor
             while cursor < measureCount {
                 let w = minWidths[cursor]
                 if context.options.wrapToViewWidth
-                    && widthSoFar + w > context.availableWidth
+                    && widthSoFar + w > contentAvail
                     && cursor > systemStart {
                     break
                 }
@@ -108,7 +114,7 @@ public enum LayoutEngine {
             let widthsSlice = Array(minWidths[systemStart..<cursor])
             let stretched = stretchWidths(
                 widths: widthsSlice,
-                availableWidth: context.availableWidth,
+                availableWidth: contentAvail,
                 shouldStretch: context.options.wrapToViewWidth
             )
             let system = buildSystem(
