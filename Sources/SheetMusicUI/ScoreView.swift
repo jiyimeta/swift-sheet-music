@@ -34,12 +34,12 @@ public struct ScoreView: View {
                 naturalDoc: naturalDoc)
             ScoreCanvas(document: doc)
         }
-        // `idealWidth`/`idealHeight` supply a fallback size when the parent
-        // proposes nil, but defer to finite proposals (so wrapping still
-        // works in a width-bounded VStack).
+        // Size the view to EXACTLY the rendered document so the
+        // ScrollView's scrollable area matches the white canvas — no
+        // excess right or bottom margin.
         .frame(
-            idealWidth: naturalDoc.size.width,
-            idealHeight: naturalDoc.size.height)
+            width: naturalDoc.size.width,
+            height: naturalDoc.size.height)
     }
 
     /// Pick the layout to render based on the width the parent offers.

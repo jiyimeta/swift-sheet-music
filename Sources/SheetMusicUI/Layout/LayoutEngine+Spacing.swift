@@ -103,9 +103,6 @@ extension LayoutEngine {
             }.max() ?? 0
             total += w
         }
-        // Small right margin so the trailing barline of the last
-        // measure doesn't touch the view edge.
-        total += metrics.sp * 2
         return total
     }
 
