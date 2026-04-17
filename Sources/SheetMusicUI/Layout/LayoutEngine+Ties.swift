@@ -25,17 +25,22 @@ extension LayoutEngine {
         var pairs: [TiePair] = []
         // For open ties: store (origin, above) so the arc direction is
         // consistent between the start note and the end note.
-        // Keyed by (tieNumber, noteStep) — tieNumber alone is
-        // insufficient because every staff's note defaults to
-        // tieForward/tieBack = 1, so multi-staff ties would collide
-        // in a flat dictionary. Adding the step disambiguates because
-        // the same pitch on different staves maps to different steps
-        // (e.g. C4 in treble → step -6, C4 in bass → step +6).
+        // Keyed by (tieNumber, noteStep, staffId) — all three are
+        // needed to prevent cross-staff mis-matching:
+        //
+        // - tieNumber alone collides across ALL staves.
+        // - (number, step) collides when two staves share the same
+        //   clef (e.g. two treble staves both have C4 at step −6).
+        // - Adding `staffId` (derived from the note's absolute y and
+        //   step → rounded staff-midline y) uniquely identifies the
+        //   staff without needing an explicit index.
         struct TieKey: Hashable {
             let number: Int
             let step: Int
+            let staffId: Int
         }
         var open: [TieKey: (origin: CGPoint, above: Bool)] = [:]
+        let sp = document.metrics.sp
         for system in document.systems {
             for measure in system.measures {
                 for el in measure.elements {
@@ -68,9 +73,18 @@ extension LayoutEngine {
                         } else {
                             above = stem == .down
                         }
+                        // Staff discriminator: the staff-midline
+                        // absolute y, rounded. Notes on the same staff
+                        // share the same midline; different staves
+                        // differ by staffSpacing (≈ 8 sp).
+                        let staffMidY = absolute.y
+                            + CGFloat(n.step) * sp / 2
+                        let sid = Int(round(staffMidY))
+
                         if let back = n.tieBack {
                             let key = TieKey(
-                                number: back, step: n.step)
+                                number: back, step: n.step,
+                                staffId: sid)
                             if let openTie = open[key] {
                                 pairs.append(TiePair(
                                     staff: 0,
@@ -83,7 +97,8 @@ extension LayoutEngine {
                         }
                         if let fwd = n.tieForward {
                             let key = TieKey(
-                                number: fwd, step: n.step)
+                                number: fwd, step: n.step,
+                                staffId: sid)
                             open[key] = (absolute, above)
                         }
                     }
