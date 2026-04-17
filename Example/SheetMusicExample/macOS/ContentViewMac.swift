@@ -8,6 +8,8 @@ struct ContentViewMac: View {
     @State private var score: Score?
     @State private var sourceName = "(none)"
     @State private var errorMessage: String?
+    @State private var magnification: CGFloat = 1.0
+    @State private var steadyMagnification: CGFloat = 1.0
 
     var body: some View {
         NavigationSplitView {
@@ -16,6 +18,16 @@ struct ContentViewMac: View {
                     Button("Load test.mscx") {
                         loadBundled()
                     }
+                }
+                Section("Zoom") {
+                    Text("\(Int(steadyMagnification * 100))%")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                    Button("Reset (100%)") {
+                        steadyMagnification = 1.0
+                        magnification = 1.0
+                    }
+                    .disabled(steadyMagnification == 1.0)
                 }
                 Section("State") {
                     Text(sourceName)
@@ -33,8 +45,22 @@ struct ContentViewMac: View {
             if let score {
                 ScrollView([.vertical, .horizontal]) {
                     ScoreView(score: score)
+                        .scaleEffect(magnification)
                         .padding()
                 }
+                .gesture(
+                    MagnifyGesture()
+                        .onChanged { value in
+                            magnification = steadyMagnification
+                                * value.magnification
+                        }
+                        .onEnded { value in
+                            steadyMagnification *= value.magnification
+                            steadyMagnification = min(
+                                max(steadyMagnification, 0.25), 4.0)
+                            magnification = steadyMagnification
+                        }
+                )
             } else {
                 ContentUnavailableView(
                     "No score loaded",
