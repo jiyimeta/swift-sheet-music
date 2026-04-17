@@ -23,12 +23,17 @@ extension LayoutEngine {
         score: Score
     ) -> [TiePair] {
         var pairs: [TiePair] = []
-        var open: [Int: CGPoint] = [:]
+        // For open ties: store (origin, above) so the arc direction is
+        // consistent between the start note and the end note.
+        var open: [Int: (origin: CGPoint, above: Bool)] = [:]
         for system in document.systems {
             for measure in system.measures {
                 for el in measure.elements {
-                    guard case .chord(let notes, _, _, _, _, _, _) = el
-                    else { continue }
+                    guard case .chord(let notes, _, let stem, _, _, _, _)
+                        = el else { continue }
+                    let noteSteps = notes.map(\.step)
+                    let maxStep = noteSteps.max() ?? 0
+                    let minStep = noteSteps.min() ?? 0
                     for n in notes {
                         let absolute = CGPoint(
                             x: system.origin.x
@@ -38,17 +43,33 @@ extension LayoutEngine {
                                 + measure.origin.y
                                 + n.origin.y
                         )
-                        if let back = n.tieBack, let from = open[back] {
+                        // Tie direction: opposite of stem for single notes
+                        // (MuseScore's primary rule). For chords: top note
+                        // → above, bottom note → below, middle → opposite
+                        // of stem.
+                        let above: Bool
+                        if maxStep == minStep {
+                            // Single note in chord.
+                            above = stem == .down
+                        } else if n.step == maxStep {
+                            above = true   // top note → tie above
+                        } else if n.step == minStep {
+                            above = false  // bottom note → tie below
+                        } else {
+                            above = stem == .down
+                        }
+                        if let back = n.tieBack,
+                           let openTie = open[back] {
                             pairs.append(TiePair(
                                 staff: 0,
-                                fromOrigin: from,
+                                fromOrigin: openTie.origin,
                                 toOrigin: absolute,
-                                above: n.step <= 0
+                                above: openTie.above
                             ))
                             open[back] = nil
                         }
                         if let fwd = n.tieForward {
-                            open[fwd] = absolute
+                            open[fwd] = (absolute, above)
                         }
                     }
                 }
