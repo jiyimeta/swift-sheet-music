@@ -5,9 +5,16 @@
 enum SMuFLGlyph {
     // Clefs
     static let gClef: Character            = "\u{E050}"
+    static let gClef15mb: Character        = "\u{E051}"
+    static let gClef8vb: Character         = "\u{E052}"
+    static let gClef8va: Character         = "\u{E053}"
+    static let gClef15ma: Character        = "\u{E054}"
     static let fClef: Character            = "\u{E062}"
+    static let fClef15mb: Character        = "\u{E063}"
+    static let fClef8vb: Character         = "\u{E064}"
+    static let fClef8va: Character         = "\u{E065}"
     static let cClef: Character            = "\u{E05C}"
-    static let percussionClef: Character   = "\u{E069}"  // "unpitched"
+    static let percussionClef: Character   = "\u{E069}"
 
     // Noteheads
     static let noteheadWhole: Character    = "\u{E0A2}"

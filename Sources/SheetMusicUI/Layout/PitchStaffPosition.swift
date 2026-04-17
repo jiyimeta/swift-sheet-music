@@ -6,7 +6,13 @@ import SheetMusicCore
 @available(macOS 15.0, *)
 public enum NotatedClef: Sendable, Equatable {
     case treble          // G4 on line 2 (second from bottom)
+    case treble8va       // G clef, 8va alta — notes read 1 octave higher
+    case treble8vb       // G clef, 8va bassa — 1 octave lower
+    case treble15ma      // G clef, 15ma alta — 2 octaves higher
+    case treble15mb      // G clef, 15ma bassa — 2 octaves lower
     case bass            // F3 on line 4 (second from top)
+    case bass8va         // F clef, 8va alta
+    case bass8vb         // F clef, 8va bassa
     case alto            // C4 on middle line
     case tenor           // C4 on line 4
     case percussion      // unpitched 5-line drum staff
@@ -14,12 +20,18 @@ public enum NotatedClef: Sendable, Equatable {
     /// Parse a `Clef.concertClefType` string (MuseScore encoding).
     public init(rawType: String) {
         switch rawType {
-        case "G", "G1", "G2", "G8va", "G8vb", "treble": self = .treble
-        case "F", "F8va", "F8vb", "bass":              self = .bass
-        case "C3", "alto":                              self = .alto
-        case "C4", "tenor":                             self = .tenor
-        case "PERC", "PERC2", "percussion":             self = .percussion
-        default:                                        self = .treble
+        case "G", "G1", "G2", "treble":                 self = .treble
+        case "G8va":                                     self = .treble8va
+        case "G8vb":                                     self = .treble8vb
+        case "G15ma":                                    self = .treble15ma
+        case "G15mb":                                    self = .treble15mb
+        case "F", "bass":                                self = .bass
+        case "F8va":                                     self = .bass8va
+        case "F8vb":                                     self = .bass8vb
+        case "C3", "alto":                               self = .alto
+        case "C4", "tenor":                              self = .tenor
+        case "PERC", "PERC2", "percussion":              self = .percussion
+        default:                                         self = .treble
         }
     }
 }
@@ -56,10 +68,19 @@ public enum PitchStaffPosition {
         let diatonicFromC = tpcLetters[((tpc + 1) % 7 + 7) % 7]
         let octave = octaveFor(midiPitch: midiPitch, diatonicFromC: diatonicFromC)
         let diatonicAbs = octave * 7 + diatonicFromC
+        // Diatonic step of the note sitting on the middle staff line
+        // for each clef. Octave-transposing clefs shift the reference
+        // by ±7 (one diatonic octave) or ±14 (two octaves).
         let midLineDiatonic: Int
         switch clef {
         case .treble:     midLineDiatonic = 4 * 7 + 6     // B4
+        case .treble8va:  midLineDiatonic = 5 * 7 + 6     // B5
+        case .treble8vb:  midLineDiatonic = 3 * 7 + 6     // B3
+        case .treble15ma: midLineDiatonic = 6 * 7 + 6     // B6
+        case .treble15mb: midLineDiatonic = 2 * 7 + 6     // B2
         case .bass:       midLineDiatonic = 3 * 7 + 1     // D3
+        case .bass8va:    midLineDiatonic = 4 * 7 + 1     // D4
+        case .bass8vb:    midLineDiatonic = 2 * 7 + 1     // D2
         case .alto:       midLineDiatonic = 4 * 7 + 0     // C4
         case .tenor:      midLineDiatonic = 3 * 7 + 5     // A3
         case .percussion: midLineDiatonic = 4 * 7 + 6     // positional (B4)
