@@ -10,6 +10,7 @@ struct ContentViewMac: View {
     @State private var errorMessage: String?
     @State private var magnification: CGFloat = 1.0
     @State private var steadyMagnification: CGFloat = 1.0
+    @State private var zoomAnchor: UnitPoint = .center
 
     var body: some View {
         NavigationSplitView {
@@ -45,11 +46,12 @@ struct ContentViewMac: View {
             if let score {
                 ScrollView([.vertical, .horizontal]) {
                     ScoreView(score: score)
-                        .scaleEffect(magnification, anchor: .topLeading)
+                        .scaleEffect(magnification, anchor: zoomAnchor)
                         .padding()
                         .simultaneousGesture(
                             MagnifyGesture()
                                 .onChanged { value in
+                                    zoomAnchor = value.startAnchor
                                     magnification = steadyMagnification
                                         * value.magnification
                                 }
