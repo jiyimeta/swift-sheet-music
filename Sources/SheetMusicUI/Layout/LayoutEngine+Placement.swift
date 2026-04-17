@@ -255,7 +255,7 @@ extension LayoutEngine {
                     let stem = forcedStem
                         ?? StemDirectionRule.direction(
                             for: chordNotes.map(\.step))
-                    voiceChordOutIndex[voiceIdx] = out.count
+                    voiceChordOutIndex[voiceElemIdx] = out.count
                     out.append(.chord(
                         notes: chordNotes,
                         duration: chord.duration,
@@ -342,7 +342,8 @@ extension LayoutEngine {
             // so the line slopes between the two different pitches.
             let chordVoiceIndices = voiceChordOutIndex.keys.sorted()
             for (pairIdx, voiceIdx) in chordVoiceIndices.enumerated() {
-                guard case .chord(let chord) = voice.elements[voiceIdx]
+                guard voiceIdx < voice.elements.count,
+                      case .chord(let chord) = voice.elements[voiceIdx]
                 else { continue }
                 guard let glissNoteIdx = chord.notes
                     .firstIndex(where: { $0.glissando != nil }),
