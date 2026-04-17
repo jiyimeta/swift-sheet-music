@@ -594,14 +594,15 @@ extension LayoutEngine {
         }
         guard !chordStemXs.isEmpty else { return }
 
-        // Determine whether the whole tuplet coincides exactly with
-        // one beam group. That's MuseScore's primary "drop the
-        // bracket" condition.
+        // MuseScore's bracket rule (Tuplet::calcHasBracket): hide the
+        // bracket when the first AND last tuplet members sit inside
+        // the SAME beam AND no member is a rest. The beam can be
+        // larger than the tuplet — what matters is that both ends
+        // share one continuous beam.
         let isBeamedGroup = !containsRest
             && beamGroups.contains { bg in
-                bg.memberIndices.first == tuplet.startIndex
-                && bg.memberIndices.last == tuplet.endIndex
-                && bg.memberIndices.count == chordCount
+                bg.memberIndices.contains(tuplet.startIndex)
+                && bg.memberIndices.contains(tuplet.endIndex)
             }
 
         // Place the marking above stem-up groups, below stem-down.
