@@ -343,6 +343,32 @@ enum Samples {
             staves: [StaffContent(id: 1, measures: [m])])
     }
 
+    // MARK: - 16 beat-boundary break with mixed durations
+
+    static var beatBoundaryBreak: Score {
+        let c4 = Note(pitch: 60, tpc: 14)
+        let eighth = Chord(duration: .eighth, notes: [c4])
+        let dotted8th = Chord(
+            duration: NoteDuration.eighth.dotted(1), notes: [c4])
+        let sixteenth = Chord(
+            duration: .sixteenth, notes: [Note(pitch: 64, tpc: 18)])
+        let elements: [VoiceElement] = [
+            .clef(Clef(concertClefType: "G")),
+            .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+            // dotted8th + 16th | 8th + 8th  → should split (2+2)
+            .chord(dotted8th), .chord(sixteenth),
+            .chord(eighth), .chord(eighth),
+            // 8th + 8th + 8th + 8th  → should merge (group of 4)
+            .chord(eighth), .chord(eighth),
+            .chord(eighth), .chord(eighth),
+        ]
+        let m = Measure(voices: [Voice(elements: elements)])
+        return Score(
+            division: 480,
+            parts: [treblePart()],
+            staves: [StaffContent(id: 1, measures: [m])])
+    }
+
     // MARK: - 12 dotted durations (single + double dot)
 
     static var dottedDurations: Score {

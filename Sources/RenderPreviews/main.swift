@@ -45,6 +45,7 @@ func run() throws {
         ("13-mixed-beams", Samples.mixedBeams, CGSize(width: 900, height: 220)),
         ("14-tuplets", Samples.tuplets, CGSize(width: 1200, height: 220)),
         ("15-tuplet-bracket", Samples.tupletBracket, CGSize(width: 900, height: 220)),
+        ("16-beat-boundary", Samples.beatBoundaryBreak, CGSize(width: 900, height: 220)),
     ]
 
     for (name, score, size) in samples {

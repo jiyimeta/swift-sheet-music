@@ -12,15 +12,54 @@ extension LayoutEngine {
         let level: Int
     }
 
-    /// Compute beam groups for a single voice under the given time signature.
-    /// Pure function; no layout side effects.
+    /// Compute beam groups for a single voice under the given time
+    /// signature. Implements a simplified version of MuseScore's
+    /// `Groups::actualBeamMode` + `beatSubdivision` logic:
+    ///
+    /// 1. Always break at the **max beam-group boundary** (half note
+    ///    in 4/4, dotted quarter in 6/8, etc.).
+    /// 2. At **beat boundaries** within that span, break ONLY when
+    ///    the minimum beam level in the just-ended beat differs from
+    ///    the minimum level in the upcoming beat. This lets 4 uniform
+    ///    8ths (both beats have min=1) merge into one group, while
+    ///    "dotted-8th + 16th | 8th + 8th" (beat-1 min=2, beat-2
+    ///    min=1) still splits at the beat.
     static func beamGroups(
         voice: Voice,
         timeSignature: TimeSignature?,
         division: Int
     ) -> [BeamGroup] {
-        let beat = beamGroupTicks(
+        let beatLen = oneBeatTicks(
             timeSignature: timeSignature, division: division)
+        let maxGroupLen = beamGroupTicks(
+            timeSignature: timeSignature, division: division)
+
+        // Pre-scan: for each beat, collect the DISTINCT beam levels so
+        // we can tell whether the beat is "uniform" (all notes share a
+        // single level) or "mixed" (multiple levels coexist). MuseScore
+        // merges beats only when BOTH sides of the boundary are uniform
+        // — a beat containing a dotted-8th + 16th has levels {1, 2}
+        // (mixed) and forces a break even though both levels appear in
+        // the neighbouring beat too.
+        var beatLevelSets: [Int: Set<Int>] = [:]
+        var scanTick = 0
+        for el in voice.elements {
+            switch el {
+            case .chord(let c):
+                let level = beamLevel(c.duration)
+                if level > 0 && beatLen > 0 {
+                    let beat = scanTick / beatLen
+                    beatLevelSets[beat, default: Set()].insert(level)
+                }
+                scanTick += c.duration.ticks(division: division)
+            case .rest(let r):
+                scanTick += r.duration.ticks(division: division)
+            default:
+                break
+            }
+        }
+
+        // Main pass — build groups with the two-level boundary check.
         var tick = 0
         var groups: [BeamGroup] = []
         var currentIndices: [Int] = []
@@ -42,8 +81,25 @@ extension LayoutEngine {
                     tick += c.duration.ticks(division: division)
                     continue
                 }
-                // Flush at beat boundary BEFORE adding this chord.
-                if tick > 0 && tick % beat == 0 { flush() }
+                if tick > 0 {
+                    // Hard boundary (half-note in 4/4).
+                    if maxGroupLen > 0 && tick % maxGroupLen == 0 {
+                        flush()
+                    }
+                    // Beat boundary: merge only when BOTH the previous
+                    // beat and the current beat are uniform (a single
+                    // beam level throughout). Mixed beats (e.g. dotted-
+                    // 8th + 16th) always force a break.
+                    else if beatLen > 0 && tick % beatLen == 0 {
+                        let curBeat = tick / beatLen
+                        let prevBeat = curBeat - 1
+                        let prevUniform =
+                            (beatLevelSets[prevBeat]?.count ?? 0) <= 1
+                        let curUniform =
+                            (beatLevelSets[curBeat]?.count ?? 0) <= 1
+                        if !(prevUniform && curUniform) { flush() }
+                    }
+                }
                 currentIndices.append(i)
                 currentLevel = max(currentLevel, level)
                 tick += c.duration.ticks(division: division)
@@ -51,15 +107,27 @@ extension LayoutEngine {
                 flush()
                 tick += r.duration.ticks(division: division)
             default:
-                // Clefs/keys/time sigs/dynamics/etc don't move the tick
-                // cursor and don't break a beam group in between notes.
-                // But conservatively we flush on barline-like things.
                 if case .barLine = el { flush() }
                 break
             }
         }
         flush()
         return groups
+    }
+
+    /// One beat in ticks — the INNER boundary for the subdivision
+    /// check. Different from `beamGroupTicks` which is the OUTER
+    /// (max) boundary.
+    private static func oneBeatTicks(
+        timeSignature: TimeSignature?, division: Int
+    ) -> Int {
+        guard let ts = timeSignature else { return division }
+        if ts.denominator == 8
+            && ts.numerator % 3 == 0
+            && ts.numerator > 0 {
+            return (division * 3) / 2
+        }
+        return (division * 4) / max(1, ts.denominator)
     }
 
     static func beamLevel(_ dur: NoteDuration) -> Int {
