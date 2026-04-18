@@ -11,6 +11,7 @@ struct ContentViewMac: View {
     @State private var magnification: CGFloat = 1.0
     @State private var steadyMagnification: CGFloat = 1.0
     @State private var zoomAnchor: UnitPoint = .center
+    @State private var verticalLayout = false
 
     var body: some View {
         NavigationSplitView {
@@ -19,6 +20,15 @@ struct ContentViewMac: View {
                     Button("Load test.mscx") {
                         loadBundled()
                     }
+                }
+                Section("Layout") {
+                    Picker("Scroll", selection: $verticalLayout) {
+                        Label("Horizontal", systemImage: "arrow.left.and.right")
+                            .tag(false)
+                        Label("Vertical", systemImage: "arrow.up.and.down")
+                            .tag(true)
+                    }
+                    .pickerStyle(.inline)
                 }
                 Section("Zoom") {
                     Text("\(Int(steadyMagnification * 100))%")
@@ -44,27 +54,7 @@ struct ContentViewMac: View {
             .navigationSplitViewColumnWidth(min: 220, ideal: 240)
         } detail: {
             if let score {
-                ScrollView([.vertical, .horizontal]) {
-                    ScoreView(score: score)
-                        .scaleEffect(magnification, anchor: zoomAnchor)
-                        .padding()
-                        .simultaneousGesture(
-                            MagnifyGesture()
-                                .onChanged { value in
-                                    zoomAnchor = value.startAnchor
-                                    magnification = steadyMagnification
-                                        * value.magnification
-                                }
-                                .onEnded { value in
-                                    steadyMagnification *=
-                                        value.magnification
-                                    steadyMagnification = min(
-                                        max(steadyMagnification, 0.25),
-                                        4.0)
-                                    magnification = steadyMagnification
-                                }
-                        )
-                }
+                scoreContent(score: score)
             } else {
                 ContentUnavailableView(
                     "No score loaded",
@@ -74,6 +64,40 @@ struct ContentViewMac: View {
             }
         }
         .onAppear(perform: loadBundled)
+    }
+
+    @ViewBuilder
+    private func scoreContent(score: Score) -> some View {
+        let opts = ScoreViewOptions(
+            wrapToViewWidth: verticalLayout)
+        if verticalLayout {
+            ScrollView(.vertical) {
+                ScoreView(score: score, options: opts)
+                    .padding()
+            }
+        } else {
+            ScrollView([.vertical, .horizontal]) {
+                ScoreView(score: score, options: opts)
+                    .scaleEffect(magnification, anchor: zoomAnchor)
+                    .padding()
+                    .simultaneousGesture(
+                        MagnifyGesture()
+                            .onChanged { value in
+                                zoomAnchor = value.startAnchor
+                                magnification = steadyMagnification
+                                    * value.magnification
+                            }
+                            .onEnded { value in
+                                steadyMagnification *=
+                                    value.magnification
+                                steadyMagnification = min(
+                                    max(steadyMagnification, 0.25),
+                                    4.0)
+                                magnification = steadyMagnification
+                            }
+                    )
+            }
+        }
     }
 
     private func loadBundled() {
