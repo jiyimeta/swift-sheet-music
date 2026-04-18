@@ -1,35 +1,48 @@
 import SheetMusicCore
 import SwiftUI
 
+/// A single system rendered in its own Canvas. Used by `ScoreView`
+/// inside a `LazyVStack` so only visible systems are drawn — the
+/// biggest performance win for long scores during scrolling.
 @available(macOS 15.0, iOS 16.0, *)
-struct ScoreCanvas: View {
-    let document: LayoutDocument
+struct SystemCanvas: View {
+    let system: LayoutSystem
+    let metrics: StaffMetrics
 
     var body: some View {
-        Canvas { context, _ in
-            for system in document.systems {
-                drawSystem(system, into: &context)
-            }
+        Canvas(opaque: true, rendersAsynchronously: true) { context, _ in
+            // Fill with white (opaque canvas doesn't auto-clear).
+            context.fill(
+                Path(CGRect(
+                    origin: .zero,
+                    size: CGSize(
+                        width: system.size.width,
+                        height: system.size.height))),
+                with: .color(.white))
+            // Draw with system origin translated to (0, 0).
+            var local = context
+            local.translateBy(x: -system.origin.x, y: -system.origin.y)
+            ScoreCanvasDrawing.drawSystem(
+                system, metrics: metrics, into: &local)
         }
         .frame(
-            width: max(document.size.width, 1),
-            height: max(document.size.height, 1),
-            alignment: .topLeading
-        )
-        // Score paper is always white with black ink, regardless of
-        // the host app's light/dark appearance. Forcing `.light` makes
-        // `Color.primary` inside the Canvas resolve to black, and the
-        // explicit white background keeps the page looking like paper
-        // even when the surrounding UI is dark.
-        .background(Color.white)
+            width: system.size.width,
+            height: system.size.height,
+            alignment: .topLeading)
         .environment(\.colorScheme, .light)
     }
+}
 
-    private func drawSystem(
+/// Static drawing routines shared between single-system and full-
+/// document canvases. Factored out of `ScoreCanvas` so `SystemCanvas`
+/// can call them too.
+@available(macOS 15.0, iOS 16.0, *)
+enum ScoreCanvasDrawing {
+    static func drawSystem(
         _ system: LayoutSystem,
+        metrics: StaffMetrics,
         into context: inout GraphicsContext
     ) {
-        let metrics = document.metrics
         // Staves
         for origin in system.staffOrigins {
             StaffRenderer.draw(
@@ -42,9 +55,7 @@ struct ScoreCanvas: View {
                 metrics: metrics
             )
         }
-        // Bracket connecting multiple staves of a single Part (piano grand
-        // staff and larger groupings). v1 draws one bracket spanning the
-        // full vertical extent of all staves.
+        // Bracket connecting multiple staves.
         if system.staffOrigins.count >= 2,
            let top = system.staffOrigins.first,
            let bot = system.staffOrigins.last {
@@ -58,15 +69,15 @@ struct ScoreCanvas: View {
                 metrics: metrics
             )
         }
-        // Part labels (left of staves — origin.x is a small left margin;
-        // offset by the staff-label-width reservation so text anchors to
-        // the right just before staff start).
+        // Part labels
         for label in system.partLabels {
             PartLabelRenderer.draw(
                 context: &context,
                 text: label.text,
                 origin: CGPoint(
-                    x: system.origin.x + (system.staffOrigins.first?.x ?? 60) - metrics.sp,
+                    x: system.origin.x
+                        + (system.staffOrigins.first?.x ?? 60)
+                        - metrics.sp,
                     y: system.origin.y + label.origin.y
                 ),
                 metrics: metrics
@@ -91,14 +102,14 @@ struct ScoreCanvas: View {
                             metrics: metrics, into: &context)
             }
         }
-        // System-level spanners (populated by Stage 9).
+        // System-level spanners
         for el in system.spanners {
             drawElement(el, base: system.origin,
                         metrics: metrics, into: &context)
         }
     }
 
-    private func drawElement(
+    static func drawElement(
         _ element: LayoutElement,
         base: CGPoint,
         metrics: StaffMetrics,
@@ -138,8 +149,6 @@ struct ScoreCanvas: View {
         case .chord(let notes, let dur, let stem, let stemOrigin,
                      _, _, let isBeamed):
             let (baseDur, dots) = DurationInterpretation.split(dur)
-            // Shift note origins into absolute coords for the heads
-            // and the stem renderer.
             let shiftedNotes = notes.map {
                 LayoutChordNote(
                     step: $0.step,
@@ -168,17 +177,12 @@ struct ScoreCanvas: View {
                     onStaffLine: n.step.isMultiple(of: 2),
                     metrics: metrics)
             }
-            // Ledger lines for notes extending above/below the staff.
+            // Ledger lines
             drawLedgerLines(
                 context: &context,
                 notes: shiftedNotes,
                 metrics: metrics)
-            // For beamed chords, the placement pass stores the shared
-            // beam y into stemOrigin.y so every member's stem reaches
-            // the same horizontal beam bar.
             let beamY: CGFloat? = isBeamed ? shift(stemOrigin).y : nil
-            // Base duration drives stem/flag choice so a dotted 8th
-            // still gets the 8th flag (its raw duration is a fraction).
             StemRenderer.draw(
                 context: &context, notes: shiftedNotes,
                 direction: stem, duration: baseDur,
@@ -235,14 +239,6 @@ struct ScoreCanvas: View {
                 context: &context,
                 from: shift(from), to: shift(to),
                 wavy: wavy, text: text, metrics: metrics)
-        case .marker(let kind, let text, let p):
-            MarkerRenderer.draw(
-                context: &context, kind: kind, text: text,
-                origin: shift(p), metrics: metrics)
-        case .jump(let text, let p):
-            JumpRenderer.draw(
-                context: &context, text: text,
-                origin: shift(p), metrics: metrics)
         case .tupletLabel(let from, let to, let text,
                           let bracket, let above):
             TupletRenderer.draw(
@@ -252,20 +248,22 @@ struct ScoreCanvas: View {
                 hasBracket: bracket,
                 isAbove: above,
                 metrics: metrics)
+        case .marker(let kind, let text, let p):
+            MarkerRenderer.draw(
+                context: &context, kind: kind, text: text,
+                origin: shift(p), metrics: metrics)
+        case .jump(let text, let p):
+            JumpRenderer.draw(
+                context: &context, text: text,
+                origin: shift(p), metrics: metrics)
         case .note:
-            // `.note` case isn't emitted in v1 (chords carry notes via
-            // LayoutChordNote). Reserved for future expansion.
             break
         }
     }
+
     // MARK: - Ledger lines
 
-    /// Draw short horizontal lines through or near noteheads that sit
-    /// above (step > +4) or below (step < −4) the five-line staff.
-    /// Each ledger line sits on an even step position (a "line"
-    /// extension of the staff). Lines are drawn from the staff edge
-    /// outward to the most extreme note.
-    private func drawLedgerLines(
+    static func drawLedgerLines(
         context: inout GraphicsContext,
         notes: [LayoutChordNote],
         metrics: StaffMetrics
@@ -276,14 +274,12 @@ struct ScoreCanvas: View {
         let minStep = allSteps.min() ?? 0
         guard maxStep > 4 || minStep < -4 else { return }
 
-        // Derive the staff-midline absolute y from any note.
         let staffMidYAbs = ref.origin.y
             + CGFloat(ref.step) * metrics.sp / 2
         let chordX = ref.origin.x
         let halfWidth = metrics.sp * 0.9
         let lineWidth = metrics.staffLineThickness * 1.5
 
-        // Upper ledger lines
         if maxStep > 4 {
             let topEven = maxStep.isMultiple(of: 2)
                 ? maxStep : maxStep - 1
@@ -299,7 +295,6 @@ struct ScoreCanvas: View {
             }
         }
 
-        // Lower ledger lines
         if minStep < -4 {
             let botEven = minStep.isMultiple(of: 2)
                 ? minStep : minStep + 1
