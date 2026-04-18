@@ -46,8 +46,8 @@ struct ContentView: View {
     @ViewBuilder
     private func scoreContent(score: Score) -> some View {
         let opts = ScoreViewOptions(
-            staffSize: 20,
-            systemGap: 30,
+            staffSize: verticalLayout ? 14 : 20,
+            systemGap: verticalLayout ? 12 : 30,
             wrapToViewWidth: verticalLayout)
         if verticalLayout {
             ScrollView(.vertical) {

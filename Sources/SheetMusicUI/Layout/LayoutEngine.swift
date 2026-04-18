@@ -164,9 +164,9 @@ public enum LayoutEngine {
         let staves = context.score.staves
         let partLabelWidth: CGFloat = isFirstSystem ? 80 : 30
 
-        let topPad: CGFloat = metrics.sp * 8
-        let bottomPad: CGFloat = metrics.sp * 8
-        let minGap: CGFloat = metrics.sp * 2
+        let topPad: CGFloat = metrics.sp * 6
+        let bottomPad: CGFloat = metrics.sp * 6
+        let minGap: CGFloat = metrics.sp * 1.5
 
         // --- Dynamic per-staff bottom padding ---
         //
