@@ -173,6 +173,10 @@ enum ScoreSemanticComparison {
     /// comparison across MusicXML / MSCX producers.
     static func normalize(_ score: Score, options: Options = .init()) -> Score {
         var s = score
+        // Title block (`<VBox>` in MSCX) has no MusicXML equivalent
+        // — drop it from both sides so the comparison stays focused
+        // on the notation itself.
+        s.titleFrame = nil
         if options.ignoreEmptyMetaTags {
             s.metaTags = s.metaTags.filter { !$0.value.isEmpty }
         }

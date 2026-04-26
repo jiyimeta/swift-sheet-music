@@ -21,6 +21,23 @@ extension Score {
                 metaTags[name] = tag.text
             }
         }
-        return Score(division: division, parts: parts, staves: staves, metaTags: metaTags)
+        // Look for a leading `<VBox>` on staff 0 — that's where the
+        // title / subtitle / composer block lives in MuseScore. Any
+        // VBox that appears AFTER the first <Measure> is treated as
+        // a section header and ignored for now (title-only minimal
+        // port).
+        var titleFrame: ScoreFrame?
+        if let firstStaff = scoreNode.first("Staff") {
+            for child in firstStaff.children {
+                if child.name == "VBox" {
+                    titleFrame = ScoreFrame.decode(vbox: child)
+                    break
+                }
+                if child.name == "Measure" { break }
+            }
+        }
+        return Score(
+            division: division, parts: parts, staves: staves,
+            metaTags: metaTags, titleFrame: titleFrame)
     }
 }
