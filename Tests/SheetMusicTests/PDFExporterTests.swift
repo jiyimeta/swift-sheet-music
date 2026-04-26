@@ -29,7 +29,10 @@ struct PDFExporterTests {
     @Test("Round-trips through CGPDFDocument with the expected page count")
     func cgPdfDocumentRoundTrip() throws {
         guard #available(macOS 15.0, *) else { return }
-        let data = try PDFExporter.export(score: Self.smallScore())
+        let data = try PDFExporter.export(
+            score: Self.smallScore(),
+            options: PDFExporter.Options(
+                page: .explicit(.usLetter)))
         guard let provider = CGDataProvider(data: data as CFData),
               let pdf = CGPDFDocument(provider) else {
             Issue.record("CGPDFDocument failed to parse exporter output")
@@ -53,12 +56,16 @@ struct PDFExporterTests {
         // small page height the document must paginate. We don't
         // demand an exact page count (depends on system packing
         // heuristics), only "more than one".
+        let shortPage = EngravingPage(
+            size: CGSize(width: 612, height: 300),
+            oddMargins: PageMargins(uniform: 18),
+            evenMargins: PageMargins(uniform: 18),
+            twosided: false)
         let data = try PDFExporter.export(
             score: Self.longScore(measureCount: 64),
             options: PDFExporter.Options(
-                pageSize: CGSize(width: 612, height: 300),
-                margin: 18,
-                staffSize: 12))
+                page: .explicit(shortPage),
+                staffSize: .explicit(12)))
         let provider = try #require(CGDataProvider(data: data as CFData))
         let pdf = try #require(CGPDFDocument(provider))
         #expect(pdf.numberOfPages > 1)
@@ -98,13 +105,16 @@ struct PDFExporterTests {
         // Usable height = 200 - 2*10 = 180 → 1 system per page (each
         // is 100 high, two together = 110 + 100 = 210 > 180 from the
         // first system's start).
+        let page = EngravingPage(
+            size: CGSize(width: 400, height: 200),
+            oddMargins: PageMargins(uniform: 10),
+            evenMargins: PageMargins(uniform: 10),
+            twosided: false)
         let pages = PDFExporter.paginate(
-            systems: [s0, s1, s2, s3],
-            pageSize: CGSize(width: 400, height: 200),
-            margin: 10)
+            systems: [s0, s1, s2, s3], page: page)
         #expect(pages.count == 4)
-        for page in pages {
-            #expect(page.systems.count == 1)
+        for batch in pages {
+            #expect(batch.systems.count == 1)
         }
     }
 

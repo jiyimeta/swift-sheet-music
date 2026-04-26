@@ -502,14 +502,18 @@ struct ContentViewMac: View {
 
     @ViewBuilder
     private func pdfPreview(score: Score) -> some View {
-        let pageSize = PDFExporter.Options.usLetter
-        let margin: CGFloat = 36
+        // Resolve page size, margins, staff size from the score's
+        // `<Style>` block via `PDFExporter.resolve` — the same call
+        // path the share-button export uses, so the preview is a
+        // truthful proxy for the PDF the user gets.
+        let resolved = PDFExporter.resolve(
+            options: PDFExporter.Options(), score: score)
 
         Group {
             if let doc = pdfDoc, !pdfPages.isEmpty {
                 pdfPreviewContent(
                     doc: doc, pages: pdfPages,
-                    pageSize: pageSize, margin: margin)
+                    page: resolved.page)
             } else {
                 ProgressView("Laying out…")
                     .frame(
@@ -518,22 +522,21 @@ struct ContentViewMac: View {
             }
         }
         .task(id: scoreVersion) {
-            // Same knobs as `Save as PDF…` so the on-screen pages
-            // match the file the user would get from PDFExporter.
-            let pdfStaffSize: CGFloat = 14
             let pdfOpts = ScoreViewOptions(
-                staffSize: pdfStaffSize,
+                staffSize: resolved.staffSize,
                 systemGap: 16,
                 wrapToViewWidth: true)
             let availableWidth = max(
-                pdfStaffSize * 4, pageSize.width - 2 * margin)
+                resolved.staffSize * 4,
+                resolved.page.size.width
+                    - resolved.page.oddMargins.leading
+                    - resolved.page.oddMargins.trailing)
             let doc = LayoutEngine.layout(
                 score: score, options: pdfOpts,
                 availableWidth: availableWidth)
             pdfDoc = doc
             pdfPages = PDFExporter.paginate(
-                systems: doc.systems,
-                pageSize: pageSize, margin: margin)
+                systems: doc.systems, page: resolved.page)
         }
     }
 
@@ -541,8 +544,7 @@ struct ContentViewMac: View {
     private func pdfPreviewContent(
         doc: LayoutDocument,
         pages: [PDFExporter.PageBatch],
-        pageSize: CGSize,
-        margin: CGFloat
+        page: EngravingPage
     ) -> some View {
         // Hosting the page deck inside an `NSScrollView` with
         // `allowsMagnification = true` mirrors how horizontal mode
@@ -555,8 +557,7 @@ struct ContentViewMac: View {
             magnification: $pdfScale,
             doc: doc,
             pages: pages,
-            pageSize: pageSize,
-            margin: margin)
+            page: page)
     }
 
     private func handleTap(at location: CGPoint, document: LayoutDocument) {
@@ -1087,8 +1088,7 @@ private struct MagnifyingPDFScrollView: NSViewRepresentable {
     @Binding var magnification: CGFloat
     let doc: LayoutDocument
     let pages: [PDFExporter.PageBatch]
-    let pageSize: CGSize
-    let margin: CGFloat
+    let page: EngravingPage
 
     func makeNSView(context: Context) -> NSScrollView {
         let scrollView = NSScrollView()
@@ -1153,9 +1153,10 @@ private struct MagnifyingPDFScrollView: NSViewRepresentable {
     }
 
     private var rootView: AnyView {
-        AnyView(
+        let pageSize = page.size
+        return AnyView(
             HStack(alignment: .top, spacing: 24) {
-                ForEach(Array(pages.enumerated()), id: \.offset) { idx, page in
+                ForEach(Array(pages.enumerated()), id: \.offset) { idx, batch in
                     VStack(spacing: 6) {
                         // Layer-tree page (vector CAShapeLayers) so
                         // NSScrollView's `allowsMagnification` re-
@@ -1163,12 +1164,12 @@ private struct MagnifyingPDFScrollView: NSViewRepresentable {
                         // — sharp throughout the pinch, exactly like
                         // horizontal mode's score view.
                         PDFPageLayerView(
-                            systems: page.systems,
-                            pageStartY: page.startY,
+                            systems: batch.systems,
+                            pageStartY: batch.startY,
                             titleFrame: idx == 0 ? doc.titleFrame : nil,
                             metrics: doc.metrics,
                             pageSize: pageSize,
-                            margin: margin)
+                            margins: page.margins(forPageIndex: idx))
                             .frame(
                                 width: pageSize.width,
                                 height: pageSize.height)

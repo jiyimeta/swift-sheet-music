@@ -25,7 +25,7 @@ public struct PDFPageLayerView: NSViewRepresentable {
     public let titleFrame: SheetMusicUI.LayoutTitleFrame?
     public let metrics: SheetMusicUI.StaffMetrics
     public let pageSize: CGSize
-    public let margin: CGFloat
+    public let margins: PageMargins
 
     public init(
         systems: [SheetMusicUI.LayoutSystem],
@@ -33,14 +33,14 @@ public struct PDFPageLayerView: NSViewRepresentable {
         titleFrame: SheetMusicUI.LayoutTitleFrame? = nil,
         metrics: SheetMusicUI.StaffMetrics,
         pageSize: CGSize,
-        margin: CGFloat
+        margins: PageMargins
     ) {
         self.systems = systems
         self.pageStartY = pageStartY
         self.titleFrame = titleFrame
         self.metrics = metrics
         self.pageSize = pageSize
-        self.margin = margin
+        self.margins = margins
     }
 
     public func makeNSView(context: Context) -> _PDFPageLayerHostView {
@@ -49,7 +49,7 @@ public struct PDFPageLayerView: NSViewRepresentable {
         view.configure(
             systems: systems, pageStartY: pageStartY,
             titleFrame: titleFrame, metrics: metrics,
-            pageSize: pageSize, margin: margin)
+            pageSize: pageSize, margins: margins)
         return view
     }
 
@@ -59,7 +59,7 @@ public struct PDFPageLayerView: NSViewRepresentable {
         nsView.configure(
             systems: systems, pageStartY: pageStartY,
             titleFrame: titleFrame, metrics: metrics,
-            pageSize: pageSize, margin: margin)
+            pageSize: pageSize, margins: margins)
     }
 }
 
@@ -85,7 +85,7 @@ public final class _PDFPageLayerHostView: NSView {
         titleFrame: SheetMusicUI.LayoutTitleFrame?,
         metrics: SheetMusicUI.StaffMetrics,
         pageSize: CGSize,
-        margin: CGFloat
+        margins: PageMargins
     ) {
         let signature = ConfigSignature(
             systemCount: systems.count,
@@ -95,7 +95,7 @@ public final class _PDFPageLayerHostView: NSView {
             titleHash: titleFrame?.texts.map { $0.text }
                 .joined(separator: "|"),
             pageSize: pageSize,
-            margin: margin,
+            margins: margins,
             staffSize: metrics.staffHeight)
         if signature == lastSignature { return }
         lastSignature = signature
@@ -113,7 +113,7 @@ public final class _PDFPageLayerHostView: NSView {
             for entry in titleFrame.texts {
                 if let textLayer = makeTitleTextLayer(
                     entry: entry,
-                    pageSize: pageSize, margin: margin) {
+                    pageSize: pageSize, margins: margins) {
                     host.addSublayer(textLayer)
                 }
             }
@@ -127,10 +127,10 @@ public final class _PDFPageLayerHostView: NSView {
             // The system layer is built in the platform-native Y
             // (Y-up on macOS, post-`flipForPlatform`). Place its
             // bottom-left so its top sits at the right page Y.
-            let topYUp = pageSize.height - margin
+            let topYUp = pageSize.height - margins.top
                 - (system.origin.y - pageStartY)
             systemLayer.frame.origin = CGPoint(
-                x: margin + system.origin.x,
+                x: margins.leading + system.origin.x,
                 y: topYUp - (system.size.height + 1))
             host.addSublayer(systemLayer)
         }
@@ -143,7 +143,7 @@ private struct ConfigSignature: Equatable {
     let pageStartY: CGFloat
     let titleHash: String?
     let pageSize: CGSize
-    let margin: CGFloat
+    let margins: PageMargins
     let staffSize: CGFloat
 }
 
@@ -153,7 +153,7 @@ private struct ConfigSignature: Equatable {
 private func makeTitleTextLayer(
     entry: SheetMusicUI.LayoutFrameText,
     pageSize: CGSize,
-    margin: CGFloat
+    margins: PageMargins
 ) -> CAShapeLayer? {
     // MuseScore's title-block defaults are all `FontStyle::Normal`
     // (no bold / italic) — see `engraving/style/styledef.cpp`.
@@ -173,7 +173,7 @@ private func makeTitleTextLayer(
     //   * `anchorX` — page-coord X for the text's left edge
     //   * `topPageDown` — page-coord Y (Y-down) of the text's
     //     visible top edge (= ascent above baseline)
-    var anchorX: CGFloat = entry.position.x + margin
+    var anchorX: CGFloat = entry.position.x + margins.leading
     switch entry.anchor {
     case .top, .bottom:
         anchorX -= bbox.width / 2
@@ -187,11 +187,11 @@ private func makeTitleTextLayer(
     case .topLeading, .top, .topTrailing:
         // Anchor is the visible TOP edge of the text → entry's
         // y already names the top.
-        topPageDown = margin + entry.position.y
+        topPageDown = margins.top + entry.position.y
     case .bottomLeading, .bottom, .bottomTrailing:
         // Anchor is the visible BOTTOM edge → text's top sits
         // `totalHeight` above it.
-        topPageDown = margin + entry.position.y - totalHeight
+        topPageDown = margins.top + entry.position.y - totalHeight
     }
 
     // Build the path in Y-down doc coords first (so it lines up

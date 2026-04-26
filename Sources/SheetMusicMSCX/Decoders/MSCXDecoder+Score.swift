@@ -36,8 +36,14 @@ extension Score {
                 if child.name == "Measure" { break }
             }
         }
+        let style: ScoreStyle
+        if let styleNode = scoreNode.first("Style") {
+            style = ScoreStyle.decode(style: styleNode)
+        } else {
+            style = .museScoreDefaults
+        }
         return Score(
             division: division, parts: parts, staves: staves,
-            metaTags: metaTags, titleFrame: titleFrame)
+            metaTags: metaTags, titleFrame: titleFrame, style: style)
     }
 }

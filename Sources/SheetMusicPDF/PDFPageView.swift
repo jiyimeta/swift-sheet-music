@@ -10,9 +10,10 @@ import SwiftUI
 ///
 /// The view's coordinate space is the page in points (1pt = 1/72").
 /// The `Canvas` is set up so that document-space `(0, pageStartY)`
-/// maps to page-space `(margin, margin)`. Each system on the page
-/// is then drawn in document coords; the single translation handles
-/// both the inset margin and the per-page Y offset.
+/// maps to page-space `(margins.leading, margins.top)`. Each system
+/// on the page is then drawn in document coords; the single
+/// translation handles both the inset margin and the per-page Y
+/// offset.
 @available(macOS 15.0, iOS 16.0, *)
 public struct PDFPageView: View {
     let systems: [LayoutSystem]
@@ -23,7 +24,7 @@ public struct PDFPageView: View {
     let titleFrame: LayoutTitleFrame?
     let metrics: StaffMetrics
     let pageSize: CGSize
-    let margin: CGFloat
+    let margins: PageMargins
     /// Visual zoom factor for previewers. The view's frame becomes
     /// `pageSize * renderScale` and the `Canvas` scales its drawing
     /// coordinates by the same factor — so glyphs and lines stay
@@ -39,7 +40,7 @@ public struct PDFPageView: View {
         titleFrame: LayoutTitleFrame? = nil,
         metrics: StaffMetrics,
         pageSize: CGSize,
-        margin: CGFloat,
+        margins: PageMargins,
         renderScale: CGFloat = 1
     ) {
         self.systems = systems
@@ -47,7 +48,7 @@ public struct PDFPageView: View {
         self.titleFrame = titleFrame
         self.metrics = metrics
         self.pageSize = pageSize
-        self.margin = margin
+        self.margins = margins
         self.renderScale = renderScale
     }
 
@@ -72,8 +73,8 @@ public struct PDFPageView: View {
                 local.scaleBy(x: renderScale, y: renderScale)
             }
             local.translateBy(
-                x: margin,
-                y: margin - pageStartY)
+                x: margins.leading,
+                y: margins.top - pageStartY)
             if let titleFrame {
                 TitleFrameRenderer.draw(titleFrame, into: &local)
             }

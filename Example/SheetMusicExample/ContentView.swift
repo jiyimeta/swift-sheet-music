@@ -336,14 +336,18 @@ struct ContentView: View {
 
     @ViewBuilder
     private func pdfPreview(score: Score) -> some View {
-        let pageSize = PDFExporter.Options.usLetter
-        let margin: CGFloat = 36
+        // Pull page size, margins, staff size from the score's
+        // `<Style>` block via `PDFExporter.resolve` — the same call
+        // path the share-button export uses, so the preview is a
+        // truthful proxy for the PDF the user gets.
+        let resolved = PDFExporter.resolve(
+            options: PDFExporter.Options(), score: score)
 
         Group {
             if let doc = pdfDoc, !pdfPages.isEmpty {
                 pdfPreviewContent(
                     doc: doc, pages: pdfPages,
-                    pageSize: pageSize, margin: margin)
+                    page: resolved.page)
             } else {
                 ProgressView("Laying out…")
                     .frame(
@@ -352,22 +356,21 @@ struct ContentView: View {
             }
         }
         .task(id: scoreVersion) {
-            // Same knobs as the share button so on-screen pages
-            // match the file the user would get from PDFExporter.
-            let pdfStaffSize: CGFloat = 14
             let pdfOpts = ScoreViewOptions(
-                staffSize: pdfStaffSize,
+                staffSize: resolved.staffSize,
                 systemGap: 16,
                 wrapToViewWidth: true)
             let availableWidth = max(
-                pdfStaffSize * 4, pageSize.width - 2 * margin)
+                resolved.staffSize * 4,
+                resolved.page.size.width
+                    - resolved.page.oddMargins.leading
+                    - resolved.page.oddMargins.trailing)
             let doc = LayoutEngine.layout(
                 score: score, options: pdfOpts,
                 availableWidth: availableWidth)
             pdfDoc = doc
             pdfPages = PDFExporter.paginate(
-                systems: doc.systems,
-                pageSize: pageSize, margin: margin)
+                systems: doc.systems, page: resolved.page)
         }
     }
 
@@ -375,9 +378,9 @@ struct ContentView: View {
     private func pdfPreviewContent(
         doc: LayoutDocument,
         pages: [PDFExporter.PageBatch],
-        pageSize: CGSize,
-        margin: CGFloat
+        page: EngravingPage
     ) -> some View {
+        let pageSize = page.size
         let pageSpacing: CGFloat = 16 * pdfScale
         let outerPadding: CGFloat = 16 * pdfScale
         let labelHeight: CGFloat = 14 * pdfScale + 6 * pdfScale
@@ -391,7 +394,7 @@ struct ContentView: View {
 
         ScrollView([.horizontal, .vertical]) {
             HStack(alignment: .top, spacing: pageSpacing) {
-                ForEach(Array(pages.enumerated()), id: \.offset) { idx, page in
+                ForEach(Array(pages.enumerated()), id: \.offset) { idx, batch in
                     VStack(spacing: 6 * pdfScale) {
                         // PDFPageView's `renderScale` makes the
                         // Canvas draw glyphs at the new resolution
@@ -401,12 +404,12 @@ struct ContentView: View {
                         // pinch the cheap `scaleEffect` overlay
                         // handles motion smoothly.
                         PDFPageView(
-                            systems: page.systems,
-                            pageStartY: page.startY,
+                            systems: batch.systems,
+                            pageStartY: batch.startY,
                             titleFrame: idx == 0 ? doc.titleFrame : nil,
                             metrics: doc.metrics,
                             pageSize: pageSize,
-                            margin: margin,
+                            margins: page.margins(forPageIndex: idx),
                             renderScale: pdfScale)
                             .background(Color.white)
                             .border(Color.gray.opacity(0.4))

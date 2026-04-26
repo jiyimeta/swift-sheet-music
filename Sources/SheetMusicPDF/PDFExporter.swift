@@ -14,62 +14,58 @@ public enum PDFExportError: Error, Sendable {
     case contextCreationFailed
 }
 
-/// Renders a `Score` to a PDF document.
+/// Renders a `Score` to a PDF document, reproducing MuseScore's
+/// page geometry, spatium-driven staff size, and header/footer
+/// chrome.
 ///
 /// The exporter mirrors MuseScore's approach
 /// (`importexport/imagesexport/internal/pdfwriter.cpp`): the same
 /// drawing pipeline that paints the on-screen view paints the PDF
 /// pages, just with a `CGPDFContext` as the destination instead of
-/// the screen. Layout runs once at the configured `pageSize`,
-/// systems are packed into pages by cumulative height, and each
-/// page is rendered through SwiftUI's `ImageRenderer` so glyphs
-/// stay vector (no per-page rasterisation).
+/// the screen. Page geometry / staff size resolve from the score's
+/// `<Style>` block by default (see `PDFExporter.Options`).
 ///
 /// All public methods are `@MainActor` because `ImageRenderer` is.
-/// Wrap calls in a detached task if you don't want to block the UI:
-///
-///     let data = await Task.detached { @MainActor in
-///         try PDFExporter.export(score: score)
-///     }.value
+/// Wrap calls in a detached task if you don't want to block the UI.
 @available(macOS 15.0, iOS 16.0, *)
 @MainActor
 public enum PDFExporter {
 
-    /// Knobs for page geometry, layout, and PDF metadata. Defaults
-    /// produce US Letter, half-inch margins, staff size 14 — a
-    /// reasonable preset for a single-instrument practice handout.
+    /// Knobs for page geometry, staff scaling, layout gap, and PDF
+    /// metadata. Defaults pull every dimensional value from the
+    /// score's `<Style>` block (`.fromScore` selectors).
     public struct Options: Sendable {
-        /// Page size in points (1pt = 1/72"). See `Options.usLetter`
-        /// / `.a4` for common presets.
-        public var pageSize: CGSize
-        /// Inset on all four sides of every page, in points.
-        public var margin: CGFloat
-        /// Staff space (one staff line interval) in points. Drives
-        /// every glyph and spacing dimension downstream.
-        public var staffSize: CGFloat
-        /// Vertical gap between consecutive systems on the same page.
+        public enum PageGeometry: Sendable {
+            /// Resolve from `score.style.pageLayout`. Default.
+            case fromScore
+            /// Override with explicit point-space values.
+            case explicit(EngravingPage)
+        }
+        public enum StaffSize: Sendable {
+            /// Total staff height in points, derived from
+            /// `score.style.spatium` (mm). A staff is 4 × spatium
+            /// tall, so the resolved value is
+            /// `4 × spatium_mm × 72 / 25.4`. Default.
+            case fromScore
+            /// Override with an explicit total staff height in
+            /// points (= 4 × one staff space).
+            case explicit(CGFloat)
+        }
+
+        public var page: PageGeometry
+        public var staffSize: StaffSize
         public var systemGap: CGFloat
-        /// Stamped into the PDF metadata's `Title` field. Visible in
-        /// most PDF viewers' window-title / properties panel.
         public var title: String?
-        /// Stamped into the PDF metadata's `Author` field.
         public var author: String?
 
-        /// 8.5" × 11" — North American letter size.
-        public static let usLetter = CGSize(width: 612, height: 792)
-        /// 210mm × 297mm — ISO A4.
-        public static let a4 = CGSize(width: 595, height: 842)
-
         public init(
-            pageSize: CGSize = Options.usLetter,
-            margin: CGFloat = 36,
-            staffSize: CGFloat = 14,
+            page: PageGeometry = .fromScore,
+            staffSize: StaffSize = .fromScore,
             systemGap: CGFloat = 16,
             title: String? = nil,
             author: String? = nil
         ) {
-            self.pageSize = pageSize
-            self.margin = margin
+            self.page = page
             self.staffSize = staffSize
             self.systemGap = systemGap
             self.title = title
@@ -82,20 +78,21 @@ public enum PDFExporter {
         score: Score,
         options: Options = Options()
     ) throws -> Data {
+        let resolved = resolve(options: options, score: score)
         let layoutOptions = ScoreViewOptions(
-            staffSize: options.staffSize,
+            staffSize: resolved.staffSize,
             systemGap: options.systemGap,
             wrapToViewWidth: true)
         let availableWidth = max(
-            options.staffSize * 4,
-            options.pageSize.width - 2 * options.margin)
+            resolved.staffSize * 4,
+            resolved.page.size.width
+                - resolved.page.oddMargins.leading
+                - resolved.page.oddMargins.trailing)
         let document = LayoutEngine.layout(
             score: score, options: layoutOptions,
             availableWidth: availableWidth)
         let pages = paginate(
-            systems: document.systems,
-            pageSize: options.pageSize,
-            margin: options.margin)
+            systems: document.systems, page: resolved.page)
 
         let data = NSMutableData()
         guard let consumer = CGDataConsumer(data: data),
@@ -108,27 +105,36 @@ public enum PDFExporter {
         }
 
         for (idx, page) in pages.enumerated() {
+            let margins = resolved.page.margins(forPageIndex: idx)
             let view = PDFPageView(
                 systems: page.systems,
                 pageStartY: page.startY,
                 titleFrame: idx == 0 ? document.titleFrame : nil,
                 metrics: document.metrics,
-                pageSize: options.pageSize,
-                margin: options.margin)
+                pageSize: resolved.page.size,
+                margins: margins)
             let renderer = ImageRenderer(content: view)
             renderer.proposedSize = ProposedViewSize(
-                width: options.pageSize.width,
-                height: options.pageSize.height)
+                width: resolved.page.size.width,
+                height: resolved.page.size.height)
             renderer.scale = 1
             renderer.isOpaque = true
             renderer.render { _, drawInto in
                 var mediaBox = CGRect(
-                    origin: .zero, size: options.pageSize)
+                    origin: .zero, size: resolved.page.size)
                 pdfContext.beginPDFPage(
                     [kCGPDFContextMediaBox as String:
                         Data(bytes: &mediaBox, count: MemoryLayout<CGRect>.size)
                     ] as CFDictionary)
                 drawInto(pdfContext)
+                PageChromeRenderer.draw(
+                    chrome: score.style.pageChrome,
+                    pageIndex: idx,
+                    pageCount: pages.count,
+                    pageSize: resolved.page.size,
+                    margins: margins,
+                    metaTags: score.metaTags,
+                    into: pdfContext)
                 pdfContext.endPDFPage()
             }
         }
@@ -149,26 +155,33 @@ public enum PDFExporter {
 
     // MARK: - Pagination (public so previewers can mirror the export layout)
 
-    public struct PageBatch {
+    public struct PageBatch: Sendable {
         public let startY: CGFloat
         public let systems: [LayoutSystem]
     }
 
     /// Group `systems` (in document Y order) into pages so each
-    /// page's combined height fits inside `pageSize.height - 2 *
-    /// margin`. Systems are not split across page boundaries — the
-    /// largest single system is allowed to exceed the usable height
-    /// (it just spills off its page) rather than being clipped or
+    /// page's combined height fits inside its usable height (page
+    /// height minus the active top + bottom margins for that page).
+    /// Two-sided pages alternate between odd and even margin sets
+    /// per `EngravingPage.margins(forPageIndex:)`.
+    ///
+    /// Systems are not split across page boundaries — the largest
+    /// single system is allowed to exceed the usable height (it
+    /// just spills off its page) rather than being clipped or
     /// dropped.
     public static func paginate(
         systems: [LayoutSystem],
-        pageSize: CGSize,
-        margin: CGFloat
+        page: EngravingPage
     ) -> [PageBatch] {
-        let usableHeight = max(1, pageSize.height - 2 * margin)
         var pages: [PageBatch] = []
         var currentSystems: [LayoutSystem] = []
         var currentStartY: CGFloat = 0
+
+        func usableHeight(forPageIndex idx: Int) -> CGFloat {
+            let m = page.margins(forPageIndex: idx)
+            return max(1, page.size.height - m.top - m.bottom)
+        }
 
         for system in systems {
             if currentSystems.isEmpty {
@@ -183,7 +196,7 @@ public enum PDFExporter {
             }
             let bottomOnPage =
                 (system.origin.y + system.size.height) - currentStartY
-            if bottomOnPage > usableHeight {
+            if bottomOnPage > usableHeight(forPageIndex: pages.count) {
                 pages.append(PageBatch(
                     startY: currentStartY,
                     systems: currentSystems))
@@ -199,6 +212,43 @@ public enum PDFExporter {
                 systems: currentSystems))
         }
         return pages
+    }
+
+    // MARK: - Resolution
+
+    /// What `export(score:options:)` actually uses after applying
+    /// the `.fromScore` selectors. Public so on-screen previewers
+    /// can mirror the geometry that the exported PDF will have.
+    public struct Resolved: Sendable, Equatable {
+        public let page: EngravingPage
+        /// Spatium in points (one staff space).
+        public let staffSize: CGFloat
+    }
+
+    public static func resolve(
+        options: Options, score: Score
+    ) -> Resolved {
+        let page: EngravingPage
+        switch options.page {
+        case .fromScore:
+            page = EngravingPage.from(score.style.pageLayout)
+        case .explicit(let p):
+            page = p
+        }
+        let staffSize: CGFloat
+        switch options.staffSize {
+        case .fromScore:
+            // `StaffMetrics.staffSize` denotes total staff height
+            // (= 4 × sp), not a single staff space. MuseScore's
+            // spatium is in mm and equals one sp, so the conversion
+            // is `4 × spatium_mm × 72 / 25.4`. Source:
+            // `engraving/dom/staff.cpp::Staff::staffHeight`.
+            staffSize = CGFloat(
+                4 * score.style.spatium * 72.0 / 25.4)
+        case .explicit(let v):
+            staffSize = v
+        }
+        return Resolved(page: page, staffSize: staffSize)
     }
 
     private static func makePDFInfo(
