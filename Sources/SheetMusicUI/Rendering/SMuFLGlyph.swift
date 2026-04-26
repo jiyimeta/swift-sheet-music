@@ -19,9 +19,15 @@ enum SMuFLGlyph {
     static let noteheadWhole: Character    = "\u{E0A2}"
     static let noteheadHalf: Character     = "\u{E0A3}"
     static let noteheadBlack: Character    = "\u{E0A4}"
-    // Noteheads — cross (x)
-    static let noteheadXWhole: Character   = "\u{E0AB}"
-    static let noteheadXHalf: Character    = "\u{E0AA}"
+    // Noteheads — cross (x). Per the SMuFL Noteheads range
+    // (U+E0A0..U+E0FF), the X family lives at U+E0A6..U+E0A9; the
+    // earlier `U+E0AA`/`U+E0AB` codepoints were actually the
+    // `noteheadPlusDoubleWhole` / `noteheadPlusWhole` glyphs (the
+    // plus-in-a-circle shapes), which is why whole-note crosses
+    // were rendering as "double sharp + 丸".
+    static let noteheadXDoubleWhole: Character = "\u{E0A6}"
+    static let noteheadXWhole: Character   = "\u{E0A7}"
+    static let noteheadXHalf: Character    = "\u{E0A8}"
     static let noteheadXBlack: Character   = "\u{E0A9}"
     // Noteheads — diamond
     static let noteheadDiamondWhole: Character = "\u{E0D8}"
@@ -44,6 +50,16 @@ enum SMuFLGlyph {
     // Rests
     static let restWhole: Character        = "\u{E4E3}"
     static let restHalf: Character         = "\u{E4E4}"
+    // Whole / half rest variants with a baked-in leger line —
+    // used when the rest is hung above or below the staff (e.g.
+    // voice-2 whole rests in a multi-voice measure). MuseScore
+    // swaps to these via `Rest::getSymbol` when `line` is outside
+    // the staff range (`rest.cpp:260-262`). Codepoints from
+    // SMuFL's `glyphnames.json`: `restWholeLegerLine` is U+E4F4
+    // and `restHalfLegerLine` is U+E4F5 (the earlier U+E4F3 was
+    // `restHBar`, the multi-measure I-beam, hence the wrong glyph).
+    static let restWholeLegerLine: Character = "\u{E4F4}"
+    static let restHalfLegerLine: Character  = "\u{E4F5}"
     static let restQuarter: Character      = "\u{E4E5}"
     static let rest8th: Character          = "\u{E4E6}"
     static let rest16th: Character         = "\u{E4E7}"

@@ -18,14 +18,14 @@ import os
 /// registration silently failed), SwiftUI displays tofu boxes in place of
 /// SMuFL glyphs. The diagnostics below help pinpoint where that happened.
 @available(macOS 15.0, iOS 16.0, *)
-enum BravuraFont {
-    static let familyName = "Bravura"
+public enum BravuraFont {
+    public static let familyName = "Bravura"
 
     /// Registration result, published the first time `register` is touched.
     /// `true` means CoreText can now resolve the Bravura family in this
     /// process. `false` means all resolution strategies failed; glyphs
     /// will render as tofu until the caller supplies the font another way.
-    static let register: Bool = {
+    public static let register: Bool = {
         let logger = Logger(
             subsystem: "swift-sheet-music.SheetMusicUI",
             category: "BravuraFont")

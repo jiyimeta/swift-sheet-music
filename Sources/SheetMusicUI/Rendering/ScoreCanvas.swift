@@ -9,17 +9,17 @@ struct SystemCanvas: View {
     let system: LayoutSystem
     let metrics: StaffMetrics
 
+    private static let overlap: CGFloat = 1
+
     var body: some View {
+        let h = system.size.height + Self.overlap
         Canvas(opaque: true, rendersAsynchronously: true) { context, _ in
-            // Fill with white (opaque canvas doesn't auto-clear).
             context.fill(
                 Path(CGRect(
                     origin: .zero,
                     size: CGSize(
-                        width: system.size.width,
-                        height: system.size.height))),
+                        width: system.size.width, height: h))),
                 with: .color(.white))
-            // Draw with system origin translated to (0, 0).
             var local = context
             local.translateBy(x: -system.origin.x, y: -system.origin.y)
             ScoreCanvasDrawing.drawSystem(
@@ -27,8 +27,40 @@ struct SystemCanvas: View {
         }
         .frame(
             width: system.size.width,
-            height: system.size.height,
+            height: h,
             alignment: .topLeading)
+        .environment(\.colorScheme, .light)
+    }
+}
+
+/// A horizontal slice of a single system. Used by `ScoreView` in
+/// horizontal-scroll mode inside a `LazyHStack` so only visible
+/// portions of a long system are rasterised.
+@available(macOS 15.0, iOS 16.0, *)
+struct SystemSliceCanvas: View {
+    let system: LayoutSystem
+    let metrics: StaffMetrics
+    let xStart: CGFloat
+    let sliceWidth: CGFloat
+
+    var body: some View {
+        let h = system.size.height + 1
+        Canvas(opaque: true, rendersAsynchronously: true) { context, _ in
+            context.fill(
+                Path(CGRect(
+                    origin: .zero,
+                    size: CGSize(width: sliceWidth, height: h))),
+                with: .color(.white))
+            var local = context
+            local.translateBy(
+                x: -system.origin.x - xStart,
+                y: -system.origin.y)
+            let absX = system.origin.x + xStart
+            ScoreCanvasDrawing.drawSystem(
+                system, metrics: metrics, into: &local,
+                visibleX: absX...(absX + sliceWidth))
+        }
+        .frame(width: sliceWidth, height: h, alignment: .topLeading)
         .environment(\.colorScheme, .light)
     }
 }
@@ -41,7 +73,8 @@ enum ScoreCanvasDrawing {
     static func drawSystem(
         _ system: LayoutSystem,
         metrics: StaffMetrics,
-        into context: inout GraphicsContext
+        into context: inout GraphicsContext,
+        visibleX: ClosedRange<CGFloat>? = nil
     ) {
         // Staves
         for origin in system.staffOrigins {
@@ -83,8 +116,15 @@ enum ScoreCanvasDrawing {
                 metrics: metrics
             )
         }
-        // Measures
+        // Measures — skip those entirely outside the visible x range.
         for measure in system.measures {
+            if let vx = visibleX {
+                let mLeft = system.origin.x + measure.origin.x
+                let mRight = mLeft + measure.width
+                if mRight < vx.lowerBound || mLeft > vx.upperBound {
+                    continue
+                }
+            }
             let base = CGPoint(
                 x: system.origin.x + measure.origin.x,
                 y: system.origin.y + measure.origin.y
@@ -135,10 +175,11 @@ enum ScoreCanvasDrawing {
             BarLineRenderer.draw(
                 context: &context, subtype: s,
                 origin: shift(p), metrics: metrics)
-        case .rest(let d, let p):
+        case .rest(let d, let p, _, _, let hll):
             let (baseDur, dots) = DurationInterpretation.split(d)
             RestRenderer.draw(
                 context: &context, duration: baseDur,
+                hasLegerLine: hll,
                 origin: shift(p), metrics: metrics)
             DotRenderer.draw(
                 context: &context,
@@ -147,10 +188,11 @@ enum ScoreCanvasDrawing {
                 onStaffLine: true,
                 metrics: metrics)
         case .chord(let notes, let dur, let stem, let stemOrigin,
-                     _, _, let isBeamed):
+                     _, _, let isBeamed, _):
             let (baseDur, dots) = DurationInterpretation.split(dur)
             let shiftedNotes = notes.map {
                 LayoutChordNote(
+                    noteID: $0.noteID,
                     step: $0.step,
                     accidental: $0.accidental,
                     origin: shift($0.origin),
@@ -256,6 +298,38 @@ enum ScoreCanvasDrawing {
             JumpRenderer.draw(
                 context: &context, text: text,
                 origin: shift(p), metrics: metrics)
+        case .measureNumber(let text, let p):
+            MeasureNumberRenderer.draw(
+                context: &context, text: text,
+                origin: shift(p), metrics: metrics)
+        case .staffName(let text, let p):
+            StaffNameRenderer.draw(
+                context: &context, text: text,
+                origin: shift(p), metrics: metrics)
+        case .staffText(let text, let p, let color, _):
+            StaffTextRenderer.draw(
+                context: &context, text: text,
+                origin: shift(p),
+                color: color,
+                metrics: metrics)
+        case .lyricsMelisma(let from, let to):
+            var path = Path()
+            path.move(to: shift(from))
+            path.addLine(to: shift(to))
+            context.stroke(
+                path,
+                with: .color(.primary),
+                lineWidth: metrics.sp * 0.1)
+        case .lyricHyphen(let from, let to):
+            // Same line thickness as the melisma rule; MuseScore's
+            // `lyricsDashLineThickness` default is 0.1 sp.
+            var path = Path()
+            path.move(to: shift(from))
+            path.addLine(to: shift(to))
+            context.stroke(
+                path,
+                with: .color(.primary),
+                lineWidth: metrics.sp * 0.1)
         case .note:
             break
         }

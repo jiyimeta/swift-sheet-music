@@ -6,13 +6,20 @@ enum RestRenderer {
     static func draw(
         context: inout GraphicsContext,
         duration: NoteDuration,
+        hasLegerLine: Bool = false,
         origin: CGPoint,
         metrics: StaffMetrics
     ) {
         let glyph: Character
         switch duration {
-        case .whole: glyph = SMuFLGlyph.restWhole
-        case .half: glyph = SMuFLGlyph.restHalf
+        case .whole:
+            glyph = hasLegerLine
+                ? SMuFLGlyph.restWholeLegerLine
+                : SMuFLGlyph.restWhole
+        case .half:
+            glyph = hasLegerLine
+                ? SMuFLGlyph.restHalfLegerLine
+                : SMuFLGlyph.restHalf
         case .quarter: glyph = SMuFLGlyph.restQuarter
         case .eighth: glyph = SMuFLGlyph.rest8th
         case .sixteenth: glyph = SMuFLGlyph.rest16th
