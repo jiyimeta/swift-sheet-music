@@ -19,10 +19,11 @@ The package is split into focused libraries; pick what you need.
 | `SheetMusicMSCX` | MuseScore file I/O: `.mscx` parsing and `.mscz` read/write (main score only). |
 | `SheetMusicMIDI` | In-memory MIDI model, score → MIDI rendering, SMF read/write. |
 | `SheetMusicUI` | SwiftUI read-only notation viewer (macOS 15+), bundles Bravura SMuFL font (SIL OFL). |
-| `SheetMusicAudio` | AVAudioEngine-backed playback. Per-staff `AVAudioUnitSampler`s, `SoundfontResolver` protocol, single-note preview, and full timeline-driven playback (chord-by-chord cursor via `PlaybackEngine.currentItem`). |
+| `SheetMusicAudio` | AVAudioEngine-backed playback. Per-staff `AVAudioUnitSampler`s, `SoundfontResolver` protocol, single-note preview, and full timeline-driven playback (chord-by-chord cursor via `PlaybackEngine.currentCursor`). |
+| `SheetMusicPDF` | PDF export (macOS 15+ / iOS 16+). Reuses `SheetMusicUI`'s layout + drawing pipeline through an `ImageRenderer` → `CGPDFContext` bridge, so glyphs stay vector. |
 
 Future libraries on the roadmap: additional `SheetMusic<FormatName>`
-libraries (e.g. PDF) as they're added.
+libraries (e.g. MusicXML export) as they're added.
 
 ### SoundFonts
 
@@ -129,10 +130,35 @@ struct PlayerView: View {
 }
 ```
 
-`engine.currentItem` is a `@Published` `ScoreItemID?` that ticks
-chord-by-chord during playback; `ScoreView` translates it into a
-tall translucent rectangle spanning every staff in the system that
-contains the current item.
+`engine.currentCursor` is a `@Published` `ScoreCursor?` that ticks
+chord-by-chord during playback (and on every metric beat in
+between); `ScoreView` translates it into a tall translucent
+rectangle spanning every staff in the system that contains the
+current column.
+
+To export a `Score` to PDF (macOS 15+ / iOS 16+):
+
+```swift
+import SheetMusic
+import SheetMusicPDF
+
+let score = try SheetMusic.loadScore(mscxData: data)
+let pdf = try await Task { @MainActor in
+    try PDFExporter.export(
+        score: score,
+        options: .init(
+            pageSize: PDFExporter.Options.a4,
+            margin: 36,
+            staffSize: 14,
+            title: "My Piece"))
+}.value
+try pdf.write(to: someOutputPdfURL)
+```
+
+`PDFExporter` is `@MainActor` (it drives SwiftUI's `ImageRenderer`).
+The same drawing pipeline that paints `ScoreView` on screen paints
+the PDF — so the printed pages match the on-screen layout exactly,
+glyphs are vector, and a single set of options covers both surfaces.
 
 ## Coverage
 

@@ -29,6 +29,10 @@ let package = Package(
         // SoundFont resolution, single-note preview, and (soon) timeline-
         // driven full playback.
         .library(name: "SheetMusicAudio", targets: ["SheetMusicAudio"]),
+        // PDF export. Reuses SheetMusicUI's layout + drawing pipeline
+        // behind an `ImageRenderer` → `CGPDFContext` bridge. macOS 15+
+        // / iOS 16+ (same as SheetMusicUI).
+        .library(name: "SheetMusicPDF", targets: ["SheetMusicPDF"]),
         // Dev tool (not a consumer-facing product): renders sample
         // Scores to PNG for visual inspection of ScoreView.
         .executable(name: "render-previews", targets: ["RenderPreviews"]),
@@ -77,6 +81,13 @@ let package = Package(
             ]
         ),
         .target(
+            name: "SheetMusicPDF",
+            dependencies: [
+                "SheetMusicCore",
+                "SheetMusicUI",
+            ]
+        ),
+        .target(
             name: "SheetMusic",
             dependencies: [
                 "SheetMusicCore",
@@ -101,6 +112,7 @@ let package = Package(
                 "SheetMusicMusicXML",
                 "SheetMusicUI",
                 "SheetMusicAudio",
+                "SheetMusicPDF",
                 "SheetMusicXMLTools",
                 "ZIPFoundation",   // MXLTestBuilder builds .mxl archives at test time
             ],
