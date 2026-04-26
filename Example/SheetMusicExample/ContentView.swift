@@ -23,7 +23,17 @@ struct ContentView: View {
     /// ScoreHitTester so layout runs once per change instead of
     /// twice per tap.
     @State private var verticalDoc: LayoutDocument?
+    /// Pre-computed natural-width layout for the horizontal viewport.
+    /// Used to drive the same auto-scroll path as vertical mode.
+    @State private var horizontalDoc: LayoutDocument?
     @State private var scoreVersion = UUID()
+    /// Live frames of each system (vertical mode) / measure
+    /// (horizontal mode) in the corresponding scroll view's named
+    /// coordinate space. Updated continuously via anchor previews,
+    /// so the auto-scroll heuristic can ask "is the cursor's row
+    /// on screen *right now*?" without doing scroll-offset math.
+    @State private var verticalSystemFrames: [Int: CGRect] = [:]
+    @State private var horizontalMeasureFrames: [Int: CGRect] = [:]
     /// Audio engine for single-note preview + full-score playback.
     /// Stays silent until the user drops a SoundFont into `Sounds/`
     /// (see `BundledSoundfontResolver`). Held as a `@StateObject` so
@@ -210,18 +220,34 @@ struct ContentView: View {
         case .vertical:
             GeometryReader { geo in
                 let width = geo.size.width - 16
-                ScrollView(.vertical) {
-                    if let doc = verticalDoc {
-                        ScoreView(
-                            document: doc, score: score,
-                            selection: selection,
-                            voiceColors: voiceColors,
-                            playbackCursor: playbackEngine.currentCursor)
-                            .onTapGesture { loc in
-                                handleTap(at: loc, document: doc)
+                ScrollViewReader { proxy in
+                    ScrollView(.vertical) {
+                        if let doc = verticalDoc {
+                            ZStack(alignment: .topLeading) {
+                                ScoreView(
+                                    document: doc, score: score,
+                                    selection: selection,
+                                    voiceColors: voiceColors,
+                                    playbackCursor: playbackEngine.currentCursor)
+                                    .onTapGesture { loc in
+                                        handleTap(at: loc, document: doc)
+                                    }
+                                VerticalSystemAnchors(document: doc)
                             }
                             .padding(.horizontal, 8)
                             .padding(.vertical, 16)
+                        }
+                    }
+                    .coordinateSpace(name: "vScroll")
+                    .onPreferenceChange(VerticalSystemFramesKey.self) { f in
+                        verticalSystemFrames = f
+                    }
+                    .onChange(of: playbackEngine.currentCursor) { newCursor in
+                        autoScroll(
+                            cursor: newCursor, doc: verticalDoc,
+                            score: score,
+                            axis: .vertical,
+                            viewport: geo.size, proxy: proxy)
                     }
                 }
                 .task(id: VerticalLayoutKey(
@@ -236,12 +262,42 @@ struct ContentView: View {
             }
         case .horizontal:
             GeometryReader { geo in
-                ScrollView(.horizontal) {
-                    ScoreView(
+                ScrollViewReader { proxy in
+                    ScrollView(.horizontal) {
+                        if let doc = horizontalDoc {
+                            ZStack(alignment: .topLeading) {
+                                ScoreView(
+                                    document: doc, score: score,
+                                    selection: selection,
+                                    voiceColors: voiceColors,
+                                    playbackCursor: playbackEngine.currentCursor)
+                                HorizontalMeasureAnchors(document: doc)
+                            }
+                            .frame(minHeight: geo.size.height)
+                            .padding(16)
+                        }
+                    }
+                    .coordinateSpace(name: "hScroll")
+                    .onPreferenceChange(HorizontalMeasureFramesKey.self) { f in
+                        horizontalMeasureFrames = f
+                    }
+                    .onChange(of: playbackEngine.currentCursor) { newCursor in
+                        autoScroll(
+                            cursor: newCursor, doc: horizontalDoc,
+                            score: score,
+                            axis: .horizontal,
+                            viewport: geo.size, proxy: proxy)
+                    }
+                }
+                .task(id: HorizontalLayoutKey(
+                    staffSize: staffSize,
+                    scoreVersion: scoreVersion)
+                ) {
+                    let natural = LayoutEngine.naturalContentWidth(
+                        score: score, options: opts)
+                    horizontalDoc = LayoutEngine.layout(
                         score: score, options: opts,
-                        playbackCursor: playbackEngine.currentCursor)
-                        .frame(minHeight: geo.size.height)
-                        .padding(16)
+                        availableWidth: natural)
                 }
             }
         case .paged:
@@ -424,6 +480,145 @@ struct ContentView: View {
         }
     }
 
+    /// Re-evaluate visibility on every cursor change — `onChange`
+    /// of an `@Published` cursor fires per chord / rest step the
+    /// playback engine takes. When the cursor's row (system in
+    /// vertical mode, measure in horizontal mode) has no overlap
+    /// with the visible viewport, scroll its nearest edge to the
+    /// viewport's nearest edge:
+    ///
+    ///   * Off-screen below → bottom staff's bottom → viewport
+    ///     bottom (`anchor: .bottom`).
+    ///   * Off-screen above → top staff's top → viewport top
+    ///     (`anchor: .top`).
+    ///
+    /// Visibility uses the live frame of each anchor in the scroll
+    /// view's named coordinate space, reported by the anchor
+    /// views. That avoids the lag and races of trying to derive a
+    /// scalar scroll offset from a `PreferenceKey`. The visibility
+    /// check itself acts as the natural dedup: once a scroll lands
+    /// the system in the viewport, subsequent chord / rest changes
+    /// within it short-circuit.
+    private func autoScroll(
+        cursor: ScoreCursor?,
+        doc: LayoutDocument?,
+        score: Score,
+        axis: ScrollAxis,
+        viewport: CGSize,
+        proxy: ScrollViewProxy
+    ) {
+        guard playbackEngine.state == .playing,
+              let cursor, let doc
+        else { return }
+        let mi = cursor.measureIndex
+
+        let pad: CGFloat = 8 * doc.metrics.sp
+        switch axis {
+        case .vertical:
+            // Anchor frame spans the system's staff range in
+            // "vScroll" coords; y = 0 is the viewport top, y =
+            // viewport.height the viewport bottom.
+            guard let sys = doc.systemIndex(forMeasureIndex: mi),
+                  let frame = verticalSystemFrames[sys]
+            else { return }
+            if isFullyVisible(
+                anchorMin: frame.minY, anchorMax: frame.maxY,
+                anchorSize: frame.height,
+                viewportSize: viewport.height
+            ) { return }
+            let unit = paddedAnchor(
+                aboveViewport: frame.minY < 0,
+                anchorSize: frame.height,
+                viewportSize: viewport.height,
+                pad: pad,
+                horizontal: false)
+            withAnimation(.easeInOut(duration: 0.25)) {
+                proxy.scrollTo(
+                    VerticalSystemAnchorID(systemIndex: sys),
+                    anchor: unit)
+            }
+        case .horizontal:
+            guard let frame = horizontalMeasureFrames[mi]
+            else { return }
+            if isFullyVisible(
+                anchorMin: frame.minX, anchorMax: frame.maxX,
+                anchorSize: frame.width,
+                viewportSize: viewport.width
+            ) { return }
+            let unit = paddedAnchor(
+                aboveViewport: frame.minX < 0,
+                anchorSize: frame.width,
+                viewportSize: viewport.width,
+                pad: pad,
+                horizontal: true)
+            withAnimation(.easeInOut(duration: 0.25)) {
+                proxy.scrollTo(
+                    HorizontalMeasureAnchorID(measureIndex: mi),
+                    anchor: unit)
+            }
+        }
+    }
+
+    /// Treat the cursor as "visible" only when fully inside the
+    /// viewport — any partial overhang triggers a scroll. The
+    /// exception: when the anchor itself is bigger than the
+    /// viewport (nothing we can do), fall back to "any overlap"
+    /// to avoid oscillating between top and bottom alignment.
+    private func isFullyVisible(
+        anchorMin: CGFloat,
+        anchorMax: CGFloat,
+        anchorSize: CGFloat,
+        viewportSize: CGFloat
+    ) -> Bool {
+        if anchorSize > viewportSize {
+            return anchorMax > 0 && anchorMin < viewportSize
+        }
+        return anchorMin >= 0 && anchorMax <= viewportSize
+    }
+
+    /// Build a `UnitPoint` that, when passed to `ScrollViewReader.
+    /// scrollTo(_, anchor:)`, leaves `pad` points between the
+    /// staff edge and the matching viewport edge.
+    ///
+    /// `scrollTo` aligns target's anchor point with viewport's
+    /// anchor point — same `UnitPoint` for both. With `y_unit = y`:
+    ///
+    ///     scrollOffset = target.minY + y * (target.height - viewport.height)
+    ///
+    /// To place target.minY at `pad` (i.e. top-aligned with `pad`
+    /// inset), solve for y → `y = pad / (viewport - target)`.
+    /// Bottom-aligned with `pad` inset is the mirror:
+    /// `y = 1 - pad / (viewport - target)`.
+    ///
+    /// When `target >= viewport` the staff is bigger than the
+    /// viewport — there's no room for padding, so fall back to
+    /// plain `.top` / `.bottom`.
+    private func paddedAnchor(
+        aboveViewport: Bool,
+        anchorSize: CGFloat,
+        viewportSize: CGFloat,
+        pad: CGFloat,
+        horizontal: Bool
+    ) -> UnitPoint {
+        let denom = viewportSize - anchorSize
+        // `denom <= pad` means there's no room to keep `pad` on the
+        // chosen side without pushing the opposite edge off — fall
+        // back to plain edge alignment so we don't flip direction.
+        let frac: CGFloat
+        if denom <= pad {
+            frac = aboveViewport ? 0 : 1
+        } else if aboveViewport {
+            frac = pad / denom
+        } else {
+            frac = 1 - pad / denom
+        }
+        return horizontal
+            ? UnitPoint(x: frac, y: 0.5)
+            : UnitPoint(x: 0.5, y: frac)
+    }
+
+    enum ScrollAxis { case vertical, horizontal }
+
     private func loadBundled() {
         guard let url = Bundle.main.url(
             forResource: "test", withExtension: "mscx")
@@ -436,6 +631,7 @@ struct ContentView: View {
             let loaded = try SheetMusic.loadScore(mscxData: data)
             score = loaded
             verticalDoc = nil
+            horizontalDoc = nil
             scoreVersion = UUID()
             selection = .none
             // (Re)build samplers for this score. SoundFont parsing
@@ -453,6 +649,11 @@ struct ContentView: View {
 
 private struct VerticalLayoutKey: Hashable {
     let width: CGFloat
+    let staffSize: CGFloat
+    let scoreVersion: UUID
+}
+
+private struct HorizontalLayoutKey: Hashable {
     let staffSize: CGFloat
     let scoreVersion: UUID
 }

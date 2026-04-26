@@ -79,6 +79,19 @@ struct ContentViewMac: View {
     @State private var pdfDoc: LayoutDocument?
     @State private var pdfPages: [PDFExporter.PageBatch] = []
 
+    /// Live frames of each system in the vertical ScrollView's
+    /// "vScroll" coordinate space. Drives the on-/off-screen check
+    /// in `autoScrollVertical` directly — no scroll-offset
+    /// arithmetic.
+    @State private var verticalSystemFrames: [Int: CGRect] = [:]
+    /// Vertical scroll offset of the SwiftUI vertical-mode scroll
+    /// view, mirrored from a PreferenceKey reader.
+    /// Pending programmatic scroll target for the horizontal
+    /// `MagnifyingScoreScrollView`, in document coords. The wrapper
+    /// animates to it and resets the binding to nil. Set by the
+    /// auto-scroll path during playback.
+    @State private var pendingHorizontalScroll: CGPoint?
+
     /// Per-voice highlight colors (MuseScore convention: voice 1 blue,
     /// voice 2 green, voice 3 orange, voice 4 purple). The library
     /// provides no defaults — this dictionary lives entirely in the app.
@@ -304,17 +317,34 @@ struct ContentViewMac: View {
         case .vertical:
             GeometryReader { geo in
                 let width = geo.size.width - 32
-                ScrollView(.vertical) {
-                    if let doc = verticalDoc {
-                        ScoreView(
-                            document: doc, score: score,
-                            selection: selection,
-                            voiceColors: voiceColors,
-                            playbackCursor: playbackEngine.currentCursor)
-                            .onTapGesture { loc in
-                                handleTap(at: loc, document: doc)
+                ScrollViewReader { proxy in
+                    ScrollView(.vertical) {
+                        if let doc = verticalDoc {
+                            ZStack(alignment: .topLeading) {
+                                ScoreView(
+                                    document: doc, score: score,
+                                    selection: selection,
+                                    voiceColors: voiceColors,
+                                    playbackCursor: playbackEngine.currentCursor)
+                                    .onTapGesture { loc in
+                                        handleTap(at: loc, document: doc)
+                                    }
+                                VerticalSystemAnchors(document: doc)
                             }
                             .padding()
+                        }
+                    }
+                    .coordinateSpace(name: "vScroll")
+                    .onPreferenceChange(VerticalSystemFramesKey.self) { f in
+                        verticalSystemFrames = f
+                    }
+                    .onChange(of: playbackEngine.currentCursor) { newCursor in
+                        autoScrollVertical(
+                            cursor: newCursor,
+                            doc: verticalDoc,
+                            score: score,
+                            viewportHeight: geo.size.height,
+                            proxy: proxy)
                     }
                 }
                 .task(id: VerticalLayoutKey(
@@ -374,12 +404,23 @@ struct ContentViewMac: View {
                         magnification: $magnification,
                         documentScrollX: $horizontalScrollX,
                         documentScrollY: $horizontalScrollY,
+                        pendingScrollTarget: $pendingHorizontalScroll,
                         selection: selection,
                         voiceColors: voiceColors,
                         playbackCursor: playbackEngine.currentCursor,
                         onTap: { loc in
                             handleTap(at: loc, document: doc)
                         })
+                        .background(
+                            GeometryReader { hgeo in
+                                Color.clear
+                                    .onChange(of: playbackEngine.currentCursor) { newCursor in
+                                        autoScrollHorizontal(
+                                            cursor: newCursor, doc: doc,
+                                            score: score,
+                                            viewportWidth: hgeo.size.width)
+                                    }
+                            })
                     if horizontalScrollX > bracketHostingX {
                         StickyHeaderView(
                             document: doc,
@@ -578,6 +619,104 @@ struct ContentViewMac: View {
         }
     }
 
+    /// Re-evaluated on every cursor change (chord / rest level).
+    /// When the cursor's system has no overlap with the visible
+    /// band, scroll the nearest staff edge to the matching
+    /// viewport edge:
+    ///
+    ///   * Off-screen below → bottom staff bottom → viewport
+    ///     bottom.
+    ///   * Off-screen above → top staff top → viewport top.
+    ///
+    /// The system-overlap visibility check is itself the dedup:
+    /// once the scroll lands, the system overlaps the viewport
+    /// and subsequent chord / rest changes short-circuit.
+    private func autoScrollVertical(
+        cursor: ScoreCursor?,
+        doc: LayoutDocument?,
+        score: Score,
+        viewportHeight: CGFloat,
+        proxy: ScrollViewProxy
+    ) {
+        guard playbackEngine.state == .playing,
+              let cursor, let doc
+        else { return }
+        let mi = cursor.measureIndex
+        guard let sys = doc.systemIndex(forMeasureIndex: mi),
+              let frame = verticalSystemFrames[sys]
+        else { return }
+        // Any partial overhang triggers a scroll. When the anchor
+        // is taller than the viewport (nothing we can do), fall
+        // back to "any overlap" to avoid oscillating.
+        let fits = frame.height <= viewportHeight
+        let visible = fits
+            ? (frame.minY >= 0 && frame.maxY <= viewportHeight)
+            : (frame.maxY > 0 && frame.minY < viewportHeight)
+        if visible { return }
+        // Leave `pad` between the matching staff edge and viewport
+        // edge. Custom UnitPoint lets `scrollTo` build that gap
+        // directly — see iOS `paddedAnchor` for the derivation.
+        // `denom <= pad` → no room to keep pad without flipping
+        // direction; fall back to plain edge alignment.
+        let pad: CGFloat = 8 * doc.metrics.sp
+        let aboveViewport = frame.minY < 0
+        let denom = viewportHeight - frame.height
+        let frac: CGFloat
+        if denom <= pad {
+            frac = aboveViewport ? 0 : 1
+        } else if aboveViewport {
+            frac = pad / denom
+        } else {
+            frac = 1 - pad / denom
+        }
+        withAnimation(.easeInOut(duration: 0.25)) {
+            proxy.scrollTo(
+                VerticalSystemAnchorID(systemIndex: sys),
+                anchor: UnitPoint(x: 0.5, y: frac))
+        }
+    }
+
+    /// Same idea for horizontal mode: snap the measure to the
+    /// leading edge via the wrapper's pending-scroll target.
+    /// Goes through `MagnifyingScoreScrollView`'s
+    /// `pendingScrollTarget` binding, which animates with
+    /// `NSAnimationContext`.
+    private func autoScrollHorizontal(
+        cursor: ScoreCursor?,
+        doc: LayoutDocument,
+        score: Score,
+        viewportWidth: CGFloat
+    ) {
+        guard playbackEngine.state == .playing,
+              let cursor,
+              let cursorRect = doc.cursorFrame(for: cursor, in: score),
+              let origin = doc.measureOrigin(measureIndex: cursor.measureIndex)
+        else { return }
+        let inset = MagnifyingScoreScrollView.contentInset
+        // `horizontalScrollX` lives in document / clip-view coords;
+        // converting to doc coords removes the `inset`-padding
+        // around the score so we compare in the same frame as
+        // `cursorRect`. Pinch-zoom shrinks the doc-coord region
+        // visible inside the clip view: `clipView.bounds.size =
+        // clipView.frame.size / magnification`. So the visible
+        // doc-coord width is the screen-space `viewportWidth`
+        // divided by the live magnification.
+        let mag = max(0.01, magnification)
+        let visibleDocWidth = viewportWidth / mag
+        let visibleDocLeft = horizontalScrollX - inset
+        let visibleDocRight = visibleDocLeft + visibleDocWidth
+        let cursorVisible = cursorRect.minX >= visibleDocLeft
+            && cursorRect.maxX <= visibleDocRight
+        if cursorVisible { return }
+        // Target: measure leading edge so the measure lands at the
+        // visible leading edge after the scroll. Reads back through
+        // the clipView coord space (= horizontalScrollX's frame),
+        // which is offset from doc by `inset`.
+        let targetX = max(0, origin.x)
+        pendingHorizontalScroll = CGPoint(
+            x: targetX, y: horizontalScrollY)
+    }
+
     private func loadBundled() {
         guard
             let url = Bundle.main.url(
@@ -609,6 +748,7 @@ struct ContentViewMac: View {
             errorMessage = nil
             scoreVersion = UUID()
             selection = .none
+            pendingHorizontalScroll = nil
             // (Re)build samplers + timeline for this score. SoundFont
             // loading is potentially slow on first call (tens of ms
             // per file), so do it off-main; the score renders before
@@ -661,6 +801,11 @@ private struct MagnifyingScoreScrollView: NSViewRepresentable {
     /// scrolls vertically too — the sticky pane needs to ride the
     /// same offset so its clef stays glued to the staff lines.
     @Binding var documentScrollY: CGFloat
+    /// Programmatic scroll target in document coords. When set,
+    /// the wrapper animates the clip view to that point and
+    /// resets the binding to `nil`. Used by the playback auto-
+    /// scroll path during full-score playback.
+    @Binding var pendingScrollTarget: CGPoint?
     let selection: ScoreSelection
     let voiceColors: [Int: Color]
     let playbackCursor: ScoreCursor?
@@ -792,6 +937,28 @@ private struct MagnifyingScoreScrollView: NSViewRepresentable {
             && abs(nsView.magnification - magnification) > 0.001 {
             nsView.magnification = magnification
         }
+
+        // Programmatic scroll-to (auto-follow during playback).
+        // The `pendingScrollTarget != lastHandledScrollTarget` check
+        // makes this a one-shot per request: SwiftUI re-evaluates
+        // this body on every body input change, so without the
+        // guard we'd re-issue the animation each time.
+        if let target = pendingScrollTarget,
+           target != coord.lastHandledScrollTarget {
+            coord.lastHandledScrollTarget = target
+            let clipView = nsView.contentView
+            NSAnimationContext.runAnimationGroup({ ctx in
+                ctx.duration = 0.25
+                ctx.timingFunction = .init(name: .easeInEaseOut)
+                ctx.allowsImplicitAnimation = true
+                clipView.animator().setBoundsOrigin(target)
+                nsView.reflectScrolledClipView(clipView)
+            }, completionHandler: {
+                DispatchQueue.main.async { pendingScrollTarget = nil }
+            })
+        } else if pendingScrollTarget == nil {
+            coord.lastHandledScrollTarget = nil
+        }
     }
 
     func makeCoordinator() -> Coordinator {
@@ -813,6 +980,11 @@ private struct MagnifyingScoreScrollView: NSViewRepresentable {
         /// value into the SwiftUI binding so the sticky pane's
         /// scaleEffect tracks the score live.
         var isLiveMagnifying = false
+        /// Last `pendingScrollTarget` value the coordinator has
+        /// already animated to. Compared against the current binding
+        /// in `updateNSView` so the same request isn't re-issued on
+        /// every body re-eval.
+        var lastHandledScrollTarget: CGPoint?
         /// KVO observation of `NSScrollView.magnification`. Active
         /// only between will-start and did-end live magnification —
         /// AppKit fires no "during" notification, so we observe the
