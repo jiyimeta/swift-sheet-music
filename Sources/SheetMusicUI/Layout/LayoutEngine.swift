@@ -34,7 +34,25 @@ public enum LayoutEngine {
             melismaContinuations: melismas,
             effectiveMelismaTicks: effectiveMelismaTicks
         )
-        let systems = packSystems(context: context)
+        let packedSystems = packSystems(context: context)
+        // Title block at the top of the document. Built first so we
+        // know how much vertical space to leave above the first
+        // system.
+        let titleFrame: LayoutTitleFrame? = {
+            guard options.includeTitleFrame, let src = score.titleFrame
+            else { return nil }
+            return buildTitleFrame(
+                source: src,
+                metrics: metrics,
+                docWidth: max(availableWidth,
+                    packedSystems.reduce(CGFloat(0)) { acc, s in
+                        max(acc, s.origin.x + s.size.width)
+                    }))
+        }()
+        let yShift = titleFrame?.height ?? 0
+        let systems = yShift > 0
+            ? packedSystems.map { shift($0, byY: yShift) }
+            : packedSystems
         // Use the actual rendered system extent — not `availableWidth`,
         // which may be larger than the content needs.
         let totalWidth = systems.reduce(CGFloat(0)) { acc, system in
@@ -56,7 +74,8 @@ public enum LayoutEngine {
         let firstPass = LayoutDocument(
             size: CGSize(width: docWidth, height: totalHeight),
             systems: systemsWithSpanners,
-            metrics: metrics
+            metrics: metrics,
+            titleFrame: titleFrame
         )
         let ties = resolveTies(for: firstPass, score: score)
         let systemsWithTies = attachTies(
@@ -64,8 +83,101 @@ public enum LayoutEngine {
         return LayoutDocument(
             size: firstPass.size,
             systems: systemsWithTies,
-            metrics: metrics
+            metrics: metrics,
+            titleFrame: titleFrame
         )
+    }
+
+    private static func shift(
+        _ system: LayoutSystem, byY dy: CGFloat
+    ) -> LayoutSystem {
+        LayoutSystem(
+            origin: CGPoint(
+                x: system.origin.x, y: system.origin.y + dy),
+            size: system.size,
+            measures: system.measures,
+            staffOrigins: system.staffOrigins,
+            partLabels: system.partLabels,
+            spanners: system.spanners)
+    }
+
+    private static func buildTitleFrame(
+        source: ScoreFrame,
+        metrics: StaffMetrics,
+        docWidth: CGFloat
+    ) -> LayoutTitleFrame {
+        // MuseScore's `<height>` is in spatium units. Clamp to a
+        // tiny minimum so a malformed VBox doesn't drop text on top
+        // of the first staff, but otherwise honour what the score
+        // declared (and any `<offset>` overrides on individual
+        // texts).
+        let frameHeight = max(
+            metrics.sp * 4,
+            source.heightSp * metrics.sp)
+        let center = docWidth / 2
+
+        // MuseScore stores offsets for the title-block styles in
+        // millimetres (`OffsetType::ABS` — see `styledef.cpp`).
+        // Conversion to typographic points: 72 pt ÷ 25.4 mm.  We use
+        // the same conversion for both the per-text override
+        // (`<offset>` in `.mscx`) and the styledef defaults (e.g.
+        // `subTitleOffset = PointF(0, 10)` ⇒ 10 mm below VBox top).
+        let mmToPt: CGFloat = 72.0 / 25.4
+
+        var laidOut: [LayoutFrameText] = []
+        for (idx, t) in source.texts.enumerated() {
+            // Defaults sourced from MuseScore's
+            // `engraving/style/styledef.cpp`:
+            //   Title    — Align(HCENTER, TOP),    offset (0,  0) mm, font 22pt
+            //   Subtitle — Align(HCENTER, TOP),    offset (0, 10) mm, font 14pt
+            //   Composer — Align(RIGHT,   BOTTOM), offset (0,  0) mm, font 10pt
+            //   Lyricist — Align(LEFT,    BOTTOM), offset (0,  0) mm, font 10pt
+            // All four are `FontStyle::Normal` (no bold / italic).
+            // `<Text>` inline `<b>` / `<font>` markup is stripped
+            // at parse time.
+            let fontSize: CGFloat
+            let baseY: CGFloat
+            let baseX: CGFloat
+            let anchor: LayoutFrameText.Anchor
+            switch t.style {
+            case .title:
+                fontSize = 22
+                baseY = 0
+                baseX = center
+                anchor = .top
+            case .subtitle:
+                fontSize = 14
+                baseY = 10 * mmToPt
+                baseX = center
+                anchor = .top
+            case .composer:
+                fontSize = 10
+                baseY = frameHeight
+                baseX = docWidth
+                anchor = .bottomTrailing
+            case .lyricist:
+                fontSize = 10
+                baseY = frameHeight
+                baseX = 0
+                anchor = .bottomLeading
+            case .other:
+                fontSize = 10
+                baseY = 10 * mmToPt
+                    + CGFloat(idx) * 4 * mmToPt
+                baseX = center
+                anchor = .top
+            }
+            let dx = (t.offsetMm?.x ?? 0) * mmToPt
+            let dy = (t.offsetMm?.y ?? 0) * mmToPt
+            laidOut.append(LayoutFrameText(
+                text: t.text,
+                style: t.style,
+                position: CGPoint(x: baseX + dx, y: baseY + dy),
+                fontSize: fontSize,
+                anchor: anchor))
+        }
+        return LayoutTitleFrame(
+            height: frameHeight, texts: laidOut)
     }
 
     // MARK: - Context

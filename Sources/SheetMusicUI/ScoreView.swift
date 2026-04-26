@@ -117,8 +117,18 @@ public struct ScoreView: View {
         // notehead positions drift rightward off the LayoutEngine's
         // coordinates while ScoreHitTester stays at x=0 — hit zones
         // then fall slightly left of the noteheads.
+        // `LazyVStack` so only the visible systems instantiate and
+        // paint their CALayer trees — a 100-system score would
+        // otherwise render every system on every body re-eval and
+        // grind the scroll to a halt. SystemLayerView reports a
+        // fixed frame, so the lazy container can size each row
+        // without rendering it first.
         ZStack(alignment: .topLeading) {
-            VStack(alignment: .leading, spacing: 0) {
+            LazyVStack(alignment: .leading, spacing: 0) {
+                if let titleFrame = doc.titleFrame {
+                    TitleFrameView(
+                        frame: titleFrame, width: doc.size.width)
+                }
                 ForEach(Array(doc.systems.enumerated()), id: \.offset) { _, sys in
                     SystemLayerView(
                         system: sys, metrics: doc.metrics,
@@ -149,9 +159,15 @@ public struct ScoreView: View {
             // layer tree is what makes future incremental updates
             // (selection highlight, playback cursor) cheap.
             ZStack(alignment: .topLeading) {
-                SystemLayerView(
-                    system: system, metrics: doc.metrics,
-                    selection: selection)
+                VStack(alignment: .leading, spacing: 0) {
+                    if let titleFrame = doc.titleFrame {
+                        TitleFrameView(
+                            frame: titleFrame, width: doc.size.width)
+                    }
+                    SystemLayerView(
+                        system: system, metrics: doc.metrics,
+                        selection: selection)
+                }
                 PlaybackCursorView(
                     cursor: playbackCursor,
                     document: doc,
