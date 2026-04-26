@@ -135,6 +135,12 @@ distributed as part of the SwiftPM package (consumers receive only
 When researching a MuseScore behaviour, read it from the submodule and
 implement independently in Swift; do not copy code structures verbatim.
 
+`docs/musescore-engraving-reference.md` collects findings that recur
+across porting work — coordinate units (DPI / DPMM / spatium),
+`<offset>` / `OffsetType` semantics, frame layout, title-block style
+defaults, read-path tiers. Consult / extend it before re-spelunking
+the same C++ files.
+
 ## Things not to do
 
 - Don't add the MuseScore submodule contents into the SwiftPM package
