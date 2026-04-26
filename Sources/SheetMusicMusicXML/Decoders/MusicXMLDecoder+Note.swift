@@ -156,15 +156,21 @@ enum MusicXMLNoteDecoder {
     }
 
     /// MusicXML `<lyric>` children. `<lyric number="N"><text>…</text></lyric>`.
-    private static func decodeLyrics(_ node: XMLTreeNode) -> [String] {
-        var map: [Int: String] = [:]
+    /// `<syllabic>` classifies word-internal syllables; `<extend/>`
+    /// marks a melisma (we leave `ticks` at 0 because MusicXML does
+    /// not spell the extent — callers that need a melisma length can
+    /// derive it from the covered notes).
+    private static func decodeLyrics(_ node: XMLTreeNode) -> [Lyric] {
+        var map: [Int: Lyric] = [:]
         for lyricNode in node.all("lyric") {
             let verse = Int(lyricNode.attributes["number"] ?? "1") ?? 1
-            if let text = lyricNode.first("text")?.text {
-                map[verse - 1] = text   // MusicXML is 1-indexed
-            }
+            let text = lyricNode.first("text")?.text ?? ""
+            let syllabic = (lyricNode.first("syllabic")?.text)
+                .flatMap(Syllabic.init(mscxValue:)) ?? .single
+            map[verse - 1] = Lyric(
+                text: text, syllabic: syllabic, ticks: 0)
         }
         guard let maxVerse = map.keys.max() else { return [] }
-        return (0...maxVerse).map { map[$0] ?? "" }
+        return (0...maxVerse).map { map[$0] ?? Lyric(text: "") }
     }
 }

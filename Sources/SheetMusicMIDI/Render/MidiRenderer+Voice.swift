@@ -126,7 +126,7 @@ extension MidiRenderer {
                 )
                 events.append(TimedMidiEvent(tick: localTick, event: .meta(meta)))
             }
-        case .clef, .barLine, .spanner, .measureRepeat:
+        case .clef, .barLine, .spanner, .measureRepeat, .staffText:
             return
         case let .tempo(tempo):
             currentTempoBps = tempo.beatsPerSecond

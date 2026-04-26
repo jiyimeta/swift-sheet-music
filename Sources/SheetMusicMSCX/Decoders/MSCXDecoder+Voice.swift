@@ -73,6 +73,12 @@ extension Voice {
             case "Fermata":
                 let subtype = child.first("subtype")?.text ?? ""
                 elements.append(.fermata(Fermata(subtype: subtype)))
+            case "StaffText":
+                elements.append(.staffText(
+                    try StaffText.decode(child, isSystemText: false)))
+            case "SystemText":
+                elements.append(.staffText(
+                    try StaffText.decode(child, isSystemText: true)))
             default:
                 // Unknown elements are silently ignored. Decoder is permissive on purpose
                 // — once we see what features individual MIDI tests actually need, they
