@@ -19,10 +19,43 @@ The package is split into focused libraries; pick what you need.
 | `SheetMusicMSCX` | MuseScore file I/O: `.mscx` parsing and `.mscz` read/write (main score only). |
 | `SheetMusicMIDI` | In-memory MIDI model, score → MIDI rendering, SMF read/write. |
 | `SheetMusicUI` | SwiftUI read-only notation viewer (macOS 15+), bundles Bravura SMuFL font (SIL OFL). |
+| `SheetMusicAudio` | AVAudioEngine-backed playback. Per-staff `AVAudioUnitSampler`s, `SoundfontResolver` protocol, single-note preview, and full timeline-driven playback (chord-by-chord cursor via `PlaybackEngine.currentItem`). |
 
-Future libraries on the roadmap: `SheetMusicPlayback` (AVAudioEngine
-MIDI player), and additional `SheetMusic<FormatName>` libraries (e.g.
-PDF) as they're added.
+Future libraries on the roadmap: additional `SheetMusic<FormatName>`
+libraries (e.g. PDF) as they're added.
+
+### SoundFonts
+
+`SheetMusicAudio` doesn't ship audio samples — you supply them via
+`SoundfontResolver`. The example app expects:
+
+* **Per-(bank, program) SF2 files** at `Sounds/BBB_PPP.sf2`, where
+  `BBB` and `PPP` are three-digit decimal numbers (e.g.
+  `Sounds/000_000.sf2` is bank 0 / program 0 = Acoustic Grand Piano).
+  Loaded lazily so iPhone memory stays low — only the patches the
+  score actually uses end up resident.
+* **`Sounds/MuseScore_General.sf2`** — full GM SoundFont fallback
+  for any (bank, program) without a dedicated file.
+
+Both are distributed via GitHub Releases (the SF2 files are too
+large to track in git). The split per-program SF2 set lives at
+[jiyimeta/musescore-general-sf2-split](https://github.com/jiyimeta/musescore-general-sf2-split).
+Download the release archive, unzip into
+`Example/SheetMusicExample/Sounds/`, regenerate the project
+(`xcodegen` from `Example/`), and rebuild — the example app picks
+them up automatically.
+
+> `AVAudioUnitSampler` only reads `.sf2` and `.dls`, **not** `.sf3`
+> (SF3 = SoundFont with OGG-compressed samples, which the system
+> sampler does not decode). If you start from an `.sf3` distribution
+> like the upstream MuseScore_General, convert to `.sf2` first
+> (e.g. via Polyphone or `sf3convert`).
+
+Without the soundfonts the example still runs — the playback
+engine just stays silent, and you'll see the score without hearing
+it. Library consumers who want a different layout (downloading at
+runtime, bundling a smaller subset, etc.) implement
+`SoundfontResolver` themselves.
 
 ## Example
 
@@ -61,6 +94,45 @@ import SheetMusicUI
 let score = try SheetMusic.loadScore(mscxData: data)
 ScoreView(score: score)
 ```
+
+To play a score with a moving cursor (macOS 13+ / iOS 16+):
+
+```swift
+import SheetMusic
+import SheetMusicAudio
+import SheetMusicUI
+import SwiftUI
+
+struct PlayerView: View {
+    let score: Score
+    @StateObject private var engine = PlaybackEngine(
+        soundfontResolver: MyResolver())
+
+    var body: some View {
+        VStack {
+            ScoreView(
+                score: score,
+                playbackCursor: engine.currentItem)
+            HStack {
+                Button(engine.state == .playing ? "Pause" : "Play") {
+                    engine.state == .playing
+                        ? engine.pause()
+                        : engine.play(in: score)
+                }
+                Button("Stop") { engine.stop() }
+            }
+        }
+        .task {
+            try? engine.prepare(score: score)
+        }
+    }
+}
+```
+
+`engine.currentItem` is a `@Published` `ScoreItemID?` that ticks
+chord-by-chord during playback; `ScoreView` translates it into a
+tall translucent rectangle spanning every staff in the system that
+contains the current item.
 
 ## Coverage
 

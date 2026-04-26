@@ -369,6 +369,234 @@ enum Samples {
             staves: [StaffContent(id: 1, measures: [m])])
     }
 
+    // MARK: - 21 rest/note overlap reproduction (user-reported)
+
+    /// Reproduces the user's reported alignment bug.  Staff 1 carries
+    /// many 16ths that include ticks not present in staff 2; staff 2
+    /// has a sparser rhythm whose total voice-weight is SMALLER than
+    /// staff 1's.  With naive max-of-voice-fractions spacing, staff
+    /// 2's inflated fractions would push tick 1200's x to the right
+    /// of tick 1320's x — causing staff 1's rest at 1320 to render
+    /// behind its own note at 1200.  After aggregated-weight spacing,
+    /// every tick is monotonic across every voice.
+    static var restNoteOverlapRepro: Score {
+        let c4 = Note(pitch: 60, tpc: 14)
+        let s1: [VoiceElement] = [
+            .clef(Clef(concertClefType: "G")),
+            .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+            .rest(Rest(duration: .half)),
+            .rest(Rest(duration: .sixteenth)),
+            .chord(Chord(duration: .sixteenth, notes: [c4])),
+            .chord(Chord(duration: .sixteenth, notes: [c4])),
+            .rest(Rest(duration: .sixteenth)),
+            .rest(Rest(duration: .sixteenth)),
+            .rest(Rest(duration: .sixteenth)),
+            .rest(Rest(duration: .sixteenth)),
+            .rest(Rest(duration: .sixteenth)),  // pad to full 1920
+        ]
+        let s2: [VoiceElement] = [
+            .clef(Clef(concertClefType: "G")),
+            .rest(Rest(duration: .half)),
+            .rest(Rest(duration: .sixteenth)),
+            .chord(Chord(duration: .sixteenth, notes: [c4])),
+            .rest(Rest(duration: .eighth)),
+            .chord(Chord(
+                duration: NoteDuration.eighth.dotted(1),
+                notes: [c4])),
+            .rest(Rest(duration: .sixteenth)),
+        ]
+        let part = Part(
+            id: "P1",
+            trackName: "Duo",
+            instrument: Instrument(
+                id: "synth",
+                longName: "Duo", shortName: "D."))
+        return Score(
+            division: 480,
+            parts: [part],
+            staves: [
+                StaffContent(
+                    id: 1, measures: [Measure(voices: [Voice(elements: s1)])]),
+                StaffContent(
+                    id: 2, measures: [Measure(voices: [Voice(elements: s2)])]),
+            ])
+    }
+
+    // MARK: - 20 multi-voice whole-rest placement
+
+    /// Voice 0 runs four quarter notes; voice 1 holds a whole rest.
+    /// A single-voice whole rest is conventionally centered in the
+    /// measure, but in a multi-voice measure that centering would
+    /// drop the rest exactly on top of one of voice 0's notes.  The
+    /// whole rest therefore anchors to its tick (0) and uses the
+    /// voice's y-offset to stay clear of the melody.
+    static var multiVoiceWholeRest: Score {
+        let c4 = Note(pitch: 60, tpc: 14)
+        let m = Measure(voices: [
+            Voice(elements: [
+                .clef(Clef(concertClefType: "G")),
+                .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+                .chord(Chord(duration: .quarter, notes: [c4])),
+                .chord(Chord(duration: .quarter, notes: [c4])),
+                .chord(Chord(duration: .quarter, notes: [c4])),
+                .chord(Chord(duration: .quarter, notes: [c4])),
+            ]),
+            Voice(elements: [
+                .rest(Rest(duration: .whole)),
+            ]),
+        ])
+        return Score(
+            division: 480,
+            parts: [treblePart()],
+            staves: [StaffContent(id: 1, measures: [m])])
+    }
+
+    // MARK: - 19 two-voice rest / note alignment (diagnostic)
+
+    /// Two voices in one staff, with voice 0 carrying a busy 16th-note
+    /// pattern and voice 1 alternating kick notes and rests. Every
+    /// voice-1 rest shares a tick with a voice-0 note; the two must
+    /// coexist without visual overlap. This mirrors MuseScore's
+    /// "drum set" notation where melody (voice 0) and rhythm (voice 1)
+    /// are written on the same staff.
+    static var twoVoiceRestNote: Score {
+        let c4 = Note(pitch: 60, tpc: 14)
+        let b3 = Note(pitch: 59, tpc: 12)
+        let c3 = Note(pitch: 48, tpc: 14)
+        let v0: [VoiceElement] = [
+            .chord(Chord(duration: .eighth, notes: [c4])),
+            .chord(Chord(duration: .sixteenth, notes: [b3])),
+            .chord(Chord(duration: .sixteenth, notes: [c4])),
+            .chord(Chord(duration: .sixteenth, notes: [b3])),
+            .chord(Chord(duration: .sixteenth, notes: [c4])),
+            .chord(Chord(duration: .eighth, notes: [c4])),
+            .chord(Chord(duration: .sixteenth, notes: [b3])),
+            .chord(Chord(duration: .sixteenth, notes: [c4])),
+            .chord(Chord(duration: .sixteenth, notes: [b3])),
+            .chord(Chord(duration: .sixteenth, notes: [c4])),
+            .chord(Chord(duration: .quarter, notes: [c4])),
+        ]
+        let v1: [VoiceElement] = [
+            .chord(Chord(duration: .eighth, notes: [c3])),
+            .rest(Rest(duration: .eighth)),
+            .rest(Rest(duration: .eighth)),
+            .chord(Chord(duration: .eighth, notes: [c3])),
+            .rest(Rest(duration: .quarter)),
+            .chord(Chord(duration: .quarter, notes: [c3])),
+        ]
+        let leadingV0: [VoiceElement] = [
+            .clef(Clef(concertClefType: "G")),
+            .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+        ] + v0
+        let m = Measure(voices: [
+            Voice(elements: leadingV0),
+            Voice(elements: v1),
+        ])
+        return Score(
+            division: 480,
+            parts: [treblePart()],
+            staves: [StaffContent(id: 1, measures: [m])])
+    }
+
+    // MARK: - 18 cross-staff alignment (shared tick columns)
+
+    /// Two staves with different rhythms but a shared duration envelope.
+    /// Staff 1 plays `8th + 16th + 16th` every beat; staff 2 plays
+    /// `dotted 8th + 16th` every beat.  The 16ths at the end of each
+    /// beat (tick 360, 840, 1320, 1800) must line up vertically across
+    /// the two staves — every notehead in staff 2 shares an x with the
+    /// matching notehead in staff 1.
+    static var multiStaffAlignment: Score {
+        let c4 = Note(pitch: 60, tpc: 14)
+        let d4 = Note(pitch: 62, tpc: 16)
+        let e4 = Note(pitch: 64, tpc: 18)
+        let c3 = Note(pitch: 48, tpc: 14)
+        let e3 = Note(pitch: 52, tpc: 18)
+
+        // Staff 1 — 8th + 16th + 16th per beat ×4.
+        var rhElems: [VoiceElement] = [
+            .clef(Clef(concertClefType: "G")),
+            .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+        ]
+        for _ in 0..<4 {
+            rhElems.append(.chord(Chord(duration: .eighth, notes: [c4])))
+            rhElems.append(.chord(Chord(duration: .sixteenth, notes: [d4])))
+            rhElems.append(.chord(Chord(duration: .sixteenth, notes: [e4])))
+        }
+
+        // Staff 2 — dotted 8th + 16th per beat ×4.
+        var lhElems: [VoiceElement] = [
+            .clef(Clef(concertClefType: "F")),
+        ]
+        for _ in 0..<4 {
+            lhElems.append(.chord(Chord(
+                duration: NoteDuration.eighth.dotted(1),
+                notes: [c3])))
+            lhElems.append(.chord(Chord(
+                duration: .sixteenth, notes: [e3])))
+        }
+
+        let rh = Measure(voices: [Voice(elements: rhElems)])
+        let lh = Measure(voices: [Voice(elements: lhElems)])
+        let part = Part(
+            id: "P1",
+            trackName: "Piano",
+            instrument: Instrument(
+                id: "pno", longName: "Piano", shortName: "Pno."))
+        return Score(
+            division: 480,
+            parts: [part],
+            staves: [
+                StaffContent(id: 1, measures: [rh]),
+                StaffContent(id: 2, measures: [lh]),
+            ])
+    }
+
+    // MARK: - 17 beat boundary with 16ths (secondary-beam rule)
+
+    static var beatBoundary16ths: Score {
+        let c4 = Note(pitch: 60, tpc: 14)
+        let e4 = Note(pitch: 64, tpc: 18)
+        let c16 = Chord(duration: .sixteenth, notes: [c4])
+        let e16 = Chord(duration: .sixteenth, notes: [e4])
+
+        // Measure 1 — 16 consecutive 16ths.  Secondary beams (level 2
+        // or deeper) break at every beat boundary even when both sides
+        // are uniform at the same level, so the bar renders as
+        // 4+4+4+4 rather than one run of 16 or two half-bar runs of 8.
+        let m1 = Measure(voices: [Voice(elements: [
+            .clef(Clef(concertClefType: "G")),
+            .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+            .chord(c16), .chord(c16), .chord(c16), .chord(c16),
+            .chord(c16), .chord(c16), .chord(c16), .chord(c16),
+            .chord(c16), .chord(c16), .chord(c16), .chord(c16),
+            .chord(c16), .chord(c16), .chord(c16), .chord(c16),
+        ])])
+
+        // Measure 2 — sparse 16th figure spanning beats 3 and 4.
+        // The two consecutive 16th notes that straddle the beat
+        // boundary must NOT be beamed together, even though they are
+        // the only unbroken pair in that stretch.  Each renders as a
+        // lone flagged note; only the closing 16+16 inside beat 4
+        // stays beamed.
+        let m2 = Measure(voices: [Voice(elements: [
+            .rest(Rest(duration: .half)),
+            .rest(Rest(duration: .sixteenth)),
+            .chord(c16),
+            .rest(Rest(duration: .sixteenth)),
+            .chord(c16),
+            .chord(e16),
+            .rest(Rest(duration: .sixteenth)),
+            .chord(c16),
+            .chord(e16),
+        ])])
+
+        return Score(
+            division: 480,
+            parts: [treblePart()],
+            staves: [StaffContent(id: 1, measures: [m1, m2])])
+    }
+
     // MARK: - 12 dotted durations (single + double dot)
 
     static var dottedDurations: Score {
