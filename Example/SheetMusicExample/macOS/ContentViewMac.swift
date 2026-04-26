@@ -1,7 +1,15 @@
 #if os(macOS)
+import AppKit
 import SheetMusic
+import SheetMusicAudio
 import SheetMusicUI
 import SwiftUI
+
+private enum LayoutMode: String {
+    case horizontal = "Horizontal"
+    case vertical = "Vertical"
+    case paged = "Page"
+}
 
 @available(macOS 15.0, *)
 struct ContentViewMac: View {
@@ -9,9 +17,61 @@ struct ContentViewMac: View {
     @State private var sourceName = "(none)"
     @State private var errorMessage: String?
     @State private var magnification: CGFloat = 1.0
-    @State private var steadyMagnification: CGFloat = 1.0
-    @State private var zoomAnchor: UnitPoint = .center
-    @State private var verticalLayout = false
+    @State private var layoutMode: LayoutMode = .horizontal
+    @State private var pageIndex = 0
+    @State private var totalPages = 1
+    @State private var selection: ScoreSelection = .none
+    /// Pre-computed layout for the current vertical viewport width.
+    /// Rebuilt on width / score / mode changes; passed into both
+    /// ScoreView (for rendering) and ScoreHitTester (for tap
+    /// mapping), so layout runs at most once per change instead of
+    /// twice per click.
+    @State private var verticalDoc: LayoutDocument?
+    /// Pre-computed layout for horizontal mode (one long system at
+    /// natural content width). Rebuilt on mode / score changes.
+    @State private var horizontalDoc: LayoutDocument?
+    /// Per-measure clef / key / time / part-label state. Cached so
+    /// the sticky header doesn't recompute it on every body re-eval
+    /// (an O(measures × staves) walk that adds up during pinch /
+    /// scroll). Refilled when a new score loads.
+    @State private var horizontalContexts: [LayoutMeasureContext] = []
+    /// Live document-space X of the visible left edge in horizontal
+    /// mode. Drives the sticky header overlay.
+    @State private var horizontalScrollX: CGFloat = 0
+    /// Live document-space Y of the visible top edge. When the user
+    /// has zoomed in past the viewport height, the score scrolls
+    /// vertically; the sticky pane offsets by this value so its
+    /// clef stays attached to the staff.
+    @State private var horizontalScrollY: CGFloat = 0
+    /// Bumped whenever a new score is loaded so that `.task(id:)`
+    /// observers know to rebuild their layouts even if width and
+    /// mode did not change.
+    @State private var scoreVersion = UUID()
+    /// Audio engine for single-note preview + full-score playback.
+    /// Held as `@StateObject` so SwiftUI re-evaluates the play / pause
+    /// button label and the playback cursor whenever the engine's
+    /// `@Published` `state` / `currentCursor` change.
+    @StateObject private var playbackEngine = PlaybackEngine(
+        soundfontResolver: BundledSoundfontResolver())
+    /// Local NSEvent monitor that turns the spacebar into a play /
+    /// pause toggle (MuseScore convention). Stored so we can remove
+    /// it on disappear.
+    @State private var keyMonitor: Any?
+
+    /// Per-voice highlight colors (MuseScore convention: voice 1 blue,
+    /// voice 2 green, voice 3 orange, voice 4 purple). The library
+    /// provides no defaults — this dictionary lives entirely in the app.
+    private let voiceColors: [Int: Color] = [
+        0: .blue,
+        1: .green,
+        2: .orange,
+        3: .purple
+    ]
+
+    private static let verticalOptions = ScoreViewOptions(
+        staffSize: 18, systemGap: 16, wrapToViewWidth: true)
+    private static let horizontalOptions = ScoreViewOptions(
+        staffSize: 28, systemGap: 40, wrapToViewWidth: false)
 
     var body: some View {
         NavigationSplitView {
@@ -21,24 +81,79 @@ struct ContentViewMac: View {
                         loadBundled()
                     }
                 }
+                Section("Playback") {
+                    HStack {
+                        Button {
+                            togglePlayback()
+                        } label: {
+                            Image(systemName: playbackEngine.state == .playing
+                                ? "pause.fill" : "play.fill")
+                        }
+                        .disabled(score == nil)
+
+                        Button {
+                            playbackEngine.stop()
+                        } label: {
+                            Image(systemName: "stop.fill")
+                        }
+                        .disabled(playbackEngine.state == .stopped)
+
+                        Button {
+                            playbackEngine.isMetronomeEnabled.toggle()
+                        } label: {
+                            Image(systemName: playbackEngine.isMetronomeEnabled
+                                ? "metronome.fill" : "metronome")
+                        }
+                        .help("Metronome (toggles during playback)")
+
+                        Spacer()
+
+                        Text(playbackStateLabel)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                    Text("Space = play / pause")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
                 Section("Layout") {
-                    Picker("Scroll", selection: $verticalLayout) {
+                    Picker("Mode", selection: $layoutMode) {
                         Label("Horizontal", systemImage: "arrow.left.and.right")
-                            .tag(false)
+                            .tag(LayoutMode.horizontal)
                         Label("Vertical", systemImage: "arrow.up.and.down")
-                            .tag(true)
+                            .tag(LayoutMode.vertical)
+                        Label("Page", systemImage: "book.pages")
+                            .tag(LayoutMode.paged)
                     }
                     .pickerStyle(.inline)
                 }
+                if layoutMode == .paged {
+                    Section("Page") {
+                        Text("\(min(pageIndex, totalPages - 1) + 1) / \(totalPages)")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                        HStack {
+                            Button("Prev") {
+                                if pageIndex > 0 { pageIndex -= 1 }
+                            }
+                            .disabled(pageIndex <= 0)
+                            Button("Next") {
+                                if pageIndex < totalPages - 1 {
+                                    pageIndex += 1
+                                }
+                            }
+                            .disabled(pageIndex >= totalPages - 1)
+                        }
+                    }
+                }
                 Section("Zoom") {
-                    Text("\(Int(steadyMagnification * 100))%")
+                    Text("\(Int(magnification * 100))%")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                     Button("Reset (100%)") {
-                        steadyMagnification = 1.0
                         magnification = 1.0
                     }
-                    .disabled(steadyMagnification == 1.0)
+                    .disabled(abs(magnification - 1.0) < 0.001)
                 }
                 Section("State") {
                     Text(sourceName)
@@ -64,40 +179,287 @@ struct ContentViewMac: View {
             }
         }
         .onAppear(perform: loadBundled)
+        .onAppear(perform: installKeyMonitor)
+        .onDisappear(perform: removeKeyMonitor)
+    }
+
+    private var playbackStateLabel: String {
+        switch playbackEngine.state {
+        case .stopped: return "stopped"
+        case .playing: return "playing"
+        case .paused: return "paused"
+        }
+    }
+
+    private func togglePlayback() {
+        guard let score else { return }
+        switch playbackEngine.state {
+        case .playing:
+            playbackEngine.pause()
+        case .paused, .stopped:
+            // Cursor wins over selection: a cursor left behind by
+            // the last pause is the user's "current playback
+            // position", and a stale selection from before that
+            // pause shouldn't override it. The cursor is dropped
+            // explicitly by `handleTap` when the user makes a NEW
+            // selection — at that point we fall through to the
+            // selection branch.
+            let from: ScoreCursor? = playbackEngine.currentCursor
+                ?? selectionPlayFrom.map { .item($0) }
+            playbackEngine.play(from: from, in: score)
+        }
+    }
+
+    private var selectionPlayFrom: ScoreItemID? {
+        switch selection {
+        case .none: return nil
+        case .single(let id): return id
+        case .range(let anchor, let target):
+            // Whichever corner is earlier in playback time wins —
+            // shift-click order doesn't determine playback start.
+            return playbackEngine.earliest(of: [anchor, target])
+                ?? anchor
+        }
+    }
+
+    private func installKeyMonitor() {
+        guard keyMonitor == nil else { return }
+        // keyCode 49 is spacebar on every keyboard layout (it's a
+        // physical-key code). Skip auto-repeat so a held space
+        // doesn't toggle dozens of times per second.
+        keyMonitor = NSEvent.addLocalMonitorForEvents(
+            matching: .keyDown
+        ) { event in
+            if event.keyCode == 49 && !event.isARepeat {
+                togglePlayback()
+                return nil
+            }
+            return event
+        }
+    }
+
+    private func removeKeyMonitor() {
+        if let m = keyMonitor {
+            NSEvent.removeMonitor(m)
+            keyMonitor = nil
+        }
     }
 
     @ViewBuilder
     private func scoreContent(score: Score) -> some View {
-        let opts = ScoreViewOptions(
-            staffSize: verticalLayout ? 18 : 28,
-            systemGap: verticalLayout ? 16 : 40,
-            wrapToViewWidth: verticalLayout)
-        if verticalLayout {
-            ScrollView(.vertical) {
-                ScoreView(score: score, options: opts)
-                    .padding()
+        switch layoutMode {
+        case .vertical:
+            GeometryReader { geo in
+                let width = geo.size.width - 32
+                ScrollView(.vertical) {
+                    if let doc = verticalDoc {
+                        ScoreView(
+                            document: doc, score: score,
+                            selection: selection,
+                            voiceColors: voiceColors,
+                            playbackCursor: playbackEngine.currentCursor)
+                            .onTapGesture { loc in
+                                handleTap(at: loc, document: doc)
+                            }
+                            .padding()
+                    }
+                }
+                .task(id: VerticalLayoutKey(
+                    width: width, scoreVersion: scoreVersion)
+                ) {
+                    verticalDoc = LayoutEngine.layout(
+                        score: score,
+                        options: Self.verticalOptions,
+                        availableWidth: max(100, width))
+                }
+            }
+        case .horizontal:
+            // Native NSScrollView handles pinch-zoom-around-cursor
+            // reliably; a SwiftUI-only implementation fought
+            // ScrollPosition's asynchronous updates.
+            if let doc = horizontalDoc {
+                let inset = MagnifyingScoreScrollView.contentInset
+                // Bracket position in hostingView coords (unmag).
+                // The bracket sits half a space to the LEFT of the
+                // first staff's leading edge — see
+                // `ScoreCanvas.swift:91-104` /
+                // `ScoreLayerBuilder.drawBracket`. The sticky
+                // pane's visibility threshold and its horizontal
+                // shift both pivot on this position, so when the
+                // score's bracket reaches the viewport's leading
+                // edge the sticky takes over with its own bracket
+                // landing at the exact same viewport X.
+                let staffStartDocX = doc.systems.first?
+                    .staffOrigins.first?.x ?? 0
+                let bracketDocX = staffStartDocX
+                    - doc.metrics.sp / 2
+                let bracketHostingX = inset + bracketDocX
+                // Score-relative X (unmagnified) of the leftmost
+                // visible score pixel.
+                let scoreScrollX = max(
+                    0, horizontalScrollX - inset)
+                // The measure to display in the sticky is driven by
+                // its TRAILING edge, not the leftmost-visible pixel
+                // (which is hidden behind the pane). That way the
+                // displayed measure number flips the moment the
+                // NEXT measure's leading barline crosses the pane's
+                // trailing edge — i.e. the moment that measure
+                // becomes the first thing the user actually sees.
+                let stickyLookupX = doc.stickyTrailingX(
+                    scoreScrollX: scoreScrollX,
+                    measureContexts: horizontalContexts)
+                // Hide the sticky until the user has scrolled far
+                // enough that the score's bracket has reached the
+                // viewport's leading edge. Below that the bracket
+                // and everything that follows it are still in
+                // their natural unscrolled positions, so showing
+                // the sticky would only duplicate what's already
+                // on screen.
+                ZStack(alignment: .topLeading) {
+                    MagnifyingScoreScrollView(
+                        document: doc, score: score,
+                        magnification: $magnification,
+                        documentScrollX: $horizontalScrollX,
+                        documentScrollY: $horizontalScrollY,
+                        selection: selection,
+                        voiceColors: voiceColors,
+                        playbackCursor: playbackEngine.currentCursor,
+                        onTap: { loc in
+                            handleTap(at: loc, document: doc)
+                        })
+                    if horizontalScrollX > bracketHostingX {
+                        StickyHeaderView(
+                            document: doc,
+                            measureContexts: horizontalContexts,
+                            documentScrollX: stickyLookupX)
+                            // Match the score's `.padding(inset)`
+                            // exactly so vertical alignment is
+                            // identical: leading + top padding put
+                            // the sticky's white area at the same
+                            // (inset, inset) corner as the score's
+                            // own white background.
+                            .padding(.leading, inset)
+                            .padding(.top, inset)
+                            // Track vertical scroll: the sticky's
+                            // staves stay locked to the score's
+                            // staves when zoomed past the viewport
+                            // height. Horizontally, shift left by
+                            // `bracketHostingX` so the pane's
+                            // bracket renders at viewport x = 0 —
+                            // exactly where the score's bracket
+                            // sits at the visibility threshold,
+                            // making the transition seamless and
+                            // every other element (clef / key /
+                            // time / staff name) overlap its
+                            // counterpart at that scroll amount.
+                            .offset(
+                                x: -bracketHostingX,
+                                y: -horizontalScrollY)
+                            .scaleEffect(
+                                magnification, anchor: .topLeading)
+                            .allowsHitTesting(false)
+                    }
+                }
+                // Confine the sticky to the same rect the score
+                // scroll view occupies — without this, scaleEffect's
+                // overflow can paint into the sidebar / window
+                // toolbar, since SwiftUI doesn't auto-clip
+                // transformed content. `.contentShape` keeps tap
+                // hit-testing aligned with the visible region.
+                .clipped()
+                .contentShape(Rectangle())
+            }
+        case .paged:
+            let opts = ScoreViewOptions(
+                staffSize: 18, systemGap: 16,
+                wrapToViewWidth: true)
+            ZStack {
+                PagedScoreView(
+                    score: score, options: opts,
+                    pageIndex: $pageIndex,
+                    totalPages: $totalPages)
+                HStack(spacing: 0) {
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            if pageIndex > 0 { pageIndex -= 1 }
+                        }
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            if pageIndex < totalPages - 1 {
+                                pageIndex += 1
+                            }
+                        }
+                }
+            }
+            .overlay(alignment: .bottom) {
+                Text("\(min(pageIndex, totalPages - 1) + 1) / \(totalPages)")
+                    .font(.caption)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .background(.ultraThinMaterial, in: Capsule())
+                    .padding(.bottom, 8)
+            }
+        }
+    }
+
+    private func handleTap(at location: CGPoint, document: LayoutDocument) {
+        let tester = ScoreHitTester(document: document)
+        guard let target = tester.hitTest(at: location) else {
+            selection = .none
+            return
+        }
+        // A fresh, deliberate selection drops the playback cursor
+        // (no-op while playing). The next `togglePlayback` then
+        // reads the selection instead of the stale cursor.
+        playbackEngine.clearCursor()
+        let shift = NSEvent.modifierFlags.contains(.shift)
+
+        // Beam without shift: range-select every note under the beam
+        // run. This is our app-side policy — MuseScore would instead
+        // let you edit the beam's length; we don't need that here.
+        if case let .beam(notes) = target, !shift,
+           let first = notes.first, let last = notes.last {
+            selection = .range(
+                anchor: .note(first), target: .note(last))
+            return
+        }
+
+        // Everything else resolves to one "primary" ScoreItemID:
+        //   - note/rest: themselves
+        //   - stem/flag: the chord's first notehead
+        //   - beam (with shift): the chord's first notehead
+        let primary: ScoreItemID
+        switch target {
+        case .note(let id): primary = .note(id)
+        case .rest(let id): primary = .rest(id)
+        case .stem(let notes), .flag(let notes), .beam(let notes):
+            guard let first = notes.first else {
+                selection = .none
+                return
+            }
+            primary = .note(first)
+        }
+
+        if shift {
+            switch selection {
+            case .none:
+                selection = .single(primary)
+            case .single(let anchor):
+                selection = .range(anchor: anchor, target: primary)
+            case .range(let anchor, _):
+                selection = .range(anchor: anchor, target: primary)
             }
         } else {
-            ScrollView([.vertical, .horizontal]) {
-                ScoreView(score: score, options: opts)
-                    .scaleEffect(magnification, anchor: zoomAnchor)
-                    .padding()
-                    .simultaneousGesture(
-                        MagnifyGesture()
-                            .onChanged { value in
-                                zoomAnchor = value.startAnchor
-                                magnification = steadyMagnification
-                                    * value.magnification
-                            }
-                            .onEnded { value in
-                                steadyMagnification *=
-                                    value.magnification
-                                steadyMagnification = min(
-                                    max(steadyMagnification, 0.25),
-                                    4.0)
-                                magnification = steadyMagnification
-                            }
-                    )
+            selection = .single(primary)
+            // MuseScore-style: a click on a single note triggers a
+            // brief preview playback of just that note. Skip when
+            // shift is held (extending a range) or for non-note
+            // targets (rests, stems on chords without notes).
+            if case .note(let id) = primary, let score {
+                playbackEngine.playPreview(
+                    noteID: id, in: score)
             }
         }
     }
@@ -112,11 +474,316 @@ struct ContentViewMac: View {
         }
         do {
             let data = try Data(contentsOf: url)
-            score = try SheetMusic.loadScore(mscxData: data)
+            let loaded = try SheetMusic.loadScore(mscxData: data)
+            // Pre-build the horizontal layout synchronously. It
+            // doesn't depend on the viewport (uses the score's
+            // natural content width), so there's no reason to defer
+            // it to a .task — and an if-let gated Group can fail
+            // to trigger .task(id:) when it starts empty.
+            let hOpts = Self.horizontalOptions
+            horizontalDoc = LayoutEngine.layout(
+                score: loaded, options: hOpts,
+                availableWidth: LayoutEngine.naturalContentWidth(
+                    score: loaded, options: hOpts))
+            horizontalContexts = LayoutEngine.measureContexts(
+                for: loaded)
+            // Vertical layout still needs the viewport width, so
+            // it's built by a .task in the .vertical case.
+            verticalDoc = nil
+            score = loaded
             sourceName = url.lastPathComponent
             errorMessage = nil
+            scoreVersion = UUID()
+            selection = .none
+            // (Re)build samplers + timeline for this score. SoundFont
+            // loading is potentially slow on first call (tens of ms
+            // per file), so do it off-main; the score renders before
+            // the first preview is requested in practice. If no SF2
+            // is bundled the resolver returns nil and the engine
+            // stays silent.
+            let engine = playbackEngine
+            Task.detached(priority: .userInitiated) { [loaded] in
+                try? engine.prepare(score: loaded)
+            }
         } catch {
             errorMessage = "Failed: \(error.localizedDescription)"
+        }
+    }
+}
+
+private struct VerticalLayoutKey: Hashable {
+    let width: CGFloat
+    let scoreVersion: UUID
+}
+
+// MARK: - NSScrollView wrapper for pinch-to-zoom
+
+/// Hosts a SwiftUI `ScoreView` inside an `NSScrollView` that provides
+/// native pinch-to-zoom-around-cursor.
+///
+/// SwiftUI's own `ScrollView` + `MagnifyGesture` can be coordinated
+/// manually, but the commit-time scroll offset update fights
+/// concurrent content-size changes and the anchor drifts in
+/// small-content axes.  AppKit already solves this with
+/// `NSScrollView.allowsMagnification`, so we bridge instead of
+/// reinventing it.
+@available(macOS 15.0, *)
+private struct MagnifyingScoreScrollView: NSViewRepresentable {
+    /// Padding (in document/unmagnified points) around the ScoreView
+    /// inside the hosting view. Known so the click handler can
+    /// subtract it when converting hosting-view coords to doc coords.
+    static let contentInset: CGFloat = 16
+
+    let document: LayoutDocument
+    let score: Score
+    @Binding var magnification: CGFloat
+    /// Document-space X (unmagnified) of the visible left edge.
+    /// Updated live as the user scrolls so a sticky header pane
+    /// overlay can re-render its clef / key / time / measure-number
+    /// state to match the leftmost visible measure.
+    @Binding var documentScrollX: CGFloat
+    /// Document-space Y (unmagnified) of the visible top edge.
+    /// When the user zooms in past the viewport height, the score
+    /// scrolls vertically too — the sticky pane needs to ride the
+    /// same offset so its clef stays glued to the staff lines.
+    @Binding var documentScrollY: CGFloat
+    let selection: ScoreSelection
+    let voiceColors: [Int: Color]
+    let playbackCursor: ScoreCursor?
+    let onTap: (CGPoint) -> Void
+
+    private var rootView: AnyView {
+        AnyView(
+            ScoreView(
+                document: document, score: score,
+                selection: selection,
+                voiceColors: voiceColors,
+                playbackCursor: playbackCursor)
+                .padding(Self.contentInset))
+    }
+
+    func makeNSView(context: Context) -> NSScrollView {
+        let scrollView = NSScrollView()
+        scrollView.allowsMagnification = true
+        scrollView.minMagnification = 0.25
+        scrollView.maxMagnification = 4.0
+        scrollView.hasHorizontalScroller = true
+        scrollView.hasVerticalScroller = true
+        scrollView.autohidesScrollers = true
+        scrollView.borderType = .noBorder
+        scrollView.drawsBackground = false
+        scrollView.usesPredominantAxisScrolling = false
+
+        let hosting = NSHostingView(rootView: rootView)
+        hosting.translatesAutoresizingMaskIntoConstraints = false
+        scrollView.documentView = hosting
+
+        // Use an NSClickGestureRecognizer rather than SwiftUI's
+        // `.onTapGesture` because SwiftUI does NOT compensate for
+        // NSScrollView's magnification transform — the tap location
+        // it reports drifts off the clicked note as soon as zoom
+        // leaves 100 %. `gr.location(in:)` returns coords in the
+        // hosting view's own (unmagnified) coord space, so we land
+        // on the correct notehead at any zoom level.
+        let click = NSClickGestureRecognizer(
+            target: context.coordinator,
+            action: #selector(Coordinator.handleClick(_:)))
+        click.buttonMask = 0x1
+        hosting.addGestureRecognizer(click)
+
+        context.coordinator.hostingView = hosting
+        context.coordinator.magnificationBinding = $magnification
+        context.coordinator.documentScrollXBinding = $documentScrollX
+        context.coordinator.documentScrollYBinding = $documentScrollY
+        context.coordinator.contentInset = Self.contentInset
+        context.coordinator.onTap = onTap
+        // Seed the change-detection cache with the values we just
+        // installed in `rootView`, so `updateNSView`'s short-circuit
+        // doesn't re-render on the first benign re-eval.
+        context.coordinator.lastSelection = selection
+        context.coordinator.lastVoiceColors = voiceColors
+        context.coordinator.lastDocumentSize = document.size
+        context.coordinator.lastPlaybackCursor = playbackCursor
+
+        NotificationCenter.default.addObserver(
+            context.coordinator,
+            selector: #selector(Coordinator.magnificationDidEnd(_:)),
+            name: NSScrollView.didEndLiveMagnifyNotification,
+            object: scrollView)
+        // Pinch gesture: NSScrollView fires bounds-changed every
+        // frame while magnifying because clipView's size shrinks
+        // / grows around the magnification anchor. Each such
+        // notification would invalidate the SwiftUI binding and
+        // force a full body re-eval (and an NSHostingView refresh
+        // of the score), making pinch feel laggy on big scores.
+        // Track the live-magnify state so `boundsDidChange` can
+        // bail out until the gesture finishes — we then fire one
+        // catch-up update from `magnificationDidEnd`.
+        NotificationCenter.default.addObserver(
+            context.coordinator,
+            selector: #selector(Coordinator.willStartLiveMagnify(_:)),
+            name: NSScrollView.willStartLiveMagnifyNotification,
+            object: scrollView)
+
+        // Track the document-space scroll offset live. NSClipView's
+        // bounds change every frame during a scroll; we mirror it
+        // into the SwiftUI binding so an outer overlay (sticky
+        // header pane) can re-render in sync.
+        let clipView = scrollView.contentView
+        clipView.postsBoundsChangedNotifications = true
+        NotificationCenter.default.addObserver(
+            context.coordinator,
+            selector: #selector(Coordinator.boundsDidChange(_:)),
+            name: NSView.boundsDidChangeNotification,
+            object: clipView)
+
+        return scrollView
+    }
+
+    func updateNSView(_ nsView: NSScrollView, context: Context) {
+        let coord = context.coordinator
+        coord.magnificationBinding = $magnification
+        coord.documentScrollXBinding = $documentScrollX
+        coord.documentScrollYBinding = $documentScrollY
+        coord.onTap = onTap
+
+        // Skip the rootView reassignment when none of its inputs
+        // actually changed. SwiftUI re-evaluates this view's body
+        // every time `documentScrollX` updates (60-120 Hz during
+        // scroll), and assigning a fresh `AnyView` makes
+        // NSHostingView walk the SwiftUI tree top-to-bottom each
+        // time. Comparing `selection` and `voiceColors` is O(few
+        // entries), so this guard pays for itself many times over.
+        let selectionChanged = coord.lastSelection != selection
+        let voiceColorsChanged = coord.lastVoiceColors != voiceColors
+        let documentChanged = coord.lastDocumentSize != document.size
+        let cursorChanged = coord.lastPlaybackCursor != playbackCursor
+        if selectionChanged || voiceColorsChanged
+            || documentChanged || cursorChanged {
+            coord.hostingView?.rootView = rootView
+            coord.lastSelection = selection
+            coord.lastVoiceColors = voiceColors
+            coord.lastDocumentSize = document.size
+            coord.lastPlaybackCursor = playbackCursor
+        }
+
+        // Apply external magnification changes (e.g., sidebar reset
+        // button) without clobbering a value we just reported. Skip
+        // during live pinch — the gesture itself is driving
+        // `nsView.magnification`, and writing it back from a
+        // mid-gesture binding update would fight the gesture
+        // handler (causing visible jitter / glitches at frame
+        // boundaries).
+        if !coord.isLiveMagnifying
+            && abs(nsView.magnification - magnification) > 0.001 {
+            nsView.magnification = magnification
+        }
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(contentInset: Self.contentInset)
+    }
+
+    final class Coordinator: NSObject {
+        var contentInset: CGFloat
+        var hostingView: NSHostingView<AnyView>?
+        var magnificationBinding: Binding<CGFloat>?
+        var documentScrollXBinding: Binding<CGFloat>?
+        var documentScrollYBinding: Binding<CGFloat>?
+        var onTap: ((CGPoint) -> Void)?
+        /// Set while the user is actively pinching. The score's
+        /// NSScrollView drives its own magnification via Core
+        /// Animation; we mustn't write back to `nsView.magnification`
+        /// while the gesture is in progress (it would fight the
+        /// gesture handler), but we still want to mirror its current
+        /// value into the SwiftUI binding so the sticky pane's
+        /// scaleEffect tracks the score live.
+        var isLiveMagnifying = false
+        /// KVO observation of `NSScrollView.magnification`. Active
+        /// only between will-start and did-end live magnification —
+        /// AppKit fires no "during" notification, so we observe the
+        /// property directly to push live values into the SwiftUI
+        /// binding at gesture frame rate.
+        var magnificationObservation: NSKeyValueObservation?
+        /// Last `rootView` inputs we actually applied. Used to skip
+        /// the NSHostingView refresh when only the scroll binding
+        /// changed (the common case during scroll / pinch).
+        var lastSelection: ScoreSelection = .none
+        var lastVoiceColors: [Int: Color] = [:]
+        var lastDocumentSize: CGSize = .zero
+        var lastPlaybackCursor: ScoreCursor?
+
+        init(contentInset: CGFloat) {
+            self.contentInset = contentInset
+        }
+
+        @objc func handleClick(_ gr: NSClickGestureRecognizer) {
+            guard let hosting = hostingView else { return }
+            let local = gr.location(in: hosting)
+            // `.padding(inset)` shifts the ScoreView inside the
+            // hosting view by (inset, inset); subtract it back out
+            // to get coords in the document/ScoreView coord space.
+            let docPoint = CGPoint(
+                x: local.x - contentInset,
+                y: local.y - contentInset)
+            onTap?(docPoint)
+        }
+
+        @objc func willStartLiveMagnify(_ notification: Notification) {
+            isLiveMagnifying = true
+            // Observe the scroll view's magnification at gesture
+            // frame rate so the sticky pane's scaleEffect can
+            // track in lock-step. AppKit doesn't post a "during
+            // live magnify" notification — KVO is the only
+            // continuous signal available.
+            guard let scrollView = notification.object as? NSScrollView
+            else { return }
+            magnificationObservation = scrollView.observe(
+                \.magnification, options: [.new]
+            ) { [weak self] _, change in
+                guard let self, let value = change.newValue else { return }
+                self.magnificationBinding?.wrappedValue = value
+            }
+        }
+
+        @objc func magnificationDidEnd(_ notification: Notification) {
+            isLiveMagnifying = false
+            magnificationObservation = nil
+            guard let scrollView = notification.object as? NSScrollView
+            else { return }
+            magnificationBinding?.wrappedValue = scrollView.magnification
+            // Catch-up: any final bounds frame that landed on the
+            // exact gesture-end boundary should be reflected in the
+            // bindings.
+            let bounds = scrollView.contentView.bounds
+            documentScrollXBinding?.wrappedValue = bounds.origin.x
+            documentScrollYBinding?.wrappedValue = bounds.origin.y
+        }
+
+        @objc func boundsDidChange(_ notification: Notification) {
+            guard let clipView = notification.object as? NSClipView
+            else { return }
+            // Pass the raw clipView origin through, even when it
+            // briefly slips below zero (over-scroll up / left) or
+            // past the document end (over-scroll down / right).
+            // The sticky pane needs to follow the elastic bounce so
+            // it stays glued to the staves; clamping here would
+            // make it freeze at the document edge instead. The
+            // visibility check (`horizontalScrollX > 0`) and the
+            // measure lookup (`max(0, …)`) absorb negative values
+            // downstream without misbehaving.
+            //
+            // We let this fire during pinch as well: the sticky
+            // needs to follow the magnify-anchor's scroll shift
+            // live. Body re-evaluation stays cheap thanks to the
+            // cached `measureContexts`, the rootView short-circuit
+            // in `updateNSView`, and `_LayerBackedSystem`'s
+            // identity check — the layer tree doesn't rebuild when
+            // the synthetic system is structurally identical.
+            documentScrollXBinding?.wrappedValue =
+                clipView.bounds.origin.x
+            documentScrollYBinding?.wrappedValue =
+                clipView.bounds.origin.y
         }
     }
 }

@@ -24,11 +24,22 @@ targets:
       - path: SheetMusicExample
         excludes:
           - macOS
+          - Sounds
+      # Folder reference (blue folder) — preserves the `Sounds/`
+      # subdirectory inside the .app bundle so
+      # `Bundle.url(forResource:..., subdirectory: "Sounds")`
+      # resolves. `optional: true` lets the project generate when
+      # the user hasn't downloaded the SoundFont set yet.
+      - path: SheetMusicExample/Sounds
+        type: folder
+        optional: true
     dependencies:
       - package: swift-sheet-music
         product: SheetMusic
       - package: swift-sheet-music
         product: SheetMusicUI
+      - package: swift-sheet-music
+        product: SheetMusicAudio
 
   SheetMusicExampleMac:
     type: application
@@ -42,8 +53,15 @@ targets:
       CODE_SIGN_IDENTITY: "-"
     sources:
       - path: SheetMusicExample
+        excludes:
+          - Sounds
+      - path: SheetMusicExample/Sounds
+        type: folder
+        optional: true
     dependencies:
       - package: swift-sheet-music
         product: SheetMusic
       - package: swift-sheet-music
         product: SheetMusicUI
+      - package: swift-sheet-music
+        product: SheetMusicAudio
