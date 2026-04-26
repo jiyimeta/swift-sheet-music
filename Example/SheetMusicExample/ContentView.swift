@@ -1,11 +1,13 @@
 #if !os(macOS)
 import SheetMusic
 import SheetMusicAudio
+import SheetMusicPDF
 import SheetMusicUI
 import SwiftUI
+import UIKit
 
 private enum LayoutMode: Int {
-    case vertical, horizontal, paged
+    case vertical, horizontal, paged, pdf
 }
 
 struct ContentView: View {
@@ -30,6 +32,27 @@ struct ContentView: View {
     /// `currentCursor` changes.
     @StateObject private var playbackEngine = PlaybackEngine(
         soundfontResolver: BundledSoundfontResolver())
+    /// Set when the user taps the share button. Drives the
+    /// `.sheet` modifier that presents `UIActivityViewController`
+    /// for the freshly-exported PDF.
+    @State private var pdfShareItem: PDFShareItem?
+    /// Live magnification factor for PDF preview mode (driven by
+    /// pinch-to-zoom). Persists across score / mode changes so the
+    /// user doesn't lose their zoom level when switching tabs.
+    @State private var pdfScale: CGFloat = 1.0
+    /// Live overlay scale applied via `scaleEffect` during an active
+    /// pinch — cheap visual upscale that avoids re-rasterising every
+    /// page Canvas at gesture frame rate. Always 1.0 outside a
+    /// pinch; on gesture end we fold it into `pdfScale` (which
+    /// drives the Canvas's true `renderScale`) so the result is
+    /// vector-sharp once the user releases.
+    @State private var pdfGestureScale: CGFloat = 1.0
+    /// Cached PDF-mode layout. Recomputed via `.task(id:)` only on
+    /// score change, NOT on every pinch frame — `LayoutEngine.layout`
+    /// is expensive on large scores and re-running it per frame
+    /// makes the pinch crawl.
+    @State private var pdfDoc: LayoutDocument?
+    @State private var pdfPages: [PDFExporter.PageBatch] = []
 
     /// Per-voice highlight colors (MuseScore convention). iOS has no
     /// keyboard shift, so this example only supports single-note
@@ -83,6 +106,13 @@ struct ContentView: View {
                         Image(systemName: playbackEngine.isMetronomeEnabled
                             ? "metronome.fill" : "metronome")
                     }
+
+                    Button {
+                        exportPDF()
+                    } label: {
+                        Image(systemName: "square.and.arrow.up")
+                    }
+                    .disabled(score == nil)
                 }
                 ToolbarItemGroup(placement: .topBarTrailing) {
                     Button {
@@ -106,13 +136,35 @@ struct ContentView: View {
                             .tag(LayoutMode.horizontal)
                         Image(systemName: "book.pages")
                             .tag(LayoutMode.paged)
+                        Image(systemName: "doc.text")
+                            .tag(LayoutMode.pdf)
                     }
                     .pickerStyle(.segmented)
-                    .frame(width: 120)
+                    .frame(width: 160)
                 }
             }
         }
         .onAppear(perform: loadBundled)
+        .sheet(item: $pdfShareItem) { item in
+            ShareSheet(items: [item.url])
+        }
+    }
+
+    private func exportPDF() {
+        guard let score else { return }
+        do {
+            let data = try PDFExporter.export(
+                score: score,
+                options: PDFExporter.Options(title: "test"))
+            // Write to a temp file so UIActivityViewController can
+            // share it (Mail / Files / AirDrop / Save to Files).
+            let url = FileManager.default.temporaryDirectory
+                .appendingPathComponent("test-\(UUID().uuidString.prefix(8)).pdf")
+            try data.write(to: url)
+            pdfShareItem = PDFShareItem(url: url)
+        } catch {
+            errorMessage = "PDF export failed: \(error.localizedDescription)"
+        }
     }
 
     private func togglePlayback() {
@@ -152,7 +204,8 @@ struct ContentView: View {
         let opts = ScoreViewOptions(
             staffSize: staffSize,
             systemGap: gap,
-            wrapToViewWidth: layoutMode != .horizontal)
+            wrapToViewWidth: layoutMode != .horizontal,
+            includeTitleFrame: layoutMode != .horizontal)
         switch layoutMode {
         case .vertical:
             GeometryReader { geo in
@@ -220,7 +273,119 @@ struct ContentView: View {
                     .background(.ultraThinMaterial, in: Capsule())
                     .padding(.bottom, 8)
             }
+        case .pdf:
+            pdfPreview(score: score)
         }
+    }
+
+    @ViewBuilder
+    private func pdfPreview(score: Score) -> some View {
+        let pageSize = PDFExporter.Options.usLetter
+        let margin: CGFloat = 36
+
+        Group {
+            if let doc = pdfDoc, !pdfPages.isEmpty {
+                pdfPreviewContent(
+                    doc: doc, pages: pdfPages,
+                    pageSize: pageSize, margin: margin)
+            } else {
+                ProgressView("Laying out…")
+                    .frame(
+                        maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color(white: 0.92))
+            }
+        }
+        .task(id: scoreVersion) {
+            // Same knobs as the share button so on-screen pages
+            // match the file the user would get from PDFExporter.
+            let pdfStaffSize: CGFloat = 14
+            let pdfOpts = ScoreViewOptions(
+                staffSize: pdfStaffSize,
+                systemGap: 16,
+                wrapToViewWidth: true)
+            let availableWidth = max(
+                pdfStaffSize * 4, pageSize.width - 2 * margin)
+            let doc = LayoutEngine.layout(
+                score: score, options: pdfOpts,
+                availableWidth: availableWidth)
+            pdfDoc = doc
+            pdfPages = PDFExporter.paginate(
+                systems: doc.systems,
+                pageSize: pageSize, margin: margin)
+        }
+    }
+
+    @ViewBuilder
+    private func pdfPreviewContent(
+        doc: LayoutDocument,
+        pages: [PDFExporter.PageBatch],
+        pageSize: CGSize,
+        margin: CGFloat
+    ) -> some View {
+        let pageSpacing: CGFloat = 16 * pdfScale
+        let outerPadding: CGFloat = 16 * pdfScale
+        let labelHeight: CGFloat = 14 * pdfScale + 6 * pdfScale
+        let naturalWidth =
+            pageSize.width * pdfScale * CGFloat(pages.count)
+            + pageSpacing * CGFloat(max(0, pages.count - 1))
+            + outerPadding * 2
+        let naturalHeight =
+            pageSize.height * pdfScale + labelHeight
+            + outerPadding * 2
+
+        ScrollView([.horizontal, .vertical]) {
+            HStack(alignment: .top, spacing: pageSpacing) {
+                ForEach(Array(pages.enumerated()), id: \.offset) { idx, page in
+                    VStack(spacing: 6 * pdfScale) {
+                        // PDFPageView's `renderScale` makes the
+                        // Canvas draw glyphs at the new resolution
+                        // — vector-sharp instead of an upscaled
+                        // bitmap. We only update it on gesture-end
+                        // (committed `pdfScale`); during the active
+                        // pinch the cheap `scaleEffect` overlay
+                        // handles motion smoothly.
+                        PDFPageView(
+                            systems: page.systems,
+                            pageStartY: page.startY,
+                            titleFrame: idx == 0 ? doc.titleFrame : nil,
+                            metrics: doc.metrics,
+                            pageSize: pageSize,
+                            margin: margin,
+                            renderScale: pdfScale)
+                            .background(Color.white)
+                            .border(Color.gray.opacity(0.4))
+                            .shadow(radius: 3 * pdfScale)
+                        Text("\(idx + 1) / \(pages.count)")
+                            .font(.system(size: 11 * pdfScale))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .padding(outerPadding)
+            // Apply the gesture overlay AFTER padding so the whole
+            // page deck zooms uniformly. `scaleEffect` is visual-
+            // only; the explicit frame tells the parent ScrollView
+            // the scaled extent so it can scroll the full zoomed
+            // area during the gesture.
+            .scaleEffect(pdfGestureScale, anchor: .topLeading)
+            .frame(
+                width: naturalWidth * pdfGestureScale,
+                height: naturalHeight * pdfGestureScale,
+                alignment: .topLeading)
+        }
+        .background(Color(white: 0.92))
+        .gesture(
+            MagnificationGesture()
+                .onChanged { rawValue in
+                    let target = pdfScale * rawValue
+                    let clamped = max(0.25, min(4.0, target))
+                    pdfGestureScale = clamped / pdfScale
+                }
+                .onEnded { _ in
+                    pdfScale = max(
+                        0.25, min(4.0, pdfScale * pdfGestureScale))
+                    pdfGestureScale = 1
+                })
     }
 
     private func handleTap(at location: CGPoint, document: LayoutDocument) {
@@ -290,5 +455,24 @@ private struct VerticalLayoutKey: Hashable {
     let width: CGFloat
     let staffSize: CGFloat
     let scoreVersion: UUID
+}
+
+private struct PDFShareItem: Identifiable {
+    let id = UUID()
+    let url: URL
+}
+
+private struct ShareSheet: UIViewControllerRepresentable {
+    let items: [Any]
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(
+            activityItems: items, applicationActivities: nil)
+    }
+
+    func updateUIViewController(
+        _ uiViewController: UIActivityViewController,
+        context: Context
+    ) {}
 }
 #endif

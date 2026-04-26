@@ -40,6 +40,8 @@ targets:
         product: SheetMusicUI
       - package: swift-sheet-music
         product: SheetMusicAudio
+      - package: swift-sheet-music
+        product: SheetMusicPDF
 
   SheetMusicExampleMac:
     type: application
@@ -65,3 +67,5 @@ targets:
         product: SheetMusicUI
       - package: swift-sheet-music
         product: SheetMusicAudio
+      - package: swift-sheet-music
+        product: SheetMusicPDF

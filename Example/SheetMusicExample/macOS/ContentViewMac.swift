@@ -2,13 +2,20 @@
 import AppKit
 import SheetMusic
 import SheetMusicAudio
+import SheetMusicPDF
 import SheetMusicUI
 import SwiftUI
+import UniformTypeIdentifiers
 
 private enum LayoutMode: String {
     case horizontal = "Horizontal"
     case vertical = "Vertical"
     case paged = "Page"
+    /// Mirrors the PDF export's pagination — same page size, margin,
+    /// and packing logic as `PDFExporter` — but laid out side-by-side
+    /// in a horizontal scroll view so you can review what the PDF
+    /// will look like before saving.
+    case pdf = "PDF"
 }
 
 @available(macOS 15.0, *)
@@ -57,6 +64,20 @@ struct ContentViewMac: View {
     /// pause toggle (MuseScore convention). Stored so we can remove
     /// it on disappear.
     @State private var keyMonitor: Any?
+    /// Live magnification factor for PDF preview mode (driven by
+    /// pinch-to-zoom). Persists across score / mode changes so the
+    /// user doesn't lose their zoom level when switching tabs.
+    /// Current magnification of the PDF preview, driven by
+    /// `NSScrollView.magnification` via `MagnifyingPDFScrollView`.
+    /// Persists across mode / score swaps so the user's zoom level
+    /// survives.
+    @State private var pdfScale: CGFloat = 1.0
+    /// Cached PDF-mode layout. Recomputed via `.task(id:)` only on
+    /// score change, NOT on every pinch frame — `LayoutEngine.layout`
+    /// is expensive on large scores and re-running it per frame
+    /// makes the pinch crawl.
+    @State private var pdfDoc: LayoutDocument?
+    @State private var pdfPages: [PDFExporter.PageBatch] = []
 
     /// Per-voice highlight colors (MuseScore convention: voice 1 blue,
     /// voice 2 green, voice 3 orange, voice 4 purple). The library
@@ -71,7 +92,8 @@ struct ContentViewMac: View {
     private static let verticalOptions = ScoreViewOptions(
         staffSize: 18, systemGap: 16, wrapToViewWidth: true)
     private static let horizontalOptions = ScoreViewOptions(
-        staffSize: 28, systemGap: 40, wrapToViewWidth: false)
+        staffSize: 28, systemGap: 40, wrapToViewWidth: false,
+        includeTitleFrame: false)
 
     var body: some View {
         NavigationSplitView {
@@ -116,6 +138,12 @@ struct ContentViewMac: View {
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
+                Section("Export") {
+                    Button("Save as PDF…") {
+                        exportPDF()
+                    }
+                    .disabled(score == nil)
+                }
                 Section("Layout") {
                     Picker("Mode", selection: $layoutMode) {
                         Label("Horizontal", systemImage: "arrow.left.and.right")
@@ -124,6 +152,8 @@ struct ContentViewMac: View {
                             .tag(LayoutMode.vertical)
                         Label("Page", systemImage: "book.pages")
                             .tag(LayoutMode.paged)
+                        Label("PDF", systemImage: "doc.text")
+                            .tag(LayoutMode.pdf)
                     }
                     .pickerStyle(.inline)
                 }
@@ -188,6 +218,29 @@ struct ContentViewMac: View {
         case .stopped: return "stopped"
         case .playing: return "playing"
         case .paused: return "paused"
+        }
+    }
+
+    private func exportPDF() {
+        guard let score else { return }
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.pdf]
+        panel.nameFieldStringValue = (sourceName as NSString)
+            .deletingPathExtension + ".pdf"
+        panel.canCreateDirectories = true
+        panel.title = "Save Score as PDF"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            try PDFExporter.export(
+                score: score,
+                to: url,
+                options: PDFExporter.Options(
+                    title: (sourceName as NSString).deletingPathExtension))
+            // Reveal the resulting file so the user can inspect it
+            // without hunting through Finder.
+            NSWorkspace.shared.activateFileViewerSelecting([url])
+        } catch {
+            errorMessage = "PDF export failed: \(error.localizedDescription)"
         }
     }
 
@@ -401,7 +454,68 @@ struct ContentViewMac: View {
                     .background(.ultraThinMaterial, in: Capsule())
                     .padding(.bottom, 8)
             }
+        case .pdf:
+            pdfPreview(score: score)
         }
+    }
+
+    @ViewBuilder
+    private func pdfPreview(score: Score) -> some View {
+        let pageSize = PDFExporter.Options.usLetter
+        let margin: CGFloat = 36
+
+        Group {
+            if let doc = pdfDoc, !pdfPages.isEmpty {
+                pdfPreviewContent(
+                    doc: doc, pages: pdfPages,
+                    pageSize: pageSize, margin: margin)
+            } else {
+                ProgressView("Laying out…")
+                    .frame(
+                        maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color(white: 0.92))
+            }
+        }
+        .task(id: scoreVersion) {
+            // Same knobs as `Save as PDF…` so the on-screen pages
+            // match the file the user would get from PDFExporter.
+            let pdfStaffSize: CGFloat = 14
+            let pdfOpts = ScoreViewOptions(
+                staffSize: pdfStaffSize,
+                systemGap: 16,
+                wrapToViewWidth: true)
+            let availableWidth = max(
+                pdfStaffSize * 4, pageSize.width - 2 * margin)
+            let doc = LayoutEngine.layout(
+                score: score, options: pdfOpts,
+                availableWidth: availableWidth)
+            pdfDoc = doc
+            pdfPages = PDFExporter.paginate(
+                systems: doc.systems,
+                pageSize: pageSize, margin: margin)
+        }
+    }
+
+    @ViewBuilder
+    private func pdfPreviewContent(
+        doc: LayoutDocument,
+        pages: [PDFExporter.PageBatch],
+        pageSize: CGSize,
+        margin: CGFloat
+    ) -> some View {
+        // Hosting the page deck inside an `NSScrollView` with
+        // `allowsMagnification = true` mirrors how horizontal mode
+        // stays sharp during pinch: AppKit re-rasterises the layer
+        // tree at the new contents scale instead of bitmap-
+        // upscaling a fixed-resolution snapshot. PDFPageView's own
+        // `renderScale` stays at 1 — the scroll view supplies the
+        // zoom.
+        MagnifyingPDFScrollView(
+            magnification: $pdfScale,
+            doc: doc,
+            pages: pages,
+            pageSize: pageSize,
+            margin: margin)
     }
 
     private func handleTap(at location: CGPoint, document: LayoutDocument) {
@@ -784,6 +898,136 @@ private struct MagnifyingScoreScrollView: NSViewRepresentable {
                 clipView.bounds.origin.x
             documentScrollYBinding?.wrappedValue =
                 clipView.bounds.origin.y
+        }
+    }
+}
+
+// MARK: - PDF preview scroll wrapper
+
+/// Hosts the PDF page deck inside an `NSScrollView` whose
+/// `allowsMagnification` does the heavy lifting. AppKit re-
+/// rasterises the document layer at the current magnification —
+/// SwiftUI Canvas drawings stay vector-sharp at any zoom level
+/// without us having to redraw them per pinch frame, exactly the
+/// way horizontal mode keeps the score sharp during pinch.
+@available(macOS 15.0, *)
+private struct MagnifyingPDFScrollView: NSViewRepresentable {
+    @Binding var magnification: CGFloat
+    let doc: LayoutDocument
+    let pages: [PDFExporter.PageBatch]
+    let pageSize: CGSize
+    let margin: CGFloat
+
+    func makeNSView(context: Context) -> NSScrollView {
+        let scrollView = NSScrollView()
+        scrollView.allowsMagnification = true
+        scrollView.minMagnification = 0.25
+        scrollView.maxMagnification = 4.0
+        scrollView.hasHorizontalScroller = true
+        scrollView.hasVerticalScroller = true
+        scrollView.autohidesScrollers = true
+        scrollView.borderType = .noBorder
+        scrollView.usesPredominantAxisScrolling = false
+        scrollView.drawsBackground = true
+        scrollView.backgroundColor = NSColor(white: 0.92, alpha: 1)
+
+        let hosting = NSHostingView(rootView: rootView)
+        hosting.translatesAutoresizingMaskIntoConstraints = false
+        scrollView.documentView = hosting
+
+        scrollView.magnification = magnification
+        context.coordinator.binding = $magnification
+        context.coordinator.lastDocId = ObjectIdentifier(
+            doc.systems as AnyObject)
+
+        // NSScrollView fires `didEndLiveMagnify` once after the
+        // gesture settles; we mirror its final value into the
+        // SwiftUI binding so a future external write (e.g. a
+        // "Reset zoom" button) can apply.
+        NotificationCenter.default.addObserver(
+            context.coordinator,
+            selector: #selector(Coordinator.magnificationDidEnd(_:)),
+            name: NSScrollView.didEndLiveMagnifyNotification,
+            object: scrollView)
+        NotificationCenter.default.addObserver(
+            context.coordinator,
+            selector: #selector(Coordinator.willStartLiveMagnify(_:)),
+            name: NSScrollView.willStartLiveMagnifyNotification,
+            object: scrollView)
+
+        return scrollView
+    }
+
+    func updateNSView(_ nsView: NSScrollView, context: Context) {
+        context.coordinator.binding = $magnification
+        // Rebuild the rootView only when the cached layout actually
+        // changed — body re-evals during scroll / magnify shouldn't
+        // walk the whole page deck again.
+        let newDocId = ObjectIdentifier(doc.systems as AnyObject)
+        if context.coordinator.lastDocId != newDocId
+            || context.coordinator.lastPageCount != pages.count {
+            (nsView.documentView as? NSHostingView<AnyView>)?
+                .rootView = rootView
+            context.coordinator.lastDocId = newDocId
+            context.coordinator.lastPageCount = pages.count
+        }
+        // Apply external magnification writes (e.g. a sidebar
+        // reset). Skip while the user is mid-pinch — writing back
+        // during a live gesture would fight AppKit's own update.
+        if !context.coordinator.isLiveMagnifying
+            && abs(nsView.magnification - magnification) > 0.001 {
+            nsView.magnification = magnification
+        }
+    }
+
+    private var rootView: AnyView {
+        AnyView(
+            HStack(alignment: .top, spacing: 24) {
+                ForEach(Array(pages.enumerated()), id: \.offset) { idx, page in
+                    VStack(spacing: 6) {
+                        // Layer-tree page (vector CAShapeLayers) so
+                        // NSScrollView's `allowsMagnification` re-
+                        // rasterises the contents at the new scale
+                        // — sharp throughout the pinch, exactly like
+                        // horizontal mode's score view.
+                        PDFPageLayerView(
+                            systems: page.systems,
+                            pageStartY: page.startY,
+                            titleFrame: idx == 0 ? doc.titleFrame : nil,
+                            metrics: doc.metrics,
+                            pageSize: pageSize,
+                            margin: margin)
+                            .frame(
+                                width: pageSize.width,
+                                height: pageSize.height)
+                            .border(Color.gray.opacity(0.4))
+                            .shadow(radius: 3)
+                        Text("\(idx + 1) / \(pages.count)")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .padding(24))
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    final class Coordinator: NSObject {
+        var binding: Binding<CGFloat>?
+        var lastDocId: ObjectIdentifier?
+        var lastPageCount: Int = -1
+        var isLiveMagnifying = false
+
+        @objc func willStartLiveMagnify(_ notification: Notification) {
+            isLiveMagnifying = true
+        }
+
+        @objc func magnificationDidEnd(_ notification: Notification) {
+            isLiveMagnifying = false
+            guard let scrollView = notification.object as? NSScrollView
+            else { return }
+            binding?.wrappedValue = scrollView.magnification
         }
     }
 }
