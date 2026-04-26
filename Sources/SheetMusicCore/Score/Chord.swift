@@ -9,13 +9,13 @@ public struct Chord: Sendable, Equatable {
     public var arpeggio: Arpeggio?
     /// Lyrics syllable(s) attached to this chord, one per verse line.
     /// Most scores use a single verse (index 0). C++: `mu::engraving::Lyrics`.
-    public var lyrics: [String]
+    public var lyrics: [Lyric]
 
     public init(
         duration: NoteDuration,
         notes: [Note],
         arpeggio: Arpeggio? = nil,
-        lyrics: [String] = []
+        lyrics: [Lyric] = []
     ) {
         self.duration = duration
         self.notes = notes

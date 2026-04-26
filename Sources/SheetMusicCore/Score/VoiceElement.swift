@@ -14,4 +14,5 @@ public enum VoiceElement: Sendable, Equatable {
     case spanner(Spanner)
     case measureRepeat(MeasureRepeat)
     case fermata(Fermata)
+    case staffText(StaffText)
 }

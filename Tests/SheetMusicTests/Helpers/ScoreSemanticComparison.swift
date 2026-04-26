@@ -165,6 +165,7 @@ enum ScoreSemanticComparison {
         case .spanner(let s): return "spanner(\(s.kind))"
         case .measureRepeat: return "measureRepeat"
         case .fermata(let f): return "fermata(\(f.subtype))"
+        case .staffText(let st): return "staffText(\"\(st.text)\")"
         }
     }
 
@@ -212,7 +213,18 @@ enum ScoreSemanticComparison {
             st.measures = st.measures.map { measure in
                 var m = measure
                 m.voices = m.voices.map { voice in
-                    Voice(elements: voice.elements.map(canonicalizeDurations))
+                    Voice(elements: voice.elements
+                        // Strip staff/system text — only the MSCX
+                        // decoder picks them up today, so keeping
+                        // them would break cross-format equivalence
+                        // of fixtures that round-trip through both.
+                        .filter { element in
+                            if case .staffText = element {
+                                return false
+                            }
+                            return true
+                        }
+                        .map(canonicalizeDurations))
                 }
                 return m
             }
