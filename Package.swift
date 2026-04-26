@@ -25,6 +25,10 @@ let package = Package(
         .library(name: "SheetMusicMIDI", targets: ["SheetMusicMIDI"]),
         // SwiftUI views for rendering a Score. macOS 15+ only.
         .library(name: "SheetMusicUI", targets: ["SheetMusicUI"]),
+        // AVFoundation-backed playback: per-staff `AVAudioUnitSampler`s,
+        // SoundFont resolution, single-note preview, and (soon) timeline-
+        // driven full playback.
+        .library(name: "SheetMusicAudio", targets: ["SheetMusicAudio"]),
         // Dev tool (not a consumer-facing product): renders sample
         // Scores to PNG for visual inspection of ScoreView.
         .executable(name: "render-previews", targets: ["RenderPreviews"]),
@@ -66,6 +70,13 @@ let package = Package(
             resources: [.process("Fonts/Resources")]
         ),
         .target(
+            name: "SheetMusicAudio",
+            dependencies: [
+                "SheetMusicCore",
+                "SheetMusicMIDI",
+            ]
+        ),
+        .target(
             name: "SheetMusic",
             dependencies: [
                 "SheetMusicCore",
@@ -89,6 +100,7 @@ let package = Package(
                 "SheetMusicMSCX",
                 "SheetMusicMusicXML",
                 "SheetMusicUI",
+                "SheetMusicAudio",
                 "SheetMusicXMLTools",
                 "ZIPFoundation",   // MXLTestBuilder builds .mxl archives at test time
             ],
