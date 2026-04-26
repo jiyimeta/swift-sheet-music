@@ -85,18 +85,40 @@ extension LayoutEngine {
                     if maxGroupLen > 0 && tick % maxGroupLen == 0 {
                         flush()
                     }
-                    // Beat boundary: merge only when BOTH the previous
-                    // beat and the current beat are uniform (a single
-                    // beam level throughout). Mixed beats (e.g. dotted-
-                    // 8th + 16th) always force a break.
+                    // Beat boundary rules:
+                    //
+                    // 1. If EITHER side of the boundary contains a
+                    //    **secondary-beam** duration (16th or
+                    //    shorter), flush.  MuseScore's engraver
+                    //    ("Groups::actualBeamMode") breaks secondary
+                    //    beams at every beat, so e.g. two beats of
+                    //    straight 16ths appear as 4+4 rather than a
+                    //    single run of 8 — even though both beats are
+                    //    "uniform" at level 2.
+                    //
+                    // 2. Otherwise (both sides primary-only or empty),
+                    //    merge only when BOTH beats are uniform at
+                    //    level 1.  Mixed level-1/2 beats (dotted-8th +
+                    //    16th) are handled by rule 1 above; a non-
+                    //    uniform level-1-only beat (rare, e.g. ties
+                    //    producing different effective durations) still
+                    //    forces a break.
                     else if beatLen > 0 && tick % beatLen == 0 {
                         let curBeat = tick / beatLen
                         let prevBeat = curBeat - 1
-                        let prevUniform =
-                            (beatLevelSets[prevBeat]?.count ?? 0) <= 1
-                        let curUniform =
-                            (beatLevelSets[curBeat]?.count ?? 0) <= 1
-                        if !(prevUniform && curUniform) { flush() }
+                        let prevMax = beatLevelSets[prevBeat]?.max() ?? 0
+                        let curMax = beatLevelSets[curBeat]?.max() ?? 0
+                        let secondaryInvolved =
+                            prevMax >= 2 || curMax >= 2
+                        if secondaryInvolved {
+                            flush()
+                        } else {
+                            let prevUniform =
+                                (beatLevelSets[prevBeat]?.count ?? 0) <= 1
+                            let curUniform =
+                                (beatLevelSets[curBeat]?.count ?? 0) <= 1
+                            if !(prevUniform && curUniform) { flush() }
+                        }
                     }
                 }
                 currentIndices.append(i)

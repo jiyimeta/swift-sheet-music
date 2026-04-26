@@ -24,26 +24,38 @@ extension LayoutEngine {
         var pairs: [TiePair] = []
         // For open ties: store (origin, above) so the arc direction is
         // consistent between the start note and the end note.
-        // Keyed by (tieNumber, noteStep, staffId) — all three are
+        // Keyed by (tieNumber, noteStep, staffIndex) — all three are
         // needed to prevent cross-staff mis-matching:
         //
         // - tieNumber alone collides across ALL staves.
         // - (number, step) collides when two staves share the same
         //   clef (e.g. two treble staves both have C4 at step −6).
-        // - Adding `staffId` (derived from the note's absolute y and
-        //   step → rounded staff-midline y) uniquely identifies the
-        //   staff without needing an explicit index.
+        // - Adding `staffIndex` (the index of the staff within the
+        //   system, derived by closest-midline match) uniquely
+        //   identifies the staff in a way that is STABLE across
+        //   system breaks. An earlier version used the absolute
+        //   staff-midline Y, but that differs between systems in
+        //   vertical / page mode (different `system.origin.y`),
+        //   so a tie crossing a system break failed to match and
+        //   was silently dropped.
         struct TieKey: Hashable {
             let number: Int
             let step: Int
-            let staffId: Int
+            let staffIndex: Int
         }
         var open: [TieKey: (origin: CGPoint, above: Bool)] = [:]
         let sp = document.metrics.sp
+        let staffMidOffset = document.metrics.staffHeight / 2
         for system in document.systems {
+            // Per-system staff midlines (system-local). Used to pick
+            // the staff INDEX a note belongs to so the discriminator
+            // is identical for the same staff in any other system.
+            let staffMidYsLocal = system.staffOrigins.map {
+                $0.y + staffMidOffset
+            }
             for measure in system.measures {
                 for el in measure.elements {
-                    guard case .chord(let notes, _, let stem, _, _, _, _)
+                    guard case .chord(let notes, _, let stem, _, _, _, _, _)
                         = el else { continue }
                     let noteSteps = notes.map(\.step)
                     let maxStep = noteSteps.max() ?? 0
@@ -72,21 +84,31 @@ extension LayoutEngine {
                         } else {
                             above = stem == .down
                         }
-                        // Staff discriminator: the staff-midline
-                        // absolute y, rounded. Notes on the same staff
-                        // share the same midline; different staves
-                        // differ by staffSpacing (≈ 8 sp).
-                        let staffMidY = absolute.y
+                        // Find which staff this note belongs to within
+                        // its system by matching its derived midline
+                        // against `staffMidYsLocal`. The note's own y
+                        // plus `step * sp / 2` is its staff midline in
+                        // absolute coordinates; subtracting the system
+                        // origin gives the system-local midline.
+                        let noteMidYLocal = (absolute.y - system.origin.y)
                             + CGFloat(n.step) * sp / 2
-                        let sid = Int(round(staffMidY))
+                        var staffIndex = 0
+                        var bestDist = CGFloat.infinity
+                        for (i, mid) in staffMidYsLocal.enumerated() {
+                            let d = abs(mid - noteMidYLocal)
+                            if d < bestDist {
+                                bestDist = d
+                                staffIndex = i
+                            }
+                        }
 
                         if let back = n.tieBack {
                             let key = TieKey(
                                 number: back, step: n.step,
-                                staffId: sid)
+                                staffIndex: staffIndex)
                             if let openTie = open[key] {
                                 pairs.append(TiePair(
-                                    staff: 0,
+                                    staff: staffIndex,
                                     fromOrigin: openTie.origin,
                                     toOrigin: absolute,
                                     above: openTie.above
@@ -97,7 +119,7 @@ extension LayoutEngine {
                         if let fwd = n.tieForward {
                             let key = TieKey(
                                 number: fwd, step: n.step,
-                                staffId: sid)
+                                staffIndex: staffIndex)
                             open[key] = (absolute, above)
                         }
                     }
@@ -109,7 +131,8 @@ extension LayoutEngine {
 
     static func attachTies(
         to systems: [LayoutSystem],
-        pairs: [TiePair]
+        pairs: [TiePair],
+        metrics: StaffMetrics
     ) -> [LayoutSystem] {
         guard !pairs.isEmpty else { return systems }
 
@@ -137,6 +160,12 @@ extension LayoutEngine {
             } else if let from = fromSysIdx, let to = toSysIdx {
                 let fromSys = systems[from]
                 let toSys = systems[to]
+                // BEGIN segment (end of source system): the tie hangs
+                // from the source chord out to the right edge of the
+                // system, mirroring MuseScore's
+                // `system->endingXForOpenEndedLines()` (slurtielayout
+                // line 1559). The 2 px inset keeps it off the canvas
+                // edge so anti-aliasing can finish the curve.
                 let edgeX = fromSys.size.width - 2
                 extraPerSystem[from].append(.tieArc(
                     fromOrigin: CGPoint(
@@ -147,12 +176,27 @@ extension LayoutEngine {
                         y: pair.fromOrigin.y - fromSys.origin.y),
                     above: pair.above
                 ))
+                // END segment (start of target system): MuseScore
+                // anchors p1 at `system->firstNoteRestSegmentX(true)`
+                // (slurtielayout line 1625) — the X of the first
+                // note/rest in the system, NOT x=0. Anchoring at 0
+                // makes the tie span across the synthesised clef and
+                // key signature, which looks wrong. We approximate
+                // `firstNoteRestSegmentX` by scanning the first
+                // measure for the leftmost chord/rest origin and
+                // backing off by half a space.
+                let toLocalChordX = pair.toOrigin.x - toSys.origin.x
+                let firstContent = firstContentX(in: toSys)
+                let endSegStart = max(
+                    firstContent - metrics.sp * 0.5,
+                    toLocalChordX - metrics.sp * 4)
                 extraPerSystem[to].append(.tieArc(
                     fromOrigin: CGPoint(
-                        x: 0,
+                        x: min(endSegStart,
+                               toLocalChordX - metrics.sp),
                         y: pair.toOrigin.y - toSys.origin.y),
                     toOrigin: CGPoint(
-                        x: pair.toOrigin.x - toSys.origin.x,
+                        x: toLocalChordX,
                         y: pair.toOrigin.y - toSys.origin.y),
                     above: pair.above
                 ))
@@ -169,6 +213,33 @@ extension LayoutEngine {
                 spanners: system.spanners + extraPerSystem[idx]
             )
         }
+    }
+
+    /// X coordinate (system-local) of the first chord/rest in the
+    /// first measure of `system`. Used as MuseScore's
+    /// `firstNoteRestSegmentX` analogue when laying out the END
+    /// segment of a tie at a system head: anchoring there keeps the
+    /// arc clear of the synthesised clef and key signature.
+    private static func firstContentX(in system: LayoutSystem) -> CGFloat {
+        guard let firstMeasure = system.measures.first else { return 0 }
+        var firstX: CGFloat = .infinity
+        for el in firstMeasure.elements {
+            switch el {
+            case .chord(let notes, _, _, _, _, _, _, _):
+                if let n = notes.first {
+                    firstX = min(
+                        firstX,
+                        firstMeasure.origin.x + n.origin.x)
+                }
+            case .rest(_, let p, _, _, _):
+                firstX = min(
+                    firstX,
+                    firstMeasure.origin.x + p.x)
+            default:
+                break
+            }
+        }
+        return firstX.isFinite ? firstX : 0
     }
 
     static func systemIndex(

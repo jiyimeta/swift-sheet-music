@@ -33,6 +33,26 @@ public enum NotatedClef: Sendable, Equatable {
         default:                                         self = .treble
         }
     }
+
+    /// Canonical MuseScore-style clef identifier.  Inverse of
+    /// `init(rawType:)` for the forms we emit — callers use this when
+    /// they need to carry an active clef forward as a string (e.g.,
+    /// synthesising a clef at the start of a continuation system).
+    public var rawType: String {
+        switch self {
+        case .treble:      return "G"
+        case .treble8va:   return "G8va"
+        case .treble8vb:   return "G8vb"
+        case .treble15ma:  return "G15ma"
+        case .treble15mb:  return "G15mb"
+        case .bass:        return "F"
+        case .bass8va:     return "F8va"
+        case .bass8vb:     return "F8vb"
+        case .alto:        return "C3"
+        case .tenor:       return "C4"
+        case .percussion:  return "PERC"
+        }
+    }
 }
 
 /// Result of mapping a MIDI pitch to a staff position under a given clef.

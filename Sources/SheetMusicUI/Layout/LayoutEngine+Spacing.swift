@@ -20,31 +20,50 @@ extension LayoutEngine {
     /// staves. Each column's width is the max width consumed by any
     /// staff that carries that element, so staves lacking an element
     /// simply skip its slot (empty visual space).
+    ///
+    /// `synthesizeKeySigForAllStaves` + `activeKeys` reserve header
+    /// width for a key signature even when the measure has no literal
+    /// `<KeySig>` — used at the start of continuation systems to
+    /// redraw the currently active key.
     static func computeHeaderSchedule(
         measureIdx: Int,
         staves: [StaffContent],
         metrics: StaffMetrics,
-        synthesizeClefForAllStaves: Bool
+        synthesizeClefForAllStaves: Bool,
+        synthesizeKeySigForAllStaves: Bool = false,
+        activeKeys: [Int]? = nil
     ) -> HeaderSchedule {
         var clefWidth: CGFloat = 0
         var keySigWidth: CGFloat = 0
         var timeSigWidth: CGFloat = 0
 
-        for staff in staves {
+        for (idx, staff) in staves.enumerated() {
             guard measureIdx < staff.measures.count else { continue }
             let measure = staff.measures[measureIdx]
             // On the first system, every staff draws a clef (either
             // explicit or synthesized). Ensure the clef column is sized
             // even when no staff has a literal <Clef>.
             if synthesizeClefForAllStaves {
-                clefWidth = max(clefWidth, metrics.sp * 3)
+                clefWidth = max(clefWidth, metrics.sp * 2)
+            }
+            // When a continuation system synthesises the active key
+            // signature, reserve width based on that staff's carried
+            // key — even if the measure itself has no literal
+            // <KeySig> element.
+            if synthesizeKeySigForAllStaves,
+               let keys = activeKeys,
+               idx < keys.count,
+               keys[idx] != 0 {
+                keySigWidth = max(
+                    keySigWidth,
+                    metrics.sp * (CGFloat(abs(keys[idx])) + 1.5))
             }
             let leading = measure.voices.first?.elements ?? []
             for el in leading {
                 var stop = false
                 switch el {
                 case .clef:
-                    clefWidth = max(clefWidth, metrics.sp * 3)
+                    clefWidth = max(clefWidth, metrics.sp * 2)
                 case .keySignature(let k):
                     keySigWidth = max(
                         keySigWidth,
@@ -105,6 +124,185 @@ extension LayoutEngine {
         return total
     }
 
+    /// Shared x-coordinate for every unique tick in a measure, computed
+    /// across all voices of all staves.  Mirrors MuseScore's segment
+    /// concept: notes at the same tick share one horizontal position
+    /// no matter which staff or voice they live in.
+    ///
+    /// Algorithm (pro-rated gap aggregation):
+    /// 1. Collect every unique tick at which ANY voice has a timed
+    ///    element starting, plus the measure end (the "fence post"
+    ///    after the last tick).
+    /// 2. For each pair of consecutive ticks `(t_i, t_{i+1})`, compute
+    ///    the minimum horizontal space needed — the MAX across voices
+    ///    of the element active at `t_i` scaled to the portion of its
+    ///    duration that falls inside `(t_i, t_{i+1})`.  Pro-rating is
+    ///    what keeps a long voice-1 element (e.g. a whole note) from
+    ///    stealing space from voice 0's uniform quarters, while still
+    ///    reserving enough room for its own tick boundaries.
+    /// 3. Prefix-sum the gap weights.  Because gap weights are
+    ///    non-negative, the resulting x sequence is MONOTONIC — no
+    ///    tick ever lands left of an earlier one, even when voices
+    ///    have different element counts.
+    ///
+    /// Returns an empty map when the measure has no timed content.
+    static func tickColumns(
+        staves: [StaffContent],
+        measureIdx: Int,
+        metrics: StaffMetrics,
+        headerSchedule: HeaderSchedule,
+        width: CGFloat,
+        division: Int
+    ) -> [Int: CGFloat] {
+        struct TimedElement {
+            let startTick: Int
+            let endTick: Int
+            let weight: CGFloat
+        }
+        var voiceElements: [[TimedElement]] = []
+        var allTicks: Set<Int> = []
+        var measureEnd: Int = 0
+
+        for staff in staves where measureIdx < staff.measures.count {
+            for voice in staff.measures[measureIdx].voices {
+                var elements: [TimedElement] = []
+                var tick = 0
+                for el in voice.elements {
+                    switch el {
+                    case .chord(let c):
+                        let w = max(
+                            durationWidth(c.duration, metrics: metrics),
+                            lyricsWidth(c.lyrics, metrics: metrics))
+                        let end = tick + c.duration.ticks(division: division)
+                        elements.append(TimedElement(
+                            startTick: tick, endTick: end, weight: w))
+                        allTicks.insert(tick)
+                        tick = end
+                    case .rest(let r):
+                        let w = durationWidth(r.duration, metrics: metrics)
+                        let end = tick + r.duration.ticks(division: division)
+                        elements.append(TimedElement(
+                            startTick: tick, endTick: end, weight: w))
+                        allTicks.insert(tick)
+                        tick = end
+                    default:
+                        break
+                    }
+                }
+                if !elements.isEmpty {
+                    voiceElements.append(elements)
+                    measureEnd = max(measureEnd, tick)
+                }
+            }
+        }
+
+        guard !allTicks.isEmpty else { return [:] }
+        let sortedTicks = allTicks.sorted()
+
+        // Gap weights: max pro-rated contribution across voices per
+        // inter-tick segment.  We also append one trailing gap from
+        // the last tick to `measureEnd` so the final element still
+        // reserves horizontal space.
+        var gapWeights: [CGFloat] = []
+        gapWeights.reserveCapacity(sortedTicks.count)
+        for i in 0..<sortedTicks.count {
+            let tStart = sortedTicks[i]
+            let tEnd = i + 1 < sortedTicks.count
+                ? sortedTicks[i + 1]
+                : measureEnd
+            let gapTicks = tEnd - tStart
+            guard gapTicks > 0 else {
+                gapWeights.append(0)
+                continue
+            }
+            var maxGap: CGFloat = 0
+            for elements in voiceElements {
+                for el in elements where el.startTick <= tStart
+                    && el.endTick > tStart {
+                    let duration = el.endTick - el.startTick
+                    guard duration > 0 else { break }
+                    let share = el.weight
+                        * CGFloat(gapTicks) / CGFloat(duration)
+                    maxGap = max(maxGap, share)
+                    break
+                }
+            }
+            gapWeights.append(maxGap)
+        }
+
+        let totalWeight = gapWeights.reduce(0, +)
+        let trailingGap = metrics.sp * 3
+        let contentWidth = max(
+            metrics.sp * 4,
+            width - headerSchedule.contentStartX - trailingGap)
+        let baseX = headerSchedule.contentStartX + metrics.sp
+
+        var tickToX: [Int: CGFloat] = [:]
+        var cumulative: CGFloat = 0
+        for (i, t) in sortedTicks.enumerated() {
+            let fraction = totalWeight > 0 ? cumulative / totalWeight : 0
+            tickToX[t] = baseX + fraction * contentWidth
+            cumulative += gapWeights[i]
+        }
+        return tickToX
+    }
+
+    /// Extra width the FIRST measure of a system needs beyond its
+    /// natural `minimumMeasureWidth` to fit the clef + key signature
+    /// that engraving redraws at every system head.
+    ///
+    /// `minimumMeasureWidth` only counts elements physically present
+    /// inside the measure's `<voice>`. When wrapping promotes an
+    /// interior measure to a system head, `computeHeaderSchedule`
+    /// synthesises a clef + key signature at the line start — eating
+    /// into the chord content area without anyone having reserved the
+    /// space. The result is squeezed lyrics that overlap each other,
+    /// despite the same measure spacing fine in horizontal mode.
+    /// We compute the synth overhead here and add it to the first
+    /// measure's width during system packing.
+    static func synthHeaderOverhead(
+        staves: [StaffContent],
+        measureIdx: Int,
+        activeKeys: [Int],
+        metrics: StaffMetrics
+    ) -> CGFloat {
+        var clefBoost: CGFloat = 0
+        var keyBoost: CGFloat = 0
+        for (staffIdx, staff) in staves.enumerated() {
+            guard measureIdx < staff.measures.count else { continue }
+            let measure = staff.measures[measureIdx]
+            var hasExplicitClef = false
+            var explicitKeyWidth: CGFloat = 0
+            scan: for el in measure.voices.first?.elements ?? [] {
+                switch el {
+                case .clef:
+                    hasExplicitClef = true
+                case .keySignature(let k):
+                    explicitKeyWidth = max(
+                        explicitKeyWidth,
+                        metrics.sp * (CGFloat(abs(k.concertKey)) + 1))
+                case .chord, .rest:
+                    break scan
+                default:
+                    continue
+                }
+            }
+            if !hasExplicitClef {
+                clefBoost = max(clefBoost, metrics.sp * 2)
+            }
+            let activeKey = staffIdx < activeKeys.count
+                ? activeKeys[staffIdx] : 0
+            if activeKey != 0 {
+                let synthKeyW = metrics.sp
+                    * (CGFloat(abs(activeKey)) + 1.5)
+                keyBoost = max(
+                    keyBoost,
+                    max(0, synthKeyW - explicitKeyWidth))
+            }
+        }
+        return clefBoost + keyBoost
+    }
+
     static func minimumMeasureWidth(
         measure: Measure,
         metrics: StaffMetrics
@@ -117,7 +315,7 @@ extension LayoutEngine {
             for el in voice.elements {
                 switch el {
                 case .clef:
-                    w += metrics.sp * 3
+                    w += metrics.sp * 2
                 case .keySignature(let k):
                     w += metrics.sp * (CGFloat(abs(k.concertKey)) + 1)
                 case .timeSignature:
@@ -131,7 +329,7 @@ extension LayoutEngine {
                 case .rest(let r):
                     w += durationWidth(r.duration, metrics: metrics)
                 case .dynamic, .tempo, .fermata,
-                     .measureRepeat, .spanner:
+                     .measureRepeat, .spanner, .staffText:
                     break
                 }
             }
@@ -177,19 +375,27 @@ extension LayoutEngine {
         return max(baseWidth, floor)
     }
 
-    /// Estimated minimum horizontal space needed by a chord's lyrics so
-    /// adjacent syllables don't overlap. Returns 0 when the chord has
-    /// no lyrics. Uses a rough per-character width estimate (measuring
-    /// via CoreText would be more precise but expensive inside a tight
-    /// layout loop). The font is ~2.2 sp; average character width ≈
-    /// 1.0 sp.
+    /// Minimum horizontal space needed by a chord's lyrics so adjacent
+    /// syllables don't overlap. Returns 0 when the chord has no lyrics.
+    ///
+    /// MuseScore sizes chord segments around each syllable's actual
+    /// rendered bounding box plus a small inter-syllable distance
+    /// (`lyricsMinDistance`, ~1 sp at default style). We mirror that
+    /// here by measuring with CoreText — the same call used to position
+    /// the melisma start-x — instead of approximating `count × sp`,
+    /// which severely underestimates wide glyphs (CJK ≈ 2.2 sp/char vs
+    /// ASCII ≈ 1.0 sp/char) and caused adjacent words to collide.
+    /// The CT call is cheap relative to a full layout pass.
     static func lyricsWidth(
-        _ lyrics: [String], metrics: StaffMetrics
+        _ lyrics: [Lyric], metrics: StaffMetrics
     ) -> CGFloat {
-        guard let widest = lyrics.max(by: { $0.count < $1.count }),
-              !widest.isEmpty else { return 0 }
-        let charWidth = metrics.sp * 1.0
-        let padding = metrics.sp * 1.5
-        return CGFloat(widest.count) * charWidth + padding
+        var widest: CGFloat = 0
+        for lyric in lyrics where !lyric.text.isEmpty {
+            widest = max(
+                widest,
+                lyricsTextWidth(lyric.text, sp: metrics.sp))
+        }
+        guard widest > 0 else { return 0 }
+        return widest + metrics.sp
     }
 }

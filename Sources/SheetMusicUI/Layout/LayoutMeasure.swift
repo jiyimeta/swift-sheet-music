@@ -2,6 +2,10 @@ import CoreGraphics
 
 @available(macOS 15.0, iOS 16.0, *)
 public struct LayoutMeasure: Sendable, Equatable {
+    /// 0-based score-wide measure index. Identifies which measure of
+    /// `score.staves[*].measures` this layout entry corresponds to,
+    /// independent of the system that wrapping placed it in.
+    public let measureIndex: Int
     /// Measure-local origin within its `LayoutSystem`.
     public let origin: CGPoint
     /// Width of the measure (including barline space).
@@ -15,12 +19,14 @@ public struct LayoutMeasure: Sendable, Equatable {
     public let jumps: [LayoutElement]
 
     public init(
+        measureIndex: Int,
         origin: CGPoint,
         width: CGFloat,
         elements: [LayoutElement],
         markers: [LayoutElement] = [],
         jumps: [LayoutElement] = []
     ) {
+        self.measureIndex = measureIndex
         self.origin = origin
         self.width = width
         self.elements = elements

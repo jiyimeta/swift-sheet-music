@@ -21,11 +21,18 @@ public enum LayoutEngine {
         availableWidth: CGFloat
     ) -> LayoutDocument {
         let metrics = StaffMetrics(staffSize: options.staffSize)
+        let effectiveMelismaTicks = computeEffectiveMelismaTicks(
+            score: score, division: score.division)
+        let melismas = computeMelismaContinuations(
+            score: score, division: score.division,
+            effectiveTicks: effectiveMelismaTicks)
         let context = RenderContext(
             score: score,
             options: options,
             metrics: metrics,
-            availableWidth: availableWidth
+            availableWidth: availableWidth,
+            melismaContinuations: melismas,
+            effectiveMelismaTicks: effectiveMelismaTicks
         )
         let systems = packSystems(context: context)
         // Use the actual rendered system extent — not `availableWidth`,
@@ -53,7 +60,7 @@ public enum LayoutEngine {
         )
         let ties = resolveTies(for: firstPass, score: score)
         let systemsWithTies = attachTies(
-            to: systemsWithSpanners, pairs: ties)
+            to: systemsWithSpanners, pairs: ties, metrics: metrics)
         return LayoutDocument(
             size: firstPass.size,
             systems: systemsWithTies,
@@ -68,6 +75,19 @@ public enum LayoutEngine {
         let options: ScoreViewOptions
         let metrics: StaffMetrics
         let availableWidth: CGFloat
+        /// Per-(staff, measure) melisma continuation lines.
+        /// `melismaContinuations[staffIdx][measureIdx]` lists the
+        /// melismas that extend INTO this measure from an earlier
+        /// measure. The measure that owns the anchor `<Lyrics>` is
+        /// handled by the per-chord `emitMelismaLine` path and is
+        /// not included here.
+        let melismaContinuations: [[[MelismaContinuation]]]
+        /// Per-lyric effective melisma duration (in ticks) that
+        /// accounts for tied-chain continuations past the anchor
+        /// note. Used by `placeMeasureElements` so that the
+        /// "melisma?" check is consistent with the continuation
+        /// plan from `computeMelismaContinuations`.
+        let effectiveMelismaTicks: [MelismaLyricKey: Int]
     }
 
     // MARK: - System packing
@@ -95,6 +115,24 @@ public enum LayoutEngine {
             }.max() ?? 0
         }
 
+        // Clef state persists ACROSS systems: engraving convention
+        // redraws the currently active clef at the start of every
+        // new system (line break).  Without this persistence,
+        // continuation systems would either omit the clef or restore
+        // an outdated default, losing any mid-piece clef changes.
+        var activeClefs: [NotatedClef] = defaultClefRawTypes(
+            staves: context.score.staves,
+            parts: context.score.parts
+        ).map { NotatedClef(rawType: $0) }
+
+        // Key signatures follow the same engraving rule: redraw the
+        // currently active key at the start of every system.  Core
+        // storage is `concertKey` — positive = sharps, negative =
+        // flats, 0 = C major (drawn as nothing).
+        var activeKeys: [Int] = Array(
+            repeating: 0,
+            count: context.score.staves.count)
+
         var systems: [LayoutSystem] = []
         var currentY: CGFloat = 0
         var cursor = 0
@@ -108,8 +146,25 @@ public enum LayoutEngine {
             let contentAvail = context.availableWidth - labelW
             var widthSoFar: CGFloat = 0
             let systemStart = cursor
+            // Engraving convention redraws the active clef + key
+            // signature at every system head. `minWidths[systemStart]`
+            // only counts elements physically present in that measure,
+            // so when wrapping promotes an interior measure to a system
+            // head, the synthesised header eats into the chord content
+            // area — squeezing adjacent lyrics together. Reserve the
+            // synthesised overhead up front so the first measure keeps
+            // its natural chord spacing.
+            let firstHeaderBoost = synthHeaderOverhead(
+                staves: context.score.staves,
+                measureIdx: systemStart,
+                activeKeys: activeKeys,
+                metrics: context.metrics
+            )
             while cursor < measureCount {
-                let w = minWidths[cursor]
+                let baseW = minWidths[cursor]
+                let w = cursor == systemStart
+                    ? baseW + firstHeaderBoost
+                    : baseW
                 if context.options.wrapToViewWidth
                     && widthSoFar + w > contentAvail
                     && cursor > systemStart {
@@ -118,7 +173,10 @@ public enum LayoutEngine {
                 widthSoFar += w
                 cursor += 1
             }
-            let widthsSlice = Array(minWidths[systemStart..<cursor])
+            var widthsSlice = Array(minWidths[systemStart..<cursor])
+            if !widthsSlice.isEmpty {
+                widthsSlice[0] += firstHeaderBoost
+            }
             let stretched = stretchWidths(
                 widths: widthsSlice,
                 availableWidth: contentAvail,
@@ -129,6 +187,8 @@ public enum LayoutEngine {
                 widths: stretched,
                 systemOriginY: currentY,
                 isFirstSystem: isFirstSystem,
+                activeClefs: &activeClefs,
+                activeKeys: &activeKeys,
                 context: context
             )
             currentY += system.size.height + context.options.systemGap
@@ -136,6 +196,25 @@ public enum LayoutEngine {
             isFirstSystem = false
         }
         return systems
+    }
+
+    /// Resolve each staff's starting-of-score default clef from the
+    /// part's declarations.  Mirrors the logic used previously inside
+    /// `buildSystem`; factored out so `packSystems` can initialise the
+    /// clef carry-over state before entering the system loop.
+    static func defaultClefRawTypes(
+        staves: [StaffContent],
+        parts: [Part]
+    ) -> [String] {
+        staves.enumerated().map { idx, _ in
+            let part = idx < parts.count ? parts[idx] : nil
+            let decl = part?.staffDeclarations.first
+            if let declared = decl?.defaultClefType {
+                return declared
+            }
+            if decl?.group == "percussion" { return "PERC" }
+            return "G"
+        }
     }
 
     static func stretchWidths(
@@ -158,6 +237,8 @@ public enum LayoutEngine {
         widths: [CGFloat],
         systemOriginY: CGFloat,
         isFirstSystem: Bool,
+        activeClefs: inout [NotatedClef],
+        activeKeys: inout [Int],
         context: RenderContext
     ) -> LayoutSystem {
         let metrics = context.metrics
@@ -180,7 +261,7 @@ public enum LayoutEngine {
                 for voice in staff.measures[mIdx].voices {
                     for el in voice.elements {
                         if case .chord(let c) = el {
-                            let nonEmpty = c.lyrics.filter { !$0.isEmpty }.count
+                            let nonEmpty = c.lyrics.filter { !$0.text.isEmpty }.count
                             maxLyricsVerses = max(maxLyricsVerses, nonEmpty)
                         }
                     }
@@ -195,16 +276,136 @@ public enum LayoutEngine {
             return max(basePad, lyricsPad)
         }
 
-        // --- Dynamic per-staff top padding ---
+        // --- Pass 1: place all measures untranslated ---
         //
-        // Space above the staff for tempo, ottava, high ledger lines.
-        // For the first staff, topPad is the system-level value;
-        // subsequent staves use a smaller overhead.
+        // Element auto-placement (e.g. `<StaffText>` getting bumped
+        // above a high stem) makes each staff's vertical extent
+        // dynamic — we can't size `staffTopPads` until we've seen
+        // where the elements actually landed. Run `placeMeasureElements`
+        // first into a per-staff buffer, then derive padding from
+        // the resulting Y bounds, then translate in pass 2.
+        struct UntranslatedMeasure {
+            let measureIdx: Int
+            let width: CGFloat
+            let perStaffElements: [Int: [LayoutElement]]
+            let staff0Measure: Measure?
+        }
+        var untranslated: [UntranslatedMeasure] = []
+        var clefs = activeClefs
+        var keys = activeKeys
+        for (j, measureIdx) in measureRange.enumerated() {
+            let w = widths[j]
+            let synthesizeClefHere = j == 0
+            let synthesizeKeySigHere = j == 0
+            let schedule = computeHeaderSchedule(
+                measureIdx: measureIdx,
+                staves: staves,
+                metrics: metrics,
+                synthesizeClefForAllStaves: synthesizeClefHere,
+                synthesizeKeySigForAllStaves: synthesizeKeySigHere,
+                activeKeys: keys
+            )
+            let tickCols = tickColumns(
+                staves: staves,
+                measureIdx: measureIdx,
+                metrics: metrics,
+                headerSchedule: schedule,
+                width: w,
+                division: context.score.division
+            )
+            var perStaff: [Int: [LayoutElement]] = [:]
+            for (staffIdx, staff) in staves.enumerated() {
+                guard measureIdx < staff.measures.count else { continue }
+                let m = staff.measures[measureIdx]
+                let synthClef: String? = synthesizeClefHere
+                    ? clefs[staffIdx].rawType
+                    : nil
+                let synthKey: Int? = synthesizeKeySigHere
+                    ? keys[staffIdx]
+                    : nil
+                let part = staffIdx < context.score.parts.count
+                    ? context.score.parts[staffIdx] : nil
+                let drumMap: [Int: Int]? =
+                    part?.instrument.useDrumset == true
+                        ? part?.instrument.drumLineMap
+                        : nil
+                let totalMeasures = staves.first?.measures.count ?? 0
+                let lastMeasure = measureIdx == totalMeasures - 1
+                let incomingMelismas = context.melismaContinuations
+                    .indices.contains(staffIdx)
+                    && context.melismaContinuations[staffIdx]
+                        .indices.contains(measureIdx)
+                    ? context.melismaContinuations[staffIdx][measureIdx]
+                    : []
+                let (els, newClef, newKey) = placeMeasureElements(
+                    measure: m,
+                    staffIndex: staffIdx,
+                    measureIndex: measureIdx,
+                    width: w,
+                    metrics: metrics,
+                    activeClef: clefs[staffIdx],
+                    activeKey: keys[staffIdx],
+                    initialClefRawType: synthClef,
+                    initialKeyForSynth: synthKey,
+                    headerSchedule: schedule,
+                    tickColumns: tickCols,
+                    division: context.score.division,
+                    drumLineMap: drumMap,
+                    isLastMeasure: lastMeasure,
+                    incomingMelismas: incomingMelismas,
+                    effectiveMelismaTicks: context.effectiveMelismaTicks
+                )
+                clefs[staffIdx] = newClef
+                keys[staffIdx] = newKey
+                perStaff[staffIdx] = els
+            }
+            let staff0Measure: Measure? = measureIdx
+                < (staves.first?.measures.count ?? 0)
+                ? staves.first?.measures[measureIdx]
+                : nil
+            untranslated.append(UntranslatedMeasure(
+                measureIdx: measureIdx,
+                width: w,
+                perStaffElements: perStaff,
+                staff0Measure: staff0Measure))
+        }
+
+        // --- Per-staff Y bounds from the untranslated elements ---
+        //
+        // Mirrors MuseScore's "skyline" — the highest and lowest
+        // points each staff actually paints, which feeds the
+        // adaptive staff distance below. Staff top in placement
+        // coords sits at `sp * 2` (see `staffMidY` in
+        // `placeMeasureElements`); anything above that pushes the
+        // next staff down so they don't overlap.
+        let staffTopLocal: CGFloat = metrics.sp * 2
+        var staffMinY = Array(
+            repeating: CGFloat.infinity, count: staves.count)
+        for um in untranslated {
+            for (staffIdx, els) in um.perStaffElements {
+                for el in els {
+                    for y in elementYPoints(el) {
+                        if y < staffMinY[staffIdx] {
+                            staffMinY[staffIdx] = y
+                        }
+                    }
+                }
+            }
+        }
+
+        // --- Adaptive per-staff top padding ---
         let staffTopPads: [CGFloat] = staves.enumerated().map { idx, _ in
-            // A staff can have tempo / markers / high notes above.
-            // For now, use a fixed estimate; per-element scanning is
-            // expensive and a 4 sp overhead covers common cases.
-            return idx == 0 ? 0 : metrics.sp * 2
+            let topOverflow: CGFloat = staffMinY[idx].isFinite
+                ? max(0, staffTopLocal - staffMinY[idx]
+                      + metrics.sp * 0.5)
+                : 0
+            // First staff falls under the system's `topPad` already;
+            // subsequent staves still get the previous baseline of
+            // 2 sp (so multi-staff parts breathe even without staff
+            // text), plus the overflow needed to clear elements
+            // that landed above this staff's top.
+            let baseline: CGFloat = idx == 0 ? 0 : metrics.sp * 2
+            return baseline + topOverflow
         }
 
         // --- Compute staffOrigins from cumulative extent ---
@@ -243,107 +444,70 @@ public enum LayoutEngine {
             )
         }
 
-        // Resolve each staff's default clef from its Part's declaration.
-        // MuseScore omits an explicit `<Clef>` in the first measure when
-        // the default is obvious (treble for pitched voice, PERC for
-        // percussion); without this resolution the staff renders with no
-        // clef glyph at all.
-        let defaultClefRawTypes: [String] =
-            staves.enumerated().map { idx, _ in
-                let part = idx < context.score.parts.count
-                    ? context.score.parts[idx] : nil
-                let decl = part?.staffDeclarations.first
-                if let declared = decl?.defaultClefType {
-                    return declared
-                }
-                if decl?.group == "percussion" { return "PERC" }
-                return "G"
-            }
-
+        // --- Pass 2: translate elements with adjusted origins ---
         var layoutMeasures: [LayoutMeasure] = []
         var xCursor: CGFloat = partLabelWidth
-        var clefs: [NotatedClef] = defaultClefRawTypes.map {
-            NotatedClef(rawType: $0)
-        }
-        for (j, measureIdx) in measureRange.enumerated() {
-            let w = widths[j]
-            let synthesizeClefHere = isFirstSystem && j == 0
-            let schedule = computeHeaderSchedule(
-                measureIdx: measureIdx,
-                staves: staves,
-                metrics: metrics,
-                synthesizeClefForAllStaves: synthesizeClefHere
-            )
+        for (j, um) in untranslated.enumerated() {
+            let w = um.width
+            let measureIdx = um.measureIdx
             var aggregated: [LayoutElement] = []
             var markers: [LayoutElement] = []
             var jumps: [LayoutElement] = []
-            for (staffIdx, staff) in staves.enumerated() {
-                guard measureIdx < staff.measures.count else { continue }
-                let m = staff.measures[measureIdx]
-                let synthClef: String? = synthesizeClefHere
-                    ? defaultClefRawTypes[staffIdx]
-                    : nil
-                // For percussion staves, pass the instrument's drum
-                // map so note positions use the per-pitch line
-                // rather than the pitched diatonic formula.
-                let part = staffIdx < context.score.parts.count
-                    ? context.score.parts[staffIdx] : nil
-                let drumMap: [Int: Int]? =
-                    part?.instrument.useDrumset == true
-                        ? part?.instrument.drumLineMap
-                        : nil
-                let totalMeasures = staves.first?.measures.count ?? 0
-                let lastMeasure = measureIdx == totalMeasures - 1
-                let (els, newClef) = placeMeasureElements(
-                    measure: m,
-                    width: w,
-                    metrics: metrics,
-                    activeClef: clefs[staffIdx],
-                    initialClefRawType: synthClef,
-                    headerSchedule: schedule,
-                    division: context.score.division,
-                    drumLineMap: drumMap,
-                    isLastMeasure: lastMeasure
-                )
-                clefs[staffIdx] = newClef
-                // Placement emits positions relative to "staff top at
-                // sp*2" (see `staffMidY` inside placeMeasureElements).
-                // Shift by the difference so placement coords end up in
-                // system coords.
-                let yOffset = staffOrigins[staffIdx].y - metrics.sp * 2
+            for (staffIdx, _) in staves.enumerated() {
+                guard let els = um.perStaffElements[staffIdx]
+                else { continue }
+                // Placement emits positions relative to "staff top
+                // at sp*2" (see `staffMidY` inside
+                // `placeMeasureElements`). Shift by the difference
+                // so placement coords end up in system coords.
+                let yOffset = staffOrigins[staffIdx].y
+                    - metrics.sp * 2
                 aggregated.append(contentsOf: els.map {
                     translate(element: $0, dy: yOffset)
                 })
-                // Markers / jumps are collected only from the first staff
-                // — they apply to the whole system at this measure, not
-                // per staff. A piano grand staff repeats the same marker
-                // on both staves in MSCX; we draw it once above the top
-                // staff to match engraving convention.
-                if staffIdx == 0 {
-                    let staffTopY = staffOrigins[staffIdx].y
-                    let staffBottomY = staffTopY + metrics.staffHeight
-                    for marker in m.markers {
-                        let labelText = marker.text.isEmpty
-                            ? marker.label : marker.text
-                        markers.append(.marker(
-                            kind: marker.kind,
-                            text: labelText,
-                            origin: CGPoint(
-                                x: 4, y: staffTopY - metrics.sp)
-                        ))
-                    }
-                    for jump in m.jumps {
-                        jumps.append(.jump(
-                            text: jump.text,
-                            origin: CGPoint(
-                                x: w - metrics.sp * 4,
-                                y: staffBottomY + metrics.sp
-                            )
-                        ))
-                    }
+            }
+            // Markers / jumps come from the first staff only — they
+            // apply to the whole system at this measure, not per
+            // staff. A piano grand staff repeats the same marker
+            // on both staves in MSCX; we draw it once above the
+            // top staff to match engraving convention.
+            if let m = um.staff0Measure {
+                let staffTopY = staffOrigins[0].y
+                let staffBottomY = staffTopY + metrics.staffHeight
+                for marker in m.markers {
+                    let labelText = marker.text.isEmpty
+                        ? marker.label : marker.text
+                    markers.append(.marker(
+                        kind: marker.kind,
+                        text: labelText,
+                        origin: CGPoint(
+                            x: 4, y: staffTopY - metrics.sp)
+                    ))
+                }
+                for jump in m.jumps {
+                    jumps.append(.jump(
+                        text: jump.text,
+                        origin: CGPoint(
+                            x: w - metrics.sp * 4,
+                            y: staffBottomY + metrics.sp
+                        )
+                    ))
                 }
             }
+            // Measure number at every system head — TOP STAFF
+            // ONLY. Engraving convention places a single number
+            // above the topmost staff at the start of each system.
+            if j == 0, !staves.isEmpty {
+                let staffTopY = staffOrigins[0].y
+                markers.append(.measureNumber(
+                    text: "\(measureIdx + 1)",
+                    origin: CGPoint(
+                        x: -metrics.sp * 0.5,
+                        y: staffTopY - metrics.sp * 1.5)
+                ))
+            }
             layoutMeasures.append(LayoutMeasure(
+                measureIndex: measureIdx,
                 origin: CGPoint(x: xCursor, y: 0),
                 width: w,
                 elements: aggregated,
@@ -386,6 +550,12 @@ public enum LayoutEngine {
                     origin: CGPoint(x: $0.origin.x, y: $0.origin.y + topShift))
             }
             : labels
+
+        // Hand the (possibly mutated) clef / key state back to the
+        // caller so the next system continues from where this one
+        // ended.
+        activeClefs = clefs
+        activeKeys = keys
 
         return LayoutSystem(
             origin: CGPoint(x: 0, y: systemOriginY),
@@ -432,16 +602,20 @@ public enum LayoutEngine {
              .keySignature(_, _, let p),
              .timeSignature(_, _, let p),
              .barLine(_, let p),
-             .rest(_, let p),
              .textMark(_, _, let p),
              .fermata(_, let p),
              .marker(_, _, let p),
              .jump(_, let p),
-             .measureRepeat(_, let p):
+             .measureRepeat(_, let p),
+             .measureNumber(_, let p),
+             .staffName(_, let p),
+             .staffText(_, let p, _, _):
+            return [p.y]
+        case .rest(_, let p, _, _, _):
             return [p.y]
         case .note(_, _, _, _, let p, _, _, _):
             return [p.y]
-        case .chord(let notes, _, _, let so, _, _, _):
+        case .chord(let notes, _, _, let so, _, _, _, _):
             var ys = notes.map(\.origin.y)
             ys.append(so.y)
             return ys
@@ -459,6 +633,9 @@ public enum LayoutEngine {
             return [top.y, bot.y]
         case .tupletLabel(let from, let to, _, _, _):
             return [from.y, to.y]
+        case .lyricsMelisma(let from, let to),
+             .lyricHyphen(let from, let to):
+            return [from.y, to.y]
         }
     }
 
@@ -466,6 +643,7 @@ public enum LayoutEngine {
         _ measure: LayoutMeasure, dy: CGFloat
     ) -> LayoutMeasure {
         LayoutMeasure(
+            measureIndex: measure.measureIndex,
             origin: measure.origin,
             width: measure.width,
             elements: measure.elements.map { translate(element: $0, dy: dy) },
@@ -492,11 +670,16 @@ public enum LayoutEngine {
                 numerator: n, denominator: d, origin: shift(p))
         case .barLine(let s, let p):
             return .barLine(subtype: s, origin: shift(p))
-        case .rest(let d, let p):
-            return .rest(duration: d, origin: shift(p))
-        case .chord(let notes, let dur, let stem, let so, let arp, let art, let beamed):
+        case let .rest(d, p, vi, rid, hll):
+            return .rest(
+                duration: d, origin: shift(p),
+                voiceIndex: vi, restID: rid,
+                hasLegerLine: hll)
+        case .chord(let notes, let dur, let stem, let so,
+                    let arp, let art, let beamed, let vi):
             let shiftedNotes = notes.map {
                 LayoutChordNote(
+                    noteID: $0.noteID,
                     step: $0.step,
                     accidental: $0.accidental,
                     origin: shift($0.origin),
@@ -513,7 +696,8 @@ public enum LayoutEngine {
                 stemOrigin: shift(so),
                 hasArpeggio: arp,
                 arpeggioRawType: art,
-                isBeamed: beamed
+                isBeamed: beamed,
+                voiceIndex: vi
             )
         case .textMark(let k, let t, let p):
             return .textMark(kind: k, text: t, origin: shift(p))
@@ -545,7 +729,27 @@ public enum LayoutEngine {
                 text: text,
                 hasBracket: bracket,
                 isAbove: above)
-        case .note, .marker, .jump, .spannerSegment, .tieArc:
+        case .lyricsMelisma(let from, let to):
+            return .lyricsMelisma(
+                fromOrigin: shift(from),
+                toOrigin: shift(to))
+        case .lyricHyphen(let from, let to):
+            return .lyricHyphen(
+                fromOrigin: shift(from),
+                toOrigin: shift(to))
+        case .staffText(let text, let p, let color, let isSystem):
+            // Emitted by `placeMeasureElements` in staff-local
+            // coords (relative to a virtual staff with top at
+            // sp * 2), so the per-staff `dy` must be applied for
+            // the text to land above its OWN staff. Without this
+            // shift every staff's text rendered above staff 0.
+            return .staffText(
+                text: text,
+                origin: shift(p),
+                color: color,
+                isSystemText: isSystem)
+        case .note, .marker, .jump, .measureNumber, .staffName,
+             .spannerSegment, .tieArc:
             return element
         }
     }

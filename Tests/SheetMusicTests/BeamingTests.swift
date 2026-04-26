@@ -105,5 +105,84 @@ struct BeamingTests {
         )
         #expect(groups.isEmpty)
     }
+
+    @Test("8 straight 16ths in 4/4 split at the beat (2 groups of 4)")
+    func eightSixteenthsSplitAtBeat() {
+        guard #available(macOS 15.0, *) else { return }
+        let c = Chord(
+            duration: .sixteenth,
+            notes: [Note(pitch: 60, tpc: 14)])
+        let voice = Voice(elements: Array(
+            repeating: .chord(c), count: 8))
+        let groups = LayoutEngine.beamGroups(
+            voice: voice,
+            timeSignature: TimeSignature(
+                numerator: 4, denominator: 4),
+            division: 480
+        )
+        // Two uniform level-2 beats still flush because secondary
+        // beams break at every beat — not a single merged run of 8.
+        #expect(groups.count == 2)
+        #expect(groups[0].memberIndices.count == 4)
+        #expect(groups[1].memberIndices.count == 4)
+        #expect(groups[0].level == 2)
+        #expect(groups[1].level == 2)
+    }
+
+    @Test("16 straight 16ths in 4/4 → 4 groups of 4 (one per beat)")
+    func sixteenSixteenthsFourGroups() {
+        guard #available(macOS 15.0, *) else { return }
+        let c = Chord(
+            duration: .sixteenth,
+            notes: [Note(pitch: 60, tpc: 14)])
+        let voice = Voice(elements: Array(
+            repeating: .chord(c), count: 16))
+        let groups = LayoutEngine.beamGroups(
+            voice: voice,
+            timeSignature: TimeSignature(
+                numerator: 4, denominator: 4),
+            division: 480
+        )
+        #expect(groups.count == 4)
+        for g in groups {
+            #expect(g.memberIndices.count == 4)
+            #expect(g.level == 2)
+        }
+    }
+
+    @Test("Two 16ths straddling a beat boundary are not beamed together")
+    func sixteenthPairAcrossBeat() {
+        guard #available(macOS 15.0, *) else { return }
+        // User-reported pattern: half rest + sparse 16th figure over
+        // beats 3-4. Elements 4 and 5 are the two consecutive 16th
+        // notes that cross the beat 3→4 boundary and must NOT beam.
+        // Only elements 7 and 8 (both inside beat 4) remain a pair.
+        let c16 = Chord(
+            duration: .sixteenth,
+            notes: [Note(pitch: 60, tpc: 14)])
+        let e16 = Chord(
+            duration: .sixteenth,
+            notes: [Note(pitch: 64, tpc: 18)])
+        let voice = Voice(elements: [
+            .rest(Rest(duration: .half)),        // 0
+            .rest(Rest(duration: .sixteenth)),   // 1
+            .chord(c16),                         // 2
+            .rest(Rest(duration: .sixteenth)),   // 3
+            .chord(c16),                         // 4 — end of beat 3
+            .chord(e16),                         // 5 — start of beat 4
+            .rest(Rest(duration: .sixteenth)),   // 6
+            .chord(c16),                         // 7
+            .chord(e16),                         // 8
+        ])
+        let groups = LayoutEngine.beamGroups(
+            voice: voice,
+            timeSignature: TimeSignature(
+                numerator: 4, denominator: 4),
+            division: 480
+        )
+        #expect(groups.count == 1)
+        #expect(groups.first?.memberIndices == [7, 8])
+        #expect(groups.first?.level == 2)
+    }
 }
 #endif

@@ -1,5 +1,36 @@
 import CoreGraphics
+import CoreText
 import SheetMusicCore
+
+/// A melisma that extends INTO a measure from an earlier measure.
+/// The anchor measure (where the `<Lyrics>` element lives) is
+/// handled inside `emitMelismaLine`; instances of this type describe
+/// the left-hand continuation rule drawn on the following measures.
+@available(macOS 15.0, iOS 16.0, *)
+struct MelismaContinuation: Sendable, Equatable {
+    let voiceIndex: Int
+    let verseIndex: Int
+    /// Tick (within this measure's voice time) where the line
+    /// terminates. Ignored when `continuesPastMeasure` is true.
+    let endTick: Int
+    /// The melisma spans all of this measure and keeps going into
+    /// the next one — the rule should run through to the trailing
+    /// barline (and beyond) so it meets up with the continuation
+    /// line in the next measure without a visible gap.
+    let continuesPastMeasure: Bool
+}
+
+/// Identifies one lyric syllable across the score — used as the key
+/// for pre-computed per-lyric data (e.g. effective melisma ticks
+/// after following ties forward).
+@available(macOS 15.0, iOS 16.0, *)
+struct MelismaLyricKey: Hashable, Sendable {
+    let staffIndex: Int
+    let measureIndex: Int
+    let voiceIndex: Int
+    let elementIndex: Int
+    let verseIndex: Int
+}
 
 @available(macOS 15.0, iOS 16.0, *)
 extension LayoutEngine {
@@ -13,18 +44,26 @@ extension LayoutEngine {
     /// stretched measure width.
     static func placeMeasureElements(
         measure: Measure,
+        staffIndex: Int,
+        measureIndex: Int,
         width: CGFloat,
         metrics: StaffMetrics,
         activeClef: NotatedClef,
+        activeKey: Int = 0,
         initialClefRawType: String? = nil,
+        initialKeyForSynth: Int? = nil,
         headerSchedule: HeaderSchedule,
+        tickColumns: [Int: CGFloat],
         division: Int,
         drumLineMap: [Int: Int]? = nil,
-        isLastMeasure: Bool = false
-    ) -> (elements: [LayoutElement], clef: NotatedClef) {
+        isLastMeasure: Bool = false,
+        incomingMelismas: [MelismaContinuation] = [],
+        effectiveMelismaTicks: [MelismaLyricKey: Int] = [:]
+    ) -> (elements: [LayoutElement], clef: NotatedClef, key: Int) {
         let staffMidY = metrics.staffHeight / 2 + metrics.sp * 2
         var out: [LayoutElement] = []
         var currentClef = activeClef
+        var currentKey = activeKey
 
         // --- Scan: time signature and total ticks in the widest voice ---
         var measureTimeSig: TimeSignature?
@@ -53,41 +92,96 @@ extension LayoutEngine {
         } else {
             synthesizeLeadingClef = false
         }
-
-        // Content width uses the shared schedule, so timed elements in
-        // this staff align with timed elements in every other staff of
-        // the same system.
-        let trailingGap = metrics.sp * 3
-        let contentWidth = max(
-            metrics.sp * 4,
-            width - headerSchedule.contentStartX - trailingGap)
+        // --- Should we synthesize a leading key signature? ---
+        //
+        // At the start of a continuation system, engraving convention
+        // redraws the currently active key signature even if the
+        // measure itself has no explicit `<KeySig>`.  `activeKey`
+        // carries the current concert key (positive = sharps, etc.);
+        // `initialKeyForSynth` is non-nil when the caller asks for the
+        // synthesis.  We skip when the key is 0 (C major — no glyph).
+        let synthesizeLeadingKeySig: Bool
+        if let keyForSynth = initialKeyForSynth,
+           keyForSynth != 0,
+           !firstVoiceHasLeadingKeySig(measure: measure) {
+            synthesizeLeadingKeySig = true
+        } else {
+            synthesizeLeadingKeySig = false
+        }
 
         // --- Pass 2: emit elements for each voice ---
         //
-        // Multi-voice detection (MuseScore's hasVoices): a measure
-        // uses multiple voices when more than one voice contains at
-        // least one chord. In that mode:
-        //  - Voice 0 / 2: stems forced UP
-        //  - Voice 1 / 3: stems forced DOWN
-        //  - Rest y offset: voice 0 stays normal, voice 1 shifts down
+        // Two independent multi-voice checks:
+        //
+        //   `hasMultiChordVoices`  — more than one voice contains at
+        //       least one chord.  Drives stem-direction forcing (voice
+        //       0/2 up, 1/3 down) and skipping the whole-measure rest
+        //       centering.  Matches MuseScore's `hasVoices()` for stem
+        //       direction.
+        //   `hasMultiContentVoices` — more than one voice has ANY
+        //       timed content (chord OR rest).  Drives rest y-offset
+        //       so a voice 1 that holds only rests still gets shifted
+        //       below voice 0's melody line; and drives whole-rest
+        //       tick anchoring so centering doesn't drop the rest
+        //       onto a melody note.
         let voicesWithChords = measure.voices.filter { v in
             v.elements.contains { if case .chord = $0 { true } else { false } }
         }.count
-        let isMultiVoice = voicesWithChords > 1
+        let voicesWithContent = measure.voices.filter { v in
+            v.elements.contains { el in
+                switch el {
+                case .chord, .rest: return true
+                default: return false
+                }
+            }
+        }.count
+        let hasMultiChordVoices = voicesWithChords > 1
+        let hasMultiContentVoices = voicesWithContent > 1
+        let isMultiVoice = hasMultiChordVoices
 
         var remainingSynthClef = synthesizeLeadingClef
+        var remainingSynthKeySig = synthesizeLeadingKeySig
         for (voiceIdx, voice) in measure.voices.enumerated() {
-            let voiceTotal = totalTicks(in: voice, division: division)
             var tickCursor = 0
             var inHeader = true
             var voiceChordOutIndex: [Int: Int] = [:]
+            // Per-verse trail used to drop hyphens between adjacent
+            // syllables of the same word ("Pa-ra-di-so" → 3 dashes).
+            // Mirrors MuseScore's `LyricsLayout::layoutDashes`: when
+            // the previous syllable was `begin`/`middle` and the
+            // current is `middle`/`end`, dashes fill the gap between
+            // them. Within-measure only for now; cross-measure
+            // hyphens (when a word spans a barline) would need the
+            // same continuation plumbing as melismas.
+            struct LyricTrail {
+                let centerX: CGFloat
+                let textWidth: CGFloat
+                let lyricsY: CGFloat
+                let syllabic: Syllabic
+            }
+            var previousLyric: [Int: LyricTrail] = [:]
+            // Pre-compute this voice's total ticks for the measure
+            // so melisma emission can tell "ends inside" from
+            // "crosses into next measure" without rescanning.
+            let voiceTotalTicks: Int = voice.elements.reduce(0) { acc, el in
+                switch el {
+                case .chord(let c):
+                    return acc + c.duration.ticks(division: division)
+                case .rest(let r):
+                    return acc + r.duration.ticks(division: division)
+                default:
+                    return acc
+                }
+            }
 
             // Forced stem direction for multi-voice measures.
             let forcedStem: StemDirection? = isMultiVoice
                 ? (voiceIdx.isMultiple(of: 2) ? .up : .down)
                 : nil
-            // Rest y offset when multi-voice to avoid collision.
-            let restVoiceOffset: CGFloat = isMultiVoice
+            // Rest y offset when multiple voices coexist — even if the
+            // second voice only carries rests, we still need to pull
+            // them out of the way of voice 0's melody.
+            let restVoiceOffset: CGFloat = hasMultiContentVoices
                 ? (voiceIdx.isMultiple(of: 2)
                    ? -metrics.sp * 2
                    :  metrics.sp * 2)
@@ -102,52 +196,25 @@ extension LayoutEngine {
                         x: headerSchedule.clefX, y: staffMidY)))
                 remainingSynthClef = false
             }
-
-            // --- Weight-proportional x placement ---
-            //
-            // Pure tick-proportional placement gives equal horizontal
-            // density to every beat regardless of lyrics width. This
-            // causes long syllables ("can't") to overlap short ones
-            // ("say"). Instead, weight each timed element by
-            // max(tickWidth, lyricsWidth) and distribute the content
-            // width proportionally to those weights.
-            var elementWeights: [(voiceElementIdx: Int, weight: CGFloat)] = []
-            var totalWeight: CGFloat = 0
-            for (idx, el) in voice.elements.enumerated() {
-                switch el {
-                case .chord(let c):
-                    let tickW = durationWidth(c.duration, metrics: metrics)
-                    let lyricW = lyricsWidth(c.lyrics, metrics: metrics)
-                    let w = max(tickW, lyricW)
-                    elementWeights.append((idx, w))
-                    totalWeight += w
-                case .rest(let r):
-                    let w = durationWidth(r.duration, metrics: metrics)
-                    elementWeights.append((idx, w))
-                    totalWeight += w
-                default:
-                    break
-                }
+            // Emit the synthesized leading key signature once, after
+            // the clef column.
+            if remainingSynthKeySig, let k = initialKeyForSynth {
+                out.append(.keySignature(
+                    sharps: max(0, k),
+                    flats: max(0, -k),
+                    origin: CGPoint(
+                        x: headerSchedule.keySigX, y: staffMidY)))
+                remainingSynthKeySig = false
             }
 
-            var weightCursor: CGFloat = 0
-            var weightLookup: [Int: CGFloat] = [:]
-            for entry in elementWeights {
-                weightLookup[entry.voiceElementIdx] = weightCursor
-                weightCursor += entry.weight
-            }
-
-            /// x-coordinate for the current timed element.
-            /// Uses weight-proportional placement so lyrics-heavy chords
-            /// get more room than pure tick fractions would give.
-            func timedX(voiceElementIdx: Int) -> CGFloat {
-                guard totalWeight > 0 else {
-                    return headerSchedule.contentStartX + metrics.sp
-                }
-                let wCursor = weightLookup[voiceElementIdx] ?? 0
-                let fraction = wCursor / totalWeight
-                return headerSchedule.contentStartX
-                    + metrics.sp + fraction * contentWidth
+            /// x-coordinate for a timed element starting at `tick`.
+            /// Always consults the shared per-measure `tickColumns` map
+            /// so notes at the same tick across different staves or
+            /// voices land at exactly the same x — MuseScore's segment
+            /// alignment.
+            func timedX(atTick tick: Int) -> CGFloat {
+                tickColumns[tick]
+                    ?? (headerSchedule.contentStartX + metrics.sp)
             }
 
             for (voiceElemIdx, el) in voice.elements.enumerated() {
@@ -155,24 +222,25 @@ extension LayoutEngine {
                 case .clef(let clef):
                     currentClef = NotatedClef(rawType: clef.concertClefType)
                     let clefX = inHeader ? headerSchedule.clefX
-                        : timedX(voiceElementIdx: voiceElemIdx)
+                        : timedX(atTick: tickCursor)
                     out.append(.clef(
                         rawType: clef.concertClefType,
                         origin: CGPoint(x: clefX, y: staffMidY)))
                 case .keySignature(let key):
-                    let keyX = inHeader ? headerSchedule.keySigX : timedX(voiceElementIdx: voiceElemIdx)
+                    currentKey = key.concertKey
+                    let keyX = inHeader ? headerSchedule.keySigX : timedX(atTick: tickCursor)
                     out.append(.keySignature(
                         sharps: max(0, key.concertKey),
                         flats: max(0, -key.concertKey),
                         origin: CGPoint(x: keyX, y: staffMidY)))
                 case .timeSignature(let ts):
-                    let tsX = inHeader ? headerSchedule.timeSigX : timedX(voiceElementIdx: voiceElemIdx)
+                    let tsX = inHeader ? headerSchedule.timeSigX : timedX(atTick: tickCursor)
                     out.append(.timeSignature(
                         numerator: ts.numerator,
                         denominator: ts.denominator,
                         origin: CGPoint(x: tsX, y: staffMidY)))
                 case .barLine(let b):
-                    let barX = inHeader ? metrics.sp : timedX(voiceElementIdx: voiceElemIdx)
+                    let barX = inHeader ? metrics.sp : timedX(atTick: tickCursor)
                     out.append(.barLine(
                         subtype: b.subtype,
                         origin: CGPoint(x: barX, y: staffMidY)))
@@ -192,40 +260,61 @@ extension LayoutEngine {
                     default:
                         restY = staffMidY + restVoiceOffset
                     }
-                    // A whole-measure rest is centered horizontally.
+                    // Whole-measure rest: ALWAYS centered horizontally
+                    // in the measure body, even when other voices
+                    // carry content — that's how MuseScore engraves
+                    // it (`Rest::layout` falls into the
+                    // `centerInMeasure` branch whenever the rest's
+                    // duration spans the full measure, irrespective
+                    // of voice multiplicity). The vertical offset
+                    // assigned by `restVoiceOffset` keeps voice 2 /
+                    // 3 / 4 rests off voice 1's melody line, so
+                    // centering doesn't introduce any actual
+                    // collision.
                     let isWholeRest = restBase == .whole
                     let restX: CGFloat
                     if isWholeRest {
                         restX = (headerSchedule.contentStartX + width
                                  - metrics.sp * 3) / 2
                     } else {
-                        restX = timedX(voiceElementIdx: voiceElemIdx)
+                        restX = timedX(atTick: tickCursor)
                     }
+                    let restID = RestID(
+                        staffIndex: staffIndex,
+                        measureIndex: measureIndex,
+                        voiceIndex: voiceIdx,
+                        elementIndex: voiceElemIdx)
+                    // Staff lines span y = sp*2 (top) to y = sp*6
+                    // (bottom). When a whole / half rest lands
+                    // outside that range — e.g. voice-2 whole
+                    // rest pushed below the staff — MuseScore
+                    // draws its leger-line variant glyph so the
+                    // rest comes with its own short stroke.
+                    let staffTopLocal = metrics.sp * 2
+                    let staffBottomLocal = metrics.sp * 2
+                        + metrics.staffHeight
+                    let needsLeger = (restBase == .whole
+                            || restBase == .half)
+                        && (restY < staffTopLocal
+                            || restY > staffBottomLocal)
                     out.append(.rest(
                         duration: r.duration,
-                        origin: CGPoint(x: restX, y: restY)))
+                        origin: CGPoint(x: restX, y: restY),
+                        voiceIndex: voiceIdx,
+                        restID: restID,
+                        hasLegerLine: needsLeger))
                     tickCursor += r.duration.ticks(division: division)
                 case .chord(let chord):
                     inHeader = false
-                    // Shift flagged notes left so the visual centre of
-                    // the notehead + flag combination sits on the tick
-                    // position. The flag extends ~1 sp right of the
-                    // stem; a 0.3 sp left-shift balances this. For
-                    // beamed chords the flag isn't drawn, but the
-                    // tiny shift is invisible and harmless.
-                    let (chordBase, _) = DurationInterpretation.split(
-                        chord.duration)
-                    let flagShift: CGFloat
-                    switch chordBase {
-                    case .eighth, .sixteenth, .thirtySecond,
-                         .sixtyFourth, .oneTwentyEighth,
-                         .twoFiftySixth:
-                        flagShift = metrics.sp * 0.3
-                    default:
-                        flagShift = 0
-                    }
-                    let chordX = timedX(voiceElementIdx: voiceElemIdx) - flagShift
-                    let chordNotes = chord.notes.map { note -> LayoutChordNote in
+                    // Every element at a shared tick lives at the same
+                    // x. Flag glyphs extend ~1 sp to the right of the
+                    // stem, but that's a visual-only concern — shifting
+                    // the notehead itself would desynchronise flagged
+                    // chords from rests (and from notes in other
+                    // voices) that share the same tick.
+                    let chordX = timedX(atTick: tickCursor)
+                    let chordNotes = chord.notes.enumerated().map {
+                        (noteIdx, note) -> LayoutChordNote in
                         // For percussion staves, use the drum map's
                         // <line> value to position the notehead
                         // instead of the pitched diatonic formula.
@@ -242,7 +331,15 @@ extension LayoutEngine {
                             ).step
                         }
                         let y = staffMidY - CGFloat(step) * metrics.sp / 2
+                        let id = NoteID(
+                            staffIndex: staffIndex,
+                            measureIndex: measureIndex,
+                            voiceIndex: voiceIdx,
+                            elementIndex: voiceElemIdx,
+                            noteIndexInChord: noteIdx
+                        )
                         return LayoutChordNote(
+                            noteID: id,
                             step: step,
                             accidental: note.accidental,
                             origin: CGPoint(x: chordX, y: y),
@@ -263,7 +360,8 @@ extension LayoutEngine {
                         stemOrigin: CGPoint(x: chordX, y: staffMidY),
                         hasArpeggio: chord.arpeggio != nil,
                         arpeggioRawType: chord.arpeggio.flatMap(arpeggioSubtype),
-                        isBeamed: false))
+                        isBeamed: false,
+                        voiceIndex: voiceIdx))
                     if let arp = chord.arpeggio {
                         let ys = chordNotes.map(\.origin.y)
                         let top = ys.min() ?? staffMidY
@@ -274,17 +372,87 @@ extension LayoutEngine {
                             subtype: arpeggioSubtype(arp)
                         ))
                     }
-                    // Lyrics: emit below the staff, one line per verse.
-                    for (verseIdx, syllable) in chord.lyrics.enumerated() {
-                        guard !syllable.isEmpty else { continue }
+                    // Lyrics: emit the syllable text + (if the lyric
+                    // extends beyond this chord) a melisma rule that
+                    // stretches to the end of the last note it covers.
+                    let chordTicks = chord.duration.ticks(
+                        division: division)
+                    for (verseIdx, lyric) in chord.lyrics.enumerated() {
+                        guard !lyric.text.isEmpty else { continue }
                         let lyricsY = staffMidY + metrics.sp * 6
                             + CGFloat(verseIdx) * metrics.sp * 2.5
                         out.append(.textMark(
                             kind: .lyrics,
-                            text: syllable,
+                            text: lyric.text,
                             origin: CGPoint(x: chordX, y: lyricsY)))
+                        let textWidth = Self.lyricsTextWidth(
+                            lyric.text, sp: metrics.sp)
+                        // Hyphens between this syllable and the
+                        // previous one in the same verse.
+                        if let prev = previousLyric[verseIdx],
+                           connectsWithHyphen(
+                            prev: prev.syllabic,
+                            curr: lyric.syllabic) {
+                            let prevRight = prev.centerX
+                                + prev.textWidth / 2
+                                + metrics.sp * 0.3
+                            let currLeft = chordX - textWidth / 2
+                                - metrics.sp * 0.3
+                            emitLyricHyphens(
+                                fromX: prevRight,
+                                toX: currLeft,
+                                y: lyricsY,
+                                metrics: metrics,
+                                out: &out)
+                        }
+                        previousLyric[verseIdx] = LyricTrail(
+                            centerX: chordX,
+                            textWidth: textWidth,
+                            lyricsY: lyricsY,
+                            syllabic: lyric.syllabic)
+                        // `<ticks>N</ticks>` in MuseScore marks a
+                        // melisma whose visual rule reaches the
+                        // chord that starts at `anchor.tick + N`.
+                        // Any positive value means "draw a melisma
+                        // line up to that target chord" — even when
+                        // it equals the anchor chord's own duration
+                        // (in which case the target is whatever
+                        // chord follows the anchor).
+                        if lyric.ticks > 0 {
+                            // `>=`: a melisma that lands exactly on
+                            // the barline still needs to extend past
+                            // it so the boundary-cap continuation in
+                            // the next measure (see
+                            // `appendContinuations`) meets it.
+                            let continuesPastMeasure =
+                                tickCursor + lyric.ticks
+                                    >= voiceTotalTicks
+                            // Drop the rule down to roughly the
+                            // underscore baseline of the lyric font
+                            // (~`sp * 0.9` below the center anchor
+                            // we use for the syllable text). Matches
+                            // MuseScore's "at baseline + underline
+                            // offset" placement, see
+                            // `melismaLineYOffset` below.
+                            let melismaLineY = lyricsY
+                                + Self.melismaLineYOffset(sp: metrics.sp)
+                            emitMelismaLine(
+                                chordX: chordX,
+                                lyricText: lyric.text,
+                                lyricTicks: lyric.ticks,
+                                lyricsY: melismaLineY,
+                                tickCursor: tickCursor,
+                                chordTicks: chordTicks,
+                                tickColumns: tickColumns,
+                                headerContentStartX:
+                                    headerSchedule.contentStartX,
+                                measureWidth: width,
+                                continuesPastMeasure: continuesPastMeasure,
+                                metrics: metrics,
+                                out: &out)
+                        }
                     }
-                    tickCursor += chord.duration.ticks(division: division)
+                    tickCursor += chordTicks
                 case .dynamic(let d):
                     // Dynamics sit below-left of the note they apply to
                     // (i.e. the next timed element at the current tick).
@@ -292,13 +460,33 @@ extension LayoutEngine {
                     // following chord's notehead or stem.
                     let baseX = inHeader
                         ? headerSchedule.contentStartX
-                        : timedX(voiceElementIdx: voiceElemIdx)
+                        : timedX(atTick: tickCursor)
                     out.append(.textMark(
                         kind: .dynamic,
                         text: d.subtype,
                         origin: CGPoint(
                             x: baseX - metrics.sp,
                             y: staffMidY + metrics.sp * 4)))
+                case .staffText(let st):
+                    // Place at the current tick column (or header
+                    // start if we haven't reached any timed element
+                    // yet). Default Y is `sp * 3` above the top
+                    // staff line (matches MuseScore's
+                    // `staffTextPlacement` default of "above" with
+                    // an offset just clear of the staff). The
+                    // author's `<offset>` (in spatium units) shifts
+                    // both axes from there.
+                    let stX = inHeader
+                        ? headerSchedule.contentStartX
+                        : timedX(atTick: tickCursor)
+                    out.append(.staffText(
+                        text: st.text,
+                        origin: CGPoint(
+                            x: stX + CGFloat(st.offsetX) * metrics.sp,
+                            y: staffMidY - metrics.sp * 3
+                                + CGFloat(st.offsetY) * metrics.sp),
+                        color: st.color,
+                        isSystemText: st.isSystemText))
                 case .tempo(let t):
                     let bpm = Int((t.beatsPerSecond * 60.0).rounded())
                     // "♩" is Unicode U+2669, rendered in the system text font,
@@ -306,7 +494,7 @@ extension LayoutEngine {
                     // codepoint without also switching the renderer's font.
                     let tempoX = inHeader
                         ? headerSchedule.contentStartX
-                        : timedX(voiceElementIdx: voiceElemIdx)
+                        : timedX(atTick: tickCursor)
                     out.append(.textMark(
                         kind: .tempo,
                         text: "♩ = \(bpm)",
@@ -320,7 +508,7 @@ extension LayoutEngine {
                     let lastChordX = lastChordOrRestX(in: out)
                         ?? (inHeader
                             ? headerSchedule.contentStartX
-                            : timedX(voiceElementIdx: voiceElemIdx))
+                            : timedX(atTick: tickCursor))
                     out.append(.fermata(
                         subtype: f.subtype,
                         origin: CGPoint(
@@ -355,9 +543,9 @@ extension LayoutEngine {
                 guard let fromOutIdx = voiceChordOutIndex[voiceIdx],
                       let toOutIdx = voiceChordOutIndex[nextVoiceIdx]
                 else { continue }
-                guard case .chord(let fromNotes, _, _, _, _, _, _) =
+                guard case .chord(let fromNotes, _, _, _, _, _, _, _) =
                         out[fromOutIdx],
-                      case .chord(let toNotes, _, _, _, _, _, _) =
+                      case .chord(let toNotes, _, _, _, _, _, _, _) =
                         out[toOutIdx]
                 else { continue }
                 let fromNote = glissNoteIdx < fromNotes.count
@@ -390,7 +578,7 @@ extension LayoutEngine {
                 var groupSteps: [Int] = []
                 for memberIdx in group.memberIndices {
                     guard let outIdx = voiceChordOutIndex[memberIdx],
-                          case .chord(let n, _, _, _, _, _, _)
+                          case .chord(let n, _, _, _, _, _, _, _)
                             = out[outIdx]
                     else { continue }
                     groupSteps.append(contentsOf: n.map(\.step))
@@ -408,7 +596,7 @@ extension LayoutEngine {
                 var memberLevels: [Int] = []
                 for memberIdx in group.memberIndices {
                     guard let outIdx = voiceChordOutIndex[memberIdx],
-                          case .chord(let n, _, _, let so, _, _, _)
+                          case .chord(let n, _, _, let so, _, _, _, _)
                             = out[outIdx]
                     else {
                         memberLevels.append(0)
@@ -455,7 +643,7 @@ extension LayoutEngine {
                 for (i, memberIdx) in group.memberIndices.enumerated() {
                     guard let outIdx = voiceChordOutIndex[memberIdx],
                           case .chord(let n, let d, _, let so,
-                                      let arp, let art, _) = out[outIdx]
+                                      let arp, let art, _, let vi) = out[outIdx]
                     else { continue }
                     out[outIdx] = .chord(
                         notes: n,
@@ -465,7 +653,8 @@ extension LayoutEngine {
                             x: so.x, y: memberStemYs[i]),
                         hasArpeggio: arp,
                         arpeggioRawType: art,
-                        isBeamed: true)
+                        isBeamed: true,
+                        voiceIndex: vi)
                 }
 
                 // --- Phase 5: emit per-level beam runs ---
@@ -546,7 +735,539 @@ extension LayoutEngine {
                     x: width - metrics.sp / 2,
                     y: staffMidY)))
         }
-        return (out, currentClef)
+        for continuation in incomingMelismas {
+            emitMelismaContinuation(
+                continuation: continuation,
+                staffMidY: staffMidY,
+                tickColumns: tickColumns,
+                headerContentStartX: headerSchedule.contentStartX,
+                measureWidth: width,
+                metrics: metrics,
+                out: &out)
+        }
+        // Auto-place staff text: shift it above any chord stem /
+        // beam in this measure. MuseScore does this in its skyline-
+        // based autoplace step (`Autoplace::autoplaceStaffText`);
+        // we approximate by bumping every staff text in the measure
+        // by the same amount so the layout stays simple while the
+        // visual outcome — text never overlaps a stem or beam —
+        // matches.
+        autoPlaceStaffText(
+            in: &out, staffMidY: staffMidY, metrics: metrics)
+        return (out, currentClef, currentKey)
+    }
+
+    /// True when consecutive same-verse syllables should be linked
+    /// with a hyphen line. MuseScore draws dashes between any
+    /// `begin`/`middle` and the next `middle`/`end` syllable; the
+    /// boundary cases (`single→…`, `…→single`, `…→begin`) start a
+    /// new word so no hyphen is drawn.
+    private static func connectsWithHyphen(
+        prev: Syllabic, curr: Syllabic
+    ) -> Bool {
+        let prevContinues = prev == .begin || prev == .middle
+        let currContinues = curr == .middle || curr == .end
+        return prevContinues && currContinues
+    }
+
+    /// Drop one or more hyphen segments between `fromX` and `toX`
+    /// at lyric-text Y. Implements the dash-count + dash-distance
+    /// algorithm from MuseScore's
+    /// `LyricsLayout::layoutDashes` (lyricslayout.cpp:260) using
+    /// the engraving defaults from `styledef.cpp`:
+    ///
+    ///   * `lyricsDashMaxDistance` = 16 sp — gap between dashes
+    ///   * `lyricsDashMinLength` = 0.4 sp — short gaps still get one
+    ///   * `lyricsDashMaxLength` = 0.6 sp — cap on each dash length
+    ///   * `lyricsDashFirstAndLastGapAreHalf` = true — outer gaps
+    ///     are half-width so the dash row reads as evenly spaced
+    ///     between the syllables it connects.
+    ///
+    /// `lyricsDashForce` is also true by default, so any positive
+    /// gap below `dashMinLength` still gets one dash.
+    private static func emitLyricHyphens(
+        fromX: CGFloat,
+        toX: CGFloat,
+        y: CGFloat,
+        metrics: StaffMetrics,
+        out: inout [LayoutElement]
+    ) {
+        let curLength = toX - fromX
+        guard curLength > 0 else { return }
+        let maxDashDistance = metrics.sp * 16
+        let dashMaxLength = metrics.sp * 0.6
+        // First and last gaps are half-width (matches MuseScore's
+        // default), so the floor/ceil split below mirrors theirs.
+        var dashCount: Int
+        if curLength > maxDashDistance {
+            dashCount = Int(ceil(curLength / maxDashDistance))
+        } else {
+            dashCount = Int(floor(curLength / maxDashDistance))
+        }
+        // `lyricsDashForce` default — at least one dash whenever the
+        // syllables are connected, no matter how short the gap.
+        if curLength > 0 {
+            dashCount = max(dashCount, 1)
+        }
+        guard dashCount > 0 else { return }
+        let dashWidth = min(curLength, dashMaxLength)
+        // With `firstAndLastGapAreHalf = true`, the spacing between
+        // dash centres is `curLength / dashCount`, and the first
+        // centre sits at half that distance from the start.
+        let dashDist = curLength / CGFloat(dashCount)
+        var xCenter: CGFloat = 0
+        for i in 0..<dashCount {
+            xCenter += i == 0 ? 0.5 * dashDist : dashDist
+            let centerX = fromX + xCenter
+            out.append(.lyricHyphen(
+                fromOrigin: CGPoint(
+                    x: centerX - 0.5 * dashWidth, y: y),
+                toOrigin: CGPoint(
+                    x: centerX + 0.5 * dashWidth, y: y)))
+        }
+    }
+
+    /// Maximum upward extent (smallest Y) of any chord stem-tip,
+    /// notehead, or beam in `elements`. Used by the staff-text
+    /// auto-placement post-pass. Returns `+infinity` when the
+    /// measure has no chords/beams.
+    private static func chordTopExtent(
+        in elements: [LayoutElement]
+    ) -> CGFloat {
+        var minY = CGFloat.infinity
+        for el in elements {
+            switch el {
+            case .chord(let notes, _, let dir, let stemOrigin,
+                        _, _, _, _):
+                let topNote = notes.map(\.origin.y).min()
+                    ?? stemOrigin.y
+                let extent = dir == .up
+                    ? min(stemOrigin.y, topNote)
+                    : topNote
+                minY = min(minY, extent)
+            case .beam(let from, let to, _, _):
+                minY = min(minY, from.y, to.y)
+            default:
+                break
+            }
+        }
+        return minY
+    }
+
+    /// Shift every `.staffText` in `out` upward as needed so that
+    /// its Y clears the topmost chord/beam in the measure. The
+    /// user-supplied vertical offset (already baked into the
+    /// element's `origin.y` during placement) is preserved — only
+    /// the BASE position changes; the offset shifts relative to it.
+    private static func autoPlaceStaffText(
+        in out: inout [LayoutElement],
+        staffMidY: CGFloat,
+        metrics: StaffMetrics
+    ) {
+        let chordTop = chordTopExtent(in: out)
+        guard chordTop.isFinite else { return }
+        // Default placement Y matches the constant used when the
+        // text was first emitted (`staffMidY - sp * 3`). The auto
+        // base sits 1.5 sp above the highest chord/beam point.
+        let defaultBase = staffMidY - metrics.sp * 3
+        let autoBase = chordTop - metrics.sp * 1.5
+        // Only shift when the chord is actually pushing into the
+        // text's default zone — otherwise leave the layout alone.
+        guard autoBase < defaultBase else { return }
+        let shift = autoBase - defaultBase
+        for i in 0..<out.count {
+            if case .staffText(let text, let p, let color,
+                               let isSystem) = out[i] {
+                out[i] = .staffText(
+                    text: text,
+                    origin: CGPoint(x: p.x, y: p.y + shift),
+                    color: color,
+                    isSystemText: isSystem)
+            }
+        }
+    }
+
+    /// Emit the left-hand continuation rule that shows a melisma
+    /// started in an earlier measure is still active here.
+    private static func emitMelismaContinuation(
+        continuation: MelismaContinuation,
+        staffMidY: CGFloat,
+        tickColumns: [Int: CGFloat],
+        headerContentStartX: CGFloat,
+        measureWidth: CGFloat,
+        metrics: StaffMetrics,
+        out: inout [LayoutElement]
+    ) {
+        // Use the same Y the anchor rule uses — the lyric font's
+        // underline level (baseline + underline offset) rather
+        // than the text's vertical center.
+        let lyricsY = staffMidY + metrics.sp * 6
+            + CGFloat(continuation.verseIndex) * metrics.sp * 2.5
+            + Self.melismaLineYOffset(sp: metrics.sp)
+        // Start at x=0 (the measure's left boundary) for mid-system
+        // continuations so the rule visually touches the previous
+        // measure's anchor rule. When the measure carries a clef /
+        // key-sig / time-sig redraw (system-start, or a mid-piece
+        // change), bump past it so the rule doesn't run under the
+        // glyphs. Detection: the baseline `contentStartX` for a
+        // header-free measure is `sp * 2` (see `computeHeaderSchedule`'s
+        // `clefX`); anything higher indicates a redraw.
+        let hasHeaderRedraw = headerContentStartX > metrics.sp * 2.1
+        let lineStartX: CGFloat = hasHeaderRedraw
+            ? headerContentStartX
+            : 0
+        let withinMeasureRightX = max(
+            headerContentStartX + metrics.sp,
+            measureWidth - metrics.sp)
+        let crossingRightX = measureWidth
+        let sortedTicks = tickColumns.keys.sorted()
+        let endX: CGFloat
+        if continuation.continuesPastMeasure {
+            endX = crossingRightX
+        } else if let t = sortedTicks.first(
+            where: { $0 >= continuation.endTick }),
+           let nextX = tickColumns[t] {
+            // Match MuseScore: extend through the end-note's
+            // notehead to its right edge rather than stopping
+            // just before it.
+            endX = min(crossingRightX, nextX + Self.noteheadHalfExtent(sp: metrics.sp))
+        } else {
+            endX = withinMeasureRightX
+        }
+        guard endX > lineStartX + metrics.sp * 0.5 else { return }
+        out.append(.lyricsMelisma(
+            fromOrigin: CGPoint(x: lineStartX, y: lyricsY),
+            toOrigin: CGPoint(x: endX, y: lyricsY)))
+    }
+
+    /// Build a map from every non-empty lyric syllable to its
+    /// "effective" melisma duration. Treats ties and melismas as
+    /// independent concepts (a tie spans two notes of the same
+    /// pitch played as one; a melisma is a syllable held over a
+    /// stretch of voice time). The melisma length comes solely from
+    /// `<ticks>`. We keep this helper so the layout pipeline still
+    /// has a single place to compute the per-lyric duration and the
+    /// per-measure continuation plan stays consistent.
+    static func computeEffectiveMelismaTicks(
+        score: Score, division: Int
+    ) -> [MelismaLyricKey: Int] {
+        var map: [MelismaLyricKey: Int] = [:]
+        for (staffIdx, staff) in score.staves.enumerated() {
+            for (mIdx, measure) in staff.measures.enumerated() {
+                for (vIdx, voice) in measure.voices.enumerated() {
+                    for (eIdx, el) in voice.elements.enumerated() {
+                        guard case .chord(let chord) = el else { continue }
+                        for (verseIdx, lyric)
+                        in chord.lyrics.enumerated()
+                        where !lyric.text.isEmpty {
+                            map[MelismaLyricKey(
+                                staffIndex: staffIdx,
+                                measureIndex: mIdx,
+                                voiceIndex: vIdx,
+                                elementIndex: eIdx,
+                                verseIndex: verseIdx)] = lyric.ticks
+                        }
+                    }
+                }
+            }
+        }
+        return map
+    }
+
+    /// Walk the score once, identify every lyric with
+    /// `ticks > chord.duration`, and compute the continuation lines
+    /// that need to be drawn on every measure after the anchor.
+    ///
+    /// Returned shape: `result[staffIdx][measureIdx]` is the list of
+    /// continuations that start elsewhere but pass through (or end
+    /// in) this measure. The anchor measure itself is intentionally
+    /// omitted — the per-chord `emitMelismaLine` already emits the
+    /// opening segment there.
+    ///
+    /// Continuation semantics:
+    ///
+    /// * `endTick` stores the voice tick within the target measure
+    ///   where the rule ends.
+    /// * When `endTick` equals (or exceeds) that measure's total
+    ///   voice ticks, the rule is to run through the trailing
+    ///   barline — the melisma continues to the NEXT measure.
+    static func computeMelismaContinuations(
+        score: Score, division: Int,
+        effectiveTicks: [MelismaLyricKey: Int]
+    ) -> [[[MelismaContinuation]]] {
+        var result: [[[MelismaContinuation]]] = score.staves.map {
+            Array(repeating: [], count: $0.measures.count)
+        }
+        for (staffIdx, staff) in score.staves.enumerated() {
+            let voiceCount = staff.measures
+                .map(\.voices.count).max() ?? 0
+            for voiceIdx in 0..<voiceCount {
+                // Pre-compute total voice ticks per measure so the
+                // inner loop doesn't rescan them repeatedly.
+                let tickCounts: [Int] = staff.measures.map { m in
+                    guard voiceIdx < m.voices.count else { return 0 }
+                    var total = 0
+                    for el in m.voices[voiceIdx].elements {
+                        switch el {
+                        case .chord(let c):
+                            total += c.duration.ticks(division: division)
+                        case .rest(let r):
+                            total += r.duration.ticks(division: division)
+                        default:
+                            break
+                        }
+                    }
+                    return total
+                }
+                for (mIdx, measure) in staff.measures.enumerated() {
+                    guard voiceIdx < measure.voices.count else { continue }
+                    var tickInMeasure = 0
+                    for (eIdx, el)
+                    in measure.voices[voiceIdx].elements.enumerated() {
+                        switch el {
+                        case .chord(let c):
+                            let chordTicks = c.duration
+                                .ticks(division: division)
+                            for (verseIdx, lyric)
+                            in c.lyrics.enumerated()
+                            where !lyric.text.isEmpty {
+                                let key = MelismaLyricKey(
+                                    staffIndex: staffIdx,
+                                    measureIndex: mIdx,
+                                    voiceIndex: voiceIdx,
+                                    elementIndex: eIdx,
+                                    verseIndex: verseIdx)
+                                let ticks = effectiveTicks[key]
+                                    ?? lyric.ticks
+                                guard ticks > 0 else { continue }
+                                appendContinuations(
+                                    startMeasureIdx: mIdx,
+                                    startTickInMeasure: tickInMeasure,
+                                    lyricTicks: ticks,
+                                    voiceIdx: voiceIdx,
+                                    verseIdx: verseIdx,
+                                    tickCounts: tickCounts,
+                                    result: &result[staffIdx])
+                            }
+                            tickInMeasure += chordTicks
+                        case .rest(let r):
+                            tickInMeasure += r.duration
+                                .ticks(division: division)
+                        default:
+                            break
+                        }
+                    }
+                }
+            }
+        }
+        return result
+    }
+
+    /// Helper for `computeMelismaContinuations`. Walks forward from
+    /// the anchor chord's position, consuming voice ticks across
+    /// measure boundaries, and records continuation lines on every
+    /// measure AFTER the anchor.
+    private static func appendContinuations(
+        startMeasureIdx: Int,
+        startTickInMeasure: Int,
+        lyricTicks: Int,
+        voiceIdx: Int,
+        verseIdx: Int,
+        tickCounts: [Int],
+        result: inout [[MelismaContinuation]]
+    ) {
+        var remaining = lyricTicks
+        var currentMeasure = startMeasureIdx
+        var currentTick = startTickInMeasure
+        while currentMeasure < tickCounts.count {
+            let available = tickCounts[currentMeasure] - currentTick
+            if available <= 0 {
+                // Empty voice in this measure — treat the whole
+                // measure as "fully covered, continues further".
+                if currentMeasure > startMeasureIdx {
+                    result[currentMeasure].append(MelismaContinuation(
+                        voiceIndex: voiceIdx,
+                        verseIndex: verseIdx,
+                        endTick: tickCounts[currentMeasure],
+                        continuesPastMeasure: true))
+                }
+                currentMeasure += 1
+                currentTick = 0
+                continue
+            }
+            // NOTE: strict `<` — when the melisma ends exactly on
+            // the measure's right boundary (`remaining == available`)
+            // we deliberately fall through to the full-cover branch
+            // so the loop advances one more time and emits a
+            // `endTick == 0` "boundary cap" on the next measure.
+            // Without this, a melisma whose visual end-note is the
+            // first note of the next measure gets no continuation
+            // and the rule appears to stop at the barline.
+            if remaining < available {
+                if currentMeasure > startMeasureIdx {
+                    result[currentMeasure].append(MelismaContinuation(
+                        voiceIndex: voiceIdx,
+                        verseIndex: verseIdx,
+                        endTick: currentTick + remaining,
+                        continuesPastMeasure: false))
+                }
+                return
+            }
+            remaining -= available
+            // Falling through means this measure is fully covered
+            // AND the loop will advance to another measure (either
+            // another full-cover if `remaining > 0` or a boundary
+            // cap if `remaining == 0`). In both cases the rule in
+            // THIS measure has to run past the trailing barline so
+            // it meets the next measure's rule without a gap —
+            // hence an unconditional `true`. If the advance walks
+            // off the end of the score the only visible effect is
+            // the rule slightly overshooting the final barline,
+            // which is acceptable for that edge case.
+            if currentMeasure > startMeasureIdx {
+                result[currentMeasure].append(MelismaContinuation(
+                    voiceIndex: voiceIdx,
+                    verseIndex: verseIdx,
+                    endTick: tickCounts[currentMeasure],
+                    continuesPastMeasure: true))
+            }
+            currentMeasure += 1
+            currentTick = 0
+        }
+    }
+
+    /// Horizontal distance from a note's anchor x to its
+    /// notehead right edge. Bravura's `noteheadBlack` is 1.18 sp
+    /// wide (half-width 0.59 sp); whole / half noteheads are a
+    /// touch wider. We pick 0.7 sp as a single constant that
+    /// covers every notehead family with a small safety margin
+    /// without bleeding into the next note's space.
+    private static func noteheadHalfExtent(sp: CGFloat) -> CGFloat {
+        sp * 0.7
+    }
+
+    /// Pixel width of the rendered lyric text at the layout's
+    /// staff size. Mirrors the font used by `ScoreLayerBuilder.textLayer`
+    /// for `.textMark(.lyrics, ...)` — system font at `sp * 2.2`.
+    /// Shared with `LayoutEngine+Spacing.lyricsWidth` so chord spacing
+    /// uses the same measurement as melisma start-x positioning.
+    static func lyricsTextWidth(
+        _ text: String, sp: CGFloat
+    ) -> CGFloat {
+        guard !text.isEmpty else { return 0 }
+        let fontSize = sp * 2.2
+        let font = CTFontCreateUIFontForLanguage(
+            .system, fontSize, nil)
+            ?? CTFontCreateWithName(
+                "Helvetica" as CFString, fontSize, nil)
+        let attrs: CFDictionary = [
+            kCTFontAttributeName: font
+        ] as CFDictionary
+        guard let attrString = CFAttributedStringCreate(
+            nil, text as CFString, attrs)
+        else { return 0 }
+        let line = CTLineCreateWithAttributedString(attrString)
+        return CGFloat(
+            CTLineGetTypographicBounds(line, nil, nil, nil))
+    }
+
+    /// Y offset from the lyric text's center anchor down to where
+    /// the melisma rule should be drawn. MuseScore positions the
+    /// rule at the lyric font's underline level, i.e. baseline +
+    /// `underlinePosition`. For SwiftUI's systemFont rendered at
+    /// `sp * 2.2`, the typical metrics are:
+    ///
+    ///   ascent  ≈ 0.85 × em ≈ 1.87 sp
+    ///   descent ≈ 0.22 × em ≈ 0.47 sp
+    ///   underline offset from baseline ≈ 0.10 × em ≈ 0.22 sp
+    ///
+    /// With anchor (0.5, 0.5) the text's center sits at
+    /// `lyricsY`, so the baseline lives at
+    /// `lyricsY + (ascent - descent) / 2 ≈ lyricsY + 0.7 sp` and
+    /// the underline at roughly `lyricsY + 0.9 sp`. We hard-code
+    /// 0.9 so the line sits where MuseScore draws it without
+    /// bringing CoreText metric calls into the layout loop.
+    private static func melismaLineYOffset(sp: CGFloat) -> CGFloat {
+        sp * 0.9
+    }
+
+    /// Emit a horizontal melisma line under the given chord's lyric.
+    ///
+    /// MuseScore authors specify the end-note of a melisma by
+    /// dragging its right handle, which encodes the total held
+    /// duration as `<ticks>` on the anchor `<Lyrics>`. We reflect
+    /// that in the UI by:
+    ///
+    /// 1. Computing `endTick = tickCursor + lyric.ticks` — this is
+    ///    the end-tick of the last covered note.
+    /// 2. Finding the event at or after `endTick` in the shared
+    ///    `tickColumns`. That event's x is where the NEXT syllable
+    ///    / note sits, so the rule ends just before it.
+    /// 3. If the melisma runs through the end of the measure (no
+    ///    event at or after `endTick` in this measure), extending
+    ///    the rule close to the trailing barline (`measureWidth -
+    ///    sp/2`) with ~0.5 sp clearance.
+    ///
+    /// Cross-measure continuation (a secondary rule at the start of
+    /// the next measure) is not yet emitted — within a single
+    /// measure, the rule always stops at the barline.
+    private static func emitMelismaLine(
+        chordX: CGFloat,
+        lyricText: String,
+        lyricTicks: Int,
+        lyricsY: CGFloat,
+        tickCursor: Int,
+        chordTicks: Int,
+        tickColumns: [Int: CGFloat],
+        headerContentStartX: CGFloat,
+        measureWidth: CGFloat,
+        continuesPastMeasure: Bool,
+        metrics: StaffMetrics,
+        out: inout [LayoutElement]
+    ) {
+        let endTick = tickCursor + lyricTicks
+        // When the melisma keeps going into the next measure, take
+        // the line all the way to `measureWidth` so it meets the
+        // continuation rule emitted at the next measure's x=0 and
+        // there is no visible break around the barline. When it
+        // stops here, leave ~sp clearance before the trailing
+        // barline (which sits at `measureWidth - sp/2`).
+        let withinMeasureRightX = max(
+            headerContentStartX + metrics.sp,
+            measureWidth - metrics.sp)
+        let crossingRightX = measureWidth
+        let sortedTicks = tickColumns.keys.sorted()
+        let endX: CGFloat
+        if let t = sortedTicks.first(where: { $0 >= endTick }),
+           let nextX = tickColumns[t] {
+            // Extend through the end-note's notehead to its right
+            // edge — MuseScore's convention, and visually the line
+            // then clearly "covers" the end note. See
+            // `noteheadHalfExtent` for the constant choice.
+            endX = min(crossingRightX, nextX + Self.noteheadHalfExtent(sp: metrics.sp))
+        } else if continuesPastMeasure {
+            endX = crossingRightX
+        } else {
+            endX = withinMeasureRightX
+        }
+
+        // The lyric glyph is rendered with a center anchor at
+        // `chordX`. Use CoreText to measure its actual rendered
+        // width — a hard-coded "X sp per character" approximation
+        // overestimates Latin (creating a visible gap before the
+        // rule) and underestimates CJK (running the rule under the
+        // glyph). MuseScore matches the rule to the syllable's
+        // bbox right edge plus a quarter-staff-space.
+        let textWidth = Self.lyricsTextWidth(
+            lyricText, sp: metrics.sp)
+        let lineStartX = chordX + textWidth / 2 + metrics.sp * 0.25
+        // Only emit if there is actually a visible line to draw —
+        // avoids a one-pixel stub when the estimate pushes
+        // `lineStartX` past `endX`.
+        guard endX > lineStartX + metrics.sp * 0.5 else { return }
+        out.append(.lyricsMelisma(
+            fromOrigin: CGPoint(x: lineStartX, y: lyricsY),
+            toOrigin: CGPoint(x: endX, y: lyricsY)))
     }
 
     /// Extract a render-ready subtype string from the Core `Arpeggio` value.
@@ -621,7 +1342,7 @@ extension LayoutEngine {
             }
             guard let outIdx = voiceChordOutIndex[idx],
                   case .chord(let notes, _, let stem, let so,
-                              _, _, _) = out[outIdx]
+                              _, _, _, _) = out[outIdx]
             else { continue }
             chordStemXs.append(so.x)
             if stem == .up { chordStemsUp += 1 }
@@ -667,8 +1388,8 @@ extension LayoutEngine {
             guard
                 let firstIdx = voiceChordOutIndex[tuplet.startIndex],
                 let lastIdx = voiceChordOutIndex[tuplet.endIndex],
-                case .chord(_, _, _, let firstSO, _, _, _) = out[firstIdx],
-                case .chord(_, _, _, let lastSO, _, _, _) = out[lastIdx]
+                case .chord(_, _, _, let firstSO, _, _, _, _) = out[firstIdx],
+                case .chord(_, _, _, let lastSO, _, _, _, _) = out[lastIdx]
             else { return }
             let outward: CGFloat = isAbove ? -labelPad : labelPad
             fromY = firstSO.y + outward
@@ -773,16 +1494,26 @@ extension LayoutEngine {
         return false
     }
 
-    private static func totalTicks(in voice: Voice, division: Int) -> Int {
-        voice.elements.reduce(0) { acc, el in
+    /// True when the first voice's leading (pre-timed-content) run
+    /// contains a `<KeySig>`.  Used to skip key-signature synthesis
+    /// when the measure already has an explicit one.
+    private static func firstVoiceHasLeadingKeySig(
+        measure: Measure
+    ) -> Bool {
+        guard let elements = measure.voices.first?.elements else {
+            return false
+        }
+        for el in elements {
             switch el {
-            case .chord(let c):
-                return acc + c.duration.ticks(division: division)
-            case .rest(let r):
-                return acc + r.duration.ticks(division: division)
-            default: return acc
+            case .keySignature:
+                return true
+            case .chord, .rest:
+                return false
+            default:
+                continue
             }
         }
+        return false
     }
 
     /// Find the x coordinate of the most recently emitted chord or rest
@@ -792,9 +1523,9 @@ extension LayoutEngine {
     ) -> CGFloat? {
         for el in elements.reversed() {
             switch el {
-            case .chord(_, _, _, let origin, _, _, _):
+            case .chord(_, _, _, let origin, _, _, _, _):
                 return origin.x
-            case .rest(_, let origin):
+            case .rest(_, let origin, _, _, _):
                 return origin.x
             default: continue
             }

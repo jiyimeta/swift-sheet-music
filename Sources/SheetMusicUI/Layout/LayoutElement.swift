@@ -33,9 +33,22 @@ public enum LayoutElement: Sendable, Equatable {
         stemOrigin: CGPoint,
         hasArpeggio: Bool,
         arpeggioRawType: String?,
-        isBeamed: Bool
+        isBeamed: Bool,
+        voiceIndex: Int
     )
-    case rest(duration: NoteDuration, origin: CGPoint)
+    case rest(
+        duration: NoteDuration,
+        origin: CGPoint,
+        voiceIndex: Int,
+        restID: RestID,
+        /// Set when the rest is hung above the top staff line or
+        /// below the bottom one (e.g. the voice-2 whole rest that
+        /// the placement nudges out of voice 1's way). The renderer
+        /// switches to MuseScore's `restWholeLegerLine` /
+        /// `restHalfLegerLine` glyphs in that case so the rest comes
+        /// with its own short ledger stroke.
+        hasLegerLine: Bool
+    )
     /// A single beam bar at `level` (1 = primary, 2 = first secondary,
     /// …). A note group with mixed durations emits one `beam` per bar
     /// per run of consecutive members that need that level, so that a
@@ -48,10 +61,33 @@ public enum LayoutElement: Sendable, Equatable {
         level: Int
     )
     case textMark(kind: TextMarkKind, text: String, origin: CGPoint)
+    /// Free-form staff or system text imported from MuseScore.
+    /// Distinct from `.textMark` because it carries author-supplied
+    /// colour and the placement comes pre-shifted by the user offset
+    /// declared in the source file.
+    case staffText(
+        text: String,
+        origin: CGPoint,
+        color: ScoreColor?,
+        isSystemText: Bool
+    )
     case fermata(subtype: String, origin: CGPoint)
     case marker(kind: Marker.Kind, text: String, origin: CGPoint)
     case jump(text: String, origin: CGPoint)
     case measureRepeat(count: Int, origin: CGPoint)
+    /// 1-based measure number drawn above a staff. Emitted for every
+    /// staff at the first measure of every system in vertical / page
+    /// modes so that readers can locate themselves after a system
+    /// break. Mirrors MuseScore's per-system measure-number layout.
+    case measureNumber(text: String, origin: CGPoint)
+    /// Staff / instrument name drawn above a staff with leading
+    /// alignment at `origin.x`. Used by the horizontal continuous-
+    /// view sticky pane (mirrors MuseScore's `continuouspanel.cpp`
+    /// staff-name rendering at `(clefLeftMargin + widthClef, -2 sp)`)
+    /// where the part label sits above the staff rather than to its
+    /// left, with the text free to overflow the pane's white box if
+    /// the name is long.
+    case staffName(text: String, origin: CGPoint)
     case spannerSegment(
         kind: SpannerKind,
         fromOrigin: CGPoint,
@@ -64,6 +100,26 @@ public enum LayoutElement: Sendable, Equatable {
         fromOrigin: CGPoint,
         toOrigin: CGPoint,
         above: Bool
+    )
+    /// Horizontal melisma line drawn at the lyric baseline, from just
+    /// past the syllable's text to the end of the last note the
+    /// syllable covers. Emitted when a `Lyric.ticks` exceeds its
+    /// anchor chord's duration. Rendered as a thin underscore-style
+    /// rule matching MuseScore's convention.
+    case lyricsMelisma(
+        fromOrigin: CGPoint,
+        toOrigin: CGPoint
+    )
+    /// One short horizontal stroke between two adjacent syllables of
+    /// the same word ("Pa-ra-di-so" → three hyphens). Multiple
+    /// segments may be emitted for a wide gap; the layout decides
+    /// how many and where, mirroring MuseScore's
+    /// `LyricsLayout::layoutDashes`. Drawn at the lyric text's
+    /// midline (between baseline and cap-height) — distinct from the
+    /// melisma rule, which sits on the underline.
+    case lyricHyphen(
+        fromOrigin: CGPoint,
+        toOrigin: CGPoint
     )
     case glissandoLine(
         fromOrigin: CGPoint,
@@ -108,6 +164,7 @@ public enum LayoutElement: Sendable, Equatable {
 
 @available(macOS 15.0, iOS 16.0, *)
 public struct LayoutChordNote: Sendable, Equatable {
+    public let noteID: NoteID
     public let step: Int
     public let accidental: Accidental?
     public let origin: CGPoint
@@ -117,6 +174,7 @@ public struct LayoutChordNote: Sendable, Equatable {
     public let headType: String?
 
     public init(
+        noteID: NoteID,
         step: Int,
         accidental: Accidental?,
         origin: CGPoint,
@@ -125,6 +183,7 @@ public struct LayoutChordNote: Sendable, Equatable {
         hasGlissando: Bool,
         headType: String? = nil
     ) {
+        self.noteID = noteID
         self.step = step
         self.accidental = accidental
         self.origin = origin
