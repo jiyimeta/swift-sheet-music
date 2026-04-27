@@ -133,14 +133,6 @@ struct ContentViewMac: View {
                         }
                         .disabled(playbackEngine.state == .stopped)
 
-                        Button {
-                            playbackEngine.isMetronomeEnabled.toggle()
-                        } label: {
-                            Image(systemName: playbackEngine.isMetronomeEnabled
-                                ? "metronome.fill" : "metronome")
-                        }
-                        .help("Metronome (toggles during playback)")
-
                         Spacer()
 
                         Text(playbackStateLabel)
@@ -156,6 +148,11 @@ struct ContentViewMac: View {
                         exportPDF()
                     }
                     .disabled(score == nil)
+                }
+                if !playbackEngine.mixerChannels.isEmpty {
+                    Section("Mixer") {
+                        MixerView(engine: playbackEngine)
+                    }
                 }
                 Section("Layout") {
                     Picker("Mode", selection: $layoutMode) {
@@ -561,13 +558,26 @@ struct ContentViewMac: View {
 
     private func handleTap(at location: CGPoint, document: LayoutDocument) {
         let tester = ScoreHitTester(document: document)
-        guard let target = tester.hitTest(at: location) else {
+        let target = tester.hitTest(at: location)
+
+        // While playing: tap-to-seek. Audio jumps to the tapped
+        // note while continuing to play; selection (single or
+        // range) and any in-flight shift gesture are left alone.
+        if playbackEngine.state == .playing {
+            if let id = primaryItemID(of: target) {
+                playbackEngine.seek(to: .item(id))
+            }
+            return
+        }
+
+        guard let target else {
             selection = .none
             return
         }
         // A fresh, deliberate selection drops the playback cursor
-        // (no-op while playing). The next `togglePlayback` then
-        // reads the selection instead of the stale cursor.
+        // (no-op while playing — we already returned above). The next
+        // `togglePlayback` then reads the selection instead of the
+        // stale cursor.
         playbackEngine.clearCursor()
         let shift = NSEvent.modifierFlags.contains(.shift)
 
@@ -616,6 +626,21 @@ struct ContentViewMac: View {
                 playbackEngine.playPreview(
                     noteID: id, in: score)
             }
+        }
+    }
+
+    /// Resolve a hit-test result to its "primary" `ScoreItemID`
+    /// — the item the click is conceptually pointing at. Returns
+    /// `nil` for misses or for beam runs that contain no notes.
+    private func primaryItemID(
+        of target: ScoreHitTarget?
+    ) -> ScoreItemID? {
+        guard let target else { return nil }
+        switch target {
+        case .note(let id): return .note(id)
+        case .rest(let id): return .rest(id)
+        case .stem(let notes), .flag(let notes), .beam(let notes):
+            return notes.first.map { .note($0) }
         }
     }
 
