@@ -519,7 +519,7 @@ public enum LayoutEngine {
         struct UntranslatedMeasure {
             let measureIdx: Int
             let width: CGFloat
-            let perStaffElements: [Int: [LayoutElement]]
+            var perStaffElements: [Int: [LayoutElement]]
             let staff0Measure: Measure?
         }
         var untranslated: [UntranslatedMeasure] = []
@@ -600,6 +600,54 @@ public enum LayoutEngine {
                 width: w,
                 perStaffElements: perStaff,
                 staff0Measure: staff0Measure))
+        }
+
+        // --- System-wide lyric-Y alignment ---
+        //
+        // MuseScore's
+        // `LyricsLayout::checkCollisionsWithStaffElements`
+        // (`engraving/rendering/score/lyricslayout.cpp:614-651`)
+        // walks the whole system, finds the deepest required
+        // verse-Y, and shifts EVERY lyric in the verse uniformly
+        // so the row stays horizontally aligned across the
+        // system. `placeMeasureElements` only ratchets per
+        // measure — across measures, lyric Y can still differ
+        // (one measure has a low note that pushes lyrics down;
+        // adjacent measures don't). This post-pass enforces the
+        // system-wide max.
+        for staffIdx in 0..<staves.count {
+            // For each measure on this staff, the lowest Y among
+            // its lyric elements is verse 0's Y (the
+            // `maxLyricCenterYInMeasure` ratchet inside
+            // `placeMeasureElements` gives all chords in the
+            // measure the same Y base).
+            var measureVerse0Y: [Int: CGFloat] = [:]
+            for (mIdx, m) in untranslated.enumerated() {
+                guard let els = m.perStaffElements[staffIdx]
+                else { continue }
+                var minY = CGFloat.infinity
+                for el in els {
+                    if case let .textMark(.lyrics, _, p) = el,
+                       p.y < minY {
+                        minY = p.y
+                    }
+                }
+                if minY != .infinity {
+                    measureVerse0Y[mIdx] = minY
+                }
+            }
+            guard let systemTargetY = measureVerse0Y.values.max()
+            else { continue }
+            for (mIdx, baseY) in measureVerse0Y
+                where baseY < systemTargetY {
+                let dy = systemTargetY - baseY
+                if var els = untranslated[mIdx]
+                    .perStaffElements[staffIdx] {
+                    els = els.map { shiftLyricY($0, dy: dy) }
+                    untranslated[mIdx]
+                        .perStaffElements[staffIdx] = els
+                }
+            }
         }
 
         // --- Per-staff Y bounds from the untranslated elements ---
@@ -883,6 +931,33 @@ public enum LayoutEngine {
         case .lyricsMelisma(let from, let to),
              .lyricHyphen(let from, let to):
             return [from.y, to.y]
+        }
+    }
+
+    /// Shift lyric, melisma rule, and lyric hyphen Y by `dy`.
+    /// Used by the system-wide lyric alignment pass — bumps
+    /// these elements only, not chords / rests / spanners /
+    /// staff lines etc., so the rest of the engraving stays put
+    /// while the lyric row aligns horizontally across the
+    /// system.
+    private static func shiftLyricY(
+        _ element: LayoutElement, dy: CGFloat
+    ) -> LayoutElement {
+        func bump(_ p: CGPoint) -> CGPoint {
+            CGPoint(x: p.x, y: p.y + dy)
+        }
+        switch element {
+        case .textMark(let kind, let text, let p)
+            where kind == .lyrics:
+            return .textMark(kind: kind, text: text, origin: bump(p))
+        case .lyricsMelisma(let from, let to):
+            return .lyricsMelisma(
+                fromOrigin: bump(from), toOrigin: bump(to))
+        case .lyricHyphen(let from, let to):
+            return .lyricHyphen(
+                fromOrigin: bump(from), toOrigin: bump(to))
+        default:
+            return element
         }
     }
 
