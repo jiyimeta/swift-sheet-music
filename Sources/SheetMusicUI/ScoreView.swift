@@ -110,37 +110,43 @@ public struct ScoreView: View {
         doc: LayoutDocument,
         selection: SelectionRenderState
     ) -> some View {
-        // `.leading` alignment: a system that happens to be narrower
-        // than `doc.size.width` (last system not stretched, or a
-        // single-system horizontal doc) must pin to x=0 — otherwise
-        // SwiftUI's default `.center` centers it, and the visual
-        // notehead positions drift rightward off the LayoutEngine's
-        // coordinates while ScoreHitTester stays at x=0 — hit zones
-        // then fall slightly left of the noteheads.
-        // `LazyVStack` so only the visible systems instantiate and
-        // paint their CALayer trees — a 100-system score would
-        // otherwise render every system on every body re-eval and
-        // grind the scroll to a halt. SystemLayerView reports a
-        // fixed frame, so the lazy container can size each row
-        // without rendering it first.
+        // Each system is positioned at its doc-coord `origin.y`
+        // via `.offset` rather than stacked by a `VStack`. The
+        // layout engine bakes `systemGap` into `origin.y` (see
+        // `LayoutEngine.swift:194`), so a `VStack(spacing: 0)`
+        // would render system N at `N × systemGap` above its
+        // doc Y — breaking click-hit-test, the playback cursor's
+        // offset, and any external auto-scroll that maps doc Y
+        // to view Y.
+        //
+        // `.topLeading` alignment pins all children to the ZStack's
+        // top-leading corner so a system narrower than `doc.size`
+        // (last partial system, single-system docs) starts at x=0
+        // — otherwise SwiftUI's default centering would drift
+        // notehead positions off the LayoutEngine's coords.
+        //
+        // The title frame (when present) sits at y=0; system
+        // `origin.y` already accounts for its height.
         ZStack(alignment: .topLeading) {
-            LazyVStack(alignment: .leading, spacing: 0) {
-                if let titleFrame = doc.titleFrame {
-                    TitleFrameView(
-                        frame: titleFrame, width: doc.size.width)
-                }
-                ForEach(Array(doc.systems.enumerated()), id: \.offset) { _, sys in
-                    SystemLayerView(
-                        system: sys, metrics: doc.metrics,
-                        selection: selection)
-                }
+            if let titleFrame = doc.titleFrame {
+                TitleFrameView(
+                    frame: titleFrame, width: doc.size.width)
+            }
+            ForEach(Array(doc.systems.enumerated()), id: \.offset) { _, sys in
+                SystemLayerView(
+                    system: sys, metrics: doc.metrics,
+                    selection: selection)
+                    .offset(y: sys.origin.y)
             }
             PlaybackCursorView(
                 cursor: playbackCursor,
                 document: doc,
                 score: score)
         }
-        .frame(width: doc.size.width, alignment: .leading)
+        .frame(
+            width: doc.size.width,
+            height: doc.size.height,
+            alignment: .topLeading)
         .background(Color.white)
         .environment(\.colorScheme, .light)
     }
