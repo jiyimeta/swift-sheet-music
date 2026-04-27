@@ -115,6 +115,7 @@ enum MidiSemanticComparison {
         case .keySignature:  return 2
         case .tempo:         return 3
         case .portChange:    return 4
+        case .marker:        return 5
         }
     }
 

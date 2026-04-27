@@ -589,6 +589,31 @@ extension LayoutEngine {
                 case .spanner:
                     // Resolved at system level in the spanner-attach pass.
                     break
+                case .rehearsalMark(let rm):
+                    // System-flagged: drawn once above the top staff at
+                    // measure-left. Only emit on staff 0 / voice 0 to
+                    // avoid duplicates from linked-main mirrors and from
+                    // other staves in a multi-staff piece. Y mirrors
+                    // marker placement (`staffTopY - sp * 1.5` post-
+                    // translation), which in staff-local coords is
+                    // `staffMidY - sp * 3.5` (staffTopLocal = sp*2;
+                    // staffMidY = staffTopLocal + staffHeight/2 = sp*4
+                    // for 5-line staves; sp*4 - sp*3.5 ≈ sp*0.5 above
+                    // the top line — matches MuseScore's default).
+                    if staffIndex == 0 && voiceIdx == 0 {
+                        let originX = inHeader
+                            ? headerSchedule.contentStartX
+                            : metrics.sp * 0.5
+                        out.append(.rehearsalMark(
+                            text: rm.text,
+                            origin: CGPoint(
+                                x: originX
+                                    + CGFloat(rm.offsetX) * metrics.sp,
+                                y: staffMidY - metrics.sp * 3.5
+                                    + CGFloat(rm.offsetY) * metrics.sp),
+                            frame: rm.frame,
+                            color: rm.color))
+                    }
                 }
             }
 

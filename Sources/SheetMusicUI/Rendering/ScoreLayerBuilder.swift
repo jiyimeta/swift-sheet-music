@@ -713,6 +713,11 @@ public enum ScoreLayerBuilder {
             drawMarker(
                 kind: kind, text: text, origin: shift(p),
                 metrics: metrics, height: height, into: parent)
+        case .rehearsalMark(let text, let p, let frame, let color):
+            drawRehearsalMark(
+                text: text, origin: shift(p), frame: frame,
+                color: color.map(scoreColorToCGColor) ?? Self.inkColor,
+                metrics: metrics, height: height, into: parent)
         case .jump(let text, let p):
             if !text.isEmpty,
                let layer = textLayer(
@@ -1836,6 +1841,86 @@ public enum ScoreLayerBuilder {
                 height: height) {
                 parent.addSublayer(layer)
             }
+        }
+    }
+
+    // MARK: - Rehearsal mark
+
+    private static func drawRehearsalMark(
+        text: String, origin: CGPoint,
+        frame: RehearsalMark.FrameKind, color: CGColor,
+        metrics: StaffMetrics, height: CGFloat,
+        into parent: CALayer
+    ) {
+        guard !text.isEmpty else { return }
+        let textSize = metrics.sp * 2.5
+        let font = systemFont(size: textSize, italic: false)
+
+        // Measure the text via CTLine so we know the frame's
+        // typographic bounds. Bounding the path's ink would clip the
+        // descender on letters like "g", and CJK glyphs (e.g. "サビ")
+        // exceed any single-row ascent/descent estimate.
+        let attr = NSAttributedString(
+            string: text, attributes: [.font: font])
+        let line = CTLineCreateWithAttributedString(attr)
+        var ascent: CGFloat = 0
+        var descent: CGFloat = 0
+        var leading: CGFloat = 0
+        let advance = CGFloat(CTLineGetTypographicBounds(
+            line, &ascent, &descent, &leading))
+        let textWidth = max(advance, textSize * 0.5)
+        let textHeight = ascent + descent
+
+        // Anchor the text bottom-leading at `origin`, with a half-sp
+        // padding inside the frame.
+        let pad = metrics.sp * 0.4
+        let textOrigin = CGPoint(
+            x: origin.x + pad, y: origin.y - pad)
+
+        if let layer = textLayer(
+            text: text, at: textOrigin,
+            size: textSize, italic: false,
+            anchor: CGPoint(x: 0, y: 1),
+            color: color,
+            height: height) {
+            parent.addSublayer(layer)
+        }
+
+        // Frame box around the text. y grows downward in layout
+        // coords, so the box's top is `origin.y - 2*pad - textHeight`
+        // and its bottom is `origin.y`.
+        let boxRect = CGRect(
+            x: origin.x,
+            y: origin.y - 2 * pad - textHeight,
+            width: textWidth + 2 * pad,
+            height: textHeight + 2 * pad)
+        let lineWidth = metrics.sp * 0.12
+        let framePath: CGPath?
+        switch frame {
+        case .none:
+            framePath = nil
+        case .rectangle:
+            framePath = CGPath(rect: boxRect, transform: nil)
+        case .circle:
+            // Inscribe the text in a circle whose diameter matches
+            // the larger of the box's two sides — letterbox-friendly
+            // for short labels ("A") and short-and-wide ("1サビ")
+            // alike.
+            let diameter = max(boxRect.width, boxRect.height)
+            let cx = boxRect.midX
+            let cy = boxRect.midY
+            framePath = CGPath(
+                ellipseIn: CGRect(
+                    x: cx - diameter / 2,
+                    y: cy - diameter / 2,
+                    width: diameter,
+                    height: diameter),
+                transform: nil)
+        }
+        if let fp = framePath {
+            parent.addSublayer(strokeLayer(
+                path: fp, height: height,
+                lineWidth: lineWidth, color: color))
         }
     }
 

@@ -73,6 +73,15 @@ public enum LayoutElement: Sendable, Equatable {
     )
     case fermata(subtype: String, origin: CGPoint)
     case marker(kind: Marker.Kind, text: String, origin: CGPoint)
+    /// Rehearsal letter / number drawn above the top staff at the
+    /// start of its containing measure. `frame` controls whether
+    /// the text is boxed, circled, or unframed.
+    case rehearsalMark(
+        text: String,
+        origin: CGPoint,
+        frame: RehearsalMark.FrameKind,
+        color: ScoreColor?
+    )
     case jump(text: String, origin: CGPoint)
     case measureRepeat(count: Int, origin: CGPoint)
     /// 1-based measure number drawn above a staff. Emitted for every

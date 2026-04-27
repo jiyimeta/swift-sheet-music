@@ -139,6 +139,16 @@ enum MusicXMLMeasureWalker {
                     perStaff[0].addMarkers(navigation.markers)
                     perStaff[0].addJumps(navigation.jumps)
                 }
+                // Rehearsal marks ride on the same `<direction>` element
+                // as a `<direction-type><rehearsal>` child. Attach to
+                // staff 0 so they match the MSCX `RehearsalMark` shape
+                // (system-flagged, drawn once above the top staff).
+                let rehearsals = MusicXMLRehearsalDecoder.decode(child)
+                if !perStaff.isEmpty {
+                    for mark in rehearsals {
+                        perStaff[0].addRehearsalMark(mark)
+                    }
+                }
 
             case "backup", "forward":
                 // For Phase 0 we rely on document order + <voice>/<staff> tags

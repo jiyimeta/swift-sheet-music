@@ -79,6 +79,9 @@ extension Voice {
             case "SystemText":
                 elements.append(.staffText(
                     try StaffText.decode(child, isSystemText: true)))
+            case "RehearsalMark":
+                elements.append(.rehearsalMark(
+                    try RehearsalMark.decode(child)))
             default:
                 // Unknown elements are silently ignored. Decoder is permissive on purpose
                 // — once we see what features individual MIDI tests actually need, they

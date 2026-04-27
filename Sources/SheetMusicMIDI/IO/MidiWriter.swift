@@ -109,6 +109,11 @@ public enum MidiWriter {
             encoder.appendUInt8(0x21)
             encoder.appendUInt8(0x01)
             encoder.appendUInt8(UInt8(port & 0x7F))
+        case let .marker(text):
+            encoder.appendUInt8(0x06)
+            let bytes = Data(text.utf8)
+            encoder.append(VariableLengthQuantity.encode(bytes.count))
+            encoder.append(bytes)
         }
     }
 

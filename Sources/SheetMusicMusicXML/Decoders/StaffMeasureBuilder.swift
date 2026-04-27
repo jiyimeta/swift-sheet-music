@@ -26,6 +26,15 @@ struct StaffMeasureBuilder {
         jumps.append(contentsOf: newJumps)
     }
 
+    /// Append a rehearsal mark to the staff's first voice. MusicXML
+    /// rehearsal marks are part-level, but our model puts them in
+    /// `VoiceElement.rehearsalMark` — we attach to voice 0 to match
+    /// MuseScore's MSCX shape (rehearsal marks always read from the
+    /// first `<voice>` block).
+    mutating func addRehearsalMark(_ mark: RehearsalMark) {
+        appendAttribute(.rehearsalMark(mark))
+    }
+
     /// Append to the first voice index (MSCX attributes convention). Lazily
     /// creates the voice 0 bucket if no notes have been seen yet.
     mutating func appendAttribute(_ element: VoiceElement) {

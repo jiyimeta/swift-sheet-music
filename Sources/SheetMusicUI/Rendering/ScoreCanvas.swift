@@ -293,6 +293,11 @@ public enum ScoreCanvasDrawing {
             MarkerRenderer.draw(
                 context: &context, kind: kind, text: text,
                 origin: shift(p), metrics: metrics)
+        case .rehearsalMark(let text, let p, let frame, let color):
+            RehearsalMarkRenderer.draw(
+                context: &context, text: text,
+                origin: shift(p), frame: frame, color: color,
+                metrics: metrics)
         case .jump(let text, let p):
             JumpRenderer.draw(
                 context: &context, text: text,

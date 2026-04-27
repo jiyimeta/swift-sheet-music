@@ -970,7 +970,8 @@ public enum LayoutEngine {
              .measureRepeat(_, let p),
              .measureNumber(_, let p),
              .staffName(_, let p),
-             .staffText(_, let p, _, _):
+             .staffText(_, let p, _, _),
+             .rehearsalMark(_, let p, _, _):
             return [p.y]
         case .rest(_, let p, _, _, _):
             return [p.y]
@@ -1146,6 +1147,12 @@ public enum LayoutEngine {
                 origin: shift(p),
                 color: color,
                 isSystemText: isSystem)
+        case .rehearsalMark(let text, let p, let frame, let color):
+            // Same staff-local origin convention as `.staffText`;
+            // shift onto the system's actual top-staff y.
+            return .rehearsalMark(
+                text: text, origin: shift(p),
+                frame: frame, color: color)
         case .note, .marker, .jump, .measureNumber, .staffName,
              .spannerSegment, .tieArc:
             return element

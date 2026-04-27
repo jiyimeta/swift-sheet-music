@@ -351,7 +351,8 @@ extension LayoutEngine {
                 case .rest(let r):
                     w += durationWidth(r.duration, metrics: metrics)
                 case .dynamic, .tempo, .fermata,
-                     .measureRepeat, .spanner, .staffText:
+                     .measureRepeat, .spanner, .staffText,
+                     .rehearsalMark:
                     break
                 }
             }

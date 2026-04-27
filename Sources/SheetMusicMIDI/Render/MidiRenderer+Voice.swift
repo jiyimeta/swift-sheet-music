@@ -128,6 +128,18 @@ extension MidiRenderer {
             }
         case .clef, .barLine, .spanner, .measureRepeat, .staffText:
             return
+        case let .rehearsalMark(rm):
+            // Emit SMF Marker meta-event (0xFF 06). Mirrors how `.tempo` is
+            // forwarded only on `voiceIndex == 0`: the same marker would
+            // otherwise be duplicated across voice 0/1 of the same staff
+            // bucket. Cross-staff duplication (each staff's track gets the
+            // mark) is intentional and matches the existing tempo-handling
+            // convention here.
+            if voiceIndex == 0 && !rm.text.isEmpty {
+                events.append(TimedMidiEvent(
+                    tick: localTick,
+                    event: .meta(.marker(rm.text))))
+            }
         case let .tempo(tempo):
             currentTempoBps = tempo.beatsPerSecond
             if voiceIndex == 0 {
