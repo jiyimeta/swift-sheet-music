@@ -160,11 +160,6 @@ extension LayoutEngine {
                 let syllabic: Syllabic
             }
             var previousLyric: [Int: LyricTrail] = [:]
-            // Monotonic max of chord-driven lyric Y across this
-            // measure — once a low note bumps the lyric down,
-            // later chords in the measure stay at that lower Y.
-            // See `lyricSouth` block in the chord branch below.
-            var maxLyricCenterYInMeasure: CGFloat = -.infinity
             // Pre-compute this voice's total ticks for the measure
             // so melisma emission can tell "ends inside" from
             // "crosses into next measure" without rescanning.
@@ -191,6 +186,53 @@ extension LayoutEngine {
                    ? -metrics.sp * 2
                    :  metrics.sp * 2)
                 : 0
+
+            // Final lyric centre Y for this voice — the max over
+            // all chords' south-skyline-pushed Ys. Pre-computed
+            // here (rather than ratcheted incrementally during
+            // emission) so every chord's lyric uses the SAME Y;
+            // otherwise earlier chords sit at a lower ratchet
+            // value than later ones and the in-measure lyric row
+            // is jagged.
+            let voiceMaxLyricCenterY: CGFloat = {
+                var maxY = staffMidY + metrics.sp * 4
+                for el in voice.elements {
+                    guard case .chord(let chord) = el else { continue }
+                    let steps: [Int] = chord.notes.map { note in
+                        if let drumLine = drumLineMap?[note.pitch] {
+                            return 4 - drumLine
+                        }
+                        return PitchStaffPosition.step(
+                            midiPitch: note.pitch, tpc: note.tpc,
+                            clef: currentClef
+                        ).step
+                    }
+                    let stemDir = forcedStem
+                        ?? StemDirectionRule.direction(for: steps)
+                    guard let lowestStep = steps.min()
+                    else { continue }
+                    let lowestNoteY = staffMidY
+                        - CGFloat(lowestStep) * metrics.sp / 2
+                    let noteheadBottom = lowestNoteY
+                        + metrics.sp * 0.5
+                    var south = noteheadBottom
+                    if stemDir == .up {
+                        let hasTie = chord.notes.contains {
+                            $0.tieForward != nil
+                                || $0.tieBack != nil
+                        }
+                        if hasTie {
+                            south = max(
+                                south,
+                                noteheadBottom + metrics.sp * 0.8)
+                        }
+                    }
+                    let southAvoidY = south
+                        + metrics.sp * (1 + 1.1)
+                    maxY = max(maxY, southAvoidY)
+                }
+                return maxY
+            }()
 
             // Emit the synthesized leading clef exactly once, at the top
             // of the first voice to process it.
@@ -390,48 +432,13 @@ extension LayoutEngine {
                     // stretches to the end of the last note it covers.
                     let chordTicks = chord.duration.ticks(
                         division: division)
-                    // South skyline for this chord. Approximates
-                    // MuseScore's per-system skyline collision
-                    // pass (`engraving/rendering/score/lyricslayout
-                    // .cpp::checkCollisionsWithStaffElements`):
-                    // when notes / ties / stems hang below the
-                    // staff bottom, the lyric must drop with them
-                    // so it doesn't overlap. We compute it per
-                    // chord (rather than per-system) so the
-                    // refactor stays local; adjacent chords share
-                    // verse Y via the `maxLyricsYInMeasure`
-                    // monotone ratchet below.
-                    let lyricSouth = chordSouthExtent(
-                        notes: chordNotes,
-                        stem: stem,
-                        staffMidY: staffMidY,
-                        metrics: metrics)
-                    // Default lyric centre. See the design notes
-                    // below the formula for why
-                    // `staffMidY + 4 sp` matches MuseScore's
-                    // `Sid::lyricsMinTopDistance = 1 sp`.
-                    let defaultLyricsCenterY =
-                        staffMidY + metrics.sp * 4
-                    // South-driven lyric centre: clear the chord's
-                    // south extent by `lyricsMinTopDistance`
-                    // (1 sp) + the lyric font's ascent (~1.1 sp at
-                    // sp × 2.2 size).
-                    let southAvoidLyricsCenterY =
-                        lyricSouth + metrics.sp * (1 + 1.1)
-                    let baseLyricsY = max(
-                        defaultLyricsCenterY,
-                        southAvoidLyricsCenterY)
-                    // Monotone ratchet across this measure. Once
-                    // a chord pushes the lyric down, later chords
-                    // in the same measure stay at the lower Y so
-                    // adjacent syllables remain horizontally
-                    // aligned (pre-MuseScore-per-system would
-                    // emit jagged-up-and-down lyric heights when
-                    // the south extent varied chord-to-chord).
-                    maxLyricCenterYInMeasure = max(
-                        maxLyricCenterYInMeasure, baseLyricsY)
-                    let chordLyricCenterY =
-                        maxLyricCenterYInMeasure
+                    // Use the voice's pre-computed max south-driven
+                    // Y so every chord in the measure shares the
+                    // same lyric centre (within-measure horizontal
+                    // alignment). The system-wide post-pass in
+                    // `LayoutEngine.layout` then aligns this Y
+                    // across measures of the same system.
+                    let chordLyricCenterY = voiceMaxLyricCenterY
                     for (verseIdx, lyric) in chord.lyrics.enumerated() {
                         guard !lyric.text.isEmpty else { continue }
                         // Verse stride 1.7 sp keeps multi-verse

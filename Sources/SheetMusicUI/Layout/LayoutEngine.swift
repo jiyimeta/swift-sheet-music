@@ -638,15 +638,44 @@ public enum LayoutEngine {
             }
             guard let systemTargetY = measureVerse0Y.values.max()
             else { continue }
+            // Per-measure shift for lyric text + hyphens: all
+            // verses move uniformly so verse N stays at
+            // `systemTargetY + N * 1.7sp`.
             for (mIdx, baseY) in measureVerse0Y
                 where baseY < systemTargetY {
                 let dy = systemTargetY - baseY
                 if var els = untranslated[mIdx]
                     .perStaffElements[staffIdx] {
-                    els = els.map { shiftLyricY($0, dy: dy) }
+                    els = els.map { shiftLyricTextY($0, dy: dy) }
                     untranslated[mIdx]
                         .perStaffElements[staffIdx] = els
                 }
+            }
+            // Melisma rules need an absolute snap, not a per-
+            // measure shift. Anchor rules emitted in a chord-
+            // pushed measure use that measure's pushed Y; the
+            // continuation rule for the SAME melisma emitted in
+            // the following measure (`emitMelismaContinuation`)
+            // uses the default verse-0 Y because it has no view
+            // of the originating chord. Without this snap the
+            // continuation lands at default Y + dy_thisMeasure,
+            // which only equals `systemTargetY + offset` when the
+            // current measure has no own push. Force every
+            // melisma in the system to `systemTargetY + 0.9 sp`
+            // (the lyric font's underline level — see
+            // `melismaLineYOffset`) so the rule sits flush with
+            // the now-aligned lyric row, regardless of which
+            // measure emitted it. Verse 0 only — multi-verse
+            // melismas would need a verse hint on the element.
+            let melismaTargetY = systemTargetY + metrics.sp * 0.9
+            for mIdx in untranslated.indices {
+                guard var els = untranslated[mIdx]
+                    .perStaffElements[staffIdx] else { continue }
+                els = els.map {
+                    setMelismaAbsoluteY($0, y: melismaTargetY)
+                }
+                untranslated[mIdx]
+                    .perStaffElements[staffIdx] = els
             }
         }
 
@@ -934,13 +963,10 @@ public enum LayoutEngine {
         }
     }
 
-    /// Shift lyric, melisma rule, and lyric hyphen Y by `dy`.
-    /// Used by the system-wide lyric alignment pass — bumps
-    /// these elements only, not chords / rests / spanners /
-    /// staff lines etc., so the rest of the engraving stays put
-    /// while the lyric row aligns horizontally across the
-    /// system.
-    private static func shiftLyricY(
+    /// Shift lyric text and lyric hyphens by `dy`. Excludes
+    /// melisma rules, which are snapped absolutely by
+    /// `setMelismaAbsoluteY` after this pass.
+    private static func shiftLyricTextY(
         _ element: LayoutElement, dy: CGFloat
     ) -> LayoutElement {
         func bump(_ p: CGPoint) -> CGPoint {
@@ -950,15 +976,26 @@ public enum LayoutEngine {
         case .textMark(let kind, let text, let p)
             where kind == .lyrics:
             return .textMark(kind: kind, text: text, origin: bump(p))
-        case .lyricsMelisma(let from, let to):
-            return .lyricsMelisma(
-                fromOrigin: bump(from), toOrigin: bump(to))
         case .lyricHyphen(let from, let to):
             return .lyricHyphen(
                 fromOrigin: bump(from), toOrigin: bump(to))
         default:
             return element
         }
+    }
+
+    /// Force every `.lyricsMelisma` to `y` regardless of its
+    /// originating Y. See the call site in the system-wide
+    /// alignment pass for the rationale.
+    private static func setMelismaAbsoluteY(
+        _ element: LayoutElement, y: CGFloat
+    ) -> LayoutElement {
+        if case .lyricsMelisma(let from, let to) = element {
+            return .lyricsMelisma(
+                fromOrigin: CGPoint(x: from.x, y: y),
+                toOrigin: CGPoint(x: to.x, y: y))
+        }
+        return element
     }
 
     private static func shiftMeasure(
