@@ -285,11 +285,17 @@ public enum LayoutEngine {
                 widthSoFar += w
                 cursor += 1
                 // Explicit `<LayoutBreak><subtype>line</subtype>`
-                // forces the next measure onto a new system. Mirrors
-                // `engraving/rendering/score/systemlayout.cpp:262`.
+                // forces the next measure onto a new system —
+                // ONLY in wrap-to-width mode. Horizontal /
+                // single-line layouts ignore line breaks, mirroring
+                // MuseScore's `LayoutMode::LINE` /
+                // `LayoutMode::HORIZONTAL_FIXED` branch in
+                // `engraving/rendering/score/systemlayout.cpp:265-269`
+                // where `lineBreak = false` regardless of the flag.
                 // Line breaks are document-level (every staff agrees),
                 // so we check staff 0.
-                if cursor > systemStart,
+                if context.options.wrapToViewWidth,
+                   cursor > systemStart,
                    measureForcesLineBreak(
                         at: cursor - 1,
                         staves: context.score.staves) {

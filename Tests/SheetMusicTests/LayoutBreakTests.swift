@@ -81,6 +81,45 @@ import Testing
             at: 99, staves: staves) == false)
     }
 
+    /// Horizontal mode (`wrapToViewWidth = false`) must ignore
+    /// line breaks — the whole score lays out as a single
+    /// continuous strip. Mirrors MuseScore's
+    /// `LayoutMode::HORIZONTAL_FIXED` branch in
+    /// `engraving/rendering/score/systemlayout.cpp:265-269`.
+    @Test func horizontalModeIgnoresLineBreaks() {
+        guard #available(macOS 15.0, iOS 16.0, *) else { return }
+        let chord = Chord(
+            duration: .quarter,
+            notes: [Note(pitch: 60, tpc: 14)])
+        // Six measures with a forced line break on every odd index.
+        let measures = (0..<6).map { idx in
+            Measure(
+                voices: [Voice(elements: [
+                    .chord(chord), .chord(chord),
+                    .chord(chord), .chord(chord),
+                ])],
+                lineBreak: idx % 2 == 1)
+        }
+        let staff = StaffContent(id: 1, measures: measures)
+        let part = Part(
+            id: "P1",
+            instrument: Instrument(
+                id: "i",
+                articulations: [InstrumentArticulation()]))
+        let score = Score(
+            division: 480, parts: [part], staves: [staff])
+        let doc = LayoutEngine.layout(
+            score: score,
+            options: ScoreViewOptions(
+                staffSize: 16, systemGap: 16,
+                wrapToViewWidth: false),
+            availableWidth: 4000)
+        // wrapToViewWidth=false → one system holds every measure
+        // regardless of LayoutBreaks.
+        #expect(doc.systems.count == 1)
+        #expect(doc.systems.first?.measures.count == 6)
+    }
+
     /// A score with explicit line breaks every 2 measures produces
     /// one system per pair regardless of how many would otherwise
     /// fit horizontally.
