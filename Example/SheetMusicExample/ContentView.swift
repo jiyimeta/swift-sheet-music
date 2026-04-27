@@ -46,6 +46,10 @@ struct ContentView: View {
     /// `.sheet` modifier that presents `UIActivityViewController`
     /// for the freshly-exported PDF.
     @State private var pdfShareItem: PDFShareItem?
+    /// Drives the `.fileImporter` sheet for loading arbitrary
+    /// `.mscx` / `.mscz` / `.musicxml` / `.mxl` documents from the
+    /// user's iCloud or local file storage.
+    @State private var isImportingFile = false
     /// Live magnification factor for PDF preview mode (driven by
     /// pinch-to-zoom). Persists across score / mode changes so the
     /// user doesn't lose their zoom level when switching tabs.
@@ -123,6 +127,12 @@ struct ContentView: View {
                         Image(systemName: "square.and.arrow.up")
                     }
                     .disabled(score == nil)
+
+                    Button {
+                        isImportingFile = true
+                    } label: {
+                        Image(systemName: "folder")
+                    }
                 }
                 ToolbarItemGroup(placement: .topBarTrailing) {
                     Button {
@@ -155,6 +165,13 @@ struct ContentView: View {
             }
         }
         .onAppear(perform: loadBundled)
+        .fileImporter(
+            isPresented: $isImportingFile,
+            allowedContentTypes: ScoreFileType.allUTTypes,
+            allowsMultipleSelection: false
+        ) { result in
+            handleFileImport(result)
+        }
         .sheet(item: $pdfShareItem) { item in
             ShareSheet(items: [item.url])
         }
@@ -633,20 +650,78 @@ struct ContentView: View {
         do {
             let data = try Data(contentsOf: url)
             let loaded = try SheetMusic.loadScore(mscxData: data)
-            score = loaded
-            verticalDoc = nil
-            horizontalDoc = nil
-            scoreVersion = UUID()
-            selection = .none
-            // (Re)build samplers for this score. SoundFont parsing
-            // can take tens of ms per file; offloading keeps the
-            // first-paint latency low even on iPhone.
-            let engine = playbackEngine
-            Task.detached(priority: .userInitiated) { [loaded] in
-                try? engine.prepare(score: loaded)
-            }
+            adoptLoadedScore(loaded)
         } catch {
             errorMessage = error.localizedDescription
+        }
+    }
+
+    /// Handle the result of `.fileImporter`. iOS hands us a
+    /// security-scoped URL — we must call
+    /// `startAccessingSecurityScopedResource()` before reading or
+    /// the load will fail with EPERM on iCloud / external-storage
+    /// files.
+    private func handleFileImport(
+        _ result: Result<[URL], Error>
+    ) {
+        switch result {
+        case .failure(let err):
+            errorMessage =
+                "File picker failed: \(err.localizedDescription)"
+        case .success(let urls):
+            guard let url = urls.first else { return }
+            loadFromUserURL(url)
+        }
+    }
+
+    private func loadFromUserURL(_ url: URL) {
+        let started = url.startAccessingSecurityScopedResource()
+        defer {
+            if started { url.stopAccessingSecurityScopedResource() }
+        }
+        do {
+            let loaded: Score
+            switch ScoreFileType.detect(url: url) {
+            case .mscx:
+                loaded = try SheetMusic.loadScore(mscxURL: url)
+            case .mscz:
+                loaded = try SheetMusic.loadScore(msczURL: url)
+            case .musicXML:
+                let data = try Data(contentsOf: url)
+                loaded = try SheetMusic.loadScore(musicXMLData: data)
+            case .mxl:
+                let data = try Data(contentsOf: url)
+                loaded = try SheetMusic.loadScore(mxlData: data)
+            case nil:
+                errorMessage =
+                    "Unsupported file: \(url.lastPathComponent)"
+                return
+            }
+            adoptLoadedScore(loaded)
+        } catch {
+            errorMessage =
+                "Could not load \(url.lastPathComponent): " +
+                error.localizedDescription
+        }
+    }
+
+    /// Replace the active score with `loaded`, reset cached
+    /// per-score view state, kick off background sampler prep.
+    private func adoptLoadedScore(_ loaded: Score) {
+        score = loaded
+        verticalDoc = nil
+        horizontalDoc = nil
+        pdfDoc = nil
+        pdfPages = []
+        scoreVersion = UUID()
+        selection = .none
+        errorMessage = nil
+        // (Re)build samplers for this score. SoundFont parsing can
+        // take tens of ms per file; offloading keeps the first-paint
+        // latency low even on iPhone.
+        let engine = playbackEngine
+        Task.detached(priority: .userInitiated) { [loaded] in
+            try? engine.prepare(score: loaded)
         }
     }
 }

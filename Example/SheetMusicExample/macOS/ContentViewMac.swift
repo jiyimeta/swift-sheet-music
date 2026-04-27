@@ -116,6 +116,16 @@ struct ContentViewMac: View {
                         loadBundled()
                     }
                 }
+                Section("Open") {
+                    Button("Open File…") {
+                        showOpenPanel()
+                    }
+                    Text(sourceName)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
                 Section("Playback") {
                     HStack {
                         Button {
@@ -232,6 +242,17 @@ struct ContentViewMac: View {
         case .playing: return "playing"
         case .paused: return "paused"
         }
+    }
+
+    private func showOpenPanel() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = ScoreFileType.allUTTypes
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.title = "Open Score"
+        guard panel.runModal() == .OK,
+              let url = panel.url else { return }
+        openUserURL(url)
     }
 
     private func exportPDF() {
@@ -729,39 +750,82 @@ struct ContentViewMac: View {
         do {
             let data = try Data(contentsOf: url)
             let loaded = try SheetMusic.loadScore(mscxData: data)
-            // Pre-build the horizontal layout synchronously. It
-            // doesn't depend on the viewport (uses the score's
-            // natural content width), so there's no reason to defer
-            // it to a .task — and an if-let gated Group can fail
-            // to trigger .task(id:) when it starts empty.
-            let hOpts = Self.horizontalOptions
-            horizontalDoc = LayoutEngine.layout(
-                score: loaded, options: hOpts,
-                availableWidth: LayoutEngine.naturalContentWidth(
-                    score: loaded, options: hOpts))
-            horizontalContexts = LayoutEngine.measureContexts(
-                for: loaded)
-            // Vertical layout still needs the viewport width, so
-            // it's built by a .task in the .vertical case.
-            verticalDoc = nil
-            score = loaded
-            sourceName = url.lastPathComponent
-            errorMessage = nil
-            scoreVersion = UUID()
-            selection = .none
-            pendingHorizontalScroll = nil
-            // (Re)build samplers + timeline for this score. SoundFont
-            // loading is potentially slow on first call (tens of ms
-            // per file), so do it off-main; the score renders before
-            // the first preview is requested in practice. If no SF2
-            // is bundled the resolver returns nil and the engine
-            // stays silent.
-            let engine = playbackEngine
-            Task.detached(priority: .userInitiated) { [loaded] in
-                try? engine.prepare(score: loaded)
-            }
+            adoptLoadedScore(
+                loaded, sourceName: url.lastPathComponent)
         } catch {
             errorMessage = "Failed: \(error.localizedDescription)"
+        }
+    }
+
+    /// User-triggered "Open…" via NSOpenPanel. Reads the file at
+    /// `url` (any of the formats `ScoreFileType` recognises),
+    /// adopts it as the active score.
+    func openUserURL(_ url: URL) {
+        let started = url.startAccessingSecurityScopedResource()
+        defer {
+            if started { url.stopAccessingSecurityScopedResource() }
+        }
+        do {
+            let loaded: Score
+            switch ScoreFileType.detect(url: url) {
+            case .mscx:
+                loaded = try SheetMusic.loadScore(mscxURL: url)
+            case .mscz:
+                loaded = try SheetMusic.loadScore(msczURL: url)
+            case .musicXML:
+                let data = try Data(contentsOf: url)
+                loaded = try SheetMusic.loadScore(musicXMLData: data)
+            case .mxl:
+                let data = try Data(contentsOf: url)
+                loaded = try SheetMusic.loadScore(mxlData: data)
+            case nil:
+                errorMessage =
+                    "Unsupported file: \(url.lastPathComponent)"
+                return
+            }
+            adoptLoadedScore(
+                loaded, sourceName: url.lastPathComponent)
+        } catch {
+            errorMessage =
+                "Could not load \(url.lastPathComponent): " +
+                error.localizedDescription
+        }
+    }
+
+    /// Replace the active score with `loaded`, reset cached
+    /// per-score view state, kick off background sampler prep.
+    /// Mirrors iOS's `adoptLoadedScore` but also rebuilds the
+    /// horizontal layout synchronously (macOS uses it in the
+    /// horizontal-mode entry path).
+    private func adoptLoadedScore(
+        _ loaded: Score, sourceName name: String
+    ) {
+        // Pre-build the horizontal layout synchronously. It
+        // doesn't depend on the viewport (uses the score's
+        // natural content width), so there's no reason to defer
+        // it to a .task — and an if-let gated Group can fail
+        // to trigger .task(id:) when it starts empty.
+        let hOpts = Self.horizontalOptions
+        horizontalDoc = LayoutEngine.layout(
+            score: loaded, options: hOpts,
+            availableWidth: LayoutEngine.naturalContentWidth(
+                score: loaded, options: hOpts))
+        horizontalContexts = LayoutEngine.measureContexts(
+            for: loaded)
+        // Vertical layout still needs the viewport width, so it's
+        // built by a .task in the .vertical case.
+        verticalDoc = nil
+        pdfDoc = nil
+        pdfPages = []
+        score = loaded
+        sourceName = name
+        errorMessage = nil
+        scoreVersion = UUID()
+        selection = .none
+        pendingHorizontalScroll = nil
+        let engine = playbackEngine
+        Task.detached(priority: .userInitiated) { [loaded] in
+            try? engine.prepare(score: loaded)
         }
     }
 }
