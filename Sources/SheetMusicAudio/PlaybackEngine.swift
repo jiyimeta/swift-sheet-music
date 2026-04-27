@@ -31,6 +31,15 @@ public final class PlaybackEngine: ObservableObject {
     /// `AVAudioUnitSampler` per staff index. Re-built on each call
     /// to `prepare(score:)`.
     private var staffSamplers: [Int: AVAudioUnitSampler] = [:]
+    /// SoundFont-load parameters cached per staff so the mixer's
+    /// program picker can swap the GM patch on a sampler without
+    /// having to consult the `Score` again.
+    private var staffLoadParams: [Int: StaffLoadParams] = [:]
+
+    struct StaffLoadParams: Sendable {
+        var bankLSB: UInt8
+        var isDrums: Bool
+    }
     /// Used to silence pending preview note-offs when the engine is
     /// torn down or a new score is prepared.
     private let previewQueue = DispatchQueue(
@@ -62,17 +71,62 @@ public final class PlaybackEngine: ObservableObject {
 
     @Published public private(set) var state: PlaybackState = .stopped
     @Published public private(set) var currentCursor: ScoreCursor?
-    /// MuseScore-style toggle for the metronome click during full-
-    /// score playback. Defaults to `true`; flipping it mid-playback
-    /// mutes / unmutes the live metronome track without rebuilding
-    /// the sequencer.
-    @Published public var isMetronomeEnabled = true {
-        didSet { metronome.isEnabled = isMetronomeEnabled }
-    }
+    /// One strip per staff plus a metronome strip. Rebuilt on each
+    /// `prepare(score:)` call; mutated through `setVolume / setMuted
+    /// / setSoloed`. Hosts bind a SwiftUI mixer view directly to
+    /// this array and re-render on change.
+    @Published public private(set) var mixerChannels: [MixerChannel] = []
 
     public init(soundfontResolver: SoundfontResolver) {
         self.resolver = soundfontResolver
         self.metronome = MetronomeController(engine: engine)
+    }
+
+    // MARK: Internal accessors for `PlaybackEngine+Mixer`
+
+    func staffSampler(at idx: Int) -> AVAudioUnitSampler? {
+        staffSamplers[idx]
+    }
+
+    func setMetronomeEnabled(_ enabled: Bool) {
+        metronome.isEnabled = enabled
+    }
+
+    func setMetronomeVolume(_ volume: Float) {
+        metronome.volume = volume
+    }
+
+    func replaceMixerChannels(_ channels: [MixerChannel]) {
+        mixerChannels = channels
+    }
+
+    func mutateMixerChannel(
+        at idx: Int, _ change: (inout MixerChannel) -> Void
+    ) {
+        change(&mixerChannels[idx])
+    }
+
+    /// Reload the staff `idx` sampler with a new GM `program`,
+    /// keeping the staff's existing bank / drumset choice. Does
+    /// nothing if the sampler isn't built yet (engine never
+    /// prepared) or the resolver returns no SoundFont URL — the
+    /// existing patch keeps playing in that case.
+    func loadProgram(forStaff idx: Int, program: UInt8) {
+        guard
+            let sampler = staffSamplers[idx],
+            let params = staffLoadParams[idx],
+            let url = resolver.soundfontURL(
+                forBank: params.bankLSB, program: program)
+                ?? resolver.defaultGMSoundfontURL
+        else { return }
+        let bankMSB: UInt8 = params.isDrums
+            ? UInt8(kAUSampler_DefaultPercussionBankMSB)
+            : UInt8(kAUSampler_DefaultMelodicBankMSB)
+        try? sampler.loadSoundBankInstrument(
+            at: url,
+            program: program,
+            bankMSB: bankMSB,
+            bankLSB: params.bankLSB)
     }
 
     /// Build per-staff samplers, load their SoundFont presets, and
@@ -99,6 +153,7 @@ public final class PlaybackEngine: ObservableObject {
             engine.detach(sampler)
         }
         staffSamplers.removeAll()
+        staffLoadParams.removeAll()
 
         #if os(iOS) || os(tvOS) || os(watchOS)
         let session = AVAudioSession.sharedInstance()
@@ -151,7 +206,12 @@ public final class PlaybackEngine: ObservableObject {
                 }
             }
             staffSamplers[idx] = sampler
+            staffLoadParams[idx] = StaffLoadParams(
+                bankLSB: bank, isDrums: isDrums)
         }
+
+        rebuildMixerChannels(for: score)
+        applyMixerState()
 
         if !engine.isRunning {
             try engine.start()
@@ -240,6 +300,20 @@ public final class PlaybackEngine: ObservableObject {
             // and let the host surface the error if it cares.
             state = .stopped
         }
+    }
+
+    /// Reposition the playback cursor without changing play / pause
+    /// state. Used for click-to-seek during playback — the user taps
+    /// a note and audio jumps to that note while continuing to play.
+    /// No-op when there is no sequencer yet (call `prepare(score:)`
+    /// first) or when `cursor` doesn't resolve into the timeline.
+    public func seek(to cursor: ScoreCursor) {
+        guard let timeline, let sequencer,
+              let frame = timeline.frame(forCursor: cursor) else {
+            return
+        }
+        sequencer.currentPositionInSeconds = frame.timeSeconds
+        currentCursor = frame.cursor
     }
 
     /// Pause playback at the current position. `play(...)` resumes

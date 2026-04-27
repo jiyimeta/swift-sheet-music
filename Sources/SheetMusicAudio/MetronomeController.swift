@@ -31,10 +31,16 @@ final class MetronomeController {
 
     /// User-facing toggle. Defaults to `true` to match MuseScore
     /// (metronome is enabled out of the box; the user mutes it from
-    /// the toolbar). When flipped at runtime, the live track's mute
+    /// the mixer). When flipped at runtime, the live track's mute
     /// state is updated so changes take effect mid-playback.
     var isEnabled = true {
         didSet { track?.isMuted = !isEnabled }
+    }
+
+    /// Linear gain. Mutates the live AU so a slider moved during
+    /// playback is heard immediately.
+    var volume: Float = 1.0 {
+        didSet { sampler?.volume = volume }
     }
 
     init(engine: AVAudioEngine) {
@@ -51,6 +57,7 @@ final class MetronomeController {
             let s = AVAudioUnitSampler()
             engine.attach(s)
             engine.connect(s, to: engine.mainMixerNode, format: nil)
+            s.volume = volume
             self.sampler = s
             return s
         }()
