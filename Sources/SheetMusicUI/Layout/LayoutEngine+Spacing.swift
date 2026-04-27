@@ -236,8 +236,10 @@ extension LayoutEngine {
         // `rightPadding`; if these drift apart, chord-to-x mapping
         // and minimum-width allocation disagree and the system
         // packer hands `chordSpacingTickToX` a `width` that under-
-        // allocates the chord area.
-        let trailingGap = metrics.sp * 0.5
+        // allocates the chord area. 1 sp also gives flagged 8th
+        // / 16th notes room for their flag glyph before the
+        // barline.
+        let trailingGap = metrics.sp * 1
         let contentWidth = max(
             metrics.sp * 4,
             width - headerSchedule.contentStartX - trailingGap)
@@ -313,14 +315,13 @@ extension LayoutEngine {
         measure: Measure,
         metrics: StaffMetrics
     ) -> CGFloat {
-        // MuseScore's `Sid::measureSpacing` defaults — keep
-        // tight enough that 4-measure systems on dense 16th-note
-        // content still fit the available width. The visual
-        // breathing room within a measure comes from the
-        // per-note floor in `durationWidth` (1.8 sp for flagged
-        // notes), not from extra measure-edge padding.
+        // Edge padding inside the barlines. `rightPadding` must
+        // be wide enough that a flagged 8th / 16th at the end of
+        // the measure doesn't crash its flag glyph (extends ~1.1
+        // sp past the stem) into the right barline. 1 sp = ~3.4
+        // pt is the minimum that consistently clears the flag.
         let leftPadding = metrics.sp * 1.0
-        let rightPadding = metrics.sp * 0.5
+        let rightPadding = metrics.sp * 1.0
         var maxVoiceWidth: CGFloat = 0
         for voice in measure.voices {
             var w: CGFloat = 0

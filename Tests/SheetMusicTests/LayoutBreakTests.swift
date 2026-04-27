@@ -125,13 +125,15 @@ import Testing
         // Width chosen so 4 measures fit at the 1.5x
         // natural-stretch threshold but 5 don't. The dynamic
         // part-label width sizes itself to the longest label
-        // ("P1" → minimum floor of ~4 sp), so most of the
-        // available width goes to chord content. Greedy packing
-        // without balanced wrap would land 5+3.
+        // (here `nil → ""` → 4 sp floor = ~14 pt), and every
+        // synthesised measure carries a time signature, so
+        // each measure costs ~37 pt + a one-shot synth-clef
+        // boost on the first measure. Greedy without balanced
+        // wrap would land 5+3.
         let opts = ScoreViewOptions(
             staffSize: 14, systemGap: 16, wrapToViewWidth: true)
         let doc = LayoutEngine.layout(
-            score: score, options: opts, availableWidth: 240)
+            score: score, options: opts, availableWidth: 280)
         // Two systems, 4 measures each — not 5+3 / 6+2 / 7+1.
         #expect(doc.systems.count == 2)
         #expect(doc.systems[0].measures.count == 4)

@@ -281,7 +281,7 @@ extension LayoutEngine {
                         // `chordSpacingTickToX.trailingGap` —
                         // otherwise the rest drifts off-centre
                         // whenever those constants are tuned.
-                        let trailingPad = metrics.sp * 0.5
+                        let trailingPad = metrics.sp * 1
                         restX = (headerSchedule.contentStartX
                                  + width - trailingPad) / 2
                     } else {
