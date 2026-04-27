@@ -67,6 +67,8 @@ struct ContentView: View {
     /// makes the pinch crawl.
     @State private var pdfDoc: LayoutDocument?
     @State private var pdfPages: [PDFExporter.PageBatch] = []
+    /// Mixer sheet visibility — toolbar mixer button toggles it.
+    @State private var isMixerPresented = false
 
     /// Per-voice highlight colors (MuseScore convention). iOS has no
     /// keyboard shift, so this example only supports single-note
@@ -115,11 +117,11 @@ struct ContentView: View {
                     .disabled(playbackEngine.state == .stopped)
 
                     Button {
-                        playbackEngine.isMetronomeEnabled.toggle()
+                        isMixerPresented = true
                     } label: {
-                        Image(systemName: playbackEngine.isMetronomeEnabled
-                            ? "metronome.fill" : "metronome")
+                        Image(systemName: "slider.horizontal.3")
                     }
+                    .disabled(playbackEngine.mixerChannels.isEmpty)
 
                     Button {
                         exportPDF()
@@ -174,6 +176,20 @@ struct ContentView: View {
         }
         .sheet(item: $pdfShareItem) { item in
             ShareSheet(items: [item.url])
+        }
+        .sheet(isPresented: $isMixerPresented) {
+            NavigationStack {
+                MixerView(engine: playbackEngine)
+                    .padding()
+                    .navigationTitle("Mixer")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Button("Done") { isMixerPresented = false }
+                        }
+                    }
+            }
+            .presentationDetents([.medium, .large])
         }
     }
 
@@ -474,13 +490,26 @@ struct ContentView: View {
 
     private func handleTap(at location: CGPoint, document: LayoutDocument) {
         let tester = ScoreHitTester(document: document)
-        guard let target = tester.hitTest(at: location) else {
+        let target = tester.hitTest(at: location)
+
+        // While playing: tapping a note seeks audio to that note
+        // without disturbing the user's selection. Tapping empty
+        // space is ignored — we don't clear the selection mid-play.
+        if playbackEngine.state == .playing {
+            if let id = primaryItemID(of: target) {
+                playbackEngine.seek(to: .item(id))
+            }
+            return
+        }
+
+        guard let target else {
             selection = .none
             return
         }
         // A fresh, deliberate selection drops the playback cursor
-        // (no-op while playing). The next `togglePlayback` then
-        // reads the selection instead of the stale cursor.
+        // (no-op while playing — we already returned above). The next
+        // `togglePlayback` then reads the selection instead of the
+        // stale cursor.
         playbackEngine.clearCursor()
         switch target {
         case .note(let id):
@@ -505,6 +534,21 @@ struct ContentView: View {
                 selection = .range(
                     anchor: .note(first), target: .note(last))
             }
+        }
+    }
+
+    /// Resolve a hit-test result to its "primary" `ScoreItemID`
+    /// — the item the tap is conceptually pointing at. Returns
+    /// `nil` for misses or for beam runs that contain no notes.
+    private func primaryItemID(
+        of target: ScoreHitTarget?
+    ) -> ScoreItemID? {
+        guard let target else { return nil }
+        switch target {
+        case .note(let id): return .note(id)
+        case .rest(let id): return .rest(id)
+        case .stem(let notes), .flag(let notes), .beam(let notes):
+            return notes.first.map { .note($0) }
         }
     }
 
