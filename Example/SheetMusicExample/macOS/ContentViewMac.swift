@@ -102,8 +102,12 @@ struct ContentViewMac: View {
         3: .purple
     ]
 
+    // systemGap targets MuseScore's `Sid::minSystemDistance` of
+    // 8.5 sp; with our staff-distance pads contributing ~3.5 sp
+    // below the last lyric staff, ~5 sp here (≈ 1.25 × staffSize)
+    // lands the visible system-to-system gap in MuseScore range.
     private static let verticalOptions = ScoreViewOptions(
-        staffSize: 18, systemGap: 16, wrapToViewWidth: true)
+        staffSize: 18, systemGap: 22, wrapToViewWidth: true)
     private static let horizontalOptions = ScoreViewOptions(
         staffSize: 28, systemGap: 40, wrapToViewWidth: false,
         includeTitleFrame: false)

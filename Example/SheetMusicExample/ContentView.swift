@@ -227,7 +227,14 @@ struct ContentView: View {
 
     @ViewBuilder
     private func scoreContent(score: Score) -> some View {
-        let gap = staffSize * (layoutMode == .horizontal ? 1.5 : 0.85)
+        // Per-system gap. Horizontal mode laps systems side-by-side
+        // so this is unused there but we keep the ratio consistent.
+        // MuseScore's `Sid::minSystemDistance = 8.5 sp` is the
+        // engraving target between vertical-mode systems; with our
+        // staff-distance pads already covering ~3.5 sp below the
+        // last lyric staff, ~5 sp more here lands us in MuseScore's
+        // territory without crowding the page.
+        let gap = staffSize * 1.25
         let opts = ScoreViewOptions(
             staffSize: staffSize,
             systemGap: gap,
