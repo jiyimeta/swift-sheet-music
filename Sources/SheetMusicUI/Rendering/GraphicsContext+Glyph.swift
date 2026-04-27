@@ -38,4 +38,29 @@ extension GraphicsContext {
         draw(resolved, at: origin, anchor: anchor)
     }
 
+    /// Draw lyric syllables. MuseScore's default
+    /// `Sid::lyricsOddFontFace = "Edwin"` (a Bravura-companion
+    /// humanist serif) at regular weight; we don't bundle Edwin,
+    /// so we use the platform system font at *regular* weight —
+    /// roughly the same x-height as SF-Pro-semibold (which the
+    /// rest of the engraving chrome uses) but ~15 % narrower per
+    /// character, which is what MuseScore's Edwin output looks
+    /// like at the same nominal size. Keeping system font
+    /// matters: `.custom("Times New Roman")` doesn't carry a
+    /// CJK glyph fallback in SwiftUI's `Text`, and Japanese
+    /// lyrics render via the synthesised system fallback at the
+    /// wrong size.
+    mutating func drawLyricText(
+        _ string: String,
+        at origin: CGPoint,
+        size: CGFloat,
+        color: Color = .primary,
+        anchor: UnitPoint = .center
+    ) {
+        let resolved = resolve(
+            Text(string)
+                .foregroundColor(color)
+                .font(.system(size: size, weight: .regular)))
+        draw(resolved, at: origin, anchor: anchor)
+    }
 }

@@ -249,10 +249,28 @@ public enum LayoutEngine {
         var currentY: CGFloat = 0
         var cursor = 0
         var isFirstSystem = true
+        // Dynamic label width — measure the actual longest part
+        // label so the first system doesn't reserve more indent
+        // than the longest text needs. MuseScore's
+        // `Sid::firstSystemIndent` adds zero base indent and
+        // sizes the bracket region purely from the longest
+        // instrument name; previously we hard-coded 80 pt, which
+        // pushed the first system noticeably right of the page's
+        // content margin even for short labels like "Lead" /
+        // "Top".
+        let firstSystemLabelW = labelWidth(
+            score: context.score,
+            metrics: context.metrics,
+            useLong: true)
+        let continuationLabelW = labelWidth(
+            score: context.score,
+            metrics: context.metrics,
+            useLong: false)
         while cursor < measureCount {
             // Part-label width depends on whether this is the first
             // system — the first shows long names, subsequent short.
-            let labelW: CGFloat = isFirstSystem ? 80 : 30
+            let labelW: CGFloat = isFirstSystem
+                ? firstSystemLabelW : continuationLabelW
             // The CONTENT area starts after the label; measures must
             // fit within availableWidth − labelW.
             let contentAvail = context.availableWidth - labelW
@@ -421,7 +439,10 @@ public enum LayoutEngine {
     ) -> LayoutSystem {
         let metrics = context.metrics
         let staves = context.score.staves
-        let partLabelWidth: CGFloat = isFirstSystem ? 80 : 30
+        let partLabelWidth: CGFloat = labelWidth(
+            score: context.score,
+            metrics: metrics,
+            useLong: isFirstSystem)
 
         // Inter-system breathing room. MuseScore's style defaults
         // (`engraving/style/styledef.cpp`):
@@ -438,9 +459,13 @@ public enum LayoutEngine {
         let topPad: CGFloat = metrics.sp * 1
         let bottomPad: CGFloat = metrics.sp * 1
         // Inter-staff vertical gap baseline. Combined with
-        // `staffBottomPads[idx]` (lyrics / dynamics extent) this
-        // approximates MuseScore's `Sid::staffDistance = 6.5sp`.
-        let minGap: CGFloat = metrics.sp * 1
+        // `staffBottomPads[idx]` (lyrics / dynamics extent) and
+        // the next staff's `staffTopPads` (2 sp baseline), this
+        // approximates MuseScore's `Sid::staffDistance = 6.5 sp`.
+        // 0.5 sp keeps total system height in line with
+        // MuseScore's reference output without sacrificing
+        // breathing room.
+        let minGap: CGFloat = metrics.sp * 0.5
 
         // --- Dynamic per-staff bottom padding ---
         //
@@ -460,18 +485,22 @@ public enum LayoutEngine {
                     }
                 }
             }
-            // Base slack (dynamics, hairpins, etc.). MuseScore
-            // defaults `lyricsMinDistance = 0.25sp` and the staff
-            // distance itself (6.5sp) already includes room for
-            // dynamics — keep this small.
-            let basePad: CGFloat = metrics.sp * 2
-            // Lyrics sit ~3sp under the staff baseline; each
-            // additional verse adds another `lyricsLineHeight`
-            // (~1.5sp). Tuned to match MuseScore's
-            // `lyricsLineHeight = 1.0` × spatium scaling rather
-            // than our previous over-estimate.
+            // Base slack below a staff with no lyrics —
+            // accommodates dynamics, hairpins, fermata. Splits
+            // MuseScore's `Sid::staffDistance` 6.5 sp gap across
+            // `bottomPad + minGap + nextStaff.topPad` (= 2.5 + 1
+            // + 2 = 5.5 sp baseline, plus per-element overflow).
+            let basePad: CGFloat = metrics.sp * 2.5
+            // Lyric extent below the staff. Verse 1's centre sits
+            // 1.5 sp below the bottom line (`lyricsY = staffMidY
+            // + 3.5 sp`); the visual bottom is ~1.1 sp below the
+            // centre, so the lyric reaches ~2.6 sp below the
+            // bottom line. Each verse adds `lyricsLineHeight =
+            // 1.5 sp`. The constant 2 sp absorbs descenders + a
+            // 1 sp slack to the next staff's top baseline.
             let lyricsPad: CGFloat = maxLyricsVerses > 0
-                ? metrics.sp * 2 + CGFloat(maxLyricsVerses) * metrics.sp * 1.5
+                ? metrics.sp * 2
+                    + CGFloat(maxLyricsVerses) * metrics.sp * 1.5
                 : 0
             return max(basePad, lyricsPad)
         }
@@ -601,17 +630,14 @@ public enum LayoutEngine {
                 : 0
             // First staff falls under the system's `topPad`
             // already. For subsequent staves, MuseScore's
-            // `Sid::staffDistance = 6.5 sp` covers the entire
-            // gap between adjacent staves; that allowance is
-            // already paid in `staffBottomPads[idx-1] + minGap`,
-            // so the per-staff top baseline can stay small.
-            // 1 sp leaves room for staff-line stroke half-widths
-            // and CT glyph descenders without growing the system
-            // beyond MuseScore's actual engraved extent (~230 pt
-            // for a 6-staff layout). The previous 2 sp inflated
-            // each system by ~16 pt, dropping pages from 3
-            // systems / page to 2 on borderline content.
-            let baseline: CGFloat = idx == 0 ? 0 : metrics.sp * 1
+            // `Sid::staffDistance = 6.5 sp` is the total gap
+            // between adjacent staves. We split that across
+            // `staffBottomPads[idx-1] + minGap + this baseline`,
+            // so the baseline carries roughly 2 sp of clearance
+            // — enough that the upper staff's lyrics or staff-
+            // text dynamics don't visually fuse with this
+            // staff's top line.
+            let baseline: CGFloat = idx == 0 ? 0 : metrics.sp * 2
             return baseline + topOverflow
         }
 

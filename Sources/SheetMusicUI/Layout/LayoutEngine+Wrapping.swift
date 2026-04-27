@@ -21,6 +21,41 @@ extension LayoutEngine {
         return m.lineBreak || m.pageBreak
     }
 
+    /// Dynamic part-label width = max(measured label widths) +
+    /// padding. `useLong` selects long instrument names (first
+    /// system) vs short names (continuation systems). Mirrors
+    /// MuseScore's behaviour where the indent fits the longest
+    /// label in the active system rather than a fixed value.
+    static func labelWidth(
+        score: Score, metrics: StaffMetrics, useLong: Bool
+    ) -> CGFloat {
+        let labels: [String] = score.parts.map { part in
+            if useLong {
+                return part.trackName
+                    ?? part.instrument.longName
+                    ?? ""
+            } else {
+                return part.instrument.shortName
+                    ?? part.trackName.map { String($0.prefix(3)) }
+                    ?? ""
+            }
+        }
+        let fontSize = metrics.sp * 2.5
+        var widest: CGFloat = 0
+        for text in labels where !text.isEmpty {
+            widest = max(
+                widest,
+                LayoutEngine.lyricsTextWidth(text, sp: metrics.sp)
+                    * (fontSize / (metrics.sp * 2.2)))
+        }
+        // Floor: enough room for at least 2-3 characters even if
+        // every label is empty. Pad: 1 sp between text and the
+        // staff so glyphs don't touch the leftmost barline.
+        let pad = metrics.sp * 1
+        let floor = useLong ? metrics.sp * 4 : metrics.sp * 2
+        return max(floor, widest + pad)
+    }
+
     /// Threshold (in measures) for switching between balanced
     /// and greedy wrap. Spans up to this size use balanced wrap
     /// (the user authored explicit breaks roughly that close

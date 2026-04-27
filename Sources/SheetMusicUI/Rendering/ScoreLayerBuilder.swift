@@ -228,6 +228,28 @@ public enum ScoreLayerBuilder {
         return font
     }
 
+    private nonisolated(unsafe) static var cachedLyricFont: CTFont?
+    private nonisolated(unsafe) static var cachedLyricFontSize: CGFloat = 0
+
+    /// System font at regular weight, sized for lyrics. Cached
+    /// because `CTFontCreate` is non-trivial in tight render
+    /// loops.
+    private static func lyricFont(size: CGFloat) -> CTFont {
+        if let f = cachedLyricFont, cachedLyricFontSize == size {
+            return f
+        }
+        #if os(macOS)
+        let font = NSFont.systemFont(
+            ofSize: size, weight: .regular) as CTFont
+        #else
+        let font = UIFont.systemFont(
+            ofSize: size, weight: .regular) as CTFont
+        #endif
+        cachedLyricFont = font
+        cachedLyricFontSize = size
+        return font
+    }
+
     private nonisolated(unsafe) static var cachedSystemFont: CTFont?
     private nonisolated(unsafe) static var cachedSystemKey:
         (size: CGFloat, italic: Bool) = (0, false)
@@ -412,6 +434,14 @@ public enum ScoreLayerBuilder {
         return composite.isEmpty ? nil : composite
     }
 
+    /// Text-layer "kind" — picks the font family. MuseScore's
+    /// engraving uses different fonts for chrome (system serif),
+    /// dynamics / tempo (italic system), and lyrics (Edwin / Times
+    /// at regular weight). We approximate Edwin with Times, which
+    /// renders ~25 % narrower than the SF Pro semibold the rest
+    /// of the score uses.
+    enum TextLayerKind { case expression, lyrics }
+
     private static func textLayer(
         text: String,
         at origin: CGPoint,
@@ -420,10 +450,23 @@ public enum ScoreLayerBuilder {
         anchor: CGPoint = CGPoint(x: 0, y: 0.5),
         rotation: CGFloat = 0,
         color: CGColor = inkColor,
+        kind: TextLayerKind = .expression,
         height: CGFloat
     ) -> CAShapeLayer? {
         guard !text.isEmpty else { return nil }
-        let font = systemFont(size: size, italic: italic)
+        let font: CTFont
+        switch kind {
+        case .expression:
+            font = systemFont(size: size, italic: italic)
+        case .lyrics:
+            // System font at regular weight — ~15 % narrower
+            // than the semibold used for expression text, with
+            // proper CJK fallback. See `drawLyricText` in
+            // `GraphicsContext+Glyph.swift` for the matching
+            // Canvas-side rendering and the font-choice
+            // rationale.
+            font = lyricFont(size: size)
+        }
         guard let path = textPath(text, font: font) else { return nil }
         let bbox = path.boundingBoxOfPath
 
@@ -624,6 +667,7 @@ public enum ScoreLayerBuilder {
                 text: text, at: shift(p),
                 size: metrics.sp * 2.2, italic: false,
                 anchor: CGPoint(x: 0.5, y: 0.5),
+                kind: .lyrics,
                 height: height) {
                 parent.addSublayer(layer)
             }

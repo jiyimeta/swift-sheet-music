@@ -122,15 +122,16 @@ import Testing
                 articulations: [InstrumentArticulation()]))
         let score = Score(
             division: 480, parts: [part], staves: [staff])
-        // Width chosen so 4 measures comfortably fit at the
-        // 1.5x natural-stretch threshold but 5 don't, even after
-        // accounting for the 80pt first-system part-label
-        // reserved by the layout engine. Greedy packing without
-        // balanced wrap would land 5+3.
+        // Width chosen so 4 measures fit at the 1.5x
+        // natural-stretch threshold but 5 don't. The dynamic
+        // part-label width sizes itself to the longest label
+        // ("P1" → minimum floor of ~4 sp), so most of the
+        // available width goes to chord content. Greedy packing
+        // without balanced wrap would land 5+3.
         let opts = ScoreViewOptions(
             staffSize: 14, systemGap: 16, wrapToViewWidth: true)
         let doc = LayoutEngine.layout(
-            score: score, options: opts, availableWidth: 320)
+            score: score, options: opts, availableWidth: 240)
         // Two systems, 4 measures each — not 5+3 / 6+2 / 7+1.
         #expect(doc.systems.count == 2)
         #expect(doc.systems[0].measures.count == 4)

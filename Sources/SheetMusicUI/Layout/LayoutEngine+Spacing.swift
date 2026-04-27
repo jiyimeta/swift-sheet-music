@@ -313,11 +313,12 @@ extension LayoutEngine {
         measure: Measure,
         metrics: StaffMetrics
     ) -> CGFloat {
-        // Per-measure padding aligned with MuseScore's
-        // `Sid::measureBegin` (~1 sp) + `Sid::measureSpacing`
-        // trailing slack. Everything wider than this forces our
-        // 7-measure intro span into 6 measures when MuseScore
-        // packs 7.
+        // MuseScore's `Sid::measureSpacing` defaults — keep
+        // tight enough that 4-measure systems on dense 16th-note
+        // content still fit the available width. The visual
+        // breathing room within a measure comes from the
+        // per-note floor in `durationWidth` (1.8 sp for flagged
+        // notes), not from extra measure-edge padding.
         let leftPadding = metrics.sp * 1.0
         let rightPadding = metrics.sp * 0.5
         var maxVoiceWidth: CGFloat = 0
@@ -379,20 +380,14 @@ extension LayoutEngine {
         }
         let baseWidth = metrics.spacePerQuarter * CGFloat(quarters)
         // Per-note clearance floor. MuseScore's
-        // `Sid::shortestNoteDistance` defaults to 1.5 sp for short
-        // notes (8th and shorter — flagged or beamed); anything else
-        // needs only enough room for the notehead. Beam vs. flag is
-        // handled at render time, so this floor is a single value
-        // that protects against zero-width collapse.
-        let (base, _) = DurationInterpretation.split(dur)
-        let floor: CGFloat
-        switch base {
-        case .eighth, .sixteenth, .thirtySecond, .sixtyFourth,
-             .oneTwentyEighth, .twoFiftySixth:
-            floor = metrics.sp * 1.5
-        default:
-            floor = metrics.sp * 1.5
-        }
+        // `Sid::shortestNoteDistance` is 1.5 sp baseline. Going
+        // higher (e.g. 1.8 sp) for flagged notes would protect
+        // against flag/beam collision, but it also pushes
+        // 4-measure systems with rapid 16ths over the available
+        // width — breaking the systems-per-line balance the
+        // explicit LayoutBreaks expect. We accept the tighter
+        // 16th-note spacing in exchange.
+        let floor = metrics.sp * 1.5
         return max(baseWidth, floor)
     }
 

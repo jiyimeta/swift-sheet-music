@@ -281,8 +281,6 @@ extension LayoutEngine {
                         // `chordSpacingTickToX.trailingGap` —
                         // otherwise the rest drifts off-centre
                         // whenever those constants are tuned.
-                        // Currently 0.5 sp, matching the post-
-                        // MuseScore-spacing tightening.
                         let trailingPad = metrics.sp * 0.5
                         restX = (headerSchedule.contentStartX
                                  + width - trailingPad) / 2
@@ -389,8 +387,21 @@ extension LayoutEngine {
                         division: division)
                     for (verseIdx, lyric) in chord.lyrics.enumerated() {
                         guard !lyric.text.isEmpty else { continue }
-                        let lyricsY = staffMidY + metrics.sp * 6
-                            + CGFloat(verseIdx) * metrics.sp * 2.5
+                        // Lyric baseline. MuseScore's
+                        // `Sid::lyricsPosBelow` default places the
+                        // lyric ~1 sp below the staff bottom line;
+                        // our `staffMidY` includes a 2 sp top
+                        // buffer, so a `staffMidY + 3 sp` baseline
+                        // = 1 sp below the bottom line. Each
+                        // additional verse adds
+                        // `lyricsLineHeight (1 sp) + small slack`,
+                        // matching MuseScore's `Sid::lyricsLineHeight
+                        // = 1.0`. Previous 6 sp baseline + 2.5 sp
+                        // verse stride pushed lyrics so far below
+                        // the staff that they collided with the
+                        // next staff's top.
+                        let lyricsY = staffMidY + metrics.sp * 3.5
+                            + CGFloat(verseIdx) * metrics.sp * 1.5
                         out.append(.textMark(
                             kind: .lyrics,
                             text: lyric.text,
@@ -911,8 +922,8 @@ extension LayoutEngine {
         // Use the same Y the anchor rule uses — the lyric font's
         // underline level (baseline + underline offset) rather
         // than the text's vertical center.
-        let lyricsY = staffMidY + metrics.sp * 6
-            + CGFloat(continuation.verseIndex) * metrics.sp * 2.5
+        let lyricsY = staffMidY + metrics.sp * 3.5
+            + CGFloat(continuation.verseIndex) * metrics.sp * 1.5
             + Self.melismaLineYOffset(sp: metrics.sp)
         // Start at x=0 (the measure's left boundary) for mid-system
         // continuations so the rule visually touches the previous
@@ -1158,9 +1169,12 @@ extension LayoutEngine {
 
     /// Pixel width of the rendered lyric text at the layout's
     /// staff size. Mirrors the font used by `ScoreLayerBuilder.textLayer`
-    /// for `.textMark(.lyrics, ...)` — system font at `sp * 2.2`.
-    /// Shared with `LayoutEngine+Spacing.lyricsWidth` so chord spacing
-    /// uses the same measurement as melisma start-x positioning.
+    /// for `.textMark(.lyrics, ...)` and `GraphicsContext.drawLyricText`
+    /// — system font at regular weight, sized to `sp * 2.2` (a
+    /// proxy for MuseScore's Edwin which we don't bundle).
+    /// Shared with `LayoutEngine+Spacing.lyricsWidth` so chord
+    /// spacing uses the same measurement as melisma start-x
+    /// positioning.
     static func lyricsTextWidth(
         _ text: String, sp: CGFloat
     ) -> CGFloat {
