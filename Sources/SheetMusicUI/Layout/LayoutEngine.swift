@@ -373,11 +373,22 @@ public enum LayoutEngine {
             if !widthsSlice.isEmpty {
                 widthsSlice[0] += firstHeaderBoost
             }
-            let stretched = stretchWidths(
-                widths: widthsSlice,
-                availableWidth: contentAvail,
-                shouldStretch: context.options.wrapToViewWidth
-            )
+            let stretched: [CGFloat]
+            if context.options.wrapToViewWidth {
+                stretched = stretchWidths(
+                    widths: widthsSlice,
+                    availableWidth: contentAvail,
+                    shouldStretch: true)
+            } else {
+                // Horizontal (no-wrap) mode: there's no viewport
+                // width to stretch into, so without a fixed scale
+                // measures collapse to their minimums. The
+                // minimum widths are tuned for the wrapped layout
+                // where the viewport stretches them ~1.5×; apply
+                // the same `naturalStretch` here so horizontal
+                // mode has matching breathing room.
+                stretched = widthsSlice.map { $0 * naturalStretch }
+            }
             let system = buildSystem(
                 measureRange: systemStart..<cursor,
                 widths: stretched,
