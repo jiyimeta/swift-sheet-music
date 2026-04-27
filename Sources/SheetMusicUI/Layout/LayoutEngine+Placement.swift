@@ -387,21 +387,33 @@ extension LayoutEngine {
                         division: division)
                     for (verseIdx, lyric) in chord.lyrics.enumerated() {
                         guard !lyric.text.isEmpty else { continue }
-                        // Lyric baseline. MuseScore's
-                        // `Sid::lyricsPosBelow` default places the
-                        // lyric ~1 sp below the staff bottom line;
-                        // our `staffMidY` includes a 2 sp top
-                        // buffer, so a `staffMidY + 3 sp` baseline
-                        // = 1 sp below the bottom line. Each
-                        // additional verse adds
-                        // `lyricsLineHeight (1 sp) + small slack`,
-                        // matching MuseScore's `Sid::lyricsLineHeight
-                        // = 1.0`. Previous 6 sp baseline + 2.5 sp
-                        // verse stride pushed lyrics so far below
-                        // the staff that they collided with the
-                        // next staff's top.
-                        let lyricsY = staffMidY + metrics.sp * 3.5
-                            + CGFloat(verseIdx) * metrics.sp * 1.5
+                        // Lyric centre position, calibrated to
+                        // MuseScore's `Sid::lyricsMinTopDistance =
+                        // 1 sp` (rather than the looser
+                        // `lyricsPosBelow = 3 sp` baseline) so
+                        // continuation systems still pack 3 per
+                        // page on A4 — the strict 3 sp baseline
+                        // dropped us to 2 systems / page.
+                        //
+                        // `staffMidY` carries a 2 sp top buffer
+                        // (`staffMidY = staffHeight/2 + 2 sp`), so
+                        // the staff bottom line sits at
+                        // `staffMidY + 2 sp`. Anchor `.center`
+                        // means the lyric's vertical centre lands
+                        // at `lyricsY`; a font at sp×2.2 has
+                        // ascent ~1.1 sp. Setting
+                        // `lyricsY = staffMidY + 4 sp` puts the
+                        // lyric centre 2 sp below the bottom
+                        // line — top edge ~0.9 sp below bottom
+                        // (just inside `lyricsMinTopDistance`),
+                        // visible bottom ~3.1 sp below.
+                        //
+                        // Verse stride 1.7 sp keeps multi-verse
+                        // stacks compact while still clearing
+                        // ascender/descender overlap between
+                        // adjacent verse lines.
+                        let lyricsY = staffMidY + metrics.sp * 4
+                            + CGFloat(verseIdx) * metrics.sp * 1.7
                         out.append(.textMark(
                             kind: .lyrics,
                             text: lyric.text,
@@ -922,8 +934,8 @@ extension LayoutEngine {
         // Use the same Y the anchor rule uses — the lyric font's
         // underline level (baseline + underline offset) rather
         // than the text's vertical center.
-        let lyricsY = staffMidY + metrics.sp * 3.5
-            + CGFloat(continuation.verseIndex) * metrics.sp * 1.5
+        let lyricsY = staffMidY + metrics.sp * 4
+            + CGFloat(continuation.verseIndex) * metrics.sp * 1.7
             + Self.melismaLineYOffset(sp: metrics.sp)
         // Start at x=0 (the measure's left boundary) for mid-system
         // continuations so the rule visually touches the previous

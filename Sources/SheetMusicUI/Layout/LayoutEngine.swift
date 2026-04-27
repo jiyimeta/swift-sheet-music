@@ -491,16 +491,19 @@ public enum LayoutEngine {
             // `bottomPad + minGap + nextStaff.topPad` (= 2.5 + 1
             // + 2 = 5.5 sp baseline, plus per-element overflow).
             let basePad: CGFloat = metrics.sp * 2.5
-            // Lyric extent below the staff. Verse 1's centre sits
-            // 1.5 sp below the bottom line (`lyricsY = staffMidY
-            // + 3.5 sp`); the visual bottom is ~1.1 sp below the
-            // centre, so the lyric reaches ~2.6 sp below the
-            // bottom line. Each verse adds `lyricsLineHeight =
-            // 1.5 sp`. The constant 2 sp absorbs descenders + a
-            // 1 sp slack to the next staff's top baseline.
+            // Lyric extent below the staff. Verse 1's centre
+            // sits 2 sp below the bottom line (`lyricsY =
+            // staffMidY + 4 sp`); the visual bottom of the text
+            // is ~1.1 sp below that centre, so the first lyric
+            // reaches ~3.1 sp below the bottom line. Each
+            // additional verse adds 1.7 sp (matches the
+            // verse-stride in `placeMeasureElements`). The
+            // 1.5 sp constant covers descenders + a thin slack
+            // — the rest of the inter-staff clearance comes from
+            // `minGap + nextStaff.staffTopPads.baseline`.
             let lyricsPad: CGFloat = maxLyricsVerses > 0
-                ? metrics.sp * 2
-                    + CGFloat(maxLyricsVerses) * metrics.sp * 1.5
+                ? metrics.sp * 1.5
+                    + CGFloat(maxLyricsVerses) * metrics.sp * 1.7
                 : 0
             return max(basePad, lyricsPad)
         }
