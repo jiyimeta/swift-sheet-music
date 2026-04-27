@@ -467,46 +467,10 @@ public enum LayoutEngine {
         // breathing room.
         let minGap: CGFloat = metrics.sp * 0.5
 
-        // --- Dynamic per-staff bottom padding ---
-        //
-        // Each staff needs enough room below its bottom line for
-        // lyrics, dynamics, pedal marks, etc. Scan the measure
-        // content within this system's range to estimate the extent.
-        let staffBottomPads: [CGFloat] = staves.enumerated().map { idx, staff in
-            var maxLyricsVerses = 0
-            for mIdx in measureRange {
-                guard mIdx < staff.measures.count else { continue }
-                for voice in staff.measures[mIdx].voices {
-                    for el in voice.elements {
-                        if case .chord(let c) = el {
-                            let nonEmpty = c.lyrics.filter { !$0.text.isEmpty }.count
-                            maxLyricsVerses = max(maxLyricsVerses, nonEmpty)
-                        }
-                    }
-                }
-            }
-            // Base slack below a staff with no lyrics —
-            // accommodates dynamics, hairpins, fermata. Splits
-            // MuseScore's `Sid::staffDistance` 6.5 sp gap across
-            // `bottomPad + minGap + nextStaff.topPad` (= 2.5 + 1
-            // + 2 = 5.5 sp baseline, plus per-element overflow).
-            let basePad: CGFloat = metrics.sp * 2.5
-            // Lyric extent below the staff. Verse 1's centre
-            // sits 2 sp below the bottom line (`lyricsY =
-            // staffMidY + 4 sp`); the visual bottom of the text
-            // is ~1.1 sp below that centre, so the first lyric
-            // reaches ~3.1 sp below the bottom line. Each
-            // additional verse adds 1.7 sp (matches the
-            // verse-stride in `placeMeasureElements`). The
-            // 1.5 sp constant covers descenders + a thin slack
-            // — the rest of the inter-staff clearance comes from
-            // `minGap + nextStaff.staffTopPads.baseline`.
-            let lyricsPad: CGFloat = maxLyricsVerses > 0
-                ? metrics.sp * 1.5
-                    + CGFloat(maxLyricsVerses) * metrics.sp * 1.7
-                : 0
-            return max(basePad, lyricsPad)
-        }
+        // `staffBottomPads` is computed AFTER the untranslated
+        // layout below — it depends on the actual south-skyline
+        // Y of each staff (chord-pushed lyrics, melismas, etc.),
+        // which only exists once `placeMeasureElements` has run.
 
         // --- Pass 1: place all measures untranslated ---
         //
@@ -685,17 +649,25 @@ public enum LayoutEngine {
         // points each staff actually paints, which feeds the
         // adaptive staff distance below. Staff top in placement
         // coords sits at `sp * 2` (see `staffMidY` in
-        // `placeMeasureElements`); anything above that pushes the
-        // next staff down so they don't overlap.
+        // `placeMeasureElements`); the bottom is at `sp * 6` for
+        // a 5-line staff. Anything outside that range pushes the
+        // adjacent staff away so they don't overlap.
         let staffTopLocal: CGFloat = metrics.sp * 2
+        let staffBottomLocal: CGFloat = staffTopLocal
+            + metrics.staffHeight
         var staffMinY = Array(
             repeating: CGFloat.infinity, count: staves.count)
+        var staffMaxY = Array(
+            repeating: -CGFloat.infinity, count: staves.count)
         for um in untranslated {
             for (staffIdx, els) in um.perStaffElements {
                 for el in els {
                     for y in elementYPoints(el) {
                         if y < staffMinY[staffIdx] {
                             staffMinY[staffIdx] = y
+                        }
+                        if y > staffMaxY[staffIdx] {
+                            staffMaxY[staffIdx] = y
                         }
                     }
                 }
@@ -719,6 +691,60 @@ public enum LayoutEngine {
             // staff's top line.
             let baseline: CGFloat = idx == 0 ? 0 : metrics.sp * 2
             return baseline + topOverflow
+        }
+
+        // --- Adaptive per-staff bottom padding ---
+        //
+        // Two sources feed the gap below a staff:
+        //   - A verse-count estimate that matches MuseScore's
+        //     default `Sid::staffDistance = 6.5 sp` for a staff
+        //     with one verse (1.5 sp `lyricsMinBottomDistance` +
+        //     1.7 sp verse stride; see
+        //     `engraving/style/styledef.cpp:92-99`).
+        //   - The measured south skyline (`staffMaxY`), which
+        //     captures chord-pushed lyrics + melisma rules +
+        //     hyphens that can dip well below the verse-count
+        //     estimate when low notes / ties are present.
+        //
+        // We take the max so the default case stays page-count
+        // compatible with MuseScore while chord-pushed measures
+        // get the extra room they need (see
+        // `LyricsLayout::addToSkyline`,
+        // `lyricslayout.cpp:707`).
+        let staffBottomPads: [CGFloat] = staves.enumerated().map { idx, staff in
+            var maxLyricsVerses = 0
+            for mIdx in measureRange {
+                guard mIdx < staff.measures.count else { continue }
+                for voice in staff.measures[mIdx].voices {
+                    for el in voice.elements {
+                        if case .chord(let c) = el {
+                            let nonEmpty = c.lyrics.filter {
+                                !$0.text.isEmpty
+                            }.count
+                            maxLyricsVerses = max(
+                                maxLyricsVerses, nonEmpty)
+                        }
+                    }
+                }
+            }
+            let basePad: CGFloat = metrics.sp * 2.5
+            let lyricsEstimate: CGFloat = maxLyricsVerses > 0
+                ? metrics.sp * 1.5
+                    + CGFloat(maxLyricsVerses) * metrics.sp * 1.7
+                : 0
+            let southExtent: CGFloat = staffMaxY[idx].isFinite
+                ? max(0, staffMaxY[idx] - staffBottomLocal)
+                : 0
+            // Clearance constant stays smaller than MuseScore's
+            // raw `lyricsMinBottomDistance = 1.5 sp` because our
+            // `staffTopPads` baseline already adds another ~2 sp
+            // above the next staff — together they reach the
+            // 1.5 sp lyric-bottom-to-next-staff minimum without
+            // bloating the page count. The same 0.5 sp matches
+            // MuseScore's `Sid::minVerticalDistance` for general
+            // skyline padding (`styledef.cpp:772`).
+            let measuredPad = southExtent + metrics.sp * 0.5
+            return max(basePad, lyricsEstimate, measuredPad)
         }
 
         // --- Compute staffOrigins from cumulative extent ---
