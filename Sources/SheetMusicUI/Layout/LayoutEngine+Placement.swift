@@ -160,6 +160,11 @@ extension LayoutEngine {
                 let syllabic: Syllabic
             }
             var previousLyric: [Int: LyricTrail] = [:]
+            // Monotonic max of chord-driven lyric Y across this
+            // measure — once a low note bumps the lyric down,
+            // later chords in the measure stay at that lower Y.
+            // See `lyricSouth` block in the chord branch below.
+            var maxLyricCenterYInMeasure: CGFloat = -.infinity
             // Pre-compute this voice's total ticks for the measure
             // so melisma emission can tell "ends inside" from
             // "crosses into next measure" without rescanning.
@@ -385,34 +390,57 @@ extension LayoutEngine {
                     // stretches to the end of the last note it covers.
                     let chordTicks = chord.duration.ticks(
                         division: division)
+                    // South skyline for this chord. Approximates
+                    // MuseScore's per-system skyline collision
+                    // pass (`engraving/rendering/score/lyricslayout
+                    // .cpp::checkCollisionsWithStaffElements`):
+                    // when notes / ties / stems hang below the
+                    // staff bottom, the lyric must drop with them
+                    // so it doesn't overlap. We compute it per
+                    // chord (rather than per-system) so the
+                    // refactor stays local; adjacent chords share
+                    // verse Y via the `maxLyricsYInMeasure`
+                    // monotone ratchet below.
+                    let lyricSouth = chordSouthExtent(
+                        notes: chordNotes,
+                        stem: stem,
+                        staffMidY: staffMidY,
+                        metrics: metrics)
+                    // Default lyric centre. See the design notes
+                    // below the formula for why
+                    // `staffMidY + 4 sp` matches MuseScore's
+                    // `Sid::lyricsMinTopDistance = 1 sp`.
+                    let defaultLyricsCenterY =
+                        staffMidY + metrics.sp * 4
+                    // South-driven lyric centre: clear the chord's
+                    // south extent by `lyricsMinTopDistance`
+                    // (1 sp) + the lyric font's ascent (~1.1 sp at
+                    // sp × 2.2 size).
+                    let southAvoidLyricsCenterY =
+                        lyricSouth + metrics.sp * (1 + 1.1)
+                    let baseLyricsY = max(
+                        defaultLyricsCenterY,
+                        southAvoidLyricsCenterY)
+                    // Monotone ratchet across this measure. Once
+                    // a chord pushes the lyric down, later chords
+                    // in the same measure stay at the lower Y so
+                    // adjacent syllables remain horizontally
+                    // aligned (pre-MuseScore-per-system would
+                    // emit jagged-up-and-down lyric heights when
+                    // the south extent varied chord-to-chord).
+                    maxLyricCenterYInMeasure = max(
+                        maxLyricCenterYInMeasure, baseLyricsY)
+                    let chordLyricCenterY =
+                        maxLyricCenterYInMeasure
                     for (verseIdx, lyric) in chord.lyrics.enumerated() {
                         guard !lyric.text.isEmpty else { continue }
-                        // Lyric centre position, calibrated to
-                        // MuseScore's `Sid::lyricsMinTopDistance =
-                        // 1 sp` (rather than the looser
-                        // `lyricsPosBelow = 3 sp` baseline) so
-                        // continuation systems still pack 3 per
-                        // page on A4 — the strict 3 sp baseline
-                        // dropped us to 2 systems / page.
-                        //
-                        // `staffMidY` carries a 2 sp top buffer
-                        // (`staffMidY = staffHeight/2 + 2 sp`), so
-                        // the staff bottom line sits at
-                        // `staffMidY + 2 sp`. Anchor `.center`
-                        // means the lyric's vertical centre lands
-                        // at `lyricsY`; a font at sp×2.2 has
-                        // ascent ~1.1 sp. Setting
-                        // `lyricsY = staffMidY + 4 sp` puts the
-                        // lyric centre 2 sp below the bottom
-                        // line — top edge ~0.9 sp below bottom
-                        // (just inside `lyricsMinTopDistance`),
-                        // visible bottom ~3.1 sp below.
-                        //
                         // Verse stride 1.7 sp keeps multi-verse
                         // stacks compact while still clearing
                         // ascender/descender overlap between
-                        // adjacent verse lines.
-                        let lyricsY = staffMidY + metrics.sp * 4
+                        // adjacent verse lines (≈
+                        // `Sid::lyricsLineHeight = 1.0` × font
+                        // height).
+                        let lyricsY = chordLyricCenterY
                             + CGFloat(verseIdx) * metrics.sp * 1.7
                         out.append(.textMark(
                             kind: .lyrics,
@@ -1177,6 +1205,50 @@ extension LayoutEngine {
     /// without bleeding into the next note's space.
     private static func noteheadHalfExtent(sp: CGFloat) -> CGFloat {
         sp * 0.7
+    }
+
+    /// Lowest Y a chord's geometry occupies BELOW the staff,
+    /// in measure-local coords. Used to push lyrics below low
+    /// noteheads / ties-below so they don't overlap.
+    /// Approximates the "south skyline" MuseScore computes for
+    /// collision avoidance in `lyricslayout.cpp`.
+    ///
+    /// Counts only elements that actually hang below the staff —
+    /// noteheads with `step ≤ -4` and tie arcs on the lowest
+    /// note. Stem direction is NOT included: stem-down chords
+    /// have their stem extending opposite to the lyric direction
+    /// in the upper half of the staff (where stem-down is the
+    /// engraving rule), and stem-up stems point away from the
+    /// lyric area entirely. Including stem length here pushed
+    /// every stem-down chord's lyric down by ~0.6 sp,
+    /// disconnecting melisma rules from their continuation rules
+    /// in subsequent measures.
+    static func chordSouthExtent(
+        notes: [LayoutChordNote],
+        stem: StemDirection,
+        staffMidY: CGFloat,
+        metrics: StaffMetrics
+    ) -> CGFloat {
+        guard let lowestStep = notes.map(\.step).min() else {
+            return staffMidY
+        }
+        let lowestNoteY = staffMidY
+            - CGFloat(lowestStep) * metrics.sp / 2
+        let noteheadBottom = lowestNoteY + metrics.sp * 0.5
+        var south = noteheadBottom
+        // Ties on the lowest note arc downward when the stem
+        // is up (they go opposite to the stem). The arc peaks
+        // ~0.8 sp below the notehead bottom.
+        if stem == .up {
+            let hasTie = notes.contains { (n: LayoutChordNote) in
+                n.tieForward != nil || n.tieBack != nil
+            }
+            if hasTie {
+                south = max(
+                    south, noteheadBottom + metrics.sp * 0.8)
+            }
+        }
+        return south
     }
 
     /// Pixel width of the rendered lyric text at the layout's
