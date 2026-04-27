@@ -123,13 +123,33 @@ public struct ScoreView: View {
         // grind the scroll to a halt. SystemLayerView reports a
         // fixed frame, so the lazy container can size each row
         // without rendering it first.
+        //
+        // Per-system gap: `LayoutEngine.layout` advances `currentY`
+        // by `system.size.height + options.systemGap`, so the
+        // difference between two adjacent systems' `origin.y`
+        // (minus the upper system's height) IS the configured
+        // gap. Reading it back here lets us honour the option
+        // without threading it through the `init(document:)`
+        // overload, which intentionally discards the original
+        // `ScoreViewOptions`.
+        let interSystemGap: CGFloat = {
+            guard doc.systems.count >= 2 else { return 0 }
+            let upper = doc.systems[0]
+            let lower = doc.systems[1]
+            return max(0, lower.origin.y
+                - (upper.origin.y + upper.size.height))
+        }()
         ZStack(alignment: .topLeading) {
+            // `spacing: 0` keeps the title frame flush with the
+            // first system (matching `LayoutEngine`'s `yShift`).
+            // The inter-system gap is applied as `.padding(.top)`
+            // on every system except the first.
             LazyVStack(alignment: .leading, spacing: 0) {
                 if let titleFrame = doc.titleFrame {
                     TitleFrameView(
                         frame: titleFrame, width: doc.size.width)
                 }
-                ForEach(Array(doc.systems.enumerated()), id: \.offset) { _, sys in
+                ForEach(Array(doc.systems.enumerated()), id: \.offset) { idx, sys in
                     SystemLayerView(
                         system: sys, metrics: doc.metrics,
                         selection: selection)
@@ -138,6 +158,7 @@ public struct ScoreView: View {
                                 mode: .system(system: sys),
                                 metrics: doc.metrics)
                         }
+                        .padding(.top, idx == 0 ? 0 : interSystemGap)
                 }
             }
             PlaybackCursorView(
