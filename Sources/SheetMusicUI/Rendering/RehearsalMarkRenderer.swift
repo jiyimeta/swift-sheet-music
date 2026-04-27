@@ -12,8 +12,11 @@ enum RehearsalMarkRenderer {
         metrics: StaffMetrics
     ) {
         guard !text.isEmpty else { return }
-        let textSize = metrics.sp * 2.5
-        let pad = metrics.sp * 0.4
+        // MuseScore defaults: `Sid::rehearsalMarkFontSize` = 14pt with
+        // FontSpatiumDependent ⇒ 14/5 = 2.8 sp.
+        // `Sid::rehearsalMarkFramePadding` = 0.5 sp.
+        let textSize = metrics.sp * 2.8
+        let pad = metrics.sp * 0.5
 
         let textColor: Color
         if let c = color {
@@ -50,7 +53,8 @@ enum RehearsalMarkRenderer {
             y: origin.y - boxHeight,
             width: boxWidth,
             height: boxHeight)
-        let lineWidth = metrics.sp * 0.12
+        // `Sid::rehearsalMarkFrameWidth` default.
+        let lineWidth = metrics.sp * 0.16
         var framePath: Path?
         switch frame {
         case .none:

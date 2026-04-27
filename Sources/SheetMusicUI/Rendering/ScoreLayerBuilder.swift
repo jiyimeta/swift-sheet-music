@@ -1853,7 +1853,10 @@ public enum ScoreLayerBuilder {
         into parent: CALayer
     ) {
         guard !text.isEmpty else { return }
-        let textSize = metrics.sp * 2.5
+        // MuseScore `Sid::rehearsalMarkFontSize` = 14pt at the
+        // engraving reference of 1 sp = 5 pt with `FontSpatiumDependent
+        // = true` ⇒ 14/5 = 2.8 sp.
+        let textSize = metrics.sp * 2.8
         let font = systemFont(size: textSize, italic: false)
 
         // Measure the text via CTLine so we know the frame's
@@ -1871,9 +1874,10 @@ public enum ScoreLayerBuilder {
         let textWidth = max(advance, textSize * 0.5)
         let textHeight = ascent + descent
 
-        // Anchor the text bottom-leading at `origin`, with a half-sp
-        // padding inside the frame.
-        let pad = metrics.sp * 0.4
+        // MuseScore `Sid::rehearsalMarkFramePadding` = 0.5 sp inside
+        // the box on every side; `Sid::rehearsalMarkFrameWidth` =
+        // 0.16 sp stroke.
+        let pad = metrics.sp * 0.5
         let textOrigin = CGPoint(
             x: origin.x + pad, y: origin.y - pad)
 
@@ -1894,7 +1898,7 @@ public enum ScoreLayerBuilder {
             y: origin.y - 2 * pad - textHeight,
             width: textWidth + 2 * pad,
             height: textHeight + 2 * pad)
-        let lineWidth = metrics.sp * 0.12
+        let lineWidth = metrics.sp * 0.16
         let framePath: CGPath?
         switch frame {
         case .none:
