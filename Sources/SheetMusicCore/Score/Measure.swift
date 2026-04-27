@@ -17,6 +17,12 @@ public struct Measure: Sendable, Equatable {
     public var markers: [Marker]
     /// Measure-right `<Jump>` entries (D.C., D.S., D.C. al Coda, …).
     public var jumps: [Jump]
+    /// `<LayoutBreak><subtype>line</subtype>`. When `true`, the next
+    /// measure starts a new system. Mirrors
+    /// `MeasureBase::lineBreak()` (`engraving/dom/measurebase.h:140`)
+    /// and the system-break check in
+    /// `engraving/rendering/score/systemlayout.cpp:262`.
+    public var lineBreak: Bool
 
     public init(
         voices: [Voice],
@@ -24,7 +30,8 @@ public struct Measure: Sendable, Equatable {
         endRepeatCount: Int? = nil,
         measureRepeatCount: Int? = nil,
         markers: [Marker] = [],
-        jumps: [Jump] = []
+        jumps: [Jump] = [],
+        lineBreak: Bool = false
     ) {
         self.voices = voices
         self.startRepeat = startRepeat
@@ -32,5 +39,6 @@ public struct Measure: Sendable, Equatable {
         self.measureRepeatCount = measureRepeatCount
         self.markers = markers
         self.jumps = jumps
+        self.lineBreak = lineBreak
     }
 }

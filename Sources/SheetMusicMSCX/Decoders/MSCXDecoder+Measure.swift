@@ -19,6 +19,13 @@ extension Measure {
         }
         let markers = node.all("Marker").map(decodeMarker)
         let jumps = node.all("Jump").map(decodeJump)
+        // `<LayoutBreak><subtype>line</subtype>` forces a system
+        // break after this measure. Page / section breaks are
+        // ignored for now — only line breaks affect engraving in
+        // our current vertical layout.
+        let lineBreak = node.all("LayoutBreak").contains { lb in
+            lb.first("subtype")?.text == "line"
+        }
 
         return Measure(
             voices: voices,
@@ -26,7 +33,8 @@ extension Measure {
             endRepeatCount: endRepeatCount,
             measureRepeatCount: measureRepeatCount,
             markers: markers,
-            jumps: jumps
+            jumps: jumps,
+            lineBreak: lineBreak
         )
     }
 

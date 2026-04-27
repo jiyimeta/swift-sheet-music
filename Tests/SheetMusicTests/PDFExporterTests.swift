@@ -52,17 +52,20 @@ struct PDFExporterTests {
     @Test("Pagination splits a tall layout into multiple pages")
     func pagination() throws {
         guard #available(macOS 15.0, *) else { return }
-        // 64 measures of half notes wraps into many systems; with a
-        // small page height the document must paginate. We don't
-        // demand an exact page count (depends on system packing
-        // heuristics), only "more than one".
+        // Long score forced into a narrow + short page so it must
+        // both wrap into multiple systems horizontally and split
+        // across pages vertically. With our MuseScore-aligned
+        // measure spacing (`spacePerQuarter ≈ 1.6 sp`) and tighter
+        // inter-staff padding, 64 measures alone fit on a short
+        // page — bump the count and shrink the page so the test
+        // still genuinely exercises pagination.
         let shortPage = EngravingPage(
-            size: CGSize(width: 612, height: 300),
+            size: CGSize(width: 360, height: 200),
             oddMargins: PageMargins(uniform: 18),
             evenMargins: PageMargins(uniform: 18),
             twosided: false)
         let data = try PDFExporter.export(
-            score: Self.longScore(measureCount: 64),
+            score: Self.longScore(measureCount: 256),
             options: PDFExporter.Options(
                 page: .explicit(shortPage),
                 staffSize: .explicit(12)))

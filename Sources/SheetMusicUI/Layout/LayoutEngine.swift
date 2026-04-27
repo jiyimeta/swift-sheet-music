@@ -284,6 +284,17 @@ public enum LayoutEngine {
                 }
                 widthSoFar += w
                 cursor += 1
+                // Explicit `<LayoutBreak><subtype>line</subtype>`
+                // forces the next measure onto a new system. Mirrors
+                // `engraving/rendering/score/systemlayout.cpp:262`.
+                // Line breaks are document-level (every staff agrees),
+                // so we check staff 0.
+                if cursor > systemStart,
+                   measureForcesLineBreak(
+                        at: cursor - 1,
+                        staves: context.score.staves) {
+                    break
+                }
             }
             var widthsSlice = Array(minWidths[systemStart..<cursor])
             if !widthsSlice.isEmpty {
@@ -357,9 +368,24 @@ public enum LayoutEngine {
         let staves = context.score.staves
         let partLabelWidth: CGFloat = isFirstSystem ? 80 : 30
 
-        let topPad: CGFloat = metrics.sp * 6
-        let bottomPad: CGFloat = metrics.sp * 6
-        let minGap: CGFloat = metrics.sp * 1.5
+        // Inter-system breathing room. MuseScore's style defaults
+        // (`engraving/style/styledef.cpp`):
+        //   * `staffUpperBorder` = 7sp — but it acts only on a
+        //     page's *first* system, not every system; `systemGap`
+        //     (configured at the exporter / view level) handles the
+        //     distance between consecutive systems.
+        //   * `staffDistance` = 6.5sp — total gap between adjacent
+        //     staves *within* a system.
+        // Our previous `topPad = bottomPad = 6sp` double-counted
+        // that distance and produced systems ~50% taller than
+        // MuseScore. 1sp leaves a hairline so glyph extents that
+        // overshoot the staff don't graze the system above / below.
+        let topPad: CGFloat = metrics.sp * 1
+        let bottomPad: CGFloat = metrics.sp * 1
+        // Inter-staff vertical gap baseline. Combined with
+        // `staffBottomPads[idx]` (lyrics / dynamics extent) this
+        // approximates MuseScore's `Sid::staffDistance = 6.5sp`.
+        let minGap: CGFloat = metrics.sp * 1
 
         // --- Dynamic per-staff bottom padding ---
         //
@@ -379,11 +405,18 @@ public enum LayoutEngine {
                     }
                 }
             }
-            // Base slack (dynamics, hairpins, etc.).
-            let basePad: CGFloat = metrics.sp * 4
-            // Lyrics sit at staffMidY + 6 sp, each verse adds 2.5 sp.
+            // Base slack (dynamics, hairpins, etc.). MuseScore
+            // defaults `lyricsMinDistance = 0.25sp` and the staff
+            // distance itself (6.5sp) already includes room for
+            // dynamics — keep this small.
+            let basePad: CGFloat = metrics.sp * 2
+            // Lyrics sit ~3sp under the staff baseline; each
+            // additional verse adds another `lyricsLineHeight`
+            // (~1.5sp). Tuned to match MuseScore's
+            // `lyricsLineHeight = 1.0` × spatium scaling rather
+            // than our previous over-estimate.
             let lyricsPad: CGFloat = maxLyricsVerses > 0
-                ? metrics.sp * 4 + CGFloat(maxLyricsVerses) * metrics.sp * 2.5
+                ? metrics.sp * 2 + CGFloat(maxLyricsVerses) * metrics.sp * 1.5
                 : 0
             return max(basePad, lyricsPad)
         }
@@ -864,5 +897,18 @@ public enum LayoutEngine {
              .spannerSegment, .tieArc:
             return element
         }
+    }
+
+    /// True when the measure at `idx` carries `<LayoutBreak>line`,
+    /// forcing the next measure onto a new system. Looks only at
+    /// staff 0 — line breaks are a document-level engraving
+    /// decision, not per-staff (MuseScore stores them on
+    /// `MeasureBase`, which is shared across staves).
+    static func measureForcesLineBreak(
+        at idx: Int, staves: [StaffContent]
+    ) -> Bool {
+        guard let s0 = staves.first,
+              idx < s0.measures.count else { return false }
+        return s0.measures[idx].lineBreak
     }
 }

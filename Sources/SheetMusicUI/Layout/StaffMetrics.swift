@@ -25,6 +25,11 @@ public struct StaffMetrics: Sendable, Equatable {
     /// Font size for Bravura glyphs (pt). One em = 4 sp by SMuFL convention.
     public var glyphFontSize: CGFloat { sp * 4 }
     /// Horizontal space allocated per quarter note (pre-stretch).
-    /// Tuned empirically; adjustable at stage 4's stretch pass.
-    public var spacePerQuarter: CGFloat { sp * 4 }
+    /// Calibrated against MuseScore's
+    /// `Sid::measureSpacing = 1.5_sp` default, modulated by the
+    /// "shortest note in this measure" heuristic; for the typical
+    /// quarter beat the engraving target is ~1.6 sp. The previous
+    /// 4 sp value over-stretched measures, especially under
+    /// lyrics, and reduced systems-per-page by ~40 %.
+    public var spacePerQuarter: CGFloat { sp * 1.6 }
 }

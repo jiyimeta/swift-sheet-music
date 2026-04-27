@@ -78,6 +78,12 @@ public enum PDFExporter {
         score: Score,
         options: Options = Options()
     ) throws -> Data {
+        // Trigger Bravura registration on the export thread. The
+        // on-screen views do this via their own bodies, but
+        // `PDFExporter` is the first contact with `ImageRenderer` in
+        // many host-app paths and would otherwise render music
+        // glyphs as tofu boxes.
+        _ = BravuraFont.register
         let resolved = resolve(options: options, score: score)
         let layoutOptions = ScoreViewOptions(
             staffSize: resolved.staffSize,
