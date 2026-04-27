@@ -231,7 +231,13 @@ extension LayoutEngine {
         }
 
         let totalWeight = gapWeights.reduce(0, +)
-        let trailingGap = metrics.sp * 3
+        // Trailing slack between the last note's tick position and
+        // the right barline. Matches `minimumMeasureWidth`'s
+        // `rightPadding`; if these drift apart, chord-to-x mapping
+        // and minimum-width allocation disagree and the system
+        // packer hands `chordSpacingTickToX` a `width` that under-
+        // allocates the chord area.
+        let trailingGap = metrics.sp * 1
         let contentWidth = max(
             metrics.sp * 4,
             width - headerSchedule.contentStartX - trailingGap)
@@ -307,8 +313,14 @@ extension LayoutEngine {
         measure: Measure,
         metrics: StaffMetrics
     ) -> CGFloat {
-        let leftPadding = metrics.sp * 3
-        let rightPadding = metrics.sp * 3
+        // MuseScore's `Sid::measureSpacing` defaults yield roughly
+        // 1.5 sp of leading padding and ~1 sp of trailing slack;
+        // anything more would force ~3 measures / system on
+        // typical part scores instead of MuseScore's 4. Previous
+        // 3 sp + 3 sp sum was tuned for the stand-alone single-
+        // staff demo and over-padded multi-measure rows.
+        let leftPadding = metrics.sp * 1.5
+        let rightPadding = metrics.sp * 1
         var maxVoiceWidth: CGFloat = 0
         for voice in measure.voices {
             var w: CGFloat = 0
@@ -358,19 +370,20 @@ extension LayoutEngine {
             quarters = Double(f.numerator) / Double(f.denominator) * 4
         }
         let baseWidth = metrics.spacePerQuarter * CGFloat(quarters)
-        // Potentially-flagged durations (8th and shorter) need extra
-        // clearance so the flag glyph — which hangs ~1.1 sp past the
-        // stem x — doesn't crash into the next note. Non-flagged
-        // durations (quarter and longer, plus fractions that aren't
-        // clean dotted bases) just need enough room for a notehead.
+        // Per-note clearance floor. MuseScore's
+        // `Sid::shortestNoteDistance` defaults to 1.5 sp for short
+        // notes (8th and shorter — flagged or beamed); anything else
+        // needs only enough room for the notehead. Beam vs. flag is
+        // handled at render time, so this floor is a single value
+        // that protects against zero-width collapse.
         let (base, _) = DurationInterpretation.split(dur)
         let floor: CGFloat
         switch base {
         case .eighth, .sixteenth, .thirtySecond, .sixtyFourth,
              .oneTwentyEighth, .twoFiftySixth:
-            floor = metrics.sp * 3
+            floor = metrics.sp * 1.5
         default:
-            floor = metrics.sp * 2
+            floor = metrics.sp * 1.5
         }
         return max(baseWidth, floor)
     }
@@ -378,14 +391,24 @@ extension LayoutEngine {
     /// Minimum horizontal space needed by a chord's lyrics so adjacent
     /// syllables don't overlap. Returns 0 when the chord has no lyrics.
     ///
-    /// MuseScore sizes chord segments around each syllable's actual
-    /// rendered bounding box plus a small inter-syllable distance
-    /// (`lyricsMinDistance`, ~1 sp at default style). We mirror that
-    /// here by measuring with CoreText — the same call used to position
-    /// the melisma start-x — instead of approximating `count × sp`,
-    /// which severely underestimates wide glyphs (CJK ≈ 2.2 sp/char vs
-    /// ASCII ≈ 1.0 sp/char) and caused adjacent words to collide.
-    /// The CT call is cheap relative to a full layout pass.
+    /// Horizontal contribution one chord's lyric makes to the
+    /// chord's minimum width, factoring in that lyrics are
+    /// **centre-anchored** under the notehead and so half of every
+    /// syllable extends LEFT of the chord's x and half extends RIGHT.
+    ///
+    /// MuseScore's spacing rule: adjacent chords with lyrics must be
+    /// at least `lyricRightHalf[i] + lyricLeftHalf[i+1] +
+    /// Sid::lyricsMinDistance` (≈ 0.25 sp) apart. When all chords
+    /// have the same syllable width that simplifies to one full
+    /// syllable per chord PLUS one extra at the row's start, which
+    /// is what we approximate here: `widest / 2 + lyricsMinDistance`.
+    ///
+    /// The previous formula (`widest + metrics.sp`) treated each
+    /// chord as if it owned a full syllable's worth of horizontal
+    /// space INDEPENDENTLY of neighbours — it inflated 16-chord
+    /// rapid-lyric measures (e.g. "tu lu tu lu …") to roughly twice
+    /// MuseScore's output, dropping our systems-per-page from 4 to
+    /// 2-3 measures.
     static func lyricsWidth(
         _ lyrics: [Lyric], metrics: StaffMetrics
     ) -> CGFloat {
@@ -396,6 +419,8 @@ extension LayoutEngine {
                 lyricsTextWidth(lyric.text, sp: metrics.sp))
         }
         guard widest > 0 else { return 0 }
-        return widest + metrics.sp
+        // Half-syllable extent + MuseScore's `lyricsMinDistance`
+        // default of 0.25 sp.
+        return widest / 2 + metrics.sp * 0.25
     }
 }

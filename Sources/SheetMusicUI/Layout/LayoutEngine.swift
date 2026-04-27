@@ -272,6 +272,24 @@ public enum LayoutEngine {
                 activeKeys: activeKeys,
                 metrics: context.metrics
             )
+            // Targeted measures-per-system across the next forced
+            // line-break boundary (or score end). MuseScore's
+            // system layout balances measures evenly between
+            // breaks rather than greedily filling the first system
+            // — see
+            // `engraving/rendering/score/systemlayout.cpp` and
+            // `Sid::lastSystemFillLimit`. Without this lookahead,
+            // a span of 8 measures with sparse content packs as
+            // 6 + 2 instead of MuseScore's 4 + 4.
+            let balancedTarget = context.options.wrapToViewWidth
+                ? balancedMeasuresPerSystem(
+                    fromIndex: systemStart,
+                    measureCount: measureCount,
+                    minWidths: minWidths,
+                    firstHeaderBoost: firstHeaderBoost,
+                    contentAvail: contentAvail,
+                    staves: context.score.staves)
+                : Int.max
             while cursor < measureCount {
                 let baseW = minWidths[cursor]
                 let w = cursor == systemStart
@@ -280,6 +298,10 @@ public enum LayoutEngine {
                 if context.options.wrapToViewWidth
                     && widthSoFar + w > contentAvail
                     && cursor > systemStart {
+                    break
+                }
+                if context.options.wrapToViewWidth
+                    && cursor - systemStart >= balancedTarget {
                     break
                 }
                 widthSoFar += w
@@ -905,16 +927,4 @@ public enum LayoutEngine {
         }
     }
 
-    /// True when the measure at `idx` carries `<LayoutBreak>line`,
-    /// forcing the next measure onto a new system. Looks only at
-    /// staff 0 — line breaks are a document-level engraving
-    /// decision, not per-staff (MuseScore stores them on
-    /// `MeasureBase`, which is shared across staves).
-    static func measureForcesLineBreak(
-        at idx: Int, staves: [StaffContent]
-    ) -> Bool {
-        guard let s0 = staves.first,
-              idx < s0.measures.count else { return false }
-        return s0.measures[idx].lineBreak
-    }
 }

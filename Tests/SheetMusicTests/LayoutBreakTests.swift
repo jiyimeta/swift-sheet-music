@@ -81,6 +81,50 @@ import Testing
             at: 99, staves: staves) == false)
     }
 
+    /// Between two forced breaks (or between start-of-score and the
+    /// first break), measures should split evenly across systems
+    /// rather than greedily packing the first system. Mirrors
+    /// MuseScore's "balanced wrap" preference: when an 8-measure
+    /// span needs 2 systems to fit, prefer 4+4 over 6+2 or 7+1.
+    @Test func balancedWrapBetweenBreaks() {
+        guard #available(macOS 15.0, iOS 16.0, *) else { return }
+        // Construct measures wide enough that 8 of them force a
+        // 2-system split, but with each measure narrow enough that
+        // a greedy packer could pack 6 in the first system. We use
+        // a quarter-note chord per measure so the duration-driven
+        // width is meaningful.
+        let chord = Chord(
+            duration: .quarter,
+            notes: [Note(pitch: 60, tpc: 14)])
+        let baseMeasure = Measure(voices: [Voice(elements: [
+            .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+            .chord(chord), .chord(chord),
+            .chord(chord), .chord(chord),
+        ])])
+        let measures = (0..<8).map { idx -> Measure in
+            var m = baseMeasure
+            if idx == 7 { m.lineBreak = true }
+            return m
+        }
+        let staff = StaffContent(id: 1, measures: measures)
+        let part = Part(
+            id: "P1",
+            instrument: Instrument(
+                id: "i",
+                articulations: [InstrumentArticulation()]))
+        let score = Score(
+            division: 480, parts: [part], staves: [staff])
+        // Width chosen so 4 measures comfortably fit but 6 don't.
+        let opts = ScoreViewOptions(
+            staffSize: 14, systemGap: 16, wrapToViewWidth: true)
+        let doc = LayoutEngine.layout(
+            score: score, options: opts, availableWidth: 280)
+        // Two systems, 4 measures each — not 6+2 or 7+1.
+        #expect(doc.systems.count == 2)
+        #expect(doc.systems[0].measures.count == 4)
+        #expect(doc.systems[1].measures.count == 4)
+    }
+
     /// Horizontal mode (`wrapToViewWidth = false`) must ignore
     /// line breaks — the whole score lays out as a single
     /// continuous strip. Mirrors MuseScore's

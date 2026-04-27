@@ -223,15 +223,18 @@ struct MultiStaffAlignmentTests {
         // The whole rest must NOT share x with voice 0's first chord
         // — it's centered in the measure body (MuseScore behaviour),
         // distinct from tick 0 even when other voices carry content.
-        #expect(abs(wr - v0Xs[0]) > 5,
+        // 3 pt is enough headroom to be unambiguous after we tightened
+        // measure padding to match MuseScore's `Sid::measureSpacing`
+        // defaults; the meaningful invariant is the upper-bound check
+        // below.
+        #expect(abs(wr - v0Xs[0]) > 3,
             "whole rest x=\(wr) should NOT match v0 tick-0 x=\(v0Xs[0])")
-        // And it should land between the inner v0 chords — i.e. near
-        // the measure's spatial centre.
-        let centerLow = min(v0Xs[1], v0Xs[2])
-        let centerHigh = max(v0Xs[1], v0Xs[2])
-        let upperBound = centerHigh + (v0Xs[3] - v0Xs[2])
-        #expect(wr > centerLow && wr < upperBound,
-            "whole rest x=\(wr) should land near the measure centre")
+        // And it should land between the second and last v0 chord —
+        // i.e. broadly inside the measure's central half. The exact
+        // x depends on `Sid::measureSpacing` and the proportional
+        // chord-to-chord weights; we don't pin it precisely so that
+        // future spacing tuning doesn't churn this test.
+        #expect(wr > v0Xs[1] && wr < v0Xs[3])
     }
 
     @Test("User repro: staves with different rhythms keep x monotonic at every tick")

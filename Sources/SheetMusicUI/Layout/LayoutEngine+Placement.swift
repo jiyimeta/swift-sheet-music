@@ -274,8 +274,17 @@ extension LayoutEngine {
                     let isWholeRest = restBase == .whole
                     let restX: CGFloat
                     if isWholeRest {
-                        restX = (headerSchedule.contentStartX + width
-                                 - metrics.sp * 3) / 2
+                        // Centre the rest in the measure's chord
+                        // area: midpoint of [contentStart,
+                        // width − trailingPadding]. Must use the
+                        // SAME trailing-padding constant as
+                        // `minimumMeasureWidth` and
+                        // `chordSpacingTickToX`'s `trailingGap`,
+                        // otherwise the rest drifts off-centre when
+                        // those constants are tuned. Currently 1 sp.
+                        let trailingPad = metrics.sp * 1
+                        restX = (headerSchedule.contentStartX
+                                 + width - trailingPad) / 2
                     } else {
                         restX = timedX(atTick: tickCursor)
                     }
