@@ -410,7 +410,8 @@ struct ContentView: View {
                             metrics: doc.metrics,
                             pageSize: pageSize,
                             margins: page.margins(forPageIndex: idx),
-                            renderScale: pdfScale)
+                            renderScale: pdfScale,
+                            showBreakIndicators: true)
                             .background(Color.white)
                             .border(Color.gray.opacity(0.4))
                             .shadow(radius: 3 * pdfScale)

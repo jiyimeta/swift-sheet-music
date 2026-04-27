@@ -45,19 +45,45 @@ public struct PagedScoreView: View {
             let pageSystems = safe >= 0 && safe < pages.count
                 ? pages[safe] : []
 
-            Canvas(opaque: true, rendersAsynchronously: true) { ctx, size in
-                ctx.fill(
-                    Path(CGRect(origin: .zero, size: size)),
-                    with: .color(.white))
-                var localY: CGFloat = 0
-                for system in pageSystems {
-                    var sub = ctx
-                    sub.translateBy(
-                        x: -system.origin.x,
-                        y: localY - system.origin.y)
-                    ScoreCanvasDrawing.drawSystem(
-                        system, metrics: doc.metrics, into: &sub)
-                    localY += system.size.height
+            ZStack(alignment: .topLeading) {
+                Canvas(opaque: true, rendersAsynchronously: true) { ctx, size in
+                    ctx.fill(
+                        Path(CGRect(origin: .zero, size: size)),
+                        with: .color(.white))
+                    var localY: CGFloat = 0
+                    for system in pageSystems {
+                        var sub = ctx
+                        sub.translateBy(
+                            x: -system.origin.x,
+                            y: localY - system.origin.y)
+                        ScoreCanvasDrawing.drawSystem(
+                            system, metrics: doc.metrics, into: &sub)
+                        localY += system.size.height
+                    }
+                }
+                // Indicator overlay laid out in this page's
+                // coord space. The Canvas above translates each
+                // system by `localY - system.origin.y` so that
+                // system N's local-(x, y) lines up with
+                // page-(x, y - system.origin.y + sumOfPriorHeights).
+                // We mirror that mapping by passing a synthetic
+                // `documentYOffset` per system; cleanest way is
+                // to overlay one per-system indicator strip.
+                let pageOrigins = Self.systemPageOrigins(
+                    pageSystems: pageSystems)
+                ForEach(
+                    Array(pageSystems.enumerated()),
+                    id: \.offset
+                ) { idx, sys in
+                    BreakIndicatorOverlay(
+                        mode: .system(system: sys),
+                        metrics: doc.metrics)
+                        .frame(width: sys.size.width,
+                               height: sys.size.height,
+                               alignment: .topLeading)
+                        .offset(
+                            x: sys.origin.x,
+                            y: pageOrigins[idx])
                 }
             }
             .frame(width: doc.size.width, height: proxy.size.height)
@@ -90,11 +116,35 @@ public struct PagedScoreView: View {
             }
             current.append(system)
             usedHeight += h
+            // `<LayoutBreak>page` on the last measure of this
+            // system forces the page to close immediately, even
+            // if more systems would still fit vertically.
+            if system.measures.last?.pageBreak == true {
+                pages.append(current)
+                current = []
+                usedHeight = 0
+            }
         }
         if !current.isEmpty {
             pages.append(current)
         }
         return pages
+    }
+
+    /// Y offset (in page-local coords) for each system on the
+    /// current page. Mirrors the `localY` accumulator inside the
+    /// Canvas drawing pass — required so the indicator overlay
+    /// lands at the same on-screen position as the system itself.
+    static func systemPageOrigins(
+        pageSystems: [LayoutSystem]
+    ) -> [CGFloat] {
+        var offsets: [CGFloat] = []
+        var localY: CGFloat = 0
+        for system in pageSystems {
+            offsets.append(localY)
+            localY += system.size.height
+        }
+        return offsets
     }
 }
 

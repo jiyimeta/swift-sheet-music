@@ -17,6 +17,14 @@ public struct LayoutMeasure: Sendable, Equatable {
     public let markers: [LayoutElement]
     /// Bottom-right jumps (D.C., D.S.).
     public let jumps: [LayoutElement]
+    /// `<LayoutBreak>line` on the source `Measure`. Render-time
+    /// indicators (UI) consult this; layout has already applied
+    /// the break by ending the system at this measure.
+    public let lineBreak: Bool
+    /// `<LayoutBreak>page` on the source `Measure`. The exporter's
+    /// pagination uses this to force a page boundary; UI indicator
+    /// overlay also consults it.
+    public let pageBreak: Bool
 
     public init(
         measureIndex: Int,
@@ -24,7 +32,9 @@ public struct LayoutMeasure: Sendable, Equatable {
         width: CGFloat,
         elements: [LayoutElement],
         markers: [LayoutElement] = [],
-        jumps: [LayoutElement] = []
+        jumps: [LayoutElement] = [],
+        lineBreak: Bool = false,
+        pageBreak: Bool = false
     ) {
         self.measureIndex = measureIndex
         self.origin = origin
@@ -32,5 +42,7 @@ public struct LayoutMeasure: Sendable, Equatable {
         self.elements = elements
         self.markers = markers
         self.jumps = jumps
+        self.lineBreak = lineBreak
+        self.pageBreak = pageBreak
     }
 }

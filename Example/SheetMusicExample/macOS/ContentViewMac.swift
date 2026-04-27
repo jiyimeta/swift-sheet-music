@@ -1173,6 +1173,26 @@ private struct MagnifyingPDFScrollView: NSViewRepresentable {
                             .frame(
                                 width: pageSize.width,
                                 height: pageSize.height)
+                            // Authoring overlay: line / page break
+                            // badges on the on-screen preview only.
+                            // The exported PDF skips this overlay
+                            // because PDFExporter.export passes
+                            // showBreakIndicators=false to its
+                            // own Canvas-based PDFPageView.
+                            .overlay(alignment: .topLeading) {
+                                BreakIndicatorOverlay(
+                                    mode: .document(
+                                        systems: batch.systems,
+                                        documentYOffset:
+                                            batch.startY
+                                            - page.margins(
+                                                forPageIndex: idx
+                                            ).top,
+                                        xOffset: page.margins(
+                                            forPageIndex: idx
+                                        ).leading),
+                                    metrics: doc.metrics)
+                            }
                             .border(Color.gray.opacity(0.4))
                             .shadow(radius: 3)
                         Text("\(idx + 1) / \(pages.count)")

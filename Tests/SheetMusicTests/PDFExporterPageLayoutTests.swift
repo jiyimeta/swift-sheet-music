@@ -4,6 +4,7 @@ import PDFKit
 @testable import SheetMusic
 @testable import SheetMusicCore
 @testable import SheetMusicPDF
+@testable import SheetMusicUI
 import Testing
 
 @Suite @MainActor struct PDFExporterPageLayoutTests {
@@ -78,6 +79,43 @@ import Testing
                 == 0.5 * 72)
         #expect(page.margins(forPageIndex: 1).leading
                 == 0.5 * 72)
+    }
+
+    /// `<LayoutBreak>page` on a measure forces the next system to
+    /// start a new PDF page even when the current page would still
+    /// have vertical room for it.
+    @Test func paginatePageBreakClosesPage() {
+        guard #available(macOS 15.0, iOS 16.0, *) else { return }
+        let pageGeom = EngravingPage(
+            size: CGSize(width: 600, height: 1200),
+            oddMargins: PageMargins(uniform: 30),
+            evenMargins: PageMargins(uniform: 30),
+            twosided: false)
+        // Three short systems that together fit on one page.
+        // System 1's last measure carries pageBreak → forces close.
+        func sys(originY: CGFloat,
+                 lastMeasurePageBreak: Bool) -> LayoutSystem {
+            let m = LayoutMeasure(
+                measureIndex: 0, origin: .zero, width: 100,
+                elements: [], pageBreak: lastMeasurePageBreak)
+            return LayoutSystem(
+                origin: CGPoint(x: 0, y: originY),
+                size: CGSize(width: 100, height: 200),
+                measures: [m],
+                staffOrigins: [.zero],
+                partLabels: [],
+                spanners: [])
+        }
+        let s0 = sys(originY: 0, lastMeasurePageBreak: true)
+        let s1 = sys(originY: 220, lastMeasurePageBreak: false)
+        let s2 = sys(originY: 440, lastMeasurePageBreak: false)
+        let pages = PDFExporter.paginate(
+            systems: [s0, s1, s2], page: pageGeom)
+        // s0 closes its page (page 1) by the explicit pageBreak;
+        // s1 + s2 share page 2.
+        #expect(pages.count == 2)
+        #expect(pages[0].systems.count == 1)
+        #expect(pages[1].systems.count == 2)
     }
 
     /// Right margin derives per `Page::rm`:

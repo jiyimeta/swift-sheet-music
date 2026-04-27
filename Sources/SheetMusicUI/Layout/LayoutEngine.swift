@@ -679,13 +679,24 @@ public enum LayoutEngine {
                         y: staffTopY - metrics.sp * 1.5)
                 ))
             }
+            // Surface the source measure's break flags so the
+            // pagination phase (page break → close page) and the
+            // on-screen indicator overlay (icons at the measure's
+            // top-right) can consult them without re-walking
+            // `score.staves`.
+            let sourceMeasure = context.score.staves.first
+                .flatMap { $0.measures.indices.contains(measureIdx)
+                    ? $0.measures[measureIdx]
+                    : nil }
             layoutMeasures.append(LayoutMeasure(
                 measureIndex: measureIdx,
                 origin: CGPoint(x: xCursor, y: 0),
                 width: w,
                 elements: aggregated,
                 markers: markers,
-                jumps: jumps
+                jumps: jumps,
+                lineBreak: sourceMeasure?.lineBreak ?? false,
+                pageBreak: sourceMeasure?.pageBreak ?? false
             ))
             xCursor += w
         }
@@ -821,7 +832,9 @@ public enum LayoutEngine {
             width: measure.width,
             elements: measure.elements.map { translate(element: $0, dy: dy) },
             markers: measure.markers.map { translate(element: $0, dy: dy) },
-            jumps: measure.jumps.map { translate(element: $0, dy: dy) }
+            jumps: measure.jumps.map { translate(element: $0, dy: dy) },
+            lineBreak: measure.lineBreak,
+            pageBreak: measure.pageBreak
         )
     }
 

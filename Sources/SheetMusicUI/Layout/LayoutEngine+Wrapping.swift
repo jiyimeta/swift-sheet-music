@@ -3,18 +3,22 @@ import SheetMusicCore
 
 @available(macOS 15.0, iOS 16.0, *)
 extension LayoutEngine {
-    /// True when the measure at `idx` carries `<LayoutBreak>line`,
-    /// forcing the next measure onto a new system. Looks only at
-    /// staff 0 — line breaks are a document-level engraving
-    /// decision, not per-staff (MuseScore stores them on
-    /// `MeasureBase`, which is shared across staves). Mirrors
-    /// `engraving/dom/measurebase.h::lineBreak()`.
+    /// True when the measure at `idx` carries `<LayoutBreak>line`
+    /// or `<LayoutBreak>page`, forcing the next measure onto a new
+    /// system. Looks only at staff 0 — line / page breaks are a
+    /// document-level engraving decision, not per-staff (MuseScore
+    /// stores them on `MeasureBase`, which is shared across
+    /// staves). Mirrors `engraving/dom/measurebase.h::lineBreak()`
+    /// + the page-break promotion in
+    /// `engraving/rendering/score/systemlayout.cpp:262` (a page
+    /// break implies a system break).
     static func measureForcesLineBreak(
         at idx: Int, staves: [StaffContent]
     ) -> Bool {
         guard let s0 = staves.first,
               idx < s0.measures.count else { return false }
-        return s0.measures[idx].lineBreak
+        let m = s0.measures[idx]
+        return m.lineBreak || m.pageBreak
     }
 
     /// Decide how many measures to put on the current system so

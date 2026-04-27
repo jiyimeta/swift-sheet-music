@@ -19,12 +19,18 @@ extension Measure {
         }
         let markers = node.all("Marker").map(decodeMarker)
         let jumps = node.all("Jump").map(decodeJump)
-        // `<LayoutBreak><subtype>line</subtype>` forces a system
-        // break after this measure. Page / section breaks are
-        // ignored for now — only line breaks affect engraving in
-        // our current vertical layout.
-        let lineBreak = node.all("LayoutBreak").contains { lb in
-            lb.first("subtype")?.text == "line"
+        // `<LayoutBreak>` declares an explicit system / page break
+        // after this measure. We track `line` (system break) and
+        // `page` (page break, which also implies a system break).
+        // Section breaks aren't yet plumbed through layout.
+        var lineBreak = false
+        var pageBreak = false
+        for lb in node.all("LayoutBreak") {
+            switch lb.first("subtype")?.text {
+            case "line": lineBreak = true
+            case "page": pageBreak = true
+            default: break
+            }
         }
 
         return Measure(
@@ -34,7 +40,8 @@ extension Measure {
             measureRepeatCount: measureRepeatCount,
             markers: markers,
             jumps: jumps,
-            lineBreak: lineBreak
+            lineBreak: lineBreak,
+            pageBreak: pageBreak
         )
     }
 

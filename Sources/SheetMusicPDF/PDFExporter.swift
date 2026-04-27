@@ -118,7 +118,10 @@ public enum PDFExporter {
                 titleFrame: idx == 0 ? document.titleFrame : nil,
                 metrics: document.metrics,
                 pageSize: resolved.page.size,
-                margins: margins)
+                margins: margins,
+                // Authoring overlay is for previews only; the
+                // exported file must not show it.
+                showBreakIndicators: false)
             let renderer = ImageRenderer(content: view)
             renderer.proposedSize = ProposedViewSize(
                 width: resolved.page.size.width,
@@ -172,6 +175,12 @@ public enum PDFExporter {
     /// Two-sided pages alternate between odd and even margin sets
     /// per `EngravingPage.margins(forPageIndex:)`.
     ///
+    /// Systems whose final measure carries `<LayoutBreak>page` end
+    /// the current page even when more systems would fit
+    /// vertically. Mirrors MuseScore's
+    /// `MeasureBase::pageBreak()` honoring in
+    /// `engraving/rendering/score/pagelayout.cpp`.
+    ///
     /// Systems are not split across page boundaries — the largest
     /// single system is allowed to exceed the usable height (it
     /// just spills off its page) rather than being clipped or
@@ -189,6 +198,10 @@ public enum PDFExporter {
             return max(1, page.size.height - m.top - m.bottom)
         }
 
+        func systemEndsPage(_ system: LayoutSystem) -> Bool {
+            system.measures.last?.pageBreak ?? false
+        }
+
         for system in systems {
             if currentSystems.isEmpty {
                 // Page 1 always anchors at doc Y = 0 so a leading
@@ -198,6 +211,12 @@ public enum PDFExporter {
                 // 0's origin.y is also 0 — same answer either way.
                 currentStartY = pages.isEmpty ? 0 : system.origin.y
                 currentSystems.append(system)
+                if systemEndsPage(system) {
+                    pages.append(PageBatch(
+                        startY: currentStartY,
+                        systems: currentSystems))
+                    currentSystems = []
+                }
                 continue
             }
             let bottomOnPage =
@@ -210,6 +229,12 @@ public enum PDFExporter {
                 currentSystems = [system]
             } else {
                 currentSystems.append(system)
+            }
+            if systemEndsPage(system) && !currentSystems.isEmpty {
+                pages.append(PageBatch(
+                    startY: currentStartY,
+                    systems: currentSystems))
+                currentSystems = []
             }
         }
         if !currentSystems.isEmpty {

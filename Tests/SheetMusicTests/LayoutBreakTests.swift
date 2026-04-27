@@ -38,10 +38,11 @@ import Testing
         #expect(measures[2].lineBreak == false)
     }
 
-    /// LayoutBreak subtypes other than "line" don't trigger the
-    /// flag — page / section breaks are honoured separately
-    /// (currently unused in our pipeline).
-    @Test func ignoresPageBreakSubtype() throws {
+    /// `<LayoutBreak><subtype>page</subtype>` is parsed into
+    /// `Measure.pageBreak`. It does NOT set `lineBreak` —
+    /// honoring "page break implies line break" happens at layout
+    /// time (`measureForcesLineBreak`), not parse time.
+    @Test func parsesPageBreak() throws {
         let mscx = """
         <?xml version="1.0" encoding="UTF-8"?>
         <museScore version="4.60">
@@ -59,23 +60,30 @@ import Testing
         </museScore>
         """
         let score = try MSCXParser.parse(Data(mscx.utf8))
+        #expect(score.staves[0].measures[0].pageBreak == true)
         #expect(score.staves[0].measures[0].lineBreak == false)
     }
 
     /// `LayoutEngine.measureForcesLineBreak(at:staves:)` consults
-    /// only staff 0 (line breaks are document-level).
+    /// only staff 0 (line breaks are document-level), and treats
+    /// page-break as also forcing a system break (mirrors
+    /// `engraving/rendering/score/systemlayout.cpp:262`).
     @Test func helperReadsStaffZero() {
         guard #available(macOS 15.0, iOS 16.0, *) else { return }
-        let m1 = Measure(voices: [], lineBreak: true)
-        let m2 = Measure(voices: [], lineBreak: false)
+        let mLine = Measure(voices: [], lineBreak: true)
+        let mPage = Measure(voices: [], pageBreak: true)
+        let mPlain = Measure(voices: [])
         let staves = [
-            StaffContent(id: 1, measures: [m1, m2]),
-            StaffContent(id: 2, measures: [m2, m2]),
+            StaffContent(id: 1, measures: [mLine, mPage, mPlain]),
+            StaffContent(id: 2, measures: [mPlain, mPlain, mPlain]),
         ]
         #expect(LayoutEngine.measureForcesLineBreak(
             at: 0, staves: staves) == true)
         #expect(LayoutEngine.measureForcesLineBreak(
-            at: 1, staves: staves) == false)
+            at: 1, staves: staves) == true,
+                "page break should also force a system break")
+        #expect(LayoutEngine.measureForcesLineBreak(
+            at: 2, staves: staves) == false)
         // Out-of-range index returns false rather than crashing.
         #expect(LayoutEngine.measureForcesLineBreak(
             at: 99, staves: staves) == false)

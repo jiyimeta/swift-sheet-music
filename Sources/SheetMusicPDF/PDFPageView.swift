@@ -33,6 +33,11 @@ public struct PDFPageView: View {
     /// uses `1.0`; the on-screen preview pinch-zoom drives this
     /// directly.
     let renderScale: CGFloat
+    /// Whether to overlay MuseScore-style break indicator badges.
+    /// On-screen previews pass `true` for authoring affordance;
+    /// `PDFExporter.export` passes `false` so the saved file is
+    /// indicator-free.
+    let showBreakIndicators: Bool
 
     public init(
         systems: [LayoutSystem],
@@ -41,7 +46,8 @@ public struct PDFPageView: View {
         metrics: StaffMetrics,
         pageSize: CGSize,
         margins: PageMargins,
-        renderScale: CGFloat = 1
+        renderScale: CGFloat = 1,
+        showBreakIndicators: Bool = false
     ) {
         self.systems = systems
         self.pageStartY = pageStartY
@@ -50,37 +56,50 @@ public struct PDFPageView: View {
         self.pageSize = pageSize
         self.margins = margins
         self.renderScale = renderScale
+        self.showBreakIndicators = showBreakIndicators
     }
 
     public var body: some View {
-        Canvas(opaque: true) { context, _ in
-            // White background — `opaque: true` doesn't auto-clear,
-            // and we want a paper-like fill regardless of the host
-            // platform's default canvas color. Fill the full
-            // (scaled) canvas extent so the background still covers
-            // the view at any `renderScale`.
-            let canvasSize = CGSize(
-                width: pageSize.width * renderScale,
-                height: pageSize.height * renderScale)
-            context.fill(
-                Path(CGRect(origin: .zero, size: canvasSize)),
-                with: .color(.white))
-            var local = context
-            // Scale the drawing coordinates BEFORE translating so
-            // glyphs render at native resolution at the new size,
-            // not as an upscaled bitmap.
-            if renderScale != 1 {
-                local.scaleBy(x: renderScale, y: renderScale)
+        ZStack(alignment: .topLeading) {
+            Canvas(opaque: true) { context, _ in
+                // White background — `opaque: true` doesn't
+                // auto-clear, and we want a paper-like fill
+                // regardless of the host platform's default canvas
+                // color. Fill the full (scaled) canvas extent so
+                // the background still covers the view at any
+                // `renderScale`.
+                let canvasSize = CGSize(
+                    width: pageSize.width * renderScale,
+                    height: pageSize.height * renderScale)
+                context.fill(
+                    Path(CGRect(origin: .zero, size: canvasSize)),
+                    with: .color(.white))
+                var local = context
+                // Scale the drawing coordinates BEFORE translating
+                // so glyphs render at native resolution at the new
+                // size, not as an upscaled bitmap.
+                if renderScale != 1 {
+                    local.scaleBy(x: renderScale, y: renderScale)
+                }
+                local.translateBy(
+                    x: margins.leading,
+                    y: margins.top - pageStartY)
+                if let titleFrame {
+                    TitleFrameRenderer.draw(titleFrame, into: &local)
+                }
+                for system in systems {
+                    ScoreCanvasDrawing.drawSystem(
+                        system, metrics: metrics, into: &local)
+                }
             }
-            local.translateBy(
-                x: margins.leading,
-                y: margins.top - pageStartY)
-            if let titleFrame {
-                TitleFrameRenderer.draw(titleFrame, into: &local)
-            }
-            for system in systems {
-                ScoreCanvasDrawing.drawSystem(
-                    system, metrics: metrics, into: &local)
+            if showBreakIndicators {
+                BreakIndicatorOverlay(
+                    mode: .document(
+                        systems: systems,
+                        documentYOffset: pageStartY - margins.top,
+                        xOffset: margins.leading),
+                    metrics: metrics)
+                    .scaleEffect(renderScale, anchor: .topLeading)
             }
         }
         .frame(

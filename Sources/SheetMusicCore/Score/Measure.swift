@@ -23,6 +23,12 @@ public struct Measure: Sendable, Equatable {
     /// and the system-break check in
     /// `engraving/rendering/score/systemlayout.cpp:262`.
     public var lineBreak: Bool
+    /// `<LayoutBreak><subtype>page</subtype>`. When `true`, the next
+    /// measure starts a new page (and, transitively, a new system).
+    /// Mirrors `MeasureBase::pageBreak()` —
+    /// `engraving/rendering/score/systemlayout.cpp:262` treats
+    /// `pageBreak()` as ALSO triggering a line break.
+    public var pageBreak: Bool
 
     public init(
         voices: [Voice],
@@ -31,7 +37,8 @@ public struct Measure: Sendable, Equatable {
         measureRepeatCount: Int? = nil,
         markers: [Marker] = [],
         jumps: [Jump] = [],
-        lineBreak: Bool = false
+        lineBreak: Bool = false,
+        pageBreak: Bool = false
     ) {
         self.voices = voices
         self.startRepeat = startRepeat
@@ -40,5 +47,6 @@ public struct Measure: Sendable, Equatable {
         self.markers = markers
         self.jumps = jumps
         self.lineBreak = lineBreak
+        self.pageBreak = pageBreak
     }
 }
