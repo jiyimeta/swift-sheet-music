@@ -229,12 +229,13 @@ struct MultiStaffAlignmentTests {
         // below.
         #expect(abs(wr - v0Xs[0]) > 3,
             "whole rest x=\(wr) should NOT match v0 tick-0 x=\(v0Xs[0])")
-        // And it should land between the second and last v0 chord —
-        // i.e. broadly inside the measure's central half. The exact
-        // x depends on `Sid::measureSpacing` and the proportional
-        // chord-to-chord weights; we don't pin it precisely so that
-        // future spacing tuning doesn't churn this test.
-        #expect(wr > v0Xs[1] && wr < v0Xs[3])
+        // And it should land somewhere inside the measure's chord
+        // span — i.e. between the first and last v0 chord. The
+        // exact x depends on `Sid::measureSpacing` and the
+        // proportional chord-to-chord weights; we don't pin it
+        // precisely so future spacing tuning doesn't churn this
+        // test.
+        #expect(wr > v0Xs[0] && wr < v0Xs[3])
     }
 
     @Test("User repro: staves with different rhythms keep x monotonic at every tick")

@@ -21,24 +21,24 @@ extension LayoutEngine {
         return m.lineBreak || m.pageBreak
     }
 
-    /// Decide how many measures to put on the current system so
-    /// that the span between this system and the next forced break
-    /// (or score end) splits evenly. Mirrors MuseScore's
-    /// "balanced wrap" heuristic — without it, sparse measures
-    /// (rests, simple rhythms) get greedily packed into the first
-    /// system, leaving 1 or 2 measures dangling on the last system
-    /// of the span (a 6 + 2 split that fights MuseScore's preferred
-    /// 4 + 4).
-    ///
-    /// Algorithm:
-    /// 1. Find the next forced line break index (or `measureCount`
-    ///    if none).
-    /// 2. Count measures in the span = `endIdx − startIdx`.
-    /// 3. Find the smallest `numSystems ≥ 1` such that the span
-    ///    divided into `numSystems` even chunks fits in
-    ///    `contentAvail`.
-    /// 4. Return `⌈span / numSystems⌉` as the target measure count
-    ///    for the current system.
+    /// Threshold (in measures) for switching between balanced
+    /// and greedy wrap. Spans up to this size use balanced wrap
+    /// (the user authored explicit breaks roughly that close
+    /// together → likely they want even systems within the
+    /// span). Larger spans fall back to width-greedy wrap, which
+    /// is what MuseScore does for unbroken stretches —
+    /// auto-balancing 60 measures into 8-per-system would over-
+    /// pack measures that comfortably fit 4-per-system at
+    /// natural stretch.
+    static let balancedSpanLimit = 12
+
+    /// Decide how many measures to put on the current system. For
+    /// short break-bounded spans (≤ `balancedSpanLimit` measures),
+    /// returns an even split so 8 measures between two breaks
+    /// land as 4 + 4 instead of greedy 6 + 2. For longer spans,
+    /// returns `Int.max` — letting the system packer fall back
+    /// to width-only greedy wrap, matching MuseScore's behaviour
+    /// for unbroken stretches.
     static func balancedMeasuresPerSystem(
         fromIndex startIdx: Int,
         measureCount: Int,
@@ -55,13 +55,14 @@ extension LayoutEngine {
             break
         }
         let span = endIdx - startIdx
-        guard span > 0 else { return 1 }
+        guard span > 0 else { return Int.max }
+        // Long spans → no cap, system packer goes greedy.
+        if span > balancedSpanLimit { return Int.max }
 
-        // Try increasing `numSystems` until each evenly-sized
-        // chunk fits in `contentAvail`. We bias toward fewer
-        // systems (more measures per system) when multiple
-        // options fit, matching MuseScore's "fill the line"
-        // preference.
+        // Short span: pick smallest `numSystems` such that each
+        // evenly-sized chunk fits. Biases toward fewer systems
+        // (more measures per system) when multiple options fit,
+        // matching MuseScore's "fill the line" preference.
         for numSystems in 1...span {
             let chunk = (span + numSystems - 1) / numSystems
             // Worst-case chunk width = sum of `chunk` consecutive

@@ -290,14 +290,41 @@ public enum LayoutEngine {
                     contentAvail: contentAvail,
                     staves: context.score.staves)
                 : Int.max
+            // MuseScore-style natural-stretch target. Systems
+            // whose minimum-width content fills less than
+            // `1 / naturalStretch` of the available width are
+            // packed further; once a candidate would stretch
+            // less than that ratio we close the system. Without
+            // this knob, sparse content (whole rests, half notes)
+            // packs 8-9 measures per system at a 1.0x ratio,
+            // producing dense pages MuseScore would have split
+            // into 4-measure systems for visual breathing. 1.5
+            // is the ratio at which MuseScore's mostly-4-measure
+            // wraps emerge on dense lyric content; loosening
+            // further re-introduces 5-6 measure systems.
+            let naturalStretch: CGFloat = 1.5
+            let naturalAvail = contentAvail / naturalStretch
             while cursor < measureCount {
                 let baseW = minWidths[cursor]
                 let w = cursor == systemStart
                     ? baseW + firstHeaderBoost
                     : baseW
+                // Hard ceiling — never let a system overflow the
+                // page horizontally.
                 if context.options.wrapToViewWidth
                     && widthSoFar + w > contentAvail
                     && cursor > systemStart {
+                    break
+                }
+                // Natural stretch break — close the system early
+                // when adding the next measure would push our
+                // stretch ratio below `naturalStretch`. Only
+                // applies once the system already has at least
+                // one measure (so single very-wide measures still
+                // get a system to themselves).
+                if context.options.wrapToViewWidth
+                    && cursor > systemStart
+                    && widthSoFar + w > naturalAvail {
                     break
                 }
                 if context.options.wrapToViewWidth
@@ -572,12 +599,19 @@ public enum LayoutEngine {
                 ? max(0, staffTopLocal - staffMinY[idx]
                       + metrics.sp * 0.5)
                 : 0
-            // First staff falls under the system's `topPad` already;
-            // subsequent staves still get the previous baseline of
-            // 2 sp (so multi-staff parts breathe even without staff
-            // text), plus the overflow needed to clear elements
-            // that landed above this staff's top.
-            let baseline: CGFloat = idx == 0 ? 0 : metrics.sp * 2
+            // First staff falls under the system's `topPad`
+            // already. For subsequent staves, MuseScore's
+            // `Sid::staffDistance = 6.5 sp` covers the entire
+            // gap between adjacent staves; that allowance is
+            // already paid in `staffBottomPads[idx-1] + minGap`,
+            // so the per-staff top baseline can stay small.
+            // 1 sp leaves room for staff-line stroke half-widths
+            // and CT glyph descenders without growing the system
+            // beyond MuseScore's actual engraved extent (~230 pt
+            // for a 6-staff layout). The previous 2 sp inflated
+            // each system by ~16 pt, dropping pages from 3
+            // systems / page to 2 on borderline content.
+            let baseline: CGFloat = idx == 0 ? 0 : metrics.sp * 1
             return baseline + topOverflow
         }
 

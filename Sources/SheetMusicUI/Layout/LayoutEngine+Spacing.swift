@@ -237,7 +237,7 @@ extension LayoutEngine {
         // and minimum-width allocation disagree and the system
         // packer hands `chordSpacingTickToX` a `width` that under-
         // allocates the chord area.
-        let trailingGap = metrics.sp * 1
+        let trailingGap = metrics.sp * 0.5
         let contentWidth = max(
             metrics.sp * 4,
             width - headerSchedule.contentStartX - trailingGap)
@@ -313,25 +313,33 @@ extension LayoutEngine {
         measure: Measure,
         metrics: StaffMetrics
     ) -> CGFloat {
-        // MuseScore's `Sid::measureSpacing` defaults yield roughly
-        // 1.5 sp of leading padding and ~1 sp of trailing slack;
-        // anything more would force ~3 measures / system on
-        // typical part scores instead of MuseScore's 4. Previous
-        // 3 sp + 3 sp sum was tuned for the stand-alone single-
-        // staff demo and over-padded multi-measure rows.
-        let leftPadding = metrics.sp * 1.5
-        let rightPadding = metrics.sp * 1
+        // Per-measure padding aligned with MuseScore's
+        // `Sid::measureBegin` (~1 sp) + `Sid::measureSpacing`
+        // trailing slack. Everything wider than this forces our
+        // 7-measure intro span into 6 measures when MuseScore
+        // packs 7.
+        let leftPadding = metrics.sp * 1.0
+        let rightPadding = metrics.sp * 0.5
         var maxVoiceWidth: CGFloat = 0
         for voice in measure.voices {
             var w: CGFloat = 0
             for el in voice.elements {
                 switch el {
+                // Header element widths sized against MuseScore's
+                // engraving defaults. Treble clef glyph ≈ 2.2 sp
+                // wide, but `Sid::clefBarlineDistance` overlaps the
+                // glyph with the barline by ~0.5 sp, netting ~1.7 sp.
                 case .clef:
-                    w += metrics.sp * 2
+                    w += metrics.sp * 1.7
+                // Key sig: `|k|` accidentals × ~1 sp each, plus
+                // `keysigLeftMargin` (0.5 sp). `+ 0.5` instead of
+                // the previous `+ 1` more closely matches MuseScore.
                 case .keySignature(let k):
-                    w += metrics.sp * (CGFloat(abs(k.concertKey)) + 1)
+                    w += metrics.sp
+                        * (CGFloat(abs(k.concertKey)) + 0.5)
+                // Time sig: 1.7 sp digit + 0.5 sp barline distance.
                 case .timeSignature:
-                    w += metrics.sp * 3
+                    w += metrics.sp * 2.2
                 case .barLine:
                     w += metrics.sp
                 case .chord(let c):

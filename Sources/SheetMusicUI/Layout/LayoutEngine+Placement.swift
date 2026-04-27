@@ -276,13 +276,14 @@ extension LayoutEngine {
                     if isWholeRest {
                         // Centre the rest in the measure's chord
                         // area: midpoint of [contentStart,
-                        // width − trailingPadding]. Must use the
-                        // SAME trailing-padding constant as
-                        // `minimumMeasureWidth` and
-                        // `chordSpacingTickToX`'s `trailingGap`,
-                        // otherwise the rest drifts off-centre when
-                        // those constants are tuned. Currently 1 sp.
-                        let trailingPad = metrics.sp * 1
+                        // width − trailingPadding]. Must track
+                        // `minimumMeasureWidth.rightPadding` and
+                        // `chordSpacingTickToX.trailingGap` —
+                        // otherwise the rest drifts off-centre
+                        // whenever those constants are tuned.
+                        // Currently 0.5 sp, matching the post-
+                        // MuseScore-spacing tightening.
+                        let trailingPad = metrics.sp * 0.5
                         restX = (headerSchedule.contentStartX
                                  + width - trailingPad) / 2
                     } else {
