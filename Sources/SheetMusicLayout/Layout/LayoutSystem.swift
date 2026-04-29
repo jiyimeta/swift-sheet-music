@@ -26,7 +26,8 @@ public struct LayoutSystem: Sendable, Equatable {
     /// Used as the binary-search tolerance so a rect that intersects
     /// an event's bbox but lies outside its `centerX` still hits.
     public let maxBBoxHalfWidth: CGFloat
-    /// Spatium (half a staff-space) used to compute event bboxes.
+    /// Spatium (one staff space, equal to one quarter of the total
+    /// staff height) used to compute event bboxes.
     /// Equals `StaffMetrics(staffSize:).sp` for the current staff size.
     public let sp: CGFloat
 
