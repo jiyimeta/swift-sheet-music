@@ -259,34 +259,10 @@ struct ContentView: View {
                 }
             }
         case .paged:
-            ZStack {
-                PagedScoreView(
-                    score: score, options: opts,
-                    pageIndex: $pageIndex,
-                    totalPages: $totalPages)
-                HStack(spacing: 0) {
-                    Color.clear
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            if pageIndex > 0 { pageIndex -= 1 }
-                        }
-                    Color.clear
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            if pageIndex < totalPages - 1 {
-                                pageIndex += 1
-                            }
-                        }
-                }
-            }
-            .overlay(alignment: .bottom) {
-                Text("\(min(pageIndex, totalPages - 1) + 1) / \(totalPages)")
-                    .font(.caption)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
-                    .background(.ultraThinMaterial, in: Capsule())
-                    .padding(.bottom, 8)
-            }
+            PagedScoreContainer(
+                score: score, options: opts,
+                pageIndex: $pageIndex,
+                totalPages: $totalPages)
         case .pdf:
             pdfPreview(score: score)
         }

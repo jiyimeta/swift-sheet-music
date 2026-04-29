@@ -82,7 +82,7 @@ struct HorizontalScoreContainer: View {
                 .background(
                     GeometryReader { hgeo in
                         Color.clear
-                            .onChange(of: playbackCursor) { newCursor in
+                            .onChange(of: playbackCursor) { _, newCursor in
                                 onCursorChange(newCursor, hgeo.size.width)
                             }
                     })
