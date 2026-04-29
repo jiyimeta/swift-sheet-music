@@ -60,6 +60,10 @@ struct ContentViewMac: View {
     /// `@Published` `state` / `currentCursor` change.
     @StateObject private var playbackEngine = PlaybackEngine(
         soundfontResolver: BundledSoundfontResolver())
+    /// Edit-mode controller. Lives across score reloads —
+    /// `reset(score:)` is called from `adoptLoadedScore`.
+    @State private var inputController: NoteInputController?
+    @Environment(\.undoManager) private var undoManager
     /// Local NSEvent monitor that turns the spacebar into a play /
     /// pause toggle (MuseScore convention). Stored so we can remove
     /// it on disappear.
@@ -128,6 +132,18 @@ struct ContentViewMac: View {
         .onAppear(perform: loadBundled)
         .onAppear(perform: installKeyMonitor)
         .onDisappear(perform: removeKeyMonitor)
+        .toolbar {
+            ToolbarItem {
+                Toggle(isOn: Binding(
+                    get: { inputController?.isInputModeOn ?? false },
+                    set: { inputController?.isInputModeOn = $0 }
+                )) {
+                    Label("Input Mode", systemImage: "pencil.tip")
+                }
+                .disabled(inputController == nil)
+                .help("Type C/D/E/F/G/A/B to drop a note on the selected rest. ↑/↓ shift octave.")
+            }
+        }
     }
 
     private func showOpenPanel() {
@@ -182,6 +198,13 @@ struct ContentViewMac: View {
                 togglePlayback()
                 return nil
             }
+            if let controller = inputController, controller.isInputModeOn {
+                if let consumed = handleInputModeKey(
+                    event, controller: controller
+                ) {
+                    return consumed ? nil : event
+                }
+            }
             return event
         }
     }
@@ -190,6 +213,64 @@ struct ContentViewMac: View {
         if let m = keyMonitor {
             NSEvent.removeMonitor(m)
             keyMonitor = nil
+        }
+    }
+
+    /// Returns nil if the key wasn't relevant to input mode (caller
+    /// passes the event through). Returns true if it was consumed,
+    /// false if it was relevant-but-rejected (also pass through).
+    private func handleInputModeKey(
+        _ event: NSEvent,
+        controller: NoteInputController
+    ) -> Bool? {
+        if !event.isARepeat,
+           event.modifierFlags
+            .intersection(.deviceIndependentFlagsMask).isEmpty {
+            switch event.keyCode {
+            case 126: // up arrow
+                controller.inputOctave = min(8, controller.inputOctave + 1)
+                return true
+            case 125: // down arrow
+                controller.inputOctave = max(0, controller.inputOctave - 1)
+                return true
+            default:
+                break
+            }
+        }
+        guard let chars = event.charactersIgnoringModifiers,
+              let letter = chars.first,
+              let mapped = NoteInputKeyMap.pitch(
+                forLetter: letter,
+                octave: controller.inputOctave)
+        else {
+            return nil
+        }
+        guard case let .single(.rest(restID)) = selection else {
+            return false
+        }
+        do {
+            try controller.apply(
+                InputNote(
+                    at: restID,
+                    pitch: mapped.pitch,
+                    tpc: mapped.tpc),
+                undoManager: undoManager)
+            // After successful insertion the rest is gone — select
+            // the freshly-inserted note so the user sees what they
+            // just typed.
+            let noteID = NoteID(
+                staffIndex: restID.staffIndex,
+                measureIndex: restID.measureIndex,
+                voiceIndex: restID.voiceIndex,
+                elementIndex: restID.elementIndex,
+                noteIndexInChord: 0)
+            selection = .single(.note(noteID))
+            score = controller.score
+            scoreVersion = UUID()
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return true
         }
     }
 
@@ -445,6 +526,11 @@ struct ContentViewMac: View {
         verticalDoc = nil
         pdfLayout = nil
         score = loaded
+        if let inputController {
+            inputController.reset(score: loaded)
+        } else {
+            inputController = NoteInputController(score: loaded)
+        }
         sourceName = name
         errorMessage = nil
         scoreVersion = UUID()
