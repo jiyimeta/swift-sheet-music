@@ -275,6 +275,9 @@ struct ContentView: View {
             // shift-click order doesn't determine playback start.
             return playbackEngine.earliest(of: [anchor, target])
                 ?? anchor
+        case .multi(let ids):
+            // Marquee selection: play from the earliest in time.
+            return playbackEngine.earliest(of: Array(ids))
         }
     }
 
