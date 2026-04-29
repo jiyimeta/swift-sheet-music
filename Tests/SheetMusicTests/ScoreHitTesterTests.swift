@@ -102,5 +102,65 @@ struct ScoreHitTesterTests {
         let id = tester.itemID(at: CGPoint(x: 0, y: -500))
         #expect(id == nil)
     }
+
+    @Test("itemIDs(in:) returns events whose bbox intersects the rect")
+    func marqueeBasic() throws {
+        guard #available(macOS 15.0, *) else { return }
+        let score = sample()
+        let doc = LayoutEngine.layout(
+            score: score,
+            options: ScoreViewOptions(),
+            availableWidth: 600)
+        let tester = ScoreHitTester(document: doc)
+
+        // Rect that covers the whole first system.
+        let system = try #require(doc.systems.first)
+        let allRect = CGRect(
+            x: system.origin.x,
+            y: system.origin.y,
+            width: system.size.width,
+            height: system.size.height)
+        let allIds = tester.itemIDs(in: allRect)
+        // 3 chords + 1 rest from sample().
+        #expect(allIds.count == 4)
+    }
+
+    @Test("itemIDs(in:) misses events outside the rect")
+    func marqueeEmpty() throws {
+        guard #available(macOS 15.0, *) else { return }
+        let score = sample()
+        let doc = LayoutEngine.layout(
+            score: score,
+            options: ScoreViewOptions(),
+            availableWidth: 600)
+        let tester = ScoreHitTester(document: doc)
+        // Rect far below the system.
+        let rect = CGRect(x: 0, y: 100_000, width: 10, height: 10)
+        #expect(tester.itemIDs(in: rect).isEmpty)
+    }
+
+    @Test("itemIDs(in:) preserves visit order (sorted by centerX)")
+    func marqueeOrder() throws {
+        guard #available(macOS 15.0, *) else { return }
+        let score = sample()
+        let doc = LayoutEngine.layout(
+            score: score,
+            options: ScoreViewOptions(),
+            availableWidth: 600)
+        let tester = ScoreHitTester(document: doc)
+
+        let system = try #require(doc.systems.first)
+        let allRect = CGRect(
+            x: system.origin.x, y: system.origin.y,
+            width: system.size.width, height: system.size.height)
+        let ids = tester.itemIDs(in: allRect)
+        // Resolve each id back to its centerX via system.eventColumns
+        // and verify they're in ascending order.
+        let xs: [CGFloat] = ids.compactMap { id in
+            system.eventColumns.first(where: { $0.id == id })
+                .map { $0.centerX + system.origin.x }
+        }
+        #expect(xs == xs.sorted())
+    }
 }
 #endif
