@@ -100,6 +100,9 @@ struct ContentView: View {
             .navigationTitle("Sheet Music")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                // Leading — playback controls. Two buttons fit
+                // unconditionally even on the narrowest iPhone, so
+                // they never get pushed into auto-overflow.
                 ToolbarItemGroup(placement: .topBarLeading) {
                     Button {
                         togglePlayback()
@@ -115,42 +118,17 @@ struct ContentView: View {
                         Image(systemName: "stop.fill")
                     }
                     .disabled(playbackEngine.state == .stopped)
-
-                    Button {
-                        isMixerPresented = true
-                    } label: {
-                        Image(systemName: "slider.horizontal.3")
-                    }
-                    .disabled(playbackEngine.mixerChannels.isEmpty)
-
-                    Button {
-                        exportPDF()
-                    } label: {
-                        Image(systemName: "square.and.arrow.up")
-                    }
-                    .disabled(score == nil)
-
-                    Button {
-                        isImportingFile = true
-                    } label: {
-                        Image(systemName: "folder")
-                    }
                 }
-                ToolbarItemGroup(placement: .topBarTrailing) {
-                    Button {
-                        staffSize = max(8, staffSize - 2)
-                    } label: {
-                        Image(systemName: "minus.magnifyingglass")
-                    }
-                    .disabled(staffSize <= 8)
-
-                    Button {
-                        staffSize = min(32, staffSize + 2)
-                    } label: {
-                        Image(systemName: "plus.magnifyingglass")
-                    }
-                    .disabled(staffSize >= 32)
-
+                // Trailing — layout picker + explicit overflow menu.
+                //
+                // We do NOT rely on `ToolbarItemGroup`'s auto-overflow
+                // (the system-managed `…` indicator). On iPhone-width
+                // toolbars iOS 18 SwiftUI quietly drops tap routing
+                // for the auto-overflow button when its candidate
+                // items mix `.disabled()` states; the indicator
+                // appears but tapping it does nothing. Authoring an
+                // explicit `Menu` sidesteps that path entirely.
+                ToolbarItem(placement: .topBarTrailing) {
                     Picker("Layout", selection: $layoutMode) {
                         Image(systemName: "arrow.up.and.down")
                             .tag(LayoutMode.vertical)
@@ -163,6 +141,50 @@ struct ContentView: View {
                     }
                     .pickerStyle(.segmented)
                     .frame(width: 160)
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        Button {
+                            isMixerPresented = true
+                        } label: {
+                            Label("Mixer", systemImage: "slider.horizontal.3")
+                        }
+                        .disabled(playbackEngine.mixerChannels.isEmpty)
+
+                        Button {
+                            exportPDF()
+                        } label: {
+                            Label("Export PDF",
+                                systemImage: "square.and.arrow.up")
+                        }
+                        .disabled(score == nil)
+
+                        Button {
+                            isImportingFile = true
+                        } label: {
+                            Label("Open File", systemImage: "folder")
+                        }
+
+                        Divider()
+
+                        Button {
+                            staffSize = max(8, staffSize - 2)
+                        } label: {
+                            Label("Zoom Out",
+                                systemImage: "minus.magnifyingglass")
+                        }
+                        .disabled(staffSize <= 8)
+
+                        Button {
+                            staffSize = min(32, staffSize + 2)
+                        } label: {
+                            Label("Zoom In",
+                                systemImage: "plus.magnifyingglass")
+                        }
+                        .disabled(staffSize >= 32)
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                    }
                 }
             }
         }
