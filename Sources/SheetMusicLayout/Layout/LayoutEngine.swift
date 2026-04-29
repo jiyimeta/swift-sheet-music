@@ -103,7 +103,8 @@ public enum LayoutEngine {
             measures: system.measures,
             staffOrigins: system.staffOrigins,
             partLabels: system.partLabels,
-            spanners: system.spanners)
+            spanners: system.spanners,
+            sp: system.sp)
     }
 
     private static func buildTitleFrame(

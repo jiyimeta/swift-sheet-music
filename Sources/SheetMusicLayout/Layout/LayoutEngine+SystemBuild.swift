@@ -490,7 +490,8 @@ extension LayoutEngine {
             measures: adjustedMeasures,
             staffOrigins: adjustedStaffOrigins,
             partLabels: adjustedLabels,
-            spanners: []
+            spanners: [],
+            sp: metrics.sp
         )
     }
 }

@@ -179,7 +179,8 @@ struct PDFExporterTests {
             measures: [],
             staffOrigins: [.zero],
             partLabels: [],
-            spanners: [])
+            spanners: [],
+            sp: 7.0)
     }
 }
 #endif

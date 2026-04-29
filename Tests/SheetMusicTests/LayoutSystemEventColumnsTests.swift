@@ -53,6 +53,10 @@ struct LayoutSystemEventColumnsTests {
             }
         })
         #expect(kinds == ["note", "rest"])
+
+        // The fixture is single-voice (voice 0); confirm the
+        // column → element wiring carries the voiceIndex through.
+        #expect(system.eventColumns.allSatisfy { $0.voiceIndex == 0 })
     }
 
     @Test("maxBBoxHalfWidth is the max of all column bboxes")

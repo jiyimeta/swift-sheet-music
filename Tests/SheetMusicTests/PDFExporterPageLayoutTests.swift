@@ -105,7 +105,8 @@ import Testing
                 measures: [m],
                 staffOrigins: [.zero],
                 partLabels: [],
-                spanners: [])
+                spanners: [],
+                sp: 7.0)
         }
         let s0 = sys(originY: 0, lastMeasurePageBreak: true)
         let s1 = sys(originY: 220, lastMeasurePageBreak: false)

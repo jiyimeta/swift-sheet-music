@@ -26,6 +26,9 @@ public struct LayoutSystem: Sendable, Equatable {
     /// Used as the binary-search tolerance so a rect that intersects
     /// an event's bbox but lies outside its `centerX` still hits.
     public let maxBBoxHalfWidth: CGFloat
+    /// Spatium (half a staff-space) used to compute event bboxes.
+    /// Equals `StaffMetrics(staffSize:).sp` for the current staff size.
+    public let sp: CGFloat
 
     public init(
         origin: CGPoint,
@@ -33,7 +36,8 @@ public struct LayoutSystem: Sendable, Equatable {
         measures: [LayoutMeasure],
         staffOrigins: [CGPoint],
         partLabels: [LayoutPartLabel],
-        spanners: [LayoutElement]
+        spanners: [LayoutElement],
+        sp: CGFloat
     ) {
         self.origin = origin
         self.size = size
@@ -41,7 +45,8 @@ public struct LayoutSystem: Sendable, Equatable {
         self.staffOrigins = staffOrigins
         self.partLabels = partLabels
         self.spanners = spanners
-        let columns = Self.buildEventColumns(measures: measures)
+        self.sp = sp
+        let columns = Self.buildEventColumns(measures: measures, sp: sp)
         self.eventColumns = columns
         self.maxBBoxHalfWidth = columns
             .map { $0.bbox.width / 2 }
@@ -49,7 +54,8 @@ public struct LayoutSystem: Sendable, Equatable {
     }
 
     private static func buildEventColumns(
-        measures: [LayoutMeasure]
+        measures: [LayoutMeasure],
+        sp: CGFloat
     ) -> [EventColumn] {
         var result: [EventColumn] = []
         for measure in measures {
@@ -57,10 +63,7 @@ public struct LayoutSystem: Sendable, Equatable {
             let my = measure.origin.y
             for el in measure.elements {
                 switch el {
-                case .chord(
-                    let notes, _, _, _, _, _, _,
-                    let voiceIndex
-                ):
+                case let .chord(notes, _, _, _, _, _, _, voiceIndex):
                     guard !notes.isEmpty else { continue }
                     let xs = notes.map { mx + $0.origin.x }
                     let ys = notes.map { my + $0.origin.y }
@@ -71,11 +74,8 @@ public struct LayoutSystem: Sendable, Equatable {
                           let topNote = notes.min(by: {
                               $0.origin.y < $1.origin.y })
                     else { continue }
-                    // Notehead radius approximation. `LayoutSystem`
-                    // doesn't carry `sp`, so we use a conservative
-                    // absolute pad that matches the tester's
-                    // `sp * 1.2` hit radius for typical staff sizes.
-                    let pad: CGFloat = 4.5
+                    // Matches `ScoreHitTester.hitNote`'s hit radius.
+                    let pad: CGFloat = sp * 1.2
                     let bbox = CGRect(
                         x: minX - pad,
                         y: minY - pad,
@@ -87,11 +87,12 @@ public struct LayoutSystem: Sendable, Equatable {
                         centerX: (minX + maxX) / 2,
                         centerY: (minY + maxY) / 2,
                         bbox: bbox))
-                case .rest(_, let origin, let voiceIndex, let restID, _):
+                case let .rest(_, origin, voiceIndex, restID, _):
                     let cx = mx + origin.x
                     let cy = my + origin.y
-                    let halfW: CGFloat = 6.5      // ≈ 1.8 sp at sp=3.5
-                    let halfH: CGFloat = 9.0      // ≈ 2.5 sp at sp=3.5
+                    // Matches `ScoreHitTester.hitRest`'s half-extents.
+                    let halfW: CGFloat = sp * 1.8
+                    let halfH: CGFloat = sp * 2.5
                     let bbox = CGRect(
                         x: cx - halfW, y: cy - halfH,
                         width: halfW * 2, height: halfH * 2)

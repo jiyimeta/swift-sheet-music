@@ -210,7 +210,8 @@ extension LayoutEngine {
                 measures: system.measures,
                 staffOrigins: system.staffOrigins,
                 partLabels: system.partLabels,
-                spanners: system.spanners + extraPerSystem[idx]
+                spanners: system.spanners + extraPerSystem[idx],
+                sp: system.sp
             )
         }
     }

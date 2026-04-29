@@ -300,7 +300,8 @@ extension LayoutEngine {
             // number for the gutter or push the pane wider when
             // the text is long.
             partLabels: [],
-            spanners: []
+            spanners: [],
+            sp: metrics.sp
         )
     }
 }
