@@ -162,5 +162,34 @@ struct ScoreHitTesterTests {
         }
         #expect(xs == xs.sorted())
     }
+
+    @Test("itemIDs(in:) catches events whose bbox grazes the rect")
+    func marqueeGrazingBbox() throws {
+        guard #available(macOS 15.0, *) else { return }
+        let score = sample()
+        let doc = LayoutEngine.layout(
+            score: score,
+            options: ScoreViewOptions(),
+            availableWidth: 600)
+        let tester = ScoreHitTester(document: doc)
+        let system = try #require(doc.systems.first)
+        let firstColumn = try #require(system.eventColumns.first)
+
+        // Rect sits to the LEFT of the column's centerX (so the X
+        // binary-search would prune it without `maxBBoxHalfWidth`
+        // tolerance) but still overlaps the column's bbox by 1 pt.
+        // Documents the core algorithmic guarantee: the tolerance
+        // window is wide enough that no bbox-intersecting event
+        // gets pruned.
+        let bbox = firstColumn.bbox
+        let docMinX = system.origin.x + bbox.minX
+        let rect = CGRect(
+            x: docMinX - 5,
+            y: system.origin.y + bbox.minY,
+            width: 6,           // overlaps bbox by 1 pt on the right
+            height: bbox.height)
+        let ids = tester.itemIDs(in: rect)
+        #expect(ids.contains(firstColumn.id))
+    }
 }
 #endif

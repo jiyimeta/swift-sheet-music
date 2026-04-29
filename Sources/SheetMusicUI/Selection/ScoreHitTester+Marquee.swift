@@ -9,6 +9,10 @@ extension ScoreHitTester {
     /// Result preserves visit order: systems top-to-bottom, then
     /// `EventColumn.centerX` ascending within each system.
     ///
+    /// A zero-size rect (zero width or height) always returns
+    /// empty because `CGRect.intersects` requires a non-degenerate
+    /// intersection. To hit-test a single point use `itemID(at:)`.
+    ///
     /// O(systems_intersecting_rect · (log E + k)).
     public func itemIDs(in rect: CGRect) -> [ScoreItemID] {
         var result: [ScoreItemID] = []
