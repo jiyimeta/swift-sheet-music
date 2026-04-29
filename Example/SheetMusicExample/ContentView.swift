@@ -69,6 +69,14 @@ struct ContentView: View {
     @State private var pdfPages: [PDFExporter.PageBatch] = []
     /// Mixer sheet visibility — toolbar mixer button toggles it.
     @State private var isMixerPresented = false
+    /// When true, vertical-mode drags become marquee selections
+    /// instead of falling through to scroll. Toggled from the
+    /// toolbar; OFF restores normal tap/scroll behaviour.
+    @State private var isMarqueeMode = false
+    /// Active marquee rectangle in vertical-mode local coords.
+    /// `nil` outside an in-progress drag; the overlay reads this
+    /// to draw the live selection rectangle.
+    @State private var marqueeRect: CGRect?
 
     /// Per-voice highlight colors (MuseScore convention). iOS has no
     /// keyboard shift, so this example only supports single-note
@@ -164,6 +172,13 @@ struct ContentView: View {
                         } label: {
                             Label("Open File", systemImage: "folder")
                         }
+
+                        Toggle(isOn: $isMarqueeMode) {
+                            Label("Marquee Select",
+                                systemImage: "rectangle.dashed")
+                        }
+                        .disabled(score == nil
+                            || layoutMode != .vertical)
 
                         Divider()
 
