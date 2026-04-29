@@ -7,7 +7,7 @@ import SheetMusicCore
 /// `.fraction(1/12)`) — both lose the original visual base that the
 /// UI needs to pick a notehead, beam level, flag, or dot count.
 @available(macOS 15.0, iOS 16.0, *)
-enum DurationInterpretation {
+public enum DurationInterpretation {
     /// Split a duration into its (base, dots) form.
     ///
     /// - Plain durations (`.whole`, `.half`, …) → `(dur, 0)`.
@@ -19,7 +19,7 @@ enum DurationInterpretation {
     ///   → `(base, dots)` of the un-scaled duration, so a triplet 8th
     ///   renders as an 8th (beams / flags included).
     /// - Anything else → `(dur, 0)`.
-    static func split(
+    public static func split(
         _ dur: NoteDuration
     ) -> (base: NoteDuration, dots: Int) {
         switch dur {

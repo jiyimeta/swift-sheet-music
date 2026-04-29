@@ -1,4 +1,5 @@
 import SheetMusicCore
+import SheetMusicLayout
 import SwiftUI
 
 /// Paginated score view that displays one page of systems at a time.

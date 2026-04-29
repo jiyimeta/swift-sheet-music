@@ -1,6 +1,7 @@
 import CoreGraphics
 import Foundation
 import SheetMusicCore
+import SheetMusicLayout
 import SheetMusicUI
 import SwiftUI
 

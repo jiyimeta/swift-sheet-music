@@ -23,6 +23,11 @@ let package = Package(
         .library(name: "SheetMusicMusicXML", targets: ["SheetMusicMusicXML"]),
         // MIDI: in-memory model, score → MIDI rendering, SMF read/write.
         .library(name: "SheetMusicMIDI", targets: ["SheetMusicMIDI"]),
+        // Pure-geometry layout layer: turns a Score into a `LayoutDocument`
+        // (systems / measures / glyph positions). UI-framework free —
+        // CoreGraphics + CoreText only — so it can back SwiftUI today and
+        // alternative renderers (PDF, AppKit, non-Apple) tomorrow.
+        .library(name: "SheetMusicLayout", targets: ["SheetMusicLayout"]),
         // SwiftUI views for rendering a Score. macOS 15+ only.
         .library(name: "SheetMusicUI", targets: ["SheetMusicUI"]),
         // AVFoundation-backed playback: per-staff `AVAudioUnitSampler`s,
@@ -69,9 +74,13 @@ let package = Package(
             dependencies: ["SheetMusicCore"]
         ),
         .target(
-            name: "SheetMusicUI",
+            name: "SheetMusicLayout",
             dependencies: ["SheetMusicCore"],
             resources: [.process("Fonts/Resources")]
+        ),
+        .target(
+            name: "SheetMusicUI",
+            dependencies: ["SheetMusicCore", "SheetMusicLayout"]
         ),
         .target(
             name: "SheetMusicAudio",
@@ -84,6 +93,7 @@ let package = Package(
             name: "SheetMusicPDF",
             dependencies: [
                 "SheetMusicCore",
+                "SheetMusicLayout",
                 "SheetMusicUI",
             ]
         ),
@@ -100,7 +110,7 @@ let package = Package(
         // inspection. Not a published product — only for contributor use.
         .executableTarget(
             name: "RenderPreviews",
-            dependencies: ["SheetMusic", "SheetMusicUI"]
+            dependencies: ["SheetMusic", "SheetMusicLayout", "SheetMusicUI"]
         ),
         .testTarget(
             name: "SheetMusicTests",
@@ -110,6 +120,7 @@ let package = Package(
                 "SheetMusicMIDI",
                 "SheetMusicMSCX",
                 "SheetMusicMusicXML",
+                "SheetMusicLayout",
                 "SheetMusicUI",
                 "SheetMusicAudio",
                 "SheetMusicPDF",

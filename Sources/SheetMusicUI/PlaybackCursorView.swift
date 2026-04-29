@@ -1,4 +1,5 @@
 import SheetMusicCore
+import SheetMusicLayout
 import SwiftUI
 
 /// MuseScore-style playback cursor: a tall translucent rectangle

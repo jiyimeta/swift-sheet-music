@@ -3,6 +3,7 @@ import AppKit
 import CoreText
 import QuartzCore
 import SheetMusicCore
+import SheetMusicLayout
 import SheetMusicUI
 import SwiftUI
 
@@ -20,18 +21,18 @@ import SwiftUI
 /// `CGPDFContext`); this view is the on-screen counterpart.
 @available(macOS 15.0, *)
 public struct PDFPageLayerView: NSViewRepresentable {
-    public let systems: [SheetMusicUI.LayoutSystem]
+    public let systems: [LayoutSystem]
     public let pageStartY: CGFloat
-    public let titleFrame: SheetMusicUI.LayoutTitleFrame?
-    public let metrics: SheetMusicUI.StaffMetrics
+    public let titleFrame: LayoutTitleFrame?
+    public let metrics: StaffMetrics
     public let pageSize: CGSize
     public let margins: PageMargins
 
     public init(
-        systems: [SheetMusicUI.LayoutSystem],
+        systems: [LayoutSystem],
         pageStartY: CGFloat,
-        titleFrame: SheetMusicUI.LayoutTitleFrame? = nil,
-        metrics: SheetMusicUI.StaffMetrics,
+        titleFrame: LayoutTitleFrame? = nil,
+        metrics: StaffMetrics,
         pageSize: CGSize,
         margins: PageMargins
     ) {
@@ -80,10 +81,10 @@ public final class _PDFPageLayerHostView: NSView {
     public required init?(coder: NSCoder) { fatalError() }
 
     fileprivate func configure(
-        systems: [SheetMusicUI.LayoutSystem],
+        systems: [LayoutSystem],
         pageStartY: CGFloat,
-        titleFrame: SheetMusicUI.LayoutTitleFrame?,
-        metrics: SheetMusicUI.StaffMetrics,
+        titleFrame: LayoutTitleFrame?,
+        metrics: StaffMetrics,
         pageSize: CGSize,
         margins: PageMargins
     ) {
@@ -151,7 +152,7 @@ private struct ConfigSignature: Equatable {
 
 @available(macOS 15.0, iOS 16.0, *)
 private func makeTitleTextLayer(
-    entry: SheetMusicUI.LayoutFrameText,
+    entry: LayoutFrameText,
     pageSize: CGSize,
     margins: PageMargins
 ) -> CAShapeLayer? {

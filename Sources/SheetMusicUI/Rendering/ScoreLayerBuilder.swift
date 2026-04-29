@@ -1,6 +1,7 @@
 import CoreText
 import QuartzCore
 import SheetMusicCore
+import SheetMusicLayout
 
 #if os(macOS)
 import AppKit

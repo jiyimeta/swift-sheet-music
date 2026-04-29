@@ -5,6 +5,7 @@ import Foundation
 import QuartzCore
 import SheetMusic
 import SheetMusicCore
+import SheetMusicLayout
 import SheetMusicMSCX
 import SheetMusicUI
 

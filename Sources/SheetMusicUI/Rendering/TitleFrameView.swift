@@ -1,4 +1,5 @@
 import SheetMusicCore
+import SheetMusicLayout
 import SwiftUI
 
 /// SwiftUI view that paints a `LayoutTitleFrame` via `Canvas`.

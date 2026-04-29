@@ -1,5 +1,6 @@
 #if os(macOS)
 import SheetMusicCore
+@testable import SheetMusicLayout
 @testable import SheetMusicUI
 import Testing
 

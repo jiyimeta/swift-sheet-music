@@ -1,5 +1,6 @@
 import CoreGraphics
 import SheetMusicCore
+import SheetMusicLayout
 import SwiftUI
 
 #if os(macOS)

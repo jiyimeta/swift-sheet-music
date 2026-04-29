@@ -4,6 +4,7 @@ import Foundation
 @testable import SheetMusicPDF
 import SheetMusic
 import SheetMusicCore
+import SheetMusicLayout
 import SheetMusicMSCX
 import SheetMusicUI
 import Testing

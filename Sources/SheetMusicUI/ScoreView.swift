@@ -1,4 +1,5 @@
 import SheetMusicCore
+import SheetMusicLayout
 import SwiftUI
 
 /// Read-only SwiftUI view that renders a `Score`.

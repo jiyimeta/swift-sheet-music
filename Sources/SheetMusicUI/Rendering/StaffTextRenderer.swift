@@ -1,4 +1,5 @@
 import SheetMusicCore
+import SheetMusicLayout
 import SwiftUI
 
 /// Draws free-form `<StaffText>` / `<SystemText>` from `.mscx`,

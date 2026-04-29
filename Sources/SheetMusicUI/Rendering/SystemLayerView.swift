@@ -1,5 +1,6 @@
 import QuartzCore
 import SheetMusicCore
+import SheetMusicLayout
 import SwiftUI
 
 #if os(macOS)

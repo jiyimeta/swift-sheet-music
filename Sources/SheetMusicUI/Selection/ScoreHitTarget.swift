@@ -1,4 +1,5 @@
 import SheetMusicCore
+import SheetMusicLayout
 
 /// The engraving element sitting under a point during a hit-test.
 ///

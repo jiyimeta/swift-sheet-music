@@ -1,4 +1,5 @@
 import SwiftUI
+import SheetMusicLayout
 
 /// Augmentation dots drawn to the right of a notehead or rest glyph.
 /// Small filled circle; offset by ~1 sp right of the anchor, further

@@ -1,6 +1,7 @@
 import CoreGraphics
 import QuartzCore
 import SheetMusicCore
+import SheetMusicLayout
 
 @available(macOS 15.0, iOS 16.0, *)
 extension ScoreLayerBuilder {

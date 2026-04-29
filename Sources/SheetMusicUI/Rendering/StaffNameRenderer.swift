@@ -1,4 +1,5 @@
 import SwiftUI
+import SheetMusicLayout
 
 /// Draws the instrument / staff name above a staff in the horizontal
 /// continuous-view sticky pane.

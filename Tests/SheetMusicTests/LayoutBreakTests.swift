@@ -2,6 +2,7 @@ import Foundation
 @testable import SheetMusic
 @testable import SheetMusicCore
 @testable import SheetMusicMSCX
+@testable import SheetMusicLayout
 @testable import SheetMusicUI
 import Testing
 

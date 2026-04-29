@@ -1,4 +1,5 @@
 import SheetMusicCore
+import SheetMusicLayout
 import SwiftUI
 
 /// Draws the texts of a `LayoutTitleFrame` (resolved positions +

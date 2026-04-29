@@ -1,4 +1,5 @@
 import SheetMusicCore
+import SheetMusicLayout
 import SwiftUI
 
 /// A single system rendered in its own Canvas. Used by `ScoreView`

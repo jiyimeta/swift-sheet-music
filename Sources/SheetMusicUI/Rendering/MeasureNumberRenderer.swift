@@ -1,4 +1,5 @@
 import SwiftUI
+import SheetMusicLayout
 
 /// Draws the measure-number label that engraving convention places
 /// above the first measure of every system.

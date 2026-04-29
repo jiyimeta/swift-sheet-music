@@ -4,6 +4,7 @@ import PDFKit
 @testable import SheetMusic
 @testable import SheetMusicCore
 @testable import SheetMusicPDF
+@testable import SheetMusicLayout
 @testable import SheetMusicUI
 import Testing
 

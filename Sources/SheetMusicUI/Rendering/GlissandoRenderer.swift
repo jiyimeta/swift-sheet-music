@@ -1,4 +1,5 @@
 import SwiftUI
+import SheetMusicLayout
 
 /// Draws a glissando line (straight or wavy) between two noteheads,
 /// with an optional text label ("gliss.", etc.) that follows the

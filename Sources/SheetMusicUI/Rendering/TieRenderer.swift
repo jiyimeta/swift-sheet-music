@@ -1,4 +1,5 @@
 import SwiftUI
+import SheetMusicLayout
 
 /// Draws a tie arc as a filled crescent — thin at the endpoints, thick
 /// at the middle. Mirrors MuseScore's approach in
