@@ -1285,21 +1285,32 @@ extension LayoutEngine {
 
     /// Pixel width of the rendered lyric text at the layout's
     /// staff size. Mirrors the font used by `ScoreLayerBuilder.textLayer`
-    /// for `.textMark(.lyrics, ...)` and `GraphicsContext.drawLyricText`
-    /// — system font at regular weight, sized to `sp * 2.2` (a
-    /// proxy for MuseScore's Edwin which we don't bundle).
-    /// Shared with `LayoutEngine+Spacing.lyricsWidth` so chord
-    /// spacing uses the same measurement as melisma start-x
-    /// positioning.
+    /// for `.textMark(.lyrics, ...)` — `.system(size: sp*2.2, weight: .semibold)`.
+    /// Shared with `LayoutEngine+Spacing.lyricsPairWidth` so chord spacing
+    /// uses the same measurement as melisma start-x positioning.
+    ///
+    /// Weight matters: SwiftUI renders lyrics at `.semibold` (see
+    /// `GraphicsContext+Glyph.drawExpressionText`). Measuring with the
+    /// regular system font under-reports glyph advance by 5–10 %, which
+    /// accumulates into adjacent-syllable overlap on tight runs of
+    /// eighth notes (m. 32 "Pa ra di so!").
     static func lyricsTextWidth(
         _ text: String, sp: CGFloat
     ) -> CGFloat {
         guard !text.isEmpty else { return 0 }
         let fontSize = sp * 2.2
-        let font = CTFontCreateUIFontForLanguage(
-            .system, fontSize, nil)
-            ?? CTFontCreateWithName(
-                "Helvetica" as CFString, fontSize, nil)
+        // `kCTFontWeightTrait` is in [-1, 1]. UIFont.Weight.semibold
+        // maps to 0.3 — match it so CoreText returns the same glyph
+        // advances SwiftUI uses.
+        let traits: CFDictionary = [
+            kCTFontWeightTrait: 0.3
+        ] as CFDictionary
+        let attributes: CFDictionary = [
+            kCTFontTraitsAttribute: traits,
+            kCTFontSizeAttribute: fontSize,
+        ] as CFDictionary
+        let descriptor = CTFontDescriptorCreateWithAttributes(attributes)
+        let font = CTFontCreateWithFontDescriptor(descriptor, fontSize, nil)
         let attrs: CFDictionary = [
             kCTFontAttributeName: font
         ] as CFDictionary

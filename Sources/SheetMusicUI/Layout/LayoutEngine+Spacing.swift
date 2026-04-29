@@ -113,12 +113,18 @@ extension LayoutEngine {
         }
         var total: CGFloat = partLabelWidth
         for i in 0..<measureCount {
-            let w = score.staves.map { staff -> CGFloat in
-                guard i < staff.measures.count else { return 0 }
-                return minimumMeasureWidth(
-                    measure: staff.measures[i],
-                    metrics: metrics)
-            }.max() ?? 0
+            let baseHeader = computeHeaderSchedule(
+                measureIdx: i,
+                staves: score.staves,
+                metrics: metrics,
+                synthesizeClefForAllStaves: false,
+                synthesizeKeySigForAllStaves: false)
+            let w = crossStaffMinimumMeasureWidth(
+                staves: score.staves,
+                measureIdx: i,
+                metrics: metrics,
+                headerSchedule: baseHeader,
+                division: score.division)
             total += w
         }
         return total
@@ -154,6 +160,85 @@ extension LayoutEngine {
         width: CGFloat,
         division: Int
     ) -> [Int: CGFloat] {
+        let agg = aggregatedTickWeights(
+            staves: staves, measureIdx: measureIdx,
+            metrics: metrics, division: division)
+        guard !agg.sortedTicks.isEmpty else { return [:] }
+
+        // Trailing slack between the last note's tick and the right
+        // barline. Matches `minimumMeasureWidth`'s `rightPadding`;
+        // 1 sp also gives flagged 8th / 16th notes room for their
+        // flag glyph before the barline.
+        let trailingGap = metrics.sp * 1
+        // Floor `contentWidth` at `totalWeight`: even when callers
+        // hand us a `width` smaller than the cross-staff aggregated
+        // minimum, never squeeze gaps below their declared per-segment
+        // minimum — that would re-introduce the lyric overlap that
+        // `lyricsPairWidth` is supposed to prevent. Excess width
+        // beyond `totalWeight` still spreads proportionally, so the
+        // measure can stretch but cannot collapse.
+        let contentWidth = max(
+            agg.totalWeight,
+            max(metrics.sp * 4,
+                width - headerSchedule.contentStartX - trailingGap))
+        let baseX = headerSchedule.contentStartX + metrics.sp
+
+        var tickToX: [Int: CGFloat] = [:]
+        var cumulative: CGFloat = 0
+        for (i, t) in agg.sortedTicks.enumerated() {
+            let fraction = agg.totalWeight > 0
+                ? cumulative / agg.totalWeight : 0
+            tickToX[t] = baseX + fraction * contentWidth
+            cumulative += agg.gapWeights[i]
+        }
+        return tickToX
+    }
+
+    /// Cross-staff aggregated minimum measure width — the smallest
+    /// `width` for which `tickColumns` can place every chord/rest
+    /// without squeezing any segment below its declared weight.
+    ///
+    /// Per-staff `minimumMeasureWidth` undercounts when other staves
+    /// subdivide a long element: the cross-tick aggregation in
+    /// `tickColumns` produces a larger `totalWeight` than any single
+    /// staff's sum (e.g. m.32 of test.mscx — Lead's Pa-ra-di-so!
+    /// eighths squeezed below 21 sp because V.P.'s 16ths split
+    /// Lead's quarter rest into two gaps, each charged the floor
+    /// minimum). Using THIS function for layout's per-measure width
+    /// keeps the spacing engine and the placement engine in sync.
+    static func crossStaffMinimumMeasureWidth(
+        staves: [StaffContent],
+        measureIdx: Int,
+        metrics: StaffMetrics,
+        headerSchedule: HeaderSchedule,
+        division: Int
+    ) -> CGFloat {
+        let agg = aggregatedTickWeights(
+            staves: staves, measureIdx: measureIdx,
+            metrics: metrics, division: division)
+        // Must match `tickColumns`' trailingGap so the spacing engine
+        // and the placement engine size every measure identically.
+        let trailingGap = metrics.sp * 1
+        let contentWidth = max(metrics.sp * 4, agg.totalWeight)
+        // baseX = contentStartX + sp; the rightmost tick lands at
+        // baseX + contentWidth; trailing barline / gap follows.
+        return headerSchedule.contentStartX + metrics.sp
+            + contentWidth + trailingGap
+    }
+
+    /// Per-segment aggregation primitive shared by `tickColumns` (uses
+    /// it to place chord x-positions) and
+    /// `crossStaffMinimumMeasureWidth` (uses it to size the measure
+    /// so the placement never has to squeeze). Keeping a single
+    /// algorithm avoids the bug where the two diverged and the
+    /// minimum width undersized the layout.
+    static func aggregatedTickWeights(
+        staves: [StaffContent],
+        measureIdx: Int,
+        metrics: StaffMetrics,
+        division: Int
+    ) -> (sortedTicks: [Int], gapWeights: [CGFloat],
+          totalWeight: CGFloat, measureEnd: Int) {
         struct TimedElement {
             let startTick: Int
             let endTick: Int
@@ -167,12 +252,17 @@ extension LayoutEngine {
             for voice in staff.measures[measureIdx].voices {
                 var elements: [TimedElement] = []
                 var tick = 0
-                for el in voice.elements {
+                for (idx, el) in voice.elements.enumerated() {
                     switch el {
                     case .chord(let c):
+                        let nextLyrics = nextChordLyrics(
+                            in: voice.elements, after: idx)
                         let w = max(
                             durationWidth(c.duration, metrics: metrics),
-                            lyricsWidth(c.lyrics, metrics: metrics))
+                            lyricsPairWidth(
+                                currentLyrics: c.lyrics,
+                                nextLyrics: nextLyrics,
+                                metrics: metrics))
                         let end = tick + c.duration.ticks(division: division)
                         elements.append(TimedElement(
                             startTick: tick, endTick: end, weight: w))
@@ -196,13 +286,11 @@ extension LayoutEngine {
             }
         }
 
-        guard !allTicks.isEmpty else { return [:] }
+        guard !allTicks.isEmpty else {
+            return ([], [], 0, 0)
+        }
         let sortedTicks = allTicks.sorted()
 
-        // Gap weights: max pro-rated contribution across voices per
-        // inter-tick segment.  We also append one trailing gap from
-        // the last tick to `measureEnd` so the final element still
-        // reserves horizontal space.
         var gapWeights: [CGFloat] = []
         gapWeights.reserveCapacity(sortedTicks.count)
         for i in 0..<sortedTicks.count {
@@ -231,28 +319,7 @@ extension LayoutEngine {
         }
 
         let totalWeight = gapWeights.reduce(0, +)
-        // Trailing slack between the last note's tick position and
-        // the right barline. Matches `minimumMeasureWidth`'s
-        // `rightPadding`; if these drift apart, chord-to-x mapping
-        // and minimum-width allocation disagree and the system
-        // packer hands `chordSpacingTickToX` a `width` that under-
-        // allocates the chord area. 1 sp also gives flagged 8th
-        // / 16th notes room for their flag glyph before the
-        // barline.
-        let trailingGap = metrics.sp * 1
-        let contentWidth = max(
-            metrics.sp * 4,
-            width - headerSchedule.contentStartX - trailingGap)
-        let baseX = headerSchedule.contentStartX + metrics.sp
-
-        var tickToX: [Int: CGFloat] = [:]
-        var cumulative: CGFloat = 0
-        for (i, t) in sortedTicks.enumerated() {
-            let fraction = totalWeight > 0 ? cumulative / totalWeight : 0
-            tickToX[t] = baseX + fraction * contentWidth
-            cumulative += gapWeights[i]
-        }
-        return tickToX
+        return (sortedTicks, gapWeights, totalWeight, measureEnd)
     }
 
     /// Extra width the FIRST measure of a system needs beyond its
@@ -325,7 +392,7 @@ extension LayoutEngine {
         var maxVoiceWidth: CGFloat = 0
         for voice in measure.voices {
             var w: CGFloat = 0
-            for el in voice.elements {
+            for (idx, el) in voice.elements.enumerated() {
                 switch el {
                 // Header element widths sized against MuseScore's
                 // engraving defaults. Treble clef glyph ≈ 2.2 sp
@@ -346,7 +413,12 @@ extension LayoutEngine {
                     w += metrics.sp
                 case .chord(let c):
                     let tickW = durationWidth(c.duration, metrics: metrics)
-                    let lyricW = lyricsWidth(c.lyrics, metrics: metrics)
+                    let nextLyrics = nextChordLyrics(
+                        in: voice.elements, after: idx)
+                    let lyricW = lyricsPairWidth(
+                        currentLyrics: c.lyrics,
+                        nextLyrics: nextLyrics,
+                        metrics: metrics)
                     w += max(tickW, lyricW)
                 case .rest(let r):
                     w += durationWidth(r.duration, metrics: metrics)
@@ -393,28 +465,53 @@ extension LayoutEngine {
         return max(baseWidth, floor)
     }
 
-    /// Minimum horizontal space needed by a chord's lyrics so adjacent
-    /// syllables don't overlap. Returns 0 when the chord has no lyrics.
+    /// Minimum tick-to-tick (chord-anchor to next-anchor) distance so
+    /// the current chord's lyric and the next voice element's lyric
+    /// don't overlap, with extra room for a connecting dash when the
+    /// current syllable is BEGIN/MIDDLE.
     ///
-    /// Horizontal contribution one chord's lyric makes to the
-    /// chord's minimum width, factoring in that lyrics are
-    /// **centre-anchored** under the notehead and so half of every
-    /// syllable extends LEFT of the chord's x and half extends RIGHT.
+    /// Mirrors MuseScore's `HorizontalSpacing::computeLyricsPadding`
+    /// (`engraving/rendering/score/horizontalspacing.cpp:1586`) plus
+    /// the default style values:
     ///
-    /// MuseScore's spacing rule: adjacent chords with lyrics must be
-    /// at least `lyricRightHalf[i] + lyricLeftHalf[i+1] +
-    /// Sid::lyricsMinDistance` (≈ 0.25 sp) apart. When all chords
-    /// have the same syllable width that simplifies to one full
-    /// syllable per chord PLUS one extra at the row's start, which
-    /// is what we approximate here: `widest / 2 + lyricsMinDistance`.
+    ///   * `lyricsDashMinLength`  = 0.4 sp
+    ///   * `lyricsDashPad`        = 0.05 sp (×2)
+    ///   * `lyricsDashForce`      = true
+    ///   * `lyricsMinDistance`    = 0.25 sp
     ///
-    /// The previous formula (`widest + metrics.sp`) treated each
-    /// chord as if it owned a full syllable's worth of horizontal
-    /// space INDEPENDENTLY of neighbours — it inflated 16-chord
-    /// rapid-lyric measures (e.g. "tu lu tu lu …") to roughly twice
-    /// MuseScore's output, dropping our systems-per-page from 4 to
-    /// 2-3 measures.
-    static func lyricsWidth(
+    /// Lyrics are rendered centred on the chord anchor, so the centre
+    /// distance must clear `halfL1 + interSyllable + halfL2`. The
+    /// previous implementation used only the CURRENT chord's lyric
+    /// width and assumed symmetry — fine for uniform Latin runs but
+    /// wrong when a wide syllable follows a narrow one (CJK / ASCII
+    /// mix) or when font measurement under-reports advance.
+    ///
+    /// Returns 0 when the current chord has no lyric — duration spacing
+    /// still applies via `durationWidth`.
+    static func lyricsPairWidth(
+        currentLyrics: [Lyric],
+        nextLyrics: [Lyric],
+        metrics: StaffMetrics
+    ) -> CGFloat {
+        let curWidth = chordLyricMaxWidth(currentLyrics, metrics: metrics)
+        guard curWidth > 0 else { return 0 }
+        let nextWidth = chordLyricMaxWidth(nextLyrics, metrics: metrics)
+        let dashForce = currentLyrics.contains { lyric in
+            !lyric.text.isEmpty
+                && (lyric.syllabic == .begin || lyric.syllabic == .middle)
+        }
+        // Dash spacing only applies when the next chord actually has a
+        // syllable to connect to; otherwise we just need the regular
+        // min-distance buffer.
+        let inter: CGFloat = (dashForce && nextWidth > 0)
+            ? metrics.sp * 0.5
+            : metrics.sp * 0.25
+        return curWidth / 2 + inter + nextWidth / 2
+    }
+
+    /// Widest rendered lyric in a chord (verse-aware: takes the max
+    /// across verses). Returns 0 when no syllable has text.
+    static func chordLyricMaxWidth(
         _ lyrics: [Lyric], metrics: StaffMetrics
     ) -> CGFloat {
         var widest: CGFloat = 0
@@ -423,9 +520,26 @@ extension LayoutEngine {
                 widest,
                 lyricsTextWidth(lyric.text, sp: metrics.sp))
         }
-        guard widest > 0 else { return 0 }
-        // Half-syllable extent + MuseScore's `lyricsMinDistance`
-        // default of 0.25 sp.
-        return widest / 2 + metrics.sp * 0.25
+        return widest
+    }
+
+    /// First chord's lyrics that follow the element at `startIndex` in
+    /// `elements`, looking past clefs / key sigs / barlines / etc. that
+    /// don't carry a tick. Empty when no further chord exists.
+    static func nextChordLyrics(
+        in elements: [VoiceElement], after startIndex: Int
+    ) -> [Lyric] {
+        guard startIndex + 1 < elements.count else { return [] }
+        for j in (startIndex + 1)..<elements.count {
+            switch elements[j] {
+            case .chord(let nc):
+                return nc.lyrics
+            case .rest:
+                return []
+            default:
+                continue
+            }
+        }
+        return []
     }
 }

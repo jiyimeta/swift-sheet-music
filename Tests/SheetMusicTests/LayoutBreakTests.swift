@@ -122,18 +122,24 @@ import Testing
                 articulations: [InstrumentArticulation()]))
         let score = Score(
             division: 480, parts: [part], staves: [staff])
-        // Width chosen so 4 measures fit at the 1.5x
-        // natural-stretch threshold but 5 don't. The dynamic
-        // part-label width sizes itself to the longest label
-        // (here `nil → ""` → 4 sp floor = ~14 pt), and every
-        // synthesised measure carries a time signature, so
-        // each measure costs ~37 pt + a one-shot synth-clef
-        // boost on the first measure. Greedy without balanced
-        // wrap would land 5+3.
+        // Width chosen so greedy packing would land 5+3 but
+        // balanced wrap collapses that to 4+4. Each measure's
+        // `crossStaffMinimumMeasureWidth` is ~48.65 pt at
+        // staffSize=14 (contentStartX 5.5 sp + 4 quarters at
+        // 1.6 sp/quarter + trailingGap 1 sp + leading sp).
+        // Part labels here floor to sp*4 = 14 pt (first system)
+        // / sp*2 = 7 pt (after) since `nil → ""` track names.
+        // With contentAvail = 386 first / 393 after:
+        //   * greedy + 1.5x natural stretch fits 5 in system 1
+        //     (5×48.65 + 7 = 250.25 ≤ 386/1.5 ≈ 257);
+        //   * balanced wrap rejects chunk=8 (8×48.65 + 7 =
+        //     396.2 > 386) and returns chunk=4 (201.6 ≤ 386),
+        //     so the system packer caps at 4 — collapsing
+        //     greedy 5+3 to 4+4.
         let opts = ScoreViewOptions(
             staffSize: 14, systemGap: 16, wrapToViewWidth: true)
         let doc = LayoutEngine.layout(
-            score: score, options: opts, availableWidth: 280)
+            score: score, options: opts, availableWidth: 400)
         // Two systems, 4 measures each — not 5+3 / 6+2 / 7+1.
         #expect(doc.systems.count == 2)
         #expect(doc.systems[0].measures.count == 4)
@@ -216,3 +222,4 @@ import Testing
         #expect(doc.systems.count == 3)
     }
 }
+

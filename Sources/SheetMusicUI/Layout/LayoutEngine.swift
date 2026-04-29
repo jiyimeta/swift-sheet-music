@@ -215,16 +215,25 @@ public enum LayoutEngine {
         }
 
         let measureCount = firstStaff.measures.count
-        // Per-measure minimum width = max across staves so that the
-        // widest staff's content fits at this index.
+        // Per-measure minimum width via the same cross-staff
+        // tick-aggregation `tickColumns` will use, so the spacing
+        // pass and the placement pass agree on segment widths.
+        // (Per-staff `minimumMeasureWidth` undercounts when other
+        // staves subdivide a long element — see
+        // `crossStaffMinimumMeasureWidth`.)
         let minWidths: [CGFloat] = (0..<measureCount).map { i in
-            context.score.staves.map { staff in
-                i < staff.measures.count
-                    ? minimumMeasureWidth(
-                        measure: staff.measures[i],
-                        metrics: context.metrics)
-                    : 0
-            }.max() ?? 0
+            let baseHeader = computeHeaderSchedule(
+                measureIdx: i,
+                staves: context.score.staves,
+                metrics: context.metrics,
+                synthesizeClefForAllStaves: false,
+                synthesizeKeySigForAllStaves: false)
+            return crossStaffMinimumMeasureWidth(
+                staves: context.score.staves,
+                measureIdx: i,
+                metrics: context.metrics,
+                headerSchedule: baseHeader,
+                division: context.score.division)
         }
 
         // Clef state persists ACROSS systems: engraving convention
