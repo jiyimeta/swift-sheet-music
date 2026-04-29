@@ -16,6 +16,10 @@ public enum SheetMusicError: Error, Sendable {
     /// Wrapping for `Data(contentsOf:)` / `Data.write(to:)` failures in
     /// the URL-based API overloads. The original error is preserved.
     case ioError(url: URL, underlying: Error)
+    /// An `EditCommand` could not be applied — typically because the
+    /// target path no longer resolves, or the element at that path
+    /// is the wrong kind for the command.
+    case invalidEdit(reason: String)
 }
 
 /// Surface the case-specific reason via `localizedDescription` — without this,
@@ -37,6 +41,8 @@ extension SheetMusicError: LocalizedError {
             return "Corrupted archive: \(reason)"
         case let .ioError(url, underlying):
             return "I/O error reading \(url.lastPathComponent): \(underlying.localizedDescription)"
+        case let .invalidEdit(reason):
+            return "Invalid edit: \(reason)"
         }
     }
 }
