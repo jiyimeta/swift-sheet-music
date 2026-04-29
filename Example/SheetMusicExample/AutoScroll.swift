@@ -228,3 +228,62 @@ struct HorizontalMeasureAnchors: View {
         return result.sorted { $0.docX < $1.docX }
     }
 }
+
+// MARK: - Auto-scroll geometry helpers
+
+/// Visibility test for an anchor frame in a scroll view's named
+/// coord space. Treats the anchor as visible only when fully inside
+/// the viewport — any partial overhang triggers a scroll. The
+/// exception: when the anchor is taller / wider than the viewport
+/// (nothing we can do), fall back to "any overlap" so the auto-
+/// scroll heuristic doesn't oscillate between top and bottom
+/// alignment on every cursor step.
+func isAnchorFullyVisible(
+    anchorMin: CGFloat,
+    anchorMax: CGFloat,
+    anchorSize: CGFloat,
+    viewportSize: CGFloat
+) -> Bool {
+    if anchorSize > viewportSize {
+        return anchorMax > 0 && anchorMin < viewportSize
+    }
+    return anchorMin >= 0 && anchorMax <= viewportSize
+}
+
+/// Build a `UnitPoint` that, when passed to
+/// `ScrollViewReader.scrollTo(_, anchor:)`, leaves `pad` points
+/// between the anchor edge and the matching viewport edge.
+///
+/// `scrollTo` aligns the target's anchor point with the viewport's
+/// anchor point — same `UnitPoint` for both. With `y_unit = y`:
+///
+///     scrollOffset = target.minY + y * (target.height - viewport.height)
+///
+/// To place `target.minY` at `pad` (top-aligned with `pad` inset),
+/// solve for `y` → `y = pad / (viewport - target)`. Bottom-aligned
+/// with `pad` inset is the mirror: `y = 1 - pad / (viewport - target)`.
+///
+/// When `target >= viewport` the anchor is bigger than the viewport
+/// — no room for padding, fall back to plain `.top` / `.bottom`.
+/// Same when `denom <= pad`: keeping `pad` on the chosen side would
+/// push the opposite edge off.
+func paddedScrollAnchor(
+    aboveViewport: Bool,
+    anchorSize: CGFloat,
+    viewportSize: CGFloat,
+    pad: CGFloat,
+    horizontal: Bool
+) -> UnitPoint {
+    let denom = viewportSize - anchorSize
+    let frac: CGFloat
+    if denom <= pad {
+        frac = aboveViewport ? 0 : 1
+    } else if aboveViewport {
+        frac = pad / denom
+    } else {
+        frac = 1 - pad / denom
+    }
+    return horizontal
+        ? UnitPoint(x: frac, y: 0.5)
+        : UnitPoint(x: 0.5, y: frac)
+}

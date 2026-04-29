@@ -6,14 +6,14 @@ import SheetMusicUI
 import SwiftUI
 import UIKit
 
-private enum LayoutMode: Int {
+enum IOSLayoutMode: Int {
     case vertical, horizontal, paged, pdf
 }
 
 struct ContentView: View {
     @State private var score: Score?
     @State private var errorMessage: String?
-    @State private var layoutMode: LayoutMode = .vertical
+    @State private var layoutMode: IOSLayoutMode = .vertical
     @State private var staffSize: CGFloat = 14
     @State private var pageIndex = 0
     @State private var totalPages = 1
@@ -54,19 +54,11 @@ struct ContentView: View {
     /// pinch-to-zoom). Persists across score / mode changes so the
     /// user doesn't lose their zoom level when switching tabs.
     @State private var pdfScale: CGFloat = 1.0
-    /// Live overlay scale applied via `scaleEffect` during an active
-    /// pinch — cheap visual upscale that avoids re-rasterising every
-    /// page Canvas at gesture frame rate. Always 1.0 outside a
-    /// pinch; on gesture end we fold it into `pdfScale` (which
-    /// drives the Canvas's true `renderScale`) so the result is
-    /// vector-sharp once the user releases.
-    @State private var pdfGestureScale: CGFloat = 1.0
     /// Cached PDF-mode layout. Recomputed via `.task(id:)` only on
     /// score change, NOT on every pinch frame — `LayoutEngine.layout`
     /// is expensive on large scores and re-running it per frame
     /// makes the pinch crawl.
-    @State private var pdfDoc: LayoutDocument?
-    @State private var pdfPages: [PDFExporter.PageBatch] = []
+    @State private var pdfLayout: PDFPreviewLayout?
     /// Mixer sheet visibility — toolbar mixer button toggles it.
     @State private var isMixerPresented = false
     /// When true, vertical-mode drags become marquee selections
@@ -77,16 +69,6 @@ struct ContentView: View {
     /// `nil` outside an in-progress drag; the overlay reads this
     /// to draw the live selection rectangle.
     @State private var marqueeRect: CGRect?
-
-    /// Per-voice highlight colors (MuseScore convention). iOS has no
-    /// keyboard shift, so this example only supports single-note
-    /// selection — range selection is a macOS-only demo for now.
-    private let voiceColors: [Int: Color] = [
-        0: .blue,
-        1: .green,
-        2: .orange,
-        3: .purple
-    ]
 
     var body: some View {
         NavigationStack {
@@ -108,99 +90,16 @@ struct ContentView: View {
             .navigationTitle("Sheet Music")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                // Leading — playback controls. Two buttons fit
-                // unconditionally even on the narrowest iPhone, so
-                // they never get pushed into auto-overflow.
-                ToolbarItemGroup(placement: .topBarLeading) {
-                    Button {
-                        togglePlayback()
-                    } label: {
-                        Image(systemName: playbackEngine.state == .playing
-                            ? "pause.fill" : "play.fill")
-                    }
-                    .disabled(score == nil)
-
-                    Button {
-                        playbackEngine.stop()
-                    } label: {
-                        Image(systemName: "stop.fill")
-                    }
-                    .disabled(playbackEngine.state == .stopped)
-                }
-                // Trailing — layout picker + explicit overflow menu.
-                //
-                // We do NOT rely on `ToolbarItemGroup`'s auto-overflow
-                // (the system-managed `…` indicator). On iPhone-width
-                // toolbars iOS 18 SwiftUI quietly drops tap routing
-                // for the auto-overflow button when its candidate
-                // items mix `.disabled()` states; the indicator
-                // appears but tapping it does nothing. Authoring an
-                // explicit `Menu` sidesteps that path entirely.
-                ToolbarItem(placement: .topBarTrailing) {
-                    Picker("Layout", selection: $layoutMode) {
-                        Image(systemName: "arrow.up.and.down")
-                            .tag(LayoutMode.vertical)
-                        Image(systemName: "arrow.left.and.right")
-                            .tag(LayoutMode.horizontal)
-                        Image(systemName: "book.pages")
-                            .tag(LayoutMode.paged)
-                        Image(systemName: "doc.text")
-                            .tag(LayoutMode.pdf)
-                    }
-                    .pickerStyle(.segmented)
-                    .frame(width: 160)
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Menu {
-                        Button {
-                            isMixerPresented = true
-                        } label: {
-                            Label("Mixer", systemImage: "slider.horizontal.3")
-                        }
-                        .disabled(playbackEngine.mixerChannels.isEmpty)
-
-                        Button {
-                            exportPDF()
-                        } label: {
-                            Label("Export PDF",
-                                systemImage: "square.and.arrow.up")
-                        }
-                        .disabled(score == nil)
-
-                        Button {
-                            isImportingFile = true
-                        } label: {
-                            Label("Open File", systemImage: "folder")
-                        }
-
-                        Toggle(isOn: $isMarqueeMode) {
-                            Label("Marquee Select",
-                                systemImage: "rectangle.dashed")
-                        }
-                        .disabled(score == nil
-                            || layoutMode != .vertical)
-
-                        Divider()
-
-                        Button {
-                            staffSize = max(8, staffSize - 2)
-                        } label: {
-                            Label("Zoom Out",
-                                systemImage: "minus.magnifyingglass")
-                        }
-                        .disabled(staffSize <= 8)
-
-                        Button {
-                            staffSize = min(32, staffSize + 2)
-                        } label: {
-                            Label("Zoom In",
-                                systemImage: "plus.magnifyingglass")
-                        }
-                        .disabled(staffSize >= 32)
-                    } label: {
-                        Image(systemName: "ellipsis.circle")
-                    }
-                }
+                ContentToolbar(
+                    playbackEngine: playbackEngine,
+                    score: score,
+                    layoutMode: $layoutMode,
+                    staffSize: $staffSize,
+                    isMixerPresented: $isMixerPresented,
+                    isImportingFile: $isImportingFile,
+                    isMarqueeMode: $isMarqueeMode,
+                    onTogglePlayback: togglePlayback,
+                    onExportPDF: exportPDF)
             }
         }
         .onAppear(perform: loadBundled)
@@ -249,36 +148,8 @@ struct ContentView: View {
 
     private func togglePlayback() {
         guard let score else { return }
-        switch playbackEngine.state {
-        case .playing:
-            playbackEngine.pause()
-        case .paused, .stopped:
-            // Cursor wins over selection: a cursor left behind by
-            // the last pause is the user's "current playback
-            // position", and a stale selection from before that
-            // pause shouldn't override it. The cursor is dropped
-            // explicitly by `handleTap` when the user makes a NEW
-            // selection — at that point we fall through to the
-            // selection branch.
-            let from: ScoreCursor? = playbackEngine.currentCursor
-                ?? selectionPlayFrom.map { .item($0) }
-            playbackEngine.play(from: from, in: score)
-        }
-    }
-
-    private var selectionPlayFrom: ScoreItemID? {
-        switch selection {
-        case .none: return nil
-        case .single(let id): return id
-        case .range(let anchor, let target):
-            // Whichever corner is earlier in playback time wins —
-            // shift-click order doesn't determine playback start.
-            return playbackEngine.earliest(of: [anchor, target])
-                ?? anchor
-        case .multi(let ids):
-            // Marquee selection: play from the earliest in time.
-            return playbackEngine.earliest(of: Array(ids))
-        }
+        playbackEngine.togglePlayback(
+            score: score, selection: selection)
     }
 
     @ViewBuilder
@@ -307,7 +178,7 @@ struct ContentView: View {
                                 ScoreView(
                                     document: doc, score: score,
                                     selection: selection,
-                                    voiceColors: voiceColors,
+                                    voiceColors: exampleVoiceColors,
                                     playbackCursor: playbackEngine.currentCursor)
                                     .onTapGesture { loc in
                                         guard !isMarqueeMode else { return }
@@ -356,7 +227,7 @@ struct ContentView: View {
                                 ScoreView(
                                     document: doc, score: score,
                                     selection: selection,
-                                    voiceColors: voiceColors,
+                                    voiceColors: exampleVoiceColors,
                                     playbackCursor: playbackEngine.currentCursor)
                                 HorizontalMeasureAnchors(document: doc)
                             }
@@ -423,18 +294,12 @@ struct ContentView: View {
 
     @ViewBuilder
     private func pdfPreview(score: Score) -> some View {
-        // Pull page size, margins, staff size from the score's
-        // `<Style>` block via `PDFExporter.resolve` — the same call
-        // path the share-button export uses, so the preview is a
-        // truthful proxy for the PDF the user gets.
-        let resolved = PDFExporter.resolve(
-            options: PDFExporter.Options(), score: score)
-
         Group {
-            if let doc = pdfDoc, !pdfPages.isEmpty {
-                pdfPreviewContent(
-                    doc: doc, pages: pdfPages,
-                    page: resolved.page)
+            if let layout = pdfLayout {
+                PDFPreviewView(
+                    doc: layout.doc, pages: layout.pages,
+                    page: layout.page,
+                    pdfScale: $pdfScale)
             } else {
                 ProgressView("Laying out…")
                     .frame(
@@ -443,96 +308,8 @@ struct ContentView: View {
             }
         }
         .task(id: scoreVersion) {
-            let pdfOpts = ScoreViewOptions(
-                staffSize: resolved.staffSize,
-                systemGap: 16,
-                wrapToViewWidth: true)
-            let availableWidth = max(
-                resolved.staffSize * 4,
-                resolved.page.size.width
-                    - resolved.page.oddMargins.leading
-                    - resolved.page.oddMargins.trailing)
-            let doc = LayoutEngine.layout(
-                score: score, options: pdfOpts,
-                availableWidth: availableWidth)
-            pdfDoc = doc
-            pdfPages = PDFExporter.paginate(
-                systems: doc.systems, page: resolved.page)
+            pdfLayout = PDFPreviewLayout.build(score: score)
         }
-    }
-
-    @ViewBuilder
-    private func pdfPreviewContent(
-        doc: LayoutDocument,
-        pages: [PDFExporter.PageBatch],
-        page: EngravingPage
-    ) -> some View {
-        let pageSize = page.size
-        let pageSpacing: CGFloat = 16 * pdfScale
-        let outerPadding: CGFloat = 16 * pdfScale
-        let labelHeight: CGFloat = 14 * pdfScale + 6 * pdfScale
-        let naturalWidth =
-            pageSize.width * pdfScale * CGFloat(pages.count)
-            + pageSpacing * CGFloat(max(0, pages.count - 1))
-            + outerPadding * 2
-        let naturalHeight =
-            pageSize.height * pdfScale + labelHeight
-            + outerPadding * 2
-
-        ScrollView([.horizontal, .vertical]) {
-            HStack(alignment: .top, spacing: pageSpacing) {
-                ForEach(Array(pages.enumerated()), id: \.offset) { idx, batch in
-                    VStack(spacing: 6 * pdfScale) {
-                        // PDFPageView's `renderScale` makes the
-                        // Canvas draw glyphs at the new resolution
-                        // — vector-sharp instead of an upscaled
-                        // bitmap. We only update it on gesture-end
-                        // (committed `pdfScale`); during the active
-                        // pinch the cheap `scaleEffect` overlay
-                        // handles motion smoothly.
-                        PDFPageView(
-                            systems: batch.systems,
-                            pageStartY: batch.startY,
-                            titleFrame: idx == 0 ? doc.titleFrame : nil,
-                            metrics: doc.metrics,
-                            pageSize: pageSize,
-                            margins: page.margins(forPageIndex: idx),
-                            renderScale: pdfScale,
-                            showBreakIndicators: true)
-                            .background(Color.white)
-                            .border(Color.gray.opacity(0.4))
-                            .shadow(radius: 3 * pdfScale)
-                        Text("\(idx + 1) / \(pages.count)")
-                            .font(.system(size: 11 * pdfScale))
-                            .foregroundStyle(.secondary)
-                    }
-                }
-            }
-            .padding(outerPadding)
-            // Apply the gesture overlay AFTER padding so the whole
-            // page deck zooms uniformly. `scaleEffect` is visual-
-            // only; the explicit frame tells the parent ScrollView
-            // the scaled extent so it can scroll the full zoomed
-            // area during the gesture.
-            .scaleEffect(pdfGestureScale, anchor: .topLeading)
-            .frame(
-                width: naturalWidth * pdfGestureScale,
-                height: naturalHeight * pdfGestureScale,
-                alignment: .topLeading)
-        }
-        .background(Color(white: 0.92))
-        .gesture(
-            MagnificationGesture()
-                .onChanged { rawValue in
-                    let target = pdfScale * rawValue
-                    let clamped = max(0.25, min(4.0, target))
-                    pdfGestureScale = clamped / pdfScale
-                }
-                .onEnded { _ in
-                    pdfScale = max(
-                        0.25, min(4.0, pdfScale * pdfGestureScale))
-                    pdfGestureScale = 1
-                })
     }
 
     private func handleTap(at location: CGPoint, document: LayoutDocument) {
@@ -634,21 +411,6 @@ struct ContentView: View {
         playbackEngine.clearCursor()
     }
 
-    /// Resolve a hit-test result to its "primary" `ScoreItemID`
-    /// — the item the tap is conceptually pointing at. Returns
-    /// `nil` for misses or for beam runs that contain no notes.
-    private func primaryItemID(
-        of target: ScoreHitTarget?
-    ) -> ScoreItemID? {
-        guard let target else { return nil }
-        switch target {
-        case .note(let id): return .note(id)
-        case .rest(let id): return .rest(id)
-        case .stem(let notes), .flag(let notes), .beam(let notes):
-            return notes.first.map { .note($0) }
-        }
-    }
-
     /// Re-evaluate visibility on every cursor change — `onChange`
     /// of an `@Published` cursor fires per chord / rest step the
     /// playback engine takes. When the cursor's row (system in
@@ -690,12 +452,12 @@ struct ContentView: View {
             guard let sys = doc.systemIndex(forMeasureIndex: mi),
                   let frame = verticalSystemFrames[sys]
             else { return }
-            if isFullyVisible(
+            if isAnchorFullyVisible(
                 anchorMin: frame.minY, anchorMax: frame.maxY,
                 anchorSize: frame.height,
                 viewportSize: viewport.height
             ) { return }
-            let unit = paddedAnchor(
+            let unit = paddedScrollAnchor(
                 aboveViewport: frame.minY < 0,
                 anchorSize: frame.height,
                 viewportSize: viewport.height,
@@ -709,12 +471,12 @@ struct ContentView: View {
         case .horizontal:
             guard let frame = horizontalMeasureFrames[mi]
             else { return }
-            if isFullyVisible(
+            if isAnchorFullyVisible(
                 anchorMin: frame.minX, anchorMax: frame.maxX,
                 anchorSize: frame.width,
                 viewportSize: viewport.width
             ) { return }
-            let unit = paddedAnchor(
+            let unit = paddedScrollAnchor(
                 aboveViewport: frame.minX < 0,
                 anchorSize: frame.width,
                 viewportSize: viewport.width,
@@ -728,87 +490,20 @@ struct ContentView: View {
         }
     }
 
-    /// Treat the cursor as "visible" only when fully inside the
-    /// viewport — any partial overhang triggers a scroll. The
-    /// exception: when the anchor itself is bigger than the
-    /// viewport (nothing we can do), fall back to "any overlap"
-    /// to avoid oscillating between top and bottom alignment.
-    private func isFullyVisible(
-        anchorMin: CGFloat,
-        anchorMax: CGFloat,
-        anchorSize: CGFloat,
-        viewportSize: CGFloat
-    ) -> Bool {
-        if anchorSize > viewportSize {
-            return anchorMax > 0 && anchorMin < viewportSize
-        }
-        return anchorMin >= 0 && anchorMax <= viewportSize
-    }
-
-    /// Build a `UnitPoint` that, when passed to `ScrollViewReader.
-    /// scrollTo(_, anchor:)`, leaves `pad` points between the
-    /// staff edge and the matching viewport edge.
-    ///
-    /// `scrollTo` aligns target's anchor point with viewport's
-    /// anchor point — same `UnitPoint` for both. With `y_unit = y`:
-    ///
-    ///     scrollOffset = target.minY + y * (target.height - viewport.height)
-    ///
-    /// To place target.minY at `pad` (i.e. top-aligned with `pad`
-    /// inset), solve for y → `y = pad / (viewport - target)`.
-    /// Bottom-aligned with `pad` inset is the mirror:
-    /// `y = 1 - pad / (viewport - target)`.
-    ///
-    /// When `target >= viewport` the staff is bigger than the
-    /// viewport — there's no room for padding, so fall back to
-    /// plain `.top` / `.bottom`.
-    private func paddedAnchor(
-        aboveViewport: Bool,
-        anchorSize: CGFloat,
-        viewportSize: CGFloat,
-        pad: CGFloat,
-        horizontal: Bool
-    ) -> UnitPoint {
-        let denom = viewportSize - anchorSize
-        // `denom <= pad` means there's no room to keep `pad` on the
-        // chosen side without pushing the opposite edge off — fall
-        // back to plain edge alignment so we don't flip direction.
-        let frac: CGFloat
-        if denom <= pad {
-            frac = aboveViewport ? 0 : 1
-        } else if aboveViewport {
-            frac = pad / denom
-        } else {
-            frac = 1 - pad / denom
-        }
-        return horizontal
-            ? UnitPoint(x: frac, y: 0.5)
-            : UnitPoint(x: 0.5, y: frac)
-    }
-
     enum ScrollAxis { case vertical, horizontal }
 
     private func loadBundled() {
-        guard let url = Bundle.main.url(
-            forResource: "test", withExtension: "mscx")
-        else {
-            errorMessage = "Bundled test.mscx not found."
-            return
-        }
         do {
-            let data = try Data(contentsOf: url)
-            let loaded = try SheetMusic.loadScore(mscxData: data)
-            adoptLoadedScore(loaded)
+            adoptLoadedScore(try ScoreLoader.loadBundled())
         } catch {
             errorMessage = error.localizedDescription
         }
     }
 
-    /// Handle the result of `.fileImporter`. iOS hands us a
-    /// security-scoped URL — we must call
-    /// `startAccessingSecurityScopedResource()` before reading or
-    /// the load will fail with EPERM on iCloud / external-storage
-    /// files.
+    /// Handle the result of `.fileImporter`. The picker hands us a
+    /// security-scoped URL — `ScoreLoader.load(from:)` brackets the
+    /// read with `startAccessingSecurityScopedResource()` so loads
+    /// from iCloud / external storage don't fail with EPERM.
     private func handleFileImport(
         _ result: Result<[URL], Error>
     ) {
@@ -818,38 +513,13 @@ struct ContentView: View {
                 "File picker failed: \(err.localizedDescription)"
         case .success(let urls):
             guard let url = urls.first else { return }
-            loadFromUserURL(url)
-        }
-    }
-
-    private func loadFromUserURL(_ url: URL) {
-        let started = url.startAccessingSecurityScopedResource()
-        defer {
-            if started { url.stopAccessingSecurityScopedResource() }
-        }
-        do {
-            let loaded: Score
-            switch ScoreFileType.detect(url: url) {
-            case .mscx:
-                loaded = try SheetMusic.loadScore(mscxURL: url)
-            case .mscz:
-                loaded = try SheetMusic.loadScore(msczURL: url)
-            case .musicXML:
-                let data = try Data(contentsOf: url)
-                loaded = try SheetMusic.loadScore(musicXMLData: data)
-            case .mxl:
-                let data = try Data(contentsOf: url)
-                loaded = try SheetMusic.loadScore(mxlData: data)
-            case nil:
+            do {
+                adoptLoadedScore(try ScoreLoader.load(from: url))
+            } catch {
                 errorMessage =
-                    "Unsupported file: \(url.lastPathComponent)"
-                return
+                    "Could not load \(url.lastPathComponent): "
+                    + error.localizedDescription
             }
-            adoptLoadedScore(loaded)
-        } catch {
-            errorMessage =
-                "Could not load \(url.lastPathComponent): " +
-                error.localizedDescription
         }
     }
 
@@ -859,18 +529,11 @@ struct ContentView: View {
         score = loaded
         verticalDoc = nil
         horizontalDoc = nil
-        pdfDoc = nil
-        pdfPages = []
+        pdfLayout = nil
         scoreVersion = UUID()
         selection = .none
         errorMessage = nil
-        // (Re)build samplers for this score. SoundFont parsing can
-        // take tens of ms per file; offloading keeps the first-paint
-        // latency low even on iPhone.
-        let engine = playbackEngine
-        Task.detached(priority: .userInitiated) { [loaded] in
-            try? engine.prepare(score: loaded)
-        }
+        playbackEngine.prepareInBackground(score: loaded)
     }
 }
 
