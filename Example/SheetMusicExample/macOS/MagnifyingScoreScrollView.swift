@@ -42,7 +42,22 @@ struct MagnifyingScoreScrollView: NSViewRepresentable {
     let selection: ScoreSelection
     let voiceColors: [Int: Color]
     let playbackCursor: ScoreCursor?
+    /// When ON, drags inside the score area are interpreted as
+    /// marquee selections (a `NSPanGestureRecognizer` reports the
+    /// rect through `marqueeRect` and `onMarqueeEnd`). When OFF,
+    /// the score is click-only.
+    let isMarqueeMode: Bool
+    /// Live marquee rect in document (ScoreView-local) coords
+    /// during an active drag, otherwise `nil`. The wrapper draws
+    /// `MarqueeOverlay(rect:)` attached to the inner `ScoreView`,
+    /// so this rides the `magnification` transform automatically.
+    @Binding var marqueeRect: CGRect?
     let onTap: (CGPoint) -> Void
+    /// Fired on drag-end with the final rect in document coords.
+    /// Also fired by a click in marquee mode (with `.zero`) so a
+    /// tap-without-movement clears the selection — matching the
+    /// iOS marquee path.
+    let onMarqueeEnd: (CGRect) -> Void
 
     private var rootView: AnyView {
         AnyView(
@@ -51,6 +66,7 @@ struct MagnifyingScoreScrollView: NSViewRepresentable {
                 selection: selection,
                 voiceColors: voiceColors,
                 playbackCursor: playbackCursor)
+                .overlay(MarqueeOverlay(rect: marqueeRect))
                 .padding(Self.contentInset))
     }
 
@@ -83,12 +99,29 @@ struct MagnifyingScoreScrollView: NSViewRepresentable {
         click.buttonMask = 0x1
         hosting.addGestureRecognizer(click)
 
+        // Marquee drag recognizer. Stays attached unconditionally so
+        // we can flip its `isEnabled` from `updateNSView` without
+        // re-installing it; AppKit lets click + pan coexist (pan
+        // wins on movement, click wins on no-movement) but we still
+        // gate pan to marquee mode so a casual drag in normal mode
+        // doesn't surprise the user.
+        let pan = NSPanGestureRecognizer(
+            target: context.coordinator,
+            action: #selector(Coordinator.handlePan(_:)))
+        pan.buttonMask = 0x1
+        pan.isEnabled = isMarqueeMode
+        hosting.addGestureRecognizer(pan)
+
         context.coordinator.hostingView = hosting
+        context.coordinator.panRecognizer = pan
         context.coordinator.magnificationBinding = $magnification
         context.coordinator.documentScrollXBinding = $documentScrollX
         context.coordinator.documentScrollYBinding = $documentScrollY
         context.coordinator.contentInset = Self.contentInset
         context.coordinator.onTap = onTap
+        context.coordinator.onMarqueeEnd = onMarqueeEnd
+        context.coordinator.marqueeRectBinding = $marqueeRect
+        context.coordinator.isMarqueeMode = isMarqueeMode
         // Seed the change-detection cache with the values we just
         // installed in `rootView`, so `updateNSView`'s short-circuit
         // doesn't re-render on the first benign re-eval.
@@ -138,6 +171,10 @@ struct MagnifyingScoreScrollView: NSViewRepresentable {
         coord.documentScrollXBinding = $documentScrollX
         coord.documentScrollYBinding = $documentScrollY
         coord.onTap = onTap
+        coord.onMarqueeEnd = onMarqueeEnd
+        coord.marqueeRectBinding = $marqueeRect
+        coord.isMarqueeMode = isMarqueeMode
+        coord.panRecognizer?.isEnabled = isMarqueeMode
 
         // Skip the rootView reassignment when none of its inputs
         // actually changed. SwiftUI re-evaluates this view's body
@@ -150,13 +187,16 @@ struct MagnifyingScoreScrollView: NSViewRepresentable {
         let voiceColorsChanged = coord.lastVoiceColors != voiceColors
         let documentChanged = coord.lastDocumentSize != document.size
         let cursorChanged = coord.lastPlaybackCursor != playbackCursor
+        let marqueeChanged = coord.lastMarqueeRect != marqueeRect
         if selectionChanged || voiceColorsChanged
-            || documentChanged || cursorChanged {
+            || documentChanged || cursorChanged
+            || marqueeChanged {
             coord.hostingView?.rootView = rootView
             coord.lastSelection = selection
             coord.lastVoiceColors = voiceColors
             coord.lastDocumentSize = document.size
             coord.lastPlaybackCursor = playbackCursor
+            coord.lastMarqueeRect = marqueeRect
         }
 
         // Apply external magnification changes (e.g., sidebar reset
@@ -201,10 +241,19 @@ struct MagnifyingScoreScrollView: NSViewRepresentable {
     final class Coordinator: NSObject {
         var contentInset: CGFloat
         var hostingView: NSHostingView<AnyView>?
+        weak var panRecognizer: NSPanGestureRecognizer?
         var magnificationBinding: Binding<CGFloat>?
         var documentScrollXBinding: Binding<CGFloat>?
         var documentScrollYBinding: Binding<CGFloat>?
+        var marqueeRectBinding: Binding<CGRect?>?
         var onTap: ((CGPoint) -> Void)?
+        var onMarqueeEnd: ((CGRect) -> Void)?
+        var isMarqueeMode = false
+        /// Drag start in document coords. `nil` outside an active
+        /// pan; preserved across `.changed` notifications so the
+        /// rect can be rebuilt from the original anchor each frame.
+        var marqueeStart: CGPoint?
+        var lastMarqueeRect: CGRect?
         /// Set while the user is actively pinching. The score's
         /// NSScrollView drives its own magnification via Core
         /// Animation; we mustn't write back to `nsView.magnification`
@@ -245,7 +294,45 @@ struct MagnifyingScoreScrollView: NSViewRepresentable {
             let docPoint = CGPoint(
                 x: local.x - contentInset,
                 y: local.y - contentInset)
-            onTap?(docPoint)
+            if isMarqueeMode {
+                // Tap-without-movement during marquee mode mirrors
+                // the iOS DragGesture(minimumDistance: 0) behaviour:
+                // the empty rect resolves to "no items hit" so the
+                // selection clears.
+                onMarqueeEnd?(.zero)
+            } else {
+                onTap?(docPoint)
+            }
+        }
+
+        @objc func handlePan(_ gr: NSPanGestureRecognizer) {
+            guard let hosting = hostingView else { return }
+            let local = gr.location(in: hosting)
+            let docPoint = CGPoint(
+                x: local.x - contentInset,
+                y: local.y - contentInset)
+            switch gr.state {
+            case .began:
+                marqueeStart = docPoint
+                marqueeRectBinding?.wrappedValue =
+                    CGRect(origin: docPoint, size: .zero)
+            case .changed:
+                guard let start = marqueeStart else { return }
+                marqueeRectBinding?.wrappedValue = makeMarqueeRect(
+                    from: start, to: docPoint)
+            case .ended:
+                guard let start = marqueeStart else { return }
+                let rect = makeMarqueeRect(
+                    from: start, to: docPoint)
+                marqueeStart = nil
+                marqueeRectBinding?.wrappedValue = nil
+                onMarqueeEnd?(rect)
+            case .cancelled, .failed:
+                marqueeStart = nil
+                marqueeRectBinding?.wrappedValue = nil
+            default:
+                break
+            }
         }
 
         @objc func willStartLiveMagnify(_ notification: Notification) {

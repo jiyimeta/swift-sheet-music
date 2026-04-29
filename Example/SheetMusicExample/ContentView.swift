@@ -229,6 +229,16 @@ struct ContentView: View {
                                     selection: selection,
                                     voiceColors: exampleVoiceColors,
                                     playbackCursor: playbackEngine.currentCursor)
+                                    .onTapGesture { loc in
+                                        guard !isMarqueeMode else { return }
+                                        handleTap(at: loc, document: doc)
+                                    }
+                                    .gesture(
+                                        isMarqueeMode
+                                            ? marqueeDragGesture(document: doc)
+                                            : nil)
+                                    .overlay(
+                                        MarqueeOverlay(rect: marqueeRect))
                                 HorizontalMeasureAnchors(document: doc)
                             }
                             .frame(minHeight: geo.size.height)
@@ -349,12 +359,12 @@ struct ContentView: View {
     ) -> some Gesture {
         DragGesture(minimumDistance: 0)
             .onChanged { value in
-                marqueeRect = makeRect(
+                marqueeRect = makeMarqueeRect(
                     from: value.startLocation,
                     to: value.location)
             }
             .onEnded { value in
-                let rect = makeRect(
+                let rect = makeMarqueeRect(
                     from: value.startLocation,
                     to: value.location)
                 marqueeRect = nil
@@ -362,15 +372,6 @@ struct ContentView: View {
             }
     }
 
-    private func makeRect(
-        from a: CGPoint, to b: CGPoint
-    ) -> CGRect {
-        CGRect(
-            x: min(a.x, b.x),
-            y: min(a.y, b.y),
-            width: abs(b.x - a.x),
-            height: abs(b.y - a.y))
-    }
 
     private func applyMarquee(
         rect: CGRect, document: LayoutDocument

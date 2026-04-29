@@ -17,6 +17,7 @@ struct ContentSidebar: View {
     @Binding var pageIndex: Int
     let totalPages: Int
     @Binding var magnification: CGFloat
+    @Binding var isMarqueeMode: Bool
 
     let onLoadBundled: () -> Void
     let onOpenFile: () -> Void
@@ -82,6 +83,14 @@ struct ContentSidebar: View {
                         .tag(MacLayoutMode.pdf)
                 }
                 .pickerStyle(.inline)
+            }
+            Section("Selection") {
+                Toggle(isOn: $isMarqueeMode) {
+                    Label("Marquee Drag", systemImage: "rectangle.dashed")
+                }
+                .disabled(score == nil
+                    || (layoutMode != .vertical
+                        && layoutMode != .horizontal))
             }
             if layoutMode == .paged {
                 Section("Page") {

@@ -23,12 +23,16 @@ struct HorizontalScoreContainer: View {
     let selection: ScoreSelection
     let voiceColors: [Int: Color]
     let playbackCursor: ScoreCursor?
+    let isMarqueeMode: Bool
     let onTap: (CGPoint) -> Void
+    let onMarqueeEnd: (CGRect, LayoutDocument) -> Void
     /// Fired on every cursor change with the current viewport
     /// width. The host calls back into its `autoScrollHorizontal`
     /// implementation, which reads `horizontalScrollX` / etc. from
     /// its own state.
     let onCursorChange: (ScoreCursor?, CGFloat) -> Void
+
+    @State private var marqueeRect: CGRect?
 
     var body: some View {
         let inset = MagnifyingScoreScrollView.contentInset
@@ -78,7 +82,12 @@ struct HorizontalScoreContainer: View {
                 selection: selection,
                 voiceColors: voiceColors,
                 playbackCursor: playbackCursor,
-                onTap: onTap)
+                isMarqueeMode: isMarqueeMode,
+                marqueeRect: $marqueeRect,
+                onTap: onTap,
+                onMarqueeEnd: { rect in
+                    onMarqueeEnd(rect, document)
+                })
                 .background(
                     GeometryReader { hgeo in
                         Color.clear

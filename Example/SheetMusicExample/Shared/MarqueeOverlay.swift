@@ -1,5 +1,16 @@
-#if !os(macOS)
 import SwiftUI
+
+/// Build a non-negative rectangle from two arbitrary corner
+/// points. The drag gesture's `startLocation` and `location` can
+/// produce any of the four directional drags; this normalises so
+/// both ends of the dragged region appear in the resulting rect.
+func makeMarqueeRect(from a: CGPoint, to b: CGPoint) -> CGRect {
+    CGRect(
+        x: min(a.x, b.x),
+        y: min(a.y, b.y),
+        width: abs(b.x - a.x),
+        height: abs(b.y - a.y))
+}
 
 /// Translucent rectangle + dashed stroke drawn over `ScoreView`
 /// while the user is dragging a marquee selection. `rect` is `nil`
@@ -27,4 +38,3 @@ struct MarqueeOverlay: View {
         }
     }
 }
-#endif

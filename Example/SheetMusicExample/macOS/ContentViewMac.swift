@@ -83,6 +83,10 @@ struct ContentViewMac: View {
     /// animates to it and resets the binding to nil. Set by the
     /// auto-scroll path during playback.
     @State private var pendingHorizontalScroll: CGPoint?
+    /// When ON, drags inside vertical / horizontal score viewports
+    /// resolve to a marquee selection instead of falling through to
+    /// scroll or click. Toggled from the sidebar.
+    @State private var isMarqueeMode = false
 
     // systemGap targets MuseScore's `Sid::minSystemDistance` of
     // 8.5 sp; with our staff-distance pads contributing ~3.5 sp
@@ -105,6 +109,7 @@ struct ContentViewMac: View {
                 pageIndex: $pageIndex,
                 totalPages: totalPages,
                 magnification: $magnification,
+                isMarqueeMode: $isMarqueeMode,
                 onLoadBundled: loadBundled,
                 onOpenFile: showOpenPanel,
                 onTogglePlayback: togglePlayback,
@@ -201,8 +206,12 @@ struct ContentViewMac: View {
                 voiceColors: exampleVoiceColors,
                 playbackCursor: playbackEngine.currentCursor,
                 isPlaying: playbackEngine.state == .playing,
+                isMarqueeMode: isMarqueeMode,
                 onTap: { loc, doc in
                     handleTap(at: loc, document: doc)
+                },
+                onMarqueeEnd: { rect, doc in
+                    applyMarquee(rect: rect, document: doc)
                 })
         case .horizontal:
             // Native NSScrollView handles pinch-zoom-around-cursor
@@ -220,8 +229,12 @@ struct ContentViewMac: View {
                     selection: selection,
                     voiceColors: exampleVoiceColors,
                     playbackCursor: playbackEngine.currentCursor,
+                    isMarqueeMode: isMarqueeMode,
                     onTap: { loc in
                         handleTap(at: loc, document: doc)
+                    },
+                    onMarqueeEnd: { rect, doc in
+                        applyMarquee(rect: rect, document: doc)
                     },
                     onCursorChange: { newCursor, viewportWidth in
                         autoScrollHorizontalMac(
@@ -362,6 +375,25 @@ struct ContentViewMac: View {
                     noteID: id, in: score)
             }
         }
+    }
+
+    /// Resolve a marquee drag's rect against the score's hit-test
+    /// columns and reflect the result into `selection`. An empty
+    /// rect (no events overlap) clears the selection — same
+    /// behaviour as a tap on empty space.
+    private func applyMarquee(
+        rect: CGRect, document: LayoutDocument
+    ) {
+        let tester = ScoreHitTester(document: document)
+        let ids = tester.itemIDs(in: rect)
+        if ids.isEmpty {
+            selection = .none
+        } else {
+            selection = .multi(Set(ids))
+        }
+        // A fresh marquee selection drops the playback cursor for
+        // the same reason `handleTap` does.
+        playbackEngine.clearCursor()
     }
 
     private func loadBundled() {

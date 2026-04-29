@@ -86,7 +86,8 @@ struct ContentToolbar: ToolbarContent {
                         systemImage: "rectangle.dashed")
                 }
                 .disabled(score == nil
-                    || layoutMode != .vertical)
+                    || (layoutMode != .vertical
+                        && layoutMode != .horizontal))
 
                 Divider()
 
