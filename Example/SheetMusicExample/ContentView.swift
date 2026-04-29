@@ -310,8 +310,15 @@ struct ContentView: View {
                                     voiceColors: voiceColors,
                                     playbackCursor: playbackEngine.currentCursor)
                                     .onTapGesture { loc in
+                                        guard !isMarqueeMode else { return }
                                         handleTap(at: loc, document: doc)
                                     }
+                                    .gesture(
+                                        isMarqueeMode
+                                            ? marqueeDragGesture(document: doc)
+                                            : nil)
+                                    .overlay(
+                                        MarqueeOverlay(rect: marqueeRect))
                                 VerticalSystemAnchors(document: doc)
                             }
                             .padding(.horizontal, 8)
@@ -575,6 +582,56 @@ struct ContentView: View {
                     anchor: .note(first), target: .note(last))
             }
         }
+    }
+
+    /// Drag gesture used while marquee mode is on. Uses
+    /// `minimumDistance: 0` so a tap+release with no movement still
+    /// resolves (clears selection if no events fall in the zero
+    /// rect). Coordinates are reported in the gesture's local space,
+    /// which matches the `ZStack`'s coordinate system — same space
+    /// as `LayoutDocument` because the `.padding` wrappers shift the
+    /// content but the gesture sits inside the padding.
+    private func marqueeDragGesture(
+        document: LayoutDocument
+    ) -> some Gesture {
+        DragGesture(minimumDistance: 0)
+            .onChanged { value in
+                marqueeRect = makeRect(
+                    from: value.startLocation,
+                    to: value.location)
+            }
+            .onEnded { value in
+                let rect = makeRect(
+                    from: value.startLocation,
+                    to: value.location)
+                marqueeRect = nil
+                applyMarquee(rect: rect, document: document)
+            }
+    }
+
+    private func makeRect(
+        from a: CGPoint, to b: CGPoint
+    ) -> CGRect {
+        CGRect(
+            x: min(a.x, b.x),
+            y: min(a.y, b.y),
+            width: abs(b.x - a.x),
+            height: abs(b.y - a.y))
+    }
+
+    private func applyMarquee(
+        rect: CGRect, document: LayoutDocument
+    ) {
+        let tester = ScoreHitTester(document: document)
+        let ids = tester.itemIDs(in: rect)
+        if ids.isEmpty {
+            selection = .none
+        } else {
+            selection = .multi(Set(ids))
+        }
+        // A fresh marquee selection drops the playback cursor for
+        // the same reason `handleTap` does.
+        playbackEngine.clearCursor()
     }
 
     /// Resolve a hit-test result to its "primary" `ScoreItemID`
