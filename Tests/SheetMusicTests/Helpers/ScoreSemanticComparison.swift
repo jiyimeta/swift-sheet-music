@@ -178,6 +178,11 @@ enum ScoreSemanticComparison {
         // — drop it from both sides so the comparison stays focused
         // on the notation itself.
         s.titleFrame = nil
+        // `<Style>` block (page geometry, spatium, header/footer chrome)
+        // and `<LayoutBreak>` markers are MSCX-only page-layout metadata —
+        // the MusicXML decoder doesn't translate them. Reset to defaults
+        // on both sides so the comparison reflects the music itself.
+        s.style = .museScoreDefaults
         if options.ignoreEmptyMetaTags {
             s.metaTags = s.metaTags.filter { !$0.value.isEmpty }
         }
@@ -217,6 +222,8 @@ enum ScoreSemanticComparison {
             var st = staff
             st.measures = st.measures.map { measure in
                 var m = measure
+                m.lineBreak = false
+                m.pageBreak = false
                 m.voices = m.voices.map { voice in
                     Voice(elements: voice.elements
                         // Strip staff/system text — only the MSCX
