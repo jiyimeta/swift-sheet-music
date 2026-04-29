@@ -62,6 +62,12 @@ struct SelectionRenderState {
                 voiceColors: cgColors,
                 drawRangeBox: true,
                 rangeBoxColor: defaultBoxColor)
+        case let .multi(ids):
+            return SelectionRenderState(
+                selectedIDs: ids,
+                voiceColors: cgColors,
+                drawRangeBox: false,
+                rangeBoxColor: defaultBoxColor)
         }
     }
 
