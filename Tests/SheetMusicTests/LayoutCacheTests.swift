@@ -37,8 +37,8 @@ struct LayoutCacheTests {
         #expect(cached.size == baseline.size)
     }
 
-    @Test("Cold call: every width is a miss")
-    func coldCallAllWidthMisses() {
+    @Test("Cold call: every width and placement is a miss")
+    func coldCallAllMisses() {
         guard #available(macOS 15.0, *) else { return }
         let score = Self.sampleScore()
         let cache = LayoutCache()
@@ -48,10 +48,13 @@ struct LayoutCacheTests {
         #expect(cache.entries.count == 3)
         #expect(cache.widthHits == 0)
         #expect(cache.widthMisses == 3)
+        // Single-staff score → one placement per measure.
+        #expect(cache.placementHits == 0)
+        #expect(cache.placementMisses == 3)
     }
 
-    @Test("Warm call on identical score: every width is a hit")
-    func warmCallAllWidthHits() {
+    @Test("Warm call on identical score: every lookup is a hit")
+    func warmCallAllHits() {
         guard #available(macOS 15.0, *) else { return }
         let score = Self.sampleScore()
         let cache = LayoutCache()
@@ -65,6 +68,8 @@ struct LayoutCacheTests {
         #expect(first.size == second.size)
         #expect(cache.widthHits == 3)
         #expect(cache.widthMisses == 0)
+        #expect(cache.placementHits == 3)
+        #expect(cache.placementMisses == 0)
     }
 
     @Test("Editing one measure: only that measure misses")
@@ -92,6 +97,9 @@ struct LayoutCacheTests {
         // Measures 0 and 2 unchanged → 2 width hits; measure 1 → 1 miss.
         #expect(cache.widthHits == 2)
         #expect(cache.widthMisses == 1)
+        // Placements track the same pattern: 2 hits, 1 miss.
+        #expect(cache.placementHits == 2)
+        #expect(cache.placementMisses == 1)
     }
 }
 #endif

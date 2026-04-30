@@ -110,12 +110,10 @@ extension LayoutEngine {
                         .indices.contains(measureIdx)
                     ? context.melismaContinuations[staffIdx][measureIdx]
                     : []
-                let (els, newClef, newKey) = placeMeasureElements(
+                let placementInputs = LayoutCache.PlacementInputs(
                     measure: m,
-                    staffIndex: staffIdx,
-                    measureIndex: measureIdx,
                     width: w,
-                    metrics: metrics,
+                    metricsSp: metrics.sp,
                     activeClef: clefs[staffIdx],
                     activeKey: keys[staffIdx],
                     initialClefRawType: synthClef,
@@ -128,6 +126,49 @@ extension LayoutEngine {
                     incomingMelismas: incomingMelismas,
                     effectiveMelismaTicks: context.effectiveMelismaTicks
                 )
+                let els: [LayoutElement]
+                let newClef: NotatedClef
+                let newKey: Int
+                if let cached = context.cache?
+                    .entries[measureIdx]?.placements[staffIdx],
+                   cached.inputs == placementInputs {
+                    els = cached.elements
+                    newClef = cached.newClef
+                    newKey = cached.newKey
+                    context.cache?.placementHits += 1
+                } else {
+                    let result = placeMeasureElements(
+                        measure: m,
+                        staffIndex: staffIdx,
+                        measureIndex: measureIdx,
+                        width: w,
+                        metrics: metrics,
+                        activeClef: clefs[staffIdx],
+                        activeKey: keys[staffIdx],
+                        initialClefRawType: synthClef,
+                        initialKeyForSynth: synthKey,
+                        headerSchedule: schedule,
+                        tickColumns: tickCols,
+                        division: context.score.division,
+                        drumLineMap: drumMap,
+                        isLastMeasure: lastMeasure,
+                        incomingMelismas: incomingMelismas,
+                        effectiveMelismaTicks: context.effectiveMelismaTicks
+                    )
+                    els = result.elements
+                    newClef = result.clef
+                    newKey = result.key
+                    context.cache?.placementMisses += 1
+                    if var entry = context.cache?.entries[measureIdx] {
+                        entry.placements[staffIdx] = LayoutCache
+                            .StaffPlacement(
+                                inputs: placementInputs,
+                                elements: els,
+                                newClef: newClef,
+                                newKey: newKey)
+                        context.cache?.entries[measureIdx] = entry
+                    }
+                }
                 clefs[staffIdx] = newClef
                 keys[staffIdx] = newKey
                 perStaff[staffIdx] = els
