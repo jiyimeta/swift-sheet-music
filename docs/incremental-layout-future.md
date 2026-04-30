@@ -102,6 +102,51 @@ synchronous relayout per edit, but skips two redundant walks:
 Even with those skipped, the relayout itself remains `O(measures)`,
 hence the residual lag.
 
+## 案1 — per-measure cache (shipped on `feature/incremental-layout`)
+
+`LayoutEngine.layout(score:, options:, availableWidth:, cache:
+LayoutCache)` overload memoizes per-measure work:
+
+* `crossStaffMinimumMeasureWidth` keyed by `(measureIdx, [Measure?]
+  per staff, sp, division)`.
+* `placeMeasureElements` keyed per-`(measure, staff)` by all of its
+  inputs (`Measure`, `width`, `metricsSp`, `activeClef`, `activeKey`,
+  `headerSchedule`, `tickColumns`, `drumLineMap`, `isLastMeasure`,
+  `incomingMelismas`, `effectiveMelismaTicks`).
+
+Cache is rebuilt in place each call: prior entries are copied
+forward only on input match.
+
+### Bench (`Example/SheetMusicExample/test.mscx`, 112 measures × 6 staves)
+
+Release config, `swift test -c release`:
+
+```
+cold (no cache):       85.2 ms
+cold (populate cache): 85.2 ms
+warm (all cached):     63.7 ms        — 25 % faster, 99 %+ hit rate
+edit (1 measure):      63.5 ms        — 1 width miss, 6 placement misses
+                                         (rest hit)
+```
+
+Speedup ceiling: only the per-measure work (≈25 % of total layout
+time on this score) is cacheable. The remainder is score-wide
+(`computeEffectiveMelismaTicks`, `computeMelismaContinuations`,
+`collectSpanners` / `attachSpanners`, `resolveTies` / `attachTies`)
+and post-placement (system-wide lyric-Y align, per-staff Y-bound
+skyline, translate pass) — none of which the per-measure cache can
+skip.
+
+To push meaningfully past 25 %, options:
+1. Cache the score-wide pass results on `LayoutCache`, keyed on a
+   cheap structural digest (so note-pitch edits — which never affect
+   melisma / spanner / tie structure — skip them).
+2. Graduate to 案2 (tick-bounded incremental layout) which skips
+   whole systems outside the dirty range.
+
+The benchmark itself lives in `Tests/SheetMusicTests/LayoutCacheBenchmark.swift`,
+gated by `SHEETMUSIC_RUN_LAYOUT_BENCH=1`.
+
 ## Pointers when the time comes
 
 * `Sources/SheetMusicLayout/Layout/LayoutEngine.swift` — `layout(...)`,
