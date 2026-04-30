@@ -37,6 +37,11 @@ struct ContentViewMac: View {
     /// Pre-computed layout for horizontal mode (one long system at
     /// natural content width). Rebuilt on mode / score changes.
     @State private var horizontalDoc: LayoutDocument?
+    /// Reused across `adoptEditedScore` calls so `LayoutEngine.layout`
+    /// can skip per-measure work for measures unchanged by the edit.
+    /// Reset on every `adoptLoadedScore` (a fresh score has no cache
+    /// continuity with the previous one).
+    @State private var layoutCache = LayoutCache()
     /// Per-measure clef / key / time / part-label state. Cached so
     /// the sticky header doesn't recompute it on every body re-eval
     /// (an O(measures × staves) walk that adds up during pinch /
@@ -311,23 +316,26 @@ struct ContentViewMac: View {
         _ event: NSEvent,
         controller: NoteInputController
     ) -> Bool {
-        // Octave shift via arrow keys. Always consume so AppKit
-        // doesn't beep at the unhandled event.
-        if !event.isARepeat,
-           event.modifierFlags
-            .intersection(.deviceIndependentFlagsMask).isEmpty {
-            switch event.keyCode {
-            case 126: // up arrow
-                controller.inputOctave = min(8, controller.inputOctave + 1)
+        // Up / down arrow: shift the selected note by ±1 semitone
+        // when a note is selected; otherwise shift the input
+        // octave (used for the next letter typed onto a rest).
+        // Always consume so AppKit doesn't beep on unhandled events.
+        if event.modifierFlags
+            .intersection(.deviceIndependentFlagsMask).isEmpty,
+           event.keyCode == 126 || event.keyCode == 125 {
+            let delta = event.keyCode == 126 ? 1 : -1
+            if case .single(.note(let noteID)) = selection {
+                shiftSelectedNote(
+                    noteID: noteID, by: delta, controller: controller)
+            } else if !event.isARepeat {
+                // Octave shift only fires on the initial press —
+                // holding the key shouldn't crank the octave through
+                // the whole keyboard.
+                controller.inputOctave = max(
+                    0, min(8, controller.inputOctave + delta))
                 errorMessage = "Input octave: \(controller.inputOctave)"
-                return true
-            case 125: // down arrow
-                controller.inputOctave = max(0, controller.inputOctave - 1)
-                errorMessage = "Input octave: \(controller.inputOctave)"
-                return true
-            default:
-                break
             }
+            return true
         }
         guard let chars = event.charactersIgnoringModifiers,
               let letter = chars.first
@@ -382,6 +390,41 @@ struct ContentViewMac: View {
             errorMessage = error.localizedDescription
         }
         return true
+    }
+
+    /// Apply a ±semitone shift to the currently-selected note.
+    /// Routed through `SetNotePitch` so undo / redo work the same
+    /// way as letter-key insertion. The new TPC is computed by
+    /// `PitchSpelling.shiftedTpc` (direction-aware natural-neighbor).
+    private func shiftSelectedNote(
+        noteID: NoteID,
+        by semitones: Int,
+        controller: NoteInputController
+    ) {
+        guard let original = controller.score[noteID] else {
+            errorMessage = "Selected note not found in score"
+            return
+        }
+        guard let shifted = original.shifted(bySemitones: semitones)
+        else {
+            errorMessage = "Pitch out of MIDI range (0…127)"
+            return
+        }
+        do {
+            try controller.apply(
+                SetNotePitch(
+                    at: noteID,
+                    pitch: shifted.pitch,
+                    tpc: shifted.tpc),
+                undoManager: undoManager)
+            adoptEditedScore(controller.score)
+            playbackEngine.playPreview(
+                noteID: noteID, in: controller.score)
+            scrollToAffectedMeasure(measureIndex: noteID.measureIndex)
+            errorMessage = "Shifted to MIDI \(shifted.pitch)"
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 
     private func describeSelection(_ s: ScoreSelection) -> String {
@@ -639,10 +682,14 @@ struct ContentViewMac: View {
         // it to a .task — and an if-let gated Group can fail
         // to trigger .task(id:) when it starts empty.
         let hOpts = Self.horizontalOptions
+        // New score → drop the old cache; per-measure entries from
+        // a previous score have no validity here.
+        layoutCache = LayoutCache()
         horizontalDoc = LayoutEngine.layout(
             score: loaded, options: hOpts,
             availableWidth: LayoutEngine.naturalContentWidth(
-                score: loaded, options: hOpts))
+                score: loaded, options: hOpts),
+            cache: layoutCache)
         horizontalContexts = LayoutEngine.measureContexts(
             for: loaded)
         // Vertical layout still needs the viewport width, so it's
@@ -691,6 +738,7 @@ struct ContentViewMac: View {
     ///     layout engine renormalises within the system on its own
     ///     pass — saving the full-score `naturalContentWidth` walk.
     private func adoptEditedScore(_ edited: Score) {
+        let t0 = Date()
         let hOpts = Self.horizontalOptions
         // Reuse the previously-laid-out total width as the
         // `availableWidth` input. For a single-note edit this is
@@ -700,13 +748,36 @@ struct ContentViewMac: View {
         let availableWidth = horizontalDoc?.size.width
             ?? LayoutEngine.naturalContentWidth(
                 score: edited, options: hOpts)
+        let tLayoutStart = Date()
         horizontalDoc = LayoutEngine.layout(
             score: edited, options: hOpts,
-            availableWidth: availableWidth)
+            availableWidth: availableWidth,
+            cache: layoutCache)
+        let layoutMs = Date().timeIntervalSince(tLayoutStart) * 1000
         verticalDoc = nil
         pdfLayout = nil
         score = edited
         scoreVersion = UUID()
+        let stateDoneMs = Date().timeIntervalSince(t0) * 1000
+        // Schedule probes at three milestones:
+        //   - tick:  next runloop iteration (~SwiftUI commit done)
+        //   - paint: after Core Animation flushes the next frame
+        //            (closest proxy for "user sees it")
+        DispatchQueue.main.async {
+            let tickMs = Date().timeIntervalSince(t0) * 1000
+            CATransaction.begin()
+            CATransaction.setCompletionBlock {
+                let paintMs = Date().timeIntervalSince(t0) * 1000
+                print(String(
+                    format: "edit: layout=%.1f state=%.1f tick=%.1f paint=%.1f ms (total %.1fms)",
+                    layoutMs,
+                    stateDoneMs - layoutMs,
+                    tickMs - stateDoneMs,
+                    paintMs - tickMs,
+                    paintMs))
+            }
+            CATransaction.commit()
+        }
     }
 }
 #endif

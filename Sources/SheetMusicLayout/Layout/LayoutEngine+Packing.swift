@@ -16,6 +16,22 @@ extension LayoutEngine {
         }
 
         let measureCount = firstStaff.measures.count
+        // Stash the prior cache entries before rebuilding. Each
+        // measure that hits the cache is copied forward (carrying its
+        // placement results, populated later in buildSystem). Misses
+        // produce a fresh entry with empty `placements`.
+        let priorEntries = context.cache?.entries ?? [:]
+        let priorSystemEntries = context.cache?.systemEntries ?? [:]
+        context.cache?.entries = [:]
+        context.cache?.systemEntries = [:]
+        context.cache?.widthHits = 0
+        context.cache?.widthMisses = 0
+        context.cache?.placementHits = 0
+        context.cache?.placementMisses = 0
+        context.cache?.systemHits = 0
+        context.cache?.systemMisses = 0
+        let sp = context.metrics.sp
+        let division = context.score.division
         // Per-measure minimum width via the same cross-staff
         // tick-aggregation `tickColumns` will use, so the spacing
         // pass and the placement pass agree on segment widths.
@@ -23,18 +39,40 @@ extension LayoutEngine {
         // staves subdivide a long element — see
         // `crossStaffMinimumMeasureWidth`.)
         let minWidths: [CGFloat] = (0..<measureCount).map { i in
+            let measuresAt = context.score.staves.map { staff in
+                i < staff.measures.count ? staff.measures[i] : nil
+            }
+            if let prior = priorEntries[i],
+               prior.sp == sp,
+               prior.division == division,
+               prior.measures == measuresAt {
+                // Cache hit: copy the prior entry forward verbatim.
+                // `buildSystem` will trust its `placements` only
+                // when the per-staff inputs also match.
+                context.cache?.entries[i] = prior
+                context.cache?.widthHits += 1
+                return prior.minWidth
+            }
+            context.cache?.widthMisses += 1
             let baseHeader = computeHeaderSchedule(
                 measureIdx: i,
                 staves: context.score.staves,
                 metrics: context.metrics,
                 synthesizeClefForAllStaves: false,
                 synthesizeKeySigForAllStaves: false)
-            return crossStaffMinimumMeasureWidth(
+            let w = crossStaffMinimumMeasureWidth(
                 staves: context.score.staves,
                 measureIdx: i,
                 metrics: context.metrics,
                 headerSchedule: baseHeader,
-                division: context.score.division)
+                division: division)
+            context.cache?.entries[i] = LayoutCache.Entry(
+                measures: measuresAt,
+                sp: sp,
+                division: division,
+                minWidth: w,
+                placements: [:])
+            return w
         }
 
         // Clef state persists ACROSS systems: engraving convention
@@ -199,15 +237,50 @@ extension LayoutEngine {
                 // mode has matching breathing room.
                 stretched = widthsSlice.map { $0 * naturalStretch }
             }
-            let system = buildSystem(
-                measureRange: systemStart..<cursor,
+            // Snapshot carry-in state BEFORE buildSystem mutates it.
+            // Used either as cache key (on miss store) or for hit check.
+            let activeClefsIn = activeClefs
+            let activeKeysIn = activeKeys
+            let measureCount = cursor - systemStart
+            let inputs = systemInputs(
+                measureStart: systemStart,
+                measureCount: measureCount,
                 widths: stretched,
-                systemOriginY: currentY,
                 isFirstSystem: isFirstSystem,
-                activeClefs: &activeClefs,
-                activeKeys: &activeKeys,
-                context: context
-            )
+                activeClefsIn: activeClefsIn,
+                activeKeysIn: activeKeysIn,
+                context: context)
+            let system: LayoutSystem
+            if let prior = priorSystemEntries[systemStart],
+               prior.inputs == inputs {
+                // Cache hit: reuse stored unshifted system + carry-out.
+                system = shift(prior.system, byY: currentY)
+                activeClefs = prior.activeClefsOut
+                activeKeys = prior.activeKeysOut
+                context.cache?.systemEntries[systemStart] = prior
+                context.cache?.systemHits += 1
+            } else {
+                // Miss: build the system at originY = 0 (so the cache
+                // entry is independent of vertical packing position),
+                // then shift to currentY for placement.
+                let unshifted = buildSystem(
+                    measureRange: systemStart..<cursor,
+                    widths: stretched,
+                    systemOriginY: 0,
+                    isFirstSystem: isFirstSystem,
+                    activeClefs: &activeClefs,
+                    activeKeys: &activeKeys,
+                    context: context
+                )
+                system = shift(unshifted, byY: currentY)
+                context.cache?.systemEntries[systemStart] = LayoutCache
+                    .SystemEntry(
+                        inputs: inputs,
+                        system: unshifted,
+                        activeClefsOut: activeClefs,
+                        activeKeysOut: activeKeys)
+                context.cache?.systemMisses += 1
+            }
             currentY += system.size.height + context.options.systemGap
             systems.append(system)
             isFirstSystem = false
@@ -232,6 +305,61 @@ extension LayoutEngine {
             if decl?.group == "percussion" { return "PERC" }
             return "G"
         }
+    }
+
+    /// Build a `LayoutCache.SystemInputs` snapshot for the given
+    /// system. The snapshot is the cache-hit predicate — every input
+    /// that affects `buildSystem` output (apart from `systemOriginY`,
+    /// which is normalised away) must appear here.
+    static func systemInputs(
+        measureStart: Int,
+        measureCount: Int,
+        widths: [CGFloat],
+        isFirstSystem: Bool,
+        activeClefsIn: [NotatedClef],
+        activeKeysIn: [Int],
+        context: RenderContext
+    ) -> LayoutCache.SystemInputs {
+        let staves = context.score.staves
+        let measuresPerStaff: [[Measure?]] = staves.map { staff in
+            (0..<measureCount).map { local in
+                let abs = measureStart + local
+                return abs < staff.measures.count
+                    ? staff.measures[abs] : nil
+            }
+        }
+        let melismaForRange: [[[MelismaContinuation]]]
+        melismaForRange = (0..<staves.count).map { staffIdx in
+            (0..<measureCount).map { local in
+                let abs = measureStart + local
+                guard staffIdx < context.melismaContinuations.count,
+                      abs < context.melismaContinuations[staffIdx].count
+                else { return [] }
+                return context.melismaContinuations[staffIdx][abs]
+            }
+        }
+        let drumLineMaps: [[Int: Int]?] = staves.indices.map { idx in
+            let part = idx < context.score.parts.count
+                ? context.score.parts[idx] : nil
+            return part?.instrument.useDrumset == true
+                ? part?.instrument.drumLineMap : nil
+        }
+        return LayoutCache.SystemInputs(
+            measureStart: measureStart,
+            measureCount: measureCount,
+            widths: widths,
+            isFirstSystem: isFirstSystem,
+            activeClefsIn: activeClefsIn,
+            activeKeysIn: activeKeysIn,
+            sp: context.metrics.sp,
+            availableWidth: context.availableWidth,
+            division: context.score.division,
+            measuresPerStaff: measuresPerStaff,
+            effectiveMelismaTicks: context.effectiveMelismaTicks,
+            melismaContinuationsForRange: melismaForRange,
+            drumLineMaps: drumLineMaps,
+            totalMeasures: staves.first?.measures.count ?? 0,
+            options: context.options)
     }
 
     static func stretchWidths(
