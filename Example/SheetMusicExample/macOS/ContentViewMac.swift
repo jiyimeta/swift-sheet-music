@@ -37,6 +37,11 @@ struct ContentViewMac: View {
     /// Pre-computed layout for horizontal mode (one long system at
     /// natural content width). Rebuilt on mode / score changes.
     @State private var horizontalDoc: LayoutDocument?
+    /// Reused across `adoptEditedScore` calls so `LayoutEngine.layout`
+    /// can skip per-measure work for measures unchanged by the edit.
+    /// Reset on every `adoptLoadedScore` (a fresh score has no cache
+    /// continuity with the previous one).
+    @State private var layoutCache = LayoutCache()
     /// Per-measure clef / key / time / part-label state. Cached so
     /// the sticky header doesn't recompute it on every body re-eval
     /// (an O(measures × staves) walk that adds up during pinch /
@@ -639,10 +644,14 @@ struct ContentViewMac: View {
         // it to a .task — and an if-let gated Group can fail
         // to trigger .task(id:) when it starts empty.
         let hOpts = Self.horizontalOptions
+        // New score → drop the old cache; per-measure entries from
+        // a previous score have no validity here.
+        layoutCache = LayoutCache()
         horizontalDoc = LayoutEngine.layout(
             score: loaded, options: hOpts,
             availableWidth: LayoutEngine.naturalContentWidth(
-                score: loaded, options: hOpts))
+                score: loaded, options: hOpts),
+            cache: layoutCache)
         horizontalContexts = LayoutEngine.measureContexts(
             for: loaded)
         // Vertical layout still needs the viewport width, so it's
@@ -702,7 +711,8 @@ struct ContentViewMac: View {
                 score: edited, options: hOpts)
         horizontalDoc = LayoutEngine.layout(
             score: edited, options: hOpts,
-            availableWidth: availableWidth)
+            availableWidth: availableWidth,
+            cache: layoutCache)
         verticalDoc = nil
         pdfLayout = nil
         score = edited
