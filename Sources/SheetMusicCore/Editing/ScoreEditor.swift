@@ -14,6 +14,11 @@ public final class ScoreEditor {
     public private(set) var score: Score
     private var undoStack: [any EditCommand] = []
     private var redoStack: [any EditCommand] = []
+    /// Voice-element slot most recently touched (by `apply`,
+    /// `undo`, or `redo`). Hosts use this to scroll the affected
+    /// measure into view, position a cursor, etc. `nil` until the
+    /// first edit lands.
+    public private(set) var lastAffectedLocation: VoiceElementID?
 
     public init(score: Score) {
         self.score = score
@@ -28,6 +33,7 @@ public final class ScoreEditor {
         let inverse = try command.apply(to: &score)
         undoStack.append(inverse)
         redoStack.removeAll()
+        lastAffectedLocation = command.affectedLocation
     }
 
     /// Pops the most recent inverse off the undo stack and applies
@@ -38,6 +44,7 @@ public final class ScoreEditor {
         }
         let redo = try inverse.apply(to: &score)
         redoStack.append(redo)
+        lastAffectedLocation = inverse.affectedLocation
     }
 
     /// Symmetric counterpart of `undo()`.
@@ -47,5 +54,6 @@ public final class ScoreEditor {
         }
         let inverse = try command.apply(to: &score)
         undoStack.append(inverse)
+        lastAffectedLocation = command.affectedLocation
     }
 }

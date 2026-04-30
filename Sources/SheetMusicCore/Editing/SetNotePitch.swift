@@ -17,6 +17,8 @@ public struct SetNotePitch: EditCommand {
         self.tpc = tpc
     }
 
+    public var affectedLocation: VoiceElementID { VoiceElementID(location) }
+
     @discardableResult
     public func apply(to score: inout Score) throws -> any EditCommand {
         guard let oldNote = score[location] else {
