@@ -117,35 +117,55 @@ LayoutCache)` overload memoizes per-measure work:
 Cache is rebuilt in place each call: prior entries are copied
 forward only on input match.
 
+### Per-system extension
+
+Per-measure caching alone left ~75 % of layout time on the table —
+score-wide passes plus the `buildSystem` post-placement work
+(system-wide lyric-Y align, per-staff Y-bound skyline, translate,
+`buildEventColumns`).
+
+Promoting the cache to **per-system** granularity recovers the
+rest. `LayoutCache.SystemEntry` captures all `buildSystem` inputs
+(`measureRange`, stretched widths, `isFirstSystem`, carry-in
+clef/key, sliced melisma data, drum maps, `ScoreViewOptions`, all
+staves' `Measure` values for the range) and stores the produced
+`LayoutSystem` normalised to `origin.y == 0`. On a hit the entire
+`buildSystem` call is skipped; the cached system is shifted to the
+current packing Y and the carry-out clef/key restored.
+
+This mirrors MuseScore's `rangeDone` early exit
+(`engraving/rendering/score/systemlayout.cpp:318`) at finer
+granularity — a single-note edit invalidates one system, the rest
+are reused intact.
+
 ### Bench (`Example/SheetMusicExample/test.mscx`, 112 measures × 6 staves)
 
 Release config, `swift test -c release`:
 
 ```
-cold (no cache):       85.2 ms
-cold (populate cache): 85.2 ms
-warm (all cached):     63.7 ms        — 25 % faster, 99 %+ hit rate
-edit (1 measure):      63.5 ms        — 1 width miss, 6 placement misses
-                                         (rest hit)
+cold (no cache):       98.4 ms
+cold (populate cache): 93.2 ms
+warm (all cached):      3.8 ms       — 96 % faster, full system hits
+edit (1 measure):       4.9 ms       — 1 system miss, 0 system hits
+                                        (single-system score), 18
+                                        placement hits + 6 misses
+                                        inside the missed system
 ```
 
-Speedup ceiling: only the per-measure work (≈25 % of total layout
-time on this score) is cacheable. The remainder is score-wide
-(`computeEffectiveMelismaTicks`, `computeMelismaContinuations`,
-`collectSpanners` / `attachSpanners`, `resolveTies` / `attachTies`)
-and post-placement (system-wide lyric-Y align, per-staff Y-bound
-skyline, translate pass) — none of which the per-measure cache can
-skip.
+The remaining ~5 ms in the warm/edit path is dominated by the
+score-wide post-passes (`collectSpanners`/`attachSpanners`,
+`resolveTies`/`attachTies`) and the score-wide melisma precompute,
+all of which still run unconditionally. They could be cached too
+(at the document level, keyed on a cheap structural digest), but
+3-5 ms is well below user-perceivable lag so further engine
+optimization is no longer the bottleneck — see
+`example(macOS): instrument edit pipeline timing` for the
+end-to-end measurement that captures rendering / scroll-view
+overhead.
 
-To push meaningfully past 25 %, options:
-1. Cache the score-wide pass results on `LayoutCache`, keyed on a
-   cheap structural digest (so note-pitch edits — which never affect
-   melisma / spanner / tie structure — skip them).
-2. Graduate to 案2 (tick-bounded incremental layout) which skips
-   whole systems outside the dirty range.
-
-The benchmark itself lives in `Tests/SheetMusicTests/LayoutCacheBenchmark.swift`,
-gated by `SHEETMUSIC_RUN_LAYOUT_BENCH=1`.
+The benchmark itself lives in
+`Tests/SheetMusicTests/LayoutCacheBenchmark.swift`, gated by
+`SHEETMUSIC_RUN_LAYOUT_BENCH=1`.
 
 ## Pointers when the time comes
 

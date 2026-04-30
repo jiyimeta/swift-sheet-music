@@ -116,7 +116,7 @@ public enum LayoutEngine {
         )
     }
 
-    private static func shift(
+    static func shift(
         _ system: LayoutSystem, byY dy: CGFloat
     ) -> LayoutSystem {
         LayoutSystem(

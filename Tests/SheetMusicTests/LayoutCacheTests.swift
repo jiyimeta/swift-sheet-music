@@ -39,7 +39,7 @@ struct LayoutCacheTests {
         #expect(cached.size == baseline.size)
     }
 
-    @Test("Cold call: every width and placement is a miss")
+    @Test("Cold call: every width / placement / system is a miss")
     func coldCallAllMisses() {
         guard #available(macOS 15.0, *) else { return }
         let score = Self.sampleScore()
@@ -53,10 +53,13 @@ struct LayoutCacheTests {
         // Single-staff score → one placement per measure.
         #expect(cache.placementHits == 0)
         #expect(cache.placementMisses == 3)
+        // The 3 measures pack into one system on a wide canvas.
+        #expect(cache.systemHits == 0)
+        #expect(cache.systemMisses == 1)
     }
 
-    @Test("Warm call on identical score: every lookup is a hit")
-    func warmCallAllHits() {
+    @Test("Warm call on identical score: system hits short-circuit")
+    func warmCallSystemHits() {
         guard #available(macOS 15.0, *) else { return }
         let score = Self.sampleScore()
         let cache = LayoutCache()
@@ -68,13 +71,20 @@ struct LayoutCacheTests {
             availableWidth: 800, cache: cache)
         #expect(first.systems == second.systems)
         #expect(first.size == second.size)
+        // Width cache fires for every measure (it runs in packSystems
+        // before the system-level lookup).
         #expect(cache.widthHits == 3)
         #expect(cache.widthMisses == 0)
-        #expect(cache.placementHits == 3)
+        // System hit short-circuits buildSystem; placement counters
+        // do not increment since `placeMeasureElements` is never
+        // called.
+        #expect(cache.systemHits == 1)
+        #expect(cache.systemMisses == 0)
+        #expect(cache.placementHits == 0)
         #expect(cache.placementMisses == 0)
     }
 
-    @Test("Editing one measure: only that measure misses")
+    @Test("Editing one measure: only that measure's system misses")
     func singleMeasureEditMisses() {
         guard #available(macOS 15.0, *) else { return }
         let scoreA = Self.sampleScore()
@@ -99,7 +109,12 @@ struct LayoutCacheTests {
         // Measures 0 and 2 unchanged → 2 width hits; measure 1 → 1 miss.
         #expect(cache.widthHits == 2)
         #expect(cache.widthMisses == 1)
-        // Placements track the same pattern: 2 hits, 1 miss.
+        // The 3 measures still pack into one system, but the system's
+        // inputs changed (one measure differs) → system miss.
+        #expect(cache.systemHits == 0)
+        #expect(cache.systemMisses == 1)
+        // Per-(measure, staff) placement: inside the missed system,
+        // measures 0 + 2 hit on placement, measure 1 misses.
         #expect(cache.placementHits == 2)
         #expect(cache.placementMisses == 1)
     }
@@ -133,9 +148,9 @@ struct LayoutCacheTests {
         }
     }
 
-    /// On a real fixture, a warm second call must hit the cache
-    /// for every measure / staff combination.
-    @Test("Real mscx fixture: warm call is fully cached")
+    /// On a real fixture, a warm second call must hit the system
+    /// cache for every system — `buildSystem` is skipped wholesale.
+    @Test("Real mscx fixture: warm call is fully cached at system level")
     func realFixtureWarmHitRate() throws {
         guard #available(macOS 15.0, *) else { return }
         guard let url = Bundle.module.url(
@@ -149,15 +164,18 @@ struct LayoutCacheTests {
             score: score, options: .init(),
             availableWidth: 800, cache: cache)
         let widthMissesCold = cache.widthMisses
-        let placementMissesCold = cache.placementMisses
+        let systemMissesCold = cache.systemMisses
         _ = LayoutEngine.layout(
             score: score, options: .init(),
             availableWidth: 800, cache: cache)
         // Warm call: zero misses, every prior miss is now a hit.
         #expect(cache.widthMisses == 0)
-        #expect(cache.placementMisses == 0)
+        #expect(cache.systemMisses == 0)
         #expect(cache.widthHits == widthMissesCold)
-        #expect(cache.placementHits == placementMissesCold)
+        #expect(cache.systemHits == systemMissesCold)
+        // System hit short-circuits buildSystem entirely.
+        #expect(cache.placementHits == 0)
+        #expect(cache.placementMisses == 0)
     }
 
     /// Changing the staffSize (which changes `metrics.sp`) must

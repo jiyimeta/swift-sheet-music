@@ -21,11 +21,15 @@ extension LayoutEngine {
         // placement results, populated later in buildSystem). Misses
         // produce a fresh entry with empty `placements`.
         let priorEntries = context.cache?.entries ?? [:]
+        let priorSystemEntries = context.cache?.systemEntries ?? [:]
         context.cache?.entries = [:]
+        context.cache?.systemEntries = [:]
         context.cache?.widthHits = 0
         context.cache?.widthMisses = 0
         context.cache?.placementHits = 0
         context.cache?.placementMisses = 0
+        context.cache?.systemHits = 0
+        context.cache?.systemMisses = 0
         let sp = context.metrics.sp
         let division = context.score.division
         // Per-measure minimum width via the same cross-staff
@@ -233,15 +237,50 @@ extension LayoutEngine {
                 // mode has matching breathing room.
                 stretched = widthsSlice.map { $0 * naturalStretch }
             }
-            let system = buildSystem(
-                measureRange: systemStart..<cursor,
+            // Snapshot carry-in state BEFORE buildSystem mutates it.
+            // Used either as cache key (on miss store) or for hit check.
+            let activeClefsIn = activeClefs
+            let activeKeysIn = activeKeys
+            let measureCount = cursor - systemStart
+            let inputs = systemInputs(
+                measureStart: systemStart,
+                measureCount: measureCount,
                 widths: stretched,
-                systemOriginY: currentY,
                 isFirstSystem: isFirstSystem,
-                activeClefs: &activeClefs,
-                activeKeys: &activeKeys,
-                context: context
-            )
+                activeClefsIn: activeClefsIn,
+                activeKeysIn: activeKeysIn,
+                context: context)
+            let system: LayoutSystem
+            if let prior = priorSystemEntries[systemStart],
+               prior.inputs == inputs {
+                // Cache hit: reuse stored unshifted system + carry-out.
+                system = shift(prior.system, byY: currentY)
+                activeClefs = prior.activeClefsOut
+                activeKeys = prior.activeKeysOut
+                context.cache?.systemEntries[systemStart] = prior
+                context.cache?.systemHits += 1
+            } else {
+                // Miss: build the system at originY = 0 (so the cache
+                // entry is independent of vertical packing position),
+                // then shift to currentY for placement.
+                let unshifted = buildSystem(
+                    measureRange: systemStart..<cursor,
+                    widths: stretched,
+                    systemOriginY: 0,
+                    isFirstSystem: isFirstSystem,
+                    activeClefs: &activeClefs,
+                    activeKeys: &activeKeys,
+                    context: context
+                )
+                system = shift(unshifted, byY: currentY)
+                context.cache?.systemEntries[systemStart] = LayoutCache
+                    .SystemEntry(
+                        inputs: inputs,
+                        system: unshifted,
+                        activeClefsOut: activeClefs,
+                        activeKeysOut: activeKeys)
+                context.cache?.systemMisses += 1
+            }
             currentY += system.size.height + context.options.systemGap
             systems.append(system)
             isFirstSystem = false
@@ -266,6 +305,61 @@ extension LayoutEngine {
             if decl?.group == "percussion" { return "PERC" }
             return "G"
         }
+    }
+
+    /// Build a `LayoutCache.SystemInputs` snapshot for the given
+    /// system. The snapshot is the cache-hit predicate — every input
+    /// that affects `buildSystem` output (apart from `systemOriginY`,
+    /// which is normalised away) must appear here.
+    static func systemInputs(
+        measureStart: Int,
+        measureCount: Int,
+        widths: [CGFloat],
+        isFirstSystem: Bool,
+        activeClefsIn: [NotatedClef],
+        activeKeysIn: [Int],
+        context: RenderContext
+    ) -> LayoutCache.SystemInputs {
+        let staves = context.score.staves
+        let measuresPerStaff: [[Measure?]] = staves.map { staff in
+            (0..<measureCount).map { local in
+                let abs = measureStart + local
+                return abs < staff.measures.count
+                    ? staff.measures[abs] : nil
+            }
+        }
+        let melismaForRange: [[[MelismaContinuation]]]
+        melismaForRange = (0..<staves.count).map { staffIdx in
+            (0..<measureCount).map { local in
+                let abs = measureStart + local
+                guard staffIdx < context.melismaContinuations.count,
+                      abs < context.melismaContinuations[staffIdx].count
+                else { return [] }
+                return context.melismaContinuations[staffIdx][abs]
+            }
+        }
+        let drumLineMaps: [[Int: Int]?] = staves.indices.map { idx in
+            let part = idx < context.score.parts.count
+                ? context.score.parts[idx] : nil
+            return part?.instrument.useDrumset == true
+                ? part?.instrument.drumLineMap : nil
+        }
+        return LayoutCache.SystemInputs(
+            measureStart: measureStart,
+            measureCount: measureCount,
+            widths: widths,
+            isFirstSystem: isFirstSystem,
+            activeClefsIn: activeClefsIn,
+            activeKeysIn: activeKeysIn,
+            sp: context.metrics.sp,
+            availableWidth: context.availableWidth,
+            division: context.score.division,
+            measuresPerStaff: measuresPerStaff,
+            effectiveMelismaTicks: context.effectiveMelismaTicks,
+            melismaContinuationsForRange: melismaForRange,
+            drumLineMaps: drumLineMaps,
+            totalMeasures: staves.first?.measures.count ?? 0,
+            options: context.options)
     }
 
     static func stretchWidths(
