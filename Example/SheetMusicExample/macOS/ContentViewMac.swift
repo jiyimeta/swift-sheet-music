@@ -355,6 +355,18 @@ struct ContentViewMac: View {
             }
             return true
         }
+        // `+` (shift+; on JIS, shift+= on US) toggles a tie from the
+        // selected note to the next same-pitch chord in its voice.
+        // Checked BEFORE the letter-key insertion path so `+` never
+        // lands in a note-input lookup that doesn't know about it.
+        if event.characters == "+",
+           event.modifierFlags
+            .intersection([.command, .control, .option]).isEmpty,
+           case .single(.note(let noteID)) = selection {
+            toggleTieForward(
+                noteID: noteID, controller: controller)
+            return true
+        }
         guard let chars = event.charactersIgnoringModifiers,
               let letter = chars.first
         else {
@@ -408,6 +420,38 @@ struct ContentViewMac: View {
             errorMessage = error.localizedDescription
         }
         return true
+    }
+
+    /// Toggle a tie from the currently-selected note to the next
+    /// chord in the same voice that contains a note of the same
+    /// pitch. Adds the tie when none is present, removes it when
+    /// one is.
+    private func toggleTieForward(
+        noteID: NoteID,
+        controller: NoteInputController
+    ) {
+        guard let source = controller.score[noteID] else {
+            errorMessage = "Selected note not found in score"
+            return
+        }
+        guard let target = controller.score
+            .nextTieTarget(after: noteID) else {
+            errorMessage = "No tie target — the next chord in this "
+                + "voice must contain a note of the same pitch."
+            return
+        }
+        let alreadyTied = source.tieForward != nil
+        let cmd = SetTie(
+            from: noteID, to: target,
+            sourceTieForward: alreadyTied ? nil : 1,
+            targetTieBack: alreadyTied ? nil : 1)
+        do {
+            try controller.apply(cmd, undoManager: undoManager)
+            adoptEditedScore(controller.score)
+            errorMessage = alreadyTied ? "Tie removed" : "Tied"
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 
     /// Replace the currently-selected chord/rest with a rest of the
