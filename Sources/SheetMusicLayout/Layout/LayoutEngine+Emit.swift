@@ -10,14 +10,17 @@ extension LayoutEngine {
         tuplet: Tuplet,
         voice: Voice,
         voiceChordOutIndex: [Int: Int],
+        voiceRestOutIndex: [Int: Int],
         out: inout [LayoutElement],
         beamGroups: [BeamGroup],
         staffMidY: CGFloat,
         metrics: StaffMetrics
     ) {
-        // Collect the out-array indices of members that are chords
-        // (rests have no stemOrigin to reference — we fall back to a
-        // per-member rest-scan if we need them).
+        // Walk every member. Chord X positions also feed the
+        // Y-anchor computation; rest X positions only widen the
+        // bracket span so a rest at the start or end of the
+        // tuplet doesn't visually exclude itself from the bracket.
+        var memberSpanXs: [CGFloat] = []
         var chordStemXs: [CGFloat] = []
         var chordAnchorYs: [CGFloat] = []   // beam-side note y (outer note)
         var chordStemsUp = 0
@@ -28,26 +31,31 @@ extension LayoutEngine {
             switch el {
             case .chord:
                 chordCount += 1
+                guard let outIdx = voiceChordOutIndex[idx],
+                      case .chord(let notes, _, let stem, let so,
+                                  _, _, _, _) = out[outIdx]
+                else { continue }
+                memberSpanXs.append(so.x)
+                chordStemXs.append(so.x)
+                if stem == .up { chordStemsUp += 1 }
+                let anchorY: CGFloat
+                if stem == .up {
+                    anchorY = notes.map(\.origin.y).min() ?? so.y
+                } else {
+                    anchorY = notes.map(\.origin.y).max() ?? so.y
+                }
+                chordAnchorYs.append(anchorY)
             case .rest:
                 containsRest = true
+                guard let outIdx = voiceRestOutIndex[idx],
+                      case .rest(_, let origin, _, _, _) = out[outIdx]
+                else { continue }
+                memberSpanXs.append(origin.x)
             default:
                 continue
             }
-            guard let outIdx = voiceChordOutIndex[idx],
-                  case .chord(let notes, _, let stem, let so,
-                              _, _, _, _) = out[outIdx]
-            else { continue }
-            chordStemXs.append(so.x)
-            if stem == .up { chordStemsUp += 1 }
-            let anchorY: CGFloat
-            if stem == .up {
-                anchorY = notes.map(\.origin.y).min() ?? so.y
-            } else {
-                anchorY = notes.map(\.origin.y).max() ?? so.y
-            }
-            chordAnchorYs.append(anchorY)
         }
-        guard !chordStemXs.isEmpty else { return }
+        guard !memberSpanXs.isEmpty, !chordStemXs.isEmpty else { return }
 
         // MuseScore's bracket rule (Tuplet::calcHasBracket): hide the
         // bracket when the first AND last tuplet members sit inside
@@ -63,9 +71,12 @@ extension LayoutEngine {
         // Place the marking above stem-up groups, below stem-down.
         let isAbove = chordStemsUp * 2 >= chordCount
 
-        // Horizontal span — first to last chord's stem x.
-        let fromX = chordStemXs.first!
-        let toX = chordStemXs.last!
+        // Horizontal span — first to last MEMBER's x (chord stem
+        // for chords, rest origin for rests). Widening to include
+        // rests prevents the bracket from collapsing inward when a
+        // tuplet member is deleted to a rest.
+        let fromX = memberSpanXs.first!
+        let toX = memberSpanXs.last!
 
         // Vertical position:
         // - Beamed: just above/below the beam (= stemOrigin.y for the

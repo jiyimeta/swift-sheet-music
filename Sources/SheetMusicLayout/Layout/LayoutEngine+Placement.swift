@@ -145,6 +145,10 @@ extension LayoutEngine {
             var tickCursor = 0
             var inHeader = true
             var voiceChordOutIndex: [Int: Int] = [:]
+            // Parallel mapping for rest members. Used by
+            // `emitTupletLabel` so a rest in a tuplet still
+            // contributes to the bracket's horizontal span.
+            var voiceRestOutIndex: [Int: Int] = [:]
             // Per-verse trail used to drop hyphens between adjacent
             // syllables of the same word ("Pa-ra-di-so" → 3 dashes).
             // Mirrors MuseScore's `LyricsLayout::layoutDashes`: when
@@ -352,6 +356,7 @@ extension LayoutEngine {
                             || restBase == .half)
                         && (restY < staffTopLocal
                             || restY > staffBottomLocal)
+                    voiceRestOutIndex[voiceElemIdx] = out.count
                     out.append(.rest(
                         duration: r.duration,
                         origin: CGPoint(x: restX, y: restY),
@@ -805,6 +810,7 @@ extension LayoutEngine {
                     tuplet: tuplet,
                     voice: voice,
                     voiceChordOutIndex: voiceChordOutIndex,
+                    voiceRestOutIndex: voiceRestOutIndex,
                     out: &out,
                     beamGroups: beamGroups(
                         voice: voice,
