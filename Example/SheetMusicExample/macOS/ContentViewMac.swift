@@ -213,7 +213,7 @@ struct ContentViewMac: View {
             if event.modifierFlags.contains(.command),
                !event.isARepeat,
                let chars = event.charactersIgnoringModifiers,
-               chars.first == "z" {
+               chars.first?.lowercased() == "z" {
                 if let controller = inputController {
                     handleEditorUndoRedo(
                         controller: controller,
@@ -237,22 +237,32 @@ struct ContentViewMac: View {
         do {
             if redo {
                 try controller.redo()
-                errorMessage = "Redo"
             } else {
                 try controller.undo()
-                errorMessage = "Undo"
             }
-            // Drop selection to a known value before adopting. The
-            // apply path's synchronous refresh appears to depend on
-            // a `selection` write to nudge SwiftUI's invalidation
-            // (purely score / horizontalDoc writes from an NSEvent
-            // monitor closure don't always trigger body re-eval).
-            // Setting `.none` is harmless: after undo / redo the
-            // user typically wants to click the next target anyway.
-            selection = .none
-            adoptEditedScore(controller.score)
         } catch {
             errorMessage = error.localizedDescription
+            return
+        }
+        // Defer @State mutations to the next runloop tick.
+        // Repeatedly mutating @State from inside an `NSEvent`
+        // monitor closure (e.g. holding ⌘Z) doesn't reliably
+        // invalidate the SwiftUI view: the second-and-onward
+        // writes to the same property within one event-handling
+        // pass can be no-ops (Equatable check), and `scoreVersion`
+        // alone hasn't been enough to nudge body re-eval.
+        // `DispatchQueue.main.async` puts the mutations on the
+        // next runloop iteration, fully outside the NSEvent
+        // dispatch path, where SwiftUI's normal update cycle
+        // applies. The same fix shape can later be applied to
+        // the apply path if the rapid-typing case shows similar
+        // staleness.
+        let edited = controller.score
+        let isRedo = redo
+        DispatchQueue.main.async {
+            errorMessage = isRedo ? "Redo" : "Undo"
+            selection = .none
+            adoptEditedScore(edited)
         }
     }
 
@@ -407,7 +417,8 @@ struct ContentViewMac: View {
                             horizontalScrollX: horizontalScrollX,
                             horizontalScrollY: horizontalScrollY,
                             pendingScroll: $pendingHorizontalScroll)
-                    })
+                    },
+                    contentVersion: AnyHashable(scoreVersion))
             }
         case .paged:
             PagedScoreContainer(

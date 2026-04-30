@@ -31,6 +31,11 @@ struct HorizontalScoreContainer: View {
     /// implementation, which reads `horizontalScrollX` / etc. from
     /// its own state.
     let onCursorChange: (ScoreCursor?, CGFloat) -> Void
+    /// Forwarded to `MagnifyingScoreScrollView.contentVersion`.
+    /// Bumped by the host when an edit changes glyph content
+    /// without changing `document.size`, so the scroll view's
+    /// optimisation guard doesn't swallow the refresh.
+    var contentVersion: AnyHashable? = nil
 
     @State private var marqueeRect: CGRect?
 
@@ -87,7 +92,8 @@ struct HorizontalScoreContainer: View {
                 onTap: onTap,
                 onMarqueeEnd: { rect in
                     onMarqueeEnd(rect, document)
-                })
+                },
+                contentVersion: contentVersion)
                 .background(
                     GeometryReader { hgeo in
                         Color.clear
