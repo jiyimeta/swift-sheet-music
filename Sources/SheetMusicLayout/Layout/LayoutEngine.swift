@@ -20,10 +20,32 @@ import SheetMusicCore
 /// - `LayoutEngine+Translate.swift`   — element-tree vertical translate.
 @available(macOS 15.0, iOS 16.0, *)
 public enum LayoutEngine {
+    /// Lay out `score` into a `LayoutDocument`. Equivalent to the
+    /// cache-aware overload with `cache: nil` — every per-measure
+    /// computation runs from scratch.
     public static func layout(
         score: Score,
         options: ScoreViewOptions,
         availableWidth: CGFloat
+    ) -> LayoutDocument {
+        layout(
+            score: score,
+            options: options,
+            availableWidth: availableWidth,
+            cache: nil)
+    }
+
+    /// Cache-aware overload. Reuse the same `LayoutCache` instance
+    /// across edits and unchanged measures will skip per-measure
+    /// recomputation.
+    ///
+    /// The cache is rebuilt in place each call: prior entries are
+    /// kept only when their inputs match the current call.
+    public static func layout(
+        score: Score,
+        options: ScoreViewOptions,
+        availableWidth: CGFloat,
+        cache: LayoutCache?
     ) -> LayoutDocument {
         let metrics = StaffMetrics(staffSize: options.staffSize)
         let effectiveMelismaTicks = computeEffectiveMelismaTicks(
@@ -37,7 +59,8 @@ public enum LayoutEngine {
             metrics: metrics,
             availableWidth: availableWidth,
             melismaContinuations: melismas,
-            effectiveMelismaTicks: effectiveMelismaTicks
+            effectiveMelismaTicks: effectiveMelismaTicks,
+            cache: cache
         )
         let packedSystems = packSystems(context: context)
         // Title block at the top of the document. Built first so we
@@ -206,5 +229,10 @@ public enum LayoutEngine {
         /// "melisma?" check is consistent with the continuation
         /// plan from `computeMelismaContinuations`.
         let effectiveMelismaTicks: [MelismaLyricKey: Int]
+        /// Optional incremental-layout cache. When non-nil, the
+        /// layout pass reads prior per-measure results from it and
+        /// rebuilds it in place with this call's results. See
+        /// `LayoutCache`.
+        let cache: LayoutCache?
     }
 }
