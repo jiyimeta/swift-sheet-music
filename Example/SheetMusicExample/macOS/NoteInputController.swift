@@ -13,15 +13,19 @@ import SheetMusicUI
 @Observable
 final class NoteInputController {
     private(set) var editor: ScoreEditor
-    /// Bumped on every applied / undone / redone edit so SwiftUI
-    /// `.task(id:)` observers downstream of `score` rebuild their
-    /// derived state (LayoutDocument, etc).
+    /// Bumped on every applied / undone / redone edit. Host views
+    /// can `.onChange(of:)` this to trigger derived rebuilds.
     private(set) var version = UUID()
     /// Whether the toolbar input toggle is on. The key handler only
     /// routes letter keys when this is true.
     var isInputModeOn = false
     /// Octave used by the next letter-key input. 4 = middle-C octave.
     var inputOctave = 4
+    /// Fires after every successful edit (apply / undo / redo).
+    /// The host wires this up after construction so layout caches
+    /// rebuild even when the change comes from `UndoManager`'s
+    /// internal closure (which can't reach SwiftUI state on its own).
+    var onScoreEdited: (@MainActor () -> Void)?
 
     var score: Score { editor.score }
 
@@ -46,7 +50,25 @@ final class NoteInputController {
     ) throws {
         try editor.apply(command)
         version = UUID()
+        onScoreEdited?()
         registerUndo(with: manager)
+    }
+
+    /// Direct undo path used by the host's keyboard handler when the
+    /// system-level `UndoManager` integration isn't reachable (e.g.
+    /// the score viewport is not a text-input responder, so Edit >
+    /// Undo never reaches us). Mutates the editor and bumps version
+    /// so the host's `onScoreEdited` callback can refresh layout.
+    func undo() throws {
+        try editor.undo()
+        version = UUID()
+        onScoreEdited?()
+    }
+
+    func redo() throws {
+        try editor.redo()
+        version = UUID()
+        onScoreEdited?()
     }
 
     private func registerUndo(with manager: UndoManager?) {
@@ -55,6 +77,7 @@ final class NoteInputController {
             do {
                 try target.editor.undo()
                 target.version = UUID()
+                target.onScoreEdited?()
                 target.registerRedo(with: manager)
             } catch {
                 NSLog("NoteInputController.undo failed: \(error)")
@@ -68,6 +91,7 @@ final class NoteInputController {
             do {
                 try target.editor.redo()
                 target.version = UUID()
+                target.onScoreEdited?()
                 target.registerUndo(with: manager)
             } catch {
                 NSLog("NoteInputController.redo failed: \(error)")

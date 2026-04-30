@@ -133,15 +133,19 @@ struct ContentViewMac: View {
         .onAppear(perform: installKeyMonitor)
         .onDisappear(perform: removeKeyMonitor)
         .toolbar {
-            ToolbarItem {
-                Toggle(isOn: Binding(
-                    get: { inputController?.isInputModeOn ?? false },
-                    set: { inputController?.isInputModeOn = $0 }
-                )) {
-                    Label("Input Mode", systemImage: "pencil.tip")
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    inputController?.isInputModeOn.toggle()
+                } label: {
+                    let on = inputController?.isInputModeOn ?? false
+                    Label(
+                        on ? "Input Mode (on)" : "Input Mode",
+                        systemImage: on ? "pencil.tip.crop.circle.fill" : "pencil.tip")
+                        .symbolRenderingMode(.hierarchical)
+                        .foregroundStyle(on ? Color.accentColor : .primary)
                 }
                 .disabled(inputController == nil)
-                .help("Type C/D/E/F/G/A/B to drop a note on the selected rest. ↑/↓ shift octave.")
+                .help("Toggle note input mode. Then click a rest and type C/D/E/F/G/A/B; ↑/↓ shifts octave; ⌘Z undoes.")
             }
         }
     }
@@ -198,14 +202,57 @@ struct ContentViewMac: View {
                 togglePlayback()
                 return nil
             }
+            // ⌘Z / ⌘⇧Z routed to our editor directly. SwiftUI's
+            // `@Environment(\.undoManager)` requires the focused
+            // responder to also expose one; our score viewport is
+            // not a text-input responder, so the Edit menu's Undo
+            // never reaches us. Catching the chord here works
+            // regardless of focus state. The `UndoManager`
+            // registration in `NoteInputController` is kept for
+            // future Edit-menu integration.
+            if event.modifierFlags.contains(.command),
+               !event.isARepeat,
+               let chars = event.charactersIgnoringModifiers,
+               chars.first == "z" {
+                if let controller = inputController {
+                    handleEditorUndoRedo(
+                        controller: controller,
+                        redo: event.modifierFlags.contains(.shift))
+                    return nil
+                }
+            }
             if let controller = inputController, controller.isInputModeOn {
-                if let consumed = handleInputModeKey(
-                    event, controller: controller
-                ) {
-                    return consumed ? nil : event
+                if handleInputModeKey(event, controller: controller) {
+                    return nil
                 }
             }
             return event
+        }
+    }
+
+    private func handleEditorUndoRedo(
+        controller: NoteInputController,
+        redo: Bool
+    ) {
+        do {
+            if redo {
+                try controller.redo()
+                errorMessage = "Redo"
+            } else {
+                try controller.undo()
+                errorMessage = "Undo"
+            }
+            // Drop selection to a known value before adopting. The
+            // apply path's synchronous refresh appears to depend on
+            // a `selection` write to nudge SwiftUI's invalidation
+            // (purely score / horizontalDoc writes from an NSEvent
+            // monitor closure don't always trigger body re-eval).
+            // Setting `.none` is harmless: after undo / redo the
+            // user typically wants to click the next target anyway.
+            selection = .none
+            adoptEditedScore(controller.score)
+        } catch {
+            errorMessage = error.localizedDescription
         }
     }
 
@@ -216,37 +263,53 @@ struct ContentViewMac: View {
         }
     }
 
-    /// Returns nil if the key wasn't relevant to input mode (caller
-    /// passes the event through). Returns true if it was consumed,
-    /// false if it was relevant-but-rejected (also pass through).
+    /// Routes a keydown while input mode is on. Returns `true` when
+    /// the event has been consumed (caller returns `nil` to AppKit
+    /// so no beep plays); `false` when it should propagate (e.g. a
+    /// letter unrelated to note input, leaving other shortcuts
+    /// reachable).
     private func handleInputModeKey(
         _ event: NSEvent,
         controller: NoteInputController
-    ) -> Bool? {
+    ) -> Bool {
+        // Octave shift via arrow keys. Always consume so AppKit
+        // doesn't beep at the unhandled event.
         if !event.isARepeat,
            event.modifierFlags
             .intersection(.deviceIndependentFlagsMask).isEmpty {
             switch event.keyCode {
             case 126: // up arrow
                 controller.inputOctave = min(8, controller.inputOctave + 1)
+                errorMessage = "Input octave: \(controller.inputOctave)"
                 return true
             case 125: // down arrow
                 controller.inputOctave = max(0, controller.inputOctave - 1)
+                errorMessage = "Input octave: \(controller.inputOctave)"
                 return true
             default:
                 break
             }
         }
         guard let chars = event.charactersIgnoringModifiers,
-              let letter = chars.first,
-              let mapped = NoteInputKeyMap.pitch(
-                forLetter: letter,
-                octave: controller.inputOctave)
+              let letter = chars.first
         else {
-            return nil
+            return false
+        }
+        guard let mapped = NoteInputKeyMap.pitch(
+            forLetter: letter,
+            octave: controller.inputOctave)
+        else {
+            // Letter unrelated to note entry — let other shortcuts /
+            // text inputs through. (No beep risk because the system
+            // will deliver it to whatever responder is appropriate.)
+            return false
         }
         guard case let .single(.rest(restID)) = selection else {
-            return false
+            // Letter is mapped but there's no rest to drop it onto.
+            // Consume it so the user doesn't get a beep, and give
+            // visible feedback.
+            errorMessage = "Click a rest to insert a note. Current selection: \(describeSelection(selection))."
+            return true
         }
         do {
             try controller.apply(
@@ -265,12 +328,29 @@ struct ContentViewMac: View {
                 elementIndex: restID.elementIndex,
                 noteIndexInChord: 0)
             selection = .single(.note(noteID))
-            score = controller.score
-            scoreVersion = UUID()
-            return true
+            // Synchronous layout rebuild. `.onChange(of: editVersion)`
+            // is unreliable from an `NSEvent` monitor closure: the
+            // @State write gets deferred past the current frame so
+            // the user sees no change until the next interaction.
+            // Inline rebuild guarantees the inserted note appears
+            // immediately. The `editVersion` / `.onChange` path is
+            // still wired so ⌘Z (which runs in a different context)
+            // continues to refresh.
+            adoptEditedScore(controller.score)
+            errorMessage = "Inserted \(String(letter).uppercased())\(controller.inputOctave) (MIDI \(mapped.pitch)). Click another rest to keep typing."
         } catch {
             errorMessage = error.localizedDescription
-            return true
+        }
+        return true
+    }
+
+    private func describeSelection(_ s: ScoreSelection) -> String {
+        switch s {
+        case .none: return "none"
+        case .single(.rest): return "rest"
+        case .single(.note): return "note"
+        case .range: return "range"
+        case .multi: return "multi"
         }
     }
 
@@ -529,7 +609,9 @@ struct ContentViewMac: View {
         if let inputController {
             inputController.reset(score: loaded)
         } else {
-            inputController = NoteInputController(score: loaded)
+            let controller = NoteInputController(score: loaded)
+            controller.onScoreEdited = handleControllerEdit
+            inputController = controller
         }
         sourceName = name
         errorMessage = nil
@@ -537,6 +619,50 @@ struct ContentViewMac: View {
         selection = .none
         pendingHorizontalScroll = nil
         playbackEngine.prepareInBackground(score: loaded)
+    }
+
+    /// Wired into `NoteInputController.onScoreEdited`. Runs after
+    /// every successful apply / undo / redo — including from inside
+    /// the `UndoManager` closure (⌘Z), which executes outside
+    /// SwiftUI's normal update cycle and so can't be picked up
+    /// reliably by `.onChange(of:)`. Inline @State writes from this
+    /// callback DO propagate, since `adoptEditedScore` mutates
+    /// stored `@State` properties directly via the captured view
+    /// struct's State backing storage.
+    private func handleControllerEdit() {
+        if let edited = inputController?.score {
+            adoptEditedScore(edited)
+        }
+    }
+
+    /// Adopt a score edited via `inputController`.
+    ///
+    /// Optimised vs `adoptLoadedScore` to keep keystrokes responsive
+    /// on large scores (`test.mscx` is ~1356 measures):
+    ///   * `horizontalContexts` is NOT recomputed — a single-note
+    ///     edit can't change clef / key / time / part metadata.
+    ///   * The horizontal layout's `availableWidth` reuses the
+    ///     existing `horizontalDoc.contentWidth`. The width *might*
+    ///     drift by a glyph's worth on note-vs-rest swaps, but the
+    ///     layout engine renormalises within the system on its own
+    ///     pass — saving the full-score `naturalContentWidth` walk.
+    private func adoptEditedScore(_ edited: Score) {
+        let hOpts = Self.horizontalOptions
+        // Reuse the previously-laid-out total width as the
+        // `availableWidth` input. For a single-note edit this is
+        // within a glyph's width of the true natural content width,
+        // and the layout engine renormalises systems internally —
+        // saves a full-score width walk.
+        let availableWidth = horizontalDoc?.size.width
+            ?? LayoutEngine.naturalContentWidth(
+                score: edited, options: hOpts)
+        horizontalDoc = LayoutEngine.layout(
+            score: edited, options: hOpts,
+            availableWidth: availableWidth)
+        verticalDoc = nil
+        pdfLayout = nil
+        score = edited
+        scoreVersion = UUID()
     }
 }
 #endif
