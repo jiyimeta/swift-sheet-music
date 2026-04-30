@@ -700,6 +700,7 @@ struct ContentViewMac: View {
     ///     layout engine renormalises within the system on its own
     ///     pass — saving the full-score `naturalContentWidth` walk.
     private func adoptEditedScore(_ edited: Score) {
+        let t0 = Date()
         let hOpts = Self.horizontalOptions
         // Reuse the previously-laid-out total width as the
         // `availableWidth` input. For a single-note edit this is
@@ -709,14 +710,36 @@ struct ContentViewMac: View {
         let availableWidth = horizontalDoc?.size.width
             ?? LayoutEngine.naturalContentWidth(
                 score: edited, options: hOpts)
+        let tLayoutStart = Date()
         horizontalDoc = LayoutEngine.layout(
             score: edited, options: hOpts,
             availableWidth: availableWidth,
             cache: layoutCache)
+        let layoutMs = Date().timeIntervalSince(tLayoutStart) * 1000
         verticalDoc = nil
         pdfLayout = nil
         score = edited
         scoreVersion = UUID()
+        let stateDoneMs = Date().timeIntervalSince(t0) * 1000
+        // Schedule probes at three milestones:
+        //   - tick:  next runloop iteration (~SwiftUI commit done)
+        //   - paint: after Core Animation flushes the next frame
+        //            (closest proxy for "user sees it")
+        DispatchQueue.main.async {
+            let tickMs = Date().timeIntervalSince(t0) * 1000
+            CATransaction.begin()
+            CATransaction.setCompletionBlock {
+                let paintMs = Date().timeIntervalSince(t0) * 1000
+                print(String(
+                    format: "edit: layout=%.1f state=%.1f tick=%.1f paint=%.1f ms (total %.1fms)",
+                    layoutMs,
+                    stateDoneMs - layoutMs,
+                    tickMs - stateDoneMs,
+                    paintMs - tickMs,
+                    paintMs))
+            }
+            CATransaction.commit()
+        }
     }
 }
 #endif
