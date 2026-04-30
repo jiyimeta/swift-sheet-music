@@ -36,6 +36,11 @@ struct HorizontalScoreContainer: View {
     /// without changing `document.size`, so the scroll view's
     /// optimisation guard doesn't swallow the refresh.
     var contentVersion: AnyHashable? = nil
+    /// Reports the score area's live viewport size to the host so
+    /// it can decide whether an offscreen measure needs an
+    /// auto-scroll on edit. Fires on first layout and on every
+    /// resize. Optional — preserves callers that don't need it.
+    var onViewportSizeChange: ((CGSize) -> Void)? = nil
 
     @State private var marqueeRect: CGRect?
 
@@ -97,6 +102,12 @@ struct HorizontalScoreContainer: View {
                 .background(
                     GeometryReader { hgeo in
                         Color.clear
+                            .onAppear {
+                                onViewportSizeChange?(hgeo.size)
+                            }
+                            .onChange(of: hgeo.size) { _, newSize in
+                                onViewportSizeChange?(newSize)
+                            }
                             .onChange(of: playbackCursor) { _, newCursor in
                                 onCursorChange(newCursor, hgeo.size.width)
                             }

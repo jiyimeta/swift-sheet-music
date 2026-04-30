@@ -63,6 +63,12 @@ struct ContentViewMac: View {
     /// Edit-mode controller. Lives across score reloads —
     /// `reset(score:)` is called from `adoptLoadedScore`.
     @State private var inputController: NoteInputController?
+    /// Live size of the horizontal score viewport. Populated by
+    /// `HorizontalScoreContainer.onViewportSizeChange` on first
+    /// layout / resize. Used by the edit-time scroll helper to
+    /// decide whether the affected measure is already in view.
+    /// `.zero` until the container reports a real value.
+    @State private var horizontalViewportSize: CGSize = .zero
     @Environment(\.undoManager) private var undoManager
     /// Local NSEvent monitor that turns the spacebar into a play /
     /// pause toggle (MuseScore convention). Stored so we can remove
@@ -259,11 +265,34 @@ struct ContentViewMac: View {
         // staleness.
         let edited = controller.score
         let isRedo = redo
+        let affectedMeasure = controller.editor.lastAffectedLocation?.measureIndex
         DispatchQueue.main.async {
             errorMessage = isRedo ? "Redo" : "Undo"
             selection = .none
             adoptEditedScore(edited)
+            if let mi = affectedMeasure {
+                scrollToAffectedMeasure(measureIndex: mi)
+            }
         }
+    }
+
+    /// Scroll the horizontal viewport so `measureIndex`'s leading
+    /// edge sits at the visible left edge. No-ops in non-horizontal
+    /// modes (vertical / paged / pdf each have their own pathway,
+    /// and editing them isn't supported in this slice yet).
+    private func scrollToAffectedMeasure(measureIndex: Int) {
+        guard layoutMode == .horizontal,
+              let doc = horizontalDoc,
+              horizontalViewportSize.width > 0
+        else { return }
+        scrollToMeasureMac(
+            measureIndex: measureIndex,
+            doc: doc,
+            viewportWidth: horizontalViewportSize.width,
+            magnification: magnification,
+            horizontalScrollX: horizontalScrollX,
+            horizontalScrollY: horizontalScrollY,
+            pendingScroll: $pendingHorizontalScroll)
     }
 
     private func removeKeyMonitor() {
@@ -338,15 +367,16 @@ struct ContentViewMac: View {
                 elementIndex: restID.elementIndex,
                 noteIndexInChord: 0)
             selection = .single(.note(noteID))
-            // Synchronous layout rebuild. `.onChange(of: editVersion)`
-            // is unreliable from an `NSEvent` monitor closure: the
-            // @State write gets deferred past the current frame so
-            // the user sees no change until the next interaction.
-            // Inline rebuild guarantees the inserted note appears
-            // immediately. The `editVersion` / `.onChange` path is
-            // still wired so ⌘Z (which runs in a different context)
-            // continues to refresh.
             adoptEditedScore(controller.score)
+            // Match the click-on-note feedback path: brief preview
+            // of the just-inserted pitch via the playback engine.
+            playbackEngine.playPreview(
+                noteID: noteID, in: controller.score)
+            // Pull the affected measure into view if it isn't
+            // already (handles fast typing past the visible window
+            // and edits on offscreen rests).
+            scrollToAffectedMeasure(
+                measureIndex: restID.measureIndex)
             errorMessage = "Inserted \(String(letter).uppercased())\(controller.inputOctave) (MIDI \(mapped.pitch)). Click another rest to keep typing."
         } catch {
             errorMessage = error.localizedDescription
@@ -418,7 +448,10 @@ struct ContentViewMac: View {
                             horizontalScrollY: horizontalScrollY,
                             pendingScroll: $pendingHorizontalScroll)
                     },
-                    contentVersion: AnyHashable(scoreVersion))
+                    contentVersion: AnyHashable(scoreVersion),
+                    onViewportSizeChange: { size in
+                        horizontalViewportSize = size
+                    })
             }
         case .paged:
             PagedScoreContainer(
