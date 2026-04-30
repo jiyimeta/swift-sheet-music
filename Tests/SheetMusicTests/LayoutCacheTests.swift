@@ -36,5 +36,62 @@ struct LayoutCacheTests {
         #expect(cached.systems == baseline.systems)
         #expect(cached.size == baseline.size)
     }
+
+    @Test("Cold call: every width is a miss")
+    func coldCallAllWidthMisses() {
+        guard #available(macOS 15.0, *) else { return }
+        let score = Self.sampleScore()
+        let cache = LayoutCache()
+        _ = LayoutEngine.layout(
+            score: score, options: .init(),
+            availableWidth: 800, cache: cache)
+        #expect(cache.entries.count == 3)
+        #expect(cache.widthHits == 0)
+        #expect(cache.widthMisses == 3)
+    }
+
+    @Test("Warm call on identical score: every width is a hit")
+    func warmCallAllWidthHits() {
+        guard #available(macOS 15.0, *) else { return }
+        let score = Self.sampleScore()
+        let cache = LayoutCache()
+        let first = LayoutEngine.layout(
+            score: score, options: .init(),
+            availableWidth: 800, cache: cache)
+        let second = LayoutEngine.layout(
+            score: score, options: .init(),
+            availableWidth: 800, cache: cache)
+        #expect(first.systems == second.systems)
+        #expect(first.size == second.size)
+        #expect(cache.widthHits == 3)
+        #expect(cache.widthMisses == 0)
+    }
+
+    @Test("Editing one measure: only that measure misses")
+    func singleMeasureEditMisses() {
+        guard #available(macOS 15.0, *) else { return }
+        let scoreA = Self.sampleScore()
+        let cache = LayoutCache()
+        _ = LayoutEngine.layout(
+            score: scoreA, options: .init(),
+            availableWidth: 800, cache: cache)
+        // Now edit measure 1: replace its content.
+        var staff = scoreA.staves[0]
+        var measures = staff.measures
+        let editedMeasure1 = Measure(voices: [Voice(elements: [
+            .chord(Chord(duration: .half, notes: [
+                Note(pitch: 60, tpc: 14)])),
+            .rest(Rest(duration: .half))
+        ])])
+        measures[1] = editedMeasure1
+        staff = StaffContent(id: staff.id, measures: measures)
+        let scoreB = Score(division: scoreA.division, staves: [staff])
+        _ = LayoutEngine.layout(
+            score: scoreB, options: .init(),
+            availableWidth: 800, cache: cache)
+        // Measures 0 and 2 unchanged → 2 width hits; measure 1 → 1 miss.
+        #expect(cache.widthHits == 2)
+        #expect(cache.widthMisses == 1)
+    }
 }
 #endif

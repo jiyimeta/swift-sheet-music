@@ -16,6 +16,18 @@ extension LayoutEngine {
         }
 
         let measureCount = firstStaff.measures.count
+        // Stash the prior cache entries before rebuilding. Each
+        // measure that hits the cache is copied forward (carrying its
+        // placement results, populated later in buildSystem). Misses
+        // produce a fresh entry with empty `placements`.
+        let priorEntries = context.cache?.entries ?? [:]
+        context.cache?.entries = [:]
+        context.cache?.widthHits = 0
+        context.cache?.widthMisses = 0
+        context.cache?.placementHits = 0
+        context.cache?.placementMisses = 0
+        let sp = context.metrics.sp
+        let division = context.score.division
         // Per-measure minimum width via the same cross-staff
         // tick-aggregation `tickColumns` will use, so the spacing
         // pass and the placement pass agree on segment widths.
@@ -23,18 +35,40 @@ extension LayoutEngine {
         // staves subdivide a long element — see
         // `crossStaffMinimumMeasureWidth`.)
         let minWidths: [CGFloat] = (0..<measureCount).map { i in
+            let measuresAt = context.score.staves.map { staff in
+                i < staff.measures.count ? staff.measures[i] : nil
+            }
+            if let prior = priorEntries[i],
+               prior.sp == sp,
+               prior.division == division,
+               prior.measures == measuresAt {
+                // Cache hit: copy the prior entry forward verbatim.
+                // `buildSystem` will trust its `placements` only
+                // when the per-staff inputs also match.
+                context.cache?.entries[i] = prior
+                context.cache?.widthHits += 1
+                return prior.minWidth
+            }
+            context.cache?.widthMisses += 1
             let baseHeader = computeHeaderSchedule(
                 measureIdx: i,
                 staves: context.score.staves,
                 metrics: context.metrics,
                 synthesizeClefForAllStaves: false,
                 synthesizeKeySigForAllStaves: false)
-            return crossStaffMinimumMeasureWidth(
+            let w = crossStaffMinimumMeasureWidth(
                 staves: context.score.staves,
                 measureIdx: i,
                 metrics: context.metrics,
                 headerSchedule: baseHeader,
-                division: context.score.division)
+                division: division)
+            context.cache?.entries[i] = LayoutCache.Entry(
+                measures: measuresAt,
+                sp: sp,
+                division: division,
+                minWidth: w,
+                placements: [:])
+            return w
         }
 
         // Clef state persists ACROSS systems: engraving convention

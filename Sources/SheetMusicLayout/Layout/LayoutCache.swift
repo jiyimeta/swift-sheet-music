@@ -25,6 +25,16 @@ public final class LayoutCache: @unchecked Sendable {
     /// Per-measure cache entries. The key is `measureIdx`.
     var entries: [Int: Entry] = [:]
 
+    /// Hit/miss counters, useful for tests to assert that the cache
+    /// is actually taking effect. Counts one event per per-measure
+    /// width lookup and per per-(measure, staff) placement lookup.
+    /// Reset to zero at the start of every `LayoutEngine.layout(...)`
+    /// call.
+    var widthHits: Int = 0
+    var widthMisses: Int = 0
+    var placementHits: Int = 0
+    var placementMisses: Int = 0
+
     /// One measure's cached inputs and outputs. The width portion is
     /// consumed by `packSystems`; the per-staff `placements`
     /// portion by `buildSystem`.
