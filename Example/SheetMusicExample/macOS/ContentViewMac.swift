@@ -320,8 +320,16 @@ struct ContentViewMac: View {
         // when a note is selected; otherwise shift the input
         // octave (used for the next letter typed onto a rest).
         // Always consume so AppKit doesn't beep on unhandled events.
+        //
+        // We only filter out the "real" modifier keys (cmd / ctrl /
+        // option / shift). Arrow keys themselves carry `.function`
+        // and `.numericPad` flags on macOS — testing against the
+        // full `deviceIndependentFlagsMask` for `.isEmpty` rejects
+        // every plain arrow press.
+        let blockingMods: NSEvent.ModifierFlags =
+            [.command, .control, .option, .shift]
         if event.modifierFlags
-            .intersection(.deviceIndependentFlagsMask).isEmpty,
+            .intersection(blockingMods).isEmpty,
            event.keyCode == 126 || event.keyCode == 125 {
             let delta = event.keyCode == 126 ? 1 : -1
             if case .single(.note(let noteID)) = selection {
