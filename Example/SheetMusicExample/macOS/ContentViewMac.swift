@@ -316,23 +316,26 @@ struct ContentViewMac: View {
         _ event: NSEvent,
         controller: NoteInputController
     ) -> Bool {
-        // Octave shift via arrow keys. Always consume so AppKit
-        // doesn't beep at the unhandled event.
-        if !event.isARepeat,
-           event.modifierFlags
-            .intersection(.deviceIndependentFlagsMask).isEmpty {
-            switch event.keyCode {
-            case 126: // up arrow
-                controller.inputOctave = min(8, controller.inputOctave + 1)
+        // Up / down arrow: shift the selected note by ±1 semitone
+        // when a note is selected; otherwise shift the input
+        // octave (used for the next letter typed onto a rest).
+        // Always consume so AppKit doesn't beep on unhandled events.
+        if event.modifierFlags
+            .intersection(.deviceIndependentFlagsMask).isEmpty,
+           event.keyCode == 126 || event.keyCode == 125 {
+            let delta = event.keyCode == 126 ? 1 : -1
+            if case .single(.note(let noteID)) = selection {
+                shiftSelectedNote(
+                    noteID: noteID, by: delta, controller: controller)
+            } else if !event.isARepeat {
+                // Octave shift only fires on the initial press —
+                // holding the key shouldn't crank the octave through
+                // the whole keyboard.
+                controller.inputOctave = max(
+                    0, min(8, controller.inputOctave + delta))
                 errorMessage = "Input octave: \(controller.inputOctave)"
-                return true
-            case 125: // down arrow
-                controller.inputOctave = max(0, controller.inputOctave - 1)
-                errorMessage = "Input octave: \(controller.inputOctave)"
-                return true
-            default:
-                break
             }
+            return true
         }
         guard let chars = event.charactersIgnoringModifiers,
               let letter = chars.first
@@ -387,6 +390,41 @@ struct ContentViewMac: View {
             errorMessage = error.localizedDescription
         }
         return true
+    }
+
+    /// Apply a ±semitone shift to the currently-selected note.
+    /// Routed through `SetNotePitch` so undo / redo work the same
+    /// way as letter-key insertion. The new TPC is computed by
+    /// `PitchSpelling.shiftedTpc` (direction-aware natural-neighbor).
+    private func shiftSelectedNote(
+        noteID: NoteID,
+        by semitones: Int,
+        controller: NoteInputController
+    ) {
+        guard let original = controller.score[noteID] else {
+            errorMessage = "Selected note not found in score"
+            return
+        }
+        guard let shifted = original.shifted(bySemitones: semitones)
+        else {
+            errorMessage = "Pitch out of MIDI range (0…127)"
+            return
+        }
+        do {
+            try controller.apply(
+                SetNotePitch(
+                    at: noteID,
+                    pitch: shifted.pitch,
+                    tpc: shifted.tpc),
+                undoManager: undoManager)
+            adoptEditedScore(controller.score)
+            playbackEngine.playPreview(
+                noteID: noteID, in: controller.score)
+            scrollToAffectedMeasure(measureIndex: noteID.measureIndex)
+            errorMessage = "Shifted to MIDI \(shifted.pitch)"
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 
     private func describeSelection(_ s: ScoreSelection) -> String {
