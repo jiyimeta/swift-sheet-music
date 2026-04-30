@@ -415,20 +415,33 @@ struct ContentViewMac: View {
             errorMessage = "Selected note not found in score"
             return
         }
-        let activeKey = controller.score.activeKey(at: noteID)
+        // Drum staves: shift by pitch but ignore the staff's key
+        // signature for spelling, and never paint an accidental glyph.
+        // Drum noteheads are positioned by the part's drum-line map,
+        // not by chromatic spelling, and accidentals on a drum staff
+        // are nonsensical even when the staff happens to carry a
+        // KeySig element from the source file.
+        let isDrumStaff = noteID.staffIndex
+            < controller.score.parts.count
+            && controller.score.parts[noteID.staffIndex]
+                .instrument.useDrumset
+        let keySigForSpelling = isDrumStaff
+            ? 0
+            : controller.score.activeKey(at: noteID)
         guard let shifted = original.shifted(
-            bySemitones: semitones, in: activeKey)
+            bySemitones: semitones, in: keySigForSpelling)
         else {
             errorMessage = "Pitch out of MIDI range (0…127)"
             return
         }
+        let accidentalToWrite = isDrumStaff ? nil : shifted.accidental
         do {
             try controller.apply(
                 SetNotePitch(
                     at: noteID,
                     pitch: shifted.pitch,
                     tpc: shifted.tpc,
-                    accidental: shifted.accidental),
+                    accidental: accidentalToWrite),
                 undoManager: undoManager)
             adoptEditedScore(controller.score)
             playbackEngine.playPreview(
