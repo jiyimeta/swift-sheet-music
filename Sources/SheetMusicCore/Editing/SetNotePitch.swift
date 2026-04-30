@@ -1,20 +1,32 @@
 import Foundation
 
-/// Retunes a note (changes its MIDI `pitch` and `tpc`) without
-/// affecting its accidental, ties, or other notehead metadata.
+/// Retunes a note (changes its MIDI `pitch`, `tpc`, and the
+/// accidental override the layout renders).
 ///
 /// Used for arrow-key transpose and for replacing one note within a
 /// chord. The inverse is another `SetNotePitch` carrying the old
-/// values.
+/// values, so undo restores both the pitch and the accidental
+/// glyph that was visible before.
 public struct SetNotePitch: EditCommand {
     public let location: NoteID
     public let pitch: Int
     public let tpc: Int
+    /// Accidental glyph to display on the note. Pass `nil` to
+    /// suppress (the note matches the key sig at this beat).
+    /// Computed via `PitchSpelling.displayedAccidental(forTpc:in:)`
+    /// for arrow-key shifts.
+    public let accidental: Accidental?
 
-    public init(at location: NoteID, pitch: Int, tpc: Int) {
+    public init(
+        at location: NoteID,
+        pitch: Int,
+        tpc: Int,
+        accidental: Accidental? = nil
+    ) {
         self.location = location
         self.pitch = pitch
         self.tpc = tpc
+        self.accidental = accidental
     }
 
     public var affectedLocation: VoiceElementID { VoiceElementID(location) }
@@ -33,10 +45,13 @@ public struct SetNotePitch: EditCommand {
         var note = chord.notes[location.noteIndexInChord]
         note.pitch = pitch
         note.tpc = tpc
+        note.accidental = accidental
         chord.notes[location.noteIndexInChord] = note
         score[veID] = .chord(chord)
-        return SetNotePitch(at: location,
-                            pitch: oldNote.pitch,
-                            tpc: oldNote.tpc)
+        return SetNotePitch(
+            at: location,
+            pitch: oldNote.pitch,
+            tpc: oldNote.tpc,
+            accidental: oldNote.accidental)
     }
 }

@@ -403,7 +403,9 @@ struct ContentViewMac: View {
     /// Apply a ±semitone shift to the currently-selected note.
     /// Routed through `SetNotePitch` so undo / redo work the same
     /// way as letter-key insertion. The new TPC is computed by
-    /// `PitchSpelling.shiftedTpc` (direction-aware natural-neighbor).
+    /// `PitchSpelling.shiftedTpc` using the active key signature
+    /// at the note's location, matching MuseScore's
+    /// `EditNote::upDownChromatic` behaviour.
     private func shiftSelectedNote(
         noteID: NoteID,
         by semitones: Int,
@@ -413,7 +415,9 @@ struct ContentViewMac: View {
             errorMessage = "Selected note not found in score"
             return
         }
-        guard let shifted = original.shifted(bySemitones: semitones)
+        let activeKey = controller.score.activeKey(at: noteID)
+        guard let shifted = original.shifted(
+            bySemitones: semitones, in: activeKey)
         else {
             errorMessage = "Pitch out of MIDI range (0…127)"
             return
@@ -423,7 +427,8 @@ struct ContentViewMac: View {
                 SetNotePitch(
                     at: noteID,
                     pitch: shifted.pitch,
-                    tpc: shifted.tpc),
+                    tpc: shifted.tpc,
+                    accidental: shifted.accidental),
                 undoManager: undoManager)
             adoptEditedScore(controller.score)
             playbackEngine.playPreview(

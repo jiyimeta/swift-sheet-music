@@ -63,12 +63,15 @@ struct PitchSpellingTests {
             from: 63, priorTpc: 23, to: 64) == 18)
     }
 
-    @Test("Note.shifted updates pitch + tpc and clamps at MIDI bounds")
+    @Test("Note.shifted updates pitch + tpc + accidental")
     func noteShiftedConvenience() {
+        // C → C# in C major: accidental becomes .sharp (mismatch
+        // with key alt 0 for C).
         let c4 = Note(pitch: 60, tpc: 14)
         let cSharp4 = c4.shifted(bySemitones: 1)
         #expect(cSharp4?.pitch == 61)
         #expect(cSharp4?.tpc == 21)
+        #expect(cSharp4?.accidental == .sharp)
         // Out of range above
         let high = Note(pitch: 127, tpc: 19)
         #expect(high.shifted(bySemitones: 1) == nil)
@@ -77,16 +80,87 @@ struct PitchSpellingTests {
         #expect(low.shifted(bySemitones: -1) == nil)
     }
 
-    @Test("Note.shifted preserves ties / accidental override / glissando")
+    @Test("Note.shifted preserves ties / glissando, recomputes accidental")
     func noteShiftedPreservesMetadata() {
         let original = Note(
             pitch: 60, tpc: 14,
             accidental: .natural,
             tieForward: 1)
+        // +2 semitones in C major: 60 → 62 (D natural). D matches
+        // C major's key alt for D (0) → recomputed accidental is
+        // nil, replacing the now-stale .natural override.
         let shifted = original.shifted(bySemitones: 2)
         #expect(shifted?.pitch == 62)
         #expect(shifted?.tpc == 16)
-        #expect(shifted?.accidental == .natural)
+        #expect(shifted?.accidental == nil)
         #expect(shifted?.tieForward == 1)
+    }
+
+    @Test("displayedAccidental honours the key signature")
+    func displayedAccidentalRule() {
+        let aFlatMajor = -4
+        // In key (no symbol)
+        #expect(PitchSpelling.displayedAccidental(
+            forTpc: 14, in: aFlatMajor) == nil)            // C natural
+        #expect(PitchSpelling.displayedAccidental(
+            forTpc: 12, in: aFlatMajor) == nil)            // B♭ in key
+        #expect(PitchSpelling.displayedAccidental(
+            forTpc: 10, in: aFlatMajor) == nil)            // A♭ in key
+        // Out of key — needs symbol
+        #expect(PitchSpelling.displayedAccidental(
+            forTpc: 7,  in: aFlatMajor) == .flat)          // C♭
+        #expect(PitchSpelling.displayedAccidental(
+            forTpc: 5,  in: aFlatMajor) == .doubleFlat)    // B♭♭
+        #expect(PitchSpelling.displayedAccidental(
+            forTpc: 16, in: aFlatMajor) == .natural)       // D♮ cancels D♭
+        // C major (no flats / sharps)
+        #expect(PitchSpelling.displayedAccidental(
+            forTpc: 21, in: 0) == .sharp)                  // C♯
+        #expect(PitchSpelling.displayedAccidental(
+            forTpc: 14, in: 0) == nil)                     // C natural
+    }
+
+    /// MuseScore's reference behaviour in A♭ major (keySig = −4):
+    /// ascending from C natural follows the alternating
+    /// "diatonic-then-chromatic" pattern.
+    @Test("A♭ major ascending: C → D♭ → D♮ → E♭ → E♮ → F → F♯")
+    func ascendingInAFlatMajor() {
+        let key = -4
+        var n = Note(pitch: 60, tpc: 14)
+        n = n.shifted(bySemitones: 1, in: key)!
+        #expect(n.pitch == 61 && n.tpc == 9)     // D♭
+        n = n.shifted(bySemitones: 1, in: key)!
+        #expect(n.pitch == 62 && n.tpc == 16)    // D natural
+        n = n.shifted(bySemitones: 1, in: key)!
+        #expect(n.pitch == 63 && n.tpc == 11)    // E♭
+        n = n.shifted(bySemitones: 1, in: key)!
+        #expect(n.pitch == 64 && n.tpc == 18)    // E natural
+        n = n.shifted(bySemitones: 1, in: key)!
+        #expect(n.pitch == 65 && n.tpc == 13)    // F
+        n = n.shifted(bySemitones: 1, in: key)!
+        #expect(n.pitch == 66 && n.tpc == 20)    // F♯
+    }
+
+    /// MuseScore's reference behaviour in A♭ major (keySig = −4):
+    /// descending from C natural produces
+    /// C → C♭ → B♭ → B♭♭ → A♭ → G → G♭ — alternating
+    /// "stay on the same letter and add a flat" with "advance to
+    /// the previous letter at its key-sig alteration".
+    @Test("A♭ major descending: C → C♭ → B♭ → B♭♭ → A♭ → G → G♭")
+    func descendingInAFlatMajor() {
+        let key = -4
+        var n = Note(pitch: 60, tpc: 14)
+        n = n.shifted(bySemitones: -1, in: key)!
+        #expect(n.pitch == 59 && n.tpc == 7)     // C♭
+        n = n.shifted(bySemitones: -1, in: key)!
+        #expect(n.pitch == 58 && n.tpc == 12)    // B♭ (in key)
+        n = n.shifted(bySemitones: -1, in: key)!
+        #expect(n.pitch == 57 && n.tpc == 5)     // B♭♭
+        n = n.shifted(bySemitones: -1, in: key)!
+        #expect(n.pitch == 56 && n.tpc == 10)    // A♭ (in key)
+        n = n.shifted(bySemitones: -1, in: key)!
+        #expect(n.pitch == 55 && n.tpc == 15)    // G
+        n = n.shifted(bySemitones: -1, in: key)!
+        #expect(n.pitch == 54 && n.tpc == 8)     // G♭
     }
 }
