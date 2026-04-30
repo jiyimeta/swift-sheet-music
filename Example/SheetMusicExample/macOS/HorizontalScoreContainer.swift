@@ -31,6 +31,16 @@ struct HorizontalScoreContainer: View {
     /// implementation, which reads `horizontalScrollX` / etc. from
     /// its own state.
     let onCursorChange: (ScoreCursor?, CGFloat) -> Void
+    /// Forwarded to `MagnifyingScoreScrollView.contentVersion`.
+    /// Bumped by the host when an edit changes glyph content
+    /// without changing `document.size`, so the scroll view's
+    /// optimisation guard doesn't swallow the refresh.
+    var contentVersion: AnyHashable? = nil
+    /// Reports the score area's live viewport size to the host so
+    /// it can decide whether an offscreen measure needs an
+    /// auto-scroll on edit. Fires on first layout and on every
+    /// resize. Optional — preserves callers that don't need it.
+    var onViewportSizeChange: ((CGSize) -> Void)? = nil
 
     @State private var marqueeRect: CGRect?
 
@@ -87,10 +97,17 @@ struct HorizontalScoreContainer: View {
                 onTap: onTap,
                 onMarqueeEnd: { rect in
                     onMarqueeEnd(rect, document)
-                })
+                },
+                contentVersion: contentVersion)
                 .background(
                     GeometryReader { hgeo in
                         Color.clear
+                            .onAppear {
+                                onViewportSizeChange?(hgeo.size)
+                            }
+                            .onChange(of: hgeo.size) { _, newSize in
+                                onViewportSizeChange?(newSize)
+                            }
                             .onChange(of: playbackCursor) { _, newCursor in
                                 onCursorChange(newCursor, hgeo.size.width)
                             }

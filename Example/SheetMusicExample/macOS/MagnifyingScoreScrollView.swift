@@ -58,6 +58,17 @@ struct MagnifyingScoreScrollView: NSViewRepresentable {
     /// tap-without-movement clears the selection — matching the
     /// iOS marquee path.
     let onMarqueeEnd: (CGRect) -> Void
+    /// Opaque version stamp for the score's *content*. Not a
+    /// position / size value — the wrapper already gates on
+    /// `document.size`, but two LayoutDocuments can share the same
+    /// size while having different glyph content (e.g. a rest
+    /// replaced by a chord of the same duration). When this
+    /// changes, `updateNSView` reassigns the inner `rootView` so
+    /// note-input edits propagate without falling through the
+    /// document-size short-circuit. Pass nil to keep the legacy
+    /// "size only" gate (the perf-tuned default for scroll-driven
+    /// reflow).
+    var contentVersion: AnyHashable? = nil
 
     private var rootView: AnyView {
         AnyView(
@@ -188,15 +199,17 @@ struct MagnifyingScoreScrollView: NSViewRepresentable {
         let documentChanged = coord.lastDocumentSize != document.size
         let cursorChanged = coord.lastPlaybackCursor != playbackCursor
         let marqueeChanged = coord.lastMarqueeRect != marqueeRect
+        let contentChanged = coord.lastContentVersion != contentVersion
         if selectionChanged || voiceColorsChanged
             || documentChanged || cursorChanged
-            || marqueeChanged {
+            || marqueeChanged || contentChanged {
             coord.hostingView?.rootView = rootView
             coord.lastSelection = selection
             coord.lastVoiceColors = voiceColors
             coord.lastDocumentSize = document.size
             coord.lastPlaybackCursor = playbackCursor
             coord.lastMarqueeRect = marqueeRect
+            coord.lastContentVersion = contentVersion
         }
 
         // Apply external magnification changes (e.g., sidebar reset
@@ -280,6 +293,7 @@ struct MagnifyingScoreScrollView: NSViewRepresentable {
         var lastVoiceColors: [Int: Color] = [:]
         var lastDocumentSize: CGSize = .zero
         var lastPlaybackCursor: ScoreCursor?
+        var lastContentVersion: AnyHashable?
 
         init(contentInset: CGFloat) {
             self.contentInset = contentInset

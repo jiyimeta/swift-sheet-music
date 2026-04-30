@@ -60,6 +60,16 @@ struct ContentViewMac: View {
     /// `@Published` `state` / `currentCursor` change.
     @StateObject private var playbackEngine = PlaybackEngine(
         soundfontResolver: BundledSoundfontResolver())
+    /// Edit-mode controller. Lives across score reloads —
+    /// `reset(score:)` is called from `adoptLoadedScore`.
+    @State private var inputController: NoteInputController?
+    /// Live size of the horizontal score viewport. Populated by
+    /// `HorizontalScoreContainer.onViewportSizeChange` on first
+    /// layout / resize. Used by the edit-time scroll helper to
+    /// decide whether the affected measure is already in view.
+    /// `.zero` until the container reports a real value.
+    @State private var horizontalViewportSize: CGSize = .zero
+    @Environment(\.undoManager) private var undoManager
     /// Local NSEvent monitor that turns the spacebar into a play /
     /// pause toggle (MuseScore convention). Stored so we can remove
     /// it on disappear.
@@ -128,6 +138,22 @@ struct ContentViewMac: View {
         .onAppear(perform: loadBundled)
         .onAppear(perform: installKeyMonitor)
         .onDisappear(perform: removeKeyMonitor)
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    inputController?.isInputModeOn.toggle()
+                } label: {
+                    let on = inputController?.isInputModeOn ?? false
+                    Label(
+                        on ? "Input Mode (on)" : "Input Mode",
+                        systemImage: on ? "pencil.tip.crop.circle.fill" : "pencil.tip")
+                        .symbolRenderingMode(.hierarchical)
+                        .foregroundStyle(on ? Color.accentColor : .primary)
+                }
+                .disabled(inputController == nil)
+                .help("Toggle note input mode. Then click a rest and type C/D/E/F/G/A/B; ↑/↓ shifts octave; ⌘Z undoes.")
+            }
+        }
     }
 
     private func showOpenPanel() {
@@ -182,14 +208,189 @@ struct ContentViewMac: View {
                 togglePlayback()
                 return nil
             }
+            // ⌘Z / ⌘⇧Z routed to our editor directly. SwiftUI's
+            // `@Environment(\.undoManager)` requires the focused
+            // responder to also expose one; our score viewport is
+            // not a text-input responder, so the Edit menu's Undo
+            // never reaches us. Catching the chord here works
+            // regardless of focus state. The `UndoManager`
+            // registration in `NoteInputController` is kept for
+            // future Edit-menu integration.
+            if event.modifierFlags.contains(.command),
+               !event.isARepeat,
+               let chars = event.charactersIgnoringModifiers,
+               chars.first?.lowercased() == "z" {
+                if let controller = inputController {
+                    handleEditorUndoRedo(
+                        controller: controller,
+                        redo: event.modifierFlags.contains(.shift))
+                    return nil
+                }
+            }
+            if let controller = inputController, controller.isInputModeOn {
+                if handleInputModeKey(event, controller: controller) {
+                    return nil
+                }
+            }
             return event
         }
+    }
+
+    private func handleEditorUndoRedo(
+        controller: NoteInputController,
+        redo: Bool
+    ) {
+        do {
+            if redo {
+                try controller.redo()
+            } else {
+                try controller.undo()
+            }
+        } catch {
+            errorMessage = error.localizedDescription
+            return
+        }
+        // Defer @State mutations to the next runloop tick.
+        // Repeatedly mutating @State from inside an `NSEvent`
+        // monitor closure (e.g. holding ⌘Z) doesn't reliably
+        // invalidate the SwiftUI view: the second-and-onward
+        // writes to the same property within one event-handling
+        // pass can be no-ops (Equatable check), and `scoreVersion`
+        // alone hasn't been enough to nudge body re-eval.
+        // `DispatchQueue.main.async` puts the mutations on the
+        // next runloop iteration, fully outside the NSEvent
+        // dispatch path, where SwiftUI's normal update cycle
+        // applies. The same fix shape can later be applied to
+        // the apply path if the rapid-typing case shows similar
+        // staleness.
+        let edited = controller.score
+        let isRedo = redo
+        let affectedMeasure = controller.editor.lastAffectedLocation?.measureIndex
+        DispatchQueue.main.async {
+            errorMessage = isRedo ? "Redo" : "Undo"
+            selection = .none
+            adoptEditedScore(edited)
+            if let mi = affectedMeasure {
+                scrollToAffectedMeasure(measureIndex: mi)
+            }
+        }
+    }
+
+    /// Scroll the horizontal viewport so `measureIndex`'s leading
+    /// edge sits at the visible left edge. No-ops in non-horizontal
+    /// modes (vertical / paged / pdf each have their own pathway,
+    /// and editing them isn't supported in this slice yet).
+    private func scrollToAffectedMeasure(measureIndex: Int) {
+        guard layoutMode == .horizontal,
+              let doc = horizontalDoc,
+              horizontalViewportSize.width > 0
+        else { return }
+        scrollToMeasureMac(
+            measureIndex: measureIndex,
+            doc: doc,
+            viewportWidth: horizontalViewportSize.width,
+            magnification: magnification,
+            horizontalScrollX: horizontalScrollX,
+            horizontalScrollY: horizontalScrollY,
+            pendingScroll: $pendingHorizontalScroll)
     }
 
     private func removeKeyMonitor() {
         if let m = keyMonitor {
             NSEvent.removeMonitor(m)
             keyMonitor = nil
+        }
+    }
+
+    /// Routes a keydown while input mode is on. Returns `true` when
+    /// the event has been consumed (caller returns `nil` to AppKit
+    /// so no beep plays); `false` when it should propagate (e.g. a
+    /// letter unrelated to note input, leaving other shortcuts
+    /// reachable).
+    private func handleInputModeKey(
+        _ event: NSEvent,
+        controller: NoteInputController
+    ) -> Bool {
+        // Octave shift via arrow keys. Always consume so AppKit
+        // doesn't beep at the unhandled event.
+        if !event.isARepeat,
+           event.modifierFlags
+            .intersection(.deviceIndependentFlagsMask).isEmpty {
+            switch event.keyCode {
+            case 126: // up arrow
+                controller.inputOctave = min(8, controller.inputOctave + 1)
+                errorMessage = "Input octave: \(controller.inputOctave)"
+                return true
+            case 125: // down arrow
+                controller.inputOctave = max(0, controller.inputOctave - 1)
+                errorMessage = "Input octave: \(controller.inputOctave)"
+                return true
+            default:
+                break
+            }
+        }
+        guard let chars = event.charactersIgnoringModifiers,
+              let letter = chars.first
+        else {
+            return false
+        }
+        guard let mapped = NoteInputKeyMap.pitch(
+            forLetter: letter,
+            octave: controller.inputOctave)
+        else {
+            // Letter unrelated to note entry — let other shortcuts /
+            // text inputs through. (No beep risk because the system
+            // will deliver it to whatever responder is appropriate.)
+            return false
+        }
+        guard case let .single(.rest(restID)) = selection else {
+            // Letter is mapped but there's no rest to drop it onto.
+            // Consume it so the user doesn't get a beep, and give
+            // visible feedback.
+            errorMessage = "Click a rest to insert a note. Current selection: \(describeSelection(selection))."
+            return true
+        }
+        do {
+            try controller.apply(
+                InputNote(
+                    at: restID,
+                    pitch: mapped.pitch,
+                    tpc: mapped.tpc),
+                undoManager: undoManager)
+            // After successful insertion the rest is gone — select
+            // the freshly-inserted note so the user sees what they
+            // just typed.
+            let noteID = NoteID(
+                staffIndex: restID.staffIndex,
+                measureIndex: restID.measureIndex,
+                voiceIndex: restID.voiceIndex,
+                elementIndex: restID.elementIndex,
+                noteIndexInChord: 0)
+            selection = .single(.note(noteID))
+            adoptEditedScore(controller.score)
+            // Match the click-on-note feedback path: brief preview
+            // of the just-inserted pitch via the playback engine.
+            playbackEngine.playPreview(
+                noteID: noteID, in: controller.score)
+            // Pull the affected measure into view if it isn't
+            // already (handles fast typing past the visible window
+            // and edits on offscreen rests).
+            scrollToAffectedMeasure(
+                measureIndex: restID.measureIndex)
+            errorMessage = "Inserted \(String(letter).uppercased())\(controller.inputOctave) (MIDI \(mapped.pitch)). Click another rest to keep typing."
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+        return true
+    }
+
+    private func describeSelection(_ s: ScoreSelection) -> String {
+        switch s {
+        case .none: return "none"
+        case .single(.rest): return "rest"
+        case .single(.note): return "note"
+        case .range: return "range"
+        case .multi: return "multi"
         }
     }
 
@@ -246,6 +447,10 @@ struct ContentViewMac: View {
                             horizontalScrollX: horizontalScrollX,
                             horizontalScrollY: horizontalScrollY,
                             pendingScroll: $pendingHorizontalScroll)
+                    },
+                    contentVersion: AnyHashable(scoreVersion),
+                    onViewportSizeChange: { size in
+                        horizontalViewportSize = size
                     })
             }
         case .paged:
@@ -445,12 +650,63 @@ struct ContentViewMac: View {
         verticalDoc = nil
         pdfLayout = nil
         score = loaded
+        if let inputController {
+            inputController.reset(score: loaded)
+        } else {
+            let controller = NoteInputController(score: loaded)
+            controller.onScoreEdited = handleControllerEdit
+            inputController = controller
+        }
         sourceName = name
         errorMessage = nil
         scoreVersion = UUID()
         selection = .none
         pendingHorizontalScroll = nil
         playbackEngine.prepareInBackground(score: loaded)
+    }
+
+    /// Wired into `NoteInputController.onScoreEdited`. Runs after
+    /// every successful apply / undo / redo — including from inside
+    /// the `UndoManager` closure (⌘Z), which executes outside
+    /// SwiftUI's normal update cycle and so can't be picked up
+    /// reliably by `.onChange(of:)`. Inline @State writes from this
+    /// callback DO propagate, since `adoptEditedScore` mutates
+    /// stored `@State` properties directly via the captured view
+    /// struct's State backing storage.
+    private func handleControllerEdit() {
+        if let edited = inputController?.score {
+            adoptEditedScore(edited)
+        }
+    }
+
+    /// Adopt a score edited via `inputController`.
+    ///
+    /// Optimised vs `adoptLoadedScore` to keep keystrokes responsive
+    /// on large scores (`test.mscx` is ~1356 measures):
+    ///   * `horizontalContexts` is NOT recomputed — a single-note
+    ///     edit can't change clef / key / time / part metadata.
+    ///   * The horizontal layout's `availableWidth` reuses the
+    ///     existing `horizontalDoc.contentWidth`. The width *might*
+    ///     drift by a glyph's worth on note-vs-rest swaps, but the
+    ///     layout engine renormalises within the system on its own
+    ///     pass — saving the full-score `naturalContentWidth` walk.
+    private func adoptEditedScore(_ edited: Score) {
+        let hOpts = Self.horizontalOptions
+        // Reuse the previously-laid-out total width as the
+        // `availableWidth` input. For a single-note edit this is
+        // within a glyph's width of the true natural content width,
+        // and the layout engine renormalises systems internally —
+        // saves a full-score width walk.
+        let availableWidth = horizontalDoc?.size.width
+            ?? LayoutEngine.naturalContentWidth(
+                score: edited, options: hOpts)
+        horizontalDoc = LayoutEngine.layout(
+            score: edited, options: hOpts,
+            availableWidth: availableWidth)
+        verticalDoc = nil
+        pdfLayout = nil
+        score = edited
+        scoreVersion = UUID()
     }
 }
 #endif
