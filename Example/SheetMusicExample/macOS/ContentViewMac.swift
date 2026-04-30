@@ -316,11 +316,6 @@ struct ContentViewMac: View {
         _ event: NSEvent,
         controller: NoteInputController
     ) -> Bool {
-        // Up / down arrow: shift the selected note by ±1 semitone
-        // when a note is selected; otherwise shift the input
-        // octave (used for the next letter typed onto a rest).
-        // Always consume so AppKit doesn't beep on unhandled events.
-        //
         // We only filter out the "real" modifier keys (cmd / ctrl /
         // option / shift). Arrow keys themselves carry `.function`
         // and `.numericPad` flags on macOS — testing against the
@@ -328,6 +323,21 @@ struct ContentViewMac: View {
         // every plain arrow press.
         let blockingMods: NSEvent.ModifierFlags =
             [.command, .control, .option, .shift]
+
+        // Backspace (keyCode 51) / forward Delete (keyCode 117):
+        // replace the selected chord/rest with a rest of the same
+        // duration. Drum notes included — DeleteVoiceElement just
+        // calls into ReplaceVoiceElement at the library level.
+        if event.modifierFlags
+            .intersection(blockingMods).isEmpty,
+           event.keyCode == 51 || event.keyCode == 117 {
+            deleteSelectedElement(controller: controller)
+            return true
+        }
+        // Up / down arrow: shift the selected note by ±1 semitone
+        // when a note is selected; otherwise shift the input
+        // octave (used for the next letter typed onto a rest).
+        // Always consume so AppKit doesn't beep on unhandled events.
         if event.modifierFlags
             .intersection(blockingMods).isEmpty,
            event.keyCode == 126 || event.keyCode == 125 {
@@ -398,6 +408,43 @@ struct ContentViewMac: View {
             errorMessage = error.localizedDescription
         }
         return true
+    }
+
+    /// Replace the currently-selected chord/rest with a rest of the
+    /// same duration via `DeleteVoiceElement`. Selection moves to
+    /// the resulting rest so subsequent edits (transpose, retype)
+    /// target the new element. No-op when nothing actionable is
+    /// selected.
+    private func deleteSelectedElement(
+        controller: NoteInputController
+    ) {
+        let target: VoiceElementID
+        switch selection {
+        case .single(.note(let noteID)):
+            target = VoiceElementID(noteID)
+        case .single(.rest(let restID)):
+            target = VoiceElementID(restID)
+        default:
+            errorMessage = "Select a note or rest to delete."
+            return
+        }
+        do {
+            try controller.apply(
+                DeleteVoiceElement(at: target),
+                undoManager: undoManager)
+            adoptEditedScore(controller.score)
+            // Select the freshly-created rest so the user can keep
+            // editing at the same beat.
+            let newRest = RestID(
+                staffIndex: target.staffIndex,
+                measureIndex: target.measureIndex,
+                voiceIndex: target.voiceIndex,
+                elementIndex: target.elementIndex)
+            selection = .single(.rest(newRest))
+            errorMessage = "Deleted"
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 
     /// Apply a ±semitone shift to the currently-selected note.
