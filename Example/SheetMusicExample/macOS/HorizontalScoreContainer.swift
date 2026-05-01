@@ -36,6 +36,11 @@ struct HorizontalScoreContainer: View {
     /// without changing `document.size`, so the scroll view's
     /// optimisation guard doesn't swallow the refresh.
     var contentVersion: AnyHashable? = nil
+    /// In-document overlay forwarded to `MagnifyingScoreScrollView`
+    /// — used by the host to mount an inline lyric editor at a
+    /// chord's lyric line. See `MagnifyingScoreScrollView`.
+    var inDocumentOverlay: AnyView? = nil
+    var inDocumentOverlayKey: AnyHashable? = nil
     /// Reports the score area's live viewport size to the host so
     /// it can decide whether an offscreen measure needs an
     /// auto-scroll on edit. Fires on first layout and on every
@@ -98,7 +103,9 @@ struct HorizontalScoreContainer: View {
                 onMarqueeEnd: { rect in
                     onMarqueeEnd(rect, document)
                 },
-                contentVersion: contentVersion)
+                contentVersion: contentVersion,
+                inDocumentOverlay: inDocumentOverlay,
+                inDocumentOverlayKey: inDocumentOverlayKey)
                 .background(
                     GeometryReader { hgeo in
                         Color.clear

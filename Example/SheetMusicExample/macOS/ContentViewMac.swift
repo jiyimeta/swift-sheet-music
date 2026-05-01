@@ -42,6 +42,12 @@ struct ContentViewMac: View {
     /// Reset on every `adoptLoadedScore` (a fresh score has no cache
     /// continuity with the previous one).
     @State private var layoutCache = LayoutCache()
+    /// When non-nil, the lyric editor TextField is shown anchored to
+    /// the chord at this location. Set by ⌘L on a selected note,
+    /// cleared on submit / cancel.
+    @State private var lyricEditTarget: VoiceElementID?
+    @State private var lyricEditText: String = ""
+    @FocusState private var lyricEditFocused: Bool
     /// Per-measure clef / key / time / part-label state. Cached so
     /// the sticky header doesn't recompute it on every body re-eval
     /// (an O(measures × staves) walk that adds up during pinch /
@@ -209,7 +215,20 @@ struct ContentViewMac: View {
         keyMonitor = NSEvent.addLocalMonitorForEvents(
             matching: .keyDown
         ) { event in
-            if event.keyCode == 49 && !event.isARepeat {
+            // Space (keyCode 49). Inside the lyric editor it
+            // advances to the next chord's syllable; otherwise it
+            // toggles playback. The editor takes priority so the
+            // user can type lyrics rapidly without leaving keyboard
+            // focus.
+            if event.keyCode == 49,
+               !event.isARepeat,
+               event.modifierFlags
+                .intersection([.command, .control, .option])
+                .isEmpty {
+                if lyricEditTarget != nil {
+                    advanceLyricToNextChord()
+                    return nil
+                }
                 togglePlayback()
                 return nil
             }
@@ -229,6 +248,19 @@ struct ContentViewMac: View {
                     handleEditorUndoRedo(
                         controller: controller,
                         redo: event.modifierFlags.contains(.shift))
+                    return nil
+                }
+            }
+            // ⌘L on a selected note opens the lyric editor.
+            // Independent of input mode — editing existing lyrics is
+            // a normal browse-mode action too. Caught here (alongside
+            // ⌘Z) for the same reason: the score viewport isn't a
+            // text-input responder.
+            if event.modifierFlags.contains(.command),
+               !event.isARepeat,
+               let chars = event.charactersIgnoringModifiers,
+               chars.first?.lowercased() == "l" {
+                if openLyricEditorForSelection() {
                     return nil
                 }
             }
@@ -367,6 +399,19 @@ struct ContentViewMac: View {
                 noteID: noteID, controller: controller)
             return true
         }
+        // Number keys 1–7 with a note selected → change that
+        // chord's duration. Mapping mirrors MuseScore:
+        //   1=64th, 2=32nd, 3=16th, 4=8th, 5=quarter, 6=half, 7=whole.
+        if event.modifierFlags
+            .intersection([.command, .control, .option]).isEmpty,
+           case .single(.note(let noteID)) = selection,
+           let duration = NoteInputKeyMap.duration(
+            forCharacter: event.characters ?? "") {
+            setSelectedChordDuration(
+                noteID: noteID, duration: duration,
+                controller: controller)
+            return true
+        }
         guard let chars = event.charactersIgnoringModifiers,
               let letter = chars.first
         else {
@@ -420,6 +465,164 @@ struct ContentViewMac: View {
             errorMessage = error.localizedDescription
         }
         return true
+    }
+
+    /// Build the in-document overlay shown when the lyric editor is
+    /// open. Returns nil when no chord is being edited; otherwise a
+    /// small TextField positioned (in document coords) at the chord's
+    /// stem X / lyric-line Y, so it scrolls + magnifies along with
+    /// the staff. Mirrors MuseScore's inline lyric input.
+    private func inlineLyricEditorOverlay(
+        document: LayoutDocument
+    ) -> AnyView? {
+        guard let target = lyricEditTarget,
+              let stemOrigin = document.chordStemOrigin(at: target),
+              let lyricY = document.lyricLineY(at: target)
+        else { return nil }
+        // Match the rendered lyric: same system-font size as
+        // `ScoreCanvas`'s `drawLyricText` (sp × 2.2), centered both
+        // horizontally and vertically on the chord stem X / lyric
+        // line Y so the field sits exactly where the rendered
+        // syllable would.
+        let sp = document.metrics.sp
+        let lyricFontSize = sp * 2.2
+        let fieldWidth: CGFloat = sp * 12
+        return AnyView(
+            TextField("", text: $lyricEditText)
+                .textFieldStyle(.plain)
+                .font(.system(size: lyricFontSize, weight: .regular))
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.primary)
+                .frame(width: fieldWidth)
+                .padding(.horizontal, 2)
+                .background(Color.white)
+                // Force light-mode resolution so the text colour
+                // (`.primary`) lands on black against the forced
+                // white background regardless of system theme —
+                // matches the lyric glyph colour the renderer
+                // uses on a light score canvas.
+                .colorScheme(.light)
+                .focused($lyricEditFocused)
+                .onSubmit { submitLyricEdit() }
+                .onExitCommand { closeLyricEditor() }
+                .position(x: stemOrigin.x, y: lyricY))
+    }
+
+    /// Populate the lyric-editor state from the currently-selected
+    /// note (if any) and surface the TextField overlay. Returns
+    /// `true` when the lyric editor was opened so the caller can
+    /// suppress the originating event.
+    @discardableResult
+    private func openLyricEditorForSelection() -> Bool {
+        let chordID: VoiceElementID
+        switch selection {
+        case .single(.note(let noteID)):
+            chordID = VoiceElementID(noteID)
+        default:
+            return false
+        }
+        guard let controller = inputController,
+              case .chord(let chord) = controller.score[chordID] else {
+            return false
+        }
+        lyricEditText = chord.lyrics.first?.text ?? ""
+        lyricEditTarget = chordID
+        lyricEditFocused = true
+        return true
+    }
+
+    /// Commit the editor's current text to the target chord via
+    /// `SetLyrics`. Empty text clears the lyric. Returns `true` on
+    /// successful apply (caller can then advance / close).
+    @discardableResult
+    private func applyLyricEdit() -> Bool {
+        guard let target = lyricEditTarget,
+              let controller = inputController else { return false }
+        let newLyrics: [Lyric] = lyricEditText.isEmpty
+            ? []
+            : [Lyric(text: lyricEditText)]
+        do {
+            try controller.apply(
+                SetLyrics(at: target, lyrics: newLyrics),
+                undoManager: undoManager)
+            adoptEditedScore(controller.score)
+            errorMessage = lyricEditText.isEmpty
+                ? "Lyric cleared"
+                : "Lyric set"
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
+    /// Apply current text and close the editor (Enter / OK).
+    private func submitLyricEdit() {
+        applyLyricEdit()
+        closeLyricEditor()
+    }
+
+    /// Apply current text, then move the editor to the next chord
+    /// in the same voice (Space key flow). Closes the editor when
+    /// no further chord exists in the staff.
+    private func advanceLyricToNextChord() {
+        guard let current = lyricEditTarget,
+              let controller = inputController else {
+            closeLyricEditor()
+            return
+        }
+        applyLyricEdit()
+        guard let next = controller.score.nextChord(after: current),
+              case .chord(let chord) = controller.score[next] else {
+            closeLyricEditor()
+            return
+        }
+        // Pre-fill with any existing first-verse lyric and re-focus.
+        lyricEditText = chord.lyrics.first?.text ?? ""
+        lyricEditTarget = next
+        lyricEditFocused = true
+        // Selection follows the editor so other shortcuts (⌘L,
+        // arrow-shift, Delete) target the same chord.
+        if let firstNote = chord.notes.first {
+            selection = .single(.note(NoteID(
+                staffIndex: next.staffIndex,
+                measureIndex: next.measureIndex,
+                voiceIndex: next.voiceIndex,
+                elementIndex: next.elementIndex,
+                noteIndexInChord: 0)))
+            _ = firstNote
+        }
+        scrollToAffectedMeasure(measureIndex: next.measureIndex)
+    }
+
+    private func closeLyricEditor() {
+        lyricEditTarget = nil
+        lyricEditText = ""
+        lyricEditFocused = false
+    }
+
+    /// Set the duration of the chord that contains the currently-
+    /// selected note via `SetChordDuration`. Maps MuseScore-style
+    /// shortenings to leftover rests and lengthenings to consumed
+    /// following elements. Surfaces `invalidEdit` reasons (tuplet,
+    /// measure boundary, non-timed element in path) as user-visible
+    /// `errorMessage` text.
+    private func setSelectedChordDuration(
+        noteID: NoteID,
+        duration: NoteDuration,
+        controller: NoteInputController
+    ) {
+        let chordID = VoiceElementID(noteID)
+        do {
+            try controller.apply(
+                SetChordDuration(at: chordID, duration: duration),
+                undoManager: undoManager)
+            adoptEditedScore(controller.score)
+            errorMessage = "Duration changed"
+            scrollToAffectedMeasure(measureIndex: noteID.measureIndex)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 
     /// Toggle a tie from the currently-selected note to the next
@@ -609,6 +812,10 @@ struct ContentViewMac: View {
                             pendingScroll: $pendingHorizontalScroll)
                     },
                     contentVersion: AnyHashable(scoreVersion),
+                    inDocumentOverlay: inlineLyricEditorOverlay(
+                        document: doc),
+                    inDocumentOverlayKey: lyricEditTarget
+                        .map { AnyHashable($0) },
                     onViewportSizeChange: { size in
                         horizontalViewportSize = size
                     })

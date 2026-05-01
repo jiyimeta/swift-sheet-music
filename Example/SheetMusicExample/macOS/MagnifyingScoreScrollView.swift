@@ -69,14 +69,30 @@ struct MagnifyingScoreScrollView: NSViewRepresentable {
     /// "size only" gate (the perf-tuned default for scroll-driven
     /// reflow).
     var contentVersion: AnyHashable? = nil
+    /// Optional content rendered ON TOP of the score, in the score's
+    /// own document-coord space (so it scrolls + magnifies with the
+    /// staff). Used to host an inline lyric-editor TextField anchored
+    /// to a specific chord's lyric line. Caller positions content
+    /// via `.position(x:, y:)` in document coords.
+    var inDocumentOverlay: AnyView? = nil
+    /// Hashable identity of the in-document overlay used to decide
+    /// when `updateNSView` should rebuild `rootView`. AnyView is not
+    /// Equatable, so callers pass a key that changes whenever the
+    /// overlay's identity / visibility flips.
+    var inDocumentOverlayKey: AnyHashable? = nil
 
     private var rootView: AnyView {
         AnyView(
-            ScoreView(
-                document: document, score: score,
-                selection: selection,
-                voiceColors: voiceColors,
-                playbackCursor: playbackCursor)
+            ZStack(alignment: .topLeading) {
+                ScoreView(
+                    document: document, score: score,
+                    selection: selection,
+                    voiceColors: voiceColors,
+                    playbackCursor: playbackCursor)
+                if let overlay = inDocumentOverlay {
+                    overlay
+                }
+            }
                 .overlay(MarqueeOverlay(rect: marqueeRect))
                 .padding(Self.contentInset))
     }
@@ -200,9 +216,11 @@ struct MagnifyingScoreScrollView: NSViewRepresentable {
         let cursorChanged = coord.lastPlaybackCursor != playbackCursor
         let marqueeChanged = coord.lastMarqueeRect != marqueeRect
         let contentChanged = coord.lastContentVersion != contentVersion
+        let overlayChanged =
+            coord.lastInDocOverlayKey != inDocumentOverlayKey
         if selectionChanged || voiceColorsChanged
             || documentChanged || cursorChanged
-            || marqueeChanged || contentChanged {
+            || marqueeChanged || contentChanged || overlayChanged {
             coord.hostingView?.rootView = rootView
             coord.lastSelection = selection
             coord.lastVoiceColors = voiceColors
@@ -210,6 +228,7 @@ struct MagnifyingScoreScrollView: NSViewRepresentable {
             coord.lastPlaybackCursor = playbackCursor
             coord.lastMarqueeRect = marqueeRect
             coord.lastContentVersion = contentVersion
+            coord.lastInDocOverlayKey = inDocumentOverlayKey
         }
 
         // Apply external magnification changes (e.g., sidebar reset
@@ -294,6 +313,7 @@ struct MagnifyingScoreScrollView: NSViewRepresentable {
         var lastDocumentSize: CGSize = .zero
         var lastPlaybackCursor: ScoreCursor?
         var lastContentVersion: AnyHashable?
+        var lastInDocOverlayKey: AnyHashable?
 
         init(contentInset: CGFloat) {
             self.contentInset = contentInset
