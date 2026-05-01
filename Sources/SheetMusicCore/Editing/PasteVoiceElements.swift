@@ -15,15 +15,22 @@ import Foundation
 ///   rest elements until enough time is freed; an overshot final
 ///   chord becomes a tied-clone chain.
 ///
-/// Refused (with `invalidEdit`):
-/// - the target sits inside (or before, with overlap) a `Tuplet` —
-///   v1 does not handle tuplet rebalancing across multi-element
-///   splices.
-/// - the lengthen path runs into a non-timed element or out of
-///   measure room.
+/// Tuplet handling: the paste's element-index range is
+/// `[location, consumedEnd]`. For each tuplet of the destination
+/// voice we check that range vs. the tuplet's own indices:
+/// - **disjoint** → keep the tuplet untouched (just shift indices
+///   to account for net element count change).
+/// - **paste fully contains the tuplet** → drop the tuplet (the
+///   triplet/quintuplet/… is replaced wholesale).
+/// - **partial overlap** → refuse with `invalidEdit` (would split
+///   the tuplet, invalidating its ratio).
 ///
-/// Inverse is a `ReplaceVoiceElements` carrying the pre-edit voice,
-/// so undo restores the entire voice in one step.
+/// Other refusals: lengthen path runs into a non-timed element, or
+/// runs out of room before reaching the required tick count.
+///
+/// Inverse is a `ReplaceVoiceElements` carrying the pre-edit voice
+/// (elements + tuplets), so undo restores the entire voice in one
+/// step.
 public struct PasteVoiceElements: EditCommand {
     public let location: VoiceElementID
     public let elements: [VoiceElement]
@@ -51,16 +58,6 @@ public struct PasteVoiceElements: EditCommand {
             throw SheetMusicError.invalidEdit(
                 reason: "PasteVoiceElements: no element at \(location)")
         }
-        // v1 limitation: refuse when any tuplet of the destination
-        // voice extends to or past the target. Multi-element splice
-        // through a tuplet would need bespoke rebalance logic.
-        if voice.tuplets.contains(where: {
-            $0.endIndex >= location.elementIndex
-        }) {
-            throw SheetMusicError.invalidEdit(
-                reason: "PasteVoiceElements: destination voice has "
-                    + "a tuplet at or after the paste location")
-        }
         let division = score.division
         let target = voice.elements[location.elementIndex]
         let targetTicks = Self.ticks(of: target, division: division) ?? 0
@@ -71,7 +68,7 @@ public struct PasteVoiceElements: EditCommand {
             in: voice,
             ofElementAt: location.elementIndex,
             division: division)
-        let newElements = try Self.computeRebalanced(
+        let (newElements, newTuplets) = try Self.computeRebalanced(
             voice: voice,
             atIdx: location.elementIndex,
             payload: elements,
@@ -84,7 +81,7 @@ public struct PasteVoiceElements: EditCommand {
             measureIndex: location.measureIndex,
             voiceIndex: location.voiceIndex,
             elements: newElements,
-            tuplets: voice.tuplets)
+            tuplets: newTuplets)
         return try replace.apply(to: &score)
     }
 
@@ -98,12 +95,11 @@ public struct PasteVoiceElements: EditCommand {
         }
     }
 
-    /// Splice the payload into the voice at `idx` (replacing the
-    /// single target there), then rebalance the tail so the measure's
-    /// tick total is unchanged. Mirrors the shorten / lengthen split
-    /// in `DurationChangeAlgorithm.compute` but for a multi-element
-    /// inserted region. v1 ignores tuplets — the caller has already
-    /// refused the operation when any tuplet would interfere.
+    /// Splice the payload into the voice at `idx`, rebalance the
+    /// tail, and adjust tuplet indices. Returns the new (elements,
+    /// tuplets) pair. Throws on partial-overlap with any tuplet
+    /// (the user must clear the tuplet first or paste at a different
+    /// location).
     private static func computeRebalanced(
         voice: Voice,
         atIdx idx: Int,
@@ -112,10 +108,16 @@ public struct PasteVoiceElements: EditCommand {
         targetTicks: Int,
         targetRtick: Int,
         division: Int
-    ) throws -> [VoiceElement] {
+    ) throws -> (elements: [VoiceElement], tuplets: [Tuplet]) {
         var newElements = voice.elements
         newElements.replaceSubrange(idx...idx, with: payload)
         let payloadEndIdx = idx + payload.count - 1
+        let payloadInsertDelta = payload.count - 1
+        // The paste's effective element-index range in the ORIGINAL
+        // voice, i.e. which elements of voice.elements get replaced
+        // or consumed. Always at least `[idx, idx]` (the target).
+        var consumedEndOrigIdx = idx
+
         if payloadTicks < targetTicks {
             let leftover = targetTicks - payloadTicks
             let rests = DurationChangeAlgorithm.alignedRests(
@@ -164,15 +166,22 @@ public struct PasteVoiceElements: EditCommand {
                         + "in the measure to lengthen "
                         + "(need \(needed), have \(consumed))")
             }
+            consumedEndOrigIdx = lastConsumedIdx - payloadInsertDelta
+
+            try checkTupletOverlap(
+                voice: voice,
+                pasteStart: idx,
+                pasteEnd: consumedEndOrigIdx)
+
             newElements.removeSubrange(
                 (payloadEndIdx + 1)...lastConsumedIdx)
-            if partial > 0, let lastConsumedEl {
+            if partial > 0, let lastEl = lastConsumedEl {
                 let durations = DurationChangeAlgorithm.alignedDurations(
                     forTicks: partial,
                     rtickStart: targetRtick + payloadTicks,
                     division: division)
                 let pieces: [VoiceElement]
-                switch lastConsumedEl {
+                switch lastEl {
                 case .chord(let c):
                     pieces = DurationChangeAlgorithm.makeChordChain(
                         from: c, durations: durations)
@@ -185,6 +194,61 @@ public struct PasteVoiceElements: EditCommand {
                     contentsOf: pieces, at: payloadEndIdx + 1)
             }
         }
-        return newElements
+
+        // For shorten / equal-duration paths only the target slot
+        // changes — no consumption of subsequent elements. The
+        // tuplet check still has to run because the target itself
+        // might sit inside a tuplet.
+        if payloadTicks <= targetTicks {
+            try checkTupletOverlap(
+                voice: voice, pasteStart: idx, pasteEnd: idx)
+        }
+
+        let netDelta = newElements.count - voice.elements.count
+        let adjustedTuplets: [Tuplet] = voice.tuplets.compactMap { t in
+            let overlapsPaste = idx <= t.endIndex
+                && t.startIndex <= consumedEndOrigIdx
+            if !overlapsPaste {
+                // Disjoint with the paste range. Either entirely
+                // before (keep verbatim) or entirely after (shift
+                // indices by net element-count change).
+                if t.startIndex > consumedEndOrigIdx {
+                    return Tuplet(
+                        normalNotes: t.normalNotes,
+                        actualNotes: t.actualNotes,
+                        startIndex: t.startIndex + netDelta,
+                        endIndex: t.endIndex + netDelta)
+                }
+                return t
+            }
+            // Verified above (`checkTupletOverlap`) that the paste
+            // fully contains overlapping tuplets. Drop them.
+            return nil
+        }
+        return (newElements, adjustedTuplets)
+    }
+
+    /// Refuse the paste when its element range
+    /// `[pasteStart, pasteEnd]` overlaps any tuplet without fully
+    /// containing it. The full-contain case is allowed (the tuplet
+    /// is dropped wholesale by the caller).
+    private static func checkTupletOverlap(
+        voice: Voice, pasteStart: Int, pasteEnd: Int
+    ) throws {
+        for t in voice.tuplets {
+            let overlap = pasteStart <= t.endIndex
+                && t.startIndex <= pasteEnd
+            if !overlap { continue }
+            let fullyContained = pasteStart <= t.startIndex
+                && t.endIndex <= pasteEnd
+            if !fullyContained {
+                throw SheetMusicError.invalidEdit(
+                    reason: "PasteVoiceElements: paste range "
+                        + "[\(pasteStart)…\(pasteEnd)] would "
+                        + "partially overlap a tuplet "
+                        + "[\(t.startIndex)…\(t.endIndex)] — "
+                        + "would invalidate its ratio")
+            }
+        }
     }
 }

@@ -123,6 +123,163 @@ struct PasteVoiceElementsTests {
         }
     }
 
+    @Test("paste before a tuplet leaves it untouched (just shifts indices)")
+    func tupletAfterPasteIsKept() throws {
+        // [timeSig, rest(q), rest(q), <tuplet of 3 eighths>, rest(q)]
+        // Paste a half-chord at idx 1 (rest q). Half = 2 quarters →
+        // consumes idx 2 (rest q) but stops before the tuplet at
+        // idx 3..5. Tuplet should survive with shifted indices.
+        var score = EditingFixtures.fourQuarterRests()
+        var v = score.staves[0].measures[0].voices[0]
+        v.elements = [
+            .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+            .rest(Rest(duration: .quarter)),
+            .rest(Rest(duration: .quarter)),
+            // Triplet: 3 eighths in a quarter (3:2).
+            .chord(Chord(duration: .eighth,
+                         notes: [Note(pitch: 60, tpc: 14)])),
+            .chord(Chord(duration: .eighth,
+                         notes: [Note(pitch: 62, tpc: 16)])),
+            .chord(Chord(duration: .eighth,
+                         notes: [Note(pitch: 64, tpc: 18)])),
+            .rest(Rest(duration: .quarter)),
+        ]
+        v.tuplets = [Tuplet(
+            normalNotes: 2, actualNotes: 3,
+            startIndex: 3, endIndex: 5)]
+        score.staves[0].measures[0].voices[0] = v
+        let restID = VoiceElementID(
+            staffIndex: 0, measureIndex: 0,
+            voiceIndex: 0, elementIndex: 1)
+        let halfChord = Chord(
+            duration: .half, notes: [Note(pitch: 67, tpc: 15)])
+        let cmd = PasteVoiceElements(
+            at: restID, elements: [.chord(halfChord)])
+        _ = try cmd.apply(to: &score)
+        let voice = score.staves[0].measures[0].voices[0]
+        // [timeSig, half-chord, <tuplet at 2..4>, rest q]
+        #expect(voice.elements.count == 6)
+        #expect(voice.tuplets.count == 1)
+        #expect(voice.tuplets[0].startIndex == 2)
+        #expect(voice.tuplets[0].endIndex == 4)
+    }
+
+    @Test("paste fully containing a tuplet drops it")
+    func pasteFullyContainsTupletDropsIt() throws {
+        // Same setup as above, but paste a whole-chord at idx 1.
+        // Whole = 4 quarters → consumes idx 2 (rest q) + tuplet
+        // (= 1 quarter total) + idx 6 (rest q) = full bar gap.
+        // Tuplet fully contained in paste range → dropped.
+        var score = EditingFixtures.fourQuarterRests()
+        var v = score.staves[0].measures[0].voices[0]
+        v.elements = [
+            .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+            .rest(Rest(duration: .quarter)),
+            .rest(Rest(duration: .quarter)),
+            .chord(Chord(duration: .eighth,
+                         notes: [Note(pitch: 60, tpc: 14)])),
+            .chord(Chord(duration: .eighth,
+                         notes: [Note(pitch: 62, tpc: 16)])),
+            .chord(Chord(duration: .eighth,
+                         notes: [Note(pitch: 64, tpc: 18)])),
+            .rest(Rest(duration: .quarter)),
+        ]
+        v.tuplets = [Tuplet(
+            normalNotes: 2, actualNotes: 3,
+            startIndex: 3, endIndex: 5)]
+        score.staves[0].measures[0].voices[0] = v
+        let restID = VoiceElementID(
+            staffIndex: 0, measureIndex: 0,
+            voiceIndex: 0, elementIndex: 1)
+        let wholeChord = Chord(
+            duration: .whole, notes: [Note(pitch: 67, tpc: 15)])
+        let cmd = PasteVoiceElements(
+            at: restID, elements: [.chord(wholeChord)])
+        _ = try cmd.apply(to: &score)
+        let voice = score.staves[0].measures[0].voices[0]
+        #expect(voice.tuplets.isEmpty)
+    }
+
+    @Test("paste partially overlapping a tuplet refuses")
+    func partialOverlapRefuses() {
+        // Setup: [timeSig, rest(q), rest(q), <tuplet 3 eighths>, rest(q)]
+        // Paste a dotted-half chord at idx 1. Dotted half = 1440
+        // ticks = 3 quarters → consumes idx 2 (q rest) + only PART
+        // of the tuplet → partial overlap → refuse.
+        var score = EditingFixtures.fourQuarterRests()
+        var v = score.staves[0].measures[0].voices[0]
+        v.elements = [
+            .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+            .rest(Rest(duration: .quarter)),
+            .rest(Rest(duration: .quarter)),
+            .chord(Chord(duration: .eighth,
+                         notes: [Note(pitch: 60, tpc: 14)])),
+            .chord(Chord(duration: .eighth,
+                         notes: [Note(pitch: 62, tpc: 16)])),
+            .chord(Chord(duration: .eighth,
+                         notes: [Note(pitch: 64, tpc: 18)])),
+            .rest(Rest(duration: .quarter)),
+        ]
+        v.tuplets = [Tuplet(
+            normalNotes: 2, actualNotes: 3,
+            startIndex: 3, endIndex: 5)]
+        score.staves[0].measures[0].voices[0] = v
+        let restID = VoiceElementID(
+            staffIndex: 0, measureIndex: 0,
+            voiceIndex: 0, elementIndex: 1)
+        // 3-quarters worth of payload — eats first quarter rest +
+        // second quarter rest + part of the triplet.
+        let payload: [VoiceElement] = [
+            .chord(Chord(
+                duration: .quarter,
+                notes: [Note(pitch: 67, tpc: 15)])),
+            .chord(Chord(
+                duration: .quarter,
+                notes: [Note(pitch: 69, tpc: 17)])),
+            .chord(Chord(
+                duration: .quarter,
+                notes: [Note(pitch: 71, tpc: 19)])),
+        ]
+        let cmd = PasteVoiceElements(
+            at: restID, elements: payload)
+        #expect(throws: SheetMusicError.self) {
+            _ = try cmd.apply(to: &score)
+        }
+    }
+
+    @Test("paste onto an element inside a tuplet refuses")
+    func targetInsideTupletRefuses() {
+        var score = EditingFixtures.fourQuarterRests()
+        var v = score.staves[0].measures[0].voices[0]
+        v.elements = [
+            .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+            .chord(Chord(duration: .eighth,
+                         notes: [Note(pitch: 60, tpc: 14)])),
+            .chord(Chord(duration: .eighth,
+                         notes: [Note(pitch: 62, tpc: 16)])),
+            .chord(Chord(duration: .eighth,
+                         notes: [Note(pitch: 64, tpc: 18)])),
+            .rest(Rest(duration: .half)),
+            .rest(Rest(duration: .quarter)),
+        ]
+        v.tuplets = [Tuplet(
+            normalNotes: 2, actualNotes: 3,
+            startIndex: 1, endIndex: 3)]
+        score.staves[0].measures[0].voices[0] = v
+        // Target idx 2 = middle of the triplet.
+        let middleID = VoiceElementID(
+            staffIndex: 0, measureIndex: 0,
+            voiceIndex: 0, elementIndex: 2)
+        let cmd = PasteVoiceElements(
+            at: middleID,
+            elements: [.chord(Chord(
+                duration: .eighth,
+                notes: [Note(pitch: 67, tpc: 15)]))])
+        #expect(throws: SheetMusicError.self) {
+            _ = try cmd.apply(to: &score)
+        }
+    }
+
     @Test("refuses when payload won't fit in the measure")
     func refusesOverflow() {
         // Last quarter rest + payload of two quarter chords = 2
