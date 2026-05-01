@@ -5,8 +5,7 @@ import Foundation
 /// duration of a timed element at index L; rebalance the rest of
 /// the voice so the measure's tick total stays the same"; the only
 /// difference between them is which element kind they expect at L.
-@_documentation(visibility: internal)
-internal enum DurationChangeAlgorithm {
+public enum DurationChangeAlgorithm {
     /// Inputs and outputs:
     /// - `voice`: the voice to recompute.
     /// - `idx`: index in `voice.elements` of the element being
@@ -210,7 +209,7 @@ internal enum DurationChangeAlgorithm {
     /// rule produces e.g. `eighth + quarter + half` — not greedy
     /// `half + quarter + eighth` — for a whole shortened to an
     /// eighth at beat 1.
-    static func alignedDurations(
+    public static func alignedDurations(
         forTicks length: Int,
         rtickStart: Int,
         division: Int

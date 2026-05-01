@@ -30,13 +30,12 @@ struct RangeCell: Sendable, Equatable {
 }
 
 /// Clipboard payload for a `.range` copy. `cells` is the per-
-/// (staff × measure × voice) breakdown; `anchorTickWithinMeasure`
-/// is the tick offset of the source's leading edge so paste can
-/// refuse a destination whose tick offset doesn't match (would
-/// otherwise smear cell content across the wrong beats).
+/// (staff × measure × voice) breakdown; paste concatenates cells
+/// of each (staffOffset, voiceIndex) pair into a tick stream and
+/// places it starting at the destination's tick offset, splitting
+/// across measures as needed.
 struct RangePayload: Sendable, Equatable {
     let cells: [RangeCell]
-    let anchorTickWithinMeasure: Int
     let staffCount: Int
     let measureCount: Int
 }
@@ -986,7 +985,6 @@ struct ContentViewMac: View {
         guard !cells.isEmpty else { return nil }
         return RangePayload(
             cells: cells,
-            anchorTickWithinMeasure: timeLo.tick,
             staffCount: staffHi - staffLo + 1,
             measureCount: timeHi.measure - timeLo.measure + 1)
     }
@@ -1235,107 +1233,83 @@ struct ContentViewMac: View {
         return true
     }
 
-    /// Drop a range payload onto the score at `targetID`. Validates
-    /// alignment + destination existence first, then loops over
-    /// cells calling `PasteVoiceElements` once each. The whole loop
-    /// is wrapped in `beginUndoGrouping`/`endUndoGrouping` so a
-    /// single ⌘Z reverses every cell in one step.
+    /// Drop a range payload onto the score at `targetID`. Source
+    /// cells are concatenated per (staff, voice) into tick streams;
+    /// each stream walks from the target's tick offset, splitting
+    /// elements at destination measure boundaries (chord → tied
+    /// chain, rest → aligned rests). For each affected destination
+    /// measure the function builds a single replacement payload
+    /// (with leading/trailing trim of any boundary elements) and
+    /// applies it via `PasteVoiceElements`. All sub-commands run
+    /// inside a `CompositeEditCommand` so one ⌘Z reverses the
+    /// entire paste.
     private func pasteRangePayload(
         _ payload: RangePayload,
         at targetID: VoiceElementID,
         controller: NoteInputController
     ) throws {
         let score = controller.score
-        // Tick alignment: target's tick offset within its measure
-        // must match the source's leading edge — otherwise cells
-        // for measureOffset > 0 (which paste at tick 0 of their
-        // destination measure) would be off-beat relative to cell 0.
-        let targetTick = elementTickPosition(
-            of: .rest(RestID(
-                staffIndex: targetID.staffIndex,
-                measureIndex: targetID.measureIndex,
-                voiceIndex: targetID.voiceIndex,
-                elementIndex: targetID.elementIndex)),
-            in: score)?.tick ?? 0
-        if targetTick != payload.anchorTickWithinMeasure {
-            throw SheetMusicError.invalidEdit(
-                reason: "Paste range: destination tick offset "
-                    + "(\(targetTick)) doesn't match source's "
-                    + "leading edge (\(payload.anchorTickWithinMeasure)). "
-                    + "Pick a beat at the same offset within its "
-                    + "measure.")
+        let targetTick = Self.elementTickOffset(
+            of: targetID, in: score) ?? 0
+
+        // Group cells into (staffOffset, voiceIndex) streams,
+        // sorted by source measureOffset, with elements
+        // concatenated.  Multi-measure source cells become one
+        // continuous tick stream per destination voice.
+        struct StreamKey: Hashable {
+            let staffOffset: Int
+            let voiceIndex: Int
+        }
+        var streams: [StreamKey: [VoiceElement]] = [:]
+        for cell in payload.cells {
+            let key = StreamKey(
+                staffOffset: cell.staffOffset,
+                voiceIndex: cell.voiceIndex)
+            streams[key, default: []].append(contentsOf: cell.elements)
         }
 
-        // Validate every destination resolves before applying any.
-        for cell in payload.cells {
-            let destStaff = targetID.staffIndex + cell.staffOffset
-            let destMeasure = targetID.measureIndex + cell.measureOffset
+        var subCommands: [any EditCommand] = []
+        for (key, streamElements) in streams {
+            let destStaff = targetID.staffIndex + key.staffOffset
             guard score.staves.indices.contains(destStaff) else {
                 throw SheetMusicError.invalidEdit(
-                    reason: "Paste range: no staff at index "
+                    reason: "Paste: no staff at index \(destStaff)")
+            }
+            guard score.staves[destStaff].measures
+                .indices.contains(targetID.measureIndex) else {
+                throw SheetMusicError.invalidEdit(
+                    reason: "Paste: no measure "
+                        + "\(targetID.measureIndex) on staff "
                         + "\(destStaff)")
             }
-            let measures = score.staves[destStaff].measures
-            guard measures.indices.contains(destMeasure) else {
-                throw SheetMusicError.invalidEdit(
-                    reason: "Paste range: no measure at "
-                        + "(\(destStaff), \(destMeasure))")
-            }
-            let voices = measures[destMeasure].voices
-            guard voices.indices.contains(cell.voiceIndex) else {
-                throw SheetMusicError.invalidEdit(
-                    reason: "Paste range: destination measure "
-                        + "(\(destStaff), \(destMeasure)) has no "
-                        + "voice \(cell.voiceIndex)")
-            }
-            // Find the destination element index — for cell 0
-            // (measureOffset == 0) this is `targetID.elementIndex`;
-            // otherwise it's the first chord/rest at tick 0.
-            let neededTick = cell.measureOffset == 0
-                ? targetTick : 0
-            guard Self.elementIdxAtTick(
-                in: voices[cell.voiceIndex],
-                tick: neededTick,
-                division: score.division) != nil
-            else {
-                throw SheetMusicError.invalidEdit(
-                    reason: "Paste range: destination "
-                        + "(\(destStaff), \(destMeasure), "
-                        + "voice \(cell.voiceIndex)) has no "
-                        + "element starting at tick \(neededTick).")
+
+            // Walk the stream tick-by-tick across destination
+            // measures, splitting elements at boundaries.
+            let pieces = try Self.buildStreamPieces(
+                stream: streamElements,
+                destStaff: destStaff,
+                destVoice: key.voiceIndex,
+                startMeasure: targetID.measureIndex,
+                startTickInMeasure: targetTick,
+                score: score)
+
+            for piece in pieces {
+                let cmd = try Self.buildMeasureReplaceCommand(
+                    staff: destStaff,
+                    measure: piece.measureIdx,
+                    voice: key.voiceIndex,
+                    tickStartInMeasure: piece.tickStartInMeasure,
+                    pieceElements: piece.elements,
+                    score: score)
+                subCommands.append(cmd)
             }
         }
 
-        // Build one CompositeEditCommand for all cells so the
-        // entire paste lands as a single entry on the editor's undo
-        // stack — one ⌘Z reverses every cell at once.
-        var subCommands: [any EditCommand] = []
-        for cell in payload.cells {
-            let destStaff = targetID.staffIndex + cell.staffOffset
-            let destMeasure = targetID.measureIndex + cell.measureOffset
-            let voice = controller.score.staves[destStaff]
-                .measures[destMeasure].voices[cell.voiceIndex]
-            let neededTick = cell.measureOffset == 0
-                ? targetTick : 0
-            guard let destElemIdx = Self.elementIdxAtTick(
-                in: voice, tick: neededTick,
-                division: controller.score.division)
-            else { continue } // shouldn't happen — pre-validated
-            let destID = VoiceElementID(
-                staffIndex: destStaff,
-                measureIndex: destMeasure,
-                voiceIndex: cell.voiceIndex,
-                elementIndex: destElemIdx)
-            subCommands.append(PasteVoiceElements(
-                at: destID, elements: cell.elements))
-        }
         try controller.apply(
             CompositeEditCommand(
-                commands: subCommands,
-                location: targetID),
+                commands: subCommands, location: targetID),
             undoManager: undoManager)
         adoptEditedScore(controller.score)
-        // Re-anchor on the first pasted element of the first cell.
         if let firstCell = payload.cells.first,
            let firstElement = firstCell.elements.first {
             anchorSelectionAfterPaste(
@@ -1348,31 +1322,329 @@ struct ContentViewMac: View {
             + (total == 1 ? "" : "s")
     }
 
-    /// First chord/rest element index whose onset within `voice`
-    /// equals `tick`. nil when no element starts exactly there
-    /// (paste alignment depends on this — refusing the paste is
-    /// safer than silently snapping).
-    private static func elementIdxAtTick(
-        in voice: Voice, tick: Int, division: Int
-    ) -> Int? {
-        var t = 0
-        for (i, el) in voice.elements.enumerated() {
-            switch el {
-            case .chord, .rest:
-                if t == tick { return i }
-            default:
-                continue
-            }
-            switch el {
-            case .chord(let c):
-                t += c.duration.ticks(division: division)
-            case .rest(let r):
-                t += r.duration.ticks(division: division)
-            default:
-                continue
+    /// One contiguous slice of a paste stream that lives in a
+    /// single destination measure. `tickStartInMeasure` is the
+    /// tick where the first element of the slice begins; the slice
+    /// runs to `tickStartInMeasure + sum(durations)`.
+    private struct DestinationPiece {
+        let measureIdx: Int
+        let tickStartInMeasure: Int
+        let elements: [VoiceElement]
+    }
+
+    /// Walk a flat source stream and split it into per-measure
+    /// destination pieces. Source elements that overflow the
+    /// current destination measure boundary become tied chord
+    /// chains (chord case) or aligned rests (rest case) on each
+    /// side of the boundary.
+    private static func buildStreamPieces(
+        stream: [VoiceElement],
+        destStaff: Int,
+        destVoice: Int,
+        startMeasure: Int,
+        startTickInMeasure: Int,
+        score: Score
+    ) throws -> [DestinationPiece] {
+        var result: [DestinationPiece] = []
+        let division = score.division
+        let measures = score.staves[destStaff].measures
+
+        var pieceMeasure = startMeasure
+        var pieceTickStart = startTickInMeasure
+        var pieceElements: [VoiceElement] = []
+        var measureTickCursor = startTickInMeasure
+
+        func flushPiece() {
+            guard !pieceElements.isEmpty else { return }
+            result.append(DestinationPiece(
+                measureIdx: pieceMeasure,
+                tickStartInMeasure: pieceTickStart,
+                elements: pieceElements))
+            pieceElements = []
+        }
+
+        func advanceMeasure() throws {
+            flushPiece()
+            pieceMeasure += 1
+            pieceTickStart = 0
+            measureTickCursor = 0
+            if pieceMeasure >= measures.count {
+                throw SheetMusicError.invalidEdit(
+                    reason: "Paste: ran out of destination "
+                        + "measures past staff \(destStaff) "
+                        + "measure \(measures.count - 1)")
             }
         }
-        return nil
+
+        for srcEl in stream {
+            var elementTicksRemaining: Int
+            switch srcEl {
+            case .chord(let c):
+                elementTicksRemaining = c.duration
+                    .ticks(division: division)
+            case .rest(let r):
+                elementTicksRemaining = r.duration
+                    .ticks(division: division)
+            default:
+                continue
+            }
+            var isFirstSplit = true
+
+            while elementTicksRemaining > 0 {
+                let voice = measures[pieceMeasure]
+                    .voices[destVoice]
+                let measureTotal = totalTicks(
+                    of: voice, division: division)
+                if measureTickCursor >= measureTotal {
+                    try advanceMeasure()
+                    continue
+                }
+                let measureRemaining = measureTotal - measureTickCursor
+                let partTicks = min(
+                    elementTicksRemaining, measureRemaining)
+                let isLastSplit = (partTicks == elementTicksRemaining)
+
+                let durations = DurationChangeAlgorithm
+                    .alignedDurations(
+                        forTicks: partTicks,
+                        rtickStart: measureTickCursor,
+                        division: division)
+                switch srcEl {
+                case .chord(let c):
+                    for (i, dur) in durations.enumerated() {
+                        let isFirstChain =
+                            isFirstSplit && i == 0
+                        let isLastChain =
+                            isLastSplit && i == durations.count - 1
+                        var notes = c.notes
+                        for ni in notes.indices {
+                            notes[ni].tieBack = isFirstChain
+                                ? c.notes[ni].tieBack : 1
+                            notes[ni].tieForward = isLastChain
+                                ? c.notes[ni].tieForward : 1
+                        }
+                        pieceElements.append(.chord(Chord(
+                            duration: dur,
+                            notes: notes,
+                            arpeggio: isFirstChain
+                                ? c.arpeggio : nil,
+                            lyrics: isFirstChain
+                                ? c.lyrics : [])))
+                    }
+                case .rest:
+                    for dur in durations {
+                        pieceElements.append(
+                            .rest(Rest(duration: dur)))
+                    }
+                default:
+                    break
+                }
+
+                measureTickCursor += partTicks
+                elementTicksRemaining -= partTicks
+                isFirstSplit = false
+            }
+        }
+        flushPiece()
+        return result
+    }
+
+    /// Build one `PasteVoiceElements` for a single destination
+    /// measure: replaces the element range covering
+    /// `[tickStartInMeasure, tickStartInMeasure + sum(piece))` with
+    /// `[trimmedLeading] + pieceElements + [trimmedTrailing]`. The
+    /// total replacement ticks equal the consumed range's ticks, so
+    /// `PasteVoiceElements`' rebalance lengthen path simply
+    /// substitutes — no rest spillover.
+    private static func buildMeasureReplaceCommand(
+        staff: Int,
+        measure: Int,
+        voice: Int,
+        tickStartInMeasure: Int,
+        pieceElements: [VoiceElement],
+        score: Score
+    ) throws -> any EditCommand {
+        let division = score.division
+        let v = score.staves[staff].measures[measure].voices[voice]
+        let pieceTicks = pieceElements.reduce(0) {
+            $0 + tickOf($1, division: division)
+        }
+        let tickEnd = tickStartInMeasure + pieceTicks
+
+        // Locate the leading element (the one whose range covers
+        // tickStartInMeasure) and the trailing element (whose range
+        // covers tickEnd-1). Walk voice.elements summing ticks.
+        var tick = 0
+        var leadingIdx: Int?
+        var leadingStart = 0
+        var leadingEnd = 0
+        var trailingIdx: Int?
+        var trailingStart = 0
+        var trailingEnd = 0
+        for (i, el) in v.elements.enumerated() {
+            let elTicks = tickOf(el, division: division)
+            if elTicks == 0 { continue }
+            let elStart = tick
+            let elEnd = tick + elTicks
+            if leadingIdx == nil
+                && elStart <= tickStartInMeasure
+                && tickStartInMeasure < elEnd {
+                leadingIdx = i
+                leadingStart = elStart
+                leadingEnd = elEnd
+            }
+            if elStart < tickEnd && tickEnd <= elEnd {
+                trailingIdx = i
+                trailingStart = elStart
+                trailingEnd = elEnd
+            }
+            tick = elEnd
+        }
+        guard let loIdx = leadingIdx else {
+            throw SheetMusicError.invalidEdit(
+                reason: "Paste: no element at tick "
+                    + "\(tickStartInMeasure) on staff \(staff) "
+                    + "measure \(measure) voice \(voice)")
+        }
+        // Single-element overlap (loIdx == hiIdx) is fine — we
+        // trim both ends of the same element. trailingIdx unset
+        // means tickEnd reached past the measure tail; treat it
+        // as a no-trailing-trim case using the leading element
+        // as the consumed extent.
+        let hiIdx = trailingIdx ?? loIdx
+        let hiStart = trailingIdx == nil ? leadingStart : trailingStart
+        let hiEnd = trailingIdx == nil ? leadingEnd : trailingEnd
+
+        let leadingTrim = tickStartInMeasure - leadingStart
+        let trailingTrim = hiEnd - tickEnd
+        // If the trailing trim is negative (shouldn't happen given
+        // the scan), bail.
+        guard trailingTrim >= 0 else {
+            throw SheetMusicError.invalidEdit(
+                reason: "Paste: trailing trim came out negative "
+                    + "— consumed range \(tickStartInMeasure)..\(tickEnd) "
+                    + "vs trailing element \(hiStart)..\(hiEnd)")
+        }
+
+        var replacement: [VoiceElement] = []
+        // Leading trim: keep [leadingStart, tickStartInMeasure).
+        if leadingTrim > 0 {
+            replacement.append(contentsOf: trimmedBoundary(
+                element: v.elements[loIdx],
+                ticks: leadingTrim,
+                rtickStart: leadingStart,
+                tieBackKeepsOriginal: true,
+                tieForwardKeepsOriginal: false,
+                division: division))
+        }
+        replacement.append(contentsOf: pieceElements)
+        // Trailing trim: keep [tickEnd, hiEnd).
+        if trailingTrim > 0 {
+            replacement.append(contentsOf: trimmedBoundary(
+                element: v.elements[hiIdx],
+                ticks: trailingTrim,
+                rtickStart: tickEnd,
+                tieBackKeepsOriginal: false,
+                tieForwardKeepsOriginal: true,
+                division: division))
+        }
+
+        return PasteVoiceElements(
+            at: VoiceElementID(
+                staffIndex: staff,
+                measureIndex: measure,
+                voiceIndex: voice,
+                elementIndex: loIdx),
+            elements: replacement)
+    }
+
+    /// Build a tied chord chain or aligned rest sequence for a
+    /// trimmed boundary element. `tieBackKeepsOriginal` and
+    /// `tieForwardKeepsOriginal` control whether the chain's outer
+    /// tie endpoints inherit the source element's ties (so the
+    /// trim integrates with the surrounding score) or get cleared
+    /// (the trimmed end abuts pasted content from a different
+    /// origin).
+    private static func trimmedBoundary(
+        element: VoiceElement,
+        ticks: Int,
+        rtickStart: Int,
+        tieBackKeepsOriginal: Bool,
+        tieForwardKeepsOriginal: Bool,
+        division: Int
+    ) -> [VoiceElement] {
+        let durations = DurationChangeAlgorithm.alignedDurations(
+            forTicks: ticks,
+            rtickStart: rtickStart,
+            division: division)
+        switch element {
+        case .chord(let c):
+            var pieces: [VoiceElement] = []
+            for (i, dur) in durations.enumerated() {
+                let isFirst = i == 0
+                let isLast = i == durations.count - 1
+                var notes = c.notes
+                for ni in notes.indices {
+                    notes[ni].tieBack = isFirst
+                        ? (tieBackKeepsOriginal
+                           ? c.notes[ni].tieBack : nil)
+                        : 1
+                    notes[ni].tieForward = isLast
+                        ? (tieForwardKeepsOriginal
+                           ? c.notes[ni].tieForward : nil)
+                        : 1
+                }
+                pieces.append(.chord(Chord(
+                    duration: dur,
+                    notes: notes,
+                    arpeggio: isFirst && tieBackKeepsOriginal
+                        ? c.arpeggio : nil,
+                    lyrics: isFirst && tieBackKeepsOriginal
+                        ? c.lyrics : [])))
+            }
+            return pieces
+        case .rest:
+            return durations.map { .rest(Rest(duration: $0)) }
+        default:
+            return [element]
+        }
+    }
+
+    private static func tickOf(
+        _ el: VoiceElement, division: Int
+    ) -> Int {
+        switch el {
+        case .chord(let c):
+            return c.duration.ticks(division: division)
+        case .rest(let r):
+            return r.duration.ticks(division: division)
+        default:
+            return 0
+        }
+    }
+
+    /// Tick offset of the element at `id` within its destination
+    /// measure. Sums the ticks of preceding chord/rest elements;
+    /// non-timed elements contribute zero.
+    private static func elementTickOffset(
+        of id: VoiceElementID, in score: Score
+    ) -> Int? {
+        guard score.staves.indices.contains(id.staffIndex)
+        else { return nil }
+        let measures = score.staves[id.staffIndex].measures
+        guard measures.indices.contains(id.measureIndex)
+        else { return nil }
+        let voices = measures[id.measureIndex].voices
+        guard voices.indices.contains(id.voiceIndex)
+        else { return nil }
+        let elements = voices[id.voiceIndex].elements
+        guard elements.indices.contains(id.elementIndex)
+        else { return nil }
+        var tick = 0
+        for i in 0..<id.elementIndex {
+            tick += tickOf(elements[i], division: score.division)
+        }
+        return tick
     }
 
     /// Re-anchor the selection on the first chord/rest produced by
