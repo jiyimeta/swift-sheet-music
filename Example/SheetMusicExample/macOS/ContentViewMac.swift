@@ -399,18 +399,30 @@ struct ContentViewMac: View {
                 noteID: noteID, controller: controller)
             return true
         }
-        // Number keys 1–7 with a note selected → change that
-        // chord's duration. Mapping mirrors MuseScore:
+        // Number keys 1–7 with a note OR rest selected → change
+        // that element's duration. Mapping mirrors MuseScore:
         //   1=64th, 2=32nd, 3=16th, 4=8th, 5=quarter, 6=half, 7=whole.
+        // Notes route through SetChordDuration; rests through
+        // SetRestDuration (both share the same shorten / lengthen
+        // / chord-overshoot algorithm).
         if event.modifierFlags
             .intersection([.command, .control, .option]).isEmpty,
-           case .single(.note(let noteID)) = selection,
            let duration = NoteInputKeyMap.duration(
             forCharacter: event.characters ?? "") {
-            setSelectedChordDuration(
-                noteID: noteID, duration: duration,
-                controller: controller)
-            return true
+            switch selection {
+            case .single(.note(let noteID)):
+                setSelectedChordDuration(
+                    noteID: noteID, duration: duration,
+                    controller: controller)
+                return true
+            case .single(.rest(let restID)):
+                setSelectedRestDuration(
+                    restID: restID, duration: duration,
+                    controller: controller)
+                return true
+            default:
+                break
+            }
         }
         guard let chars = event.charactersIgnoringModifiers,
               let letter = chars.first
@@ -620,6 +632,26 @@ struct ContentViewMac: View {
             adoptEditedScore(controller.score)
             errorMessage = "Duration changed"
             scrollToAffectedMeasure(measureIndex: noteID.measureIndex)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    /// Same as `setSelectedChordDuration` but for the
+    /// `SetRestDuration` command.
+    private func setSelectedRestDuration(
+        restID: RestID,
+        duration: NoteDuration,
+        controller: NoteInputController
+    ) {
+        let veID = VoiceElementID(restID)
+        do {
+            try controller.apply(
+                SetRestDuration(at: veID, duration: duration),
+                undoManager: undoManager)
+            adoptEditedScore(controller.score)
+            errorMessage = "Duration changed"
+            scrollToAffectedMeasure(measureIndex: restID.measureIndex)
         } catch {
             errorMessage = error.localizedDescription
         }
