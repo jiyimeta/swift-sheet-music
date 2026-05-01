@@ -164,6 +164,30 @@ struct ContentViewMac: View {
                 .disabled(inputController == nil)
                 .help("Toggle note input mode. Then click a rest and type C/D/E/F/G/A/B; ↑/↓ shifts octave; ⌘Z undoes.")
             }
+            ToolbarItemGroup(placement: .primaryAction) {
+                accidentalButton(.doubleFlat, glyph: "𝄫",
+                    help: "Double flat (𝄫) on the selected note")
+                accidentalButton(.flat, glyph: "♭",
+                    help: "Flat (♭) on the selected note")
+                accidentalButton(.natural, glyph: "♮",
+                    help: "Natural (♮) on the selected note")
+                accidentalButton(.sharp, glyph: "♯",
+                    help: "Sharp (♯) on the selected note")
+                accidentalButton(.doubleSharp, glyph: "𝄪",
+                    help: "Double sharp (𝄪) on the selected note")
+                Button {
+                    if case .single(.note(let id)) = selection {
+                        applyAccidental(nil, to: id)
+                    }
+                } label: {
+                    Label("No Accidental",
+                        systemImage: "minus.circle")
+                }
+                .disabled(!isAccidentalActionable)
+                .help("Clear the explicit accidental glyph; the "
+                    + "note reverts to whatever the key signature "
+                    + "implies.")
+            }
         }
     }
 
@@ -775,6 +799,68 @@ struct ContentViewMac: View {
             try controller.apply(cmd, undoManager: undoManager)
             adoptEditedScore(controller.score)
             errorMessage = alreadyTied ? "Tie removed" : "Tied"
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    /// True when the accidental toolbar buttons should be enabled —
+    /// a single note is selected and it does not live on a drum
+    /// staff (where accidentals are meaningless).
+    private var isAccidentalActionable: Bool {
+        guard case .single(.note(let id)) = selection,
+              let controller = inputController
+        else { return false }
+        return !isDrumStaff(noteID: id, controller: controller)
+    }
+
+    /// Toolbar button for one accidental value. Emits a `SetAccidental`
+    /// command when clicked and selects the resulting (respelled) note
+    /// so the user can chain another edit. Disabled when no note is
+    /// selected, or when the selected note sits on a drum staff.
+    @ViewBuilder
+    private func accidentalButton(
+        _ accidental: Accidental, glyph: String, help: String
+    ) -> some View {
+        Button {
+            if case .single(.note(let id)) = selection {
+                applyAccidental(accidental, to: id)
+            }
+        } label: {
+            // Use the SMuFL/Unicode accidental glyph directly so the
+            // toolbar reads at a glance — system accidental symbols
+            // exist but only as colour-rendered SF Symbols which
+            // don't read in a small toolbar slot.
+            Text(glyph)
+                .font(.system(size: 16))
+                .accessibilityLabel(help)
+        }
+        .disabled(!isAccidentalActionable)
+        .help(help)
+    }
+
+    /// Apply `SetAccidental` to the given note, refresh the layout,
+    /// and re-anchor the selection on the (possibly respelled) note
+    /// at the same NoteID. Plays a preview at the new pitch so the
+    /// user hears the respell.
+    private func applyAccidental(
+        _ accidental: Accidental?, to noteID: NoteID
+    ) {
+        guard let controller = inputController else { return }
+        do {
+            try controller.apply(
+                SetAccidental(at: noteID, accidental: accidental),
+                undoManager: undoManager)
+            adoptEditedScore(controller.score)
+            // The note retained its NoteID — re-anchor selection so
+            // the canvas keeps showing the highlight on the new
+            // pitch / glyph.
+            selection = .single(.note(noteID))
+            playbackEngine.playPreview(
+                noteID: noteID, in: controller.score)
+            errorMessage = accidental.map {
+                "Set accidental: \($0)"
+            } ?? "Cleared accidental"
         } catch {
             errorMessage = error.localizedDescription
         }
