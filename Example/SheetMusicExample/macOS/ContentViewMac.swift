@@ -438,6 +438,18 @@ struct ContentViewMac: View {
             // will deliver it to whatever responder is appropriate.)
             return false
         }
+        // Shift+letter on a selected note → add the letter's pitch
+        // to that note's chord. Mirrors MuseScore's chord-input
+        // shortcut. The accidental glyph is computed against the
+        // active key sig so the new note's spelling matches what
+        // the staff already shows for that letter.
+        if event.modifierFlags.contains(.shift),
+           case .single(.note(let noteID)) = selection {
+            addNoteToChord(
+                noteID: noteID, mapped: mapped,
+                controller: controller)
+            return true
+        }
         guard case let .single(.rest(restID)) = selection else {
             // Letter is mapped but there's no rest to drop it onto.
             // Consume it so the user doesn't get a beep, and give
@@ -611,6 +623,69 @@ struct ContentViewMac: View {
         lyricEditTarget = nil
         lyricEditText = ""
         lyricEditFocused = false
+    }
+
+    /// Add a new note (Shift+letter mapping → pitch in input
+    /// octave) to the chord that contains the currently-selected
+    /// note. The accidental is auto-computed against the active key
+    /// signature; the chord's other metadata (duration, lyrics,
+    /// arpeggio) is preserved by `AddNoteToChord`.
+    private func addNoteToChord(
+        noteID: NoteID,
+        mapped: (pitch: Int, tpc: Int),
+        controller: NoteInputController
+    ) {
+        let chordID = VoiceElementID(noteID)
+        let activeKey = controller.score.activeKey(at: noteID)
+        let accidental: Accidental? = isDrumStaff(noteID: noteID,
+                                                  controller: controller)
+            ? nil
+            : PitchSpelling.displayedAccidental(
+                forTpc: mapped.tpc, in: activeKey)
+        // Capture the chord's prior note count so we can address
+        // the freshly-appended note after the apply.
+        let priorNoteCount: Int
+        if case .chord(let c) = controller.score[chordID] {
+            priorNoteCount = c.notes.count
+        } else {
+            priorNoteCount = 0
+        }
+        do {
+            try controller.apply(
+                AddNoteToChord(
+                    at: chordID,
+                    pitch: mapped.pitch,
+                    tpc: mapped.tpc,
+                    accidental: accidental),
+                undoManager: undoManager)
+            adoptEditedScore(controller.score)
+            // Move selection to the freshly-added note (it sits at
+            // the end of `chord.notes` per AddNoteToChord) and
+            // preview that pitch — matches the rest-input flow's
+            // "select what you just typed + play it" feedback.
+            let newNoteID = NoteID(
+                staffIndex: noteID.staffIndex,
+                measureIndex: noteID.measureIndex,
+                voiceIndex: noteID.voiceIndex,
+                elementIndex: noteID.elementIndex,
+                noteIndexInChord: priorNoteCount)
+            selection = .single(.note(newNoteID))
+            playbackEngine.playPreview(
+                noteID: newNoteID, in: controller.score)
+            errorMessage = "Added \(mapped.pitch) to chord"
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func isDrumStaff(
+        noteID: NoteID,
+        controller: NoteInputController
+    ) -> Bool {
+        let staffIdx = noteID.staffIndex
+        return staffIdx < controller.score.parts.count
+            && controller.score.parts[staffIdx]
+                .instrument.useDrumset
     }
 
     /// Set the duration of the chord that contains the currently-
