@@ -70,7 +70,7 @@ import Testing
         let measure = Measure(voices: [Voice(elements: [
             .rehearsalMark(mark),
             .chord(chord),
-        ]), ])
+        ])])
         let staff = StaffContent(id: 1, measures: [measure])
         let part = Part(id: "P1", instrument: Instrument(
             id: "voice",
@@ -124,7 +124,7 @@ import Testing
         let measure = Measure(voices: [Voice(elements: [
             .rehearsalMark(mark),
             .chord(chord),
-        ]), ])
+        ])])
         let staff = StaffContent(id: 1, measures: [measure])
         let part = Part(id: "P1", instrument: Instrument(
             id: "voice",

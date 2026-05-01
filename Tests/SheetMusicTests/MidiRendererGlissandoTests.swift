@@ -176,7 +176,7 @@ import Testing
                 notes: [Note(
                     pitch: 60, tpc: 14,
                     glissando: Glissando(style: .chromatic, easeIn: easeIn, easeOut: 0)
-                ), ]
+                )]
             )
             let end = Chord(duration: .quarter, notes: [Note(pitch: 66, tpc: 14)])
             let file = try MidiRenderer.render(

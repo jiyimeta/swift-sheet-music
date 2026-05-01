@@ -71,7 +71,7 @@ import Testing
                     pitch: 68, tpc: 22,
                     tieBack: 1,
                     glissando: Glissando(style: .portamento)
-                ), ]
+                )]
             ),
             // Glissando target.
             Chord(duration: .half, notes: [Note(pitch: 71, tpc: 19)]),
@@ -122,7 +122,7 @@ import Testing
                     pitch: 64, tpc: 18,
                     tieBack: 1,
                     glissando: Glissando(style: .portamento)
-                ), ]
+                )]
             ),
             Chord(duration: .half, notes: [Note(pitch: 68, tpc: 22)]),
             Chord(duration: .quarter, notes: [Note(pitch: 64, tpc: 18)]),

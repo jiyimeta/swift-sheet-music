@@ -98,7 +98,7 @@ struct ScoreNextTieTargetTests {
             staves: [StaffContent(
                 id: 1,
                 measures: [Measure(voices: [voice])]
-            ), ]
+            )]
         )
         let source = NoteID(
             staffIndex: 0,
@@ -129,7 +129,7 @@ struct ScoreNextTieTargetTests {
             staves: [StaffContent(
                 id: 1,
                 measures: [Measure(voices: [voice])]
-            ), ]
+            )]
         )
         let source = NoteID(
             staffIndex: 0,
@@ -159,7 +159,7 @@ struct ScoreNextTieTargetTests {
             staves: [StaffContent(
                 id: 1,
                 measures: [Measure(voices: [voice])]
-            ), ]
+            )]
         )
         let source = NoteID(
             staffIndex: 0,
@@ -189,7 +189,7 @@ struct ScoreNextTieTargetTests {
             staves: [StaffContent(
                 id: 1,
                 measures: [Measure(voices: [voice])]
-            ), ]
+            )]
         )
         let source = NoteID(
             staffIndex: 0,

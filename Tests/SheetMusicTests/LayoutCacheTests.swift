@@ -12,14 +12,14 @@
             let note = Note(pitch: 60, tpc: 14)
             let m1 = Measure(voices: [Voice(elements: [
                 .chord(Chord(duration: .whole, notes: [note])),
-            ]), ])
+            ])])
             let m2 = Measure(voices: [Voice(elements: [
                 .chord(Chord(duration: .half, notes: [note])),
                 .chord(Chord(duration: .half, notes: [note])),
-            ]), ])
+            ])])
             let m3 = Measure(voices: [Voice(elements: [
                 .rest(duration: .whole),
-            ]), ])
+            ])])
             return Score(
                 division: 480,
                 staves: [StaffContent(id: 1, measures: [m1, m2, m3])]
@@ -107,7 +107,7 @@
                     Note(pitch: 60, tpc: 14),
                 ])),
                 .rest(duration: .half),
-            ]), ])
+            ])])
             measures[1] = editedMeasure1
             staff = StaffContent(id: staff.id, measures: measures)
             let scoreB = Score(division: scoreA.division, staves: [staff])

@@ -95,7 +95,7 @@
             let signature = ConfigSignature(
                 systemCount: systems.count,
                 firstSystemId: systems.first.map { ObjectIdentifier(
-                    $0.measures as AnyObject) 
+                    $0.measures as AnyObject)
                 },
                 pageStartY: pageStartY,
                 titleHash: titleFrame?.texts.map(\.text)
