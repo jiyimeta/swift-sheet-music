@@ -1219,13 +1219,20 @@ struct ContentViewMac: View {
                 try pasteRangePayload(
                     payload, at: id, controller: controller)
             } else if let element = voiceElementClipboard {
-                try controller.apply(
-                    PasteVoiceElement(at: id, element: element),
-                    undoManager: undoManager)
-                adoptEditedScore(controller.score)
-                anchorSelectionAfterPaste(
-                    at: id, firstElement: element)
-                errorMessage = "Pasted"
+                // Reuse the cross-measure paste path so a single
+                // long element (e.g. a whole copied to a position
+                // too close to the bar end) spills into following
+                // measures with a tied chord chain instead of
+                // refusing with "not enough room".
+                let singleCell = RangeCell(
+                    staffOffset: 0, measureOffset: 0,
+                    voiceIndex: id.voiceIndex,
+                    elements: [element])
+                let payload = RangePayload(
+                    cells: [singleCell],
+                    staffCount: 1, measureCount: 1)
+                try pasteRangePayload(
+                    payload, at: id, controller: controller)
             }
         } catch {
             errorMessage = error.localizedDescription
