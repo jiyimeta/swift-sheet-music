@@ -47,6 +47,18 @@ struct ContentViewMac: View {
     /// cleared on submit / cancel.
     @State private var lyricEditTarget: VoiceElementID?
     @State private var lyricEditText: String = ""
+    /// Internal clipboard for ⌘C / ⌘X / ⌘V. Holds whatever
+    /// `VoiceElement` was last copied — chord or rest typically.
+    /// Not synced with the system pasteboard: the score model isn't
+    /// representable as a uniform type, and cross-process paste
+    /// doesn't make sense for a single-element copy.
+    @State private var voiceElementClipboard: VoiceElement?
+    /// Multi-element clipboard. Set when the user copies a `.range`
+    /// selection that resolves to a contiguous slice of one voice;
+    /// pasted via `PasteVoiceElements`. The two clipboards are
+    /// mutually exclusive — a fresh copy populates one and clears
+    /// the other so ⌘V always knows which command to dispatch.
+    @State private var voiceElementsClipboard: [VoiceElement]?
     @FocusState private var lyricEditFocused: Bool
     /// Per-measure clef / key / time / part-label state. Cached so
     /// the sticky header doesn't recompute it on every body re-eval
@@ -286,6 +298,26 @@ struct ContentViewMac: View {
                chars.first?.lowercased() == "l" {
                 if openLyricEditorForSelection() {
                     return nil
+                }
+            }
+            // ⌘C / ⌘X / ⌘V: clipboard for one VoiceElement. Cut and
+            // copy capture the currently-selected chord or rest into
+            // an in-memory slot; paste calls PasteVoiceElement, which
+            // refuses if the destination's duration doesn't match.
+            if event.modifierFlags.contains(.command),
+               !event.isARepeat,
+               event.modifierFlags
+                .intersection([.option, .control]).isEmpty,
+               let chars = event.charactersIgnoringModifiers,
+               let key = chars.first?.lowercased() {
+                switch key {
+                case "c":
+                    if copySelectedElement() { return nil }
+                case "x":
+                    if cutSelectedElement() { return nil }
+                case "v":
+                    if pasteAtSelection() { return nil }
+                default: break
                 }
             }
             if let controller = inputController, controller.isInputModeOn {
@@ -801,6 +833,228 @@ struct ContentViewMac: View {
             errorMessage = alreadyTied ? "Tie removed" : "Tied"
         } catch {
             errorMessage = error.localizedDescription
+        }
+    }
+
+    /// Copy the current selection into one of the two clipboards.
+    /// `.single` populates `voiceElementClipboard` (and clears the
+    /// range one); `.range` resolved to a contiguous in-voice slice
+    /// populates `voiceElementsClipboard`. Returns true when the
+    /// event was actionable so the key monitor can swallow ⌘C.
+    private func copySelectedElement() -> Bool {
+        guard let controller = inputController else { return false }
+        switch selection {
+        case .single:
+            guard let id = selectedVoiceElementID(),
+                  let element = controller.score[id]
+            else { return false }
+            voiceElementClipboard = element
+            voiceElementsClipboard = nil
+            errorMessage = "Copied"
+            return true
+        case .range(let anchor, let target):
+            guard let payload = collectRangePayload(
+                anchor: anchor, target: target,
+                score: controller.score)
+            else {
+                errorMessage = "Range copy needs the same staff, "
+                    + "voice, and measure on both ends."
+                return true
+            }
+            voiceElementsClipboard = payload
+            voiceElementClipboard = nil
+            errorMessage = "Copied \(payload.count) element"
+                + (payload.count == 1 ? "" : "s")
+            return true
+        default:
+            return false
+        }
+    }
+
+    /// Extract a contiguous voice slice for a `.range` selection.
+    /// v1 supports same-staff / same-voice / same-measure ranges
+    /// only; returns `nil` when the range crosses any of those
+    /// boundaries so the caller can show an error.
+    private func collectRangePayload(
+        anchor: ScoreItemID, target: ScoreItemID, score: Score
+    ) -> [VoiceElement]? {
+        guard anchor.staffIndex == target.staffIndex,
+              anchor.measureIndex == target.measureIndex,
+              anchor.voiceIndex == target.voiceIndex
+        else { return nil }
+        guard score.staves.indices.contains(anchor.staffIndex) else {
+            return nil
+        }
+        let measures = score.staves[anchor.staffIndex].measures
+        guard measures.indices.contains(anchor.measureIndex) else {
+            return nil
+        }
+        let voices = measures[anchor.measureIndex].voices
+        guard voices.indices.contains(anchor.voiceIndex) else {
+            return nil
+        }
+        let elements = voices[anchor.voiceIndex].elements
+        let lo = min(anchor.elementIndex, target.elementIndex)
+        let hi = max(anchor.elementIndex, target.elementIndex)
+        guard elements.indices.contains(lo),
+              elements.indices.contains(hi)
+        else { return nil }
+        return Array(elements[lo...hi])
+    }
+
+    /// Capture the selection like `copy`, then replace each
+    /// captured element with a rest of the same duration via
+    /// `DeleteVoiceElement`. For `.range` the deletes run from the
+    /// last element to the first so element indices stay valid as
+    /// the loop progresses.
+    private func cutSelectedElement() -> Bool {
+        guard let controller = inputController else { return false }
+        switch selection {
+        case .single:
+            guard let id = selectedVoiceElementID(),
+                  let element = controller.score[id]
+            else { return false }
+            voiceElementClipboard = element
+            voiceElementsClipboard = nil
+            do {
+                try controller.apply(
+                    DeleteVoiceElement(at: id),
+                    undoManager: undoManager)
+                adoptEditedScore(controller.score)
+                selection = .single(.rest(RestID(
+                    staffIndex: id.staffIndex,
+                    measureIndex: id.measureIndex,
+                    voiceIndex: id.voiceIndex,
+                    elementIndex: id.elementIndex)))
+                errorMessage = "Cut"
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+            return true
+        case .range(let anchor, let target):
+            guard let payload = collectRangePayload(
+                anchor: anchor, target: target,
+                score: controller.score)
+            else {
+                errorMessage = "Range cut needs the same staff, "
+                    + "voice, and measure on both ends."
+                return true
+            }
+            voiceElementsClipboard = payload
+            voiceElementClipboard = nil
+            let lo = min(anchor.elementIndex, target.elementIndex)
+            let hi = max(anchor.elementIndex, target.elementIndex)
+            do {
+                // Delete back-to-front so each pending index stays
+                // valid while we iterate.
+                for elemIdx in stride(from: hi, through: lo, by: -1) {
+                    let id = VoiceElementID(
+                        staffIndex: anchor.staffIndex,
+                        measureIndex: anchor.measureIndex,
+                        voiceIndex: anchor.voiceIndex,
+                        elementIndex: elemIdx)
+                    try controller.apply(
+                        DeleteVoiceElement(at: id),
+                        undoManager: undoManager)
+                }
+                adoptEditedScore(controller.score)
+                selection = .single(.rest(RestID(
+                    staffIndex: anchor.staffIndex,
+                    measureIndex: anchor.measureIndex,
+                    voiceIndex: anchor.voiceIndex,
+                    elementIndex: lo)))
+                errorMessage = "Cut \(payload.count) element"
+                    + (payload.count == 1 ? "" : "s")
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+            return true
+        default:
+            return false
+        }
+    }
+
+    /// Paste the clipboard onto the currently-selected chord or rest.
+    /// Single-element clipboard → `PasteVoiceElement` (handles the
+    /// duration rebalance for one element). Multi-element clipboard
+    /// → `PasteVoiceElements` (range copy). Refuses when nothing is
+    /// in the clipboard or the destination isn't a single chord/rest.
+    private func pasteAtSelection() -> Bool {
+        if voiceElementClipboard == nil
+            && voiceElementsClipboard == nil {
+            errorMessage = "Clipboard is empty."
+            return true
+        }
+        guard let id = selectedVoiceElementID(),
+              let controller = inputController
+        else {
+            errorMessage = "Select a chord or rest to paste onto."
+            return true
+        }
+        do {
+            if let payload = voiceElementsClipboard {
+                try controller.apply(
+                    PasteVoiceElements(at: id, elements: payload),
+                    undoManager: undoManager)
+                adoptEditedScore(controller.score)
+                anchorSelectionAfterPaste(
+                    at: id, firstElement: payload.first)
+                errorMessage = "Pasted \(payload.count) element"
+                    + (payload.count == 1 ? "" : "s")
+            } else if let element = voiceElementClipboard {
+                try controller.apply(
+                    PasteVoiceElement(at: id, element: element),
+                    undoManager: undoManager)
+                adoptEditedScore(controller.score)
+                anchorSelectionAfterPaste(
+                    at: id, firstElement: element)
+                errorMessage = "Pasted"
+            }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+        return true
+    }
+
+    /// Re-anchor the selection on the first chord/rest produced by
+    /// a paste so subsequent edits land where the user is looking.
+    private func anchorSelectionAfterPaste(
+        at id: VoiceElementID, firstElement: VoiceElement?
+    ) {
+        switch firstElement {
+        case .chord:
+            selection = .single(.note(NoteID(
+                staffIndex: id.staffIndex,
+                measureIndex: id.measureIndex,
+                voiceIndex: id.voiceIndex,
+                elementIndex: id.elementIndex,
+                noteIndexInChord: 0)))
+        case .rest:
+            selection = .single(.rest(RestID(
+                staffIndex: id.staffIndex,
+                measureIndex: id.measureIndex,
+                voiceIndex: id.voiceIndex,
+                elementIndex: id.elementIndex)))
+        default:
+            break
+        }
+    }
+
+    /// VoiceElementID derived from the current selection, or nil
+    /// when the selection isn't a single chord/rest. Used by
+    /// copy / cut / paste so they share the same selection model.
+    private func selectedVoiceElementID() -> VoiceElementID? {
+        switch selection {
+        case .single(.note(let n)):
+            return VoiceElementID(n)
+        case .single(.rest(let r)):
+            return VoiceElementID(
+                staffIndex: r.staffIndex,
+                measureIndex: r.measureIndex,
+                voiceIndex: r.voiceIndex,
+                elementIndex: r.elementIndex)
+        default:
+            return nil
         }
     }
 
