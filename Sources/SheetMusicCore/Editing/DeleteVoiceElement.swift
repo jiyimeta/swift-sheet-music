@@ -17,6 +17,13 @@ import Foundation
 /// Inverse is a `ReplaceVoiceElement` that restores the original
 /// element verbatim, so undo brings back the chord with all its
 /// notes / accidentals / ties.
+///
+/// > Note: This command is sugar over `ReplaceVoiceElement` with a
+/// > same-duration empty chord. It exists to give the operation a
+/// > domain-meaningful name and to centralise the duration lookup;
+/// > callers can equally construct the equivalent
+/// > `ReplaceVoiceElement` directly. See `docs/edit-commands.md`
+/// > for the policy.
 public struct DeleteVoiceElement: EditCommand {
     public let location: VoiceElementID
 

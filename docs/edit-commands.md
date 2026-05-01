@@ -10,56 +10,76 @@ edit-command implementations live in
 
 ---
 
+## Policy: implement composables as named commands too
+
+Many edit operations can in principle be expressed as a Composite
+of one or two `ReplaceVoiceElement` calls plus some inline data
+mutation by the caller. That's "composable" — no new
+domain-specific algorithm is required.
+
+**We still implement those as named `EditCommand` values, marked
+in DocC as sugar.** The named-command form earns its keep on three
+axes:
+
+1. **Intent** — `SetTie(from:to:...)` reads as a music-theory
+   operation; the equivalent Composite of two ReplaceVoiceElement
+   constructions reads as plumbing.
+2. **Centralised validation** — even when the validation is
+   minimal (e.g. "noteIndex in range"), having one place that
+   owns it avoids drift across consumers.
+3. **Future re-use** — additional consumers (CLI, tests, plugins,
+   future editors) get the same named operation for free.
+
+The DocC convention used to mark a sugar command:
+
+```swift
+/// > Note: This command is sugar over
+/// > `ReplaceVoiceElement` (× N) + `CompositeEditCommand`. It
+/// > exists to give the operation a domain-meaningful name and
+/// > to centralise the small bit of validation it performs;
+/// > callers can equally well construct the equivalent
+/// > Composite directly.
+```
+
+When a command's body is purely a Composite over primitives,
+include this note. When it has a non-trivial algorithm
+(`SetChordDuration`, `PasteVoiceElement{,s}`, `CompositeEditCommand`,
+`ReplaceVoiceElement{,s}`), no note is needed — those carry their
+own substantive logic.
+
+---
+
 ## A. Implemented
 
-| Command | Trigger in macOS example |
-| --- | --- |
-| `SetNotePitch` | ↑ / ↓ (±1 semitone) |
-| `SetAccidental` | toolbar (♭♭ ♭ ♮ ♯ 𝄪 + clear) |
-| `AddNoteToChord` | Shift+letter |
-| `RemoveNoteFromChord` | Shift+Backspace |
-| `DeleteVoiceElement` | Backspace / forward Delete |
-| `SetTie` | `+` |
-| `SetLyrics` | ⌘L (inline TextField) |
-| `SetChordDuration` | 1..7 (chord selected) |
-| `SetRestDuration` | 1..7 (rest selected) |
-| `ReplaceVoiceElement` | primitive (used by note-input letter keys) |
-| `ReplaceVoiceElements` | primitive |
-| `PasteVoiceElement` | ⌘V (single, cross-measure spill) |
-| `PasteVoiceElements` | ⌘V (range, multi-element, cross-measure spill, tuplet-aware) |
-| `CompositeEditCommand` | infrastructure for atomic multi-step edits |
+| Command | Trigger in macOS example | Sugar? |
+| --- | --- | --- |
+| `SetNotePitch` | ↑ / ↓ (±1 semitone) | — |
+| `SetAccidental` | toolbar (♭♭ ♭ ♮ ♯ 𝄪 + clear) | sugar |
+| `AddNoteToChord` | Shift+letter | sugar |
+| `RemoveNoteFromChord` | Shift+Backspace | sugar |
+| `DeleteVoiceElement` | Backspace / forward Delete | sugar |
+| `SetTie` | `+` | sugar |
+| `SetLyrics` | ⌘L (inline TextField) | sugar |
+| `SetChordDuration` | 1..7 (chord selected) | — |
+| `SetRestDuration` | 1..7 (rest selected) | — |
+| `ReplaceVoiceElement` | primitive (used by note-input letter keys) | primitive |
+| `ReplaceVoiceElements` | primitive | primitive |
+| `PasteVoiceElement` | ⌘V (single, cross-measure spill) | — |
+| `PasteVoiceElements` | ⌘V (range, multi-element, cross-measure spill, tuplet-aware) | — |
+| `CompositeEditCommand` | infrastructure for atomic multi-step edits | infrastructure |
 
 Undo / redo is delivered by `ScoreEditor` (one inverse per applied
 command).
 
 ---
 
-## B. Composable (no new library command needed)
-
-These build on the existing primitives + `CompositeEditCommand`.
-The macOS host can construct them inline in a key handler — no
-library API surface required.
-
-- Transpose range by ±N semitones — loop `SetNotePitch`.
-- Transpose range by ±N octaves — loop `SetNotePitch` (12 semis).
-- Add interval (third / fifth above-or-below) to a selection — loop
-  `AddNoteToChord` with computed pitches.
-- Delete a range (replace with rests) — loop `DeleteVoiceElement`.
-- Apply one accidental to every selected note — loop
-  `SetAccidental`.
-- Set the same duration on every selected timed element — loop
-  `SetChord/RestDuration`.
-- Insert a chord/rest at an arbitrary beat — already covered by
-  `PasteVoiceElement` (the cross-measure spill handles overflow).
-- Re-spell a range as natural / sharp / flat — loop
-  `SetAccidental(.natural | .sharp | …)`.
-
----
-
-## C. To-do — need a new `EditCommand`
+## B. To-do checklist
 
 The data model already supports each of these. Each item is a
-candidate library command.
+candidate library command. Sugar items are explicitly tagged so
+the implementer knows the body will be a thin Composite — but
+they're still part of the implementation queue (per the policy
+section above).
 
 ### Structural
 
@@ -72,8 +92,8 @@ candidate library command.
   another within the same measure.
 - [ ] **`InsertMeasure`** / **`DeleteMeasure`** — measure-level
   structural ops.
-- [ ] **`SetBarLineSubtype`** — change a barline (regular / double /
-  repeat / end).
+- [ ] **`SetBarLineSubtype`** *(sugar)* — change a barline
+  (regular / double / repeat / end).
 - [ ] **`SetMeasureRepeat`** — replace a measure's content with a
   measure-repeat sign.
 
@@ -84,20 +104,43 @@ candidate library command.
 - [ ] **`SetKeySignature`** at a position.
 - [ ] **`SetTimeSignature`** at a measure start — with downstream
   tick-budget recompute.
-- [ ] **`SetTempo`** — insert / edit / remove a tempo marking.
-- [ ] **`SetDynamic`** — pp / p / mf / f / ff / etc.
-- [ ] **`SetStaffText`** — arbitrary text label.
-- [ ] **`SetRehearsalMark`** — A / B / C boxed labels.
-- [ ] **`SetFermata`** — toggle fermata after / over an element.
+- [ ] **`SetTempo`** *(sugar)* — insert / edit / remove a tempo
+  marking.
+- [ ] **`SetDynamic`** *(sugar)* — pp / p / mf / f / ff / etc.
+- [ ] **`SetStaffText`** *(sugar)* — arbitrary text label.
+- [ ] **`SetRehearsalMark`** *(sugar)* — A / B / C boxed labels.
+- [ ] **`SetFermata`** *(sugar)* — toggle fermata after / over an
+  element.
 
 ### Note / Chord properties (fields already exist on the model)
 
-- [ ] **`SetArpeggio`** — `Chord.arpeggio`.
-- [ ] **`SetGlissando`** — `Note.glissando`.
-- [ ] **`SetNoteHeadType`** — `Note.headType` (cross / diamond /
-  triangle / …).
-- [ ] **`SetDots`** — augmentation dot (`.fraction(...)`); could
-  start as a thin wrapper over `SetChordDuration`.
+- [ ] **`SetArpeggio`** *(sugar)* — `Chord.arpeggio`.
+- [ ] **`SetGlissando`** *(sugar)* — `Note.glissando`.
+- [ ] **`SetNoteHeadType`** *(sugar)* — `Note.headType` (cross /
+  diamond / triangle / …).
+- [ ] **`SetDots`** *(sugar)* — augmentation dot (`.fraction(...)`);
+  thin wrapper over `SetChordDuration`.
+
+### Range operations (composable from existing per-element
+commands + `CompositeEditCommand`)
+
+These iterate an existing per-element command across a `.range`
+selection. Sugar all the way down — but worth a named API for
+intent.
+
+- [ ] **`TransposeRange`** *(sugar)* — by ±N semitones / octaves;
+  loops `SetNotePitch`.
+- [ ] **`AddIntervalToSelection`** *(sugar)* — third / fifth above
+  or below; loops `AddNoteToChord` with computed pitches.
+- [ ] **`DeleteRange`** *(sugar)* — replace each timed element in
+  the range with rests; loops `DeleteVoiceElement`.
+- [ ] **`SetAccidentalsInRange`** *(sugar)* — apply one accidental
+  to every selected note; loops `SetAccidental`.
+- [ ] **`SetDurationInRange`** *(sugar)* — set the same duration
+  on every selected timed element; loops
+  `SetChord/RestDuration`.
+- [ ] **`RespellRange`** *(sugar)* — re-spell a range as natural
+  / sharp / flat; loops `SetAccidental`.
 
 ### Spanners (depends on `Spanner` subtype coverage)
 
@@ -109,7 +152,7 @@ candidate library command.
 
 ---
 
-## D. Out of scope for the current data model
+## C. Out of scope for the current data model
 
 These need a `Score` model extension before any edit command makes
 sense.
@@ -132,17 +175,19 @@ sense.
 
 ## Suggested implementation order
 
-The list in C above is roughly ordered by impact. A reasonable
-sweep is:
+Roughly ordered by impact. A reasonable sweep:
 
 1. `CreateTuplet` / `RemoveTuplet` — rhythm editing core.
 2. `SetDots` — cheap, but unlocks dotted durations from the
    keyboard.
 3. `InsertMeasure` / `DeleteMeasure` — structural foundation.
-4. Text-mark commands together (`SetTempo` /`SetDynamic` /
+4. Range commands (`TransposeRange` / `DeleteRange` /
+   `SetAccidentalsInRange` / …) — pure sugar, ergonomic wins for
+   the editor UX.
+5. Text-mark commands together (`SetTempo` /`SetDynamic` /
    `SetStaffText` / `SetRehearsalMark`) — shared shape, easy to
    batch.
-5. Chord/note property commands (`SetArpeggio` / `SetGlissando` /
+6. Chord/note property commands (`SetArpeggio` / `SetGlissando` /
    `SetNoteHeadType`) — small, isolated.
-6. `MoveToVoice` — voice editing.
-7. Spanner commands once `Spanner` subtypes are confirmed.
+7. `MoveToVoice` — voice editing.
+8. Spanner commands once `Spanner` subtypes are confirmed.

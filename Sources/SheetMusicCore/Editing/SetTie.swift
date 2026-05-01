@@ -12,6 +12,13 @@ import Foundation
 /// this command always round-trips cleanly even when the prior tie
 /// state was asymmetric (e.g. a half-decoded score where only one
 /// side of a tie was recorded).
+///
+/// > Note: This command is sugar over two `ReplaceVoiceElement`
+/// > applications wrapped in `CompositeEditCommand`. It exists to
+/// > give the operation a domain-meaningful name and to centralise
+/// > existence / type / index validation; callers can equally
+/// > construct the equivalent Composite directly. See
+/// > `docs/edit-commands.md` for the policy.
 public struct SetTie: EditCommand {
     public let sourceID: NoteID
     public let targetID: NoteID

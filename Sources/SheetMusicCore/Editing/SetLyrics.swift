@@ -3,6 +3,12 @@ import Foundation
 /// Replaces the lyrics array on a chord. Inverse is another
 /// `SetLyrics` carrying the prior lyrics.
 ///
+/// > Note: This command is sugar over `ReplaceVoiceElement` —
+/// > read the chord, swap its `lyrics`, write it back. It exists
+/// > to give the operation a domain-meaningful name; callers can
+/// > equally construct an equivalent `ReplaceVoiceElement`
+/// > directly. See `docs/edit-commands.md` for the policy.
+///
 /// Single-verse callers pass `[Lyric(text: "syllable")]`; multi-verse
 /// callers pass one entry per verse, in order. Pass `[]` to clear.
 public struct SetLyrics: EditCommand {

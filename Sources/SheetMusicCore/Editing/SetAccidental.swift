@@ -13,6 +13,14 @@ import Foundation
 /// Inverse is a `SetNotePitch` that carries the original pitch,
 /// TPC, and accidental, so undo restores all three verbatim even
 /// when the user cycled through several accidentals in a row.
+///
+/// > Note: This command is sugar over
+/// > `PitchSpelling.respelled(from:with:)` + `SetNotePitch`. It
+/// > exists to give the operation a domain-meaningful name and to
+/// > pair the respelling with the pitch / TPC update in one
+/// > intent; callers can equally construct the equivalent
+/// > `SetNotePitch` directly. See `docs/edit-commands.md` for the
+/// > policy.
 public struct SetAccidental: EditCommand {
     public let location: NoteID
     public let accidental: Accidental?

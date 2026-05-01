@@ -10,6 +10,14 @@ import Foundation
 /// undo restores the chord verbatim (notes, lyrics, arpeggio,
 /// duration), including chord-level metadata that the empty-chord
 /// path implicitly suppresses.
+///
+/// > Note: This command is sugar over chord-notes mutation +
+/// > `ReplaceVoiceElement`. It exists to give the operation a
+/// > domain-meaningful name and to handle the "lyrics / arpeggio
+/// > strip when collapsing to a rest" detail in one place;
+/// > callers can equally construct the equivalent
+/// > `ReplaceVoiceElement` directly. See
+/// > `docs/edit-commands.md` for the policy.
 public struct RemoveNoteFromChord: EditCommand {
     public let location: NoteID
 
