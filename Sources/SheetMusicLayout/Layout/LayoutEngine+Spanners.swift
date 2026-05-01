@@ -45,9 +45,6 @@ extension LayoutEngine {
                         case .chord(let c):
                             tick += c.duration.ticks(
                                 division: score.division)
-                        case .rest(let r):
-                            tick += r.duration.ticks(
-                                division: score.division)
                         default: break
                         }
                     }

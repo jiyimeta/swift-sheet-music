@@ -150,7 +150,7 @@ extension PlaybackTimeline {
                     case .timeSignature(let ts):
                         currentTimeSig = ts
                         break staffLoop
-                    case .chord, .rest:
+                    case .chord:
                         // Time sigs are emitted before the first
                         // chord/rest; once we see one we're past
                         // the meta header for this measure.
@@ -169,8 +169,6 @@ extension PlaybackTimeline {
                     switch el {
                     case .chord(let c):
                         spineTick += c.duration.ticks(division: division)
-                    case .rest(let r):
-                        spineTick += r.duration.ticks(division: division)
                     default:
                         break
                     }
@@ -187,7 +185,7 @@ extension PlaybackTimeline {
                     var tick = measureStartTick
                     for (elemIdx, el) in voice.elements.enumerated() {
                         switch el {
-                        case .chord(let chord):
+                        case .chord(let chord) where !chord.notes.isEmpty:
                             for (noteIdx, _) in chord.notes.enumerated() {
                                 let nid = NoteID(
                                     staffIndex: staffIdx,
@@ -197,21 +195,20 @@ extension PlaybackTimeline {
                                     noteIndexInChord: noteIdx)
                                 itemTicks[.note(nid)] = tick
                             }
-                            if chord.notes.first != nil {
-                                let id = NoteID(
-                                    staffIndex: staffIdx,
-                                    measureIndex: measureIdx,
-                                    voiceIndex: voiceIdx,
-                                    elementIndex: elemIdx,
-                                    noteIndexInChord: 0)
-                                pending.append(.init(
-                                    tick: tick,
-                                    sortKey: (staffIdx, voiceIdx),
-                                    cursor: .item(.note(id))))
-                            }
+                            let id = NoteID(
+                                staffIndex: staffIdx,
+                                measureIndex: measureIdx,
+                                voiceIndex: voiceIdx,
+                                elementIndex: elemIdx,
+                                noteIndexInChord: 0)
+                            pending.append(.init(
+                                tick: tick,
+                                sortKey: (staffIdx, voiceIdx),
+                                cursor: .item(.note(id))))
                             tick += chord.duration.ticks(
                                 division: division)
-                        case .rest(let rest):
+                        case .chord(let rest):
+                            // Empty chord = rest.
                             let id = RestID(
                                 staffIndex: staffIdx,
                                 measureIndex: measureIdx,

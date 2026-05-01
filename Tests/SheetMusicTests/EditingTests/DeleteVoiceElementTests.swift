@@ -13,7 +13,7 @@ struct DeleteVoiceElementTests {
         let cmd = DeleteVoiceElement(at: Self.chordID)
         _ = try cmd.apply(to: &score)
         let after = try #require(score[Self.chordID])
-        guard case .rest(let r) = after else {
+        guard case .chord(let r) = after, r.notes.isEmpty else {
             Issue.record("Expected rest after delete, got \(after)")
             return
         }

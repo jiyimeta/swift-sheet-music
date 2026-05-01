@@ -86,7 +86,7 @@ struct CompositeEditCommandTests {
                     with: .chord(chord)),
                 ReplaceVoiceElement(
                     at: bogusID,
-                    with: .rest(Rest(duration: .quarter))),
+                    with: .rest(duration: .quarter)),
             ],
             location: Self.restID)
         #expect(throws: SheetMusicError.self) {

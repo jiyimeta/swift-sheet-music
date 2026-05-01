@@ -16,7 +16,7 @@ struct ScoreActiveKeyTests {
                 elements.append(.keySignature(
                     KeySignature(concertKey: entry.key)))
             }
-            elements.append(.rest(Rest(duration: .whole)))
+            elements.append(.rest(duration: .whole))
             measures.append(Measure(voices: [Voice(elements: elements)]))
         }
         return StaffContent(id: 1, measures: measures)

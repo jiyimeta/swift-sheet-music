@@ -107,7 +107,6 @@ extension MidiRenderer {
         for element in voice.elements {
             switch element {
             case let .chord(chord): ticks += chord.duration.ticks(division: division)
-            case let .rest(rest):   ticks += rest.duration.ticks(division: division)
             case let .measureRepeat(rep): ticks += rep.duration.ticks(division: division)
             default: continue
             }
@@ -221,7 +220,7 @@ extension MidiRenderer {
             }
             let stripped = candidate.elements.filter {
                 switch $0 {
-                case .chord, .rest, .dynamic: return true
+                case .chord, .dynamic: return true
                 default: return false
                 }
             }

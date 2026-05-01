@@ -54,7 +54,8 @@ struct PasteVoiceElementsTests {
         guard case .chord(let c0) = voice.elements[1],
               case .chord(let c1) = voice.elements[2],
               case .chord(let c2) = voice.elements[3],
-              case .rest = voice.elements[4]
+              case .chord(let r4) = voice.elements[4],
+              r4.notes.isEmpty
         else { Issue.record("layout off"); return }
         #expect(c0.notes.first?.pitch == 60)
         #expect(c1.notes.first?.pitch == 62)
@@ -68,9 +69,9 @@ struct PasteVoiceElementsTests {
         var v = score.staves[0].measures[0].voices[0]
         v.elements = [
             .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
-            .rest(Rest(duration: .half)),
-            .rest(Rest(duration: .quarter)),
-            .rest(Rest(duration: .quarter)),
+            .rest(duration: .half),
+            .rest(duration: .quarter),
+            .rest(duration: .quarter),
         ]
         score.staves[0].measures[0].voices[0] = v
         let halfRestID = VoiceElementID(
@@ -90,7 +91,7 @@ struct PasteVoiceElementsTests {
         let voice = score.staves[0].measures[0].voices[0]
         // [timeSig, eighth, eighth, rest(q leftover), rest(q), rest(q)]
         #expect(voice.elements.count == 6)
-        guard case .rest(let leftover) = voice.elements[3] else {
+        guard case .chord(let leftover) = voice.elements[3], leftover.notes.isEmpty else {
             Issue.record("expected leftover rest at idx 3"); return
         }
         #expect(leftover.duration == .quarter)
@@ -133,8 +134,8 @@ struct PasteVoiceElementsTests {
         var v = score.staves[0].measures[0].voices[0]
         v.elements = [
             .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
-            .rest(Rest(duration: .quarter)),
-            .rest(Rest(duration: .quarter)),
+            .rest(duration: .quarter),
+            .rest(duration: .quarter),
             // Triplet: 3 eighths in a quarter (3:2).
             .chord(Chord(duration: .eighth,
                          notes: [Note(pitch: 60, tpc: 14)])),
@@ -142,7 +143,7 @@ struct PasteVoiceElementsTests {
                          notes: [Note(pitch: 62, tpc: 16)])),
             .chord(Chord(duration: .eighth,
                          notes: [Note(pitch: 64, tpc: 18)])),
-            .rest(Rest(duration: .quarter)),
+            .rest(duration: .quarter),
         ]
         v.tuplets = [Tuplet(
             normalNotes: 2, actualNotes: 3,
@@ -174,15 +175,15 @@ struct PasteVoiceElementsTests {
         var v = score.staves[0].measures[0].voices[0]
         v.elements = [
             .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
-            .rest(Rest(duration: .quarter)),
-            .rest(Rest(duration: .quarter)),
+            .rest(duration: .quarter),
+            .rest(duration: .quarter),
             .chord(Chord(duration: .eighth,
                          notes: [Note(pitch: 60, tpc: 14)])),
             .chord(Chord(duration: .eighth,
                          notes: [Note(pitch: 62, tpc: 16)])),
             .chord(Chord(duration: .eighth,
                          notes: [Note(pitch: 64, tpc: 18)])),
-            .rest(Rest(duration: .quarter)),
+            .rest(duration: .quarter),
         ]
         v.tuplets = [Tuplet(
             normalNotes: 2, actualNotes: 3,
@@ -210,15 +211,15 @@ struct PasteVoiceElementsTests {
         var v = score.staves[0].measures[0].voices[0]
         v.elements = [
             .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
-            .rest(Rest(duration: .quarter)),
-            .rest(Rest(duration: .quarter)),
+            .rest(duration: .quarter),
+            .rest(duration: .quarter),
             .chord(Chord(duration: .eighth,
                          notes: [Note(pitch: 60, tpc: 14)])),
             .chord(Chord(duration: .eighth,
                          notes: [Note(pitch: 62, tpc: 16)])),
             .chord(Chord(duration: .eighth,
                          notes: [Note(pitch: 64, tpc: 18)])),
-            .rest(Rest(duration: .quarter)),
+            .rest(duration: .quarter),
         ]
         v.tuplets = [Tuplet(
             normalNotes: 2, actualNotes: 3,
@@ -259,8 +260,8 @@ struct PasteVoiceElementsTests {
                          notes: [Note(pitch: 62, tpc: 16)])),
             .chord(Chord(duration: .eighth,
                          notes: [Note(pitch: 64, tpc: 18)])),
-            .rest(Rest(duration: .half)),
-            .rest(Rest(duration: .quarter)),
+            .rest(duration: .half),
+            .rest(duration: .quarter),
         ]
         v.tuplets = [Tuplet(
             normalNotes: 2, actualNotes: 3,

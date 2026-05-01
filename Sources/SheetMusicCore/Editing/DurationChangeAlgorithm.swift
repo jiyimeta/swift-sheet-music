@@ -73,9 +73,8 @@ public enum DurationChangeAlgorithm {
                         case .chord(let c):
                             tupletTicks += c.duration.ticks(
                                 division: division)
-                        case .rest(let r):
-                            tupletTicks += r.duration.ticks(
-                                division: division)
+                        // Rests are empty chords, picked up by the
+                        // .chord case above.
                         default:
                             continue
                         }
@@ -99,8 +98,6 @@ public enum DurationChangeAlgorithm {
                 switch newElements[i] {
                 case .chord(let c):
                     elTicks = c.duration.ticks(division: division)
-                case .rest(let r):
-                    elTicks = r.duration.ticks(division: division)
                 default:
                     throw SheetMusicError.invalidEdit(
                         reason: "DurationChange: lengthening "
@@ -136,16 +133,19 @@ public enum DurationChangeAlgorithm {
                 let pieces: [VoiceElement]
                 if lastConsumedWasTuplet {
                     pieces = durations.map {
-                        .rest(Rest(duration: $0))
+                        .rest(duration: $0)
                     }
                 } else {
                     switch lastEl {
-                    case .chord(let consumedChord):
+                    case .chord(let consumedChord)
+                        where !consumedChord.notes.isEmpty:
                         pieces = makeChordChain(
                             from: consumedChord, durations: durations)
                     default:
+                        // Rest overshoot (or empty chord) — leftover
+                        // is plain rests, no tied chain.
                         pieces = durations.map {
-                            .rest(Rest(duration: $0))
+                            .rest(duration: $0)
                         }
                     }
                 }
@@ -192,8 +192,6 @@ public enum DurationChangeAlgorithm {
             switch voice.elements[i] {
             case .chord(let c):
                 t += c.duration.ticks(division: division)
-            case .rest(let r):
-                t += r.duration.ticks(division: division)
             default:
                 continue
             }
@@ -245,7 +243,7 @@ public enum DurationChangeAlgorithm {
         return result
     }
 
-    static func alignedRests(
+    public static func alignedRests(
         forTicks length: Int,
         rtickStart: Int,
         division: Int
@@ -253,13 +251,10 @@ public enum DurationChangeAlgorithm {
         alignedDurations(
             forTicks: length, rtickStart: rtickStart,
             division: division
-        ).map { .rest(Rest(duration: $0)) }
+        ).map { .rest(duration: $0) }
     }
 
-    /// Tied chain of chord clones — one per entry in `durations`.
-    /// Used when lengthening encroaches on a chord: the consumed
-    /// chord's pitch survives in the leftover as a tied chain.
-    static func makeChordChain(
+    public static func makeChordChain(
         from src: Chord, durations: [NoteDuration]
     ) -> [VoiceElement] {
         guard !durations.isEmpty else { return [] }
@@ -274,12 +269,11 @@ public enum DurationChangeAlgorithm {
                     ? src.notes[ni].tieForward
                     : 1
             }
-            let cloned = Chord(
+            pieces.append(.chord(Chord(
                 duration: dur,
                 notes: notes,
                 arpeggio: isFirst ? src.arpeggio : nil,
-                lyrics: isFirst ? src.lyrics : [])
-            pieces.append(.chord(cloned))
+                lyrics: isFirst ? src.lyrics : [])))
         }
         return pieces
     }

@@ -155,7 +155,7 @@ enum ScoreSemanticComparison {
     private static func shortDesc(_ element: VoiceElement) -> String {
         switch element {
         case .chord(let c): return "chord(\(c.notes.map { $0.pitch }), \(c.duration))"
-        case .rest(let r): return "rest(\(r.duration))"
+        case .chord(let r) where r.notes.isEmpty: return "rest(\(r.duration))"
         case .keySignature(let k): return "key(\(k.concertKey))"
         case .timeSignature(let t): return "time(\(t.numerator)/\(t.denominator))"
         case .clef(let c): return "clef(\(c.concertClefType))"
@@ -250,9 +250,6 @@ enum ScoreSemanticComparison {
         case .chord(var c):
             c.duration = canonicalDuration(c.duration)
             return .chord(c)
-        case .rest(var r):
-            r.duration = canonicalDuration(r.duration)
-            return .rest(r)
         default:
             return element
         }

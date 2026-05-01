@@ -1,14 +1,15 @@
 import Foundation
 
 /// Inverse of `AddNoteToChord`: drop one note from a chord at the
-/// given `NoteID`. When the chord's last note is removed the whole
-/// element collapses to a `Rest` of the same duration — MuseScore's
-/// behaviour when the user deletes the final notehead of a chord.
+/// given `NoteID`. Removing the last note leaves the chord with an
+/// empty `notes` array — which is the canonical representation of a
+/// rest in this model, so layout and MIDI keep working without any
+/// special-casing.
 ///
 /// Inverse is a `ReplaceVoiceElement` carrying the prior chord, so
 /// undo restores the chord verbatim (notes, lyrics, arpeggio,
-/// duration). For the chord→rest collapse case this also restores
-/// the chord-level metadata that was implicitly discarded.
+/// duration), including chord-level metadata that the empty-chord
+/// path implicitly suppresses.
 public struct RemoveNoteFromChord: EditCommand {
     public let location: NoteID
 
@@ -35,12 +36,15 @@ public struct RemoveNoteFromChord: EditCommand {
                     + "at index \(location.noteIndexInChord)")
         }
         let original = chord
-        if chord.notes.count == 1 {
-            score[veID] = .rest(Rest(duration: chord.duration))
-        } else {
-            chord.notes.remove(at: location.noteIndexInChord)
-            score[veID] = .chord(chord)
+        chord.notes.remove(at: location.noteIndexInChord)
+        // chord-level metadata (lyrics, arpeggio) on a rest is
+        // unusual, so strip it. The original is preserved in the
+        // inverse for undo.
+        if chord.notes.isEmpty {
+            chord.lyrics = []
+            chord.arpeggio = nil
         }
+        score[veID] = .chord(chord)
         return ReplaceVoiceElement(at: veID, with: .chord(original))
     }
 }

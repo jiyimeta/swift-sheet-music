@@ -7,7 +7,7 @@ struct SetRestDurationTests {
         .chord(Chord(duration: d, notes: [Note(pitch: p, tpc: 14)]))
     }
     private func rest(_ d: NoteDuration) -> VoiceElement {
-        .rest(Rest(duration: d))
+        .rest(duration: d)
     }
     private func score(_ elements: [VoiceElement]) -> Score {
         Score(division: 480, staves: [
@@ -31,11 +31,11 @@ struct SetRestDurationTests {
             at: Self.restID, duration: .eighth)
         _ = try cmd.apply(to: &score)
         let els = first(score)
-        guard case .rest(let r0) = els[0] else {
+        guard case .chord(let r0) = els[0], r0.notes.isEmpty else {
             Issue.record("els[0] not rest"); return
         }
         #expect(r0.duration == .eighth)
-        guard case .rest(let r1) = els[1] else {
+        guard case .chord(let r1) = els[1], r1.notes.isEmpty else {
             Issue.record("els[1] not rest"); return
         }
         #expect(r1.duration == .eighth)
@@ -43,7 +43,7 @@ struct SetRestDurationTests {
             switch el {
             case .chord(let c):
                 return acc + c.duration.ticks(division: 480)
-            case .rest(let r):
+            case .chord(let r) where r.notes.isEmpty:
                 return acc + r.duration.ticks(division: 480)
             default: return acc
             }
@@ -61,7 +61,7 @@ struct SetRestDurationTests {
         // rest(.eighth), rest(.eighth), rest(.quarter), rest(.half)
         #expect(els.count == 4)
         let durations = els.compactMap { el -> NoteDuration? in
-            if case .rest(let r) = el { return r.duration }
+            if case .chord(let r) = el, r.notes.isEmpty { return r.duration }
             return nil
         }
         #expect(durations == [.eighth, .eighth, .quarter, .half])
@@ -79,7 +79,7 @@ struct SetRestDurationTests {
         let els = first(score)
         // Expected: rest(.quarter), rest(.half), rest(.quarter)
         #expect(els.count == 3)
-        guard case .rest(let r0) = els[0] else {
+        guard case .chord(let r0) = els[0], r0.notes.isEmpty else {
             Issue.record("els[0]"); return
         }
         #expect(r0.duration == .quarter)
@@ -102,7 +102,7 @@ struct SetRestDurationTests {
         //           chord(eighth, p64, tieBack), rest(quarter),
         //           rest(eighth)
         #expect(els.count == 5)
-        guard case .rest(let r0) = els[0] else {
+        guard case .chord(let r0) = els[0], r0.notes.isEmpty else {
             Issue.record("els[0]"); return
         }
         #expect(r0.duration == .quarter)

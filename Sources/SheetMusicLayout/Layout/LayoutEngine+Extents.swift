@@ -146,7 +146,7 @@ extension LayoutEngine {
             case .keySignature(let k):
                 w += metrics.sp * (CGFloat(abs(k.concertKey)) + 1.5)
             case .timeSignature: w += metrics.sp * 3
-            case .chord, .rest:
+            case .chord:
                 return w   // first timed element ends the header
             default:
                 continue

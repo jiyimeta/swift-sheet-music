@@ -26,7 +26,8 @@ public extension Score {
                 let start = voiceElementID.elementIndex + 1
                 if start < elements.count {
                     for idx in start..<elements.count {
-                        if case .chord = elements[idx] {
+                        if case .chord(let c) = elements[idx],
+                           !c.notes.isEmpty {
                             return VoiceElementID(
                                 staffIndex: staffIndex,
                                 measureIndex: voiceElementID.measureIndex,
@@ -46,7 +47,7 @@ public extension Score {
             guard voiceIndex < voices.count else { continue }
             let elements = voices[voiceIndex].elements
             for (idx, el) in elements.enumerated() {
-                if case .chord = el {
+                if case .chord(let c) = el, !c.notes.isEmpty {
                     return VoiceElementID(
                         staffIndex: staffIndex,
                         measureIndex: mIdx,

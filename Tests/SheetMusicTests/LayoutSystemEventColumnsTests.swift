@@ -14,7 +14,7 @@ struct LayoutSystemEventColumnsTests {
         let measure = Measure(voices: [
             Voice(elements: [
                 .clef(Clef(concertClefType: "G")),
-                chord(60), .rest(Rest(duration: .quarter)),
+                chord(60), .rest(duration: .quarter),
                 chord(64), chord(65)
             ])
         ])

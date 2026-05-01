@@ -35,7 +35,7 @@ struct RemoveNoteFromChordTests {
             voiceIndex: 0, elementIndex: 1, noteIndexInChord: 0)
         let cmd = RemoveNoteFromChord(at: removeID)
         _ = try cmd.apply(to: &score)
-        guard case .rest(let rest) = score[Self.chordVE] else {
+        guard case .chord(let rest) = score[Self.chordVE], rest.notes.isEmpty else {
             Issue.record("not a rest"); return
         }
         #expect(rest.duration == .quarter)

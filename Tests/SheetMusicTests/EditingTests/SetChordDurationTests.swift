@@ -7,7 +7,7 @@ struct SetChordDurationTests {
         .chord(Chord(duration: d, notes: [Note(pitch: 60, tpc: 14)]))
     }
     private func rest(_ d: NoteDuration) -> VoiceElement {
-        .rest(Rest(duration: d))
+        .rest(duration: d)
     }
     /// Build a single-measure 4/4 score whose voice 0 is `elements`.
     private func score(_ elements: [VoiceElement]) -> Score {
@@ -37,7 +37,7 @@ struct SetChordDurationTests {
             Issue.record("element 0 not chord"); return
         }
         #expect(c.duration == .eighth)
-        guard case .rest(let r) = els[1] else {
+        guard case .chord(let r) = els[1], r.notes.isEmpty else {
             Issue.record("element 1 not rest"); return
         }
         #expect(r.duration == .eighth)
@@ -46,7 +46,7 @@ struct SetChordDurationTests {
             switch el {
             case .chord(let c):
                 return acc + c.duration.ticks(division: 480)
-            case .rest(let r):
+            case .chord(let r) where r.notes.isEmpty:
                 return acc + r.duration.ticks(division: 480)
             default:
                 return acc
@@ -69,7 +69,7 @@ struct SetChordDurationTests {
             Issue.record("not chord"); return
         }
         #expect(c.duration == .quarter)
-        guard case .rest(let r1) = els[1] else {
+        guard case .chord(let r1) = els[1], r1.notes.isEmpty else {
             Issue.record("not rest"); return
         }
         #expect(r1.duration == .half)
@@ -99,7 +99,7 @@ struct SetChordDurationTests {
             switch el {
             case .chord(let c):
                 return acc + c.duration.ticks(division: 480)
-            case .rest(let r):
+            case .chord(let r) where r.notes.isEmpty:
                 return acc + r.duration.ticks(division: 480)
             default:
                 return acc
@@ -183,13 +183,13 @@ struct SetChordDurationTests {
             Issue.record("not chord"); return
         }
         #expect(c.duration == .eighth)
-        guard case .rest(let r1) = els[1] else {
+        guard case .chord(let r1) = els[1], r1.notes.isEmpty else {
             Issue.record("els[1] not rest"); return
         }
-        guard case .rest(let r2) = els[2] else {
+        guard case .chord(let r2) = els[2], r2.notes.isEmpty else {
             Issue.record("els[2] not rest"); return
         }
-        guard case .rest(let r3) = els[3] else {
+        guard case .chord(let r3) = els[3], r3.notes.isEmpty else {
             Issue.record("els[3] not rest"); return
         }
         #expect(r1.duration == .eighth)
@@ -214,10 +214,10 @@ struct SetChordDurationTests {
         // chord(.quarter), rest(.quarter), rest(.eighth),
         // rest(.quarter), rest(.eighth)
         #expect(els.count == 5)
-        guard case .rest(let r1) = els[1] else {
+        guard case .chord(let r1) = els[1], r1.notes.isEmpty else {
             Issue.record("els[1] not rest"); return
         }
-        guard case .rest(let r2) = els[2] else {
+        guard case .chord(let r2) = els[2], r2.notes.isEmpty else {
             Issue.record("els[2] not rest"); return
         }
         #expect(r1.duration == .quarter)
@@ -271,7 +271,7 @@ struct SetChordDurationTests {
             switch el {
             case .chord(let c):
                 return acc + c.duration.ticks(division: 480)
-            case .rest(let r):
+            case .chord(let r) where r.notes.isEmpty:
                 return acc + r.duration.ticks(division: 480)
             default: return acc
             }

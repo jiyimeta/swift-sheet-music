@@ -51,7 +51,7 @@ extension Score {
                         // exactly at posHi sits past the range.
                         let inRange = pos >= posLo && pos < posHi
                         switch el {
-                        case .chord(let chord):
+                        case .chord(let chord) where !chord.notes.isEmpty:
                             if inRange {
                                 for nIdx in chord.notes.indices {
                                     result.append(.note(NoteID(
@@ -63,7 +63,8 @@ extension Score {
                                 }
                             }
                             tick += chord.duration.ticks(division: division)
-                        case .rest(let rest):
+                        case .chord(let rest):
+                            // Empty chord — selectable as a rest.
                             if inRange {
                                 result.append(.rest(RestID(
                                     staffIndex: staffIdx,
@@ -110,8 +111,6 @@ extension Score {
         switch elements[id.elementIndex] {
         case .chord(let c):
             dur = c.duration.ticks(division: division)
-        case .rest(let r):
-            dur = r.duration.ticks(division: division)
         default:
             dur = 0
         }
@@ -135,8 +134,6 @@ extension Score {
             switch elements[i] {
             case .chord(let c):
                 tick += c.duration.ticks(division: division)
-            case .rest(let r):
-                tick += r.duration.ticks(division: division)
             default:
                 break
             }

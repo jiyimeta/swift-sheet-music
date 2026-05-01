@@ -108,9 +108,9 @@ struct MultiStaffAlignmentTests {
         ]
         let v1: [VoiceElement] = [
             .chord(Chord(duration: .quarter, notes: [c4])),
-            .rest(Rest(duration: .quarter)),
+            .rest(duration: .quarter),
             .chord(Chord(duration: .quarter, notes: [c4])),
-            .rest(Rest(duration: .quarter)),
+            .rest(duration: .quarter),
         ]
         let m = Measure(voices: [
             Voice(elements: v0),
@@ -185,7 +185,7 @@ struct MultiStaffAlignmentTests {
                 .chord(Chord(duration: .quarter, notes: [c4])),
             ]),
             Voice(elements: [
-                .rest(Rest(duration: .whole)),
+                .rest(duration: .whole),
             ]),
         ])
         let staff = StaffContent(id: 1, measures: [m])
@@ -247,15 +247,15 @@ struct MultiStaffAlignmentTests {
         let s1: [VoiceElement] = [
             .clef(Clef(concertClefType: "G")),
             .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
-            .rest(Rest(duration: .half)),
-            .rest(Rest(duration: .sixteenth)),
+            .rest(duration: .half),
+            .rest(duration: .sixteenth),
             .chord(Chord(duration: .sixteenth, notes: [c4])),
             .chord(Chord(duration: .sixteenth, notes: [c4])),
-            .rest(Rest(duration: .sixteenth)),
-            .rest(Rest(duration: .sixteenth)),
-            .rest(Rest(duration: .sixteenth)),
-            .rest(Rest(duration: .sixteenth)),
-            .rest(Rest(duration: .sixteenth)),
+            .rest(duration: .sixteenth),
+            .rest(duration: .sixteenth),
+            .rest(duration: .sixteenth),
+            .rest(duration: .sixteenth),
+            .rest(duration: .sixteenth),
         ]
         // Staff 2 — half + 16th rest + 16th + 8th rest + dotted 8th +
         // 16th rest.  Fewer elements ⇒ smaller voice total; with the
@@ -265,14 +265,14 @@ struct MultiStaffAlignmentTests {
         // pile up at the same x.
         let s2: [VoiceElement] = [
             .clef(Clef(concertClefType: "G")),
-            .rest(Rest(duration: .half)),
-            .rest(Rest(duration: .sixteenth)),
+            .rest(duration: .half),
+            .rest(duration: .sixteenth),
             .chord(Chord(duration: .sixteenth, notes: [c4])),
-            .rest(Rest(duration: .eighth)),
+            .rest(duration: .eighth),
             .chord(Chord(
                 duration: NoteDuration.eighth.dotted(1),
                 notes: [c4])),
-            .rest(Rest(duration: .sixteenth)),
+            .rest(duration: .sixteenth),
         ]
         let part = Part(
             id: "P1", trackName: "Duo",

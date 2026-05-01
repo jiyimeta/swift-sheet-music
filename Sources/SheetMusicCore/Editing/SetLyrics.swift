@@ -18,9 +18,11 @@ public struct SetLyrics: EditCommand {
 
     @discardableResult
     public func apply(to score: inout Score) throws -> any EditCommand {
-        guard case var .chord(chord) = score[location] else {
+        guard case var .chord(chord) = score[location],
+              !chord.notes.isEmpty else {
             throw SheetMusicError.invalidEdit(
-                reason: "SetLyrics: element at \(location) is not a chord")
+                reason: "SetLyrics: element at \(location) "
+                    + "is not a chord (rests can't carry lyrics)")
         }
         let prior = chord.lyrics
         chord.lyrics = lyrics

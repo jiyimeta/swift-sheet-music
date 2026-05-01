@@ -54,9 +54,9 @@ struct PasteVoiceElementTests {
         var v = score.staves[0].measures[0].voices[0]
         v.elements = [
             .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
-            .rest(Rest(duration: .half)),
-            .rest(Rest(duration: .quarter)),
-            .rest(Rest(duration: .quarter)),
+            .rest(duration: .half),
+            .rest(duration: .quarter),
+            .rest(duration: .quarter),
         ]
         score.staves[0].measures[0].voices[0] = v
         let halfRestID = VoiceElementID(
@@ -75,7 +75,7 @@ struct PasteVoiceElementTests {
             Issue.record("expected chord at idx 1"); return
         }
         #expect(pasted.duration == .quarter)
-        guard case .rest(let leftover) = voice.elements[2] else {
+        guard case .chord(let leftover) = voice.elements[2], leftover.notes.isEmpty else {
             Issue.record("expected leftover rest at idx 2"); return
         }
         #expect(leftover.duration == .quarter)
@@ -117,7 +117,7 @@ struct PasteVoiceElementTests {
     func inverseRestores() throws {
         var score = EditingFixtures.chordAtIndex1()
         let snapshot = score
-        let restElement = VoiceElement.rest(Rest(duration: .quarter))
+        let restElement = VoiceElement.rest(duration: .quarter)
         let cmd = PasteVoiceElement(
             at: Self.chordID, element: restElement)
         let inverse = try cmd.apply(to: &score)
@@ -133,7 +133,7 @@ struct PasteVoiceElementTests {
             voiceIndex: 0, elementIndex: 99)
         let cmd = PasteVoiceElement(
             at: bogus,
-            element: .rest(Rest(duration: .quarter)))
+            element: .rest(duration: .quarter))
         #expect(throws: SheetMusicError.self) {
             _ = try cmd.apply(to: &score)
         }

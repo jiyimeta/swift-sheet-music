@@ -8,8 +8,8 @@ struct VoiceElementIDTests {
         let score = EditingFixtures.fourQuarterRests()
         let id = VoiceElementID(staffIndex: 0, measureIndex: 0,
                                 voiceIndex: 0, elementIndex: 1)
-        guard case let .rest(rest) = score[id] else {
-            Issue.record("expected a rest at index 1")
+        guard case let .chord(rest) = score[id], rest.notes.isEmpty else {
+            Issue.record("expected a rest (empty chord) at index 1")
             return
         }
         #expect(rest.duration == .quarter)

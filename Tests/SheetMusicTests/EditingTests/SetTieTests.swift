@@ -11,7 +11,7 @@ struct SetTieTests {
                          notes: [Note(pitch: 60, tpc: 14)])),
             .chord(Chord(duration: .quarter,
                          notes: [Note(pitch: 60, tpc: 14)])),
-            .rest(Rest(duration: .half)),
+            .rest(duration: .half),
         ])
         let measure = Measure(voices: [voice])
         let staff = StaffContent(id: 1, measures: [measure])
@@ -112,7 +112,7 @@ struct ScoreNextTieTargetTests {
         let voice = Voice(elements: [
             .chord(Chord(duration: .quarter,
                          notes: [Note(pitch: 60, tpc: 14)])),
-            .rest(Rest(duration: .quarter)),
+            .rest(duration: .quarter),
             .chord(Chord(duration: .quarter,
                          notes: [Note(pitch: 60, tpc: 14)])),
         ])

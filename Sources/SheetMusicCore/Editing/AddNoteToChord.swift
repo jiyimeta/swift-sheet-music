@@ -32,10 +32,13 @@ public struct AddNoteToChord: EditCommand {
 
     @discardableResult
     public func apply(to score: inout Score) throws -> any EditCommand {
-        guard case .chord(var chord) = score[location] else {
+        guard case .chord(var chord) = score[location],
+              !chord.notes.isEmpty else {
             throw SheetMusicError.invalidEdit(
                 reason: "AddNoteToChord: element at \(location) "
-                    + "is not a chord")
+                    + "is not a chord (need at least one existing "
+                    + "note; use ReplaceVoiceElement to seed a "
+                    + "chord onto a rest)")
         }
         if chord.notes.contains(where: { $0.pitch == pitch }) {
             throw SheetMusicError.invalidEdit(

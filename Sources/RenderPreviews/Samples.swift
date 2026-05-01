@@ -138,12 +138,12 @@ enum Samples {
 
     static var rests: Score {
         let restElements: [VoiceElement] = [
-            .rest(Rest(duration: .whole)),
-            .rest(Rest(duration: .half)),
-            .rest(Rest(duration: .quarter)),
-            .rest(Rest(duration: .eighth)),
-            .rest(Rest(duration: .sixteenth)),
-            .rest(Rest(duration: .thirtySecond)),
+            .rest(duration: .whole),
+            .rest(duration: .half),
+            .rest(duration: .quarter),
+            .rest(duration: .eighth),
+            .rest(duration: .sixteenth),
+            .rest(duration: .thirtySecond),
         ]
         let m = Measure(voices: [Voice(elements: [
             .clef(Clef(concertClefType: "G")),
@@ -197,23 +197,23 @@ enum Samples {
         // beam-group detector treats them as loners and keeps the flag
         // glyph on each note. Alternates stem-up (low notes, below
         // middle line) and stem-down (high notes).
-        let smallRest = Rest(duration: .eighth)
+        let smallRest = Chord(duration: .eighth, notes: [])
         let elements: [VoiceElement] = [
             .clef(Clef(concertClefType: "G")),
             .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
             // Stem up, 8th flag
             .chord(Chord(duration: .eighth,
                          notes: [Note(pitch: 60, tpc: 14)])),
-            .rest(smallRest),
+            .chord(smallRest),
             // Stem up, 16th flag
             .chord(Chord(duration: .sixteenth,
                          notes: [Note(pitch: 62, tpc: 16)])),
-            .rest(smallRest),
-            .rest(Rest(duration: .sixteenth)),
+            .chord(smallRest),
+            .rest(duration: .sixteenth),
             // Stem down, 8th flag
             .chord(Chord(duration: .eighth,
                          notes: [Note(pitch: 72, tpc: 14)])),
-            .rest(smallRest),
+            .chord(smallRest),
             // Stem down, 16th flag
             .chord(Chord(duration: .sixteenth,
                          notes: [Note(pitch: 74, tpc: 16)])),
@@ -384,26 +384,26 @@ enum Samples {
         let s1: [VoiceElement] = [
             .clef(Clef(concertClefType: "G")),
             .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
-            .rest(Rest(duration: .half)),
-            .rest(Rest(duration: .sixteenth)),
+            .rest(duration: .half),
+            .rest(duration: .sixteenth),
             .chord(Chord(duration: .sixteenth, notes: [c4])),
             .chord(Chord(duration: .sixteenth, notes: [c4])),
-            .rest(Rest(duration: .sixteenth)),
-            .rest(Rest(duration: .sixteenth)),
-            .rest(Rest(duration: .sixteenth)),
-            .rest(Rest(duration: .sixteenth)),
-            .rest(Rest(duration: .sixteenth)),  // pad to full 1920
+            .rest(duration: .sixteenth),
+            .rest(duration: .sixteenth),
+            .rest(duration: .sixteenth),
+            .rest(duration: .sixteenth),
+            .rest(duration: .sixteenth),  // pad to full 1920
         ]
         let s2: [VoiceElement] = [
             .clef(Clef(concertClefType: "G")),
-            .rest(Rest(duration: .half)),
-            .rest(Rest(duration: .sixteenth)),
+            .rest(duration: .half),
+            .rest(duration: .sixteenth),
             .chord(Chord(duration: .sixteenth, notes: [c4])),
-            .rest(Rest(duration: .eighth)),
+            .rest(duration: .eighth),
             .chord(Chord(
                 duration: NoteDuration.eighth.dotted(1),
                 notes: [c4])),
-            .rest(Rest(duration: .sixteenth)),
+            .rest(duration: .sixteenth),
         ]
         let part = Part(
             id: "P1",
@@ -442,7 +442,7 @@ enum Samples {
                 .chord(Chord(duration: .quarter, notes: [c4])),
             ]),
             Voice(elements: [
-                .rest(Rest(duration: .whole)),
+                .rest(duration: .whole),
             ]),
         ])
         return Score(
@@ -478,10 +478,10 @@ enum Samples {
         ]
         let v1: [VoiceElement] = [
             .chord(Chord(duration: .eighth, notes: [c3])),
-            .rest(Rest(duration: .eighth)),
-            .rest(Rest(duration: .eighth)),
+            .rest(duration: .eighth),
+            .rest(duration: .eighth),
             .chord(Chord(duration: .eighth, notes: [c3])),
-            .rest(Rest(duration: .quarter)),
+            .rest(duration: .quarter),
             .chord(Chord(duration: .quarter, notes: [c3])),
         ]
         let leadingV0: [VoiceElement] = [
@@ -580,13 +580,13 @@ enum Samples {
         // lone flagged note; only the closing 16+16 inside beat 4
         // stays beamed.
         let m2 = Measure(voices: [Voice(elements: [
-            .rest(Rest(duration: .half)),
-            .rest(Rest(duration: .sixteenth)),
+            .rest(duration: .half),
+            .rest(duration: .sixteenth),
             .chord(c16),
-            .rest(Rest(duration: .sixteenth)),
+            .rest(duration: .sixteenth),
             .chord(c16),
             .chord(e16),
-            .rest(Rest(duration: .sixteenth)),
+            .rest(duration: .sixteenth),
             .chord(c16),
             .chord(e16),
         ])])
@@ -608,7 +608,7 @@ enum Samples {
             .chord(Chord(
                 duration: NoteDuration.half.dotted(1),
                 notes: [c4])),
-            .rest(Rest(duration: NoteDuration.quarter)),
+            .rest(duration: NoteDuration.quarter),
             // dotted quarter
             .chord(Chord(
                 duration: NoteDuration.quarter.dotted(1),
@@ -617,13 +617,13 @@ enum Samples {
             .chord(Chord(
                 duration: NoteDuration.eighth.dotted(1),
                 notes: [c4])),
-            .rest(Rest(duration: NoteDuration.sixteenth)),
+            .rest(duration: NoteDuration.sixteenth),
             // double-dotted quarter
             .chord(Chord(
                 duration: NoteDuration.quarter.dotted(2),
                 notes: [c4])),
             // dotted rest
-            .rest(Rest(duration: NoteDuration.quarter.dotted(1))),
+            .rest(duration: NoteDuration.quarter.dotted(1)),
         ]
         let m = Measure(voices: [Voice(elements: elements)])
         return Score(

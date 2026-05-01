@@ -16,7 +16,6 @@ import Testing
         voice.elements.reduce(0) { acc, el in
             switch el {
             case let .chord(c): return acc + c.duration.ticks(division: division)
-            case let .rest(r):  return acc + r.duration.ticks(division: division)
             default:            return acc
             }
         }

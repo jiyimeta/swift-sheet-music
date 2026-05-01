@@ -149,8 +149,9 @@ extension MidiRenderer {
             }
         case let .dynamic(dynamic):
             velocity = effectiveVelocity(forDynamic: dynamic, instrument: instrument)
-        case let .rest(rest):
-            localTick += rest.duration.ticks(division: division)
+        case let .chord(chord) where chord.notes.isEmpty:
+            // Rest: advance the tick cursor, emit no note events.
+            localTick += chord.duration.ticks(division: division)
         case let .chord(chord):
             let glissandoEndPitch = chord.notes.contains(where: { $0.glissando != nil })
                 ? MidiRenderer.glissandoEndPitch(

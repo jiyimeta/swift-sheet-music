@@ -11,10 +11,10 @@ enum EditingFixtures {
     static func fourQuarterRests() -> Score {
         let voice = Voice(elements: [
             .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
-            .rest(Rest(duration: .quarter)),
-            .rest(Rest(duration: .quarter)),
-            .rest(Rest(duration: .quarter)),
-            .rest(Rest(duration: .quarter)),
+            .rest(duration: .quarter),
+            .rest(duration: .quarter),
+            .rest(duration: .quarter),
+            .rest(duration: .quarter),
         ])
         let measure = Measure(voices: [voice])
         let staff = StaffContent(id: 1, measures: [measure])

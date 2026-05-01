@@ -90,7 +90,6 @@ public struct PasteVoiceElements: EditCommand {
     ) -> Int? {
         switch element {
         case .chord(let c): return c.duration.ticks(division: division)
-        case .rest(let r):  return r.duration.ticks(division: division)
         default: return nil
         }
     }
@@ -138,8 +137,6 @@ public struct PasteVoiceElements: EditCommand {
                 switch newElements[i] {
                 case .chord(let c):
                     elTicks = c.duration.ticks(division: division)
-                case .rest(let r):
-                    elTicks = r.duration.ticks(division: division)
                 default:
                     throw SheetMusicError.invalidEdit(
                         reason: "PasteVoiceElements: lengthening "
@@ -182,13 +179,11 @@ public struct PasteVoiceElements: EditCommand {
                     division: division)
                 let pieces: [VoiceElement]
                 switch lastEl {
-                case .chord(let c):
+                case .chord(let c) where !c.notes.isEmpty:
                     pieces = DurationChangeAlgorithm.makeChordChain(
                         from: c, durations: durations)
                 default:
-                    pieces = durations.map {
-                        .rest(Rest(duration: $0))
-                    }
+                    pieces = durations.map { .rest(duration: $0) }
                 }
                 newElements.insert(
                     contentsOf: pieces, at: payloadEndIdx + 1)

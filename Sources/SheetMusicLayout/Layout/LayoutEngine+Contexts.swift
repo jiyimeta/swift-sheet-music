@@ -88,7 +88,7 @@ extension LayoutEngine {
                         timeSig = .init(
                             numerator: t.numerator,
                             denominator: t.denominator)
-                    case .chord, .rest:
+                    case .chord:
                         break scan
                     default:
                         continue

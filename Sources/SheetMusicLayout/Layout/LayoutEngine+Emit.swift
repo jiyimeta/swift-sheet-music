@@ -29,7 +29,7 @@ extension LayoutEngine {
         for idx in tuplet.startIndex...tuplet.endIndex {
             let el = voice.elements[idx]
             switch el {
-            case .chord:
+            case .chord(let c) where !c.notes.isEmpty:
                 chordCount += 1
                 guard let outIdx = voiceChordOutIndex[idx],
                       case .chord(let notes, _, let stem, let so,
@@ -45,7 +45,8 @@ extension LayoutEngine {
                     anchorY = notes.map(\.origin.y).max() ?? so.y
                 }
                 chordAnchorYs.append(anchorY)
-            case .rest:
+            case .chord:
+                // Empty chord = rest.
                 containsRest = true
                 guard let outIdx = voiceRestOutIndex[idx],
                       case .rest(_, let origin, _, _, _) = out[outIdx]
@@ -211,7 +212,7 @@ extension LayoutEngine {
             switch el {
             case .keySignature:
                 return true
-            case .chord, .rest:
+            case .chord:
                 return false
             default:
                 continue

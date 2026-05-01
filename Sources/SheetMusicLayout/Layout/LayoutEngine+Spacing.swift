@@ -70,7 +70,7 @@ extension LayoutEngine {
                         metrics.sp * (CGFloat(abs(k.concertKey)) + 1.5))
                 case .timeSignature:
                     timeSigWidth = max(timeSigWidth, metrics.sp * 3)
-                case .chord, .rest:
+                case .chord:
                     stop = true
                 default:
                     break
@@ -254,7 +254,7 @@ extension LayoutEngine {
                 var tick = 0
                 for (idx, el) in voice.elements.enumerated() {
                     switch el {
-                    case .chord(let c):
+                    case .chord(let c) where !c.notes.isEmpty:
                         let nextLyrics = nextChordLyrics(
                             in: voice.elements, after: idx)
                         let w = max(
@@ -268,7 +268,8 @@ extension LayoutEngine {
                             startTick: tick, endTick: end, weight: w))
                         allTicks.insert(tick)
                         tick = end
-                    case .rest(let r):
+                    case .chord(let r):
+                        // Empty chord = rest.
                         let w = durationWidth(r.duration, metrics: metrics)
                         let end = tick + r.duration.ticks(division: division)
                         elements.append(TimedElement(
@@ -356,7 +357,7 @@ extension LayoutEngine {
                     explicitKeyWidth = max(
                         explicitKeyWidth,
                         metrics.sp * (CGFloat(abs(k.concertKey)) + 1))
-                case .chord, .rest:
+                case .chord:
                     break scan
                 default:
                     continue
@@ -411,7 +412,7 @@ extension LayoutEngine {
                     w += metrics.sp * 2.2
                 case .barLine:
                     w += metrics.sp
-                case .chord(let c):
+                case .chord(let c) where !c.notes.isEmpty:
                     let tickW = durationWidth(c.duration, metrics: metrics)
                     let nextLyrics = nextChordLyrics(
                         in: voice.elements, after: idx)
@@ -420,7 +421,8 @@ extension LayoutEngine {
                         nextLyrics: nextLyrics,
                         metrics: metrics)
                     w += max(tickW, lyricW)
-                case .rest(let r):
+                case .chord(let r):
+                    // Empty chord = rest.
                     w += durationWidth(r.duration, metrics: metrics)
                 case .dynamic, .tempo, .fermata,
                      .measureRepeat, .spanner, .staffText,
@@ -532,9 +534,10 @@ extension LayoutEngine {
         guard startIndex + 1 < elements.count else { return [] }
         for j in (startIndex + 1)..<elements.count {
             switch elements[j] {
-            case .chord(let nc):
+            case .chord(let nc) where !nc.notes.isEmpty:
                 return nc.lyrics
-            case .rest:
+            case .chord:
+                // Empty chord = rest.
                 return []
             default:
                 continue

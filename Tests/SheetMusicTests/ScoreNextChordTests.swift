@@ -8,7 +8,7 @@ struct ScoreNextChordTests {
                      notes: [Note(pitch: p, tpc: 14)]))
     }
     private static let restQ: VoiceElement = .rest(
-        Rest(duration: .quarter))
+        duration: .quarter)
 
     @Test("returns the next chord in the same measure")
     func sameMeasure() {

@@ -198,8 +198,6 @@ extension LayoutEngine {
                         switch el {
                         case .chord(let c):
                             total += c.duration.ticks(division: division)
-                        case .rest(let r):
-                            total += r.duration.ticks(division: division)
                         default:
                             break
                         }
@@ -237,9 +235,6 @@ extension LayoutEngine {
                                     result: &result[staffIdx])
                             }
                             tickInMeasure += chordTicks
-                        case .rest(let r):
-                            tickInMeasure += r.duration
-                                .ticks(division: division)
                         default:
                             break
                         }

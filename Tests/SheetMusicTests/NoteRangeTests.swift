@@ -27,10 +27,10 @@ struct NoteRangeTests {
             Voice(elements: [
                 .chord(Chord(duration: .quarter,
                              notes: [Note(pitch: 60, tpc: 14)])),
-                .rest(Rest(duration: .quarter)),
+                .rest(duration: .quarter),
                 .chord(Chord(duration: .quarter,
                              notes: [Note(pitch: 64, tpc: 14)])),
-                .rest(Rest(duration: .quarter))
+                .rest(duration: .quarter)
             ])
         ])
         return Score(

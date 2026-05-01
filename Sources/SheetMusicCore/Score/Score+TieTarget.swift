@@ -29,7 +29,7 @@ public extension Score {
         guard start < elements.count else { return nil }
         for idx in start..<elements.count {
             switch elements[idx] {
-            case .chord(let nextChord):
+            case .chord(let nextChord) where !nextChord.notes.isEmpty:
                 guard let matchIdx = nextChord.notes.firstIndex(
                     where: { $0.pitch == source.pitch })
                 else { return nil }
@@ -39,9 +39,10 @@ public extension Score {
                     voiceIndex: noteID.voiceIndex,
                     elementIndex: idx,
                     noteIndexInChord: matchIdx)
-            case .rest:
-                // A rest between source and a same-pitch note breaks
-                // the tie chain — they're no longer "adjacent".
+            case .chord:
+                // Empty chord = rest. A rest between source and a
+                // same-pitch note breaks the tie chain — they're no
+                // longer "adjacent".
                 return nil
             default:
                 continue

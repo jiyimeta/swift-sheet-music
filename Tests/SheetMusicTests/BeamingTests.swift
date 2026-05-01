@@ -92,10 +92,9 @@ struct BeamingTests {
         let eighth = Chord(
             duration: .eighth,
             notes: [Note(pitch: 60, tpc: 14)])
-        let rest = Rest(duration: .quarter)
         let voice = Voice(elements: [
             .chord(eighth),
-            .rest(rest),
+            .rest(duration: .quarter),
             .chord(eighth)
         ])
         let groups = LayoutEngine.beamGroups(
@@ -165,13 +164,13 @@ struct BeamingTests {
             duration: .sixteenth,
             notes: [Note(pitch: 64, tpc: 18)])
         let voice = Voice(elements: [
-            .rest(Rest(duration: .half)),        // 0
-            .rest(Rest(duration: .sixteenth)),   // 1
+            .rest(duration: .half),        // 0
+            .rest(duration: .sixteenth),   // 1
             .chord(c16),                         // 2
-            .rest(Rest(duration: .sixteenth)),   // 3
+            .rest(duration: .sixteenth),   // 3
             .chord(c16),                         // 4 — end of beat 3
             .chord(e16),                         // 5 — start of beat 4
-            .rest(Rest(duration: .sixteenth)),   // 6
+            .rest(duration: .sixteenth),   // 6
             .chord(c16),                         // 7
             .chord(e16),                         // 8
         ])

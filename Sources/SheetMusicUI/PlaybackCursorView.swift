@@ -147,21 +147,20 @@ extension LayoutDocument {
                 var t = 0
                 for (elemIdx, el) in voice.elements.enumerated() {
                     switch el {
-                    case .chord(let chord):
-                        if chord.notes.first != nil {
-                            let nid = NoteID(
-                                staffIndex: staffIdx,
-                                measureIndex: measureIndex,
-                                voiceIndex: voiceIdx,
-                                elementIndex: elemIdx,
-                                noteIndexInChord: 0)
-                            if ticksToX[t] == nil,
-                               let x = itemX(.note(nid), in: layoutMeasure) {
-                                ticksToX[t] = x
-                            }
+                    case .chord(let chord) where !chord.notes.isEmpty:
+                        let nid = NoteID(
+                            staffIndex: staffIdx,
+                            measureIndex: measureIndex,
+                            voiceIndex: voiceIdx,
+                            elementIndex: elemIdx,
+                            noteIndexInChord: 0)
+                        if ticksToX[t] == nil,
+                           let x = itemX(.note(nid), in: layoutMeasure) {
+                            ticksToX[t] = x
                         }
                         t += chord.duration.ticks(division: division)
-                    case .rest(let rest):
+                    case .chord(let rest):
+                        // Empty chord = rest.
                         let rid = RestID(
                             staffIndex: staffIdx,
                             measureIndex: measureIndex,
@@ -250,7 +249,6 @@ private func measureTickLength(
     for el in voice0.elements {
         switch el {
         case .chord(let c): t += c.duration.ticks(division: division)
-        case .rest(let r): t += r.duration.ticks(division: division)
         default: break
         }
     }

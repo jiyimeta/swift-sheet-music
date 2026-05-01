@@ -43,7 +43,7 @@ extension PlaybackTimeline {
                     case .timeSignature(let ts):
                         currentTimeSig = ts
                         break staffLoop
-                    case .chord, .rest:
+                    case .chord:
                         break staffLoop
                     default:
                         break
@@ -56,8 +56,6 @@ extension PlaybackTimeline {
                     switch el {
                     case .chord(let c):
                         spineTick += c.duration.ticks(division: division)
-                    case .rest(let r):
-                        spineTick += r.duration.ticks(division: division)
                     default:
                         break
                     }

@@ -18,7 +18,7 @@ struct LayoutCacheTests {
             .chord(Chord(duration: .half, notes: [note])),
         ])])
         let m3 = Measure(voices: [Voice(elements: [
-            .rest(Rest(duration: .whole))
+            .rest(duration: .whole)
         ])])
         return Score(
             division: 480,
@@ -98,7 +98,7 @@ struct LayoutCacheTests {
         let editedMeasure1 = Measure(voices: [Voice(elements: [
             .chord(Chord(duration: .half, notes: [
                 Note(pitch: 60, tpc: 14)])),
-            .rest(Rest(duration: .half))
+            .rest(duration: .half)
         ])])
         measures[1] = editedMeasure1
         staff = StaffContent(id: staff.id, measures: measures)

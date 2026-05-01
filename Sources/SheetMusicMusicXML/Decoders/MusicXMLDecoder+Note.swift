@@ -34,7 +34,7 @@ enum MusicXMLNoteDecoder {
         let prefix: [VoiceElement] = fermata.map { [.fermata($0)] } ?? []
 
         if isRest {
-            return .new(prefix + [.rest(Rest(duration: duration))])
+            return .new(prefix + [.rest(duration: duration)])
         }
 
         let midi: Int

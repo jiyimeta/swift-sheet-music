@@ -51,8 +51,9 @@ extension LayoutEngine {
                     beatLevelSets[beat, default: Set()].insert(level)
                 }
                 scanTick += c.duration.ticks(division: division)
-            case .rest(let r):
-                scanTick += r.duration.ticks(division: division)
+            // Empty chord = rest, picked up by the .chord case above
+            // since c.notes.isEmpty contributes 0 elements to beam
+            // groups but still advances scanTick.
             default:
                 break
             }
@@ -73,6 +74,10 @@ extension LayoutEngine {
         }
         for (i, el) in voice.elements.enumerated() {
             switch el {
+            case .chord(let c) where c.notes.isEmpty:
+                // Rest: breaks any in-progress beam group.
+                flush()
+                tick += c.duration.ticks(division: division)
             case .chord(let c):
                 let level = beamLevel(c.duration)
                 if level == 0 {
@@ -124,9 +129,6 @@ extension LayoutEngine {
                 currentIndices.append(i)
                 currentLevel = max(currentLevel, level)
                 tick += c.duration.ticks(division: division)
-            case .rest(let r):
-                flush()
-                tick += r.duration.ticks(division: division)
             default:
                 if case .barLine = el { flush() }
                 break

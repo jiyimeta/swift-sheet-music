@@ -35,11 +35,12 @@ public struct SetRestDuration: EditCommand {
                 reason: "SetRestDuration: location \(location) "
                     + "doesn't resolve to a voice element")
         }
-        guard case .rest(var rest)
-            = voice.elements[location.elementIndex] else {
+        guard case .chord(var rest) = voice.elements[location.elementIndex],
+              rest.notes.isEmpty
+        else {
             throw SheetMusicError.invalidEdit(
                 reason: "SetRestDuration: element at \(location) "
-                    + "is not a rest")
+                    + "is not a rest (empty chord)")
         }
         try DurationChangeAlgorithm.ensureNotInsideTuplet(
             voice: voice,
@@ -60,7 +61,7 @@ public struct SetRestDuration: EditCommand {
             .compute(
                 in: voice,
                 atIdx: location.elementIndex,
-                mutatedTarget: .rest(rest),
+                mutatedTarget: .chord(rest),
                 srcTicks: srcTicks,
                 dstTicks: dstTicks,
                 targetRtick: targetRtick,

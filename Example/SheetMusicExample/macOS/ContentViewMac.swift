@@ -957,7 +957,7 @@ struct ContentViewMac: View {
                         switch el {
                         case .chord(let c):
                             elTicks = c.duration.ticks(division: division)
-                        case .rest(let r):
+                        case .chord(let r) where r.notes.isEmpty:
                             elTicks = r.duration.ticks(division: division)
                         default:
                             // Non-timed (clef / key sig / barline /
@@ -1023,7 +1023,7 @@ struct ContentViewMac: View {
             switch elements[i] {
             case .chord(let c):
                 tick += c.duration.ticks(division: score.division)
-            case .rest(let r):
+            case .chord(let r) where r.notes.isEmpty:
                 tick += r.duration.ticks(division: score.division)
             default: continue
             }
@@ -1051,7 +1051,7 @@ struct ContentViewMac: View {
             return MeasureTick(
                 measure: start.measure,
                 tick: start.tick + c.duration.ticks(division: division))
-        case .rest(let r):
+        case .chord(let r) where r.notes.isEmpty:
             return MeasureTick(
                 measure: start.measure,
                 tick: start.tick + r.duration.ticks(division: division))
@@ -1073,7 +1073,7 @@ struct ContentViewMac: View {
             switch el {
             case .chord(let c):
                 return acc + c.duration.ticks(division: division)
-            case .rest(let r):
+            case .chord(let r) where r.notes.isEmpty:
                 return acc + r.duration.ticks(division: division)
             default:
                 return acc
@@ -1389,7 +1389,7 @@ struct ContentViewMac: View {
             case .chord(let c):
                 elementTicksRemaining = c.duration
                     .ticks(division: division)
-            case .rest(let r):
+            case .chord(let r) where r.notes.isEmpty:
                 elementTicksRemaining = r.duration
                     .ticks(division: division)
             default:
@@ -1417,7 +1417,7 @@ struct ContentViewMac: View {
                         rtickStart: measureTickCursor,
                         division: division)
                 switch srcEl {
-                case .chord(let c):
+                case .chord(let c) where !c.notes.isEmpty:
                     for (i, dur) in durations.enumerated() {
                         let isFirstChain =
                             isFirstSplit && i == 0
@@ -1438,10 +1438,11 @@ struct ContentViewMac: View {
                             lyrics: isFirstChain
                                 ? c.lyrics : [])))
                     }
-                case .rest:
+                case .chord:
+                    // Empty chord = rest.
                     for dur in durations {
                         pieceElements.append(
-                            .rest(Rest(duration: dur)))
+                            .rest(duration: dur))
                     }
                 default:
                     break
@@ -1585,7 +1586,7 @@ struct ContentViewMac: View {
             rtickStart: rtickStart,
             division: division)
         switch element {
-        case .chord(let c):
+        case .chord(let c) where !c.notes.isEmpty:
             var pieces: [VoiceElement] = []
             for (i, dur) in durations.enumerated() {
                 let isFirst = i == 0
@@ -1610,8 +1611,9 @@ struct ContentViewMac: View {
                         ? c.lyrics : [])))
             }
             return pieces
-        case .rest:
-            return durations.map { .rest(Rest(duration: $0)) }
+        case .chord:
+            // Empty chord = rest.
+            return durations.map { .rest(duration: $0) }
         default:
             return [element]
         }
@@ -1623,8 +1625,6 @@ struct ContentViewMac: View {
         switch el {
         case .chord(let c):
             return c.duration.ticks(division: division)
-        case .rest(let r):
-            return r.duration.ticks(division: division)
         default:
             return 0
         }
@@ -1660,14 +1660,15 @@ struct ContentViewMac: View {
         at id: VoiceElementID, firstElement: VoiceElement?
     ) {
         switch firstElement {
-        case .chord:
+        case .chord(let c) where !c.notes.isEmpty:
             selection = .single(.note(NoteID(
                 staffIndex: id.staffIndex,
                 measureIndex: id.measureIndex,
                 voiceIndex: id.voiceIndex,
                 elementIndex: id.elementIndex,
                 noteIndexInChord: 0)))
-        case .rest:
+        case .chord:
+            // Empty chord = rest.
             selection = .single(.rest(RestID(
                 staffIndex: id.staffIndex,
                 measureIndex: id.measureIndex,

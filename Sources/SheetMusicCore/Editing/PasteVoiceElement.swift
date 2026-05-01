@@ -97,7 +97,6 @@ public struct PasteVoiceElement: EditCommand {
     ) -> Int? {
         switch element {
         case .chord(let c): return c.duration.ticks(division: division)
-        case .rest(let r):  return r.duration.ticks(division: division)
         default: return nil
         }
     }

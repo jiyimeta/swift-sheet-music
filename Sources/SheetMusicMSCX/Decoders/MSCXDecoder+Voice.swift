@@ -31,10 +31,10 @@ extension Voice {
                     chord.duration, by: tupletFractions())
                 elements.append(.chord(chord))
             case "Rest":
-                var rest = try Rest.decode(child)
+                var rest = try MSCXRestDecoder.decode(child)
                 rest.duration = scaled(
                     rest.duration, by: tupletFractions())
-                elements.append(.rest(rest))
+                elements.append(.chord(rest))
             case "Tuplet":
                 if let ratio = tupletRatio(from: child) {
                     tupletStack.append(OpenTuplet(

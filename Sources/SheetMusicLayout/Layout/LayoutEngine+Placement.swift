@@ -125,14 +125,17 @@ extension LayoutEngine {
         //       tick anchoring so centering doesn't drop the rest
         //       onto a melody note.
         let voicesWithChords = measure.voices.filter { v in
-            v.elements.contains { if case .chord = $0 { true } else { false } }
+            v.elements.contains {
+                if case .chord(let c) = $0, !c.notes.isEmpty {
+                    return true
+                }
+                return false
+            }
         }.count
         let voicesWithContent = measure.voices.filter { v in
-            v.elements.contains { el in
-                switch el {
-                case .chord, .rest: return true
-                default: return false
-                }
+            v.elements.contains {
+                if case .chord = $0 { return true }
+                return false
             }
         }.count
         let hasMultiChordVoices = voicesWithChords > 1
@@ -171,8 +174,6 @@ extension LayoutEngine {
                 switch el {
                 case .chord(let c):
                     return acc + c.duration.ticks(division: division)
-                case .rest(let r):
-                    return acc + r.duration.ticks(division: division)
                 default:
                     return acc
                 }
@@ -295,7 +296,7 @@ extension LayoutEngine {
                     out.append(.barLine(
                         subtype: b.subtype,
                         origin: CGPoint(x: barX, y: staffMidY)))
-                case .rest(let r):
+                case .chord(let r) where r.notes.isEmpty:
                     inHeader = false
                     let (restBase, _) = DurationInterpretation.split(
                         r.duration)

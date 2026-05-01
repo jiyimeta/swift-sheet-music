@@ -7,10 +7,11 @@ import Foundation
 /// would be a separate command.
 ///
 /// Behaviour by element kind:
-///   - `.chord`: replaced with `.rest(Rest(duration: chord.duration))`.
-///   - `.rest`:  replaced with itself (idempotent — still recorded
-///               in the undo stack so a subsequent edit's undo path
-///               stays consistent).
+///   - `.chord` with notes: replaced with `.rest(duration:)` of the
+///     same duration (an empty `Chord`).
+///   - `.chord` already empty (= rest): replaced with itself
+///     (idempotent — still recorded in the undo stack so a
+///     subsequent edit's undo path stays consistent).
 ///   - any other element kind throws `SheetMusicError.invalidEdit`.
 ///
 /// Inverse is a `ReplaceVoiceElement` that restores the original
@@ -34,13 +35,12 @@ public struct DeleteVoiceElement: EditCommand {
         let duration: NoteDuration
         switch original {
         case .chord(let c): duration = c.duration
-        case .rest(let r):  duration = r.duration
         default:
             throw SheetMusicError.invalidEdit(
                 reason: "DeleteVoiceElement: element at \(location) "
                     + "is not a chord or rest (\(original))")
         }
-        score[location] = .rest(Rest(duration: duration))
+        score[location] = .rest(duration: duration)
         return ReplaceVoiceElement(at: location, with: original)
     }
 }
