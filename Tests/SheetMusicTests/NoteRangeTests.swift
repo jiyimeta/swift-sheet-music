@@ -153,6 +153,44 @@ struct NoteRangeTests {
         #expect(restCount == 2)
     }
 
+    @Test("Long note in another staff extends range across short notes")
+    func longerEndpointExtendsCoverage() {
+        // staff 0: 8 eighths. staff 1: 1 whole — both starting at
+        // tick 0 of measure 0. Selecting the first eighth (staff 0)
+        // and shift-clicking the whole (staff 1) should cover EVERY
+        // eighth in staff 0, not just the two clicked endpoints,
+        // because the whole's duration extends the range to the
+        // end of the bar.
+        func eighth(_ pitch: Int) -> VoiceElement {
+            .chord(Chord(
+                duration: .eighth,
+                notes: [Note(pitch: pitch, tpc: 14)]))
+        }
+        let s0m0 = Measure(voices: [
+            Voice(elements: [
+                eighth(60), eighth(62), eighth(64), eighth(65),
+                eighth(67), eighth(69), eighth(71), eighth(72)])
+        ])
+        let s1m0 = Measure(voices: [
+            Voice(elements: [
+                .chord(Chord(
+                    duration: .whole,
+                    notes: [Note(pitch: 48, tpc: 14)]))])
+        ])
+        let score = Score(
+            division: 480,
+            staves: [
+                StaffContent(id: 1, measures: [s0m0]),
+                StaffContent(id: 2, measures: [s1m0])])
+        let firstEighth = note(0, 0, 0, 0)
+        let whole = note(1, 0, 0, 0)
+        let result = score.items(
+            inRangeFrom: firstEighth, to: whole)
+        // 8 notes from staff 0 + 1 note from staff 1 = 9 IDs.
+        #expect(result.count == 9)
+        #expect(Set(result.map(\.staffIndex)) == [0, 1])
+    }
+
     @Test("Clicking a rest anchors the range")
     func restAsAnchor() {
         let score = makeSingleStaffScoreWithRests()

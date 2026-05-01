@@ -18,14 +18,22 @@ extension Score {
         inRangeFrom anchor: ScoreItemID,
         to target: ScoreItemID
     ) -> [ScoreItemID] {
-        guard let anchorPos = tickPosition(for: anchor),
-              let targetPos = tickPosition(for: target)
+        guard let anchorStart = tickPosition(for: anchor),
+              let targetStart = tickPosition(for: target),
+              let anchorEnd = endTickPosition(for: anchor),
+              let targetEnd = endTickPosition(for: target)
         else { return [] }
         let staffLo = min(anchor.staffIndex, target.staffIndex)
         let staffHi = max(anchor.staffIndex, target.staffIndex)
-        let (posLo, posHi) = anchorPos <= targetPos
-            ? (anchorPos, targetPos)
-            : (targetPos, anchorPos)
+        // Lower bound = whichever endpoint STARTS earlier; upper
+        // bound = whichever endpoint ENDS later. Using the END for
+        // posHi is what makes the rectangle cover the full duration
+        // of the longer endpoint — e.g. shift-clicking a whole note
+        // in staff 2 from a single eighth in staff 1 selects every
+        // eighth that overlaps the whole note's tick span, not just
+        // the two endpoints.
+        let posLo = min(anchorStart, targetStart)
+        let posHi = max(anchorEnd, targetEnd)
 
         var result: [ScoreItemID] = []
         for staffIdx in staffLo...staffHi {
@@ -37,7 +45,11 @@ extension Score {
                     var tick = 0
                     for (eIdx, el) in voice.elements.enumerated() {
                         let pos = TickPosition(measure: mIdx, tick: tick)
-                        let inRange = pos >= posLo && pos <= posHi
+                        // posHi is exclusive (it's the END tick of
+                        // the later endpoint, i.e. the start of
+                        // whatever comes after). An element STARTING
+                        // exactly at posHi sits past the range.
+                        let inRange = pos >= posLo && pos < posHi
                         switch el {
                         case .chord(let chord):
                             if inRange {
@@ -68,6 +80,43 @@ extension Score {
             }
         }
         return result
+    }
+
+    /// Tick position one element-width past `id` — the upper bound
+    /// of the time region covered by selecting `id`. Combining the
+    /// two endpoints' END positions (rather than their starts) for
+    /// `posHi` is what lets a long note (e.g. a whole) extend the
+    /// selection rectangle across every shorter note that sits
+    /// inside its tick span.
+    private func endTickPosition(
+        for id: ScoreItemID
+    ) -> TickPosition? {
+        guard let start = tickPosition(for: id),
+              staves.indices.contains(id.staffIndex)
+        else { return nil }
+        let measures = staves[id.staffIndex].measures
+        guard measures.indices.contains(id.measureIndex) else {
+            return nil
+        }
+        let voices = measures[id.measureIndex].voices
+        guard voices.indices.contains(id.voiceIndex) else {
+            return nil
+        }
+        let elements = voices[id.voiceIndex].elements
+        guard elements.indices.contains(id.elementIndex) else {
+            return nil
+        }
+        let dur: Int
+        switch elements[id.elementIndex] {
+        case .chord(let c):
+            dur = c.duration.ticks(division: division)
+        case .rest(let r):
+            dur = r.duration.ticks(division: division)
+        default:
+            dur = 0
+        }
+        return TickPosition(
+            measure: start.measure, tick: start.tick + dur)
     }
 
     /// Tick position of the element referenced by `id` within its
