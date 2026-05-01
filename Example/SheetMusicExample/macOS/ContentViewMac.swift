@@ -343,12 +343,42 @@ struct ContentViewMac: View {
                 default: break
                 }
             }
+            // ⌘3 / ⌘5 / ⌘7 / …: convert the selected chord/rest
+            // into a tuplet (triplet / quintuplet / septuplet …).
+            // Matches MuseScore's macOS shortcut.
+            if event.modifierFlags.contains(.command),
+               !event.isARepeat,
+               event.modifierFlags
+                .intersection([.control, .option, .shift]).isEmpty,
+               let chars = event.charactersIgnoringModifiers,
+               let ratio = Self.tupletRatio(forCharacter: chars.first) {
+                if applyCreateTuplet(
+                    actualNotes: ratio.actual,
+                    normalNotes: ratio.normal) {
+                    return nil
+                }
+            }
             if let controller = inputController, controller.isInputModeOn {
                 if handleInputModeKey(event, controller: controller) {
                     return nil
                 }
             }
             return event
+        }
+    }
+
+    /// Map a digit to the (actual:normal) ratio of the tuplet it
+    /// triggers. nil for digits that don't carry a default tuplet.
+    private static func tupletRatio(
+        forCharacter char: Character?
+    ) -> (actual: Int, normal: Int)? {
+        switch char {
+        case "3": return (3, 2)   // triplet
+        case "5": return (5, 4)   // quintuplet
+        case "6": return (6, 4)   // sextuplet
+        case "7": return (7, 4)   // septuplet
+        case "9": return (9, 8)   // nonuplet
+        default:  return nil
         }
     }
 
@@ -1736,6 +1766,63 @@ struct ContentViewMac: View {
     /// and re-anchor the selection on the (possibly respelled) note
     /// at the same NoteID. Plays a preview at the new pitch so the
     /// user hears the respell.
+    /// Tuplet toggle: ⌘+digit on a non-tuplet element creates a
+    /// tuplet, on an existing tuplet member removes it. Returns
+    /// `true` when the event was consumed (selection actionable)
+    /// so the key monitor can stop AppKit from beeping. Errors
+    /// (target's ticks don't divide evenly, target isn't a
+    /// chord/rest, etc.) are surfaced through `errorMessage`.
+    private func applyCreateTuplet(
+        actualNotes: Int, normalNotes: Int
+    ) -> Bool {
+        guard let id = selectedVoiceElementID(),
+              let controller = inputController
+        else { return false }
+        let voice = controller.score.staves
+            .indices.contains(id.staffIndex)
+            ? controller.score.staves[id.staffIndex].measures
+                .indices.contains(id.measureIndex)
+                ? controller.score.staves[id.staffIndex]
+                    .measures[id.measureIndex].voices
+                    .indices.contains(id.voiceIndex)
+                    ? controller.score.staves[id.staffIndex]
+                        .measures[id.measureIndex]
+                        .voices[id.voiceIndex]
+                    : nil
+                : nil
+            : nil
+        let alreadyInTuplet = voice?.tuplets.contains(where: {
+            $0.startIndex <= id.elementIndex
+                && id.elementIndex <= $0.endIndex
+        }) ?? false
+        do {
+            if alreadyInTuplet {
+                try controller.apply(
+                    RemoveTuplet(at: id),
+                    undoManager: undoManager)
+                errorMessage = "Tuplet removed"
+            } else {
+                try controller.apply(
+                    CreateTuplet(
+                        at: id,
+                        actualNotes: actualNotes,
+                        normalNotes: normalNotes),
+                    undoManager: undoManager)
+                errorMessage = "Tuplet \(actualNotes):\(normalNotes)"
+            }
+            adoptEditedScore(controller.score)
+            // Re-anchor on the element at the same path (first
+            // member of the new tuplet, or the single replacement
+            // after removal).
+            let firstElement = controller.score[id]
+            anchorSelectionAfterPaste(
+                at: id, firstElement: firstElement)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+        return true
+    }
+
     private func applyAccidental(
         _ accidental: Accidental?, to noteID: NoteID
     ) {
@@ -1818,6 +1905,39 @@ struct ContentViewMac: View {
     private func deleteSelectedElement(
         controller: NoteInputController
     ) {
+        // Tuplet selection: collapse the tuplet to a rest of the
+        // same total duration. RemoveTuplet alone keeps the first
+        // member's pitch (used by the ⌘3 toggle); for Backspace
+        // we want the "delete the whole thing" semantic, so chain
+        // RemoveTuplet → DeleteVoiceElement under one Composite
+        // so a single ⌘Z restores everything.
+        if case .single(.tuplet(let tid)) = selection {
+            let veID = VoiceElementID(
+                staffIndex: tid.staffIndex,
+                measureIndex: tid.measureIndex,
+                voiceIndex: tid.voiceIndex,
+                elementIndex: tid.startElementIndex)
+            do {
+                try controller.apply(
+                    CompositeEditCommand(
+                        commands: [
+                            RemoveTuplet(at: veID),
+                            DeleteVoiceElement(at: veID),
+                        ],
+                        location: veID),
+                    undoManager: undoManager)
+                adoptEditedScore(controller.score)
+                selection = .single(.rest(RestID(
+                    staffIndex: tid.staffIndex,
+                    measureIndex: tid.measureIndex,
+                    voiceIndex: tid.voiceIndex,
+                    elementIndex: tid.startElementIndex)))
+                errorMessage = "Tuplet deleted"
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+            return
+        }
         let target: VoiceElementID
         switch selection {
         case .single(.note(let noteID)):
@@ -1905,6 +2025,7 @@ struct ContentViewMac: View {
         case .none: return "none"
         case .single(.rest): return "rest"
         case .single(.note): return "note"
+        case .single(.tuplet): return "tuplet"
         case .range: return "range"
         case .multi: return "multi"
         }
@@ -2068,6 +2189,7 @@ struct ContentViewMac: View {
         switch target {
         case .note(let id): primary = .note(id)
         case .rest(let id): primary = .rest(id)
+        case .tuplet(let id): primary = .tuplet(id)
         case .stem(let notes), .flag(let notes), .beam(let notes):
             guard let first = notes.first else {
                 selection = .none
