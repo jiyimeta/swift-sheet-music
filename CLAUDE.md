@@ -124,28 +124,35 @@ test target and not part of any published library product. See:
 Don't move these fixtures into `Sources/` and don't ship them in any
 library product.
 
-## MuseScore submodule
+## MuseScore C++ source as reference
 
-`MuseScore/` is a git submodule referencing the upstream MuseScore C++
-source (GPL-3.0). It exists for **development reference only** — to let
-us cross-check algorithms against the C++ implementation. It is not
-distributed as part of the SwiftPM package (consumers receive only
-`Sources/`).
-
-When researching a MuseScore behaviour, read it from the submodule and
-implement independently in Swift; do not copy code structures verbatim.
+The upstream MuseScore C++ source (<https://github.com/musescore/MuseScore>,
+GPL-3.0) is used as a behavioural specification when porting algorithms.
+It is **not** vendored into this repository — clone it separately when
+you need to cross-reference. The Swift implementation is rewritten
+independently from the studied behaviour; do not copy code structures
+verbatim, and do not import any GPL source into `Sources/`.
 
 `docs/musescore-engraving-reference.md` collects findings that recur
 across porting work — coordinate units (DPI / DPMM / spatium),
 `<offset>` / `OffsetType` semantics, frame layout, title-block style
 defaults, read-path tiers. Consult / extend it before re-spelunking
-the same C++ files.
+the same C++ files. Path references in that doc (and in
+`docs/incremental-layout-future.md`) are relative to the upstream
+MuseScore repository root.
 
 ## Things not to do
 
-- Don't add the MuseScore submodule contents into the SwiftPM package
-  (it's GPL — keep it dev-only).
+- Don't vendor the MuseScore C++ source into this repository (it's
+  GPL — keep it as an external reference only).
 - Don't introduce GPL code into `Sources/`. The published source is MIT.
+- Don't bundle the GPL-3.0 test fixtures under
+  `Tests/SheetMusicTests/Resources/` into any library or executable
+  product. They must stay confined to the test target — that's what
+  keeps the package distributable as MIT under GPL §5 mere-aggregation.
+  Keep them out of `Sources/`, never list them as resources of a
+  `.target` / `.executableTarget`, and don't ship a binary that
+  embeds them.
 - Don't rename to anything containing `MuseScore` in the package or
   product names — trademark concerns drove the move to `swift-sheet-music`.
 - Don't add `SheetMusicKit` either — Apple's `MusicKit` is a related

@@ -189,6 +189,7 @@ Major features supported by the renderer:
 - See [NOTICE](NOTICE) for full provenance and trademark disclosure.
 
 The Swift implementation is independently authored. Algorithms were
-studied from MuseScore's C++ source (referenced via the `MuseScore/` git
-submodule) and reimplemented in Swift; no C++ source is reproduced.
-MuseScore is a trademark of Muse Group.
+studied from MuseScore's C++ source
+(<https://github.com/musescore/MuseScore>, GPL-3.0) and reimplemented
+in Swift; no C++ source is reproduced. MuseScore is a trademark of
+Muse Group.

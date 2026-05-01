@@ -1,11 +1,13 @@
 # MuseScore engraving reference
 
-A navigation map for spelunking the `MuseScore/` submodule. Lists
-**where to look** and **what surprises to expect** for the topics we
-keep porting. Specific constants (sizes, magic numbers, defaults)
-intentionally aren't duplicated here — `grep`, the `Sid::` /
-`Pid::` enums, and `engraving/style/styledef.cpp` are the source of
-truth and they drift between MuseScore versions.
+A navigation map for spelunking the upstream MuseScore C++ source
+(<https://github.com/musescore/MuseScore>, GPL-3.0; not vendored here —
+clone separately for reference). Lists **where to look** and **what
+surprises to expect** for the topics we keep porting. All paths below
+are relative to the MuseScore repository root. Specific constants
+(sizes, magic numbers, defaults) intentionally aren't duplicated here
+— `grep`, the `Sid::` / `Pid::` enums, and `engraving/style/styledef.cpp`
+are the source of truth and they drift between MuseScore versions.
 
 
 ## Coordinate systems & units

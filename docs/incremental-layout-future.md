@@ -15,8 +15,9 @@ a starting point.
 
 ## How MuseScore avoids full re-layout
 
-Source paths refer to the upstream MuseScore git submodule
-(`MuseScore/`, dev-only, GPL-3.0).
+Source paths are relative to the upstream MuseScore repository root
+(<https://github.com/musescore/MuseScore>, GPL-3.0; not vendored — clone
+separately for reference).
 
 1. **Tick-bounded dirty range** —
    `engraving/editing/cmd.cpp` `CmdState::setTick(Fraction)` records
@@ -180,7 +181,7 @@ The benchmark itself lives in
   An incremental refactor will likely add a `measureSpans:
   [MeasureSpan]` field where `MeasureSpan` carries (startTick,
   endTick, width, hasCrossMeasureSpanner).
-* `MuseScore/src/engraving/rendering/score/systemlayout.cpp:318` —
+* `src/engraving/rendering/score/systemlayout.cpp:318` —
   the canonical "stable boundary" predicate to mirror.
 
 ## Out of scope for this doc
