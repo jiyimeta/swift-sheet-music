@@ -60,6 +60,62 @@ public enum PitchSpelling {
     /// MuseScore's `Tpc::TPC_C` — the TPC of C natural.
     private static let tpcC = 14
 
+    /// TPC of each natural letter (`C, D, E, F, G, A, B`). `letter`
+    /// is the diatonic letter index (0…6, C-D-E-F-G-A-B order).
+    private static let naturalTpcByLetter: [Int] =
+        [14, 16, 18, 13, 15, 17, 19]
+    /// Semitone offset of each natural letter from C (`C, D, E, F,
+    /// G, A, B`).
+    private static let naturalSemitoneByLetter: [Int] =
+        [0, 2, 4, 5, 7, 9, 11]
+
+    /// Diatonic letter index (0=C … 6=B) of a TPC.
+    /// `(tpc + 1) % 7` rotates the line of fifths to align with
+    /// `F C G D A E B`; the returned table maps to
+    /// `C D E F G A B` order so callers can index `naturalTpcByLetter`
+    /// and `naturalSemitoneByLetter` directly.
+    private static func letterIndex(forTpc tpc: Int) -> Int {
+        let table = [3, 0, 4, 1, 5, 2, 6]
+        return table[((tpc + 1) % 7 + 7) % 7]
+    }
+
+    private static func semitoneShift(of accidental: Accidental?) -> Int {
+        switch accidental {
+        case .doubleFlat:  return -2
+        case .flat:        return -1
+        case .none, .natural: return 0
+        case .sharp:       return 1
+        case .doubleSharp: return 2
+        }
+    }
+
+    /// Re-spell `note` so it carries the requested `accidental`,
+    /// preserving the diatonic letter (C → C♯, D♭ → D♮, etc.). The
+    /// pitch shifts by the alteration delta; the TPC moves to the
+    /// new (letter, alteration) pair on the line of fifths.
+    ///
+    /// Passing `accidental: nil` is a no-op for pitch and TPC — the
+    /// caller wants only to clear the displayed glyph (e.g. so a
+    /// note revert to "implied by key signature").
+    public static func respelled(
+        from note: Note, with accidental: Accidental?
+    ) -> (pitch: Int, tpc: Int) {
+        guard let target = accidental else {
+            return (note.pitch, note.tpc)
+        }
+        let letter = letterIndex(forTpc: note.tpc)
+        let naturalSemi = naturalSemitoneByLetter[letter]
+        // Octave is whichever places the note's natural pitch
+        // closest to the existing pitch — works for any current
+        // accidental within ±2 semitones of natural.
+        let approxOctave = Int(((Double(note.pitch)
+            - Double(naturalSemi)) / 12.0).rounded()) - 1
+        let shift = semitoneShift(of: target)
+        let newPitch = 12 * (approxOctave + 1) + naturalSemi + shift
+        let newTpc = naturalTpcByLetter[letter] + 7 * shift
+        return (newPitch, newTpc)
+    }
+
     /// Return the accidental glyph that should be drawn for a note
     /// with the given `tpc` under the active `keySig`, or `nil`
     /// when the note's alteration matches the key signature for its
