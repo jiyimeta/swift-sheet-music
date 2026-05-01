@@ -130,10 +130,11 @@ public struct ScoreHitTester: Sendable {
         let radius = sp * 1.2
         let radiusSquared = radius * radius
         for el in measure.elements {
-            guard case .chord(let notes, _, _, _, _, _, _, _) = el
+            guard case .chord(let notes, _, let stem, _, _, _, _, _) = el
             else { continue }
             for n in notes {
-                let ax = base.x + n.origin.x
+                let mirrorDx = n.mirrorDx(stem: stem, sp: sp)
+                let ax = base.x + n.origin.x + mirrorDx
                 let ay = base.y + n.origin.y
                 let dx = point.x - ax
                 let dy = point.y - ay

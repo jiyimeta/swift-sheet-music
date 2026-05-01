@@ -61,10 +61,15 @@ extension LayoutEngine {
                     let maxStep = noteSteps.max() ?? 0
                     let minStep = noteSteps.min() ?? 0
                     for n in notes {
+                        // Anchor ties on the visual notehead — for
+                        // mirrored notes (in seconds), the tie has to
+                        // start from the side the head was pushed to,
+                        // not the chord's natural anchor x.
                         let absolute = CGPoint(
                             x: system.origin.x
                                 + measure.origin.x
-                                + n.origin.x,
+                                + n.origin.x
+                                + n.mirrorDx(stem: stem, sp: sp),
                             y: system.origin.y
                                 + measure.origin.y
                                 + n.origin.y

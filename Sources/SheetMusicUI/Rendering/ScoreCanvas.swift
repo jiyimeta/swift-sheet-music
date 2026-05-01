@@ -200,22 +200,26 @@ public enum ScoreCanvasDrawing {
                     tieForward: $0.tieForward,
                     tieBack: $0.tieBack,
                     hasGlissando: $0.hasGlissando,
-                    headType: $0.headType
+                    headType: $0.headType,
+                    mirror: $0.mirror
                 )
             }
             for n in shiftedNotes {
+                let mirrorDx = n.mirrorDx(stem: stem, sp: metrics.sp)
+                let visualOrigin = CGPoint(
+                    x: n.origin.x + mirrorDx, y: n.origin.y)
                 NoteheadRenderer.drawHead(
-                    context: &context, at: n.origin,
+                    context: &context, at: visualOrigin,
                     duration: baseDur, headType: n.headType,
                     metrics: metrics)
                 if let acc = n.accidental {
                     AccidentalRenderer.draw(
                         context: &context, accidental: acc,
-                        origin: n.origin, metrics: metrics)
+                        origin: visualOrigin, metrics: metrics)
                 }
                 DotRenderer.draw(
                     context: &context,
-                    after: n.origin,
+                    after: visualOrigin,
                     count: dots,
                     onStaffLine: n.step.isMultiple(of: 2),
                     metrics: metrics)
@@ -223,7 +227,7 @@ public enum ScoreCanvasDrawing {
             // Ledger lines
             drawLedgerLines(
                 context: &context,
-                notes: shiftedNotes,
+                notes: shiftedNotes, stem: stem,
                 metrics: metrics)
             let beamY: CGFloat? = isBeamed ? shift(stemOrigin).y : nil
             StemRenderer.draw(
@@ -345,6 +349,7 @@ public enum ScoreCanvasDrawing {
     static func drawLedgerLines(
         context: inout GraphicsContext,
         notes: [LayoutChordNote],
+        stem: StemDirection,
         metrics: StaffMetrics
     ) {
         guard let ref = notes.first else { return }
@@ -359,16 +364,29 @@ public enum ScoreCanvasDrawing {
         let halfWidth = metrics.sp * 0.9
         let lineWidth = metrics.staffLineThickness * 1.5
 
+        func bounds(forLedgerStep ledger: Int) -> (CGFloat, CGFloat) {
+            var leftExt: CGFloat = 0
+            var rightExt: CGFloat = 0
+            for n in notes
+            where abs(n.step - ledger) <= 1 && n.mirror {
+                let dx = n.mirrorDx(stem: stem, sp: metrics.sp)
+                if dx > 0 { rightExt = max(rightExt, dx) }
+                else { leftExt = max(leftExt, -dx) }
+            }
+            return (chordX - halfWidth - leftExt,
+                    chordX + halfWidth + rightExt)
+        }
+
         if maxStep > 4 {
             let topEven = maxStep.isMultiple(of: 2)
                 ? maxStep : maxStep - 1
             for ledgerStep in stride(from: 6, through: topEven, by: 2) {
                 let y = staffMidYAbs
                     - CGFloat(ledgerStep) * metrics.sp / 2
+                let (xL, xR) = bounds(forLedgerStep: ledgerStep)
                 var p = Path()
-                p.move(to: CGPoint(x: chordX - halfWidth, y: y))
-                p.addLine(to: CGPoint(
-                    x: chordX + halfWidth, y: y))
+                p.move(to: CGPoint(x: xL, y: y))
+                p.addLine(to: CGPoint(x: xR, y: y))
                 context.stroke(
                     p, with: .color(.primary), lineWidth: lineWidth)
             }
@@ -382,10 +400,10 @@ public enum ScoreCanvasDrawing {
             ) {
                 let y = staffMidYAbs
                     - CGFloat(ledgerStep) * metrics.sp / 2
+                let (xL, xR) = bounds(forLedgerStep: ledgerStep)
                 var p = Path()
-                p.move(to: CGPoint(x: chordX - halfWidth, y: y))
-                p.addLine(to: CGPoint(
-                    x: chordX + halfWidth, y: y))
+                p.move(to: CGPoint(x: xL, y: y))
+                p.addLine(to: CGPoint(x: xR, y: y))
                 context.stroke(
                     p, with: .color(.primary), lineWidth: lineWidth)
             }

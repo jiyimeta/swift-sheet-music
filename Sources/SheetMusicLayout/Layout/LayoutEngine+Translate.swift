@@ -37,7 +37,8 @@ extension LayoutEngine {
                     tieForward: $0.tieForward,
                     tieBack: $0.tieBack,
                     hasGlissando: $0.hasGlissando,
-                    headType: $0.headType
+                    headType: $0.headType,
+                    mirror: $0.mirror
                 )
             }
             return .chord(

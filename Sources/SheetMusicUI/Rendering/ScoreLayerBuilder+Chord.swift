@@ -37,13 +37,20 @@ extension ScoreLayerBuilder {
                 tieForward: n.tieForward,
                 tieBack: n.tieBack,
                 hasGlissando: n.hasGlissando,
-                headType: n.headType)
+                headType: n.headType,
+                mirror: n.mirror)
         }
         for n in shifted {
             let glyph = noteheadGlyph(
                 for: baseDur, headType: n.headType)
+            // Mirrored seconds: notehead, accidental and dots track
+            // the visual centre, while ledger lines + stem stay on
+            // the chord's natural anchor x.
+            let mirrorDx = n.mirrorDx(stem: stem, sp: metrics.sp)
+            let visualOrigin = CGPoint(
+                x: n.origin.x + mirrorDx, y: n.origin.y)
             if let layer = glyphLayer(
-                glyph, at: n.origin,
+                glyph, at: visualOrigin,
                 size: metrics.glyphFontSize,
                 height: height) {
                 parent.addSublayer(layer)
@@ -51,17 +58,17 @@ extension ScoreLayerBuilder {
             }
             if let acc = n.accidental,
                let accLayer = drawAccidental(
-                accidental: acc, origin: n.origin,
+                accidental: acc, origin: visualOrigin,
                 metrics: metrics, height: height, into: parent) {
                 context.attach(accLayer, to: .note(n.noteID))
             }
             drawDots(
-                after: n.origin, count: dots,
+                after: visualOrigin, count: dots,
                 onStaffLine: n.step.isMultiple(of: 2),
                 metrics: metrics, height: height, into: parent)
         }
         drawLedgerLines(
-            notes: shifted, metrics: metrics,
+            notes: shifted, stem: stem, metrics: metrics,
             height: height, into: parent)
         let shiftedStemOrigin = CGPoint(
             x: base.x + stemOrigin.x,
@@ -190,6 +197,7 @@ extension ScoreLayerBuilder {
 
     private static func drawLedgerLines(
         notes: [LayoutChordNote],
+        stem: StemDirection,
         metrics: StaffMetrics,
         height: CGFloat,
         into parent: CALayer
@@ -206,6 +214,22 @@ extension ScoreLayerBuilder {
         let halfWidth = metrics.sp * 0.9
         let lineWidth = metrics.staffLineThickness * 1.5
 
+        // When a ledger spans a mirrored note, extend its width on
+        // that side by the notehead-width offset so the stroke still
+        // reaches the visible head.
+        func bounds(forLedgerStep ledger: Int) -> (CGFloat, CGFloat) {
+            var leftExt: CGFloat = 0
+            var rightExt: CGFloat = 0
+            for n in notes
+            where abs(n.step - ledger) <= 1 && n.mirror {
+                let dx = n.mirrorDx(stem: stem, sp: metrics.sp)
+                if dx > 0 { rightExt = max(rightExt, dx) }
+                else { leftExt = max(leftExt, -dx) }
+            }
+            return (chordX - halfWidth - leftExt,
+                    chordX + halfWidth + rightExt)
+        }
+
         if maxStep > 4 {
             let topEven = maxStep.isMultiple(of: 2)
                 ? maxStep : maxStep - 1
@@ -213,11 +237,10 @@ extension ScoreLayerBuilder {
                 from: 6, through: topEven, by: 2) {
                 let y = staffMidYAbs
                     - CGFloat(ledgerStep) * metrics.sp / 2
+                let (xL, xR) = bounds(forLedgerStep: ledgerStep)
                 let path = CGMutablePath()
-                path.move(to: CGPoint(
-                    x: chordX - halfWidth, y: y))
-                path.addLine(to: CGPoint(
-                    x: chordX + halfWidth, y: y))
+                path.move(to: CGPoint(x: xL, y: y))
+                path.addLine(to: CGPoint(x: xR, y: y))
                 parent.addSublayer(strokeLayer(
                     path: path, height: height,
                     lineWidth: lineWidth))
@@ -231,11 +254,10 @@ extension ScoreLayerBuilder {
                 from: -6, through: botEven, by: -2) {
                 let y = staffMidYAbs
                     - CGFloat(ledgerStep) * metrics.sp / 2
+                let (xL, xR) = bounds(forLedgerStep: ledgerStep)
                 let path = CGMutablePath()
-                path.move(to: CGPoint(
-                    x: chordX - halfWidth, y: y))
-                path.addLine(to: CGPoint(
-                    x: chordX + halfWidth, y: y))
+                path.move(to: CGPoint(x: xL, y: y))
+                path.addLine(to: CGPoint(x: xR, y: y))
                 parent.addSublayer(strokeLayer(
                     path: path, height: height,
                     lineWidth: lineWidth))

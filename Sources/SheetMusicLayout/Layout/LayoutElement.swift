@@ -181,6 +181,13 @@ public struct LayoutChordNote: Sendable, Equatable {
     public let tieBack: Int?
     public let hasGlissando: Bool
     public let headType: String?
+    /// True when this notehead must be drawn on the OPPOSITE side of
+    /// the stem from the chord's natural side — i.e. the right side
+    /// for a stem-up chord, the left side for a stem-down chord.
+    /// Set during placement when the note participates in a "second"
+    /// cluster (adjacent staff lines / spaces). Mirrors MuseScore's
+    /// `ChordLayout::layoutChords2`.
+    public let mirror: Bool
 
     public init(
         noteID: NoteID,
@@ -190,7 +197,8 @@ public struct LayoutChordNote: Sendable, Equatable {
         tieForward: Int?,
         tieBack: Int?,
         hasGlissando: Bool,
-        headType: String? = nil
+        headType: String? = nil,
+        mirror: Bool = false
     ) {
         self.noteID = noteID
         self.step = step
@@ -200,6 +208,19 @@ public struct LayoutChordNote: Sendable, Equatable {
         self.tieBack = tieBack
         self.hasGlissando = hasGlissando
         self.headType = headType
+        self.mirror = mirror
+    }
+
+    /// Horizontal offset from `origin.x` to the visual centre of the
+    /// notehead. Zero unless `mirror` is set, in which case the head
+    /// shifts by one notehead-width (Bravura's `noteheadBlack`
+    /// width = 1.18 sp) to the side opposite the chord's natural
+    /// side. Used by renderers and the hit-tester so the visible
+    /// glyph and click target track the mirrored position while
+    /// `origin` keeps anchoring the stem and ledger lines.
+    public func mirrorDx(stem: StemDirection, sp: CGFloat) -> CGFloat {
+        guard mirror else { return 0 }
+        return (stem == .up ? 1 : -1) * sp * 1.18
     }
 }
 

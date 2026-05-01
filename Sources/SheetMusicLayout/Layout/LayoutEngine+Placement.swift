@@ -373,7 +373,7 @@ extension LayoutEngine {
                     // chords from rests (and from notes in other
                     // voices) that share the same tick.
                     let chordX = timedX(atTick: tickCursor)
-                    let chordNotes = chord.notes.enumerated().map {
+                    let preliminaryNotes = chord.notes.enumerated().map {
                         (noteIdx, note) -> LayoutChordNote in
                         // For percussion staves, use the drum map's
                         // <line> value to position the notehead
@@ -411,7 +411,9 @@ extension LayoutEngine {
                     }
                     let stem = forcedStem
                         ?? StemDirectionRule.direction(
-                            for: chordNotes.map(\.step))
+                            for: preliminaryNotes.map(\.step))
+                    let chordNotes = applyChordMirroring(
+                        preliminaryNotes, stem: stem)
                     voiceChordOutIndex[voiceElemIdx] = out.count
                     out.append(.chord(
                         notes: chordNotes,
@@ -854,5 +856,55 @@ extension LayoutEngine {
         autoPlaceStaffText(
             in: &out, staffMidY: staffMidY, metrics: metrics)
         return (out, currentClef, currentKey)
+    }
+
+    /// Decide which notes in a chord need to render on the OPPOSITE
+    /// side of the stem from the chord's natural side. Mirrors
+    /// MuseScore's `ChordLayout::layoutChords2`: walk notes in
+    /// step-sorted order (bottom-up for stem-up, top-down for
+    /// stem-down) and flip the side whenever an adjacent pair sits
+    /// less than 2 staff lines apart (a "second" or unison). Stays
+    /// flipped through a cluster of consecutive seconds and returns
+    /// to the default side once the gap reopens.
+    static func applyChordMirroring(
+        _ notes: [LayoutChordNote],
+        stem: StemDirection
+    ) -> [LayoutChordNote] {
+        guard notes.count >= 2 else { return notes }
+        let isUp = stem == .up
+        let order: [Int] = (0..<notes.count).sorted { i, j in
+            isUp ? notes[i].step < notes[j].step
+                 : notes[i].step > notes[j].step
+        }
+        var mirrors = [Bool](repeating: false, count: notes.count)
+        // `isLeft` tracks which side of the stem the current note
+        // sits on. Default = the chord's natural side: left for
+        // stem-up, right for stem-down. (MuseScore initialises
+        // `isLeft = chord.up()` for the same reason.) `prevLine`
+        // starts huge so the first iteration never registers a
+        // conflict.
+        var isLeft = isUp
+        var prevLine = 1000
+        for idx in order {
+            let line = notes[idx].step
+            let conflict = abs(prevLine - line) < 2
+            if conflict || (isUp != isLeft) {
+                isLeft = !isLeft
+            }
+            mirrors[idx] = isUp != isLeft
+            prevLine = line
+        }
+        return notes.enumerated().map { i, n in
+            LayoutChordNote(
+                noteID: n.noteID,
+                step: n.step,
+                accidental: n.accidental,
+                origin: n.origin,
+                tieForward: n.tieForward,
+                tieBack: n.tieBack,
+                hasGlissando: n.hasGlissando,
+                headType: n.headType,
+                mirror: mirrors[i])
+        }
     }
 }
