@@ -119,7 +119,8 @@ struct LayoutEngineTests {
     private static func layoutChord(
         notes chordNotes: [Note]
     ) -> (notes: [LayoutChordNote], stem: StemDirection)? {
-        let chord = Chord(duration: .quarter, notes: chordNotes)
+        let chord = Chord(
+            duration: .quarter, notes: ChordNotes(chordNotes))
         let measure = Measure(
             voices: [Voice(elements: [.chord(chord)])])
         let staff = StaffContent(id: 1, measures: [measure])

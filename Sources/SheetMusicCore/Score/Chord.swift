@@ -4,7 +4,10 @@ import Foundation
 /// C++: `mu::engraving::Chord` (subset).
 public struct Chord: Sendable, Equatable {
     public var duration: NoteDuration
-    public var notes: [Note]
+    /// Notes belonging to this chord. The pitch-uniqueness
+    /// invariant lives in `ChordNotes` itself: assignments,
+    /// appends, and in-place mutations all dedupe by `Note.pitch`.
+    public var notes: ChordNotes
     /// Optional arpeggio that spreads the chord's notes in time.
     public var arpeggio: Arpeggio?
     /// Lyrics syllable(s) attached to this chord, one per verse line.
@@ -13,7 +16,7 @@ public struct Chord: Sendable, Equatable {
 
     public init(
         duration: NoteDuration,
-        notes: [Note],
+        notes: ChordNotes,
         arpeggio: Arpeggio? = nil,
         lyrics: [Lyric] = []
     ) {

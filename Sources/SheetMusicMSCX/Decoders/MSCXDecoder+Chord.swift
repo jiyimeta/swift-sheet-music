@@ -42,7 +42,7 @@ extension Chord {
             : []
 
         return Chord(
-            duration: duration, notes: notes,
+            duration: duration, notes: ChordNotes(notes),
             arpeggio: arpeggio, lyrics: lyrics)
     }
 }
