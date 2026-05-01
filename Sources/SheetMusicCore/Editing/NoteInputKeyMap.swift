@@ -31,4 +31,24 @@ public enum NoteInputKeyMap {
         let pitch = (octave + 1) * 12 + pitchOffset
         return (pitch, tpc)
     }
+
+    /// Returns the `NoteDuration` MuseScore assigns to a typed digit
+    /// for arrow-style duration changes:
+    ///   1 → 64th, 2 → 32nd, 3 → 16th, 4 → 8th,
+    ///   5 → quarter, 6 → half, 7 → whole.
+    /// Returns `nil` for any other character.
+    public static func duration(
+        forCharacter character: String
+    ) -> NoteDuration? {
+        switch character {
+        case "1": return .sixtyFourth
+        case "2": return .thirtySecond
+        case "3": return .sixteenth
+        case "4": return .eighth
+        case "5": return .quarter
+        case "6": return .half
+        case "7": return .whole
+        default:  return nil
+        }
+    }
 }
