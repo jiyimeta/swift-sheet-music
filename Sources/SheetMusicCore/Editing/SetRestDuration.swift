@@ -1,30 +1,20 @@
 import Foundation
 
-/// Change the duration of a chord, mirroring MuseScore's
-/// `Score::changeCRlen` (`engraving/editing/cmd.cpp:1692`):
+/// Change the duration of a rest with the same MuseScore-equivalent
+/// rebalancing rules as `SetChordDuration`. Shortening fills the
+/// leftover with beat-aligned rests; lengthening consumes following
+/// chord/rest elements (and surfaces overshoot of a chord as a
+/// tied chain of that chord's clones, preserving its pitch).
 ///
-/// **Shorten**: replace the chord's duration; the leftover time
-/// becomes a rest (or a sequence of standard rests when the
-/// remainder isn't itself a power-of-two duration). The rest
-/// pieces are aligned to natural beat boundaries.
+/// Identical out-of-scope behaviour to `SetChordDuration`:
+/// - rest is inside a tuplet
+/// - lengthening crosses the measure boundary
+/// - lengthening consumes past a non-timed element
+/// - lengthening overlaps a downstream tuplet
 ///
-/// **Lengthen**: walk forward in the same voice and consume
-/// following chord/rest elements until enough time is freed; the
-/// last consumed element may be partially consumed, in which case
-/// the leftover becomes either rests (when the consumed element
-/// was a rest) or a tied chain of chord clones (when it was a
-/// chord — preserving its pitch).
-///
-/// Out of scope (refused with `invalidEdit`):
-/// - the chord is inside a `Tuplet` span
-/// - lengthening would cross the measure boundary
-/// - lengthening would consume past a non-timed element
-///   (clef / key sig / time sig / barline)
-/// - lengthening would overlap a tuplet that follows the chord
-///
-/// The inverse is a `ReplaceVoiceElements` whose payload is the
-/// pre-edit `elements` + `tuplets`, so undo is bit-perfect.
-public struct SetChordDuration: EditCommand {
+/// Inverse is a `ReplaceVoiceElements` carrying the pre-edit
+/// `elements` + `tuplets`.
+public struct SetRestDuration: EditCommand {
     public let location: VoiceElementID
     public let duration: NoteDuration
 
@@ -42,35 +32,35 @@ public struct SetChordDuration: EditCommand {
               voice.elements.indices.contains(location.elementIndex)
         else {
             throw SheetMusicError.invalidEdit(
-                reason: "SetChordDuration: location \(location) "
+                reason: "SetRestDuration: location \(location) "
                     + "doesn't resolve to a voice element")
         }
-        guard case .chord(var chord)
+        guard case .rest(var rest)
             = voice.elements[location.elementIndex] else {
             throw SheetMusicError.invalidEdit(
-                reason: "SetChordDuration: element at \(location) "
-                    + "is not a chord")
+                reason: "SetRestDuration: element at \(location) "
+                    + "is not a rest")
         }
         try DurationChangeAlgorithm.ensureNotInsideTuplet(
             voice: voice,
             elementIdx: location.elementIndex,
-            label: "SetChordDuration")
+            label: "SetRestDuration")
         let division = score.division
-        let srcTicks = chord.duration.ticks(division: division)
+        let srcTicks = rest.duration.ticks(division: division)
         let dstTicks = duration.ticks(division: division)
         if srcTicks == dstTicks {
-            return SetChordDuration(at: location, duration: duration)
+            return SetRestDuration(at: location, duration: duration)
         }
         let targetRtick = DurationChangeAlgorithm.tickOffset(
             in: voice,
             ofElementAt: location.elementIndex,
             division: division)
-        chord.duration = duration
+        rest.duration = duration
         let (newElements, newTuplets) = try DurationChangeAlgorithm
             .compute(
                 in: voice,
                 atIdx: location.elementIndex,
-                mutatedTarget: .chord(chord),
+                mutatedTarget: .rest(rest),
                 srcTicks: srcTicks,
                 dstTicks: dstTicks,
                 targetRtick: targetRtick,

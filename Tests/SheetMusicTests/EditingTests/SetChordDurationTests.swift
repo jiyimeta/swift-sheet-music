@@ -296,6 +296,60 @@ struct SetChordDurationTests {
         #expect(score == snapshot)
     }
 
+    /// Lengthening into a tuplet — MuseScore deletes the whole
+    /// tuplet as a unit (`makeGap` → `cmdDeleteTuplet`) and the
+    /// overshoot becomes plain rests via `setRest`. We mirror that
+    /// behaviour: the tuplet vanishes, its tick count is consumed,
+    /// and any leftover is rest-decomposed (no tied chord clones).
+    @Test("Lengthen consumes a downstream tuplet wholesale")
+    func lengthenConsumesTupletWhole() throws {
+        // chord A (eighth, p60) at rtick 0
+        // tuplet of three eighth chords (3:2 of eighth = 1 quarter of
+        // total time) at rticks 240..720 (tuplet members)
+        // rest (half) at rtick 720
+        let A: VoiceElement = .chord(Chord(
+            duration: .eighth, notes: [Note(pitch: 60, tpc: 14)]))
+        let t1: VoiceElement = .chord(Chord(
+            duration: .eighth, notes: [Note(pitch: 64, tpc: 18)]))
+        let t2: VoiceElement = .chord(Chord(
+            duration: .eighth, notes: [Note(pitch: 65, tpc: 13)]))
+        let t3: VoiceElement = .chord(Chord(
+            duration: .eighth, notes: [Note(pitch: 67, tpc: 15)]))
+        let voice = Voice(
+            elements: [A, t1, t2, t3, rest(.half), rest(.eighth)],
+            tuplets: [Tuplet(
+                normalNotes: 2, actualNotes: 3,
+                startIndex: 1, endIndex: 3)])
+        let measure = Measure(voices: [voice])
+        var score = Score(division: 480,
+                          staves: [StaffContent(id: 1,
+                              measures: [measure])])
+        // Lengthen A from eighth (240) to half (960). Need +720.
+        // The tuplet's three eighths within a 3:2 ratio of base
+        // eighths actually occupy 480 ticks of measure time
+        // (3 * 240 = 720 raw; but tuplet ratio is 2/3 — wait, we
+        // model durations AS ALREADY scaled, so each member's
+        // .eighth = 240 ticks. The tuplet appears to total 720
+        // ticks at face value here, even though musically it
+        // would be 480 in the real engraving. For this unit test
+        // the raw model-tick view is what matters.)
+        let cmd = SetChordDuration(
+            at: Self.chordID, duration: .half)
+        _ = try cmd.apply(to: &score)
+        // After: chord A (half) at rtick 0, then alignedRests
+        // for the leftover (none since 960=240+720 exactly), then
+        // the trailing rest(.half), rest(.eighth) untouched.
+        let staff = score.staves[0]
+        let m = staff.measures[0]
+        let v = m.voices[0]
+        guard case .chord(let aa) = v.elements[0] else {
+            Issue.record("els[0] not chord"); return
+        }
+        #expect(aa.duration == .half)
+        // Tuplet must be gone (consumed wholesale).
+        #expect(v.tuplets.isEmpty)
+    }
+
     @Test("No-op when duration is unchanged")
     func noOpUnchanged() throws {
         var score = score([
