@@ -18,6 +18,29 @@ enum MacLayoutMode: String {
     case pdf = "PDF"
 }
 
+/// One cell of a copied range — captures a contiguous slice of a
+/// single voice within a single measure. Offsets are relative to
+/// the range's top-left corner so paste can drop the same shape at
+/// any anchor point.
+struct RangeCell: Sendable, Equatable {
+    let staffOffset: Int
+    let measureOffset: Int
+    let voiceIndex: Int
+    let elements: [VoiceElement]
+}
+
+/// Clipboard payload for a `.range` copy. `cells` is the per-
+/// (staff × measure × voice) breakdown; `anchorTickWithinMeasure`
+/// is the tick offset of the source's leading edge so paste can
+/// refuse a destination whose tick offset doesn't match (would
+/// otherwise smear cell content across the wrong beats).
+struct RangePayload: Sendable, Equatable {
+    let cells: [RangeCell]
+    let anchorTickWithinMeasure: Int
+    let staffCount: Int
+    let measureCount: Int
+}
+
 @available(macOS 15.0, *)
 struct ContentViewMac: View {
     @State private var score: Score?
@@ -53,12 +76,13 @@ struct ContentViewMac: View {
     /// representable as a uniform type, and cross-process paste
     /// doesn't make sense for a single-element copy.
     @State private var voiceElementClipboard: VoiceElement?
-    /// Multi-element clipboard. Set when the user copies a `.range`
-    /// selection that resolves to a contiguous slice of one voice;
-    /// pasted via `PasteVoiceElements`. The two clipboards are
-    /// mutually exclusive — a fresh copy populates one and clears
-    /// the other so ⌘V always knows which command to dispatch.
-    @State private var voiceElementsClipboard: [VoiceElement]?
+    /// Range clipboard. Stores a cell-per-(staff, measure, voice)
+    /// payload captured from a `.range` selection — supports copies
+    /// that span multiple staves, voices, and measures. Pasted via
+    /// per-cell `PasteVoiceElements` calls grouped under one undo
+    /// step. Mutually exclusive with `voiceElementClipboard`: a
+    /// fresh copy populates one and clears the other.
+    @State private var voiceRangeClipboard: RangePayload?
     @FocusState private var lyricEditFocused: Bool
     /// Per-measure clef / key / time / part-label state. Cached so
     /// the sticky header doesn't recompute it on every body re-eval
@@ -849,7 +873,7 @@ struct ContentViewMac: View {
                   let element = controller.score[id]
             else { return false }
             voiceElementClipboard = element
-            voiceElementsClipboard = nil
+            voiceRangeClipboard = nil
             errorMessage = "Copied"
             return true
         case .range(let anchor, let target):
@@ -857,49 +881,206 @@ struct ContentViewMac: View {
                 anchor: anchor, target: target,
                 score: controller.score)
             else {
-                errorMessage = "Range copy needs the same staff, "
-                    + "voice, and measure on both ends."
+                errorMessage = "Range copy: nothing to copy."
                 return true
             }
-            voiceElementsClipboard = payload
+            voiceRangeClipboard = payload
             voiceElementClipboard = nil
-            errorMessage = "Copied \(payload.count) element"
-                + (payload.count == 1 ? "" : "s")
+            let total = payload.cells.reduce(0) {
+                $0 + $1.elements.count
+            }
+            errorMessage = "Copied \(total) element"
+                + (total == 1 ? "" : "s")
+                + " across \(payload.cells.count) voice/measure cell"
+                + (payload.cells.count == 1 ? "" : "s")
             return true
         default:
             return false
         }
     }
 
-    /// Extract a contiguous voice slice for a `.range` selection.
-    /// v1 supports same-staff / same-voice / same-measure ranges
-    /// only; returns `nil` when the range crosses any of those
-    /// boundaries so the caller can show an error.
+    /// Build a `RangePayload` for a `.range` selection. Captures
+    /// every chord / rest in every (staff × measure × voice) cell
+    /// inside the selection rectangle (non-timed elements like
+    /// clef / key sig are skipped — pasting those wholesale would
+    /// surprise the user). Returns `nil` if the range references
+    /// elements that don't resolve in the score.
     private func collectRangePayload(
         anchor: ScoreItemID, target: ScoreItemID, score: Score
-    ) -> [VoiceElement]? {
-        guard anchor.staffIndex == target.staffIndex,
-              anchor.measureIndex == target.measureIndex,
-              anchor.voiceIndex == target.voiceIndex
+    ) -> RangePayload? {
+        let division = score.division
+        guard let anchorStart = elementTickPosition(
+            of: anchor, in: score),
+              let targetStart = elementTickPosition(
+                of: target, in: score),
+              let targetEnd = elementEndTickPosition(
+                of: target, in: score)
         else { return nil }
-        guard score.staves.indices.contains(anchor.staffIndex) else {
+        let staffLo = min(anchor.staffIndex, target.staffIndex)
+        let staffHi = max(anchor.staffIndex, target.staffIndex)
+        // (lo, hi) bracket the time region: lo = whichever of the
+        // two endpoints starts earlier; hi = whichever ENDS later.
+        // `targetEnd` is the tick offset just past `target`'s
+        // duration, so pasting respects the full extent of the
+        // last selected element.
+        let aFirst = anchorStart <= targetStart
+        let timeLo = aFirst ? anchorStart : targetStart
+        let timeHi = aFirst
+            ? max(targetEnd,
+                  anchorEndPosition(of: anchor, in: score)
+                    ?? anchorStart)
+            : max(
+                anchorEndPosition(of: anchor, in: score) ?? anchorStart,
+                targetEnd)
+
+        var cells: [RangeCell] = []
+        for staffIdx in staffLo...staffHi {
+            guard score.staves.indices.contains(staffIdx) else {
+                continue
+            }
+            let measures = score.staves[staffIdx].measures
+            for measureIdx in timeLo.measure...timeHi.measure {
+                guard measures.indices.contains(measureIdx) else {
+                    continue
+                }
+                for (voiceIdx, voice)
+                    in measures[measureIdx].voices.enumerated() {
+                    let measureTotalTicks =
+                        Self.totalTicks(of: voice, division: division)
+                    let tickStart = (measureIdx == timeLo.measure)
+                        ? timeLo.tick : 0
+                    let tickEnd = (measureIdx == timeHi.measure)
+                        ? timeHi.tick : measureTotalTicks
+                    var captured: [VoiceElement] = []
+                    var tick = 0
+                    for el in voice.elements {
+                        let elTicks: Int
+                        switch el {
+                        case .chord(let c):
+                            elTicks = c.duration.ticks(division: division)
+                        case .rest(let r):
+                            elTicks = r.duration.ticks(division: division)
+                        default:
+                            // Non-timed (clef / key sig / barline /
+                            // …) skipped — they don't move under
+                            // paste alignment, and pasting them
+                            // wholesale would surprise the user.
+                            continue
+                        }
+                        if tick >= tickStart && tick < tickEnd {
+                            captured.append(el)
+                        }
+                        tick += elTicks
+                    }
+                    if !captured.isEmpty {
+                        cells.append(RangeCell(
+                            staffOffset: staffIdx - staffLo,
+                            measureOffset:
+                                measureIdx - timeLo.measure,
+                            voiceIndex: voiceIdx,
+                            elements: captured))
+                    }
+                }
+            }
+        }
+        guard !cells.isEmpty else { return nil }
+        return RangePayload(
+            cells: cells,
+            anchorTickWithinMeasure: timeLo.tick,
+            staffCount: staffHi - staffLo + 1,
+            measureCount: timeHi.measure - timeLo.measure + 1)
+    }
+
+    private struct MeasureTick: Comparable {
+        let measure: Int
+        let tick: Int
+        static func < (lhs: MeasureTick, rhs: MeasureTick) -> Bool {
+            if lhs.measure != rhs.measure {
+                return lhs.measure < rhs.measure
+            }
+            return lhs.tick < rhs.tick
+        }
+    }
+
+    private func elementTickPosition(
+        of id: ScoreItemID, in score: Score
+    ) -> MeasureTick? {
+        guard score.staves.indices.contains(id.staffIndex) else {
             return nil
         }
-        let measures = score.staves[anchor.staffIndex].measures
-        guard measures.indices.contains(anchor.measureIndex) else {
+        let measures = score.staves[id.staffIndex].measures
+        guard measures.indices.contains(id.measureIndex) else {
             return nil
         }
-        let voices = measures[anchor.measureIndex].voices
-        guard voices.indices.contains(anchor.voiceIndex) else {
+        let voices = measures[id.measureIndex].voices
+        guard voices.indices.contains(id.voiceIndex) else {
             return nil
         }
-        let elements = voices[anchor.voiceIndex].elements
-        let lo = min(anchor.elementIndex, target.elementIndex)
-        let hi = max(anchor.elementIndex, target.elementIndex)
-        guard elements.indices.contains(lo),
-              elements.indices.contains(hi)
+        let elements = voices[id.voiceIndex].elements
+        guard elements.indices.contains(id.elementIndex) else {
+            return nil
+        }
+        var tick = 0
+        for i in 0..<id.elementIndex {
+            switch elements[i] {
+            case .chord(let c):
+                tick += c.duration.ticks(division: score.division)
+            case .rest(let r):
+                tick += r.duration.ticks(division: score.division)
+            default: continue
+            }
+        }
+        return MeasureTick(measure: id.measureIndex, tick: tick)
+    }
+
+    /// Tick position one element-width past `id` — the slice's
+    /// upper bound when copying so the target's full duration is
+    /// included in the captured range.
+    private func elementEndTickPosition(
+        of id: ScoreItemID, in score: Score
+    ) -> MeasureTick? {
+        guard let start = elementTickPosition(of: id, in: score),
+              let element = score.staves
+                .indices.contains(id.staffIndex)
+                ? score.staves[id.staffIndex].measures[id.measureIndex]
+                    .voices[id.voiceIndex]
+                    .elements[id.elementIndex]
+                : nil
         else { return nil }
-        return Array(elements[lo...hi])
+        let division = score.division
+        switch element {
+        case .chord(let c):
+            return MeasureTick(
+                measure: start.measure,
+                tick: start.tick + c.duration.ticks(division: division))
+        case .rest(let r):
+            return MeasureTick(
+                measure: start.measure,
+                tick: start.tick + r.duration.ticks(division: division))
+        default:
+            return start
+        }
+    }
+
+    private func anchorEndPosition(
+        of id: ScoreItemID, in score: Score
+    ) -> MeasureTick? {
+        elementEndTickPosition(of: id, in: score)
+    }
+
+    private static func totalTicks(
+        of voice: Voice, division: Int
+    ) -> Int {
+        voice.elements.reduce(0) { acc, el in
+            switch el {
+            case .chord(let c):
+                return acc + c.duration.ticks(division: division)
+            case .rest(let r):
+                return acc + r.duration.ticks(division: division)
+            default:
+                return acc
+            }
+        }
     }
 
     /// Capture the selection like `copy`, then replace each
@@ -915,7 +1096,7 @@ struct ContentViewMac: View {
                   let element = controller.score[id]
             else { return false }
             voiceElementClipboard = element
-            voiceElementsClipboard = nil
+            voiceRangeClipboard = nil
             do {
                 try controller.apply(
                     DeleteVoiceElement(at: id),
@@ -936,35 +1117,59 @@ struct ContentViewMac: View {
                 anchor: anchor, target: target,
                 score: controller.score)
             else {
-                errorMessage = "Range cut needs the same staff, "
-                    + "voice, and measure on both ends."
+                errorMessage = "Range cut: nothing to cut."
                 return true
             }
-            voiceElementsClipboard = payload
+            voiceRangeClipboard = payload
             voiceElementClipboard = nil
-            let lo = min(anchor.elementIndex, target.elementIndex)
-            let hi = max(anchor.elementIndex, target.elementIndex)
+            let total = payload.cells.reduce(0) {
+                $0 + $1.elements.count
+            }
             do {
-                // Delete back-to-front so each pending index stays
-                // valid while we iterate.
-                for elemIdx in stride(from: hi, through: lo, by: -1) {
-                    let id = VoiceElementID(
-                        staffIndex: anchor.staffIndex,
-                        measureIndex: anchor.measureIndex,
-                        voiceIndex: anchor.voiceIndex,
-                        elementIndex: elemIdx)
-                    try controller.apply(
-                        DeleteVoiceElement(at: id),
-                        undoManager: undoManager)
+                // Bundle every cell's deletes into one composite
+                // command so a single ⌘Z restores the whole range
+                // at once. Identifying each cell's live element
+                // index range can't go by reference (VoiceElement
+                // is a value type) — find it by position.
+                let staffBase = min(
+                    anchor.staffIndex, target.staffIndex)
+                let measureBase = min(
+                    anchor.measureIndex, target.measureIndex)
+                var subCommands: [any EditCommand] = []
+                for cell in payload.cells {
+                    let staff = staffBase + cell.staffOffset
+                    let measure = measureBase + cell.measureOffset
+                    let voice = controller.score.staves[staff]
+                        .measures[measure].voices[cell.voiceIndex]
+                    let baseIndices = Self.findContiguousIndices(
+                        of: cell.elements, in: voice.elements)
+                    guard let (lo, hi) = baseIndices else { continue }
+                    // Schedule deletes back-to-front so indices
+                    // stay valid as the composite executes.
+                    for elemIdx in stride(
+                        from: hi, through: lo, by: -1) {
+                        let id = VoiceElementID(
+                            staffIndex: staff,
+                            measureIndex: measure,
+                            voiceIndex: cell.voiceIndex,
+                            elementIndex: elemIdx)
+                        subCommands.append(DeleteVoiceElement(at: id))
+                    }
                 }
+                try controller.apply(
+                    CompositeEditCommand(
+                        commands: subCommands,
+                        location: VoiceElementID(
+                            staffIndex: staffBase,
+                            measureIndex: measureBase,
+                            voiceIndex: payload.cells.first?
+                                .voiceIndex ?? 0,
+                            elementIndex: 0)),
+                    undoManager: undoManager)
                 adoptEditedScore(controller.score)
-                selection = .single(.rest(RestID(
-                    staffIndex: anchor.staffIndex,
-                    measureIndex: anchor.measureIndex,
-                    voiceIndex: anchor.voiceIndex,
-                    elementIndex: lo)))
-                errorMessage = "Cut \(payload.count) element"
-                    + (payload.count == 1 ? "" : "s")
+                selection = .none
+                errorMessage = "Cut \(total) element"
+                    + (total == 1 ? "" : "s")
             } catch {
                 errorMessage = error.localizedDescription
             }
@@ -974,14 +1179,34 @@ struct ContentViewMac: View {
         }
     }
 
+    /// Locate the `[lo...hi]` element index range in `live` whose
+    /// values are `Equatable`-equal to `slice` in order. Returns
+    /// the first such match or nil. Used by range cut to find the
+    /// live position of captured cells (we can't track by reference
+    /// because VoiceElement is a value type).
+    private static func findContiguousIndices(
+        of slice: [VoiceElement], in live: [VoiceElement]
+    ) -> (Int, Int)? {
+        guard !slice.isEmpty else { return nil }
+        outer: for start in 0...(live.count - slice.count) {
+            for k in 0..<slice.count {
+                if live[start + k] != slice[k] { continue outer }
+            }
+            return (start, start + slice.count - 1)
+        }
+        return nil
+    }
+
     /// Paste the clipboard onto the currently-selected chord or rest.
-    /// Single-element clipboard → `PasteVoiceElement` (handles the
-    /// duration rebalance for one element). Multi-element clipboard
-    /// → `PasteVoiceElements` (range copy). Refuses when nothing is
-    /// in the clipboard or the destination isn't a single chord/rest.
+    /// `voiceElementClipboard` (single) → `PasteVoiceElement`.
+    /// `voiceRangeClipboard` (range) → per-cell `PasteVoiceElements`
+    /// loop, with all cells grouped under one undo step. The range
+    /// path refuses when the destination's tick offset within its
+    /// measure doesn't match the source's leading edge — paste only
+    /// drops the captured shape onto an aligned beat.
     private func pasteAtSelection() -> Bool {
         if voiceElementClipboard == nil
-            && voiceElementsClipboard == nil {
+            && voiceRangeClipboard == nil {
             errorMessage = "Clipboard is empty."
             return true
         }
@@ -992,15 +1217,9 @@ struct ContentViewMac: View {
             return true
         }
         do {
-            if let payload = voiceElementsClipboard {
-                try controller.apply(
-                    PasteVoiceElements(at: id, elements: payload),
-                    undoManager: undoManager)
-                adoptEditedScore(controller.score)
-                anchorSelectionAfterPaste(
-                    at: id, firstElement: payload.first)
-                errorMessage = "Pasted \(payload.count) element"
-                    + (payload.count == 1 ? "" : "s")
+            if let payload = voiceRangeClipboard {
+                try pasteRangePayload(
+                    payload, at: id, controller: controller)
             } else if let element = voiceElementClipboard {
                 try controller.apply(
                     PasteVoiceElement(at: id, element: element),
@@ -1014,6 +1233,146 @@ struct ContentViewMac: View {
             errorMessage = error.localizedDescription
         }
         return true
+    }
+
+    /// Drop a range payload onto the score at `targetID`. Validates
+    /// alignment + destination existence first, then loops over
+    /// cells calling `PasteVoiceElements` once each. The whole loop
+    /// is wrapped in `beginUndoGrouping`/`endUndoGrouping` so a
+    /// single ⌘Z reverses every cell in one step.
+    private func pasteRangePayload(
+        _ payload: RangePayload,
+        at targetID: VoiceElementID,
+        controller: NoteInputController
+    ) throws {
+        let score = controller.score
+        // Tick alignment: target's tick offset within its measure
+        // must match the source's leading edge — otherwise cells
+        // for measureOffset > 0 (which paste at tick 0 of their
+        // destination measure) would be off-beat relative to cell 0.
+        let targetTick = elementTickPosition(
+            of: .rest(RestID(
+                staffIndex: targetID.staffIndex,
+                measureIndex: targetID.measureIndex,
+                voiceIndex: targetID.voiceIndex,
+                elementIndex: targetID.elementIndex)),
+            in: score)?.tick ?? 0
+        if targetTick != payload.anchorTickWithinMeasure {
+            throw SheetMusicError.invalidEdit(
+                reason: "Paste range: destination tick offset "
+                    + "(\(targetTick)) doesn't match source's "
+                    + "leading edge (\(payload.anchorTickWithinMeasure)). "
+                    + "Pick a beat at the same offset within its "
+                    + "measure.")
+        }
+
+        // Validate every destination resolves before applying any.
+        for cell in payload.cells {
+            let destStaff = targetID.staffIndex + cell.staffOffset
+            let destMeasure = targetID.measureIndex + cell.measureOffset
+            guard score.staves.indices.contains(destStaff) else {
+                throw SheetMusicError.invalidEdit(
+                    reason: "Paste range: no staff at index "
+                        + "\(destStaff)")
+            }
+            let measures = score.staves[destStaff].measures
+            guard measures.indices.contains(destMeasure) else {
+                throw SheetMusicError.invalidEdit(
+                    reason: "Paste range: no measure at "
+                        + "(\(destStaff), \(destMeasure))")
+            }
+            let voices = measures[destMeasure].voices
+            guard voices.indices.contains(cell.voiceIndex) else {
+                throw SheetMusicError.invalidEdit(
+                    reason: "Paste range: destination measure "
+                        + "(\(destStaff), \(destMeasure)) has no "
+                        + "voice \(cell.voiceIndex)")
+            }
+            // Find the destination element index — for cell 0
+            // (measureOffset == 0) this is `targetID.elementIndex`;
+            // otherwise it's the first chord/rest at tick 0.
+            let neededTick = cell.measureOffset == 0
+                ? targetTick : 0
+            guard Self.elementIdxAtTick(
+                in: voices[cell.voiceIndex],
+                tick: neededTick,
+                division: score.division) != nil
+            else {
+                throw SheetMusicError.invalidEdit(
+                    reason: "Paste range: destination "
+                        + "(\(destStaff), \(destMeasure), "
+                        + "voice \(cell.voiceIndex)) has no "
+                        + "element starting at tick \(neededTick).")
+            }
+        }
+
+        // Build one CompositeEditCommand for all cells so the
+        // entire paste lands as a single entry on the editor's undo
+        // stack — one ⌘Z reverses every cell at once.
+        var subCommands: [any EditCommand] = []
+        for cell in payload.cells {
+            let destStaff = targetID.staffIndex + cell.staffOffset
+            let destMeasure = targetID.measureIndex + cell.measureOffset
+            let voice = controller.score.staves[destStaff]
+                .measures[destMeasure].voices[cell.voiceIndex]
+            let neededTick = cell.measureOffset == 0
+                ? targetTick : 0
+            guard let destElemIdx = Self.elementIdxAtTick(
+                in: voice, tick: neededTick,
+                division: controller.score.division)
+            else { continue } // shouldn't happen — pre-validated
+            let destID = VoiceElementID(
+                staffIndex: destStaff,
+                measureIndex: destMeasure,
+                voiceIndex: cell.voiceIndex,
+                elementIndex: destElemIdx)
+            subCommands.append(PasteVoiceElements(
+                at: destID, elements: cell.elements))
+        }
+        try controller.apply(
+            CompositeEditCommand(
+                commands: subCommands,
+                location: targetID),
+            undoManager: undoManager)
+        adoptEditedScore(controller.score)
+        // Re-anchor on the first pasted element of the first cell.
+        if let firstCell = payload.cells.first,
+           let firstElement = firstCell.elements.first {
+            anchorSelectionAfterPaste(
+                at: targetID, firstElement: firstElement)
+        }
+        let total = payload.cells.reduce(0) {
+            $0 + $1.elements.count
+        }
+        errorMessage = "Pasted \(total) element"
+            + (total == 1 ? "" : "s")
+    }
+
+    /// First chord/rest element index whose onset within `voice`
+    /// equals `tick`. nil when no element starts exactly there
+    /// (paste alignment depends on this — refusing the paste is
+    /// safer than silently snapping).
+    private static func elementIdxAtTick(
+        in voice: Voice, tick: Int, division: Int
+    ) -> Int? {
+        var t = 0
+        for (i, el) in voice.elements.enumerated() {
+            switch el {
+            case .chord, .rest:
+                if t == tick { return i }
+            default:
+                continue
+            }
+            switch el {
+            case .chord(let c):
+                t += c.duration.ticks(division: division)
+            case .rest(let r):
+                t += r.duration.ticks(division: division)
+            default:
+                continue
+            }
+        }
+        return nil
     }
 
     /// Re-anchor the selection on the first chord/rest produced by
