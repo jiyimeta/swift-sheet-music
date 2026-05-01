@@ -15,7 +15,7 @@
             let m = Measure(voices: [Voice(elements: [
                 .chord(Chord(duration: .quarter, notes: [a])),
                 .chord(Chord(duration: .quarter, notes: [b])),
-            ])])
+            ]), ])
             let staff = StaffContent(id: 1, measures: [m])
             let score = Score(division: 480, staves: [staff])
             let doc = LayoutEngine.layout(
@@ -33,7 +33,7 @@
             let m = Measure(voices: [Voice(elements: [
                 .chord(Chord(duration: .quarter, notes: [a])),
                 .chord(Chord(duration: .quarter, notes: [b])),
-            ])])
+            ]), ])
             let staff = StaffContent(id: 1, measures: [m])
             let score = Score(division: 480, staves: [staff])
             let doc = LayoutEngine.layout(
@@ -55,10 +55,10 @@
             let b = Note(pitch: 60, tpc: 14, tieBack: 1)
             let m1 = Measure(voices: [Voice(elements: [
                 .chord(Chord(duration: .whole, notes: [a])),
-            ])])
+            ]), ])
             let m2 = Measure(voices: [Voice(elements: [
                 .chord(Chord(duration: .whole, notes: [b])),
-            ])])
+            ]), ])
             let staff = StaffContent(id: 1, measures: [m1, m2])
             let score = Score(division: 480, staves: [staff])
             let opts = ScoreViewOptions(wrapToViewWidth: true)
@@ -89,10 +89,10 @@
             let b = Note(pitch: 60, tpc: 14, tieBack: 1)
             let m1 = Measure(voices: [Voice(elements: [
                 .chord(Chord(duration: .whole, notes: [a])),
-            ])])
+            ]), ])
             let m2 = Measure(voices: [Voice(elements: [
                 .chord(Chord(duration: .whole, notes: [b])),
-            ])])
+            ]), ])
             let staff = StaffContent(id: 1, measures: [m1, m2])
             let score = Score(division: 480, staves: [staff])
             let opts = ScoreViewOptions(wrapToViewWidth: true)

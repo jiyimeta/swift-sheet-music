@@ -196,8 +196,7 @@ extension LayoutDocument {
         var leftTick = sorted.first!
         var rightTick: Int?
         for tick in sorted {
-            if tick <= target { leftTick = tick }
-            else { rightTick = tick; break }
+            if tick <= target { leftTick = tick } else { rightTick = tick; break }
         }
         guard let leftX = ticksToX[leftTick] else { return nil }
         if let rightTick, let rightX = ticksToX[rightTick],

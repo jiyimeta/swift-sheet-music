@@ -25,7 +25,7 @@
                 .chord(Chord(duration: .eighth, notes: [c4])),
                 .chord(Chord(duration: .sixteenth, notes: [d4])),
                 .chord(Chord(duration: .sixteenth, notes: [e4])),
-            ])])
+            ]), ])
 
             // Staff 2: dotted 8th + 16th (ticks 0, 360) — same beat
             // duration, fewer notes, so voice-local weight-cumulative
@@ -40,7 +40,7 @@
                     notes: [c3]
                 )),
                 .chord(Chord(duration: .sixteenth, notes: [e3])),
-            ])])
+            ]), ])
 
             let part = Part(
                 id: "P1",
@@ -134,7 +134,7 @@
                     instrument: Instrument(
                         id: "pno", longName: "Treble", shortName: "Tr."
                     )
-                )],
+                ), ],
                 staves: [staff]
             )
             let doc = LayoutEngine.layout(
@@ -214,7 +214,7 @@
                     instrument: Instrument(
                         id: "pno", longName: "Treble", shortName: "Tr."
                     )
-                )],
+                ), ],
                 staves: [staff]
             )
             let doc = LayoutEngine.layout(
@@ -390,7 +390,7 @@
                     instrument: Instrument(
                         id: "x", longName: "T", shortName: "T"
                     )
-                )],
+                ), ],
                 staves: [staff]
             )
             let doc = LayoutEngine.layout(

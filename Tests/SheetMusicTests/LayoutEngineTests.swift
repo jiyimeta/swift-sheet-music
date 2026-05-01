@@ -46,7 +46,7 @@
                 .chord(Chord(duration: .whole, notes: [note])),
                 .chord(Chord(duration: .whole, notes: [note])),
                 .chord(Chord(duration: .whole, notes: [note])),
-            ])])
+            ]), ])
             let staff = StaffContent(
                 id: 1, measures: [m, m, m, m, m, m, m, m]
             )

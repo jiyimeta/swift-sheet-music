@@ -16,7 +16,7 @@
                 .clef(Clef(concertClefType: "G")),
                 .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
                 .chord(Chord(duration: .whole, notes: [c4])),
-            ])])
+            ]), ])
             return Score(
                 division: 480,
                 parts: [treblePart()],
@@ -40,7 +40,7 @@
             let m1 = Measure(voices: [Voice(elements: [
                 .clef(Clef(concertClefType: "G")),
                 .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
-            ] + Array(chords.prefix(4)))])
+            ] + Array(chords.prefix(4))), ])
             let m2 = Measure(voices: [Voice(elements: Array(chords.suffix(4)))])
             return Score(
                 division: 480,
@@ -65,7 +65,7 @@
             let m = Measure(voices: [Voice(elements: [
                 .clef(Clef(concertClefType: "G")),
                 .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
-            ] + chords)])
+            ] + chords), ])
             return Score(
                 division: 480,
                 parts: [treblePart()],
@@ -95,7 +95,7 @@
                     duration: .quarter,
                     notes: [Note(pitch: 72, tpc: 14)]
                 )),
-            ])])
+            ]), ])
             let lh = Measure(voices: [Voice(elements: [
                 .clef(Clef(concertClefType: "F")),
                 .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
@@ -107,7 +107,7 @@
                     duration: .half,
                     notes: [Note(pitch: 52, tpc: 18)]
                 )),
-            ])])
+            ]), ])
             let part = Part(
                 id: "P1",
                 trackName: "Piano",
@@ -148,7 +148,7 @@
             let m = Measure(voices: [Voice(elements: [
                 .clef(Clef(concertClefType: "G")),
                 .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
-            ] + chords)])
+            ] + chords), ])
             return Score(
                 division: 480,
                 parts: [treblePart()],
@@ -170,7 +170,7 @@
             let m = Measure(voices: [Voice(elements: [
                 .clef(Clef(concertClefType: "G")),
                 .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
-            ] + restElements)])
+            ] + restElements), ])
             return Score(
                 division: 480,
                 parts: [treblePart()],
@@ -187,7 +187,7 @@
                     .clef(Clef(concertClefType: "G")),
                     .keySignature(KeySignature(concertKey: k)),
                     .chord(Chord(duration: .whole, notes: [c4])),
-                ])])
+                ]), ])
             }
             return Score(
                 division: 480,
@@ -205,7 +205,7 @@
                     .clef(Clef(concertClefType: "G")),
                     .timeSignature(TimeSignature(numerator: n, denominator: d)),
                     .chord(Chord(duration: .whole, notes: [c4])),
-                ])])
+                ]), ])
             }
             return Score(
                 division: 480,
@@ -213,7 +213,7 @@
                 staves: [StaffContent(
                     id: 1,
                     measures: [m(3, 4), m(6, 8), m(12, 8)]
-                )]
+                ), ]
             )
         }
 
@@ -647,7 +647,7 @@
                 .chord(c16), .chord(c16), .chord(c16), .chord(c16),
                 .chord(c16), .chord(c16), .chord(c16), .chord(c16),
                 .chord(c16), .chord(c16), .chord(c16), .chord(c16),
-            ])])
+            ]), ])
 
             // Measure 2 — sparse 16th figure spanning beats 3 and 4.
             // The two consecutive 16th notes that straddle the beat
@@ -665,7 +665,7 @@
                 .rest(duration: .sixteenth),
                 .chord(c16),
                 .chord(e16),
-            ])])
+            ]), ])
 
             return Score(
                 division: 480,
@@ -727,7 +727,7 @@
                 .chord(Chord(duration: .quarter, notes: [c4])),
                 .dynamic(Dynamic(subtype: "f", velocity: 100)),
                 .chord(Chord(duration: .half, notes: [c4])),
-            ])])
+            ]), ])
             return Score(
                 division: 480,
                 parts: [treblePart()],

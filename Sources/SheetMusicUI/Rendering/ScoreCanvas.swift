@@ -449,8 +449,7 @@ public enum ScoreCanvasDrawing {
                 where abs(n.step - ledger) <= 1 && n.mirror
             {
                 let dx = n.mirrorDx(stem: stem, sp: metrics.sp)
-                if dx > 0 { rightExt = max(rightExt, dx) }
-                else { leftExt = max(leftExt, -dx) }
+                if dx > 0 { rightExt = max(rightExt, dx) } else { leftExt = max(leftExt, -dx) }
             }
             return (
                 chordX - halfWidth - leftExt,

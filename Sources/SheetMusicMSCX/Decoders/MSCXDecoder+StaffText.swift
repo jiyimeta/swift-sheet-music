@@ -11,7 +11,7 @@ extension StaffText {
     ) throws -> StaffText {
         let text = node.first("text")
             .map(plainText(of:)) ?? ""
-        let color = node.first("color").map(decodeColor(_:)) ?? nil
+        let color = node.first("color").flatMap(decodeColor(_:))
         let offset = node.first("offset")
             .map(decodeOffset(_:)) ?? (0, 0)
         return StaffText(

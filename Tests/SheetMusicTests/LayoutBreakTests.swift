@@ -116,7 +116,7 @@ import Testing
             .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
             .chord(chord), .chord(chord),
             .chord(chord), .chord(chord),
-        ])])
+        ]), ])
         let measures = (0 ..< 8).map { idx -> Measure in
             var m = baseMeasure
             if idx == 7 { m.lineBreak = true }
@@ -176,7 +176,7 @@ import Testing
                 voices: [Voice(elements: [
                     .chord(chord), .chord(chord),
                     .chord(chord), .chord(chord),
-                ])],
+                ]), ],
                 lineBreak: idx % 2 == 1
             )
         }
@@ -221,7 +221,7 @@ import Testing
                 voices: [Voice(elements: [
                     .chord(chord), .chord(chord),
                     .chord(chord), .chord(chord),
-                ])],
+                ]), ],
                 lineBreak: idx == 1 || idx == 3
             )
         }

@@ -171,7 +171,7 @@ struct PasteVoiceElementsTests {
         v.tuplets = [Tuplet(
             normalNotes: 2, actualNotes: 3,
             startIndex: 3, endIndex: 5
-        )]
+        ), ]
         score.staves[0].measures[0].voices[0] = v
         let restID = VoiceElementID(
             staffIndex: 0, measureIndex: 0,
@@ -221,7 +221,7 @@ struct PasteVoiceElementsTests {
         v.tuplets = [Tuplet(
             normalNotes: 2, actualNotes: 3,
             startIndex: 3, endIndex: 5
-        )]
+        ), ]
         score.staves[0].measures[0].voices[0] = v
         let restID = VoiceElementID(
             staffIndex: 0, measureIndex: 0,
@@ -267,7 +267,7 @@ struct PasteVoiceElementsTests {
         v.tuplets = [Tuplet(
             normalNotes: 2, actualNotes: 3,
             startIndex: 3, endIndex: 5
-        )]
+        ), ]
         score.staves[0].measures[0].voices[0] = v
         let restID = VoiceElementID(
             staffIndex: 0, measureIndex: 0,
@@ -321,7 +321,7 @@ struct PasteVoiceElementsTests {
         v.tuplets = [Tuplet(
             normalNotes: 2, actualNotes: 3,
             startIndex: 1, endIndex: 3
-        )]
+        ), ]
         score.staves[0].measures[0].voices[0] = v
         // Target idx 2 = middle of the triplet.
         let middleID = VoiceElementID(
@@ -333,7 +333,7 @@ struct PasteVoiceElementsTests {
             elements: [.chord(Chord(
                 duration: .eighth,
                 notes: [Note(pitch: 67, tpc: 15)]
-            ))]
+            )), ]
         )
         #expect(throws: SheetMusicError.self) {
             _ = try cmd.apply(to: &score)

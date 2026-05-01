@@ -951,7 +951,7 @@ extension LayoutEngine {
             let line = notes[idx].step
             let conflict = abs(prevLine - line) < 2
             if conflict || (isUp != isLeft) {
-                isLeft = !isLeft
+                isLeft.toggle()
             }
             mirrors[idx] = isUp != isLeft
             prevLine = line

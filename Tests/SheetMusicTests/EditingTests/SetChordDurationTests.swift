@@ -175,7 +175,7 @@ struct SetChordDurationTests {
             tuplets: [Tuplet(
                 normalNotes: 2, actualNotes: 3,
                 startIndex: 0, endIndex: 2
-            )]
+            ), ]
         )
         let measure = Measure(voices: [voice])
         var score = Score(
@@ -359,7 +359,7 @@ struct SetChordDurationTests {
             tuplets: [Tuplet(
                 normalNotes: 2, actualNotes: 3,
                 startIndex: 1, endIndex: 3
-            )]
+            ), ]
         )
         let measure = Measure(voices: [voice])
         var score = Score(
@@ -367,7 +367,7 @@ struct SetChordDurationTests {
             staves: [StaffContent(
                 id: 1,
                 measures: [measure]
-            )]
+            ), ]
         )
         // Lengthen A from eighth (240) to half (960). Need +720.
         // The tuplet's three eighths within a 3:2 ratio of base

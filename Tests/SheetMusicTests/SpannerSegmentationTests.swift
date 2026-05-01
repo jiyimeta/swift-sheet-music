@@ -16,10 +16,10 @@
             let m1 = Measure(voices: [Voice(elements: [
                 .spanner(slur),
                 .chord(Chord(duration: .quarter, notes: [note])),
-            ])])
+            ]), ])
             let m2 = Measure(voices: [Voice(elements: [
                 .chord(Chord(duration: .quarter, notes: [note])),
-            ])])
+            ]), ])
             let staff = StaffContent(id: 1, measures: [m1, m2])
             let score = Score(division: 480, staves: [staff])
             let anchors = LayoutEngine.collectSpanners(score: score)
@@ -39,7 +39,7 @@
             let m = Measure(voices: [Voice(elements: [
                 .spanner(v1),
                 .chord(Chord(duration: .quarter, notes: [note])),
-            ])])
+            ]), ])
             let staff = StaffContent(id: 1, measures: [m])
             let score = Score(division: 480, staves: [staff])
             let anchors = LayoutEngine.collectSpanners(score: score)

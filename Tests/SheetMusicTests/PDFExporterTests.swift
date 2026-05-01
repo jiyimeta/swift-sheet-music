@@ -21,7 +21,7 @@
                     title: "test", author: "tester"
                 )
             )
-            #expect(data.count > 0)
+            #expect(!data.isEmpty)
             // PDF files start with `%PDF-` (0x25 0x50 0x44 0x46 0x2D).
             // No BOM, no whitespace — first byte must be `%`.
             let prefix = data.prefix(5)

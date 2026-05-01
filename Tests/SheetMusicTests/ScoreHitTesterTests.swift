@@ -30,8 +30,8 @@
                         staffType: "stdNormal",
                         group: "pitched",
                         defaultClefType: "G"
-                    )]
-                )],
+                    ), ]
+                ), ],
                 staves: [StaffContent(id: 1, measures: [measure])]
             )
         }

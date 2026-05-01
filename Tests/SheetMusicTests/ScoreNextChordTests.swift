@@ -19,7 +19,7 @@ struct ScoreNextChordTests {
             StaffContent(id: 1, measures: [
                 Measure(voices: [Voice(elements: [
                     Self.chord(60), Self.chord(62), Self.chord(64),
-                ])]),
+                ]), ]),
             ]),
         ])
         let here = VoiceElementID(
@@ -40,7 +40,7 @@ struct ScoreNextChordTests {
                     Self.restQ,
                     .barLine(BarLine()),
                     Self.chord(62),
-                ])]),
+                ]), ]),
             ]),
         ])
         let here = VoiceElementID(

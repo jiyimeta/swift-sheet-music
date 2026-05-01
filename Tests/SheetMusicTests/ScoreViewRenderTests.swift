@@ -14,7 +14,7 @@
             let note = Note(pitch: 60, tpc: 14)
             let m = Measure(voices: [Voice(elements: [
                 .chord(Chord(duration: .whole, notes: [note])),
-            ])])
+            ]), ])
             let staff = StaffContent(id: 1, measures: [m])
             let score = Score(division: 480, staves: [staff])
             let view = ScoreView(score: score)
@@ -38,7 +38,7 @@
                     .chord(Chord(duration: .quarter, notes: [note])),
                     .chord(Chord(duration: .quarter, notes: [note])),
                     .chord(Chord(duration: .quarter, notes: [note])),
-                ])]))
+                ]), ]))
             }
             let staff = StaffContent(id: 1, measures: measures)
             let score = Score(division: 480, staves: [staff])
@@ -70,7 +70,7 @@
                 measures.append(Measure(voices: [Voice(elements: [
                     .chord(Chord(duration: .quarter, notes: [note])),
                     .chord(Chord(duration: .quarter, notes: [note])),
-                ])]))
+                ]), ]))
             }
             let staff = StaffContent(id: 1, measures: measures)
             let score = Score(division: 480, staves: [staff])
