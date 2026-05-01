@@ -1,3 +1,4 @@
+// swiftlint:disable function_body_length file_length
 @testable import SheetMusicCore
 import Testing
 
@@ -261,13 +262,13 @@ struct SetChordDurationTests {
     func lengthenIntoNextChord() throws {
         // chord A (eighth, pitch 60) + chord B (half, pitch 64) +
         // rest (quarter) + rest (eighth)
-        let A: VoiceElement = .chord(Chord(
+        let chordA: VoiceElement = .chord(Chord(
             duration: .eighth, notes: [Note(pitch: 60, tpc: 14)]
         ))
-        let B: VoiceElement = .chord(Chord(
+        let chordB: VoiceElement = .chord(Chord(
             duration: .half, notes: [Note(pitch: 64, tpc: 18)]
         ))
-        var score = score([A, B, rest(.quarter), rest(.eighth)])
+        var score = score([chordA, chordB, rest(.quarter), rest(.eighth)])
         // Lengthen A to quarter → consume +240 ticks of B.
         // B's overshoot = 720 ticks at rtick 480, decomposes as
         // quarter (480) + eighth (240).
@@ -315,13 +316,13 @@ struct SetChordDurationTests {
     /// (single half note) after undo.
     @Test("Lengthen-into-chord round-trips through inverse")
     func lengthenIntoChordRoundTrip() throws {
-        let A: VoiceElement = .chord(Chord(
+        let chordA: VoiceElement = .chord(Chord(
             duration: .eighth, notes: [Note(pitch: 60, tpc: 14)]
         ))
-        let B: VoiceElement = .chord(Chord(
+        let chordB: VoiceElement = .chord(Chord(
             duration: .half, notes: [Note(pitch: 64, tpc: 18)]
         ))
-        var score = score([A, B, rest(.quarter), rest(.eighth)])
+        var score = score([chordA, chordB, rest(.quarter), rest(.eighth)])
         let snapshot = score
         let cmd = SetChordDuration(
             at: Self.chordID, duration: .quarter
@@ -342,7 +343,7 @@ struct SetChordDurationTests {
         // tuplet of three eighth chords (3:2 of eighth = 1 quarter of
         // total time) at rticks 240..720 (tuplet members)
         // rest (half) at rtick 720
-        let A: VoiceElement = .chord(Chord(
+        let chordA: VoiceElement = .chord(Chord(
             duration: .eighth, notes: [Note(pitch: 60, tpc: 14)]
         ))
         let t1: VoiceElement = .chord(Chord(
@@ -355,7 +356,7 @@ struct SetChordDurationTests {
             duration: .eighth, notes: [Note(pitch: 67, tpc: 15)]
         ))
         let voice = Voice(
-            elements: [A, t1, t2, t3, rest(.half), rest(.eighth)],
+            elements: [chordA, t1, t2, t3, rest(.half), rest(.eighth)],
             tuplets: [Tuplet(
                 normalNotes: 2, actualNotes: 3,
                 startIndex: 1, endIndex: 3

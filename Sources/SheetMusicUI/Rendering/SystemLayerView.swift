@@ -111,7 +111,7 @@ struct SystemLayerView: View {
         }
 
         @available(*, unavailable)
-        required init?(coder: NSCoder) { fatalError() }
+        required init?(coder: NSCoder) { fatalError("init(coder:) is unavailable") }
 
         func configure(
             system: LayoutSystem,
@@ -210,7 +210,7 @@ struct SystemLayerView: View {
         }
 
         @available(*, unavailable)
-        required init?(coder: NSCoder) { fatalError() }
+        required init?(coder: NSCoder) { fatalError("init(coder:) is unavailable") }
 
         func configure(
             system: LayoutSystem,

@@ -1,3 +1,4 @@
+// swiftlint:disable function_body_length file_length
 import Foundation
 
 /// Multi-element paste: replace the single element at `location`

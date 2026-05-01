@@ -52,7 +52,7 @@ extension PlaybackEngine {
     func rebuildMixerChannels(for score: Score) {
         var channels: [MixerChannel] = []
         channels.reserveCapacity(score.staves.count + 1)
-        for (idx, _) in score.staves.enumerated() {
+        for idx in score.staves.indices {
             channels.append(MixerChannel(
                 id: .staff(idx),
                 name: staffName(at: idx, in: score),

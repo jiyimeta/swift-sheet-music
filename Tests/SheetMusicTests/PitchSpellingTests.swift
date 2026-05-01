@@ -145,20 +145,20 @@ struct PitchSpellingTests {
     /// ascending from C natural follows the alternating
     /// "diatonic-then-chromatic" pattern.
     @Test("A♭ major ascending: C → D♭ → D♮ → E♭ → E♮ → F → F♯")
-    func ascendingInAFlatMajor() {
+    func ascendingInAFlatMajor() throws {
         let key = -4
         var n = Note(pitch: 60, tpc: 14)
-        n = n.shifted(bySemitones: 1, in: key)!
+        n = try #require(n.shifted(bySemitones: 1, in: key))
         #expect(n.pitch == 61 && n.tpc == 9) // D♭
-        n = n.shifted(bySemitones: 1, in: key)!
+        n = try #require(n.shifted(bySemitones: 1, in: key))
         #expect(n.pitch == 62 && n.tpc == 16) // D natural
-        n = n.shifted(bySemitones: 1, in: key)!
+        n = try #require(n.shifted(bySemitones: 1, in: key))
         #expect(n.pitch == 63 && n.tpc == 11) // E♭
-        n = n.shifted(bySemitones: 1, in: key)!
+        n = try #require(n.shifted(bySemitones: 1, in: key))
         #expect(n.pitch == 64 && n.tpc == 18) // E natural
-        n = n.shifted(bySemitones: 1, in: key)!
+        n = try #require(n.shifted(bySemitones: 1, in: key))
         #expect(n.pitch == 65 && n.tpc == 13) // F
-        n = n.shifted(bySemitones: 1, in: key)!
+        n = try #require(n.shifted(bySemitones: 1, in: key))
         #expect(n.pitch == 66 && n.tpc == 20) // F♯
     }
 
@@ -168,20 +168,20 @@ struct PitchSpellingTests {
     /// "stay on the same letter and add a flat" with "advance to
     /// the previous letter at its key-sig alteration".
     @Test("A♭ major descending: C → C♭ → B♭ → B♭♭ → A♭ → G → G♭")
-    func descendingInAFlatMajor() {
+    func descendingInAFlatMajor() throws {
         let key = -4
         var n = Note(pitch: 60, tpc: 14)
-        n = n.shifted(bySemitones: -1, in: key)!
+        n = try #require(n.shifted(bySemitones: -1, in: key))
         #expect(n.pitch == 59 && n.tpc == 7) // C♭
-        n = n.shifted(bySemitones: -1, in: key)!
+        n = try #require(n.shifted(bySemitones: -1, in: key))
         #expect(n.pitch == 58 && n.tpc == 12) // B♭ (in key)
-        n = n.shifted(bySemitones: -1, in: key)!
+        n = try #require(n.shifted(bySemitones: -1, in: key))
         #expect(n.pitch == 57 && n.tpc == 5) // B♭♭
-        n = n.shifted(bySemitones: -1, in: key)!
+        n = try #require(n.shifted(bySemitones: -1, in: key))
         #expect(n.pitch == 56 && n.tpc == 10) // A♭ (in key)
-        n = n.shifted(bySemitones: -1, in: key)!
+        n = try #require(n.shifted(bySemitones: -1, in: key))
         #expect(n.pitch == 55 && n.tpc == 15) // G
-        n = n.shifted(bySemitones: -1, in: key)!
+        n = try #require(n.shifted(bySemitones: -1, in: key))
         #expect(n.pitch == 54 && n.tpc == 8) // G♭
     }
 }

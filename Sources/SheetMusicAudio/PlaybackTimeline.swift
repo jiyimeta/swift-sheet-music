@@ -1,3 +1,4 @@
+// swiftlint:disable function_body_length file_length
 import Foundation
 import SheetMusicCore
 
@@ -187,7 +188,7 @@ extension PlaybackTimeline {
                     for (elemIdx, el) in voice.elements.enumerated() {
                         switch el {
                         case let .chord(chord) where !chord.notes.isEmpty:
-                            for (noteIdx, _) in chord.notes.enumerated() {
+                            for noteIdx in chord.notes.indices {
                                 let nid = NoteID(
                                     staffIndex: staffIdx,
                                     measureIndex: measureIdx,

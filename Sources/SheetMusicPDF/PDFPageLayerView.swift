@@ -44,8 +44,8 @@
             self.margins = margins
         }
 
-        public func makeNSView(context: Context) -> _PDFPageLayerHostView {
-            let view = _PDFPageLayerHostView(frame: NSRect(
+        public func makeNSView(context: Context) -> PDFPageLayerHostView {
+            let view = PDFPageLayerHostView(frame: NSRect(
                 origin: .zero, size: pageSize
             ))
             view.configure(
@@ -57,7 +57,7 @@
         }
 
         public func updateNSView(
-            _ nsView: _PDFPageLayerHostView, context: Context
+            _ nsView: PDFPageLayerHostView, context: Context
         ) {
             nsView.configure(
                 systems: systems, pageStartY: pageStartY,
@@ -68,7 +68,7 @@
     }
 
     @available(macOS 15.0, *)
-    public final class _PDFPageLayerHostView: NSView {
+    public final class PDFPageLayerHostView: NSView {
         // Identity of the configuration we last applied. Body re-evals
         // during scroll / live magnify must NOT rebuild the layer tree
         // unless an actual input changed.
@@ -82,7 +82,7 @@
         }
 
         @available(*, unavailable)
-        public required init?(coder: NSCoder) { fatalError() }
+        public required init?(coder: NSCoder) { fatalError("init(coder:) is unavailable") }
 
         fileprivate func configure(
             systems: [LayoutSystem],

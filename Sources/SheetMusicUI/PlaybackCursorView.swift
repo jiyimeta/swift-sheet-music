@@ -1,3 +1,4 @@
+// swiftlint:disable function_body_length file_length
 import SheetMusicCore
 import SheetMusicLayout
 import SwiftUI
@@ -188,12 +189,11 @@ extension LayoutDocument {
             }
         }
 
-        guard !ticksToX.isEmpty else { return nil }
         let sorted = ticksToX.keys.sorted()
         // Snap onto an existing column if there is one.
         if let exact = ticksToX[target] { return exact }
         // Find brackets: largest tick <= target, smallest tick > target.
-        var leftTick = sorted.first!
+        guard var leftTick = sorted.first else { return nil }
         var rightTick: Int?
         for tick in sorted {
             if tick <= target { leftTick = tick } else { rightTick = tick; break }

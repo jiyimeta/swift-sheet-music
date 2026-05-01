@@ -36,9 +36,11 @@
             )
 
             var t = CGAffineTransform.identity
-            let path = CTFontCreatePathForGlyph(font, glyphs[0], &t)
-            try #require(path != nil, "CTFont returned nil path for notehead")
-            let bbox = path!.boundingBoxOfPath
+            let path = try #require(
+                CTFontCreatePathForGlyph(font, glyphs[0], &t),
+                "CTFont returned nil path for notehead"
+            )
+            let bbox = path.boundingBoxOfPath
             #expect(bbox.width > 0, "Notehead bbox has zero width")
             #expect(bbox.height > 0, "Notehead bbox has zero height")
         }

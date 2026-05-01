@@ -1,3 +1,4 @@
+// swiftlint:disable function_body_length file_length
 import AVFoundation
 import Combine
 import Foundation
@@ -165,7 +166,7 @@ public final class PlaybackEngine: ObservableObject {
             try session.setActive(true, options: [])
         #endif
 
-        for (idx, _) in score.staves.enumerated() {
+        for idx in score.staves.indices {
             let part = idx < score.parts.count
                 ? score.parts[idx]
                 : nil

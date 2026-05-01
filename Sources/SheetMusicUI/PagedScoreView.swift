@@ -1,3 +1,4 @@
+// swiftlint:disable function_body_length file_length
 import SheetMusicCore
 import SheetMusicLayout
 import SwiftUI
@@ -30,76 +31,7 @@ public struct PagedScoreView: View {
 
     public var body: some View {
         GeometryReader { proxy in
-            let w = max(proxy.size.width, options.staffSize * 4)
-            let pageOpts = ScoreViewOptions(
-                staffSize: options.staffSize,
-                systemGap: options.systemGap,
-                wrapToViewWidth: true
-            )
-            let doc = LayoutEngine.layout(
-                score: score, options: pageOpts,
-                availableWidth: w
-            )
-            let pages = Self.paginate(
-                systems: doc.systems,
-                pageHeight: proxy.size.height
-            )
-            let count = max(1, pages.count)
-            let safe = min(max(pageIndex, 0), count - 1)
-            let pageSystems = safe >= 0 && safe < pages.count
-                ? pages[safe] : []
-
-            ZStack(alignment: .topLeading) {
-                Canvas(opaque: true, rendersAsynchronously: true) { ctx, size in
-                    ctx.fill(
-                        Path(CGRect(origin: .zero, size: size)),
-                        with: .color(.white)
-                    )
-                    var localY: CGFloat = 0
-                    for system in pageSystems {
-                        var sub = ctx
-                        sub.translateBy(
-                            x: -system.origin.x,
-                            y: localY - system.origin.y
-                        )
-                        ScoreCanvasDrawing.drawSystem(
-                            system, metrics: doc.metrics, into: &sub
-                        )
-                        localY += system.size.height
-                    }
-                }
-                // Indicator overlay laid out in this page's
-                // coord space. The Canvas above translates each
-                // system by `localY - system.origin.y` so that
-                // system N's local-(x, y) lines up with
-                // page-(x, y - system.origin.y + sumOfPriorHeights).
-                // We mirror that mapping by passing a synthetic
-                // `documentYOffset` per system; cleanest way is
-                // to overlay one per-system indicator strip.
-                let pageOrigins = Self.systemPageOrigins(
-                    pageSystems: pageSystems)
-                ForEach(
-                    Array(pageSystems.enumerated()),
-                    id: \.offset
-                ) { idx, sys in
-                    BreakIndicatorOverlay(
-                        mode: .system(system: sys),
-                        metrics: doc.metrics
-                    )
-                    .frame(
-                        width: sys.size.width,
-                        height: sys.size.height,
-                        alignment: .topLeading
-                    )
-                    .offset(
-                        x: sys.origin.x,
-                        y: pageOrigins[idx]
-                    )
-                }
-            }
-            .frame(width: doc.size.width, height: proxy.size.height)
-            .environment(\.colorScheme, .light)
-            .preference(key: PageCountKey.self, value: count)
+            pageContent(in: proxy)
         }
         .onPreferenceChange(PageCountKey.self) { count in
             totalPages = count
@@ -107,6 +39,80 @@ public struct PagedScoreView: View {
                 pageIndex = max(0, count - 1)
             }
         }
+    }
+
+    @ViewBuilder
+    private func pageContent(in proxy: GeometryProxy) -> some View {
+        let w = max(proxy.size.width, options.staffSize * 4)
+        let pageOpts = ScoreViewOptions(
+            staffSize: options.staffSize,
+            systemGap: options.systemGap,
+            wrapToViewWidth: true
+        )
+        let doc = LayoutEngine.layout(
+            score: score, options: pageOpts,
+            availableWidth: w
+        )
+        let pages = Self.paginate(
+            systems: doc.systems,
+            pageHeight: proxy.size.height
+        )
+        let count = max(1, pages.count)
+        let safe = min(max(pageIndex, 0), count - 1)
+        let pageSystems = safe >= 0 && safe < pages.count
+            ? pages[safe] : []
+
+        ZStack(alignment: .topLeading) {
+            Canvas(opaque: true, rendersAsynchronously: true) { ctx, size in
+                ctx.fill(
+                    Path(CGRect(origin: .zero, size: size)),
+                    with: .color(.white)
+                )
+                var localY: CGFloat = 0
+                for system in pageSystems {
+                    var sub = ctx
+                    sub.translateBy(
+                        x: -system.origin.x,
+                        y: localY - system.origin.y
+                    )
+                    ScoreCanvasDrawing.drawSystem(
+                        system, metrics: doc.metrics, into: &sub
+                    )
+                    localY += system.size.height
+                }
+            }
+            // Indicator overlay laid out in this page's
+            // coord space. The Canvas above translates each
+            // system by `localY - system.origin.y` so that
+            // system N's local-(x, y) lines up with
+            // page-(x, y - system.origin.y + sumOfPriorHeights).
+            // We mirror that mapping by passing a synthetic
+            // `documentYOffset` per system; cleanest way is
+            // to overlay one per-system indicator strip.
+            let pageOrigins = Self.systemPageOrigins(
+                pageSystems: pageSystems)
+            ForEach(
+                Array(pageSystems.enumerated()),
+                id: \.offset
+            ) { idx, sys in
+                BreakIndicatorOverlay(
+                    mode: .system(system: sys),
+                    metrics: doc.metrics
+                )
+                .frame(
+                    width: sys.size.width,
+                    height: sys.size.height,
+                    alignment: .topLeading
+                )
+                .offset(
+                    x: sys.origin.x,
+                    y: pageOrigins[idx]
+                )
+            }
+        }
+        .frame(width: doc.size.width, height: proxy.size.height)
+        .environment(\.colorScheme, .light)
+        .preference(key: PageCountKey.self, value: count)
     }
 
     static func paginate(

@@ -1,3 +1,4 @@
+// swiftlint:disable function_body_length file_length
 import Foundation
 
 /// Shared shorten / lengthen algorithm used by `SetChordDuration`

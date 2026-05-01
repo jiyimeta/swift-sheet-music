@@ -1,9 +1,10 @@
+// swiftlint:disable function_body_length file_length
 #if os(macOS)
     import Foundation
     import SheetMusicCore
 
     /// Hand-built sample scores for visual inspection of `ScoreView`.
-    enum Samples {
+    enum Samples { // swiftlint:disable:this type_body_length
         // MARK: - 01 empty
 
         static let empty = Score(division: 480)

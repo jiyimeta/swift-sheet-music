@@ -1,3 +1,4 @@
+// swiftlint:disable function_body_length file_length
 #if os(macOS)
     import Foundation
     import SheetMusicCore

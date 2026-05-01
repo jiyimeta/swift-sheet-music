@@ -1,3 +1,4 @@
+// swiftlint:disable function_body_length file_length
 import CoreGraphics
 import SheetMusicCore
 
@@ -244,7 +245,14 @@ extension LayoutEngine {
         precondition(anchorSteps.count == stemXs.count)
         let stemLen = metrics.defaultStemLength
 
-        guard anchorSteps.count >= 2 else {
+        guard anchorSteps.count >= 2,
+              let startStep = anchorSteps.first,
+              let endStep = anchorSteps.last,
+              let startAnchorY = anchorYs.first,
+              let endAnchorY = anchorYs.last,
+              let firstStemX = stemXs.first,
+              let lastStemX = stemXs.last
+        else {
             let y = (anchorYs.first ?? 0)
                 + (direction == .up ? -stemLen : stemLen)
             return BeamLine(startY: y, endY: y)
@@ -257,9 +265,6 @@ extension LayoutEngine {
         let flatY = direction == .up
             ? extremeY - stemLen
             : extremeY + stemLen
-
-        let startStep = anchorSteps.first!
-        let endStep = anchorSteps.last!
 
         // FLAT constraint: a middle anchor is more extreme than both
         // endpoints. Strict inequality — equal heights use slope.
@@ -291,7 +296,7 @@ extension LayoutEngine {
 
         let beamWidthSp = max(
             0.01,
-            (stemXs.last! - stemXs.first!) / metrics.sp
+            (lastStemX - firstStemX) / metrics.sp
         )
         let maxByWidth: Int
         switch beamWidthSp {
@@ -313,8 +318,6 @@ extension LayoutEngine {
         // by the signed slant.
         let startY: CGFloat
         let endY: CGFloat
-        let startAnchorY = anchorYs.first!
-        let endAnchorY = anchorYs.last!
         switch direction {
         case .up:
             // Higher anchor = smaller y.

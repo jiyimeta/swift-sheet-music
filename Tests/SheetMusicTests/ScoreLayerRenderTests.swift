@@ -1,3 +1,4 @@
+// swiftlint:disable function_body_length file_length
 #if os(macOS)
     import AppKit
     import CoreGraphics
@@ -66,8 +67,9 @@
             tree.render(in: ctx)
 
             let image = try #require(ctx.makeImage())
-            let data = try #require(
-                CFDataGetBytePtr(image.dataProvider!.data!))
+            let provider = try #require(image.dataProvider)
+            let cfData = try #require(provider.data)
+            let data = try #require(CFDataGetBytePtr(cfData))
 
             // Count non-white pixels — the rendered system should have
             // plenty of ink (staff lines + clef + notehead).

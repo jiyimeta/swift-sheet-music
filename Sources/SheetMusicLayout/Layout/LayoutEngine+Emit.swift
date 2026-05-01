@@ -1,3 +1,4 @@
+// swiftlint:disable function_body_length file_length
 import CoreGraphics
 import SheetMusicCore
 
@@ -65,7 +66,10 @@ extension LayoutEngine {
                 continue
             }
         }
-        guard !memberSpanXs.isEmpty, !chordStemXs.isEmpty else { return }
+        guard let fromX = memberSpanXs.first,
+              let toX = memberSpanXs.last,
+              !chordStemXs.isEmpty
+        else { return }
 
         // MuseScore's bracket rule (Tuplet::calcHasBracket): hide the
         // bracket when the first AND last tuplet members sit inside
@@ -85,8 +89,6 @@ extension LayoutEngine {
         // for chords, rest origin for rests). Widening to include
         // rests prevents the bracket from collapsing inward when a
         // tuplet member is deleted to a rest.
-        let fromX = memberSpanXs.first!
-        let toX = memberSpanXs.last!
 
         // Vertical position:
         // - Beamed: just above/below the beam (= stemOrigin.y for the

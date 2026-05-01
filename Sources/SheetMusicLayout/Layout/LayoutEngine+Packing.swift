@@ -1,3 +1,4 @@
+// swiftlint:disable function_body_length file_length
 import CoreGraphics
 import SheetMusicCore
 
@@ -314,7 +315,7 @@ extension LayoutEngine {
         staves: [StaffContent],
         parts: [Part]
     ) -> [String] {
-        staves.enumerated().map { idx, _ in
+        staves.indices.map { idx in
             let part = idx < parts.count ? parts[idx] : nil
             let decl = part?.staffDeclarations.first
             if let declared = decl?.defaultClefType {

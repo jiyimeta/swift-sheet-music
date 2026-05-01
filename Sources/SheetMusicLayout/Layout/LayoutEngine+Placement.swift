@@ -1,3 +1,4 @@
+// swiftlint:disable function_body_length file_length
 import CoreGraphics
 import CoreText
 import SheetMusicCore
@@ -387,8 +388,7 @@ extension LayoutEngine {
                     // chords from rests (and from notes in other
                     // voices) that share the same tick.
                     let chordX = timedX(atTick: tickCursor)
-                    let preliminaryNotes = chord.notes.enumerated().map {
-                        noteIdx, note -> LayoutChordNote in
+                    let preliminaryNotes = chord.notes.enumerated().map { noteIdx, note -> LayoutChordNote in
                         // For percussion staves, use the drum map's
                         // <line> value to position the notehead
                         // instead of the pitched diatonic formula.
@@ -682,12 +682,15 @@ extension LayoutEngine {
                     case let .chord(toNotes, _, _, _, _, _, _, _) =
                     out[toOutIdx]
                 else { continue }
+                guard let fromFallback = fromNotes.last,
+                      let toFallback = toNotes.last
+                else { continue }
                 let fromNote = glissNoteIdx < fromNotes.count
                     ? fromNotes[glissNoteIdx]
-                    : fromNotes.last!
+                    : fromFallback
                 let toNote = glissNoteIdx < toNotes.count
                     ? toNotes[glissNoteIdx]
-                    : toNotes.last!
+                    : toFallback
                 // Offset x inward so the line starts past the from-
                 // notehead and ends before the to-notehead.
                 out.append(.glissandoLine(
@@ -757,7 +760,10 @@ extension LayoutEngine {
                         memberLevels.append(0)
                     }
                 }
-                guard memberStemXs.count >= 2 else { continue }
+                guard memberStemXs.count >= 2,
+                      let beamStartX = memberStemXs.first,
+                      let beamEndX = memberStemXs.last
+                else { continue }
 
                 // --- Phase 3: sloped beam line ---
                 let line = computeBeamLine(
@@ -767,8 +773,6 @@ extension LayoutEngine {
                     direction: groupDirection,
                     metrics: metrics
                 )
-                let beamStartX = memberStemXs.first!
-                let beamEndX = memberStemXs.last!
                 let beamSpan = beamEndX - beamStartX
                 func beamYAt(_ x: CGFloat) -> CGFloat {
                     guard beamSpan > 0 else { return line.startY }

@@ -120,6 +120,11 @@ enum SMFReader {
         let start = payload.startIndex
         switch metaType {
         case 0x03:
+            // String(decoding:as:) substitutes U+FFFD for invalid UTF-8;
+            // we want that lossy behaviour over the failable
+            // String(bytes:encoding:) initialiser (which returns nil on
+            // even a single bad byte) for permissive SMF parsing.
+            // swiftlint:disable:next non_optional_string_data_conversion optional_data_string_conversion
             let name = String(decoding: payload, as: UTF8.self).trimmingCharacters(in: .controlCharacters)
             events.append(TimedMidiEvent(tick: tick, event: .meta(.trackName(name))))
         case 0x21 where len == 1:

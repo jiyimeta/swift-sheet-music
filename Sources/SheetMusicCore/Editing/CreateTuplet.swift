@@ -1,3 +1,4 @@
+// swiftlint:disable function_body_length file_length
 import Foundation
 
 /// Convert a single chord or rest into a tuplet of `actualNotes`

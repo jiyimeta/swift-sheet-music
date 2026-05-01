@@ -1,6 +1,11 @@
 disabled_rules:
   # - attribute_name_spacing
-  # - blanket_disable_command
+  # We deliberately blanket-disable function_body_length / file_length
+  # at file scope for engine implementations whose method/file size
+  # reflects domain complexity (LayoutEngine passes, ScoreEditor
+  # commands, etc.). Re-enabling per-function would just spam the
+  # whole codebase.
+  - blanket_disable_command
   # - block_based_kvo
   # - class_delegate_protocol
   # - closing_brace

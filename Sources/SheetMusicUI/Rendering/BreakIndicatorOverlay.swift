@@ -49,8 +49,7 @@ public struct BreakIndicatorOverlay: View {
             // underlying Canvas / layer view (we also turn it off
             // explicitly below).
             Color.clear
-            ForEach(Array(indicators.enumerated()), id: \.offset) {
-                _, ind in
+            ForEach(Array(indicators.enumerated()), id: \.offset) { _, ind in
                 BreakIndicatorBadge(kind: ind.kind)
                     .position(x: ind.x, y: ind.y)
             }

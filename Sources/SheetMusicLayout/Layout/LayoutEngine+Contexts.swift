@@ -1,3 +1,4 @@
+// swiftlint:disable function_body_length file_length
 import CoreGraphics
 import SheetMusicCore
 
@@ -62,7 +63,7 @@ extension LayoutEngine {
         )
         var keys = Array(repeating: 0, count: score.staves.count)
         var timeSig: LayoutMeasureContext.TimeSignaturePair?
-        let partLabels = score.staves.enumerated().map { idx, _ in
+        let partLabels = score.staves.indices.map { idx in
             let part = idx < score.parts.count ? score.parts[idx] : nil
             return part?.trackName
                 ?? part?.instrument.longName

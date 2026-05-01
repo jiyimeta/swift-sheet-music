@@ -1,3 +1,4 @@
+// swiftlint:disable function_body_length file_length
 import CoreGraphics
 import SheetMusicCore
 
@@ -302,7 +303,7 @@ extension LayoutEngine {
         }
 
         // --- Adaptive per-staff top padding ---
-        let staffTopPads: [CGFloat] = staves.enumerated().map { idx, _ in
+        let staffTopPads: [CGFloat] = staves.indices.map { idx in
             let topOverflow: CGFloat = staffMinY[idx].isFinite
                 ? max(
                     0,
@@ -395,7 +396,7 @@ extension LayoutEngine {
         // Per-staff labels. Stage 5 assumes staves align 1:1 with parts;
         // multi-staff-per-part (piano grand staff) is handled the same
         // way for now — each staff gets its own label.
-        let labels: [LayoutPartLabel] = staves.enumerated().map { idx, _ in
+        let labels: [LayoutPartLabel] = staves.indices.map { idx in
             let part = idx < context.score.parts.count
                 ? context.score.parts[idx] : nil
             let text: String
@@ -424,7 +425,7 @@ extension LayoutEngine {
             var aggregated: [LayoutElement] = []
             var markers: [LayoutElement] = []
             var jumps: [LayoutElement] = []
-            for (staffIdx, _) in staves.enumerated() {
+            for staffIdx in staves.indices {
                 guard let els = um.perStaffElements[staffIdx]
                 else { continue }
                 // Placement emits positions relative to "staff top

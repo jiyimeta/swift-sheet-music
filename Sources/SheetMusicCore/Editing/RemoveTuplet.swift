@@ -1,3 +1,4 @@
+// swiftlint:disable function_body_length file_length
 import Foundation
 
 /// Drop the tuplet that contains the element at `location` and

@@ -75,6 +75,8 @@ enum SMuFLGlyph {
 
     // Time signature digits (0..9)
     static func timeSigDigit(_ d: Int) -> Character {
+        // 0xE080..0xE089 are private-use SMuFL digits — always valid scalars.
+        // swiftlint:disable:next force_unwrapping
         Character(UnicodeScalar(0xE080 + max(0, min(9, d)))!)
     }
 
