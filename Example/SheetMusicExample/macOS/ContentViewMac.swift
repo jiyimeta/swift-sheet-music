@@ -356,6 +356,22 @@ struct ContentViewMac: View {
         let blockingMods: NSEvent.ModifierFlags =
             [.command, .control, .option, .shift]
 
+        // Shift+Backspace / Shift+forward-Delete with a note
+        // selected: remove only that note from its chord.
+        // `RemoveNoteFromChord` collapses to a rest if it was the
+        // last note. Lets the user prune one head from a chord
+        // without losing the chord-level duration / lyrics in the
+        // multi-note case. Plain Backspace below stays "delete the
+        // whole element".
+        if event.modifierFlags
+            .intersection([.command, .control, .option]).isEmpty,
+           event.modifierFlags.contains(.shift),
+           event.keyCode == 51 || event.keyCode == 117,
+           case .single(.note(let noteID)) = selection {
+            removeNoteFromChord(
+                noteID: noteID, controller: controller)
+            return true
+        }
         // Backspace (keyCode 51) / forward Delete (keyCode 117):
         // replace the selected chord/rest with a rest of the same
         // duration. Drum notes included — DeleteVoiceElement just
@@ -759,6 +775,57 @@ struct ContentViewMac: View {
             try controller.apply(cmd, undoManager: undoManager)
             adoptEditedScore(controller.score)
             errorMessage = alreadyTied ? "Tie removed" : "Tied"
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    /// Remove a single note from its chord via
+    /// `RemoveNoteFromChord`. When the chord had only that one note,
+    /// the library collapses the element to a rest of the same
+    /// duration; selection moves to that new rest. Otherwise the
+    /// chord shrinks by one note and we re-anchor the selection on a
+    /// surviving note (the previous index, clamped) so the user can
+    /// keep editing the same chord.
+    private func removeNoteFromChord(
+        noteID: NoteID,
+        controller: NoteInputController
+    ) {
+        let veID = VoiceElementID(noteID)
+        let priorNoteCount: Int
+        if case .chord(let c) = controller.score[veID] {
+            priorNoteCount = c.notes.count
+        } else {
+            priorNoteCount = 0
+        }
+        do {
+            try controller.apply(
+                RemoveNoteFromChord(at: noteID),
+                undoManager: undoManager)
+            adoptEditedScore(controller.score)
+            if priorNoteCount <= 1 {
+                let newRest = RestID(
+                    staffIndex: veID.staffIndex,
+                    measureIndex: veID.measureIndex,
+                    voiceIndex: veID.voiceIndex,
+                    elementIndex: veID.elementIndex)
+                selection = .single(.rest(newRest))
+            } else {
+                // Clamp to the new range — removing index N from a
+                // chord of size N+1 leaves indices 0...N-1.
+                let newIdx = max(
+                    0,
+                    min(noteID.noteIndexInChord,
+                        priorNoteCount - 2))
+                let surviving = NoteID(
+                    staffIndex: noteID.staffIndex,
+                    measureIndex: noteID.measureIndex,
+                    voiceIndex: noteID.voiceIndex,
+                    elementIndex: noteID.elementIndex,
+                    noteIndexInChord: newIdx)
+                selection = .single(.note(surviving))
+            }
+            errorMessage = "Removed note"
         } catch {
             errorMessage = error.localizedDescription
         }
