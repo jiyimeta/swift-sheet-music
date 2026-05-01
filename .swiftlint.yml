@@ -78,7 +78,10 @@ disabled_rules:
   # - switch_case_alignment
   # - syntactic_sugar
   - todo
-  # - trailing_comma
+  # SwiftFormat owns trailing-comma placement; swiftlint's view here
+  # cycles against swiftformat's spaceInsideBrackets / trailingCommas
+  # on nested collection literals like `])])`.
+  - trailing_comma
   # - trailing_newline
   # - trailing_semicolon
   - trailing_whitespace
@@ -260,9 +263,6 @@ identifier_name:
 
 large_tuple:
   warning: 4
-
-trailing_comma:
-  mandatory_comma: true
 
 custom_rules:
   # Forbid `extension Foo where ...` (constrained extension). Place the
