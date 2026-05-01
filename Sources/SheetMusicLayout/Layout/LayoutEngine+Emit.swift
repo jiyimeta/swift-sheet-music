@@ -14,7 +14,8 @@ extension LayoutEngine {
         out: inout [LayoutElement],
         beamGroups: [BeamGroup],
         staffMidY: CGFloat,
-        metrics: StaffMetrics
+        metrics: StaffMetrics,
+        tupletID: TupletID? = nil
     ) {
         // Walk every member. Chord X positions also feed the
         // Y-anchor computation; rest X positions only widen the
@@ -134,7 +135,8 @@ extension LayoutEngine {
             toOrigin: CGPoint(x: toX, y: clampedToY),
             text: "\(tuplet.actualNotes)",
             hasBracket: !isBeamedGroup,
-            isAbove: isAbove))
+            isAbove: isAbove,
+            tupletID: tupletID))
     }
 
     /// Emit a single beam bar for a run of consecutive members that

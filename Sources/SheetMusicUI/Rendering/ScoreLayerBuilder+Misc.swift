@@ -98,7 +98,9 @@ extension ScoreLayerBuilder {
     static func drawTuplet(
         from: CGPoint, to: CGPoint, text: String,
         hasBracket: Bool, isAbove: Bool,
+        tupletID: TupletID?,
         metrics: StaffMetrics, height: CGFloat,
+        context: inout BuildContext,
         into parent: CALayer
     ) {
         let fontSize = metrics.sp * 2
@@ -111,6 +113,9 @@ extension ScoreLayerBuilder {
             anchor: CGPoint(x: 0.5, y: 0.5),
             height: height) {
             parent.addSublayer(layer)
+            if let tid = tupletID {
+                context.attach(layer, to: .tuplet(tid))
+            }
         }
         guard hasBracket else { return }
         let labelHalfWidth = fontSize * 0.4
@@ -125,8 +130,12 @@ extension ScoreLayerBuilder {
                 x: endpoint.x,
                 y: endpoint.y + hookDy))
             p.addLine(to: endpoint)
-            parent.addSublayer(strokeLayer(
-                path: p, height: height, lineWidth: lineWidth))
+            let layer = strokeLayer(
+                path: p, height: height, lineWidth: lineWidth)
+            parent.addSublayer(layer)
+            if let tid = tupletID {
+                context.attach(layer, to: .tuplet(tid))
+            }
         }
         let leftSeg = CGMutablePath()
         leftSeg.move(to: from)
@@ -135,8 +144,12 @@ extension ScoreLayerBuilder {
             y: interpY(
                 from: from, to: to,
                 x: labelX - labelHalfWidth)))
-        parent.addSublayer(strokeLayer(
-            path: leftSeg, height: height, lineWidth: lineWidth))
+        let leftLayer = strokeLayer(
+            path: leftSeg, height: height, lineWidth: lineWidth)
+        parent.addSublayer(leftLayer)
+        if let tid = tupletID {
+            context.attach(leftLayer, to: .tuplet(tid))
+        }
         let rightSeg = CGMutablePath()
         rightSeg.move(to: CGPoint(
             x: labelX + labelHalfWidth,
@@ -144,8 +157,12 @@ extension ScoreLayerBuilder {
                 from: from, to: to,
                 x: labelX + labelHalfWidth)))
         rightSeg.addLine(to: to)
-        parent.addSublayer(strokeLayer(
-            path: rightSeg, height: height, lineWidth: lineWidth))
+        let rightLayer = strokeLayer(
+            path: rightSeg, height: height, lineWidth: lineWidth)
+        parent.addSublayer(rightLayer)
+        if let tid = tupletID {
+            context.attach(rightLayer, to: .tuplet(tid))
+        }
     }
 
     private static func interpY(

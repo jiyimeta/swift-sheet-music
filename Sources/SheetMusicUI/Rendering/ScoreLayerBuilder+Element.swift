@@ -113,11 +113,14 @@ extension ScoreLayerBuilder {
                 text: text,
                 metrics: metrics, height: height, into: parent)
         case .tupletLabel(
-            let from, let to, let text, let bracket, let above):
+            let from, let to, let text, let bracket, let above,
+            let tid):
             drawTuplet(
                 from: shift(from), to: shift(to),
                 text: text, hasBracket: bracket, isAbove: above,
-                metrics: metrics, height: height, into: parent)
+                tupletID: tid,
+                metrics: metrics, height: height,
+                context: &context, into: parent)
         case .marker(let kind, let text, let p):
             drawMarker(
                 kind: kind, text: text, origin: shift(p),

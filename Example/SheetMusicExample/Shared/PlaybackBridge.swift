@@ -69,5 +69,7 @@ func primaryItemID(of target: ScoreHitTarget?) -> ScoreItemID? {
         return .rest(id)
     case .stem(let notes), .flag(let notes), .beam(let notes):
         return notes.first.map { .note($0) }
+    case .tuplet(let id):
+        return .tuplet(id)
     }
 }

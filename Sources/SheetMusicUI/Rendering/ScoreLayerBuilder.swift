@@ -144,12 +144,29 @@ public enum ScoreLayerBuilder {
             .subtracting(newSelection.selectedIDs)
         for id in toReset {
             guard let layers = items[id] else { continue }
-            for layer in layers { layer.fillColor = inkColor }
+            for layer in layers {
+                // Notehead / text glyphs are filled paths; bracket
+                // hooks and segments are stroked. Resetting both
+                // covers either kind without needing to know which.
+                if layer.fillColor != nil {
+                    layer.fillColor = inkColor
+                }
+                if layer.strokeColor != nil {
+                    layer.strokeColor = inkColor
+                }
+            }
         }
         for id in newSelection.selectedIDs {
             guard let layers = items[id] else { continue }
             let color = newSelection.voiceColors[id.voiceIndex] ?? inkColor
-            for layer in layers { layer.fillColor = color }
+            for layer in layers {
+                if layer.fillColor != nil {
+                    layer.fillColor = color
+                }
+                if layer.strokeColor != nil {
+                    layer.strokeColor = color
+                }
+            }
         }
     }
 }

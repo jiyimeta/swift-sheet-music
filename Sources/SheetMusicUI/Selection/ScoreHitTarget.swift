@@ -19,4 +19,7 @@ public enum ScoreHitTarget: Hashable, Sendable {
     case stem(notes: [NoteID])
     case flag(notes: [NoteID])
     case beam(notes: [NoteID])
+    /// Tuplet bracket / number area. Hit-target for clicking the
+    /// "3" / "5" label or the bracket line that spans the tuplet.
+    case tuplet(TupletID)
 }

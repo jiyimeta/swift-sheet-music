@@ -68,7 +68,7 @@ extension LayoutEngine {
             return [from.y, to.y]
         case .arpeggioWiggle(let top, let bot, _):
             return [top.y, bot.y]
-        case .tupletLabel(let from, let to, _, _, _):
+        case .tupletLabel(let from, let to, _, _, _, _):
             return [from.y, to.y]
         case .lyricsMelisma(let from, let to),
              .lyricHyphen(let from, let to):

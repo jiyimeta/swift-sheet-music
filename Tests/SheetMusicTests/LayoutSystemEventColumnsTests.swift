@@ -50,6 +50,7 @@ struct LayoutSystemEventColumnsTests {
             switch col.id {
             case .note: return "note"
             case .rest: return "rest"
+            case .tuplet: return "tuplet"
             }
         })
         #expect(kinds == ["note", "rest"])

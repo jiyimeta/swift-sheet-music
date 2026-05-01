@@ -234,6 +234,11 @@ extension LayoutDocument {
                     return p.x
                 }
             }
+        case .tuplet:
+            // Playback cursor never positions on a tuplet bracket
+            // — a tuplet selection is rest-of-the-tuplet shorthand,
+            // not a tick anchor.
+            return nil
         }
         return nil
     }

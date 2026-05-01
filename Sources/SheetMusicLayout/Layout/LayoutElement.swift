@@ -145,13 +145,15 @@ public enum LayoutElement: Sendable, Equatable {
     /// number in the middle, or number alone (when beamed). `fromOrigin`
     /// and `toOrigin` define the horizontal span of the first and last
     /// tuplet members. `isAbove` controls which side of the staff it
-    /// sits on.
+    /// sits on. `tupletID` identifies the source `Tuplet` entry for
+    /// hit-testing, when one is available.
     case tupletLabel(
         fromOrigin: CGPoint,
         toOrigin: CGPoint,
         text: String,
         hasBracket: Bool,
-        isAbove: Bool
+        isAbove: Bool,
+        tupletID: TupletID?
     )
 
     public enum TextMarkKind: Sendable, Equatable {

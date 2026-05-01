@@ -79,11 +79,13 @@ public struct ScoreHitTester: Sendable {
     }
 
     /// Convenience that only reports the "primary" selectable items.
-    /// Equivalent to `hitTest(at:)` filtered to `.note` and `.rest`.
+    /// Equivalent to `hitTest(at:)` filtered to `.note`, `.rest`,
+    /// and `.tuplet`.
     public func itemID(at point: CGPoint) -> ScoreItemID? {
         switch hitTest(at: point) {
         case .note(let id): return .note(id)
         case .rest(let id): return .rest(id)
+        case .tuplet(let id): return .tuplet(id)
         default: return nil
         }
     }
@@ -117,6 +119,59 @@ public struct ScoreHitTester: Sendable {
         // 5. Stem
         if let target = hitStem(measure: measure, base: base, point: point, sp: sp) {
             return target
+        }
+        // 6. Tuplet bracket / number — lowest priority so a click
+        //    on a notehead inside the bracket still selects the
+        //    note. The bracket is a thin strip at the top/bottom
+        //    of the tuplet's vertical extent, plus a small label
+        //    box around the number.
+        if let target = hitTuplet(measure: measure, base: base, point: point, sp: sp) {
+            return target
+        }
+        return nil
+    }
+
+    /// Hit-test a tuplet bracket / number. The bracket itself is a
+    /// thin horizontal segment around `from.y`/`to.y`, with the
+    /// number sitting at the midpoint. We accept the click if it
+    /// falls within `~0.5 sp` of either the bracket span or the
+    /// number's bounding box — generous enough to be clickable
+    /// without snagging clicks intended for notes nearby.
+    private func hitTuplet(
+        measure: LayoutMeasure,
+        base: CGPoint, point: CGPoint, sp: CGFloat
+    ) -> ScoreHitTarget? {
+        let bracketTolerance = sp * 0.6
+        let labelHalfHeight = sp * 1.2
+        let labelHalfWidth = sp * 1.0
+        for el in measure.elements {
+            guard case let .tupletLabel(from, to, _, _, _, tid) = el,
+                  let tupletID = tid
+            else { continue }
+            let aFromX = base.x + from.x
+            let aFromY = base.y + from.y
+            let aToX = base.x + to.x
+            let aToY = base.y + to.y
+            // Bracket span: horizontal strip from (fromX, fromY) to
+            // (toX, toY). For a sloped bracket we approximate the
+            // hit zone with the line's bounding box widened by the
+            // tolerance. For our level of precision a flat strip
+            // around the average y is enough.
+            let avgY = (aFromY + aToY) / 2
+            let spanLo = min(aFromX, aToX)
+            let spanHi = max(aFromX, aToX)
+            if point.x >= spanLo && point.x <= spanHi
+                && abs(point.y - avgY) <= bracketTolerance {
+                return .tuplet(tupletID)
+            }
+            // Label (the number "3", "5", etc.) sits at the
+            // midpoint of the bracket. A small box is enough.
+            let labelX = (aFromX + aToX) / 2
+            let labelY = avgY
+            if abs(point.x - labelX) <= labelHalfWidth
+                && abs(point.y - labelY) <= labelHalfHeight {
+                return .tuplet(tupletID)
+            }
         }
         return nil
     }

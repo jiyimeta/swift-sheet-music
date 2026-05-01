@@ -74,13 +74,15 @@ extension LayoutEngine {
                 top: shift(top),
                 bottom: shift(bot),
                 subtype: subtype)
-        case .tupletLabel(let from, let to, let text, let bracket, let above):
+        case .tupletLabel(let from, let to, let text, let bracket,
+                          let above, let tid):
             return .tupletLabel(
                 fromOrigin: shift(from),
                 toOrigin: shift(to),
                 text: text,
                 hasBracket: bracket,
-                isAbove: above)
+                isAbove: above,
+                tupletID: tid)
         case .lyricsMelisma(let from, let to):
             return .lyricsMelisma(
                 fromOrigin: shift(from),

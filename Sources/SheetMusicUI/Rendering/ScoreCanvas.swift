@@ -286,7 +286,7 @@ public enum ScoreCanvasDrawing {
                 from: shift(from), to: shift(to),
                 wavy: wavy, text: text, metrics: metrics)
         case .tupletLabel(let from, let to, let text,
-                          let bracket, let above):
+                          let bracket, let above, _):
             TupletRenderer.draw(
                 context: &context,
                 from: shift(from), to: shift(to),

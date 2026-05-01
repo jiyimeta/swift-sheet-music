@@ -820,7 +820,12 @@ extension LayoutEngine {
                         timeSignature: measureTimeSig,
                         division: division),
                     staffMidY: staffMidY,
-                    metrics: metrics)
+                    metrics: metrics,
+                    tupletID: TupletID(
+                        staffIndex: staffIndex,
+                        measureIndex: measureIndex,
+                        voiceIndex: voiceIdx,
+                        startElementIndex: tuplet.startIndex))
             }
         }
 
