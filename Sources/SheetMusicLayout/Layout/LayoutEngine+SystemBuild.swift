@@ -19,7 +19,8 @@ extension LayoutEngine {
         let partLabelWidth: CGFloat = labelWidth(
             score: context.score,
             metrics: metrics,
-            useLong: isFirstSystem)
+            useLong: isFirstSystem
+        )
 
         // Inter-system breathing room. MuseScore's style defaults
         // (`engraving/style/styledef.cpp`):
@@ -107,7 +108,7 @@ extension LayoutEngine {
                 let incomingMelismas = context.melismaContinuations
                     .indices.contains(staffIdx)
                     && context.melismaContinuations[staffIdx]
-                        .indices.contains(measureIdx)
+                    .indices.contains(measureIdx)
                     ? context.melismaContinuations[staffIdx][measureIdx]
                     : []
                 let placementInputs = LayoutCache.PlacementInputs(
@@ -131,7 +132,8 @@ extension LayoutEngine {
                 let newKey: Int
                 if let cached = context.cache?
                     .entries[measureIdx]?.placements[staffIdx],
-                   cached.inputs == placementInputs {
+                    cached.inputs == placementInputs
+                {
                     els = cached.elements
                     newClef = cached.newClef
                     newKey = cached.newKey
@@ -165,7 +167,8 @@ extension LayoutEngine {
                                 inputs: placementInputs,
                                 elements: els,
                                 newClef: newClef,
-                                newKey: newKey)
+                                newKey: newKey
+                            )
                         context.cache?.entries[measureIdx] = entry
                     }
                 }
@@ -181,7 +184,8 @@ extension LayoutEngine {
                 measureIdx: measureIdx,
                 width: w,
                 perStaffElements: perStaff,
-                staff0Measure: staff0Measure))
+                staff0Measure: staff0Measure
+            ))
         }
 
         // --- System-wide lyric-Y alignment ---
@@ -197,7 +201,7 @@ extension LayoutEngine {
         // (one measure has a low note that pushes lyrics down;
         // adjacent measures don't). This post-pass enforces the
         // system-wide max.
-        for staffIdx in 0..<staves.count {
+        for staffIdx in 0 ..< staves.count {
             // For each measure on this staff, the lowest Y among
             // its lyric elements is verse 0's Y (the
             // `maxLyricCenterYInMeasure` ratchet inside
@@ -210,7 +214,8 @@ extension LayoutEngine {
                 var minY = CGFloat.infinity
                 for el in els {
                     if case let .textMark(.lyrics, _, p) = el,
-                       p.y < minY {
+                       p.y < minY
+                    {
                         minY = p.y
                     }
                 }
@@ -224,10 +229,12 @@ extension LayoutEngine {
             // verses move uniformly so verse N stays at
             // `systemTargetY + N * 1.7sp`.
             for (mIdx, baseY) in measureVerse0Y
-                where baseY < systemTargetY {
+                where baseY < systemTargetY
+            {
                 let dy = systemTargetY - baseY
                 if var els = untranslated[mIdx]
-                    .perStaffElements[staffIdx] {
+                    .perStaffElements[staffIdx]
+                {
                     els = els.map { shiftLyricTextY($0, dy: dy) }
                     untranslated[mIdx]
                         .perStaffElements[staffIdx] = els
@@ -274,9 +281,11 @@ extension LayoutEngine {
         let staffBottomLocal: CGFloat = staffTopLocal
             + metrics.staffHeight
         var staffMinY = Array(
-            repeating: CGFloat.infinity, count: staves.count)
+            repeating: CGFloat.infinity, count: staves.count
+        )
         var staffMaxY = Array(
-            repeating: -CGFloat.infinity, count: staves.count)
+            repeating: -CGFloat.infinity, count: staves.count
+        )
         for um in untranslated {
             for (staffIdx, els) in um.perStaffElements {
                 for el in els {
@@ -295,8 +304,11 @@ extension LayoutEngine {
         // --- Adaptive per-staff top padding ---
         let staffTopPads: [CGFloat] = staves.enumerated().map { idx, _ in
             let topOverflow: CGFloat = staffMinY[idx].isFinite
-                ? max(0, staffTopLocal - staffMinY[idx]
-                      + metrics.sp * 0.5)
+                ? max(
+                    0,
+                    staffTopLocal - staffMinY[idx]
+                        + metrics.sp * 0.5
+                )
                 : 0
             // First staff falls under the system's `topPad`
             // already. For subsequent staves, MuseScore's
@@ -335,12 +347,13 @@ extension LayoutEngine {
                 guard mIdx < staff.measures.count else { continue }
                 for voice in staff.measures[mIdx].voices {
                     for el in voice.elements {
-                        if case .chord(let c) = el {
+                        if case let .chord(c) = el {
                             let nonEmpty = c.lyrics.filter {
                                 !$0.text.isEmpty
                             }.count
                             maxLyricsVerses = max(
-                                maxLyricsVerses, nonEmpty)
+                                maxLyricsVerses, nonEmpty
+                            )
                         }
                     }
                 }
@@ -348,7 +361,7 @@ extension LayoutEngine {
             let basePad: CGFloat = metrics.sp * 2.5
             let lyricsEstimate: CGFloat = maxLyricsVerses > 0
                 ? metrics.sp * 1.5
-                    + CGFloat(maxLyricsVerses) * metrics.sp * 1.7
+                + CGFloat(maxLyricsVerses) * metrics.sp * 1.7
                 : 0
             let southExtent: CGFloat = staffMaxY[idx].isFinite
                 ? max(0, staffMaxY[idx] - staffBottomLocal)
@@ -368,10 +381,11 @@ extension LayoutEngine {
         // --- Compute staffOrigins from cumulative extent ---
         var staffOrigins: [CGPoint] = []
         var currentY: CGFloat = topPad
-        for idx in 0..<staves.count {
+        for idx in 0 ..< staves.count {
             currentY += staffTopPads[idx]
             staffOrigins.append(CGPoint(
-                x: partLabelWidth, y: currentY))
+                x: partLabelWidth, y: currentY
+            ))
             if idx < staves.count - 1 {
                 currentY += metrics.staffHeight
                     + staffBottomPads[idx] + minGap
@@ -438,7 +452,8 @@ extension LayoutEngine {
                         kind: marker.kind,
                         text: labelText,
                         origin: CGPoint(
-                            x: 4, y: staffTopY - metrics.sp)
+                            x: 4, y: staffTopY - metrics.sp
+                        )
                     ))
                 }
                 for jump in m.jumps {
@@ -460,7 +475,8 @@ extension LayoutEngine {
                     text: "\(measureIdx + 1)",
                     origin: CGPoint(
                         x: -metrics.sp * 0.5,
-                        y: staffTopY - metrics.sp * 1.5)
+                        y: staffTopY - metrics.sp * 1.5
+                    )
                 ))
             }
             // Surface the source measure's break flags so the
@@ -471,7 +487,8 @@ extension LayoutEngine {
             let sourceMeasure = context.score.staves.first
                 .flatMap { $0.measures.indices.contains(measureIdx)
                     ? $0.measures[measureIdx]
-                    : nil }
+                    : nil
+                }
             layoutMeasures.append(LayoutMeasure(
                 measureIndex: measureIdx,
                 origin: CGPoint(x: xCursor, y: 0),
@@ -496,7 +513,8 @@ extension LayoutEngine {
         // bottom staff than the baseline allowed.
         let bbox = elementYBounds(
             in: layoutMeasures,
-            metrics: metrics)
+            metrics: metrics
+        )
         let bottomSlack = max(0, bbox.max - baselineHeight) + metrics.sp * 2
         let totalHeight = baselineHeight + bottomSlack
 
@@ -515,7 +533,8 @@ extension LayoutEngine {
             ? labels.map {
                 LayoutPartLabel(
                     text: $0.text,
-                    origin: CGPoint(x: $0.origin.x, y: $0.origin.y + topShift))
+                    origin: CGPoint(x: $0.origin.x, y: $0.origin.y + topShift)
+                )
             }
             : labels
 

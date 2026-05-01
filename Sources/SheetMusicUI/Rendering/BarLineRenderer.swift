@@ -1,5 +1,5 @@
-import SwiftUI
 import SheetMusicLayout
+import SwiftUI
 
 @available(macOS 15.0, iOS 16.0, *)
 enum BarLineRenderer {
@@ -27,11 +27,19 @@ enum BarLineRenderer {
         case "start-repeat":
             line(dx: 0, width: metrics.sp * 0.4)
             line(dx: +metrics.sp * 0.3, width: metrics.sp * 0.15)
-            drawRepeatDots(context: &context, origin: origin,
-                           xOffset: metrics.sp * 0.6, metrics: metrics)
+            drawRepeatDots(
+                context: &context,
+                origin: origin,
+                xOffset: metrics.sp * 0.6,
+                metrics: metrics
+            )
         case "end-repeat":
-            drawRepeatDots(context: &context, origin: origin,
-                           xOffset: -metrics.sp * 0.6, metrics: metrics)
+            drawRepeatDots(
+                context: &context,
+                origin: origin,
+                xOffset: -metrics.sp * 0.6,
+                metrics: metrics
+            )
             line(dx: 0, width: metrics.sp * 0.15)
             line(dx: +metrics.sp * 0.3, width: metrics.sp * 0.4)
         default:
@@ -50,13 +58,17 @@ enum BarLineRenderer {
             Path(ellipseIn: CGRect(
                 x: origin.x + xOffset - dotSize / 2,
                 y: origin.y - metrics.sp / 2 - dotSize / 2,
-                width: dotSize, height: dotSize)),
-            with: .color(.primary))
+                width: dotSize, height: dotSize
+            )),
+            with: .color(.primary)
+        )
         context.fill(
             Path(ellipseIn: CGRect(
                 x: origin.x + xOffset - dotSize / 2,
                 y: origin.y + metrics.sp / 2 - dotSize / 2,
-                width: dotSize, height: dotSize)),
-            with: .color(.primary))
+                width: dotSize, height: dotSize
+            )),
+            with: .color(.primary)
+        )
     }
 }

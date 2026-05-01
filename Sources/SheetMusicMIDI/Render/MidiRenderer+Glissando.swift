@@ -102,11 +102,11 @@ extension MidiRenderer {
         // Shift indices 1… to place the sweep inside the trailing glissando
         // portion (the held portion consumes times[0…1]).
         let originalTimesOne = times[1]
-        for i in 1..<times.count {
+        for i in 1 ..< times.count {
             times[i] += heldDuration - originalTimesOne
         }
 
-        for i in 0..<b {
+        for i in 0 ..< b {
             let pitch = startPitch + body[i]
             let onTick = startTick + times[i]
             let offTick = (i + 1 < b) ? startTick + times[i + 1] - 1 : startTick + durationTicks - 1
@@ -162,7 +162,7 @@ extension MidiRenderer {
         events: inout [TimedMidiEvent]
     ) {
         let semitones = Double(endPitch - startPitch)
-        let sensitivity = 12.0  // Matches the RPN set in the track header.
+        let sensitivity = 12.0 // Matches the RPN set in the track header.
         let targetOffset = max(-8192.0, min(8191.0, semitones / sensitivity * 8191.0))
 
         // Strike the start pitch (unless tied from a still-sounding predecessor);
@@ -190,7 +190,7 @@ extension MidiRenderer {
         let sampleCount = max(4, min(64, durationTicks / 16))
         let eIn = glissando.easeIn
         let eOut = glissando.easeOut
-        for i in 1...sampleCount {
+        for i in 1 ... sampleCount {
             let t = Double(i) / Double(sampleCount)
             let curved = (eIn == 0 && eOut == 0)
                 ? t : xFromYBezier(t, easeIn: Double(eIn) / 100.0, easeOut: Double(eOut) / 100.0)

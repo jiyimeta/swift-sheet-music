@@ -26,7 +26,8 @@ public struct InputNote: EditCommand {
         }
         let chord = Chord(
             duration: rest.duration,
-            notes: [Note(pitch: pitch, tpc: tpc)])
+            notes: [Note(pitch: pitch, tpc: tpc)]
+        )
         let veID = VoiceElementID(location)
         score[veID] = .chord(chord)
         return ReplaceVoiceElement(at: veID, with: .chord(rest))

@@ -9,8 +9,8 @@ extension ScoreCursor {
     /// cursor move into a different measure?".
     var measureIndex: Int {
         switch self {
-        case .item(let id): return id.measureIndex
-        case .beat(let mi, _): return mi
+        case let .item(id): return id.measureIndex
+        case let .beat(mi, _): return mi
         }
     }
 }
@@ -27,7 +27,8 @@ extension LayoutDocument {
             ) {
                 return CGPoint(
                     x: system.origin.x + m.origin.x,
-                    y: system.origin.y + m.origin.y)
+                    y: system.origin.y + m.origin.y
+                )
             }
         }
         return nil
@@ -37,7 +38,8 @@ extension LayoutDocument {
     /// when no system holds that measure.
     func systemIndex(forMeasureIndex mi: Int) -> Int? {
         for (i, sys) in systems.enumerated()
-        where sys.measures.contains(where: { $0.measureIndex == mi }) {
+            where sys.measures.contains(where: { $0.measureIndex == mi })
+        {
             return i
         }
         return nil
@@ -127,7 +129,7 @@ struct VerticalSystemAnchors: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            ForEach(0..<document.systems.count, id: \.self) { i in
+            ForEach(0 ..< document.systems.count, id: \.self) { i in
                 let sys = document.systems[i]
                 let topY = staffTopDocY(of: sys)
                 let bottomY = staffBottomDocY(of: sys)
@@ -147,8 +149,9 @@ struct VerticalSystemAnchors: View {
                             Color.clear.preference(
                                 key: VerticalSystemFramesKey.self,
                                 value: [
-                                    i: g.frame(in: .named("vScroll"))
-                                ])
+                                    i: g.frame(in: .named("vScroll")),
+                                ]
+                            )
                         })
             }
             Spacer(minLength: 0)
@@ -156,7 +159,8 @@ struct VerticalSystemAnchors: View {
         .frame(
             width: document.size.width,
             height: document.size.height,
-            alignment: .topLeading)
+            alignment: .topLeading
+        )
         .allowsHitTesting(false)
     }
 
@@ -181,7 +185,7 @@ struct HorizontalMeasureAnchors: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 0) {
-            ForEach(0..<measures.count, id: \.self) { i in
+            ForEach(0 ..< measures.count, id: \.self) { i in
                 let m = measures[i]
                 let prevRight: CGFloat = i == 0
                     ? 0
@@ -200,8 +204,9 @@ struct HorizontalMeasureAnchors: View {
                                 key: HorizontalMeasureFramesKey.self,
                                 value: [
                                     m.measureIndex:
-                                        g.frame(in: .named("hScroll"))
-                                ])
+                                        g.frame(in: .named("hScroll")),
+                                ]
+                            )
                         })
             }
             Spacer(minLength: 0)
@@ -209,7 +214,8 @@ struct HorizontalMeasureAnchors: View {
         .frame(
             width: document.size.width,
             height: document.size.height,
-            alignment: .topLeading)
+            alignment: .topLeading
+        )
         .allowsHitTesting(false)
     }
 
@@ -218,11 +224,13 @@ struct HorizontalMeasureAnchors: View {
         var result: [(measureIndex: Int, docX: CGFloat, width: CGFloat)] = []
         for sys in document.systems {
             for m in sys.measures
-            where seen.insert(m.measureIndex).inserted {
+                where seen.insert(m.measureIndex).inserted
+            {
                 result.append((
                     measureIndex: m.measureIndex,
                     docX: sys.origin.x + m.origin.x,
-                    width: m.width))
+                    width: m.width
+                ))
             }
         }
         return result.sorted { $0.docX < $1.docX }

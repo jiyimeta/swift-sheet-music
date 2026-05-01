@@ -20,9 +20,11 @@ public enum TitleFrameRenderer {
             let resolved = context.resolve(styled)
             let pos = CGPoint(
                 x: origin.x + entry.position.x,
-                y: origin.y + entry.position.y)
+                y: origin.y + entry.position.y
+            )
             context.draw(
-                resolved, at: pos, anchor: anchor(for: entry.anchor))
+                resolved, at: pos, anchor: anchor(for: entry.anchor)
+            )
         }
     }
 
@@ -40,12 +42,12 @@ public enum TitleFrameRenderer {
         for anchor: LayoutFrameText.Anchor
     ) -> UnitPoint {
         switch anchor {
-        case .topLeading: return .topLeading
-        case .top: return .top
-        case .topTrailing: return .topTrailing
-        case .bottomLeading: return .bottomLeading
-        case .bottom: return .bottom
-        case .bottomTrailing: return .bottomTrailing
+        case .topLeading: .topLeading
+        case .top: .top
+        case .topTrailing: .topTrailing
+        case .bottomLeading: .bottomLeading
+        case .bottom: .bottom
+        case .bottomTrailing: .bottomTrailing
         }
     }
 }

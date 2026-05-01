@@ -52,7 +52,7 @@ enum MidiSemanticComparison {
     private static func normalize(_ events: [TimedMidiEvent]) -> [TimedMidiEvent] {
         var filtered: [TimedMidiEvent] = []
         for event in events {
-            if case .controlChange(_, let cc, _) = event.event, cc == 2 {
+            if case let .controlChange(_, cc, _) = event.event, cc == 2 {
                 continue
             }
             filtered.append(event)
@@ -85,7 +85,7 @@ enum MidiSemanticComparison {
         // same kind exists within ≤1 tick, drop it.
         var keep = Array(repeating: true, count: events.count)
         let indexed = events.enumerated().filter {
-            if case .meta = $0.element.event { return true } else { return false }
+            if case .meta = $0.element.event { true } else { false }
         }
         // Group meta indices by kind for efficient lookup.
         var byKind: [Int: [(index: Int, tick: Int)]] = [:]
@@ -96,7 +96,7 @@ enum MidiSemanticComparison {
         }
         for (kind, items) in byKind {
             let sorted = items.sorted { $0.tick < $1.tick }
-            for k in 0..<(sorted.count - 1) {
+            for k in 0 ..< (sorted.count - 1) {
                 let curr = sorted[k]
                 let next = sorted[k + 1]
                 if next.tick - curr.tick <= 1 {
@@ -110,12 +110,12 @@ enum MidiSemanticComparison {
 
     private static func metaKindRaw(_ m: MetaEvent) -> Int {
         switch m {
-        case .trackName:     return 0
-        case .timeSignature: return 1
-        case .keySignature:  return 2
-        case .tempo:         return 3
-        case .portChange:    return 4
-        case .marker:        return 5
+        case .trackName: 0
+        case .timeSignature: 1
+        case .keySignature: 2
+        case .tempo: 3
+        case .portChange: 4
+        case .marker: 5
         }
     }
 
@@ -128,10 +128,11 @@ enum MidiSemanticComparison {
     /// up to T+1 (covers the 479-vs-480 quirk in midi01-ref).
     private static func collapseNoteOffOneTickEarly(_ events: [TimedMidiEvent]) -> [TimedMidiEvent] {
         var out = events
-        for i in 0..<out.count {
+        for i in 0 ..< out.count {
             if case .noteOff = out[i].event {
                 if i + 1 < out.count, case .noteOn = out[i + 1].event,
-                   out[i + 1].tick == out[i].tick + 1 {
+                   out[i + 1].tick == out[i].tick + 1
+                {
                     out[i].tick += 1
                 }
             }
@@ -141,23 +142,23 @@ enum MidiSemanticComparison {
 
     private static func kindOrdinal(_ e: MidiEvent) -> Int {
         switch e {
-        case .meta:           return 0
-        case .programChange:  return 1
-        case .controlChange:  return 2
-        case .pitchBend:      return 3
-        case .noteOff:        return 4
-        case .noteOn:         return 5
-        case .endOfTrack:     return 6
+        case .meta: 0
+        case .programChange: 1
+        case .controlChange: 2
+        case .pitchBend: 3
+        case .noteOff: 4
+        case .noteOn: 5
+        case .endOfTrack: 6
         }
     }
 
     private static func channel(_ e: MidiEvent) -> Int {
         switch e {
-        case .noteOn(let ch, _, _),
-             .noteOff(let ch, _, _),
-             .controlChange(let ch, _, _),
-             .programChange(let ch, _),
-             .pitchBend(let ch, _):
+        case let .noteOn(ch, _, _),
+             let .noteOff(ch, _, _),
+             let .controlChange(ch, _, _),
+             let .programChange(ch, _),
+             let .pitchBend(ch, _):
             return ch
         case .meta, .endOfTrack:
             return -1
@@ -166,14 +167,14 @@ enum MidiSemanticComparison {
 
     private static func dataA(_ e: MidiEvent) -> Int {
         switch e {
-        case .noteOn(_, let pitch, _),
-             .noteOff(_, let pitch, _):
+        case let .noteOn(_, pitch, _),
+             let .noteOff(_, pitch, _):
             return pitch
-        case .controlChange(_, let cc, _):
+        case let .controlChange(_, cc, _):
             return cc
-        case .programChange(_, let p):
+        case let .programChange(_, p):
             return p
-        case .pitchBend(_, let value):
+        case let .pitchBend(_, value):
             return value
         case .meta, .endOfTrack:
             return 0
@@ -188,12 +189,12 @@ enum MidiSemanticComparison {
     private static func window(_ events: [TimedMidiEvent], around index: Int, span: Int = 2) -> String {
         let lower = max(0, index - span)
         let upper = min(events.count, index + span + 1)
-        return events[lower..<upper].map { "  \(describe($0))" }.joined(separator: "\n")
+        return events[lower ..< upper].map { "  \(describe($0))" }.joined(separator: "\n")
     }
 
     private static func firstDifference(_ a: [TimedMidiEvent], _ b: [TimedMidiEvent]) -> Int? {
         let n = max(a.count, b.count)
-        for i in 0..<n where a[safe: i] != b[safe: i] {
+        for i in 0 ..< n where a[safe: i] != b[safe: i] {
             return i
         }
         return nil

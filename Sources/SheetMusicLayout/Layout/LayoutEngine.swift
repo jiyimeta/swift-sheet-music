@@ -32,7 +32,8 @@ public enum LayoutEngine {
             score: score,
             options: options,
             availableWidth: availableWidth,
-            cache: nil)
+            cache: nil
+        )
     }
 
     /// Cache-aware overload. Reuse the same `LayoutCache` instance
@@ -49,10 +50,12 @@ public enum LayoutEngine {
     ) -> LayoutDocument {
         let metrics = StaffMetrics(staffSize: options.staffSize)
         let effectiveMelismaTicks = computeEffectiveMelismaTicks(
-            score: score, division: score.division)
+            score: score, division: score.division
+        )
         let melismas = computeMelismaContinuations(
             score: score, division: score.division,
-            effectiveTicks: effectiveMelismaTicks)
+            effectiveTicks: effectiveMelismaTicks
+        )
         let context = RenderContext(
             score: score,
             options: options,
@@ -72,10 +75,13 @@ public enum LayoutEngine {
             return buildTitleFrame(
                 source: src,
                 metrics: metrics,
-                docWidth: max(availableWidth,
+                docWidth: max(
+                    availableWidth,
                     packedSystems.reduce(CGFloat(0)) { acc, s in
                         max(acc, s.origin.x + s.size.width)
-                    }))
+                    }
+                )
+            )
         }()
         let yShift = titleFrame?.height ?? 0
         let systems = yShift > 0
@@ -107,7 +113,8 @@ public enum LayoutEngine {
         )
         let ties = resolveTies(for: firstPass, score: score)
         let systemsWithTies = attachTies(
-            to: systemsWithSpanners, pairs: ties, metrics: metrics)
+            to: systemsWithSpanners, pairs: ties, metrics: metrics
+        )
         return LayoutDocument(
             size: firstPass.size,
             systems: systemsWithTies,
@@ -121,13 +128,15 @@ public enum LayoutEngine {
     ) -> LayoutSystem {
         LayoutSystem(
             origin: CGPoint(
-                x: system.origin.x, y: system.origin.y + dy),
+                x: system.origin.x, y: system.origin.y + dy
+            ),
             size: system.size,
             measures: system.measures,
             staffOrigins: system.staffOrigins,
             partLabels: system.partLabels,
             spanners: system.spanners,
-            sp: system.sp)
+            sp: system.sp
+        )
     }
 
     private static func buildTitleFrame(
@@ -142,7 +151,8 @@ public enum LayoutEngine {
         // texts).
         let frameHeight = max(
             metrics.sp * 4,
-            source.heightSp * metrics.sp)
+            source.heightSp * metrics.sp
+        )
         let center = docWidth / 2
 
         // MuseScore stores offsets for the title-block styles in
@@ -203,10 +213,12 @@ public enum LayoutEngine {
                 style: t.style,
                 position: CGPoint(x: baseX + dx, y: baseY + dy),
                 fontSize: fontSize,
-                anchor: anchor))
+                anchor: anchor
+            ))
         }
         return LayoutTitleFrame(
-            height: frameHeight, texts: laidOut)
+            height: frameHeight, texts: laidOut
+        )
     }
 
     // MARK: - Context

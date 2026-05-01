@@ -31,7 +31,8 @@ public struct VoiceElementID: Hashable, Sendable {
             staffIndex: id.staffIndex,
             measureIndex: id.measureIndex,
             voiceIndex: id.voiceIndex,
-            elementIndex: id.elementIndex)
+            elementIndex: id.elementIndex
+        )
     }
 
     public init(_ id: NoteID) {
@@ -39,7 +40,8 @@ public struct VoiceElementID: Hashable, Sendable {
             staffIndex: id.staffIndex,
             measureIndex: id.measureIndex,
             voiceIndex: id.voiceIndex,
-            elementIndex: id.elementIndex)
+            elementIndex: id.elementIndex
+        )
     }
 }
 
@@ -63,8 +65,8 @@ extension Score {
                   staves[id.staffIndex].measures.indices.contains(id.measureIndex),
                   staves[id.staffIndex].measures[id.measureIndex]
                       .voices.indices.contains(id.voiceIndex),
-                  staves[id.staffIndex].measures[id.measureIndex]
-                      .voices[id.voiceIndex].elements.indices
+                      staves[id.staffIndex].measures[id.measureIndex]
+                          .voices[id.voiceIndex].elements.indices
                           .contains(id.elementIndex)
             else { return }
             staves[id.staffIndex]

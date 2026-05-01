@@ -21,9 +21,9 @@ enum MusicXMLBarlineDecoder {
         let location = node.attributes["location"] ?? "right"
         let placement: Decoded.Placement
         switch location {
-        case "left":   placement = .start
+        case "left": placement = .start
         case "middle": placement = .middle
-        default:       placement = .end
+        default: placement = .end
         }
 
         let barStyle = node.first("bar-style")?.text
@@ -37,7 +37,7 @@ enum MusicXMLBarlineDecoder {
         case "forward":
             startRepeat = true
         case "backward":
-            endRepeatCount = 2  // MuseScore defaults to 2 plays when no explicit count.
+            endRepeatCount = 2 // MuseScore defaults to 2 plays when no explicit count.
         default:
             break
         }
@@ -68,17 +68,17 @@ enum MusicXMLBarlineDecoder {
             // `<BarLine>` with an empty subtype. End-of-measure regular
             // barlines are the implicit measure boundary.
             return placement == .middle ? BarLine(subtype: nil) : nil
-        case "dotted":      return BarLine(subtype: "dotted")
-        case "dashed":      return BarLine(subtype: "dashed")
+        case "dotted": return BarLine(subtype: "dotted")
+        case "dashed": return BarLine(subtype: "dashed")
         case "light-light": return BarLine(subtype: "double")
         case "light-heavy":
             return BarLine(subtype: placement == .end ? "end" : "final")
         case "heavy-light": return BarLine(subtype: "reverse-end")
         case "heavy-heavy": return BarLine(subtype: "heavy")
-        case "tick":        return BarLine(subtype: "tick")
-        case "short":       return BarLine(subtype: "short")
-        case "none":        return nil
-        default:            return BarLine(subtype: barStyle)
+        case "tick": return BarLine(subtype: "tick")
+        case "short": return BarLine(subtype: "short")
+        case "none": return nil
+        default: return BarLine(subtype: barStyle)
         }
     }
 }

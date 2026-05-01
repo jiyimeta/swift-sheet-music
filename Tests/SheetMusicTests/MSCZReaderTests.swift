@@ -40,7 +40,7 @@ import ZIPFoundation
             _ = try MSCZReader.parse(empty)
             Issue.record("expected throw")
         } catch let error as SheetMusicError {
-            guard case .corruptedContainer(let reason) = error else {
+            guard case let .corruptedContainer(reason) = error else {
                 Issue.record("wrong case: \(error)")
                 return
             }
@@ -65,7 +65,7 @@ import ZIPFoundation
             _ = try MSCZReader.parse(contentsOf: missing)
             Issue.record("expected throw")
         } catch let error as SheetMusicError {
-            guard case .ioError(let u, _) = error else {
+            guard case let .ioError(u, _) = error else {
                 Issue.record("wrong case: \(error)")
                 return
             }
@@ -91,7 +91,7 @@ import ZIPFoundation
         ) { position, size in
             let start = Int(position)
             let end = min(start + size, mscxBytes.count)
-            return mscxBytes.subdata(in: start..<end)
+            return mscxBytes.subdata(in: start ..< end)
         }
         let msczBytes = try #require(archive.data)
         let score = try MSCZReader.parse(msczBytes)

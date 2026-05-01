@@ -73,7 +73,7 @@ public enum MidiRenderer {
 
         var voiceEventBuckets: [[TimedMidiEvent]] = []
         let voiceCount = staff.measures.map(\.voices.count).max() ?? 0
-        for voiceIndex in 0..<voiceCount {
+        for voiceIndex in 0 ..< voiceCount {
             let (voiceEvents, _) = renderVoice(
                 voiceIndex: voiceIndex,
                 staff: staff,

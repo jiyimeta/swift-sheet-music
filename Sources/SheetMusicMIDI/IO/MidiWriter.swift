@@ -120,13 +120,13 @@ public enum MidiWriter {
     /// SMF time-signature denominator is encoded as a power of 2: 1→0, 2→1, 4→2, 8→3, 16→4, 32→5.
     private static func log2Denominator(_ d: Int) -> Int {
         switch d {
-        case 1: return 0
-        case 2: return 1
-        case 4: return 2
-        case 8: return 3
-        case 16: return 4
-        case 32: return 5
-        default: return 2
+        case 1: 0
+        case 2: 1
+        case 4: 2
+        case 8: 3
+        case 16: 4
+        case 32: 5
+        default: 2
         }
     }
 }

@@ -32,7 +32,7 @@ public struct RemoveNoteFromChord: EditCommand {
     @discardableResult
     public func apply(to score: inout Score) throws -> any EditCommand {
         let veID = VoiceElementID(location)
-        guard case .chord(var chord) = score[veID] else {
+        guard case var .chord(chord) = score[veID] else {
             throw SheetMusicError.invalidEdit(
                 reason: "RemoveNoteFromChord: element at \(veID) "
                     + "is not a chord")

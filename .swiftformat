@@ -2,6 +2,7 @@
 --disable andOperator
 --disable unusedArguments
 --disable opaqueGenericParameters
+--disable conditionalAssignment
 --lineaftermarks false
 --swiftversion 6.2
 --wraparguments before-first

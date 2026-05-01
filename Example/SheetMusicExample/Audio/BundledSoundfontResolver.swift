@@ -25,13 +25,15 @@ struct BundledSoundfontResolver: SoundfontResolver {
         return bundle.url(
             forResource: name,
             withExtension: "sf2",
-            subdirectory: "Sounds")
+            subdirectory: "Sounds"
+        )
     }
 
     var defaultGMSoundfontURL: URL? {
         bundle.url(
             forResource: "MuseScore_General",
             withExtension: "sf2",
-            subdirectory: "Sounds")
+            subdirectory: "Sounds"
+        )
     }
 }

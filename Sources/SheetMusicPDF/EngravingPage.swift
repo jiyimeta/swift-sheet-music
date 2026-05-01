@@ -45,7 +45,8 @@ public struct EngravingPage: Sendable, Equatable {
         size: CGSize(width: 612, height: 792),
         oddMargins: PageMargins(uniform: 36),
         evenMargins: PageMargins(uniform: 36),
-        twosided: false)
+        twosided: false
+    )
 
     /// MuseScore's default A4 with 15 mm margins, two-sided.
     /// Equivalent to `EngravingPage.from(.museScoreA4)`.
@@ -60,18 +61,22 @@ public struct EngravingPage: Sendable, Equatable {
         return EngravingPage(
             size: CGSize(
                 width: layout.width * inchToPt,
-                height: layout.height * inchToPt),
+                height: layout.height * inchToPt
+            ),
             oddMargins: PageMargins(
                 top: layout.oddTopMargin * inchToPt,
                 leading: layout.oddLeftMargin * inchToPt,
                 bottom: layout.oddBottomMargin * inchToPt,
-                trailing: oddRight),
+                trailing: oddRight
+            ),
             evenMargins: PageMargins(
                 top: layout.evenTopMargin * inchToPt,
                 leading: layout.evenLeftMargin * inchToPt,
                 bottom: layout.evenBottomMargin * inchToPt,
-                trailing: evenRight),
-            twosided: layout.twosided)
+                trailing: evenRight
+            ),
+            twosided: layout.twosided
+        )
     }
 }
 
@@ -97,7 +102,11 @@ public struct PageMargins: Sendable, Equatable {
     }
 
     public init(uniform: CGFloat) {
-        self.init(top: uniform, leading: uniform,
-                  bottom: uniform, trailing: uniform)
+        self.init(
+            top: uniform,
+            leading: uniform,
+            bottom: uniform,
+            trailing: uniform
+        )
     }
 }

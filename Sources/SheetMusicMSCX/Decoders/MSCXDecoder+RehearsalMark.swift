@@ -21,7 +21,8 @@ extension RehearsalMark {
             offsetX: offset.0,
             offsetY: offset.1,
             color: color,
-            frame: frame)
+            frame: frame
+        )
     }
 
     /// Recursively concatenate the text content, mirroring
@@ -60,10 +61,10 @@ extension RehearsalMark {
 
     private static func decodeFrame(_ raw: Int) -> FrameKind {
         switch raw {
-        case 0: return .rectangle
-        case 1: return .circle
-        case 2: return .none
-        default: return .rectangle
+        case 0: .rectangle
+        case 1: .circle
+        case 2: .none
+        default: .rectangle
         }
     }
 }

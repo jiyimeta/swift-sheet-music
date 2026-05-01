@@ -30,20 +30,23 @@ extension ScoreHitTester {
             // Translate query rect into system-relative coords for
             // bbox tests (which are stored system-relative).
             let localRect = rect.offsetBy(
-                dx: -system.origin.x, dy: -system.origin.y)
+                dx: -system.origin.x, dy: -system.origin.y
+            )
             let tol = system.maxBBoxHalfWidth
 
             // Binary-search the X window: skip columns whose
             // (centerX + tol) is still left of localRect.minX.
             let lo = lowerBoundCenterX(
                 columns: columns,
-                value: localRect.minX - tol)
+                value: localRect.minX - tol
+            )
             let hi = upperBoundCenterX(
                 columns: columns,
-                value: localRect.maxX + tol)
+                value: localRect.maxX + tol
+            )
             guard lo < hi else { continue }
 
-            for i in lo..<hi {
+            for i in lo ..< hi {
                 let col = columns[i]
                 if col.bbox.intersects(localRect) {
                     result.append(col.id)

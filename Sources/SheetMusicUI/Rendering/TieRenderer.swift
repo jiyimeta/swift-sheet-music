@@ -1,5 +1,5 @@
-import SwiftUI
 import SheetMusicLayout
+import SwiftUI
 
 /// Draws a tie arc as a filled crescent — thin at the endpoints, thick
 /// at the middle. Mirrors MuseScore's approach in
@@ -21,10 +21,12 @@ enum TieRenderer {
 
         let startPt = CGPoint(
             x: from.x,
-            y: from.y + headClearance * vertSign)
+            y: from.y + headClearance * vertSign
+        )
         let endPt = CGPoint(
             x: to.x,
-            y: to.y + headClearance * vertSign)
+            y: to.y + headClearance * vertSign
+        )
 
         // Shoulder height scales with the square root of tie length so
         // long ties flatten instead of ballooning. Values from
@@ -50,10 +52,12 @@ enum TieRenderer {
         let dy = endPt.y - startPt.y
         let ctrl1 = CGPoint(
             x: startPt.x + dx * 0.2,
-            y: startPt.y + dy * 0.2 + shoulderH * vertSign)
+            y: startPt.y + dy * 0.2 + shoulderH * vertSign
+        )
         let ctrl2 = CGPoint(
             x: startPt.x + dx * 0.8,
-            y: startPt.y + dy * 0.8 + shoulderH * vertSign)
+            y: startPt.y + dy * 0.8 + shoulderH * vertSign
+        )
 
         // Thickness offset — perpendicular to the tie baseline.
         // For roughly-horizontal ties, vertical ±midThickness is a
@@ -66,12 +70,14 @@ enum TieRenderer {
         path.addCurve(
             to: endPt,
             control1: CGPoint(x: ctrl1.x, y: ctrl1.y - thickDy),
-            control2: CGPoint(x: ctrl2.x, y: ctrl2.y - thickDy))
+            control2: CGPoint(x: ctrl2.x, y: ctrl2.y - thickDy)
+        )
         // Inner curve (closer to notes) — returns to start.
         path.addCurve(
             to: startPt,
             control1: CGPoint(x: ctrl2.x, y: ctrl2.y + thickDy),
-            control2: CGPoint(x: ctrl1.x, y: ctrl1.y + thickDy))
+            control2: CGPoint(x: ctrl1.x, y: ctrl1.y + thickDy)
+        )
         path.closeSubpath()
 
         context.fill(path, with: .color(.primary))

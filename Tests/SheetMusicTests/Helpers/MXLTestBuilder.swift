@@ -12,13 +12,13 @@ enum MXLTestBuilder {
     ///     (defaults to `"score.xml"`); referenced from `container.xml`.
     static func wrap(xml: Data, entryName: String = "score.xml") throws -> Data {
         let container = Data("""
-            <?xml version="1.0" encoding="UTF-8"?>
-            <container>
-              <rootfiles>
-                <rootfile full-path="\(entryName)" media-type="application/vnd.recordare.musicxml+xml"/>
-              </rootfiles>
-            </container>
-            """.utf8)
+        <?xml version="1.0" encoding="UTF-8"?>
+        <container>
+          <rootfiles>
+            <rootfile full-path="\(entryName)" media-type="application/vnd.recordare.musicxml+xml"/>
+          </rootfiles>
+        </container>
+        """.utf8)
         return try buildArchive(entries: [
             ("META-INF/container.xml", container),
             (entryName, xml),
@@ -36,13 +36,13 @@ enum MXLTestBuilder {
     /// `MXL: rootfile not found` error path.
     static func wrapWithDanglingRootfile(xml: Data) throws -> Data {
         let container = Data("""
-            <?xml version="1.0" encoding="UTF-8"?>
-            <container>
-              <rootfiles>
-                <rootfile full-path="missing.xml" media-type="application/vnd.recordare.musicxml+xml"/>
-              </rootfiles>
-            </container>
-            """.utf8)
+        <?xml version="1.0" encoding="UTF-8"?>
+        <container>
+          <rootfiles>
+            <rootfile full-path="missing.xml" media-type="application/vnd.recordare.musicxml+xml"/>
+          </rootfiles>
+        </container>
+        """.utf8)
         return try buildArchive(entries: [
             ("META-INF/container.xml", container),
             ("score.xml", xml),
@@ -60,7 +60,7 @@ enum MXLTestBuilder {
                 provider: { position, count in
                     let start = Int(position)
                     let end = start + count
-                    return entry.data.subdata(in: start..<end)
+                    return entry.data.subdata(in: start ..< end)
                 }
             )
         }

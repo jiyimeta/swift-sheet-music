@@ -11,7 +11,8 @@ extension LayoutEngine {
         let stavesCount = context.score.staves.count
         guard stavesCount > 0,
               let firstStaff = context.score.staves.first,
-              !firstStaff.measures.isEmpty else {
+              !firstStaff.measures.isEmpty
+        else {
             return []
         }
 
@@ -38,14 +39,15 @@ extension LayoutEngine {
         // (Per-staff `minimumMeasureWidth` undercounts when other
         // staves subdivide a long element — see
         // `crossStaffMinimumMeasureWidth`.)
-        let minWidths: [CGFloat] = (0..<measureCount).map { i in
+        let minWidths: [CGFloat] = (0 ..< measureCount).map { i in
             let measuresAt = context.score.staves.map { staff in
                 i < staff.measures.count ? staff.measures[i] : nil
             }
             if let prior = priorEntries[i],
                prior.sp == sp,
                prior.division == division,
-               prior.measures == measuresAt {
+               prior.measures == measuresAt
+            {
                 // Cache hit: copy the prior entry forward verbatim.
                 // `buildSystem` will trust its `placements` only
                 // when the per-staff inputs also match.
@@ -59,19 +61,22 @@ extension LayoutEngine {
                 staves: context.score.staves,
                 metrics: context.metrics,
                 synthesizeClefForAllStaves: false,
-                synthesizeKeySigForAllStaves: false)
+                synthesizeKeySigForAllStaves: false
+            )
             let w = crossStaffMinimumMeasureWidth(
                 staves: context.score.staves,
                 measureIdx: i,
                 metrics: context.metrics,
                 headerSchedule: baseHeader,
-                division: division)
+                division: division
+            )
             context.cache?.entries[i] = LayoutCache.Entry(
                 measures: measuresAt,
                 sp: sp,
                 division: division,
                 minWidth: w,
-                placements: [:])
+                placements: [:]
+            )
             return w
         }
 
@@ -91,7 +96,8 @@ extension LayoutEngine {
         // flats, 0 = C major (drawn as nothing).
         var activeKeys: [Int] = Array(
             repeating: 0,
-            count: context.score.staves.count)
+            count: context.score.staves.count
+        )
 
         var systems: [LayoutSystem] = []
         var currentY: CGFloat = 0
@@ -109,11 +115,13 @@ extension LayoutEngine {
         let firstSystemLabelW = labelWidth(
             score: context.score,
             metrics: context.metrics,
-            useLong: true)
+            useLong: true
+        )
         let continuationLabelW = labelWidth(
             score: context.score,
             metrics: context.metrics,
-            useLong: false)
+            useLong: false
+        )
         while cursor < measureCount {
             // Part-label width depends on whether this is the first
             // system — the first shows long names, subsequent short.
@@ -154,7 +162,8 @@ extension LayoutEngine {
                     minWidths: minWidths,
                     firstHeaderBoost: firstHeaderBoost,
                     contentAvail: contentAvail,
-                    staves: context.score.staves)
+                    staves: context.score.staves
+                )
                 : Int.max
             // MuseScore-style natural-stretch target. Systems
             // whose minimum-width content fills less than
@@ -179,7 +188,8 @@ extension LayoutEngine {
                 // page horizontally.
                 if context.options.wrapToViewWidth
                     && widthSoFar + w > contentAvail
-                    && cursor > systemStart {
+                    && cursor > systemStart
+                {
                     break
                 }
                 // Natural stretch break — close the system early
@@ -190,11 +200,13 @@ extension LayoutEngine {
                 // get a system to themselves).
                 if context.options.wrapToViewWidth
                     && cursor > systemStart
-                    && widthSoFar + w > naturalAvail {
+                    && widthSoFar + w > naturalAvail
+                {
                     break
                 }
                 if context.options.wrapToViewWidth
-                    && cursor - systemStart >= balancedTarget {
+                    && cursor - systemStart >= balancedTarget
+                {
                     break
                 }
                 widthSoFar += w
@@ -212,12 +224,14 @@ extension LayoutEngine {
                 if context.options.wrapToViewWidth,
                    cursor > systemStart,
                    measureForcesLineBreak(
-                        at: cursor - 1,
-                        staves: context.score.staves) {
+                       at: cursor - 1,
+                       staves: context.score.staves
+                   )
+                {
                     break
                 }
             }
-            var widthsSlice = Array(minWidths[systemStart..<cursor])
+            var widthsSlice = Array(minWidths[systemStart ..< cursor])
             if !widthsSlice.isEmpty {
                 widthsSlice[0] += firstHeaderBoost
             }
@@ -226,7 +240,8 @@ extension LayoutEngine {
                 stretched = stretchWidths(
                     widths: widthsSlice,
                     availableWidth: contentAvail,
-                    shouldStretch: true)
+                    shouldStretch: true
+                )
             } else {
                 // Horizontal (no-wrap) mode: there's no viewport
                 // width to stretch into, so without a fixed scale
@@ -249,10 +264,12 @@ extension LayoutEngine {
                 isFirstSystem: isFirstSystem,
                 activeClefsIn: activeClefsIn,
                 activeKeysIn: activeKeysIn,
-                context: context)
+                context: context
+            )
             let system: LayoutSystem
             if let prior = priorSystemEntries[systemStart],
-               prior.inputs == inputs {
+               prior.inputs == inputs
+            {
                 // Cache hit: reuse stored unshifted system + carry-out.
                 system = shift(prior.system, byY: currentY)
                 activeClefs = prior.activeClefsOut
@@ -264,7 +281,7 @@ extension LayoutEngine {
                 // entry is independent of vertical packing position),
                 // then shift to currentY for placement.
                 let unshifted = buildSystem(
-                    measureRange: systemStart..<cursor,
+                    measureRange: systemStart ..< cursor,
                     widths: stretched,
                     systemOriginY: 0,
                     isFirstSystem: isFirstSystem,
@@ -278,7 +295,8 @@ extension LayoutEngine {
                         inputs: inputs,
                         system: unshifted,
                         activeClefsOut: activeClefs,
-                        activeKeysOut: activeKeys)
+                        activeKeysOut: activeKeys
+                    )
                 context.cache?.systemMisses += 1
             }
             currentY += system.size.height + context.options.systemGap
@@ -322,15 +340,15 @@ extension LayoutEngine {
     ) -> LayoutCache.SystemInputs {
         let staves = context.score.staves
         let measuresPerStaff: [[Measure?]] = staves.map { staff in
-            (0..<measureCount).map { local in
+            (0 ..< measureCount).map { local in
                 let abs = measureStart + local
                 return abs < staff.measures.count
                     ? staff.measures[abs] : nil
             }
         }
         let melismaForRange: [[[MelismaContinuation]]]
-        melismaForRange = (0..<staves.count).map { staffIdx in
-            (0..<measureCount).map { local in
+        melismaForRange = (0 ..< staves.count).map { staffIdx in
+            (0 ..< measureCount).map { local in
                 let abs = measureStart + local
                 guard staffIdx < context.melismaContinuations.count,
                       abs < context.melismaContinuations[staffIdx].count
@@ -359,7 +377,8 @@ extension LayoutEngine {
             melismaContinuationsForRange: melismaForRange,
             drumLineMaps: drumLineMaps,
             totalMeasures: staves.first?.measures.count ?? 0,
-            options: context.options)
+            options: context.options
+        )
     }
 
     static func stretchWidths(

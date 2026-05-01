@@ -1,5 +1,5 @@
-import SwiftUI
 import SheetMusicLayout
+import SwiftUI
 
 /// Draws a glissando line (straight or wavy) between two noteheads,
 /// with an optional text label ("gliss.", etc.) that follows the
@@ -19,7 +19,7 @@ enum GlissandoRenderer {
         let dy = to.y - from.y
         let length = sqrt(dx * dx + dy * dy)
         guard length > 0.01 else { return }
-        let angle = atan2(dy, dx)  // radians, screen-coords
+        let angle = atan2(dy, dx) // radians, screen-coords
 
         // Work in a rotated coordinate system anchored at `from`, so
         // the line runs horizontally from (0, 0) to (length, 0).
@@ -34,7 +34,7 @@ enum GlissandoRenderer {
             let segments = max(3, Int(length / (metrics.sp * 0.8)))
             let segLen = length / CGFloat(segments)
             linePath.move(to: .zero)
-            for i in 1...segments {
+            for i in 1 ... segments {
                 let x = segLen * CGFloat(i)
                 let y = i.isMultiple(of: 2) ? waveAmp : -waveAmp
                 linePath.addLine(to: CGPoint(x: x, y: y))
@@ -45,7 +45,8 @@ enum GlissandoRenderer {
         }
         local.stroke(
             linePath, with: .color(.primary),
-            lineWidth: metrics.sp * 0.15)
+            lineWidth: metrics.sp * 0.15
+        )
 
         // --- Text label (centred along the line) ---
         if let text, !text.isEmpty {
@@ -58,7 +59,8 @@ enum GlissandoRenderer {
                 at: CGPoint(x: textX, y: yOffset),
                 size: fontSize,
                 italic: true,
-                anchor: .center)
+                anchor: .center
+            )
         }
     }
 }

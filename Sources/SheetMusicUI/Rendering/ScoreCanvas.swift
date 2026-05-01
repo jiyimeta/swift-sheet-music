@@ -19,17 +19,22 @@ struct SystemCanvas: View {
                 Path(CGRect(
                     origin: .zero,
                     size: CGSize(
-                        width: system.size.width, height: h))),
-                with: .color(.white))
+                        width: system.size.width, height: h
+                    )
+                )),
+                with: .color(.white)
+            )
             var local = context
             local.translateBy(x: -system.origin.x, y: -system.origin.y)
             ScoreCanvasDrawing.drawSystem(
-                system, metrics: metrics, into: &local)
+                system, metrics: metrics, into: &local
+            )
         }
         .frame(
             width: system.size.width,
             height: h,
-            alignment: .topLeading)
+            alignment: .topLeading
+        )
         .environment(\.colorScheme, .light)
     }
 }
@@ -50,16 +55,20 @@ struct SystemSliceCanvas: View {
             context.fill(
                 Path(CGRect(
                     origin: .zero,
-                    size: CGSize(width: sliceWidth, height: h))),
-                with: .color(.white))
+                    size: CGSize(width: sliceWidth, height: h)
+                )),
+                with: .color(.white)
+            )
             var local = context
             local.translateBy(
                 x: -system.origin.x - xStart,
-                y: -system.origin.y)
+                y: -system.origin.y
+            )
             let absX = system.origin.x + xStart
             ScoreCanvasDrawing.drawSystem(
                 system, metrics: metrics, into: &local,
-                visibleX: absX...(absX + sliceWidth))
+                visibleX: absX ... (absX + sliceWidth)
+            )
         }
         .frame(width: sliceWidth, height: h, alignment: .topLeading)
         .environment(\.colorScheme, .light)
@@ -92,14 +101,16 @@ public enum ScoreCanvasDrawing {
         // Bracket connecting multiple staves.
         if system.staffOrigins.count >= 2,
            let top = system.staffOrigins.first,
-           let bot = system.staffOrigins.last {
+           let bot = system.staffOrigins.last
+        {
             let x = system.origin.x + top.x - metrics.sp * 0.5
             StaffRenderer.drawBracket(
                 context: &context,
                 top: CGPoint(x: x, y: system.origin.y + top.y),
                 bottom: CGPoint(
                     x: x,
-                    y: system.origin.y + bot.y + metrics.staffHeight),
+                    y: system.origin.y + bot.y + metrics.staffHeight
+                ),
                 metrics: metrics
             )
         }
@@ -131,22 +142,38 @@ public enum ScoreCanvasDrawing {
                 y: system.origin.y + measure.origin.y
             )
             for element in measure.elements {
-                drawElement(element, base: base,
-                            metrics: metrics, into: &context)
+                drawElement(
+                    element,
+                    base: base,
+                    metrics: metrics,
+                    into: &context
+                )
             }
             for el in measure.markers {
-                drawElement(el, base: base,
-                            metrics: metrics, into: &context)
+                drawElement(
+                    el,
+                    base: base,
+                    metrics: metrics,
+                    into: &context
+                )
             }
             for el in measure.jumps {
-                drawElement(el, base: base,
-                            metrics: metrics, into: &context)
+                drawElement(
+                    el,
+                    base: base,
+                    metrics: metrics,
+                    into: &context
+                )
             }
         }
         // System-level spanners
         for el in system.spanners {
-            drawElement(el, base: system.origin,
-                        metrics: metrics, into: &context)
+            drawElement(
+                el,
+                base: system.origin,
+                metrics: metrics,
+                into: &context
+            )
         }
     }
 
@@ -160,36 +187,50 @@ public enum ScoreCanvasDrawing {
             CGPoint(x: base.x + p.x, y: base.y + p.y)
         }
         switch element {
-        case .clef(let raw, let p):
+        case let .clef(raw, p):
             ClefRenderer.draw(
                 context: &context, rawType: raw,
-                origin: shift(p), metrics: metrics)
-        case .keySignature(let s, let f, let p):
+                origin: shift(p), metrics: metrics
+            )
+        case let .keySignature(s, f, p):
             KeySignatureRenderer.draw(
                 context: &context, sharps: s, flats: f,
-                origin: shift(p), metrics: metrics)
-        case .timeSignature(let n, let d, let p):
+                origin: shift(p), metrics: metrics
+            )
+        case let .timeSignature(n, d, p):
             TimeSignatureRenderer.draw(
                 context: &context, numerator: n, denominator: d,
-                origin: shift(p), metrics: metrics)
-        case .barLine(let s, let p):
+                origin: shift(p), metrics: metrics
+            )
+        case let .barLine(s, p):
             BarLineRenderer.draw(
                 context: &context, subtype: s,
-                origin: shift(p), metrics: metrics)
-        case .rest(let d, let p, _, _, let hll):
+                origin: shift(p), metrics: metrics
+            )
+        case let .rest(d, p, _, _, hll):
             let (baseDur, dots) = DurationInterpretation.split(d)
             RestRenderer.draw(
                 context: &context, duration: baseDur,
                 hasLegerLine: hll,
-                origin: shift(p), metrics: metrics)
+                origin: shift(p), metrics: metrics
+            )
             DotRenderer.draw(
                 context: &context,
                 after: shift(p),
                 count: dots,
                 onStaffLine: true,
-                metrics: metrics)
-        case .chord(let notes, let dur, let stem, let stemOrigin,
-                     _, _, let isBeamed, _):
+                metrics: metrics
+            )
+        case let .chord(
+            notes,
+            dur,
+            stem,
+            stemOrigin,
+            _,
+            _,
+            isBeamed,
+            _
+        ):
             let (baseDur, dots) = DurationInterpretation.split(dur)
             let shiftedNotes = notes.map {
                 LayoutChordNote(
@@ -207,129 +248,165 @@ public enum ScoreCanvasDrawing {
             for n in shiftedNotes {
                 let mirrorDx = n.mirrorDx(stem: stem, sp: metrics.sp)
                 let visualOrigin = CGPoint(
-                    x: n.origin.x + mirrorDx, y: n.origin.y)
+                    x: n.origin.x + mirrorDx, y: n.origin.y
+                )
                 NoteheadRenderer.drawHead(
                     context: &context, at: visualOrigin,
                     duration: baseDur, headType: n.headType,
-                    metrics: metrics)
+                    metrics: metrics
+                )
                 if let acc = n.accidental {
                     AccidentalRenderer.draw(
                         context: &context, accidental: acc,
-                        origin: visualOrigin, metrics: metrics)
+                        origin: visualOrigin, metrics: metrics
+                    )
                 }
                 DotRenderer.draw(
                     context: &context,
                     after: visualOrigin,
                     count: dots,
                     onStaffLine: n.step.isMultiple(of: 2),
-                    metrics: metrics)
+                    metrics: metrics
+                )
             }
             // Ledger lines
             drawLedgerLines(
                 context: &context,
                 notes: shiftedNotes, stem: stem,
-                metrics: metrics)
+                metrics: metrics
+            )
             let beamY: CGFloat? = isBeamed ? shift(stemOrigin).y : nil
             StemRenderer.draw(
                 context: &context, notes: shiftedNotes,
                 direction: stem, duration: baseDur,
-                isBeamed: isBeamed, beamY: beamY, metrics: metrics)
-        case .textMark(.dynamic, let text, let p):
+                isBeamed: isBeamed, beamY: beamY, metrics: metrics
+            )
+        case let .textMark(.dynamic, text, p):
             TextMarkRenderer.drawDynamic(
                 context: &context, text: text,
-                origin: shift(p), metrics: metrics)
-        case .textMark(.tempo, let text, let p):
+                origin: shift(p), metrics: metrics
+            )
+        case let .textMark(.tempo, text, p):
             TextMarkRenderer.drawTempo(
                 context: &context, text: text,
-                origin: shift(p), metrics: metrics)
-        case .textMark(.lyrics, let text, let p):
+                origin: shift(p), metrics: metrics
+            )
+        case let .textMark(.lyrics, text, p):
             context.drawLyricText(
                 text, at: shift(p),
                 size: metrics.sp * 2.2,
-                anchor: .center)
-        case .beam(let from, let to, let direction, let level):
+                anchor: .center
+            )
+        case let .beam(from, to, direction, level):
             BeamRenderer.draw(
                 context: &context,
                 from: shift(from),
                 to: shift(to),
                 direction: direction,
                 level: level,
-                metrics: metrics)
-        case .fermata(let subtype, let p):
+                metrics: metrics
+            )
+        case let .fermata(subtype, p):
             FermataRenderer.draw(
                 context: &context, subtype: subtype,
-                origin: shift(p), metrics: metrics)
-        case .measureRepeat(let c, let p):
+                origin: shift(p), metrics: metrics
+            )
+        case let .measureRepeat(c, p):
             MeasureRepeatRenderer.draw(
                 context: &context, count: c,
-                origin: shift(p), metrics: metrics)
-        case .arpeggioWiggle(let top, let bot, let sub):
+                origin: shift(p), metrics: metrics
+            )
+        case let .arpeggioWiggle(top, bot, sub):
             ArpeggioRenderer.draw(
                 context: &context, top: shift(top),
                 bottom: shift(bot), subtype: sub,
-                metrics: metrics)
-        case .spannerSegment(let kind, let from, let to,
-                             let cl, let cr, let text):
+                metrics: metrics
+            )
+        case let .spannerSegment(
+            kind,
+            from,
+            to,
+            cl,
+            cr,
+            text
+        ):
             SpannerRenderer.draw(
                 context: &context, kind: kind,
                 from: shift(from), to: shift(to),
                 continuesLeft: cl, continuesRight: cr,
-                text: text, metrics: metrics)
-        case .tieArc(let from, let to, let above):
+                text: text, metrics: metrics
+            )
+        case let .tieArc(from, to, above):
             TieRenderer.draw(
                 context: &context,
                 from: shift(from), to: shift(to),
-                above: above, metrics: metrics)
-        case .glissandoLine(let from, let to, let wavy, let text):
+                above: above, metrics: metrics
+            )
+        case let .glissandoLine(from, to, wavy, text):
             GlissandoRenderer.draw(
                 context: &context,
                 from: shift(from), to: shift(to),
-                wavy: wavy, text: text, metrics: metrics)
-        case .tupletLabel(let from, let to, let text,
-                          let bracket, let above, _):
+                wavy: wavy, text: text, metrics: metrics
+            )
+        case let .tupletLabel(
+            from,
+            to,
+            text,
+            bracket,
+            above,
+            _
+        ):
             TupletRenderer.draw(
                 context: &context,
                 from: shift(from), to: shift(to),
                 text: text,
                 hasBracket: bracket,
                 isAbove: above,
-                metrics: metrics)
-        case .marker(let kind, let text, let p):
+                metrics: metrics
+            )
+        case let .marker(kind, text, p):
             MarkerRenderer.draw(
                 context: &context, kind: kind, text: text,
-                origin: shift(p), metrics: metrics)
-        case .rehearsalMark(let text, let p, let frame, let color):
+                origin: shift(p), metrics: metrics
+            )
+        case let .rehearsalMark(text, p, frame, color):
             RehearsalMarkRenderer.draw(
                 context: &context, text: text,
                 origin: shift(p), frame: frame, color: color,
-                metrics: metrics)
-        case .jump(let text, let p):
+                metrics: metrics
+            )
+        case let .jump(text, p):
             JumpRenderer.draw(
                 context: &context, text: text,
-                origin: shift(p), metrics: metrics)
-        case .measureNumber(let text, let p):
+                origin: shift(p), metrics: metrics
+            )
+        case let .measureNumber(text, p):
             MeasureNumberRenderer.draw(
                 context: &context, text: text,
-                origin: shift(p), metrics: metrics)
-        case .staffName(let text, let p):
+                origin: shift(p), metrics: metrics
+            )
+        case let .staffName(text, p):
             StaffNameRenderer.draw(
                 context: &context, text: text,
-                origin: shift(p), metrics: metrics)
-        case .staffText(let text, let p, let color, _):
+                origin: shift(p), metrics: metrics
+            )
+        case let .staffText(text, p, color, _):
             StaffTextRenderer.draw(
                 context: &context, text: text,
                 origin: shift(p),
                 color: color,
-                metrics: metrics)
-        case .lyricsMelisma(let from, let to):
+                metrics: metrics
+            )
+        case let .lyricsMelisma(from, to):
             var path = Path()
             path.move(to: shift(from))
             path.addLine(to: shift(to))
             context.stroke(
                 path,
                 with: .color(.primary),
-                lineWidth: metrics.sp * 0.1)
-        case .lyricHyphen(let from, let to):
+                lineWidth: metrics.sp * 0.1
+            )
+        case let .lyricHyphen(from, to):
             // Same line thickness as the melisma rule; MuseScore's
             // `lyricsDashLineThickness` default is 0.1 sp.
             var path = Path()
@@ -338,7 +415,8 @@ public enum ScoreCanvasDrawing {
             context.stroke(
                 path,
                 with: .color(.primary),
-                lineWidth: metrics.sp * 0.1)
+                lineWidth: metrics.sp * 0.1
+            )
         case .note:
             break
         }
@@ -368,13 +446,16 @@ public enum ScoreCanvasDrawing {
             var leftExt: CGFloat = 0
             var rightExt: CGFloat = 0
             for n in notes
-            where abs(n.step - ledger) <= 1 && n.mirror {
+                where abs(n.step - ledger) <= 1 && n.mirror
+            {
                 let dx = n.mirrorDx(stem: stem, sp: metrics.sp)
                 if dx > 0 { rightExt = max(rightExt, dx) }
                 else { leftExt = max(leftExt, -dx) }
             }
-            return (chordX - halfWidth - leftExt,
-                    chordX + halfWidth + rightExt)
+            return (
+                chordX - halfWidth - leftExt,
+                chordX + halfWidth + rightExt
+            )
         }
 
         if maxStep > 4 {
@@ -388,7 +469,8 @@ public enum ScoreCanvasDrawing {
                 p.move(to: CGPoint(x: xL, y: y))
                 p.addLine(to: CGPoint(x: xR, y: y))
                 context.stroke(
-                    p, with: .color(.primary), lineWidth: lineWidth)
+                    p, with: .color(.primary), lineWidth: lineWidth
+                )
             }
         }
 
@@ -405,7 +487,8 @@ public enum ScoreCanvasDrawing {
                 p.move(to: CGPoint(x: xL, y: y))
                 p.addLine(to: CGPoint(x: xR, y: y))
                 context.stroke(
-                    p, with: .color(.primary), lineWidth: lineWidth)
+                    p, with: .color(.primary), lineWidth: lineWidth
+                )
             }
         }
     }

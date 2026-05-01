@@ -7,10 +7,10 @@ extension LayoutEngine {
     /// layout system (coordinates are system-absolute; the attach pass
     /// converts them to system-local).
     struct TiePair: Sendable, Equatable {
-        let staff: Int            // staff index (v1 only staff 0 considered)
-        let fromOrigin: CGPoint   // absolute (system + measure + note origin)
+        let staff: Int // staff index (v1 only staff 0 considered)
+        let fromOrigin: CGPoint // absolute (system + measure + note origin)
         let toOrigin: CGPoint
-        let above: Bool           // arc curves above (true) or below (false)
+        let above: Bool // arc curves above (true) or below (false)
     }
 
     /// Pair up ties across the fully-laid-out document. Walk each system's
@@ -55,7 +55,7 @@ extension LayoutEngine {
             }
             for measure in system.measures {
                 for el in measure.elements {
-                    guard case .chord(let notes, _, let stem, _, _, _, _, _)
+                    guard case let .chord(notes, _, stem, _, _, _, _, _)
                         = el else { continue }
                     let noteSteps = notes.map(\.step)
                     let maxStep = noteSteps.max() ?? 0
@@ -83,9 +83,9 @@ extension LayoutEngine {
                             // Single note in chord.
                             above = stem == .down
                         } else if n.step == maxStep {
-                            above = true   // top note → tie above
+                            above = true // top note → tie above
                         } else if n.step == minStep {
-                            above = false  // bottom note → tie below
+                            above = false // bottom note → tie below
                         } else {
                             above = stem == .down
                         }
@@ -110,7 +110,8 @@ extension LayoutEngine {
                         if let back = n.tieBack {
                             let key = TieKey(
                                 number: back, step: n.step,
-                                staffIndex: staffIndex)
+                                staffIndex: staffIndex
+                            )
                             if let openTie = open[key] {
                                 pairs.append(TiePair(
                                     staff: staffIndex,
@@ -124,7 +125,8 @@ extension LayoutEngine {
                         if let fwd = n.tieForward {
                             let key = TieKey(
                                 number: fwd, step: n.step,
-                                staffIndex: staffIndex)
+                                staffIndex: staffIndex
+                            )
                             open[key] = (absolute, above)
                         }
                     }
@@ -146,17 +148,21 @@ extension LayoutEngine {
 
         for pair in pairs {
             let fromSysIdx = systemIndex(
-                for: pair.fromOrigin.y, in: systems)
+                for: pair.fromOrigin.y, in: systems
+            )
             let toSysIdx = systemIndex(
-                for: pair.toOrigin.y, in: systems)
+                for: pair.toOrigin.y, in: systems
+            )
             if fromSysIdx == toSysIdx, let idx = fromSysIdx {
                 let sys = systems[idx]
                 let localFrom = CGPoint(
                     x: pair.fromOrigin.x - sys.origin.x,
-                    y: pair.fromOrigin.y - sys.origin.y)
+                    y: pair.fromOrigin.y - sys.origin.y
+                )
                 let localTo = CGPoint(
                     x: pair.toOrigin.x - sys.origin.x,
-                    y: pair.toOrigin.y - sys.origin.y)
+                    y: pair.toOrigin.y - sys.origin.y
+                )
                 extraPerSystem[idx].append(.tieArc(
                     fromOrigin: localFrom,
                     toOrigin: localTo,
@@ -175,10 +181,12 @@ extension LayoutEngine {
                 extraPerSystem[from].append(.tieArc(
                     fromOrigin: CGPoint(
                         x: pair.fromOrigin.x - fromSys.origin.x,
-                        y: pair.fromOrigin.y - fromSys.origin.y),
+                        y: pair.fromOrigin.y - fromSys.origin.y
+                    ),
                     toOrigin: CGPoint(
                         x: edgeX,
-                        y: pair.fromOrigin.y - fromSys.origin.y),
+                        y: pair.fromOrigin.y - fromSys.origin.y
+                    ),
                     above: pair.above
                 ))
                 // END segment (start of target system): MuseScore
@@ -194,15 +202,20 @@ extension LayoutEngine {
                 let firstContent = firstContentX(in: toSys)
                 let endSegStart = max(
                     firstContent - metrics.sp * 0.5,
-                    toLocalChordX - metrics.sp * 4)
+                    toLocalChordX - metrics.sp * 4
+                )
                 extraPerSystem[to].append(.tieArc(
                     fromOrigin: CGPoint(
-                        x: min(endSegStart,
-                               toLocalChordX - metrics.sp),
-                        y: pair.toOrigin.y - toSys.origin.y),
+                        x: min(
+                            endSegStart,
+                            toLocalChordX - metrics.sp
+                        ),
+                        y: pair.toOrigin.y - toSys.origin.y
+                    ),
                     toOrigin: CGPoint(
                         x: toLocalChordX,
-                        y: pair.toOrigin.y - toSys.origin.y),
+                        y: pair.toOrigin.y - toSys.origin.y
+                    ),
                     above: pair.above
                 ))
             }
@@ -231,16 +244,18 @@ extension LayoutEngine {
         var firstX: CGFloat = .infinity
         for el in firstMeasure.elements {
             switch el {
-            case .chord(let notes, _, _, _, _, _, _, _):
+            case let .chord(notes, _, _, _, _, _, _, _):
                 if let n = notes.first {
                     firstX = min(
                         firstX,
-                        firstMeasure.origin.x + n.origin.x)
+                        firstMeasure.origin.x + n.origin.x
+                    )
                 }
-            case .rest(_, let p, _, _, _):
+            case let .rest(_, p, _, _, _):
                 firstX = min(
                     firstX,
-                    firstMeasure.origin.x + p.x)
+                    firstMeasure.origin.x + p.x
+                )
             default:
                 break
             }

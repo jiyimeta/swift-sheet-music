@@ -34,10 +34,14 @@ public struct CreateTuplet: EditCommand {
         actualNotes: Int,
         normalNotes: Int
     ) {
-        precondition(actualNotes > 1,
-            "CreateTuplet: actualNotes must be > 1")
-        precondition(normalNotes > 0,
-            "CreateTuplet: normalNotes must be > 0")
+        precondition(
+            actualNotes > 1,
+            "CreateTuplet: actualNotes must be > 1"
+        )
+        precondition(
+            normalNotes > 0,
+            "CreateTuplet: normalNotes must be > 0"
+        )
         self.location = location
         self.actualNotes = actualNotes
         self.normalNotes = normalNotes
@@ -49,7 +53,7 @@ public struct CreateTuplet: EditCommand {
     public func apply(to score: inout Score) throws -> any EditCommand {
         guard let voice = DurationChangeAlgorithm
             .voice(in: score, at: location),
-              voice.elements.indices.contains(location.elementIndex)
+            voice.elements.indices.contains(location.elementIndex)
         else {
             throw SheetMusicError.invalidEdit(
                 reason: "CreateTuplet: no element at \(location)")
@@ -62,8 +66,9 @@ public struct CreateTuplet: EditCommand {
                 reason: "CreateTuplet: target at \(location) "
                     + "already sits inside another tuplet")
         }
-        guard case .chord(let target)
-            = voice.elements[location.elementIndex] else {
+        guard case let .chord(target)
+            = voice.elements[location.elementIndex]
+        else {
             throw SheetMusicError.invalidEdit(
                 reason: "CreateTuplet: target at \(location) "
                     + "is not a chord or rest")
@@ -79,13 +84,14 @@ public struct CreateTuplet: EditCommand {
         let memberTicks = targetTicks / actualNotes
         let memberDuration: NoteDuration = .fraction(Fraction(
             numerator: memberTicks,
-            denominator: 4 * division))
+            denominator: 4 * division
+        ))
 
         // Build the member sequence. The first one carries the
         // target's chord content (or stays a rest if the target was
         // empty); the remainder are rests of the same duration.
         var members: [VoiceElement] = []
-        for i in 0..<actualNotes {
+        for i in 0 ..< actualNotes {
             if i == 0 && !target.notes.isEmpty {
                 var copy = target
                 copy.duration = memberDuration
@@ -97,8 +103,9 @@ public struct CreateTuplet: EditCommand {
 
         var newElements = voice.elements
         newElements.replaceSubrange(
-            location.elementIndex...location.elementIndex,
-            with: members)
+            location.elementIndex ... location.elementIndex,
+            with: members
+        )
 
         // Tuplets entirely past the spliced region shift by the
         // net element-count change; tuplets entirely before stay
@@ -111,7 +118,8 @@ public struct CreateTuplet: EditCommand {
                     normalNotes: t.normalNotes,
                     actualNotes: t.actualNotes,
                     startIndex: t.startIndex + netDelta,
-                    endIndex: t.endIndex + netDelta)
+                    endIndex: t.endIndex + netDelta
+                )
             }
             return t
         }
@@ -119,7 +127,8 @@ public struct CreateTuplet: EditCommand {
             normalNotes: normalNotes,
             actualNotes: actualNotes,
             startIndex: location.elementIndex,
-            endIndex: location.elementIndex + actualNotes - 1))
+            endIndex: location.elementIndex + actualNotes - 1
+        ))
         // Sort by startIndex so downstream code that assumes ordered
         // tuplets doesn't break.
         newTuplets.sort { $0.startIndex < $1.startIndex }
@@ -129,7 +138,8 @@ public struct CreateTuplet: EditCommand {
             measureIndex: location.measureIndex,
             voiceIndex: location.voiceIndex,
             elements: newElements,
-            tuplets: newTuplets)
+            tuplets: newTuplets
+        )
         return try replace.apply(to: &score)
     }
 }

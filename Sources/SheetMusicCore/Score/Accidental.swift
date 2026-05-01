@@ -8,12 +8,12 @@ public enum Accidental: String, Sendable {
     /// Decode from mscx `<Accidental><subtype>` text values.
     public init?(mscxSubtype: String) {
         switch mscxSubtype {
-        case "accidentalSharp":       self = .sharp
-        case "accidentalFlat":        self = .flat
-        case "accidentalNatural":     self = .natural
+        case "accidentalSharp": self = .sharp
+        case "accidentalFlat": self = .flat
+        case "accidentalNatural": self = .natural
         case "accidentalDoubleSharp": self = .doubleSharp
-        case "accidentalDoubleFlat":  self = .doubleFlat
-        default:                      return nil
+        case "accidentalDoubleFlat": self = .doubleFlat
+        default: return nil
         }
     }
 }

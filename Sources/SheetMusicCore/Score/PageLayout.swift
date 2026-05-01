@@ -5,15 +5,15 @@ import Foundation
 /// — it is derived from `(width − printableWidth) − leftMargin`,
 /// mirroring `Page::rm` (`engraving/dom/page.cpp:207-209`).
 public struct PageLayout: Sendable, Equatable {
-    public var width: Double             // inches; C++ Sid::pageWidth
-    public var height: Double            // inches; C++ Sid::pageHeight
-    public var printableWidth: Double    // inches; C++ Sid::pagePrintableWidth
-    public var oddTopMargin: Double      // inches
-    public var oddBottomMargin: Double   // inches
-    public var oddLeftMargin: Double     // inches
-    public var evenTopMargin: Double     // inches
-    public var evenBottomMargin: Double  // inches
-    public var evenLeftMargin: Double    // inches
+    public var width: Double // inches; C++ Sid::pageWidth
+    public var height: Double // inches; C++ Sid::pageHeight
+    public var printableWidth: Double // inches; C++ Sid::pagePrintableWidth
+    public var oddTopMargin: Double // inches
+    public var oddBottomMargin: Double // inches
+    public var oddLeftMargin: Double // inches
+    public var evenTopMargin: Double // inches
+    public var evenBottomMargin: Double // inches
+    public var evenLeftMargin: Double // inches
     /// `true` → odd pages use `odd*Margin`, even pages use
     /// `even*Margin`. `false` → every page uses the odd values.
     /// MuseScore default `true`. C++ `Sid::pageTwosided`.
@@ -68,5 +68,6 @@ public struct PageLayout: Sendable, Equatable {
         evenTopMargin: 15.0 / 25.4,
         evenBottomMargin: 15.0 / 25.4,
         evenLeftMargin: 15.0 / 25.4,
-        twosided: true)
+        twosided: true
+    )
 }

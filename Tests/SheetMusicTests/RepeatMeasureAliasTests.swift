@@ -22,7 +22,7 @@ import Testing
           </RepeatMeasure>
         </voice>
         """
-        let voice = try Voice.decode(try XMLTreeParser.parse(Data(xml.utf8)))
+        let voice = try Voice.decode(XMLTreeParser.parse(Data(xml.utf8)))
         #expect(voice.elements.count == 1)
         guard case let .measureRepeat(rep) = voice.elements[0] else {
             Issue.record("expected .measureRepeat, got \(voice.elements)")
@@ -42,11 +42,11 @@ import Testing
         // Source measure has TWO voices.
         let sourceVoice0 = Voice(elements: [
             .chord(Chord(duration: .half, notes: [Note(pitch: 60, tpc: 14)])),
-            .chord(Chord(duration: .half, notes: [Note(pitch: 62, tpc: 16)]))
+            .chord(Chord(duration: .half, notes: [Note(pitch: 62, tpc: 16)])),
         ])
         let sourceVoice1 = Voice(elements: [
             .chord(Chord(duration: .half, notes: [Note(pitch: 72, tpc: 14)])),
-            .chord(Chord(duration: .half, notes: [Note(pitch: 74, tpc: 16)]))
+            .chord(Chord(duration: .half, notes: [Note(pitch: 74, tpc: 16)])),
         ])
         let sourceMeasure = Measure(voices: [sourceVoice0, sourceVoice1])
         // Repeat measure has only voice 0 carrying the marker. Voice 1 is absent
@@ -55,7 +55,7 @@ import Testing
             .measureRepeat(MeasureRepeat(
                 numMeasures: 1,
                 duration: .fraction(Fraction(numerator: 4, denominator: 4))
-            ))
+            )),
         ])
         let repeatMeasure = Measure(voices: [markerVoice])
         let staff = StaffContent(id: 1, measures: [sourceMeasure, repeatMeasure])
@@ -76,10 +76,10 @@ import Testing
         let instrument = Instrument(id: "test", articulations: [InstrumentArticulation()])
         let part = Part(id: "P1", instrument: instrument)
         let sourceVoice0 = Voice(elements: [
-            .chord(Chord(duration: .whole, notes: [Note(pitch: 60, tpc: 14)]))
+            .chord(Chord(duration: .whole, notes: [Note(pitch: 60, tpc: 14)])),
         ])
         let sourceVoice1 = Voice(elements: [
-            .chord(Chord(duration: .whole, notes: [Note(pitch: 72, tpc: 14)]))
+            .chord(Chord(duration: .whole, notes: [Note(pitch: 72, tpc: 14)])),
         ])
         let sourceMeasure = Measure(voices: [sourceVoice0, sourceVoice1])
         let emptyVoice0 = Voice(elements: [])
@@ -87,7 +87,7 @@ import Testing
             .measureRepeat(MeasureRepeat(
                 numMeasures: 1,
                 duration: .fraction(Fraction(numerator: 4, denominator: 4))
-            ))
+            )),
         ])
         let repeatMeasure = Measure(voices: [emptyVoice0, markerVoice1])
         let staff = StaffContent(id: 1, measures: [sourceMeasure, repeatMeasure])
@@ -125,7 +125,7 @@ import Testing
             .measureRepeat(MeasureRepeat(
                 numMeasures: 2,
                 duration: .fraction(Fraction(numerator: 4, denominator: 4))
-            ))
+            )),
         ])
         let m4 = Measure(
             voices: [m4MarkerVoice, Voice(elements: [])],
@@ -153,7 +153,7 @@ import Testing
             .chord(Chord(duration: .quarter, notes: [Note(pitch: 60, tpc: 14)])),
             .chord(Chord(duration: .quarter, notes: [Note(pitch: 62, tpc: 16)])),
             .chord(Chord(duration: .quarter, notes: [Note(pitch: 64, tpc: 18)])),
-            .chord(Chord(duration: .quarter, notes: [Note(pitch: 65, tpc: 13)]))
+            .chord(Chord(duration: .quarter, notes: [Note(pitch: 65, tpc: 13)])),
         ])
         let sourceMeasure = Measure(voices: [sourceVoice])
         // Measure 2: a single <MeasureRepeat> marker spanning the whole measure.
@@ -161,7 +161,7 @@ import Testing
             .measureRepeat(MeasureRepeat(
                 numMeasures: 1,
                 duration: .fraction(Fraction(numerator: 4, denominator: 4))
-            ))
+            )),
         ])
         let repeatMeasure = Measure(voices: [repeatVoice])
         let staff = StaffContent(id: 1, measures: [sourceMeasure, repeatMeasure])

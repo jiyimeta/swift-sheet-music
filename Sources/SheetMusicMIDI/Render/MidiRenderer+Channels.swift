@@ -49,7 +49,7 @@ extension MidiRenderer {
         var staffCursor = 0
         for (partIndex, part) in score.parts.enumerated() {
             let stavesInPart = max(1, part.staffDeclarations.count)
-            for offset in 0..<stavesInPart {
+            for offset in 0 ..< stavesInPart {
                 guard staffCursor < score.staves.count else { break }
                 result.append(StaffOwnership(partIndex: partIndex, isTopOfPart: offset == 0))
                 staffCursor += 1

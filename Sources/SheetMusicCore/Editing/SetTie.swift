@@ -55,14 +55,17 @@ public struct SetTie: EditCommand {
         let priorTargetBack = oldTarget.tieBack
         try Self.update(
             score: &score, noteID: sourceID,
-            mutate: { $0.tieForward = sourceTieForward })
+            mutate: { $0.tieForward = sourceTieForward }
+        )
         try Self.update(
             score: &score, noteID: targetID,
-            mutate: { $0.tieBack = targetTieBack })
+            mutate: { $0.tieBack = targetTieBack }
+        )
         return SetTie(
             from: sourceID, to: targetID,
             sourceTieForward: priorSourceForward,
-            targetTieBack: priorTargetBack)
+            targetTieBack: priorTargetBack
+        )
     }
 
     private static func update(
@@ -76,7 +79,8 @@ public struct SetTie: EditCommand {
                 reason: "SetTie: element at \(veID) is not a chord")
         }
         guard chord.notes.indices
-            .contains(noteID.noteIndexInChord) else {
+            .contains(noteID.noteIndexInChord)
+        else {
             throw SheetMusicError.invalidEdit(
                 reason: "SetTie: noteIndex out of range at \(noteID)")
         }

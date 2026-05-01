@@ -1,5 +1,5 @@
-import SwiftUI
 import SheetMusicLayout
+import SwiftUI
 
 @available(macOS 15.0, iOS 16.0, *)
 enum ArpeggioRenderer {
@@ -21,7 +21,8 @@ enum ArpeggioRenderer {
             context.drawGlyph(
                 SMuFLGlyph.arpeggioWiggle,
                 at: CGPoint(x: x, y: y),
-                size: metrics.glyphFontSize)
+                size: metrics.glyphFontSize
+            )
             y += metrics.sp
         }
         switch subtype {
@@ -29,12 +30,14 @@ enum ArpeggioRenderer {
             context.drawGlyph(
                 SMuFLGlyph.arpeggioUpArrow,
                 at: CGPoint(x: x, y: top.y - metrics.sp),
-                size: metrics.glyphFontSize)
+                size: metrics.glyphFontSize
+            )
         case "down":
             context.drawGlyph(
                 SMuFLGlyph.arpeggioDownArrow,
                 at: CGPoint(x: x, y: bottom.y + metrics.sp),
-                size: metrics.glyphFontSize)
+                size: metrics.glyphFontSize
+            )
         default:
             break
         }

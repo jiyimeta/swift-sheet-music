@@ -12,7 +12,8 @@ enum MSCXRestDecoder {
                 reason: "Rest missing <durationType>")
         }
         let duration = try duration(
-            forDurationType: durationText, node: node)
+            forDurationType: durationText, node: node
+        )
         return Chord(duration: duration, notes: [])
     }
 

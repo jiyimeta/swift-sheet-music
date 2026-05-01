@@ -71,10 +71,12 @@ public struct PDFPageView: View {
                 // `renderScale`.
                 let canvasSize = CGSize(
                     width: pageSize.width * renderScale,
-                    height: pageSize.height * renderScale)
+                    height: pageSize.height * renderScale
+                )
                 context.fill(
                     Path(CGRect(origin: .zero, size: canvasSize)),
-                    with: .color(.white))
+                    with: .color(.white)
+                )
                 var local = context
                 // Scale the drawing coordinates BEFORE translating
                 // so glyphs render at native resolution at the new
@@ -84,13 +86,15 @@ public struct PDFPageView: View {
                 }
                 local.translateBy(
                     x: margins.leading,
-                    y: margins.top - pageStartY)
+                    y: margins.top - pageStartY
+                )
                 if let titleFrame {
                     TitleFrameRenderer.draw(titleFrame, into: &local)
                 }
                 for system in systems {
                     ScoreCanvasDrawing.drawSystem(
-                        system, metrics: metrics, into: &local)
+                        system, metrics: metrics, into: &local
+                    )
                 }
             }
             if showBreakIndicators {
@@ -98,14 +102,17 @@ public struct PDFPageView: View {
                     mode: .document(
                         systems: systems,
                         documentYOffset: pageStartY - margins.top,
-                        xOffset: margins.leading),
-                    metrics: metrics)
-                    .scaleEffect(renderScale, anchor: .topLeading)
+                        xOffset: margins.leading
+                    ),
+                    metrics: metrics
+                )
+                .scaleEffect(renderScale, anchor: .topLeading)
             }
         }
         .frame(
             width: pageSize.width * renderScale,
-            height: pageSize.height * renderScale)
+            height: pageSize.height * renderScale
+        )
         .environment(\.colorScheme, .light)
     }
 }

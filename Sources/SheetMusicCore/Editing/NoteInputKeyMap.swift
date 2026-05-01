@@ -18,12 +18,12 @@ public enum NoteInputKeyMap {
         let pitchOffset: Int
         let tpc: Int
         switch lower {
-        case "c": pitchOffset = 0;  tpc = 14
-        case "d": pitchOffset = 2;  tpc = 16
-        case "e": pitchOffset = 4;  tpc = 18
-        case "f": pitchOffset = 5;  tpc = 13
-        case "g": pitchOffset = 7;  tpc = 15
-        case "a": pitchOffset = 9;  tpc = 17
+        case "c": pitchOffset = 0; tpc = 14
+        case "d": pitchOffset = 2; tpc = 16
+        case "e": pitchOffset = 4; tpc = 18
+        case "f": pitchOffset = 5; tpc = 13
+        case "g": pitchOffset = 7; tpc = 15
+        case "a": pitchOffset = 9; tpc = 17
         case "b": pitchOffset = 11; tpc = 19
         default: return nil
         }
@@ -48,7 +48,7 @@ public enum NoteInputKeyMap {
         case "5": return .quarter
         case "6": return .half
         case "7": return .whole
-        default:  return nil
+        default: return nil
         }
     }
 }

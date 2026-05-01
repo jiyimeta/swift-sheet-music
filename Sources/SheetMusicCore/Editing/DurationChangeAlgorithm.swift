@@ -42,7 +42,8 @@ public enum DurationChangeAlgorithm {
             let rests = alignedRests(
                 forTicks: leftover,
                 rtickStart: targetRtick + dstTicks,
-                division: division)
+                division: division
+            )
             newElements.insert(contentsOf: rests, at: idx + 1)
         } else if dstTicks > srcTicks {
             let needed = dstTicks - srcTicks
@@ -68,9 +69,9 @@ public enum DurationChangeAlgorithm {
                     $0.startIndex <= i && i <= $0.endIndex
                 }) {
                     var tupletTicks = 0
-                    for j in containing.startIndex...containing.endIndex {
+                    for j in containing.startIndex ... containing.endIndex {
                         switch newElements[j] {
-                        case .chord(let c):
+                        case let .chord(c):
                             tupletTicks += c.duration.ticks(
                                 division: division)
                         // Rests are empty chords, picked up by the
@@ -96,7 +97,7 @@ public enum DurationChangeAlgorithm {
                 }
                 let elTicks: Int
                 switch newElements[i] {
-                case .chord(let c):
+                case let .chord(c):
                     elTicks = c.duration.ticks(division: division)
                 default:
                     throw SheetMusicError.invalidEdit(
@@ -124,12 +125,13 @@ public enum DurationChangeAlgorithm {
             }
             consumedEndIdx = lastConsumedIdx
             let lastEl = newElements[lastConsumedIdx]
-            newElements.removeSubrange((idx + 1)...lastConsumedIdx)
+            newElements.removeSubrange((idx + 1) ... lastConsumedIdx)
             if partial > 0 {
                 let durations = alignedDurations(
                     forTicks: partial,
                     rtickStart: targetRtick + dstTicks,
-                    division: division)
+                    division: division
+                )
                 let pieces: [VoiceElement]
                 if lastConsumedWasTuplet {
                     pieces = durations.map {
@@ -137,10 +139,11 @@ public enum DurationChangeAlgorithm {
                     }
                 } else {
                     switch lastEl {
-                    case .chord(let consumedChord)
+                    case let .chord(consumedChord)
                         where !consumedChord.notes.isEmpty:
                         pieces = makeChordChain(
-                            from: consumedChord, durations: durations)
+                            from: consumedChord, durations: durations
+                        )
                     default:
                         // Rest overshoot (or empty chord) — leftover
                         // is plain rests, no tied chain.
@@ -150,7 +153,8 @@ public enum DurationChangeAlgorithm {
                     }
                 }
                 newElements.insert(
-                    contentsOf: pieces, at: idx + 1)
+                    contentsOf: pieces, at: idx + 1
+                )
             }
         }
         let netDelta = newElements.count - voice.elements.count
@@ -163,7 +167,8 @@ public enum DurationChangeAlgorithm {
                 return t
             }
             if t.startIndex >= idx + 1
-                && t.endIndex <= consumedEndIdx {
+                && t.endIndex <= consumedEndIdx
+            {
                 return nil
             }
             if t.startIndex > consumedEndIdx {
@@ -171,7 +176,8 @@ public enum DurationChangeAlgorithm {
                     normalNotes: t.normalNotes,
                     actualNotes: t.actualNotes,
                     startIndex: t.startIndex + netDelta,
-                    endIndex: t.endIndex + netDelta)
+                    endIndex: t.endIndex + netDelta
+                )
             }
             // Partial overlap — should not occur given our
             // tuplet-as-unit consumption rule.
@@ -188,9 +194,9 @@ public enum DurationChangeAlgorithm {
         in voice: Voice, ofElementAt idx: Int, division: Int
     ) -> Int {
         var t = 0
-        for i in 0..<min(idx, voice.elements.count) {
+        for i in 0 ..< min(idx, voice.elements.count) {
             switch voice.elements[i] {
-            case .chord(let c):
+            case let .chord(c):
                 t += c.duration.ticks(division: division)
             default:
                 continue
@@ -232,7 +238,8 @@ public enum DurationChangeAlgorithm {
             guard let pick = picked else {
                 result.append(.fraction(Fraction(
                     numerator: remaining,
-                    denominator: division * 4)))
+                    denominator: division * 4
+                )))
                 break
             }
             result.append(pick)
@@ -273,7 +280,8 @@ public enum DurationChangeAlgorithm {
                 duration: dur,
                 notes: notes,
                 arpeggio: isFirst ? src.arpeggio : nil,
-                lyrics: isFirst ? src.lyrics : [])))
+                lyrics: isFirst ? src.lyrics : []
+            )))
         }
         return pieces
     }

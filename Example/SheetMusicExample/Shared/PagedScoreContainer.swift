@@ -17,7 +17,8 @@ struct PagedScoreContainer: View {
             PagedScoreView(
                 score: score, options: options,
                 pageIndex: $pageIndex,
-                totalPages: $totalPages)
+                totalPages: $totalPages
+            )
             HStack(spacing: 0) {
                 Color.clear
                     .contentShape(Rectangle())

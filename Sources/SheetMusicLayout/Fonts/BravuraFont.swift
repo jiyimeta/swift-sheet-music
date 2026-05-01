@@ -28,12 +28,14 @@ public enum BravuraFont {
     public static let register: Bool = {
         let logger = Logger(
             subsystem: "swift-sheet-music.SheetMusicUI",
-            category: "BravuraFont")
+            category: "BravuraFont"
+        )
 
         if let url = locateBravuraURL(logger: logger) {
             var error: Unmanaged<CFError>?
             let ok = CTFontManagerRegisterFontsForURL(
-                url as CFURL, .process, &error)
+                url as CFURL, .process, &error
+            )
             if ok {
                 logger.info("Bravura registered from \(url.path, privacy: .public)")
                 return true
@@ -44,7 +46,8 @@ public enum BravuraFont {
             // means a previous register call (e.g. in the same process)
             // already installed the font.
             if let cfErr = error?.takeUnretainedValue(),
-               CFErrorGetCode(cfErr) == 105 {
+               CFErrorGetCode(cfErr) == 105
+            {
                 logger.info("Bravura already registered (reused)")
                 return true
             }
@@ -74,10 +77,12 @@ public enum BravuraFont {
             // Host apps may also embed the SheetMusicUI resource bundle
             // as a sibling .bundle; open it explicitly and search inside.
             if let nestedURL = bundle.url(
-                    forResource: "swift-sheet-music_SheetMusicUI",
-                    withExtension: "bundle"),
-               let nested = Bundle(url: nestedURL),
-               let url = find(in: nested) {
+                forResource: "swift-sheet-music_SheetMusicUI",
+                withExtension: "bundle"
+            ),
+                let nested = Bundle(url: nestedURL),
+                let url = find(in: nested)
+            {
                 return url
             }
         }
@@ -87,12 +92,14 @@ public enum BravuraFont {
 
     private static func find(in bundle: Bundle) -> URL? {
         if let url = bundle.url(
-            forResource: "Bravura", withExtension: "otf") {
+            forResource: "Bravura", withExtension: "otf"
+        ) {
             return url
         }
         if let url = bundle.url(
             forResource: "Bravura", withExtension: "otf",
-            subdirectory: "Resources") {
+            subdirectory: "Resources"
+        ) {
             return url
         }
         return nil

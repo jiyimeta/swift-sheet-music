@@ -33,5 +33,6 @@ public struct ScoreStyle: Sendable, Equatable {
     public static let museScoreDefaults = ScoreStyle(
         spatium: 1.75,
         pageLayout: .museScoreA4,
-        pageChrome: .museScoreDefaults)
+        pageChrome: .museScoreDefaults
+    )
 }

@@ -6,8 +6,12 @@ struct VoiceElementIDTests {
     @Test("Subscript getter resolves a valid path")
     func getterValid() {
         let score = EditingFixtures.fourQuarterRests()
-        let id = VoiceElementID(staffIndex: 0, measureIndex: 0,
-                                voiceIndex: 0, elementIndex: 1)
+        let id = VoiceElementID(
+            staffIndex: 0,
+            measureIndex: 0,
+            voiceIndex: 0,
+            elementIndex: 1
+        )
         guard case let .chord(rest) = score[id], rest.notes.isEmpty else {
             Issue.record("expected a rest (empty chord) at index 1")
             return
@@ -18,18 +22,28 @@ struct VoiceElementIDTests {
     @Test("Subscript getter returns nil for out-of-range path")
     func getterOutOfRange() {
         let score = EditingFixtures.fourQuarterRests()
-        let id = VoiceElementID(staffIndex: 0, measureIndex: 0,
-                                voiceIndex: 0, elementIndex: 99)
+        let id = VoiceElementID(
+            staffIndex: 0,
+            measureIndex: 0,
+            voiceIndex: 0,
+            elementIndex: 99
+        )
         #expect(score[id] == nil)
     }
 
     @Test("Subscript setter replaces the element at the given path")
     func setterReplaces() {
         var score = EditingFixtures.fourQuarterRests()
-        let id = VoiceElementID(staffIndex: 0, measureIndex: 0,
-                                voiceIndex: 0, elementIndex: 1)
-        let chord = Chord(duration: .quarter,
-                          notes: [Note(pitch: 60, tpc: 14)])
+        let id = VoiceElementID(
+            staffIndex: 0,
+            measureIndex: 0,
+            voiceIndex: 0,
+            elementIndex: 1
+        )
+        let chord = Chord(
+            duration: .quarter,
+            notes: [Note(pitch: 60, tpc: 14)]
+        )
         score[id] = .chord(chord)
         guard case let .chord(c) = score[id] else {
             Issue.record("expected chord after set")
@@ -40,8 +54,12 @@ struct VoiceElementIDTests {
 
     @Test("RestID converts to VoiceElementID with same indices")
     func fromRestID() {
-        let restID = RestID(staffIndex: 0, measureIndex: 0,
-                            voiceIndex: 0, elementIndex: 1)
+        let restID = RestID(
+            staffIndex: 0,
+            measureIndex: 0,
+            voiceIndex: 0,
+            elementIndex: 1
+        )
         let veID = VoiceElementID(restID)
         #expect(veID.staffIndex == 0)
         #expect(veID.measureIndex == 0)

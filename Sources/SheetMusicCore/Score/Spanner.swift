@@ -17,9 +17,9 @@ public struct Spanner: Sendable, Equatable {
     }
 
     public var kind: Kind
-    public var rawType: String                // original "type" attribute
-    public var nextMeasuresOffset: Int        // distance to the spanner end in measures
-    public var voltaEndings: [Int]            // for Volta: the take-numbers (1, 2, …)
+    public var rawType: String // original "type" attribute
+    public var nextMeasuresOffset: Int // distance to the spanner end in measures
+    public var voltaEndings: [Int] // for Volta: the take-numbers (1, 2, …)
 
     public init(
         kind: Kind,

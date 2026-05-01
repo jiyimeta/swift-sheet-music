@@ -1,5 +1,5 @@
-import SwiftUI
 import SheetMusicLayout
+import SwiftUI
 
 /// Draws the measure-number label that engraving convention places
 /// above the first measure of every system.
@@ -23,6 +23,7 @@ enum MeasureNumberRenderer {
             text, at: origin,
             size: metrics.sp * 2.0,
             italic: false,
-            anchor: .bottomLeading)
+            anchor: .bottomLeading
+        )
     }
 }

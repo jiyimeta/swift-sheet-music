@@ -37,7 +37,7 @@ public enum MSCZWriter {
             ) { position, size in
                 let start = Int(position)
                 let end = min(start + size, mscxData.count)
-                return mscxData.subdata(in: start..<end)
+                return mscxData.subdata(in: start ..< end)
             }
         } catch {
             throw SheetMusicError.corruptedContainer(

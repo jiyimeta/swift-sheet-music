@@ -111,7 +111,7 @@ import Testing
         // channels 0…10 (skipping 9) and the drum still lands on 9.
         var parts: [Part] = []
         var staves: [StaffContent] = []
-        for i in 0..<11 {
+        for i in 0 ..< 11 {
             parts.append(Part(
                 id: "M\(i)",
                 instrument: Instrument(id: "m\(i)", articulations: [InstrumentArticulation()])
@@ -125,7 +125,7 @@ import Testing
         let file = try MidiRenderer.render(score: score)
         let channels = file.tracks.compactMap(Self.channelOf(track:))
         // Melodic parts: 0,1,2,3,4,5,6,7,8,10,11 (skipping 9). Drum: 9.
-        #expect(channels[0..<11] == [0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 11])
+        #expect(channels[0 ..< 11] == [0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 11])
         #expect(channels[11] == 9)
     }
 

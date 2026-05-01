@@ -1,5 +1,5 @@
-import SwiftUI
 import SheetMusicLayout
+import SwiftUI
 
 @available(macOS 15.0, iOS 16.0, *)
 enum TextMarkRenderer {
@@ -14,7 +14,8 @@ enum TextMarkRenderer {
             text,
             at: origin,
             size: metrics.sp * 2.5,
-            italic: true)
+            italic: true
+        )
     }
 
     /// Tempo indication ("♩ = 120"). Upright, bold, above staff.
@@ -28,6 +29,7 @@ enum TextMarkRenderer {
             text,
             at: origin,
             size: metrics.sp * 2.2,
-            italic: false)
+            italic: false
+        )
     }
 }

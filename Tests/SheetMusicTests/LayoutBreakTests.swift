@@ -1,8 +1,8 @@
 import Foundation
 @testable import SheetMusic
 @testable import SheetMusicCore
-@testable import SheetMusicMSCX
 @testable import SheetMusicLayout
+@testable import SheetMusicMSCX
 @testable import SheetMusicUI
 import Testing
 
@@ -79,15 +79,21 @@ import Testing
             StaffContent(id: 2, measures: [mPlain, mPlain, mPlain]),
         ]
         #expect(LayoutEngine.measureForcesLineBreak(
-            at: 0, staves: staves) == true)
+            at: 0, staves: staves
+        ) == true)
+        #expect(
+            LayoutEngine.measureForcesLineBreak(
+                at: 1, staves: staves
+            ) == true,
+            "page break should also force a system break"
+        )
         #expect(LayoutEngine.measureForcesLineBreak(
-            at: 1, staves: staves) == true,
-                "page break should also force a system break")
-        #expect(LayoutEngine.measureForcesLineBreak(
-            at: 2, staves: staves) == false)
+            at: 2, staves: staves
+        ) == false)
         // Out-of-range index returns false rather than crashing.
         #expect(LayoutEngine.measureForcesLineBreak(
-            at: 99, staves: staves) == false)
+            at: 99, staves: staves
+        ) == false)
     }
 
     /// Between two forced breaks (or between start-of-score and the
@@ -104,13 +110,14 @@ import Testing
         // width is meaningful.
         let chord = Chord(
             duration: .quarter,
-            notes: [Note(pitch: 60, tpc: 14)])
+            notes: [Note(pitch: 60, tpc: 14)]
+        )
         let baseMeasure = Measure(voices: [Voice(elements: [
             .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
             .chord(chord), .chord(chord),
             .chord(chord), .chord(chord),
         ])])
-        let measures = (0..<8).map { idx -> Measure in
+        let measures = (0 ..< 8).map { idx -> Measure in
             var m = baseMeasure
             if idx == 7 { m.lineBreak = true }
             return m
@@ -120,9 +127,12 @@ import Testing
             id: "P1",
             instrument: Instrument(
                 id: "i",
-                articulations: [InstrumentArticulation()]))
+                articulations: [InstrumentArticulation()]
+            )
+        )
         let score = Score(
-            division: 480, parts: [part], staves: [staff])
+            division: 480, parts: [part], staves: [staff]
+        )
         // Width chosen so greedy packing would land 5+3 but
         // balanced wrap collapses that to 4+4. Each measure's
         // `crossStaffMinimumMeasureWidth` is ~48.65 pt at
@@ -138,9 +148,11 @@ import Testing
         //     so the system packer caps at 4 — collapsing
         //     greedy 5+3 to 4+4.
         let opts = ScoreViewOptions(
-            staffSize: 14, systemGap: 16, wrapToViewWidth: true)
+            staffSize: 14, systemGap: 16, wrapToViewWidth: true
+        )
         let doc = LayoutEngine.layout(
-            score: score, options: opts, availableWidth: 400)
+            score: score, options: opts, availableWidth: 400
+        )
         // Two systems, 4 measures each — not 5+3 / 6+2 / 7+1.
         #expect(doc.systems.count == 2)
         #expect(doc.systems[0].measures.count == 4)
@@ -156,30 +168,37 @@ import Testing
         guard #available(macOS 15.0, iOS 16.0, *) else { return }
         let chord = Chord(
             duration: .quarter,
-            notes: [Note(pitch: 60, tpc: 14)])
+            notes: [Note(pitch: 60, tpc: 14)]
+        )
         // Six measures with a forced line break on every odd index.
-        let measures = (0..<6).map { idx in
+        let measures = (0 ..< 6).map { idx in
             Measure(
                 voices: [Voice(elements: [
                     .chord(chord), .chord(chord),
                     .chord(chord), .chord(chord),
                 ])],
-                lineBreak: idx % 2 == 1)
+                lineBreak: idx % 2 == 1
+            )
         }
         let staff = StaffContent(id: 1, measures: measures)
         let part = Part(
             id: "P1",
             instrument: Instrument(
                 id: "i",
-                articulations: [InstrumentArticulation()]))
+                articulations: [InstrumentArticulation()]
+            )
+        )
         let score = Score(
-            division: 480, parts: [part], staves: [staff])
+            division: 480, parts: [part], staves: [staff]
+        )
         let doc = LayoutEngine.layout(
             score: score,
             options: ScoreViewOptions(
                 staffSize: 16, systemGap: 16,
-                wrapToViewWidth: false),
-            availableWidth: 4000)
+                wrapToViewWidth: false
+            ),
+            availableWidth: 4000
+        )
         // wrapToViewWidth=false → one system holds every measure
         // regardless of LayoutBreaks.
         #expect(doc.systems.count == 1)
@@ -193,34 +212,40 @@ import Testing
         guard #available(macOS 15.0, iOS 16.0, *) else { return }
         let chord = Chord(
             duration: .quarter,
-            notes: [Note(pitch: 60, tpc: 14)])
+            notes: [Note(pitch: 60, tpc: 14)]
+        )
         // Six measures, with `lineBreak` on indices 1 and 3 (so
         // breaks land *after* measures 2 and 4).
-        let measures = (0..<6).map { idx in
+        let measures = (0 ..< 6).map { idx in
             Measure(
                 voices: [Voice(elements: [
                     .chord(chord), .chord(chord),
                     .chord(chord), .chord(chord),
                 ])],
-                lineBreak: idx == 1 || idx == 3)
+                lineBreak: idx == 1 || idx == 3
+            )
         }
         let staff = StaffContent(id: 1, measures: measures)
         let part = Part(
             id: "P1",
             instrument: Instrument(
                 id: "i",
-                articulations: [InstrumentArticulation()]))
+                articulations: [InstrumentArticulation()]
+            )
+        )
         let score = Score(
-            division: 480, parts: [part], staves: [staff])
+            division: 480, parts: [part], staves: [staff]
+        )
         let doc = LayoutEngine.layout(
             score: score,
             options: ScoreViewOptions(
                 staffSize: 16, systemGap: 16,
-                wrapToViewWidth: true),
-            availableWidth: 4000) // wide enough that nothing
-                                  // wraps from horizontal overflow
+                wrapToViewWidth: true
+            ),
+            availableWidth: 4000
+        ) // wide enough that nothing
+        // wraps from horizontal overflow
         // Two explicit breaks → three systems.
         #expect(doc.systems.count == 3)
     }
 }
-

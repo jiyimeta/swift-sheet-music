@@ -5,7 +5,8 @@ import Testing
 struct DeleteVoiceElementTests {
     private static let chordID = VoiceElementID(
         staffIndex: 0, measureIndex: 0,
-        voiceIndex: 0, elementIndex: 1)
+        voiceIndex: 0, elementIndex: 1
+    )
 
     @Test("apply replaces a chord with a rest of the same duration")
     func applyChord() throws {
@@ -13,7 +14,7 @@ struct DeleteVoiceElementTests {
         let cmd = DeleteVoiceElement(at: Self.chordID)
         _ = try cmd.apply(to: &score)
         let after = try #require(score[Self.chordID])
-        guard case .chord(let r) = after, r.notes.isEmpty else {
+        guard case let .chord(r) = after, r.notes.isEmpty else {
             Issue.record("Expected rest after delete, got \(after)")
             return
         }
@@ -35,7 +36,8 @@ struct DeleteVoiceElementTests {
         var score = EditingFixtures.fourQuarterRests()
         let restID = VoiceElementID(
             staffIndex: 0, measureIndex: 0,
-            voiceIndex: 0, elementIndex: 2)
+            voiceIndex: 0, elementIndex: 2
+        )
         let before = score
         let cmd = DeleteVoiceElement(at: restID)
         let inverse = try cmd.apply(to: &score)
@@ -50,7 +52,8 @@ struct DeleteVoiceElementTests {
         var score = EditingFixtures.fourQuarterRests()
         let timeSigID = VoiceElementID(
             staffIndex: 0, measureIndex: 0,
-            voiceIndex: 0, elementIndex: 0)
+            voiceIndex: 0, elementIndex: 0
+        )
         let cmd = DeleteVoiceElement(at: timeSigID)
         #expect(throws: SheetMusicError.self) {
             _ = try cmd.apply(to: &score)
@@ -62,7 +65,8 @@ struct DeleteVoiceElementTests {
         var score = EditingFixtures.fourQuarterRests()
         let bogus = VoiceElementID(
             staffIndex: 0, measureIndex: 0,
-            voiceIndex: 0, elementIndex: 99)
+            voiceIndex: 0, elementIndex: 99
+        )
         let cmd = DeleteVoiceElement(at: bogus)
         #expect(throws: SheetMusicError.self) {
             _ = try cmd.apply(to: &score)

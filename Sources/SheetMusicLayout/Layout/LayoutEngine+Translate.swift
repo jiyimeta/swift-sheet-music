@@ -12,22 +12,32 @@ extension LayoutEngine {
             CGPoint(x: p.x, y: p.y + dy)
         }
         switch element {
-        case .clef(let t, let p):
+        case let .clef(t, p):
             return .clef(rawType: t, origin: shift(p))
-        case .keySignature(let s, let f, let p):
+        case let .keySignature(s, f, p):
             return .keySignature(sharps: s, flats: f, origin: shift(p))
-        case .timeSignature(let n, let d, let p):
+        case let .timeSignature(n, d, p):
             return .timeSignature(
-                numerator: n, denominator: d, origin: shift(p))
-        case .barLine(let s, let p):
+                numerator: n, denominator: d, origin: shift(p)
+            )
+        case let .barLine(s, p):
             return .barLine(subtype: s, origin: shift(p))
         case let .rest(d, p, vi, rid, hll):
             return .rest(
                 duration: d, origin: shift(p),
                 voiceIndex: vi, restID: rid,
-                hasLegerLine: hll)
-        case .chord(let notes, let dur, let stem, let so,
-                    let arp, let art, let beamed, let vi):
+                hasLegerLine: hll
+            )
+        case let .chord(
+            notes,
+            dur,
+            stem,
+            so,
+            arp,
+            art,
+            beamed,
+            vi
+        ):
             let shiftedNotes = notes.map {
                 LayoutChordNote(
                     noteID: $0.noteID,
@@ -51,47 +61,59 @@ extension LayoutEngine {
                 isBeamed: beamed,
                 voiceIndex: vi
             )
-        case .textMark(let k, let t, let p):
+        case let .textMark(k, t, p):
             return .textMark(kind: k, text: t, origin: shift(p))
-        case .fermata(let s, let p):
+        case let .fermata(s, p):
             return .fermata(subtype: s, origin: shift(p))
-        case .measureRepeat(let c, let p):
+        case let .measureRepeat(c, p):
             return .measureRepeat(count: c, origin: shift(p))
-        case .beam(let from, let to, let direction, let level):
+        case let .beam(from, to, direction, level):
             return .beam(
                 fromOrigin: shift(from),
                 toOrigin: shift(to),
                 direction: direction,
-                level: level)
-        case .glissandoLine(let from, let to, let wavy, let text):
+                level: level
+            )
+        case let .glissandoLine(from, to, wavy, text):
             return .glissandoLine(
                 fromOrigin: shift(from),
                 toOrigin: shift(to),
                 wavy: wavy,
-                text: text)
-        case .arpeggioWiggle(let top, let bot, let subtype):
+                text: text
+            )
+        case let .arpeggioWiggle(top, bot, subtype):
             return .arpeggioWiggle(
                 top: shift(top),
                 bottom: shift(bot),
-                subtype: subtype)
-        case .tupletLabel(let from, let to, let text, let bracket,
-                          let above, let tid):
+                subtype: subtype
+            )
+        case let .tupletLabel(
+            from,
+            to,
+            text,
+            bracket,
+            above,
+            tid
+        ):
             return .tupletLabel(
                 fromOrigin: shift(from),
                 toOrigin: shift(to),
                 text: text,
                 hasBracket: bracket,
                 isAbove: above,
-                tupletID: tid)
-        case .lyricsMelisma(let from, let to):
+                tupletID: tid
+            )
+        case let .lyricsMelisma(from, to):
             return .lyricsMelisma(
                 fromOrigin: shift(from),
-                toOrigin: shift(to))
-        case .lyricHyphen(let from, let to):
+                toOrigin: shift(to)
+            )
+        case let .lyricHyphen(from, to):
             return .lyricHyphen(
                 fromOrigin: shift(from),
-                toOrigin: shift(to))
-        case .staffText(let text, let p, let color, let isSystem):
+                toOrigin: shift(to)
+            )
+        case let .staffText(text, p, color, isSystem):
             // Emitted by `placeMeasureElements` in staff-local
             // coords (relative to a virtual staff with top at
             // sp * 2), so the per-staff `dy` must be applied for
@@ -101,13 +123,15 @@ extension LayoutEngine {
                 text: text,
                 origin: shift(p),
                 color: color,
-                isSystemText: isSystem)
-        case .rehearsalMark(let text, let p, let frame, let color):
+                isSystemText: isSystem
+            )
+        case let .rehearsalMark(text, p, frame, color):
             // Same staff-local origin convention as `.staffText`;
             // shift onto the system's actual top-staff y.
             return .rehearsalMark(
                 text: text, origin: shift(p),
-                frame: frame, color: color)
+                frame: frame, color: color
+            )
         case .note, .marker, .jump, .measureNumber, .staffName,
              .spannerSegment, .tieArc:
             return element

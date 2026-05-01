@@ -8,7 +8,7 @@ import Testing
 @Suite struct MidiRendererTests {
     @Test func rendersMidi01HeaderAndNotes() throws {
         let url = try #require(Bundle.module.url(forResource: "midi01", withExtension: "mscx"))
-        let score = try MSCXParser.parse(try Data(contentsOf: url))
+        let score = try MSCXParser.parse(Data(contentsOf: url))
         let file = try MidiRenderer.render(score: score)
 
         #expect(file.format == 1)
@@ -32,7 +32,7 @@ import Testing
 
         // Four note-on events at quarter-note positions (pitches 60..63).
         let noteOns: [(Int, Int)] = track.events.compactMap { ev in
-            if case .noteOn(_, let pitch, let vel) = ev.event, vel > 0 { return (ev.tick, pitch) } else { return nil }
+            if case let .noteOn(_, pitch, vel) = ev.event, vel > 0 { return (ev.tick, pitch) } else { return nil }
         }
         #expect(noteOns.count == 4)
         #expect(noteOns.map(\.0) == [0, 480, 960, 1440])
@@ -40,8 +40,8 @@ import Testing
 
         // Four note-off events at on-tick + 479 (mirrors midi01-ref.mid).
         let noteOffs: [(Int, Int)] = track.events.compactMap { ev in
-            if case .noteOff(_, let pitch, _) = ev.event { return (ev.tick, pitch) }
-            if case .noteOn(_, let pitch, let vel) = ev.event, vel == 0 { return (ev.tick, pitch) }
+            if case let .noteOff(_, pitch, _) = ev.event { return (ev.tick, pitch) }
+            if case let .noteOn(_, pitch, vel) = ev.event, vel == 0 { return (ev.tick, pitch) }
             return nil
         }
         #expect(noteOffs.count == 4)

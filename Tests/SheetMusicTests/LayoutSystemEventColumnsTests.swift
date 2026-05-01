@@ -9,14 +9,15 @@ struct LayoutSystemEventColumnsTests {
         let chord = { (p: Int) -> VoiceElement in
             .chord(Chord(
                 duration: .quarter,
-                notes: [Note(pitch: p, tpc: 14)]))
+                notes: [Note(pitch: p, tpc: 14)]
+            ))
         }
         let measure = Measure(voices: [
             Voice(elements: [
                 .clef(Clef(concertClefType: "G")),
                 chord(60), .rest(duration: .quarter),
-                chord(64), chord(65)
-            ])
+                chord(64), chord(65),
+            ]),
         ])
         return Score(
             division: 480,
@@ -26,8 +27,11 @@ struct LayoutSystemEventColumnsTests {
                 staffDeclarations: [StaffDeclaration(
                     staffType: "stdNormal",
                     group: "pitched",
-                    defaultClefType: "G")])],
-            staves: [StaffContent(id: 1, measures: [measure])])
+                    defaultClefType: "G"
+                )]
+            )],
+            staves: [StaffContent(id: 1, measures: [measure])]
+        )
     }
 
     @Test("Index has one entry per chord + rest, sorted by centerX")
@@ -36,7 +40,8 @@ struct LayoutSystemEventColumnsTests {
         let doc = LayoutEngine.layout(
             score: sample(),
             options: ScoreViewOptions(),
-            availableWidth: 600)
+            availableWidth: 600
+        )
         let system = try #require(doc.systems.first)
 
         // 3 chords + 1 rest from `sample()`, no clef entry.
@@ -48,9 +53,9 @@ struct LayoutSystemEventColumnsTests {
         // measure layout.
         let kinds = Set(system.eventColumns.map { col -> String in
             switch col.id {
-            case .note: return "note"
-            case .rest: return "rest"
-            case .tuplet: return "tuplet"
+            case .note: "note"
+            case .rest: "rest"
+            case .tuplet: "tuplet"
             }
         })
         #expect(kinds == ["note", "rest"])
@@ -66,7 +71,8 @@ struct LayoutSystemEventColumnsTests {
         let doc = LayoutEngine.layout(
             score: sample(),
             options: ScoreViewOptions(),
-            availableWidth: 600)
+            availableWidth: 600
+        )
         let system = try #require(doc.systems.first)
 
         let expected = system.eventColumns

@@ -29,6 +29,7 @@ enum RestRenderer {
         default: glyph = SMuFLGlyph.restQuarter
         }
         context.drawGlyph(
-            glyph, at: origin, size: metrics.glyphFontSize)
+            glyph, at: origin, size: metrics.glyphFontSize
+        )
     }
 }

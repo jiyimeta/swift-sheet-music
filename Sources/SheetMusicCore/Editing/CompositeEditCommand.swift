@@ -49,6 +49,7 @@ public struct CompositeEditCommand: EditCommand {
         // back to where the previous sub-command had left it.
         return CompositeEditCommand(
             commands: inverses.reversed(),
-            location: location)
+            location: location
+        )
     }
 }

@@ -81,11 +81,11 @@ public enum PitchSpelling {
 
     private static func semitoneShift(of accidental: Accidental?) -> Int {
         switch accidental {
-        case .doubleFlat:  return -2
-        case .flat:        return -1
-        case .none, .natural: return 0
-        case .sharp:       return 1
-        case .doubleSharp: return 2
+        case .doubleFlat: -2
+        case .flat: -1
+        case .none, .natural: 0
+        case .sharp: 1
+        case .doubleSharp: 2
         }
     }
 
@@ -109,7 +109,7 @@ public enum PitchSpelling {
         // closest to the existing pitch — works for any current
         // accidental within ±2 semitones of natural.
         let approxOctave = Int(((Double(note.pitch)
-            - Double(naturalSemi)) / 12.0).rounded()) - 1
+                - Double(naturalSemi)) / 12.0).rounded()) - 1
         let shift = semitoneShift(of: target)
         let newPitch = 12 * (approxOctave + 1) + naturalSemi + shift
         let newTpc = naturalTpcByLetter[letter] + 7 * shift
@@ -151,17 +151,17 @@ public enum PitchSpelling {
         }
         if alteration == keyAlteration { return nil }
         switch alteration {
-        case 0:  return .natural
-        case 1:  return .sharp
+        case 0: return .natural
+        case 1: return .sharp
         case -1: return .flat
-        case 2:  return .doubleSharp
+        case 2: return .doubleSharp
         case -2: return .doubleFlat
         default: return nil
         }
     }
 }
 
-public extension Note {
+extension Note {
     /// Return a copy of this note shifted by `delta` semitones.
     /// Each semitone step is computed via
     /// `PitchSpelling.shiftedTpc(... in: keySig)`, applied
@@ -170,16 +170,17 @@ public extension Note {
     ///
     /// Returns `nil` when the resulting pitch falls outside the
     /// MIDI range `0…127`.
-    func shifted(bySemitones delta: Int, in keySig: Int = 0) -> Note? {
+    public func shifted(bySemitones delta: Int, in keySig: Int = 0) -> Note? {
         if delta == 0 { return self }
         let direction = delta > 0 ? 1 : -1
         var current = self
-        for _ in 0..<abs(delta) {
+        for _ in 0 ..< abs(delta) {
             let nextPitch = current.pitch + direction
-            guard (0...127).contains(nextPitch) else { return nil }
+            guard (0 ... 127).contains(nextPitch) else { return nil }
             current.tpc = PitchSpelling.shiftedTpc(
                 from: current.pitch, priorTpc: current.tpc,
-                to: nextPitch, in: keySig)
+                to: nextPitch, in: keySig
+            )
             current.pitch = nextPitch
         }
         // Refresh the accidental override to match the new TPC vs
@@ -188,7 +189,8 @@ public extension Note {
         // the prior note had — usually nil, leaving newly-altered notes
         // with no visible flat / sharp / natural sign.
         current.accidental = PitchSpelling.displayedAccidental(
-            forTpc: current.tpc, in: keySig)
+            forTpc: current.tpc, in: keySig
+        )
         return current
     }
 }

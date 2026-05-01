@@ -29,9 +29,11 @@ extension LayoutEngine {
         division: Int
     ) -> [BeamGroup] {
         let beatLen = oneBeatTicks(
-            timeSignature: timeSignature, division: division)
+            timeSignature: timeSignature, division: division
+        )
         let maxGroupLen = beamGroupTicks(
-            timeSignature: timeSignature, division: division)
+            timeSignature: timeSignature, division: division
+        )
 
         // Pre-scan: for each beat, collect the DISTINCT beam levels so
         // we can tell whether the beat is "uniform" (all notes share a
@@ -44,7 +46,7 @@ extension LayoutEngine {
         var scanTick = 0
         for el in voice.elements {
             switch el {
-            case .chord(let c):
+            case let .chord(c):
                 let level = beamLevel(c.duration)
                 if level > 0 && beatLen > 0 {
                     let beat = scanTick / beatLen
@@ -67,18 +69,19 @@ extension LayoutEngine {
         func flush() {
             if currentIndices.count >= 2 && currentLevel >= 1 {
                 groups.append(BeamGroup(
-                    memberIndices: currentIndices, level: currentLevel))
+                    memberIndices: currentIndices, level: currentLevel
+                ))
             }
             currentIndices.removeAll()
             currentLevel = 0
         }
         for (i, el) in voice.elements.enumerated() {
             switch el {
-            case .chord(let c) where c.notes.isEmpty:
+            case let .chord(c) where c.notes.isEmpty:
                 // Rest: breaks any in-progress beam group.
                 flush()
                 tick += c.duration.ticks(division: division)
-            case .chord(let c):
+            case let .chord(c):
                 let level = beamLevel(c.duration)
                 if level == 0 {
                     flush()
@@ -131,7 +134,6 @@ extension LayoutEngine {
                 tick += c.duration.ticks(division: division)
             default:
                 if case .barLine = el { flush() }
-                break
             }
         }
         flush()
@@ -147,7 +149,8 @@ extension LayoutEngine {
         guard let ts = timeSignature else { return division }
         if ts.denominator == 8
             && ts.numerator % 3 == 0
-            && ts.numerator > 0 {
+            && ts.numerator > 0
+        {
             return (division * 3) / 2
         }
         return (division * 4) / max(1, ts.denominator)
@@ -187,7 +190,8 @@ extension LayoutEngine {
         // Compound meter: group = dotted quarter.
         if ts.denominator == 8
             && ts.numerator % 3 == 0
-            && ts.numerator > 0 {
+            && ts.numerator > 0
+        {
             return (division * 3) / 2
         }
 
@@ -287,15 +291,16 @@ extension LayoutEngine {
 
         let beamWidthSp = max(
             0.01,
-            (stemXs.last! - stemXs.first!) / metrics.sp)
+            (stemXs.last! - stemXs.first!) / metrics.sp
+        )
         let maxByWidth: Int
         switch beamWidthSp {
-        case ..<3:    maxByWidth = 1
-        case ..<5:    maxByWidth = 2
-        case ..<7.5:  maxByWidth = 3
-        case ..<10:   maxByWidth = 4
+        case ..<3: maxByWidth = 1
+        case ..<5: maxByWidth = 2
+        case ..<7.5: maxByWidth = 3
+        case ..<10: maxByWidth = 4
         case ..<12.5: maxByWidth = 5
-        default:      maxByWidth = 6
+        default: maxByWidth = 6
         }
 
         let slantSteps = min(intervalSteps, min(maxByInterval, maxByWidth))

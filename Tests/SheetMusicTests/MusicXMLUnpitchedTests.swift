@@ -165,8 +165,10 @@ import Testing
             Issue.record("expected parse failure")
         } catch let e as SheetMusicError {
             let description = e.localizedDescription
-            #expect(description.contains("MusicXML"),
-                    "errorDescription should expose the reason, got: \(description)")
+            #expect(
+                description.contains("MusicXML"),
+                "errorDescription should expose the reason, got: \(description)"
+            )
         }
     }
 }

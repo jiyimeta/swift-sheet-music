@@ -5,13 +5,15 @@ import Testing
 struct CreateTupletTests {
     private static let chordVE = VoiceElementID(
         staffIndex: 0, measureIndex: 0,
-        voiceIndex: 0, elementIndex: 1)
+        voiceIndex: 0, elementIndex: 1
+    )
 
     @Test("triplet on a quarter chord produces 3 eighth-triplet members")
     func tripletOnQuarter() throws {
         var score = EditingFixtures.chordAtIndex1()
         let cmd = CreateTuplet(
-            at: Self.chordVE, actualNotes: 3, normalNotes: 2)
+            at: Self.chordVE, actualNotes: 3, normalNotes: 2
+        )
         _ = try cmd.apply(to: &score)
         let voice = score.staves[0].measures[0].voices[0]
         // Original: [timeSig, chord(q), rest(q) × 3]. After:
@@ -24,16 +26,16 @@ struct CreateTupletTests {
         #expect(t.startIndex == 1)
         #expect(t.endIndex == 3)
         // First member retains the C4 chord; the other two are rests.
-        guard case .chord(let c1) = voice.elements[1] else {
+        guard case let .chord(c1) = voice.elements[1] else {
             Issue.record("first member should keep the chord"); return
         }
         #expect(!c1.notes.isEmpty)
         #expect(c1.notes.first?.pitch == 60)
         #expect(c1.duration == .fraction(Fraction(numerator: 1, denominator: 12)))
-        guard case .chord(let r2) = voice.elements[2], r2.notes.isEmpty
+        guard case let .chord(r2) = voice.elements[2], r2.notes.isEmpty
         else { Issue.record("idx 2 should be a rest"); return }
         #expect(r2.duration == .fraction(Fraction(numerator: 1, denominator: 12)))
-        guard case .chord(let r3) = voice.elements[3], r3.notes.isEmpty
+        guard case let .chord(r3) = voice.elements[3], r3.notes.isEmpty
         else { Issue.record("idx 3 should be a rest"); return }
         #expect(r3.duration == .fraction(Fraction(numerator: 1, denominator: 12)))
     }
@@ -43,14 +45,16 @@ struct CreateTupletTests {
         var score = EditingFixtures.fourQuarterRests()
         let restID = VoiceElementID(
             staffIndex: 0, measureIndex: 0,
-            voiceIndex: 0, elementIndex: 2)
+            voiceIndex: 0, elementIndex: 2
+        )
         let cmd = CreateTuplet(
-            at: restID, actualNotes: 3, normalNotes: 2)
+            at: restID, actualNotes: 3, normalNotes: 2
+        )
         _ = try cmd.apply(to: &score)
         let voice = score.staves[0].measures[0].voices[0]
         #expect(voice.tuplets.count == 1)
-        for j in 2...4 {
-            guard case .chord(let r) = voice.elements[j], r.notes.isEmpty
+        for j in 2 ... 4 {
+            guard case let .chord(r) = voice.elements[j], r.notes.isEmpty
             else { Issue.record("idx \(j) should be a rest"); return }
         }
     }
@@ -59,12 +63,13 @@ struct CreateTupletTests {
     func quintupletOnQuarter() throws {
         var score = EditingFixtures.chordAtIndex1()
         let cmd = CreateTuplet(
-            at: Self.chordVE, actualNotes: 5, normalNotes: 4)
+            at: Self.chordVE, actualNotes: 5, normalNotes: 4
+        )
         _ = try cmd.apply(to: &score)
         let voice = score.staves[0].measures[0].voices[0]
         #expect(voice.tuplets[0].actualNotes == 5)
         #expect(voice.tuplets[0].endIndex - voice.tuplets[0].startIndex == 4)
-        guard case .chord(let c) = voice.elements[1] else {
+        guard case let .chord(c) = voice.elements[1] else {
             Issue.record("expected chord"); return
         }
         // 480 / 5 = 96 ticks per member. As fraction-of-whole:
@@ -77,7 +82,8 @@ struct CreateTupletTests {
         var score = EditingFixtures.chordAtIndex1()
         let snapshot = score
         let cmd = CreateTuplet(
-            at: Self.chordVE, actualNotes: 3, normalNotes: 2)
+            at: Self.chordVE, actualNotes: 3, normalNotes: 2
+        )
         let inverse = try cmd.apply(to: &score)
         _ = try inverse.apply(to: &score)
         #expect(score == snapshot)
@@ -88,15 +94,18 @@ struct CreateTupletTests {
         var score = EditingFixtures.chordAtIndex1()
         // First create a triplet.
         let outer = try? CreateTuplet(
-            at: Self.chordVE, actualNotes: 3, normalNotes: 2)
-            .apply(to: &score)
+            at: Self.chordVE, actualNotes: 3, normalNotes: 2
+        )
+        .apply(to: &score)
         _ = outer
         // Targeting a member of the new triplet should refuse.
         let memberVE = VoiceElementID(
             staffIndex: 0, measureIndex: 0,
-            voiceIndex: 0, elementIndex: 2)
+            voiceIndex: 0, elementIndex: 2
+        )
         let cmd = CreateTuplet(
-            at: memberVE, actualNotes: 3, normalNotes: 2)
+            at: memberVE, actualNotes: 3, normalNotes: 2
+        )
         #expect(throws: SheetMusicError.self) {
             _ = try cmd.apply(to: &score)
         }
@@ -107,7 +116,8 @@ struct CreateTupletTests {
         var score = EditingFixtures.chordAtIndex1()
         // Quarter = 480 ticks; 480 / 7 isn't an integer.
         let cmd = CreateTuplet(
-            at: Self.chordVE, actualNotes: 7, normalNotes: 4)
+            at: Self.chordVE, actualNotes: 7, normalNotes: 4
+        )
         #expect(throws: SheetMusicError.self) {
             _ = try cmd.apply(to: &score)
         }
@@ -122,17 +132,20 @@ struct CreateTupletTests {
         // first tuplet's indices should not move.
         var score = EditingFixtures.chordAtIndex1()
         _ = try CreateTuplet(
-            at: Self.chordVE, actualNotes: 3, normalNotes: 2)
-            .apply(to: &score)
+            at: Self.chordVE, actualNotes: 3, normalNotes: 2
+        )
+        .apply(to: &score)
         // After the first triplet voice is:
         //   [timeSig, m1, m2, m3, rest(q), rest(q), rest(q)]
         // Target the rest at idx 4.
         let secondTarget = VoiceElementID(
             staffIndex: 0, measureIndex: 0,
-            voiceIndex: 0, elementIndex: 4)
+            voiceIndex: 0, elementIndex: 4
+        )
         _ = try CreateTuplet(
-            at: secondTarget, actualNotes: 3, normalNotes: 2)
-            .apply(to: &score)
+            at: secondTarget, actualNotes: 3, normalNotes: 2
+        )
+        .apply(to: &score)
         let voice = score.staves[0].measures[0].voices[0]
         #expect(voice.tuplets.count == 2)
         let first = voice.tuplets[0]

@@ -70,7 +70,7 @@ extension Score {
                 }
             }
             let rights = id.all("rights")
-                .map { $0.text }
+                .map(\.text)
                 .filter { !$0.isEmpty }
                 .joined(separator: "\n")
             if !rights.isEmpty {
@@ -106,7 +106,8 @@ extension Score {
         for (index, partNode) in root.all("part").enumerated() {
             let id = partNode.attributes["id"] ?? ""
             guard let scorePart = scoreParts.first(where: { $0.attributes["id"] == id })
-                ?? (index < scoreParts.count ? scoreParts[index] : nil) else {
+                ?? (index < scoreParts.count ? scoreParts[index] : nil)
+            else {
                 throw SheetMusicError.malformedScore(
                     reason: "MusicXML: <part id='\(id)'> has no matching <score-part>"
                 )

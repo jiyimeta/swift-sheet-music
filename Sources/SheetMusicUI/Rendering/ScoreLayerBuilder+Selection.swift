@@ -26,9 +26,10 @@ extension ScoreLayerBuilder {
         for measure in system.measures {
             for el in measure.elements {
                 switch el {
-                case .chord(let notes, _, _, _, _, _, _, _):
+                case let .chord(notes, _, _, _, _, _, _, _):
                     for n in notes
-                    where selection.selectedIDs.contains(.note(n.noteID)) {
+                        where selection.selectedIDs.contains(.note(n.noteID))
+                    {
                         let ax = measure.origin.x + n.origin.x
                         minX = min(minX, ax)
                         maxX = max(maxX, ax)
@@ -61,18 +62,20 @@ extension ScoreLayerBuilder {
             x: minX - xPad,
             y: topY - yPad,
             width: max(0, maxX - minX) + xPad * 2,
-            height: (botY - topY) + metrics.staffHeight + yPad * 2)
+            height: (botY - topY) + metrics.staffHeight + yPad * 2
+        )
 
         let path = CGPath(rect: rect, transform: nil)
         #if os(macOS)
-        // LayoutEngine emits Y-down; macOS CALayer is Y-up. Flip
-        // around `height` to match the other layers built in the
-        // same tree (see `ScoreLayerBuilder.flipForPlatform`).
-        var flip = CGAffineTransform(
-            a: 1, b: 0, c: 0, d: -1, tx: 0, ty: height)
-        let drawPath = path.copy(using: &flip) ?? path
+            // LayoutEngine emits Y-down; macOS CALayer is Y-up. Flip
+            // around `height` to match the other layers built in the
+            // same tree (see `ScoreLayerBuilder.flipForPlatform`).
+            var flip = CGAffineTransform(
+                a: 1, b: 0, c: 0, d: -1, tx: 0, ty: height
+            )
+            let drawPath = path.copy(using: &flip) ?? path
         #else
-        let drawPath = path
+            let drawPath = path
         #endif
         let layer = CAShapeLayer()
         layer.path = drawPath

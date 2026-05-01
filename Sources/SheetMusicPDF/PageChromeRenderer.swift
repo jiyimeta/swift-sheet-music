@@ -4,9 +4,9 @@ import Foundation
 import SheetMusicCore
 
 #if canImport(AppKit)
-import AppKit
+    import AppKit
 #elseif canImport(UIKit)
-import UIKit
+    import UIKit
 #endif
 
 /// Draws header / footer / page-number text into the margin area of
@@ -32,17 +32,20 @@ enum PageChromeRenderer {
         let macroContext = PageChromeMacroExpander.Context(
             pageIndex: pageIndex,
             pageCount: pageCount,
-            metaTags: metaTags)
+            metaTags: metaTags
+        )
         drawBlock(
             chrome.header, kind: .header,
             pageIndex: pageIndex,
             pageSize: pageSize, margins: margins,
-            macroContext: macroContext, into: ctx)
+            macroContext: macroContext, into: ctx
+        )
         drawBlock(
             chrome.footer, kind: .footer,
             pageIndex: pageIndex,
             pageSize: pageSize, margins: margins,
-            macroContext: macroContext, into: ctx)
+            macroContext: macroContext, into: ctx
+        )
     }
 
     private enum BlockKind { case header, footer }
@@ -63,23 +66,29 @@ enum PageChromeRenderer {
         let font = makeFont(
             face: block.fontFace,
             size: CGFloat(block.fontSize),
-            style: block.fontStyle)
+            style: block.fontStyle
+        )
         let baselineY = baseline(
             kind: kind, font: font,
-            pageSize: pageSize, margins: margins)
+            pageSize: pageSize, margins: margins
+        )
 
         let leftText = PageChromeMacroExpander.expand(
-            row.left, context: macroContext)
+            row.left, context: macroContext
+        )
         let centerText = PageChromeMacroExpander.expand(
-            row.center, context: macroContext)
+            row.center, context: macroContext
+        )
         let rightText = PageChromeMacroExpander.expand(
-            row.right, context: macroContext)
+            row.right, context: macroContext
+        )
 
         if !leftText.isEmpty {
             drawLine(
                 leftText, font: font,
                 x: margins.leading, alignment: .leading,
-                baselineY: baselineY, into: ctx)
+                baselineY: baselineY, into: ctx
+            )
         }
         if !centerText.isEmpty {
             let mid = (margins.leading
@@ -87,14 +96,16 @@ enum PageChromeRenderer {
             drawLine(
                 centerText, font: font,
                 x: mid, alignment: .center,
-                baselineY: baselineY, into: ctx)
+                baselineY: baselineY, into: ctx
+            )
         }
         if !rightText.isEmpty {
             drawLine(
                 rightText, font: font,
                 x: pageSize.width - margins.trailing,
                 alignment: .trailing,
-                baselineY: baselineY, into: ctx)
+                baselineY: baselineY, into: ctx
+            )
         }
     }
 
@@ -144,15 +155,17 @@ enum PageChromeRenderer {
             string: text, attributes: [
                 .font: font,
                 .foregroundColor: cgBlack(),
-            ])
+            ]
+        )
         let line = CTLineCreateWithAttributedString(attr)
         let bounds = CTLineGetBoundsWithOptions(
-            line, [.useGlyphPathBounds])
+            line, [.useGlyphPathBounds]
+        )
         let width = bounds.width
         let originX: CGFloat
         switch alignment {
-        case .leading:  originX = x
-        case .center:   originX = x - width / 2
+        case .leading: originX = x
+        case .center: originX = x - width / 2
         case .trailing: originX = x - width
         }
         ctx.saveGState()
@@ -161,7 +174,8 @@ enum PageChromeRenderer {
         // purposes; we draw with `textMatrix` flipped so glyph
         // outlines go up-right rather than down-right.
         ctx.textMatrix = CGAffineTransform(
-            a: 1, b: 0, c: 0, d: -1, tx: 0, ty: 0)
+            a: 1, b: 0, c: 0, d: -1, tx: 0, ty: 0
+        )
         ctx.textPosition = CGPoint(x: originX, y: baselineY)
         CTLineDraw(line, ctx)
         ctx.restoreGState()
@@ -175,21 +189,24 @@ enum PageChromeRenderer {
         face: String, size: CGFloat, style: FontStyleSet
     ) -> CTFont {
         var traits: CTFontSymbolicTraits = []
-        if style.contains(.bold)   { traits.insert(.boldTrait) }
+        if style.contains(.bold) { traits.insert(.boldTrait) }
         if style.contains(.italic) { traits.insert(.italicTrait) }
         let descriptor = CTFontDescriptorCreateWithNameAndSize(
-            face as CFString, size)
+            face as CFString, size
+        )
         let withTraits: CTFontDescriptor
         if traits.isEmpty {
             withTraits = descriptor
         } else if let d = CTFontDescriptorCreateCopyWithSymbolicTraits(
-            descriptor, traits, traits) {
+            descriptor, traits, traits
+        ) {
             withTraits = d
         } else {
             withTraits = descriptor
         }
         let font = CTFontCreateWithFontDescriptor(
-            withTraits, size, nil)
+            withTraits, size, nil
+        )
         // CT happily creates a stub for missing faces; check by
         // round-tripping the family name and falling back to a
         // system serif if the requested face isn't really there.
@@ -204,14 +221,15 @@ enum PageChromeRenderer {
         size: CGFloat, traits: CTFontSymbolicTraits
     ) -> CTFont {
         #if canImport(AppKit)
-        let nsFont = NSFont.systemFont(ofSize: size)
-        return nsFont as CTFont
+            let nsFont = NSFont.systemFont(ofSize: size)
+            return nsFont as CTFont
         #elseif canImport(UIKit)
-        let uiFont = UIFont.systemFont(ofSize: size)
-        return uiFont as CTFont
+            let uiFont = UIFont.systemFont(ofSize: size)
+            return uiFont as CTFont
         #else
-        return CTFontCreateWithName(
-            "Helvetica" as CFString, size, nil)
+            return CTFontCreateWithName(
+                "Helvetica" as CFString, size, nil
+            )
         #endif
     }
 }

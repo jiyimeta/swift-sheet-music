@@ -63,14 +63,17 @@ extension LayoutEngine {
         // centre sits at half that distance from the start.
         let dashDist = curLength / CGFloat(dashCount)
         var xCenter: CGFloat = 0
-        for i in 0..<dashCount {
+        for i in 0 ..< dashCount {
             xCenter += i == 0 ? 0.5 * dashDist : dashDist
             let centerX = fromX + xCenter
             out.append(.lyricHyphen(
                 fromOrigin: CGPoint(
-                    x: centerX - 0.5 * dashWidth, y: y),
+                    x: centerX - 0.5 * dashWidth, y: y
+                ),
                 toOrigin: CGPoint(
-                    x: centerX + 0.5 * dashWidth, y: y)))
+                    x: centerX + 0.5 * dashWidth, y: y
+                )
+            ))
         }
     }
 
@@ -105,7 +108,8 @@ extension LayoutEngine {
             : 0
         let withinMeasureRightX = max(
             headerContentStartX + metrics.sp,
-            measureWidth - metrics.sp)
+            measureWidth - metrics.sp
+        )
         let crossingRightX = measureWidth
         let sortedTicks = tickColumns.keys.sorted()
         let endX: CGFloat
@@ -113,7 +117,8 @@ extension LayoutEngine {
             endX = crossingRightX
         } else if let t = sortedTicks.first(
             where: { $0 >= continuation.endTick }),
-           let nextX = tickColumns[t] {
+            let nextX = tickColumns[t]
+        {
             // Match MuseScore: extend through the end-note's
             // notehead to its right edge rather than stopping
             // just before it.
@@ -124,7 +129,8 @@ extension LayoutEngine {
         guard endX > lineStartX + metrics.sp * 0.5 else { return }
         out.append(.lyricsMelisma(
             fromOrigin: CGPoint(x: lineStartX, y: lyricsY),
-            toOrigin: CGPoint(x: endX, y: lyricsY)))
+            toOrigin: CGPoint(x: endX, y: lyricsY)
+        ))
     }
 
     /// Build a map from every non-empty lyric syllable to its
@@ -143,16 +149,18 @@ extension LayoutEngine {
             for (mIdx, measure) in staff.measures.enumerated() {
                 for (vIdx, voice) in measure.voices.enumerated() {
                     for (eIdx, el) in voice.elements.enumerated() {
-                        guard case .chord(let chord) = el else { continue }
+                        guard case let .chord(chord) = el else { continue }
                         for (verseIdx, lyric)
-                        in chord.lyrics.enumerated()
-                        where !lyric.text.isEmpty {
+                            in chord.lyrics.enumerated()
+                            where !lyric.text.isEmpty
+                        {
                             map[MelismaLyricKey(
                                 staffIndex: staffIdx,
                                 measureIndex: mIdx,
                                 voiceIndex: vIdx,
                                 elementIndex: eIdx,
-                                verseIndex: verseIdx)] = lyric.ticks
+                                verseIndex: verseIdx
+                            )] = lyric.ticks
                         }
                     }
                 }
@@ -188,7 +196,7 @@ extension LayoutEngine {
         for (staffIdx, staff) in score.staves.enumerated() {
             let voiceCount = staff.measures
                 .map(\.voices.count).max() ?? 0
-            for voiceIdx in 0..<voiceCount {
+            for voiceIdx in 0 ..< voiceCount {
                 // Pre-compute total voice ticks per measure so the
                 // inner loop doesn't rescan them repeatedly.
                 let tickCounts: [Int] = staff.measures.map { m in
@@ -196,7 +204,7 @@ extension LayoutEngine {
                     var total = 0
                     for el in m.voices[voiceIdx].elements {
                         switch el {
-                        case .chord(let c):
+                        case let .chord(c):
                             total += c.duration.ticks(division: division)
                         default:
                             break
@@ -208,20 +216,23 @@ extension LayoutEngine {
                     guard voiceIdx < measure.voices.count else { continue }
                     var tickInMeasure = 0
                     for (eIdx, el)
-                    in measure.voices[voiceIdx].elements.enumerated() {
+                        in measure.voices[voiceIdx].elements.enumerated()
+                    {
                         switch el {
-                        case .chord(let c):
+                        case let .chord(c):
                             let chordTicks = c.duration
                                 .ticks(division: division)
                             for (verseIdx, lyric)
-                            in c.lyrics.enumerated()
-                            where !lyric.text.isEmpty {
+                                in c.lyrics.enumerated()
+                                where !lyric.text.isEmpty
+                            {
                                 let key = MelismaLyricKey(
                                     staffIndex: staffIdx,
                                     measureIndex: mIdx,
                                     voiceIndex: voiceIdx,
                                     elementIndex: eIdx,
-                                    verseIndex: verseIdx)
+                                    verseIndex: verseIdx
+                                )
                                 let ticks = effectiveTicks[key]
                                     ?? lyric.ticks
                                 guard ticks > 0 else { continue }
@@ -232,7 +243,8 @@ extension LayoutEngine {
                                     voiceIdx: voiceIdx,
                                     verseIdx: verseIdx,
                                     tickCounts: tickCounts,
-                                    result: &result[staffIdx])
+                                    result: &result[staffIdx]
+                                )
                             }
                             tickInMeasure += chordTicks
                         default:
@@ -271,7 +283,8 @@ extension LayoutEngine {
                         voiceIndex: voiceIdx,
                         verseIndex: verseIdx,
                         endTick: tickCounts[currentMeasure],
-                        continuesPastMeasure: true))
+                        continuesPastMeasure: true
+                    ))
                 }
                 currentMeasure += 1
                 currentTick = 0
@@ -291,7 +304,8 @@ extension LayoutEngine {
                         voiceIndex: voiceIdx,
                         verseIndex: verseIdx,
                         endTick: currentTick + remaining,
-                        continuesPastMeasure: false))
+                        continuesPastMeasure: false
+                    ))
                 }
                 return
             }
@@ -311,7 +325,8 @@ extension LayoutEngine {
                     voiceIndex: voiceIdx,
                     verseIndex: verseIdx,
                     endTick: tickCounts[currentMeasure],
-                    continuesPastMeasure: true))
+                    continuesPastMeasure: true
+                ))
             }
             currentMeasure += 1
             currentTick = 0
@@ -338,7 +353,7 @@ extension LayoutEngine {
         // maps to 0.3 — match it so CoreText returns the same glyph
         // advances SwiftUI uses.
         let traits: CFDictionary = [
-            kCTFontWeightTrait: 0.3
+            kCTFontWeightTrait: 0.3,
         ] as CFDictionary
         let attributes: CFDictionary = [
             kCTFontTraitsAttribute: traits,
@@ -347,10 +362,11 @@ extension LayoutEngine {
         let descriptor = CTFontDescriptorCreateWithAttributes(attributes)
         let font = CTFontCreateWithFontDescriptor(descriptor, fontSize, nil)
         let attrs: CFDictionary = [
-            kCTFontAttributeName: font
+            kCTFontAttributeName: font,
         ] as CFDictionary
         guard let attrString = CFAttributedStringCreate(
-            nil, text as CFString, attrs)
+            nil, text as CFString, attrs
+        )
         else { return 0 }
         let line = CTLineCreateWithAttributedString(attrString)
         return CGFloat(
@@ -420,12 +436,14 @@ extension LayoutEngine {
         // barline (which sits at `measureWidth - sp/2`).
         let withinMeasureRightX = max(
             headerContentStartX + metrics.sp,
-            measureWidth - metrics.sp)
+            measureWidth - metrics.sp
+        )
         let crossingRightX = measureWidth
         let sortedTicks = tickColumns.keys.sorted()
         let endX: CGFloat
         if let t = sortedTicks.first(where: { $0 >= endTick }),
-           let nextX = tickColumns[t] {
+           let nextX = tickColumns[t]
+        {
             // Extend through the end-note's notehead to its right
             // edge — MuseScore's convention, and visually the line
             // then clearly "covers" the end note. See
@@ -445,7 +463,8 @@ extension LayoutEngine {
         // glyph). MuseScore matches the rule to the syllable's
         // bbox right edge plus a quarter-staff-space.
         let textWidth = Self.lyricsTextWidth(
-            lyricText, sp: metrics.sp)
+            lyricText, sp: metrics.sp
+        )
         let lineStartX = chordX + textWidth / 2 + metrics.sp * 0.25
         // Only emit if there is actually a visible line to draw —
         // avoids a one-pixel stub when the estimate pushes
@@ -453,6 +472,7 @@ extension LayoutEngine {
         guard endX > lineStartX + metrics.sp * 0.5 else { return }
         out.append(.lyricsMelisma(
             fromOrigin: CGPoint(x: lineStartX, y: lyricsY),
-            toOrigin: CGPoint(x: endX, y: lyricsY)))
+            toOrigin: CGPoint(x: endX, y: lyricsY)
+        ))
     }
 }

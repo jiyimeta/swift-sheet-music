@@ -20,7 +20,8 @@ enum MusicXMLDuration {
         let dotCount = note.all("dot").count
 
         if let typeText,
-           let base = NoteDuration(mscxName: canonicalise(typeText)) {
+           let base = NoteDuration(mscxName: canonicalise(typeText))
+        {
             let dotted = base.dotted(dotCount)
             if let mod = note.first("time-modification") {
                 return applyTupletModification(to: dotted, mod: mod)
@@ -41,8 +42,8 @@ enum MusicXMLDuration {
     private static func canonicalise(_ musicXMLType: String) -> String {
         switch musicXMLType {
         case "long", "breve":
-            return "whole"   // lossy fallback: MuseScore long/breve map to .fraction(2/1)
-                             // and larger; if a fixture relies on it we'll special-case.
+            return "whole" // lossy fallback: MuseScore long/breve map to .fraction(2/1)
+        // and larger; if a fixture relies on it we'll special-case.
         default:
             return musicXMLType
         }
@@ -56,7 +57,8 @@ enum MusicXMLDuration {
               let normalText = mod.first("normal-notes")?.text,
               let actual = Int(actualText),
               let normal = Int(normalText),
-              actual > 0, normal > 0 else {
+              actual > 0, normal > 0
+        else {
             return base
         }
         let baseFraction = base.asFraction

@@ -1,6 +1,6 @@
 import Foundation
 
-public extension Score {
+extension Score {
     /// Find the next note in the same voice that could serve as the
     /// receiving end of a tie from `noteID`. Walks forward from the
     /// note's element index, skipping non-chord elements, and returns
@@ -11,7 +11,7 @@ public extension Score {
     /// require additional plumbing (selecting which staff / voice to
     /// continue into and skipping clef / barline boundaries) that
     /// isn't needed for the current arrow-key + `+` toggle UX.
-    func nextTieTarget(after noteID: NoteID) -> NoteID? {
+    public func nextTieTarget(after noteID: NoteID) -> NoteID? {
         guard let source = self[noteID] else { return nil }
         guard staves.indices.contains(noteID.staffIndex) else {
             return nil
@@ -27,9 +27,9 @@ public extension Score {
         let elements = voices[noteID.voiceIndex].elements
         let start = noteID.elementIndex + 1
         guard start < elements.count else { return nil }
-        for idx in start..<elements.count {
+        for idx in start ..< elements.count {
             switch elements[idx] {
-            case .chord(let nextChord) where !nextChord.notes.isEmpty:
+            case let .chord(nextChord) where !nextChord.notes.isEmpty:
                 guard let matchIdx = nextChord.notes.firstIndex(
                     where: { $0.pitch == source.pitch })
                 else { return nil }
@@ -38,7 +38,8 @@ public extension Score {
                     measureIndex: noteID.measureIndex,
                     voiceIndex: noteID.voiceIndex,
                     elementIndex: idx,
-                    noteIndexInChord: matchIdx)
+                    noteIndexInChord: matchIdx
+                )
             case .chord:
                 // Empty chord = rest. A rest between source and a
                 // same-pitch note breaks the tie chain — they're no

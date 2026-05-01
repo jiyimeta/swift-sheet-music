@@ -24,11 +24,11 @@ enum AccidentalRenderer {
     private static func glyphFor(_ a: Accidental) -> Character {
         // Accidental is an enum (see SheetMusicCore/Score/Accidental.swift).
         switch a {
-        case .sharp:       return SMuFLGlyph.accidentalSharp
-        case .flat:        return SMuFLGlyph.accidentalFlat
-        case .natural:     return SMuFLGlyph.accidentalNatural
-        case .doubleSharp: return SMuFLGlyph.accidentalDoubleSharp
-        case .doubleFlat:  return SMuFLGlyph.accidentalDoubleFlat
+        case .sharp: SMuFLGlyph.accidentalSharp
+        case .flat: SMuFLGlyph.accidentalFlat
+        case .natural: SMuFLGlyph.accidentalNatural
+        case .doubleSharp: SMuFLGlyph.accidentalDoubleSharp
+        case .doubleFlat: SMuFLGlyph.accidentalDoubleFlat
         }
     }
 }

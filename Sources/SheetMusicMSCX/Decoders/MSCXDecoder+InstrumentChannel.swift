@@ -28,17 +28,17 @@ extension InstrumentChannel {
                 let value = Int(valueText)
             else { continue }
             switch ctrl {
-            case 0:    // Bank Select MSB — currently unused (MuseScore
-                       // stores SF2 bank in the LSB; the MSB is the
-                       // melodic/percussion split which we infer from
-                       // `useDrumset`).
+            case 0: // Bank Select MSB — currently unused (MuseScore
+                // stores SF2 bank in the LSB; the MSB is the
+                // melodic/percussion split which we infer from
+                // `useDrumset`).
                 break
-            case 7:    channel.volume = value
-            case 10:   channel.pan = value
-            case 32:   channel.bank = value     // Bank Select LSB
-            case 91:   channel.reverb = value
-            case 93:   channel.chorus = value
-            default:   break
+            case 7: channel.volume = value
+            case 10: channel.pan = value
+            case 32: channel.bank = value // Bank Select LSB
+            case 91: channel.reverb = value
+            case 93: channel.chorus = value
+            default: break
             }
         }
         return channel

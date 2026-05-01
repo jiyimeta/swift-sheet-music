@@ -12,8 +12,8 @@ public struct StaffMetrics: Sendable, Equatable {
     public let sp: CGFloat
 
     public init(staffSize: CGFloat) {
-        self.staffHeight = staffSize
-        self.sp = staffSize / 4
+        staffHeight = staffSize
+        sp = staffSize / 4
     }
 
     /// Thickness of a staff line. Engraving: typically 0.13 sp.

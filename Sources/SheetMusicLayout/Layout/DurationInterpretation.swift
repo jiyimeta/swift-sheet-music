@@ -27,9 +27,11 @@ public enum DurationInterpretation {
              .thirtySecond, .sixtyFourth,
              .oneTwentyEighth, .twoFiftySixth:
             return (dur, 0)
-        case .fraction(let f):
-            if let direct = baseAndDots(numerator: f.numerator,
-                                        denominator: f.denominator) {
+        case let .fraction(f):
+            if let direct = baseAndDots(
+                numerator: f.numerator,
+                denominator: f.denominator
+            ) {
                 return direct
             }
             // Common tuplet ratios (actual:normal). A triplet has 3
@@ -37,21 +39,22 @@ public enum DurationInterpretation {
             // we reverse that by multiplying by 3/2. More exotic
             // ratios are tried in decreasing order of commonness.
             let tupletScales: [(num: Int, den: Int)] = [
-                (3, 2),   // triplet — 3 in 2
-                (5, 4),   // quintuplet — 5 in 4
-                (6, 4),   // sextuplet — 6 in 4
-                (7, 4),   // septuplet — 7 in 4
-                (7, 8),   // septuplet — 7 in 8
-                (9, 8),   // nonuplet
-                (5, 2),   // 5 in 2
-                (11, 8),  // 11 in 8
-                (13, 8),  // 13 in 8
+                (3, 2), // triplet — 3 in 2
+                (5, 4), // quintuplet — 5 in 4
+                (6, 4), // sextuplet — 6 in 4
+                (7, 4), // septuplet — 7 in 4
+                (7, 8), // septuplet — 7 in 8
+                (9, 8), // nonuplet
+                (5, 2), // 5 in 2
+                (11, 8), // 11 in 8
+                (13, 8), // 13 in 8
             ]
             for scale in tupletScales {
                 let num = f.numerator * scale.num
                 let den = f.denominator * scale.den
                 if let match = baseAndDots(
-                    numerator: num, denominator: den) {
+                    numerator: num, denominator: den
+                ) {
                     return match
                 }
             }
@@ -82,16 +85,16 @@ public enum DurationInterpretation {
         let baseDenom = d / dotMultiplier
         let base: NoteDuration
         switch baseDenom {
-        case 1:   base = .whole
-        case 2:   base = .half
-        case 4:   base = .quarter
-        case 8:   base = .eighth
-        case 16:  base = .sixteenth
-        case 32:  base = .thirtySecond
-        case 64:  base = .sixtyFourth
+        case 1: base = .whole
+        case 2: base = .half
+        case 4: base = .quarter
+        case 8: base = .eighth
+        case 16: base = .sixteenth
+        case 32: base = .thirtySecond
+        case 64: base = .sixtyFourth
         case 128: base = .oneTwentyEighth
         case 256: base = .twoFiftySixth
-        default:  return nil
+        default: return nil
         }
         return (base, dots)
     }

@@ -80,7 +80,7 @@ import Testing
         // (pitch 61) kicks in right after.
         #expect(ons[0].tick == 0)
         #expect(ons[1].tick >= 300 && ons[1].tick <= 340)
-        #expect(ons[4].tick == 480)  // end chord plays on time
+        #expect(ons[4].tick == 480) // end chord plays on time
         Self.assertBalancedNoteEvents(track: track)
     }
 
@@ -99,7 +99,7 @@ import Testing
 
         let targetOffs = Self.noteOffs(in: track).filter { $0.pitch == 64 }
         #expect(targetOffs.count == 1, "target pitch 64 must have exactly one note-off")
-        #expect(targetOffs.first?.tick == 959)  // 480 (start) + 480 (duration) − 1
+        #expect(targetOffs.first?.tick == 959) // 480 (start) + 480 (duration) − 1
     }
 
     @Test func whiteKeysGlissando_skipsBlackKeys() throws {
@@ -169,7 +169,7 @@ import Testing
         // after the sweep starts (they're compressed toward the beginning).
         // We assert that the last intermediate pitch's on-tick arrives earlier
         // when ease-in is applied.
-        let division = 1920  // bigger division amplifies sub-tick differences
+        let division = 1920 // bigger division amplifies sub-tick differences
         func sweepOnTicks(easeIn: Int) throws -> [Int] {
             let start = Chord(
                 duration: .quarter,
@@ -182,8 +182,8 @@ import Testing
             let file = try MidiRenderer.render(
                 score: Self.makeScore(division: division, chords: [start, end])
             )
-            return Self.noteOns(in: try #require(file.tracks.first))
-                .filter { $0.pitch < 66 }   // drop the final chord
+            return try Self.noteOns(in: #require(file.tracks.first))
+                .filter { $0.pitch < 66 } // drop the final chord
                 .map(\.tick)
         }
         let linear = try sweepOnTicks(easeIn: 0)
@@ -195,7 +195,7 @@ import Testing
         #expect(linear[1] == eased[1])
         // With max easeIn, indices 2…5 are pulled earlier than linear — their
         // event separations are compressed toward the sweep's start.
-        for i in 2..<linear.count {
+        for i in 2 ..< linear.count {
             #expect(eased[i] < linear[i], "index \(i): eased=\(eased[i]) linear=\(linear[i])")
         }
     }
@@ -276,7 +276,7 @@ import Testing
           </Chord>
         </voice>
         """
-        let voice = try Voice.decode(try XMLTreeParser.parse(Data(xml.utf8)))
+        let voice = try Voice.decode(XMLTreeParser.parse(Data(xml.utf8)))
         guard case let .chord(first) = voice.elements[0] else {
             Issue.record("expected chord"); return
         }

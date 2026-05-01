@@ -41,7 +41,7 @@ public struct DeleteVoiceElement: EditCommand {
         }
         let duration: NoteDuration
         switch original {
-        case .chord(let c): duration = c.duration
+        case let .chord(c): duration = c.duration
         default:
             throw SheetMusicError.invalidEdit(
                 reason: "DeleteVoiceElement: element at \(location) "

@@ -28,18 +28,21 @@ extension Voice {
             case "Chord":
                 var chord = try Chord.decode(child)
                 chord.duration = scaled(
-                    chord.duration, by: tupletFractions())
+                    chord.duration, by: tupletFractions()
+                )
                 elements.append(.chord(chord))
             case "Rest":
                 var rest = try MSCXRestDecoder.decode(child)
                 rest.duration = scaled(
-                    rest.duration, by: tupletFractions())
+                    rest.duration, by: tupletFractions()
+                )
                 elements.append(.chord(rest))
             case "Tuplet":
                 if let ratio = tupletRatio(from: child) {
                     tupletStack.append(OpenTuplet(
                         ratio: ratio,
-                        firstElementIndex: elements.count))
+                        firstElementIndex: elements.count
+                    ))
                 }
             case "endTuplet":
                 if let top = tupletStack.popLast() {
@@ -49,39 +52,40 @@ extension Voice {
                             normalNotes: top.ratio.numerator,
                             actualNotes: top.ratio.denominator,
                             startIndex: top.firstElementIndex,
-                            endIndex: endIndex))
+                            endIndex: endIndex
+                        ))
                     }
                 }
             case "KeySig":
-                elements.append(.keySignature(try KeySignature.decode(child)))
+                try elements.append(.keySignature(KeySignature.decode(child)))
             case "TimeSig":
-                elements.append(.timeSignature(try TimeSignature.decode(child)))
+                try elements.append(.timeSignature(TimeSignature.decode(child)))
             case "Clef":
-                elements.append(.clef(try Clef.decode(child)))
+                try elements.append(.clef(Clef.decode(child)))
             case "BarLine":
-                elements.append(.barLine(try BarLine.decode(child)))
+                try elements.append(.barLine(BarLine.decode(child)))
             case "Tempo":
-                elements.append(.tempo(try Tempo.decode(child)))
+                try elements.append(.tempo(Tempo.decode(child)))
             case "Dynamic":
-                elements.append(.dynamic(try Dynamic.decode(child)))
+                try elements.append(.dynamic(Dynamic.decode(child)))
             case "Spanner":
-                elements.append(.spanner(try Spanner.decode(child)))
+                try elements.append(.spanner(Spanner.decode(child)))
             case "MeasureRepeat", "RepeatMeasure":
                 // <RepeatMeasure> is the MuseScore 3.x spelling of the same
                 // element (see MeasureRead::readVoice in measureread.cpp:336).
-                elements.append(.measureRepeat(try MeasureRepeat.decode(child)))
+                try elements.append(.measureRepeat(MeasureRepeat.decode(child)))
             case "Fermata":
                 let subtype = child.first("subtype")?.text ?? ""
                 elements.append(.fermata(Fermata(subtype: subtype)))
             case "StaffText":
-                elements.append(.staffText(
-                    try StaffText.decode(child, isSystemText: false)))
+                try elements.append(.staffText(
+                    StaffText.decode(child, isSystemText: false)))
             case "SystemText":
-                elements.append(.staffText(
-                    try StaffText.decode(child, isSystemText: true)))
+                try elements.append(.staffText(
+                    StaffText.decode(child, isSystemText: true)))
             case "RehearsalMark":
-                elements.append(.rehearsalMark(
-                    try RehearsalMark.decode(child)))
+                try elements.append(.rehearsalMark(
+                    RehearsalMark.decode(child)))
             default:
                 // Unknown elements are silently ignored. Decoder is permissive on purpose
                 // — once we see what features individual MIDI tests actually need, they
@@ -99,7 +103,8 @@ extension Voice {
               let actualText = node.first("actualNotes")?.text,
               let normal = Int(normalText),
               let actual = Int(actualText),
-              normal > 0, actual > 0 else {
+              normal > 0, actual > 0
+        else {
             return nil
         }
         return Fraction(numerator: normal, denominator: actual)

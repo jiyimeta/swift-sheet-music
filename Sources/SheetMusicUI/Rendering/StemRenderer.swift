@@ -28,7 +28,7 @@ enum StemRenderer {
         let stemAttachDx = metrics.sp * 0.59
         let xMin = xs.min() ?? 0
         let xMax = xs.max() ?? 0
-        let yTop = ys.min() ?? 0  // higher on screen (smaller y)
+        let yTop = ys.min() ?? 0 // higher on screen (smaller y)
         let yBot = ys.max() ?? 0
         let xStem: CGFloat
         let startY: CGFloat
@@ -66,7 +66,8 @@ enum StemRenderer {
                 stemX: xStem,
                 startY: startY,
                 endY: endY,
-                metrics: metrics)
+                metrics: metrics
+            )
         }
     }
 
@@ -102,7 +103,8 @@ enum StemRenderer {
             glyph,
             at: CGPoint(x: stemX, y: tipY - ascent),
             size: metrics.glyphFontSize,
-            anchor: .topLeading)
+            anchor: .topLeading
+        )
     }
 
     // CTFont handle is shared per font-size. Creating CTFonts isn't
@@ -114,7 +116,8 @@ enum StemRenderer {
     private static func cachedBravuraFont(size: CGFloat) -> CTFont {
         if let font = cachedFont, cachedSize == size { return font }
         let font = CTFontCreateWithName(
-            BravuraFont.familyName as CFString, size, nil)
+            BravuraFont.familyName as CFString, size, nil
+        )
         cachedFont = font
         cachedSize = size
         return font

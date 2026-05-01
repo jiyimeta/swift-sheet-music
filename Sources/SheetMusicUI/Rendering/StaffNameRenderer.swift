@@ -1,5 +1,5 @@
-import SwiftUI
 import SheetMusicLayout
+import SwiftUI
 
 /// Draws the instrument / staff name above a staff in the horizontal
 /// continuous-view sticky pane.
@@ -24,6 +24,7 @@ enum StaffNameRenderer {
             text, at: origin,
             size: metrics.sp * 2.0,
             italic: false,
-            anchor: .bottomLeading)
+            anchor: .bottomLeading
+        )
     }
 }

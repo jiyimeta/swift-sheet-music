@@ -15,14 +15,14 @@ enum NoteheadRenderer {
         case "cross":
             switch duration {
             case .whole: return SMuFLGlyph.noteheadXWhole
-            case .half:  return SMuFLGlyph.noteheadXHalf
-            default:     return SMuFLGlyph.noteheadXBlack
+            case .half: return SMuFLGlyph.noteheadXHalf
+            default: return SMuFLGlyph.noteheadXBlack
             }
         case "diamond":
             switch duration {
             case .whole: return SMuFLGlyph.noteheadDiamondWhole
-            case .half:  return SMuFLGlyph.noteheadDiamondHalf
-            default:     return SMuFLGlyph.noteheadDiamondBlack
+            case .half: return SMuFLGlyph.noteheadDiamondHalf
+            default: return SMuFLGlyph.noteheadDiamondBlack
             }
         case "triangle-up":
             return SMuFLGlyph.noteheadTriangleUpBlack
@@ -32,8 +32,8 @@ enum NoteheadRenderer {
             // "normal" or nil → standard notehead
             switch duration {
             case .whole: return SMuFLGlyph.noteheadWhole
-            case .half:  return SMuFLGlyph.noteheadHalf
-            default:     return SMuFLGlyph.noteheadBlack
+            case .half: return SMuFLGlyph.noteheadHalf
+            default: return SMuFLGlyph.noteheadBlack
             }
         }
     }

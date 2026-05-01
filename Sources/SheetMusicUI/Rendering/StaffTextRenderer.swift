@@ -22,7 +22,8 @@ enum StaffTextRenderer {
             size: metrics.sp * 2.2,
             italic: false,
             color: swiftUIColor,
-            anchor: .bottomLeading)
+            anchor: .bottomLeading
+        )
     }
 
     private static func swiftUIColor(_ color: ScoreColor) -> Color {
@@ -30,6 +31,7 @@ enum StaffTextRenderer {
             red: Double(color.red) / 255,
             green: Double(color.green) / 255,
             blue: Double(color.blue) / 255,
-            opacity: Double(color.alpha) / 255)
+            opacity: Double(color.alpha) / 255
+        )
     }
 }

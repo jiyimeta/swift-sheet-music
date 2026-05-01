@@ -10,7 +10,7 @@ struct ScoreActiveKeyTests {
         // indexes; the rest of the measure is a single whole rest so
         // the score parses as valid.
         var measures: [Measure] = []
-        for i in 0..<4 {
+        for i in 0 ..< 4 {
             var elements: [VoiceElement] = []
             if let entry = keys.first(where: { $0.measureIdx == i }) {
                 elements.append(.keySignature(
@@ -26,7 +26,8 @@ struct ScoreActiveKeyTests {
     func defaultIsZero() {
         let score = Score(
             division: 480,
-            staves: [Self.staffWith(keys: [])])
+            staves: [Self.staffWith(keys: [])]
+        )
         #expect(score.activeKey(staffIndex: 0, measureIndex: 0) == 0)
         #expect(score.activeKey(staffIndex: 0, measureIndex: 3) == 0)
     }
@@ -35,7 +36,8 @@ struct ScoreActiveKeyTests {
     func declaredAtStart() {
         let score = Score(
             division: 480,
-            staves: [Self.staffWith(keys: [(0, -4)])])
+            staves: [Self.staffWith(keys: [(0, -4)])]
+        )
         #expect(score.activeKey(staffIndex: 0, measureIndex: 0) == -4)
         #expect(score.activeKey(staffIndex: 0, measureIndex: 3) == -4)
     }
@@ -44,7 +46,8 @@ struct ScoreActiveKeyTests {
     func midPieceChange() {
         let score = Score(
             division: 480,
-            staves: [Self.staffWith(keys: [(0, -4), (2, 2)])])
+            staves: [Self.staffWith(keys: [(0, -4), (2, 2)])]
+        )
         #expect(score.activeKey(staffIndex: 0, measureIndex: 0) == -4)
         #expect(score.activeKey(staffIndex: 0, measureIndex: 1) == -4)
         #expect(score.activeKey(staffIndex: 0, measureIndex: 2) == 2)
@@ -55,7 +58,8 @@ struct ScoreActiveKeyTests {
     func outOfRangeStaff() {
         let score = Score(
             division: 480,
-            staves: [Self.staffWith(keys: [(0, -4)])])
+            staves: [Self.staffWith(keys: [(0, -4)])]
+        )
         #expect(score.activeKey(staffIndex: 5, measureIndex: 0) == 0)
     }
 }

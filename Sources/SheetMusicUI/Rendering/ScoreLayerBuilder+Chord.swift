@@ -4,9 +4,9 @@ import SheetMusicCore
 import SheetMusicLayout
 
 #if os(macOS)
-import AppKit
+    import AppKit
 #else
-import UIKit
+    import UIKit
 #endif
 
 @available(macOS 15.0, iOS 16.0, *)
@@ -33,46 +33,56 @@ extension ScoreLayerBuilder {
                 accidental: n.accidental,
                 origin: CGPoint(
                     x: base.x + n.origin.x,
-                    y: base.y + n.origin.y),
+                    y: base.y + n.origin.y
+                ),
                 tieForward: n.tieForward,
                 tieBack: n.tieBack,
                 hasGlissando: n.hasGlissando,
                 headType: n.headType,
-                mirror: n.mirror)
+                mirror: n.mirror
+            )
         }
         for n in shifted {
             let glyph = noteheadGlyph(
-                for: baseDur, headType: n.headType)
+                for: baseDur, headType: n.headType
+            )
             // Mirrored seconds: notehead, accidental and dots track
             // the visual centre, while ledger lines + stem stay on
             // the chord's natural anchor x.
             let mirrorDx = n.mirrorDx(stem: stem, sp: metrics.sp)
             let visualOrigin = CGPoint(
-                x: n.origin.x + mirrorDx, y: n.origin.y)
+                x: n.origin.x + mirrorDx, y: n.origin.y
+            )
             if let layer = glyphLayer(
                 glyph, at: visualOrigin,
                 size: metrics.glyphFontSize,
-                height: height) {
+                height: height
+            ) {
                 parent.addSublayer(layer)
                 context.attach(layer, to: .note(n.noteID))
             }
             if let acc = n.accidental,
                let accLayer = drawAccidental(
-                accidental: acc, origin: visualOrigin,
-                metrics: metrics, height: height, into: parent) {
+                   accidental: acc, origin: visualOrigin,
+                   metrics: metrics, height: height, into: parent
+               )
+            {
                 context.attach(accLayer, to: .note(n.noteID))
             }
             drawDots(
                 after: visualOrigin, count: dots,
                 onStaffLine: n.step.isMultiple(of: 2),
-                metrics: metrics, height: height, into: parent)
+                metrics: metrics, height: height, into: parent
+            )
         }
         drawLedgerLines(
             notes: shifted, stem: stem, metrics: metrics,
-            height: height, into: parent)
+            height: height, into: parent
+        )
         let shiftedStemOrigin = CGPoint(
             x: base.x + stemOrigin.x,
-            y: base.y + stemOrigin.y)
+            y: base.y + stemOrigin.y
+        )
         let beamY: CGFloat? = isBeamed ? shiftedStemOrigin.y : nil
         // Extend the stem by one step (0.5 sp) when a dotted flagged
         // chord has the stem-side outer note sitting on a staff
@@ -95,7 +105,8 @@ extension ScoreLayerBuilder {
             notes: shifted, direction: stem, duration: baseDur,
             isBeamed: isBeamed, beamY: beamY,
             stemExtension: stemExtension,
-            metrics: metrics, height: height, into: parent)
+            metrics: metrics, height: height, into: parent
+        )
     }
 
     /// True when `dur` would normally be drawn with a flag (i.e.,
@@ -104,9 +115,9 @@ extension ScoreLayerBuilder {
         switch dur {
         case .eighth, .sixteenth, .thirtySecond, .sixtyFourth,
              .oneTwentyEighth, .twoFiftySixth:
-            return true
+            true
         default:
-            return false
+            false
         }
     }
 
@@ -117,14 +128,14 @@ extension ScoreLayerBuilder {
         case "cross":
             switch duration {
             case .whole: return SMuFLGlyph.noteheadXWhole
-            case .half:  return SMuFLGlyph.noteheadXHalf
-            default:     return SMuFLGlyph.noteheadXBlack
+            case .half: return SMuFLGlyph.noteheadXHalf
+            default: return SMuFLGlyph.noteheadXBlack
             }
         case "diamond":
             switch duration {
             case .whole: return SMuFLGlyph.noteheadDiamondWhole
-            case .half:  return SMuFLGlyph.noteheadDiamondHalf
-            default:     return SMuFLGlyph.noteheadDiamondBlack
+            case .half: return SMuFLGlyph.noteheadDiamondHalf
+            default: return SMuFLGlyph.noteheadDiamondBlack
             }
         case "triangle-up":
             return SMuFLGlyph.noteheadTriangleUpBlack
@@ -133,8 +144,8 @@ extension ScoreLayerBuilder {
         default:
             switch duration {
             case .whole: return SMuFLGlyph.noteheadWhole
-            case .half:  return SMuFLGlyph.noteheadHalf
-            default:     return SMuFLGlyph.noteheadBlack
+            case .half: return SMuFLGlyph.noteheadHalf
+            default: return SMuFLGlyph.noteheadBlack
             }
         }
     }
@@ -149,19 +160,21 @@ extension ScoreLayerBuilder {
     ) -> CAShapeLayer? {
         let glyph: Character
         switch accidental {
-        case .sharp:       glyph = SMuFLGlyph.accidentalSharp
-        case .flat:        glyph = SMuFLGlyph.accidentalFlat
-        case .natural:     glyph = SMuFLGlyph.accidentalNatural
+        case .sharp: glyph = SMuFLGlyph.accidentalSharp
+        case .flat: glyph = SMuFLGlyph.accidentalFlat
+        case .natural: glyph = SMuFLGlyph.accidentalNatural
         case .doubleSharp: glyph = SMuFLGlyph.accidentalDoubleSharp
-        case .doubleFlat:  glyph = SMuFLGlyph.accidentalDoubleFlat
+        case .doubleFlat: glyph = SMuFLGlyph.accidentalDoubleFlat
         }
         guard let layer = glyphLayer(
             glyph,
             at: CGPoint(
                 x: origin.x - metrics.sp * 1.2,
-                y: origin.y),
+                y: origin.y
+            ),
             size: metrics.glyphFontSize,
-            height: height)
+            height: height
+        )
         else { return nil }
         parent.addSublayer(layer)
         return layer
@@ -180,16 +193,18 @@ extension ScoreLayerBuilder {
         let firstOffset = metrics.sp * 1.15
         let spacing = metrics.sp * 0.6
         let y = onStaffLine ? origin.y - metrics.sp / 2 : origin.y
-        for i in 0..<count {
+        for i in 0 ..< count {
             let x = origin.x + firstOffset + CGFloat(i) * spacing
             let rect = CGRect(
                 x: x - radius,
                 y: y - radius,
                 width: radius * 2,
-                height: radius * 2)
+                height: radius * 2
+            )
             parent.addSublayer(fillLayer(
                 path: CGPath(ellipseIn: rect, transform: nil),
-                height: height))
+                height: height
+            ))
         }
     }
 
@@ -221,20 +236,24 @@ extension ScoreLayerBuilder {
             var leftExt: CGFloat = 0
             var rightExt: CGFloat = 0
             for n in notes
-            where abs(n.step - ledger) <= 1 && n.mirror {
+                where abs(n.step - ledger) <= 1 && n.mirror
+            {
                 let dx = n.mirrorDx(stem: stem, sp: metrics.sp)
                 if dx > 0 { rightExt = max(rightExt, dx) }
                 else { leftExt = max(leftExt, -dx) }
             }
-            return (chordX - halfWidth - leftExt,
-                    chordX + halfWidth + rightExt)
+            return (
+                chordX - halfWidth - leftExt,
+                chordX + halfWidth + rightExt
+            )
         }
 
         if maxStep > 4 {
             let topEven = maxStep.isMultiple(of: 2)
                 ? maxStep : maxStep - 1
             for ledgerStep in stride(
-                from: 6, through: topEven, by: 2) {
+                from: 6, through: topEven, by: 2
+            ) {
                 let y = staffMidYAbs
                     - CGFloat(ledgerStep) * metrics.sp / 2
                 let (xL, xR) = bounds(forLedgerStep: ledgerStep)
@@ -243,7 +262,8 @@ extension ScoreLayerBuilder {
                 path.addLine(to: CGPoint(x: xR, y: y))
                 parent.addSublayer(strokeLayer(
                     path: path, height: height,
-                    lineWidth: lineWidth))
+                    lineWidth: lineWidth
+                ))
             }
         }
 
@@ -251,7 +271,8 @@ extension ScoreLayerBuilder {
             let botEven = minStep.isMultiple(of: 2)
                 ? minStep : minStep + 1
             for ledgerStep in stride(
-                from: -6, through: botEven, by: -2) {
+                from: -6, through: botEven, by: -2
+            ) {
                 let y = staffMidYAbs
                     - CGFloat(ledgerStep) * metrics.sp / 2
                 let (xL, xR) = bounds(forLedgerStep: ledgerStep)
@@ -260,7 +281,8 @@ extension ScoreLayerBuilder {
                 path.addLine(to: CGPoint(x: xR, y: y))
                 parent.addSublayer(strokeLayer(
                     path: path, height: height,
-                    lineWidth: lineWidth))
+                    lineWidth: lineWidth
+                ))
             }
         }
     }
@@ -321,11 +343,13 @@ extension ScoreLayerBuilder {
         path.addLine(to: CGPoint(x: xStem, y: endY))
         parent.addSublayer(strokeLayer(
             path: path, height: height,
-            lineWidth: metrics.stemThickness))
+            lineWidth: metrics.stemThickness
+        ))
 
         if isBeamed { return }
         if let flag = flagGlyph(
-            for: duration, direction: direction) {
+            for: duration, direction: direction
+        ) {
             let tipY: CGFloat = direction == .up ? startY : endY
             let font = bravuraFont(size: metrics.glyphFontSize)
             let ascent = CTFontGetAscent(font)
@@ -334,7 +358,8 @@ extension ScoreLayerBuilder {
                 at: CGPoint(x: xStem, y: tipY - ascent),
                 size: metrics.glyphFontSize,
                 anchor: CGPoint(x: 0, y: 0),
-                height: height) {
+                height: height
+            ) {
                 parent.addSublayer(layer)
             }
         }
@@ -344,13 +369,13 @@ extension ScoreLayerBuilder {
         for dur: NoteDuration, direction: StemDirection
     ) -> Character? {
         switch (dur, direction) {
-        case (.eighth, .up):        return SMuFLGlyph.flag8thUp
-        case (.eighth, .down):      return SMuFLGlyph.flag8thDown
-        case (.sixteenth, .up):     return SMuFLGlyph.flag16thUp
-        case (.sixteenth, .down):   return SMuFLGlyph.flag16thDown
-        case (.thirtySecond, .up):  return SMuFLGlyph.flag32ndUp
-        case (.thirtySecond, .down):return SMuFLGlyph.flag32ndDown
-        case (.sixtyFourth, .up):   return SMuFLGlyph.flag64thUp
+        case (.eighth, .up): return SMuFLGlyph.flag8thUp
+        case (.eighth, .down): return SMuFLGlyph.flag8thDown
+        case (.sixteenth, .up): return SMuFLGlyph.flag16thUp
+        case (.sixteenth, .down): return SMuFLGlyph.flag16thDown
+        case (.thirtySecond, .up): return SMuFLGlyph.flag32ndUp
+        case (.thirtySecond, .down): return SMuFLGlyph.flag32ndDown
+        case (.sixtyFourth, .up): return SMuFLGlyph.flag64thUp
         case (.sixtyFourth, .down): return SMuFLGlyph.flag64thDown
         default: return nil
         }
@@ -378,6 +403,7 @@ extension ScoreLayerBuilder {
         path.addLine(to: CGPoint(x: from.x, y: from.y + barOuter))
         path.closeSubpath()
         parent.addSublayer(fillLayer(
-            path: path, height: height))
+            path: path, height: height
+        ))
     }
 }

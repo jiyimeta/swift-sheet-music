@@ -99,32 +99,32 @@ struct MusicXMLImportTests {
     /// `.fermata` VoiceElement immediately before the chord/rest.
     @Test func phase3_fermata_decoderUnit() throws {
         let xml = Data("""
-            <?xml version="1.0"?>
-            <score-partwise version="4.0">
-              <part-list>
-                <score-part id="P1">
-                  <part-name>X</part-name>
-                </score-part>
-              </part-list>
-              <part id="P1">
-                <measure number="1">
-                  <attributes>
-                    <divisions>1</divisions>
-                    <key><fifths>0</fifths></key>
-                    <time><beats>4</beats><beat-type>4</beat-type></time>
-                    <clef><sign>G</sign><line>2</line></clef>
-                  </attributes>
-                  <note>
-                    <pitch><step>C</step><octave>5</octave></pitch>
-                    <duration>4</duration>
-                    <voice>1</voice>
-                    <type>whole</type>
-                    <notations><fermata/></notations>
-                  </note>
-                </measure>
-              </part>
-            </score-partwise>
-            """.utf8)
+        <?xml version="1.0"?>
+        <score-partwise version="4.0">
+          <part-list>
+            <score-part id="P1">
+              <part-name>X</part-name>
+            </score-part>
+          </part-list>
+          <part id="P1">
+            <measure number="1">
+              <attributes>
+                <divisions>1</divisions>
+                <key><fifths>0</fifths></key>
+                <time><beats>4</beats><beat-type>4</beat-type></time>
+                <clef><sign>G</sign><line>2</line></clef>
+              </attributes>
+              <note>
+                <pitch><step>C</step><octave>5</octave></pitch>
+                <duration>4</duration>
+                <voice>1</voice>
+                <type>whole</type>
+                <notations><fermata/></notations>
+              </note>
+            </measure>
+          </part>
+        </score-partwise>
+        """.utf8)
         let score = try MusicXMLParser.parse(xml)
         let elements = score.staves[0].measures[0].voices[0].elements
         let fermatas = elements.compactMap { element -> Fermata? in
@@ -135,10 +135,10 @@ struct MusicXMLImportTests {
 
         // Fermata comes before the chord in voice order.
         let fermataIndex = elements.firstIndex {
-            if case .fermata = $0 { return true } else { return false }
+            if case .fermata = $0 { true } else { false }
         }
         let chordIndex = elements.firstIndex {
-            if case .chord = $0 { return true } else { return false }
+            if case .chord = $0 { true } else { false }
         }
         try #require(fermataIndex != nil)
         try #require(chordIndex != nil)

@@ -2,23 +2,25 @@ import CoreGraphics
 import SheetMusicCore
 
 @available(macOS 15.0, iOS 16.0, *)
-public extension LayoutDocument {
+extension LayoutDocument {
     /// Absolute document-coord stem origin for the chord at
     /// `voiceElementID`. Searches every system / measure / element
     /// and matches by `(measureIndex, voiceIndex, elementIndex)`.
     ///
     /// Returns `nil` when the location resolves to a non-chord element
     /// (e.g. a rest at that index) or when the index is out of range.
-    func chordStemOrigin(
+    public func chordStemOrigin(
         at id: VoiceElementID
     ) -> CGPoint? {
         for system in systems {
             for measure in system.measures
-                where measure.measureIndex == id.measureIndex {
+                where measure.measureIndex == id.measureIndex
+            {
                 for el in measure.elements {
                     guard case let .chord(
                         notes, _, _, stemOrigin,
-                        _, _, _, voiceIdx) = el
+                        _, _, _, voiceIdx
+                    ) = el
                     else { continue }
                     guard voiceIdx == id.voiceIndex,
                           let firstNote = notes.first,
@@ -27,7 +29,8 @@ public extension LayoutDocument {
                     else { continue }
                     return CGPoint(
                         x: system.origin.x + measure.origin.x + stemOrigin.x,
-                        y: system.origin.y + measure.origin.y + stemOrigin.y)
+                        y: system.origin.y + measure.origin.y + stemOrigin.y
+                    )
                 }
             }
         }
@@ -45,14 +48,15 @@ public extension LayoutDocument {
     ///    baseline: 6 sp below the staff top (staff height = 4 sp,
     ///    plus a 2-sp lyric drop). This matches the un-ratcheted
     ///    `chordLyricCenterY` in `LayoutEngine+Placement`.
-    func lyricLineY(
+    public func lyricLineY(
         at voiceElementID: VoiceElementID
     ) -> CGFloat? {
         let staffIndex = voiceElementID.staffIndex
         let measureIndex = voiceElementID.measureIndex
         for system in systems {
             for measure in system.measures
-                where measure.measureIndex == measureIndex {
+                where measure.measureIndex == measureIndex
+            {
                 guard system.staffOrigins
                     .indices.contains(staffIndex) else { return nil }
                 // Look for an existing lyric mark adjacent to the

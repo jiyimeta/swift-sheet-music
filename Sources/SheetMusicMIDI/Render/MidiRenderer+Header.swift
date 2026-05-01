@@ -67,7 +67,7 @@ extension MidiRenderer {
                 cc(93, flavour.chorus)
             }
 
-            if (0...127).contains(port) {
+            if (0 ... 127).contains(port) {
                 events.append(TimedMidiEvent(tick: 0, event: .meta(.portChange(port: port))))
             }
         }

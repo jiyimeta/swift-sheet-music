@@ -13,15 +13,23 @@ extension LayoutEngine {
         var minY = CGFloat.infinity
         for el in elements {
             switch el {
-            case .chord(let notes, _, let dir, let stemOrigin,
-                        _, _, _, _):
+            case let .chord(
+                notes,
+                _,
+                dir,
+                stemOrigin,
+                _,
+                _,
+                _,
+                _
+            ):
                 let topNote = notes.map(\.origin.y).min()
                     ?? stemOrigin.y
                 let extent = dir == .up
                     ? min(stemOrigin.y, topNote)
                     : topNote
                 minY = min(minY, extent)
-            case .beam(let from, let to, _, _):
+            case let .beam(from, to, _, _):
                 minY = min(minY, from.y, to.y)
             default:
                 break
@@ -51,14 +59,19 @@ extension LayoutEngine {
         // text's default zone — otherwise leave the layout alone.
         guard autoBase < defaultBase else { return }
         let shift = autoBase - defaultBase
-        for i in 0..<out.count {
-            if case .staffText(let text, let p, let color,
-                               let isSystem) = out[i] {
+        for i in 0 ..< out.count {
+            if case let .staffText(
+                text,
+                p,
+                color,
+                isSystem
+            ) = out[i] {
                 out[i] = .staffText(
                     text: text,
                     origin: CGPoint(x: p.x, y: p.y + shift),
                     color: color,
-                    isSystemText: isSystem)
+                    isSystemText: isSystem
+                )
             }
         }
     }
@@ -111,7 +124,8 @@ extension LayoutEngine {
             }
             if hasTie {
                 south = max(
-                    south, noteheadBottom + metrics.sp * 0.8)
+                    south, noteheadBottom + metrics.sp * 0.8
+                )
             }
         }
         return south
@@ -123,9 +137,9 @@ extension LayoutEngine {
     /// `ArpeggioRenderer` consumes "up" / "down" / nil — map accordingly.
     static func arpeggioSubtype(_ arp: Arpeggio) -> String? {
         switch arp.subtype {
-        case 1, 3: return "up"
-        case 2, 4: return "down"
-        default: return nil
+        case 1, 3: "up"
+        case 2, 4: "down"
+        default: nil
         }
     }
 
@@ -143,11 +157,11 @@ extension LayoutEngine {
         for el in elements {
             switch el {
             case .clef: w += metrics.sp * 3
-            case .keySignature(let k):
+            case let .keySignature(k):
                 w += metrics.sp * (CGFloat(abs(k.concertKey)) + 1.5)
             case .timeSignature: w += metrics.sp * 3
             case .chord:
-                return w   // first timed element ends the header
+                return w // first timed element ends the header
             default:
                 continue
             }

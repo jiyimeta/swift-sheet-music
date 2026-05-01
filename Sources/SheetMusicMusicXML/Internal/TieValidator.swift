@@ -27,8 +27,8 @@ enum TieValidator {
                 case let .chord(chord) = mutable[current.measureIndex]
                     .voices[current.voiceIndex]
                     .elements[current.elementIndex],
-                let tieNumber = chord.notes[current.noteIndex].tieForward,
-                let startIdx = nextChord[i]
+                    let tieNumber = chord.notes[current.noteIndex].tieForward,
+                    let startIdx = nextChord[i]
             else { continue }
             if let matchIdx = findMatch(
                 in: chords,
@@ -72,8 +72,8 @@ enum TieValidator {
     /// that lives in the *next* chord of the same voice.
     private static func nextChordStartMap(_ chords: [ChordRef]) -> [Int: Int] {
         var result: [Int: Int] = [:]
-        for i in 0..<chords.count {
-            for j in (i + 1)..<chords.count where chords[j].voiceIndex == chords[i].voiceIndex {
+        for i in 0 ..< chords.count {
+            for j in (i + 1) ..< chords.count where chords[j].voiceIndex == chords[i].voiceIndex {
                 let differentChord = chords[j].elementIndex != chords[i].elementIndex
                     || chords[j].measureIndex != chords[i].measureIndex
                 if differentChord {
@@ -99,13 +99,15 @@ enum TieValidator {
         while j < chords.count,
               chords[j].measureIndex == startMeasure,
               chords[j].voiceIndex == startVoice,
-              chords[j].elementIndex == startElement {
+              chords[j].elementIndex == startElement
+        {
             let ref = chords[j]
             if ref.pitch == pitch,
                case let .chord(nextChord) = measures[ref.measureIndex]
                    .voices[ref.voiceIndex]
                    .elements[ref.elementIndex],
-               nextChord.notes[ref.noteIndex].tieBack == tieNumber {
+                   nextChord.notes[ref.noteIndex].tieBack == tieNumber
+            {
                 return j
             }
             j += 1

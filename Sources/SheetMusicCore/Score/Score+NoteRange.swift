@@ -36,10 +36,10 @@ extension Score {
         let posHi = max(anchorEnd, targetEnd)
 
         var result: [ScoreItemID] = []
-        for staffIdx in staffLo...staffHi {
+        for staffIdx in staffLo ... staffHi {
             guard staves.indices.contains(staffIdx) else { continue }
             let measures = staves[staffIdx].measures
-            for mIdx in posLo.measure...posHi.measure {
+            for mIdx in posLo.measure ... posHi.measure {
                 guard measures.indices.contains(mIdx) else { continue }
                 for (vIdx, voice) in measures[mIdx].voices.enumerated() {
                     var tick = 0
@@ -51,7 +51,7 @@ extension Score {
                         // exactly at posHi sits past the range.
                         let inRange = pos >= posLo && pos < posHi
                         switch el {
-                        case .chord(let chord) where !chord.notes.isEmpty:
+                        case let .chord(chord) where !chord.notes.isEmpty:
                             if inRange {
                                 for nIdx in chord.notes.indices {
                                     result.append(.note(NoteID(
@@ -59,18 +59,20 @@ extension Score {
                                         measureIndex: mIdx,
                                         voiceIndex: vIdx,
                                         elementIndex: eIdx,
-                                        noteIndexInChord: nIdx)))
+                                        noteIndexInChord: nIdx
+                                    )))
                                 }
                             }
                             tick += chord.duration.ticks(division: division)
-                        case .chord(let rest):
+                        case let .chord(rest):
                             // Empty chord — selectable as a rest.
                             if inRange {
                                 result.append(.rest(RestID(
                                     staffIndex: staffIdx,
                                     measureIndex: mIdx,
                                     voiceIndex: vIdx,
-                                    elementIndex: eIdx)))
+                                    elementIndex: eIdx
+                                )))
                             }
                             tick += rest.duration.ticks(division: division)
                         default:
@@ -109,13 +111,14 @@ extension Score {
         }
         let dur: Int
         switch elements[id.elementIndex] {
-        case .chord(let c):
+        case let .chord(c):
             dur = c.duration.ticks(division: division)
         default:
             dur = 0
         }
         return TickPosition(
-            measure: start.measure, tick: start.tick + dur)
+            measure: start.measure, tick: start.tick + dur
+        )
     }
 
     /// Tick position of the element referenced by `id` within its
@@ -130,9 +133,9 @@ extension Score {
         guard elements.indices.contains(id.elementIndex) else { return nil }
 
         var tick = 0
-        for i in 0..<id.elementIndex {
+        for i in 0 ..< id.elementIndex {
             switch elements[i] {
-            case .chord(let c):
+            case let .chord(c):
                 tick += c.duration.ticks(division: division)
             default:
                 break

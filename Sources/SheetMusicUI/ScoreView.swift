@@ -40,8 +40,8 @@ public struct ScoreView: View {
         _ = BravuraFont.register
         self.score = score
         self.options = options
-        self.explicitWidth = availableWidth
-        self.providedDocument = nil
+        explicitWidth = availableWidth
+        providedDocument = nil
         self.selection = selection
         self.voiceColors = voiceColors
         self.playbackCursor = playbackCursor
@@ -63,9 +63,9 @@ public struct ScoreView: View {
     ) {
         _ = BravuraFont.register
         self.score = score
-        self.options = ScoreViewOptions()
-        self.explicitWidth = nil
-        self.providedDocument = document
+        options = ScoreViewOptions()
+        explicitWidth = nil
+        providedDocument = document
         self.selection = selection
         self.voiceColors = voiceColors
         self.playbackCursor = playbackCursor
@@ -75,7 +75,8 @@ public struct ScoreView: View {
         let selState = SelectionRenderState.make(
             selection: selection,
             voiceColors: voiceColors,
-            score: score)
+            score: score
+        )
         if let doc = providedDocument {
             systemStack(doc: doc, selection: selState)
         } else if options.wrapToViewWidth {
@@ -83,23 +84,27 @@ public struct ScoreView: View {
                 let w = max(ew, options.staffSize * 4)
                 let doc = LayoutEngine.layout(
                     score: score, options: options,
-                    availableWidth: w)
+                    availableWidth: w
+                )
                 systemStack(doc: doc, selection: selState)
             } else {
                 GeometryReader { proxy in
                     let w = max(proxy.size.width, options.staffSize * 4)
                     let doc = LayoutEngine.layout(
                         score: score, options: options,
-                        availableWidth: w)
+                        availableWidth: w
+                    )
                     systemStack(doc: doc, selection: selState)
                 }
             }
         } else {
             let naturalWidth = LayoutEngine.naturalContentWidth(
-                score: score, options: options)
+                score: score, options: options
+            )
             let doc = LayoutEngine.layout(
                 score: score, options: options,
-                availableWidth: naturalWidth)
+                availableWidth: naturalWidth
+            )
             horizontalStack(doc: doc, selection: selState)
         }
     }
@@ -131,28 +136,33 @@ public struct ScoreView: View {
         ZStack(alignment: .topLeading) {
             if let titleFrame = doc.titleFrame {
                 TitleFrameView(
-                    frame: titleFrame, width: doc.size.width)
+                    frame: titleFrame, width: doc.size.width
+                )
             }
             ForEach(Array(doc.systems.enumerated()), id: \.offset) { _, sys in
                 SystemLayerView(
                     system: sys, metrics: doc.metrics,
-                    selection: selection)
-                    .overlay(alignment: .topLeading) {
-                        BreakIndicatorOverlay(
-                            mode: .system(system: sys),
-                            metrics: doc.metrics)
-                    }
-                    .offset(y: sys.origin.y)
+                    selection: selection
+                )
+                .overlay(alignment: .topLeading) {
+                    BreakIndicatorOverlay(
+                        mode: .system(system: sys),
+                        metrics: doc.metrics
+                    )
+                }
+                .offset(y: sys.origin.y)
             }
             PlaybackCursorView(
                 cursor: playbackCursor,
                 document: doc,
-                score: score)
+                score: score
+            )
         }
         .frame(
             width: doc.size.width,
             height: doc.size.height,
-            alignment: .topLeading)
+            alignment: .topLeading
+        )
         .background(Color.white)
         .environment(\.colorScheme, .light)
     }
@@ -174,24 +184,28 @@ public struct ScoreView: View {
                 VStack(alignment: .leading, spacing: 0) {
                     if let titleFrame = doc.titleFrame {
                         TitleFrameView(
-                            frame: titleFrame, width: doc.size.width)
+                            frame: titleFrame, width: doc.size.width
+                        )
                     }
                     SystemLayerView(
                         system: system, metrics: doc.metrics,
-                        selection: selection)
-                        .overlay(alignment: .topLeading) {
-                            // Horizontal mode honours no breaks at
-                            // layout time, but the indicator badges
-                            // are still useful as authoring hints.
-                            BreakIndicatorOverlay(
-                                mode: .system(system: system),
-                                metrics: doc.metrics)
-                        }
+                        selection: selection
+                    )
+                    .overlay(alignment: .topLeading) {
+                        // Horizontal mode honours no breaks at
+                        // layout time, but the indicator badges
+                        // are still useful as authoring hints.
+                        BreakIndicatorOverlay(
+                            mode: .system(system: system),
+                            metrics: doc.metrics
+                        )
+                    }
                 }
                 PlaybackCursorView(
                     cursor: playbackCursor,
                     document: doc,
-                    score: score)
+                    score: score
+                )
             }
             .frame(width: doc.size.width, alignment: .leading)
             .background(Color.white)

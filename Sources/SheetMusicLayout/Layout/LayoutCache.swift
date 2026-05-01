@@ -48,7 +48,7 @@ public final class LayoutCache: @unchecked Sendable {
     /// portion by `buildSystem`.
     struct Entry {
         // --- Inputs that determine `crossStaffMinimumMeasureWidth` ---
-        let measures: [Measure?]      // one per staff (nil if absent)
+        let measures: [Measure?] // one per staff (nil if absent)
         let sp: CGFloat
         let division: Int
 

@@ -16,9 +16,10 @@ import Testing
     @Test func defaultHeaderHiddenOnFirstPage() async throws {
         guard #available(macOS 15.0, iOS 16.0, *) else { return }
         let url = try #require(Bundle.module.url(
-            forResource: "testArpeggio", withExtension: "mscx"))
+            forResource: "testArpeggio", withExtension: "mscx"
+        ))
         let score = try MSCXParser.parse(
-            try Data(contentsOf: url))
+            Data(contentsOf: url))
         let data = try PDFExporter.export(score: score)
         let doc = try #require(PDFDocument(data: data))
         let page = try #require(doc.page(at: 0))
@@ -32,7 +33,7 @@ import Testing
         // The footer `$C` defaults to copyright, which is empty in
         // testArpeggio's metaTags, so the chrome contributes
         // nothing.
-        _ = text  // smoke check — no crash and PDF parses
+        _ = text // smoke check — no crash and PDF parses
     }
 
     /// Disabling header + footer via `<showHeader>0</showHeader>`
@@ -44,13 +45,16 @@ import Testing
         score.style.pageChrome.header.enabled = false
         score.style.pageChrome.footer.enabled = false
         score.style.pageChrome.header.odd = TextRow(
-            left: "VISIBLE", center: "", right: "")
+            left: "VISIBLE", center: "", right: ""
+        )
         let data = try PDFExporter.export(score: score)
         let doc = try #require(PDFDocument(data: data))
         let page = try #require(doc.page(at: 0))
         let text = page.string ?? ""
-        #expect(!text.contains("VISIBLE"),
-                "disabled header should not render")
+        #expect(
+            !text.contains("VISIBLE"),
+            "disabled header should not render"
+        )
     }
 
     /// With `headerFirstPage = true` and a literal text in the row,
@@ -63,32 +67,40 @@ import Testing
         score.style.pageChrome.header.showOnFirstPage = true
         score.style.pageChrome.header.oddEvenDifferent = false
         score.style.pageChrome.header.odd = TextRow(
-            left: "MARKER42", center: "", right: "")
+            left: "MARKER42", center: "", right: ""
+        )
         let data = try PDFExporter.export(score: score)
         let doc = try #require(PDFDocument(data: data))
         let page = try #require(doc.page(at: 0))
         let text = page.string ?? ""
-        #expect(text.contains("MARKER42"),
-                "header on page 1 should render literal text")
+        #expect(
+            text.contains("MARKER42"),
+            "header on page 1 should render literal text"
+        )
     }
 
     private static func minimalScore() -> Score {
         let chord = Chord(
             duration: .quarter,
-            notes: [Note(pitch: 60, tpc: 14)])
+            notes: [Note(pitch: 60, tpc: 14)]
+        )
         let voice = Voice(elements: [
             .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
             .chord(chord), .chord(chord),
             .chord(chord), .chord(chord),
         ])
         let staff = StaffContent(
-            id: 1, measures: [Measure(voices: [voice])])
+            id: 1, measures: [Measure(voices: [voice])]
+        )
         let part = Part(
             id: "P1",
             instrument: Instrument(
                 id: "i",
-                articulations: [InstrumentArticulation()]))
+                articulations: [InstrumentArticulation()]
+            )
+        )
         return Score(
-            division: 480, parts: [part], staves: [staff])
+            division: 480, parts: [part], staves: [staff]
+        )
     }
 }

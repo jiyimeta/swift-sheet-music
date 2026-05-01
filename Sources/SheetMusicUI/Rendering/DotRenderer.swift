@@ -1,5 +1,5 @@
-import SwiftUI
 import SheetMusicLayout
+import SwiftUI
 
 /// Augmentation dots drawn to the right of a notehead or rest glyph.
 /// Small filled circle; offset by ~1 sp right of the anchor, further
@@ -24,15 +24,17 @@ enum DotRenderer {
         let firstOffset = metrics.sp * 1.15
         let spacing = metrics.sp * 0.6
         let y = onStaffLine ? origin.y - metrics.sp / 2 : origin.y
-        for i in 0..<count {
+        for i in 0 ..< count {
             let x = origin.x + firstOffset + CGFloat(i) * spacing
             let rect = CGRect(
                 x: x - radius,
                 y: y - radius,
                 width: radius * 2,
-                height: radius * 2)
+                height: radius * 2
+            )
             context.fill(
-                Path(ellipseIn: rect), with: .color(.primary))
+                Path(ellipseIn: rect), with: .color(.primary)
+            )
         }
     }
 }

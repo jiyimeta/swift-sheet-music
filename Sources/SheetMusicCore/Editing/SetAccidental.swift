@@ -41,13 +41,14 @@ public struct SetAccidental: EditCommand {
                 reason: "SetAccidental: no note at \(location)")
         }
         let veID = VoiceElementID(location)
-        guard case .chord(var chord) = score[veID] else {
+        guard case var .chord(chord) = score[veID] else {
             throw SheetMusicError.invalidEdit(
                 reason: "SetAccidental: element at \(veID) is not "
                     + "a chord")
         }
         let respelled = PitchSpelling.respelled(
-            from: oldNote, with: accidental)
+            from: oldNote, with: accidental
+        )
         var note = chord.notes[location.noteIndexInChord]
         note.pitch = respelled.pitch
         note.tpc = respelled.tpc
@@ -58,6 +59,7 @@ public struct SetAccidental: EditCommand {
             at: location,
             pitch: oldNote.pitch,
             tpc: oldNote.tpc,
-            accidental: oldNote.accidental)
+            accidental: oldNote.accidental
+        )
     }
 }

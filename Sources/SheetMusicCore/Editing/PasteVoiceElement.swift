@@ -36,7 +36,7 @@ public struct PasteVoiceElement: EditCommand {
     public func apply(to score: inout Score) throws -> any EditCommand {
         guard let voice = DurationChangeAlgorithm
             .voice(in: score, at: location),
-              voice.elements.indices.contains(location.elementIndex)
+            voice.elements.indices.contains(location.elementIndex)
         else {
             throw SheetMusicError.invalidEdit(
                 reason: "PasteVoiceElement: no element at \(location)")
@@ -64,11 +64,13 @@ public struct PasteVoiceElement: EditCommand {
         try DurationChangeAlgorithm.ensureNotInsideTuplet(
             voice: voice,
             elementIdx: location.elementIndex,
-            label: "PasteVoiceElement")
+            label: "PasteVoiceElement"
+        )
         let targetRtick = DurationChangeAlgorithm.tickOffset(
             in: voice,
             ofElementAt: location.elementIndex,
-            division: division)
+            division: division
+        )
         // `srcTicks` in DurationChangeAlgorithm = the OLD duration
         // at idx (i.e., the target we're replacing); `dstTicks` =
         // the NEW duration (i.e., the pasted element).
@@ -80,13 +82,15 @@ public struct PasteVoiceElement: EditCommand {
                 srcTicks: dst,
                 dstTicks: src,
                 targetRtick: targetRtick,
-                division: division)
+                division: division
+            )
         let replace = ReplaceVoiceElements(
             staffIndex: location.staffIndex,
             measureIndex: location.measureIndex,
             voiceIndex: location.voiceIndex,
             elements: newElements,
-            tuplets: newTuplets)
+            tuplets: newTuplets
+        )
         return try replace.apply(to: &score)
     }
 
@@ -96,7 +100,7 @@ public struct PasteVoiceElement: EditCommand {
         of element: VoiceElement, division: Int
     ) -> Int? {
         switch element {
-        case .chord(let c): return c.duration.ticks(division: division)
+        case let .chord(c): return c.duration.ticks(division: division)
         default: return nil
         }
     }

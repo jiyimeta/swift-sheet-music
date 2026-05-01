@@ -24,8 +24,8 @@ public struct PagedScoreView: View {
         _ = BravuraFont.register
         self.score = score
         self.options = options
-        self._pageIndex = pageIndex
-        self._totalPages = totalPages
+        _pageIndex = pageIndex
+        _totalPages = totalPages
     }
 
     public var body: some View {
@@ -34,13 +34,16 @@ public struct PagedScoreView: View {
             let pageOpts = ScoreViewOptions(
                 staffSize: options.staffSize,
                 systemGap: options.systemGap,
-                wrapToViewWidth: true)
+                wrapToViewWidth: true
+            )
             let doc = LayoutEngine.layout(
                 score: score, options: pageOpts,
-                availableWidth: w)
+                availableWidth: w
+            )
             let pages = Self.paginate(
                 systems: doc.systems,
-                pageHeight: proxy.size.height)
+                pageHeight: proxy.size.height
+            )
             let count = max(1, pages.count)
             let safe = min(max(pageIndex, 0), count - 1)
             let pageSystems = safe >= 0 && safe < pages.count
@@ -50,15 +53,18 @@ public struct PagedScoreView: View {
                 Canvas(opaque: true, rendersAsynchronously: true) { ctx, size in
                     ctx.fill(
                         Path(CGRect(origin: .zero, size: size)),
-                        with: .color(.white))
+                        with: .color(.white)
+                    )
                     var localY: CGFloat = 0
                     for system in pageSystems {
                         var sub = ctx
                         sub.translateBy(
                             x: -system.origin.x,
-                            y: localY - system.origin.y)
+                            y: localY - system.origin.y
+                        )
                         ScoreCanvasDrawing.drawSystem(
-                            system, metrics: doc.metrics, into: &sub)
+                            system, metrics: doc.metrics, into: &sub
+                        )
                         localY += system.size.height
                     }
                 }
@@ -78,13 +84,17 @@ public struct PagedScoreView: View {
                 ) { idx, sys in
                     BreakIndicatorOverlay(
                         mode: .system(system: sys),
-                        metrics: doc.metrics)
-                        .frame(width: sys.size.width,
-                               height: sys.size.height,
-                               alignment: .topLeading)
-                        .offset(
-                            x: sys.origin.x,
-                            y: pageOrigins[idx])
+                        metrics: doc.metrics
+                    )
+                    .frame(
+                        width: sys.size.width,
+                        height: sys.size.height,
+                        alignment: .topLeading
+                    )
+                    .offset(
+                        x: sys.origin.x,
+                        y: pageOrigins[idx]
+                    )
                 }
             }
             .frame(width: doc.size.width, height: proxy.size.height)

@@ -1,5 +1,5 @@
-import SwiftUI
 import SheetMusicLayout
+import SwiftUI
 
 /// Draws a tuplet marking — either a square bracket with hooks at each
 /// end and a number in the middle (non-beamed tuplets), or just the
@@ -35,7 +35,8 @@ enum TupletRenderer {
             size: fontSize,
             italic: true,
             color: color,
-            anchor: .center)
+            anchor: .center
+        )
         guard hasBracket else { return }
         // Approximate label width for the gap; errs on the side of
         // being slightly wide so the bracket never touches the glyphs.
@@ -49,28 +50,34 @@ enum TupletRenderer {
         leftHook.move(to: CGPoint(x: from.x, y: from.y + hookDy))
         leftHook.addLine(to: from)
         context.stroke(
-            leftHook, with: .color(color), lineWidth: lineWidth)
+            leftHook, with: .color(color), lineWidth: lineWidth
+        )
         // Right hook
         var rightHook = Path()
         rightHook.move(to: CGPoint(x: to.x, y: to.y + hookDy))
         rightHook.addLine(to: to)
         context.stroke(
-            rightHook, with: .color(color), lineWidth: lineWidth)
+            rightHook, with: .color(color), lineWidth: lineWidth
+        )
         // Horizontal — two segments, interrupted by the label.
         var leftSeg = Path()
         leftSeg.move(to: from)
         leftSeg.addLine(to: CGPoint(
             x: labelX - labelHalfWidth,
-            y: interpY(from: from, to: to, x: labelX - labelHalfWidth)))
+            y: interpY(from: from, to: to, x: labelX - labelHalfWidth)
+        ))
         context.stroke(
-            leftSeg, with: .color(color), lineWidth: lineWidth)
+            leftSeg, with: .color(color), lineWidth: lineWidth
+        )
         var rightSeg = Path()
         rightSeg.move(to: CGPoint(
             x: labelX + labelHalfWidth,
-            y: interpY(from: from, to: to, x: labelX + labelHalfWidth)))
+            y: interpY(from: from, to: to, x: labelX + labelHalfWidth)
+        ))
         rightSeg.addLine(to: to)
         context.stroke(
-            rightSeg, with: .color(color), lineWidth: lineWidth)
+            rightSeg, with: .color(color), lineWidth: lineWidth
+        )
     }
 
     private static func interpY(

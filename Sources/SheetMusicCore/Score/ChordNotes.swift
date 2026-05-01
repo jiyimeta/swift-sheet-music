@@ -26,13 +26,13 @@ public struct ChordNotes: Sendable, Equatable {
     @usableFromInline internal var storage: [Note]
 
     public init() {
-        self.storage = []
+        storage = []
     }
 
     @inlinable
     public init<S: Sequence>(_ sequence: S) where S.Element == Note {
         var seen = Set<Int>()
-        self.storage = []
+        storage = []
         for note in sequence where seen.insert(note.pitch).inserted {
             self.storage.append(note)
         }
@@ -86,6 +86,7 @@ extension ChordNotes: RandomAccessCollection, MutableCollection {
     public func index(_ i: Int, offsetBy distance: Int) -> Int {
         storage.index(i, offsetBy: distance)
     }
+
     public func distance(from start: Int, to end: Int) -> Int {
         storage.distance(from: start, to: end)
     }
@@ -115,7 +116,7 @@ extension ChordNotes: RangeReplaceableCollection {
     public mutating func replaceSubrange<C, R>(
         _ subrange: R, with newElements: C
     ) where C: Collection, C.Element == Note,
-            R: RangeExpression, R.Bound == Int {
+    R: RangeExpression, R.Bound == Int {
         // Build the would-be sequence (existing minus subrange +
         // newElements) then dedupe with the same first-wins rule
         // used in `init(_:)`. Pitches that already exist outside

@@ -2,8 +2,8 @@ import Foundation
 
 /// A pitched note inside a `Chord`. C++: `mu::engraving::Note` (subset).
 public struct Note: Sendable, Equatable {
-    public var pitch: Int      // MIDI 0..127
-    public var tpc: Int        // tonal pitch class
+    public var pitch: Int // MIDI 0..127
+    public var tpc: Int // tonal pitch class
     public var accidental: Accidental?
     /// Tie continuing forward from this note. `nil` means no tie;
     /// `.some(n)` means a tie numbered `n` (MusicXML `<tie number="N">`;

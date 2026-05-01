@@ -28,7 +28,7 @@ extension PlaybackEngine {
     public func setProgram(
         forChannel id: MixerChannel.Kind, to program: UInt8
     ) {
-        guard case .staff(let idx) = id else { return }
+        guard case let .staff(idx) = id else { return }
         loadProgram(forStaff: idx, program: program)
         mutate(channel: id) { $0.program = program }
     }
@@ -57,11 +57,13 @@ extension PlaybackEngine {
                 id: .staff(idx),
                 name: staffName(at: idx, in: score),
                 volume: initialStaffVolume(at: idx, in: score),
-                program: initialStaffProgram(at: idx, in: score)))
+                program: initialStaffProgram(at: idx, in: score)
+            ))
         }
         channels.append(MixerChannel(
             id: .metronome,
-            name: "Metronome"))
+            name: "Metronome"
+        ))
         replaceMixerChannels(channels)
     }
 
@@ -99,7 +101,7 @@ extension PlaybackEngine {
                 || (anySoloed && !channel.isSoloed)
             let gain: Float = effectivelyMuted ? 0 : channel.volume
             switch channel.id {
-            case .staff(let i):
+            case let .staff(i):
                 staffSampler(at: i)?.volume = gain
             case .metronome:
                 setMetronomeEnabled(!effectivelyMuted)

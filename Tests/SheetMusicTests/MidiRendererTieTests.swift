@@ -14,7 +14,7 @@ import Testing
     private static func makeScore(division: Int, chords: [Chord]) -> Score {
         let instrument = Instrument(
             id: "test",
-            articulations: [InstrumentArticulation()]  // gate = 100, velocity = 100
+            articulations: [InstrumentArticulation()] // gate = 100, velocity = 100
         )
         let part = Part(id: "P1", instrument: instrument)
         let voice = Voice(elements: chords.map { .chord($0) })
@@ -112,15 +112,15 @@ import Testing
         let a = Chord(
             duration: .quarter,
             notes: [
-                Note(pitch: 60, tpc: 14),                  // C4 — not tied
-                Note(pitch: 67, tpc: 15, tieForward: 1)    // G4 — tied forward
+                Note(pitch: 60, tpc: 14), // C4 — not tied
+                Note(pitch: 67, tpc: 15, tieForward: 1), // G4 — tied forward
             ]
         )
         let b = Chord(
             duration: .quarter,
             notes: [
-                Note(pitch: 64, tpc: 18),                  // E4 — unrelated
-                Note(pitch: 67, tpc: 15, tieBack: 1)       // G4 — tied back
+                Note(pitch: 64, tpc: 18), // E4 — unrelated
+                Note(pitch: 67, tpc: 15, tieBack: 1), // G4 — tied back
             ]
         )
         let score = Self.makeScore(division: division, chords: [a, b])
@@ -173,10 +173,11 @@ import Testing
           </Chord>
         </voice>
         """
-        let voice = try Voice.decode(try XMLTreeParser.parse(Data(xml.utf8)))
+        let voice = try Voice.decode(XMLTreeParser.parse(Data(xml.utf8)))
         #expect(voice.elements.count == 2)
         guard case let .chord(first) = voice.elements[0],
-              case let .chord(second) = voice.elements[1] else {
+              case let .chord(second) = voice.elements[1]
+        else {
             Issue.record("expected two chords, got \(voice.elements)")
             return
         }

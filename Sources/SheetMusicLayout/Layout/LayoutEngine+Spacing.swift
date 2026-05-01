@@ -53,10 +53,12 @@ extension LayoutEngine {
             if synthesizeKeySigForAllStaves,
                let keys = activeKeys,
                idx < keys.count,
-               keys[idx] != 0 {
+               keys[idx] != 0
+            {
                 keySigWidth = max(
                     keySigWidth,
-                    metrics.sp * (CGFloat(abs(keys[idx])) + 1.5))
+                    metrics.sp * (CGFloat(abs(keys[idx])) + 1.5)
+                )
             }
             let leading = measure.voices.first?.elements ?? []
             for el in leading {
@@ -64,10 +66,11 @@ extension LayoutEngine {
                 switch el {
                 case .clef:
                     clefWidth = max(clefWidth, metrics.sp * 2)
-                case .keySignature(let k):
+                case let .keySignature(k):
                     keySigWidth = max(
                         keySigWidth,
-                        metrics.sp * (CGFloat(abs(k.concertKey)) + 1.5))
+                        metrics.sp * (CGFloat(abs(k.concertKey)) + 1.5)
+                    )
                 case .timeSignature:
                     timeSigWidth = max(timeSigWidth, metrics.sp * 3)
                 case .chord:
@@ -112,19 +115,21 @@ extension LayoutEngine {
             return partLabelWidth + metrics.sp * 8
         }
         var total: CGFloat = partLabelWidth
-        for i in 0..<measureCount {
+        for i in 0 ..< measureCount {
             let baseHeader = computeHeaderSchedule(
                 measureIdx: i,
                 staves: score.staves,
                 metrics: metrics,
                 synthesizeClefForAllStaves: false,
-                synthesizeKeySigForAllStaves: false)
+                synthesizeKeySigForAllStaves: false
+            )
             let w = crossStaffMinimumMeasureWidth(
                 staves: score.staves,
                 measureIdx: i,
                 metrics: metrics,
                 headerSchedule: baseHeader,
-                division: score.division)
+                division: score.division
+            )
             total += w
         }
         return total
@@ -162,7 +167,8 @@ extension LayoutEngine {
     ) -> [Int: CGFloat] {
         let agg = aggregatedTickWeights(
             staves: staves, measureIdx: measureIdx,
-            metrics: metrics, division: division)
+            metrics: metrics, division: division
+        )
         guard !agg.sortedTicks.isEmpty else { return [:] }
 
         // Trailing slack between the last note's tick and the right
@@ -179,8 +185,11 @@ extension LayoutEngine {
         // measure can stretch but cannot collapse.
         let contentWidth = max(
             agg.totalWeight,
-            max(metrics.sp * 4,
-                width - headerSchedule.contentStartX - trailingGap))
+            max(
+                metrics.sp * 4,
+                width - headerSchedule.contentStartX - trailingGap
+            )
+        )
         let baseX = headerSchedule.contentStartX + metrics.sp
 
         var tickToX: [Int: CGFloat] = [:]
@@ -215,7 +224,8 @@ extension LayoutEngine {
     ) -> CGFloat {
         let agg = aggregatedTickWeights(
             staves: staves, measureIdx: measureIdx,
-            metrics: metrics, division: division)
+            metrics: metrics, division: division
+        )
         // Must match `tickColumns`' trailingGap so the spacing engine
         // and the placement engine size every measure identically.
         let trailingGap = metrics.sp * 1
@@ -237,8 +247,12 @@ extension LayoutEngine {
         measureIdx: Int,
         metrics: StaffMetrics,
         division: Int
-    ) -> (sortedTicks: [Int], gapWeights: [CGFloat],
-          totalWeight: CGFloat, measureEnd: Int) {
+    ) -> (
+        sortedTicks: [Int],
+        gapWeights: [CGFloat],
+        totalWeight: CGFloat,
+        measureEnd: Int
+    ) {
         struct TimedElement {
             let startTick: Int
             let endTick: Int
@@ -246,7 +260,7 @@ extension LayoutEngine {
         }
         var voiceElements: [[TimedElement]] = []
         var allTicks: Set<Int> = []
-        var measureEnd: Int = 0
+        var measureEnd = 0
 
         for staff in staves where measureIdx < staff.measures.count {
             for voice in staff.measures[measureIdx].voices {
@@ -254,26 +268,31 @@ extension LayoutEngine {
                 var tick = 0
                 for (idx, el) in voice.elements.enumerated() {
                     switch el {
-                    case .chord(let c) where !c.notes.isEmpty:
+                    case let .chord(c) where !c.notes.isEmpty:
                         let nextLyrics = nextChordLyrics(
-                            in: voice.elements, after: idx)
+                            in: voice.elements, after: idx
+                        )
                         let w = max(
                             durationWidth(c.duration, metrics: metrics),
                             lyricsPairWidth(
                                 currentLyrics: c.lyrics,
                                 nextLyrics: nextLyrics,
-                                metrics: metrics))
+                                metrics: metrics
+                            )
+                        )
                         let end = tick + c.duration.ticks(division: division)
                         elements.append(TimedElement(
-                            startTick: tick, endTick: end, weight: w))
+                            startTick: tick, endTick: end, weight: w
+                        ))
                         allTicks.insert(tick)
                         tick = end
-                    case .chord(let r):
+                    case let .chord(r):
                         // Empty chord = rest.
                         let w = durationWidth(r.duration, metrics: metrics)
                         let end = tick + r.duration.ticks(division: division)
                         elements.append(TimedElement(
-                            startTick: tick, endTick: end, weight: w))
+                            startTick: tick, endTick: end, weight: w
+                        ))
                         allTicks.insert(tick)
                         tick = end
                     default:
@@ -294,7 +313,7 @@ extension LayoutEngine {
 
         var gapWeights: [CGFloat] = []
         gapWeights.reserveCapacity(sortedTicks.count)
-        for i in 0..<sortedTicks.count {
+        for i in 0 ..< sortedTicks.count {
             let tStart = sortedTicks[i]
             let tEnd = i + 1 < sortedTicks.count
                 ? sortedTicks[i + 1]
@@ -307,7 +326,8 @@ extension LayoutEngine {
             var maxGap: CGFloat = 0
             for elements in voiceElements {
                 for el in elements where el.startTick <= tStart
-                    && el.endTick > tStart {
+                    && el.endTick > tStart
+                {
                     let duration = el.endTick - el.startTick
                     guard duration > 0 else { break }
                     let share = el.weight
@@ -353,10 +373,11 @@ extension LayoutEngine {
                 switch el {
                 case .clef:
                     hasExplicitClef = true
-                case .keySignature(let k):
+                case let .keySignature(k):
                     explicitKeyWidth = max(
                         explicitKeyWidth,
-                        metrics.sp * (CGFloat(abs(k.concertKey)) + 1))
+                        metrics.sp * (CGFloat(abs(k.concertKey)) + 1)
+                    )
                 case .chord:
                     break scan
                 default:
@@ -373,7 +394,8 @@ extension LayoutEngine {
                     * (CGFloat(abs(activeKey)) + 1.5)
                 keyBoost = max(
                     keyBoost,
-                    max(0, synthKeyW - explicitKeyWidth))
+                    max(0, synthKeyW - explicitKeyWidth)
+                )
             }
         }
         return clefBoost + keyBoost
@@ -404,7 +426,7 @@ extension LayoutEngine {
                 // Key sig: `|k|` accidentals × ~1 sp each, plus
                 // `keysigLeftMargin` (0.5 sp). `+ 0.5` instead of
                 // the previous `+ 1` more closely matches MuseScore.
-                case .keySignature(let k):
+                case let .keySignature(k):
                     w += metrics.sp
                         * (CGFloat(abs(k.concertKey)) + 0.5)
                 // Time sig: 1.7 sp digit + 0.5 sp barline distance.
@@ -412,16 +434,18 @@ extension LayoutEngine {
                     w += metrics.sp * 2.2
                 case .barLine:
                     w += metrics.sp
-                case .chord(let c) where !c.notes.isEmpty:
+                case let .chord(c) where !c.notes.isEmpty:
                     let tickW = durationWidth(c.duration, metrics: metrics)
                     let nextLyrics = nextChordLyrics(
-                        in: voice.elements, after: idx)
+                        in: voice.elements, after: idx
+                    )
                     let lyricW = lyricsPairWidth(
                         currentLyrics: c.lyrics,
                         nextLyrics: nextLyrics,
-                        metrics: metrics)
+                        metrics: metrics
+                    )
                     w += max(tickW, lyricW)
-                case .chord(let r):
+                case let .chord(r):
                     // Empty chord = rest.
                     w += durationWidth(r.duration, metrics: metrics)
                 case .dynamic, .tempo, .fermata,
@@ -451,7 +475,7 @@ extension LayoutEngine {
         case .sixtyFourth: quarters = 0.0625
         case .oneTwentyEighth: quarters = 1.0 / 32
         case .twoFiftySixth: quarters = 1.0 / 64
-        case .fraction(let f):
+        case let .fraction(f):
             quarters = Double(f.numerator) / Double(f.denominator) * 4
         }
         let baseWidth = metrics.spacePerQuarter * CGFloat(quarters)
@@ -520,7 +544,8 @@ extension LayoutEngine {
         for lyric in lyrics where !lyric.text.isEmpty {
             widest = max(
                 widest,
-                lyricsTextWidth(lyric.text, sp: metrics.sp))
+                lyricsTextWidth(lyric.text, sp: metrics.sp)
+            )
         }
         return widest
     }
@@ -532,9 +557,9 @@ extension LayoutEngine {
         in elements: [VoiceElement], after startIndex: Int
     ) -> [Lyric] {
         guard startIndex + 1 < elements.count else { return [] }
-        for j in (startIndex + 1)..<elements.count {
+        for j in (startIndex + 1) ..< elements.count {
             switch elements[j] {
-            case .chord(let nc) where !nc.notes.isEmpty:
+            case let .chord(nc) where !nc.notes.isEmpty:
                 return nc.lyrics
             case .chord:
                 // Empty chord = rest.

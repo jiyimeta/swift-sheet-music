@@ -16,12 +16,15 @@ import Testing
     @Test func initialKeySigThenRepeatToMeas2() throws {
         try assertExportMatchesReference(name: "testInitialKeySigThenRepeatToMeas2")
     }
+
     @Test func repeatsWithKeySigs() throws {
         try assertExportMatchesReference(name: "testRepeatsWithKeySigs")
     }
+
     @Test func repeatsWithKeySigsExceptFirstMeas() throws {
         try assertExportMatchesReference(name: "testRepeatsWithKeySigsExceptFirstMeas")
     }
+
     @Test func voltaTemp() throws { try assertExportMatchesReference(name: "testVoltaTemp") }
     @Test func voltaDynamic() throws { try assertExportMatchesReference(name: "testVoltaDynamic") }
 
@@ -29,7 +32,7 @@ import Testing
         let scoreURL = try #require(Bundle.module.url(forResource: name, withExtension: "mscx"))
         let refURL = try #require(Bundle.module.url(forResource: "\(name)-ref", withExtension: "mid"))
 
-        let score = try SheetMusic.loadScore(mscxData: try Data(contentsOf: scoreURL))
+        let score = try SheetMusic.loadScore(mscxData: Data(contentsOf: scoreURL))
         let produced = try SheetMusic.exportMIDI(score: score)
         let reference = try Data(contentsOf: refURL)
 

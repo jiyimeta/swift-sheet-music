@@ -40,11 +40,13 @@ public final class PlaybackEngine: ObservableObject {
         var bankLSB: UInt8
         var isDrums: Bool
     }
+
     /// Used to silence pending preview note-offs when the engine is
     /// torn down or a new score is prepared.
     private let previewQueue = DispatchQueue(
         label: "swift-sheet-music.playback.preview",
-        qos: .userInteractive)
+        qos: .userInteractive
+    )
 
     /// Sequencer used for full-score playback. Lazily built the
     /// first time `play(...)` is called for a given score.
@@ -78,8 +80,8 @@ public final class PlaybackEngine: ObservableObject {
     @Published public private(set) var mixerChannels: [MixerChannel] = []
 
     public init(soundfontResolver: SoundfontResolver) {
-        self.resolver = soundfontResolver
-        self.metronome = MetronomeController(engine: engine)
+        resolver = soundfontResolver
+        metronome = MetronomeController(engine: engine)
     }
 
     // MARK: Internal accessors for `PlaybackEngine+Mixer`
@@ -116,8 +118,9 @@ public final class PlaybackEngine: ObservableObject {
             let sampler = staffSamplers[idx],
             let params = staffLoadParams[idx],
             let url = resolver.soundfontURL(
-                forBank: params.bankLSB, program: program)
-                ?? resolver.defaultGMSoundfontURL
+                forBank: params.bankLSB, program: program
+            )
+            ?? resolver.defaultGMSoundfontURL
         else { return }
         let bankMSB: UInt8 = params.isDrums
             ? UInt8(kAUSampler_DefaultPercussionBankMSB)
@@ -126,7 +129,8 @@ public final class PlaybackEngine: ObservableObject {
             at: url,
             program: program,
             bankMSB: bankMSB,
-            bankLSB: params.bankLSB)
+            bankLSB: params.bankLSB
+        )
     }
 
     /// Build per-staff samplers, load their SoundFont presets, and
@@ -156,9 +160,9 @@ public final class PlaybackEngine: ObservableObject {
         staffLoadParams.removeAll()
 
         #if os(iOS) || os(tvOS) || os(watchOS)
-        let session = AVAudioSession.sharedInstance()
-        try session.setCategory(.playback, mode: .default, options: [])
-        try session.setActive(true, options: [])
+            let session = AVAudioSession.sharedInstance()
+            try session.setCategory(.playback, mode: .default, options: [])
+            try session.setActive(true, options: [])
         #endif
 
         for (idx, _) in score.staves.enumerated() {
@@ -172,7 +176,8 @@ public final class PlaybackEngine: ObservableObject {
             let program = UInt8(clamping: channel.program)
 
             let url = resolver.soundfontURL(
-                forBank: bank, program: program)
+                forBank: bank, program: program
+            )
                 ?? resolver.defaultGMSoundfontURL
 
             let sampler = AVAudioUnitSampler()
@@ -180,7 +185,8 @@ public final class PlaybackEngine: ObservableObject {
             engine.connect(
                 sampler,
                 to: engine.mainMixerNode,
-                format: nil)
+                format: nil
+            )
             if let url {
                 // `AVAudioUnitSampler` resolves a preset via
                 // (bank MSB, bank LSB, program). For SF2 files, the
@@ -197,7 +203,8 @@ public final class PlaybackEngine: ObservableObject {
                         at: url,
                         program: program,
                         bankMSB: bankMSB,
-                        bankLSB: bankLSB)
+                        bankLSB: bankLSB
+                    )
                 } catch {
                     // Don't fail the whole `prepare` if one staff's
                     // soundfont is missing or malformed; leave the
@@ -207,7 +214,8 @@ public final class PlaybackEngine: ObservableObject {
             }
             staffSamplers[idx] = sampler
             staffLoadParams[idx] = StaffLoadParams(
-                bankLSB: bank, isDrums: isDrums)
+                bankLSB: bank, isDrums: isDrums
+            )
         }
 
         rebuildMixerChannels(for: score)
@@ -233,7 +241,8 @@ public final class PlaybackEngine: ObservableObject {
         guard let sampler = staffSamplers[noteID.staffIndex]
         else { return }
         sampler.startNote(
-            pitch, withVelocity: velocity, onChannel: 0)
+            pitch, withVelocity: velocity, onChannel: 0
+        )
         previewQueue.asyncAfter(
             deadline: .now() + duration
         ) { [weak sampler] in
@@ -260,8 +269,8 @@ public final class PlaybackEngine: ObservableObject {
         }
         let voice = measure.voices[noteID.voiceIndex]
         guard noteID.elementIndex < voice.elements.count,
-              case .chord(let chord) =
-                voice.elements[noteID.elementIndex],
+              case let .chord(chord) =
+              voice.elements[noteID.elementIndex],
               noteID.noteIndexInChord < chord.notes.count
         else { return nil }
         return UInt8(clamping: chord.notes[noteID.noteIndexInChord].pitch)
@@ -309,7 +318,8 @@ public final class PlaybackEngine: ObservableObject {
     /// first) or when `cursor` doesn't resolve into the timeline.
     public func seek(to cursor: ScoreCursor) {
         guard let timeline, let sequencer,
-              let frame = timeline.frame(forCursor: cursor) else {
+              let frame = timeline.frame(forCursor: cursor)
+        else {
             return
         }
         sequencer.currentPositionInSeconds = frame.timeSeconds
@@ -366,7 +376,8 @@ public final class PlaybackEngine: ObservableObject {
         // pipeline injects them.
         var midi = try MidiRenderer.render(score: score)
         midi.tracks.append(metronome.metronomeTrack(
-            beats: metronomeBeats, division: midi.division))
+            beats: metronomeBeats, division: midi.division
+        ))
         let bytes = try MidiWriter.write(midi)
         try sequencer.load(from: bytes, options: [])
         // Route each track to its matching staff sampler. The

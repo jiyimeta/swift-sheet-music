@@ -41,14 +41,14 @@ extension VoiceElement {
     /// True when this element behaves as a rest — i.e. it is a
     /// chord whose `notes` array is empty.
     public var isRest: Bool {
-        if case .chord(let c) = self, c.notes.isEmpty { return true }
+        if case let .chord(c) = self, c.notes.isEmpty { return true }
         return false
     }
 
     /// Duration in ticks for chord/rest elements. nil for non-timed
     /// elements (clef, key sig, time sig, dynamics, …).
     public func tickCount(division: Int) -> Int? {
-        if case .chord(let c) = self {
+        if case let .chord(c) = self {
             return c.duration.ticks(division: division)
         }
         return nil

@@ -5,7 +5,8 @@ import Testing
 struct SetNotePitchTests {
     private static let c4 = NoteID(
         staffIndex: 0, measureIndex: 0, voiceIndex: 0,
-        elementIndex: 1, noteIndexInChord: 0)
+        elementIndex: 1, noteIndexInChord: 0
+    )
 
     @Test("apply changes pitch and tpc")
     func applyChanges() throws {

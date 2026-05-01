@@ -3,9 +3,9 @@ import SheetMusicCore
 import SheetMusicLayout
 
 #if os(macOS)
-import AppKit
+    import AppKit
 #else
-import UIKit
+    import UIKit
 #endif
 
 @available(macOS 15.0, iOS 16.0, *)
@@ -21,22 +21,23 @@ extension ScoreLayerBuilder {
         let glyph: Character
         let yOffset: CGFloat
         switch clef {
-        case .treble:     glyph = SMuFLGlyph.gClef;     yOffset = metrics.sp
-        case .treble8va:  glyph = SMuFLGlyph.gClef8va;  yOffset = metrics.sp
-        case .treble8vb:  glyph = SMuFLGlyph.gClef8vb;  yOffset = metrics.sp
+        case .treble: glyph = SMuFLGlyph.gClef; yOffset = metrics.sp
+        case .treble8va: glyph = SMuFLGlyph.gClef8va; yOffset = metrics.sp
+        case .treble8vb: glyph = SMuFLGlyph.gClef8vb; yOffset = metrics.sp
         case .treble15ma: glyph = SMuFLGlyph.gClef15ma; yOffset = metrics.sp
         case .treble15mb: glyph = SMuFLGlyph.gClef15mb; yOffset = metrics.sp
-        case .bass:       glyph = SMuFLGlyph.fClef;     yOffset = -metrics.sp
-        case .bass8va:    glyph = SMuFLGlyph.fClef8va;  yOffset = -metrics.sp
-        case .bass8vb:    glyph = SMuFLGlyph.fClef8vb;  yOffset = -metrics.sp
-        case .alto, .tenor:  glyph = SMuFLGlyph.cClef;  yOffset = 0
-        case .percussion:    glyph = SMuFLGlyph.percussionClef; yOffset = 0
+        case .bass: glyph = SMuFLGlyph.fClef; yOffset = -metrics.sp
+        case .bass8va: glyph = SMuFLGlyph.fClef8va; yOffset = -metrics.sp
+        case .bass8vb: glyph = SMuFLGlyph.fClef8vb; yOffset = -metrics.sp
+        case .alto, .tenor: glyph = SMuFLGlyph.cClef; yOffset = 0
+        case .percussion: glyph = SMuFLGlyph.percussionClef; yOffset = 0
         }
         if let layer = glyphLayer(
             glyph,
             at: CGPoint(x: origin.x, y: origin.y + yOffset),
             size: metrics.glyphFontSize,
-            height: height) {
+            height: height
+        ) {
             parent.addSublayer(layer)
         }
     }
@@ -44,7 +45,7 @@ extension ScoreLayerBuilder {
     // MARK: - Key signature
 
     private static let sharpSteps: [Int] = [4, 1, 5, 2, -1, 3, 0]
-    private static let flatSteps:  [Int] = [0, 3, -1, 2, -2, 1, -3]
+    private static let flatSteps: [Int] = [0, 3, -1, 2, -2, 1, -3]
 
     static func drawKeySignature(
         sharps: Int, flats: Int, origin: CGPoint,
@@ -59,7 +60,7 @@ extension ScoreLayerBuilder {
             : SMuFLGlyph.accidentalFlat
         let steps = isSharp ? sharpSteps : flatSteps
         let advance = metrics.sp * 1.4
-        for i in 0..<min(count, steps.count) {
+        for i in 0 ..< min(count, steps.count) {
             let step = steps[i]
             let x = origin.x + CGFloat(i) * advance
             let y = origin.y - CGFloat(step) * metrics.sp / 2
@@ -67,7 +68,8 @@ extension ScoreLayerBuilder {
                 glyph,
                 at: CGPoint(x: x, y: y),
                 size: metrics.glyphFontSize,
-                height: height) {
+                height: height
+            ) {
                 parent.addSublayer(layer)
             }
         }
@@ -97,9 +99,11 @@ extension ScoreLayerBuilder {
                 at: CGPoint(
                     x: origin.x + numOffsetX
                         + CGFloat(i) * digitAdvance,
-                    y: origin.y - metrics.sp),
+                    y: origin.y - metrics.sp
+                ),
                 size: metrics.glyphFontSize,
-                height: height) {
+                height: height
+            ) {
                 parent.addSublayer(layer)
             }
         }
@@ -110,9 +114,11 @@ extension ScoreLayerBuilder {
                 at: CGPoint(
                     x: origin.x + denOffsetX
                         + CGFloat(i) * digitAdvance,
-                    y: origin.y + metrics.sp),
+                    y: origin.y + metrics.sp
+                ),
                 size: metrics.glyphFontSize,
-                height: height) {
+                height: height
+            ) {
                 parent.addSublayer(layer)
             }
         }
@@ -132,7 +138,8 @@ extension ScoreLayerBuilder {
             path.move(to: CGPoint(x: origin.x + dx, y: topY))
             path.addLine(to: CGPoint(x: origin.x + dx, y: botY))
             parent.addSublayer(strokeLayer(
-                path: path, height: height, lineWidth: width))
+                path: path, height: height, lineWidth: width
+            ))
         }
         switch subtype {
         case "double":
@@ -146,11 +153,13 @@ extension ScoreLayerBuilder {
             line(dx: +metrics.sp * 0.3, width: metrics.sp * 0.15)
             drawRepeatDots(
                 origin: origin, xOffset: metrics.sp * 0.6,
-                metrics: metrics, height: height, into: parent)
+                metrics: metrics, height: height, into: parent
+            )
         case "end-repeat":
             drawRepeatDots(
                 origin: origin, xOffset: -metrics.sp * 0.6,
-                metrics: metrics, height: height, into: parent)
+                metrics: metrics, height: height, into: parent
+            )
             line(dx: 0, width: metrics.sp * 0.15)
             line(dx: +metrics.sp * 0.3, width: metrics.sp * 0.4)
         default:
@@ -168,17 +177,21 @@ extension ScoreLayerBuilder {
         let top = CGRect(
             x: origin.x + xOffset - half,
             y: origin.y - metrics.sp / 2 - half,
-            width: dotSize, height: dotSize)
+            width: dotSize, height: dotSize
+        )
         let bot = CGRect(
             x: origin.x + xOffset - half,
             y: origin.y + metrics.sp / 2 - half,
-            width: dotSize, height: dotSize)
+            width: dotSize, height: dotSize
+        )
         parent.addSublayer(fillLayer(
             path: CGPath(ellipseIn: top, transform: nil),
-            height: height))
+            height: height
+        ))
         parent.addSublayer(fillLayer(
             path: CGPath(ellipseIn: bot, transform: nil),
-            height: height))
+            height: height
+        ))
     }
 
     // MARK: - Rest
@@ -210,14 +223,16 @@ extension ScoreLayerBuilder {
         }
         let glyphLayerRef = glyphLayer(
             glyph, at: origin, size: metrics.glyphFontSize,
-            height: height)
+            height: height
+        )
         if let layer = glyphLayerRef {
             parent.addSublayer(layer)
         }
         drawDots(
             after: origin, count: dots,
             onStaffLine: true,
-            metrics: metrics, height: height, into: parent)
+            metrics: metrics, height: height, into: parent
+        )
         return glyphLayerRef
     }
 }

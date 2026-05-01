@@ -34,44 +34,44 @@ extension LayoutEngine {
         _ element: LayoutElement
     ) -> [CGFloat] {
         switch element {
-        case .clef(_, let p),
-             .keySignature(_, _, let p),
-             .timeSignature(_, _, let p),
-             .barLine(_, let p),
-             .textMark(_, _, let p),
-             .fermata(_, let p),
-             .marker(_, _, let p),
-             .jump(_, let p),
-             .measureRepeat(_, let p),
-             .measureNumber(_, let p),
-             .staffName(_, let p),
-             .staffText(_, let p, _, _),
-             .rehearsalMark(_, let p, _, _):
+        case let .clef(_, p),
+             let .keySignature(_, _, p),
+             let .timeSignature(_, _, p),
+             let .barLine(_, p),
+             let .textMark(_, _, p),
+             let .fermata(_, p),
+             let .marker(_, _, p),
+             let .jump(_, p),
+             let .measureRepeat(_, p),
+             let .measureNumber(_, p),
+             let .staffName(_, p),
+             let .staffText(_, p, _, _),
+             let .rehearsalMark(_, p, _, _):
             return [p.y]
-        case .rest(_, let p, _, _, _):
+        case let .rest(_, p, _, _, _):
             return [p.y]
-        case .note(_, _, _, _, let p, _, _, _):
+        case let .note(_, _, _, _, p, _, _, _):
             return [p.y]
-        case .chord(let notes, _, _, let so, _, _, _, _):
+        case let .chord(notes, _, _, so, _, _, _, _):
             var ys = notes.map(\.origin.y)
             ys.append(so.y)
             return ys
-        case .beam(let from, let to, _, _):
+        case let .beam(from, to, _, _):
             // fromOrigin, toOrigin, direction, level — only endpoints
             // contribute to the bbox at the primary-beam y; secondary
             // bars stack a fraction of sp away and are accounted for
             // by the generic glyphPad in elementYBounds.
             return [from.y, to.y]
-        case .spannerSegment(_, let from, let to, _, _, _),
-             .tieArc(let from, let to, _),
-             .glissandoLine(let from, let to, _, _):
+        case let .spannerSegment(_, from, to, _, _, _),
+             let .tieArc(from, to, _),
+             let .glissandoLine(from, to, _, _):
             return [from.y, to.y]
-        case .arpeggioWiggle(let top, let bot, _):
+        case let .arpeggioWiggle(top, bot, _):
             return [top.y, bot.y]
-        case .tupletLabel(let from, let to, _, _, _, _):
+        case let .tupletLabel(from, to, _, _, _, _):
             return [from.y, to.y]
-        case .lyricsMelisma(let from, let to),
-             .lyricHyphen(let from, let to):
+        case let .lyricsMelisma(from, to),
+             let .lyricHyphen(from, to):
             return [from.y, to.y]
         }
     }
@@ -86,12 +86,13 @@ extension LayoutEngine {
             CGPoint(x: p.x, y: p.y + dy)
         }
         switch element {
-        case .textMark(let kind, let text, let p)
+        case let .textMark(kind, text, p)
             where kind == .lyrics:
             return .textMark(kind: kind, text: text, origin: bump(p))
-        case .lyricHyphen(let from, let to):
+        case let .lyricHyphen(from, to):
             return .lyricHyphen(
-                fromOrigin: bump(from), toOrigin: bump(to))
+                fromOrigin: bump(from), toOrigin: bump(to)
+            )
         default:
             return element
         }
@@ -103,10 +104,11 @@ extension LayoutEngine {
     static func setMelismaAbsoluteY(
         _ element: LayoutElement, y: CGFloat
     ) -> LayoutElement {
-        if case .lyricsMelisma(let from, let to) = element {
+        if case let .lyricsMelisma(from, to) = element {
             return .lyricsMelisma(
                 fromOrigin: CGPoint(x: from.x, y: y),
-                toOrigin: CGPoint(x: to.x, y: y))
+                toOrigin: CGPoint(x: to.x, y: y)
+            )
         }
         return element
     }

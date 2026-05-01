@@ -21,7 +21,7 @@ extension MidiRenderer {
 
         var intervals: [Interval] = []
         var passthrough: [TimedMidiEvent] = []
-        var pendingOns: [String: [Int]] = [:]   // key "ch|pitch" -> [interval indices]
+        var pendingOns: [String: [Int]] = [:] // key "ch|pitch" -> [interval indices]
         func key(_ ch: Int, _ p: Int) -> String { "\(ch)|\(p)" }
 
         for ev in events {
@@ -52,7 +52,7 @@ extension MidiRenderer {
         }
         for indices in grouped.values {
             let sorted = indices.sorted { intervals[$0].onTick < intervals[$1].onTick }
-            for k in 0..<(sorted.count - 1) {
+            for k in 0 ..< (sorted.count - 1) {
                 let aIdx = sorted[k]
                 let bIdx = sorted[k + 1]
                 let aOriginalOff = intervals[aIdx].offTick

@@ -25,7 +25,8 @@ enum RehearsalMarkRenderer {
                 red: Double(c.red) / 255,
                 green: Double(c.green) / 255,
                 blue: Double(c.blue) / 255,
-                opacity: Double(c.alpha) / 255)
+                opacity: Double(c.alpha) / 255
+            )
         } else {
             textColor = .primary
         }
@@ -36,16 +37,19 @@ enum RehearsalMarkRenderer {
                 .font(.system(size: textSize, weight: .semibold)))
         let measured = resolved.measure(in: CGSize(
             width: CGFloat.greatestFiniteMagnitude,
-            height: CGFloat.greatestFiniteMagnitude))
+            height: CGFloat.greatestFiniteMagnitude
+        ))
 
         // Anchor the text bottom-leading at `(origin.x + pad,
         // origin.y - pad)` so the surrounding box's lower-left
         // corner ends up at `origin`.
         let textOrigin = CGPoint(
-            x: origin.x + pad, y: origin.y - pad)
+            x: origin.x + pad, y: origin.y - pad
+        )
         context.draw(
             resolved, at: textOrigin,
-            anchor: UnitPoint(x: 0, y: 1))
+            anchor: UnitPoint(x: 0, y: 1)
+        )
 
         let boxWidth = measured.width + 2 * pad
         let boxHeight = measured.height + 2 * pad
@@ -53,7 +57,8 @@ enum RehearsalMarkRenderer {
             x: origin.x,
             y: origin.y - boxHeight,
             width: boxWidth,
-            height: boxHeight)
+            height: boxHeight
+        )
         // `Sid::rehearsalMarkFrameWidth` default.
         let lineWidth = metrics.sp * 0.16
         var framePath: Path?
@@ -68,12 +73,14 @@ enum RehearsalMarkRenderer {
                 x: boxRect.midX - diameter / 2,
                 y: boxRect.midY - diameter / 2,
                 width: diameter,
-                height: diameter))
+                height: diameter
+            ))
         }
         if let p = framePath {
             context.stroke(
                 p, with: .color(textColor),
-                lineWidth: lineWidth)
+                lineWidth: lineWidth
+            )
         }
     }
 }

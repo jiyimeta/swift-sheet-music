@@ -84,7 +84,7 @@ enum MXLReader {
         if let match = roots.first(where: { $0.mediaType == musicXMLMediaType }) {
             return match
         }
-        return roots[0]  // non-empty guaranteed by readRootFiles
+        return roots[0] // non-empty guaranteed by readRootFiles
     }
 
     private static func extract(path: String, from archive: Archive) throws -> Data {

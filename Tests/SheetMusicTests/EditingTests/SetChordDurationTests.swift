@@ -6,9 +6,11 @@ struct SetChordDurationTests {
     private func chord(_ d: NoteDuration = .quarter) -> VoiceElement {
         .chord(Chord(duration: d, notes: [Note(pitch: 60, tpc: 14)]))
     }
+
     private func rest(_ d: NoteDuration) -> VoiceElement {
         .rest(duration: d)
     }
+
     /// Build a single-measure 4/4 score whose voice 0 is `elements`.
     private func score(_ elements: [VoiceElement]) -> Score {
         let voice = Voice(elements: elements)
@@ -16,37 +18,45 @@ struct SetChordDurationTests {
         let staff = StaffContent(id: 1, measures: [measure])
         return Score(division: 480, staves: [staff])
     }
+
     private func first(_ score: Score) -> [VoiceElement] {
         score.staves[0].measures[0].voices[0].elements
     }
+
     private static let chordID = VoiceElementID(
         staffIndex: 0, measureIndex: 0,
-        voiceIndex: 0, elementIndex: 0)
+        voiceIndex: 0, elementIndex: 0
+    )
 
     @Test("Shorten quarter → eighth fills the leftover with an eighth rest")
     func shortenQuarterToEighth() throws {
-        var score = score([chord(.quarter), rest(.half),
-                                rest(.eighth), rest(.eighth)])
+        var score = score([
+            chord(.quarter),
+            rest(.half),
+            rest(.eighth),
+            rest(.eighth),
+        ])
         let cmd = SetChordDuration(
-            at: Self.chordID, duration: .eighth)
+            at: Self.chordID, duration: .eighth
+        )
         _ = try cmd.apply(to: &score)
         let els = first(score)
         // Expect: chord(.eighth), rest(.eighth), rest(.half),
         //         rest(.eighth), rest(.eighth)
-        guard case .chord(let c) = els[0] else {
+        guard case let .chord(c) = els[0] else {
             Issue.record("element 0 not chord"); return
         }
         #expect(c.duration == .eighth)
-        guard case .chord(let r) = els[1], r.notes.isEmpty else {
+        guard case let .chord(r) = els[1], r.notes.isEmpty else {
             Issue.record("element 1 not rest"); return
         }
         #expect(r.duration == .eighth)
         // total tick count unchanged
         let totalTicks = els.reduce(0) { acc, el in
             switch el {
-            case .chord(let c):
+            case let .chord(c):
                 return acc + c.duration.ticks(division: 480)
-            case .chord(let r) where r.notes.isEmpty:
+            case let .chord(r) where r.notes.isEmpty:
                 return acc + r.duration.ticks(division: 480)
             default:
                 return acc
@@ -58,18 +68,20 @@ struct SetChordDurationTests {
     @Test("Lengthen eighth → quarter consumes the next rest exactly")
     func lengthenExactConsume() throws {
         var score = score([
-            chord(.eighth), rest(.eighth), rest(.half), rest(.quarter)])
+            chord(.eighth), rest(.eighth), rest(.half), rest(.quarter),
+        ])
         let cmd = SetChordDuration(
-            at: Self.chordID, duration: .quarter)
+            at: Self.chordID, duration: .quarter
+        )
         _ = try cmd.apply(to: &score)
         let els = first(score)
         // After: chord(.quarter), rest(.half), rest(.quarter)
         #expect(els.count == 3)
-        guard case .chord(let c) = els[0] else {
+        guard case let .chord(c) = els[0] else {
             Issue.record("not chord"); return
         }
         #expect(c.duration == .quarter)
-        guard case .chord(let r1) = els[1], r1.notes.isEmpty else {
+        guard case let .chord(r1) = els[1], r1.notes.isEmpty else {
             Issue.record("not rest"); return
         }
         #expect(r1.duration == .half)
@@ -79,27 +91,29 @@ struct SetChordDurationTests {
     func lengthenPartialConsume() throws {
         var score = score([
             chord(.eighth), rest(.half), rest(.quarter),
-            rest(.eighth)])
+            rest(.eighth),
+        ])
         // From eighth → quarter: needs +1 eighth = 240 ticks.
         // The next element is a half rest (960 ticks): consume 240,
         // leaving 720 ticks (= dotted quarter, decomposed as
         // quarter + eighth).
         let cmd = SetChordDuration(
-            at: Self.chordID, duration: .quarter)
+            at: Self.chordID, duration: .quarter
+        )
         _ = try cmd.apply(to: &score)
         let els = first(score)
         // Expected: chord(.quarter), rest(.quarter), rest(.eighth),
         //           rest(.quarter), rest(.eighth)
-        guard case .chord(let c) = els[0] else {
+        guard case let .chord(c) = els[0] else {
             Issue.record("not chord"); return
         }
         #expect(c.duration == .quarter)
         // Verify total ticks unchanged.
         let totalTicks = els.reduce(0) { acc, el in
             switch el {
-            case .chord(let c):
+            case let .chord(c):
                 return acc + c.duration.ticks(division: 480)
-            case .chord(let r) where r.notes.isEmpty:
+            case let .chord(r) where r.notes.isEmpty:
                 return acc + r.duration.ticks(division: 480)
             default:
                 return acc
@@ -110,11 +124,15 @@ struct SetChordDurationTests {
 
     @Test("Inverse round-trips for shorten")
     func shortenRoundTrip() throws {
-        var score = score([chord(.quarter), rest(.half),
-                                rest(.quarter)])
+        var score = score([
+            chord(.quarter),
+            rest(.half),
+            rest(.quarter),
+        ])
         let snapshot = score
         let cmd = SetChordDuration(
-            at: Self.chordID, duration: .eighth)
+            at: Self.chordID, duration: .eighth
+        )
         let inverse = try cmd.apply(to: &score)
         _ = try inverse.apply(to: &score)
         #expect(score == snapshot)
@@ -124,10 +142,12 @@ struct SetChordDurationTests {
     func lengthenRoundTrip() throws {
         var score = score([
             chord(.eighth), rest(.half), rest(.quarter),
-            rest(.eighth)])
+            rest(.eighth),
+        ])
         let snapshot = score
         let cmd = SetChordDuration(
-            at: Self.chordID, duration: .quarter)
+            at: Self.chordID, duration: .quarter
+        )
         let inverse = try cmd.apply(to: &score)
         _ = try inverse.apply(to: &score)
         #expect(score == snapshot)
@@ -136,11 +156,13 @@ struct SetChordDurationTests {
     @Test("Refuses lengthening past measure end")
     func refusesPastMeasureEnd() {
         var score = score([
-            chord(.quarter), rest(.quarter), rest(.eighth)])
+            chord(.quarter), rest(.quarter), rest(.eighth),
+        ])
         // Available room = 1/4 + 1/8 = 3/8 < lengthening from
         // quarter to whole (needs +3/4).
         let cmd = SetChordDuration(
-            at: Self.chordID, duration: .whole)
+            at: Self.chordID, duration: .whole
+        )
         #expect(throws: SheetMusicError.self) {
             _ = try cmd.apply(to: &score)
         }
@@ -152,13 +174,17 @@ struct SetChordDurationTests {
             elements: [chord(.eighth), chord(.eighth), chord(.eighth)],
             tuplets: [Tuplet(
                 normalNotes: 2, actualNotes: 3,
-                startIndex: 0, endIndex: 2)])
+                startIndex: 0, endIndex: 2
+            )]
+        )
         let measure = Measure(voices: [voice])
         var score = Score(
             division: 480,
-            staves: [StaffContent(id: 1, measures: [measure])])
+            staves: [StaffContent(id: 1, measures: [measure])]
+        )
         let cmd = SetChordDuration(
-            at: Self.chordID, duration: .quarter)
+            at: Self.chordID, duration: .quarter
+        )
         #expect(throws: SheetMusicError.self) {
             _ = try cmd.apply(to: &score)
         }
@@ -174,22 +200,23 @@ struct SetChordDurationTests {
     func shortenWholeToEighthAligned() throws {
         var score = score([chord(.whole)])
         let cmd = SetChordDuration(
-            at: Self.chordID, duration: .eighth)
+            at: Self.chordID, duration: .eighth
+        )
         _ = try cmd.apply(to: &score)
         let els = first(score)
         // chord(.eighth), rest(.eighth), rest(.quarter), rest(.half)
         #expect(els.count == 4)
-        guard case .chord(let c) = els[0] else {
+        guard case let .chord(c) = els[0] else {
             Issue.record("not chord"); return
         }
         #expect(c.duration == .eighth)
-        guard case .chord(let r1) = els[1], r1.notes.isEmpty else {
+        guard case let .chord(r1) = els[1], r1.notes.isEmpty else {
             Issue.record("els[1] not rest"); return
         }
-        guard case .chord(let r2) = els[2], r2.notes.isEmpty else {
+        guard case let .chord(r2) = els[2], r2.notes.isEmpty else {
             Issue.record("els[2] not rest"); return
         }
-        guard case .chord(let r3) = els[3], r3.notes.isEmpty else {
+        guard case let .chord(r3) = els[3], r3.notes.isEmpty else {
             Issue.record("els[3] not rest"); return
         }
         #expect(r1.duration == .eighth)
@@ -206,18 +233,20 @@ struct SetChordDurationTests {
     func lengthenLeftoverAligned() throws {
         var score = score([
             chord(.eighth),
-            rest(.half), rest(.quarter), rest(.eighth)])
+            rest(.half), rest(.quarter), rest(.eighth),
+        ])
         let cmd = SetChordDuration(
-            at: Self.chordID, duration: .quarter)
+            at: Self.chordID, duration: .quarter
+        )
         _ = try cmd.apply(to: &score)
         let els = first(score)
         // chord(.quarter), rest(.quarter), rest(.eighth),
         // rest(.quarter), rest(.eighth)
         #expect(els.count == 5)
-        guard case .chord(let r1) = els[1], r1.notes.isEmpty else {
+        guard case let .chord(r1) = els[1], r1.notes.isEmpty else {
             Issue.record("els[1] not rest"); return
         }
-        guard case .chord(let r2) = els[2], r2.notes.isEmpty else {
+        guard case let .chord(r2) = els[2], r2.notes.isEmpty else {
             Issue.record("els[2] not rest"); return
         }
         #expect(r1.duration == .quarter)
@@ -233,34 +262,37 @@ struct SetChordDurationTests {
         // chord A (eighth, pitch 60) + chord B (half, pitch 64) +
         // rest (quarter) + rest (eighth)
         let A: VoiceElement = .chord(Chord(
-            duration: .eighth, notes: [Note(pitch: 60, tpc: 14)]))
+            duration: .eighth, notes: [Note(pitch: 60, tpc: 14)]
+        ))
         let B: VoiceElement = .chord(Chord(
-            duration: .half, notes: [Note(pitch: 64, tpc: 18)]))
+            duration: .half, notes: [Note(pitch: 64, tpc: 18)]
+        ))
         var score = score([A, B, rest(.quarter), rest(.eighth)])
         // Lengthen A to quarter → consume +240 ticks of B.
         // B's overshoot = 720 ticks at rtick 480, decomposes as
         // quarter (480) + eighth (240).
         let cmd = SetChordDuration(
-            at: Self.chordID, duration: .quarter)
+            at: Self.chordID, duration: .quarter
+        )
         _ = try cmd.apply(to: &score)
         let els = first(score)
         // Expected: chord(A=quarter,p60), chord(B'=quarter,p64,tieFwd),
         //           chord(B''=eighth,p64,tieBack), rest(.quarter),
         //           rest(.eighth).
         #expect(els.count == 5)
-        guard case .chord(let aa) = els[0] else {
+        guard case let .chord(aa) = els[0] else {
             Issue.record("els[0] not chord"); return
         }
         #expect(aa.duration == .quarter)
         #expect(aa.notes.first?.pitch == 60)
-        guard case .chord(let b1) = els[1] else {
+        guard case let .chord(b1) = els[1] else {
             Issue.record("els[1] not chord"); return
         }
         #expect(b1.duration == .quarter)
         #expect(b1.notes.first?.pitch == 64)
         #expect(b1.notes.first?.tieForward == 1)
         #expect(b1.notes.first?.tieBack == nil)
-        guard case .chord(let b2) = els[2] else {
+        guard case let .chord(b2) = els[2] else {
             Issue.record("els[2] not chord"); return
         }
         #expect(b2.duration == .eighth)
@@ -269,9 +301,9 @@ struct SetChordDurationTests {
         // Total ticks unchanged
         let totalTicks = els.reduce(0) { acc, el in
             switch el {
-            case .chord(let c):
+            case let .chord(c):
                 return acc + c.duration.ticks(division: 480)
-            case .chord(let r) where r.notes.isEmpty:
+            case let .chord(r) where r.notes.isEmpty:
                 return acc + r.duration.ticks(division: 480)
             default: return acc
             }
@@ -284,13 +316,16 @@ struct SetChordDurationTests {
     @Test("Lengthen-into-chord round-trips through inverse")
     func lengthenIntoChordRoundTrip() throws {
         let A: VoiceElement = .chord(Chord(
-            duration: .eighth, notes: [Note(pitch: 60, tpc: 14)]))
+            duration: .eighth, notes: [Note(pitch: 60, tpc: 14)]
+        ))
         let B: VoiceElement = .chord(Chord(
-            duration: .half, notes: [Note(pitch: 64, tpc: 18)]))
+            duration: .half, notes: [Note(pitch: 64, tpc: 18)]
+        ))
         var score = score([A, B, rest(.quarter), rest(.eighth)])
         let snapshot = score
         let cmd = SetChordDuration(
-            at: Self.chordID, duration: .quarter)
+            at: Self.chordID, duration: .quarter
+        )
         let inverse = try cmd.apply(to: &score)
         _ = try inverse.apply(to: &score)
         #expect(score == snapshot)
@@ -308,22 +343,32 @@ struct SetChordDurationTests {
         // total time) at rticks 240..720 (tuplet members)
         // rest (half) at rtick 720
         let A: VoiceElement = .chord(Chord(
-            duration: .eighth, notes: [Note(pitch: 60, tpc: 14)]))
+            duration: .eighth, notes: [Note(pitch: 60, tpc: 14)]
+        ))
         let t1: VoiceElement = .chord(Chord(
-            duration: .eighth, notes: [Note(pitch: 64, tpc: 18)]))
+            duration: .eighth, notes: [Note(pitch: 64, tpc: 18)]
+        ))
         let t2: VoiceElement = .chord(Chord(
-            duration: .eighth, notes: [Note(pitch: 65, tpc: 13)]))
+            duration: .eighth, notes: [Note(pitch: 65, tpc: 13)]
+        ))
         let t3: VoiceElement = .chord(Chord(
-            duration: .eighth, notes: [Note(pitch: 67, tpc: 15)]))
+            duration: .eighth, notes: [Note(pitch: 67, tpc: 15)]
+        ))
         let voice = Voice(
             elements: [A, t1, t2, t3, rest(.half), rest(.eighth)],
             tuplets: [Tuplet(
                 normalNotes: 2, actualNotes: 3,
-                startIndex: 1, endIndex: 3)])
+                startIndex: 1, endIndex: 3
+            )]
+        )
         let measure = Measure(voices: [voice])
-        var score = Score(division: 480,
-                          staves: [StaffContent(id: 1,
-                              measures: [measure])])
+        var score = Score(
+            division: 480,
+            staves: [StaffContent(
+                id: 1,
+                measures: [measure]
+            )]
+        )
         // Lengthen A from eighth (240) to half (960). Need +720.
         // The tuplet's three eighths within a 3:2 ratio of base
         // eighths actually occupy 480 ticks of measure time
@@ -334,7 +379,8 @@ struct SetChordDurationTests {
         // would be 480 in the real engraving. For this unit test
         // the raw model-tick view is what matters.)
         let cmd = SetChordDuration(
-            at: Self.chordID, duration: .half)
+            at: Self.chordID, duration: .half
+        )
         _ = try cmd.apply(to: &score)
         // After: chord A (half) at rtick 0, then alignedRests
         // for the leftover (none since 960=240+720 exactly), then
@@ -342,7 +388,7 @@ struct SetChordDurationTests {
         let staff = score.staves[0]
         let m = staff.measures[0]
         let v = m.voices[0]
-        guard case .chord(let aa) = v.elements[0] else {
+        guard case let .chord(aa) = v.elements[0] else {
             Issue.record("els[0] not chord"); return
         }
         #expect(aa.duration == .half)
@@ -353,10 +399,12 @@ struct SetChordDurationTests {
     @Test("No-op when duration is unchanged")
     func noOpUnchanged() throws {
         var score = score([
-            chord(.quarter), rest(.half), rest(.quarter)])
+            chord(.quarter), rest(.half), rest(.quarter),
+        ])
         let snapshot = score
         let cmd = SetChordDuration(
-            at: Self.chordID, duration: .quarter)
+            at: Self.chordID, duration: .quarter
+        )
         _ = try cmd.apply(to: &score)
         #expect(score == snapshot)
     }

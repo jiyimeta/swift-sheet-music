@@ -9,7 +9,8 @@ func makeMarqueeRect(from a: CGPoint, to b: CGPoint) -> CGRect {
         x: min(a.x, b.x),
         y: min(a.y, b.y),
         width: abs(b.x - a.x),
-        height: abs(b.y - a.y))
+        height: abs(b.y - a.y)
+    )
 }
 
 /// Translucent rectangle + dashed stroke drawn over `ScoreView`
@@ -29,7 +30,9 @@ struct MarqueeOverlay: View {
                             Color.accentColor,
                             style: StrokeStyle(
                                 lineWidth: 1.5,
-                                dash: [5, 3]))
+                                dash: [5, 3]
+                            )
+                        )
                 }
                 .frame(width: rect.width, height: rect.height)
                 .position(x: rect.midX, y: rect.midY)

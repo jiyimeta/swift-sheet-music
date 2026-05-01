@@ -23,15 +23,15 @@ enum SMFReader {
         func readUInt32BE() throws -> UInt32 {
             try require(4); defer { cursor += 4 }
             return (UInt32(data[cursor]) << 24) | (UInt32(data[cursor + 1]) << 16)
-                 | (UInt32(data[cursor + 2]) << 8) | UInt32(data[cursor + 3])
+                | (UInt32(data[cursor + 2]) << 8) | UInt32(data[cursor + 3])
         }
         func readBytes(_ n: Int) throws -> Data {
             try require(n); defer { cursor += n }
-            return data.subdata(in: cursor..<(cursor + n))
+            return data.subdata(in: cursor ..< (cursor + n))
         }
         func readVLQ() throws -> Int {
             var v = 0
-            for _ in 0..<4 {
+            for _ in 0 ..< 4 {
                 let b = try readUInt8()
                 v = (v << 7) | Int(b & 0x7F)
                 if b & 0x80 == 0 { return v }
@@ -42,14 +42,14 @@ enum SMFReader {
         guard try readBytes(4) == Data("MThd".utf8) else { throw ReadError.malformed("missing MThd") }
         let headerLen = try readUInt32BE()
         guard headerLen == 6 else { throw ReadError.malformed("unexpected MThd length \(headerLen)") }
-        let format = Int(try readUInt16BE())
-        let ntracks = Int(try readUInt16BE())
-        let division = Int(try readUInt16BE())
+        let format = try Int(readUInt16BE())
+        let ntracks = try Int(readUInt16BE())
+        let division = try Int(readUInt16BE())
 
         var tracks: [MidiTrack] = []
-        for _ in 0..<ntracks {
+        for _ in 0 ..< ntracks {
             guard try readBytes(4) == Data("MTrk".utf8) else { throw ReadError.malformed("missing MTrk") }
-            let bodyLen = Int(try readUInt32BE())
+            let bodyLen = try Int(readUInt32BE())
             let bodyEnd = cursor + bodyLen
             var events: [TimedMidiEvent] = []
             var tick = 0
@@ -67,11 +67,11 @@ enum SMFReader {
                 let channel = Int(status & 0x0F)
                 switch status & 0xF0 {
                 case 0x80:
-                    let pitch = Int(try readUInt8()), vel = Int(try readUInt8())
+                    let pitch = try Int(readUInt8()), vel = try Int(readUInt8())
                     let event = MidiEvent.noteOff(channel: channel, pitch: pitch, velocity: vel)
                     events.append(TimedMidiEvent(tick: tick, event: event))
                 case 0x90:
-                    let pitch = Int(try readUInt8()), vel = Int(try readUInt8())
+                    let pitch = try Int(readUInt8()), vel = try Int(readUInt8())
                     let event: MidiEvent = vel == 0
                         ? .noteOff(channel: channel, pitch: pitch, velocity: 0)
                         : .noteOn(channel: channel, pitch: pitch, velocity: vel)
@@ -79,11 +79,11 @@ enum SMFReader {
                 case 0xA0:
                     _ = try readUInt8(); _ = try readUInt8()
                 case 0xB0:
-                    let cc = Int(try readUInt8()), value = Int(try readUInt8())
+                    let cc = try Int(readUInt8()), value = try Int(readUInt8())
                     let event = MidiEvent.controlChange(channel: channel, controller: cc, value: value)
                     events.append(TimedMidiEvent(tick: tick, event: event))
                 case 0xC0:
-                    let prog = Int(try readUInt8())
+                    let prog = try Int(readUInt8())
                     let event = MidiEvent.programChange(channel: channel, program: prog)
                     events.append(TimedMidiEvent(tick: tick, event: event))
                 case 0xD0:

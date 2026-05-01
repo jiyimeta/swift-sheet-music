@@ -31,11 +31,11 @@ extension LayoutEngine {
     ) -> CGFloat {
         let labels: [String] = score.parts.map { part in
             if useLong {
-                return part.trackName
+                part.trackName
                     ?? part.instrument.longName
                     ?? ""
             } else {
-                return part.instrument.shortName
+                part.instrument.shortName
                     ?? part.trackName.map { String($0.prefix(3)) }
                     ?? ""
             }
@@ -46,7 +46,8 @@ extension LayoutEngine {
             widest = max(
                 widest,
                 LayoutEngine.lyricsTextWidth(text, sp: metrics.sp)
-                    * (fontSize / (metrics.sp * 2.2)))
+                    * (fontSize / (metrics.sp * 2.2))
+            )
         }
         // Floor: enough room for at least 2-3 characters even if
         // every label is empty. Pad: 1 sp between text and the
@@ -84,8 +85,9 @@ extension LayoutEngine {
     ) -> Int {
         // Find the END of the current break-bounded span.
         var endIdx = measureCount
-        for i in startIdx..<measureCount
-            where measureForcesLineBreak(at: i, staves: staves) {
+        for i in startIdx ..< measureCount
+            where measureForcesLineBreak(at: i, staves: staves)
+        {
             endIdx = i + 1
             break
         }
@@ -98,7 +100,7 @@ extension LayoutEngine {
         // evenly-sized chunk fits. Biases toward fewer systems
         // (more measures per system) when multiple options fit,
         // matching MuseScore's "fill the line" preference.
-        for numSystems in 1...span {
+        for numSystems in 1 ... span {
             let chunk = (span + numSystems - 1) / numSystems
             // Worst-case chunk width = sum of `chunk` consecutive
             // measures within the span, plus the synthesised
@@ -107,7 +109,7 @@ extension LayoutEngine {
             var i = startIdx
             while i < endIdx {
                 let upper = min(i + chunk, endIdx)
-                let slice = minWidths[i..<upper]
+                let slice = minWidths[i ..< upper]
                 var w: CGFloat = slice.reduce(0, +)
                 if i == startIdx { w += firstHeaderBoost }
                 maxChunkWidth = max(maxChunkWidth, w)

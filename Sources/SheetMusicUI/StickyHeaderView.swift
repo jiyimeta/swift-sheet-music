@@ -46,31 +46,36 @@ public struct StickyHeaderView: View {
         self.init(
             document: document,
             measureContexts: LayoutEngine.measureContexts(for: score),
-            documentScrollX: documentScrollX)
+            documentScrollX: documentScrollX
+        )
     }
 
     public var body: some View {
         let measureIdx = document
             .measureIndex(atDocumentX: documentScrollX) ?? 0
         let safeIdx = min(
-            max(0, measureIdx), measureContexts.count - 1)
+            max(0, measureIdx), measureContexts.count - 1
+        )
         if safeIdx >= 0,
            safeIdx < measureContexts.count,
-           let template = document.systems.first {
+           let template = document.systems.first
+        {
             let context = measureContexts[safeIdx]
             let synth = LayoutEngine.stickyHeaderSystem(
                 for: context,
                 templateSystem: template,
-                metrics: document.metrics)
+                metrics: document.metrics
+            )
             ZStack(alignment: .topLeading) {
                 Color.white
                 SystemLayerView(
-                    system: synth, metrics: document.metrics)
-                    // Render the frozen elements at MuseScore's
-                    // `invisibleColor()` (#808080, 50 % gray on
-                    // white) — see `continuouspanel.cpp:417`. 50 %
-                    // black-on-white is the exact equivalent.
-                    .opacity(0.5)
+                    system: synth, metrics: document.metrics
+                )
+                // Render the frozen elements at MuseScore's
+                // `invisibleColor()` (#808080, 50 % gray on
+                // white) — see `continuouspanel.cpp:417`. 50 %
+                // black-on-white is the exact equivalent.
+                .opacity(0.5)
             }
             // Match the score's system frame, which adds 1 px to the
             // system height inside `SystemLayerView`. Lining up the
@@ -80,7 +85,8 @@ public struct StickyHeaderView: View {
             .frame(
                 width: synth.size.width,
                 height: synth.size.height + 1,
-                alignment: .topLeading)
+                alignment: .topLeading
+            )
             .environment(\.colorScheme, .light)
         }
     }

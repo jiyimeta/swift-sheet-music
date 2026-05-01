@@ -4,9 +4,9 @@ import SheetMusicLayout
 import SwiftUI
 
 #if os(macOS)
-import AppKit
+    import AppKit
 #else
-import UIKit
+    import UIKit
 #endif
 
 /// Internal rendering state computed from a public `ScoreSelection`
@@ -20,13 +20,15 @@ struct SelectionRenderState {
     let rangeBoxColor: CGColor
 
     static let defaultBoxColor = CGColor(
-        red: 0.0, green: 0.45, blue: 0.95, alpha: 1.0)
+        red: 0.0, green: 0.45, blue: 0.95, alpha: 1.0
+    )
 
     static let empty = SelectionRenderState(
         selectedIDs: [],
         voiceColors: [:],
         drawRangeBox: false,
-        rangeBoxColor: defaultBoxColor)
+        rangeBoxColor: defaultBoxColor
+    )
 
     /// Selected ink colour for an item of `voiceIndex`, or `nil` when
     /// the item is not selected or the caller did not supply a colour
@@ -48,7 +50,8 @@ struct SelectionRenderState {
                 selectedIDs: [],
                 voiceColors: cgColors,
                 drawRangeBox: false,
-                rangeBoxColor: defaultBoxColor)
+                rangeBoxColor: defaultBoxColor
+            )
         case let .single(id):
             // Tuplet selection expands to the set of member IDs
             // (every note/rest the bracket spans) so the existing
@@ -59,14 +62,16 @@ struct SelectionRenderState {
                 selectedIDs: expandedIDs,
                 voiceColors: cgColors,
                 drawRangeBox: false,
-                rangeBoxColor: defaultBoxColor)
+                rangeBoxColor: defaultBoxColor
+            )
         case let .range(anchor, target):
             let ids = Set(score.items(inRangeFrom: anchor, to: target))
             return SelectionRenderState(
                 selectedIDs: ids,
                 voiceColors: cgColors,
                 drawRangeBox: true,
-                rangeBoxColor: defaultBoxColor)
+                rangeBoxColor: defaultBoxColor
+            )
         case let .multi(ids):
             let expanded = ids.reduce(into: Set<ScoreItemID>()) {
                 $0.formUnion(Self.expand($1, in: score))
@@ -75,7 +80,8 @@ struct SelectionRenderState {
                 selectedIDs: expanded,
                 voiceColors: cgColors,
                 drawRangeBox: false,
-                rangeBoxColor: defaultBoxColor)
+                rangeBoxColor: defaultBoxColor
+            )
         }
     }
 
@@ -87,7 +93,7 @@ struct SelectionRenderState {
     private static func expand(
         _ id: ScoreItemID, in score: Score
     ) -> Set<ScoreItemID> {
-        guard case .tuplet(let tid) = id,
+        guard case let .tuplet(tid) = id,
               let tuplet = score[tid],
               score.staves.indices.contains(tid.staffIndex)
         else { return [id] }
@@ -99,16 +105,17 @@ struct SelectionRenderState {
         else { return [id] }
         let elements = voices[tid.voiceIndex].elements
         var out: Set<ScoreItemID> = [id]
-        for j in tuplet.startIndex...tuplet.endIndex {
+        for j in tuplet.startIndex ... tuplet.endIndex {
             guard elements.indices.contains(j),
-                  case .chord(let c) = elements[j]
+                  case let .chord(c) = elements[j]
             else { continue }
             if c.notes.isEmpty {
                 out.insert(.rest(RestID(
                     staffIndex: tid.staffIndex,
                     measureIndex: tid.measureIndex,
                     voiceIndex: tid.voiceIndex,
-                    elementIndex: j)))
+                    elementIndex: j
+                )))
             } else {
                 for ni in c.notes.indices {
                     out.insert(.note(NoteID(
@@ -116,7 +123,8 @@ struct SelectionRenderState {
                         measureIndex: tid.measureIndex,
                         voiceIndex: tid.voiceIndex,
                         elementIndex: j,
-                        noteIndexInChord: ni)))
+                        noteIndexInChord: ni
+                    )))
                 }
             }
         }
@@ -125,9 +133,9 @@ struct SelectionRenderState {
 
     private static func resolveCGColor(_ color: Color) -> CGColor {
         #if os(macOS)
-        return NSColor(color).cgColor
+            return NSColor(color).cgColor
         #else
-        return UIColor(color).cgColor
+            return UIColor(color).cgColor
         #endif
     }
 }

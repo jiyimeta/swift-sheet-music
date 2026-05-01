@@ -49,7 +49,7 @@ enum MusicXMLNoteDecoder {
             let instrumentRef = node.first("instrument")?.attributes["id"]
             if let id = instrumentRef, let drumPitch = drumTable.pitchByInstrumentId[id] {
                 midi = drumPitch
-                tpc = 14   // unpitched notes have no tonal-pitch meaning
+                tpc = 14 // unpitched notes have no tonal-pitch meaning
             } else {
                 (midi, tpc) = try PitchDecoder.decodeUnpitched(unpitchedNode)
             }
@@ -76,8 +76,9 @@ enum MusicXMLNoteDecoder {
         let lyrics = decodeLyrics(node)
         let chord = Chord(
             duration: duration, notes: [note],
-            arpeggio: arpeggio, lyrics: lyrics)
-        _ = existingVoiceElements   // reserved for future use (e.g. tie backrefs)
+            arpeggio: arpeggio, lyrics: lyrics
+        )
+        _ = existingVoiceElements // reserved for future use (e.g. tie backrefs)
         return .new(prefix + [.chord(chord)])
     }
 
@@ -117,8 +118,8 @@ enum MusicXMLNoteDecoder {
             let number = tie.attributes["number"].flatMap { Int($0) } ?? 1
             switch tie.attributes["type"] {
             case "start": forward = number
-            case "stop":  back = number
-            default:      continue
+            case "stop": back = number
+            default: continue
             }
         }
         return (forward, back)
@@ -131,12 +132,12 @@ enum MusicXMLNoteDecoder {
             return nil
         }
         switch text {
-        case "sharp":        return .sharp
-        case "flat":         return .flat
-        case "natural":      return .natural
+        case "sharp": return .sharp
+        case "flat": return .flat
+        case "natural": return .natural
         case "double-sharp", "sharp-sharp": return .doubleSharp
-        case "flat-flat":    return .doubleFlat
-        default:             return nil
+        case "flat-flat": return .doubleFlat
+        default: return nil
         }
     }
 
@@ -148,9 +149,9 @@ enum MusicXMLNoteDecoder {
         let direction = arp.attributes["direction"]
         let subtype: Int
         switch direction {
-        case "up":   subtype = 1
+        case "up": subtype = 1
         case "down": subtype = 2
-        default:     subtype = 0
+        default: subtype = 0
         }
         return Arpeggio(subtype: subtype)
     }
@@ -168,9 +169,10 @@ enum MusicXMLNoteDecoder {
             let syllabic = (lyricNode.first("syllabic")?.text)
                 .flatMap(Syllabic.init(mscxValue:)) ?? .single
             map[verse - 1] = Lyric(
-                text: text, syllabic: syllabic, ticks: 0)
+                text: text, syllabic: syllabic, ticks: 0
+            )
         }
         guard let maxVerse = map.keys.max() else { return [] }
-        return (0...maxVerse).map { map[$0] ?? Lyric(text: "") }
+        return (0 ... maxVerse).map { map[$0] ?? Lyric(text: "") }
     }
 }

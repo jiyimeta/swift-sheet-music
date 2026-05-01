@@ -1,6 +1,6 @@
 import Foundation
 
-public extension Score {
+extension Score {
     /// Concert-key value (`-7…+7`; flats negative) in effect at the
     /// given staff / measure location. Walks the staff's measures up
     /// to and including `measureIndex`, returning the most recent
@@ -12,17 +12,17 @@ public extension Score {
     /// arrow-key transposition operates on the note's measure as a
     /// whole. Mid-measure key changes (rare in practice) take effect
     /// from the start of their measure here.
-    func activeKey(staffIndex: Int, measureIndex: Int) -> Int {
+    public func activeKey(staffIndex: Int, measureIndex: Int) -> Int {
         guard staffIndex >= 0, staffIndex < staves.count else { return 0 }
         let measures = staves[staffIndex].measures
         let upperBound = min(measureIndex + 1, measures.count)
         var current = 0
-        for idx in 0..<upperBound {
+        for idx in 0 ..< upperBound {
             guard let leadingVoice = measures[idx].voices.first else {
                 continue
             }
             for el in leadingVoice.elements {
-                if case .keySignature(let k) = el {
+                if case let .keySignature(k) = el {
                     current = k.concertKey
                 }
             }
@@ -34,9 +34,10 @@ public extension Score {
     /// `noteID`. Equivalent to
     /// `activeKey(staffIndex: noteID.staffIndex,
     ///            measureIndex: noteID.measureIndex)`.
-    func activeKey(at noteID: NoteID) -> Int {
+    public func activeKey(at noteID: NoteID) -> Int {
         activeKey(
             staffIndex: noteID.staffIndex,
-            measureIndex: noteID.measureIndex)
+            measureIndex: noteID.measureIndex
+        )
     }
 }

@@ -81,7 +81,7 @@ import Testing
             try MSCZWriter.write(mscxData: Data([0x3C, 0x78]), to: bogus)
             Issue.record("expected throw")
         } catch let error as SheetMusicError {
-            guard case .ioError(let u, _) = error else {
+            guard case let .ioError(u, _) = error else {
                 Issue.record("wrong case: \(error)")
                 return
             }

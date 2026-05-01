@@ -21,7 +21,8 @@ public struct PageChrome: Sendable, Equatable {
     public static let museScoreDefaults = PageChrome(
         header: .museScoreDefaultHeader,
         footer: .museScoreDefaultFooter,
-        pageNumber: .museScoreDefaultPageNumber)
+        pageNumber: .museScoreDefaultPageNumber
+    )
 }
 
 /// One header or footer block, with separate odd / even rows and the
@@ -77,7 +78,8 @@ public struct HeaderFooter: Sendable, Equatable {
         odd: TextRow(left: "", center: "", right: "$p"),
         fontFace: "Edwin",
         fontSize: 9,
-        fontStyle: [])
+        fontStyle: []
+    )
 
     /// Default footer per `styledef.cpp:625-634`:
     /// copyright in the centre on every page.
@@ -89,7 +91,8 @@ public struct HeaderFooter: Sendable, Equatable {
         odd: TextRow(left: "", center: "$C", right: ""),
         fontFace: "Edwin",
         fontSize: 9,
-        fontStyle: [])
+        fontStyle: []
+    )
 }
 
 /// Three-column text strip — one header or footer row.
@@ -137,7 +140,8 @@ public struct PageNumberStyle: Sendable, Equatable {
         showOnFirstPage: false,
         oddEvenDifferent: true,
         fontFace: "Edwin",
-        fontSize: 11)
+        fontSize: 11
+    )
 }
 
 /// Bitmask of font weights / decorations. Mirrors MuseScore's
@@ -147,7 +151,7 @@ public struct FontStyleSet: OptionSet, Sendable, Hashable {
     public let rawValue: Int
     public init(rawValue: Int) { self.rawValue = rawValue }
 
-    public static let bold      = FontStyleSet(rawValue: 1 << 0)
-    public static let italic    = FontStyleSet(rawValue: 1 << 1)
+    public static let bold = FontStyleSet(rawValue: 1 << 0)
+    public static let italic = FontStyleSet(rawValue: 1 << 1)
     public static let underline = FontStyleSet(rawValue: 1 << 2)
 }

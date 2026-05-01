@@ -19,10 +19,10 @@ public enum Syllabic: Sendable, Equatable {
     public init?(mscxValue: String) {
         switch mscxValue {
         case "single": self = .single
-        case "begin":  self = .begin
+        case "begin": self = .begin
         case "middle": self = .middle
-        case "end":    self = .end
-        default:       return nil
+        case "end": self = .end
+        default: return nil
         }
     }
 }

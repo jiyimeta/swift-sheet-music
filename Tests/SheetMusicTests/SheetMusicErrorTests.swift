@@ -18,7 +18,7 @@ import Testing
 
     @Test func corruptedContainerCarriesReason() {
         let error = SheetMusicError.corruptedContainer(reason: "bad zip")
-        guard case .corruptedContainer(let reason) = error else {
+        guard case let .corruptedContainer(reason) = error else {
             Issue.record("expected corruptedContainer")
             return
         }
@@ -29,7 +29,7 @@ import Testing
         let url = URL(fileURLWithPath: "/tmp/missing.mscz")
         let underlying = NSError(domain: "TestDomain", code: 42)
         let error = SheetMusicError.ioError(url: url, underlying: underlying)
-        guard case .ioError(let u, let e) = error else {
+        guard case let .ioError(u, e) = error else {
             Issue.record("expected ioError")
             return
         }

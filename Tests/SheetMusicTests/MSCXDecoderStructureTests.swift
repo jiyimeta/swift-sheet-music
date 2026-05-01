@@ -22,8 +22,8 @@ import Testing
         guard
             case .keySignature = voice.elements[0],
             case .timeSignature = voice.elements[1],
-            case .chord(let c) = voice.elements[2], !c.notes.isEmpty,
-            case .chord(let r) = voice.elements[3], r.notes.isEmpty
+            case let .chord(c) = voice.elements[2], !c.notes.isEmpty,
+            case let .chord(r) = voice.elements[3], r.notes.isEmpty
         else {
             Issue.record("voice element order/types unexpected: \(voice.elements)")
             return
@@ -37,7 +37,7 @@ import Testing
         let node = try XMLTreeParser.parse(Data(xml.utf8))
         let voice = try Voice.decode(node)
         #expect(voice.elements.count == 1)
-        guard case .chord(let r) = voice.elements[0], r.notes.isEmpty else {
+        guard case let .chord(r) = voice.elements[0], r.notes.isEmpty else {
             Issue.record("expected the rest to survive, got \(voice.elements)")
             return
         }

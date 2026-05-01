@@ -19,13 +19,13 @@ import Testing
         #expect(score.staves[0].measures.count == 1)
         let voice = score.staves[0].measures[0].voices[0]
         #expect(voice.elements.count == 6)
-        guard case .keySignature(let k) = voice.elements[0] else {
+        guard case let .keySignature(k) = voice.elements[0] else {
             Issue.record("element 0 not key sig")
             return
         }
         #expect(k.concertKey == 1)
         let pitches = voice.elements.compactMap {
-            if case .chord(let c) = $0 { return c.notes.first?.pitch } else { return nil }
+            if case let .chord(c) = $0 { return c.notes.first?.pitch } else { return nil }
         }
         #expect(pitches == [60, 61, 62, 63])
     }

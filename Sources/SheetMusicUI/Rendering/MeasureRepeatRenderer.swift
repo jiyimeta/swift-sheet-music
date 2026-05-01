@@ -1,5 +1,5 @@
-import SwiftUI
 import SheetMusicLayout
+import SwiftUI
 
 @available(macOS 15.0, iOS 16.0, *)
 enum MeasureRepeatRenderer {
@@ -19,6 +19,7 @@ enum MeasureRepeatRenderer {
         default: glyph = SMuFLGlyph.repeat1Bar
         }
         context.drawGlyph(
-            glyph, at: origin, size: metrics.glyphFontSize)
+            glyph, at: origin, size: metrics.glyphFontSize
+        )
     }
 }

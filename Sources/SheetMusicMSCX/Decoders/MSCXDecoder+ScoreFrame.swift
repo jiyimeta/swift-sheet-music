@@ -28,11 +28,13 @@ extension FrameText {
         var offsetMm: CGPoint?
         if let off = node.first("offset"),
            let xs = off.attributes["x"], let ys = off.attributes["y"],
-           let x = Double(xs), let y = Double(ys) {
+           let x = Double(xs), let y = Double(ys)
+        {
             offsetMm = CGPoint(x: x, y: y)
         }
         return FrameText(
-            style: style, text: stripped, offsetMm: offsetMm)
+            style: style, text: stripped, offsetMm: offsetMm
+        )
     }
 }
 

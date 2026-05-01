@@ -11,7 +11,7 @@ let exampleVoiceColors: [Int: Color] = [
     0: .blue,
     1: .green,
     2: .orange,
-    3: .purple
+    3: .purple,
 ]
 
 extension ScoreSelection {
@@ -24,11 +24,11 @@ extension ScoreSelection {
         switch self {
         case .none:
             return nil
-        case .single(let id):
+        case let .single(id):
             return id
-        case .range(let anchor, let target):
+        case let .range(anchor, target):
             return engine.earliest(of: [anchor, target]) ?? anchor
-        case .multi(let ids):
+        case let .multi(ids):
             return engine.earliest(of: Array(ids))
         }
     }
@@ -63,13 +63,13 @@ extension PlaybackEngine {
 func primaryItemID(of target: ScoreHitTarget?) -> ScoreItemID? {
     guard let target else { return nil }
     switch target {
-    case .note(let id):
+    case let .note(id):
         return .note(id)
-    case .rest(let id):
+    case let .rest(id):
         return .rest(id)
-    case .stem(let notes), .flag(let notes), .beam(let notes):
+    case let .stem(notes), let .flag(notes), let .beam(notes):
         return notes.first.map { .note($0) }
-    case .tuplet(let id):
+    case let .tuplet(id):
         return .tuplet(id)
     }
 }

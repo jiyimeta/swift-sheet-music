@@ -3,9 +3,9 @@ import SheetMusicCore
 import SheetMusicLayout
 
 #if os(macOS)
-import AppKit
+    import AppKit
 #else
-import UIKit
+    import UIKit
 #endif
 
 /// Builds a `CALayer` tree from a `LayoutSystem`.
@@ -29,7 +29,7 @@ public enum ScoreLayerBuilder {
     /// Ink colour for all strokes / fills.  Matches the prior
     /// `.environment(\.colorScheme, .light)` + `.color(.primary)`
     /// combination — always black on white.
-    static let inkColor: CGColor = CGColor(gray: 0, alpha: 1)
+    static let inkColor: CGColor = .init(gray: 0, alpha: 1)
 
     /// Convert MuseScore's RGBA score colour into a `CGColor`. Used
     /// for `.staffText` (and any future author-coloured element) so
@@ -41,7 +41,8 @@ public enum ScoreLayerBuilder {
             red: CGFloat(color.red) / 255,
             green: CGFloat(color.green) / 255,
             blue: CGFloat(color.blue) / 255,
-            alpha: CGFloat(color.alpha) / 255)
+            alpha: CGFloat(color.alpha) / 255
+        )
     }
 
     // MARK: - Entry point
@@ -71,19 +72,24 @@ public enum ScoreLayerBuilder {
             origin: .zero,
             size: CGSize(
                 width: system.size.width,
-                height: height))
+                height: height
+            )
+        )
         root.masksToBounds = false
         root.backgroundColor = CGColor(gray: 1, alpha: 1)
 
         drawStaves(
             system: system, metrics: metrics,
-            height: height, into: root)
+            height: height, into: root
+        )
         drawBracket(
             system: system, metrics: metrics,
-            height: height, into: root)
+            height: height, into: root
+        )
         drawPartLabels(
             system: system, metrics: metrics,
-            height: height, into: root)
+            height: height, into: root
+        )
 
         var ctx = BuildContext()
         for measure in system.measures {
@@ -92,26 +98,30 @@ public enum ScoreLayerBuilder {
                 drawElement(
                     element, base: base,
                     metrics: metrics, height: height,
-                    context: &ctx, into: root)
+                    context: &ctx, into: root
+                )
             }
             for el in measure.markers {
                 drawElement(
                     el, base: base,
                     metrics: metrics, height: height,
-                    context: &ctx, into: root)
+                    context: &ctx, into: root
+                )
             }
             for el in measure.jumps {
                 drawElement(
                     el, base: base,
                     metrics: metrics, height: height,
-                    context: &ctx, into: root)
+                    context: &ctx, into: root
+                )
             }
         }
         for el in system.spanners {
             drawElement(
                 el, base: .zero,
                 metrics: metrics, height: height,
-                context: &ctx, into: root)
+                context: &ctx, into: root
+            )
         }
         return (root, ctx.items)
     }

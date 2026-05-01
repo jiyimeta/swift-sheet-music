@@ -31,16 +31,17 @@ extension PlaybackTimeline {
         var measureStarts = [Int](repeating: 0, count: measureCount)
         var measureTimeSigs = [TimeSignature](
             repeating: TimeSignature(numerator: 4, denominator: 4),
-            count: measureCount)
+            count: measureCount
+        )
         var spineTick = 0
         var currentTimeSig = TimeSignature(numerator: 4, denominator: 4)
-        for mi in 0..<measureCount {
+        for mi in 0 ..< measureCount {
             measureStarts[mi] = spineTick
             staffLoop: for staff in score.staves {
                 guard mi < staff.measures.count else { continue }
                 for el in staff.measures[mi].voices.first?.elements ?? [] {
                     switch el {
-                    case .timeSignature(let ts):
+                    case let .timeSignature(ts):
                         currentTimeSig = ts
                         break staffLoop
                     case .chord:
@@ -54,7 +55,7 @@ extension PlaybackTimeline {
             if let voice0 = score.staves.first?.measures[mi].voices.first {
                 for el in voice0.elements {
                     switch el {
-                    case .chord(let c):
+                    case let .chord(c):
                         spineTick += c.duration.ticks(division: division)
                     default:
                         break
@@ -65,16 +66,17 @@ extension PlaybackTimeline {
 
         var beats: [MetronomeBeat] = []
         beats.reserveCapacity(measureCount * 4)
-        for mi in 0..<measureCount {
+        for mi in 0 ..< measureCount {
             let ts = measureTimeSigs[mi]
             // ticks-per-quarter * 4 / denominator. 4/4 → division;
             // 6/8 → division/2; 3/2 → division*2. See
             // `PlaybackTimeline.init` for the same step formula.
             let step = max(1, division * 4 / ts.denominator)
-            for i in 0..<ts.numerator {
+            for i in 0 ..< ts.numerator {
                 beats.append(MetronomeBeat(
                     tick: measureStarts[mi] + i * step,
-                    isDownbeat: i == 0))
+                    isDownbeat: i == 0
+                ))
             }
         }
         return beats

@@ -16,7 +16,7 @@ import Testing
         voice.elements.reduce(0) { acc, el in
             switch el {
             case let .chord(c): return acc + c.duration.ticks(division: division)
-            default:            return acc
+            default: return acc
             }
         }
     }
@@ -39,7 +39,7 @@ import Testing
           <endTuplet/>
         </voice>
         """
-        let voice = try Voice.decode(try XMLTreeParser.parse(Data(xml.utf8)))
+        let voice = try Voice.decode(XMLTreeParser.parse(Data(xml.utf8)))
         #expect(voice.elements.count == 3)
         #expect(Self.totalChordRestTicks(voice, division: 480) == 480)
     }
@@ -58,7 +58,7 @@ import Testing
           <endTuplet/>
         </voice>
         """
-        let voice = try Voice.decode(try XMLTreeParser.parse(Data(xml.utf8)))
+        let voice = try Voice.decode(XMLTreeParser.parse(Data(xml.utf8)))
         #expect(voice.elements.count == 3)
         #expect(Self.totalChordRestTicks(voice, division: 480) == 480)
     }
@@ -79,7 +79,7 @@ import Testing
           <Chord><durationType>quarter</durationType><Note><pitch>67</pitch><tpc>15</tpc></Note></Chord>
         </voice>
         """
-        let voice = try Voice.decode(try XMLTreeParser.parse(Data(xml.utf8)))
+        let voice = try Voice.decode(XMLTreeParser.parse(Data(xml.utf8)))
         #expect(voice.elements.count == 4)
         // triplet-eighths (=quarter) + plain quarter = 2 quarters
         #expect(Self.totalChordRestTicks(voice, division: 480) == 960)
@@ -108,7 +108,7 @@ import Testing
           <endTuplet/>
         </voice>
         """
-        let voice = try Voice.decode(try XMLTreeParser.parse(Data(xml.utf8)))
+        let voice = try Voice.decode(XMLTreeParser.parse(Data(xml.utf8)))
         #expect(voice.elements.count == 3)
         let division = 1440
         #expect(Self.totalChordRestTicks(voice, division: division) == (4 * division) / 6)
@@ -134,7 +134,7 @@ import Testing
           <endTuplet/>
         </voice>
         """
-        let voice = try Voice.decode(try XMLTreeParser.parse(Data(xml.utf8)))
+        let voice = try Voice.decode(XMLTreeParser.parse(Data(xml.utf8)))
         #expect(voice.elements.count == 5)
         #expect(Self.totalChordRestTicks(voice, division: 480) == 960)
     }
@@ -157,7 +157,7 @@ import Testing
           <endTuplet/>
         </voice>
         """
-        let voice = try Voice.decode(try XMLTreeParser.parse(Data(xml.utf8)))
+        let voice = try Voice.decode(XMLTreeParser.parse(Data(xml.utf8)))
         #expect(voice.elements.count == 6)
         #expect(Self.totalChordRestTicks(voice, division: 480) == 480)
     }
@@ -184,7 +184,7 @@ import Testing
           <endTuplet/>
         </voice>
         """
-        let voice = try Voice.decode(try XMLTreeParser.parse(Data(xml.utf8)))
+        let voice = try Voice.decode(XMLTreeParser.parse(Data(xml.utf8)))
         #expect(voice.elements.count == 7)
         let division = 1680
         #expect(Self.totalChordRestTicks(voice, division: division) == division * 2)

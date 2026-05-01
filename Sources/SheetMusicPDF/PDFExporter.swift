@@ -31,7 +31,6 @@ public enum PDFExportError: Error, Sendable {
 @available(macOS 15.0, iOS 16.0, *)
 @MainActor
 public enum PDFExporter {
-
     /// Knobs for page geometry, staff scaling, layout gap, and PDF
     /// metadata. Defaults pull every dimensional value from the
     /// score's `<Style>` block (`.fromScore` selectors).
@@ -42,6 +41,7 @@ public enum PDFExporter {
             /// Override with explicit point-space values.
             case explicit(EngravingPage)
         }
+
         public enum StaffSize: Sendable {
             /// Total staff height in points, derived from
             /// `score.style.spatium` (mm). A staff is 4 × spatium
@@ -89,24 +89,29 @@ public enum PDFExporter {
         let layoutOptions = ScoreViewOptions(
             staffSize: resolved.staffSize,
             systemGap: options.systemGap,
-            wrapToViewWidth: true)
+            wrapToViewWidth: true
+        )
         let availableWidth = max(
             resolved.staffSize * 4,
             resolved.page.size.width
                 - resolved.page.oddMargins.leading
-                - resolved.page.oddMargins.trailing)
+                - resolved.page.oddMargins.trailing
+        )
         let document = LayoutEngine.layout(
             score: score, options: layoutOptions,
-            availableWidth: availableWidth)
+            availableWidth: availableWidth
+        )
         let pages = paginate(
-            systems: document.systems, page: resolved.page)
+            systems: document.systems, page: resolved.page
+        )
 
         let data = NSMutableData()
         guard let consumer = CGDataConsumer(data: data),
               let pdfContext = CGContext(
-                consumer: consumer,
-                mediaBox: nil,
-                makePDFInfo(options: options) as CFDictionary)
+                  consumer: consumer,
+                  mediaBox: nil,
+                  makePDFInfo(options: options) as CFDictionary
+              )
         else {
             throw PDFExportError.contextCreationFailed
         }
@@ -122,19 +127,23 @@ public enum PDFExporter {
                 margins: margins,
                 // Authoring overlay is for previews only; the
                 // exported file must not show it.
-                showBreakIndicators: false)
+                showBreakIndicators: false
+            )
             let renderer = ImageRenderer(content: view)
             renderer.proposedSize = ProposedViewSize(
                 width: resolved.page.size.width,
-                height: resolved.page.size.height)
+                height: resolved.page.size.height
+            )
             renderer.scale = 1
             renderer.isOpaque = true
             renderer.render { _, drawInto in
                 var mediaBox = CGRect(
-                    origin: .zero, size: resolved.page.size)
+                    origin: .zero, size: resolved.page.size
+                )
                 pdfContext.beginPDFPage(
-                    [kCGPDFContextMediaBox as String:
-                        Data(bytes: &mediaBox, count: MemoryLayout<CGRect>.size)
+                    [
+                        kCGPDFContextMediaBox as String:
+                            Data(bytes: &mediaBox, count: MemoryLayout<CGRect>.size),
                     ] as CFDictionary)
                 drawInto(pdfContext)
                 PageChromeRenderer.draw(
@@ -144,7 +153,8 @@ public enum PDFExporter {
                     pageSize: resolved.page.size,
                     margins: margins,
                     metaTags: score.metaTags,
-                    into: pdfContext)
+                    into: pdfContext
+                )
                 pdfContext.endPDFPage()
             }
         }
@@ -215,7 +225,8 @@ public enum PDFExporter {
                 if systemEndsPage(system) {
                     pages.append(PageBatch(
                         startY: currentStartY,
-                        systems: currentSystems))
+                        systems: currentSystems
+                    ))
                     currentSystems = []
                 }
                 continue
@@ -225,7 +236,8 @@ public enum PDFExporter {
             if bottomOnPage > usableHeight(forPageIndex: pages.count) {
                 pages.append(PageBatch(
                     startY: currentStartY,
-                    systems: currentSystems))
+                    systems: currentSystems
+                ))
                 currentStartY = system.origin.y
                 currentSystems = [system]
             } else {
@@ -234,14 +246,16 @@ public enum PDFExporter {
             if systemEndsPage(system) && !currentSystems.isEmpty {
                 pages.append(PageBatch(
                     startY: currentStartY,
-                    systems: currentSystems))
+                    systems: currentSystems
+                ))
                 currentSystems = []
             }
         }
         if !currentSystems.isEmpty {
             pages.append(PageBatch(
                 startY: currentStartY,
-                systems: currentSystems))
+                systems: currentSystems
+            ))
         }
         return pages
     }
@@ -264,7 +278,7 @@ public enum PDFExporter {
         switch options.page {
         case .fromScore:
             page = EngravingPage.from(score.style.pageLayout)
-        case .explicit(let p):
+        case let .explicit(p):
             page = p
         }
         let staffSize: CGFloat
@@ -277,7 +291,7 @@ public enum PDFExporter {
             // `engraving/dom/staff.cpp::Staff::staffHeight`.
             staffSize = CGFloat(
                 4 * score.style.spatium * 72.0 / 25.4)
-        case .explicit(let v):
+        case let .explicit(v):
             staffSize = v
         }
         return Resolved(page: page, staffSize: staffSize)

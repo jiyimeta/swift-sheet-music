@@ -90,7 +90,7 @@ extension MidiRenderer {
                     guard case let .spanner(spanner) = element else { continue }
                     guard spanner.kind == .volta, !spanner.voltaEndings.isEmpty else { continue }
                     let measuresCovered = max(1, spanner.nextMeasuresOffset)
-                    for k in 0..<measuresCovered where i + k < measures.count {
+                    for k in 0 ..< measuresCovered where i + k < measures.count {
                         result[i + k] = spanner.voltaEndings
                     }
                 }
@@ -211,7 +211,8 @@ extension MidiRenderer {
                 let anchor = idx - (count - 1)
                 if anchor >= 0,
                    voiceIndex < staff.measures[anchor].voices.count,
-                   let rep = explicitMeasureRepeat(in: staff.measures[anchor].voices[voiceIndex]) {
+                   let rep = explicitMeasureRepeat(in: staff.measures[anchor].voices[voiceIndex])
+                {
                     idx -= rep.numMeasures
                     continue
                 }
@@ -220,8 +221,8 @@ extension MidiRenderer {
             }
             let stripped = candidate.elements.filter {
                 switch $0 {
-                case .chord, .dynamic: return true
-                default: return false
+                case .chord, .dynamic: true
+                default: false
                 }
             }
             return Voice(elements: stripped)

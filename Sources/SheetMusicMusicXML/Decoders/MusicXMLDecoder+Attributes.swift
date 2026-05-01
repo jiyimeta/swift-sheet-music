@@ -25,7 +25,8 @@ enum AttributesDecoder {
         staffCount: Int
     ) -> [Emission] {
         if let divText = node.first("divisions")?.text,
-           let div = Int(divText), div > 0 {
+           let div = Int(divText), div > 0
+        {
             divisions.perQuarter = div
         }
 
@@ -120,7 +121,8 @@ enum AttributesDecoder {
         guard let timeNode = node.first("time"),
               let beatsText = timeNode.first("beats")?.text,
               let beatTypeText = timeNode.first("beat-type")?.text,
-              let n = Int(beatsText), let d = Int(beatTypeText) else {
+              let n = Int(beatsText), let d = Int(beatTypeText)
+        else {
             return nil
         }
         return (n, d)

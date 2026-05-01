@@ -13,6 +13,7 @@ public struct MixerChannel: Sendable, Equatable, Identifiable {
         case staff(Int)
         case metronome
     }
+
     public let id: Kind
     public let name: String
     /// Linear gain. 0 = silent, 1 = unity. The slider passes this

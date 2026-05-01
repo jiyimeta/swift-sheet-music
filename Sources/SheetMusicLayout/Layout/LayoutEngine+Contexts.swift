@@ -58,7 +58,8 @@ extension LayoutEngine {
         for score: Score
     ) -> [LayoutMeasureContext] {
         var clefs = defaultClefRawTypes(
-            staves: score.staves, parts: score.parts)
+            staves: score.staves, parts: score.parts
+        )
         var keys = Array(repeating: 0, count: score.staves.count)
         var timeSig: LayoutMeasureContext.TimeSignaturePair?
         let partLabels = score.staves.enumerated().map { idx, _ in
@@ -70,24 +71,25 @@ extension LayoutEngine {
         let measureCount = score.staves.first?.measures.count ?? 0
         var contexts: [LayoutMeasureContext] = []
         contexts.reserveCapacity(measureCount)
-        for measureIdx in 0..<measureCount {
+        for measureIdx in 0 ..< measureCount {
             for (staffIdx, staff) in score.staves.enumerated() {
                 guard measureIdx < staff.measures.count else { continue }
                 let measure = staff.measures[measureIdx]
                 scan: for el in measure.voices.first?.elements ?? [] {
                     switch el {
-                    case .clef(let c):
+                    case let .clef(c):
                         if staffIdx < clefs.count {
                             clefs[staffIdx] = c.concertClefType
                         }
-                    case .keySignature(let k):
+                    case let .keySignature(k):
                         if staffIdx < keys.count {
                             keys[staffIdx] = k.concertKey
                         }
-                    case .timeSignature(let t):
+                    case let .timeSignature(t):
                         timeSig = .init(
                             numerator: t.numerator,
-                            denominator: t.denominator)
+                            denominator: t.denominator
+                        )
                     case .chord:
                         break scan
                     default:
@@ -100,7 +102,8 @@ extension LayoutEngine {
                 clefRawTypes: clefs,
                 keySignatures: keys,
                 timeSignature: timeSig,
-                partLabels: partLabels))
+                partLabels: partLabels
+            ))
         }
         return contexts
     }
@@ -118,7 +121,8 @@ extension LayoutDocument {
         let local = x - system.origin.x
         for measure in system.measures {
             if measure.origin.x <= local
-                && measure.origin.x + measure.width > local {
+                && measure.origin.x + measure.width > local
+            {
                 return measure.measureIndex
             }
         }
@@ -152,11 +156,13 @@ extension LayoutDocument {
             - metrics.sp / 2
         let initialIdx = measureIndex(atDocumentX: scoreScrollX) ?? 0
         let safeIdx = min(
-            max(0, initialIdx), measureContexts.count - 1)
+            max(0, initialIdx), measureContexts.count - 1
+        )
         let synth = LayoutEngine.stickyHeaderSystem(
             for: measureContexts[safeIdx],
             templateSystem: template,
-            metrics: metrics)
+            metrics: metrics
+        )
         // The pane visually covers viewport [0, (synth.W -
         // bracketLocalX) * mag], so the trailing edge in score
         // coord is offset from the visible scroll position by the
@@ -226,20 +232,23 @@ extension LayoutEngine {
             if staffIdx < context.clefRawTypes.count {
                 elements.append(.clef(
                     rawType: context.clefRawTypes[staffIdx],
-                    origin: CGPoint(x: clefX, y: staffMidY)))
+                    origin: CGPoint(x: clefX, y: staffMidY)
+                ))
             }
             if staffIdx < context.keySignatures.count, keyAbs > 0 {
                 let key = context.keySignatures[staffIdx]
                 elements.append(.keySignature(
                     sharps: max(0, key),
                     flats: max(0, -key),
-                    origin: CGPoint(x: keySigX, y: staffMidY)))
+                    origin: CGPoint(x: keySigX, y: staffMidY)
+                ))
             }
             if let ts = context.timeSignature {
                 elements.append(.timeSignature(
                     numerator: ts.numerator,
                     denominator: ts.denominator,
-                    origin: CGPoint(x: timeSigX, y: staffMidY)))
+                    origin: CGPoint(x: timeSigX, y: staffMidY)
+                ))
             }
             // Staff name above the staff, left-aligned at `labelX`
             // (= clef-right-edge), mirroring MuseScore's continuous-
@@ -256,7 +265,9 @@ extension LayoutEngine {
                         text: name,
                         origin: CGPoint(
                             x: labelX,
-                            y: origin.y - metrics.sp * 0.5)))
+                            y: origin.y - metrics.sp * 0.5
+                        )
+                    ))
                 }
             }
         }
@@ -277,7 +288,9 @@ extension LayoutEngine {
                 text: "#\(context.measureIndex + 1)",
                 origin: CGPoint(
                     x: labelX,
-                    y: topStaffOrigin.y - metrics.sp * 2.5)))
+                    y: topStaffOrigin.y - metrics.sp * 2.5
+                )
+            ))
         }
         let measure = LayoutMeasure(
             measureIndex: context.measureIndex,
@@ -291,7 +304,8 @@ extension LayoutEngine {
             origin: .zero,
             size: CGSize(
                 width: headerW,
-                height: templateSystem.size.height),
+                height: templateSystem.size.height
+            ),
             measures: [measure],
             staffOrigins: staffOrigins,
             // No left-side part labels: the sticky's instrument

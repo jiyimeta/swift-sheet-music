@@ -2,7 +2,6 @@ import Foundation
 import SheetMusicCore
 import SheetMusicXMLTools
 
-
 /// Walks the `<measure>` children of a single MusicXML `<part>` and produces
 /// one `[Measure]` array per staff in the part. MusicXML interleaves notes
 /// for all staves in a single `<measure>` block; `<note><staff>N</staff></note>`
@@ -61,7 +60,8 @@ enum MusicXMLMeasureWalker {
         for measure in partNode.all("measure") {
             for attrs in measure.all("attributes") {
                 if let stavesText = attrs.first("staves")?.text,
-                   let staves = Int(stavesText), staves >= 1 {
+                   let staves = Int(stavesText), staves >= 1
+                {
                     return staves
                 }
             }
@@ -82,7 +82,7 @@ enum MusicXMLMeasureWalker {
         staffCount: Int,
         drumTable: MusicXMLDrumTable
     ) throws -> [Measure] {
-        var perStaff: [StaffMeasureBuilder] = (0..<staffCount).map { _ in
+        var perStaff: [StaffMeasureBuilder] = (0 ..< staffCount).map { _ in
             StaffMeasureBuilder()
         }
 
@@ -171,6 +171,7 @@ enum MusicXMLMeasureWalker {
 
         return perStaff.map { $0.build() }
     }
+
     // swiftlint:enable function_body_length
 
     /// Read `<note><staff>N</staff>` and convert to a 0-based staff index.

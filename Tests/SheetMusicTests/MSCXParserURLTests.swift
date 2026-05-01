@@ -19,7 +19,7 @@ import Testing
             _ = try MSCXParser.parse(contentsOf: missing)
             Issue.record("expected throw")
         } catch let error as SheetMusicError {
-            guard case .ioError(let u, _) = error else {
+            guard case let .ioError(u, _) = error else {
                 Issue.record("wrong case: \(error)")
                 return
             }

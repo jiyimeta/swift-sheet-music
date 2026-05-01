@@ -23,18 +23,26 @@ extension LayoutEngine {
         // tuplet doesn't visually exclude itself from the bracket.
         var memberSpanXs: [CGFloat] = []
         var chordStemXs: [CGFloat] = []
-        var chordAnchorYs: [CGFloat] = []   // beam-side note y (outer note)
+        var chordAnchorYs: [CGFloat] = [] // beam-side note y (outer note)
         var chordStemsUp = 0
         var chordCount = 0
         var containsRest = false
-        for idx in tuplet.startIndex...tuplet.endIndex {
+        for idx in tuplet.startIndex ... tuplet.endIndex {
             let el = voice.elements[idx]
             switch el {
-            case .chord(let c) where !c.notes.isEmpty:
+            case let .chord(c) where !c.notes.isEmpty:
                 chordCount += 1
                 guard let outIdx = voiceChordOutIndex[idx],
-                      case .chord(let notes, _, let stem, let so,
-                                  _, _, _, _) = out[outIdx]
+                      case let .chord(
+                          notes,
+                          _,
+                          stem,
+                          so,
+                          _,
+                          _,
+                          _,
+                          _
+                      ) = out[outIdx]
                 else { continue }
                 memberSpanXs.append(so.x)
                 chordStemXs.append(so.x)
@@ -50,7 +58,7 @@ extension LayoutEngine {
                 // Empty chord = rest.
                 containsRest = true
                 guard let outIdx = voiceRestOutIndex[idx],
-                      case .rest(_, let origin, _, _, _) = out[outIdx]
+                      case let .rest(_, origin, _, _, _) = out[outIdx]
                 else { continue }
                 memberSpanXs.append(origin.x)
             default:
@@ -67,7 +75,7 @@ extension LayoutEngine {
         let isBeamedGroup = !containsRest
             && beamGroups.contains { bg in
                 bg.memberIndices.contains(tuplet.startIndex)
-                && bg.memberIndices.contains(tuplet.endIndex)
+                    && bg.memberIndices.contains(tuplet.endIndex)
             }
 
         // Place the marking above stem-up groups, below stem-down.
@@ -94,8 +102,8 @@ extension LayoutEngine {
             guard
                 let firstIdx = voiceChordOutIndex[tuplet.startIndex],
                 let lastIdx = voiceChordOutIndex[tuplet.endIndex],
-                case .chord(_, _, _, let firstSO, _, _, _, _) = out[firstIdx],
-                case .chord(_, _, _, let lastSO, _, _, _, _) = out[lastIdx]
+                case let .chord(_, _, _, firstSO, _, _, _, _) = out[firstIdx],
+                case let .chord(_, _, _, lastSO, _, _, _, _) = out[lastIdx]
             else { return }
             let outward: CGFloat = isAbove ? -labelPad : labelPad
             fromY = firstSO.y + outward
@@ -112,14 +120,14 @@ extension LayoutEngine {
                 ? -(metrics.defaultStemLength + labelPad)
                 : (metrics.defaultStemLength + labelPad)
             fromY = extremeY + outward
-            toY = fromY  // flat bracket — MuseScore sometimes slopes,
+            toY = fromY // flat bracket — MuseScore sometimes slopes,
             //            but a flat bracket is the common case.
         }
 
         // Clamp so the bracket/number never falls inside the staff
         // lines (placement-local: staff top = sp*2, bottom = sp*6).
-        let staffTop = metrics.sp * 2 - metrics.sp  // 1 sp above top line
-        let staffBot = metrics.sp * 6 + metrics.sp  // 1 sp below bot line
+        let staffTop = metrics.sp * 2 - metrics.sp // 1 sp above top line
+        let staffBot = metrics.sp * 6 + metrics.sp // 1 sp below bot line
         let clampedFromY: CGFloat
         let clampedToY: CGFloat
         if isAbove {
@@ -136,7 +144,8 @@ extension LayoutEngine {
             text: "\(tuplet.actualNotes)",
             hasBracket: !isBeamedGroup,
             isAbove: isAbove,
-            tupletID: tupletID))
+            tupletID: tupletID
+        ))
     }
 
     /// Emit a single beam bar for a run of consecutive members that
@@ -162,12 +171,15 @@ extension LayoutEngine {
             out.append(.beam(
                 fromOrigin: CGPoint(
                     x: memberStemXs[start],
-                    y: memberStemYs[start]),
+                    y: memberStemYs[start]
+                ),
                 toOrigin: CGPoint(
                     x: memberStemXs[end],
-                    y: memberStemYs[end]),
+                    y: memberStemYs[end]
+                ),
                 direction: direction,
-                level: level))
+                level: level
+            ))
             return
         }
         let stubLen = metrics.sp * 1.5
@@ -187,7 +199,8 @@ extension LayoutEngine {
             fromOrigin: CGPoint(x: fromX, y: beamYAt(fromX)),
             toOrigin: CGPoint(x: toX, y: beamYAt(toX)),
             direction: direction,
-            level: level))
+            level: level
+        ))
     }
 
     /// True when the first voice's first element is a `<Clef>`. Used to
@@ -230,9 +243,9 @@ extension LayoutEngine {
     ) -> CGFloat? {
         for el in elements.reversed() {
             switch el {
-            case .chord(_, _, _, let origin, _, _, _, _):
+            case let .chord(_, _, _, origin, _, _, _, _):
                 return origin.x
-            case .rest(_, let origin, _, _, _):
+            case let .rest(_, origin, _, _, _):
                 return origin.x
             default: continue
             }

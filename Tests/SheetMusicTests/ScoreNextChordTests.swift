@@ -4,9 +4,12 @@ import Testing
 @Suite("Score.nextChord")
 struct ScoreNextChordTests {
     private static func chord(_ p: Int = 60) -> VoiceElement {
-        .chord(Chord(duration: .quarter,
-                     notes: [Note(pitch: p, tpc: 14)]))
+        .chord(Chord(
+            duration: .quarter,
+            notes: [Note(pitch: p, tpc: 14)]
+        ))
     }
+
     private static let restQ: VoiceElement = .rest(
         duration: .quarter)
 
@@ -16,12 +19,13 @@ struct ScoreNextChordTests {
             StaffContent(id: 1, measures: [
                 Measure(voices: [Voice(elements: [
                     Self.chord(60), Self.chord(62), Self.chord(64),
-                ])])
-            ])
+                ])]),
+            ]),
         ])
         let here = VoiceElementID(
             staffIndex: 0, measureIndex: 0,
-            voiceIndex: 0, elementIndex: 0)
+            voiceIndex: 0, elementIndex: 0
+        )
         let next = score.nextChord(after: here)
         #expect(next?.elementIndex == 1)
         #expect(next?.measureIndex == 0)
@@ -36,12 +40,13 @@ struct ScoreNextChordTests {
                     Self.restQ,
                     .barLine(BarLine()),
                     Self.chord(62),
-                ])])
-            ])
+                ])]),
+            ]),
         ])
         let here = VoiceElementID(
             staffIndex: 0, measureIndex: 0,
-            voiceIndex: 0, elementIndex: 0)
+            voiceIndex: 0, elementIndex: 0
+        )
         let next = score.nextChord(after: here)
         #expect(next?.elementIndex == 3)
     }
@@ -52,11 +57,12 @@ struct ScoreNextChordTests {
             StaffContent(id: 1, measures: [
                 Measure(voices: [Voice(elements: [Self.chord(60)])]),
                 Measure(voices: [Voice(elements: [Self.restQ, Self.chord(62)])]),
-            ])
+            ]),
         ])
         let here = VoiceElementID(
             staffIndex: 0, measureIndex: 0,
-            voiceIndex: 0, elementIndex: 0)
+            voiceIndex: 0, elementIndex: 0
+        )
         let next = score.nextChord(after: here)
         #expect(next?.measureIndex == 1)
         #expect(next?.elementIndex == 1)
@@ -66,12 +72,13 @@ struct ScoreNextChordTests {
     func endOfStaff() {
         let score = Score(division: 480, staves: [
             StaffContent(id: 1, measures: [
-                Measure(voices: [Voice(elements: [Self.chord(60)])])
-            ])
+                Measure(voices: [Voice(elements: [Self.chord(60)])]),
+            ]),
         ])
         let here = VoiceElementID(
             staffIndex: 0, measureIndex: 0,
-            voiceIndex: 0, elementIndex: 0)
+            voiceIndex: 0, elementIndex: 0
+        )
         #expect(score.nextChord(after: here) == nil)
     }
 
@@ -82,12 +89,13 @@ struct ScoreNextChordTests {
                 Measure(voices: [
                     Voice(elements: [Self.chord(60), Self.restQ]),
                     Voice(elements: [Self.chord(72), Self.chord(74)]),
-                ])
-            ])
+                ]),
+            ]),
         ])
         let here = VoiceElementID(
             staffIndex: 0, measureIndex: 0,
-            voiceIndex: 0, elementIndex: 0)
+            voiceIndex: 0, elementIndex: 0
+        )
         // Voice 0 has only one chord; the chord(74) in voice 1
         // must NOT match.
         #expect(score.nextChord(after: here) == nil)

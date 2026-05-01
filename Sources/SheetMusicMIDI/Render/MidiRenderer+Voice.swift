@@ -138,7 +138,8 @@ extension MidiRenderer {
             if voiceIndex == 0 && !rm.text.isEmpty {
                 events.append(TimedMidiEvent(
                     tick: localTick,
-                    event: .meta(.marker(rm.text))))
+                    event: .meta(.marker(rm.text))
+                ))
             }
         case let .tempo(tempo):
             currentTempoBps = tempo.beatsPerSecond
@@ -205,8 +206,8 @@ extension MidiRenderer {
                 tempoBps: tempoBps
             )
             let order = arpeggio.isAscending
-                ? Array(0..<chord.notes.count)
-                : Array((0..<chord.notes.count).reversed())
+                ? Array(0 ..< chord.notes.count)
+                : Array((0 ..< chord.notes.count).reversed())
             for (i, noteIndex) in order.enumerated() {
                 let note = chord.notes[noteIndex]
                 let onTick = tick + pairs[i].onOffset

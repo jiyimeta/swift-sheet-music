@@ -41,7 +41,8 @@ public struct PlaybackCursorView: View {
 
     public var body: some View {
         if let cursor,
-           let frame = document.cursorFrame(for: cursor, in: score) {
+           let frame = document.cursorFrame(for: cursor, in: score)
+        {
             Rectangle()
                 .fill(Color.blue.opacity(0.15))
                 .frame(width: frame.width, height: frame.height)
@@ -62,13 +63,14 @@ extension LayoutDocument {
         for cursor: ScoreCursor, in score: Score
     ) -> CGRect? {
         switch cursor {
-        case .item(let id):
+        case let .item(id):
             return itemFrame(id)
-        case .beat(let measureIndex, let tickInMeasure):
+        case let .beat(measureIndex, tickInMeasure):
             return beatFrame(
                 measureIndex: measureIndex,
                 tickInMeasure: tickInMeasure,
-                score: score)
+                score: score
+            )
         }
     }
 
@@ -87,7 +89,8 @@ extension LayoutDocument {
                         x: absX - halfW,
                         y: topY,
                         width: halfW * 2,
-                        height: bottomY - topY)
+                        height: bottomY - topY
+                    )
                 }
             }
         }
@@ -106,12 +109,14 @@ extension LayoutDocument {
                 + (system.staffOrigins.last?.y ?? 0)
                 + metrics.staffHeight
             for measure in system.measures
-            where measure.measureIndex == measureIndex {
+                where measure.measureIndex == measureIndex
+            {
                 guard let xInMeasure = beatXInMeasure(
                     tickInMeasure: tickInMeasure,
                     measureIndex: measureIndex,
                     layoutMeasure: measure,
-                    score: score)
+                    score: score
+                )
                 else { return nil }
                 let absX = system.origin.x
                     + measure.origin.x
@@ -121,7 +126,8 @@ extension LayoutDocument {
                     x: absX - halfW,
                     y: topY,
                     width: halfW * 2,
-                    height: bottomY - topY)
+                    height: bottomY - topY
+                )
             }
         }
         return nil
@@ -147,27 +153,31 @@ extension LayoutDocument {
                 var t = 0
                 for (elemIdx, el) in voice.elements.enumerated() {
                     switch el {
-                    case .chord(let chord) where !chord.notes.isEmpty:
+                    case let .chord(chord) where !chord.notes.isEmpty:
                         let nid = NoteID(
                             staffIndex: staffIdx,
                             measureIndex: measureIndex,
                             voiceIndex: voiceIdx,
                             elementIndex: elemIdx,
-                            noteIndexInChord: 0)
+                            noteIndexInChord: 0
+                        )
                         if ticksToX[t] == nil,
-                           let x = itemX(.note(nid), in: layoutMeasure) {
+                           let x = itemX(.note(nid), in: layoutMeasure)
+                        {
                             ticksToX[t] = x
                         }
                         t += chord.duration.ticks(division: division)
-                    case .chord(let rest):
+                    case let .chord(rest):
                         // Empty chord = rest.
                         let rid = RestID(
                             staffIndex: staffIdx,
                             measureIndex: measureIndex,
                             voiceIndex: voiceIdx,
-                            elementIndex: elemIdx)
+                            elementIndex: elemIdx
+                        )
                         if ticksToX[t] == nil,
-                           let x = itemX(.rest(rid), in: layoutMeasure) {
+                           let x = itemX(.rest(rid), in: layoutMeasure)
+                        {
                             ticksToX[t] = x
                         }
                         t += rest.duration.ticks(division: division)
@@ -191,7 +201,8 @@ extension LayoutDocument {
         }
         guard let leftX = ticksToX[leftTick] else { return nil }
         if let rightTick, let rightX = ticksToX[rightTick],
-           rightTick > leftTick {
+           rightTick > leftTick
+        {
             let frac = CGFloat(target - leftTick)
                 / CGFloat(rightTick - leftTick)
             return leftX + frac * (rightX - leftX)
@@ -204,7 +215,8 @@ extension LayoutDocument {
             // Use the measure's tick length (sum of voice 0
             // durations) to scale the remaining-beat offset.
             let measureTicks = measureTickLength(
-                measureIndex: measureIndex, score: score, division: division)
+                measureIndex: measureIndex, score: score, division: division
+            )
             if measureTicks > leftTick {
                 let frac = CGFloat(target - leftTick)
                     / CGFloat(measureTicks - leftTick)
@@ -218,19 +230,21 @@ extension LayoutDocument {
         _ id: ScoreItemID, in measure: LayoutMeasure
     ) -> CGFloat? {
         switch id {
-        case .note(let target):
+        case let .note(target):
             for el in measure.elements {
-                if case .chord(let notes, _, _, _, _, _, _, _) = el,
+                if case let .chord(notes, _, _, _, _, _, _, _) = el,
                    let n = notes.first(where: {
                        $0.noteID == target
-                   }) {
+                   })
+                {
                     return n.origin.x
                 }
             }
-        case .rest(let target):
+        case let .rest(target):
             for el in measure.elements {
-                if case .rest(_, let p, _, let rid, _) = el,
-                   rid == target {
+                if case let .rest(_, p, _, rid, _) = el,
+                   rid == target
+                {
                     return p.x
                 }
             }
@@ -253,15 +267,15 @@ private func measureTickLength(
     var t = 0
     for el in voice0.elements {
         switch el {
-        case .chord(let c): t += c.duration.ticks(division: division)
+        case let .chord(c): t += c.duration.ticks(division: division)
         default: break
         }
     }
     return t
 }
 
-private extension Array {
-    subscript(safe i: Int) -> Element? {
+extension Array {
+    fileprivate subscript(safe i: Int) -> Element? {
         indices.contains(i) ? self[i] : nil
     }
 }

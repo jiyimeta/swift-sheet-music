@@ -32,13 +32,15 @@ struct MusicXMLDrumTable: Equatable {
         for midiInstr in scorePart.all("midi-instrument") {
             let id = midiInstr.attributes["id"] ?? ""
             if let unpitchedText = midiInstr.first("midi-unpitched")?.text,
-               let raw = Int(unpitchedText), raw >= 1, raw <= 128 {
+               let raw = Int(unpitchedText), raw >= 1, raw <= 128
+            {
                 // MusicXML's 1-128 range → 0-127 MIDI numbering.
                 table.pitchByInstrumentId[id] = raw - 1
                 table.isDrumset = true
             }
             if let chText = midiInstr.first("midi-channel")?.text,
-               let ch = Int(chText), ch == 10 {
+               let ch = Int(chText), ch == 10
+            {
                 table.isDrumset = true
             }
         }

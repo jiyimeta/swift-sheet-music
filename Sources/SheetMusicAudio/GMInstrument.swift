@@ -4,7 +4,7 @@ import Foundation
 /// canonical name and family grouping. Drives the program picker
 /// in the mixer.
 public struct GMInstrument: Sendable, Equatable, Identifiable {
-    public let program: UInt8       // 0...127
+    public let program: UInt8 // 0...127
     public let name: String
     public let family: Family
     public var id: UInt8 { program }
@@ -13,22 +13,22 @@ public struct GMInstrument: Sendable, Equatable, Identifiable {
     /// to group the picker's 128-item list under collapsible
     /// section headers so the user isn't scrolling a flat list.
     public enum Family: String, CaseIterable, Sendable {
-        case piano                  = "Piano"
-        case chromaticPercussion    = "Chromatic Percussion"
-        case organ                  = "Organ"
-        case guitar                 = "Guitar"
-        case bass                   = "Bass"
-        case strings                = "Strings"
-        case ensemble               = "Ensemble"
-        case brass                  = "Brass"
-        case reed                   = "Reed"
-        case pipe                   = "Pipe"
-        case synthLead              = "Synth Lead"
-        case synthPad               = "Synth Pad"
-        case synthEffects           = "Synth Effects"
-        case ethnic                 = "Ethnic"
-        case percussive             = "Percussive"
-        case soundEffects           = "Sound Effects"
+        case piano = "Piano"
+        case chromaticPercussion = "Chromatic Percussion"
+        case organ = "Organ"
+        case guitar = "Guitar"
+        case bass = "Bass"
+        case strings = "Strings"
+        case ensemble = "Ensemble"
+        case brass = "Brass"
+        case reed = "Reed"
+        case pipe = "Pipe"
+        case synthLead = "Synth Lead"
+        case synthPad = "Synth Pad"
+        case synthEffects = "Synth Effects"
+        case ethnic = "Ethnic"
+        case percussive = "Percussive"
+        case soundEffects = "Sound Effects"
 
         /// Programs within the family, in canonical 0...127 order.
         public var programs: [GMInstrument] {
@@ -37,15 +37,14 @@ public struct GMInstrument: Sendable, Equatable, Identifiable {
     }
 
     /// All 128 GM programs in order.
-    public static let all: [GMInstrument] = {
-        zip(GMInstrument.names, 0..<UInt8(GMInstrument.names.count))
-            .map { name, program in
-                GMInstrument(
-                    program: program,
-                    name: name,
-                    family: GMInstrument.family(for: program))
-            }
-    }()
+    public static let all: [GMInstrument] = zip(GMInstrument.names, 0 ..< UInt8(GMInstrument.names.count))
+        .map { name, program in
+            GMInstrument(
+                program: program,
+                name: name,
+                family: GMInstrument.family(for: program)
+            )
+        }
 
     /// Look up the GM program by number. Falls back to a synthetic
     /// "Program N" entry for out-of-range values so calling code
@@ -55,7 +54,8 @@ public struct GMInstrument: Sendable, Equatable, Identifiable {
         return GMInstrument(
             program: program,
             name: "Program \(program)",
-            family: .soundEffects)
+            family: .soundEffects
+        )
     }
 
     private static func family(for program: UInt8) -> Family {

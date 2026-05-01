@@ -19,7 +19,8 @@ extension StaffText {
             offsetX: offset.0,
             offsetY: offset.1,
             color: color,
-            isSystemText: isSystemText)
+            isSystemText: isSystemText
+        )
     }
 
     /// Recursively concatenate the text content of `node` and any

@@ -44,6 +44,7 @@ extension Score {
         }
         return Score(
             division: division, parts: parts, staves: staves,
-            metaTags: metaTags, titleFrame: titleFrame, style: style)
+            metaTags: metaTags, titleFrame: titleFrame, style: style
+        )
     }
 }

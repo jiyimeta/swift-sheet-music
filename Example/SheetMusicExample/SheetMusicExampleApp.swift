@@ -1,12 +1,12 @@
 #if !os(macOS)
-import SwiftUI
+    import SwiftUI
 
-@main
-struct SheetMusicExampleApp: App {
-    var body: some Scene {
-        WindowGroup {
-            ContentView()
+    @main
+    struct SheetMusicExampleApp: App {
+        var body: some Scene {
+            WindowGroup {
+                ContentView()
+            }
         }
     }
-}
 #endif

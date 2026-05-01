@@ -34,7 +34,8 @@ private struct MixerStrip: View {
 
                 Button {
                     engine.setMuted(
-                        forChannel: channel.id, to: !channel.isMuted)
+                        forChannel: channel.id, to: !channel.isMuted
+                    )
                 } label: {
                     Text("M")
                         .font(.caption.bold())
@@ -46,7 +47,8 @@ private struct MixerStrip: View {
 
                 Button {
                     engine.setSoloed(
-                        forChannel: channel.id, to: !channel.isSoloed)
+                        forChannel: channel.id, to: !channel.isSoloed
+                    )
                 } label: {
                     Text("S")
                         .font(.caption.bold())
@@ -61,15 +63,19 @@ private struct MixerStrip: View {
                         get: { channel.volume },
                         set: { newValue in
                             engine.setVolume(
-                                forChannel: channel.id, to: newValue)
-                        }),
-                    in: 0...1)
+                                forChannel: channel.id, to: newValue
+                            )
+                        }
+                    ),
+                    in: 0 ... 1
+                )
             }
             if let program = channel.program {
                 ProgramMenu(
                     channelID: channel.id,
                     program: program,
-                    engine: engine)
+                    engine: engine
+                )
             }
         }
     }
@@ -95,6 +101,7 @@ private struct ProgramMenu: View {
     private var primaryColor: Color {
         colorScheme == .dark ? .white : .primary
     }
+
     private var secondaryColor: Color {
         colorScheme == .dark
             ? Color.white.opacity(0.65)
@@ -121,7 +128,8 @@ private struct ProgramMenu: View {
                             Button {
                                 engine.setProgram(
                                     forChannel: channelID,
-                                    to: instrument.program)
+                                    to: instrument.program
+                                )
                             } label: {
                                 Text(instrument.name)
                             }
@@ -145,6 +153,6 @@ private struct ProgramMenu: View {
         .padding(.horizontal, 6)
         .padding(.vertical, 3)
         .background(.quaternary, in: RoundedRectangle(cornerRadius: 4))
-        .padding(.leading, 16)  // small indent so the picker reads as part of its strip
+        .padding(.leading, 16) // small indent so the picker reads as part of its strip
     }
 }

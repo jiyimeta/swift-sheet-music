@@ -27,7 +27,7 @@ extension LayoutEngine {
                 for voice in measure.voices {
                     var tick = 0
                     for el in voice.elements {
-                        if case .spanner(let sp) = el {
+                        if case let .spanner(sp) = el {
                             out.append(SpannerAnchor(
                                 kind: sp.kind,
                                 rawType: sp.rawType,
@@ -42,7 +42,7 @@ extension LayoutEngine {
                             ))
                         }
                         switch el {
-                        case .chord(let c):
+                        case let .chord(c):
                             tick += c.duration.ticks(
                                 division: score.division)
                         default: break
@@ -66,7 +66,7 @@ extension LayoutEngine {
         var measureLocation: [Int: (Int, Int)] = [:]
         var globalIdx = 0
         for (sysIdx, system) in systems.enumerated() {
-            for localIdx in 0..<system.measures.count {
+            for localIdx in 0 ..< system.measures.count {
                 measureLocation[globalIdx] = (sysIdx, localIdx)
                 globalIdx += 1
             }
@@ -77,12 +77,15 @@ extension LayoutEngine {
 
         for anchor in anchors {
             guard let (startSys, startLocal) =
-                    measureLocation[anchor.startMeasure]
+                measureLocation[anchor.startMeasure]
             else { continue }
             let endGlobal = max(
                 anchor.startMeasure,
-                min(anchor.endMeasure,
-                    (measureLocation.keys.max() ?? anchor.startMeasure)))
+                min(
+                    anchor.endMeasure,
+                    measureLocation.keys.max() ?? anchor.startMeasure
+                )
+            )
             guard let (endSys, endLocal) = measureLocation[endGlobal]
             else { continue }
 
@@ -97,7 +100,8 @@ extension LayoutEngine {
                     + system.measures[endLocal].width
                     - metrics.sp * 2
                 let y = anchorY(
-                    in: system, belowStaff: belowStaff, metrics: metrics)
+                    in: system, belowStaff: belowStaff, metrics: metrics
+                )
                 extraPerSystem[startSys].append(.spannerSegment(
                     kind: kind,
                     fromOrigin: CGPoint(x: fromX, y: y),
@@ -113,7 +117,8 @@ extension LayoutEngine {
                 let toXStart = startSystem.size.width - metrics.sp * 2
                 let yStart = anchorY(
                     in: startSystem, belowStaff: belowStaff,
-                    metrics: metrics)
+                    metrics: metrics
+                )
                 extraPerSystem[startSys].append(.spannerSegment(
                     kind: kind,
                     fromOrigin: CGPoint(x: fromX, y: yStart),
@@ -123,18 +128,21 @@ extension LayoutEngine {
                     text: anchor.rawType
                 ))
                 if endSys > startSys + 1 {
-                    for mid in (startSys + 1)..<endSys {
+                    for mid in (startSys + 1) ..< endSys {
                         let midSystem = systems[mid]
                         let y = anchorY(
                             in: midSystem, belowStaff: belowStaff,
-                            metrics: metrics)
+                            metrics: metrics
+                        )
                         extraPerSystem[mid].append(.spannerSegment(
                             kind: kind,
                             fromOrigin: CGPoint(
-                                x: metrics.sp * 2, y: y),
+                                x: metrics.sp * 2, y: y
+                            ),
                             toOrigin: CGPoint(
                                 x: midSystem.size.width - metrics.sp * 2,
-                                y: y),
+                                y: y
+                            ),
                             continuesLeft: true,
                             continuesRight: true,
                             text: anchor.rawType
@@ -148,7 +156,8 @@ extension LayoutEngine {
                     - metrics.sp * 2
                 let yEnd = anchorY(
                     in: endSystem, belowStaff: belowStaff,
-                    metrics: metrics)
+                    metrics: metrics
+                )
                 extraPerSystem[endSys].append(.spannerSegment(
                     kind: kind,
                     fromOrigin: CGPoint(x: fromXEnd, y: yEnd),
@@ -175,8 +184,8 @@ extension LayoutEngine {
 
     static func isBelowStaff(kind: Spanner.Kind) -> Bool {
         switch kind {
-        case .hairpin, .pedal: return true
-        default: return false
+        case .hairpin, .pedal: true
+        default: false
         }
     }
 

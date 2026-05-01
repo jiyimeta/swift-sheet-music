@@ -18,15 +18,15 @@ public enum NoteDuration: Sendable, Equatable {
     /// Number of MIDI ticks at a given PPQ division. quarter = 1 * division.
     public func ticks(division: Int) -> Int {
         switch self {
-        case .whole:           return 4 * division
-        case .half:            return 2 * division
-        case .quarter:         return division
-        case .eighth:          return division / 2
-        case .sixteenth:       return division / 4
-        case .thirtySecond:    return division / 8
-        case .sixtyFourth:     return division / 16
+        case .whole: return 4 * division
+        case .half: return 2 * division
+        case .quarter: return division
+        case .eighth: return division / 2
+        case .sixteenth: return division / 4
+        case .thirtySecond: return division / 8
+        case .sixtyFourth: return division / 16
         case .oneTwentyEighth: return division / 32
-        case .twoFiftySixth:   return division / 64
+        case .twoFiftySixth: return division / 64
         case let .fraction(f): return f.ticks(division: division)
         }
     }
@@ -35,31 +35,31 @@ public enum NoteDuration: Sendable, Equatable {
     /// Returns nil for "measure" — callers must use `<duration>` to build a `.fraction`.
     public init?(mscxName: String) {
         switch mscxName {
-        case "whole":   self = .whole
-        case "half":    self = .half
+        case "whole": self = .whole
+        case "half": self = .half
         case "quarter": self = .quarter
-        case "eighth":  self = .eighth
-        case "16th":    self = .sixteenth
-        case "32nd":    self = .thirtySecond
-        case "64th":    self = .sixtyFourth
-        case "128th":   self = .oneTwentyEighth
-        case "256th":   self = .twoFiftySixth
-        default:        return nil
+        case "eighth": self = .eighth
+        case "16th": self = .sixteenth
+        case "32nd": self = .thirtySecond
+        case "64th": self = .sixtyFourth
+        case "128th": self = .oneTwentyEighth
+        case "256th": self = .twoFiftySixth
+        default: return nil
         }
     }
 
     /// This duration expressed as a fraction of a whole note.
     public var asFraction: Fraction {
         switch self {
-        case .whole:           return Fraction(numerator: 1, denominator: 1)
-        case .half:            return Fraction(numerator: 1, denominator: 2)
-        case .quarter:         return Fraction(numerator: 1, denominator: 4)
-        case .eighth:          return Fraction(numerator: 1, denominator: 8)
-        case .sixteenth:       return Fraction(numerator: 1, denominator: 16)
-        case .thirtySecond:    return Fraction(numerator: 1, denominator: 32)
-        case .sixtyFourth:     return Fraction(numerator: 1, denominator: 64)
+        case .whole: return Fraction(numerator: 1, denominator: 1)
+        case .half: return Fraction(numerator: 1, denominator: 2)
+        case .quarter: return Fraction(numerator: 1, denominator: 4)
+        case .eighth: return Fraction(numerator: 1, denominator: 8)
+        case .sixteenth: return Fraction(numerator: 1, denominator: 16)
+        case .thirtySecond: return Fraction(numerator: 1, denominator: 32)
+        case .sixtyFourth: return Fraction(numerator: 1, denominator: 64)
         case .oneTwentyEighth: return Fraction(numerator: 1, denominator: 128)
-        case .twoFiftySixth:   return Fraction(numerator: 1, denominator: 256)
+        case .twoFiftySixth: return Fraction(numerator: 1, denominator: 256)
         case let .fraction(f): return f
         }
     }

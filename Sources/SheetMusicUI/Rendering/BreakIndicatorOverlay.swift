@@ -27,9 +27,11 @@ public struct BreakIndicatorOverlay: View {
         /// `documentYOffset` subtracts the page's start-Y; `xOffset`
         /// adds the page's left-margin (mirrors `PDFPageView`'s
         /// `translateBy`).
-        case document(systems: [LayoutSystem],
-                      documentYOffset: CGFloat,
-                      xOffset: CGFloat)
+        case document(
+            systems: [LayoutSystem],
+            documentYOffset: CGFloat,
+            xOffset: CGFloat
+        )
     }
 
     public let mode: Mode
@@ -58,7 +60,7 @@ public struct BreakIndicatorOverlay: View {
 
     private var indicators: [Indicator] {
         switch mode {
-        case .system(let s):
+        case let .system(s):
             return s.measures.compactMap { m in
                 guard let kind = breakKind(for: m) else { return nil }
                 // Local-to-system coords: measure origin is
@@ -67,7 +69,7 @@ public struct BreakIndicatorOverlay: View {
                 let y = badgeOffsetY(metrics: metrics)
                 return Indicator(kind: kind, x: x, y: y)
             }
-        case .document(let systems, let dY, let xOffset):
+        case let .document(systems, dY, xOffset):
             var out: [Indicator] = []
             for s in systems {
                 for m in s.measures {
@@ -148,8 +150,8 @@ private struct BreakIndicatorBadge: View {
 
     private var accessibilityLabel: String {
         switch kind {
-        case .line: return "Line break"
-        case .page: return "Page break"
+        case .line: "Line break"
+        case .page: "Page break"
         }
     }
 }

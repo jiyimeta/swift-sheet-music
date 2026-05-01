@@ -61,7 +61,7 @@ struct StaffMeasureBuilder {
     mutating func foldIntoLastChord(voice voiceId: String, note: Note, duration: NoteDuration) {
         let idx = internVoice(voiceId)
         var elements = voices[idx]
-        if let last = elements.last, case .chord(var chord) = last {
+        if let last = elements.last, case var .chord(chord) = last {
             chord.notes.append(note)
             elements[elements.count - 1] = .chord(chord)
         } else {
@@ -127,7 +127,8 @@ struct StaffMeasureBuilder {
         // If we seeded voice 0 with attributes only and this is the first real
         // voice, adopt that slot instead of creating a new one.
         if voices.count == 1, voiceIndex.values.first == 0,
-           voiceIndex["__implicit__"] != nil, voiceIndex.count == 1 {
+           voiceIndex["__implicit__"] != nil, voiceIndex.count == 1
+        {
             voiceIndex.removeValue(forKey: "__implicit__")
             voiceIndex[voiceId] = 0
             return 0

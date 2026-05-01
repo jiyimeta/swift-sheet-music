@@ -24,7 +24,7 @@ extension MidiRenderer {
         let tempoRatio = tempoBps / 2.0
         var result: [(Int, Int)] = []
         result.reserveCapacity(noteCount)
-        for j in 0..<noteCount {
+        for j in 0 ..< noteCount {
             // Match C++ operator precedence: integer division first, then ×Double.
             let intPart = (l * j * 1000) / chordTicks
             let raw = Double(intPart) * tempoRatio * stretch

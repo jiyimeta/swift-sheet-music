@@ -1,5 +1,5 @@
-import SwiftUI
 import SheetMusicLayout
+import SwiftUI
 
 @available(macOS 15.0, iOS 16.0, *)
 enum SpannerRenderer {
@@ -16,28 +16,33 @@ enum SpannerRenderer {
         switch kind {
         case .slur:
             drawSlur(context: &context, from: from, to: to, metrics: metrics)
-        case .volta(let endings):
+        case let .volta(endings):
             drawVolta(
                 context: &context, from: from, to: to,
                 endings: endings,
                 continuesLeft: continuesLeft,
                 continuesRight: continuesRight,
-                metrics: metrics)
+                metrics: metrics
+            )
         case .hairpinOpen, .hairpinClose:
             drawHairpin(
                 context: &context, from: from, to: to,
-                open: kind == .hairpinOpen, metrics: metrics)
+                open: kind == .hairpinOpen, metrics: metrics
+            )
         case .pedal:
             drawPedal(
-                context: &context, from: from, to: to, metrics: metrics)
+                context: &context, from: from, to: to, metrics: metrics
+            )
         case .ottava:
             drawOttava(
                 context: &context, from: from, to: to,
-                metrics: metrics)
+                metrics: metrics
+            )
         case .textLine:
             drawTextLine(
                 context: &context, from: from, to: to,
-                text: text, metrics: metrics)
+                text: text, metrics: metrics
+            )
         }
     }
 
@@ -47,13 +52,15 @@ enum SpannerRenderer {
     ) {
         let mid = CGPoint(
             x: (from.x + to.x) / 2,
-            y: min(from.y, to.y) - metrics.sp * 2)
+            y: min(from.y, to.y) - metrics.sp * 2
+        )
         var p = Path()
         p.move(to: from)
         p.addQuadCurve(to: to, control: mid)
         context.stroke(
             p, with: .color(.primary),
-            lineWidth: metrics.sp * 0.15)
+            lineWidth: metrics.sp * 0.15
+        )
     }
 
     private static func drawVolta(
@@ -76,13 +83,15 @@ enum SpannerRenderer {
         }
         context.stroke(
             p, with: .color(.primary),
-            lineWidth: metrics.sp * 0.15)
+            lineWidth: metrics.sp * 0.15
+        )
         if !endings.isEmpty, !continuesLeft {
             let label = endings.map(String.init).joined(separator: ", ") + "."
             context.drawExpressionText(
                 label,
                 at: CGPoint(x: from.x + metrics.sp, y: top + metrics.sp / 2),
-                size: metrics.sp * 2, italic: false)
+                size: metrics.sp * 2, italic: false
+            )
         }
     }
 
@@ -105,7 +114,8 @@ enum SpannerRenderer {
         }
         context.stroke(
             p, with: .color(.primary),
-            lineWidth: metrics.sp * 0.15)
+            lineWidth: metrics.sp * 0.15
+        )
     }
 
     private static func drawPedal(
@@ -114,10 +124,12 @@ enum SpannerRenderer {
     ) {
         context.drawExpressionText(
             "Ped.", at: from,
-            size: metrics.sp * 2.5, italic: true)
+            size: metrics.sp * 2.5, italic: true
+        )
         context.drawExpressionText(
             "*", at: to,
-            size: metrics.sp * 3, italic: false)
+            size: metrics.sp * 3, italic: false
+        )
     }
 
     private static func drawOttava(
@@ -129,14 +141,17 @@ enum SpannerRenderer {
         // visible".
         context.drawExpressionText(
             "8va", at: from,
-            size: metrics.sp * 2.5, italic: true)
+            size: metrics.sp * 2.5, italic: true
+        )
         var p = Path()
         p.move(to: CGPoint(x: from.x + metrics.sp * 3, y: from.y))
         p.addLine(to: to)
         context.stroke(
             p, with: .color(.primary),
             style: StrokeStyle(
-                lineWidth: metrics.sp * 0.1, dash: [3, 3]))
+                lineWidth: metrics.sp * 0.1, dash: [3, 3]
+            )
+        )
     }
 
     private static func drawTextLine(
@@ -146,13 +161,15 @@ enum SpannerRenderer {
         if !text.isEmpty {
             context.drawExpressionText(
                 text, at: from,
-                size: metrics.sp * 2.2, italic: true)
+                size: metrics.sp * 2.2, italic: true
+            )
         }
         var p = Path()
         p.move(to: from)
         p.addLine(to: to)
         context.stroke(
             p, with: .color(.primary),
-            lineWidth: metrics.sp * 0.1)
+            lineWidth: metrics.sp * 0.1
+        )
     }
 }

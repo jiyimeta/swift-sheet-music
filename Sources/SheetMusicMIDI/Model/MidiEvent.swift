@@ -19,5 +19,5 @@ extension MidiEvent {
     /// 14-bit pitch-wheel value representing "no bend".
     public static let pitchBendCenter = 8192
     /// 14-bit pitch-wheel value range.
-    public static let pitchBendRange: ClosedRange<Int> = 0...16383
+    public static let pitchBendRange: ClosedRange<Int> = 0 ... 16383
 }

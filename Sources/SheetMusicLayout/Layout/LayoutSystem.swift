@@ -5,7 +5,7 @@ import SheetMusicCore
 /// vertically and one or more parts.
 @available(macOS 15.0, iOS 16.0, *)
 public struct LayoutSystem: Sendable, Equatable {
-    public let origin: CGPoint       // in document coordinates
+    public let origin: CGPoint // in document coordinates
     public let size: CGSize
     public let measures: [LayoutMeasure]
     /// Per-staff baselines (top-left in system coordinates).
@@ -48,8 +48,8 @@ public struct LayoutSystem: Sendable, Equatable {
         self.spanners = spanners
         self.sp = sp
         let columns = Self.buildEventColumns(measures: measures, sp: sp)
-        self.eventColumns = columns
-        self.maxBBoxHalfWidth = columns
+        eventColumns = columns
+        maxBBoxHalfWidth = columns
             .map { $0.bbox.width / 2 }
             .max() ?? 0
     }
@@ -73,7 +73,8 @@ public struct LayoutSystem: Sendable, Equatable {
                           let minY = ys.min(),
                           let maxY = ys.max(),
                           let topNote = notes.min(by: {
-                              $0.origin.y < $1.origin.y })
+                              $0.origin.y < $1.origin.y
+                          })
                     else { continue }
                     // Matches `ScoreHitTester.hitNote`'s hit radius.
                     let pad: CGFloat = sp * 1.2
@@ -81,13 +82,15 @@ public struct LayoutSystem: Sendable, Equatable {
                         x: minX - pad,
                         y: minY - pad,
                         width: (maxX - minX) + pad * 2,
-                        height: (maxY - minY) + pad * 2)
+                        height: (maxY - minY) + pad * 2
+                    )
                     result.append(EventColumn(
                         id: .note(topNote.noteID),
                         voiceIndex: voiceIndex,
                         centerX: (minX + maxX) / 2,
                         centerY: (minY + maxY) / 2,
-                        bbox: bbox))
+                        bbox: bbox
+                    ))
                 case let .rest(_, origin, voiceIndex, restID, _):
                     let cx = mx + origin.x
                     let cy = my + origin.y
@@ -96,13 +99,15 @@ public struct LayoutSystem: Sendable, Equatable {
                     let halfH: CGFloat = sp * 2.5
                     let bbox = CGRect(
                         x: cx - halfW, y: cy - halfH,
-                        width: halfW * 2, height: halfH * 2)
+                        width: halfW * 2, height: halfH * 2
+                    )
                     result.append(EventColumn(
                         id: .rest(restID),
                         voiceIndex: voiceIndex,
                         centerX: cx,
                         centerY: cy,
-                        bbox: bbox))
+                        bbox: bbox
+                    ))
                 default:
                     continue
                 }

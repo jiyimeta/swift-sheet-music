@@ -18,9 +18,9 @@ import Testing
         </voice>
         """
         let voice = try Voice.decode(
-            try XMLTreeParser.parse(Data(xml.utf8)))
+            XMLTreeParser.parse(Data(xml.utf8)))
         #expect(voice.elements.count == 2)
-        guard case .rehearsalMark(let rm) = voice.elements[0] else {
+        guard case let .rehearsalMark(rm) = voice.elements[0] else {
             Issue.record("element 0 is not a rehearsal mark")
             return
         }
@@ -42,8 +42,8 @@ import Testing
         </voice>
         """
         let voice = try Voice.decode(
-            try XMLTreeParser.parse(Data(xml.utf8)))
-        guard case .rehearsalMark(let rm) = voice.elements[0] else {
+            XMLTreeParser.parse(Data(xml.utf8)))
+        guard case let .rehearsalMark(rm) = voice.elements[0] else {
             Issue.record("element 0 is not a rehearsal mark")
             return
         }
@@ -65,7 +65,8 @@ import Testing
         let mark = RehearsalMark(text: "A")
         let chord = Chord(
             duration: .quarter,
-            notes: [Note(pitch: 60, tpc: 14)])
+            notes: [Note(pitch: 60, tpc: 14)]
+        )
         let measure = Measure(voices: [Voice(elements: [
             .rehearsalMark(mark),
             .chord(chord),
@@ -75,11 +76,12 @@ import Testing
             id: "voice",
             articulations: [InstrumentArticulation()]))
         let score = Score(
-            division: 480, parts: [part], staves: [staff])
+            division: 480, parts: [part], staves: [staff]
+        )
 
         let file = try MidiRenderer.render(score: score)
         let markerEvents = file.tracks[0].events.compactMap { evt -> (Int, String)? in
-            if case .meta(.marker(let text)) = evt.event {
+            if case let .meta(.marker(text)) = evt.event {
                 return (evt.tick, text)
             }
             return nil
@@ -95,9 +97,10 @@ import Testing
             MidiTrack(events: [
                 TimedMidiEvent(
                     tick: 0,
-                    event: .meta(.marker("AB"))),
+                    event: .meta(.marker("AB"))
+                ),
                 TimedMidiEvent(tick: 0, event: .endOfTrack),
-            ])
+            ]),
         ])
         let bytes = try MidiWriter.write(file)
         // 14-byte MThd + 8-byte MTrk header = 22 bytes preamble.
@@ -116,7 +119,8 @@ import Testing
         let mark = RehearsalMark(text: "")
         let chord = Chord(
             duration: .quarter,
-            notes: [Note(pitch: 60, tpc: 14)])
+            notes: [Note(pitch: 60, tpc: 14)]
+        )
         let measure = Measure(voices: [Voice(elements: [
             .rehearsalMark(mark),
             .chord(chord),
@@ -126,7 +130,8 @@ import Testing
             id: "voice",
             articulations: [InstrumentArticulation()]))
         let score = Score(
-            division: 480, parts: [part], staves: [staff])
+            division: 480, parts: [part], staves: [staff]
+        )
         let file = try MidiRenderer.render(score: score)
         for evt in file.tracks[0].events {
             if case .meta(.marker) = evt.event {
@@ -139,38 +144,38 @@ import Testing
 
     @Test func musicXMLImportsRehearsalDirection() throws {
         let xml = Data("""
-            <?xml version="1.0"?>
-            <score-partwise version="4.0">
-              <part-list>
-                <score-part id="P1"><part-name>X</part-name></score-part>
-              </part-list>
-              <part id="P1">
-                <measure number="1">
-                  <attributes>
-                    <divisions>1</divisions>
-                    <key><fifths>0</fifths></key>
-                    <time><beats>4</beats><beat-type>4</beat-type></time>
-                    <clef><sign>G</sign><line>2</line></clef>
-                  </attributes>
-                  <direction placement="above">
-                    <direction-type>
-                      <rehearsal enclosure="circle">A</rehearsal>
-                    </direction-type>
-                  </direction>
-                  <note>
-                    <pitch><step>C</step><octave>5</octave></pitch>
-                    <duration>4</duration>
-                    <voice>1</voice>
-                    <type>whole</type>
-                  </note>
-                </measure>
-              </part>
-            </score-partwise>
-            """.utf8)
+        <?xml version="1.0"?>
+        <score-partwise version="4.0">
+          <part-list>
+            <score-part id="P1"><part-name>X</part-name></score-part>
+          </part-list>
+          <part id="P1">
+            <measure number="1">
+              <attributes>
+                <divisions>1</divisions>
+                <key><fifths>0</fifths></key>
+                <time><beats>4</beats><beat-type>4</beat-type></time>
+                <clef><sign>G</sign><line>2</line></clef>
+              </attributes>
+              <direction placement="above">
+                <direction-type>
+                  <rehearsal enclosure="circle">A</rehearsal>
+                </direction-type>
+              </direction>
+              <note>
+                <pitch><step>C</step><octave>5</octave></pitch>
+                <duration>4</duration>
+                <voice>1</voice>
+                <type>whole</type>
+              </note>
+            </measure>
+          </part>
+        </score-partwise>
+        """.utf8)
         let score = try MusicXMLParser.parse(xml)
         let elements = score.staves[0].measures[0].voices[0].elements
         let marks = elements.compactMap { el -> RehearsalMark? in
-            if case .rehearsalMark(let rm) = el { return rm }
+            if case let .rehearsalMark(rm) = el { return rm }
             return nil
         }
         #expect(marks.count == 1)
@@ -180,38 +185,38 @@ import Testing
 
     @Test func musicXMLDefaultsEnclosureToRectangle() throws {
         let xml = Data("""
-            <?xml version="1.0"?>
-            <score-partwise version="4.0">
-              <part-list>
-                <score-part id="P1"><part-name>X</part-name></score-part>
-              </part-list>
-              <part id="P1">
-                <measure number="1">
-                  <attributes>
-                    <divisions>1</divisions>
-                    <key><fifths>0</fifths></key>
-                    <time><beats>4</beats><beat-type>4</beat-type></time>
-                    <clef><sign>G</sign><line>2</line></clef>
-                  </attributes>
-                  <direction>
-                    <direction-type>
-                      <rehearsal>B</rehearsal>
-                    </direction-type>
-                  </direction>
-                  <note>
-                    <pitch><step>C</step><octave>5</octave></pitch>
-                    <duration>4</duration>
-                    <voice>1</voice>
-                    <type>whole</type>
-                  </note>
-                </measure>
-              </part>
-            </score-partwise>
-            """.utf8)
+        <?xml version="1.0"?>
+        <score-partwise version="4.0">
+          <part-list>
+            <score-part id="P1"><part-name>X</part-name></score-part>
+          </part-list>
+          <part id="P1">
+            <measure number="1">
+              <attributes>
+                <divisions>1</divisions>
+                <key><fifths>0</fifths></key>
+                <time><beats>4</beats><beat-type>4</beat-type></time>
+                <clef><sign>G</sign><line>2</line></clef>
+              </attributes>
+              <direction>
+                <direction-type>
+                  <rehearsal>B</rehearsal>
+                </direction-type>
+              </direction>
+              <note>
+                <pitch><step>C</step><octave>5</octave></pitch>
+                <duration>4</duration>
+                <voice>1</voice>
+                <type>whole</type>
+              </note>
+            </measure>
+          </part>
+        </score-partwise>
+        """.utf8)
         let score = try MusicXMLParser.parse(xml)
         let marks = score.staves[0].measures[0].voices[0].elements
             .compactMap { el -> RehearsalMark? in
-                if case .rehearsalMark(let rm) = el { return rm }
+                if case let .rehearsalMark(rm) = el { return rm }
                 return nil
             }
         #expect(marks.first?.frame == .rectangle)

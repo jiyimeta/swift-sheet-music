@@ -52,6 +52,7 @@ public struct SetNotePitch: EditCommand {
             at: location,
             pitch: oldNote.pitch,
             tpc: oldNote.tpc,
-            accidental: oldNote.accidental)
+            accidental: oldNote.accidental
+        )
     }
 }

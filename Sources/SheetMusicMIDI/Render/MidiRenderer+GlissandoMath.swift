@@ -21,17 +21,28 @@ extension MidiRenderer {
         case .chromatic:
             return stride(from: startPitch, to: endPitch, by: direction).map { $0 - startPitch }
         case .whiteKeys:
-            return filteredOffsets(startPitch: startPitch, endPitch: endPitch,
-                                   direction: direction, pcs: Self.whiteKeyPCs)
+            return filteredOffsets(
+                startPitch: startPitch,
+                endPitch: endPitch,
+                direction: direction,
+                pcs: Self.whiteKeyPCs
+            )
         case .blackKeys:
-            return filteredOffsets(startPitch: startPitch, endPitch: endPitch,
-                                   direction: direction, pcs: Self.blackKeyPCs)
+            return filteredOffsets(
+                startPitch: startPitch,
+                endPitch: endPitch,
+                direction: direction,
+                pcs: Self.blackKeyPCs
+            )
         case .diatonic:
-            return filteredOffsets(startPitch: startPitch, endPitch: endPitch,
-                                   direction: direction,
-                                   pcs: majorScalePCs(forKeySignature: keySignature))
+            return filteredOffsets(
+                startPitch: startPitch,
+                endPitch: endPitch,
+                direction: direction,
+                pcs: majorScalePCs(forKeySignature: keySignature)
+            )
         case .portamento:
-            return []   // Portamento uses pitch-bend, not discrete pitches.
+            return [] // Portamento uses pitch-bend, not discrete pitches.
         }
     }
 
@@ -78,7 +89,7 @@ extension MidiRenderer {
         let eOut = Double(max(0, min(100, easeOut))) / 100.0
         var result: [Int] = []
         result.reserveCapacity(segments + 1)
-        for i in 0...segments {
+        for i in 0 ... segments {
             let y = Double(i) / n
             let x = (eIn < 1e-9 && eOut < 1e-9) ? y : xFromYBezier(y, easeIn: eIn, easeOut: eOut)
             result.append(Int((x * space).rounded()))
@@ -110,12 +121,12 @@ extension MidiRenderer {
         measureIndex: Int,
         voiceIndex: Int
     ) -> Int? {
-        for i in (afterElementIndex + 1)..<voiceElements.count {
+        for i in (afterElementIndex + 1) ..< voiceElements.count {
             if case let .chord(next) = voiceElements[i], let first = next.notes.first {
                 return first.pitch
             }
         }
-        for m in (measureIndex + 1)..<measures.count {
+        for m in (measureIndex + 1) ..< measures.count {
             guard voiceIndex < measures[m].voices.count else { continue }
             for element in measures[m].voices[voiceIndex].elements {
                 if case let .chord(next) = element, let first = next.notes.first {

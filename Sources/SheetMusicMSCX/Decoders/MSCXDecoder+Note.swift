@@ -29,7 +29,8 @@ extension Note {
                 // The Glissando block is only present on the start note
                 // (the one with <next>). End notes carry only <prev>.
                 if let glissNode = spanner.first("Glissando"),
-                   spanner.children.contains(where: { $0.name == "next" }) {
+                   spanner.children.contains(where: { $0.name == "next" })
+                {
                     glissando = decodeGlissando(glissNode)
                 }
             default:
@@ -81,12 +82,12 @@ extension Note {
         // MuseScore serialises these as ALL-CAPS tokens. Be tolerant of the
         // lower-case forms that appear in older files (e.g. "chromatic").
         switch text.uppercased() {
-        case "CHROMATIC":   return .chromatic
-        case "DIATONIC":    return .diatonic
-        case "WHITE_KEYS":  return .whiteKeys
-        case "BLACK_KEYS":  return .blackKeys
-        case "PORTAMENTO":  return .portamento
-        default:            return nil
+        case "CHROMATIC": return .chromatic
+        case "DIATONIC": return .diatonic
+        case "WHITE_KEYS": return .whiteKeys
+        case "BLACK_KEYS": return .blackKeys
+        case "PORTAMENTO": return .portamento
+        default: return nil
         }
     }
 }

@@ -15,7 +15,7 @@ extension Measure {
         } else {
             // Older / simpler mscx form: musical elements are direct children of
             // <Measure> (no <voice> wrapper). Treat them as a single implicit voice.
-            voices = [try Voice.decode(node)]
+            voices = try [Voice.decode(node)]
         }
         let markers = node.all("Marker").map(decodeMarker)
         let jumps = node.all("Jump").map(decodeJump)

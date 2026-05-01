@@ -3,9 +3,9 @@ import SheetMusicCore
 import SheetMusicLayout
 
 #if os(macOS)
-import AppKit
+    import AppKit
 #else
-import UIKit
+    import UIKit
 #endif
 
 @available(macOS 15.0, iOS 16.0, *)
@@ -21,7 +21,7 @@ extension ScoreLayerBuilder {
         for origin in system.staffOrigins {
             let path = CGMutablePath()
             let width = system.size.width - origin.x
-            for i in 0..<5 {
+            for i in 0 ..< 5 {
                 let y = origin.y + CGFloat(i) * metrics.sp
                 path.move(to: CGPoint(x: origin.x, y: y))
                 path.addLine(
@@ -30,7 +30,8 @@ extension ScoreLayerBuilder {
             parent.addSublayer(strokeLayer(
                 path: path,
                 height: height,
-                lineWidth: metrics.staffLineThickness))
+                lineWidth: metrics.staffLineThickness
+            ))
         }
     }
 
@@ -54,17 +55,20 @@ extension ScoreLayerBuilder {
         parent.addSublayer(strokeLayer(
             path: spine,
             height: height,
-            lineWidth: metrics.sp * 0.3))
+            lineWidth: metrics.sp * 0.3
+        ))
 
         for point in [topPt, botPt] {
             let serif = CGMutablePath()
             serif.move(to: point)
             serif.addLine(to: CGPoint(
-                x: point.x + metrics.sp * 0.8, y: point.y))
+                x: point.x + metrics.sp * 0.8, y: point.y
+            ))
             parent.addSublayer(strokeLayer(
                 path: serif,
                 height: height,
-                lineWidth: metrics.sp * 0.25))
+                lineWidth: metrics.sp * 0.25
+            ))
         }
     }
 
@@ -78,14 +82,16 @@ extension ScoreLayerBuilder {
             guard !label.text.isEmpty else { continue }
             let origin = CGPoint(
                 x: (system.staffOrigins.first?.x ?? 60) - metrics.sp,
-                y: label.origin.y)
+                y: label.origin.y
+            )
             if let layer = textLayer(
                 text: label.text,
                 at: origin,
                 size: metrics.sp * 2.5,
                 italic: false,
                 anchor: CGPoint(x: 1, y: 0.5),
-                height: height) {
+                height: height
+            ) {
                 parent.addSublayer(layer)
             }
         }

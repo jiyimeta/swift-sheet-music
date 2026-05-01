@@ -5,7 +5,8 @@ import Testing
 struct InputNoteTests {
     private static let restAt1 = RestID(
         staffIndex: 0, measureIndex: 0,
-        voiceIndex: 0, elementIndex: 1)
+        voiceIndex: 0, elementIndex: 1
+    )
 
     @Test("apply replaces the rest with a single-note chord at the same duration")
     func applyReplacesRest() throws {

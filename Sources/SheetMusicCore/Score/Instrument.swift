@@ -6,10 +6,10 @@ public struct Instrument: Sendable, Equatable {
     public var longName: String?
     public var shortName: String?
     public var trackName: String?
-    public var minPitchPlayable: Int?   // C++: minPitchP
-    public var maxPitchPlayable: Int?   // C++: maxPitchP
-    public var minPitchAmateur: Int?    // C++: minPitchA
-    public var maxPitchAmateur: Int?    // C++: maxPitchA
+    public var minPitchPlayable: Int? // C++: minPitchP
+    public var maxPitchPlayable: Int? // C++: maxPitchP
+    public var minPitchAmateur: Int? // C++: minPitchA
+    public var maxPitchAmateur: Int? // C++: maxPitchA
     public var articulations: [InstrumentArticulation]
     /// All `<Channel>` blocks defined for this instrument: usually one ("normal")
     /// for simple instruments, multiple for instruments with playback flavours

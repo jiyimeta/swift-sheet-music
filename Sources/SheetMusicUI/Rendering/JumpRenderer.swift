@@ -1,5 +1,5 @@
-import SwiftUI
 import SheetMusicLayout
+import SwiftUI
 
 @available(macOS 15.0, iOS 16.0, *)
 enum JumpRenderer {
@@ -12,6 +12,7 @@ enum JumpRenderer {
         guard !text.isEmpty else { return }
         context.drawExpressionText(
             text, at: origin,
-            size: metrics.sp * 2.5, italic: true)
+            size: metrics.sp * 2.5, italic: true
+        )
     }
 }

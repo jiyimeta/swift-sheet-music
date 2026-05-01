@@ -69,7 +69,7 @@ extension LayoutEngine {
         var measureTimeSig: TimeSignature?
         for voice in measure.voices {
             for el in voice.elements {
-                if case .timeSignature(let ts) = el {
+                if case let .timeSignature(ts) = el {
                     measureTimeSig = ts
                     break
                 }
@@ -86,7 +86,8 @@ extension LayoutEngine {
         // the staff is readable.
         let synthesizeLeadingClef: Bool
         if let rawType = initialClefRawType,
-           !firstVoiceStartsWithClef(measure: measure) {
+           !firstVoiceStartsWithClef(measure: measure)
+        {
             synthesizeLeadingClef = true
             currentClef = NotatedClef(rawType: rawType)
         } else {
@@ -103,7 +104,8 @@ extension LayoutEngine {
         let synthesizeLeadingKeySig: Bool
         if let keyForSynth = initialKeyForSynth,
            keyForSynth != 0,
-           !firstVoiceHasLeadingKeySig(measure: measure) {
+           !firstVoiceHasLeadingKeySig(measure: measure)
+        {
             synthesizeLeadingKeySig = true
         } else {
             synthesizeLeadingKeySig = false
@@ -126,7 +128,7 @@ extension LayoutEngine {
         //       onto a melody note.
         let voicesWithChords = measure.voices.filter { v in
             v.elements.contains {
-                if case .chord(let c) = $0, !c.notes.isEmpty {
+                if case let .chord(c) = $0, !c.notes.isEmpty {
                     return true
                 }
                 return false
@@ -172,7 +174,7 @@ extension LayoutEngine {
             // "crosses into next measure" without rescanning.
             let voiceTotalTicks: Int = voice.elements.reduce(0) { acc, el in
                 switch el {
-                case .chord(let c):
+                case let .chord(c):
                     return acc + c.duration.ticks(division: division)
                 default:
                     return acc
@@ -188,8 +190,8 @@ extension LayoutEngine {
             // them out of the way of voice 0's melody.
             let restVoiceOffset: CGFloat = hasMultiContentVoices
                 ? (voiceIdx.isMultiple(of: 2)
-                   ? -metrics.sp * 2
-                   :  metrics.sp * 2)
+                    ? -metrics.sp * 2
+                    : metrics.sp * 2)
                 : 0
 
             // Final lyric centre Y for this voice — the max over
@@ -202,7 +204,7 @@ extension LayoutEngine {
             let voiceMaxLyricCenterY: CGFloat = {
                 var maxY = staffMidY + metrics.sp * 4
                 for el in voice.elements {
-                    guard case .chord(let chord) = el else { continue }
+                    guard case let .chord(chord) = el else { continue }
                     let steps: [Int] = chord.notes.map { note in
                         if let drumLine = drumLineMap?[note.pitch] {
                             return 4 - drumLine
@@ -229,7 +231,8 @@ extension LayoutEngine {
                         if hasTie {
                             south = max(
                                 south,
-                                noteheadBottom + metrics.sp * 0.8)
+                                noteheadBottom + metrics.sp * 0.8
+                            )
                         }
                     }
                     let southAvoidY = south
@@ -245,7 +248,9 @@ extension LayoutEngine {
                 out.append(.clef(
                     rawType: rawType,
                     origin: CGPoint(
-                        x: headerSchedule.clefX, y: staffMidY)))
+                        x: headerSchedule.clefX, y: staffMidY
+                    )
+                ))
                 remainingSynthClef = false
             }
             // Emit the synthesized leading key signature once, after
@@ -255,7 +260,9 @@ extension LayoutEngine {
                     sharps: max(0, k),
                     flats: max(0, -k),
                     origin: CGPoint(
-                        x: headerSchedule.keySigX, y: staffMidY)))
+                        x: headerSchedule.keySigX, y: staffMidY
+                    )
+                ))
                 remainingSynthKeySig = false
             }
 
@@ -271,32 +278,36 @@ extension LayoutEngine {
 
             for (voiceElemIdx, el) in voice.elements.enumerated() {
                 switch el {
-                case .clef(let clef):
+                case let .clef(clef):
                     currentClef = NotatedClef(rawType: clef.concertClefType)
                     let clefX = inHeader ? headerSchedule.clefX
                         : timedX(atTick: tickCursor)
                     out.append(.clef(
                         rawType: clef.concertClefType,
-                        origin: CGPoint(x: clefX, y: staffMidY)))
-                case .keySignature(let key):
+                        origin: CGPoint(x: clefX, y: staffMidY)
+                    ))
+                case let .keySignature(key):
                     currentKey = key.concertKey
                     let keyX = inHeader ? headerSchedule.keySigX : timedX(atTick: tickCursor)
                     out.append(.keySignature(
                         sharps: max(0, key.concertKey),
                         flats: max(0, -key.concertKey),
-                        origin: CGPoint(x: keyX, y: staffMidY)))
-                case .timeSignature(let ts):
+                        origin: CGPoint(x: keyX, y: staffMidY)
+                    ))
+                case let .timeSignature(ts):
                     let tsX = inHeader ? headerSchedule.timeSigX : timedX(atTick: tickCursor)
                     out.append(.timeSignature(
                         numerator: ts.numerator,
                         denominator: ts.denominator,
-                        origin: CGPoint(x: tsX, y: staffMidY)))
-                case .barLine(let b):
+                        origin: CGPoint(x: tsX, y: staffMidY)
+                    ))
+                case let .barLine(b):
                     let barX = inHeader ? metrics.sp : timedX(atTick: tickCursor)
                     out.append(.barLine(
                         subtype: b.subtype,
-                        origin: CGPoint(x: barX, y: staffMidY)))
-                case .chord(let r) where r.notes.isEmpty:
+                        origin: CGPoint(x: barX, y: staffMidY)
+                    ))
+                case let .chord(r) where r.notes.isEmpty:
                     inHeader = false
                     let (restBase, _) = DurationInterpretation.split(
                         r.duration)
@@ -335,7 +346,7 @@ extension LayoutEngine {
                         // whenever those constants are tuned.
                         let trailingPad = metrics.sp * 1
                         restX = (headerSchedule.contentStartX
-                                 + width - trailingPad) / 2
+                            + width - trailingPad) / 2
                     } else {
                         restX = timedX(atTick: tickCursor)
                     }
@@ -343,7 +354,8 @@ extension LayoutEngine {
                         staffIndex: staffIndex,
                         measureIndex: measureIndex,
                         voiceIndex: voiceIdx,
-                        elementIndex: voiceElemIdx)
+                        elementIndex: voiceElemIdx
+                    )
                     // Staff lines span y = sp*2 (top) to y = sp*6
                     // (bottom). When a whole / half rest lands
                     // outside that range — e.g. voice-2 whole
@@ -354,7 +366,7 @@ extension LayoutEngine {
                     let staffBottomLocal = metrics.sp * 2
                         + metrics.staffHeight
                     let needsLeger = (restBase == .whole
-                            || restBase == .half)
+                        || restBase == .half)
                         && (restY < staffTopLocal
                             || restY > staffBottomLocal)
                     voiceRestOutIndex[voiceElemIdx] = out.count
@@ -363,9 +375,10 @@ extension LayoutEngine {
                         origin: CGPoint(x: restX, y: restY),
                         voiceIndex: voiceIdx,
                         restID: restID,
-                        hasLegerLine: needsLeger))
+                        hasLegerLine: needsLeger
+                    ))
                     tickCursor += r.duration.ticks(division: division)
-                case .chord(let chord):
+                case let .chord(chord):
                     inHeader = false
                     // Every element at a shared tick lives at the same
                     // x. Flag glyphs extend ~1 sp to the right of the
@@ -375,7 +388,7 @@ extension LayoutEngine {
                     // voices) that share the same tick.
                     let chordX = timedX(atTick: tickCursor)
                     let preliminaryNotes = chord.notes.enumerated().map {
-                        (noteIdx, note) -> LayoutChordNote in
+                        noteIdx, note -> LayoutChordNote in
                         // For percussion staves, use the drum map's
                         // <line> value to position the notehead
                         // instead of the pitched diatonic formula.
@@ -414,7 +427,8 @@ extension LayoutEngine {
                         ?? StemDirectionRule.direction(
                             for: preliminaryNotes.map(\.step))
                     let chordNotes = applyChordMirroring(
-                        preliminaryNotes, stem: stem)
+                        preliminaryNotes, stem: stem
+                    )
                     voiceChordOutIndex[voiceElemIdx] = out.count
                     out.append(.chord(
                         notes: chordNotes,
@@ -424,7 +438,8 @@ extension LayoutEngine {
                         hasArpeggio: chord.arpeggio != nil,
                         arpeggioRawType: chord.arpeggio.flatMap(arpeggioSubtype),
                         isBeamed: false,
-                        voiceIndex: voiceIdx))
+                        voiceIndex: voiceIdx
+                    ))
                     if let arp = chord.arpeggio {
                         let ys = chordNotes.map(\.origin.y)
                         let top = ys.min() ?? staffMidY
@@ -460,15 +475,19 @@ extension LayoutEngine {
                         out.append(.textMark(
                             kind: .lyrics,
                             text: lyric.text,
-                            origin: CGPoint(x: chordX, y: lyricsY)))
+                            origin: CGPoint(x: chordX, y: lyricsY)
+                        ))
                         let textWidth = Self.lyricsTextWidth(
-                            lyric.text, sp: metrics.sp)
+                            lyric.text, sp: metrics.sp
+                        )
                         // Hyphens between this syllable and the
                         // previous one in the same verse.
                         if let prev = previousLyric[verseIdx],
                            connectsWithHyphen(
-                            prev: prev.syllabic,
-                            curr: lyric.syllabic) {
+                               prev: prev.syllabic,
+                               curr: lyric.syllabic
+                           )
+                        {
                             let prevRight = prev.centerX
                                 + prev.textWidth / 2
                                 + metrics.sp * 0.3
@@ -479,13 +498,15 @@ extension LayoutEngine {
                                 toX: currLeft,
                                 y: lyricsY,
                                 metrics: metrics,
-                                out: &out)
+                                out: &out
+                            )
                         }
                         previousLyric[verseIdx] = LyricTrail(
                             centerX: chordX,
                             textWidth: textWidth,
                             lyricsY: lyricsY,
-                            syllabic: lyric.syllabic)
+                            syllabic: lyric.syllabic
+                        )
                         // `<ticks>N</ticks>` in MuseScore marks a
                         // melisma whose visual rule reaches the
                         // chord that starts at `anchor.tick + N`.
@@ -521,15 +542,16 @@ extension LayoutEngine {
                                 chordTicks: chordTicks,
                                 tickColumns: tickColumns,
                                 headerContentStartX:
-                                    headerSchedule.contentStartX,
+                                headerSchedule.contentStartX,
                                 measureWidth: width,
                                 continuesPastMeasure: continuesPastMeasure,
                                 metrics: metrics,
-                                out: &out)
+                                out: &out
+                            )
                         }
                     }
                     tickCursor += chordTicks
-                case .dynamic(let d):
+                case let .dynamic(d):
                     // Dynamics sit below-left of the note they apply to
                     // (i.e. the next timed element at the current tick).
                     // Shift 1 sp left so the label doesn't overlap the
@@ -542,8 +564,10 @@ extension LayoutEngine {
                         text: d.subtype,
                         origin: CGPoint(
                             x: baseX - metrics.sp,
-                            y: staffMidY + metrics.sp * 4)))
-                case .staffText(let st):
+                            y: staffMidY + metrics.sp * 4
+                        )
+                    ))
+                case let .staffText(st):
                     // Place at the current tick column (or header
                     // start if we haven't reached any timed element
                     // yet). Default Y is `sp * 3` above the top
@@ -560,10 +584,12 @@ extension LayoutEngine {
                         origin: CGPoint(
                             x: stX + CGFloat(st.offsetX) * metrics.sp,
                             y: staffMidY - metrics.sp * 3
-                                + CGFloat(st.offsetY) * metrics.sp),
+                                + CGFloat(st.offsetY) * metrics.sp
+                        ),
                         color: st.color,
-                        isSystemText: st.isSystemText))
-                case .tempo(let t):
+                        isSystemText: st.isSystemText
+                    ))
+                case let .tempo(t):
                     let bpm = Int((t.beatsPerSecond * 60.0).rounded())
                     // "♩" is Unicode U+2669, rendered in the system text font,
                     // not a SMuFL/Bravura glyph — do not migrate to a SMuFL
@@ -576,8 +602,10 @@ extension LayoutEngine {
                         text: "♩ = \(bpm)",
                         origin: CGPoint(
                             x: tempoX,
-                            y: staffMidY - metrics.sp * 4)))
-                case .fermata(let f):
+                            y: staffMidY - metrics.sp * 4
+                        )
+                    ))
+                case let .fermata(f):
                     // Fermata attaches to the preceding chord/rest; emit at
                     // the last placed timed x (or header cursor if still in
                     // header, though that's unusual).
@@ -589,15 +617,18 @@ extension LayoutEngine {
                         subtype: f.subtype,
                         origin: CGPoint(
                             x: lastChordX,
-                            y: staffMidY - metrics.sp * 3)))
+                            y: staffMidY - metrics.sp * 3
+                        )
+                    ))
                 case .measureRepeat:
                     out.append(.measureRepeat(
                         count: 1,
-                        origin: CGPoint(x: width / 2, y: staffMidY)))
+                        origin: CGPoint(x: width / 2, y: staffMidY)
+                    ))
                 case .spanner:
                     // Resolved at system level in the spanner-attach pass.
                     break
-                case .rehearsalMark(let rm):
+                case let .rehearsalMark(rm):
                     // System-flagged: drawn once above the top staff at
                     // measure-left. Only emit on staff 0 / voice 0 to
                     // avoid duplicates from linked-main mirrors and from
@@ -618,9 +649,11 @@ extension LayoutEngine {
                                 x: originX
                                     + CGFloat(rm.offsetX) * metrics.sp,
                                 y: staffMidY - metrics.sp * 3.5
-                                    + CGFloat(rm.offsetY) * metrics.sp),
+                                    + CGFloat(rm.offsetY) * metrics.sp
+                            ),
                             frame: rm.frame,
-                            color: rm.color))
+                            color: rm.color
+                        ))
                     }
                 }
             }
@@ -632,11 +665,11 @@ extension LayoutEngine {
             let chordVoiceIndices = voiceChordOutIndex.keys.sorted()
             for (pairIdx, voiceIdx) in chordVoiceIndices.enumerated() {
                 guard voiceIdx < voice.elements.count,
-                      case .chord(let chord) = voice.elements[voiceIdx]
+                      case let .chord(chord) = voice.elements[voiceIdx]
                 else { continue }
                 guard let glissNoteIdx = chord.notes
                     .firstIndex(where: { $0.glissando != nil }),
-                      let gliss = chord.notes[glissNoteIdx].glissando
+                    let gliss = chord.notes[glissNoteIdx].glissando
                 else { continue }
                 let nextPairIdx = pairIdx + 1
                 guard nextPairIdx < chordVoiceIndices.count else { continue }
@@ -644,10 +677,10 @@ extension LayoutEngine {
                 guard let fromOutIdx = voiceChordOutIndex[voiceIdx],
                       let toOutIdx = voiceChordOutIndex[nextVoiceIdx]
                 else { continue }
-                guard case .chord(let fromNotes, _, _, _, _, _, _, _) =
-                        out[fromOutIdx],
-                      case .chord(let toNotes, _, _, _, _, _, _, _) =
-                        out[toOutIdx]
+                guard case let .chord(fromNotes, _, _, _, _, _, _, _) =
+                    out[fromOutIdx],
+                    case let .chord(toNotes, _, _, _, _, _, _, _) =
+                    out[toOutIdx]
                 else { continue }
                 let fromNote = glissNoteIdx < fromNotes.count
                     ? fromNotes[glissNoteIdx]
@@ -660,10 +693,12 @@ extension LayoutEngine {
                 out.append(.glissandoLine(
                     fromOrigin: CGPoint(
                         x: fromNote.origin.x + metrics.sp * 0.8,
-                        y: fromNote.origin.y),
+                        y: fromNote.origin.y
+                    ),
                     toOrigin: CGPoint(
                         x: toNote.origin.x - metrics.sp * 0.8,
-                        y: toNote.origin.y),
+                        y: toNote.origin.y
+                    ),
                     wavy: gliss.visualType == .wavy,
                     text: gliss.text
                 ))
@@ -673,14 +708,15 @@ extension LayoutEngine {
             let groups = beamGroups(
                 voice: voice,
                 timeSignature: measureTimeSig,
-                division: division)
+                division: division
+            )
             for group in groups {
                 // --- Phase 1: collect all note steps for direction ---
                 var groupSteps: [Int] = []
                 for memberIdx in group.memberIndices {
                     guard let outIdx = voiceChordOutIndex[memberIdx],
-                          case .chord(let n, _, _, _, _, _, _, _)
-                            = out[outIdx]
+                          case let .chord(n, _, _, _, _, _, _, _)
+                          = out[outIdx]
                     else { continue }
                     groupSteps.append(contentsOf: n.map(\.step))
                 }
@@ -697,8 +733,8 @@ extension LayoutEngine {
                 var memberLevels: [Int] = []
                 for memberIdx in group.memberIndices {
                     guard let outIdx = voiceChordOutIndex[memberIdx],
-                          case .chord(let n, _, _, let so, _, _, _, _)
-                            = out[outIdx]
+                          case let .chord(n, _, _, so, _, _, _, _)
+                          = out[outIdx]
                     else {
                         memberLevels.append(0)
                         continue
@@ -715,7 +751,7 @@ extension LayoutEngine {
                     }
                     anchorSteps.append(anchorStep)
                     anchorYs.append(anchorY)
-                    if case .chord(let c) = voice.elements[memberIdx] {
+                    if case let .chord(c) = voice.elements[memberIdx] {
                         memberLevels.append(beamLevel(c.duration))
                     } else {
                         memberLevels.append(0)
@@ -729,7 +765,8 @@ extension LayoutEngine {
                     anchorYs: anchorYs,
                     stemXs: memberStemXs,
                     direction: groupDirection,
-                    metrics: metrics)
+                    metrics: metrics
+                )
                 let beamStartX = memberStemXs.first!
                 let beamEndX = memberStemXs.last!
                 let beamSpan = beamEndX - beamStartX
@@ -743,27 +780,37 @@ extension LayoutEngine {
                 // --- Phase 4: rewrite each chord with its own beam y ---
                 for (i, memberIdx) in group.memberIndices.enumerated() {
                     guard let outIdx = voiceChordOutIndex[memberIdx],
-                          case .chord(let n, let d, _, let so,
-                                      let arp, let art, _, let vi) = out[outIdx]
+                          case let .chord(
+                              n,
+                              d,
+                              _,
+                              so,
+                              arp,
+                              art,
+                              _,
+                              vi
+                          ) = out[outIdx]
                     else { continue }
                     out[outIdx] = .chord(
                         notes: n,
                         duration: d,
                         stem: groupDirection,
                         stemOrigin: CGPoint(
-                            x: so.x, y: memberStemYs[i]),
+                            x: so.x, y: memberStemYs[i]
+                        ),
                         hasArpeggio: arp,
                         arpeggioRawType: art,
                         isBeamed: true,
-                        voiceIndex: vi)
+                        voiceIndex: vi
+                    )
                 }
 
                 // --- Phase 5: emit per-level beam runs ---
                 let maxLvl = memberLevels.max() ?? 0
                 guard maxLvl >= 1 else { continue }
-                for lvl in 1...maxLvl {
+                for lvl in 1 ... maxLvl {
                     var runStart: Int?
-                    for i in 0..<memberLevels.count {
+                    for i in 0 ..< memberLevels.count {
                         let hasThisLevel = memberLevels[i] >= lvl
                         if hasThisLevel && runStart == nil {
                             runStart = i
@@ -777,7 +824,8 @@ extension LayoutEngine {
                                 beamYAt: beamYAt,
                                 direction: groupDirection,
                                 metrics: metrics,
-                                out: &out)
+                                out: &out
+                            )
                             runStart = nil
                         }
                     }
@@ -792,7 +840,8 @@ extension LayoutEngine {
                             beamYAt: beamYAt,
                             direction: groupDirection,
                             metrics: metrics,
-                            out: &out)
+                            out: &out
+                        )
                     }
                 }
             }
@@ -818,14 +867,17 @@ extension LayoutEngine {
                     beamGroups: beamGroups(
                         voice: voice,
                         timeSignature: measureTimeSig,
-                        division: division),
+                        division: division
+                    ),
                     staffMidY: staffMidY,
                     metrics: metrics,
                     tupletID: TupletID(
                         staffIndex: staffIndex,
                         measureIndex: measureIndex,
                         voiceIndex: voiceIdx,
-                        startElementIndex: tuplet.startIndex))
+                        startElementIndex: tuplet.startIndex
+                    )
+                )
             }
         }
 
@@ -840,7 +892,9 @@ extension LayoutEngine {
                 subtype: isLastMeasure ? "end" : nil,
                 origin: CGPoint(
                     x: width - metrics.sp / 2,
-                    y: staffMidY)))
+                    y: staffMidY
+                )
+            ))
         }
         for continuation in incomingMelismas {
             emitMelismaContinuation(
@@ -850,7 +904,8 @@ extension LayoutEngine {
                 headerContentStartX: headerSchedule.contentStartX,
                 measureWidth: width,
                 metrics: metrics,
-                out: &out)
+                out: &out
+            )
         }
         // Auto-place staff text: shift it above any chord stem /
         // beam in this measure. MuseScore does this in its skyline-
@@ -860,7 +915,8 @@ extension LayoutEngine {
         // visual outcome — text never overlaps a stem or beam —
         // matches.
         autoPlaceStaffText(
-            in: &out, staffMidY: staffMidY, metrics: metrics)
+            in: &out, staffMidY: staffMidY, metrics: metrics
+        )
         return (out, currentClef, currentKey)
     }
 
@@ -878,9 +934,9 @@ extension LayoutEngine {
     ) -> [LayoutChordNote] {
         guard notes.count >= 2 else { return notes }
         let isUp = stem == .up
-        let order: [Int] = (0..<notes.count).sorted { i, j in
+        let order: [Int] = (0 ..< notes.count).sorted { i, j in
             isUp ? notes[i].step < notes[j].step
-                 : notes[i].step > notes[j].step
+                : notes[i].step > notes[j].step
         }
         var mirrors = [Bool](repeating: false, count: notes.count)
         // `isLeft` tracks which side of the stem the current note
@@ -910,7 +966,8 @@ extension LayoutEngine {
                 tieBack: n.tieBack,
                 hasGlissando: n.hasGlissando,
                 headType: n.headType,
-                mirror: mirrors[i])
+                mirror: mirrors[i]
+            )
         }
     }
 }

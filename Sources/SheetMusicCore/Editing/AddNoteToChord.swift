@@ -42,8 +42,9 @@ public struct AddNoteToChord: EditCommand {
 
     @discardableResult
     public func apply(to score: inout Score) throws -> any EditCommand {
-        guard case .chord(var chord) = score[location],
-              !chord.notes.isEmpty else {
+        guard case var .chord(chord) = score[location],
+              !chord.notes.isEmpty
+        else {
             throw SheetMusicError.invalidEdit(
                 reason: "AddNoteToChord: element at \(location) "
                     + "is not a chord (need at least one existing "
@@ -52,7 +53,8 @@ public struct AddNoteToChord: EditCommand {
         }
         let original = chord
         let added = chord.notes.tryAppend(Note(
-            pitch: pitch, tpc: tpc, accidental: accidental))
+            pitch: pitch, tpc: tpc, accidental: accidental
+        ))
         guard added else {
             throw SheetMusicError.invalidEdit(
                 reason: "AddNoteToChord: chord already contains a "
@@ -60,6 +62,7 @@ public struct AddNoteToChord: EditCommand {
         }
         score[location] = .chord(chord)
         return ReplaceVoiceElement(
-            at: location, with: .chord(original))
+            at: location, with: .chord(original)
+        )
     }
 }

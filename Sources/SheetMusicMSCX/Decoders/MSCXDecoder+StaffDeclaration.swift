@@ -11,6 +11,7 @@ extension StaffDeclaration {
         return StaffDeclaration(
             staffType: staffType,
             group: group,
-            defaultClefType: defaultClef)
+            defaultClefType: defaultClef
+        )
     }
 }

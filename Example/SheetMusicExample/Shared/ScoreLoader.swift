@@ -15,7 +15,8 @@ enum ScoreLoader {
     /// error instead of silently leaving the UI empty.
     static func loadBundled() throws -> Score {
         guard let url = Bundle.main.url(
-            forResource: "test", withExtension: "mscx")
+            forResource: "test", withExtension: "mscx"
+        )
         else {
             throw LoadError.bundledMissing
         }
@@ -57,7 +58,7 @@ enum ScoreLoader {
             switch self {
             case .bundledMissing:
                 return "Bundled test.mscx not found."
-            case .unsupported(let name):
+            case let .unsupported(name):
                 return "Unsupported file: \(name)"
             }
         }
@@ -76,7 +77,7 @@ extension PlaybackEngine {
     /// guarantees we yield back to SwiftUI before doing it.
     func prepareInBackground(score: Score) {
         Task { [self] in
-            try? self.prepare(score: score)
+            try? prepare(score: score)
         }
     }
 }

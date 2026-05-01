@@ -53,7 +53,7 @@ final class MetronomeController {
     /// is non-fatal — we leave the sampler attached so the audio
     /// graph stays intact and just click silently.
     func prepare(soundfontURL: URL?) {
-        let sampler = self.sampler ?? {
+        let sampler = sampler ?? {
             let s = AVAudioUnitSampler()
             engine.attach(s)
             engine.connect(s, to: engine.mainMixerNode, format: nil)
@@ -71,7 +71,8 @@ final class MetronomeController {
                 at: url,
                 program: 0,
                 bankMSB: UInt8(kAUSampler_DefaultPercussionBankMSB),
-                bankLSB: 0)
+                bankLSB: 0
+            )
             loadedSoundfontURL = url
         } catch {
             loadedSoundfontURL = nil
@@ -95,15 +96,20 @@ final class MetronomeController {
             events.append(TimedMidiEvent(
                 tick: beat.tick,
                 event: .noteOn(
-                    channel: 9, pitch: pitch, velocity: velocity)))
+                    channel: 9, pitch: pitch, velocity: velocity
+                )
+            ))
             events.append(TimedMidiEvent(
                 tick: beat.tick + halfBeat,
                 event: .noteOff(
-                    channel: 9, pitch: pitch, velocity: 0)))
+                    channel: 9, pitch: pitch, velocity: 0
+                )
+            ))
         }
         let lastTick = events.map(\.tick).max() ?? 0
         events.append(TimedMidiEvent(
-            tick: lastTick + 1, event: .endOfTrack))
+            tick: lastTick + 1, event: .endOfTrack
+        ))
         return MidiTrack(events: events)
     }
 

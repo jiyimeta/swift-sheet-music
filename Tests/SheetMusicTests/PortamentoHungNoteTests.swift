@@ -24,7 +24,7 @@ import Testing
             Chord(duration: .quarter, notes: [Note(pitch: 67, tpc: 15)]),
             Chord(duration: .half, notes: [Note(pitch: 70, tpc: 16)]),
             Chord(duration: .quarter, notes: [Note(pitch: 72, tpc: 14)]),
-            Chord(duration: .whole, notes: [Note(pitch: 60, tpc: 14)])
+            Chord(duration: .whole, notes: [Note(pitch: 60, tpc: 14)]),
         ]
         let file = try MidiRenderer.render(score: Self.makeScore(chords: chords))
         let track = try #require(file.tracks.first)
@@ -77,7 +77,7 @@ import Testing
             Chord(duration: .half, notes: [Note(pitch: 71, tpc: 19)]),
             // Continued music — these must not inherit a hung pitch 68.
             Chord(duration: .quarter, notes: [Note(pitch: 69, tpc: 17)]),
-            Chord(duration: .quarter, notes: [Note(pitch: 64, tpc: 18)])
+            Chord(duration: .quarter, notes: [Note(pitch: 64, tpc: 18)]),
         ]
         let file = try MidiRenderer.render(score: Self.makeScore(chords: chords))
         let track = try #require(file.tracks.first)
@@ -92,8 +92,10 @@ import Testing
             return false
         }
         // Pitch 68 must have exactly as many offs as ons (no hung note).
-        #expect(pitch68Ons.count == pitch68Offs.count,
-                "pitch 68 ons=\(pitch68Ons.count) offs=\(pitch68Offs.count) — hung note")
+        #expect(
+            pitch68Ons.count == pitch68Offs.count,
+            "pitch 68 ons=\(pitch68Ons.count) offs=\(pitch68Offs.count) — hung note"
+        )
         // Pitch 68's last off must land at or before the portamento source's
         // chord ends (predecessor.tick=0 + .quarter*2 + .eighth = 1200 ticks).
         let last68Off = pitch68Offs.last
@@ -123,7 +125,7 @@ import Testing
                 )]
             ),
             Chord(duration: .half, notes: [Note(pitch: 68, tpc: 22)]),
-            Chord(duration: .quarter, notes: [Note(pitch: 64, tpc: 18)])
+            Chord(duration: .quarter, notes: [Note(pitch: 64, tpc: 18)]),
         ]
         let file = try MidiRenderer.render(score: Self.makeScore(chords: chords))
         let track = try #require(file.tracks.first)
@@ -132,8 +134,10 @@ import Testing
             return nil
         }
         // The very last pitch-bend in the entire track must be a centre reset.
-        #expect(bends.last?.value == MidiEvent.pitchBendCenter,
-                "last bend was \(bends.last?.value ?? -1), should be centre")
+        #expect(
+            bends.last?.value == MidiEvent.pitchBendCenter,
+            "last bend was \(bends.last?.value ?? -1), should be centre"
+        )
         // The peak (highest absolute deviation) must occur at a strictly
         // earlier tick than the reset that follows it.
         let resets = bends.filter { $0.value == MidiEvent.pitchBendCenter }
@@ -142,8 +146,10 @@ import Testing
         let firstResetAfterPeak = resets.first { $0.tick > (peak?.tick ?? -1) }
         let peakTick = try #require(peak?.tick)
         let resetTick = try #require(firstResetAfterPeak?.tick)
-        #expect(peakTick < resetTick,
-                "peak@\(peakTick) must precede reset@\(resetTick)")
+        #expect(
+            peakTick < resetTick,
+            "peak@\(peakTick) must precede reset@\(resetTick)"
+        )
     }
 
     @Test func portamento_pitchWheelReturnsToCentreBeforeNextChord() throws {
@@ -152,7 +158,7 @@ import Testing
                 duration: .quarter,
                 notes: [Note(pitch: 60, tpc: 14, glissando: Glissando(style: .portamento))]
             ),
-            Chord(duration: .quarter, notes: [Note(pitch: 67, tpc: 15)])
+            Chord(duration: .quarter, notes: [Note(pitch: 67, tpc: 15)]),
         ]
         let file = try MidiRenderer.render(score: Self.makeScore(chords: chords))
         let track = try #require(file.tracks.first)
@@ -171,7 +177,9 @@ import Testing
                 return nil
             }
             .last
-        #expect(lastBendValue == MidiEvent.pitchBendCenter,
-                "wheel was \(lastBendValue ?? -1) at next chord's tick \(nextChordTick) — should be 8192")
+        #expect(
+            lastBendValue == MidiEvent.pitchBendCenter,
+            "wheel was \(lastBendValue ?? -1) at next chord's tick \(nextChordTick) — should be 8192"
+        )
     }
 }

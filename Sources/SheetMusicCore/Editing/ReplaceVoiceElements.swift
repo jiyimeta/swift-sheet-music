@@ -34,7 +34,8 @@ public struct ReplaceVoiceElements: EditCommand {
             staffIndex: staffIndex,
             measureIndex: measureIndex,
             voiceIndex: voiceIndex,
-            elementIndex: 0)
+            elementIndex: 0
+        )
     }
 
     @discardableResult
@@ -45,14 +46,16 @@ public struct ReplaceVoiceElements: EditCommand {
                     + "out of range")
         }
         guard score.staves[staffIndex].measures
-            .indices.contains(measureIndex) else {
+            .indices.contains(measureIndex)
+        else {
             throw SheetMusicError.invalidEdit(
                 reason: "ReplaceVoiceElements: measure "
                     + "\(measureIndex) out of range")
         }
         guard score.staves[staffIndex]
             .measures[measureIndex].voices
-            .indices.contains(voiceIndex) else {
+            .indices.contains(voiceIndex)
+        else {
             throw SheetMusicError.invalidEdit(
                 reason: "ReplaceVoiceElements: voice "
                     + "\(voiceIndex) out of range")
@@ -62,12 +65,14 @@ public struct ReplaceVoiceElements: EditCommand {
         score.staves[staffIndex]
             .measures[measureIndex]
             .voices[voiceIndex] = Voice(
-                elements: elements, tuplets: tuplets)
+                elements: elements, tuplets: tuplets
+            )
         return ReplaceVoiceElements(
             staffIndex: staffIndex,
             measureIndex: measureIndex,
             voiceIndex: voiceIndex,
             elements: priorVoice.elements,
-            tuplets: priorVoice.tuplets)
+            tuplets: priorVoice.tuplets
+        )
     }
 }
