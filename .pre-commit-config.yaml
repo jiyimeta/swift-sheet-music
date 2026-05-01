@@ -1,0 +1,18 @@
+repos:
+  - repo: local
+    hooks:
+      - id: swiftformat
+        name: SwiftFormat
+        entry: swiftformat
+        language: system
+        types: [swift]
+      - id: swiftlint-autocorrect
+        name: SwiftLint (--fix)
+        entry: swiftlint --fix --quiet
+        language: system
+        types: [swift]
+      - id: swiftlint
+        name: SwiftLint (strict)
+        entry: swiftlint lint --strict --quiet
+        language: system
+        types: [swift]
