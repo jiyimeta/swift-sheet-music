@@ -127,7 +127,7 @@ public enum MidiReader {
                         let len = try readVLQ()
                         let payload = try readBytes(len)
                         try parseMeta(
-                            metaType: metaType, payload: payload, len: len,
+                            metaType: metaType, payload: payload,
                             tick: tick, into: &events
                         )
                     } else if status == 0xF0 || status == 0xF7 {
@@ -149,7 +149,6 @@ public enum MidiReader {
     private static func parseMeta(
         metaType: UInt8,
         payload: Data,
-        len: Int,
         tick: Int,
         into events: inout [TimedMidiEvent]
     ) throws {
@@ -167,14 +166,14 @@ public enum MidiReader {
             let text = String(decoding: payload, as: UTF8.self)
                 .trimmingCharacters(in: .controlCharacters)
             events.append(TimedMidiEvent(tick: tick, event: .meta(.marker(text))))
-        case 0x21 where len == 1:
+        case 0x21 where payload.count == 1:
             events.append(TimedMidiEvent(
                 tick: tick,
                 event: .meta(.portChange(port: Int(payload[start])))
             ))
         case 0x2F:
             events.append(TimedMidiEvent(tick: tick, event: .endOfTrack))
-        case 0x51 where len == 3:
+        case 0x51 where payload.count == 3:
             let micros = (Int(payload[start]) << 16)
                 | (Int(payload[start + 1]) << 8)
                 | Int(payload[start + 2])
@@ -182,7 +181,7 @@ public enum MidiReader {
                 tick: tick,
                 event: .meta(.tempo(microsecondsPerQuarter: micros))
             ))
-        case 0x58 where len == 4:
+        case 0x58 where payload.count == 4:
             let n = Int(payload[start])
             let d = 1 << Int(payload[start + 1])
             let cc = Int(payload[start + 2])
@@ -190,7 +189,7 @@ public enum MidiReader {
             events.append(TimedMidiEvent(tick: tick, event: .meta(.timeSignature(
                 numerator: n, denominator: d, clocksPerClick: cc, thirtySecondsPerQuarter: t
             ))))
-        case 0x59 where len == 2:
+        case 0x59 where payload.count == 2:
             let sf = Int(Int8(bitPattern: payload[start]))
             let isMinor = payload[start + 1] != 0
             events.append(TimedMidiEvent(

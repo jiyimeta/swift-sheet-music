@@ -30,15 +30,21 @@ import Testing
 
     @Test func rejectsFormat2() {
         let bytes = Self.makeSMF(format: 2, division: 480, tracks: [Self.emptyTrack])
-        #expect(throws: SheetMusicError.self) {
+        #expect {
             _ = try MidiReader.read(bytes)
+        } throws: { error in
+            guard case let SheetMusicError.unsupportedFeature(name, _) = error else { return false }
+            return name == "MIDI format 2"
         }
     }
 
     @Test func rejectsSMPTEDivision() {
         let bytes = Self.makeSMF(format: 1, division: 0xE728, tracks: [Self.emptyTrack])
-        #expect(throws: SheetMusicError.self) {
+        #expect {
             _ = try MidiReader.read(bytes)
+        } throws: { error in
+            guard case let SheetMusicError.unsupportedFeature(name, _) = error else { return false }
+            return name == "SMPTE timecode division"
         }
     }
 
