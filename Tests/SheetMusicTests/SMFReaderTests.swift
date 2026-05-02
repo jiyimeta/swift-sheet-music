@@ -5,10 +5,10 @@ import Foundation
 @testable import SheetMusicMSCX
 import Testing
 
-@Suite struct SMFReaderTests {
+@Suite struct MidiReaderRoundTripTests {
     @Test func readsMidi01Reference() throws {
         let url = try #require(Bundle.module.url(forResource: "midi01-ref", withExtension: "mid"))
-        let file = try SMFReader.read(Data(contentsOf: url))
+        let file = try MidiReader.read(Data(contentsOf: url))
         #expect(file.format == 1)
         #expect(file.division == 480)
         #expect(file.tracks.count == 1)

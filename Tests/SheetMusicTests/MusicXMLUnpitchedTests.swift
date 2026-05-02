@@ -106,7 +106,7 @@ import Testing
 
         // End-to-end: rendering produces note events on channel 9.
         let midiData = try SheetMusic.exportMIDI(score: score)
-        let file = try SMFReader.read(midiData)
+        let file = try MidiReader.read(midiData)
         let track = try #require(file.tracks.first)
         let drumOns = track.events.compactMap { ev -> (ch: Int, pitch: Int)? in
             if case let .noteOn(ch, pitch, vel) = ev.event, vel > 0 { return (ch, pitch) }

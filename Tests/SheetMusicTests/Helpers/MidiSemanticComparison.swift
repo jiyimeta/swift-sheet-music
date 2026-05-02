@@ -8,8 +8,8 @@ import Testing
 enum MidiSemanticComparison {
     /// Compare two MIDI byte streams semantically. Reports first divergence via Issue.record.
     static func assertEquivalent(produced: Data, reference: Data) throws {
-        let producedFile = try SMFReader.read(produced)
-        let referenceFile = try SMFReader.read(reference)
+        let producedFile = try MidiReader.read(produced)
+        let referenceFile = try MidiReader.read(reference)
 
         guard producedFile.division == referenceFile.division else {
             Issue.record("division differs: produced=\(producedFile.division) reference=\(referenceFile.division)")
