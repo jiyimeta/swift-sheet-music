@@ -17,11 +17,12 @@ extension MidiImporter {
         let tolerance = options.onsetTolerance ?? max(division / 16, 1)
         let onsets = noteOnTicks(in: measure)
         let spans = candidateSpans(measure: measure, division: division)
+        let binaryGrid = options.quantizeGrid.ticks(division: division)
         var assignments: [TupletAssignment] = []
         _ = fitSpanList(
             spans: spans,
             onsets: onsets,
-            grid: options.quantizeGrid.ticks(division: division),
+            grid: binaryGrid,
             tolerance: tolerance,
             tupletRatios: options.tupletRatios,
             assignments: &assignments
@@ -29,7 +30,8 @@ extension MidiImporter {
         return assemble(
             measure: measure,
             assignments: assignments,
-            division: division
+            division: division,
+            binaryGrid: binaryGrid
         )
     }
 
@@ -224,7 +226,8 @@ extension MidiImporter {
     static func assemble(
         measure: ImportMeasure,
         assignments: [TupletAssignment],
-        division: Int
+        division: Int,
+        binaryGrid: Int
     ) -> QuantizedMeasure {
         let snappedOnsets = snap(
             onsets: noteOnTicks(in: measure),
@@ -287,7 +290,26 @@ extension MidiImporter {
         return QuantizedMeasure(
             elements: elements,
             tuplets: tuplets,
-            tupletTickRanges: tupletEntries.map(\.tickRange)
+            tupletTickRanges: tupletEntries.map(\.tickRange),
+            assignments: assignments,
+            binaryGrid: binaryGrid
         )
+    }
+
+    /// Snap a tick to the nearest grid point. If an assignment owns
+    /// it, use that assignment's grid (binary or tuplet). Otherwise
+    /// fall back to the global binary grid.
+    static func snapToQuantizedGrid(
+        _ tick: Int,
+        assignments: [TupletAssignment],
+        fallbackGrid: Int
+    ) -> Int {
+        if let owning = assignments.first(where: { $0.range.contains(tick) }) {
+            let offset = tick - owning.range.lowerBound
+            let nearest = ((offset + owning.grid / 2) / owning.grid) * owning.grid
+            return owning.range.lowerBound + nearest
+        }
+        guard fallbackGrid > 0 else { return tick }
+        return ((tick + fallbackGrid / 2) / fallbackGrid) * fallbackGrid
     }
 }

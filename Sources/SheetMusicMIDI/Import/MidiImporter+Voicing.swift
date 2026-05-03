@@ -57,6 +57,8 @@ extension MidiImporter {
         mergeCarryIns(into: &notes, measure: measure)
         mergeCarryOuts(into: &notes, measure: measure)
 
+        notes = snapVoiceNotesToGrid(notes, quantized: quantized)
+
         let grid = Set(notes.flatMap { [$0.onTick, $0.offTick] })
             .union([measure.startTick, measure.endTick])
             .sorted()
@@ -131,6 +133,37 @@ extension MidiImporter {
             notes.append(VoiceNote(onTick: n.onTick, offTick: measure.endTick, pitch: n.pitch))
         }
         return notes
+    }
+
+    /// Snap each VoiceNote's on/off ticks to the same grid the
+    /// quantizer chose (binary or tuplet) so chord gaps land on
+    /// standard note values. Without this voice() would walk raw
+    /// event ticks, and any drift from the grid (typical in
+    /// DAW-exported MIDI) would produce `.fraction` durations that
+    /// downstream layout can't render as notation.
+    /// After snapping, drops any zero-length notes (where on == off).
+    private static func snapVoiceNotesToGrid(
+        _ notes: [VoiceNote],
+        quantized: QuantizedMeasure
+    ) -> [VoiceNote] {
+        notes.map { n in
+            VoiceNote(
+                onTick: snapToQuantizedGrid(
+                    n.onTick,
+                    assignments: quantized.assignments,
+                    fallbackGrid: quantized.binaryGrid
+                ),
+                offTick: snapToQuantizedGrid(
+                    n.offTick,
+                    assignments: quantized.assignments,
+                    fallbackGrid: quantized.binaryGrid
+                ),
+                pitch: n.pitch,
+                startsTied: n.startsTied,
+                endsTied: n.endsTied
+            )
+        }
+        .filter { $0.onTick < $0.offTick }
     }
 
     /// Synthesise a `startsTied` VoiceNote at the measure head for each carryIn.

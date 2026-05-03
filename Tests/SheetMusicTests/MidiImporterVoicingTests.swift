@@ -236,6 +236,64 @@ import Testing
         #expect(MidiImporter.tpc(forMidiPitch: 65, concertKey: -2) == 13) // F
     }
 
+    @Test func draftedOnsetsSnapToBinaryGridAndProduceStandardDurations() {
+        // DAW-style drift: notes intended at 0 / 480 / 960 / 1440
+        // arrive a few ticks early or late. Voicing must snap them to
+        // the 16th grid so chord durations come out as standard binary
+        // values (`.quarter` here) rather than `.fraction(...)`.
+        let measure = ImportMeasure(
+            startTick: 0, endTick: 1920, measureIndex: 0,
+            timeSignature: TimeSignature(numerator: 4, denominator: 4),
+            events: [
+                nOn(2, 60), nOff(478, 60),
+                nOn(478, 62), nOff(963, 62),
+                nOn(963, 64), nOff(1437, 64),
+                nOn(1437, 65), nOff(1922, 65),
+            ],
+            carryIns: [], carryOuts: []
+        )
+        let q = MidiImporter.quantize(measure: measure, division: 480, options: .init())
+        let voice = MidiImporter.voice(quantized: q, measure: measure, division: 480)
+        let durations = voice.elements.compactMap { e -> NoteDuration? in
+            if case let .chord(c) = e { return c.duration }
+            return nil
+        }
+        #expect(durations == [.quarter, .quarter, .quarter, .quarter])
+    }
+
+    @Test func dottedEighthAndSixteenthAndHalfPreserved() {
+        // Mix of half (960) + dotted eighth (360) + sixteenth (120)
+        // + quarter (480) = 1920. Slight DAW-style drift on each
+        // boundary — voicing must snap to grid and emit the right
+        // durations: any `.fraction` here must be a standard
+        // dotted-form (i.e. decomposable to base+dots), not an
+        // irreducible drift.
+        let measure = ImportMeasure(
+            startTick: 0, endTick: 1920, measureIndex: 0,
+            timeSignature: TimeSignature(numerator: 4, denominator: 4),
+            events: [
+                nOn(2, 60), nOff(958, 60), // half
+                nOn(958, 62), nOff(1322, 62), // dotted eighth
+                nOn(1322, 64), nOff(1438, 64), // sixteenth
+                nOn(1438, 65), nOff(1920, 65), // quarter
+            ],
+            carryIns: [], carryOuts: []
+        )
+        let q = MidiImporter.quantize(measure: measure, division: 480, options: .init())
+        let voice = MidiImporter.voice(quantized: q, measure: measure, division: 480)
+        let durations = voice.elements.compactMap { e -> NoteDuration? in
+            if case let .chord(c) = e { return c.duration }
+            return nil
+        }
+        // The dotted eighth is encoded as `.fraction(3/16)`; the
+        // others as their direct enum cases.
+        let expectedDottedEighth = NoteDuration.fraction(Fraction(numerator: 3, denominator: 16))
+        #expect(durations.contains(.half))
+        #expect(durations.contains(.sixteenth))
+        #expect(durations.contains(.quarter))
+        #expect(durations.contains(expectedDottedEighth))
+    }
+
     @Test func chordDurationsSumExactlyToMeasureLength() {
         // Imported voicing must emit chord durations whose tick-sum
         // equals the measure length exactly. Otherwise PlaybackTimeline

@@ -45,4 +45,13 @@ struct QuantizedMeasure {
     /// `voice()` to re-resolve indices when it rebuilds the element
     /// list with offset-driven grid steps.
     var tupletTickRanges: [Range<Int>]
+    /// Tuplet / binary span assignments produced by the quantizer.
+    /// `voice()` uses these to snap raw event ticks to the same
+    /// grid the quantizer chose, so chord durations land on standard
+    /// note values rather than `.fraction` fallbacks.
+    var assignments: [MidiImporter.TupletAssignment]
+    /// The binary grid (in ticks) the quantizer used. Provides the
+    /// fallback resolution when an event tick falls outside every
+    /// confirmed assignment.
+    var binaryGrid: Int
 }
