@@ -217,6 +217,63 @@ extension MidiImporter {
         return .fraction(Fraction(numerator: ticks, denominator: 4 * division))
     }
 
+    /// Decompose a tick count into a sequence of standard
+    /// `NoteDuration` values that sum to the original count. Used
+    /// outside tuplet ranges so unusual durations (e.g. a 1200-tick
+    /// rest filling beats 2.5..4) become idiomatic notation
+    /// (`[eighth, half]`) rather than `.fraction(5/8)` which
+    /// `DurationInterpretation` mis-decomposes as a triplet-scaled
+    /// triple-dotted half.
+    ///
+    /// Algorithm:
+    ///   - Match a single dotted form first (single dot only) when
+    ///     allowed (`allowDot`) — preserves dotted notation for
+    ///     chords like a dotted-quarter melody note.
+    ///   - Else greedily take the largest binary duration whose
+    ///     length divides the current measure-relative `offset` (so
+    ///     the rest/note aligns to a beat boundary).
+    ///   - Else fall through to `.fraction` for the residual (rare).
+    static func decomposeIntoStandardDurations(
+        ticks: Int,
+        division: Int,
+        offsetInMeasure: Int,
+        allowDot: Bool
+    ) -> [NoteDuration] {
+        let binaryCandidates: [NoteDuration] = [
+            .whole, .half, .quarter, .eighth, .sixteenth, .thirtySecond,
+            .sixtyFourth, .oneTwentyEighth,
+        ]
+        if let match = binaryCandidates.first(where: {
+            $0.ticks(division: division) == ticks
+        }) {
+            return [match]
+        }
+        if allowDot {
+            for c in binaryCandidates {
+                let dotted = c.dotted(1)
+                if dotted.ticks(division: division) == ticks { return [dotted] }
+            }
+        }
+        var result: [NoteDuration] = []
+        var remaining = ticks
+        var offset = offsetInMeasure
+        while remaining > 0 {
+            let chosen = binaryCandidates.first { c in
+                let d = c.ticks(division: division)
+                return d > 0 && d <= remaining && offset % d == 0
+            }
+            guard let c = chosen else { break }
+            result.append(c)
+            let d = c.ticks(division: division)
+            remaining -= d
+            offset += d
+        }
+        if remaining > 0 {
+            result.append(.fraction(Fraction(numerator: remaining, denominator: 4 * division)))
+        }
+        return result
+    }
+
     struct PendingTuplet {
         var startElement: Int
         var ratio: TupletRatio

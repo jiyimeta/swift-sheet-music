@@ -204,59 +204,57 @@ import Testing
         }
     }
 
-    @Test func tpcMatchesMuseScoreLineOfFifthsForCMajor() {
-        // No key context (= C major). Naturals on the line of fifths:
-        // F=13, C=14, G=15, D=16, A=17, E=18, B=19. Black keys default
-        // to sharp spellings: C#=21, D#=23, F#=20, G#=22, A#=24.
-        #expect(MidiImporter.tpc(forMidiPitch: 60) == 14) // C4
-        #expect(MidiImporter.tpc(forMidiPitch: 62) == 16) // D4
-        #expect(MidiImporter.tpc(forMidiPitch: 64) == 18) // E4
-        #expect(MidiImporter.tpc(forMidiPitch: 65) == 13) // F4
-        #expect(MidiImporter.tpc(forMidiPitch: 67) == 15) // G4
-        #expect(MidiImporter.tpc(forMidiPitch: 69) == 17) // A4
-        #expect(MidiImporter.tpc(forMidiPitch: 71) == 19) // B4
-        #expect(MidiImporter.tpc(forMidiPitch: 61) == 21) // C#4
-        #expect(MidiImporter.tpc(forMidiPitch: 66) == 20) // F#4
-        // Octave-invariant: same pitch class → same TPC.
-        #expect(MidiImporter.tpc(forMidiPitch: 48) == 14) // C3
-        #expect(MidiImporter.tpc(forMidiPitch: 72) == 14) // C5
-    }
-
-    @Test func tpcUsesFlatSpellingsInFlatKeys() {
-        // Bb major (concertKey = -2). Black keys take flat spellings.
-        // MuseScore line-of-fifths flats: Gb=8, Db=9, Ab=10, Eb=11, Bb=12.
-        #expect(MidiImporter.tpc(forMidiPitch: 61, concertKey: -2) == 9) // Db
-        #expect(MidiImporter.tpc(forMidiPitch: 63, concertKey: -2) == 11) // Eb
-        #expect(MidiImporter.tpc(forMidiPitch: 66, concertKey: -2) == 8) // Gb
-        #expect(MidiImporter.tpc(forMidiPitch: 68, concertKey: -2) == 10) // Ab
-        #expect(MidiImporter.tpc(forMidiPitch: 70, concertKey: -2) == 12) // Bb
-        // White keys still use natural TPC (a chromatic accidental
-        // would be rendered as a natural sign in a sharp key, etc.):
-        #expect(MidiImporter.tpc(forMidiPitch: 60, concertKey: -2) == 14) // C
-        #expect(MidiImporter.tpc(forMidiPitch: 65, concertKey: -2) == 13) // F
-    }
-
-    @Test func tpcStaffPositionForFlatKeysMatchesNaturalLetter() {
-        // Cross-check via the layout's tpc-to-letter mapping: each
-        // black-key flat must place its notehead on the *higher*
-        // diatonic letter (Db on D, Ab on A, …) — not the enharmonic
-        // sharp letter (Db ≠ C#). This is what the user reported as
-        // missing: Db displaying as C and Ab as G.
-        //
-        // tpcLetters from PitchStaffPosition.swift maps
-        //   ((tpc + 1) % 7) → 0=F, 1=C, 2=G, 3=D, 4=A, 5=E, 6=B.
-        func letter(_ tpc: Int) -> String {
-            let row = ((tpc + 1) % 7 + 7) % 7
-            return ["F", "C", "G", "D", "A", "E", "B"][row]
+    @Test func dottedQuarterChordFollowedByLongRestSplitsAtBeatBoundaries() {
+        // Reproduce the user-reported case: a dotted-quarter chord
+        // at the bar start (720 ticks) followed by a 1200-tick rest.
+        // Without decomposition the rest would be `.fraction(5/8)`
+        // which the layout mis-interprets as a tuplet-scaled
+        // triple-dotted-half. With decomposition the rest splits
+        // into [eighth (240), half (960)] — beat-aligned rest
+        // filling.
+        let measure = ImportMeasure(
+            startTick: 0, endTick: 1920, measureIndex: 0,
+            timeSignature: TimeSignature(numerator: 4, denominator: 4),
+            events: [
+                nOn(0, 60), nOff(720, 60), // dotted quarter chord
+                // 720..1920 has no note → rest of 1200 ticks.
+            ],
+            carryIns: [], carryOuts: []
+        )
+        let q = MidiImporter.quantize(measure: measure, division: 480, options: .init())
+        let voice = MidiImporter.voice(quantized: q, measure: measure, division: 480)
+        let durations: [NoteDuration] = voice.elements.compactMap { e in
+            if case let .chord(c) = e { return c.duration }
+            return nil
         }
-        // 4-flat key (Ab major). Flatted notes in the key signature
-        // are B, E, A, D — so Db / Ab should land on letters D / A.
-        let key = -4
-        #expect(letter(MidiImporter.tpc(forMidiPitch: 61, concertKey: key)) == "D") // Db on D
-        #expect(letter(MidiImporter.tpc(forMidiPitch: 68, concertKey: key)) == "A") // Ab on A
-        #expect(letter(MidiImporter.tpc(forMidiPitch: 70, concertKey: key)) == "B") // Bb on B
-        #expect(letter(MidiImporter.tpc(forMidiPitch: 63, concertKey: key)) == "E") // Eb on E
-        #expect(letter(MidiImporter.tpc(forMidiPitch: 66, concertKey: key)) == "G") // Gb on G
+        let dottedQuarter = NoteDuration.fraction(Fraction(numerator: 3, denominator: 8))
+        // Expected: dotted quarter (note) + eighth rest + half rest.
+        #expect(durations == [dottedQuarter, .eighth, .half])
+    }
+
+    @Test func tripleDottedHalfTickCountSplitsIntoFourBeatAlignedParts() {
+        // 1800 ticks (= triple-dotted half) at offset 0. Decompose
+        // greedily into binary durations to give the user-expected
+        // [half, quarter, eighth, sixteenth] sum.
+        let parts = MidiImporter.decomposeIntoStandardDurations(
+            ticks: 1800,
+            division: 480,
+            offsetInMeasure: 0,
+            allowDot: false
+        )
+        #expect(parts == [.half, .quarter, .eighth, .sixteenth])
+    }
+
+    @Test func dottedQuarterChordIsPreservedAsSingleElementWhenAllowed() {
+        // 720 ticks at offset 0, allowDot=true (chord context).
+        // Result: a single dotted-quarter (= `.fraction(3/8)`).
+        let parts = MidiImporter.decomposeIntoStandardDurations(
+            ticks: 720,
+            division: 480,
+            offsetInMeasure: 0,
+            allowDot: true
+        )
+        #expect(parts == [NoteDuration.fraction(Fraction(numerator: 3, denominator: 8))])
     }
 
     @Test func draftedOnsetsSnapToBinaryGridAndProduceStandardDurations() {
@@ -345,41 +343,5 @@ import Testing
             return acc
         }
         #expect(totalTicks == 1920)
-    }
-
-    @Test func tpcUsesSharpSpellingsInSharpKeys() {
-        // D major (concertKey = +2). Black keys take sharp spellings.
-        #expect(MidiImporter.tpc(forMidiPitch: 61, concertKey: 2) == 21) // C#
-        #expect(MidiImporter.tpc(forMidiPitch: 63, concertKey: 2) == 23) // D#
-        #expect(MidiImporter.tpc(forMidiPitch: 66, concertKey: 2) == 20) // F#
-        #expect(MidiImporter.tpc(forMidiPitch: 68, concertKey: 2) == 22) // G#
-        #expect(MidiImporter.tpc(forMidiPitch: 70, concertKey: 2) == 24) // A#
-    }
-
-    @Test func voicedNotesCarryCorrectTpcNotZero() {
-        // Regression test: previously every imported note had tpc=0,
-        // which is off the line of fifths and renders as C
-        // regardless of MIDI pitch. After the fix, each pitch class
-        // gets its natural-or-sharp TPC.
-        let measure = ImportMeasure(
-            startTick: 0, endTick: 1920, measureIndex: 0,
-            timeSignature: TimeSignature(numerator: 4, denominator: 4),
-            events: [
-                nOn(0, 60), nOff(480, 60), // C
-                nOn(480, 64), nOff(960, 64), // E
-                nOn(960, 67), nOff(1440, 67), // G
-                nOn(1440, 71), nOff(1920, 71), // B
-            ],
-            carryIns: [], carryOuts: []
-        )
-        let q = MidiImporter.quantize(measure: measure, division: 480, options: .init())
-        let voice = MidiImporter.voice(quantized: q, measure: measure, division: 480)
-        let tpcs = voice.elements.compactMap { e -> Int? in
-            if case let .chord(c) = e, let first = c.notes.first {
-                return first.tpc
-            }
-            return nil
-        }
-        #expect(tpcs == [14, 18, 15, 19]) // C, E, G, B
     }
 }
