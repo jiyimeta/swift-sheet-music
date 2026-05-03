@@ -4,7 +4,7 @@ import Testing
 @Suite("CompositeEditCommand")
 struct CompositeEditCommandTests {
     private static let restID = VoiceElementID(
-        staffIndex: 0, measureIndex: 0,
+        staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
         voiceIndex: 0, elementIndex: 2
     )
 
@@ -21,14 +21,14 @@ struct CompositeEditCommandTests {
             commands: [
                 ReplaceVoiceElement(
                     at: VoiceElementID(
-                        staffIndex: 0, measureIndex: 0,
+                        staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
                         voiceIndex: 0, elementIndex: 1
                     ),
                     with: .chord(chordA)
                 ),
                 ReplaceVoiceElement(
                     at: VoiceElementID(
-                        staffIndex: 0, measureIndex: 0,
+                        staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
                         voiceIndex: 0, elementIndex: 2
                     ),
                     with: .chord(chordB)
@@ -37,7 +37,7 @@ struct CompositeEditCommandTests {
             location: Self.restID
         )
         _ = try composite.apply(to: &score)
-        let voice = score.staves[0].measures[0].voices[0]
+        let voice = score.parts[0].staves[0].measures[0].voices[0]
         guard case let .chord(cA) = voice.elements[1],
               case let .chord(cB) = voice.elements[2]
         else {
@@ -61,14 +61,14 @@ struct CompositeEditCommandTests {
             commands: [
                 ReplaceVoiceElement(
                     at: VoiceElementID(
-                        staffIndex: 0, measureIndex: 0,
+                        staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
                         voiceIndex: 0, elementIndex: 1
                     ),
                     with: .chord(chordA)
                 ),
                 ReplaceVoiceElement(
                     at: VoiceElementID(
-                        staffIndex: 0, measureIndex: 0,
+                        staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
                         voiceIndex: 0, elementIndex: 2
                     ),
                     with: .chord(chordB)
@@ -92,14 +92,14 @@ struct CompositeEditCommandTests {
             duration: .quarter, notes: [Note(pitch: 60, tpc: 14)]
         )
         let bogusID = VoiceElementID(
-            staffIndex: 0, measureIndex: 0,
+            staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
             voiceIndex: 0, elementIndex: 99
         )
         let composite = CompositeEditCommand(
             commands: [
                 ReplaceVoiceElement(
                     at: VoiceElementID(
-                        staffIndex: 0, measureIndex: 0,
+                        staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
                         voiceIndex: 0, elementIndex: 1
                     ),
                     with: .chord(chord)
@@ -127,7 +127,7 @@ struct CompositeEditCommandTests {
             commands: [
                 ReplaceVoiceElement(
                     at: VoiceElementID(
-                        staffIndex: 0, measureIndex: 0,
+                        staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
                         voiceIndex: 0, elementIndex: 1
                     ),
                     with: .chord(Chord(
@@ -137,7 +137,7 @@ struct CompositeEditCommandTests {
                 ),
                 ReplaceVoiceElement(
                     at: VoiceElementID(
-                        staffIndex: 0, measureIndex: 0,
+                        staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
                         voiceIndex: 0, elementIndex: 2
                     ),
                     with: .chord(Chord(

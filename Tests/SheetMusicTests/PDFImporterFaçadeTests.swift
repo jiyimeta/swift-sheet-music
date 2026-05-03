@@ -39,7 +39,7 @@ import Testing
         }
         let data = PDFFixtureBuilder.build(paths: paths)
         let score = try PDFImporter.parse(pdfData: data)
-        #expect(!score.staves.isEmpty, "expected at least one staff detected")
+        #expect(score.totalStaffCount > 0, "expected at least one staff detected")
         #expect(!score.parts.isEmpty)
     }
 }

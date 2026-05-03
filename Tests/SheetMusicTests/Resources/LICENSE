@@ -34,3 +34,19 @@ same GPL-3.0 provenance, no additional content. Produced with:
 
 where score.mscx is a byte-identical copy of midi01.mscx renamed to
 the default MuseScore main-file name.
+
+---
+
+MIT-licensed fixtures
+---------------------
+
+The following file is NOT derived from MuseScore's GPL fixtures. It was
+hand-authored specifically for the swift-sheet-music test suite:
+
+  multiPartMixedStaves.mscx
+
+This file is contributed under the same MIT license that applies to
+`Sources/` in this repository. The full MIT license text is in the
+`LICENSE` file at the repository root.
+
+Copyright (C) 2026 Kiichi Ito and swift-sheet-music contributors.

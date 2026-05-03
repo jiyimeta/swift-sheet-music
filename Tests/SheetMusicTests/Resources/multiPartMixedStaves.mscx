@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<museScore version="4.60">
+  <Score>
+    <Division>480</Division>
+    <Part id="1">
+      <Staff id="1"><StaffType group="pitched"><name>stdNormal</name></StaffType><defaultClef>G</defaultClef></Staff>
+      <trackName>Violin 1</trackName>
+      <Instrument id="violin"><longName>Violin</longName></Instrument>
+    </Part>
+    <Part id="2">
+      <Staff id="2"><StaffType group="pitched"><name>stdNormal</name></StaffType><defaultClef>G</defaultClef></Staff>
+      <trackName>Violin 2</trackName>
+      <Instrument id="violin"><longName>Violin</longName></Instrument>
+    </Part>
+    <Part id="3">
+      <Staff id="3"><StaffType group="pitched"><name>stdNormal</name></StaffType><defaultClef>G</defaultClef></Staff>
+      <Staff id="4"><StaffType group="pitched"><name>stdNormal</name></StaffType><defaultClef>F</defaultClef></Staff>
+      <trackName>Piano</trackName>
+      <Instrument id="piano"><longName>Piano</longName></Instrument>
+    </Part>
+    <Part id="4">
+      <Staff id="5"><StaffType group="pitched"><name>stdNormal</name></StaffType><defaultClef>F</defaultClef></Staff>
+      <trackName>Violoncello</trackName>
+      <Instrument id="violoncello"><longName>Violoncello</longName></Instrument>
+    </Part>
+    <Staff id="1"><Measure><voice><Rest><durationType>measure</durationType><duration>4/4</duration></Rest></voice></Measure></Staff>
+    <Staff id="2"><Measure><voice><Rest><durationType>measure</durationType><duration>4/4</duration></Rest></voice></Measure></Staff>
+    <Staff id="3"><Measure><voice><Rest><durationType>measure</durationType><duration>4/4</duration></Rest></voice></Measure></Staff>
+    <Staff id="4"><Measure><voice><Rest><durationType>measure</durationType><duration>4/4</duration></Rest></voice></Measure></Staff>
+    <Staff id="5"><Measure><voice><Rest><durationType>measure</durationType><duration>4/4</duration></Rest></voice></Measure></Staff>
+  </Score>
+</museScore>

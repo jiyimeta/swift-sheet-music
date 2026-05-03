@@ -4,7 +4,7 @@ import Testing
 @Suite("AddNoteToChord")
 struct AddNoteToChordTests {
     private static let chordID = VoiceElementID(
-        staffIndex: 0, measureIndex: 0,
+        staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
         voiceIndex: 0, elementIndex: 1
     )
 
@@ -29,7 +29,7 @@ struct AddNoteToChordTests {
         // Build a chord with a lyric attached.
         var score = EditingFixtures.fourQuarterRests()
         let id = VoiceElementID(
-            staffIndex: 0, measureIndex: 0,
+            staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
             voiceIndex: 0, elementIndex: 1
         )
         score[id] = .chord(Chord(
@@ -74,7 +74,7 @@ struct AddNoteToChordTests {
     func refusesOnRest() {
         var score = EditingFixtures.fourQuarterRests()
         let restID = VoiceElementID(
-            staffIndex: 0, measureIndex: 0,
+            staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
             voiceIndex: 0, elementIndex: 2
         )
         let cmd = AddNoteToChord(

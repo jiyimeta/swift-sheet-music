@@ -7,7 +7,7 @@ struct VoiceElementIDTests {
     func getterValid() {
         let score = EditingFixtures.fourQuarterRests()
         let id = VoiceElementID(
-            staffIndex: 0,
+            staff: StaffAddress(partIndex: 0, staffIndexInPart: 0),
             measureIndex: 0,
             voiceIndex: 0,
             elementIndex: 1
@@ -16,14 +16,14 @@ struct VoiceElementIDTests {
             Issue.record("expected a rest (empty chord) at index 1")
             return
         }
-        #expect(rest.duration == .quarter)
+        #expect(rest.duration == NoteDuration.quarter)
     }
 
     @Test("Subscript getter returns nil for out-of-range path")
     func getterOutOfRange() {
         let score = EditingFixtures.fourQuarterRests()
         let id = VoiceElementID(
-            staffIndex: 0,
+            staff: StaffAddress(partIndex: 0, staffIndexInPart: 0),
             measureIndex: 0,
             voiceIndex: 0,
             elementIndex: 99
@@ -35,7 +35,7 @@ struct VoiceElementIDTests {
     func setterReplaces() {
         var score = EditingFixtures.fourQuarterRests()
         let id = VoiceElementID(
-            staffIndex: 0,
+            staff: StaffAddress(partIndex: 0, staffIndexInPart: 0),
             measureIndex: 0,
             voiceIndex: 0,
             elementIndex: 1
@@ -55,13 +55,13 @@ struct VoiceElementIDTests {
     @Test("RestID converts to VoiceElementID with same indices")
     func fromRestID() {
         let restID = RestID(
-            staffIndex: 0,
+            staff: StaffAddress(partIndex: 0, staffIndexInPart: 0),
             measureIndex: 0,
             voiceIndex: 0,
             elementIndex: 1
         )
         let veID = VoiceElementID(restID)
-        #expect(veID.staffIndex == 0)
+        #expect(veID.staff == StaffAddress(partIndex: 0, staffIndexInPart: 0))
         #expect(veID.measureIndex == 0)
         #expect(veID.voiceIndex == 0)
         #expect(veID.elementIndex == 1)

@@ -126,7 +126,7 @@ struct MusicXMLImportTests {
         </score-partwise>
         """.utf8)
         let score = try MusicXMLParser.parse(xml)
-        let elements = score.staves[0].measures[0].voices[0].elements
+        let elements = score.parts[0].staves[0].measures[0].voices[0].elements
         let fermatas = elements.compactMap { element -> Fermata? in
             if case let .fermata(f) = element { return f }
             return nil

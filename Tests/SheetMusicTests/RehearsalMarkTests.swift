@@ -71,12 +71,17 @@ import Testing
             .rehearsalMark(mark),
             .chord(chord),
         ])])
-        let staff = StaffContent(id: 1, measures: [measure])
-        let part = Part(id: "P1", instrument: Instrument(
-            id: "voice",
-            articulations: [InstrumentArticulation()]))
+        let staff = Staff(measures: [measure])
+        let part = Part(
+            id: "P1",
+            instrument: Instrument(
+                id: "voice",
+                articulations: [InstrumentArticulation()]
+            ),
+            staves: [staff]
+        )
         let score = Score(
-            division: 480, parts: [part], staves: [staff]
+            division: 480, parts: [part]
         )
 
         let file = try MidiRenderer.render(score: score)
@@ -125,12 +130,17 @@ import Testing
             .rehearsalMark(mark),
             .chord(chord),
         ])])
-        let staff = StaffContent(id: 1, measures: [measure])
-        let part = Part(id: "P1", instrument: Instrument(
-            id: "voice",
-            articulations: [InstrumentArticulation()]))
+        let staff = Staff(measures: [measure])
+        let part = Part(
+            id: "P1",
+            instrument: Instrument(
+                id: "voice",
+                articulations: [InstrumentArticulation()]
+            ),
+            staves: [staff]
+        )
         let score = Score(
-            division: 480, parts: [part], staves: [staff]
+            division: 480, parts: [part]
         )
         let file = try MidiRenderer.render(score: score)
         for evt in file.tracks[0].events {
@@ -173,7 +183,7 @@ import Testing
         </score-partwise>
         """.utf8)
         let score = try MusicXMLParser.parse(xml)
-        let elements = score.staves[0].measures[0].voices[0].elements
+        let elements = score.parts[0].staves[0].measures[0].voices[0].elements
         let marks = elements.compactMap { el -> RehearsalMark? in
             if case let .rehearsalMark(rm) = el { return rm }
             return nil
@@ -214,7 +224,7 @@ import Testing
         </score-partwise>
         """.utf8)
         let score = try MusicXMLParser.parse(xml)
-        let marks = score.staves[0].measures[0].voices[0].elements
+        let marks = score.parts[0].staves[0].measures[0].voices[0].elements
             .compactMap { el -> RehearsalMark? in
                 if case let .rehearsalMark(rm) = el { return rm }
                 return nil

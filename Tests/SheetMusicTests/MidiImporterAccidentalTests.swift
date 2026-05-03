@@ -177,7 +177,7 @@ import Testing
         guard let pi = score.parts.firstIndex(where: { $0.trackName == "Piano" }) else {
             Issue.record("expected piano part"); return
         }
-        let piano = score.staves[pi]
+        let piano = score.parts[pi].staves[0]
         // First note's TPC must be 9 (Db), not 21 (C#) which would
         // happen if concertKey were 0 instead of -4.
         let firstTpc: Int? = {
@@ -225,7 +225,7 @@ import Testing
         guard let pi = score.parts.firstIndex(where: { $0.trackName == "Piano" }) else {
             Issue.record("expected piano part"); return
         }
-        let piano = score.staves[pi]
+        let piano = score.parts[pi].staves[0]
         // Helper: TPC of the first note in a measure.
         func firstNoteTpc(in measureIndex: Int) -> Int? {
             for v in piano.measures[measureIndex].voices {

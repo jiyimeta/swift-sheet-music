@@ -16,16 +16,16 @@ struct SetChordDurationTests {
     private func score(_ elements: [VoiceElement]) -> Score {
         let voice = Voice(elements: elements)
         let measure = Measure(voices: [voice])
-        let staff = StaffContent(id: 1, measures: [measure])
-        return Score(division: 480, staves: [staff])
+        let staff = Staff(measures: [measure])
+        return Score(division: 480, parts: [Part(id: "1", instrument: Instrument(id: "x"), staves: [staff])])
     }
 
     private func first(_ score: Score) -> [VoiceElement] {
-        score.staves[0].measures[0].voices[0].elements
+        score.parts[0].staves[0].measures[0].voices[0].elements
     }
 
     private static let chordID = VoiceElementID(
-        staffIndex: 0, measureIndex: 0,
+        staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
         voiceIndex: 0, elementIndex: 0
     )
 
@@ -181,7 +181,7 @@ struct SetChordDurationTests {
         let measure = Measure(voices: [voice])
         var score = Score(
             division: 480,
-            staves: [StaffContent(id: 1, measures: [measure])]
+            parts: [Part(id: "1", instrument: Instrument(id: "x"), staves: [Staff(measures: [measure])])]
         )
         let cmd = SetChordDuration(
             at: Self.chordID, duration: .quarter
@@ -365,10 +365,7 @@ struct SetChordDurationTests {
         let measure = Measure(voices: [voice])
         var score = Score(
             division: 480,
-            staves: [StaffContent(
-                id: 1,
-                measures: [measure]
-            )]
+            parts: [Part(id: "1", instrument: Instrument(id: "x"), staves: [Staff(measures: [measure])])]
         )
         // Lengthen A from eighth (240) to half (960). Need +720.
         // The tuplet's three eighths within a 3:2 ratio of base
@@ -386,7 +383,7 @@ struct SetChordDurationTests {
         // After: chord A (half) at rtick 0, then alignedRests
         // for the leftover (none since 960=240+720 exactly), then
         // the trailing rest(.half), rest(.eighth) untouched.
-        let staff = score.staves[0]
+        let staff = score.parts[0].staves[0]
         let m = staff.measures[0]
         let v = m.voices[0]
         guard case let .chord(aa) = v.elements[0] else {

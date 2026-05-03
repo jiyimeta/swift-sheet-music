@@ -38,7 +38,6 @@ import Testing
     /// where the marker only lives in voice 0 lose voice 1's notes.
     @Test func repeatMeasureMarker_replaysEveryVoice() throws {
         let instrument = Instrument(id: "test", articulations: [InstrumentArticulation()])
-        let part = Part(id: "P1", instrument: instrument)
         // Source measure has TWO voices.
         let sourceVoice0 = Voice(elements: [
             .chord(Chord(duration: .half, notes: [Note(pitch: 60, tpc: 14)])),
@@ -58,8 +57,9 @@ import Testing
             )),
         ])
         let repeatMeasure = Measure(voices: [markerVoice])
-        let staff = StaffContent(id: 1, measures: [sourceMeasure, repeatMeasure])
-        let score = Score(division: 480, parts: [part], staves: [staff])
+        let staff = Staff(measures: [sourceMeasure, repeatMeasure])
+        let part = Part(id: "P1", instrument: instrument, staves: [staff])
+        let score = Score(division: 480, parts: [part])
         let file = try MidiRenderer.render(score: score)
         let track = try #require(file.tracks.first)
         let pitches = track.events.compactMap { ev -> Int? in
@@ -74,7 +74,6 @@ import Testing
     /// in the marker measure. Both voices of the source must still play.
     @Test func repeatMeasureMarker_inSecondaryVoice_stillReplaysAll() throws {
         let instrument = Instrument(id: "test", articulations: [InstrumentArticulation()])
-        let part = Part(id: "P1", instrument: instrument)
         let sourceVoice0 = Voice(elements: [
             .chord(Chord(duration: .whole, notes: [Note(pitch: 60, tpc: 14)])),
         ])
@@ -90,8 +89,9 @@ import Testing
             )),
         ])
         let repeatMeasure = Measure(voices: [emptyVoice0, markerVoice1])
-        let staff = StaffContent(id: 1, measures: [sourceMeasure, repeatMeasure])
-        let score = Score(division: 480, parts: [part], staves: [staff])
+        let staff = Staff(measures: [sourceMeasure, repeatMeasure])
+        let part = Part(id: "P1", instrument: instrument, staves: [staff])
+        let score = Score(division: 480, parts: [part])
         let file = try MidiRenderer.render(score: score)
         let track = try #require(file.tracks.first)
         let pitches = track.events.compactMap { ev -> Int? in
@@ -107,7 +107,6 @@ import Testing
     /// every voice of the source two-measure span must replay.
     @Test func multiMeasureRepeatGroup_replaysAllVoicesAcrossGroup() throws {
         let instrument = Instrument(id: "test", articulations: [InstrumentArticulation()])
-        let part = Part(id: "P1", instrument: instrument)
         // Two source measures, each two voices.
         let m1v0 = Voice(elements: [.chord(Chord(duration: .whole, notes: [Note(pitch: 60, tpc: 14)]))])
         let m1v1 = Voice(elements: [.chord(Chord(duration: .whole, notes: [Note(pitch: 72, tpc: 14)]))])
@@ -131,8 +130,9 @@ import Testing
             voices: [m4MarkerVoice, Voice(elements: [])],
             measureRepeatCount: 2
         )
-        let staff = StaffContent(id: 1, measures: [m1, m2, m3, m4])
-        let score = Score(division: 480, parts: [part], staves: [staff])
+        let staff = Staff(measures: [m1, m2, m3, m4])
+        let part = Part(id: "P1", instrument: instrument, staves: [staff])
+        let score = Score(division: 480, parts: [part])
         let file = try MidiRenderer.render(score: score)
         let track = try #require(file.tracks.first)
         let pitches = track.events.compactMap { ev -> Int? in
@@ -147,7 +147,6 @@ import Testing
     /// replay the previous measure's notes when rendered to MIDI.
     @Test func repeatMeasureMarker_replaysPreviousMeasureNotes() throws {
         let instrument = Instrument(id: "test", articulations: [InstrumentArticulation()])
-        let part = Part(id: "P1", instrument: instrument)
         // Measure 1: a single quarter note at pitch 60.
         let sourceVoice = Voice(elements: [
             .chord(Chord(duration: .quarter, notes: [Note(pitch: 60, tpc: 14)])),
@@ -164,8 +163,9 @@ import Testing
             )),
         ])
         let repeatMeasure = Measure(voices: [repeatVoice])
-        let staff = StaffContent(id: 1, measures: [sourceMeasure, repeatMeasure])
-        let score = Score(division: 480, parts: [part], staves: [staff])
+        let staff = Staff(measures: [sourceMeasure, repeatMeasure])
+        let part = Part(id: "P1", instrument: instrument, staves: [staff])
+        let score = Score(division: 480, parts: [part])
         let file = try MidiRenderer.render(score: score)
         let track = try #require(file.tracks.first)
 

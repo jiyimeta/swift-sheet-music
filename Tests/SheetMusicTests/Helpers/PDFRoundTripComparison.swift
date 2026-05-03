@@ -30,11 +30,11 @@ enum PDFRoundTripComparison {
         )
         // Staves: importer should detect at least 1 staff.
         #expect(
-            b.staves.count >= 1,
-            "[\(fixture)] expected ≥1 staff imported; got \(b.staves.count)"
+            b.totalStaffCount >= 1,
+            "[\(fixture)] expected ≥1 staff imported; got \(b.totalStaffCount)"
         )
         // Measures: at least 1 measure on staff 0.
-        if let firstStaff = b.staves.first {
+        if let firstStaff = b.allStaves.first?.staff {
             #expect(
                 !firstStaff.measures.isEmpty,
                 "[\(fixture)] expected ≥1 measure on staff 0"

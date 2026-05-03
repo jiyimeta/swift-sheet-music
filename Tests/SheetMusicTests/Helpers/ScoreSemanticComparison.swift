@@ -1,3 +1,4 @@
+// swiftformat:disable all
 import Foundation
 @testable import SheetMusicCore
 import Testing
@@ -58,15 +59,19 @@ enum ScoreSemanticComparison {
             diffs.append("parts.count: produced=\(lhs.parts.count) reference=\(rhs.parts.count)")
         } else {
             for (i, pair) in zip(lhs.parts, rhs.parts).enumerated()
-            where pair.0 != pair.1 {
+                where pair.0 != pair.1
+            {
                 diffs.append("parts[\(i)] differs:\n  produced=\(pair.0)\n  reference=\(pair.1)")
             }
         }
-        if lhs.staves.count != rhs.staves.count {
-            diffs.append("staves.count: produced=\(lhs.staves.count) reference=\(rhs.staves.count)")
+        let lhsStaves = lhs.allStaves.map(\.staff)
+        let rhsStaves = rhs.allStaves.map(\.staff)
+        if lhsStaves.count != rhsStaves.count {
+            diffs.append("staves.count: produced=\(lhsStaves.count) reference=\(rhsStaves.count)")
         } else {
-            for (i, pair) in zip(lhs.staves, rhs.staves).enumerated()
-            where pair.0 != pair.1 {
+            for (i, pair) in zip(lhsStaves, rhsStaves).enumerated()
+                where pair.0 != pair.1
+            {
                 diffs.append(staffDiff(index: i, produced: pair.0, reference: pair.1))
             }
         }
@@ -81,17 +86,15 @@ enum ScoreSemanticComparison {
         )
     }
 
-    private static func staffDiff(index: Int, produced: StaffContent, reference: StaffContent) -> String {
-        if produced.id != reference.id {
-            return "staves[\(index)].id: produced=\(produced.id) reference=\(reference.id)"
-        }
+    private static func staffDiff(index: Int, produced: Staff, reference: Staff) -> String {
         if produced.measures.count != reference.measures.count {
             let p = produced.measures.count
             let r = reference.measures.count
             return "staves[\(index)].measures.count: produced=\(p) reference=\(r)"
         }
         for (m, pair) in zip(produced.measures, reference.measures).enumerated()
-        where pair.0 != pair.1 {
+            where pair.0 != pair.1
+        {
             return measureDiff(staffIndex: index, measureIndex: m, produced: pair.0, reference: pair.1)
         }
         return "staves[\(index)] differs (structural)"
@@ -131,11 +134,12 @@ enum ScoreSemanticComparison {
             return msg
         }
         for (v, pair) in zip(produced.voices, reference.voices).enumerated()
-        where pair.0.elements != pair.1.elements {
+            where pair.0.elements != pair.1.elements
+        {
             msg += "voices[\(v)].elements differ:"
             let p = pair.0.elements
             let r = pair.1.elements
-            let firstDiff = (0..<max(p.count, r.count)).first { i in
+            let firstDiff = (0 ..< max(p.count, r.count)).first { i in
                 let pi: VoiceElement? = i < p.count ? p[i] : nil
                 let ri: VoiceElement? = i < r.count ? r[i] : nil
                 return pi != ri
@@ -152,21 +156,23 @@ enum ScoreSemanticComparison {
         return msg + "(unknown difference)"
     }
 
+    // swiftformat:disable:next redundantPattern
     private static func shortDesc(_ element: VoiceElement) -> String {
         switch element {
-        case .chord(let c): return "chord(\(c.notes.map { $0.pitch }), \(c.duration))"
-        case .chord(let r) where r.notes.isEmpty: return "rest(\(r.duration))"
-        case .keySignature(let k): return "key(\(k.concertKey))"
-        case .timeSignature(let t): return "time(\(t.numerator)/\(t.denominator))"
-        case .clef(let c): return "clef(\(c.concertClefType))"
-        case .barLine(let b): return "barline(\(b.subtype ?? ""))"
-        case .tempo(let t): return "tempo(\(t))"
-        case .dynamic(let d): return "dynamic(\(d))"
-        case .spanner(let s): return "spanner(\(s.kind))"
+        case let .chord(c):
+            return c.notes.isEmpty ? "rest(\(c.duration))"
+                : "chord(\(c.notes.map { $0.pitch }), \(c.duration))"
+        case let .keySignature(k): return "key(\(k.concertKey))"
+        case let .timeSignature(t): return "time(\(t.numerator)/\(t.denominator))"
+        case let .clef(c): return "clef(\(c.concertClefType))"
+        case let .barLine(b): return "barline(\(b.subtype ?? ""))"
+        case let .tempo(t): return "tempo(\(t))"
+        case let .dynamic(d): return "dynamic(\(d))"
+        case let .spanner(s): return "spanner(\(s.kind))"
         case .measureRepeat: return "measureRepeat"
-        case .fermata(let f): return "fermata(\(f.subtype))"
-        case .staffText(let st): return "staffText(\"\(st.text)\")"
-        case .rehearsalMark(let rm): return "rehearsalMark(\"\(rm.text)\")"
+        case let .fermata(f): return "fermata(\(f.subtype))"
+        case let .staffText(st): return "staffText(\"\(st.text)\")"
+        case let .rehearsalMark(rm): return "rehearsalMark(\"\(rm.text)\")"
         }
     }
 
@@ -218,55 +224,56 @@ enum ScoreSemanticComparison {
         // `<durationType>measure</durationType>` for whole-measure rests
         // (decoded as `.fraction`), while MusicXML's `<type>whole</type>`
         // lands on `.whole`. Both describe the same music.
-        s.staves = s.staves.map { staff in
-            var st = staff
-            st.measures = st.measures.map { measure in
-                var m = measure
-                m.lineBreak = false
-                m.pageBreak = false
-                m.voices = m.voices.map { voice in
-                    Voice(elements: voice.elements
-                        // Strip staff/system text — only the MSCX
-                        // decoder picks them up today, so keeping
-                        // them would break cross-format equivalence
-                        // of fixtures that round-trip through both.
-                        .filter { element in
-                            if case .staffText = element {
-                                return false
+        s.parts = s.parts.map { part in
+            var pt = part
+            pt.staves = pt.staves.map { staff in
+                var st = staff
+                st.measures = st.measures.map { measure in
+                    var m = measure
+                    m.lineBreak = false
+                    m.pageBreak = false
+                    m.voices = m.voices.map { voice in
+                        Voice(elements: voice.elements
+                            // Strip staff/system text — only the MSCX
+                            // decoder picks them up today, so keeping
+                            // them would break cross-format equivalence
+                            // of fixtures that round-trip through both.
+                            .filter { element in
+                                if case .staffText = element {
+                                    return false
+                                }
+                                return true
                             }
-                            return true
-                        }
-                        .map(canonicalizeDurations))
+                            .map(canonicalizeDurations))
+                    }
+                    return m
                 }
-                return m
+                return st
             }
-            return st
+            return pt
         }
         return s
     }
 
     private static func canonicalizeDurations(_ element: VoiceElement) -> VoiceElement {
-        switch element {
-        case .chord(var c):
-            c.duration = canonicalDuration(c.duration)
-            return .chord(c)
-        default:
-            return element
-        }
+        guard case let .chord(c) = element else { return element }
+        var updated = c
+        updated.duration = canonicalDuration(c.duration)
+        return .chord(updated)
     }
 
     private static func canonicalDuration(_ d: NoteDuration) -> NoteDuration {
         switch d {
-        case .whole:           return .fraction(Fraction(numerator: 1, denominator: 1))
-        case .half:            return .fraction(Fraction(numerator: 1, denominator: 2))
-        case .quarter:         return .fraction(Fraction(numerator: 1, denominator: 4))
-        case .eighth:          return .fraction(Fraction(numerator: 1, denominator: 8))
-        case .sixteenth:       return .fraction(Fraction(numerator: 1, denominator: 16))
-        case .thirtySecond:    return .fraction(Fraction(numerator: 1, denominator: 32))
-        case .sixtyFourth:     return .fraction(Fraction(numerator: 1, denominator: 64))
+        case .whole: return .fraction(Fraction(numerator: 1, denominator: 1))
+        case .half: return .fraction(Fraction(numerator: 1, denominator: 2))
+        case .quarter: return .fraction(Fraction(numerator: 1, denominator: 4))
+        case .eighth: return .fraction(Fraction(numerator: 1, denominator: 8))
+        case .sixteenth: return .fraction(Fraction(numerator: 1, denominator: 16))
+        case .thirtySecond: return .fraction(Fraction(numerator: 1, denominator: 32))
+        case .sixtyFourth: return .fraction(Fraction(numerator: 1, denominator: 64))
         case .oneTwentyEighth: return .fraction(Fraction(numerator: 1, denominator: 128))
-        case .twoFiftySixth:   return .fraction(Fraction(numerator: 1, denominator: 256))
-        case .fraction:        return d
+        case .twoFiftySixth: return .fraction(Fraction(numerator: 1, denominator: 256))
+        case .fraction: return d
         }
     }
 }

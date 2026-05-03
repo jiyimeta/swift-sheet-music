@@ -22,7 +22,7 @@
             ])])
             return Score(
                 division: 480,
-                staves: [StaffContent(id: 1, measures: [m1, m2, m3])]
+                parts: [Part(id: "1", instrument: Instrument(id: "x"), staves: [Staff(measures: [m1, m2, m3])])]
             )
         }
 
@@ -100,7 +100,7 @@
                 availableWidth: 800, cache: cache
             )
             // Now edit measure 1: replace its content.
-            var staff = scoreA.staves[0]
+            var staff = scoreA.parts[0].staves[0]
             var measures = staff.measures
             let editedMeasure1 = Measure(voices: [Voice(elements: [
                 .chord(Chord(duration: .half, notes: [
@@ -109,8 +109,11 @@
                 .rest(duration: .half),
             ])])
             measures[1] = editedMeasure1
-            staff = StaffContent(id: staff.id, measures: measures)
-            let scoreB = Score(division: scoreA.division, staves: [staff])
+            staff = Staff(measures: measures)
+            let scoreB = Score(
+                division: scoreA.division,
+                parts: [Part(id: "1", instrument: Instrument(id: "x"), staves: [staff])]
+            )
             _ = LayoutEngine.layout(
                 score: scoreB, options: .init(),
                 availableWidth: 800, cache: cache

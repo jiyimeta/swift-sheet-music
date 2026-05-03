@@ -4,11 +4,11 @@ import Testing
 @Suite("PasteVoiceElement")
 struct PasteVoiceElementTests {
     private static let restID = VoiceElementID(
-        staffIndex: 0, measureIndex: 0,
+        staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
         voiceIndex: 0, elementIndex: 2
     )
     private static let chordID = VoiceElementID(
-        staffIndex: 0, measureIndex: 0,
+        staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
         voiceIndex: 0, elementIndex: 1
     )
 
@@ -40,7 +40,7 @@ struct PasteVoiceElementTests {
             at: Self.restID, element: .chord(halfChord)
         )
         _ = try cmd.apply(to: &score)
-        let voice = score.staves[0].measures[0].voices[0]
+        let voice = score.parts[0].staves[0].measures[0].voices[0]
         // Voice elements: timeSig, rest(q), rest(q), chord(half),
         // (idx 4 was rest(q) — gone, eaten by the half).
         #expect(voice.elements.count == 4)
@@ -57,16 +57,16 @@ struct PasteVoiceElementTests {
         // half rest first so we have a half-duration target to paste
         // a quarter onto.
         var score = EditingFixtures.fourQuarterRests()
-        var v = score.staves[0].measures[0].voices[0]
+        var v = score.parts[0].staves[0].measures[0].voices[0]
         v.elements = [
             .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
             .rest(duration: .half),
             .rest(duration: .quarter),
             .rest(duration: .quarter),
         ]
-        score.staves[0].measures[0].voices[0] = v
+        score.parts[0].staves[0].measures[0].voices[0] = v
         let halfRestID = VoiceElementID(
-            staffIndex: 0, measureIndex: 0,
+            staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
             voiceIndex: 0, elementIndex: 1
         )
         let quarterChord = Chord(
@@ -76,7 +76,7 @@ struct PasteVoiceElementTests {
             at: halfRestID, element: .chord(quarterChord)
         )
         _ = try cmd.apply(to: &score)
-        let voice = score.staves[0].measures[0].voices[0]
+        let voice = score.parts[0].staves[0].measures[0].voices[0]
         // [timeSig, chord(quarter), rest(quarter, leftover),
         //  rest(quarter), rest(quarter)] — 5 elements.
         #expect(voice.elements.count == 5)
@@ -97,7 +97,7 @@ struct PasteVoiceElementTests {
         // nothing past idx 4 in the measure.
         var score = EditingFixtures.fourQuarterRests()
         let lastID = VoiceElementID(
-            staffIndex: 0, measureIndex: 0,
+            staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
             voiceIndex: 0, elementIndex: 4
         )
         let wholeChord = Chord(
@@ -143,7 +143,7 @@ struct PasteVoiceElementTests {
     func refusesOnOutOfRange() {
         var score = EditingFixtures.fourQuarterRests()
         let bogus = VoiceElementID(
-            staffIndex: 0, measureIndex: 0,
+            staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
             voiceIndex: 0, elementIndex: 99
         )
         let cmd = PasteVoiceElement(

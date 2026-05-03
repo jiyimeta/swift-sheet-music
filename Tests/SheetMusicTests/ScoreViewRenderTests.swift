@@ -15,8 +15,8 @@
             let m = Measure(voices: [Voice(elements: [
                 .chord(Chord(duration: .whole, notes: [note])),
             ])])
-            let staff = StaffContent(id: 1, measures: [m])
-            let score = Score(division: 480, staves: [staff])
+            let staff = Staff(measures: [m])
+            let score = Score(division: 480, parts: [Part(id: "1", instrument: Instrument(id: "x"), staves: [staff])])
             let view = ScoreView(score: score)
                 .frame(width: 600, height: 200)
             let renderer = ImageRenderer(content: view)
@@ -40,8 +40,8 @@
                     .chord(Chord(duration: .quarter, notes: [note])),
                 ])]))
             }
-            let staff = StaffContent(id: 1, measures: measures)
-            let score = Score(division: 480, staves: [staff])
+            let staff = Staff(measures: measures)
+            let score = Score(division: 480, parts: [Part(id: "1", instrument: Instrument(id: "x"), staves: [staff])])
 
             var prevH: CGFloat = 0
             for size: CGFloat in [8, 14, 20, 26, 32] {
@@ -72,8 +72,8 @@
                     .chord(Chord(duration: .quarter, notes: [note])),
                 ])]))
             }
-            let staff = StaffContent(id: 1, measures: measures)
-            let score = Score(division: 480, staves: [staff])
+            let staff = Staff(measures: measures)
+            let score = Score(division: 480, parts: [Part(id: "1", instrument: Instrument(id: "x"), staves: [staff])])
 
             var prevW: CGFloat = 0
             for size: CGFloat in [8, 14, 20, 26, 32] {

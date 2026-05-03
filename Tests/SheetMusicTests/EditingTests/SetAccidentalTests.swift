@@ -4,11 +4,11 @@ import Testing
 @Suite("SetAccidental")
 struct SetAccidentalTests {
     private static let chordVE = VoiceElementID(
-        staffIndex: 0, measureIndex: 0,
+        staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
         voiceIndex: 0, elementIndex: 1
     )
     private static let noteID = NoteID(
-        staffIndex: 0, measureIndex: 0,
+        staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
         voiceIndex: 0, elementIndex: 1, noteIndexInChord: 0
     )
 
@@ -96,7 +96,7 @@ struct SetAccidentalTests {
     func refusesOnRest() {
         var score = EditingFixtures.fourQuarterRests()
         let restNoteID = NoteID(
-            staffIndex: 0, measureIndex: 0,
+            staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
             voiceIndex: 0, elementIndex: 2, noteIndexInChord: 0
         )
         let cmd = SetAccidental(at: restNoteID, accidental: .sharp)

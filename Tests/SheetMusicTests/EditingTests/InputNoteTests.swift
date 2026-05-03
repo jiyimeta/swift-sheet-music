@@ -4,7 +4,7 @@ import Testing
 @Suite("InputNote")
 struct InputNoteTests {
     private static let restAt1 = RestID(
-        staffIndex: 0, measureIndex: 0,
+        staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
         voiceIndex: 0, elementIndex: 1
     )
 

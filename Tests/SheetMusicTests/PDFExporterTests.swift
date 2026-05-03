@@ -144,18 +144,18 @@
                 .chord(chord), .chord(chord),
                 .chord(chord), .chord(chord),
             ])
-            let staff = StaffContent(
-                id: 1, measures: [Measure(voices: [voice])]
+            let staff = Staff(measures: [Measure(voices: [voice])]
             )
             let part = Part(
                 id: "P1",
                 instrument: Instrument(
                     id: "i",
                     articulations: [InstrumentArticulation()]
-                )
+                ),
+                staves: [staff]
             )
             return Score(
-                division: 480, parts: [part], staves: [staff]
+                division: 480, parts: [part]
             )
         }
 
@@ -175,16 +175,17 @@
             for _ in 1 ..< measureCount {
                 measures.append(Measure(voices: [restVoice]))
             }
-            let staff = StaffContent(id: 1, measures: measures)
+            let staff = Staff(measures: measures)
             let part = Part(
                 id: "P1",
                 instrument: Instrument(
                     id: "i",
                     articulations: [InstrumentArticulation()]
-                )
+                ),
+                staves: [staff]
             )
             return Score(
-                division: 480, parts: [part], staves: [staff]
+                division: 480, parts: [part]
             )
         }
 

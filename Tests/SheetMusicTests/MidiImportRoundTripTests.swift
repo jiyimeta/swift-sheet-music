@@ -11,7 +11,8 @@ import Testing
 
     /// Walk all `VoiceElement` chord pitches across every staff/measure/voice.
     private func allPitches(in score: Score) -> [Int] {
-        score.staves
+        score.allStaves
+            .map(\.staff)
             .flatMap(\.measures)
             .flatMap(\.voices)
             .flatMap(\.elements)
@@ -31,16 +32,13 @@ import Testing
         let chord = Chord(duration: .quarter, notes: ChordNotes([note]))
         let voice = Voice(elements: [.chord(chord)])
         let measure = Measure(voices: [voice])
-        let staff = StaffContent(id: 1, measures: [measure])
+        let staff = Staff(measures: [measure])
         let part = Part(
             id: "P1",
-            instrument: Instrument(id: "piano", longName: "Piano")
-        )
-        let originalScore = Score(
-            division: 480,
-            parts: [part],
+            instrument: Instrument(id: "piano", longName: "Piano"),
             staves: [staff]
         )
+        let originalScore = Score(division: 480, parts: [part])
 
         // Round trip: render → SMF bytes → import.
         let smfBytes = try MidiWriter.write(MidiRenderer.render(score: originalScore))
@@ -48,7 +46,7 @@ import Testing
 
         // Verify the imported score has the right shape.
         #expect(imported.parts.count >= 1)
-        #expect(!imported.staves.isEmpty)
+        #expect(imported.totalStaffCount >= 1)
 
         let pitches = allPitches(in: imported)
         #expect(pitches.contains(60))
@@ -64,12 +62,13 @@ import Testing
         let chord = Chord(duration: .half, notes: notes)
         let voice = Voice(elements: [.chord(chord)])
         let measure = Measure(voices: [voice])
-        let staff = StaffContent(id: 1, measures: [measure])
+        let staff = Staff(measures: [measure])
         let part = Part(
             id: "P1",
-            instrument: Instrument(id: "piano", longName: "Piano")
+            instrument: Instrument(id: "piano", longName: "Piano"),
+            staves: [staff]
         )
-        let score = Score(division: 480, parts: [part], staves: [staff])
+        let score = Score(division: 480, parts: [part])
 
         let smfBytes = try MidiWriter.write(MidiRenderer.render(score: score))
         let imported = try MidiImporter.parse(smfBytes)
@@ -89,9 +88,9 @@ import Testing
         let chord = Chord(duration: .quarter, notes: ChordNotes([note]))
         let v = Voice(elements: [.chord(chord)])
         let measure = Measure(voices: [v])
-        let staff = StaffContent(id: 1, measures: [measure])
-        let part = Part(id: "P1", instrument: Instrument(id: "piano"))
-        let originalScore = Score(division: 480, parts: [part], staves: [staff])
+        let staff = Staff(measures: [measure])
+        let part = Part(id: "P1", instrument: Instrument(id: "piano"), staves: [staff])
+        let originalScore = Score(division: 480, parts: [part])
 
         let smfBytes = try MidiWriter.write(MidiRenderer.render(score: originalScore))
         let imported = try MidiImporter.parse(smfBytes)

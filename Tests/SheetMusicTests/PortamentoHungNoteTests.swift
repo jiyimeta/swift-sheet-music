@@ -9,10 +9,10 @@ import Testing
 @Suite struct PortamentoHungNoteTests {
     private static func makeScore(chords: [Chord]) -> Score {
         let instrument = Instrument(id: "test", articulations: [InstrumentArticulation()])
-        let part = Part(id: "P1", instrument: instrument)
         let voice = Voice(elements: chords.map { .chord($0) })
-        let staff = StaffContent(id: 1, measures: [Measure(voices: [voice])])
-        return Score(division: 480, parts: [part], staves: [staff])
+        let staff = Staff(measures: [Measure(voices: [voice])])
+        let part = Part(id: "P1", instrument: instrument, staves: [staff])
+        return Score(division: 480, parts: [part])
     }
 
     @Test func portamentoFollowedByMixedChords_releasesEveryPitch() throws {

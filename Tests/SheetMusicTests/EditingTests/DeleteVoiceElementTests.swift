@@ -4,7 +4,7 @@ import Testing
 @Suite("DeleteVoiceElement")
 struct DeleteVoiceElementTests {
     private static let chordID = VoiceElementID(
-        staffIndex: 0, measureIndex: 0,
+        staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
         voiceIndex: 0, elementIndex: 1
     )
 
@@ -35,7 +35,7 @@ struct DeleteVoiceElementTests {
     func applyRest() throws {
         var score = EditingFixtures.fourQuarterRests()
         let restID = VoiceElementID(
-            staffIndex: 0, measureIndex: 0,
+            staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
             voiceIndex: 0, elementIndex: 2
         )
         let before = score
@@ -51,7 +51,7 @@ struct DeleteVoiceElementTests {
     func applyOnTimeSignature() {
         var score = EditingFixtures.fourQuarterRests()
         let timeSigID = VoiceElementID(
-            staffIndex: 0, measureIndex: 0,
+            staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
             voiceIndex: 0, elementIndex: 0
         )
         let cmd = DeleteVoiceElement(at: timeSigID)
@@ -64,7 +64,7 @@ struct DeleteVoiceElementTests {
     func applyMissing() {
         var score = EditingFixtures.fourQuarterRests()
         let bogus = VoiceElementID(
-            staffIndex: 0, measureIndex: 0,
+            staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
             voiceIndex: 0, elementIndex: 99
         )
         let cmd = DeleteVoiceElement(at: bogus)

@@ -19,7 +19,7 @@ struct NoteRangeTests {
         ])
         return Score(
             division: 480,
-            staves: [StaffContent(id: 1, measures: [m1, m2])]
+            parts: [Part(id: "1", instrument: Instrument(id: "x"), staves: [Staff(measures: [m1, m2])])]
         )
     }
 
@@ -41,7 +41,7 @@ struct NoteRangeTests {
         ])
         return Score(
             division: 480,
-            staves: [StaffContent(id: 1, measures: [m1])]
+            parts: [Part(id: "1", instrument: Instrument(id: "x"), staves: [Staff(measures: [m1])])]
         )
     }
 
@@ -60,29 +60,29 @@ struct NoteRangeTests {
         ])
         return Score(
             division: 480,
-            staves: [
-                StaffContent(id: 1, measures: [m1a]),
-                StaffContent(id: 2, measures: [m1b]),
+            parts: [
+                Part(id: "1", instrument: Instrument(id: "x"), staves: [Staff(measures: [m1a])]),
+                Part(id: "2", instrument: Instrument(id: "y"), staves: [Staff(measures: [m1b])]),
             ]
         )
     }
 
     private func note(
-        _ staff: Int, _ measure: Int, _ voice: Int,
+        _ staffIdx: Int, _ measure: Int, _ voice: Int,
         _ element: Int, _ noteInChord: Int = 0
     ) -> ScoreItemID {
         .note(NoteID(
-            staffIndex: staff, measureIndex: measure,
+            staff: StaffAddress(partIndex: staffIdx, staffIndexInPart: 0), measureIndex: measure,
             voiceIndex: voice, elementIndex: element,
             noteIndexInChord: noteInChord
         ))
     }
 
     private func rest(
-        _ staff: Int, _ measure: Int, _ voice: Int, _ element: Int
+        _ staffIdx: Int, _ measure: Int, _ voice: Int, _ element: Int
     ) -> ScoreItemID {
         .rest(RestID(
-            staffIndex: staff, measureIndex: measure,
+            staff: StaffAddress(partIndex: staffIdx, staffIndexInPart: 0), measureIndex: measure,
             voiceIndex: voice, elementIndex: element
         ))
     }
@@ -133,7 +133,7 @@ struct NoteRangeTests {
         let result = score.items(inRangeFrom: anchor, to: target)
         // Each staff has elements 1 and 2 in the tick range → 2 × 2 = 4.
         #expect(result.count == 4)
-        #expect(Set(result.map(\.staffIndex)) == [0, 1])
+        #expect(Set(result.map(\.staff.partIndex)) == [0, 1])
     }
 
     @Test("Invalid ID returns empty array")
@@ -194,9 +194,9 @@ struct NoteRangeTests {
         ])
         let score = Score(
             division: 480,
-            staves: [
-                StaffContent(id: 1, measures: [s0m0]),
-                StaffContent(id: 2, measures: [s1m0]),
+            parts: [
+                Part(id: "1", instrument: Instrument(id: "x"), staves: [Staff(measures: [s0m0])]),
+                Part(id: "2", instrument: Instrument(id: "y"), staves: [Staff(measures: [s1m0])]),
             ]
         )
         let firstEighth = note(0, 0, 0, 0)
@@ -206,7 +206,7 @@ struct NoteRangeTests {
         )
         // 8 notes from staff 0 + 1 note from staff 1 = 9 IDs.
         #expect(result.count == 9)
-        #expect(Set(result.map(\.staffIndex)) == [0, 1])
+        #expect(Set(result.map(\.staff.partIndex)) == [0, 1])
     }
 
     @Test("Clicking a rest anchors the range")

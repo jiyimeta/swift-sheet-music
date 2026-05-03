@@ -56,21 +56,23 @@ import Testing
     }
 
     @Test func decodeStaffDeclaration() throws {
+        // Staff.declared decodes <StaffType> from an in-Part <Staff> node.
         let xml = """
-        <Staff>
+        <Staff id="1">
           <StaffType group="pitched"><name>stdNormal</name></StaffType>
         </Staff>
         """
         let node = try XMLTreeParser.parse(Data(xml.utf8))
-        let decl = try StaffDeclaration.decode(node)
-        #expect(decl.staffType == "stdNormal")
-        #expect(decl.group == "pitched")
+        let (mscxID, staff) = Staff.declared(node)
+        #expect(mscxID == "1")
+        #expect(staff.staffType == "stdNormal")
+        #expect(staff.group == "pitched")
     }
 
     @Test func decodePart() throws {
         let xml = """
         <Part id="1">
-          <Staff>
+          <Staff id="1">
             <StaffType group="pitched"><name>stdNormal</name></StaffType>
           </Staff>
           <trackName>Voice</trackName>
@@ -80,10 +82,10 @@ import Testing
         </Part>
         """
         let node = try XMLTreeParser.parse(Data(xml.utf8))
-        let part = try Part.decode(node)
-        #expect(part.id == "1")
-        #expect(part.trackName == "Voice")
-        #expect(part.instrument.id == "voice")
-        #expect(part.staffDeclarations.count == 1)
+        let pairing = try Part.decodePairing(node)
+        #expect(pairing.partID == "1")
+        #expect(pairing.trackName == "Voice")
+        #expect(pairing.instrument.id == "voice")
+        #expect(pairing.declared.count == 1)
     }
 }

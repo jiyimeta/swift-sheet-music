@@ -89,18 +89,18 @@ import Testing
             .chord(chord), .chord(chord),
             .chord(chord), .chord(chord),
         ])
-        let staff = StaffContent(
-            id: 1, measures: [Measure(voices: [voice])]
+        let staff = Staff(measures: [Measure(voices: [voice])]
         )
         let part = Part(
             id: "P1",
             instrument: Instrument(
                 id: "i",
                 articulations: [InstrumentArticulation()]
-            )
+            ),
+            staves: [staff]
         )
         return Score(
-            division: 480, parts: [part], staves: [staff]
+            division: 480, parts: [part]
         )
     }
 }

@@ -4,7 +4,7 @@ import Testing
 @Suite("SetLyrics")
 struct SetLyricsTests {
     private static let chordID = VoiceElementID(
-        staffIndex: 0, measureIndex: 0,
+        staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
         voiceIndex: 0, elementIndex: 1
     )
 
@@ -65,7 +65,7 @@ struct SetLyricsTests {
     func applyOnRest() {
         var score = EditingFixtures.fourQuarterRests()
         let restID = VoiceElementID(
-            staffIndex: 0, measureIndex: 0,
+            staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
             voiceIndex: 0, elementIndex: 2
         )
         let cmd = SetLyrics(at: restID, lyrics: [Lyric(text: "x")])

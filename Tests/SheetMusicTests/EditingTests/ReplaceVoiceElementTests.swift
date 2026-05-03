@@ -4,10 +4,10 @@ import Testing
 @Suite("ReplaceVoiceElement")
 struct ReplaceVoiceElementTests {
     private static let restAt1 = VoiceElementID(
-        staffIndex: 0, measureIndex: 0, voiceIndex: 0, elementIndex: 1
+        staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0, voiceIndex: 0, elementIndex: 1
     )
     private static let outOfRange = VoiceElementID(
-        staffIndex: 0, measureIndex: 0, voiceIndex: 0, elementIndex: 99
+        staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0, voiceIndex: 0, elementIndex: 99
     )
 
     @Test("apply replaces the element")

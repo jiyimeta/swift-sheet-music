@@ -4,7 +4,7 @@ import Testing
 @Suite("SetNotePitch")
 struct SetNotePitchTests {
     private static let c4 = NoteID(
-        staffIndex: 0, measureIndex: 0, voiceIndex: 0,
+        staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0, voiceIndex: 0,
         elementIndex: 1, noteIndexInChord: 0
     )
 

@@ -96,7 +96,7 @@ import Testing
         guard let drums = score.parts.firstIndex(where: { $0.instrument.useDrumset }) else {
             Issue.record("expected drumset part"); return
         }
-        let measure = score.staves[drums].measures.first
+        let measure = score.parts[drums].staves.first?.measures.first
         guard let measure else { Issue.record("expected measure"); return }
         #expect(measure.voices.count == 2)
         // Walk every chord pitch in each voice — voice 0 should
@@ -140,7 +140,7 @@ import Testing
         guard let drums = score.parts.firstIndex(where: { $0.instrument.useDrumset }) else {
             Issue.record("expected drumset part"); return
         }
-        let measure = score.staves[drums].measures.first
+        let measure = score.parts[drums].staves.first?.measures.first
         #expect(measure?.voices.count == 1)
     }
 
@@ -173,9 +173,9 @@ import Testing
             Issue.record("expected a drumset part"); return
         }
         // Staff declaration drives the layout's clef pick.
-        let decl = drums.staffDeclarations.first
-        #expect(decl?.group == "percussion")
-        #expect(decl?.defaultClefType == "PERC")
+        let firstStaff = drums.staves.first
+        #expect(firstStaff?.group == "percussion")
+        #expect(firstStaff?.defaultClefType == "PERC")
         // drumLineMap covers the GM pitches used.
         #expect(drums.instrument.drumLineMap[36] != nil) // bass drum
         #expect(drums.instrument.drumLineMap[38] != nil) // snare

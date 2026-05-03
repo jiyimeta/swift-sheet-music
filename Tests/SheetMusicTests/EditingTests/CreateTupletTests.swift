@@ -4,7 +4,7 @@ import Testing
 @Suite("CreateTuplet")
 struct CreateTupletTests {
     private static let chordVE = VoiceElementID(
-        staffIndex: 0, measureIndex: 0,
+        staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
         voiceIndex: 0, elementIndex: 1
     )
 
@@ -15,7 +15,7 @@ struct CreateTupletTests {
             at: Self.chordVE, actualNotes: 3, normalNotes: 2
         )
         _ = try cmd.apply(to: &score)
-        let voice = score.staves[0].measures[0].voices[0]
+        let voice = score.parts[0].staves[0].measures[0].voices[0]
         // Original: [timeSig, chord(q), rest(q) × 3]. After:
         // [timeSig, chord(1/12), rest(1/12), rest(1/12), rest(q) × 3].
         #expect(voice.elements.count == 7)
@@ -44,14 +44,14 @@ struct CreateTupletTests {
     func tripletOnRest() throws {
         var score = EditingFixtures.fourQuarterRests()
         let restID = VoiceElementID(
-            staffIndex: 0, measureIndex: 0,
+            staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
             voiceIndex: 0, elementIndex: 2
         )
         let cmd = CreateTuplet(
             at: restID, actualNotes: 3, normalNotes: 2
         )
         _ = try cmd.apply(to: &score)
-        let voice = score.staves[0].measures[0].voices[0]
+        let voice = score.parts[0].staves[0].measures[0].voices[0]
         #expect(voice.tuplets.count == 1)
         for j in 2 ... 4 {
             guard case let .chord(r) = voice.elements[j], r.notes.isEmpty
@@ -66,7 +66,7 @@ struct CreateTupletTests {
             at: Self.chordVE, actualNotes: 5, normalNotes: 4
         )
         _ = try cmd.apply(to: &score)
-        let voice = score.staves[0].measures[0].voices[0]
+        let voice = score.parts[0].staves[0].measures[0].voices[0]
         #expect(voice.tuplets[0].actualNotes == 5)
         #expect(voice.tuplets[0].endIndex - voice.tuplets[0].startIndex == 4)
         guard case let .chord(c) = voice.elements[1] else {
@@ -100,7 +100,7 @@ struct CreateTupletTests {
         _ = outer
         // Targeting a member of the new triplet should refuse.
         let memberVE = VoiceElementID(
-            staffIndex: 0, measureIndex: 0,
+            staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
             voiceIndex: 0, elementIndex: 2
         )
         let cmd = CreateTuplet(
@@ -139,14 +139,14 @@ struct CreateTupletTests {
         //   [timeSig, m1, m2, m3, rest(q), rest(q), rest(q)]
         // Target the rest at idx 4.
         let secondTarget = VoiceElementID(
-            staffIndex: 0, measureIndex: 0,
+            staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
             voiceIndex: 0, elementIndex: 4
         )
         _ = try CreateTuplet(
             at: secondTarget, actualNotes: 3, normalNotes: 2
         )
         .apply(to: &score)
-        let voice = score.staves[0].measures[0].voices[0]
+        let voice = score.parts[0].staves[0].measures[0].voices[0]
         #expect(voice.tuplets.count == 2)
         let first = voice.tuplets[0]
         let second = voice.tuplets[1]

@@ -16,11 +16,11 @@ import Testing
             id: "test",
             articulations: [InstrumentArticulation()] // gate = 100, velocity = 100
         )
-        let part = Part(id: "P1", instrument: instrument)
         let voice = Voice(elements: chords.map { .chord($0) })
         let measure = Measure(voices: [voice])
-        let staff = StaffContent(id: 1, measures: [measure])
-        return Score(division: division, parts: [part], staves: [staff])
+        let staff = Staff(measures: [measure])
+        let part = Part(id: "P1", instrument: instrument, staves: [staff])
+        return Score(division: division, parts: [part])
     }
 
     private static func noteOns(in track: MidiTrack) -> [(tick: Int, pitch: Int)] {

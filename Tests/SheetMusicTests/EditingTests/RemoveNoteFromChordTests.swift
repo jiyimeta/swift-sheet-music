@@ -4,7 +4,7 @@ import Testing
 @Suite("RemoveNoteFromChord")
 struct RemoveNoteFromChordTests {
     private static let chordVE = VoiceElementID(
-        staffIndex: 0, measureIndex: 0,
+        staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
         voiceIndex: 0, elementIndex: 1
     )
 
@@ -17,7 +17,7 @@ struct RemoveNoteFromChordTests {
             score[Self.chordVE] = .chord(chord)
         }
         let removeID = NoteID(
-            staffIndex: 0, measureIndex: 0,
+            staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
             voiceIndex: 0, elementIndex: 1, noteIndexInChord: 1
         )
         let cmd = RemoveNoteFromChord(at: removeID)
@@ -33,7 +33,7 @@ struct RemoveNoteFromChordTests {
     func collapsesToRest() throws {
         var score = EditingFixtures.chordAtIndex1()
         let removeID = NoteID(
-            staffIndex: 0, measureIndex: 0,
+            staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
             voiceIndex: 0, elementIndex: 1, noteIndexInChord: 0
         )
         let cmd = RemoveNoteFromChord(at: removeID)
@@ -54,7 +54,7 @@ struct RemoveNoteFromChordTests {
         ))
         let snapshot = score
         let removeID = NoteID(
-            staffIndex: 0, measureIndex: 0,
+            staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
             voiceIndex: 0, elementIndex: 1, noteIndexInChord: 0
         )
         let cmd = RemoveNoteFromChord(at: removeID)
@@ -72,7 +72,7 @@ struct RemoveNoteFromChordTests {
         }
         let snapshot = score
         let removeID = NoteID(
-            staffIndex: 0, measureIndex: 0,
+            staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
             voiceIndex: 0, elementIndex: 1, noteIndexInChord: 1
         )
         let cmd = RemoveNoteFromChord(at: removeID)
@@ -85,7 +85,7 @@ struct RemoveNoteFromChordTests {
     func refusesOnRest() {
         var score = EditingFixtures.fourQuarterRests()
         let restNoteID = NoteID(
-            staffIndex: 0, measureIndex: 0,
+            staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
             voiceIndex: 0, elementIndex: 2, noteIndexInChord: 0
         )
         let cmd = RemoveNoteFromChord(at: restNoteID)
@@ -98,7 +98,7 @@ struct RemoveNoteFromChordTests {
     func refusesOnOutOfRange() {
         var score = EditingFixtures.chordAtIndex1()
         let badID = NoteID(
-            staffIndex: 0, measureIndex: 0,
+            staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
             voiceIndex: 0, elementIndex: 1, noteIndexInChord: 7
         )
         let cmd = RemoveNoteFromChord(at: badID)

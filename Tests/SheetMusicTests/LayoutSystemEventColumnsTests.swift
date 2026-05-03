@@ -24,13 +24,13 @@ struct LayoutSystemEventColumnsTests {
             parts: [Part(
                 id: "P1",
                 instrument: Instrument(id: "piano", longName: "Piano"),
-                staffDeclarations: [StaffDeclaration(
+                staves: [Staff(
                     staffType: "stdNormal",
                     group: "pitched",
-                    defaultClefType: "G"
+                    defaultClefType: "G",
+                    measures: [measure]
                 )]
-            )],
-            staves: [StaffContent(id: 1, measures: [measure])]
+            )]
         )
     }
 

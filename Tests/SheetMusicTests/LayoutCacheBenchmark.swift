@@ -23,8 +23,8 @@
             let url = URL(fileURLWithPath: path)
             let data = try Data(contentsOf: url)
             let score = try MSCXParser.parse(data)
-            let measureCount = score.staves.first?.measures.count ?? 0
-            print("score: \(measureCount) measures, \(score.staves.count) staves")
+            let measureCount = score.allStaves.first?.staff.measures.count ?? 0
+            print("score: \(measureCount) measures, \(score.totalStaffCount) staves")
             let opts = ScoreViewOptions()
             let availableWidth = LayoutEngine.naturalContentWidth(
                 score: score, options: opts
@@ -73,20 +73,20 @@
             ))
 
             // --- Single-measure edit: replace pitch in a chord ---
-            var staves = score.staves
-            if !staves.isEmpty,
-               let editIdx = pickEditableMeasure(staff: staves[0])
+            let firstStave = score.allStaves.first?.staff
+            if let firstStave,
+               let editIdx = pickEditableMeasure(staff: firstStave)
             {
-                var measures = staves[0].measures
+                var measures = firstStave.measures
                 let original = measures[editIdx]
                 measures[editIdx] = bumpFirstChord(in: original)
-                staves[0] = StaffContent(
-                    id: staves[0].id, measures: measures
-                )
+                var editedParts = score.parts
+                if !editedParts.isEmpty && !editedParts[0].staves.isEmpty {
+                    editedParts[0].staves[0] = Staff(measures: measures)
+                }
                 let edited = Score(
                     division: score.division,
-                    parts: score.parts,
-                    staves: staves,
+                    parts: editedParts,
                     metaTags: score.metaTags,
                     titleFrame: score.titleFrame,
                     style: score.style
@@ -108,7 +108,7 @@
         }
 
         /// Find a measure with a pitched chord we can mutate.
-        private func pickEditableMeasure(staff: StaffContent) -> Int? {
+        private func pickEditableMeasure(staff: Staff) -> Int? {
             for (idx, m) in staff.measures.enumerated() {
                 for v in m.voices {
                     for el in v.elements {

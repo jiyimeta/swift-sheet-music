@@ -25,8 +25,8 @@
             let chord = Chord(duration: .whole, notes: [note])
             let measure = Measure(
                 voices: [Voice(elements: [.chord(chord)])])
-            let staff = StaffContent(id: 1, measures: [measure])
-            let score = Score(division: 480, staves: [staff])
+            let staff = Staff(measures: [measure])
+            let score = Score(division: 480, parts: [Part(id: "1", instrument: Instrument(id: "x"), staves: [staff])])
             let doc = LayoutEngine.layout(
                 score: score, options: .init(), availableWidth: 800
             )
@@ -47,10 +47,9 @@
                 .chord(Chord(duration: .whole, notes: [note])),
                 .chord(Chord(duration: .whole, notes: [note])),
             ])])
-            let staff = StaffContent(
-                id: 1, measures: [m, m, m, m, m, m, m, m]
+            let staff = Staff(measures: [m, m, m, m, m, m, m, m]
             )
-            let score = Score(division: 480, staves: [staff])
+            let score = Score(division: 480, parts: [Part(id: "1", instrument: Instrument(id: "x"), staves: [staff])])
             let doc = LayoutEngine.layout(
                 score: score, options: .init(),
                 availableWidth: 120
@@ -64,18 +63,18 @@
             let note = Note(pitch: 60, tpc: 14)
             let chord = Chord(duration: .whole, notes: [note])
             let m = Measure(voices: [Voice(elements: [.chord(chord)])])
-            let staff1 = StaffContent(id: 1, measures: [m])
-            let staff2 = StaffContent(id: 2, measures: [m])
+            let staff1 = Staff(measures: [m])
+            let staff2 = Staff(measures: [m])
             let part = Part(
                 id: "P1",
                 instrument: Instrument(
                     id: "piano", longName: "Piano", shortName: "Pno."
-                )
+                ),
+                staves: [staff1, staff2]
             )
             let score = Score(
                 division: 480,
-                parts: [part],
-                staves: [staff1, staff2]
+                parts: [part]
             )
             let doc = LayoutEngine.layout(
                 score: score, options: .init(), availableWidth: 800
@@ -92,20 +91,19 @@
             let note = Note(pitch: 60, tpc: 14)
             let chord = Chord(duration: .whole, notes: [note])
             let m = Measure(voices: [Voice(elements: [.chord(chord)])])
-            let staff = StaffContent(
-                id: 1, measures: [m, m, m, m, m, m, m, m]
+            let staff = Staff(measures: [m, m, m, m, m, m, m, m]
             )
             let part = Part(
                 id: "P1",
                 trackName: "Violin",
                 instrument: Instrument(
                     id: "violin", longName: "Violin", shortName: "Vln."
-                )
+                ),
+                staves: [staff]
             )
             let score = Score(
                 division: 480,
-                parts: [part],
-                staves: [staff]
+                parts: [part]
             )
             let doc = LayoutEngine.layout(
                 score: score, options: .init(), availableWidth: 180
@@ -132,8 +130,8 @@
             )
             let measure = Measure(
                 voices: [Voice(elements: [.chord(chord)])])
-            let staff = StaffContent(id: 1, measures: [measure])
-            let score = Score(division: 480, staves: [staff])
+            let staff = Staff(measures: [measure])
+            let score = Score(division: 480, parts: [Part(id: "1", instrument: Instrument(id: "x"), staves: [staff])])
             let doc = LayoutEngine.layout(
                 score: score, options: .init(), availableWidth: 800
             )

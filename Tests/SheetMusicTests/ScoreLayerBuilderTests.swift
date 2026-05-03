@@ -55,8 +55,8 @@
             let m = Measure(voices: [Voice(elements: [
                 .chord(Chord(duration: .whole, notes: [note])),
             ])])
-            let staff = StaffContent(id: 1, measures: [m])
-            let score = Score(division: 480, staves: [staff])
+            let staff = Staff(measures: [m])
+            let score = Score(division: 480, parts: [Part(id: "1", instrument: Instrument(id: "x"), staves: [staff])])
 
             let opts = ScoreViewOptions(
                 staffSize: 28, systemGap: 40,

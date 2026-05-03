@@ -18,16 +18,16 @@ struct SetTieTests {
             .rest(duration: .half),
         ])
         let measure = Measure(voices: [voice])
-        let staff = StaffContent(id: 1, measures: [measure])
-        return Score(division: 480, staves: [staff])
+        let staff = Staff(measures: [measure])
+        return Score(division: 480, parts: [Part(id: "1", instrument: Instrument(id: "x"), staves: [staff])])
     }
 
     private static let firstC = NoteID(
-        staffIndex: 0, measureIndex: 0,
+        staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
         voiceIndex: 0, elementIndex: 1, noteIndexInChord: 0
     )
     private static let secondC = NoteID(
-        staffIndex: 0, measureIndex: 0,
+        staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
         voiceIndex: 0, elementIndex: 2, noteIndexInChord: 0
     )
 
@@ -95,13 +95,13 @@ struct ScoreNextTieTargetTests {
         ])
         let score = Score(
             division: 480,
-            staves: [StaffContent(
-                id: 1,
-                measures: [Measure(voices: [voice])]
+            parts: [Part(
+                id: "1", instrument: Instrument(id: "x"),
+                staves: [Staff(measures: [Measure(voices: [voice])])]
             )]
         )
         let source = NoteID(
-            staffIndex: 0,
+            staff: StaffAddress(partIndex: 0, staffIndexInPart: 0),
             measureIndex: 0,
             voiceIndex: 0,
             elementIndex: 0,
@@ -126,13 +126,13 @@ struct ScoreNextTieTargetTests {
         ])
         let score = Score(
             division: 480,
-            staves: [StaffContent(
-                id: 1,
-                measures: [Measure(voices: [voice])]
+            parts: [Part(
+                id: "1", instrument: Instrument(id: "x"),
+                staves: [Staff(measures: [Measure(voices: [voice])])]
             )]
         )
         let source = NoteID(
-            staffIndex: 0,
+            staff: StaffAddress(partIndex: 0, staffIndexInPart: 0),
             measureIndex: 0,
             voiceIndex: 0,
             elementIndex: 0,
@@ -156,13 +156,13 @@ struct ScoreNextTieTargetTests {
         ])
         let score = Score(
             division: 480,
-            staves: [StaffContent(
-                id: 1,
-                measures: [Measure(voices: [voice])]
+            parts: [Part(
+                id: "1", instrument: Instrument(id: "x"),
+                staves: [Staff(measures: [Measure(voices: [voice])])]
             )]
         )
         let source = NoteID(
-            staffIndex: 0,
+            staff: StaffAddress(partIndex: 0, staffIndexInPart: 0),
             measureIndex: 0,
             voiceIndex: 0,
             elementIndex: 0,
@@ -186,13 +186,13 @@ struct ScoreNextTieTargetTests {
         ])
         let score = Score(
             division: 480,
-            staves: [StaffContent(
-                id: 1,
-                measures: [Measure(voices: [voice])]
+            parts: [Part(
+                id: "1", instrument: Instrument(id: "x"),
+                staves: [Staff(measures: [Measure(voices: [voice])])]
             )]
         )
         let source = NoteID(
-            staffIndex: 0,
+            staff: StaffAddress(partIndex: 0, staffIndexInPart: 0),
             measureIndex: 0,
             voiceIndex: 0,
             elementIndex: 0,

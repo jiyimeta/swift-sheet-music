@@ -14,12 +14,16 @@ import Testing
         Chord(duration: .quarter, notes: [Note(pitch: pitch, tpc: tpc)])
     }
 
-    private static func makeStaff(chordPitch: Int) -> StaffContent {
+    private static func makeStaff(chordPitch: Int) -> Staff {
         let voice = Voice(elements: [.chord(makeChord(pitch: chordPitch))])
-        return StaffContent(id: 1, measures: [Measure(voices: [voice])])
+        return Staff(measures: [Measure(voices: [voice])])
     }
 
-    private static func partAndStaff(useDrumset: Bool, channelOverride: Int? = nil) -> (Part, StaffContent) {
+    private static func makePart(
+        useDrumset: Bool,
+        channelOverride: Int? = nil,
+        chordPitch: Int = 60
+    ) -> Part {
         let channel = InstrumentChannel(midiChannel: channelOverride)
         let instrument = Instrument(
             id: useDrumset ? "drum" : "test",
@@ -27,8 +31,8 @@ import Testing
             channels: [channel],
             useDrumset: useDrumset
         )
-        let part = Part(id: "P1", instrument: instrument)
-        return (part, makeStaff(chordPitch: useDrumset ? 38 : 60))
+        let staff = makeStaff(chordPitch: useDrumset ? 38 : chordPitch)
+        return Part(id: "P1", instrument: instrument, staves: [staff])
     }
 
     private static func channelOf(track: MidiTrack) -> Int? {
@@ -46,8 +50,8 @@ import Testing
     // MARK: - Tests
 
     @Test func drumOnlyScore_routesAllEventsToChannel9() throws {
-        let (part, staff) = Self.partAndStaff(useDrumset: true)
-        let score = Score(division: 480, parts: [part], staves: [staff])
+        let part = Self.makePart(useDrumset: true)
+        let score = Score(division: 480, parts: [part])
         let file = try MidiRenderer.render(score: score)
         let track = try #require(file.tracks.first)
 
@@ -68,8 +72,8 @@ import Testing
     @Test func explicitMidiChannelOverridesDrumDefault() throws {
         // If the score author explicitly sets <midiChannel>5</midiChannel>
         // we honour it even when useDrumset is true.
-        let (part, staff) = Self.partAndStaff(useDrumset: true, channelOverride: 5)
-        let score = Score(division: 480, parts: [part], staves: [staff])
+        let part = Self.makePart(useDrumset: true, channelOverride: 5)
+        let score = Score(division: 480, parts: [part])
         let file = try MidiRenderer.render(score: score)
         let track = try #require(file.tracks.first)
         #expect(Self.channelOf(track: track) == 5)
@@ -80,22 +84,20 @@ import Testing
         // without consuming a counter slot, so subsequent melodics keep
         // filling 0,1,2,... (matches MuseScore's getNextFreeMidiMapping).
         // The key invariant: NO melodic part is ever placed on channel 9.
-        let (drumPart, drumStaff) = Self.partAndStaff(useDrumset: true)
+        let drumPart = Self.makePart(useDrumset: true)
+        let melodicStaff1 = Self.makeStaff(chordPitch: 60)
+        let melodicStaff2 = Self.makeStaff(chordPitch: 64)
         let melodic1 = Part(
             id: "M1",
-            instrument: Instrument(id: "melodic1", articulations: [InstrumentArticulation()])
+            instrument: Instrument(id: "melodic1", articulations: [InstrumentArticulation()]),
+            staves: [melodicStaff1]
         )
         let melodic2 = Part(
             id: "M2",
-            instrument: Instrument(id: "melodic2", articulations: [InstrumentArticulation()])
+            instrument: Instrument(id: "melodic2", articulations: [InstrumentArticulation()]),
+            staves: [melodicStaff2]
         )
-        let melodicStaff1 = Self.makeStaff(chordPitch: 60)
-        let melodicStaff2 = Self.makeStaff(chordPitch: 64)
-        let score = Score(
-            division: 480,
-            parts: [melodic1, drumPart, melodic2],
-            staves: [melodicStaff1, drumStaff, melodicStaff2]
-        )
+        let score = Score(division: 480, parts: [melodic1, drumPart, melodic2])
         let file = try MidiRenderer.render(score: score)
         #expect(file.tracks.count == 3)
         let channels = file.tracks.compactMap(Self.channelOf(track:))
@@ -110,18 +112,17 @@ import Testing
         // Eleven melodic parts followed by a drum part. The melodics fill
         // channels 0…10 (skipping 9) and the drum still lands on 9.
         var parts: [Part] = []
-        var staves: [StaffContent] = []
         for i in 0 ..< 11 {
+            let staff = Self.makeStaff(chordPitch: 60 + i)
             parts.append(Part(
                 id: "M\(i)",
-                instrument: Instrument(id: "m\(i)", articulations: [InstrumentArticulation()])
+                instrument: Instrument(id: "m\(i)", articulations: [InstrumentArticulation()]),
+                staves: [staff]
             ))
-            staves.append(Self.makeStaff(chordPitch: 60 + i))
         }
-        let (drumPart, drumStaff) = Self.partAndStaff(useDrumset: true)
+        let drumPart = Self.makePart(useDrumset: true)
         parts.append(drumPart)
-        staves.append(drumStaff)
-        let score = Score(division: 480, parts: parts, staves: staves)
+        let score = Score(division: 480, parts: parts)
         let file = try MidiRenderer.render(score: score)
         let channels = file.tracks.compactMap(Self.channelOf(track:))
         // Melodic parts: 0,1,2,3,4,5,6,7,8,10,11 (skipping 9). Drum: 9.
@@ -132,9 +133,9 @@ import Testing
     @Test func multipleDrumParts_allShareChannel9() throws {
         // Two drum parts both go to channel 9. GM percussion is keyed on note
         // number, not part — sharing the channel is the correct behaviour.
-        let (drum1, staff1) = Self.partAndStaff(useDrumset: true)
-        let (drum2, staff2) = Self.partAndStaff(useDrumset: true)
-        let score = Score(division: 480, parts: [drum1, drum2], staves: [staff1, staff2])
+        let drum1 = Self.makePart(useDrumset: true)
+        let drum2 = Self.makePart(useDrumset: true)
+        let score = Score(division: 480, parts: [drum1, drum2])
         let file = try MidiRenderer.render(score: score)
         let channels = file.tracks.compactMap(Self.channelOf(track:))
         #expect(channels == [9, 9])

@@ -14,10 +14,9 @@ import Testing
         #expect(score.parts.count == 1)
         #expect(score.parts[0].instrument.channel.program == 52)
         #expect(score.parts[0].instrument.longName == "Voice")
-        #expect(score.staves.count == 1)
-        #expect(score.staves[0].id == 1)
-        #expect(score.staves[0].measures.count == 1)
-        let voice = score.staves[0].measures[0].voices[0]
+        #expect(score.totalStaffCount == 1)
+        #expect(score.parts[0].staves[0].measures.count == 1)
+        let voice = score.parts[0].staves[0].measures[0].voices[0]
         #expect(voice.elements.count == 6)
         guard case let .keySignature(k) = voice.elements[0] else {
             Issue.record("element 0 not key sig")

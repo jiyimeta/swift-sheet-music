@@ -12,33 +12,34 @@ import Testing
         let pianoChord = Chord(duration: .quarter, notes: ChordNotes([pianoNote]))
         let pianoVoice = Voice(elements: [.chord(pianoChord)])
         let pianoMeasure = Measure(voices: [pianoVoice])
-        let pianoStaff = StaffContent(id: 1, measures: [pianoMeasure])
+        let pianoStaff = Staff(measures: [pianoMeasure])
         let pianoPart = Part(
             id: "P1",
-            instrument: Instrument(id: "piano", longName: "Piano")
+            instrument: Instrument(id: "piano", longName: "Piano"),
+            staves: [pianoStaff]
         )
         let drumNote = Note(pitch: 36, tpc: 0, headType: "normal")
         let drumChord = Chord(duration: .quarter, notes: ChordNotes([drumNote]))
         let drumVoice = Voice(elements: [.chord(drumChord)])
         let drumMeasure = Measure(voices: [drumVoice])
-        let drumStaff = StaffContent(id: 2, measures: [drumMeasure])
+        let drumStaff = Staff(measures: [drumMeasure])
         let drumPart = Part(
             id: "P2",
             instrument: Instrument(
                 id: "drumset", longName: "Drumset", useDrumset: true
-            )
+            ),
+            staves: [drumStaff]
         )
         let score = Score(
             division: 480,
-            parts: [pianoPart, drumPart],
-            staves: [pianoStaff, drumStaff]
+            parts: [pianoPart, drumPart]
         )
         let smfBytes = try MidiWriter.write(MidiRenderer.render(score: score))
         let imported = try MidiImporter.parse(smfBytes)
         #expect(imported.parts.count >= 2)
         let hasDrumset = imported.parts.contains(where: \.instrument.useDrumset)
         #expect(hasDrumset)
-        #expect(imported.staves.count >= 2)
+        #expect(imported.totalStaffCount >= 2)
     }
 
     @Test func parsesEmptyFormat0PreservingDivision() throws {
@@ -129,7 +130,7 @@ import Testing
         let bytes = try MidiWriter.write(file)
         let score = try MidiImporter.parse(bytes)
 
-        func keySigSharpsFlats(in staff: StaffContent) -> Int? {
+        func keySigSharpsFlats(in staff: Staff) -> Int? {
             for measure in staff.measures {
                 for v in measure.voices {
                     for el in v.elements {
@@ -139,7 +140,7 @@ import Testing
             }
             return nil
         }
-        func hasTempo(in staff: StaffContent) -> Bool {
+        func hasTempo(in staff: Staff) -> Bool {
             staff.measures.flatMap(\.voices).flatMap(\.elements).contains { el in
                 if case .tempo = el { true } else { false }
             }
@@ -152,10 +153,10 @@ import Testing
             Issue.record("expected piano + bass + drums parts; got \(score.parts.map(\.trackName))")
             return
         }
-        #expect(keySigSharpsFlats(in: score.staves[pi]) == 3)
-        #expect(keySigSharpsFlats(in: score.staves[bi]) == 3)
-        #expect(keySigSharpsFlats(in: score.staves[di]) == nil)
-        let withTempo = score.staves.indices.filter { hasTempo(in: score.staves[$0]) }
+        #expect(keySigSharpsFlats(in: score.parts[pi].staves[0]) == 3)
+        #expect(keySigSharpsFlats(in: score.parts[bi].staves[0]) == 3)
+        #expect(keySigSharpsFlats(in: score.parts[di].staves[0]) == nil)
+        let withTempo = score.parts.indices.filter { hasTempo(in: score.parts[$0].staves[0]) }
         #expect(withTempo == [0])
     }
 
@@ -202,7 +203,7 @@ import Testing
         guard let pi = score.parts.firstIndex(where: { $0.trackName == "Piano" }) else {
             Issue.record("expected piano part"); return
         }
-        let firstMeasure = score.staves[pi].measures[0]
+        let firstMeasure = score.parts[pi].staves[0].measures[0]
         guard let voice = firstMeasure.voices.first else {
             Issue.record("expected voice 0"); return
         }
@@ -251,7 +252,7 @@ import Testing
             Issue.record("expected piano part")
             return
         }
-        let allTpcs: [Int] = score.staves[pi].measures.flatMap { measure in
+        let allTpcs: [Int] = score.parts[pi].staves[0].measures.flatMap { measure in
             measure.voices.flatMap { v in
                 v.elements.flatMap { e -> [Int] in
                     if case let .chord(c) = e { return c.notes.map(\.tpc) }

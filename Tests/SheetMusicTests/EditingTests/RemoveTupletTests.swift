@@ -4,7 +4,7 @@ import Testing
 @Suite("RemoveTuplet")
 struct RemoveTupletTests {
     private static let chordVE = VoiceElementID(
-        staffIndex: 0, measureIndex: 0,
+        staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
         voiceIndex: 0, elementIndex: 1
     )
 
@@ -17,11 +17,11 @@ struct RemoveTupletTests {
         .apply(to: &score)
         // Remove the triplet by targeting any member.
         let memberID = VoiceElementID(
-            staffIndex: 0, measureIndex: 0,
+            staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
             voiceIndex: 0, elementIndex: 2
         )
         _ = try RemoveTuplet(at: memberID).apply(to: &score)
-        let voice = score.staves[0].measures[0].voices[0]
+        let voice = score.parts[0].staves[0].measures[0].voices[0]
         // Original 4-quarter measure restored: [timeSig, chord(q),
         // rest(q), rest(q), rest(q)].
         #expect(voice.tuplets.isEmpty)
@@ -38,7 +38,7 @@ struct RemoveTupletTests {
     func removesRestTriplet() throws {
         var score = EditingFixtures.fourQuarterRests()
         let restID = VoiceElementID(
-            staffIndex: 0, measureIndex: 0,
+            staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
             voiceIndex: 0, elementIndex: 2
         )
         _ = try CreateTuplet(
@@ -46,11 +46,11 @@ struct RemoveTupletTests {
         )
         .apply(to: &score)
         let memberID = VoiceElementID(
-            staffIndex: 0, measureIndex: 0,
+            staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
             voiceIndex: 0, elementIndex: 3
         )
         _ = try RemoveTuplet(at: memberID).apply(to: &score)
-        let voice = score.staves[0].measures[0].voices[0]
+        let voice = score.parts[0].staves[0].measures[0].voices[0]
         #expect(voice.tuplets.isEmpty)
         #expect(voice.elements.count == 5)
         guard case let .chord(r) = voice.elements[2], r.notes.isEmpty
@@ -67,7 +67,7 @@ struct RemoveTupletTests {
         .apply(to: &score)
         let snapshot = score
         let memberID = VoiceElementID(
-            staffIndex: 0, measureIndex: 0,
+            staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
             voiceIndex: 0, elementIndex: 2
         )
         let cmd = RemoveTuplet(at: memberID)

@@ -39,6 +39,7 @@ import Testing
         <museScore version="4.60">
           <Score>
             <Division>480</Division>
+            <Part id="1"><Staff id="1"/><Instrument id="x"/></Part>
             <Staff id="1"><Measure></Measure></Staff>
           </Score>
         </museScore>
@@ -57,6 +58,7 @@ import Testing
           <Score>
             <Division>480</Division>
             <Style><spatium>1.75</spatium></Style>
+            <Part id="1"><Staff id="1"/><Instrument id="x"/></Part>
             <Staff id="1"><Measure></Measure></Staff>
           </Score>
         </museScore>
@@ -76,6 +78,7 @@ import Testing
           <Score>
             <Division>480</Division>
             <Style><Spatium>2.0</Spatium></Style>
+            <Part id="1"><Staff id="1"/><Instrument id="x"/></Part>
             <Staff id="1"><Measure></Measure></Staff>
           </Score>
         </museScore>
@@ -111,6 +114,7 @@ import Testing
               <oddFooterC>OF-C</oddFooterC>
               <oddFooterR>OF-R</oddFooterR>
             </Style>
+            <Part id="1"><Staff id="1"/><Instrument id="x"/></Part>
             <Staff id="1"><Measure></Measure></Staff>
           </Score>
         </museScore>
@@ -148,6 +152,7 @@ import Testing
               <pageNumberFontSize>13.5</pageNumberFontSize>
               <pageNumberFontFace>Helvetica</pageNumberFontFace>
             </Style>
+            <Part id="1"><Staff id="1"/><Instrument id="x"/></Part>
             <Staff id="1"><Measure></Measure></Staff>
           </Score>
         </museScore>

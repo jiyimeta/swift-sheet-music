@@ -12,19 +12,21 @@ struct SetRestDurationTests {
     }
 
     private func score(_ elements: [VoiceElement]) -> Score {
-        Score(division: 480, staves: [
-            StaffContent(id: 1, measures: [
-                Measure(voices: [Voice(elements: elements)]),
+        Score(division: 480, parts: [
+            Part(id: "1", instrument: Instrument(id: "x"), staves: [
+                Staff(measures: [
+                    Measure(voices: [Voice(elements: elements)]),
+                ]),
             ]),
         ])
     }
 
     private func first(_ score: Score) -> [VoiceElement] {
-        score.staves[0].measures[0].voices[0].elements
+        score.parts[0].staves[0].measures[0].voices[0].elements
     }
 
     private static let restID = VoiceElementID(
-        staffIndex: 0, measureIndex: 0,
+        staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
         voiceIndex: 0, elementIndex: 0
     )
 

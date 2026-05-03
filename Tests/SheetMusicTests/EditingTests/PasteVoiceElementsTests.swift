@@ -4,7 +4,7 @@ import Testing
 @Suite("PasteVoiceElements")
 struct PasteVoiceElementsTests {
     private static let restID = VoiceElementID(
-        staffIndex: 0, measureIndex: 0,
+        staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
         voiceIndex: 0, elementIndex: 1
     )
 
@@ -25,7 +25,7 @@ struct PasteVoiceElementsTests {
             at: Self.restID, elements: payload
         )
         _ = try cmd.apply(to: &score)
-        let voice = score.staves[0].measures[0].voices[0]
+        let voice = score.parts[0].staves[0].measures[0].voices[0]
         // [timeSig, eighth, eighth, rest(q), rest(q), rest(q)] — 6.
         #expect(voice.elements.count == 6)
         guard case let .chord(c1) = voice.elements[1],
@@ -57,7 +57,7 @@ struct PasteVoiceElementsTests {
             at: Self.restID, elements: payload
         )
         _ = try cmd.apply(to: &score)
-        let voice = score.staves[0].measures[0].voices[0]
+        let voice = score.parts[0].staves[0].measures[0].voices[0]
         // [timeSig, c, c, c, rest(q)] — 5.
         #expect(voice.elements.count == 5)
         guard case let .chord(c0) = voice.elements[1],
@@ -75,16 +75,16 @@ struct PasteVoiceElementsTests {
     func shorterSequence() throws {
         // Shape voice as [timeSig, half-rest, q-rest, q-rest].
         var score = EditingFixtures.fourQuarterRests()
-        var v = score.staves[0].measures[0].voices[0]
+        var v = score.parts[0].staves[0].measures[0].voices[0]
         v.elements = [
             .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
             .rest(duration: .half),
             .rest(duration: .quarter),
             .rest(duration: .quarter),
         ]
-        score.staves[0].measures[0].voices[0] = v
+        score.parts[0].staves[0].measures[0].voices[0] = v
         let halfRestID = VoiceElementID(
-            staffIndex: 0, measureIndex: 0,
+            staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
             voiceIndex: 0, elementIndex: 1
         )
         // Paste two eighth chords (= 1 quarter) onto the half rest:
@@ -101,7 +101,7 @@ struct PasteVoiceElementsTests {
             at: halfRestID, elements: payload
         )
         _ = try cmd.apply(to: &score)
-        let voice = score.staves[0].measures[0].voices[0]
+        let voice = score.parts[0].staves[0].measures[0].voices[0]
         // [timeSig, eighth, eighth, rest(q leftover), rest(q), rest(q)]
         #expect(voice.elements.count == 6)
         guard case let .chord(leftover) = voice.elements[3], leftover.notes.isEmpty else {
@@ -148,7 +148,7 @@ struct PasteVoiceElementsTests {
         // consumes idx 2 (rest q) but stops before the tuplet at
         // idx 3..5. Tuplet should survive with shifted indices.
         var score = EditingFixtures.fourQuarterRests()
-        var v = score.staves[0].measures[0].voices[0]
+        var v = score.parts[0].staves[0].measures[0].voices[0]
         v.elements = [
             .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
             .rest(duration: .quarter),
@@ -172,9 +172,9 @@ struct PasteVoiceElementsTests {
             normalNotes: 2, actualNotes: 3,
             startIndex: 3, endIndex: 5
         )]
-        score.staves[0].measures[0].voices[0] = v
+        score.parts[0].staves[0].measures[0].voices[0] = v
         let restID = VoiceElementID(
-            staffIndex: 0, measureIndex: 0,
+            staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
             voiceIndex: 0, elementIndex: 1
         )
         let halfChord = Chord(
@@ -184,7 +184,7 @@ struct PasteVoiceElementsTests {
             at: restID, elements: [.chord(halfChord)]
         )
         _ = try cmd.apply(to: &score)
-        let voice = score.staves[0].measures[0].voices[0]
+        let voice = score.parts[0].staves[0].measures[0].voices[0]
         // [timeSig, half-chord, <tuplet at 2..4>, rest q]
         #expect(voice.elements.count == 6)
         #expect(voice.tuplets.count == 1)
@@ -199,7 +199,7 @@ struct PasteVoiceElementsTests {
         // (= 1 quarter total) + idx 6 (rest q) = full bar gap.
         // Tuplet fully contained in paste range → dropped.
         var score = EditingFixtures.fourQuarterRests()
-        var v = score.staves[0].measures[0].voices[0]
+        var v = score.parts[0].staves[0].measures[0].voices[0]
         v.elements = [
             .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
             .rest(duration: .quarter),
@@ -222,9 +222,9 @@ struct PasteVoiceElementsTests {
             normalNotes: 2, actualNotes: 3,
             startIndex: 3, endIndex: 5
         )]
-        score.staves[0].measures[0].voices[0] = v
+        score.parts[0].staves[0].measures[0].voices[0] = v
         let restID = VoiceElementID(
-            staffIndex: 0, measureIndex: 0,
+            staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
             voiceIndex: 0, elementIndex: 1
         )
         let wholeChord = Chord(
@@ -234,7 +234,7 @@ struct PasteVoiceElementsTests {
             at: restID, elements: [.chord(wholeChord)]
         )
         _ = try cmd.apply(to: &score)
-        let voice = score.staves[0].measures[0].voices[0]
+        let voice = score.parts[0].staves[0].measures[0].voices[0]
         #expect(voice.tuplets.isEmpty)
     }
 
@@ -245,7 +245,7 @@ struct PasteVoiceElementsTests {
         // ticks = 3 quarters → consumes idx 2 (q rest) + only PART
         // of the tuplet → partial overlap → refuse.
         var score = EditingFixtures.fourQuarterRests()
-        var v = score.staves[0].measures[0].voices[0]
+        var v = score.parts[0].staves[0].measures[0].voices[0]
         v.elements = [
             .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
             .rest(duration: .quarter),
@@ -268,9 +268,9 @@ struct PasteVoiceElementsTests {
             normalNotes: 2, actualNotes: 3,
             startIndex: 3, endIndex: 5
         )]
-        score.staves[0].measures[0].voices[0] = v
+        score.parts[0].staves[0].measures[0].voices[0] = v
         let restID = VoiceElementID(
-            staffIndex: 0, measureIndex: 0,
+            staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
             voiceIndex: 0, elementIndex: 1
         )
         // 3-quarters worth of payload — eats first quarter rest +
@@ -300,7 +300,7 @@ struct PasteVoiceElementsTests {
     @Test("paste onto an element inside a tuplet refuses")
     func targetInsideTupletRefuses() {
         var score = EditingFixtures.fourQuarterRests()
-        var v = score.staves[0].measures[0].voices[0]
+        var v = score.parts[0].staves[0].measures[0].voices[0]
         v.elements = [
             .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
             .chord(Chord(
@@ -322,10 +322,10 @@ struct PasteVoiceElementsTests {
             normalNotes: 2, actualNotes: 3,
             startIndex: 1, endIndex: 3
         )]
-        score.staves[0].measures[0].voices[0] = v
+        score.parts[0].staves[0].measures[0].voices[0] = v
         // Target idx 2 = middle of the triplet.
         let middleID = VoiceElementID(
-            staffIndex: 0, measureIndex: 0,
+            staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
             voiceIndex: 0, elementIndex: 2
         )
         let cmd = PasteVoiceElements(
@@ -346,7 +346,7 @@ struct PasteVoiceElementsTests {
         // quarters worth, but only 1 quarter remains in the measure.
         var score = EditingFixtures.fourQuarterRests()
         let lastID = VoiceElementID(
-            staffIndex: 0, measureIndex: 0,
+            staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
             voiceIndex: 0, elementIndex: 4
         )
         let payload: [VoiceElement] = [

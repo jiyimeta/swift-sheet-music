@@ -5,7 +5,7 @@ import Testing
 @Suite("ScoreEditor")
 struct ScoreEditorTests {
     private static let restAt1 = RestID(
-        staffIndex: 0, measureIndex: 0, voiceIndex: 0, elementIndex: 1
+        staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0, voiceIndex: 0, elementIndex: 1
     )
 
     @Test("apply mutates the score and enables undo")

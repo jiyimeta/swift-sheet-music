@@ -17,7 +17,7 @@ import Testing
         let score = try MidiImporter.parse(Self.emptySMFBytes)
         #expect(score.division == 480)
         #expect(score.parts.isEmpty)
-        #expect(score.staves.isEmpty)
+        #expect(score.totalStaffCount == 0)
     }
 
     @Test func usesSourceFilenameAsTitle() throws {

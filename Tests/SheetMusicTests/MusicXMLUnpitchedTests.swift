@@ -41,8 +41,8 @@ import Testing
         """
         let score = try SheetMusic.loadScore(musicXMLData: Data(xml.utf8))
         #expect(score.parts.count == 1)
-        #expect(score.staves.count == 1)
-        let voice = try #require(score.staves.first?.measures.first?.voices.first)
+        #expect(score.totalStaffCount == 1)
+        let voice = try #require(score.allStaves.first?.staff.measures.first?.voices.first)
         guard case let .chord(chord) = voice.elements.last else {
             Issue.record("expected a chord, got \(voice.elements)")
             return
@@ -98,7 +98,7 @@ import Testing
         // the part on channel 9 (GM percussion).
         #expect(part.instrument.useDrumset == true)
         // Note pitch resolved via the drum table, NOT via display-step.
-        let voice = try #require(score.staves.first?.measures.first?.voices.first)
+        let voice = try #require(score.allStaves.first?.staff.measures.first?.voices.first)
         guard case let .chord(chord) = voice.elements.last else {
             Issue.record("expected a chord, got \(voice.elements)"); return
         }

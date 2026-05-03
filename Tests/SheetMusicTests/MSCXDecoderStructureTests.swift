@@ -57,7 +57,7 @@ import Testing
         #expect(measure.voices[0].elements.count == 1)
     }
 
-    @Test func decodeStaffContent() throws {
+    @Test func decodeTopLevelStaff() throws {
         let xml = """
         <Staff id="1">
           <Measure>
@@ -68,8 +68,8 @@ import Testing
         </Staff>
         """
         let node = try XMLTreeParser.parse(Data(xml.utf8))
-        let staff = try StaffContent.decode(node)
-        #expect(staff.id == 1)
-        #expect(staff.measures.count == 1)
+        let topLevel = try MSCXTopLevelStaff.decode(node)
+        #expect(topLevel.mscxID == "1")
+        #expect(topLevel.measures.count == 1)
     }
 }

@@ -48,16 +48,10 @@
                 trackName: "Piano",
                 instrument: Instrument(
                     id: "pno", longName: "Piano", shortName: "Pno."
-                )
+                ),
+                staves: [Staff(measures: [rh]), Staff(measures: [lh])]
             )
-            let score = Score(
-                division: 480,
-                parts: [part],
-                staves: [
-                    StaffContent(id: 1, measures: [rh]),
-                    StaffContent(id: 2, measures: [lh]),
-                ]
-            )
+            let score = Score(division: 480, parts: [part])
 
             let doc = LayoutEngine.layout(
                 score: score,
@@ -127,16 +121,16 @@
                 Voice(elements: v0),
                 Voice(elements: v1),
             ])
-            let staff = StaffContent(id: 1, measures: [m])
+            let staff = Staff(measures: [m])
             let score = Score(
                 division: 480,
                 parts: [Part(
                     id: "P1", trackName: nil,
                     instrument: Instrument(
                         id: "pno", longName: "Treble", shortName: "Tr."
-                    )
-                )],
-                staves: [staff]
+                    ),
+                    staves: [staff]
+                )]
             )
             let doc = LayoutEngine.layout(
                 score: score,
@@ -207,16 +201,16 @@
                     .rest(duration: .whole),
                 ]),
             ])
-            let staff = StaffContent(id: 1, measures: [m])
+            let staff = Staff(measures: [m])
             let score = Score(
                 division: 480,
                 parts: [Part(
                     id: "P1", trackName: nil,
                     instrument: Instrument(
                         id: "pno", longName: "Treble", shortName: "Tr."
-                    )
-                )],
-                staves: [staff]
+                    ),
+                    staves: [staff]
+                )]
             )
             let doc = LayoutEngine.layout(
                 score: score,
@@ -306,20 +300,13 @@
                 id: "P1", trackName: "Duo",
                 instrument: Instrument(
                     id: "x", longName: "Duo", shortName: "D."
-                )
-            )
-            let score = Score(
-                division: 480,
-                parts: [part],
+                ),
                 staves: [
-                    StaffContent(id: 1, measures: [
-                        Measure(voices: [Voice(elements: s1)]),
-                    ]),
-                    StaffContent(id: 2, measures: [
-                        Measure(voices: [Voice(elements: s2)]),
-                    ]),
+                    Staff(measures: [Measure(voices: [Voice(elements: s1)])]),
+                    Staff(measures: [Measure(voices: [Voice(elements: s2)])]),
                 ]
             )
+            let score = Score(division: 480, parts: [part])
             let doc = LayoutEngine.layout(
                 score: score,
                 options: .init(wrapToViewWidth: false),
@@ -383,16 +370,16 @@
                     .chord(Chord(duration: .quarter, notes: [c4])),
                 ]),
             ])
-            let staff = StaffContent(id: 1, measures: [m])
+            let staff = Staff(measures: [m])
             let score = Score(
                 division: 480,
                 parts: [Part(
                     id: "P", trackName: nil,
                     instrument: Instrument(
                         id: "x", longName: "T", shortName: "T"
-                    )
-                )],
-                staves: [staff]
+                    ),
+                    staves: [staff]
+                )]
             )
             let doc = LayoutEngine.layout(
                 score: score,
@@ -442,7 +429,7 @@
                 .chord(Chord(duration: .eighth, notes: [c4])),
                 .chord(Chord(duration: .eighth, notes: [c4])),
             ])
-            let staff = StaffContent(id: 1, measures: [
+            let staff = Staff(measures: [
                 Measure(voices: [voice]),
             ])
             let metrics = StaffMetrics(staffSize: 28)

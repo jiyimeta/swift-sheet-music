@@ -17,8 +17,9 @@ enum EditingFixtures {
             .rest(duration: .quarter),
         ])
         let measure = Measure(voices: [voice])
-        let staff = StaffContent(id: 1, measures: [measure])
-        return Score(division: 480, parts: [], staves: [staff])
+        let staff = Staff(measures: [measure])
+        let part = Part(id: "1", instrument: Instrument(id: "x"), staves: [staff])
+        return Score(division: 480, parts: [part])
     }
 
     /// Same shape as `fourQuarterRests` but element index 1 is a
@@ -30,7 +31,7 @@ enum EditingFixtures {
             notes: [Note(pitch: 60, tpc: 14)]
         )
         let id = VoiceElementID(
-            staffIndex: 0,
+            staff: StaffAddress(partIndex: 0, staffIndexInPart: 0),
             measureIndex: 0,
             voiceIndex: 0,
             elementIndex: 1

@@ -16,8 +16,8 @@
                 .chord(Chord(duration: .quarter, notes: [a])),
                 .chord(Chord(duration: .quarter, notes: [b])),
             ])])
-            let staff = StaffContent(id: 1, measures: [m])
-            let score = Score(division: 480, staves: [staff])
+            let staff = Staff(measures: [m])
+            let score = Score(division: 480, parts: [Part(id: "1", instrument: Instrument(id: "x"), staves: [staff])])
             let doc = LayoutEngine.layout(
                 score: score, options: .init(), availableWidth: 800
             )
@@ -34,8 +34,8 @@
                 .chord(Chord(duration: .quarter, notes: [a])),
                 .chord(Chord(duration: .quarter, notes: [b])),
             ])])
-            let staff = StaffContent(id: 1, measures: [m])
-            let score = Score(division: 480, staves: [staff])
+            let staff = Staff(measures: [m])
+            let score = Score(division: 480, parts: [Part(id: "1", instrument: Instrument(id: "x"), staves: [staff])])
             let doc = LayoutEngine.layout(
                 score: score, options: .init(), availableWidth: 800
             )
@@ -59,8 +59,8 @@
             let m2 = Measure(voices: [Voice(elements: [
                 .chord(Chord(duration: .whole, notes: [b])),
             ])])
-            let staff = StaffContent(id: 1, measures: [m1, m2])
-            let score = Score(division: 480, staves: [staff])
+            let staff = Staff(measures: [m1, m2])
+            let score = Score(division: 480, parts: [Part(id: "1", instrument: Instrument(id: "x"), staves: [staff])])
             let opts = ScoreViewOptions(wrapToViewWidth: true)
             let doc = LayoutEngine.layout(
                 score: score, options: opts, availableWidth: 200
@@ -93,8 +93,8 @@
             let m2 = Measure(voices: [Voice(elements: [
                 .chord(Chord(duration: .whole, notes: [b])),
             ])])
-            let staff = StaffContent(id: 1, measures: [m1, m2])
-            let score = Score(division: 480, staves: [staff])
+            let staff = Staff(measures: [m1, m2])
+            let score = Score(division: 480, parts: [Part(id: "1", instrument: Instrument(id: "x"), staves: [staff])])
             let opts = ScoreViewOptions(wrapToViewWidth: true)
             let doc = LayoutEngine.layout(
                 score: score, options: opts, availableWidth: 200

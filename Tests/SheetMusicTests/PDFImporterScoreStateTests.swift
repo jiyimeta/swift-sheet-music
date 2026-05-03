@@ -1,12 +1,12 @@
 import CoreGraphics
 import Foundation
-@testable import SheetMusicCore
+import SheetMusicCore
 @testable import SheetMusicPDF
 import Testing
 
 @Suite @MainActor struct PDFImporterScoreStateTests {
-    private func synthStaff() -> Staff {
-        Staff(
+    private func synthStaff() -> SheetMusicPDF.Staff {
+        SheetMusicPDF.Staff(
             pageIndex: 0,
             yLines: [490, 495, 500, 505, 510],
             xRange: 50 ... 550,

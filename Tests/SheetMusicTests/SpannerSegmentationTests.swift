@@ -20,8 +20,8 @@
             let m2 = Measure(voices: [Voice(elements: [
                 .chord(Chord(duration: .quarter, notes: [note])),
             ])])
-            let staff = StaffContent(id: 1, measures: [m1, m2])
-            let score = Score(division: 480, staves: [staff])
+            let staff = Staff(measures: [m1, m2])
+            let score = Score(division: 480, parts: [Part(id: "1", instrument: Instrument(id: "x"), staves: [staff])])
             let anchors = LayoutEngine.collectSpanners(score: score)
             #expect(anchors.count == 1)
             #expect(anchors.first?.endMeasure == 1)
@@ -40,8 +40,8 @@
                 .spanner(v1),
                 .chord(Chord(duration: .quarter, notes: [note])),
             ])])
-            let staff = StaffContent(id: 1, measures: [m])
-            let score = Score(division: 480, staves: [staff])
+            let staff = Staff(measures: [m])
+            let score = Score(division: 480, parts: [Part(id: "1", instrument: Instrument(id: "x"), staves: [staff])])
             let anchors = LayoutEngine.collectSpanners(score: score)
             #expect(anchors.first?.voltaEndings == [1])
         }

@@ -15,6 +15,10 @@ import Testing
         <museScore version="4.60">
           <Score>
             <Division>480</Division>
+            <Part id="1">
+              <Staff id="1"><StaffType group="pitched"><name>stdNormal</name></StaffType></Staff>
+              <Instrument id="x"><longName>X</longName></Instrument>
+            </Part>
             <Staff id="1">
               <Measure>
                 <voice></voice>
@@ -33,7 +37,7 @@ import Testing
         </museScore>
         """
         let score = try MSCXParser.parse(Data(mscx.utf8))
-        let measures = score.staves[0].measures
+        let measures = score.parts[0].staves[0].measures
         #expect(measures[0].lineBreak == false)
         #expect(measures[1].lineBreak == true)
         #expect(measures[2].lineBreak == false)
@@ -49,6 +53,10 @@ import Testing
         <museScore version="4.60">
           <Score>
             <Division>480</Division>
+            <Part id="1">
+              <Staff id="1"><StaffType group="pitched"><name>stdNormal</name></StaffType></Staff>
+              <Instrument id="x"><longName>X</longName></Instrument>
+            </Part>
             <Staff id="1">
               <Measure>
                 <LayoutBreak>
@@ -61,8 +69,8 @@ import Testing
         </museScore>
         """
         let score = try MSCXParser.parse(Data(mscx.utf8))
-        #expect(score.staves[0].measures[0].pageBreak == true)
-        #expect(score.staves[0].measures[0].lineBreak == false)
+        #expect(score.parts[0].staves[0].measures[0].pageBreak == true)
+        #expect(score.parts[0].staves[0].measures[0].lineBreak == false)
     }
 
     /// `LayoutEngine.measureForcesLineBreak(at:staves:)` consults
@@ -75,8 +83,8 @@ import Testing
         let mPage = Measure(voices: [], pageBreak: true)
         let mPlain = Measure(voices: [])
         let staves = [
-            StaffContent(id: 1, measures: [mLine, mPage, mPlain]),
-            StaffContent(id: 2, measures: [mPlain, mPlain, mPlain]),
+            Staff(measures: [mLine, mPage, mPlain]),
+            Staff(measures: [mPlain, mPlain, mPlain]),
         ]
         #expect(LayoutEngine.measureForcesLineBreak(
             at: 0, staves: staves
@@ -122,17 +130,16 @@ import Testing
             if idx == 7 { m.lineBreak = true }
             return m
         }
-        let staff = StaffContent(id: 1, measures: measures)
+        let staff = Staff(measures: measures)
         let part = Part(
             id: "P1",
             instrument: Instrument(
                 id: "i",
                 articulations: [InstrumentArticulation()]
-            )
+            ),
+            staves: [staff]
         )
-        let score = Score(
-            division: 480, parts: [part], staves: [staff]
-        )
+        let score = Score(division: 480, parts: [part])
         // Width chosen so greedy packing would land 5+3 but
         // balanced wrap collapses that to 4+4. Each measure's
         // `crossStaffMinimumMeasureWidth` is ~48.65 pt at
@@ -180,17 +187,16 @@ import Testing
                 lineBreak: idx % 2 == 1
             )
         }
-        let staff = StaffContent(id: 1, measures: measures)
+        let staff = Staff(measures: measures)
         let part = Part(
             id: "P1",
             instrument: Instrument(
                 id: "i",
                 articulations: [InstrumentArticulation()]
-            )
+            ),
+            staves: [staff]
         )
-        let score = Score(
-            division: 480, parts: [part], staves: [staff]
-        )
+        let score = Score(division: 480, parts: [part])
         let doc = LayoutEngine.layout(
             score: score,
             options: ScoreViewOptions(
@@ -225,17 +231,16 @@ import Testing
                 lineBreak: idx == 1 || idx == 3
             )
         }
-        let staff = StaffContent(id: 1, measures: measures)
+        let staff = Staff(measures: measures)
         let part = Part(
             id: "P1",
             instrument: Instrument(
                 id: "i",
                 articulations: [InstrumentArticulation()]
-            )
+            ),
+            staves: [staff]
         )
-        let score = Score(
-            division: 480, parts: [part], staves: [staff]
-        )
+        let score = Score(division: 480, parts: [part])
         let doc = LayoutEngine.layout(
             score: score,
             options: ScoreViewOptions(
