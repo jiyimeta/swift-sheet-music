@@ -70,6 +70,78 @@ import Testing
         }
     }
 
+    @Test func tupletIndicesSurviveSustainedNoteThroughVoicing() {
+        // Beat 0..480 has a triplet on pitch 60 (onsets at 0, 160, 320).
+        // A sustained pitch 67 starts at tick 0 and ends at tick 240
+        // — mid-triplet. The voicing pass adds an extra grid step at
+        // tick 240, so the rebuilt elements list has more entries than
+        // the quantizer's. Tuplet indices must still point at the
+        // triplet members in the rebuilt list.
+        let measure = ImportMeasure(
+            startTick: 0, endTick: 480, measureIndex: 0,
+            timeSignature: TimeSignature(numerator: 1, denominator: 4),
+            events: [
+                // Triplet on pitch 60.
+                TimedMidiEvent(
+                    tick: 0,
+                    event: .noteOn(channel: 0, pitch: 60, velocity: 80)
+                ),
+                TimedMidiEvent(
+                    tick: 160,
+                    event: .noteOff(channel: 0, pitch: 60, velocity: 0)
+                ),
+                TimedMidiEvent(
+                    tick: 160,
+                    event: .noteOn(channel: 0, pitch: 62, velocity: 80)
+                ),
+                TimedMidiEvent(
+                    tick: 320,
+                    event: .noteOff(channel: 0, pitch: 62, velocity: 0)
+                ),
+                TimedMidiEvent(
+                    tick: 320,
+                    event: .noteOn(channel: 0, pitch: 64, velocity: 80)
+                ),
+                TimedMidiEvent(
+                    tick: 480,
+                    event: .noteOff(channel: 0, pitch: 64, velocity: 0)
+                ),
+                // Sustained pitch 67, ends mid-triplet at tick 240.
+                TimedMidiEvent(
+                    tick: 0,
+                    event: .noteOn(channel: 0, pitch: 67, velocity: 80)
+                ),
+                TimedMidiEvent(
+                    tick: 240,
+                    event: .noteOff(channel: 0, pitch: 67, velocity: 0)
+                ),
+            ],
+            carryIns: [], carryOuts: []
+        )
+        let q = MidiImporter.quantize(
+            measure: measure, division: 480, options: .init()
+        )
+        let voice = MidiImporter.voice(
+            quantized: q, measure: measure, division: 480
+        )
+        #expect(voice.tuplets.count == 1)
+        let tuplet = voice.tuplets[0]
+        // The chords at tuplet.startIndex...tuplet.endIndex must all
+        // contain pitch 60/62/64 (the triplet members), not the
+        // sustained-note rest chord at tick 240.
+        let tripletPitches: [[Int]] = (tuplet.startIndex ... tuplet.endIndex).map { i in
+            if case let .chord(c) = voice.elements[i] {
+                return c.notes.map(\.pitch)
+            }
+            return []
+        }
+        // Each tuplet member should contain at least one of {60, 62, 64}.
+        let tripletPitchesFlat = Set(tripletPitches.flatMap { $0 })
+        #expect(tripletPitchesFlat.contains(60))
+        #expect(tripletPitchesFlat.contains(62))
+        #expect(tripletPitchesFlat.contains(64))
+    }
+
     @Test func crossBarNoteEmitsTieAcrossBar() {
         // Two adjacent measures of 4/4 (1920 ticks each). A note starts
         // at tick 0 (measure 0), ends at tick 3000 (measure 1, partway).

@@ -194,6 +194,12 @@ extension MidiImporter {
         return best
     }
 
+    struct PendingTuplet {
+        var startElement: Int
+        var ratio: TupletRatio
+        var tickRange: Range<Int>
+    }
+
     static func assemble(
         measure: ImportMeasure,
         assignments: [TupletAssignment],
@@ -207,9 +213,9 @@ extension MidiImporter {
         )
 
         var elements: [VoiceElement] = []
-        var tupletRanges: [(elementRange: ClosedRange<Int>, ratio: TupletRatio)] = []
+        var tupletEntries: [(elementRange: ClosedRange<Int>, ratio: TupletRatio, tickRange: Range<Int>)] = []
         var prev = measure.startTick
-        var inProgressTuplet: (TupletAssignment, startElement: Int)?
+        var inProgress: PendingTuplet?
 
         let allTicks = (snappedOnsets.map(\.tick) + [measure.endTick]).sorted()
         for tick in allTicks where tick > prev {
@@ -225,27 +231,31 @@ extension MidiImporter {
             let owningTuplet = assignments.first(where: {
                 $0.ratio != nil && $0.range.contains(prev)
             })
-            if let owning = owningTuplet, inProgressTuplet?.0.range != owning.range {
-                if let inProgress = inProgressTuplet, let ratio = inProgress.0.ratio {
-                    let r = inProgress.startElement ... (elements.count - 2)
-                    tupletRanges.append((r, ratio))
-                }
-                inProgressTuplet = (owning, elements.count - 1)
-            } else if owningTuplet == nil, let inProgress = inProgressTuplet,
-                      let ratio = inProgress.0.ratio
+            if let owning = owningTuplet, let owningRatio = owning.ratio,
+               inProgress?.tickRange != owning.range
             {
-                let r = inProgress.startElement ... (elements.count - 2)
-                tupletRanges.append((r, ratio))
-                inProgressTuplet = nil
+                if let pending = inProgress {
+                    let r = pending.startElement ... (elements.count - 2)
+                    tupletEntries.append((r, pending.ratio, pending.tickRange))
+                }
+                inProgress = PendingTuplet(
+                    startElement: elements.count - 1,
+                    ratio: owningRatio,
+                    tickRange: owning.range
+                )
+            } else if owningTuplet == nil, let pending = inProgress {
+                let r = pending.startElement ... (elements.count - 2)
+                tupletEntries.append((r, pending.ratio, pending.tickRange))
+                inProgress = nil
             }
             prev = tick
         }
-        if let inProgress = inProgressTuplet, let ratio = inProgress.0.ratio {
-            let r = inProgress.startElement ... (elements.count - 1)
-            tupletRanges.append((r, ratio))
+        if let pending = inProgress {
+            let r = pending.startElement ... (elements.count - 1)
+            tupletEntries.append((r, pending.ratio, pending.tickRange))
         }
 
-        let tuplets = tupletRanges.map {
+        let tuplets = tupletEntries.map {
             Tuplet(
                 normalNotes: $0.ratio.normal,
                 actualNotes: $0.ratio.actual,
@@ -253,6 +263,10 @@ extension MidiImporter {
                 endIndex: $0.elementRange.upperBound
             )
         }
-        return QuantizedMeasure(elements: elements, tuplets: tuplets)
+        return QuantizedMeasure(
+            elements: elements,
+            tuplets: tuplets,
+            tupletTickRanges: tupletEntries.map(\.tickRange)
+        )
     }
 }

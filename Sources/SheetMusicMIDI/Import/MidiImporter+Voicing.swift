@@ -61,6 +61,7 @@ extension MidiImporter {
             .sorted()
 
         var elements: [VoiceElement] = []
+        var elementTicks: [Int] = [] // start tick of each element in the rebuilt list
         var prev = measure.startTick
 
         for tick in grid where tick > prev {
@@ -80,11 +81,27 @@ extension MidiImporter {
                     isDrum: isDrumTrack
                 )
             }
+            elementTicks.append(prev)
             elements.append(.chord(Chord(duration: duration, notes: ChordNotes(coreNotes))))
             prev = tick
         }
 
-        return Voice(elements: elements, tuplets: quantized.tuplets)
+        // Re-resolve tuplet indices from tick ranges into the rebuilt element list.
+        let resolvedTuplets = zip(quantized.tuplets, quantized.tupletTickRanges)
+            .compactMap { tuplet, tickRange -> Tuplet? in
+                guard let startIndex = elementTicks.firstIndex(where: { tickRange.contains($0) })
+                else { return nil }
+                guard let endIndex = elementTicks.lastIndex(where: { tickRange.contains($0) })
+                else { return nil }
+                return Tuplet(
+                    normalNotes: tuplet.normalNotes,
+                    actualNotes: tuplet.actualNotes,
+                    startIndex: startIndex,
+                    endIndex: endIndex
+                )
+            }
+
+        return Voice(elements: elements, tuplets: resolvedTuplets)
     }
 }
 

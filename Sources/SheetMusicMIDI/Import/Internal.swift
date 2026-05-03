@@ -41,4 +41,8 @@ struct CarriedNote: Equatable {
 struct QuantizedMeasure {
     var elements: [VoiceElement]
     var tuplets: [Tuplet]
+    /// Tick ranges of each tuplet, parallel to `tuplets`. Used by
+    /// `voice()` to re-resolve indices when it rebuilds the element
+    /// list with offset-driven grid steps.
+    var tupletTickRanges: [Range<Int>]
 }
