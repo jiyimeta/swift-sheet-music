@@ -19,17 +19,25 @@ public struct Staff: Sendable, Equatable {
     /// engines synthesize the opening clef from this when the first
     /// content measure lacks an explicit `<Clef>`.
     public var defaultClefType: String?
+    /// MuseScore `<bracket>` children of `<Staff>`, in document order.
+    /// Each item anchors one bracket / brace whose span extends
+    /// downward from this staff. Empty by default; callers that need
+    /// auto-derivation from instrument family must populate this list
+    /// themselves before handing the `Score` to the layout engine.
+    public var brackets: [BracketItem]
     public var measures: [Measure]
 
     public init(
         staffType: String = "stdNormal",
         group: String = "pitched",
         defaultClefType: String? = nil,
+        brackets: [BracketItem] = [],
         measures: [Measure] = []
     ) {
         self.staffType = staffType
         self.group = group
         self.defaultClefType = defaultClefType
+        self.brackets = brackets
         self.measures = measures
     }
 }

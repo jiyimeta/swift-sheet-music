@@ -30,4 +30,17 @@ import Testing
         #expect(BracketType.line.rawValue == 3)
         #expect(BracketType.noBracket.rawValue == -1)
     }
+
+    @Test func staffBracketsDefaultsToEmpty() {
+        let s = Staff()
+        #expect(s.brackets.isEmpty)
+    }
+
+    @Test func staffInitAcceptsBrackets() {
+        let s = Staff(brackets: [
+            BracketItem(type: .brace, span: 2),
+        ])
+        #expect(s.brackets.count == 1)
+        #expect(s.brackets[0].type == .brace)
+    }
 }
