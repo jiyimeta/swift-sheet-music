@@ -96,7 +96,7 @@ public enum SheetMusic {
     /// The filename (without extension) is used as the title fallback
     /// when the SMF has no Track-Name meta on Track 0.
     public static func loadScore(
-        midiURL: URL, options: MidiImportOptions
+        midiURL: URL, options: MidiImportOptions = .init()
     ) async throws -> Score {
         let data = try Data(contentsOf: midiURL)
         return try await MidiImporter.parse(
