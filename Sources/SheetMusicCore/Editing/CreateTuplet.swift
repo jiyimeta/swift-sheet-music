@@ -135,7 +135,7 @@ public struct CreateTuplet: EditCommand {
         newTuplets.sort { $0.startIndex < $1.startIndex }
 
         let replace = ReplaceVoiceElements(
-            staffIndex: location.staffIndex,
+            staff: location.staff,
             measureIndex: location.measureIndex,
             voiceIndex: location.voiceIndex,
             elements: newElements,

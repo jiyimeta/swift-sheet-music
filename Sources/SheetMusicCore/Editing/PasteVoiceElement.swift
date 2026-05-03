@@ -85,7 +85,7 @@ public struct PasteVoiceElement: EditCommand {
                 division: division
             )
         let replace = ReplaceVoiceElements(
-            staffIndex: location.staffIndex,
+            staff: location.staff,
             measureIndex: location.measureIndex,
             voiceIndex: location.voiceIndex,
             elements: newElements,

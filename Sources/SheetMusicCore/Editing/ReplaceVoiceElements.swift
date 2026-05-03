@@ -9,20 +9,20 @@ import Foundation
 /// values, so apply / undo / redo all round-trip through the same
 /// command type.
 public struct ReplaceVoiceElements: EditCommand {
-    public let staffIndex: Int
+    public let staff: StaffAddress
     public let measureIndex: Int
     public let voiceIndex: Int
     public let elements: [VoiceElement]
     public let tuplets: [Tuplet]
 
     public init(
-        staffIndex: Int,
+        staff: StaffAddress,
         measureIndex: Int,
         voiceIndex: Int,
         elements: [VoiceElement],
         tuplets: [Tuplet] = []
     ) {
-        self.staffIndex = staffIndex
+        self.staff = staff
         self.measureIndex = measureIndex
         self.voiceIndex = voiceIndex
         self.elements = elements
@@ -31,7 +31,7 @@ public struct ReplaceVoiceElements: EditCommand {
 
     public var affectedLocation: VoiceElementID {
         VoiceElementID(
-            staffIndex: staffIndex,
+            staff: staff,
             measureIndex: measureIndex,
             voiceIndex: voiceIndex,
             elementIndex: 0
@@ -40,19 +40,24 @@ public struct ReplaceVoiceElements: EditCommand {
 
     @discardableResult
     public func apply(to score: inout Score) throws -> any EditCommand {
-        guard score.staves.indices.contains(staffIndex) else {
+        guard score.parts.indices.contains(staff.partIndex),
+              score.parts[staff.partIndex].staves.indices
+                  .contains(staff.staffIndexInPart)
+        else {
             throw SheetMusicError.invalidEdit(
-                reason: "ReplaceVoiceElements: staff \(staffIndex) "
+                reason: "ReplaceVoiceElements: staff \(staff) "
                     + "out of range")
         }
-        guard score.staves[staffIndex].measures
+        let p = staff.partIndex
+        let s = staff.staffIndexInPart
+        guard score.parts[p].staves[s].measures
             .indices.contains(measureIndex)
         else {
             throw SheetMusicError.invalidEdit(
                 reason: "ReplaceVoiceElements: measure "
                     + "\(measureIndex) out of range")
         }
-        guard score.staves[staffIndex]
+        guard score.parts[p].staves[s]
             .measures[measureIndex].voices
             .indices.contains(voiceIndex)
         else {
@@ -60,15 +65,15 @@ public struct ReplaceVoiceElements: EditCommand {
                 reason: "ReplaceVoiceElements: voice "
                     + "\(voiceIndex) out of range")
         }
-        let priorVoice = score.staves[staffIndex]
+        let priorVoice = score.parts[p].staves[s]
             .measures[measureIndex].voices[voiceIndex]
-        score.staves[staffIndex]
+        score.parts[p].staves[s]
             .measures[measureIndex]
             .voices[voiceIndex] = Voice(
                 elements: elements, tuplets: tuplets
             )
         return ReplaceVoiceElements(
-            staffIndex: staffIndex,
+            staff: staff,
             measureIndex: measureIndex,
             voiceIndex: voiceIndex,
             elements: priorVoice.elements,

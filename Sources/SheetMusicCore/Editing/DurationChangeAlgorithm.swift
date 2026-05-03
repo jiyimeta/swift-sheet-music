@@ -292,10 +292,12 @@ public enum DurationChangeAlgorithm {
     static func voice(
         in score: Score, at id: VoiceElementID
     ) -> Voice? {
-        guard score.staves.indices.contains(id.staffIndex) else {
-            return nil
-        }
-        let measures = score.staves[id.staffIndex].measures
+        guard score.parts.indices.contains(id.staff.partIndex),
+              score.parts[id.staff.partIndex].staves.indices
+                  .contains(id.staff.staffIndexInPart)
+        else { return nil }
+        let measures = score.parts[id.staff.partIndex]
+            .staves[id.staff.staffIndexInPart].measures
         guard measures.indices.contains(id.measureIndex) else {
             return nil
         }
