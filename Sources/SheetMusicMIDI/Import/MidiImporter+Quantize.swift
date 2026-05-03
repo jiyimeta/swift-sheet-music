@@ -194,6 +194,27 @@ extension MidiImporter {
         return best
     }
 
+    /// Tick-exact duration for an arbitrary `ticks` count.
+    /// Returns a standard `NoteDuration` (with optional dot) when one
+    /// matches exactly; falls back to `.fraction` otherwise so the
+    /// imported chord's duration in ticks equals the original gap.
+    /// This keeps measure-internal chord-duration sums equal to the
+    /// bar length, which `PlaybackTimeline` and `MetronomeBeat` rely on.
+    static func exactDuration(ticks: Int, division: Int) -> NoteDuration {
+        let candidates: [NoteDuration] = [
+            .whole, .half, .quarter, .eighth, .sixteenth, .thirtySecond,
+            .sixtyFourth, .oneTwentyEighth,
+        ]
+        for c in candidates where c.ticks(division: division) == ticks {
+            return c
+        }
+        for c in candidates {
+            let dotted = c.dotted(1)
+            if dotted.ticks(division: division) == ticks { return dotted }
+        }
+        return .fraction(Fraction(numerator: ticks, denominator: 4 * division))
+    }
+
     struct PendingTuplet {
         var startElement: Int
         var ratio: TupletRatio

@@ -70,7 +70,7 @@ extension MidiImporter {
             let willContinue = notes.filter { $0.onTick <= prev && $0.offTick > tick }.map(\.pitch)
             let comesFromPrior = notes.filter { $0.onTick < prev && $0.offTick > prev }.map(\.pitch)
 
-            let duration = nearestDuration(ticks: tick - prev, division: division)
+            let duration = exactDuration(ticks: tick - prev, division: division)
             let coreNotes: [SheetMusicCore.Note] = activeNotes.map(\.pitch).map { pitch in
                 buildNote(
                     pitch: pitch,

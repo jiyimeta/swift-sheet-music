@@ -236,6 +236,36 @@ import Testing
         #expect(MidiImporter.tpc(forMidiPitch: 65, concertKey: -2) == 13) // F
     }
 
+    @Test func chordDurationsSumExactlyToMeasureLength() {
+        // Imported voicing must emit chord durations whose tick-sum
+        // equals the measure length exactly. Otherwise PlaybackTimeline
+        // / MetronomeBeat's spineTick drifts and metronome events can
+        // land out of order, tripping MidiWriter's sorted-by-tick
+        // precondition.
+        //
+        // Build a measure where the gap between events is 720 ticks
+        // (dotted quarter) — a value `nearestDuration` would round to
+        // `.half` (960). With `exactDuration` it must be tick-exact.
+        let measure = ImportMeasure(
+            startTick: 0, endTick: 1920, measureIndex: 0,
+            timeSignature: TimeSignature(numerator: 4, denominator: 4),
+            events: [
+                nOn(0, 60), nOff(720, 60), // dotted quarter
+                nOn(720, 62), nOff(1920, 62), // dotted half
+            ],
+            carryIns: [], carryOuts: []
+        )
+        let q = MidiImporter.quantize(measure: measure, division: 480, options: .init())
+        let voice = MidiImporter.voice(quantized: q, measure: measure, division: 480)
+        let totalTicks = voice.elements.reduce(0) { acc, el in
+            if case let .chord(c) = el {
+                return acc + c.duration.ticks(division: 480)
+            }
+            return acc
+        }
+        #expect(totalTicks == 1920)
+    }
+
     @Test func tpcUsesSharpSpellingsInSharpKeys() {
         // D major (concertKey = +2). Black keys take sharp spellings.
         #expect(MidiImporter.tpc(forMidiPitch: 61, concertKey: 2) == 21) // C#
