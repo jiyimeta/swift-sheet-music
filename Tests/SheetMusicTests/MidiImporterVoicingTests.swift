@@ -274,6 +274,21 @@ import Testing
         #expect(parts == [NoteDuration.quarter.dotted(1)])
     }
 
+    @Test func longHeldChordSplitsAtHalfMeasureBoundary() {
+        // A 1680-tick held chord starting at offset 240 in 4/4
+        // (= "eighth + dotted-half + eighth tied" naively) should
+        // instead split at the half-measure boundary into
+        // [eighth, quarter, half] (last two tied) so a dotted-half
+        // doesn't span across both half-measure and beat-4.
+        let parts = MidiImporter.decomposeIntoStandardDurations(
+            ticks: 1680,
+            division: 480,
+            offsetInMeasure: 240,
+            allowDot: true
+        )
+        #expect(parts == [.eighth, .quarter, .half])
+    }
+
     @Test func dottedQuarterChordIsPreservedAsSingleElementWhenAllowed() {
         // 720 ticks at offset 0, allowDot=true (chord context).
         // Result: a single dotted-quarter (= `.fraction(3/8)`).
