@@ -9,11 +9,11 @@ public enum ScoreItemID: Hashable, Sendable {
     case rest(RestID)
     case tuplet(TupletID)
 
-    public var staffIndex: Int {
+    public var staff: StaffAddress {
         switch self {
-        case let .note(id): return id.staffIndex
-        case let .rest(id): return id.staffIndex
-        case let .tuplet(id): return id.staffIndex
+        case let .note(id): return id.staff
+        case let .rest(id): return id.staff
+        case let .tuplet(id): return id.staff
         }
     }
 

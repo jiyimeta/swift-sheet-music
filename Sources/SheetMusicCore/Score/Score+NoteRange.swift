@@ -146,16 +146,6 @@ extension Score {
     }
 }
 
-extension ScoreItemID {
-    fileprivate var staff: StaffAddress {
-        switch self {
-        case let .note(id): return id.staff
-        case let .rest(id): return id.staff
-        case let .tuplet(id): return id.staff
-        }
-    }
-}
-
 /// Lexicographic (measure, tick) position used to order element
 /// onsets across a score.
 private struct TickPosition: Comparable {
