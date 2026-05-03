@@ -1,6 +1,21 @@
 import Foundation
 import SheetMusicCore
 
+// MARK: - VoiceNote
+
+/// Minimal note span used internally by the voicing pass.
+private struct VoiceNote {
+    var onTick: Int
+    var offTick: Int
+    var pitch: Int
+    /// True when the note is a continuation from a prior bar (carryIn).
+    var startsTied: Bool = false
+    /// True when the note continues into the next bar (carryOut).
+    var endsTied: Bool = false
+}
+
+// MARK: - voice()
+
 extension MidiImporter {
     /// Produce a `Voice` from a quantized measure plus the original
     /// `ImportMeasure` (which carries the noteOn/noteOff stream
@@ -10,15 +25,52 @@ extension MidiImporter {
     /// re-attach to the resulting voice). The actual element list
     /// is rebuilt here from the original event stream so we can
     /// generate `tieForward` / `tieBack` markers correctly across
-    /// staggered noteOffs.
+    /// staggered noteOffs and bar boundaries.
     static func voice(
         quantized: QuantizedMeasure,
         measure: ImportMeasure,
         division: Int
     ) -> Voice {
-        struct VoiceNote { var onTick: Int; var offTick: Int; var pitch: Int }
+        var notes = collectNotes(from: measure)
+        mergeCarryIns(into: &notes, measure: measure)
+        mergeCarryOuts(into: &notes, measure: measure)
 
-        // Collect (onTick, offTick, pitch) triples from the measure.
+        let grid = Set(notes.flatMap { [$0.onTick, $0.offTick] })
+            .union([measure.startTick, measure.endTick])
+            .sorted()
+
+        var elements: [VoiceElement] = []
+        var prev = measure.startTick
+
+        for tick in grid where tick > prev {
+            let activeNotes = notes.filter { $0.onTick <= prev && $0.offTick > prev }
+            let willContinue = notes.filter { $0.onTick <= prev && $0.offTick > tick }.map(\.pitch)
+            let comesFromPrior = notes.filter { $0.onTick < prev && $0.offTick > prev }.map(\.pitch)
+
+            let duration = nearestDuration(ticks: tick - prev, division: division)
+            let coreNotes: [SheetMusicCore.Note] = activeNotes.map(\.pitch).map { pitch in
+                buildNote(
+                    pitch: pitch,
+                    prev: prev,
+                    tick: tick,
+                    activeNotes: activeNotes,
+                    comesFromPrior: comesFromPrior,
+                    willContinue: willContinue
+                )
+            }
+            elements.append(.chord(Chord(duration: duration, notes: ChordNotes(coreNotes))))
+            prev = tick
+        }
+
+        return Voice(elements: elements, tuplets: quantized.tuplets)
+    }
+}
+
+// MARK: - Private helpers
+
+extension MidiImporter {
+    /// Collect `(onTick, offTick, pitch)` triples from the measure's event stream.
+    private static func collectNotes(from measure: ImportMeasure) -> [VoiceNote] {
         var open: [(channel: Int, pitch: Int, onTick: Int)] = []
         var notes: [VoiceNote] = []
         for ev in measure.events {
@@ -37,35 +89,58 @@ extension MidiImporter {
         for n in open {
             notes.append(VoiceNote(onTick: n.onTick, offTick: measure.endTick, pitch: n.pitch))
         }
+        return notes
+    }
 
-        // Walk grid positions = sorted union of onsets and offsets,
-        // bracketed by the measure boundaries.
-        let grid = Set(notes.flatMap { [$0.onTick, $0.offTick] })
-            .union([measure.startTick, measure.endTick])
-            .sorted()
-
-        var elements: [VoiceElement] = []
-        var prev = measure.startTick
-
-        for tick in grid where tick > prev {
-            let active = notes.filter { $0.onTick <= prev && $0.offTick > prev }
-                .map(\.pitch)
-            let willContinue = notes.filter { $0.onTick <= prev && $0.offTick > tick }
-                .map(\.pitch)
-            let comesFromPrior = notes.filter { $0.onTick < prev && $0.offTick > prev }
-                .map(\.pitch)
-
-            let duration = nearestDuration(ticks: tick - prev, division: division)
-            let coreNotes: [SheetMusicCore.Note] = active.map { pitch in
-                var n = SheetMusicCore.Note(pitch: pitch, tpc: 0)
-                if comesFromPrior.contains(pitch) { n.tieBack = 1 }
-                if willContinue.contains(pitch) { n.tieForward = 1 }
-                return n
-            }
-            elements.append(.chord(Chord(duration: duration, notes: ChordNotes(coreNotes))))
-            prev = tick
+    /// Synthesise a `startsTied` VoiceNote at the measure head for each carryIn.
+    private static func mergeCarryIns(into notes: inout [VoiceNote], measure: ImportMeasure) {
+        for carried in measure.carryIns {
+            notes.append(VoiceNote(
+                onTick: measure.startTick,
+                offTick: min(carried.noteOffTick, measure.endTick),
+                pitch: carried.pitch,
+                startsTied: true
+            ))
         }
+    }
 
-        return Voice(elements: elements, tuplets: quantized.tuplets)
+    /// Mark the matching VoiceNote `endsTied` for each carryOut, synthesising
+    /// one if the noteOn did not fall within this measure.
+    private static func mergeCarryOuts(into notes: inout [VoiceNote], measure: ImportMeasure) {
+        for carried in measure.carryOuts {
+            let onTick = max(carried.noteOnTick, measure.startTick)
+            if let idx = notes.firstIndex(where: { $0.pitch == carried.pitch && $0.onTick == onTick }) {
+                notes[idx].endsTied = true
+                notes[idx].offTick = measure.endTick
+            } else {
+                notes.append(VoiceNote(
+                    onTick: onTick,
+                    offTick: measure.endTick,
+                    pitch: carried.pitch,
+                    endsTied: true
+                ))
+            }
+        }
+    }
+
+    /// Stamp tie flags on a single note within the chord-emission loop.
+    private static func buildNote(
+        pitch: Int,
+        prev: Int,
+        tick: Int,
+        activeNotes: [VoiceNote],
+        comesFromPrior: [Int],
+        willContinue: [Int]
+    ) -> SheetMusicCore.Note {
+        var n = SheetMusicCore.Note(pitch: pitch, tpc: 0)
+        if comesFromPrior.contains(pitch) { n.tieBack = 1 }
+        if activeNotes.contains(where: { $0.pitch == pitch && $0.startsTied && $0.onTick == prev }) {
+            n.tieBack = 1
+        }
+        if willContinue.contains(pitch) { n.tieForward = 1 }
+        if activeNotes.contains(where: { $0.pitch == pitch && $0.endsTied && $0.offTick == tick }) {
+            n.tieForward = 1
+        }
+        return n
     }
 }

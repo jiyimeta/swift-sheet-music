@@ -69,4 +69,66 @@ import Testing
             #expect(c1.notes.isEmpty)
         }
     }
+
+    @Test func crossBarNoteEmitsTieAcrossBar() {
+        // Two adjacent measures of 4/4 (1920 ticks each). A note starts
+        // at tick 0 (measure 0), ends at tick 3000 (measure 1, partway).
+        let crossing = CarriedNote(
+            pitch: 60, channel: 0, sourceMeasureIndex: 0,
+            noteOnTick: 0, noteOffTick: 3000
+        )
+        let m1 = ImportMeasure(
+            startTick: 0, endTick: 1920, measureIndex: 0,
+            timeSignature: TimeSignature(numerator: 4, denominator: 4),
+            events: [
+                TimedMidiEvent(tick: 0, event: .noteOn(channel: 0, pitch: 60, velocity: 80)),
+                TimedMidiEvent(tick: 1920, event: .endOfTrack),
+            ],
+            carryIns: [],
+            carryOuts: [crossing]
+        )
+        let m2 = ImportMeasure(
+            startTick: 1920, endTick: 3840, measureIndex: 1,
+            timeSignature: TimeSignature(numerator: 4, denominator: 4),
+            events: [
+                TimedMidiEvent(tick: 3000, event: .noteOff(channel: 0, pitch: 60, velocity: 0)),
+            ],
+            carryIns: [crossing],
+            carryOuts: []
+        )
+
+        let v1 = MidiImporter.voice(
+            quantized: MidiImporter.quantize(measure: m1, division: 480, options: .init()),
+            measure: m1, division: 480
+        )
+        let v2 = MidiImporter.voice(
+            quantized: MidiImporter.quantize(measure: m2, division: 480, options: .init()),
+            measure: m2, division: 480
+        )
+
+        // Last chord of m1: tieForward set on pitch 60.
+        guard let lastM1 = v1.elements.last else {
+            Issue.record("expected chord at end of m1")
+            return
+        }
+        if case let .chord(c) = lastM1 {
+            let n = c.notes.first(where: { $0.pitch == 60 })
+            #expect(n != nil)
+            #expect(n?.tieForward == 1)
+        } else {
+            Issue.record("expected chord at end of m1")
+        }
+        // First chord of m2: tieBack set on pitch 60.
+        guard let firstM2 = v2.elements.first else {
+            Issue.record("expected chord at start of m2")
+            return
+        }
+        if case let .chord(c) = firstM2 {
+            let n = c.notes.first(where: { $0.pitch == 60 })
+            #expect(n != nil)
+            #expect(n?.tieBack == 1)
+        } else {
+            Issue.record("expected chord at start of m2")
+        }
+    }
 }
