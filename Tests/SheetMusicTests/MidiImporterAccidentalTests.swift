@@ -61,6 +61,62 @@ import Testing
         #expect(accFor(71) == .natural)
     }
 
+    @Test func drumTrackKeySigZeroDoesNotOverrideConductorKey() throws {
+        // Reproduce a real DAW pattern: every track (including
+        // drums) emits its own key-sig meta at tick 0. Drums always
+        // get `sf=0` because percussion has no key. If the importer
+        // collected events from every track, the drum track's
+        // `(0, 0)` would override the conductor's `(0, -4)` because
+        // it sorts last among same-tick events. Ensure the
+        // conductor's key wins for non-drum staves.
+        let track0 = MidiTrack(events: [
+            TimedMidiEvent(tick: 0, event: .meta(.trackName("Conductor"))),
+            TimedMidiEvent(tick: 0, event: .meta(.keySignature(sharpsFlats: -4, isMinor: false))),
+            TimedMidiEvent(tick: 0, event: .meta(.timeSignature(
+                numerator: 4, denominator: 4, clocksPerClick: 24, thirtySecondsPerQuarter: 8
+            ))),
+            TimedMidiEvent(tick: 1920, event: .endOfTrack),
+        ])
+        // Track 1: piano on channel 0 — key sig duplicated.
+        let track1 = MidiTrack(events: [
+            TimedMidiEvent(tick: 0, event: .meta(.trackName("Piano"))),
+            TimedMidiEvent(tick: 0, event: .meta(.keySignature(sharpsFlats: -4, isMinor: false))),
+            // Pitch 61 — should be Db (TPC 9) under -4 key.
+            TimedMidiEvent(tick: 0, event: .noteOn(channel: 0, pitch: 61, velocity: 80)),
+            TimedMidiEvent(tick: 1920, event: .noteOff(channel: 0, pitch: 61, velocity: 0)),
+            TimedMidiEvent(tick: 1920, event: .endOfTrack),
+        ])
+        // Track 2: drums on channel 9 — DAWs write sf=0 here.
+        let track2 = MidiTrack(events: [
+            TimedMidiEvent(tick: 0, event: .meta(.trackName("Drums"))),
+            TimedMidiEvent(tick: 0, event: .meta(.keySignature(sharpsFlats: 0, isMinor: false))),
+            TimedMidiEvent(tick: 0, event: .noteOn(channel: 9, pitch: 36, velocity: 80)),
+            TimedMidiEvent(tick: 1920, event: .noteOff(channel: 9, pitch: 36, velocity: 0)),
+            TimedMidiEvent(tick: 1920, event: .endOfTrack),
+        ])
+        let file = MidiFile(division: 480, format: 1, tracks: [track0, track1, track2])
+        let bytes = try MidiWriter.write(file)
+        let score = try MidiImporter.parse(bytes)
+
+        guard let pi = score.parts.firstIndex(where: { $0.trackName == "Piano" }) else {
+            Issue.record("expected piano part"); return
+        }
+        let piano = score.staves[pi]
+        // First note's TPC must be 9 (Db), not 21 (C#) which would
+        // happen if concertKey were 0 instead of -4.
+        let firstTpc: Int? = {
+            for v in piano.measures[0].voices {
+                for el in v.elements {
+                    if case let .chord(c) = el, let n = c.notes.first {
+                        return n.tpc
+                    }
+                }
+            }
+            return nil
+        }()
+        #expect(firstTpc == 9)
+    }
+
     @Test func midSongKeyChangeUpdatesTpcSpellings() throws {
         // Two-measure file: measure 0 in 4 flats (Ab major),
         // measure 1 modulates to 3 sharps (A major). The same MIDI

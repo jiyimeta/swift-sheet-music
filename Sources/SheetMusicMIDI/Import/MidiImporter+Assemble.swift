@@ -106,20 +106,22 @@ extension MidiImporter {
 
     /// Active key-signature value for each measure index.
     /// Key changes mid-piece (e.g. modulating from 4 flats to 3
-    /// sharps) take effect at the bar containing the change. The
-    /// value at index `i` is the latest sharps/flats count whose
-    /// tick is < `timeline.bars[i+1].startTick` (or the last bar
-    /// for the final measure).
+    /// sharps) take effect at the bar containing the change.
+    ///
+    /// Source: Format 1 conductor track (track 0); Format 0 single
+    /// track. Other tracks' key-sig events are ignored — DAWs often
+    /// duplicate them per instrument track and (notably) write a
+    /// stray `sf=0` on drum tracks because percussion has no key,
+    /// which would otherwise compete with the real value at tick 0.
     static func perMeasureKeys(
         file: MidiFile, timeline: BarTimeline
     ) -> [Int] {
         struct Change { var tick: Int; var sf: Int }
         var changes: [Change] = []
-        for track in file.tracks {
-            for ev in track.events {
-                if case let .meta(.keySignature(sf, _)) = ev.event {
-                    changes.append(Change(tick: ev.tick, sf: sf))
-                }
+        let conductor = file.tracks.first
+        for ev in conductor?.events ?? [] {
+            if case let .meta(.keySignature(sf, _)) = ev.event {
+                changes.append(Change(tick: ev.tick, sf: sf))
             }
         }
         changes.sort { $0.tick < $1.tick }
@@ -128,9 +130,6 @@ extension MidiImporter {
         }
 
         return timeline.bars.map { bar in
-            // Match the latest change with tick ≤ bar.startTick.
-            // (A change exactly on the bar line takes effect at
-            // that bar.)
             var current = 0
             for change in changes {
                 if change.tick <= bar.startTick {
@@ -152,7 +151,14 @@ extension MidiImporter {
         includeTempo: Bool,
         includeKeySignature: Bool
     ) {
-        let metas = file.tracks.flatMap(\.events).filter {
+        // Format 1 convention: tempo / time-sig / key-sig are all
+        // on the conductor (track 0). DAWs frequently duplicate
+        // them per instrument track, and write `sf=0` on drum
+        // tracks specifically (percussion has no key signature).
+        // Walking every track here would double-insert events and
+        // — worse — let the drum track's spurious (0, 0) override
+        // the real initial key on every non-drum staff.
+        let metas = (file.tracks.first?.events ?? []).filter {
             if case .meta = $0.event { true } else { false }
         }
         for meta in metas {
