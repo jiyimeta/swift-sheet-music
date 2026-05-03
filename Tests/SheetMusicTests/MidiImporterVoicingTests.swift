@@ -277,16 +277,19 @@ import Testing
     @Test func longHeldChordSplitsAtHalfMeasureBoundary() {
         // A 1680-tick held chord starting at offset 240 in 4/4
         // (= "eighth + dotted-half + eighth tied" naively) should
-        // instead split at the half-measure boundary into
-        // [eighth, quarter, half] (last two tied) so a dotted-half
-        // doesn't span across both half-measure and beat-4.
+        // split at the half-measure boundary into
+        // [dotted-quarter, half] (tied). The dotted-quarter starts
+        // mid-beat-1 and ends exactly at the half-measure boundary
+        // (960) — accepted by the end-aligned clause of
+        // `metricallyAligned`.
         let parts = MidiImporter.decomposeIntoStandardDurations(
             ticks: 1680,
             division: 480,
             offsetInMeasure: 240,
             allowDot: true
         )
-        #expect(parts == [.eighth, .quarter, .half])
+        let dottedQuarter = NoteDuration.fraction(Fraction(numerator: 3, denominator: 8))
+        #expect(parts == [dottedQuarter, .half])
     }
 
     @Test func dottedQuarterChordIsPreservedAsSingleElementWhenAllowed() {

@@ -86,20 +86,36 @@ extension MidiImporter {
 
     /// True if a duration with `ticks` (and underlying `baseTicks`,
     /// which equals `ticks` for binary forms) placed at
-    /// measure-relative `offset` is metrically idiomatic:
-    ///   - the duration starts at a multiple of its base value
-    ///     (= sits on a beat-or-stronger boundary at its own level)
-    ///   - the duration does not extend past the next stronger
-    ///     boundary at level `2 × baseTicks`
-    /// Together these reject unusual placements like a
-    /// dotted-eighth at offset 840 (crosses beat 3) or a
-    /// dotted-half at offset 240 (crosses half-measure twice).
+    /// measure-relative `offset` is metrically idiomatic. Either:
+    ///   (a) start-aligned: the duration starts on a multiple of
+    ///       its base value AND fits inside the stronger
+    ///       (2 × baseTicks) scope box, OR
+    ///   (b) end-aligned: the duration ends exactly on a stronger
+    ///       (2 × baseTicks) boundary AND its start lies inside
+    ///       the same stronger box
+    /// Case (b) lets a syncopated dotted-quarter at offset 240
+    /// stand as a single value when its end falls on the
+    /// half-measure boundary (a recognised engraving pattern).
+    /// Both clauses still reject crossings that span two scope
+    /// boxes (e.g. dotted-half at offset 240, dotted-eighth at
+    /// offset 840).
     static func metricallyAligned(
         ticks: Int, baseTicks: Int, at offset: Int
     ) -> Bool {
         guard ticks > 0, baseTicks > 0 else { return true }
-        if offset % baseTicks != 0 { return false }
         let stronger = baseTicks * 2
-        return (offset % stronger) + ticks <= stronger
+        // (a) start-aligned at base, fits in stronger scope.
+        if offset % baseTicks == 0
+            && (offset % stronger) + ticks <= stronger
+        {
+            return true
+        }
+        // (b) end-aligned at stronger boundary, start inside the
+        //     same stronger scope box.
+        let endTick = offset + ticks
+        if endTick % stronger == 0 {
+            return offset >= endTick - stronger
+        }
+        return false
     }
 }
