@@ -203,23 +203,33 @@ extension MidiImporter {
 
     static func makePart(for track: ImportTrack) -> Part {
         let instrument: Instrument
+        let staffDecls: [StaffDeclaration]
         if track.isDrums {
             instrument = Instrument(
                 id: "drumset",
                 longName: track.trackName ?? "Drumset",
                 useDrumset: true,
-                drumLineMap: [:]
+                drumLineMap: gmDrumLines
             )
+            // Percussion staff: layout uses these to pick the
+            // percussion clef and the drum-line note placement.
+            staffDecls = [StaffDeclaration(
+                staffType: "stdNormal",
+                group: "percussion",
+                defaultClefType: "PERC"
+            )]
         } else {
             instrument = Instrument(
                 id: gmInstrumentID(for: track.programChange),
                 longName: track.trackName ?? "Track"
             )
+            staffDecls = []
         }
         return Part(
             id: "P\(track.trackIndex)",
             trackName: track.trackName,
-            instrument: instrument
+            instrument: instrument,
+            staffDeclarations: staffDecls
         )
     }
 
