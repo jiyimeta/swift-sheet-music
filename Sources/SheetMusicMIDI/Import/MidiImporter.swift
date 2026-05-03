@@ -34,20 +34,26 @@ public enum MidiImporter {
         )
     }
 
-    // MARK: - Internal entry points (filled in over the following tasks)
+    // MARK: - Internal entry points
 
     static func assembleSync(
         file: MidiFile,
         options: MidiImportOptions,
         sourceFilename: String?
     ) throws -> Score {
-        // Phases C–F implement the real pipeline. For now: emit a
-        // Score with only the title resolved from `sourceFilename`.
-        var meta: [String: String] = [:]
-        if let title = sourceFilename, !title.isEmpty {
-            meta["workTitle"] = title
+        let imports = partition(file)
+        let timeline = buildBarTimeline(imports: imports, division: file.division)
+        let swung = imports.map { track -> ImportTrack in
+            guard let resolve = options.resolveSwing else { return track }
+            return analyzeSwing(
+                track: track, timeline: timeline,
+                division: file.division, resolve: resolve
+            )
         }
-        return Score(division: file.division, metaTags: meta)
+        return buildScore(
+            file: file, imports: swung, timeline: timeline,
+            options: options, sourceFilename: sourceFilename
+        )
     }
 
     static func assembleAsync(
@@ -55,6 +61,44 @@ public enum MidiImporter {
         options: MidiImportOptions,
         sourceFilename: String?
     ) async throws -> Score {
-        try assembleSync(file: file, options: options, sourceFilename: sourceFilename)
+        if options.resolveSwingAsync == nil {
+            return try assembleSync(
+                file: file, options: options, sourceFilename: sourceFilename
+            )
+        }
+        let imports = partition(file)
+        let timeline = buildBarTimeline(imports: imports, division: file.division)
+        var swung: [ImportTrack] = []
+        for track in imports {
+            if let resolveAsync = options.resolveSwingAsync {
+                await swung.append(asyncSwing(
+                    track: track, timeline: timeline,
+                    division: file.division, resolve: resolveAsync
+                ))
+            } else {
+                swung.append(track)
+            }
+        }
+        return buildScore(
+            file: file, imports: swung, timeline: timeline,
+            options: options, sourceFilename: sourceFilename
+        )
+    }
+
+    static func asyncSwing(
+        track: ImportTrack,
+        timeline: BarTimeline,
+        division: Int,
+        resolve: @Sendable (SwingDetection) async -> SwingResolution
+    ) async -> ImportTrack {
+        guard let detection = detectSwing(
+            track: track, timeline: timeline, division: division
+        ) else { return track }
+        switch await resolve(detection) {
+        case .treatAsWritten: return track
+        case .treatAsSwing:
+            let beat = (division * 4) / 4
+            return straighten(track: track, beat: beat)
+        }
     }
 }
