@@ -99,22 +99,12 @@ public enum ScoreCanvasDrawing {
                 metrics: metrics
             )
         }
-        // Bracket connecting multiple staves.
-        if system.staffOrigins.count >= 2,
-           let top = system.staffOrigins.first,
-           let bot = system.staffOrigins.last
-        {
-            let x = system.origin.x + top.x - metrics.sp * 0.5
-            StaffRenderer.drawBracket(
-                context: &context,
-                top: CGPoint(x: x, y: system.origin.y + top.y),
-                bottom: CGPoint(
-                    x: x,
-                    y: system.origin.y + bot.y + metrics.staffHeight
-                ),
-                metrics: metrics
-            )
-        }
+        // Brackets / braces at the left edge of the system.
+        StaffRenderer.drawBrackets(
+            context: &context,
+            system: system,
+            metrics: metrics
+        )
         // Part labels
         for label in system.partLabels {
             PartLabelRenderer.draw(

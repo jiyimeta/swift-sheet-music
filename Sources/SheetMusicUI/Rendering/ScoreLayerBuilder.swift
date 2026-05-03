@@ -82,7 +82,7 @@ public enum ScoreLayerBuilder {
             system: system, metrics: metrics,
             height: height, into: root
         )
-        drawBracket(
+        drawBrackets(
             system: system, metrics: metrics,
             height: height, into: root
         )
