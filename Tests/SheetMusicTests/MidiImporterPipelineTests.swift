@@ -91,4 +91,71 @@ import Testing
         let calls = await counter.count
         #expect(calls >= 1)
     }
+
+    @Test func keySignatureAppliesToAllNonDrumStaves() throws {
+        // Format 1 file: piano + bass + drums, with a key signature
+        // (3 sharps = A major) and tempo on Track 0. Both non-drum
+        // staves carry the key signature; the drum staff does not.
+        // Tempo lives only on staff 1.
+        let division = 480
+        let track0 = MidiTrack(events: [
+            TimedMidiEvent(tick: 0, event: .meta(.trackName("Conductor"))),
+            TimedMidiEvent(tick: 0, event: .meta(.tempo(microsecondsPerQuarter: 500_000))),
+            TimedMidiEvent(tick: 0, event: .meta(.keySignature(sharpsFlats: 3, isMinor: false))),
+            TimedMidiEvent(tick: 0, event: .meta(.timeSignature(
+                numerator: 4, denominator: 4, clocksPerClick: 24, thirtySecondsPerQuarter: 8
+            ))),
+            TimedMidiEvent(tick: 1920, event: .endOfTrack),
+        ])
+        let track1 = MidiTrack(events: [
+            TimedMidiEvent(tick: 0, event: .meta(.trackName("Piano"))),
+            TimedMidiEvent(tick: 0, event: .noteOn(channel: 0, pitch: 60, velocity: 80)),
+            TimedMidiEvent(tick: 1920, event: .noteOff(channel: 0, pitch: 60, velocity: 0)),
+            TimedMidiEvent(tick: 1920, event: .endOfTrack),
+        ])
+        let track2 = MidiTrack(events: [
+            TimedMidiEvent(tick: 0, event: .meta(.trackName("Bass"))),
+            TimedMidiEvent(tick: 0, event: .noteOn(channel: 1, pitch: 36, velocity: 80)),
+            TimedMidiEvent(tick: 1920, event: .noteOff(channel: 1, pitch: 36, velocity: 0)),
+            TimedMidiEvent(tick: 1920, event: .endOfTrack),
+        ])
+        let track3 = MidiTrack(events: [
+            TimedMidiEvent(tick: 0, event: .meta(.trackName("Drums"))),
+            TimedMidiEvent(tick: 0, event: .noteOn(channel: 9, pitch: 36, velocity: 80)),
+            TimedMidiEvent(tick: 1920, event: .noteOff(channel: 9, pitch: 36, velocity: 0)),
+            TimedMidiEvent(tick: 1920, event: .endOfTrack),
+        ])
+        let file = MidiFile(division: division, format: 1, tracks: [track0, track1, track2, track3])
+        let bytes = try MidiWriter.write(file)
+        let score = try MidiImporter.parse(bytes)
+
+        func keySigSharpsFlats(in staff: StaffContent) -> Int? {
+            for measure in staff.measures {
+                for v in measure.voices {
+                    for el in v.elements {
+                        if case let .keySignature(k) = el { return k.concertKey }
+                    }
+                }
+            }
+            return nil
+        }
+        func hasTempo(in staff: StaffContent) -> Bool {
+            staff.measures.flatMap(\.voices).flatMap(\.elements).contains { el in
+                if case .tempo = el { true } else { false }
+            }
+        }
+
+        let pianoIdx = score.parts.firstIndex(where: { $0.trackName == "Piano" })
+        let bassIdx = score.parts.firstIndex(where: { $0.trackName == "Bass" })
+        let drumsIdx = score.parts.firstIndex(where: { $0.instrument.useDrumset })
+        guard let pi = pianoIdx, let bi = bassIdx, let di = drumsIdx else {
+            Issue.record("expected piano + bass + drums parts; got \(score.parts.map(\.trackName))")
+            return
+        }
+        #expect(keySigSharpsFlats(in: score.staves[pi]) == 3)
+        #expect(keySigSharpsFlats(in: score.staves[bi]) == 3)
+        #expect(keySigSharpsFlats(in: score.staves[di]) == nil)
+        let withTempo = score.staves.indices.filter { hasTempo(in: score.staves[$0]) }
+        #expect(withTempo == [0])
+    }
 }

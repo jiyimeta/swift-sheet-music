@@ -36,9 +36,17 @@ extension MidiImporter {
             }
             let staffID = staves.count + 1
             var staff = StaffContent(id: staffID, measures: scoreMeasures)
-            if staffID == 1 {
-                injectMetaEvents(file: file, timeline: timeline, into: &staff)
-            }
+            // Tempo is global to the score — only staff 1 carries it.
+            // Time signature is shared across every staff (bar lines
+            // align). Key signature applies to all non-drum staves;
+            // percussion staves render without a key sig.
+            injectMetaEvents(
+                file: file,
+                timeline: timeline,
+                into: &staff,
+                includeTempo: staffID == 1,
+                includeKeySignature: !track.isDrums
+            )
             staves.append(staff)
             parts.append(makePart(for: track))
         }
@@ -80,7 +88,9 @@ extension MidiImporter {
     static func injectMetaEvents(
         file: MidiFile,
         timeline: BarTimeline,
-        into staff: inout StaffContent
+        into staff: inout StaffContent,
+        includeTempo: Bool,
+        includeKeySignature: Bool
     ) {
         let metas = file.tracks.flatMap(\.events).filter {
             if case .meta = $0.event { true } else { false }
@@ -91,11 +101,13 @@ extension MidiImporter {
             let element: VoiceElement?
             switch meta.event {
             case let .meta(.tempo(micros)):
+                guard includeTempo else { continue }
                 let bps = 1_000_000.0 / Double(micros)
                 element = .tempo(Tempo(beatsPerSecond: bps))
             case let .meta(.timeSignature(n, d, _, _)):
                 element = .timeSignature(TimeSignature(numerator: n, denominator: d))
             case let .meta(.keySignature(sf, _)):
+                guard includeKeySignature else { continue }
                 element = .keySignature(KeySignature(concertKey: sf))
             default:
                 element = nil
