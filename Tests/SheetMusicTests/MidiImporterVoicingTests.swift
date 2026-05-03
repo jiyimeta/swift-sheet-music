@@ -204,22 +204,45 @@ import Testing
         }
     }
 
-    @Test func defaultTpcMatchesMuseScoreLineOfFifths() {
-        // Naturals on the line of fifths: F=13, C=14, G=15, D=16,
-        // A=17, E=18, B=19. Black keys default to sharp spellings:
-        // C#=21, D#=23, F#=20, G#=22, A#=24.
-        #expect(MidiImporter.defaultTpc(forMidiPitch: 60) == 14) // C4
-        #expect(MidiImporter.defaultTpc(forMidiPitch: 62) == 16) // D4
-        #expect(MidiImporter.defaultTpc(forMidiPitch: 64) == 18) // E4
-        #expect(MidiImporter.defaultTpc(forMidiPitch: 65) == 13) // F4
-        #expect(MidiImporter.defaultTpc(forMidiPitch: 67) == 15) // G4
-        #expect(MidiImporter.defaultTpc(forMidiPitch: 69) == 17) // A4
-        #expect(MidiImporter.defaultTpc(forMidiPitch: 71) == 19) // B4
-        #expect(MidiImporter.defaultTpc(forMidiPitch: 61) == 21) // C#4
-        #expect(MidiImporter.defaultTpc(forMidiPitch: 66) == 20) // F#4
+    @Test func tpcMatchesMuseScoreLineOfFifthsForCMajor() {
+        // No key context (= C major). Naturals on the line of fifths:
+        // F=13, C=14, G=15, D=16, A=17, E=18, B=19. Black keys default
+        // to sharp spellings: C#=21, D#=23, F#=20, G#=22, A#=24.
+        #expect(MidiImporter.tpc(forMidiPitch: 60) == 14) // C4
+        #expect(MidiImporter.tpc(forMidiPitch: 62) == 16) // D4
+        #expect(MidiImporter.tpc(forMidiPitch: 64) == 18) // E4
+        #expect(MidiImporter.tpc(forMidiPitch: 65) == 13) // F4
+        #expect(MidiImporter.tpc(forMidiPitch: 67) == 15) // G4
+        #expect(MidiImporter.tpc(forMidiPitch: 69) == 17) // A4
+        #expect(MidiImporter.tpc(forMidiPitch: 71) == 19) // B4
+        #expect(MidiImporter.tpc(forMidiPitch: 61) == 21) // C#4
+        #expect(MidiImporter.tpc(forMidiPitch: 66) == 20) // F#4
         // Octave-invariant: same pitch class → same TPC.
-        #expect(MidiImporter.defaultTpc(forMidiPitch: 48) == 14) // C3
-        #expect(MidiImporter.defaultTpc(forMidiPitch: 72) == 14) // C5
+        #expect(MidiImporter.tpc(forMidiPitch: 48) == 14) // C3
+        #expect(MidiImporter.tpc(forMidiPitch: 72) == 14) // C5
+    }
+
+    @Test func tpcUsesFlatSpellingsInFlatKeys() {
+        // Bb major (concertKey = -2). Black keys take flat spellings:
+        // Db=7, Eb=11, Gb=6, Ab=8, Bb=10. Naturals are unchanged.
+        #expect(MidiImporter.tpc(forMidiPitch: 61, concertKey: -2) == 7) // Db
+        #expect(MidiImporter.tpc(forMidiPitch: 63, concertKey: -2) == 11) // Eb
+        #expect(MidiImporter.tpc(forMidiPitch: 66, concertKey: -2) == 6) // Gb
+        #expect(MidiImporter.tpc(forMidiPitch: 68, concertKey: -2) == 8) // Ab
+        #expect(MidiImporter.tpc(forMidiPitch: 70, concertKey: -2) == 10) // Bb
+        // White keys still use natural TPC (a chromatic accidental
+        // would be rendered as a natural sign in a sharp key, etc.):
+        #expect(MidiImporter.tpc(forMidiPitch: 60, concertKey: -2) == 14) // C
+        #expect(MidiImporter.tpc(forMidiPitch: 65, concertKey: -2) == 13) // F
+    }
+
+    @Test func tpcUsesSharpSpellingsInSharpKeys() {
+        // D major (concertKey = +2). Black keys take sharp spellings.
+        #expect(MidiImporter.tpc(forMidiPitch: 61, concertKey: 2) == 21) // C#
+        #expect(MidiImporter.tpc(forMidiPitch: 63, concertKey: 2) == 23) // D#
+        #expect(MidiImporter.tpc(forMidiPitch: 66, concertKey: 2) == 20) // F#
+        #expect(MidiImporter.tpc(forMidiPitch: 68, concertKey: 2) == 22) // G#
+        #expect(MidiImporter.tpc(forMidiPitch: 70, concertKey: 2) == 24) // A#
     }
 
     @Test func voicedNotesCarryCorrectTpcNotZero() {

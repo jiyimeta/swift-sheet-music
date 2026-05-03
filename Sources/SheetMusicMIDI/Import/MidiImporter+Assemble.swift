@@ -12,17 +12,20 @@ extension MidiImporter {
         sourceFilename: String?
     ) -> Score {
         let perTrackMeasures = imports.map { segment(track: $0, timeline: timeline) }
+        let concertKey = firstConcertKey(in: file)
         var parts: [Part] = []
         var staves: [StaffContent] = []
         for (trackIdx, measures) in perTrackMeasures.enumerated() {
             let track = imports[trackIdx]
+            let trackKey = track.isDrums ? 0 : concertKey
             let voices = measures.map { m -> Voice in
                 let q = quantize(measure: m, division: file.division, options: options)
                 return voice(
                     quantized: q,
                     measure: m,
                     division: file.division,
-                    isDrumTrack: track.isDrums
+                    isDrumTrack: track.isDrums,
+                    concertKey: trackKey
                 )
             }
             var scoreMeasures = voices.map { Measure(voices: [$0]) }
@@ -81,6 +84,22 @@ extension MidiImporter {
             }
             scoreMeasures[i].voices[0] = voiceVal
         }
+    }
+
+    // MARK: - Key-signature lookup
+
+    /// First key-signature meta event found anywhere in the file
+    /// (any track), as a sharps/flats count. `0` if absent.
+    /// Used to choose enharmonic spellings during voicing.
+    static func firstConcertKey(in file: MidiFile) -> Int {
+        for track in file.tracks {
+            for ev in track.events {
+                if case let .meta(.keySignature(sf, _)) = ev.event {
+                    return sf
+                }
+            }
+        }
+        return 0
     }
 
     // MARK: - Meta event injection

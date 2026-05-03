@@ -158,4 +158,48 @@ import Testing
         let withTempo = score.staves.indices.filter { hasTempo(in: score.staves[$0]) }
         #expect(withTempo == [0])
     }
+
+    @Test func flatKeySignatureChoosesFlatTpcSpellings() throws {
+        // Bb major (concertKey = -2). Pitch 70 (Bb) and pitch 63
+        // (Eb) should appear with flat TPCs (10 and 11), not the
+        // sharp enharmonics (24 and 23).
+        let track0 = MidiTrack(events: [
+            TimedMidiEvent(tick: 0, event: .meta(.trackName("Conductor"))),
+            TimedMidiEvent(tick: 0, event: .meta(.keySignature(sharpsFlats: -2, isMinor: false))),
+            TimedMidiEvent(tick: 0, event: .meta(.timeSignature(
+                numerator: 4, denominator: 4, clocksPerClick: 24, thirtySecondsPerQuarter: 8
+            ))),
+            TimedMidiEvent(tick: 1920, event: .endOfTrack),
+        ])
+        let track1 = MidiTrack(events: [
+            TimedMidiEvent(tick: 0, event: .meta(.trackName("Piano"))),
+            TimedMidiEvent(tick: 0, event: .noteOn(channel: 0, pitch: 70, velocity: 80)),
+            TimedMidiEvent(tick: 480, event: .noteOff(channel: 0, pitch: 70, velocity: 0)),
+            TimedMidiEvent(tick: 480, event: .noteOn(channel: 0, pitch: 63, velocity: 80)),
+            TimedMidiEvent(tick: 960, event: .noteOff(channel: 0, pitch: 63, velocity: 0)),
+            TimedMidiEvent(tick: 960, event: .endOfTrack),
+        ])
+        let file = MidiFile(division: 480, format: 1, tracks: [track0, track1])
+        let bytes = try MidiWriter.write(file)
+        let score = try MidiImporter.parse(bytes)
+
+        let pianoIdx = score.parts.firstIndex(where: { $0.trackName == "Piano" })
+        guard let pi = pianoIdx else {
+            Issue.record("expected piano part")
+            return
+        }
+        let allTpcs: [Int] = score.staves[pi].measures.flatMap { measure in
+            measure.voices.flatMap { v in
+                v.elements.flatMap { e -> [Int] in
+                    if case let .chord(c) = e { return c.notes.map(\.tpc) }
+                    return []
+                }
+            }
+        }
+        // Bb (10) and Eb (11), not A# (24) and D# (23).
+        #expect(allTpcs.contains(10))
+        #expect(allTpcs.contains(11))
+        #expect(!allTpcs.contains(24))
+        #expect(!allTpcs.contains(23))
+    }
 }

@@ -224,7 +224,7 @@ extension MidiImporter {
                 gap: gap, at: prev, assignments: assignments, division: division
             )
             let pitches = snappedOnsets.first(where: { $0.tick == prev })?.pitches ?? []
-            let notes = ChordNotes(pitches.map { Note(pitch: $0, tpc: defaultTpc(forMidiPitch: $0)) })
+            let notes = ChordNotes(pitches.map { Note(pitch: $0, tpc: tpc(forMidiPitch: $0)) })
             elements.append(.chord(Chord(duration: duration, notes: notes)))
 
             // Track tuplet element-range membership.

@@ -50,7 +50,8 @@ extension MidiImporter {
         quantized: QuantizedMeasure,
         measure: ImportMeasure,
         division: Int,
-        isDrumTrack: Bool = false
+        isDrumTrack: Bool = false,
+        concertKey: Int = 0
     ) -> Voice {
         var notes = collectNotes(from: measure)
         mergeCarryIns(into: &notes, measure: measure)
@@ -78,7 +79,8 @@ extension MidiImporter {
                     activeNotes: activeNotes,
                     comesFromPrior: comesFromPrior,
                     willContinue: willContinue,
-                    isDrum: isDrumTrack
+                    isDrum: isDrumTrack,
+                    concertKey: concertKey
                 )
             }
             elementTicks.append(prev)
@@ -162,26 +164,33 @@ extension MidiImporter {
         }
     }
 
-    /// Default tonal pitch class for a MIDI pitch when no key
-    /// signature context is available. Uses sharp spellings for
-    /// black keys (the choice doesn't matter for playback but
-    /// determines staff position and accidentals on render).
+    /// Tonal pitch class for a MIDI pitch, given an optional key
+    /// signature for context.
+    ///
+    /// White keys always take the natural TPC (any chromatic
+    /// alteration is rendered as an accidental on top of the key
+    /// signature). Black keys take the spelling that matches the
+    /// key's direction:
+    ///   - sharp keys (concertKey ≥ 0) → C# / D# / F# / G# / A#
+    ///   - flat keys  (concertKey < 0) → Db / Eb / Gb / Ab / Bb
+    ///
     /// MuseScore TPC convention: F=13, C=14, G=15, D=16, A=17,
     /// E=18, B=19 along the line of fifths; +7 = sharp, -7 = flat.
-    static func defaultTpc(forMidiPitch midiPitch: Int) -> Int {
+    static func tpc(forMidiPitch midiPitch: Int, concertKey: Int = 0) -> Int {
         let pitchClass = ((midiPitch % 12) + 12) % 12
+        let preferFlats = concertKey < 0
         switch pitchClass {
         case 0: return 14 // C
-        case 1: return 21 // C#
+        case 1: return preferFlats ? 7 : 21 // Db / C#
         case 2: return 16 // D
-        case 3: return 23 // D#
+        case 3: return preferFlats ? 11 : 23 // Eb / D#
         case 4: return 18 // E
         case 5: return 13 // F
-        case 6: return 20 // F#
+        case 6: return preferFlats ? 6 : 20 // Gb / F#
         case 7: return 15 // G
-        case 8: return 22 // G#
+        case 8: return preferFlats ? 8 : 22 // Ab / G#
         case 9: return 17 // A
-        case 10: return 24 // A#
+        case 10: return preferFlats ? 10 : 24 // Bb / A#
         case 11: return 19 // B
         default: return 14
         }
@@ -196,9 +205,13 @@ extension MidiImporter {
         activeNotes: [VoiceNote],
         comesFromPrior: [Int],
         willContinue: [Int],
-        isDrum: Bool = false
+        isDrum: Bool = false,
+        concertKey: Int = 0
     ) -> SheetMusicCore.Note {
-        var n = SheetMusicCore.Note(pitch: pitch, tpc: defaultTpc(forMidiPitch: pitch))
+        var n = SheetMusicCore.Note(
+            pitch: pitch,
+            tpc: tpc(forMidiPitch: pitch, concertKey: concertKey)
+        )
         if comesFromPrior.contains(pitch) { n.tieBack = 1 }
         if activeNotes.contains(where: { $0.pitch == pitch && $0.startsTied && $0.onTick == prev }) {
             n.tieBack = 1
