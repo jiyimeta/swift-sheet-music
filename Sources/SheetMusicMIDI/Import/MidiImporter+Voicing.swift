@@ -66,25 +66,26 @@ extension MidiImporter {
         var elements: [VoiceElement] = []
         var elementTicks: [Int] = [] // start tick of each element in the rebuilt list
         var prev = measure.startTick
+        // Per-measure persistence of explicit accidentals: key =
+        // packed (letter, octave). Reset for each `voice()` call so
+        // accidentals correctly clear at bar lines.
+        var persistentAlters: [Int: Int] = [:]
 
         for tick in grid where tick > prev {
-            let activeNotes = notes.filter { $0.onTick <= prev && $0.offTick > prev }
-            let willContinue = notes.filter { $0.onTick <= prev && $0.offTick > tick }.map(\.pitch)
-            let comesFromPrior = notes.filter { $0.onTick < prev && $0.offTick > prev }.map(\.pitch)
-
-            let duration = exactDuration(ticks: tick - prev, division: division)
-            let coreNotes: [SheetMusicCore.Note] = activeNotes.map(\.pitch).map { pitch in
-                buildNote(
-                    pitch: pitch,
-                    prev: prev,
-                    tick: tick,
-                    activeNotes: activeNotes,
-                    comesFromPrior: comesFromPrior,
-                    willContinue: willContinue,
-                    isDrum: isDrumTrack,
-                    concertKey: concertKey
-                )
+            var coreNotes = buildChordNotes(
+                at: prev, until: tick, notes: notes,
+                isDrumTrack: isDrumTrack, concertKey: concertKey
+            )
+            if !isDrumTrack {
+                for i in coreNotes.indices {
+                    applyAccidental(
+                        &coreNotes[i],
+                        concertKey: concertKey,
+                        persistentAlters: &persistentAlters
+                    )
+                }
             }
+            let duration = exactDuration(ticks: tick - prev, division: division)
             elementTicks.append(prev)
             elements.append(.chord(Chord(duration: duration, notes: ChordNotes(coreNotes))))
             prev = tick
@@ -231,6 +232,106 @@ extension MidiImporter {
         case 10: return preferFlats ? 12 : 24 // Bb / A#
         case 11: return 19 // B
         default: return 14
+        }
+    }
+
+    /// Build the per-pitch `Note` array for a single chord step
+    /// (gap from `prev` to `tick`).
+    private static func buildChordNotes(
+        at prev: Int,
+        until tick: Int,
+        notes: [VoiceNote],
+        isDrumTrack: Bool,
+        concertKey: Int
+    ) -> [SheetMusicCore.Note] {
+        let activeNotes = notes.filter { $0.onTick <= prev && $0.offTick > prev }
+        let willContinue = notes.filter { $0.onTick <= prev && $0.offTick > tick }.map(\.pitch)
+        let comesFromPrior = notes.filter { $0.onTick < prev && $0.offTick > prev }.map(\.pitch)
+        return activeNotes.map(\.pitch).map { pitch in
+            buildNote(
+                pitch: pitch,
+                prev: prev,
+                tick: tick,
+                activeNotes: activeNotes,
+                comesFromPrior: comesFromPrior,
+                willContinue: willContinue,
+                isDrum: isDrumTrack,
+                concertKey: concertKey
+            )
+        }
+    }
+
+    /// Decompose a (pitch, tpc) pair into (diatonic letter index 0..6
+    /// in C-major order, alter -2..+2, octave). Mirrors
+    /// `PitchStaffPosition.octaveFor` so the B/C boundary works for
+    /// enharmonic spellings (B♯3 = MIDI 60, C♭5 = MIDI 59, etc.).
+    static func letterAlterOctave(
+        pitch: Int, tpc: Int
+    ) -> (letter: Int, alter: Int, octave: Int) {
+        let tpcLetters: [Int] = [3, 0, 4, 1, 5, 2, 6] // F C G D A E B → C-letter index
+        let letter = tpcLetters[((tpc + 1) % 7 + 7) % 7]
+        let naturalTpc: [Int] = [14, 16, 18, 13, 15, 17, 19] // C D E F G A B
+        let alter = (tpc - naturalTpc[letter]) / 7
+        let letterSemitone: [Int] = [0, 2, 4, 5, 7, 9, 11] // C D E F G A B
+        let naiveOctave = pitch / 12 - 1
+        let naiveSemitone = pitch - 12 * (naiveOctave + 1)
+        let diff = naiveSemitone - letterSemitone[letter]
+        let octave: Int
+        if diff >= 6 {
+            octave = naiveOctave + 1
+        } else if diff <= -6 {
+            octave = naiveOctave - 1
+        } else {
+            octave = naiveOctave
+        }
+        return (letter, alter, octave)
+    }
+
+    /// Diatonic alter (-1, 0, +1) implied by the key signature for a
+    /// given letter index (0=C, 1=D, …, 6=B).
+    static func keySigAlter(letter: Int, concertKey: Int) -> Int {
+        // Sharps cycle of fifths: F C G D A E B (letter indices 3 0 4 1 5 2 6).
+        // Flats reverse:           B E A D G C F (letter indices 6 2 5 1 4 0 3).
+        let sharpOrder = [3, 0, 4, 1, 5, 2, 6]
+        let flatOrder = [6, 2, 5, 1, 4, 0, 3]
+        if concertKey > 0 {
+            let n = min(concertKey, 7)
+            if sharpOrder.prefix(n).contains(letter) { return 1 }
+        } else if concertKey < 0 {
+            let n = min(-concertKey, 7)
+            if flatOrder.prefix(n).contains(letter) { return -1 }
+        }
+        return 0
+    }
+
+    /// Map an alter integer to the matching `Accidental`. Returns
+    /// nil for `alter` values outside the supported range.
+    static func accidentalFor(alter: Int) -> Accidental? {
+        switch alter {
+        case -2: .doubleFlat
+        case -1: .flat
+        case 0: .natural
+        case 1: .sharp
+        case 2: .doubleSharp
+        default: nil
+        }
+    }
+
+    /// If `note`'s alter differs from what's currently in force at
+    /// its (letter, octave) under the given key signature plus any
+    /// earlier accidental in the same measure, stamp the visual
+    /// accidental and update the tracking state.
+    private static func applyAccidental(
+        _ note: inout SheetMusicCore.Note,
+        concertKey: Int,
+        persistentAlters: inout [Int: Int]
+    ) {
+        let (letter, alter, octave) = letterAlterOctave(pitch: note.pitch, tpc: note.tpc)
+        let key = letter * 32 + (octave + 16) // pack (letter, octave) — handles negative octaves
+        let currentAlter = persistentAlters[key] ?? keySigAlter(letter: letter, concertKey: concertKey)
+        if alter != currentAlter {
+            note.accidental = accidentalFor(alter: alter)
+            persistentAlters[key] = alter
         }
     }
 
