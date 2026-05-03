@@ -3,7 +3,7 @@ import SheetMusicCore
 
 extension MidiRenderer {
     static func headerEvents(
-        staff: StaffContent,
+        staff: Staff,
         part: Part,
         channels: [ChannelAssignment],
         port: Int,
@@ -76,7 +76,7 @@ extension MidiRenderer {
 
     /// Look only inside the first measure: only that measure's signature counts as
     /// the initial header value. A signature appearing later is a mid-piece change.
-    static func firstTimeSignature(in staff: StaffContent) -> TimeSignature? {
+    static func firstTimeSignature(in staff: Staff) -> TimeSignature? {
         guard let firstMeasure = staff.measures.first else { return nil }
         for voice in firstMeasure.voices {
             for element in voice.elements {
@@ -86,7 +86,7 @@ extension MidiRenderer {
         return nil
     }
 
-    static func firstKeySignature(in staff: StaffContent) -> KeySignature? {
+    static func firstKeySignature(in staff: Staff) -> KeySignature? {
         guard let firstMeasure = staff.measures.first else { return nil }
         for voice in firstMeasure.voices {
             for element in voice.elements {

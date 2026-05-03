@@ -40,25 +40,4 @@ extension MidiRenderer {
         }
         return perPart
     }
-
-    /// Map each top-level staff to its owning part. mscx lists parts and top-level
-    /// `<Staff id="N">` in matching document order; a part with K `<Staff>` declarations
-    /// owns K consecutive top-level staves.
-    static func staffOwnership(score: Score) -> [StaffOwnership] {
-        var result: [StaffOwnership] = []
-        var staffCursor = 0
-        for (partIndex, part) in score.parts.enumerated() {
-            let stavesInPart = max(1, part.staffDeclarations.count)
-            for offset in 0 ..< stavesInPart {
-                guard staffCursor < score.staves.count else { break }
-                result.append(StaffOwnership(partIndex: partIndex, isTopOfPart: offset == 0))
-                staffCursor += 1
-            }
-        }
-        // Defensive padding if part declarations are off — keep them on the last part.
-        while result.count < score.staves.count {
-            result.append(StaffOwnership(partIndex: max(0, score.parts.count - 1), isTopOfPart: false))
-        }
-        return result
-    }
 }

@@ -15,28 +15,27 @@ public enum MidiRenderer {
     /// Render the given `Score` into a `MidiFile` ready for serialisation.
     public static func render(score: Score) throws -> MidiFile {
         var tracks: [MidiTrack] = []
-
-        let staffOwners = staffOwnership(score: score)
         let channelAssignments = assignChannels(score: score)
-        for (staffIndex, staff) in score.staves.enumerated() {
-            let owner = staffOwners[staffIndex]
-            let part = score.parts[owner.partIndex]
-            let channels = channelAssignments[owner.partIndex]
-            let primaryChannel = channels.first?.channel ?? owner.partIndex
+        var trackIndex = 0
+        for (partIndex, part) in score.parts.enumerated() {
+            let channels = channelAssignments[partIndex]
+            let primaryChannel = channels.first?.channel ?? partIndex
             let port = part.instrument.channel.midiPort ?? 0
-            let track = renderTrack(
-                staff: staff,
-                part: part,
-                primaryChannel: primaryChannel,
-                channels: channels,
-                port: port,
-                isFirstTrack: staffIndex == 0,
-                isTopOfPart: owner.isTopOfPart,
-                division: score.division
-            )
-            tracks.append(track)
+            for (s, staff) in part.staves.enumerated() {
+                let track = renderTrack(
+                    staff: staff,
+                    part: part,
+                    primaryChannel: primaryChannel,
+                    channels: channels,
+                    port: port,
+                    isFirstTrack: trackIndex == 0,
+                    isTopOfPart: s == 0,
+                    division: score.division
+                )
+                tracks.append(track)
+                trackIndex += 1
+            }
         }
-
         return MidiFile(division: score.division, format: 1, tracks: tracks)
     }
 
@@ -46,14 +45,8 @@ public enum MidiRenderer {
         var flavour: InstrumentChannel
     }
 
-    /// Per-staff: which part owns it, and whether it's that part's first staff.
-    struct StaffOwnership {
-        var partIndex: Int
-        var isTopOfPart: Bool
-    }
-
     private static func renderTrack(
-        staff: StaffContent,
+        staff: Staff,
         part: Part,
         primaryChannel: Int,
         channels: [ChannelAssignment],

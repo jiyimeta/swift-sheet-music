@@ -9,7 +9,7 @@ extension MidiRenderer {
     /// playback filtering is not yet implemented.
     static func renderVoice(
         voiceIndex: Int,
-        staff: StaffContent,
+        staff: Staff,
         part: Part,
         channel: Int,
         division: Int

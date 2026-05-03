@@ -125,7 +125,7 @@ extension MidiRenderer {
     /// for the marker rather than only the voice we're currently rendering.
     static func resolvedVoice(
         measureIndex: Int,
-        staff: StaffContent,
+        staff: Staff,
         voiceIndex: Int
     ) -> Voice? {
         let measure = staff.measures[measureIndex]
@@ -156,7 +156,7 @@ extension MidiRenderer {
     /// — searching ALL voices because MuseScore detects repeat at the staff level.
     static func groupRepeatMarker(
         measureIndex: Int,
-        staff: StaffContent,
+        staff: Staff,
         voiceIndex: Int
     ) -> MeasureRepeat? {
         guard let count = staff.measures[measureIndex].measureRepeatCount else { return nil }
@@ -196,7 +196,7 @@ extension MidiRenderer {
     /// Follow MeasureRepeat chains: if the source is also a repeat measure,
     /// keep walking back until a real measure is found, then strip metadata
     /// (KeySig/TimeSig/Clef) so we don't re-emit signatures the original set.
-    static func chase(measureIndex: Int, staff: StaffContent, voiceIndex: Int) -> Voice {
+    static func chase(measureIndex: Int, staff: Staff, voiceIndex: Int) -> Voice {
         var idx = measureIndex
         while idx >= 0 {
             guard voiceIndex < staff.measures[idx].voices.count else {
