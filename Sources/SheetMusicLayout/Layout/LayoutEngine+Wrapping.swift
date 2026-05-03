@@ -31,11 +31,12 @@ extension LayoutEngine {
     ) -> CGFloat {
         let labels: [String] = score.parts.map { part in
             if useLong {
-                part.trackName
-                    ?? part.instrument.longName
+                part.instrument.longName
+                    ?? part.trackName
                     ?? ""
             } else {
                 part.instrument.shortName
+                    ?? part.instrument.longName.map { String($0.prefix(3)) }
                     ?? part.trackName.map { String($0.prefix(3)) }
                     ?? ""
             }

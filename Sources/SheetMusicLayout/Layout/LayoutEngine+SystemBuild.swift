@@ -401,11 +401,12 @@ extension LayoutEngine {
             let part = context.score.parts[entry.address.partIndex]
             let text: String
             if isFirstSystem {
-                text = part.trackName
-                    ?? part.instrument.longName
+                text = part.instrument.longName
+                    ?? part.trackName
                     ?? ""
             } else {
                 text = part.instrument.shortName
+                    ?? part.instrument.longName.map { String($0.prefix(3)) }
                     ?? part.trackName.map { String($0.prefix(3)) }
                     ?? ""
             }

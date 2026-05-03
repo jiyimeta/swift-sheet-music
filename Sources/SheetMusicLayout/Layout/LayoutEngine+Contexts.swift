@@ -67,8 +67,8 @@ extension LayoutEngine {
         // name instead of using the flat staff index as the part index.
         let partLabels = allStaves.map { entry -> String in
             let part = score.parts[entry.address.partIndex]
-            return part.trackName
-                ?? part.instrument.longName
+            return part.instrument.longName
+                ?? part.trackName
                 ?? ""
         }
         let measureCount = allStaves.first?.staff.measures.count ?? 0
