@@ -1,6 +1,7 @@
 import Foundation
 @testable import SheetMusic
 @testable import SheetMusicCore
+@testable import SheetMusicMIDI
 @testable import SheetMusicMSCX
 import Testing
 
@@ -62,5 +63,31 @@ import Testing
         try SheetMusic.saveMSCZ(mscxData: mscxData, to: tmp)
         let score = try SheetMusic.loadScore(msczURL: tmp)
         #expect(score.division == 480)
+    }
+
+    @Test func loadScoreFromMidiData() throws {
+        let bytes = Data([
+            0x4D, 0x54, 0x68, 0x64, 0x00, 0x00, 0x00, 0x06,
+            0x00, 0x00, 0x00, 0x01, 0x01, 0xE0,
+            0x4D, 0x54, 0x72, 0x6B, 0x00, 0x00, 0x00, 0x04,
+            0x00, 0xFF, 0x2F, 0x00,
+        ])
+        let score = try SheetMusic.loadScore(midiData: bytes)
+        #expect(score.division == 480)
+    }
+
+    @Test func loadScoreFromMidiURLUsesFilenameAsTitle() throws {
+        let tempURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("MyMidiSong.mid")
+        let bytes = Data([
+            0x4D, 0x54, 0x68, 0x64, 0x00, 0x00, 0x00, 0x06,
+            0x00, 0x00, 0x00, 0x01, 0x01, 0xE0,
+            0x4D, 0x54, 0x72, 0x6B, 0x00, 0x00, 0x00, 0x04,
+            0x00, 0xFF, 0x2F, 0x00,
+        ])
+        try bytes.write(to: tempURL)
+        defer { try? FileManager.default.removeItem(at: tempURL) }
+        let score = try SheetMusic.loadScore(midiURL: tempURL)
+        #expect(score.metaTags["workTitle"] == "MyMidiSong")
     }
 }

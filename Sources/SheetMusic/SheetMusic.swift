@@ -56,4 +56,52 @@ public enum SheetMusic {
         let midiFile = try MidiRenderer.render(score: score)
         return try MidiWriter.write(midiFile)
     }
+
+    /// Parse SMF bytes (`.mid`) into a `Score`. Layout-related fields
+    /// default since MIDI carries no layout. Title falls back to
+    /// `sourceFilename` if no Track-Name meta is found.
+    public static func loadScore(
+        midiData: Data,
+        options: MidiImportOptions = .init(),
+        sourceFilename: String? = nil
+    ) throws -> Score {
+        try MidiImporter.parse(midiData, options: options, sourceFilename: sourceFilename)
+    }
+
+    /// Parse SMF bytes (`.mid`) into a `Score` asynchronously.
+    /// Layout-related fields default since MIDI carries no layout.
+    /// Title falls back to `sourceFilename` if no Track-Name meta is found.
+    public static func loadScore(
+        midiData: Data,
+        options: MidiImportOptions,
+        sourceFilename: String? = nil
+    ) async throws -> Score {
+        try await MidiImporter.parse(midiData, options: options, sourceFilename: sourceFilename)
+    }
+
+    /// Read an SMF file and parse into a `Score`. The filename
+    /// (without extension) is used as the title fallback when the SMF
+    /// has no Track-Name meta on Track 0.
+    public static func loadScore(
+        midiURL: URL, options: MidiImportOptions = .init()
+    ) throws -> Score {
+        let data = try Data(contentsOf: midiURL)
+        return try MidiImporter.parse(
+            data, options: options,
+            sourceFilename: midiURL.deletingPathExtension().lastPathComponent
+        )
+    }
+
+    /// Read an SMF file and parse into a `Score` asynchronously.
+    /// The filename (without extension) is used as the title fallback
+    /// when the SMF has no Track-Name meta on Track 0.
+    public static func loadScore(
+        midiURL: URL, options: MidiImportOptions
+    ) async throws -> Score {
+        let data = try Data(contentsOf: midiURL)
+        return try await MidiImporter.parse(
+            data, options: options,
+            sourceFilename: midiURL.deletingPathExtension().lastPathComponent
+        )
+    }
 }
