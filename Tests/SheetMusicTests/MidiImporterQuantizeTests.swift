@@ -152,4 +152,39 @@ import Testing
         #expect(q.tuplets[0].normalNotes == 4)
         #expect(q.elements.count == 7)
     }
+
+    /// D5: Force-snap fallback — onsets that fit no binary or tuplet grid.
+    ///
+    /// With tuplet detection disabled and a very tight tolerance (1 tick),
+    /// no assignment is recorded for any span. `snapTick` returns each raw
+    /// onset tick unchanged; `assemble` still produces one element per
+    /// inter-onset gap plus one final element for the gap to measure end.
+    /// The quantizer must not throw and must emit ≥ 3 elements.
+    ///
+    /// Ticks 317 and 953 are prime-ish values chosen so that
+    ///   317 % 120 = 77  (min(77,43) = 43 > 1) — binary fails
+    ///   953 % 120 = 113 (min(113,7) = 7 > 1)  — binary fails
+    /// With `tupletRatios: []`, no tuplet fit is attempted at all.
+    @Test func irrationaOnsetsFallBackToForceSnap() {
+        let measure = ImportMeasure(
+            startTick: 0, endTick: 1920, measureIndex: 0,
+            timeSignature: TimeSignature(numerator: 4, denominator: 4),
+            events: [
+                TimedMidiEvent(tick: 317, event: .noteOn(channel: 0, pitch: 60, velocity: 80)),
+                TimedMidiEvent(tick: 700, event: .noteOff(channel: 0, pitch: 60, velocity: 0)),
+                TimedMidiEvent(tick: 953, event: .noteOn(channel: 0, pitch: 62, velocity: 80)),
+                TimedMidiEvent(tick: 1400, event: .noteOff(channel: 0, pitch: 62, velocity: 0)),
+            ],
+            carryIns: [], carryOuts: []
+        )
+        var opts = MidiImportOptions()
+        opts.tupletRatios = []
+        opts.onsetTolerance = 1
+        let q = MidiImporter.quantize(measure: measure, division: 480, options: opts)
+        // Must not throw (compile-time guarantee — quantize is non-throwing).
+        // Must produce at least 3 elements: gap before onset1, gap between
+        // onsets, and gap from onset2 to measure end.
+        #expect(q.elements.count >= 3)
+        #expect(q.tuplets.isEmpty)
+    }
 }
