@@ -272,6 +272,23 @@ import Testing
     }
 
     @available(macOS 15.0, iOS 16.0, *)
+    @Test func braceCarriesStaffCountForGlyphSelection() throws {
+        // Piano grand staff: BRACE on staff 0, span 2.
+        let doc = LayoutEngine.layout(
+            score: Self.makeScore(),
+            options: .init(),
+            availableWidth: 800
+        )
+        let system = doc.systems[0]
+        let brace = try #require(
+            system.brackets.first(where: { $0.type == .brace })
+        )
+        // Renderer dispatches on staffCount to pick `brace` glyph
+        // (v=2) with magx=3.625.
+        #expect(brace.staffCount == 2)
+    }
+
+    @available(macOS 15.0, iOS 16.0, *)
     @Test func labelRightEdgeUnchangedWithoutBrackets() {
         let measure = Measure(voices: [
             Voice(elements: [

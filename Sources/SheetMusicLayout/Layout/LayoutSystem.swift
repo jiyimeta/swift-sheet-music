@@ -157,16 +157,23 @@ public struct LayoutBracket: Sendable, Equatable {
     /// Horizontal nesting column. 0 sits closest to the staff; higher
     /// values stack further left.
     public let column: Int
+    /// Number of staves spanned (after end-of-score clamping). Used by
+    /// the brace renderer to select the SMuFL variant glyph and the
+    /// per-span horizontal magnification — see MuseScore's
+    /// `engraving/dom/bracket.cpp::Bracket::computeMagx`.
+    public let staffCount: Int
 
     public init(
         type: BracketType,
         topY: CGFloat,
         bottomY: CGFloat,
-        column: Int
+        column: Int,
+        staffCount: Int = 1
     ) {
         self.type = type
         self.topY = topY
         self.bottomY = bottomY
         self.column = column
+        self.staffCount = max(staffCount, 1)
     }
 }

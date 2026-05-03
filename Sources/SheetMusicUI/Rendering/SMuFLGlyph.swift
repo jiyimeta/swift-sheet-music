@@ -1,3 +1,5 @@
+import CoreGraphics
+
 /// Bravura / SMuFL Private Use Area codepoints for the glyphs we draw.
 /// Values are the SMuFL standard: https://www.smufl.org/
 @available(macOS 15.0, iOS 16.0, *)
@@ -89,10 +91,33 @@ enum SMuFLGlyph {
     static let fermataAbove: Character = "\u{E4C0}"
     static let fermataBelow: Character = "\u{E4C1}"
 
-    // Bracket caps + brace
+    // Bracket caps + brace variants. The brace family lives in
+    // Bravura's PUA optionalGlyphs range — MuseScore picks one of
+    // four per number of spanned staves (`engraving/dom/bracket.cpp::
+    // computeMagx`):
+    //   v=1 → braceSmall, v=2 → brace, v=3 → braceLarge, v≥4 → braceLarger.
     static let brace: Character = "\u{E000}"
+    static let braceSmall: Character = "\u{F400}"
+    static let braceLarge: Character = "\u{F401}"
+    static let braceLarger: Character = "\u{F402}"
     static let bracketTop: Character = "\u{E003}"
     static let bracketBottom: Character = "\u{E004}"
+
+    /// Pick the brace SMuFL codepoint and the X-magnification factor
+    /// for a given staff span, matching MuseScore's
+    /// `Bracket::computeMagx`. Returns `(codepoint, magx)`.
+    static func braceVariant(staffCount: Int) -> (UInt16, CGFloat) {
+        let v = max(staffCount, 1)
+        let magx: CGFloat = v == 1
+            ? 1
+            : CGFloat(v) + CGFloat(v - 1) * 1.625
+        switch v {
+        case 1: return (0xF400, magx) // braceSmall
+        case 2: return (0xE000, magx) // brace
+        case 3: return (0xF401, magx) // braceLarge
+        default: return (0xF402, magx) // braceLarger (v ≥ 4)
+        }
+    }
 
     // Arpeggio / measure repeat (used later stages)
     static let arpeggioWiggle: Character = "\u{EAA9}"

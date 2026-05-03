@@ -434,7 +434,8 @@ extension LayoutEngine {
                         type: bi.type,
                         topY: topY,
                         bottomY: bottomY,
-                        column: bi.column
+                        column: bi.column,
+                        staffCount: endFlat - originFlat + 1
                     ))
                 }
             }
@@ -610,7 +611,8 @@ extension LayoutEngine {
                     type: $0.type,
                     topY: $0.topY + topShift,
                     bottomY: $0.bottomY + topShift,
-                    column: $0.column
+                    column: $0.column,
+                    staffCount: $0.staffCount
                 )
             }
             : brackets

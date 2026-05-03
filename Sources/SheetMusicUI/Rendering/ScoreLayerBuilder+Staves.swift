@@ -179,11 +179,13 @@ extension ScoreLayerBuilder {
         ))
     }
 
-    /// Brace via Bravura `U+E000`, drawn as a CGPath stretched to
-    /// fit the requested span. Glyph's right edge sits sp*0.3 to the
-    /// left of the staff origin (braces sit closest to the staff;
-    /// nested columns don't apply). Mirrors
-    /// `engraving/rendering/score/tdraw.cpp:1068-1083`.
+    /// Brace via the appropriate Bravura brace variant
+    /// (`braceSmall`/`brace`/`braceLarge`/`braceLarger`), stretched in
+    /// Y to fit the span and in X by the empirical `magx` formula
+    /// `v + (v−1) × 1.625` from MuseScore's
+    /// `Bracket::computeMagx`. Glyph's right edge sits `sp * 0.3` left
+    /// of the staff. Mirrors `tdraw.cpp:1068-1083` plus
+    /// `bracket.cpp:84-94`.
     private static func drawBrace(
         bracket b: LayoutBracket,
         staffOriginX: CGFloat,
@@ -192,12 +194,16 @@ extension ScoreLayerBuilder {
         into parent: CALayer
     ) {
         let rightEdge = staffOriginX - metrics.sp * 0.3
+        let (codepoint, magx) = SMuFLGlyph.braceVariant(
+            staffCount: b.staffCount
+        )
         guard let path = smuflGlyphPathStretched(
-            codepoint: 0xE000,
+            codepoint: codepoint,
             fontSize: metrics.sp * 4,
             rightEdgeX: rightEdge,
             topY: b.topY,
-            bottomY: b.bottomY
+            bottomY: b.bottomY,
+            xScale: magx
         ) else { return }
         parent.addSublayer(fillLayer(path: path, height: height))
     }
@@ -227,15 +233,18 @@ extension ScoreLayerBuilder {
         return path.copy(using: &t) ?? path
     }
 
-    /// SMuFL glyph stretched vertically so its bbox spans
-    /// `[topY, bottomY]`, and horizontally anchored so its bbox right
-    /// edge lands at `rightEdgeX`. No X-scaling.
+    /// SMuFL glyph stretched so its bbox spans `[topY, bottomY]`
+    /// vertically, with bbox right edge at `rightEdgeX`. `xScale`
+    /// applies an additional horizontal magnification (the `magx`
+    /// from `Bracket::computeMagx`) — defaults to 1 for non-brace
+    /// glyphs that draw at their natural width.
     private static func smuflGlyphPathStretched(
         codepoint: UInt16,
         fontSize: CGFloat,
         rightEdgeX: CGFloat,
         topY: CGFloat,
-        bottomY: CGFloat
+        bottomY: CGFloat,
+        xScale: CGFloat = 1
     ) -> CGPath? {
         let font = bravuraFont(size: fontSize)
         var unichars: [UniChar] = [codepoint]
@@ -247,11 +256,12 @@ extension ScoreLayerBuilder {
         let bbox = path.boundingBox
         guard bbox.width > 0, bbox.height > 0 else { return nil }
         let scaleY = (bottomY - topY) / bbox.height
-        // font (y-up) → screen (y-down). bbox.maxY → topY, bbox.minY → bottomY.
-        // bbox.maxX → rightEdgeX, bbox.minX → rightEdgeX - bbox.width.
+        // font (y-up) → screen (y-down).
+        //   bbox.maxX → rightEdgeX, bbox.minX → rightEdgeX - bbox.width*xScale.
+        //   bbox.maxY → topY, bbox.minY → bottomY.
         var t = CGAffineTransform(
-            a: 1, b: 0, c: 0, d: -scaleY,
-            tx: rightEdgeX - bbox.maxX,
+            a: xScale, b: 0, c: 0, d: -scaleY,
+            tx: rightEdgeX - bbox.maxX * xScale,
             ty: topY + bbox.maxY * scaleY
         )
         return path.copy(using: &t) ?? path

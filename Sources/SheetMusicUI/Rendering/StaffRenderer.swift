@@ -50,6 +50,7 @@ enum StaffRenderer {
                     context: &context,
                     staffOriginX: staffOriginX,
                     topY: topY, bottomY: bottomY,
+                    staffCount: b.staffCount,
                     metrics: metrics
                 )
             case .normal:
@@ -176,23 +177,29 @@ enum StaffRenderer {
         context.stroke(spine, with: .color(.primary), lineWidth: w)
     }
 
-    /// Brace via Bravura `U+E000`, drawn as a CGPath stretched to fit
-    /// the requested span. Mirrors `tdraw.cpp:1068-1083`. We use a path
-    /// rather than `Text` because SwiftUI text rendering doesn't
-    /// reliably preserve baseline alignment under a non-uniform scale.
+    /// Brace via the appropriate Bravura brace variant
+    /// (`braceSmall`/`brace`/`braceLarge`/`braceLarger`), stretched in
+    /// Y to fit the span and in X by the empirical `magx` formula
+    /// from `Bracket::computeMagx`. Mirrors `tdraw.cpp:1068-1083`
+    /// plus `bracket.cpp:84-94`.
     private static func drawBrace(
         context: inout GraphicsContext,
         staffOriginX: CGFloat,
         topY: CGFloat, bottomY: CGFloat,
+        staffCount: Int,
         metrics: StaffMetrics
     ) {
         let rightEdge = staffOriginX - metrics.sp * 0.3
+        let (codepoint, magx) = SMuFLGlyph.braceVariant(
+            staffCount: staffCount
+        )
         guard let path = smuflGlyphPathStretched(
-            codepoint: 0xE000,
+            codepoint: codepoint,
             fontSize: metrics.sp * 4,
             rightEdgeX: rightEdge,
             topY: topY,
-            bottomY: bottomY
+            bottomY: bottomY,
+            xScale: magx
         ) else { return }
         context.fill(Path(path), with: .color(.primary))
     }
@@ -222,14 +229,16 @@ enum StaffRenderer {
         return path.copy(using: &t) ?? path
     }
 
-    /// SMuFL glyph stretched vertically so its bbox spans
-    /// `[topY, bottomY]`, with bbox right edge at `rightEdgeX`.
+    /// SMuFL glyph stretched so its bbox spans `[topY, bottomY]`
+    /// vertically, with bbox right edge at `rightEdgeX`. `xScale`
+    /// applies the brace magx multiplier; defaults to 1.
     private static func smuflGlyphPathStretched(
         codepoint: UInt16,
         fontSize: CGFloat,
         rightEdgeX: CGFloat,
         topY: CGFloat,
-        bottomY: CGFloat
+        bottomY: CGFloat,
+        xScale: CGFloat = 1
     ) -> CGPath? {
         _ = BravuraFont.register
         let font = CTFontCreateWithName(
@@ -245,8 +254,8 @@ enum StaffRenderer {
         guard bbox.width > 0, bbox.height > 0 else { return nil }
         let scaleY = (bottomY - topY) / bbox.height
         var t = CGAffineTransform(
-            a: 1, b: 0, c: 0, d: -scaleY,
-            tx: rightEdgeX - bbox.maxX,
+            a: xScale, b: 0, c: 0, d: -scaleY,
+            tx: rightEdgeX - bbox.maxX * xScale,
             ty: topY + bbox.maxY * scaleY
         )
         return path.copy(using: &t) ?? path

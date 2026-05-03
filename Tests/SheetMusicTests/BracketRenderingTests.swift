@@ -40,7 +40,8 @@
                     type: type,
                     topY: 20,
                     bottomY: 80 + metrics.staffHeight,
-                    column: 0
+                    column: 0,
+                    staffCount: 2
                 )],
                 spanners: [],
                 sp: metrics.sp
