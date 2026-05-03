@@ -18,10 +18,26 @@ extension LayoutEngine {
         let metrics = context.metrics
         let allStaves = context.score.allStaves
         let staves = allStaves.map(\.staff)
+        // Bracket-column count: max column index across every staff's
+        // BracketItems, +1. Zero when no part declares a bracket.
+        let bracketColumnCount: Int = {
+            var maxCol: Int = -1
+            for part in context.score.parts {
+                for staff in part.staves {
+                    for bi in staff.brackets where bi.visible
+                        && bi.type != .noBracket
+                    {
+                        if bi.column > maxCol { maxCol = bi.column }
+                    }
+                }
+            }
+            return maxCol + 1
+        }()
         let partLabelWidth: CGFloat = labelWidth(
             score: context.score,
             metrics: metrics,
-            useLong: isFirstSystem
+            useLong: isFirstSystem,
+            bracketColumnCount: bracketColumnCount
         )
 
         // Inter-system breathing room. MuseScore's style defaults
@@ -393,6 +409,37 @@ extension LayoutEngine {
             }
         }
 
+        // Build LayoutBrackets — one per visible BracketItem on each
+        // staff. `span` overshooting the last staff is silently
+        // clamped, mirroring MuseScore's `BracketItem::staffIdx2`.
+        var brackets: [LayoutBracket] = []
+        for (partIdx, part) in context.score.parts.enumerated() {
+            guard let partFirstFlat = allStaves.firstIndex(where: {
+                $0.address.partIndex == partIdx
+            }) else { continue }
+            for (staffIdxInPart, staff) in part.staves.enumerated() {
+                let originFlat = partFirstFlat + staffIdxInPart
+                guard originFlat < staffOrigins.count else { continue }
+                for bi in staff.brackets where bi.visible
+                    && bi.type != .noBracket
+                {
+                    let endFlat = min(
+                        originFlat + bi.span - 1,
+                        staffOrigins.count - 1
+                    )
+                    let topY = staffOrigins[originFlat].y
+                    let bottomY = staffOrigins[endFlat].y
+                        + metrics.staffHeight
+                    brackets.append(LayoutBracket(
+                        type: bi.type,
+                        topY: topY,
+                        bottomY: bottomY,
+                        column: bi.column
+                    ))
+                }
+            }
+        }
+
         // Per-Part labels. Multi-staff parts (Piano grand staff)
         // collapse to a single label centered between the topmost
         // and bottommost spanned staves, matching engraving
@@ -550,6 +597,16 @@ extension LayoutEngine {
                 )
             }
             : labels
+        let adjustedBrackets = topShift > 0
+            ? brackets.map {
+                LayoutBracket(
+                    type: $0.type,
+                    topY: $0.topY + topShift,
+                    bottomY: $0.bottomY + topShift,
+                    column: $0.column
+                )
+            }
+            : brackets
 
         // Hand the (possibly mutated) clef / key state back to the
         // caller so the next system continues from where this one
@@ -564,6 +621,7 @@ extension LayoutEngine {
             staffOrigins: adjustedStaffOrigins,
             staffAddresses: allStaves.map(\.address),
             partLabels: adjustedLabels,
+            brackets: adjustedBrackets,
             spanners: [],
             sp: metrics.sp
         )

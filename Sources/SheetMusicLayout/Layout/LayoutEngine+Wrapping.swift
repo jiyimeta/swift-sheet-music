@@ -26,8 +26,16 @@ extension LayoutEngine {
     /// system) vs short names (continuation systems). Mirrors
     /// MuseScore's behaviour where the indent fits the longest
     /// label in the active system rather than a fixed value.
+    ///
+    /// `bracketColumnCount` widens the gutter by one `sp` per
+    /// bracket column so stacked brackets have room to draw.
+    /// One column ≈ sp * 1 of horizontal stride; the base inset
+    /// (sp * 0.5) is the bracket-spine-to-staff distance.
     static func labelWidth(
-        score: Score, metrics: StaffMetrics, useLong: Bool
+        score: Score,
+        metrics: StaffMetrics,
+        useLong: Bool,
+        bracketColumnCount: Int = 0
     ) -> CGFloat {
         let labels: [String] = score.parts.map { part in
             if useLong {
@@ -55,7 +63,13 @@ extension LayoutEngine {
         // staff so glyphs don't touch the leftmost barline.
         let pad = metrics.sp * 1
         let floor = useLong ? metrics.sp * 4 : metrics.sp * 2
-        return max(floor, widest + pad)
+        // Reserve room for bracket columns on the staff's left side.
+        // One column ≈ sp * 1 of horizontal stride; the base inset
+        // (sp * 0.5) is the bracket-spine-to-staff distance.
+        let bracketGutter: CGFloat = bracketColumnCount > 0
+            ? CGFloat(bracketColumnCount) * metrics.sp + metrics.sp * 0.5
+            : 0
+        return max(floor, widest + pad) + bracketGutter
     }
 
     /// Threshold (in measures) for switching between balanced
