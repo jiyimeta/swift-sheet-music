@@ -3,6 +3,7 @@ import Foundation
 @_exported import SheetMusicMIDI
 @_exported import SheetMusicMSCX
 @_exported import SheetMusicMusicXML
+@_exported import SheetMusicPDF
 
 /// Top-level convenience façade for the SheetMusic family of libraries.
 ///
@@ -103,5 +104,23 @@ public enum SheetMusic {
             data, options: options,
             sourceFilename: midiURL.deletingPathExtension().lastPathComponent
         )
+    }
+
+    /// Read a `.pdf` file (vector PDF from MuseScore 3.x/4.x) and parse
+    /// into a `Score`. CPU-bound; wrap with `Task { … }` if you need
+    /// to keep the main thread responsive.
+    public static func loadScore(
+        pdfURL: URL,
+        options: PDFImportOptions = .init()
+    ) throws -> Score {
+        try PDFImporter.parse(pdfURL: pdfURL, options: options)
+    }
+
+    /// Parse vector-PDF bytes into a `Score`.
+    public static func loadScore(
+        pdfData: Data,
+        options: PDFImportOptions = .init()
+    ) throws -> Score {
+        try PDFImporter.parse(pdfData: pdfData, options: options)
     }
 }

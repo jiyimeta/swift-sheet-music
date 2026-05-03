@@ -58,7 +58,7 @@ let package = Package(
             dependencies: [
                 "SheetMusicCore",
                 "SheetMusicXMLTools",
-                "ZIPFoundation",   // future .mscz (zipped) support
+                "ZIPFoundation", // future .mscz (zipped) support
             ]
         ),
         .target(
@@ -66,7 +66,7 @@ let package = Package(
             dependencies: [
                 "SheetMusicCore",
                 "SheetMusicXMLTools",
-                "ZIPFoundation",   // .mxl (zipped MusicXML)
+                "ZIPFoundation", // .mxl (zipped MusicXML)
             ]
         ),
         .target(
@@ -104,6 +104,7 @@ let package = Package(
                 "SheetMusicMSCX",
                 "SheetMusicMusicXML",
                 "SheetMusicMIDI",
+                "SheetMusicPDF",
             ]
         ),
         // Dev tool: renders a set of sample Scores to PNG for visual
@@ -125,7 +126,7 @@ let package = Package(
                 "SheetMusicAudio",
                 "SheetMusicPDF",
                 "SheetMusicXMLTools",
-                "ZIPFoundation",   // MXLTestBuilder builds .mxl archives at test time
+                "ZIPFoundation", // MXLTestBuilder builds .mxl archives at test time
             ],
             resources: [
                 .process("Resources"),
