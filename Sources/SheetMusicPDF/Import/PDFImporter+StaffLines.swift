@@ -32,6 +32,12 @@ extension PDFImporter {
 
     /// Filter horizontal segments on the page and cluster them by midY using
     /// `~1.5 * lineWidth + 1` tolerance — co-linear segments coalesce.
+    ///
+    /// Width gate (>50pt) keeps decorative ledger / dot strokes out. lineWidth
+    /// is intentionally NOT gated: real MuseScore PDFs report staff `w`
+    /// operands ≥ ~1.8pt (MS3) or ≥ ~1pt (MS4), so any lineWidth threshold
+    /// would either reject genuine staves or admit beams. The CV<0.1 5-window
+    /// in `pathDetectedStaves` does the actual non-staff rejection.
     private static func clusterHorizontals(
         _ paths: [PathSegment],
         pageIndex: Int
@@ -40,7 +46,6 @@ extension PDFImporter {
             $0.pageIndex == pageIndex
                 && $0.kind == .horizontal
                 && $0.rect.width > 50
-                && $0.lineWidth < 1
         }
         var clusters: [[PathSegment]] = []
         for seg in horiz.sorted(by: { $0.rect.midY < $1.rect.midY }) {
