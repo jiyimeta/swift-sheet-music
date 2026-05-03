@@ -38,6 +38,20 @@ extension MidiImporter {
         60: "triangle-up", 61: "triangle-up",
     ]
 
+    /// Voice index a given GM drum pitch should belong to in the
+    /// engraved drum staff.
+    ///   - 0 = voice 1, stems up: cymbals, hi-hats, ride, snare,
+    ///         toms (= "hands")
+    ///   - 1 = voice 2, stems down: bass drum, low floor tom,
+    ///         pedal hi-hat (= "feet")
+    /// Matches MuseScore's default drumset partitioning.
+    static func gmDrumVoiceIndex(for pitch: Int) -> Int {
+        switch pitch {
+        case 35, 36, 41, 44: 1
+        default: 0
+        }
+    }
+
     /// GM drum-kit pitch → percussion-staff line index
     /// (0 = top line, 4 = middle, 8 = bottom line; negative =
     /// above-staff ledger; ≥ 9 = below-staff). Used by the layout

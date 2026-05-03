@@ -65,6 +65,85 @@ import Testing
         }
     }
 
+    @Test func drumStaffSplitsHandsAndFeetIntoTwoVoices() throws {
+        // Standard drum-pattern beat: kick (voice 2) + closed hi-hat
+        // (voice 1) on beat 1, snare (voice 1) + kick (voice 2) on
+        // beat 3. Voice 0 should carry hi-hat + snare; voice 1
+        // should carry the two kicks.
+        let track0 = MidiTrack(events: [
+            TimedMidiEvent(tick: 0, event: .meta(.timeSignature(
+                numerator: 4, denominator: 4, clocksPerClick: 24, thirtySecondsPerQuarter: 8
+            ))),
+            TimedMidiEvent(tick: 1920, event: .endOfTrack),
+        ])
+        let track1 = MidiTrack(events: [
+            TimedMidiEvent(tick: 0, event: .meta(.trackName("Drums"))),
+            // Beat 1: kick + hi-hat together.
+            TimedMidiEvent(tick: 0, event: .noteOn(channel: 9, pitch: 36, velocity: 100)),
+            TimedMidiEvent(tick: 0, event: .noteOn(channel: 9, pitch: 42, velocity: 80)),
+            TimedMidiEvent(tick: 240, event: .noteOff(channel: 9, pitch: 36, velocity: 0)),
+            TimedMidiEvent(tick: 240, event: .noteOff(channel: 9, pitch: 42, velocity: 0)),
+            // Beat 3: snare + kick.
+            TimedMidiEvent(tick: 960, event: .noteOn(channel: 9, pitch: 38, velocity: 100)),
+            TimedMidiEvent(tick: 960, event: .noteOn(channel: 9, pitch: 36, velocity: 100)),
+            TimedMidiEvent(tick: 1200, event: .noteOff(channel: 9, pitch: 38, velocity: 0)),
+            TimedMidiEvent(tick: 1200, event: .noteOff(channel: 9, pitch: 36, velocity: 0)),
+            TimedMidiEvent(tick: 1920, event: .endOfTrack),
+        ])
+        let file = MidiFile(division: 480, format: 1, tracks: [track0, track1])
+        let bytes = try MidiWriter.write(file)
+        let score = try MidiImporter.parse(bytes)
+        guard let drums = score.parts.firstIndex(where: { $0.instrument.useDrumset }) else {
+            Issue.record("expected drumset part"); return
+        }
+        let measure = score.staves[drums].measures.first
+        guard let measure else { Issue.record("expected measure"); return }
+        #expect(measure.voices.count == 2)
+        // Walk every chord pitch in each voice — voice 0 should
+        // contain hi-hat (42) and snare (38); voice 1 should
+        // contain the two kicks (36).
+        func pitches(in v: Voice) -> Set<Int> {
+            var out: Set<Int> = []
+            for el in v.elements {
+                if case let .chord(c) = el {
+                    for n in c.notes { out.insert(n.pitch) }
+                }
+            }
+            return out
+        }
+        #expect(pitches(in: measure.voices[0]).contains(42))
+        #expect(pitches(in: measure.voices[0]).contains(38))
+        #expect(!pitches(in: measure.voices[0]).contains(36))
+        #expect(pitches(in: measure.voices[1]) == [36])
+    }
+
+    @Test func drumStaffOmitsVoiceTwoWhenNoFootDrums() throws {
+        // Pattern with only hi-hat + snare (no kick). Voice 1
+        // should be omitted, leaving a single voice 0 with the hits.
+        let track0 = MidiTrack(events: [
+            TimedMidiEvent(tick: 0, event: .meta(.timeSignature(
+                numerator: 4, denominator: 4, clocksPerClick: 24, thirtySecondsPerQuarter: 8
+            ))),
+            TimedMidiEvent(tick: 1920, event: .endOfTrack),
+        ])
+        let track1 = MidiTrack(events: [
+            TimedMidiEvent(tick: 0, event: .meta(.trackName("Drums"))),
+            TimedMidiEvent(tick: 0, event: .noteOn(channel: 9, pitch: 42, velocity: 80)),
+            TimedMidiEvent(tick: 240, event: .noteOff(channel: 9, pitch: 42, velocity: 0)),
+            TimedMidiEvent(tick: 960, event: .noteOn(channel: 9, pitch: 38, velocity: 100)),
+            TimedMidiEvent(tick: 1200, event: .noteOff(channel: 9, pitch: 38, velocity: 0)),
+            TimedMidiEvent(tick: 1920, event: .endOfTrack),
+        ])
+        let file = MidiFile(division: 480, format: 1, tracks: [track0, track1])
+        let bytes = try MidiWriter.write(file)
+        let score = try MidiImporter.parse(bytes)
+        guard let drums = score.parts.firstIndex(where: { $0.instrument.useDrumset }) else {
+            Issue.record("expected drumset part"); return
+        }
+        let measure = score.staves[drums].measures.first
+        #expect(measure?.voices.count == 1)
+    }
+
     @Test func drumPartGetsPercussionStaffDeclarationAndDrumLineMap() throws {
         // End-to-end: a drum-only track produces a Part with the
         // `group: "percussion"`, `defaultClefType: "PERC"` staff

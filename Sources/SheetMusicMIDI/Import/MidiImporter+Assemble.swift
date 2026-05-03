@@ -17,24 +17,27 @@ extension MidiImporter {
         var staves: [StaffContent] = []
         for (trackIdx, measures) in perTrackMeasures.enumerated() {
             let track = imports[trackIdx]
-            let voices = measures.map { m -> Voice in
+            let measureVoices: [[Voice]] = measures.map { m in
                 let q = quantize(measure: m, division: file.division, options: options)
                 let key = track.isDrums
                     ? 0
                     : (m.measureIndex < measureKeys.count ? measureKeys[m.measureIndex] : 0)
-                return voice(
+                if track.isDrums {
+                    return drumVoices(measure: m, quantized: q, division: file.division)
+                }
+                return [voice(
                     quantized: q,
                     measure: m,
                     division: file.division,
-                    isDrumTrack: track.isDrums,
+                    isDrumTrack: false,
                     concertKey: key
-                )
+                )]
             }
-            var scoreMeasures = voices.map { Measure(voices: [$0]) }
+            var scoreMeasures = measureVoices.map { Measure(voices: $0) }
             if options.detectGlissando, !track.isDrums {
                 attachGlissandos(
                     measures: measures,
-                    voices: voices,
+                    voices: measureVoices.compactMap(\.first),
                     into: &scoreMeasures,
                     division: file.division
                 )
@@ -57,6 +60,70 @@ extension MidiImporter {
         }
         let meta = resolveTitle(file: file, sourceFilename: sourceFilename)
         return Score(division: file.division, parts: parts, staves: staves, metaTags: meta)
+    }
+
+    // MARK: - Drum voice splitting
+
+    /// Split a drum measure into voice 0 (hands: cymbals, hi-hat,
+    /// snare, toms) and voice 1 (feet: kick, low floor tom, pedal
+    /// hi-hat) per `gmDrumVoiceIndex`. If voice 1 has no actual
+    /// drum hits, omit it so the layout doesn't draw a redundant
+    /// rest staff.
+    static func drumVoices(
+        measure: ImportMeasure,
+        quantized: QuantizedMeasure,
+        division: Int
+    ) -> [Voice] {
+        let v0Pitches = pitchesInVoice(0, in: measure)
+        let v1Pitches = pitchesInVoice(1, in: measure)
+        var result: [Voice] = []
+        // Voice 0 always emitted (even if empty — keeps clef + rests).
+        result.append(voice(
+            quantized: quantized,
+            measure: filterMeasure(measure, keepingPitches: v0Pitches),
+            division: division,
+            isDrumTrack: true
+        ))
+        if !v1Pitches.isEmpty {
+            result.append(voice(
+                quantized: quantized,
+                measure: filterMeasure(measure, keepingPitches: v1Pitches),
+                division: division,
+                isDrumTrack: true
+            ))
+        }
+        return result
+    }
+
+    private static func pitchesInVoice(
+        _ voiceIdx: Int, in measure: ImportMeasure
+    ) -> Set<Int> {
+        var pitches: Set<Int> = []
+        for ev in measure.events {
+            if case let .noteOn(_, p, v) = ev.event, v > 0,
+               gmDrumVoiceIndex(for: p) == voiceIdx
+            {
+                pitches.insert(p)
+            }
+        }
+        return pitches
+    }
+
+    private static func filterMeasure(
+        _ measure: ImportMeasure, keepingPitches pitches: Set<Int>
+    ) -> ImportMeasure {
+        var copy = measure
+        copy.events = measure.events.filter { ev in
+            switch ev.event {
+            case let .noteOn(_, p, _), let .noteOff(_, p, _):
+                return pitches.contains(p)
+            default:
+                return true // keep meta / endOfTrack
+            }
+        }
+        copy.carryIns = measure.carryIns.filter { pitches.contains($0.pitch) }
+        copy.carryOuts = measure.carryOuts.filter { pitches.contains($0.pitch) }
+        return copy
     }
 
     // MARK: - Glissando attachment
