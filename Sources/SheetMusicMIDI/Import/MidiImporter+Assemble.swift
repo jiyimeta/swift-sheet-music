@@ -14,7 +14,6 @@ extension MidiImporter {
         let perTrackMeasures = imports.map { segment(track: $0, timeline: timeline) }
         let measureKeys = perMeasureKeys(file: file, timeline: timeline)
         var parts: [Part] = []
-        var staves: [StaffContent] = []
         for (trackIdx, measures) in perTrackMeasures.enumerated() {
             let track = imports[trackIdx]
             let measureVoices: [[Voice]] = measures.map { m in
@@ -46,24 +45,28 @@ extension MidiImporter {
                     division: file.division
                 )
             }
-            let staffID = staves.count + 1
-            var staff = StaffContent(id: staffID, measures: scoreMeasures)
-            // Tempo is global to the score — only staff 1 carries it.
+            // Build the Staff directly (replaces separate StaffContent + StaffDeclaration).
+            // Tempo is global to the score — only track 0 carries it.
             // Time signature is shared across every staff (bar lines
             // align). Key signature applies to all non-drum staves;
             // percussion staves render without a key sig.
+            var staff = Staff(
+                staffType: "stdNormal",
+                group: track.isDrums ? "percussion" : "pitched",
+                defaultClefType: track.isDrums ? "PERC" : nil,
+                measures: scoreMeasures
+            )
             injectMetaEvents(
                 file: file,
                 timeline: timeline,
                 into: &staff,
-                includeTempo: staffID == 1,
+                includeTempo: trackIdx == 0,
                 includeKeySignature: !track.isDrums
             )
-            staves.append(staff)
-            parts.append(makePart(for: track))
+            parts.append(makePart(for: track, staff: staff))
         }
         let meta = resolveTitle(file: file, sourceFilename: sourceFilename)
-        return Score(division: file.division, parts: parts, staves: staves, metaTags: meta)
+        return Score(division: file.division, parts: parts, metaTags: meta)
     }
 
     // MARK: - Drum voice splitting
@@ -221,7 +224,7 @@ extension MidiImporter {
     static func injectMetaEvents(
         file: MidiFile,
         timeline: BarTimeline,
-        into staff: inout StaffContent,
+        into staff: inout Staff,
         includeTempo: Bool,
         includeKeySignature: Bool
     ) {
@@ -275,9 +278,8 @@ extension MidiImporter {
 
     // MARK: - Part building
 
-    static func makePart(for track: ImportTrack) -> Part {
+    static func makePart(for track: ImportTrack, staff: Staff) -> Part {
         let instrument: Instrument
-        let staffDecls: [StaffDeclaration]
         if track.isDrums {
             instrument = Instrument(
                 id: "drumset",
@@ -285,25 +287,17 @@ extension MidiImporter {
                 useDrumset: true,
                 drumLineMap: gmDrumLines
             )
-            // Percussion staff: layout uses these to pick the
-            // percussion clef and the drum-line note placement.
-            staffDecls = [StaffDeclaration(
-                staffType: "stdNormal",
-                group: "percussion",
-                defaultClefType: "PERC"
-            )]
         } else {
             instrument = Instrument(
                 id: gmInstrumentID(for: track.programChange),
                 longName: track.trackName ?? "Track"
             )
-            staffDecls = []
         }
         return Part(
             id: "P\(track.trackIndex)",
             trackName: track.trackName,
             instrument: instrument,
-            staffDeclarations: staffDecls
+            staves: [staff]
         )
     }
 
