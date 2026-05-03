@@ -69,6 +69,52 @@ import Testing
         #expect(staff.group == "pitched")
     }
 
+    @Test func decodeDefaultTransposingClefAlsoSetsDefaultClefType() throws {
+        // Contrabass-style declaration: only the per-clef forms, no
+        // bare <defaultClef>. We collapse to defaultClefType, preferring
+        // the transposing clef (the one MuseScore displays when concert
+        // pitch is off — the default). Without this, the layout would
+        // fall back to G clef.
+        let xml = """
+        <Staff id="5">
+          <StaffType group="pitched"><name>stdNormal</name></StaffType>
+          <defaultConcertClef>F8vb</defaultConcertClef>
+          <defaultTransposingClef>F</defaultTransposingClef>
+        </Staff>
+        """
+        let node = try XMLTreeParser.parse(Data(xml.utf8))
+        let (_, staff) = Staff.declared(node)
+        #expect(staff.defaultClefType == "F")
+    }
+
+    @Test func decodeDefaultConcertClefAloneFallsThrough() throws {
+        // Only concert clef declared; we use it.
+        let xml = """
+        <Staff id="5">
+          <StaffType group="pitched"><name>stdNormal</name></StaffType>
+          <defaultConcertClef>F8vb</defaultConcertClef>
+        </Staff>
+        """
+        let node = try XMLTreeParser.parse(Data(xml.utf8))
+        let (_, staff) = Staff.declared(node)
+        #expect(staff.defaultClefType == "F8vb")
+    }
+
+    @Test func decodeBareDefaultClefStillWins() throws {
+        // When <defaultClef> is present, it wins over the per-clef forms.
+        let xml = """
+        <Staff id="5">
+          <StaffType group="pitched"><name>stdNormal</name></StaffType>
+          <defaultClef>F</defaultClef>
+          <defaultConcertClef>F8vb</defaultConcertClef>
+          <defaultTransposingClef>G</defaultTransposingClef>
+        </Staff>
+        """
+        let node = try XMLTreeParser.parse(Data(xml.utf8))
+        let (_, staff) = Staff.declared(node)
+        #expect(staff.defaultClefType == "F")
+    }
+
     @Test func decodePart() throws {
         let xml = """
         <Part id="1">

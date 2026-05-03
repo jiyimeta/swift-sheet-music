@@ -11,7 +11,24 @@ extension Staff {
         let staffTypeNode = node.first("StaffType")
         let staffType = staffTypeNode?.first("name")?.text ?? "stdNormal"
         let group = staffTypeNode?.attributes["group"] ?? "pitched"
+        // Default clef. MuseScore writes one of three forms (see
+        // engraving/rw/read460/tread.cpp:3948-3955):
+        //   * `<defaultClef>X</defaultClef>` — sets BOTH concert &
+        //     transposing to X.
+        //   * `<defaultConcertClef>X</defaultConcertClef>` — concert only.
+        //   * `<defaultTransposingClef>X</defaultTransposingClef>` —
+        //     transposing only.
+        // Concert pitch mode is OFF by default in MuseScore, so the
+        // displayed clef is the transposing one. We collapse to a
+        // single `defaultClefType` here, preferring (in order):
+        // explicit defaultClef → defaultTransposingClef → defaultConcertClef.
+        // This fixes scores like a contrabass part that only declares
+        // `<defaultConcertClef>F8vb</defaultConcertClef>` and
+        // `<defaultTransposingClef>F</defaultTransposingClef>` —
+        // previously we'd fall back to G clef.
         let defaultClef = node.first("defaultClef")?.text
+            ?? node.first("defaultTransposingClef")?.text
+            ?? node.first("defaultConcertClef")?.text
         let mscxID = node.attributes["id"]
 
         // Per spec: walk every <bracket> child in document order so
