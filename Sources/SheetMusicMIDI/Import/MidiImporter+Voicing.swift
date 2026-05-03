@@ -14,6 +14,26 @@ private struct VoiceNote {
     var endsTied: Bool = false
 }
 
+// MARK: - GM drum-kit notehead table
+
+extension MidiImporter {
+    /// GM drum-kit pitch → notehead shape. Pitches not listed get
+    /// `nil` (which the renderer interprets as the default head).
+    fileprivate static let gmDrumHeads: [Int: String] = [
+        35: "normal", // acoustic bass drum
+        36: "normal", // bass drum 1
+        38: "normal", // acoustic snare
+        40: "normal", // electric snare
+        42: "cross", // closed hi-hat
+        44: "cross", // pedal hi-hat
+        46: "cross", // open hi-hat
+        49: "diamond", // crash cymbal 1
+        51: "diamond", // ride cymbal 1
+        57: "diamond", // crash cymbal 2
+        59: "diamond", // ride cymbal 2
+    ]
+}
+
 // MARK: - voice()
 
 extension MidiImporter {
@@ -29,7 +49,8 @@ extension MidiImporter {
     static func voice(
         quantized: QuantizedMeasure,
         measure: ImportMeasure,
-        division: Int
+        division: Int,
+        isDrumTrack: Bool = false
     ) -> Voice {
         var notes = collectNotes(from: measure)
         mergeCarryIns(into: &notes, measure: measure)
@@ -55,7 +76,8 @@ extension MidiImporter {
                     tick: tick,
                     activeNotes: activeNotes,
                     comesFromPrior: comesFromPrior,
-                    willContinue: willContinue
+                    willContinue: willContinue,
+                    isDrum: isDrumTrack
                 )
             }
             elements.append(.chord(Chord(duration: duration, notes: ChordNotes(coreNotes))))
@@ -123,14 +145,16 @@ extension MidiImporter {
         }
     }
 
-    /// Stamp tie flags on a single note within the chord-emission loop.
+    /// Stamp tie flags (and, for drum tracks, a notehead shape) on a
+    /// single note within the chord-emission loop.
     private static func buildNote(
         pitch: Int,
         prev: Int,
         tick: Int,
         activeNotes: [VoiceNote],
         comesFromPrior: [Int],
-        willContinue: [Int]
+        willContinue: [Int],
+        isDrum: Bool = false
     ) -> SheetMusicCore.Note {
         var n = SheetMusicCore.Note(pitch: pitch, tpc: 0)
         if comesFromPrior.contains(pitch) { n.tieBack = 1 }
@@ -141,6 +165,7 @@ extension MidiImporter {
         if activeNotes.contains(where: { $0.pitch == pitch && $0.endsTied && $0.offTick == tick }) {
             n.tieForward = 1
         }
+        if isDrum { n.headType = gmDrumHeads[pitch] }
         return n
     }
 }
