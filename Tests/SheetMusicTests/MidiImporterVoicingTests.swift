@@ -223,17 +223,40 @@ import Testing
     }
 
     @Test func tpcUsesFlatSpellingsInFlatKeys() {
-        // Bb major (concertKey = -2). Black keys take flat spellings:
-        // Db=7, Eb=11, Gb=6, Ab=8, Bb=10. Naturals are unchanged.
-        #expect(MidiImporter.tpc(forMidiPitch: 61, concertKey: -2) == 7) // Db
+        // Bb major (concertKey = -2). Black keys take flat spellings.
+        // MuseScore line-of-fifths flats: Gb=8, Db=9, Ab=10, Eb=11, Bb=12.
+        #expect(MidiImporter.tpc(forMidiPitch: 61, concertKey: -2) == 9) // Db
         #expect(MidiImporter.tpc(forMidiPitch: 63, concertKey: -2) == 11) // Eb
-        #expect(MidiImporter.tpc(forMidiPitch: 66, concertKey: -2) == 6) // Gb
-        #expect(MidiImporter.tpc(forMidiPitch: 68, concertKey: -2) == 8) // Ab
-        #expect(MidiImporter.tpc(forMidiPitch: 70, concertKey: -2) == 10) // Bb
+        #expect(MidiImporter.tpc(forMidiPitch: 66, concertKey: -2) == 8) // Gb
+        #expect(MidiImporter.tpc(forMidiPitch: 68, concertKey: -2) == 10) // Ab
+        #expect(MidiImporter.tpc(forMidiPitch: 70, concertKey: -2) == 12) // Bb
         // White keys still use natural TPC (a chromatic accidental
         // would be rendered as a natural sign in a sharp key, etc.):
         #expect(MidiImporter.tpc(forMidiPitch: 60, concertKey: -2) == 14) // C
         #expect(MidiImporter.tpc(forMidiPitch: 65, concertKey: -2) == 13) // F
+    }
+
+    @Test func tpcStaffPositionForFlatKeysMatchesNaturalLetter() {
+        // Cross-check via the layout's tpc-to-letter mapping: each
+        // black-key flat must place its notehead on the *higher*
+        // diatonic letter (Db on D, Ab on A, …) — not the enharmonic
+        // sharp letter (Db ≠ C#). This is what the user reported as
+        // missing: Db displaying as C and Ab as G.
+        //
+        // tpcLetters from PitchStaffPosition.swift maps
+        //   ((tpc + 1) % 7) → 0=F, 1=C, 2=G, 3=D, 4=A, 5=E, 6=B.
+        func letter(_ tpc: Int) -> String {
+            let row = ((tpc + 1) % 7 + 7) % 7
+            return ["F", "C", "G", "D", "A", "E", "B"][row]
+        }
+        // 4-flat key (Ab major). Flatted notes in the key signature
+        // are B, E, A, D — so Db / Ab should land on letters D / A.
+        let key = -4
+        #expect(letter(MidiImporter.tpc(forMidiPitch: 61, concertKey: key)) == "D") // Db on D
+        #expect(letter(MidiImporter.tpc(forMidiPitch: 68, concertKey: key)) == "A") // Ab on A
+        #expect(letter(MidiImporter.tpc(forMidiPitch: 70, concertKey: key)) == "B") // Bb on B
+        #expect(letter(MidiImporter.tpc(forMidiPitch: 63, concertKey: key)) == "E") // Eb on E
+        #expect(letter(MidiImporter.tpc(forMidiPitch: 66, concertKey: key)) == "G") // Gb on G
     }
 
     @Test func draftedOnsetsSnapToBinaryGridAndProduceStandardDurations() {

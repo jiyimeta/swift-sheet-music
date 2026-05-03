@@ -259,8 +259,8 @@ import Testing
                 }
             }
         }
-        // Bb (10) and Eb (11), not A# (24) and D# (23).
-        #expect(allTpcs.contains(10))
+        // Bb (12) and Eb (11), not A# (24) and D# (23).
+        #expect(allTpcs.contains(12))
         #expect(allTpcs.contains(11))
         #expect(!allTpcs.contains(24))
         #expect(!allTpcs.contains(23))

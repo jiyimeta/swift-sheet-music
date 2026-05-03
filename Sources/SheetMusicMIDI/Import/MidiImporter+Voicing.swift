@@ -212,18 +212,23 @@ extension MidiImporter {
     static func tpc(forMidiPitch midiPitch: Int, concertKey: Int = 0) -> Int {
         let pitchClass = ((midiPitch % 12) + 12) % 12
         let preferFlats = concertKey < 0
+        // MuseScore line of fifths centered on D (16):
+        //   F=13, C=14, G=15, D=16, A=17, E=18, B=19.
+        // Sharp = +7 along the line; flat = -7. Concretely:
+        //   sharps: F#=20, C#=21, G#=22, D#=23, A#=24
+        //   flats:  Gb=8, Db=9, Ab=10, Eb=11, Bb=12
         switch pitchClass {
         case 0: return 14 // C
-        case 1: return preferFlats ? 7 : 21 // Db / C#
+        case 1: return preferFlats ? 9 : 21 // Db / C#
         case 2: return 16 // D
         case 3: return preferFlats ? 11 : 23 // Eb / D#
         case 4: return 18 // E
         case 5: return 13 // F
-        case 6: return preferFlats ? 6 : 20 // Gb / F#
+        case 6: return preferFlats ? 8 : 20 // Gb / F#
         case 7: return 15 // G
-        case 8: return preferFlats ? 8 : 22 // Ab / G#
+        case 8: return preferFlats ? 10 : 22 // Ab / G#
         case 9: return 17 // A
-        case 10: return preferFlats ? 10 : 24 // Bb / A#
+        case 10: return preferFlats ? 12 : 24 // Bb / A#
         case 11: return 19 // B
         default: return 14
         }
