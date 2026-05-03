@@ -393,12 +393,12 @@ extension LayoutEngine {
             }
         }
 
-        // Per-staff labels. Resolve via `address.partIndex` so
-        // multi-staff parts (piano grand staff) map both staves to
-        // the correct owning part name instead of using the flat
-        // staff index as the part index.
-        let labels: [LayoutPartLabel] = allStaves.enumerated().map { idx, entry in
-            let part = context.score.parts[entry.address.partIndex]
+        // Per-Part labels. Multi-staff parts (Piano grand staff)
+        // collapse to a single label centered between the topmost
+        // and bottommost spanned staves, matching engraving
+        // convention. Single-staff parts trivially center on their
+        // one staff.
+        let labels: [LayoutPartLabel] = context.score.parts.enumerated().compactMap { partIdx, part in
             let text: String
             if isFirstSystem {
                 text = part.instrument.longName
@@ -410,10 +410,21 @@ extension LayoutEngine {
                     ?? part.trackName.map { String($0.prefix(3)) }
                     ?? ""
             }
-            let y = staffOrigins[idx].y + metrics.staffHeight / 2
+            // Locate the part's flat-staff range. A part with no
+            // entries in `allStaves` (shouldn't normally happen — a
+            // Part declares staves that always end up flattened)
+            // is skipped silently.
+            guard let firstFlat = allStaves.firstIndex(where: {
+                $0.address.partIndex == partIdx
+            }), let lastFlat = allStaves.lastIndex(where: {
+                $0.address.partIndex == partIdx
+            }) else { return nil }
+            let topY = staffOrigins[firstFlat].y
+            let bottomY = staffOrigins[lastFlat].y + metrics.staffHeight
+            let centerY = (topY + bottomY) / 2
             return LayoutPartLabel(
                 text: text,
-                origin: CGPoint(x: 4, y: y)
+                origin: CGPoint(x: 4, y: centerY)
             )
         }
 
