@@ -88,4 +88,68 @@ import Testing
         if case let .chord(c0) = q.elements[0] { #expect(c0.duration == .half) }
         if case let .chord(c1) = q.elements[1] { #expect(c1.duration == .quarter) }
     }
+
+    /// D4a: Quintuplet — 5 evenly-spaced onsets in one beat → Tuplet(4,5).
+    ///
+    /// At 480 PPQ the beat span is 480 ticks. Quintuplet unit = 480/5 = 96 ticks.
+    /// `fitsBinary` grid=120 fails (onset at 192 is 48 ticks from the nearest
+    /// grid step, exceeding tolerance=30). `fitsTuplet(5:4)` succeeds because
+    /// all onsets land exactly on multiples of 96.
+    /// Written duration per member: 96 × 5 / 4 = 120 → .sixteenth (120 ticks).
+    @Test func quintupletDetectedInOneBeat() {
+        // 1/4 measure (480 ticks). 5 onsets spaced 96 ticks apart.
+        var events: [TimedMidiEvent] = []
+        for i in 0 ..< 5 {
+            events.append(TimedMidiEvent(
+                tick: i * 96, event: .noteOn(channel: 0, pitch: 60 + i, velocity: 80)
+            ))
+            events.append(TimedMidiEvent(
+                tick: i * 96 + 80, event: .noteOff(channel: 0, pitch: 60 + i, velocity: 0)
+            ))
+        }
+        let measure = ImportMeasure(
+            startTick: 0, endTick: 480, measureIndex: 0,
+            timeSignature: TimeSignature(numerator: 1, denominator: 4),
+            events: events,
+            carryIns: [], carryOuts: []
+        )
+        let q = MidiImporter.quantize(measure: measure, division: 480, options: .init())
+        #expect(q.tuplets.count == 1)
+        #expect(q.tuplets[0].actualNotes == 5)
+        #expect(q.tuplets[0].normalNotes == 4)
+        #expect(q.elements.count == 5)
+    }
+
+    /// D4b: Septuplet — 7 onsets in one beat → Tuplet(4,7).
+    ///
+    /// At 480 PPQ the beat span is 480 ticks. Ideal septuplet unit = 480/7 ≈ 68.57
+    /// ticks; onsets are placed at round(480/7 × i). `fitsBinary` fails because
+    /// onset at tick 69 is 51 ticks from the nearest sixteenth-grid step.
+    /// `fitsTuplet(3:2)` and `fitsTuplet(5:4)` both fail. `fitsTuplet(7:4)` uses
+    /// integer unit = 68; rounding error ≤ 3 ticks, well within tolerance=30.
+    @Test func septupletDetectedInOneBeat() {
+        // 1/4 measure (480 ticks). 7 onsets spaced ~68–69 ticks apart.
+        // Tick positions: round(480/7 × i) = 0, 69, 137, 206, 274, 343, 411.
+        let onsetTicks = [0, 69, 137, 206, 274, 343, 411]
+        var events: [TimedMidiEvent] = []
+        for (i, tick) in onsetTicks.enumerated() {
+            events.append(TimedMidiEvent(
+                tick: tick, event: .noteOn(channel: 0, pitch: 60 + i, velocity: 80)
+            ))
+            events.append(TimedMidiEvent(
+                tick: tick + 50, event: .noteOff(channel: 0, pitch: 60 + i, velocity: 0)
+            ))
+        }
+        let measure = ImportMeasure(
+            startTick: 0, endTick: 480, measureIndex: 0,
+            timeSignature: TimeSignature(numerator: 1, denominator: 4),
+            events: events,
+            carryIns: [], carryOuts: []
+        )
+        let q = MidiImporter.quantize(measure: measure, division: 480, options: .init())
+        #expect(q.tuplets.count == 1)
+        #expect(q.tuplets[0].actualNotes == 7)
+        #expect(q.tuplets[0].normalNotes == 4)
+        #expect(q.elements.count == 7)
+    }
 }
