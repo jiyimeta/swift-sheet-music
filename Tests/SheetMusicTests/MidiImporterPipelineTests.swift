@@ -36,7 +36,8 @@ import Testing
         let smfBytes = try MidiWriter.write(MidiRenderer.render(score: score))
         let imported = try MidiImporter.parse(smfBytes)
         #expect(imported.parts.count >= 2)
-        #expect(imported.parts.contains(where: \.instrument.useDrumset))
+        let hasDrumset = imported.parts.contains(where: \.instrument.useDrumset)
+        #expect(hasDrumset)
         #expect(imported.staves.count >= 2)
     }
 
