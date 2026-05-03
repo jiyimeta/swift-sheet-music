@@ -3,19 +3,44 @@ import SheetMusicCore
 import SheetMusicXMLTools
 
 extension Staff {
-    /// Decodes the `<StaffType>` / `<defaultClef>` portion of an
-    /// inside-`<Part><Staff>` element. Measures are added separately
-    /// during pairing — see `assembleParts(decoded:topLevel:)`.
+    /// Decodes the `<StaffType>` / `<defaultClef>` / `<bracket>`
+    /// portion of an inside-`<Part><Staff>` element. Measures are
+    /// added separately during pairing — see
+    /// `assembleParts(decoded:topLevel:)`.
     static func declared(_ node: XMLTreeNode) -> (mscxID: String?, staff: Staff) {
         let staffTypeNode = node.first("StaffType")
         let staffType = staffTypeNode?.first("name")?.text ?? "stdNormal"
         let group = staffTypeNode?.attributes["group"] ?? "pitched"
         let defaultClef = node.first("defaultClef")?.text
         let mscxID = node.attributes["id"]
+
+        // Per spec: walk every <bracket> child in document order so
+        // column ordering is preserved. Unknown / malformed values
+        // are silently dropped (parser's permissive policy).
+        var brackets: [BracketItem] = []
+        for el in node.all("bracket") {
+            guard let typeStr = el.attributes["type"],
+                  let typeRaw = Int(typeStr),
+                  let bracketType = BracketType(rawValue: typeRaw)
+            else { continue }
+            guard let spanStr = el.attributes["span"],
+                  let span = Int(spanStr)
+            else { continue }
+            let column = el.attributes["col"].flatMap(Int.init) ?? 0
+            let visible = (el.attributes["visible"] ?? "1") != "0"
+            brackets.append(BracketItem(
+                type: bracketType,
+                span: span,
+                column: column,
+                visible: visible
+            ))
+        }
+
         return (mscxID, Staff(
             staffType: staffType,
             group: group,
             defaultClefType: defaultClef,
+            brackets: brackets,
             measures: []
         ))
     }
