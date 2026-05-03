@@ -8,7 +8,7 @@ import Foundation
 /// `Tuplet` value (or `nil` when the path no longer points at a
 /// live tuplet, typically after an edit invalidated it).
 public struct TupletID: Hashable, Sendable {
-    public let staffIndex: Int
+    public let staff: StaffAddress
     public let measureIndex: Int
     public let voiceIndex: Int
     /// Element index of the first member in the owning voice's
@@ -17,12 +17,12 @@ public struct TupletID: Hashable, Sendable {
     public let startElementIndex: Int
 
     public init(
-        staffIndex: Int,
+        staff: StaffAddress,
         measureIndex: Int,
         voiceIndex: Int,
         startElementIndex: Int
     ) {
-        self.staffIndex = staffIndex
+        self.staff = staff
         self.measureIndex = measureIndex
         self.voiceIndex = voiceIndex
         self.startElementIndex = startElementIndex
@@ -33,12 +33,10 @@ extension Score {
     /// Resolve a `TupletID` to its `Tuplet` entry, or `nil` when
     /// the path no longer lands on a live tuplet.
     public subscript(tupletID: TupletID) -> Tuplet? {
-        guard staves.indices.contains(tupletID.staffIndex)
+        guard let staff = self[tupletID.staff] else { return nil }
+        guard staff.measures.indices.contains(tupletID.measureIndex)
         else { return nil }
-        let measures = staves[tupletID.staffIndex].measures
-        guard measures.indices.contains(tupletID.measureIndex)
-        else { return nil }
-        let voices = measures[tupletID.measureIndex].voices
+        let voices = staff.measures[tupletID.measureIndex].voices
         guard voices.indices.contains(tupletID.voiceIndex)
         else { return nil }
         return voices[tupletID.voiceIndex].tuplets.first {
