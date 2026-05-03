@@ -17,6 +17,10 @@ public struct LayoutSystem: Sendable, Equatable {
     /// Part labels at the left edge of this system (empty on continuation
     /// systems per MuseScore convention).
     public let partLabels: [LayoutPartLabel]
+    /// Brackets / braces drawn at the left edge of this system, one
+    /// per `BracketItem` on each staff. Empty when no `Staff.brackets`
+    /// were populated upstream.
+    public let brackets: [LayoutBracket]
     /// Cross-measure spanner segments (slurs, voltas, hairpins, etc.)
     /// resolved after measure placement. Origins are in system coords.
     public let spanners: [LayoutElement]
@@ -42,6 +46,7 @@ public struct LayoutSystem: Sendable, Equatable {
         staffOrigins: [CGPoint],
         staffAddresses: [StaffAddress] = [],
         partLabels: [LayoutPartLabel],
+        brackets: [LayoutBracket] = [],
         spanners: [LayoutElement],
         sp: CGFloat
     ) {
@@ -51,6 +56,7 @@ public struct LayoutSystem: Sendable, Equatable {
         self.staffOrigins = staffOrigins
         self.staffAddresses = staffAddresses
         self.partLabels = partLabels
+        self.brackets = brackets
         self.spanners = spanners
         self.sp = sp
         let columns = Self.buildEventColumns(measures: measures, sp: sp)
@@ -138,5 +144,29 @@ public struct LayoutPartLabel: Sendable, Equatable {
     public init(text: String, origin: CGPoint) {
         self.text = text
         self.origin = origin
+    }
+}
+
+@available(macOS 15.0, iOS 16.0, *)
+public struct LayoutBracket: Sendable, Equatable {
+    public let type: BracketType
+    /// Top edge of the topmost spanned staff (system coords).
+    public let topY: CGFloat
+    /// Bottom edge of the bottommost spanned staff (system coords).
+    public let bottomY: CGFloat
+    /// Horizontal nesting column. 0 sits closest to the staff; higher
+    /// values stack further left.
+    public let column: Int
+
+    public init(
+        type: BracketType,
+        topY: CGFloat,
+        bottomY: CGFloat,
+        column: Int
+    ) {
+        self.type = type
+        self.topY = topY
+        self.bottomY = bottomY
+        self.column = column
     }
 }

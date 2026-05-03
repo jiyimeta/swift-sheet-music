@@ -229,6 +229,7 @@ extension LayoutEngine {
                 measures: system.measures,
                 staffOrigins: system.staffOrigins,
                 partLabels: system.partLabels,
+                brackets: system.brackets,
                 spanners: system.spanners + extraPerSystem[idx],
                 sp: system.sp
             )

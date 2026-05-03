@@ -135,6 +135,7 @@ public enum LayoutEngine {
             measures: system.measures,
             staffOrigins: system.staffOrigins,
             partLabels: system.partLabels,
+            brackets: system.brackets,
             spanners: system.spanners,
             sp: system.sp
         )
