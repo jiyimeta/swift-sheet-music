@@ -45,6 +45,8 @@ enum ScoreLoader {
         case .mxl:
             let data = try Data(contentsOf: url)
             return try SheetMusic.loadScore(mxlData: data)
+        case .midi:
+            return try SheetMusic.loadScore(midiURL: url)
         case nil:
             throw LoadError.unsupported(filename: url.lastPathComponent)
         }
