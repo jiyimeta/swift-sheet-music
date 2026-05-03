@@ -159,6 +159,69 @@ import Testing
         #expect(withTempo == [0])
     }
 
+    @Test func tupletInFirstMeasureKeepsBracketAfterMetaInjection() throws {
+        // Reproduce the user-reported issue: a triplet in the first
+        // measure of staff 1 had its `Voice.tuplets` indices shifted
+        // out of alignment when `injectMetaEvents` inserted tempo /
+        // key sig / time sig at index 0 of the voice. Result: bracket
+        // missing on that single tuplet (subsequent measures fine
+        // because no meta is injected after measure 0).
+        //
+        // Build: 4/4 measure with quarter at 0/480/960, then a
+        // (3,2) eighth-triplet over the last beat 1440..<1920.
+        let track0 = MidiTrack(events: [
+            TimedMidiEvent(tick: 0, event: .meta(.tempo(microsecondsPerQuarter: 500_000))),
+            TimedMidiEvent(tick: 0, event: .meta(.keySignature(sharpsFlats: 0, isMinor: false))),
+            TimedMidiEvent(tick: 0, event: .meta(.timeSignature(
+                numerator: 4, denominator: 4, clocksPerClick: 24, thirtySecondsPerQuarter: 8
+            ))),
+            TimedMidiEvent(tick: 1920, event: .endOfTrack),
+        ])
+        let track1 = MidiTrack(events: [
+            TimedMidiEvent(tick: 0, event: .meta(.trackName("Piano"))),
+            // First three quarters.
+            TimedMidiEvent(tick: 0, event: .noteOn(channel: 0, pitch: 60, velocity: 80)),
+            TimedMidiEvent(tick: 480, event: .noteOff(channel: 0, pitch: 60, velocity: 0)),
+            TimedMidiEvent(tick: 480, event: .noteOn(channel: 0, pitch: 62, velocity: 80)),
+            TimedMidiEvent(tick: 960, event: .noteOff(channel: 0, pitch: 62, velocity: 0)),
+            TimedMidiEvent(tick: 960, event: .noteOn(channel: 0, pitch: 64, velocity: 80)),
+            TimedMidiEvent(tick: 1440, event: .noteOff(channel: 0, pitch: 64, velocity: 0)),
+            // Triplet over the fourth beat: 3 evenly-spaced eighths.
+            TimedMidiEvent(tick: 1440, event: .noteOn(channel: 0, pitch: 65, velocity: 80)),
+            TimedMidiEvent(tick: 1600, event: .noteOff(channel: 0, pitch: 65, velocity: 0)),
+            TimedMidiEvent(tick: 1600, event: .noteOn(channel: 0, pitch: 67, velocity: 80)),
+            TimedMidiEvent(tick: 1760, event: .noteOff(channel: 0, pitch: 67, velocity: 0)),
+            TimedMidiEvent(tick: 1760, event: .noteOn(channel: 0, pitch: 69, velocity: 80)),
+            TimedMidiEvent(tick: 1920, event: .noteOff(channel: 0, pitch: 69, velocity: 0)),
+            TimedMidiEvent(tick: 1920, event: .endOfTrack),
+        ])
+        let file = MidiFile(division: 480, format: 1, tracks: [track0, track1])
+        let bytes = try MidiWriter.write(file)
+        let score = try MidiImporter.parse(bytes)
+
+        guard let pi = score.parts.firstIndex(where: { $0.trackName == "Piano" }) else {
+            Issue.record("expected piano part"); return
+        }
+        let firstMeasure = score.staves[pi].measures[0]
+        guard let voice = firstMeasure.voices.first else {
+            Issue.record("expected voice 0"); return
+        }
+        // The tuplet must still point at three actual chord
+        // elements (not at the meta `.tempo` / `.keySignature` /
+        // `.timeSignature` we just inserted at the front).
+        #expect(voice.tuplets.count == 1)
+        guard let tuplet = voice.tuplets.first else { return }
+        for i in tuplet.startIndex ... tuplet.endIndex {
+            guard i < voice.elements.count else {
+                Issue.record("tuplet index \(i) out of bounds"); return
+            }
+            if case .chord = voice.elements[i] {
+                continue
+            }
+            Issue.record("tuplet index \(i) points at non-chord: \(voice.elements[i])")
+        }
+    }
+
     @Test func flatKeySignatureChoosesFlatTpcSpellings() throws {
         // Bb major (concertKey = -2). Pitch 70 (Bb) and pitch 63
         // (Eb) should appear with flat TPCs (10 and 11), not the

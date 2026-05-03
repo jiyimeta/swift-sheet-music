@@ -133,6 +133,20 @@ extension MidiImporter {
             }
             if let el = element, var voice = staff.measures[measureIdx].voices.first {
                 voice.elements.insert(el, at: 0)
+                // Voice.tuplets references chord indices in
+                // `elements`. Inserting at index 0 shifts every
+                // subsequent index by one — bump the tuplet ranges
+                // so they keep pointing at the same chords (otherwise
+                // the bracket gets drawn over the meta event we just
+                // inserted, or disappears entirely).
+                voice.tuplets = voice.tuplets.map {
+                    Tuplet(
+                        normalNotes: $0.normalNotes,
+                        actualNotes: $0.actualNotes,
+                        startIndex: $0.startIndex + 1,
+                        endIndex: $0.endIndex + 1
+                    )
+                }
                 staff.measures[measureIdx].voices[0] = voice
             }
         }
