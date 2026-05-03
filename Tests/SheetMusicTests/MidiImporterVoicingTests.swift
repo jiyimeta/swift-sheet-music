@@ -203,4 +203,49 @@ import Testing
             Issue.record("expected chord at start of m2")
         }
     }
+
+    @Test func defaultTpcMatchesMuseScoreLineOfFifths() {
+        // Naturals on the line of fifths: F=13, C=14, G=15, D=16,
+        // A=17, E=18, B=19. Black keys default to sharp spellings:
+        // C#=21, D#=23, F#=20, G#=22, A#=24.
+        #expect(MidiImporter.defaultTpc(forMidiPitch: 60) == 14) // C4
+        #expect(MidiImporter.defaultTpc(forMidiPitch: 62) == 16) // D4
+        #expect(MidiImporter.defaultTpc(forMidiPitch: 64) == 18) // E4
+        #expect(MidiImporter.defaultTpc(forMidiPitch: 65) == 13) // F4
+        #expect(MidiImporter.defaultTpc(forMidiPitch: 67) == 15) // G4
+        #expect(MidiImporter.defaultTpc(forMidiPitch: 69) == 17) // A4
+        #expect(MidiImporter.defaultTpc(forMidiPitch: 71) == 19) // B4
+        #expect(MidiImporter.defaultTpc(forMidiPitch: 61) == 21) // C#4
+        #expect(MidiImporter.defaultTpc(forMidiPitch: 66) == 20) // F#4
+        // Octave-invariant: same pitch class → same TPC.
+        #expect(MidiImporter.defaultTpc(forMidiPitch: 48) == 14) // C3
+        #expect(MidiImporter.defaultTpc(forMidiPitch: 72) == 14) // C5
+    }
+
+    @Test func voicedNotesCarryCorrectTpcNotZero() {
+        // Regression test: previously every imported note had tpc=0,
+        // which is off the line of fifths and renders as C
+        // regardless of MIDI pitch. After the fix, each pitch class
+        // gets its natural-or-sharp TPC.
+        let measure = ImportMeasure(
+            startTick: 0, endTick: 1920, measureIndex: 0,
+            timeSignature: TimeSignature(numerator: 4, denominator: 4),
+            events: [
+                nOn(0, 60), nOff(480, 60), // C
+                nOn(480, 64), nOff(960, 64), // E
+                nOn(960, 67), nOff(1440, 67), // G
+                nOn(1440, 71), nOff(1920, 71), // B
+            ],
+            carryIns: [], carryOuts: []
+        )
+        let q = MidiImporter.quantize(measure: measure, division: 480, options: .init())
+        let voice = MidiImporter.voice(quantized: q, measure: measure, division: 480)
+        let tpcs = voice.elements.compactMap { e -> Int? in
+            if case let .chord(c) = e, let first = c.notes.first {
+                return first.tpc
+            }
+            return nil
+        }
+        #expect(tpcs == [14, 18, 15, 19]) // C, E, G, B
+    }
 }

@@ -162,6 +162,31 @@ extension MidiImporter {
         }
     }
 
+    /// Default tonal pitch class for a MIDI pitch when no key
+    /// signature context is available. Uses sharp spellings for
+    /// black keys (the choice doesn't matter for playback but
+    /// determines staff position and accidentals on render).
+    /// MuseScore TPC convention: F=13, C=14, G=15, D=16, A=17,
+    /// E=18, B=19 along the line of fifths; +7 = sharp, -7 = flat.
+    static func defaultTpc(forMidiPitch midiPitch: Int) -> Int {
+        let pitchClass = ((midiPitch % 12) + 12) % 12
+        switch pitchClass {
+        case 0: return 14 // C
+        case 1: return 21 // C#
+        case 2: return 16 // D
+        case 3: return 23 // D#
+        case 4: return 18 // E
+        case 5: return 13 // F
+        case 6: return 20 // F#
+        case 7: return 15 // G
+        case 8: return 22 // G#
+        case 9: return 17 // A
+        case 10: return 24 // A#
+        case 11: return 19 // B
+        default: return 14
+        }
+    }
+
     /// Stamp tie flags (and, for drum tracks, a notehead shape) on a
     /// single note within the chord-emission loop.
     private static func buildNote(
@@ -173,7 +198,7 @@ extension MidiImporter {
         willContinue: [Int],
         isDrum: Bool = false
     ) -> SheetMusicCore.Note {
-        var n = SheetMusicCore.Note(pitch: pitch, tpc: 0)
+        var n = SheetMusicCore.Note(pitch: pitch, tpc: defaultTpc(forMidiPitch: pitch))
         if comesFromPrior.contains(pitch) { n.tieBack = 1 }
         if activeNotes.contains(where: { $0.pitch == pitch && $0.startsTied && $0.onTick == prev }) {
             n.tieBack = 1
