@@ -9,7 +9,7 @@ import SheetMusicCore
 
 /// Raw glyph captured from one Tj / TJ operator. Position is the
 /// text origin in PDF page coordinates (origin = bottom-left).
-struct RawGlyph: Equatable {
+struct RawGlyph: Hashable {
     var codepoint: UInt32 // Unicode scalar (often a SMuFL PUA codepoint)
     var fontName: String // PostScript name as reported by PDFKit
     var fontSize: CGFloat // points
@@ -113,4 +113,26 @@ enum ScoreStateEvent {
     case timeSignature(TimeSignature, atMeasureIndex: Int)
     case keySignature(KeySignature, atMeasureIndex: Int)
     case tempo(Tempo, atMeasureIndex: Int)
+}
+
+// MARK: - Stage [6] rhythm decoding
+
+/// Stem direction inferred from the relative y of the stem's far end
+/// against the lead notehead. Local to the PDF importer; the public
+/// score model has no equivalent flag (stems are auto-laid in
+/// engraving, not stored on chords).
+enum StemDirection: Sendable, Equatable { case up, down }
+
+/// Stage [6] output — one chord (or rest) decoded from a measure's
+/// glyph cluster. `chord.notes.isEmpty` ⇔ this element is a rest;
+/// the rest of the codebase uses the same "empty-notes Chord = rest"
+/// convention (see `VoiceElement`).
+struct RhythmElement {
+    var chord: Chord
+    var x: CGFloat
+    var y: CGFloat
+    var stemDirection: StemDirection?
+    var beamGroup: Int?
+
+    var isRest: Bool { chord.notes.isEmpty }
 }
