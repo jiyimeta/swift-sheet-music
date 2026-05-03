@@ -25,6 +25,17 @@ public struct MidiImportOptions: Sendable {
     /// semitones (matching `MidiRenderer`'s pitch-bend range header).
     public var detectGlissando: Bool = true
 
+    /// Maximum augmentation-dot count permitted in chord durations
+    /// during the import-time rhythm decomposition. `0` = no dots
+    /// (chords split into multiple tied binary durations), `1` =
+    /// single dot only (the standard engraving practice and our
+    /// default), `2` = up to double-dot, `3` = up to triple-dot.
+    /// Higher values produce more compact notation in exchange for
+    /// less common rhythmic figures.
+    /// Rests are always decomposed without dots regardless of this
+    /// setting.
+    public var maxDots: Int = 1
+
     /// Sync resolver, used by the non-async parse path.
     public var resolveSwing: (@Sendable (SwingDetection) -> SwingResolution)?
 

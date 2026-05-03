@@ -232,77 +232,7 @@ import Testing
         #expect(durations == [dottedQuarter, .eighth, .half])
     }
 
-    @Test func tripleDottedHalfTickCountSplitsIntoFourBeatAlignedParts() {
-        // 1800 ticks (= triple-dotted half) at offset 0. Decompose
-        // greedily into binary durations to give the user-expected
-        // [half, quarter, eighth, sixteenth] sum.
-        let parts = MidiImporter.decomposeIntoStandardDurations(
-            ticks: 1800,
-            division: 480,
-            offsetInMeasure: 0,
-            allowDot: false
-        )
-        #expect(parts == [.half, .quarter, .eighth, .sixteenth])
-    }
-
-    @Test func dottedEighthChordSplitsAtBeatBoundaryWhenCrossing() {
-        // User-reported case: in a measure where the rhythm is
-        // quarter chord + eighth rest + 16th rest + dotted-eighth
-        // chord + eighth × 3, the dotted-eighth at offset 840 must
-        // split into [16th, eighth] (tied) so the eighth aligns to
-        // beat 3. A naive "single dotted match" would emit a
-        // dotted eighth that crosses the beat boundary at 960.
-        let parts = MidiImporter.decomposeIntoStandardDurations(
-            ticks: 360,
-            division: 480,
-            offsetInMeasure: 840,
-            allowDot: true
-        )
-        #expect(parts == [.sixteenth, .eighth])
-    }
-
-    @Test func dottedQuarterAtBeat1IsPreservedAsSingleElement() {
-        // At an aligned offset (0, 960, etc.), a dotted-quarter
-        // chord stays a single dotted quarter. Beat-aligned dotted
-        // forms don't cross stronger metric boundaries.
-        let parts = MidiImporter.decomposeIntoStandardDurations(
-            ticks: 720,
-            division: 480,
-            offsetInMeasure: 0,
-            allowDot: true
-        )
-        #expect(parts == [NoteDuration.quarter.dotted(1)])
-    }
-
-    @Test func longHeldChordSplitsAtHalfMeasureBoundary() {
-        // A 1680-tick held chord starting at offset 240 in 4/4
-        // (= "eighth + dotted-half + eighth tied" naively) should
-        // split at the half-measure boundary into
-        // [dotted-quarter, half] (tied). The dotted-quarter starts
-        // mid-beat-1 and ends exactly at the half-measure boundary
-        // (960) — accepted by the end-aligned clause of
-        // `metricallyAligned`.
-        let parts = MidiImporter.decomposeIntoStandardDurations(
-            ticks: 1680,
-            division: 480,
-            offsetInMeasure: 240,
-            allowDot: true
-        )
-        let dottedQuarter = NoteDuration.fraction(Fraction(numerator: 3, denominator: 8))
-        #expect(parts == [dottedQuarter, .half])
-    }
-
-    @Test func dottedQuarterChordIsPreservedAsSingleElementWhenAllowed() {
-        // 720 ticks at offset 0, allowDot=true (chord context).
-        // Result: a single dotted-quarter (= `.fraction(3/8)`).
-        let parts = MidiImporter.decomposeIntoStandardDurations(
-            ticks: 720,
-            division: 480,
-            offsetInMeasure: 0,
-            allowDot: true
-        )
-        #expect(parts == [NoteDuration.fraction(Fraction(numerator: 3, denominator: 8))])
-    }
+    // (Decomposition tests live in MidiImporterDecomposeTests.swift.)
 
     @Test func draftedOnsetsSnapToBinaryGridAndProduceStandardDurations() {
         // DAW-style drift: notes intended at 0 / 480 / 960 / 1440

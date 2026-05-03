@@ -23,14 +23,18 @@ extension MidiImporter {
                     ? 0
                     : (m.measureIndex < measureKeys.count ? measureKeys[m.measureIndex] : 0)
                 if track.isDrums {
-                    return drumVoices(measure: m, quantized: q, division: file.division)
+                    return drumVoices(
+                        measure: m, quantized: q,
+                        division: file.division, maxDots: options.maxDots
+                    )
                 }
                 return [voice(
                     quantized: q,
                     measure: m,
                     division: file.division,
                     isDrumTrack: false,
-                    concertKey: key
+                    concertKey: key,
+                    maxDots: options.maxDots
                 )]
             }
             var scoreMeasures = measureVoices.map { Measure(voices: $0) }
@@ -72,7 +76,8 @@ extension MidiImporter {
     static func drumVoices(
         measure: ImportMeasure,
         quantized: QuantizedMeasure,
-        division: Int
+        division: Int,
+        maxDots: Int
     ) -> [Voice] {
         let v0Pitches = pitchesInVoice(0, in: measure)
         let v1Pitches = pitchesInVoice(1, in: measure)
@@ -82,14 +87,16 @@ extension MidiImporter {
             quantized: quantized,
             measure: filterMeasure(measure, keepingPitches: v0Pitches),
             division: division,
-            isDrumTrack: true
+            isDrumTrack: true,
+            maxDots: maxDots
         ))
         if !v1Pitches.isEmpty {
             result.append(voice(
                 quantized: quantized,
                 measure: filterMeasure(measure, keepingPitches: v1Pitches),
                 division: division,
-                isDrumTrack: true
+                isDrumTrack: true,
+                maxDots: maxDots
             ))
         }
         return result

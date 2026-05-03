@@ -11,7 +11,7 @@ extension MidiImporter {
     /// triple-dotted half.
     ///
     /// Algorithm:
-    ///   - Walk binary + (optionally) single-dotted candidates from
+    ///   - Walk binary + (up to `maxDots`-dotted) candidates from
     ///     largest to smallest. Take the first whose length fits in
     ///     `remaining` AND is metrically aligned at the current
     ///     measure-relative offset (= starts at a multiple of its
@@ -23,9 +23,9 @@ extension MidiImporter {
         ticks: Int,
         division: Int,
         offsetInMeasure: Int,
-        allowDot: Bool
+        maxDots: Int
     ) -> [NoteDuration] {
-        let candidates = decompositionCandidates(allowDot: allowDot, division: division)
+        let candidates = decompositionCandidates(maxDots: maxDots, division: division)
         var result: [NoteDuration] = []
         var remaining = ticks
         var offset = offsetInMeasure
@@ -57,11 +57,14 @@ extension MidiImporter {
         let baseTicks: Int
     }
 
-    /// Candidate durations sorted descending by tick value. When
-    /// `allowDot` is true, single-dotted variants of each binary
-    /// duration are interleaved into the priority list.
+    /// Candidate durations sorted descending by tick value.
+    /// Includes binary forms unconditionally; `maxDots > 0`
+    /// interleaves the corresponding 1..maxDots-dotted variants
+    /// of each binary duration. Each variant carries its
+    /// underlying base value so `metricallyAligned` can apply the
+    /// same scope rule to single, double, and triple dots.
     static func decompositionCandidates(
-        allowDot: Bool, division: Int
+        maxDots: Int, division: Int
     ) -> [DurationCandidate] {
         let bases: [NoteDuration] = [
             .whole, .half, .quarter, .eighth, .sixteenth, .thirtySecond,
@@ -71,14 +74,22 @@ extension MidiImporter {
             let t = $0.ticks(division: division)
             return DurationCandidate(duration: $0, ticks: t, baseTicks: t)
         }
-        if allowDot {
-            for b in bases {
-                let baseT = b.ticks(division: division)
-                all.append(DurationCandidate(
-                    duration: b.dotted(1),
-                    ticks: baseT * 3 / 2,
-                    baseTicks: baseT
-                ))
+        if maxDots > 0 {
+            for dots in 1 ... maxDots {
+                let multiplier = (1 << (dots + 1)) - 1 // 3, 7, 15, 31, …
+                let denominator = 1 << dots // 2, 4, 8, 16, …
+                for b in bases {
+                    let baseT = b.ticks(division: division)
+                    let dottedT = baseT * multiplier / denominator
+                    if dottedT <= 0 || baseT * multiplier % denominator != 0 {
+                        continue
+                    }
+                    all.append(DurationCandidate(
+                        duration: b.dotted(dots),
+                        ticks: dottedT,
+                        baseTicks: baseT
+                    ))
+                }
             }
         }
         return all.sorted { $0.ticks > $1.ticks }

@@ -105,7 +105,8 @@ extension MidiImporter {
         measure: ImportMeasure,
         division: Int,
         isDrumTrack: Bool = false,
-        concertKey: Int = 0
+        concertKey: Int = 0,
+        maxDots: Int = 1
     ) -> Voice {
         var notes = collectNotes(from: measure)
         mergeCarryIns(into: &notes, measure: measure)
@@ -134,6 +135,7 @@ extension MidiImporter {
                 division: division,
                 isDrumTrack: isDrumTrack,
                 concertKey: concertKey,
+                maxDots: maxDots,
                 persistentAlters: &persistentAlters,
                 elements: &elements,
                 elementTicks: &elementTicks
@@ -262,6 +264,7 @@ extension MidiImporter {
         division: Int,
         isDrumTrack: Bool,
         concertKey: Int,
+        maxDots: Int,
         persistentAlters: inout [Int: Int],
         elements: inout [VoiceElement],
         elementTicks: inout [Int]
@@ -286,7 +289,7 @@ extension MidiImporter {
                 ticks: tick - prev,
                 division: division,
                 offsetInMeasure: prev - measure.startTick,
-                allowDot: !coreNotes.isEmpty
+                maxDots: coreNotes.isEmpty ? 0 : maxDots
             )
         appendChordParts(
             durations: durations,
