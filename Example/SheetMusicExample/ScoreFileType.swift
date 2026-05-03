@@ -12,6 +12,7 @@ enum ScoreFileType {
     case musicXML
     case mxl
     case midi
+    case pdf
 
     /// UTI list passed to `.fileImporter`. We register custom
     /// `.mscx` / `.mscz` / `.mxl` types via `exportedTypeIdentifiers`
@@ -29,6 +30,7 @@ enum ScoreFileType {
         // Generic XML and ZIP fallbacks — picker still shows the
         // file even if the system doesn't know our custom types.
         out.append(.midi)
+        out.append(.pdf)
         out.append(.xml)
         out.append(.zip)
         return out
@@ -49,6 +51,8 @@ enum ScoreFileType {
             return .mxl
         case "mid", "midi":
             return .midi
+        case "pdf":
+            return .pdf
         default:
             return nil
         }
