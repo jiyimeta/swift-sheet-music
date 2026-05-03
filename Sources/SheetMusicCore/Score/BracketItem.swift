@@ -13,9 +13,9 @@ public enum BracketType: Int, Sendable, Equatable, Codable {
 
 /// One bracket / brace anchored on a `Staff`. The bracket spans
 /// `span` staves downward starting from this staff (counting this
-/// staff as 1). `column` controls horizontal nesting: 0 is the
-/// outermost (closest to the staff), 1 sits one column further left,
-/// etc. Multiple bracket items may share a staff.
+/// staff as 1). `column` controls horizontal nesting: 0 sits closest
+/// to the staff; higher values stack further left. Multiple bracket
+/// items may share a staff.
 ///
 /// C++: `mu::engraving::BracketItem`.
 public struct BracketItem: Sendable, Equatable, Codable {
