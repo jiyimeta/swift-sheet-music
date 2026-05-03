@@ -23,8 +23,10 @@ extension Score {
               let anchorEnd = endTickPosition(for: anchor),
               let targetEnd = endTickPosition(for: target)
         else { return [] }
-        let staffLo = min(anchor.staffIndex, target.staffIndex)
-        let staffHi = max(anchor.staffIndex, target.staffIndex)
+        let anchorAddr = anchor.staff
+        let targetAddr = target.staff
+        let lo = min(anchorAddr, targetAddr)
+        let hi = max(anchorAddr, targetAddr)
         // Lower bound = whichever endpoint STARTS earlier; upper
         // bound = whichever endpoint ENDS later. Using the END for
         // posHi is what makes the rectangle cover the full duration
@@ -36,9 +38,8 @@ extension Score {
         let posHi = max(anchorEnd, targetEnd)
 
         var result: [ScoreItemID] = []
-        for staffIdx in staffLo ... staffHi {
-            guard staves.indices.contains(staffIdx) else { continue }
-            let measures = staves[staffIdx].measures
+        for (addr, staff) in allStaves where (lo ... hi).contains(addr) {
+            let measures = staff.measures
             for mIdx in posLo.measure ... posHi.measure {
                 guard measures.indices.contains(mIdx) else { continue }
                 for (vIdx, voice) in measures[mIdx].voices.enumerated() {
@@ -55,7 +56,7 @@ extension Score {
                             if inRange {
                                 for nIdx in chord.notes.indices {
                                     result.append(.note(NoteID(
-                                        staffIndex: staffIdx,
+                                        staff: addr,
                                         measureIndex: mIdx,
                                         voiceIndex: vIdx,
                                         elementIndex: eIdx,
@@ -68,7 +69,7 @@ extension Score {
                             // Empty chord — selectable as a rest.
                             if inRange {
                                 result.append(.rest(RestID(
-                                    staffIndex: staffIdx,
+                                    staff: addr,
                                     measureIndex: mIdx,
                                     voiceIndex: vIdx,
                                     elementIndex: eIdx
@@ -95,9 +96,9 @@ extension Score {
         for id: ScoreItemID
     ) -> TickPosition? {
         guard let start = tickPosition(for: id),
-              staves.indices.contains(id.staffIndex)
+              let s = self[id.staff]
         else { return nil }
-        let measures = staves[id.staffIndex].measures
+        let measures = s.measures
         guard measures.indices.contains(id.measureIndex) else {
             return nil
         }
@@ -124,8 +125,8 @@ extension Score {
     /// Tick position of the element referenced by `id` within its
     /// measure. Returns `nil` if the path does not resolve.
     private func tickPosition(for id: ScoreItemID) -> TickPosition? {
-        guard staves.indices.contains(id.staffIndex) else { return nil }
-        let measures = staves[id.staffIndex].measures
+        guard let s = self[id.staff] else { return nil }
+        let measures = s.measures
         guard measures.indices.contains(id.measureIndex) else { return nil }
         let voices = measures[id.measureIndex].voices
         guard voices.indices.contains(id.voiceIndex) else { return nil }
@@ -142,6 +143,16 @@ extension Score {
             }
         }
         return TickPosition(measure: id.measureIndex, tick: tick)
+    }
+}
+
+extension ScoreItemID {
+    fileprivate var staff: StaffAddress {
+        switch self {
+        case let .note(id): return id.staff
+        case let .rest(id): return id.staff
+        case let .tuplet(id): return id.staff
+        }
     }
 }
 

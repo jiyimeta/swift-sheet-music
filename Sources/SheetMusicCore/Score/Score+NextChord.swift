@@ -11,12 +11,12 @@ extension Score {
     /// "advance to next syllable" flow and any future
     /// chord-by-chord navigation.
     public func nextChord(after voiceElementID: VoiceElementID) -> VoiceElementID? {
-        let staffIndex = voiceElementID.staffIndex
+        let staffAddr = voiceElementID.staff
         let voiceIndex = voiceElementID.voiceIndex
-        guard staffIndex >= 0, staffIndex < staves.count else {
+        guard let staffValue = self[staffAddr] else {
             return nil
         }
-        let measures = staves[staffIndex].measures
+        let measures = staffValue.measures
 
         // First search the rest of the current measure.
         if voiceElementID.measureIndex < measures.count {
@@ -30,7 +30,7 @@ extension Score {
                            !c.notes.isEmpty
                         {
                             return VoiceElementID(
-                                staffIndex: staffIndex,
+                                staff: staffAddr,
                                 measureIndex: voiceElementID.measureIndex,
                                 voiceIndex: voiceIndex,
                                 elementIndex: idx
@@ -51,7 +51,7 @@ extension Score {
             for (idx, el) in elements.enumerated() {
                 if case let .chord(c) = el, !c.notes.isEmpty {
                     return VoiceElementID(
-                        staffIndex: staffIndex,
+                        staff: staffAddr,
                         measureIndex: mIdx,
                         voiceIndex: voiceIndex,
                         elementIndex: idx

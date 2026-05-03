@@ -12,9 +12,9 @@ extension Score {
     /// arrow-key transposition operates on the note's measure as a
     /// whole. Mid-measure key changes (rare in practice) take effect
     /// from the start of their measure here.
-    public func activeKey(staffIndex: Int, measureIndex: Int) -> Int {
-        guard staffIndex >= 0, staffIndex < staves.count else { return 0 }
-        let measures = staves[staffIndex].measures
+    public func activeKey(staff: StaffAddress, measureIndex: Int) -> Int {
+        guard let s = self[staff] else { return 0 }
+        let measures = s.measures
         let upperBound = min(measureIndex + 1, measures.count)
         var current = 0
         for idx in 0 ..< upperBound {
@@ -32,11 +32,11 @@ extension Score {
 
     /// Convenience: active key for the staff/measure that contains
     /// `noteID`. Equivalent to
-    /// `activeKey(staffIndex: noteID.staffIndex,
+    /// `activeKey(staff: noteID.staff,
     ///            measureIndex: noteID.measureIndex)`.
     public func activeKey(at noteID: NoteID) -> Int {
         activeKey(
-            staffIndex: noteID.staffIndex,
+            staff: noteID.staff,
             measureIndex: noteID.measureIndex
         )
     }

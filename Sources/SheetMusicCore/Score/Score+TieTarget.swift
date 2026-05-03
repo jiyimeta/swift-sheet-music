@@ -13,10 +13,8 @@ extension Score {
     /// isn't needed for the current arrow-key + `+` toggle UX.
     public func nextTieTarget(after noteID: NoteID) -> NoteID? {
         guard let source = self[noteID] else { return nil }
-        guard staves.indices.contains(noteID.staffIndex) else {
-            return nil
-        }
-        let measures = staves[noteID.staffIndex].measures
+        guard let s = self[noteID.staff] else { return nil }
+        let measures = s.measures
         guard measures.indices.contains(noteID.measureIndex) else {
             return nil
         }
@@ -34,7 +32,7 @@ extension Score {
                     where: { $0.pitch == source.pitch })
                 else { return nil }
                 return NoteID(
-                    staffIndex: noteID.staffIndex,
+                    staff: noteID.staff,
                     measureIndex: noteID.measureIndex,
                     voiceIndex: noteID.voiceIndex,
                     elementIndex: idx,
