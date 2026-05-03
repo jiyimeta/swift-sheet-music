@@ -28,7 +28,7 @@ extension LayoutEngine {
     /// redraw the currently active key.
     static func computeHeaderSchedule(
         measureIdx: Int,
-        staves: [StaffContent],
+        staves: [Staff],
         metrics: StaffMetrics,
         synthesizeClefForAllStaves: Bool,
         synthesizeKeySigForAllStaves: Bool = false,
@@ -108,7 +108,8 @@ extension LayoutEngine {
     ) -> CGFloat {
         let metrics = StaffMetrics(staffSize: options.staffSize)
         let partLabelWidth: CGFloat = 80
-        guard let firstStaff = score.staves.first else {
+        let staves = score.allStaves.map(\.staff)
+        guard let firstStaff = staves.first else {
             return partLabelWidth + metrics.sp * 8
         }
         let measureCount = firstStaff.measures.count
@@ -119,13 +120,13 @@ extension LayoutEngine {
         for i in 0 ..< measureCount {
             let baseHeader = computeHeaderSchedule(
                 measureIdx: i,
-                staves: score.staves,
+                staves: staves,
                 metrics: metrics,
                 synthesizeClefForAllStaves: false,
                 synthesizeKeySigForAllStaves: false
             )
             let w = crossStaffMinimumMeasureWidth(
-                staves: score.staves,
+                staves: staves,
                 measureIdx: i,
                 metrics: metrics,
                 headerSchedule: baseHeader,
@@ -159,7 +160,7 @@ extension LayoutEngine {
     ///
     /// Returns an empty map when the measure has no timed content.
     static func tickColumns(
-        staves: [StaffContent],
+        staves: [Staff],
         measureIdx: Int,
         metrics: StaffMetrics,
         headerSchedule: HeaderSchedule,
@@ -217,7 +218,7 @@ extension LayoutEngine {
     /// minimum). Using THIS function for layout's per-measure width
     /// keeps the spacing engine and the placement engine in sync.
     static func crossStaffMinimumMeasureWidth(
-        staves: [StaffContent],
+        staves: [Staff],
         measureIdx: Int,
         metrics: StaffMetrics,
         headerSchedule: HeaderSchedule,
@@ -244,7 +245,7 @@ extension LayoutEngine {
     /// algorithm avoids the bug where the two diverged and the
     /// minimum width undersized the layout.
     static func aggregatedTickWeights(
-        staves: [StaffContent],
+        staves: [Staff],
         measureIdx: Int,
         metrics: StaffMetrics,
         division: Int
@@ -358,7 +359,7 @@ extension LayoutEngine {
     /// We compute the synth overhead here and add it to the first
     /// measure's width during system packing.
     static func synthHeaderOverhead(
-        staves: [StaffContent],
+        staves: [Staff],
         measureIdx: Int,
         activeKeys: [Int],
         metrics: StaffMetrics

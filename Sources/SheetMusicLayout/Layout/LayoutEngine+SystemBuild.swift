@@ -16,7 +16,8 @@ extension LayoutEngine {
         context: RenderContext
     ) -> LayoutSystem {
         let metrics = context.metrics
-        let staves = context.score.staves
+        let allStaves = context.score.allStaves
+        let staves = allStaves.map(\.staff)
         let partLabelWidth: CGFloat = labelWidth(
             score: context.score,
             metrics: metrics,
@@ -98,11 +99,10 @@ extension LayoutEngine {
                 let synthKey: Int? = synthesizeKeySigHere
                     ? keys[staffIdx]
                     : nil
-                let part = staffIdx < context.score.parts.count
-                    ? context.score.parts[staffIdx] : nil
+                let part = context.score.parts[allStaves[staffIdx].address.partIndex]
                 let drumMap: [Int: Int]? =
-                    part?.instrument.useDrumset == true
-                        ? part?.instrument.drumLineMap
+                    part.instrument.useDrumset
+                        ? part.instrument.drumLineMap
                         : nil
                 let totalMeasures = staves.first?.measures.count ?? 0
                 let lastMeasure = measureIdx == totalMeasures - 1
@@ -142,7 +142,7 @@ extension LayoutEngine {
                 } else {
                     let result = placeMeasureElements(
                         measure: m,
-                        staffIndex: staffIdx,
+                        staffAddress: allStaves[staffIdx].address,
                         measureIndex: measureIdx,
                         width: w,
                         metrics: metrics,
@@ -393,20 +393,20 @@ extension LayoutEngine {
             }
         }
 
-        // Per-staff labels. Stage 5 assumes staves align 1:1 with parts;
-        // multi-staff-per-part (piano grand staff) is handled the same
-        // way for now — each staff gets its own label.
-        let labels: [LayoutPartLabel] = staves.indices.map { idx in
-            let part = idx < context.score.parts.count
-                ? context.score.parts[idx] : nil
+        // Per-staff labels. Resolve via `address.partIndex` so
+        // multi-staff parts (piano grand staff) map both staves to
+        // the correct owning part name instead of using the flat
+        // staff index as the part index.
+        let labels: [LayoutPartLabel] = allStaves.enumerated().map { idx, entry in
+            let part = context.score.parts[entry.address.partIndex]
             let text: String
             if isFirstSystem {
-                text = part?.trackName
-                    ?? part?.instrument.longName
+                text = part.trackName
+                    ?? part.instrument.longName
                     ?? ""
             } else {
-                text = part?.instrument.shortName
-                    ?? part?.trackName.map { String($0.prefix(3)) }
+                text = part.instrument.shortName
+                    ?? part.trackName.map { String($0.prefix(3)) }
                     ?? ""
             }
             let y = staffOrigins[idx].y + metrics.staffHeight / 2
@@ -484,8 +484,8 @@ extension LayoutEngine {
             // pagination phase (page break → close page) and the
             // on-screen indicator overlay (icons at the measure's
             // top-right) can consult them without re-walking
-            // `score.staves`.
-            let sourceMeasure = context.score.staves.first
+            // `score.allStaves`.
+            let sourceMeasure = staves.first
                 .flatMap { $0.measures.indices.contains(measureIdx)
                     ? $0.measures[measureIdx]
                     : nil
@@ -550,6 +550,7 @@ extension LayoutEngine {
             size: CGSize(width: xCursor, height: totalHeight + topShift),
             measures: adjustedMeasures,
             staffOrigins: adjustedStaffOrigins,
+            staffAddresses: allStaves.map(\.address),
             partLabels: adjustedLabels,
             spanners: [],
             sp: metrics.sp

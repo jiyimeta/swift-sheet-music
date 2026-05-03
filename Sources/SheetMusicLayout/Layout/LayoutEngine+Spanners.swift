@@ -23,7 +23,8 @@ extension LayoutEngine {
     /// anchor); we refine only the `endMeasure` via `nextMeasuresOffset`.
     static func collectSpanners(score: Score) -> [SpannerAnchor] {
         var out: [SpannerAnchor] = []
-        for (staffIdx, staff) in score.staves.enumerated() {
+        for (staffIdx, entry) in score.allStaves.enumerated() {
+            let staff = entry.staff
             for (measureIdx, measure) in staff.measures.enumerated() {
                 for voice in measure.voices {
                     var tick = 0

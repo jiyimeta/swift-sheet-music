@@ -146,7 +146,8 @@ extension LayoutEngine {
         score: Score, division: Int
     ) -> [MelismaLyricKey: Int] {
         var map: [MelismaLyricKey: Int] = [:]
-        for (staffIdx, staff) in score.staves.enumerated() {
+        for (staffIdx, entry) in score.allStaves.enumerated() {
+            let staff = entry.staff
             for (mIdx, measure) in staff.measures.enumerated() {
                 for (vIdx, voice) in measure.voices.enumerated() {
                     for (eIdx, el) in voice.elements.enumerated() {
@@ -191,10 +192,11 @@ extension LayoutEngine {
         score: Score, division: Int,
         effectiveTicks: [MelismaLyricKey: Int]
     ) -> [[[MelismaContinuation]]] {
-        var result: [[[MelismaContinuation]]] = score.staves.map {
-            Array(repeating: [], count: $0.measures.count)
+        var result: [[[MelismaContinuation]]] = score.allStaves.map { entry in
+            Array(repeating: [], count: entry.staff.measures.count)
         }
-        for (staffIdx, staff) in score.staves.enumerated() {
+        for (staffIdx, entry) in score.allStaves.enumerated() {
+            let staff = entry.staff
             let voiceCount = staff.measures
                 .map(\.voices.count).max() ?? 0
             for voiceIdx in 0 ..< voiceCount {

@@ -58,22 +58,25 @@ extension LayoutEngine {
     public static func measureContexts(
         for score: Score
     ) -> [LayoutMeasureContext] {
-        var clefs = defaultClefRawTypes(
-            staves: score.staves, parts: score.parts
-        )
-        var keys = Array(repeating: 0, count: score.staves.count)
+        let allStaves = score.allStaves
+        var clefs = defaultClefRawTypes(addresses: allStaves)
+        var keys = Array(repeating: 0, count: allStaves.count)
         var timeSig: LayoutMeasureContext.TimeSignaturePair?
-        let partLabels = score.staves.indices.map { idx in
-            let part = idx < score.parts.count ? score.parts[idx] : nil
-            return part?.trackName
-                ?? part?.instrument.longName
+        // Fix: resolve part labels via address.partIndex so multi-staff
+        // parts (e.g. Piano grand staff) map both staves to the same part
+        // name instead of using the flat staff index as the part index.
+        let partLabels = allStaves.map { entry -> String in
+            let part = score.parts[entry.address.partIndex]
+            return part.trackName
+                ?? part.instrument.longName
                 ?? ""
         }
-        let measureCount = score.staves.first?.measures.count ?? 0
+        let measureCount = allStaves.first?.staff.measures.count ?? 0
         var contexts: [LayoutMeasureContext] = []
         contexts.reserveCapacity(measureCount)
         for measureIdx in 0 ..< measureCount {
-            for (staffIdx, staff) in score.staves.enumerated() {
+            for (staffIdx, entry) in allStaves.enumerated() {
+                let staff = entry.staff
                 guard measureIdx < staff.measures.count else { continue }
                 let measure = staff.measures[measureIdx]
                 scan: for el in measure.voices.first?.elements ?? [] {

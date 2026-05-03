@@ -45,7 +45,7 @@ extension LayoutEngine {
     /// stretched measure width.
     static func placeMeasureElements(
         measure: Measure,
-        staffIndex: Int,
+        staffAddress: StaffAddress,
         measureIndex: Int,
         width: CGFloat,
         metrics: StaffMetrics,
@@ -352,7 +352,7 @@ extension LayoutEngine {
                         restX = timedX(atTick: tickCursor)
                     }
                     let restID = RestID(
-                        staffIndex: staffIndex,
+                        staff: staffAddress,
                         measureIndex: measureIndex,
                         voiceIndex: voiceIdx,
                         elementIndex: voiceElemIdx
@@ -406,7 +406,7 @@ extension LayoutEngine {
                         }
                         let y = staffMidY - CGFloat(step) * metrics.sp / 2
                         let id = NoteID(
-                            staffIndex: staffIndex,
+                            staff: staffAddress,
                             measureIndex: measureIndex,
                             voiceIndex: voiceIdx,
                             elementIndex: voiceElemIdx,
@@ -639,7 +639,7 @@ extension LayoutEngine {
                     // staffMidY = staffTopLocal + staffHeight/2 = sp*4
                     // for 5-line staves; sp*4 - sp*3.5 ≈ sp*0.5 above
                     // the top line — matches MuseScore's default).
-                    if staffIndex == 0 && voiceIdx == 0 {
+                    if staffAddress == StaffAddress(partIndex: 0, staffIndexInPart: 0) && voiceIdx == 0 {
                         let originX = inHeader
                             ? headerSchedule.contentStartX
                             : metrics.sp * 0.5
@@ -876,7 +876,7 @@ extension LayoutEngine {
                     staffMidY: staffMidY,
                     metrics: metrics,
                     tupletID: TupletID(
-                        staffIndex: staffIndex,
+                        staff: staffAddress,
                         measureIndex: measureIndex,
                         voiceIndex: voiceIdx,
                         startElementIndex: tuplet.startIndex

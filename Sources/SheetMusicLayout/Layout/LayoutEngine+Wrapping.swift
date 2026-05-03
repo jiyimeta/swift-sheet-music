@@ -13,7 +13,7 @@ extension LayoutEngine {
     /// `engraving/rendering/score/systemlayout.cpp:262` (a page
     /// break implies a system break).
     static func measureForcesLineBreak(
-        at idx: Int, staves: [StaffContent]
+        at idx: Int, staves: [Staff]
     ) -> Bool {
         guard let s0 = staves.first,
               idx < s0.measures.count else { return false }
@@ -81,7 +81,7 @@ extension LayoutEngine {
         minWidths: [CGFloat],
         firstHeaderBoost: CGFloat,
         contentAvail: CGFloat,
-        staves: [StaffContent]
+        staves: [Staff]
     ) -> Int {
         // Find the END of the current break-bounded span.
         var endIdx = measureCount

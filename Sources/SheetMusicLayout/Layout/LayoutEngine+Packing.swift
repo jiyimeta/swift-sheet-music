@@ -9,9 +9,11 @@ extension LayoutEngine {
     static func packSystems(
         context: RenderContext
     ) -> [LayoutSystem] {
-        let stavesCount = context.score.staves.count
+        let allStaves = context.score.allStaves
+        let staves = allStaves.map(\.staff)
+        let stavesCount = staves.count
         guard stavesCount > 0,
-              let firstStaff = context.score.staves.first,
+              let firstStaff = staves.first,
               !firstStaff.measures.isEmpty
         else {
             return []
@@ -41,7 +43,7 @@ extension LayoutEngine {
         // staves subdivide a long element — see
         // `crossStaffMinimumMeasureWidth`.)
         let minWidths: [CGFloat] = (0 ..< measureCount).map { i in
-            let measuresAt = context.score.staves.map { staff in
+            let measuresAt = staves.map { staff in
                 i < staff.measures.count ? staff.measures[i] : nil
             }
             if let prior = priorEntries[i],
@@ -59,13 +61,13 @@ extension LayoutEngine {
             context.cache?.widthMisses += 1
             let baseHeader = computeHeaderSchedule(
                 measureIdx: i,
-                staves: context.score.staves,
+                staves: staves,
                 metrics: context.metrics,
                 synthesizeClefForAllStaves: false,
                 synthesizeKeySigForAllStaves: false
             )
             let w = crossStaffMinimumMeasureWidth(
-                staves: context.score.staves,
+                staves: staves,
                 measureIdx: i,
                 metrics: context.metrics,
                 headerSchedule: baseHeader,
@@ -87,8 +89,7 @@ extension LayoutEngine {
         // continuation systems would either omit the clef or restore
         // an outdated default, losing any mid-piece clef changes.
         var activeClefs: [NotatedClef] = defaultClefRawTypes(
-            staves: context.score.staves,
-            parts: context.score.parts
+            addresses: allStaves
         ).map { NotatedClef(rawType: $0) }
 
         // Key signatures follow the same engraving rule: redraw the
@@ -97,7 +98,7 @@ extension LayoutEngine {
         // flats, 0 = C major (drawn as nothing).
         var activeKeys: [Int] = Array(
             repeating: 0,
-            count: context.score.staves.count
+            count: stavesCount
         )
 
         var systems: [LayoutSystem] = []
@@ -142,7 +143,7 @@ extension LayoutEngine {
             // synthesised overhead up front so the first measure keeps
             // its natural chord spacing.
             let firstHeaderBoost = synthHeaderOverhead(
-                staves: context.score.staves,
+                staves: staves,
                 measureIdx: systemStart,
                 activeKeys: activeKeys,
                 metrics: context.metrics
@@ -163,7 +164,7 @@ extension LayoutEngine {
                     minWidths: minWidths,
                     firstHeaderBoost: firstHeaderBoost,
                     contentAvail: contentAvail,
-                    staves: context.score.staves
+                    staves: staves
                 )
                 : Int.max
             // MuseScore-style natural-stretch target. Systems
@@ -226,7 +227,7 @@ extension LayoutEngine {
                    cursor > systemStart,
                    measureForcesLineBreak(
                        at: cursor - 1,
-                       staves: context.score.staves
+                       staves: staves
                    )
                 {
                     break
@@ -311,17 +312,21 @@ extension LayoutEngine {
     /// part's declarations.  Mirrors the logic used previously inside
     /// `buildSystem`; factored out so `packSystems` can initialise the
     /// clef carry-over state before entering the system loop.
+    ///
+    /// Previously used a flat staff index to look up the part, which
+    /// broke for multi-staff parts (e.g. Piano): staff index 1 would
+    /// resolve to the second part instead of the second staff inside
+    /// the first part. `StaffAddress` carries both `partIndex` and
+    /// `staffIndexInPart`, so the lookup is now correct.
     static func defaultClefRawTypes(
-        staves: [StaffContent],
-        parts: [Part]
+        addresses: [(address: StaffAddress, staff: Staff)]
     ) -> [String] {
-        staves.indices.map { idx in
-            let part = idx < parts.count ? parts[idx] : nil
-            let decl = part?.staffDeclarations.first
-            if let declared = decl?.defaultClefType {
+        addresses.map { entry in
+            let staff = entry.staff
+            if let declared = staff.defaultClefType {
                 return declared
             }
-            if decl?.group == "percussion" { return "PERC" }
+            if staff.group == "percussion" { return "PERC" }
             return "G"
         }
     }
@@ -339,7 +344,8 @@ extension LayoutEngine {
         activeKeysIn: [Int],
         context: RenderContext
     ) -> LayoutCache.SystemInputs {
-        let staves = context.score.staves
+        let allStaves = context.score.allStaves
+        let staves = allStaves.map(\.staff)
         let measuresPerStaff: [[Measure?]] = staves.map { staff in
             (0 ..< measureCount).map { local in
                 let abs = measureStart + local
@@ -357,11 +363,10 @@ extension LayoutEngine {
                 return context.melismaContinuations[staffIdx][abs]
             }
         }
-        let drumLineMaps: [[Int: Int]?] = staves.indices.map { idx in
-            let part = idx < context.score.parts.count
-                ? context.score.parts[idx] : nil
-            return part?.instrument.useDrumset == true
-                ? part?.instrument.drumLineMap : nil
+        let drumLineMaps: [[Int: Int]?] = allStaves.map { entry in
+            let part = context.score.parts[entry.address.partIndex]
+            return part.instrument.useDrumset
+                ? part.instrument.drumLineMap : nil
         }
         return LayoutCache.SystemInputs(
             measureStart: measureStart,

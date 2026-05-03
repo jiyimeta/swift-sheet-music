@@ -24,7 +24,7 @@ extension LayoutDocument {
                     else { continue }
                     guard voiceIdx == id.voiceIndex,
                           let firstNote = notes.first,
-                          firstNote.noteID.staffIndex == id.staffIndex,
+                          firstNote.noteID.staff == id.staff,
                           firstNote.noteID.elementIndex == id.elementIndex
                     else { continue }
                     return CGPoint(
@@ -51,14 +51,15 @@ extension LayoutDocument {
     public func lyricLineY(
         at voiceElementID: VoiceElementID
     ) -> CGFloat? {
-        let staffIndex = voiceElementID.staffIndex
         let measureIndex = voiceElementID.measureIndex
         for system in systems {
             for measure in system.measures
                 where measure.measureIndex == measureIndex
             {
-                guard system.staffOrigins
-                    .indices.contains(staffIndex) else { return nil }
+                guard let staffIndex = system
+                    .flatIndex(for: voiceElementID.staff),
+                    system.staffOrigins.indices.contains(staffIndex)
+                else { return nil }
                 // Look for an existing lyric mark adjacent to the
                 // chord. The placement engine emits all of a
                 // measure's lyrics at the same Y (within a system),

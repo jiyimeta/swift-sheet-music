@@ -10,6 +10,10 @@ public struct LayoutSystem: Sendable, Equatable {
     public let measures: [LayoutMeasure]
     /// Per-staff baselines (top-left in system coordinates).
     public let staffOrigins: [CGPoint]
+    /// `StaffAddress` for each entry in `staffOrigins`, in the same
+    /// display order. Enables `StaffAddress → flat-index` conversion
+    /// without re-visiting the originating `Score`.
+    public let staffAddresses: [StaffAddress]
     /// Part labels at the left edge of this system (empty on continuation
     /// systems per MuseScore convention).
     public let partLabels: [LayoutPartLabel]
@@ -36,6 +40,7 @@ public struct LayoutSystem: Sendable, Equatable {
         size: CGSize,
         measures: [LayoutMeasure],
         staffOrigins: [CGPoint],
+        staffAddresses: [StaffAddress] = [],
         partLabels: [LayoutPartLabel],
         spanners: [LayoutElement],
         sp: CGFloat
@@ -44,6 +49,7 @@ public struct LayoutSystem: Sendable, Equatable {
         self.size = size
         self.measures = measures
         self.staffOrigins = staffOrigins
+        self.staffAddresses = staffAddresses
         self.partLabels = partLabels
         self.spanners = spanners
         self.sp = sp
@@ -52,6 +58,12 @@ public struct LayoutSystem: Sendable, Equatable {
         maxBBoxHalfWidth = columns
             .map { $0.bbox.width / 2 }
             .max() ?? 0
+    }
+
+    /// Flat index (= index into `staffOrigins`) for the given address.
+    /// Returns `nil` when the address is not present in this system.
+    public func flatIndex(for address: StaffAddress) -> Int? {
+        staffAddresses.firstIndex(of: address)
     }
 
     private static func buildEventColumns(
