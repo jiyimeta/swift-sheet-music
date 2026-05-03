@@ -100,6 +100,11 @@ struct ImportMeasure {
     var glyphs: [ClassifiedGlyph] // glyphs whose origin falls in xRange
     var leadingBarline: PathSegment? // path on the left edge
     var trailingBarline: PathSegment? // path on the right edge
+    /// Five staff-line y-coordinates (ascending) for the staff this
+    /// measure belongs to. Used by the pitch decoder to map notehead
+    /// y → diatonic step. Empty when constructed by callers that
+    /// don't need pitch information (e.g. ScoreState tests).
+    var staffYLines: [CGFloat] = []
 }
 
 /// Stage [5b] output — score-state events, in x-order, per staff.

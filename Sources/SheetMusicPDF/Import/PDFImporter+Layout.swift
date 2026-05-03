@@ -193,7 +193,8 @@ extension PDFImporter {
                 xRange: lo ... hi,
                 glyphs: cellGlyphs,
                 leadingBarline: i == 0 ? nil : barline(in: staff, near: lo),
-                trailingBarline: i == lastIndex ? nil : barline(in: staff, near: hi)
+                trailingBarline: i == lastIndex ? nil : barline(in: staff, near: hi),
+                staffYLines: staff.yLines
             ))
         }
         return measures
