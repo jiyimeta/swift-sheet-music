@@ -43,16 +43,19 @@ extension PDFImporter {
             )
         }
 
-        let staffContents = stavesContent.enumerated().map { idx, ms in
-            StaffContent(id: idx + 1, measures: ms)
+        // Distribute measure arrays back into each Part's staves.
+        var assembledParts = shape.parts
+        for (partIdx, slots) in shape.slotsByPartIndex {
+            for (staffIdx, slot) in slots.enumerated() {
+                assembledParts[partIdx].staves[staffIdx].measures = stavesContent[slot]
+            }
         }
         let titleFrame = makeTitleFrame(
             document: document, texts: texts, options: options
         )
         return Score(
             division: 480,
-            parts: shape.parts,
-            staves: staffContents,
+            parts: assembledParts,
             titleFrame: titleFrame
         )
     }
@@ -77,8 +80,8 @@ extension PDFImporter {
                 id: "P\(partIdx + 1)",
                 trackName: nil,
                 instrument: Instrument(id: "voice"),
-                staffDeclarations: Array(
-                    repeating: StaffDeclaration(staffType: "stdNormal", group: "pitched"),
+                staves: Array(
+                    repeating: SheetMusicCore.Staff(staffType: "stdNormal", group: "pitched"),
                     count: staffCount
                 )
             )

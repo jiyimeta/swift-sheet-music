@@ -20,8 +20,7 @@
             ])])
             return Score(
                 division: 480,
-                parts: [treblePart()],
-                staves: [StaffContent(id: 1, measures: [measure])]
+                parts: [treblePart(measures: [measure])]
             )
         }
 
@@ -45,8 +44,7 @@
             let m2 = Measure(voices: [Voice(elements: Array(chords.suffix(4)))])
             return Score(
                 division: 480,
-                parts: [treblePart()],
-                staves: [StaffContent(id: 1, measures: [m1, m2])]
+                parts: [treblePart(measures: [m1, m2])]
             )
         }
 
@@ -69,8 +67,7 @@
             ] + chords)])
             return Score(
                 division: 480,
-                parts: [treblePart()],
-                staves: [StaffContent(id: 1, measures: [m])]
+                parts: [treblePart(measures: [m])]
             )
         }
 
@@ -114,15 +111,25 @@
                 trackName: "Piano",
                 instrument: Instrument(
                     id: "pno", longName: "Piano", shortName: "Pno."
-                )
+                ),
+                staves: [
+                    Staff(
+                        staffType: "stdNormal",
+                        group: "pitched",
+                        defaultClefType: "G",
+                        measures: [rh]
+                    ),
+                    Staff(
+                        staffType: "stdNormal",
+                        group: "pitched",
+                        defaultClefType: "F",
+                        measures: [lh]
+                    ),
+                ]
             )
             return Score(
                 division: 480,
-                parts: [part],
-                staves: [
-                    StaffContent(id: 1, measures: [rh]),
-                    StaffContent(id: 2, measures: [lh]),
-                ]
+                parts: [part]
             )
         }
 
@@ -152,8 +159,7 @@
             ] + chords)])
             return Score(
                 division: 480,
-                parts: [treblePart()],
-                staves: [StaffContent(id: 1, measures: [m])]
+                parts: [treblePart(measures: [m])]
             )
         }
 
@@ -174,8 +180,7 @@
             ] + restElements)])
             return Score(
                 division: 480,
-                parts: [treblePart()],
-                staves: [StaffContent(id: 1, measures: [m])]
+                parts: [treblePart(measures: [m])]
             )
         }
 
@@ -192,8 +197,7 @@
             }
             return Score(
                 division: 480,
-                parts: [treblePart()],
-                staves: [StaffContent(id: 1, measures: [m(3), m(-2), m(7)])]
+                parts: [treblePart(measures: [m(3), m(-2), m(7)])]
             )
         }
 
@@ -210,11 +214,7 @@
             }
             return Score(
                 division: 480,
-                parts: [treblePart()],
-                staves: [StaffContent(
-                    id: 1,
-                    measures: [m(3, 4), m(6, 8), m(12, 8)]
-                )]
+                parts: [treblePart(measures: [m(3, 4), m(6, 8), m(12, 8)])]
             )
         }
 
@@ -257,8 +257,7 @@
             let m = Measure(voices: [Voice(elements: elements)])
             return Score(
                 division: 480,
-                parts: [treblePart()],
-                staves: [StaffContent(id: 1, measures: [m])]
+                parts: [treblePart(measures: [m])]
             )
         }
 
@@ -330,8 +329,7 @@
             ])
             return Score(
                 division: 480,
-                parts: [treblePart()],
-                staves: [StaffContent(id: 1, measures: [m])]
+                parts: [treblePart(measures: [m])]
             )
         }
 
@@ -368,8 +366,7 @@
             ])
             return Score(
                 division: 480,
-                parts: [treblePart()],
-                staves: [StaffContent(id: 1, measures: [m])]
+                parts: [treblePart(measures: [m])]
             )
         }
 
@@ -399,8 +396,7 @@
             let m = Measure(voices: [Voice(elements: elements)])
             return Score(
                 division: 480,
-                parts: [treblePart()],
-                staves: [StaffContent(id: 1, measures: [m])]
+                parts: [treblePart(measures: [m])]
             )
         }
 
@@ -428,8 +424,7 @@
             let m = Measure(voices: [Voice(elements: elements)])
             return Score(
                 division: 480,
-                parts: [treblePart()],
-                staves: [StaffContent(id: 1, measures: [m])]
+                parts: [treblePart(measures: [m])]
             )
         }
 
@@ -480,15 +475,23 @@
             )
             return Score(
                 division: 480,
-                parts: [part],
-                staves: [
-                    StaffContent(
-                        id: 1, measures: [Measure(voices: [Voice(elements: s1)])]
-                    ),
-                    StaffContent(
-                        id: 2, measures: [Measure(voices: [Voice(elements: s2)])]
-                    ),
-                ]
+                parts: [Part(
+                    id: part.id,
+                    trackName: part.trackName,
+                    instrument: part.instrument,
+                    staves: [
+                        Staff(
+                            staffType: "stdNormal",
+                            group: "pitched",
+                            measures: [Measure(voices: [Voice(elements: s1)])]
+                        ),
+                        Staff(
+                            staffType: "stdNormal",
+                            group: "pitched",
+                            measures: [Measure(voices: [Voice(elements: s2)])]
+                        ),
+                    ]
+                )]
             )
         }
 
@@ -517,8 +520,7 @@
             ])
             return Score(
                 division: 480,
-                parts: [treblePart()],
-                staves: [StaffContent(id: 1, measures: [m])]
+                parts: [treblePart(measures: [m])]
             )
         }
 
@@ -565,8 +567,7 @@
             ])
             return Score(
                 division: 480,
-                parts: [treblePart()],
-                staves: [StaffContent(id: 1, measures: [m])]
+                parts: [treblePart(measures: [m])]
             )
         }
 
@@ -617,15 +618,25 @@
                 trackName: "Piano",
                 instrument: Instrument(
                     id: "pno", longName: "Piano", shortName: "Pno."
-                )
+                ),
+                staves: [
+                    Staff(
+                        staffType: "stdNormal",
+                        group: "pitched",
+                        defaultClefType: "G",
+                        measures: [rh]
+                    ),
+                    Staff(
+                        staffType: "stdNormal",
+                        group: "pitched",
+                        defaultClefType: "F",
+                        measures: [lh]
+                    ),
+                ]
             )
             return Score(
                 division: 480,
-                parts: [part],
-                staves: [
-                    StaffContent(id: 1, measures: [rh]),
-                    StaffContent(id: 2, measures: [lh]),
-                ]
+                parts: [part]
             )
         }
 
@@ -670,8 +681,7 @@
 
             return Score(
                 division: 480,
-                parts: [treblePart()],
-                staves: [StaffContent(id: 1, measures: [m1, m2])]
+                parts: [treblePart(measures: [m1, m2])]
             )
         }
 
@@ -710,8 +720,7 @@
             let m = Measure(voices: [Voice(elements: elements)])
             return Score(
                 division: 480,
-                parts: [treblePart()],
-                staves: [StaffContent(id: 1, measures: [m])]
+                parts: [treblePart(measures: [m])]
             )
         }
 
@@ -731,20 +740,20 @@
             ])])
             return Score(
                 division: 480,
-                parts: [treblePart()],
-                staves: [StaffContent(id: 1, measures: [m])]
+                parts: [treblePart(measures: [m])]
             )
         }
 
         // MARK: - helpers
 
-        private static func treblePart() -> Part {
+        private static func treblePart(measures: [Measure] = []) -> Part {
             Part(
                 id: "P1",
                 trackName: nil,
                 instrument: Instrument(
                     id: "synth", longName: "Treble", shortName: "Tr."
-                )
+                ),
+                staves: [Staff(staffType: "stdNormal", group: "pitched", measures: measures)]
             )
         }
     }

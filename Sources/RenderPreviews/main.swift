@@ -179,37 +179,29 @@
     /// score renders into a reasonable canvas.
     @available(macOS 15.0, *)
     func trimFirstMeasures(of score: Score, count: Int) -> Score {
-        let trimmedStaves = score.staves.map { staff in
-            StaffContent(
-                id: staff.id,
-                measures: Array(staff.measures.prefix(count))
-            )
+        var s = score
+        for p in s.parts.indices {
+            for st in s.parts[p].staves.indices {
+                s.parts[p].staves[st].measures =
+                    Array(s.parts[p].staves[st].measures.prefix(count))
+            }
         }
-        return Score(
-            division: score.division,
-            parts: score.parts,
-            staves: trimmedStaves,
-            metaTags: score.metaTags
-        )
+        return s
     }
 
     /// Keep an arbitrary contiguous measure range from every staff.
     @available(macOS 15.0, *)
     func slicMeasures(of score: Score, from start: Int, count: Int) -> Score {
-        let trimmedStaves = score.staves.map { staff -> StaffContent in
-            let end = min(start + count, staff.measures.count)
-            let clamped = max(0, min(start, staff.measures.count))
-            return StaffContent(
-                id: staff.id,
-                measures: Array(staff.measures[clamped ..< end])
-            )
+        var s = score
+        for p in s.parts.indices {
+            for st in s.parts[p].staves.indices {
+                let measures = s.parts[p].staves[st].measures
+                let clamped = max(0, min(start, measures.count))
+                let end = min(start + count, measures.count)
+                s.parts[p].staves[st].measures = Array(measures[clamped ..< end])
+            }
         }
-        return Score(
-            division: score.division,
-            parts: score.parts,
-            staves: trimmedStaves,
-            metaTags: score.metaTags
-        )
+        return s
     }
 
     @available(macOS 15.0, *)
