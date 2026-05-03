@@ -89,6 +89,11 @@ enum SMuFLGlyph {
     static let fermataAbove: Character = "\u{E4C0}"
     static let fermataBelow: Character = "\u{E4C1}"
 
+    // Bracket caps + brace
+    static let brace: Character = "\u{E000}"
+    static let bracketTop: Character = "\u{E003}"
+    static let bracketBottom: Character = "\u{E004}"
+
     // Arpeggio / measure repeat (used later stages)
     static let arpeggioWiggle: Character = "\u{EAA9}"
     static let arpeggioUpArrow: Character = "\u{EAAD}"

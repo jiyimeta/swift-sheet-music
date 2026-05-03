@@ -62,7 +62,7 @@
         }
 
         @available(macOS 15.0, iOS 16.0, *)
-        @Test func braceBracketEmitsTextLayer() {
+        @Test func braceEmitsFilledGlyphPath() {
             let metrics = StaffMetrics(staffSize: 28)
             let system = Self.sampleSystem(type: .brace)
             let root = CALayer()
@@ -71,7 +71,26 @@
                 height: system.size.height, into: root
             )
             let counts = Self.countLayerKinds(root)
-            #expect(counts.texts >= 1)
+            // Brace draws as a filled CAShapeLayer (the SMuFL glyph
+            // path), not a CATextLayer.
+            #expect(counts.shapes >= 1)
+            #expect(counts.texts == 0)
+        }
+
+        @available(macOS 15.0, iOS 16.0, *)
+        @Test func normalBracketEmitsSpineAndTwoCaps() {
+            let metrics = StaffMetrics(staffSize: 28)
+            let system = Self.sampleSystem(type: .normal)
+            let root = CALayer()
+            ScoreLayerBuilder.drawBrackets(
+                system: system, metrics: metrics,
+                height: system.size.height, into: root
+            )
+            let counts = Self.countLayerKinds(root)
+            // 1 stroke (spine) + 2 fills (bracketTop + bracketBottom)
+            // = 3 shape layers. No text layers.
+            #expect(counts.shapes == 3)
+            #expect(counts.texts == 0)
         }
 
         @available(macOS 15.0, iOS 16.0, *)

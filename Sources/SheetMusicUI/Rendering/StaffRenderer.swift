@@ -27,7 +27,9 @@ enum StaffRenderer {
     }
 
     /// Draw all brackets/braces at the left edge of `system`, dispatching
-    /// on each `LayoutBracket.type`.
+    /// on each `LayoutBracket.type`. Geometry mirrors
+    /// `engraving/rendering/score/tdraw.cpp:1059-1122` so each type
+    /// matches MuseScore's engraving exactly.
     static func drawBrackets(
         context: inout GraphicsContext,
         system: LayoutSystem,
@@ -38,45 +40,40 @@ enum StaffRenderer {
         else { return }
         let staffOriginX = system.origin.x + firstStaffOrigin.x
         for b in system.brackets {
+            let topY = system.origin.y + b.topY
+            let bottomY = system.origin.y + b.bottomY
             switch b.type {
             case .noBracket:
                 continue
             case .brace:
                 drawBrace(
                     context: &context,
-                    bracket: b,
                     staffOriginX: staffOriginX,
-                    systemOriginY: system.origin.y,
+                    topY: topY, bottomY: bottomY,
                     metrics: metrics
                 )
             case .normal:
-                drawAngleBracket(
+                drawNormalBracket(
                     context: &context,
-                    bracket: b,
+                    column: b.column,
                     staffOriginX: staffOriginX,
-                    systemOriginY: system.origin.y,
-                    spineWidth: metrics.sp * 0.3,
-                    serifWidth: metrics.sp * 0.25,
-                    serifLength: metrics.sp * 0.8,
+                    topY: topY, bottomY: bottomY,
                     metrics: metrics
                 )
             case .square:
-                drawAngleBracket(
+                drawSquareBracket(
                     context: &context,
-                    bracket: b,
+                    column: b.column,
                     staffOriginX: staffOriginX,
-                    systemOriginY: system.origin.y,
-                    spineWidth: metrics.sp * 0.15,
-                    serifWidth: metrics.sp * 0.15,
-                    serifLength: metrics.sp * 0.5,
+                    topY: topY, bottomY: bottomY,
                     metrics: metrics
                 )
             case .line:
                 drawLineBracket(
                     context: &context,
-                    bracket: b,
+                    column: b.column,
                     staffOriginX: staffOriginX,
-                    systemOriginY: system.origin.y,
+                    topY: topY, bottomY: bottomY,
                     metrics: metrics
                 )
             }
@@ -89,84 +86,169 @@ enum StaffRenderer {
         staffOriginX - sp * 0.5 - CGFloat(column) * sp
     }
 
-    private static func drawAngleBracket(
+    /// Thick bracket: 0.45 sp spine plus SMuFL `bracketTop` /
+    /// `bracketBottom` cap glyphs at each end. Mirrors `tdraw.cpp:1085`.
+    private static func drawNormalBracket(
         context: inout GraphicsContext,
-        bracket b: LayoutBracket,
+        column: Int,
         staffOriginX: CGFloat,
-        systemOriginY: CGFloat,
-        spineWidth: CGFloat,
-        serifWidth: CGFloat,
-        serifLength: CGFloat,
+        topY: CGFloat, bottomY: CGFloat,
         metrics: StaffMetrics
     ) {
+        let sp = metrics.sp
         let x = bracketSpineX(
-            column: b.column, staffOriginX: staffOriginX, sp: metrics.sp
+            column: column, staffOriginX: staffOriginX, sp: sp
         )
-        let topY = systemOriginY + b.topY
-        let botY = systemOriginY + b.bottomY
+        let w = sp * 0.45
+        let bd = sp * 0.25
+        var spine = Path()
+        spine.move(to: CGPoint(x: x, y: topY - bd - w * 0.5))
+        spine.addLine(to: CGPoint(x: x, y: bottomY + bd + w * 0.5))
+        context.stroke(spine, with: .color(.primary), lineWidth: w)
+        let glyphLeftX = x - w * 0.5
+        let fontSize = sp * 4
+        if let topPath = smuflGlyphPath(
+            codepoint: 0xE003,
+            fontSize: fontSize,
+            originX: glyphLeftX,
+            originY: topY - bd
+        ) {
+            context.fill(Path(topPath), with: .color(.primary))
+        }
+        if let bottomPath = smuflGlyphPath(
+            codepoint: 0xE004,
+            fontSize: fontSize,
+            originX: glyphLeftX,
+            originY: bottomY + bd
+        ) {
+            context.fill(Path(bottomPath), with: .color(.primary))
+        }
+    }
+
+    /// Thin square bracket: spine plus two horizontal serifs of equal
+    /// `staffLineThickness`. Mirrors `tdraw.cpp:1100`.
+    private static func drawSquareBracket(
+        context: inout GraphicsContext,
+        column: Int,
+        staffOriginX: CGFloat,
+        topY: CGFloat, bottomY: CGFloat,
+        metrics: StaffMetrics
+    ) {
+        let sp = metrics.sp
+        let x = bracketSpineX(
+            column: column, staffOriginX: staffOriginX, sp: sp
+        )
+        let lineW = metrics.staffLineThickness
+        let serifLength = sp * 0.45
         var spine = Path()
         spine.move(to: CGPoint(x: x, y: topY))
-        spine.addLine(to: CGPoint(x: x, y: botY))
-        context.stroke(
-            spine, with: .color(.primary), lineWidth: spineWidth
-        )
-        for y in [topY, botY] {
+        spine.addLine(to: CGPoint(x: x, y: bottomY))
+        context.stroke(spine, with: .color(.primary), lineWidth: lineW)
+        for y in [topY, bottomY] {
             var serif = Path()
-            serif.move(to: CGPoint(x: x, y: y))
+            serif.move(to: CGPoint(x: x - lineW * 0.5, y: y))
             serif.addLine(to: CGPoint(x: x + serifLength, y: y))
             context.stroke(
-                serif, with: .color(.primary), lineWidth: serifWidth
+                serif, with: .color(.primary), lineWidth: lineW
             )
         }
     }
 
+    /// Plain vertical line bracket. Width 0.67 × bracketWidth; ends
+    /// extend `staffLineThickness/2` past the spanned staff edges.
+    /// Mirrors `tdraw.cpp:1111`.
     private static func drawLineBracket(
         context: inout GraphicsContext,
-        bracket b: LayoutBracket,
+        column: Int,
         staffOriginX: CGFloat,
-        systemOriginY: CGFloat,
+        topY: CGFloat, bottomY: CGFloat,
         metrics: StaffMetrics
     ) {
+        let sp = metrics.sp
         let x = bracketSpineX(
-            column: b.column, staffOriginX: staffOriginX, sp: metrics.sp
+            column: column, staffOriginX: staffOriginX, sp: sp
         )
+        let w = 0.67 * sp * 0.45
+        let bd = metrics.staffLineThickness * 0.5
         var spine = Path()
-        spine.move(to: CGPoint(x: x, y: systemOriginY + b.topY))
-        spine.addLine(to: CGPoint(x: x, y: systemOriginY + b.bottomY))
-        context.stroke(
-            spine, with: .color(.primary), lineWidth: metrics.sp * 0.15
-        )
+        spine.move(to: CGPoint(x: x, y: topY - bd))
+        spine.addLine(to: CGPoint(x: x, y: bottomY + bd))
+        context.stroke(spine, with: .color(.primary), lineWidth: w)
     }
 
-    /// SMuFL brace glyph (Bravura Private Use Area codepoint).
-    /// `UnicodeScalar(0xE000)` is always valid (PUA block), so the
-    /// literal character avoids a force-unwrap at each call site.
-    private static let braceCharacter: Character = "\u{E000}"
-
-    /// Brace via Bravura `U+E000`. Y-scaled to fit the requested span.
+    /// Brace via Bravura `U+E000`, drawn as a CGPath stretched to fit
+    /// the requested span. Mirrors `tdraw.cpp:1068-1083`. We use a path
+    /// rather than `Text` because SwiftUI text rendering doesn't
+    /// reliably preserve baseline alignment under a non-uniform scale.
     private static func drawBrace(
         context: inout GraphicsContext,
-        bracket b: LayoutBracket,
         staffOriginX: CGFloat,
-        systemOriginY: CGFloat,
+        topY: CGFloat, bottomY: CGFloat,
         metrics: StaffMetrics
     ) {
+        let rightEdge = staffOriginX - metrics.sp * 0.3
+        guard let path = smuflGlyphPathStretched(
+            codepoint: 0xE000,
+            fontSize: metrics.sp * 4,
+            rightEdgeX: rightEdge,
+            topY: topY,
+            bottomY: bottomY
+        ) else { return }
+        context.fill(Path(path), with: .color(.primary))
+    }
+
+    /// SMuFL glyph as a CGPath in screen coords, anchored by font
+    /// origin (baseline-left) at `(originX, originY)`. Natural metrics.
+    private static func smuflGlyphPath(
+        codepoint: UInt16,
+        fontSize: CGFloat,
+        originX: CGFloat,
+        originY: CGFloat
+    ) -> CGPath? {
         _ = BravuraFont.register
-        let target = b.bottomY - b.topY
-        let nominalSize = metrics.sp * 4
-        let braceText = Text(String(braceCharacter))
-            .font(.custom(BravuraFont.familyName, fixedSize: nominalSize))
-        let resolved = context.resolve(braceText)
-        let measured = resolved.measure(in: CGSize(
-            width: 100, height: 1000
-        ))
-        guard measured.height > 0 else { return }
-        let yScale = target / measured.height
-        let xPos = staffOriginX - metrics.sp * 0.3 - measured.width
-        let yPos = systemOriginY + b.topY
-        var sub = context
-        sub.translateBy(x: xPos, y: yPos)
-        sub.scaleBy(x: 1, y: yScale)
-        sub.draw(resolved, at: .zero, anchor: .topLeading)
+        let font = CTFontCreateWithName(
+            BravuraFont.familyName as CFString, fontSize, nil
+        )
+        var unichars: [UniChar] = [codepoint]
+        var glyphs: [CGGlyph] = [0]
+        guard CTFontGetGlyphsForCharacters(
+            font, &unichars, &glyphs, 1
+        ), let path = CTFontCreatePathForGlyph(font, glyphs[0], nil)
+        else { return nil }
+        var t = CGAffineTransform(
+            a: 1, b: 0, c: 0, d: -1,
+            tx: originX, ty: originY
+        )
+        return path.copy(using: &t) ?? path
+    }
+
+    /// SMuFL glyph stretched vertically so its bbox spans
+    /// `[topY, bottomY]`, with bbox right edge at `rightEdgeX`.
+    private static func smuflGlyphPathStretched(
+        codepoint: UInt16,
+        fontSize: CGFloat,
+        rightEdgeX: CGFloat,
+        topY: CGFloat,
+        bottomY: CGFloat
+    ) -> CGPath? {
+        _ = BravuraFont.register
+        let font = CTFontCreateWithName(
+            BravuraFont.familyName as CFString, fontSize, nil
+        )
+        var unichars: [UniChar] = [codepoint]
+        var glyphs: [CGGlyph] = [0]
+        guard CTFontGetGlyphsForCharacters(
+            font, &unichars, &glyphs, 1
+        ), let path = CTFontCreatePathForGlyph(font, glyphs[0], nil)
+        else { return nil }
+        let bbox = path.boundingBox
+        guard bbox.width > 0, bbox.height > 0 else { return nil }
+        let scaleY = (bottomY - topY) / bbox.height
+        var t = CGAffineTransform(
+            a: 1, b: 0, c: 0, d: -scaleY,
+            tx: rightEdgeX - bbox.maxX,
+            ty: topY + bbox.maxY * scaleY
+        )
+        return path.copy(using: &t) ?? path
     }
 }

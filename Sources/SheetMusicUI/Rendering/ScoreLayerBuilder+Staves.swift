@@ -53,19 +53,13 @@ extension ScoreLayerBuilder {
                     metrics: metrics, height: height, into: parent
                 )
             case .normal:
-                drawAngleBracket(
+                drawNormalBracket(
                     bracket: b, staffOriginX: staffOriginX,
-                    spineWidth: metrics.sp * 0.3,
-                    serifWidth: metrics.sp * 0.25,
-                    serifLength: metrics.sp * 0.8,
                     metrics: metrics, height: height, into: parent
                 )
             case .square:
-                drawAngleBracket(
+                drawSquareBracket(
                     bracket: b, staffOriginX: staffOriginX,
-                    spineWidth: metrics.sp * 0.15,
-                    serifWidth: metrics.sp * 0.15,
-                    serifLength: metrics.sp * 0.5,
                     metrics: metrics, height: height, into: parent
                 )
             case .line:
@@ -83,39 +77,87 @@ extension ScoreLayerBuilder {
         staffOriginX - sp * 0.5 - CGFloat(column) * sp
     }
 
-    private static func drawAngleBracket(
+    /// Thick bracket: 0.45 sp spine plus SMuFL `bracketTop` /
+    /// `bracketBottom` cap glyphs at each end. Mirrors
+    /// `engraving/rendering/score/tdraw.cpp:1085-1098`.
+    private static func drawNormalBracket(
         bracket b: LayoutBracket,
         staffOriginX: CGFloat,
-        spineWidth: CGFloat,
-        serifWidth: CGFloat,
-        serifLength: CGFloat,
         metrics: StaffMetrics,
         height: CGFloat,
         into parent: CALayer
     ) {
+        let sp = metrics.sp
         let x = bracketSpineX(
-            column: b.column, staffOriginX: staffOriginX, sp: metrics.sp
+            column: b.column, staffOriginX: staffOriginX, sp: sp
         )
+        let w = sp * 0.45 // Sid::bracketWidth
+        let bd = sp * 0.25 // bracket-distance offset
+        let spine = CGMutablePath()
+        spine.move(to: CGPoint(x: x, y: b.topY - bd - w * 0.5))
+        spine.addLine(to: CGPoint(x: x, y: b.bottomY + bd + w * 0.5))
+        parent.addSublayer(strokeLayer(
+            path: spine, height: height, lineWidth: w
+        ))
+        let glyphLeftX = x - w * 0.5
+        let fontSize = sp * 4 // Bravura: 1 em = 4 sp
+        if let topPath = smuflGlyphPath(
+            codepoint: 0xE003, // SMuFLGlyph.bracketTop
+            fontSize: fontSize,
+            originX: glyphLeftX,
+            originY: b.topY - bd
+        ) {
+            parent.addSublayer(fillLayer(path: topPath, height: height))
+        }
+        if let bottomPath = smuflGlyphPath(
+            codepoint: 0xE004, // SMuFLGlyph.bracketBottom
+            fontSize: fontSize,
+            originX: glyphLeftX,
+            originY: b.bottomY + bd
+        ) {
+            parent.addSublayer(fillLayer(path: bottomPath, height: height))
+        }
+    }
+
+    /// Thin square bracket: spine plus two horizontal serifs of equal
+    /// `staffLineThickness`. Mirrors
+    /// `engraving/rendering/score/tdraw.cpp:1100-1108`.
+    private static func drawSquareBracket(
+        bracket b: LayoutBracket,
+        staffOriginX: CGFloat,
+        metrics: StaffMetrics,
+        height: CGFloat,
+        into parent: CALayer
+    ) {
+        let sp = metrics.sp
+        let x = bracketSpineX(
+            column: b.column, staffOriginX: staffOriginX, sp: sp
+        )
+        let lineW = metrics.staffLineThickness
+        let serifLength = sp * 0.45
         let topPt = CGPoint(x: x, y: b.topY)
         let botPt = CGPoint(x: x, y: b.bottomY)
         let spine = CGMutablePath()
         spine.move(to: topPt)
         spine.addLine(to: botPt)
         parent.addSublayer(strokeLayer(
-            path: spine, height: height, lineWidth: spineWidth
+            path: spine, height: height, lineWidth: lineW
         ))
         for point in [topPt, botPt] {
             let serif = CGMutablePath()
-            serif.move(to: point)
+            serif.move(to: CGPoint(x: point.x - lineW * 0.5, y: point.y))
             serif.addLine(to: CGPoint(
                 x: point.x + serifLength, y: point.y
             ))
             parent.addSublayer(strokeLayer(
-                path: serif, height: height, lineWidth: serifWidth
+                path: serif, height: height, lineWidth: lineW
             ))
         }
     }
 
+    /// Plain vertical line bracket. Width is 0.67 × bracketWidth; ends
+    /// extend `staffLineThickness/2` past the spanned staff edges.
+    /// Mirrors `engraving/rendering/score/tdraw.cpp:1111-1118`.
     private static func drawLineBracket(
         bracket b: LayoutBracket,
         staffOriginX: CGFloat,
@@ -123,25 +165,25 @@ extension ScoreLayerBuilder {
         height: CGFloat,
         into parent: CALayer
     ) {
+        let sp = metrics.sp
         let x = bracketSpineX(
-            column: b.column, staffOriginX: staffOriginX, sp: metrics.sp
+            column: b.column, staffOriginX: staffOriginX, sp: sp
         )
+        let w = 0.67 * sp * 0.45
+        let bd = metrics.staffLineThickness * 0.5
         let spine = CGMutablePath()
-        spine.move(to: CGPoint(x: x, y: b.topY))
-        spine.addLine(to: CGPoint(x: x, y: b.bottomY))
+        spine.move(to: CGPoint(x: x, y: b.topY - bd))
+        spine.addLine(to: CGPoint(x: x, y: b.bottomY + bd))
         parent.addSublayer(strokeLayer(
-            path: spine, height: height, lineWidth: metrics.sp * 0.15
+            path: spine, height: height, lineWidth: w
         ))
     }
 
-    /// SMuFL brace glyph (Bravura Private Use Area codepoint).
-    /// `UnicodeScalar(0xE000)` is always valid (PUA block), so the
-    /// literal character avoids a force-unwrap at each call site.
-    private static let braceCharacter: Character = "\u{E000}"
-
-    /// Brace via Bravura `U+E000`. Y-scaled to fit the requested span.
-    /// Glyph's right edge sits sp*0.3 to the left of the staff origin
-    /// (braces sit closest to the staff; nested columns don't apply).
+    /// Brace via Bravura `U+E000`, drawn as a CGPath stretched to
+    /// fit the requested span. Glyph's right edge sits sp*0.3 to the
+    /// left of the staff origin (braces sit closest to the staff;
+    /// nested columns don't apply). Mirrors
+    /// `engraving/rendering/score/tdraw.cpp:1068-1083`.
     private static func drawBrace(
         bracket b: LayoutBracket,
         staffOriginX: CGFloat,
@@ -149,42 +191,70 @@ extension ScoreLayerBuilder {
         height: CGFloat,
         into parent: CALayer
     ) {
-        _ = BravuraFont.register
-        let fontSize = metrics.sp * 4
-        let font = CTFontCreateWithName(
-            BravuraFont.familyName as CFString,
-            fontSize, nil
-        )
-        var unichars: [UniChar] = [0xE000]
+        let rightEdge = staffOriginX - metrics.sp * 0.3
+        guard let path = smuflGlyphPathStretched(
+            codepoint: 0xE000,
+            fontSize: metrics.sp * 4,
+            rightEdgeX: rightEdge,
+            topY: b.topY,
+            bottomY: b.bottomY
+        ) else { return }
+        parent.addSublayer(fillLayer(path: path, height: height))
+    }
+
+    /// SMuFL glyph as a CGPath in y-down system coords, anchored by
+    /// the glyph's font origin (baseline-left) at `(originX, originY)`.
+    /// No vertical scaling — uses the glyph's natural metrics for the
+    /// given font size.
+    private static func smuflGlyphPath(
+        codepoint: UInt16,
+        fontSize: CGFloat,
+        originX: CGFloat,
+        originY: CGFloat
+    ) -> CGPath? {
+        let font = bravuraFont(size: fontSize)
+        var unichars: [UniChar] = [codepoint]
         var glyphs: [CGGlyph] = [0]
         guard CTFontGetGlyphsForCharacters(
             font, &unichars, &glyphs, 1
-        ) else { return }
-        var bbox = CGRect.zero
-        CTFontGetBoundingRectsForGlyphs(
-            font, .horizontal, &glyphs, &bbox, 1
+        ), let path = CTFontCreatePathForGlyph(font, glyphs[0], nil)
+        else { return nil }
+        // Font path is y-up (baseline at y=0). Map: screen.y = originY - font.y.
+        var t = CGAffineTransform(
+            a: 1, b: 0, c: 0, d: -1,
+            tx: originX, ty: originY
         )
-        let nativeHeight = bbox.height
-        guard nativeHeight > 0 else { return }
-        let target = b.bottomY - b.topY
-        let yScale = target / nativeHeight
-        let layer = CATextLayer()
-        layer.string = String(braceCharacter)
-        layer.font = font
-        layer.fontSize = fontSize
-        layer.alignmentMode = .left
-        layer.foregroundColor = CGColor(gray: 0, alpha: 1)
-        let glyphWidth = bbox.width
-        let x = staffOriginX - metrics.sp * 0.3 - glyphWidth
-        let frame = CGRect(
-            x: x, y: height - b.bottomY,
-            width: glyphWidth,
-            height: nativeHeight
+        return path.copy(using: &t) ?? path
+    }
+
+    /// SMuFL glyph stretched vertically so its bbox spans
+    /// `[topY, bottomY]`, and horizontally anchored so its bbox right
+    /// edge lands at `rightEdgeX`. No X-scaling.
+    private static func smuflGlyphPathStretched(
+        codepoint: UInt16,
+        fontSize: CGFloat,
+        rightEdgeX: CGFloat,
+        topY: CGFloat,
+        bottomY: CGFloat
+    ) -> CGPath? {
+        let font = bravuraFont(size: fontSize)
+        var unichars: [UniChar] = [codepoint]
+        var glyphs: [CGGlyph] = [0]
+        guard CTFontGetGlyphsForCharacters(
+            font, &unichars, &glyphs, 1
+        ), let path = CTFontCreatePathForGlyph(font, glyphs[0], nil)
+        else { return nil }
+        let bbox = path.boundingBox
+        guard bbox.width > 0, bbox.height > 0 else { return nil }
+        let scaleY = (bottomY - topY) / bbox.height
+        // font (y-up) → screen (y-down). bbox.maxY → topY, bbox.minY → bottomY.
+        // bbox.maxX → rightEdgeX, bbox.minX → rightEdgeX - bbox.width.
+        var t = CGAffineTransform(
+            a: 1, b: 0, c: 0, d: -scaleY,
+            tx: rightEdgeX - bbox.maxX,
+            ty: topY + bbox.maxY * scaleY
         )
-        layer.frame = frame
-        layer.contentsScale = 2
-        layer.transform = CATransform3DMakeScale(1, yScale, 1)
-        parent.addSublayer(layer)
+        return path.copy(using: &t) ?? path
     }
 
     static func drawPartLabels(
