@@ -2,6 +2,7 @@ import CoreGraphics
 import Foundation
 @testable import SheetMusicCore
 @testable import SheetMusicLayout
+@testable import SheetMusicMSCX
 import Testing
 
 @Suite struct LayoutBracketTests {
@@ -213,5 +214,40 @@ import Testing
             availableWidth: 800
         )
         #expect(doc.systems[0].brackets.isEmpty)
+    }
+
+    // MARK: – End-to-end: real MSCX fixture
+
+    @available(macOS 15.0, iOS 16.0, *)
+    @Test func multiPartMixedStavesFixtureBrackets() throws {
+        let url = try #require(
+            Bundle.module.url(
+                forResource: "multiPartMixedStaves",
+                withExtension: "mscx"
+            )
+        )
+        let score = try MSCXParser.parse(contentsOf: url)
+
+        // Vln1 declares NORMAL (col 0) + SQUARE (col 1); Piano (parts[2])
+        // declares BRACE on its top staff.
+        #expect(score.parts[0].staves[0].brackets.count == 2)
+        #expect(score.parts[0].staves[0].brackets.contains {
+            $0.type == .normal && $0.span == 2 && $0.column == 0
+        })
+        #expect(score.parts[0].staves[0].brackets.contains {
+            $0.type == .square && $0.span == 2 && $0.column == 1
+        })
+        #expect(score.parts[2].staves[0].brackets.count == 1)
+        #expect(score.parts[2].staves[0].brackets[0].type == .brace)
+
+        // End-to-end: layout produces three LayoutBrackets.
+        let doc = LayoutEngine.layout(
+            score: score,
+            options: .init(),
+            availableWidth: 800
+        )
+        let kinds = doc.systems[0].brackets
+            .map(\.type).sorted { $0.rawValue < $1.rawValue }
+        #expect(kinds == [.normal, .brace, .square])
     }
 }

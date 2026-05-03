@@ -3,7 +3,7 @@
   <Score>
     <Division>480</Division>
     <Part id="1">
-      <Staff id="1"><StaffType group="pitched"><name>stdNormal</name></StaffType><defaultClef>G</defaultClef></Staff>
+      <Staff id="1"><StaffType group="pitched"><name>stdNormal</name></StaffType><defaultClef>G</defaultClef><bracket type="0" span="2" col="0" visible="1"/><bracket type="2" span="2" col="1" visible="1"/></Staff>
       <trackName>Violin 1</trackName>
       <Instrument id="violin"><longName>Violin 1</longName></Instrument>
     </Part>
@@ -13,7 +13,7 @@
       <Instrument id="violin"><longName>Violin 2</longName></Instrument>
     </Part>
     <Part id="3">
-      <Staff id="3"><StaffType group="pitched"><name>stdNormal</name></StaffType><defaultClef>G</defaultClef></Staff>
+      <Staff id="3"><StaffType group="pitched"><name>stdNormal</name></StaffType><defaultClef>G</defaultClef><bracket type="1" span="2" col="0" visible="1"/></Staff>
       <Staff id="4"><StaffType group="pitched"><name>stdNormal</name></StaffType><defaultClef>F</defaultClef></Staff>
       <trackName>Piano</trackName>
       <Instrument id="piano"><longName>Piano</longName></Instrument>
