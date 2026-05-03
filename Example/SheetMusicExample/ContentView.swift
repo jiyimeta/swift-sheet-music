@@ -1,3 +1,5 @@
+// swiftlint:disable file_length type_body_length function_body_length closure_body_length
+
 #if !os(macOS)
     import SheetMusic
     import SheetMusicAudio
@@ -363,6 +365,12 @@
                         anchor: .note(first), target: .note(last)
                     )
                 }
+            case .tuplet:
+                // Tapping the tuplet bracket / number doesn't drive
+                // selection in this example viewer — the bracket is a
+                // hit target for future editing affordances. Clear
+                // selection so the tap reads as "deselect."
+                selection = .none
             }
         }
 
