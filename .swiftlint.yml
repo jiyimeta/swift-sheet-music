@@ -244,6 +244,7 @@ included:
 excluded:
   - "**/.build"
   - "**/.swiftpm"
+  - "Example"
 
 line_length:
   warning: 120

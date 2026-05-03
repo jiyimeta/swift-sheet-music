@@ -641,7 +641,7 @@
                 // the freshly-inserted note so the user sees what they
                 // just typed.
                 let noteID = NoteID(
-                    staffIndex: restID.staffIndex,
+                    staff: restID.staff,
                     measureIndex: restID.measureIndex,
                     voiceIndex: restID.voiceIndex,
                     elementIndex: restID.elementIndex,
@@ -789,7 +789,7 @@
             // arrow-shift, Delete) target the same chord.
             if let firstNote = chord.notes.first {
                 selection = .single(.note(NoteID(
-                    staffIndex: next.staffIndex,
+                    staff: next.staff,
                     measureIndex: next.measureIndex,
                     voiceIndex: next.voiceIndex,
                     elementIndex: next.elementIndex,
@@ -850,7 +850,7 @@
                 // preview that pitch — matches the rest-input flow's
                 // "select what you just typed + play it" feedback.
                 let newNoteID = NoteID(
-                    staffIndex: noteID.staffIndex,
+                    staff: noteID.staff,
                     measureIndex: noteID.measureIndex,
                     voiceIndex: noteID.voiceIndex,
                     elementIndex: noteID.elementIndex,
@@ -870,10 +870,8 @@
             noteID: NoteID,
             controller: NoteInputController
         ) -> Bool {
-            let staffIdx = noteID.staffIndex
-            return staffIdx < controller.score.parts.count
-                && controller.score.parts[staffIdx]
-                .instrument.useDrumset
+            controller.score.part(at: noteID.staff)?
+                .instrument.useDrumset ?? false
         }
 
         /// Set the duration of the chord that contains the currently-
@@ -1016,8 +1014,15 @@
                     of: target, in: score
                 )
             else { return nil }
-            let staffLo = min(anchor.staffIndex, target.staffIndex)
-            let staffHi = max(anchor.staffIndex, target.staffIndex)
+            let allStaves = score.allStaves
+            let anchorFlatIdx = allStaves.firstIndex(where: {
+                $0.address == anchor.staff
+            }) ?? 0
+            let targetFlatIdx = allStaves.firstIndex(where: {
+                $0.address == target.staff
+            }) ?? 0
+            let staffLo = min(anchorFlatIdx, targetFlatIdx)
+            let staffHi = max(anchorFlatIdx, targetFlatIdx)
             // (lo, hi) bracket the time region: lo = whichever of the
             // two endpoints starts earlier; hi = whichever ENDS later.
             // `targetEnd` is the tick offset just past `target`'s
@@ -1038,10 +1043,10 @@
 
             var cells: [RangeCell] = []
             for staffIdx in staffLo ... staffHi {
-                guard score.staves.indices.contains(staffIdx) else {
+                guard allStaves.indices.contains(staffIdx) else {
                     continue
                 }
-                let measures = score.staves[staffIdx].measures
+                let measures = allStaves[staffIdx].staff.measures
                 for measureIdx in timeLo.measure ... timeHi.measure {
                     guard measures.indices.contains(measureIdx) else {
                         continue
@@ -1110,10 +1115,10 @@
         private func elementTickPosition(
             of id: ScoreItemID, in score: Score
         ) -> MeasureTick? {
-            guard score.staves.indices.contains(id.staffIndex) else {
+            guard let staffVal = score[id.staff] else {
                 return nil
             }
-            let measures = score.staves[id.staffIndex].measures
+            let measures = staffVal.measures
             guard measures.indices.contains(id.measureIndex) else {
                 return nil
             }
@@ -1145,12 +1150,19 @@
             of id: ScoreItemID, in score: Score
         ) -> MeasureTick? {
             guard let start = elementTickPosition(of: id, in: score),
-                  let element = score.staves
-                      .indices.contains(id.staffIndex)
-                      ? score.staves[id.staffIndex].measures[id.measureIndex]
-                      .voices[id.voiceIndex]
-                      .elements[id.elementIndex]
-                      : nil
+                  let element = score[id.staff]
+                      .flatMap({ staff -> VoiceElement? in
+                          guard staff.measures.indices.contains(id.measureIndex),
+                                staff.measures[id.measureIndex].voices
+                                    .indices.contains(id.voiceIndex),
+                                    staff.measures[id.measureIndex]
+                                        .voices[id.voiceIndex].elements
+                                        .indices.contains(id.elementIndex)
+                          else { return nil }
+                          return staff.measures[id.measureIndex]
+                              .voices[id.voiceIndex]
+                              .elements[id.elementIndex]
+                      })
             else { return nil }
             let division = score.division
             switch element {
@@ -1211,7 +1223,7 @@
                     )
                     adoptEditedScore(controller.score)
                     selection = .single(.rest(RestID(
-                        staffIndex: id.staffIndex,
+                        staff: id.staff,
                         measureIndex: id.measureIndex,
                         voiceIndex: id.voiceIndex,
                         elementIndex: id.elementIndex
@@ -1241,17 +1253,27 @@
                     // at once. Identifying each cell's live element
                     // index range can't go by reference (VoiceElement
                     // is a value type) — find it by position.
-                    let staffBase = min(
-                        anchor.staffIndex, target.staffIndex
-                    )
+                    let cutAllStaves = controller.score.allStaves
+                    let anchorFlatIdx = cutAllStaves.firstIndex(where: {
+                        $0.address == anchor.staff
+                    }) ?? 0
+                    let targetFlatIdx = cutAllStaves.firstIndex(where: {
+                        $0.address == target.staff
+                    }) ?? 0
+                    let staffBase = min(anchorFlatIdx, targetFlatIdx)
                     let measureBase = min(
                         anchor.measureIndex, target.measureIndex
                     )
                     var subCommands: [any EditCommand] = []
                     for cell in payload.cells {
-                        let staff = staffBase + cell.staffOffset
+                        let staffFlat = staffBase + cell.staffOffset
                         let measure = measureBase + cell.measureOffset
-                        let voice = controller.score.staves[staff]
+                        guard cutAllStaves.indices.contains(staffFlat) else {
+                            continue
+                        }
+                        let staffAddress = cutAllStaves[staffFlat].address
+                        let staffVal = cutAllStaves[staffFlat].staff
+                        let voice = staffVal
                             .measures[measure].voices[cell.voiceIndex]
                         let baseIndices = Self.findContiguousIndices(
                             of: cell.elements, in: voice.elements
@@ -1263,7 +1285,7 @@
                             from: hi, through: lo, by: -1
                         ) {
                             let id = VoiceElementID(
-                                staffIndex: staff,
+                                staff: staffAddress,
                                 measureIndex: measure,
                                 voiceIndex: cell.voiceIndex,
                                 elementIndex: elemIdx
@@ -1271,11 +1293,15 @@
                             subCommands.append(DeleteVoiceElement(at: id))
                         }
                     }
+                    let staffBaseAddress = cutAllStaves.indices
+                        .contains(staffBase)
+                        ? cutAllStaves[staffBase].address
+                        : StaffAddress(partIndex: 0, staffIndexInPart: 0)
                     try controller.apply(
                         CompositeEditCommand(
                             commands: subCommands,
                             location: VoiceElementID(
-                                staffIndex: staffBase,
+                                staff: staffBaseAddress,
                                 measureIndex: measureBase,
                                 voiceIndex: payload.cells.first?
                                     .voiceIndex ?? 0,
@@ -1402,27 +1428,33 @@
                 streams[key, default: []].append(contentsOf: cell.elements)
             }
 
+            let pasteAllStaves = score.allStaves
+            let targetFlatIdx = pasteAllStaves.firstIndex(where: {
+                $0.address == targetID.staff
+            }) ?? 0
+
             var subCommands: [any EditCommand] = []
             for (key, streamElements) in streams {
-                let destStaff = targetID.staffIndex + key.staffOffset
-                guard score.staves.indices.contains(destStaff) else {
+                let destFlatStaff = targetFlatIdx + key.staffOffset
+                guard pasteAllStaves.indices.contains(destFlatStaff) else {
                     throw SheetMusicError.invalidEdit(
-                        reason: "Paste: no staff at index \(destStaff)")
+                        reason: "Paste: no staff at flat index \(destFlatStaff)")
                 }
-                guard score.staves[destStaff].measures
-                    .indices.contains(targetID.measureIndex)
+                let destAddress = pasteAllStaves[destFlatStaff].address
+                guard score[destAddress]?.measures
+                    .indices.contains(targetID.measureIndex) ?? false
                 else {
                     throw SheetMusicError.invalidEdit(
                         reason: "Paste: no measure "
                             + "\(targetID.measureIndex) on staff "
-                            + "\(destStaff)")
+                            + "\(destAddress)")
                 }
 
                 // Walk the stream tick-by-tick across destination
                 // measures, splitting elements at boundaries.
                 let pieces = try Self.buildStreamPieces(
                     stream: streamElements,
-                    destStaff: destStaff,
+                    destStaffAddress: destAddress,
                     destVoice: key.voiceIndex,
                     startMeasure: targetID.measureIndex,
                     startTickInMeasure: targetTick,
@@ -1431,7 +1463,7 @@
 
                 for piece in pieces {
                     let cmd = try Self.buildMeasureReplaceCommand(
-                        staff: destStaff,
+                        staffAddress: destAddress,
                         measure: piece.measureIdx,
                         voice: key.voiceIndex,
                         tickStartInMeasure: piece.tickStartInMeasure,
@@ -1480,7 +1512,7 @@
         /// side of the boundary.
         private static func buildStreamPieces(
             stream: [VoiceElement],
-            destStaff: Int,
+            destStaffAddress: StaffAddress,
             destVoice: Int,
             startMeasure: Int,
             startTickInMeasure: Int,
@@ -1488,7 +1520,11 @@
         ) throws -> [DestinationPiece] {
             var result: [DestinationPiece] = []
             let division = score.division
-            let measures = score.staves[destStaff].measures
+            guard let destStaffVal = score[destStaffAddress] else {
+                throw SheetMusicError.invalidEdit(
+                    reason: "Paste: staff not found at \(destStaffAddress)")
+            }
+            let measures = destStaffVal.measures
 
             var pieceMeasure = startMeasure
             var pieceTickStart = startTickInMeasure
@@ -1513,7 +1549,7 @@
                 if pieceMeasure >= measures.count {
                     throw SheetMusicError.invalidEdit(
                         reason: "Paste: ran out of destination "
-                            + "measures past staff \(destStaff) "
+                            + "measures past staff \(destStaffAddress) "
                             + "measure \(measures.count - 1)")
                 }
             }
@@ -1604,7 +1640,7 @@
         /// `PasteVoiceElements`' rebalance lengthen path simply
         /// substitutes — no rest spillover.
         private static func buildMeasureReplaceCommand(
-            staff: Int,
+            staffAddress: StaffAddress,
             measure: Int,
             voice: Int,
             tickStartInMeasure: Int,
@@ -1612,7 +1648,11 @@
             score: Score
         ) throws -> any EditCommand {
             let division = score.division
-            let v = score.staves[staff].measures[measure].voices[voice]
+            guard let staffVal = score[staffAddress] else {
+                throw SheetMusicError.invalidEdit(
+                    reason: "Paste: staff not found at \(staffAddress)")
+            }
+            let v = staffVal.measures[measure].voices[voice]
             let pieceTicks = pieceElements.reduce(0) {
                 $0 + tickOf($1, division: division)
             }
@@ -1651,7 +1691,7 @@
             guard let loIdx = leadingIdx else {
                 throw SheetMusicError.invalidEdit(
                     reason: "Paste: no element at tick "
-                        + "\(tickStartInMeasure) on staff \(staff) "
+                        + "\(tickStartInMeasure) on staff \(staffAddress) "
                         + "measure \(measure) voice \(voice)")
             }
             // Single-element overlap (loIdx == hiIdx) is fine — we
@@ -1701,7 +1741,7 @@
 
             return PasteVoiceElements(
                 at: VoiceElementID(
-                    staffIndex: staff,
+                    staff: staffAddress,
                     measureIndex: measure,
                     voiceIndex: voice,
                     elementIndex: loIdx
@@ -1782,9 +1822,8 @@
         private static func elementTickOffset(
             of id: VoiceElementID, in score: Score
         ) -> Int? {
-            guard score.staves.indices.contains(id.staffIndex)
-            else { return nil }
-            let measures = score.staves[id.staffIndex].measures
+            guard let staffVal = score[id.staff] else { return nil }
+            let measures = staffVal.measures
             guard measures.indices.contains(id.measureIndex)
             else { return nil }
             let voices = measures[id.measureIndex].voices
@@ -1808,7 +1847,7 @@
             switch firstElement {
             case let .chord(c) where !c.notes.isEmpty:
                 selection = .single(.note(NoteID(
-                    staffIndex: id.staffIndex,
+                    staff: id.staff,
                     measureIndex: id.measureIndex,
                     voiceIndex: id.voiceIndex,
                     elementIndex: id.elementIndex,
@@ -1817,7 +1856,7 @@
             case .chord:
                 // Empty chord = rest.
                 selection = .single(.rest(RestID(
-                    staffIndex: id.staffIndex,
+                    staff: id.staff,
                     measureIndex: id.measureIndex,
                     voiceIndex: id.voiceIndex,
                     elementIndex: id.elementIndex
@@ -1835,12 +1874,7 @@
             case let .single(.note(n)):
                 return VoiceElementID(n)
             case let .single(.rest(r)):
-                return VoiceElementID(
-                    staffIndex: r.staffIndex,
-                    measureIndex: r.measureIndex,
-                    voiceIndex: r.voiceIndex,
-                    elementIndex: r.elementIndex
-                )
+                return VoiceElementID(r)
             default:
                 return nil
             }
@@ -1897,19 +1931,15 @@
             guard let id = selectedVoiceElementID(),
                   let controller = inputController
             else { return false }
-            let voice = controller.score.staves
-                .indices.contains(id.staffIndex)
-                ? controller.score.staves[id.staffIndex].measures
-                .indices.contains(id.measureIndex)
-                ? controller.score.staves[id.staffIndex]
-                .measures[id.measureIndex].voices
-                .indices.contains(id.voiceIndex)
-                ? controller.score.staves[id.staffIndex]
-                .measures[id.measureIndex]
-                .voices[id.voiceIndex]
-                : nil
-                : nil
-                : nil
+            let voice: Voice? = {
+                guard let staffVal = controller.score[id.staff],
+                      staffVal.measures.indices.contains(id.measureIndex),
+                      staffVal.measures[id.measureIndex].voices
+                          .indices.contains(id.voiceIndex)
+                else { return nil }
+                return staffVal.measures[id.measureIndex]
+                    .voices[id.voiceIndex]
+            }()
             let alreadyInTuplet = voice?.tuplets.contains(where: {
                 $0.startIndex <= id.elementIndex
                     && id.elementIndex <= $0.endIndex
@@ -1997,7 +2027,7 @@
                 adoptEditedScore(controller.score)
                 if priorNoteCount <= 1 {
                     let newRest = RestID(
-                        staffIndex: veID.staffIndex,
+                        staff: veID.staff,
                         measureIndex: veID.measureIndex,
                         voiceIndex: veID.voiceIndex,
                         elementIndex: veID.elementIndex
@@ -2014,7 +2044,7 @@
                         )
                     )
                     let surviving = NoteID(
-                        staffIndex: noteID.staffIndex,
+                        staff: noteID.staff,
                         measureIndex: noteID.measureIndex,
                         voiceIndex: noteID.voiceIndex,
                         elementIndex: noteID.elementIndex,
@@ -2044,7 +2074,7 @@
             // so a single ⌘Z restores everything.
             if case let .single(.tuplet(tid)) = selection {
                 let veID = VoiceElementID(
-                    staffIndex: tid.staffIndex,
+                    staff: tid.staff,
                     measureIndex: tid.measureIndex,
                     voiceIndex: tid.voiceIndex,
                     elementIndex: tid.startElementIndex
@@ -2062,7 +2092,7 @@
                     )
                     adoptEditedScore(controller.score)
                     selection = .single(.rest(RestID(
-                        staffIndex: tid.staffIndex,
+                        staff: tid.staff,
                         measureIndex: tid.measureIndex,
                         voiceIndex: tid.voiceIndex,
                         elementIndex: tid.startElementIndex
@@ -2092,7 +2122,7 @@
                 // Select the freshly-created rest so the user can keep
                 // editing at the same beat.
                 let newRest = RestID(
-                    staffIndex: target.staffIndex,
+                    staff: target.staff,
                     measureIndex: target.measureIndex,
                     voiceIndex: target.voiceIndex,
                     elementIndex: target.elementIndex
@@ -2125,10 +2155,8 @@
             // not by chromatic spelling, and accidentals on a drum staff
             // are nonsensical even when the staff happens to carry a
             // KeySig element from the source file.
-            let isDrumStaff = noteID.staffIndex
-                < controller.score.parts.count
-                && controller.score.parts[noteID.staffIndex]
-                .instrument.useDrumset
+            let isDrumStaff = controller.score
+                .part(at: noteID.staff)?.instrument.useDrumset ?? false
             let keySigForSpelling = isDrumStaff
                 ? 0
                 : controller.score.activeKey(at: noteID)
