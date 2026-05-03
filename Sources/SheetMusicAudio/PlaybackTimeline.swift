@@ -131,7 +131,7 @@ extension PlaybackTimeline {
         // (from staff 0's voice 0 spine) and the time signature
         // active at that measure. Beat ticks are computed from
         // these in a second pass below.
-        let measureCount = score.staves.first?.measures.count ?? 0
+        let measureCount = score.parts.first?.staves.first?.measures.count ?? 0
         var measureStarts = [Int](repeating: 0, count: measureCount)
         var measureTimeSigs = [TimeSignature](
             repeating: TimeSignature(numerator: 4, denominator: 4),
@@ -145,7 +145,8 @@ extension PlaybackTimeline {
             // declared in voice 0 (any staff) before the first
             // chord / rest. Falls back to the previous measure's
             // value, with 4/4 as the global default.
-            staffLoop: for staff in score.staves {
+            staffLoop: for entry in score.allStaves {
+                let staff = entry.staff
                 guard mi < staff.measures.count else { continue }
                 for el in staff.measures[mi].voices.first?.elements ?? [] {
                     switch el {
@@ -166,7 +167,7 @@ extension PlaybackTimeline {
             // Advance the spine by voice 0 / staff 0's chord+rest
             // durations. Other voices in the same measure share
             // this start tick by construction.
-            if let voice0 = score.staves.first?.measures[mi].voices.first {
+            if let voice0 = score.parts.first?.staves.first?.measures[mi].voices.first {
                 for el in voice0.elements {
                     switch el {
                     case let .chord(c):
@@ -178,7 +179,8 @@ extension PlaybackTimeline {
             }
         }
 
-        for (staffIdx, staff) in score.staves.enumerated() {
+        for (staffIdx, entry) in score.allStaves.enumerated() {
+            let staff = entry.staff
             for (measureIdx, measure) in staff.measures.enumerated() {
                 let measureStartTick = measureIdx < measureCount
                     ? measureStarts[measureIdx]
@@ -190,7 +192,7 @@ extension PlaybackTimeline {
                         case let .chord(chord) where !chord.notes.isEmpty:
                             for noteIdx in chord.notes.indices {
                                 let nid = NoteID(
-                                    staffIndex: staffIdx,
+                                    staff: entry.address,
                                     measureIndex: measureIdx,
                                     voiceIndex: voiceIdx,
                                     elementIndex: elemIdx,
@@ -199,7 +201,7 @@ extension PlaybackTimeline {
                                 itemTicks[.note(nid)] = tick
                             }
                             let id = NoteID(
-                                staffIndex: staffIdx,
+                                staff: entry.address,
                                 measureIndex: measureIdx,
                                 voiceIndex: voiceIdx,
                                 elementIndex: elemIdx,
@@ -215,7 +217,7 @@ extension PlaybackTimeline {
                         case let .chord(rest):
                             // Empty chord = rest.
                             let id = RestID(
-                                staffIndex: staffIdx,
+                                staff: entry.address,
                                 measureIndex: measureIdx,
                                 voiceIndex: voiceIdx,
                                 elementIndex: elemIdx

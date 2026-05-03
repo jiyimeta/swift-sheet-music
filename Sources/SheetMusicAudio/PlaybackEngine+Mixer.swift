@@ -51,13 +51,13 @@ extension PlaybackEngine {
     /// (0...127). MuseScore's default is 100/127.
     func rebuildMixerChannels(for score: Score) {
         var channels: [MixerChannel] = []
-        channels.reserveCapacity(score.staves.count + 1)
-        for idx in score.staves.indices {
+        channels.reserveCapacity(score.totalStaffCount + 1)
+        for (idx, entry) in score.allStaves.enumerated() {
             channels.append(MixerChannel(
                 id: .staff(idx),
-                name: staffName(at: idx, in: score),
-                volume: initialStaffVolume(at: idx, in: score),
-                program: initialStaffProgram(at: idx, in: score)
+                name: staffName(at: entry.address, in: score),
+                volume: initialStaffVolume(at: entry.address, in: score),
+                program: initialStaffProgram(at: entry.address, in: score)
             ))
         }
         channels.append(MixerChannel(
@@ -72,11 +72,9 @@ extension PlaybackEngine {
     /// to MuseScore's default of 100/127 ≈ 0.787 when the part is
     /// missing or has no channel.
     private func initialStaffVolume(
-        at idx: Int, in score: Score
+        at address: StaffAddress, in score: Score
     ) -> Float {
-        let cc7: Int = idx < score.parts.count
-            ? score.parts[idx].instrument.channel.volume
-            : 100
+        let cc7: Int = score.part(at: address)?.instrument.channel.volume ?? 100
         return Float(max(0, min(127, cc7))) / 127
     }
 
@@ -84,10 +82,10 @@ extension PlaybackEngine {
     /// `<program value="…"/>` chose. Falls back to 0 (Acoustic
     /// Grand Piano) when the part is missing or has no channel.
     private func initialStaffProgram(
-        at idx: Int, in score: Score
+        at address: StaffAddress, in score: Score
     ) -> UInt8 {
-        guard idx < score.parts.count else { return 0 }
-        return UInt8(clamping: score.parts[idx].instrument.channel.program)
+        guard let part = score.part(at: address) else { return 0 }
+        return UInt8(clamping: part.instrument.channel.program)
     }
 
     /// Push the current mixer state into the live audio graph:
@@ -112,14 +110,14 @@ extension PlaybackEngine {
 
     /// Best-effort staff label: prefers the part's track name, then
     /// the instrument long name, falling back to "Staff N".
-    private func staffName(at idx: Int, in score: Score) -> String {
-        if idx < score.parts.count {
-            let part = score.parts[idx]
+    private func staffName(at address: StaffAddress, in score: Score) -> String {
+        if let part = score.part(at: address) {
             if let n = part.trackName, !n.isEmpty { return n }
             if let n = part.instrument.longName, !n.isEmpty {
                 return n
             }
         }
-        return "Staff \(idx + 1)"
+        let flatIdx = score.allStaves.firstIndex(where: { $0.address == address }) ?? 0
+        return "Staff \(flatIdx + 1)"
     }
 }

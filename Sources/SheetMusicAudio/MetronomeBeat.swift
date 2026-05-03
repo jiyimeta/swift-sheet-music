@@ -22,7 +22,7 @@ extension PlaybackTimeline {
     /// the first marked as `BeatType::DOWNBEAT`.
     public static func metronomeBeats(score: Score) -> [MetronomeBeat] {
         let division = score.division
-        let measureCount = score.staves.first?.measures.count ?? 0
+        let measureCount = score.parts.first?.staves.first?.measures.count ?? 0
         guard measureCount > 0 else { return [] }
 
         // Per-measure cache: start tick (along voice 0 / staff 0's
@@ -37,7 +37,8 @@ extension PlaybackTimeline {
         var currentTimeSig = TimeSignature(numerator: 4, denominator: 4)
         for mi in 0 ..< measureCount {
             measureStarts[mi] = spineTick
-            staffLoop: for staff in score.staves {
+            staffLoop: for entry in score.allStaves {
+                let staff = entry.staff
                 guard mi < staff.measures.count else { continue }
                 for el in staff.measures[mi].voices.first?.elements ?? [] {
                     switch el {
@@ -52,7 +53,7 @@ extension PlaybackTimeline {
                 }
             }
             measureTimeSigs[mi] = currentTimeSig
-            if let voice0 = score.staves.first?.measures[mi].voices.first {
+            if let voice0 = score.parts.first?.staves.first?.measures[mi].voices.first {
                 for el in voice0.elements {
                     switch el {
                     case let .chord(c):

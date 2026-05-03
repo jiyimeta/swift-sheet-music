@@ -166,10 +166,8 @@ public final class PlaybackEngine: ObservableObject {
             try session.setActive(true, options: [])
         #endif
 
-        for idx in score.staves.indices {
-            let part = idx < score.parts.count
-                ? score.parts[idx]
-                : nil
+        for (idx, entry) in score.allStaves.enumerated() {
+            let part = score.part(at: entry.address)
             let channel = part?.instrument.channels.first
                 ?? InstrumentChannel()
             let isDrums = part?.instrument.useDrumset == true
@@ -239,7 +237,10 @@ public final class PlaybackEngine: ObservableObject {
         velocity: UInt8 = 96
     ) {
         guard let pitch = pitch(for: noteID, in: score) else { return }
-        guard let sampler = staffSamplers[noteID.staffIndex]
+        let flatIdx = score.allStaves.firstIndex(where: {
+            $0.address == noteID.staff
+        }) ?? -1
+        guard let sampler = staffSamplers[flatIdx]
         else { return }
         sampler.startNote(
             pitch, withVelocity: velocity, onChannel: 0
@@ -257,10 +258,7 @@ public final class PlaybackEngine: ObservableObject {
     private func pitch(
         for noteID: NoteID, in score: Score
     ) -> UInt8? {
-        guard noteID.staffIndex < score.staves.count else {
-            return nil
-        }
-        let staff = score.staves[noteID.staffIndex]
+        guard let staff = score[noteID.staff] else { return nil }
         guard noteID.measureIndex < staff.measures.count else {
             return nil
         }
