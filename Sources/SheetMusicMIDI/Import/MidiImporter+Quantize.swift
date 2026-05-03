@@ -226,41 +226,29 @@ extension MidiImporter {
     /// triple-dotted half.
     ///
     /// Algorithm:
-    ///   - Match a single dotted form first (single dot only) when
-    ///     allowed (`allowDot`) — preserves dotted notation for
-    ///     chords like a dotted-quarter melody note.
-    ///   - Else greedily take the largest binary duration whose
-    ///     length divides the current measure-relative `offset` (so
-    ///     the rest/note aligns to a beat boundary).
-    ///   - Else fall through to `.fraction` for the residual (rare).
+    ///   - Walk binary + (optionally) single-dotted candidates from
+    ///     largest to smallest. Take the first whose length fits in
+    ///     `remaining` AND lies within a single power-of-two scope
+    ///     box at the current measure-relative offset (so a dotted
+    ///     eighth at offset 840 in 4/4 splits into 16th + eighth
+    ///     instead of crossing the beat boundary at 960).
+    ///   - Residual ticks fall through to `.fraction` as a last
+    ///     resort.
     static func decomposeIntoStandardDurations(
         ticks: Int,
         division: Int,
         offsetInMeasure: Int,
         allowDot: Bool
     ) -> [NoteDuration] {
-        let binaryCandidates: [NoteDuration] = [
-            .whole, .half, .quarter, .eighth, .sixteenth, .thirtySecond,
-            .sixtyFourth, .oneTwentyEighth,
-        ]
-        if let match = binaryCandidates.first(where: {
-            $0.ticks(division: division) == ticks
-        }) {
-            return [match]
-        }
-        if allowDot {
-            for c in binaryCandidates {
-                let dotted = c.dotted(1)
-                if dotted.ticks(division: division) == ticks { return [dotted] }
-            }
-        }
+        let candidates = decompositionCandidates(allowDot: allowDot, division: division)
         var result: [NoteDuration] = []
         var remaining = ticks
         var offset = offsetInMeasure
         while remaining > 0 {
-            let chosen = binaryCandidates.first { c in
+            let chosen = candidates.first { c in
                 let d = c.ticks(division: division)
-                return d > 0 && d <= remaining && offset % d == 0
+                return d > 0 && d <= remaining
+                    && metricallyAligned(ticks: d, at: offset, division: division)
             }
             guard let c = chosen else { break }
             result.append(c)
@@ -272,6 +260,39 @@ extension MidiImporter {
             result.append(.fraction(Fraction(numerator: remaining, denominator: 4 * division)))
         }
         return result
+    }
+
+    /// Candidate durations sorted descending by tick value. When
+    /// `allowDot` is true, single-dotted variants of each binary
+    /// duration are interleaved into the priority list.
+    static func decompositionCandidates(
+        allowDot: Bool, division: Int
+    ) -> [NoteDuration] {
+        let bases: [NoteDuration] = [
+            .whole, .half, .quarter, .eighth, .sixteenth, .thirtySecond,
+            .sixtyFourth, .oneTwentyEighth,
+        ]
+        var all: [NoteDuration] = bases
+        if allowDot {
+            all.append(contentsOf: bases.map { $0.dotted(1) })
+        }
+        return all.sorted {
+            $0.ticks(division: division) > $1.ticks(division: division)
+        }
+    }
+
+    /// True if a duration of `ticks` placed at measure-relative
+    /// `offset` lies within a single power-of-two "scope box".
+    /// Scope = smallest binary duration ≥ ticks. Equivalent to
+    /// "doesn't cross a metric boundary stronger than itself".
+    static func metricallyAligned(
+        ticks: Int, at offset: Int, division: Int
+    ) -> Bool {
+        guard ticks > 0 else { return true }
+        var scope = 4 * division // whole note
+        while scope / 2 >= ticks { scope /= 2 }
+        if ticks > scope { return false }
+        return (offset % scope) + ticks <= scope
     }
 
     struct PendingTuplet {

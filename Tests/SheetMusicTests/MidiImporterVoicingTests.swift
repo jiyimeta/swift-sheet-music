@@ -245,6 +245,35 @@ import Testing
         #expect(parts == [.half, .quarter, .eighth, .sixteenth])
     }
 
+    @Test func dottedEighthChordSplitsAtBeatBoundaryWhenCrossing() {
+        // User-reported case: in a measure where the rhythm is
+        // quarter chord + eighth rest + 16th rest + dotted-eighth
+        // chord + eighth × 3, the dotted-eighth at offset 840 must
+        // split into [16th, eighth] (tied) so the eighth aligns to
+        // beat 3. A naive "single dotted match" would emit a
+        // dotted eighth that crosses the beat boundary at 960.
+        let parts = MidiImporter.decomposeIntoStandardDurations(
+            ticks: 360,
+            division: 480,
+            offsetInMeasure: 840,
+            allowDot: true
+        )
+        #expect(parts == [.sixteenth, .eighth])
+    }
+
+    @Test func dottedQuarterAtBeat1IsPreservedAsSingleElement() {
+        // At an aligned offset (0, 960, etc.), a dotted-quarter
+        // chord stays a single dotted quarter. Beat-aligned dotted
+        // forms don't cross stronger metric boundaries.
+        let parts = MidiImporter.decomposeIntoStandardDurations(
+            ticks: 720,
+            division: 480,
+            offsetInMeasure: 0,
+            allowDot: true
+        )
+        #expect(parts == [NoteDuration.quarter.dotted(1)])
+    }
+
     @Test func dottedQuarterChordIsPreservedAsSingleElementWhenAllowed() {
         // 720 ticks at offset 0, allowDot=true (chord context).
         // Result: a single dotted-quarter (= `.fraction(3/8)`).
