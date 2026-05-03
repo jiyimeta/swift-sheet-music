@@ -12,20 +12,22 @@ extension MidiImporter {
         sourceFilename: String?
     ) -> Score {
         let perTrackMeasures = imports.map { segment(track: $0, timeline: timeline) }
-        let concertKey = firstConcertKey(in: file)
+        let measureKeys = perMeasureKeys(file: file, timeline: timeline)
         var parts: [Part] = []
         var staves: [StaffContent] = []
         for (trackIdx, measures) in perTrackMeasures.enumerated() {
             let track = imports[trackIdx]
-            let trackKey = track.isDrums ? 0 : concertKey
             let voices = measures.map { m -> Voice in
                 let q = quantize(measure: m, division: file.division, options: options)
+                let key = track.isDrums
+                    ? 0
+                    : (m.measureIndex < measureKeys.count ? measureKeys[m.measureIndex] : 0)
                 return voice(
                     quantized: q,
                     measure: m,
                     division: file.division,
                     isDrumTrack: track.isDrums,
-                    concertKey: trackKey
+                    concertKey: key
                 )
             }
             var scoreMeasures = voices.map { Measure(voices: [$0]) }
@@ -100,6 +102,45 @@ extension MidiImporter {
             }
         }
         return 0
+    }
+
+    /// Active key-signature value for each measure index.
+    /// Key changes mid-piece (e.g. modulating from 4 flats to 3
+    /// sharps) take effect at the bar containing the change. The
+    /// value at index `i` is the latest sharps/flats count whose
+    /// tick is < `timeline.bars[i+1].startTick` (or the last bar
+    /// for the final measure).
+    static func perMeasureKeys(
+        file: MidiFile, timeline: BarTimeline
+    ) -> [Int] {
+        struct Change { var tick: Int; var sf: Int }
+        var changes: [Change] = []
+        for track in file.tracks {
+            for ev in track.events {
+                if case let .meta(.keySignature(sf, _)) = ev.event {
+                    changes.append(Change(tick: ev.tick, sf: sf))
+                }
+            }
+        }
+        changes.sort { $0.tick < $1.tick }
+        if changes.first?.tick != 0 {
+            changes.insert(Change(tick: 0, sf: 0), at: 0)
+        }
+
+        return timeline.bars.map { bar in
+            // Match the latest change with tick ≤ bar.startTick.
+            // (A change exactly on the bar line takes effect at
+            // that bar.)
+            var current = 0
+            for change in changes {
+                if change.tick <= bar.startTick {
+                    current = change.sf
+                } else {
+                    break
+                }
+            }
+            return current
+        }
     }
 
     // MARK: - Meta event injection

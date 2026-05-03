@@ -61,6 +61,55 @@ import Testing
         #expect(accFor(71) == .natural)
     }
 
+    @Test func midSongKeyChangeUpdatesTpcSpellings() throws {
+        // Two-measure file: measure 0 in 4 flats (Ab major),
+        // measure 1 modulates to 3 sharps (A major). The same MIDI
+        // pitch class — black key 1 (C#/Db) — should spell as Db
+        // (flat) in measure 0 and C# (sharp) in measure 1.
+        let track0 = MidiTrack(events: [
+            TimedMidiEvent(tick: 0, event: .meta(.trackName("Conductor"))),
+            TimedMidiEvent(tick: 0, event: .meta(.keySignature(sharpsFlats: -4, isMinor: false))),
+            TimedMidiEvent(tick: 0, event: .meta(.timeSignature(
+                numerator: 4, denominator: 4, clocksPerClick: 24, thirtySecondsPerQuarter: 8
+            ))),
+            // Key change at bar 1 (tick 1920).
+            TimedMidiEvent(tick: 1920, event: .meta(.keySignature(sharpsFlats: 3, isMinor: false))),
+            TimedMidiEvent(tick: 3840, event: .endOfTrack),
+        ])
+        let track1 = MidiTrack(events: [
+            TimedMidiEvent(tick: 0, event: .meta(.trackName("Piano"))),
+            // Measure 0 — flat-key context. Pitch 61 should be Db (TPC 9).
+            TimedMidiEvent(tick: 0, event: .noteOn(channel: 0, pitch: 61, velocity: 80)),
+            TimedMidiEvent(tick: 1920, event: .noteOff(channel: 0, pitch: 61, velocity: 0)),
+            // Measure 1 — sharp-key context. Pitch 61 should be C# (TPC 21).
+            TimedMidiEvent(tick: 1920, event: .noteOn(channel: 0, pitch: 61, velocity: 80)),
+            TimedMidiEvent(tick: 3840, event: .noteOff(channel: 0, pitch: 61, velocity: 0)),
+            TimedMidiEvent(tick: 3840, event: .endOfTrack),
+        ])
+        let file = MidiFile(division: 480, format: 1, tracks: [track0, track1])
+        let bytes = try MidiWriter.write(file)
+        let score = try MidiImporter.parse(bytes)
+
+        guard let pi = score.parts.firstIndex(where: { $0.trackName == "Piano" }) else {
+            Issue.record("expected piano part"); return
+        }
+        let piano = score.staves[pi]
+        // Helper: TPC of the first note in a measure.
+        func firstNoteTpc(in measureIndex: Int) -> Int? {
+            for v in piano.measures[measureIndex].voices {
+                for el in v.elements {
+                    if case let .chord(c) = el, let n = c.notes.first {
+                        return n.tpc
+                    }
+                }
+            }
+            return nil
+        }
+        // Db in flat key (tpc 9), C# in sharp key (tpc 21).
+        #expect(firstNoteTpc(in: 0) == 9)
+        #expect(firstNoteTpc(in: 1) == 21)
+    }
+
     @Test func accidentalPersistsWithinMeasureAndResetsAtBar() {
         // Within a measure, a written accidental persists for the
         // same letter+octave. C-major key sig.
