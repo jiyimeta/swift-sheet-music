@@ -91,37 +91,7 @@ import Testing
         #expect(score.metaTags["workTitle"] == "MyMidiSong")
     }
 
-    @Test @MainActor func umbrellaLoadScoreFromPDFData() throws {
-        guard #available(macOS 15.0, iOS 16.0, *) else {
-            Issue.record("skipped: PDFExporter requires macOS 15+ / iOS 16+")
-            return
-        }
-        let mscxURL = try #require(Bundle.module.url(
-            forResource: "midi01", withExtension: "mscx"
-        ))
-        let mscxData = try Data(contentsOf: mscxURL)
-        let score = try MSCXParser.parse(mscxData)
-        let pdf = try PDFExporter.export(score: score)
-        let imported = try SheetMusic.loadScore(pdfData: pdf)
-        #expect(!imported.staves.isEmpty)
-    }
-
-    @Test @MainActor func umbrellaLoadScoreFromPDFURL() throws {
-        guard #available(macOS 15.0, iOS 16.0, *) else {
-            Issue.record("skipped: PDFExporter requires macOS 15+ / iOS 16+")
-            return
-        }
-        let mscxURL = try #require(Bundle.module.url(
-            forResource: "midi01", withExtension: "mscx"
-        ))
-        let mscxData = try Data(contentsOf: mscxURL)
-        let score = try MSCXParser.parse(mscxData)
-        let pdf = try PDFExporter.export(score: score)
-        let tmp = FileManager.default.temporaryDirectory
-            .appendingPathComponent("sheet-music-roundtrip-\(UUID().uuidString).pdf")
-        try pdf.write(to: tmp)
-        defer { try? FileManager.default.removeItem(at: tmp) }
-        let imported = try SheetMusic.loadScore(pdfURL: tmp)
-        #expect(!imported.staves.isEmpty)
-    }
+    // PDF roundtrip tests removed — PDF import is held internal while
+    // it's being reworked. See
+    // `docs/superpowers/plans/2026-05-03-pdf-import-paused.md`.
 }

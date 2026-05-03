@@ -104,7 +104,9 @@ let package = Package(
                 "SheetMusicMSCX",
                 "SheetMusicMusicXML",
                 "SheetMusicMIDI",
-                "SheetMusicPDF",
+                // SheetMusicPDF intentionally NOT a dep — PDF import is
+                // held internal while it's being reworked. See
+                // `docs/superpowers/plans/2026-05-03-pdf-import-paused.md`.
             ]
         ),
         // Dev tool: renders a set of sample Scores to PNG for visual

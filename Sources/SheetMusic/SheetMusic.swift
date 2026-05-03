@@ -3,7 +3,6 @@ import Foundation
 @_exported import SheetMusicMIDI
 @_exported import SheetMusicMSCX
 @_exported import SheetMusicMusicXML
-@_exported import SheetMusicPDF
 
 /// Top-level convenience façade for the SheetMusic family of libraries.
 ///
@@ -106,21 +105,8 @@ public enum SheetMusic {
         )
     }
 
-    /// Read a `.pdf` file (vector PDF from MuseScore 3.x/4.x) and parse
-    /// into a `Score`. CPU-bound; wrap with `Task { … }` if you need
-    /// to keep the main thread responsive.
-    public static func loadScore(
-        pdfURL: URL,
-        options: PDFImportOptions = .init()
-    ) throws -> Score {
-        try PDFImporter.parse(pdfURL: pdfURL, options: options)
-    }
-
-    /// Parse vector-PDF bytes into a `Score`.
-    public static func loadScore(
-        pdfData: Data,
-        options: PDFImportOptions = .init()
-    ) throws -> Score {
-        try PDFImporter.parse(pdfData: pdfData, options: options)
-    }
+    // PDF import is currently held INTERNAL while the importer is being
+    // reworked. See `docs/superpowers/plans/2026-05-03-pdf-import-paused.md`
+    // — when ready to re-expose, restore `loadScore(pdfURL:)` /
+    // `loadScore(pdfData:)` overloads delegating to `PDFImporter.parse`.
 }

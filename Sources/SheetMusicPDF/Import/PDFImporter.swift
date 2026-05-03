@@ -2,10 +2,13 @@ import Foundation
 import PDFKit
 import SheetMusicCore
 
-/// Public façade for parsing vector PDFs (MuseScore 3.x/4.x exports)
-/// into `Score`. Mirrors `MidiImporter` — caseless enum, sync only.
-public enum PDFImporter {
-    public static func parse(
+/// Internal façade for parsing vector PDFs (MuseScore 3.x/4.x exports)
+/// into `Score`. Currently HELD INTERNAL while the importer is being
+/// reworked — see `docs/superpowers/plans/2026-05-03-pdf-import-paused.md`
+/// for resume instructions and the Phase-2 roadmap. Mirrors `MidiImporter`
+/// shape (caseless enum, sync only).
+enum PDFImporter {
+    static func parse(
         pdfURL: URL,
         options: PDFImportOptions = .init()
     ) throws -> Score {
@@ -13,7 +16,7 @@ public enum PDFImporter {
         return try parse(pdfData: data, options: options)
     }
 
-    public static func parse(
+    static func parse(
         pdfData: Data,
         options: PDFImportOptions = .init()
     ) throws -> Score {

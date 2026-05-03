@@ -1,14 +1,15 @@
 import Foundation
 
 /// Non-fatal recognition issues surfaced from `PDFImporter`.
-public struct PDFImportDiagnostic: Sendable {
-    public enum Severity: Sendable { case info, warning }
-    public let severity: Severity
-    public let location: String // e.g. "page 3, system 2, measure 17"
-    public let message: String
-    public let context: String?
+/// Currently held internal — see `PDFImporter` doc comment.
+struct PDFImportDiagnostic: Sendable {
+    enum Severity: Sendable { case info, warning }
+    let severity: Severity
+    let location: String // e.g. "page 3, system 2, measure 17"
+    let message: String
+    let context: String?
 
-    public init(
+    init(
         severity: Severity, location: String,
         message: String, context: String? = nil
     ) {
@@ -19,10 +20,10 @@ public struct PDFImportDiagnostic: Sendable {
     }
 }
 
-public struct PDFImportOptions: Sendable {
-    public var preserveBreaks: Bool = true
-    public var useMetadataAsFallback: Bool = true
-    public var diagnostics: (@Sendable (PDFImportDiagnostic) -> Void)?
+struct PDFImportOptions: Sendable {
+    var preserveBreaks: Bool = true
+    var useMetadataAsFallback: Bool = true
+    var diagnostics: (@Sendable (PDFImportDiagnostic) -> Void)?
 
-    public init() {}
+    init() {}
 }
