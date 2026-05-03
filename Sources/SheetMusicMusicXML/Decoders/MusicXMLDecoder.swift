@@ -27,12 +27,12 @@ extension Score {
                 reason: "MusicXML: <part-list> is required"
             )
         }
-        let (parts, staves) = try decodeParts(root: root, partList: partList)
+        let parts = try decodeParts(root: root, partList: partList)
 
         // Hard-code division = 480 ticks per quarter, matching MuseScore's default
         // and the `*_ref.mscx` fixtures we semantic-compare against. MusicXML's
         // own `<divisions>` is part-local and would vary per fixture.
-        return Score(division: 480, parts: parts, staves: staves, metaTags: metaTags)
+        return Score(division: 480, parts: parts, metaTags: metaTags)
     }
 
     /// MusicXML carries metadata in `<work>`, `<identification>`, and `<credit>`.
@@ -92,17 +92,15 @@ extension Score {
     }
 
     /// Walk the top-level `<part>` elements, detect per-part staff count from
-    /// the first `<attributes><staves>`, and build `Part` + `StaffContent`
-    /// entries in lockstep. One `Part` per `<part>`; one `StaffContent` per
-    /// staff (so a piano part produces 2 `StaffContent`s).
+    /// the first `<attributes><staves>`, and build `Part` with its `Staff`
+    /// measures populated inline. One `Part` per `<part>`; one `Staff` per
+    /// staff (so a piano part produces a `Part` with 2 `Staff`s).
     private static func decodeParts(
         root: XMLTreeNode,
         partList: XMLTreeNode
-    ) throws -> (parts: [Part], staves: [StaffContent]) {
+    ) throws -> [Part] {
         let scoreParts = partList.all("score-part")
         var parts: [Part] = []
-        var staves: [StaffContent] = []
-        var nextStaffId = 1
         for (index, partNode) in root.all("part").enumerated() {
             let id = partNode.attributes["id"] ?? ""
             guard let scorePart = scoreParts.first(where: { $0.attributes["id"] == id })
@@ -120,17 +118,26 @@ extension Score {
                 partNode: partNode,
                 drumTable: prelimDrumTable
             )
-            let (part, _) = try Part.decodeMusicXML(
+            let (partTemplate, _) = try Part.decodeMusicXML(
                 scorePart: scorePart,
                 partId: id,
                 staffCount: walker.staffCount
             )
-            parts.append(part)
-            for staffMeasures in walker.measuresByStaff {
-                staves.append(StaffContent(id: nextStaffId, measures: staffMeasures))
-                nextStaffId += 1
+            // Replace the placeholder empty-measure staves with real content.
+            let populatedStaves: [Staff] = walker.measuresByStaff.map { staffMeasures in
+                Staff(
+                    staffType: "stdNormal", group: "pitched",
+                    defaultClefType: nil, measures: staffMeasures
+                )
             }
+            let part = Part(
+                id: partTemplate.id,
+                trackName: partTemplate.trackName,
+                instrument: partTemplate.instrument,
+                staves: populatedStaves
+            )
+            parts.append(part)
         }
-        return (parts, staves)
+        return parts
     }
 }

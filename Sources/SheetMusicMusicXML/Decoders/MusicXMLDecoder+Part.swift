@@ -4,9 +4,10 @@ import SheetMusicXMLTools
 
 extension Part {
     /// Build a `Part` from the `<score-part>` entry in `<part-list>`. The
-    /// actual `<part>` measures are walked separately by the Score decoder.
-    /// `staffCount` must be ≥ 1 and controls how many `StaffDeclaration`s
-    /// are emitted (1 for a single-staff part, 2 for piano, etc.).
+    /// actual `<part>` measures are walked separately by the Score decoder,
+    /// which replaces the placeholder empty-measure staves with real content.
+    /// `staffCount` must be ≥ 1 and controls how many `Staff`s are created
+    /// (1 for a single-staff part, 2 for piano, etc.).
     /// Also returns the part's drum-mapping table (empty for non-percussion
     /// parts) so the note decoder can resolve `<unpitched>` notes to GM
     /// percussion pitches.
@@ -23,8 +24,11 @@ extension Part {
             useDrumset: drumTable.isDrumset
         )
         let count = max(1, staffCount)
-        let declarations = Array(
-            repeating: StaffDeclaration(staffType: "stdNormal", group: "pitched"),
+        let staves = Array(
+            repeating: Staff(
+                staffType: "stdNormal", group: "pitched",
+                defaultClefType: nil, measures: []
+            ),
             count: count
         )
         let part = Part(
@@ -33,7 +37,7 @@ extension Part {
             // so leave Part.trackName nil for parity with `*_ref.mscx`.
             trackName: nil,
             instrument: instrument,
-            staffDeclarations: declarations
+            staves: staves
         )
         return (part, drumTable)
     }
