@@ -469,9 +469,16 @@ extension LayoutEngine {
             let topY = staffOrigins[firstFlat].y
             let bottomY = staffOrigins[lastFlat].y + metrics.staffHeight
             let centerY = (topY + bottomY) / 2
+            // Right-edge X for the trailing-anchored label glyphs.
+            // Sits one `sp` left of the staff plus one extra `sp`
+            // per bracket column, so the rightmost glyph never
+            // overlaps a brace or angle bracket spine.
+            let labelRightX = partLabelWidth
+                - metrics.sp
+                - CGFloat(bracketColumnCount) * metrics.sp
             return LayoutPartLabel(
                 text: text,
-                origin: CGPoint(x: 4, y: centerY)
+                origin: CGPoint(x: labelRightX, y: centerY)
             )
         }
 

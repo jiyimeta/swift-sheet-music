@@ -195,13 +195,9 @@ extension ScoreLayerBuilder {
     ) {
         for label in system.partLabels {
             guard !label.text.isEmpty else { continue }
-            let origin = CGPoint(
-                x: (system.staffOrigins.first?.x ?? 60) - metrics.sp,
-                y: label.origin.y
-            )
             if let layer = textLayer(
                 text: label.text,
-                at: origin,
+                at: label.origin,
                 size: metrics.sp * 2.5,
                 italic: false,
                 anchor: CGPoint(x: 1, y: 0.5),
@@ -210,5 +206,30 @@ extension ScoreLayerBuilder {
                 parent.addSublayer(layer)
             }
         }
+    }
+
+    /// Vertical line at the left edge of every system, joining the top
+    /// of the topmost staff to the bottom of the bottommost staff. This
+    /// is the "system barline" — MuseScore's
+    /// `engraving/dom/measure.cpp` always emits one at the system head.
+    static func drawSystemBar(
+        system: LayoutSystem,
+        metrics: StaffMetrics,
+        height: CGFloat,
+        into parent: CALayer
+    ) {
+        guard let first = system.staffOrigins.first,
+              let last = system.staffOrigins.last
+        else { return }
+        let path = CGMutablePath()
+        path.move(to: CGPoint(x: first.x, y: first.y))
+        path.addLine(to: CGPoint(
+            x: first.x, y: last.y + metrics.staffHeight
+        ))
+        parent.addSublayer(strokeLayer(
+            path: path,
+            height: height,
+            lineWidth: metrics.staffLineThickness
+        ))
     }
 }

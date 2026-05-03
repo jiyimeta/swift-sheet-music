@@ -108,5 +108,53 @@
             )
             #expect((root.sublayers ?? []).isEmpty)
         }
+
+        @available(macOS 15.0, iOS 16.0, *)
+        @Test func systemBarSpansAllStaves() {
+            let metrics = StaffMetrics(staffSize: 28)
+            let system = LayoutSystem(
+                origin: .zero,
+                size: CGSize(width: 200, height: 200),
+                measures: [],
+                staffOrigins: [
+                    CGPoint(x: 60, y: 20),
+                    CGPoint(x: 60, y: 80),
+                ],
+                partLabels: [],
+                brackets: [],
+                spanners: [],
+                sp: metrics.sp
+            )
+            let root = CALayer()
+            ScoreLayerBuilder.drawSystemBar(
+                system: system, metrics: metrics,
+                height: system.size.height, into: root
+            )
+            // Exactly one shape layer for the joining bar.
+            let counts = Self.countLayerKinds(root)
+            #expect(counts.shapes == 1)
+            #expect(counts.texts == 0)
+        }
+
+        @available(macOS 15.0, iOS 16.0, *)
+        @Test func systemBarEmptyStaffOriginsEmitsNothing() {
+            let metrics = StaffMetrics(staffSize: 28)
+            let system = LayoutSystem(
+                origin: .zero,
+                size: CGSize(width: 200, height: 200),
+                measures: [],
+                staffOrigins: [],
+                partLabels: [],
+                brackets: [],
+                spanners: [],
+                sp: metrics.sp
+            )
+            let root = CALayer()
+            ScoreLayerBuilder.drawSystemBar(
+                system: system, metrics: metrics,
+                height: system.size.height, into: root
+            )
+            #expect((root.sublayers ?? []).isEmpty)
+        }
     }
 #endif

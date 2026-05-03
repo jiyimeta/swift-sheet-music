@@ -99,21 +99,39 @@ public enum ScoreCanvasDrawing {
                 metrics: metrics
             )
         }
+        // System barline — vertical line at the system's left edge
+        // joining all staves.
+        if let first = system.staffOrigins.first,
+           let last = system.staffOrigins.last
+        {
+            let x = system.origin.x + first.x
+            var bar = Path()
+            bar.move(to: CGPoint(x: x, y: system.origin.y + first.y))
+            bar.addLine(to: CGPoint(
+                x: x,
+                y: system.origin.y + last.y + metrics.staffHeight
+            ))
+            context.stroke(
+                bar,
+                with: .color(.primary),
+                lineWidth: metrics.staffLineThickness
+            )
+        }
         // Brackets / braces at the left edge of the system.
         StaffRenderer.drawBrackets(
             context: &context,
             system: system,
             metrics: metrics
         )
-        // Part labels
+        // Part labels — `label.origin.x` already encodes the right-edge
+        // X (in system coords) computed by the layout pass to clear any
+        // bracket/brace columns.
         for label in system.partLabels {
             PartLabelRenderer.draw(
                 context: &context,
                 text: label.text,
                 origin: CGPoint(
-                    x: system.origin.x
-                        + (system.staffOrigins.first?.x ?? 60)
-                        - metrics.sp,
+                    x: system.origin.x + label.origin.x,
                     y: system.origin.y + label.origin.y
                 ),
                 metrics: metrics

@@ -82,6 +82,10 @@ public enum ScoreLayerBuilder {
             system: system, metrics: metrics,
             height: height, into: root
         )
+        drawSystemBar(
+            system: system, metrics: metrics,
+            height: height, into: root
+        )
         drawBrackets(
             system: system, metrics: metrics,
             height: height, into: root

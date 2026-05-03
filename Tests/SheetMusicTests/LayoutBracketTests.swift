@@ -250,4 +250,54 @@ import Testing
             .map(\.type).sorted { $0.rawValue < $1.rawValue }
         #expect(kinds == [.normal, .brace, .square])
     }
+
+    // MARK: – Label X positioning
+
+    @available(macOS 15.0, iOS 16.0, *)
+    @Test func labelRightEdgeShiftsLeftWithBrackets() {
+        let doc = LayoutEngine.layout(
+            score: Self.makeScore(),
+            options: .init(),
+            availableWidth: 800
+        )
+        let system = doc.systems[0]
+        let staffOriginX = system.staffOrigins[0].x
+        let sp = doc.metrics.sp
+        // bracketColumnCount = 2 (NORMAL col 0 + SQUARE col 1).
+        // Right edge of every label sits sp + count*sp left of staff.
+        let expectedRight = staffOriginX - sp - 2 * sp
+        for label in system.partLabels {
+            #expect(abs(label.origin.x - expectedRight) < 0.001)
+        }
+    }
+
+    @available(macOS 15.0, iOS 16.0, *)
+    @Test func labelRightEdgeUnchangedWithoutBrackets() {
+        let measure = Measure(voices: [
+            Voice(elements: [
+                .rest(duration: .fraction(Fraction(numerator: 1, denominator: 1))),
+            ]),
+        ])
+        let score = Score(
+            division: 480,
+            parts: [Part(
+                id: "1",
+                trackName: "P",
+                instrument: Instrument(id: "p", longName: "P"),
+                staves: [Staff(
+                    defaultClefType: "G",
+                    measures: [measure]
+                )]
+            )]
+        )
+        let doc = LayoutEngine.layout(
+            score: score, options: .init(), availableWidth: 800
+        )
+        let system = doc.systems[0]
+        let staffOriginX = system.staffOrigins[0].x
+        let sp = doc.metrics.sp
+        // No brackets → label right edge sits sp left of staff
+        // (legacy behavior preserved when bracketColumnCount == 0).
+        #expect(abs(system.partLabels[0].origin.x - (staffOriginX - sp)) < 0.001)
+    }
 }
