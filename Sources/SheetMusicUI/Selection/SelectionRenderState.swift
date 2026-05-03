@@ -95,9 +95,9 @@ struct SelectionRenderState {
     ) -> Set<ScoreItemID> {
         guard case let .tuplet(tid) = id,
               let tuplet = score[tid],
-              score.staves.indices.contains(tid.staffIndex)
+              let staffForTuplet = score[tid.staff]
         else { return [id] }
-        let measures = score.staves[tid.staffIndex].measures
+        let measures = staffForTuplet.measures
         guard measures.indices.contains(tid.measureIndex)
         else { return [id] }
         let voices = measures[tid.measureIndex].voices
@@ -111,7 +111,7 @@ struct SelectionRenderState {
             else { continue }
             if c.notes.isEmpty {
                 out.insert(.rest(RestID(
-                    staffIndex: tid.staffIndex,
+                    staff: tid.staff,
                     measureIndex: tid.measureIndex,
                     voiceIndex: tid.voiceIndex,
                     elementIndex: j
@@ -119,7 +119,7 @@ struct SelectionRenderState {
             } else {
                 for ni in c.notes.indices {
                     out.insert(.note(NoteID(
-                        staffIndex: tid.staffIndex,
+                        staff: tid.staff,
                         measureIndex: tid.measureIndex,
                         voiceIndex: tid.voiceIndex,
                         elementIndex: j,

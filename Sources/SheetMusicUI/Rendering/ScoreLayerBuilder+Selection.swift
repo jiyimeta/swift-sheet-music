@@ -22,7 +22,7 @@ extension ScoreLayerBuilder {
     ) {
         var minX = CGFloat.infinity
         var maxX = -CGFloat.infinity
-        var staffIndices: Set<Int> = []
+        var staffAddressSet: Set<StaffAddress> = []
         for measure in system.measures {
             for el in measure.elements {
                 switch el {
@@ -33,24 +33,24 @@ extension ScoreLayerBuilder {
                         let ax = measure.origin.x + n.origin.x
                         minX = min(minX, ax)
                         maxX = max(maxX, ax)
-                        staffIndices.insert(n.noteID.staffIndex)
+                        staffAddressSet.insert(n.noteID.staff)
                     }
                 case let .rest(_, origin, _, rid, _)
                     where selection.selectedIDs.contains(.rest(rid)):
                     let ax = measure.origin.x + origin.x
                     minX = min(minX, ax)
                     maxX = max(maxX, ax)
-                    staffIndices.insert(rid.staffIndex)
+                    staffAddressSet.insert(rid.staff)
                 default:
                     break
                 }
             }
         }
-        guard !staffIndices.isEmpty else { return }
+        guard !staffAddressSet.isEmpty else { return }
 
-        let staffYs = staffIndices.compactMap { idx -> CGFloat? in
-            idx < system.staffOrigins.count
-                ? system.staffOrigins[idx].y : nil
+        let staffYs = staffAddressSet.compactMap { address -> CGFloat? in
+            guard let idx = system.flatIndex(for: address) else { return nil }
+            return system.staffOrigins[idx].y
         }
         guard let topY = staffYs.min(),
               let botY = staffYs.max()

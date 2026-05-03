@@ -147,7 +147,7 @@ extension LayoutDocument {
     ) -> CGFloat? {
         var ticksToX: [Int: CGFloat] = [:]
         let division = score.division
-        for (staffIdx, staff) in score.staves.enumerated() {
+        for (address, staff) in score.allStaves {
             guard measureIndex < staff.measures.count else { continue }
             let measure = staff.measures[measureIndex]
             for (voiceIdx, voice) in measure.voices.enumerated() {
@@ -156,7 +156,7 @@ extension LayoutDocument {
                     switch el {
                     case let .chord(chord) where !chord.notes.isEmpty:
                         let nid = NoteID(
-                            staffIndex: staffIdx,
+                            staff: address,
                             measureIndex: measureIndex,
                             voiceIndex: voiceIdx,
                             elementIndex: elemIdx,
@@ -171,7 +171,7 @@ extension LayoutDocument {
                     case let .chord(rest):
                         // Empty chord = rest.
                         let rid = RestID(
-                            staffIndex: staffIdx,
+                            staff: address,
                             measureIndex: measureIndex,
                             voiceIndex: voiceIdx,
                             elementIndex: elemIdx
@@ -260,7 +260,7 @@ extension LayoutDocument {
 private func measureTickLength(
     measureIndex: Int, score: Score, division: Int
 ) -> Int {
-    guard let voice0 = score.staves.first?
+    guard let voice0 = score.allStaves.first?.staff
         .measures[safe: measureIndex]?.voices.first
     else { return 0 }
     var t = 0
