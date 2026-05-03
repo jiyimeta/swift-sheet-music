@@ -55,7 +55,7 @@ import Testing
         #expect(instr.channel.program == 52)
     }
 
-    @Test func decodeStaffDeclaration() throws {
+    @Test func decodeDeclaredStaff() throws {
         // Staff.declared decodes <StaffType> from an in-Part <Staff> node.
         let xml = """
         <Staff id="1">
