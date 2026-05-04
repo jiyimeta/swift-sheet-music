@@ -59,12 +59,20 @@ public enum HarmonyRendering {
                     advance: advance, x: cursor
                 )
             case let .accidental(a):
-                let advance = measure(
+                // Bravura's accidental glyphs carry a generous right
+                // side bearing tuned for STAFF use (clearance from
+                // the notehead). For chord symbols that bearing
+                // shows up as conspicuous whitespace after every b
+                // / #. Use the visual ink width plus one fixed
+                // small gap so the next text run sits flush against
+                // the glyph.
+                let inkWidth = inkWidth(
                     String(a.codepoint), font: glyphFont
                 )
+                let trailingGap = glyphSize * 0.08
                 run = HarmonyRun(
                     kind: .accidental(a), content: "",
-                    advance: advance, x: cursor
+                    advance: inkWidth + trailingGap, x: cursor
                 )
             }
             runs.append(run)
@@ -262,18 +270,39 @@ public enum HarmonyRendering {
     private static func measure(
         _ string: String, font: CTFont
     ) -> Double {
+        let line = ctLine(for: string, font: font)
+        return Double(CTLineGetTypographicBounds(line, nil, nil, nil))
+    }
+
+    /// Visual ink width of `string` in `font`. Excludes the font's
+    /// natural side bearings — i.e. the rectangle that the rendered
+    /// pixels actually occupy. Used for accidental glyphs whose
+    /// typographic advance is sized for staff-line clearance and
+    /// would otherwise leave a wide gap between the b/# and the
+    /// next chord-symbol character.
+    private static func inkWidth(
+        _ string: String, font: CTFont
+    ) -> Double {
+        let line = ctLine(for: string, font: font)
+        let imageBounds = CTLineGetImageBounds(line, nil)
+        // Image bounds origin can be negative when the glyph extends
+        // left of the type origin; add it back so the returned
+        // width covers the full inked extent and the renderer's
+        // origin (the run's `x`) lands at the same visual left edge.
+        return Double(imageBounds.origin.x + imageBounds.width)
+    }
+
+    private static func ctLine(
+        for string: String, font: CTFont
+    ) -> CTLine {
         let attr = NSAttributedString(
             string: string,
             attributes: [
                 NSAttributedString.Key(kCTFontAttributeName as String): font,
             ]
         )
-        let line = CTLineCreateWithAttributedString(
+        return CTLineCreateWithAttributedString(
             attr as CFAttributedString
         )
-        let typographicBounds = CTLineGetTypographicBounds(
-            line, nil, nil, nil
-        )
-        return Double(typographicBounds)
     }
 }
