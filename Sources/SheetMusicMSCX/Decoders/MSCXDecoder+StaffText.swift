@@ -34,7 +34,7 @@ extension StaffText {
     /// `<StaffText>` author payloads almost always lead with
     /// formatting tags and follow with the actual text, so the
     /// concatenated result matches what the user sees.
-    private static func plainText(of node: XMLTreeNode) -> String {
+    static func plainText(of node: XMLTreeNode) -> String {
         var result = node.text
         for child in node.children {
             result += plainText(of: child)
@@ -42,7 +42,7 @@ extension StaffText {
         return result
     }
 
-    private static func decodeColor(
+    static func decodeColor(
         _ node: XMLTreeNode
     ) -> ScoreColor? {
         let attrs = node.attributes
@@ -54,7 +54,7 @@ extension StaffText {
         return ScoreColor(red: r, green: g, blue: b, alpha: a)
     }
 
-    private static func decodeOffset(
+    static func decodeOffset(
         _ node: XMLTreeNode
     ) -> (Double, Double) {
         let attrs = node.attributes
