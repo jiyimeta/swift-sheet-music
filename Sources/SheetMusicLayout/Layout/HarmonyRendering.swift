@@ -47,32 +47,38 @@ public enum HarmonyRendering {
             face: "Bravura",
             pointSize: glyphSize
         )
+        // Both text and accidental runs trim their natural side
+        // bearings. The font advance includes left/right bearings
+        // tuned for default typography (Edwin/Campania text) or
+        // staff-line clearance (Bravura accidentals); in a tight
+        // chord symbol those bearings show up as visible whitespace
+        // at every run boundary. We shift each run left by its own
+        // left bearing so the visible ink left edge lands at
+        // `cursor`, and use ink width + a small fixed trailing gap
+        // as the advance so the next run sits flush against the
+        // visible right edge.
+        let textGap = textSize * 0.04
+        let accidentalGap = glyphSize * 0.08
         var runs: [HarmonyRun] = []
         var cursor: Double = 0
         for slice in kindedSlices {
             let run: HarmonyRun
             switch slice {
             case let .text(s):
-                let advance = measure(s, font: textFont)
+                let bounds = inkBounds(s, font: textFont)
                 run = HarmonyRun(
                     kind: .text, content: s,
-                    advance: advance, x: cursor
+                    advance: bounds.width + textGap,
+                    x: cursor - bounds.leftBearing
                 )
             case let .accidental(a):
-                // Bravura's accidental glyphs carry a generous right
-                // side bearing tuned for STAFF use (clearance from
-                // the notehead). For chord symbols that bearing
-                // shows up as conspicuous whitespace after every b
-                // / #. Use the visual ink width plus one fixed
-                // small gap so the next text run sits flush against
-                // the glyph.
-                let inkWidth = inkWidth(
+                let bounds = inkBounds(
                     String(a.codepoint), font: glyphFont
                 )
-                let trailingGap = glyphSize * 0.08
                 run = HarmonyRun(
                     kind: .accidental(a), content: "",
-                    advance: inkWidth + trailingGap, x: cursor
+                    advance: bounds.width + accidentalGap,
+                    x: cursor - bounds.leftBearing
                 )
             }
             runs.append(run)
@@ -267,29 +273,21 @@ public enum HarmonyRendering {
     /// (CTFont's cascade list handles this automatically), so the
     /// reported width stays sensible even when Edwin / Campania /
     /// Bravura are missing at test-time.
-    private static func measure(
+    /// Visual ink metrics for one glyph. `leftBearing` is the offset
+    /// from the typographic origin to the leftmost inked pixel
+    /// (positive when the glyph is inset from the origin); `width`
+    /// is the visible inked width (ink right edge minus ink left
+    /// edge). Renderers use these to trim the font's natural side
+    /// bearings on chord-symbol accidentals.
+    private static func inkBounds(
         _ string: String, font: CTFont
-    ) -> Double {
-        let line = ctLine(for: string, font: font)
-        return Double(CTLineGetTypographicBounds(line, nil, nil, nil))
-    }
-
-    /// Visual ink width of `string` in `font`. Excludes the font's
-    /// natural side bearings — i.e. the rectangle that the rendered
-    /// pixels actually occupy. Used for accidental glyphs whose
-    /// typographic advance is sized for staff-line clearance and
-    /// would otherwise leave a wide gap between the b/# and the
-    /// next chord-symbol character.
-    private static func inkWidth(
-        _ string: String, font: CTFont
-    ) -> Double {
+    ) -> (leftBearing: Double, width: Double) {
         let line = ctLine(for: string, font: font)
         let imageBounds = CTLineGetImageBounds(line, nil)
-        // Image bounds origin can be negative when the glyph extends
-        // left of the type origin; add it back so the returned
-        // width covers the full inked extent and the renderer's
-        // origin (the run's `x`) lands at the same visual left edge.
-        return Double(imageBounds.origin.x + imageBounds.width)
+        return (
+            leftBearing: Double(imageBounds.origin.x),
+            width: Double(imageBounds.width)
+        )
     }
 
     private static func ctLine(

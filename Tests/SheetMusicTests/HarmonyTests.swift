@@ -258,10 +258,12 @@ extension HarmonyTests {
         let summed = runs.reduce(0.0) { $0 + $1.advance }
         #expect(width == summed)
         #expect(width > 0)
-        var cumulative = 0.0
-        for run in runs {
-            #expect(run.x == cumulative)
-            cumulative += run.advance
+        // Runs are placed in left-to-right order. Accidental runs
+        // may have a `.x` shifted by `-leftBearing` to trim Bravura's
+        // natural left padding, so we don't assert `run.x ==
+        // cumulative_advance`; we just check monotonic order.
+        for i in 0 ..< runs.count - 1 {
+            #expect(runs[i].x < runs[i + 1].x)
         }
     }
 
