@@ -127,7 +127,7 @@ extension MidiRenderer {
                 )
                 events.append(TimedMidiEvent(tick: localTick, event: .meta(meta)))
             }
-        case .clef, .barLine, .spanner, .measureRepeat, .staffText:
+        case .clef, .barLine, .spanner, .measureRepeat, .staffText, .harmony:
             return
         case let .locationShift(delta):
             // Voice cursor shift: applies the location's fractional

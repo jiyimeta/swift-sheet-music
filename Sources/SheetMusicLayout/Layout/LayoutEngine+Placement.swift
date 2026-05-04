@@ -728,6 +728,9 @@ extension LayoutEngine {
                     // shifted tick. Mirrors MuseScore's
                     // `setLocation` behaviour during voice read.
                     tickCursor += delta.ticks(division: division)
+                case .harmony:
+                    // Wired up in Task 7.
+                    break
                 }
             }
 
