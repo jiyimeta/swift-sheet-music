@@ -123,16 +123,19 @@ enum SpannerRenderer {
         context: inout GraphicsContext, from: CGPoint, to: CGPoint,
         metrics: StaffMetrics
     ) {
-        // MuseScore default: Edwin 10 pt, normal weight (the actual
-        // pedal glyph is a SMuFL keyboardPedalPed; rendering it with
-        // the SMuFL font is a follow-up task).
-        let style = ResolvedTextStyle.resolve(.pedal, metrics: metrics)
-        let pedText = context.resolve(
-            Text("Ped.").foregroundColor(.primary).font(style.font))
-        context.draw(pedText, at: from, anchor: .leading)
-        let starText = context.resolve(
-            Text("*").foregroundColor(.primary).font(style.font))
-        context.draw(starText, at: to, anchor: .leading)
+        // MuseScore renders pedal marks as SMuFL glyphs from the
+        // music font: `keyboardPedalPed` (U+E650) for the "Ped."
+        // sigil and `keyboardPedalUp` (U+E655) for the closing
+        // "*" / asterisk. They sit on the keyboard-pedal cluster
+        // alongside the music-symbol-sized bold serifs of dynamics.
+        context.drawGlyph(
+            SMuFLGlyph.keyboardPedalPed, at: from,
+            size: metrics.glyphFontSize, anchor: .leading
+        )
+        context.drawGlyph(
+            SMuFLGlyph.keyboardPedalUp, at: to,
+            size: metrics.glyphFontSize, anchor: .leading
+        )
     }
 
     private static func drawOttava(

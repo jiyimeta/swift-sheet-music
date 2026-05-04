@@ -146,24 +146,21 @@ extension ScoreLayerBuilder {
         metrics: StaffMetrics, height: CGFloat,
         into parent: CALayer
     ) {
-        // MuseScore default: Edwin 10 pt (`Sid::pedalFontFace/Size`).
-        let style = ResolvedTextStyle.resolve(
-            .pedal, metrics: metrics
-        )
-        if let layer = textLayer(
-            text: "Ped.", at: from,
-            size: style.pointSize, italic: style.isItalic,
+        // MuseScore pedal marks are SMuFL glyphs from the music
+        // font: `keyboardPedalPed` (U+E650) and `keyboardPedalUp`
+        // (U+E655), rendered at music-symbol size (1 em = 4 sp).
+        if let layer = glyphLayer(
+            SMuFLGlyph.keyboardPedalPed, at: from,
+            size: metrics.glyphFontSize,
             anchor: CGPoint(x: 0, y: 0.5),
-            font: style.ctFont,
             height: height
         ) {
             parent.addSublayer(layer)
         }
-        if let layer = textLayer(
-            text: "*", at: to,
-            size: style.pointSize, italic: style.isItalic,
+        if let layer = glyphLayer(
+            SMuFLGlyph.keyboardPedalUp, at: to,
+            size: metrics.glyphFontSize,
             anchor: CGPoint(x: 0, y: 0.5),
-            font: style.ctFont,
             height: height
         ) {
             parent.addSublayer(layer)

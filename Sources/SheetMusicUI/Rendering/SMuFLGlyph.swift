@@ -118,6 +118,14 @@ enum SMuFLGlyph {
         }
     }
 
+    // Keyboard pedal — SMuFL Keyboard Techniques range
+    // (U+E650..U+E67F). MuseScore renders pedal lines using these
+    // glyphs from the music font, not text. The "Ped." mark and
+    // the closing "*" both carry the bold serif weight that makes
+    // them visually distinct from prose text.
+    static let keyboardPedalPed: Character = "\u{E650}"
+    static let keyboardPedalUp: Character = "\u{E655}"
+
     // Dynamics — atomic letter glyphs from SMuFL Dynamics range
     // (U+E520..U+E526). MuseScore composes multi-letter dynamics
     // (mp, mf, ff, fff, …) from these per `dynamic.cpp` DYN_LIST.
