@@ -24,6 +24,23 @@ enum ScoreLoader {
         return try SheetMusic.loadScore(mscxData: data)
     }
 
+    /// Load the bundled `harmony-basic.mscx` fixture. Lives under
+    /// `Resources/Fixtures/` (folder reference) so it ships with the
+    /// example app and preserves its filename for `Bundle.url`.
+    static func loadHarmonyBasic() throws -> Score {
+        guard let url = Bundle.main.url(
+            forResource: "harmony-basic",
+            withExtension: "mscx",
+            subdirectory: "Fixtures"
+        ) ?? Bundle.main.url(
+            forResource: "harmony-basic", withExtension: "mscx"
+        )
+        else {
+            throw LoadError.bundledMissing
+        }
+        return try SheetMusic.loadScore(mscxURL: url)
+    }
+
     /// Load a user-picked score. Wraps the security-scoped resource
     /// dance and dispatches to the format-specific loader based on
     /// `ScoreFileType.detect(url:)`.

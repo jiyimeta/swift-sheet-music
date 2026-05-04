@@ -26,6 +26,7 @@ targets:
           - macOS
           - Sounds
           - Resources/Fonts
+          - Resources/Fixtures
       # Folder reference (blue folder) — preserves the `Sounds/`
       # subdirectory inside the .app bundle so
       # `Bundle.url(forResource:..., subdirectory: "Sounds")`
@@ -39,6 +40,12 @@ targets:
       # so library consumers can supply their own face if they
       # prefer. `SheetMusicFonts.register` is called at app launch.
       - path: SheetMusicExample/Resources/Fonts
+        type: folder
+      # Hand-authored MIT-licensed fixtures kept alongside the test
+      # fixtures (see Tests/SheetMusicTests/Resources/LICENSE).
+      # Bundled so the in-app sidebar can offer a "Load X" button
+      # without requiring the user to drop a file in manually.
+      - path: SheetMusicExample/Resources/Fixtures
         type: folder
     dependencies:
       - package: swift-sheet-music
@@ -65,10 +72,13 @@ targets:
         excludes:
           - Sounds
           - Resources/Fonts
+          - Resources/Fixtures
       - path: SheetMusicExample/Sounds
         type: folder
         optional: true
       - path: SheetMusicExample/Resources/Fonts
+        type: folder
+      - path: SheetMusicExample/Resources/Fixtures
         type: folder
     dependencies:
       - package: swift-sheet-music

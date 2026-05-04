@@ -169,6 +169,7 @@
                     magnification: $magnification,
                     isMarqueeMode: $isMarqueeMode,
                     onLoadBundled: loadBundled,
+                    onLoadHarmonyBasic: loadHarmonyBasic,
                     onOpenFile: showOpenPanel,
                     onTogglePlayback: togglePlayback,
                     onExportPDF: exportPDF
@@ -2427,6 +2428,17 @@
             do {
                 let loaded = try ScoreLoader.loadBundled()
                 adoptLoadedScore(loaded, sourceName: "test.mscx")
+            } catch {
+                errorMessage = "Failed: \(error.localizedDescription)"
+            }
+        }
+
+        private func loadHarmonyBasic() {
+            do {
+                let loaded = try ScoreLoader.loadHarmonyBasic()
+                adoptLoadedScore(
+                    loaded, sourceName: "harmony-basic.mscx"
+                )
             } catch {
                 errorMessage = "Failed: \(error.localizedDescription)"
             }

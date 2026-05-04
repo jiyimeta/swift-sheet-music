@@ -20,6 +20,7 @@
         @Binding var isMarqueeMode: Bool
 
         let onLoadBundled: () -> Void
+        let onLoadHarmonyBasic: () -> Void
         let onOpenFile: () -> Void
         let onTogglePlayback: () -> Void
         let onExportPDF: () -> Void
@@ -28,6 +29,10 @@
             List {
                 Section("Bundled") {
                     Button("Load test.mscx", action: onLoadBundled)
+                    Button(
+                        "Load harmony-basic.mscx",
+                        action: onLoadHarmonyBasic
+                    )
                 }
                 Section("Open") {
                     Button("Open File…", action: onOpenFile)
