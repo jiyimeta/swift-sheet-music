@@ -71,17 +71,36 @@ extension ScoreLayerBuilder {
                 context: &context, into: parent
             )
         case let .textMark(.dynamic, text, p):
-            let style = ResolvedTextStyle.resolve(
-                .dynamics, metrics: metrics
-            )
-            if let layer = textLayer(
-                text: text, at: shift(p),
-                size: style.pointSize, italic: style.isItalic,
-                anchor: CGPoint(x: 0, y: 0.5),
-                font: style.ctFont,
-                height: height
-            ) {
-                parent.addSublayer(layer)
+            // Standard dynamics → Bravura SMuFL glyphs at 4 sp.
+            // Free-form text dynamics → Edwin italic 10 pt fallback.
+            // See `TextMarkRenderer.drawDynamic` for the rationale.
+            if let glyphs = DynamicSymbolMap.glyphs(for: text) {
+                let glyphSize = metrics.sp * 4
+                let bravura = CTFontCreateWithName(
+                    BravuraFont.familyName as CFString, glyphSize, nil
+                )
+                if let layer = textLayer(
+                    text: String(glyphs), at: shift(p),
+                    size: glyphSize, italic: false,
+                    anchor: CGPoint(x: 0, y: 0.5),
+                    font: bravura,
+                    height: height
+                ) {
+                    parent.addSublayer(layer)
+                }
+            } else {
+                let style = ResolvedTextStyle.resolve(
+                    .dynamics, metrics: metrics
+                )
+                if let layer = textLayer(
+                    text: text, at: shift(p),
+                    size: style.pointSize, italic: style.isItalic,
+                    anchor: CGPoint(x: 0, y: 0.5),
+                    font: style.ctFont,
+                    height: height
+                ) {
+                    parent.addSublayer(layer)
+                }
             }
         case let .textMark(.tempo, text, p):
             let style = ResolvedTextStyle.resolve(

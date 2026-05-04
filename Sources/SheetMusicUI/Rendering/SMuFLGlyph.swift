@@ -2,7 +2,6 @@ import CoreGraphics
 
 /// Bravura / SMuFL Private Use Area codepoints for the glyphs we draw.
 /// Values are the SMuFL standard: https://www.smufl.org/
-@available(macOS 15.0, iOS 16.0, *)
 enum SMuFLGlyph {
     // Clefs
     static let gClef: Character = "\u{E050}"
@@ -118,6 +117,19 @@ enum SMuFLGlyph {
         default: return (0xF402, magx) // braceLarger (v ≥ 4)
         }
     }
+
+    // Dynamics — atomic letter glyphs from SMuFL Dynamics range
+    // (U+E520..U+E526). MuseScore composes multi-letter dynamics
+    // (mp, mf, ff, fff, …) from these per `dynamic.cpp` DYN_LIST.
+    // The bold serif weight is part of the *music font* (Bravura);
+    // hence dynamics look much heavier than Edwin italic text.
+    static let dynamicPiano: Character = "\u{E520}"
+    static let dynamicMezzo: Character = "\u{E521}"
+    static let dynamicForte: Character = "\u{E522}"
+    static let dynamicRinforzando: Character = "\u{E523}"
+    static let dynamicSforzando: Character = "\u{E524}"
+    static let dynamicZ: Character = "\u{E525}"
+    static let dynamicNiente: Character = "\u{E526}"
 
     // Arpeggio / measure repeat (used later stages)
     static let arpeggioWiggle: Character = "\u{EAA9}"
