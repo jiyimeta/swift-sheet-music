@@ -340,6 +340,43 @@ extension HarmonyTests {
         #expect(lh.harmony.name == "C")
     }
 
+    @available(macOS 15.0, iOS 16.0, *)
+    @Test func multipleHarmoniesAtSameTickStackVertically() {
+        let note = Note(pitch: 60, tpc: 14)
+        let measure = Measure(voices: [Voice(elements: [
+            .clef(Clef(concertClefType: "G")),
+            .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+            .harmony(Harmony(name: "C")),
+            .harmony(Harmony(name: "Am7")),
+            .chord(Chord(duration: .whole, notes: [note])),
+        ])])
+        let part = Part(
+            id: "P1",
+            instrument: Instrument(id: "voice"),
+            staves: [Staff(measures: [measure])]
+        )
+        let score = Score(division: 480, parts: [part])
+        let document = LayoutEngine.layout(
+            score: score,
+            options: ScoreViewOptions(staffSize: 28),
+            availableWidth: 800
+        )
+        var harmonies: [LayoutHarmony] = []
+        for system in document.systems {
+            for measure in system.measures {
+                for el in measure.elements {
+                    if case let .harmony(lh) = el {
+                        harmonies.append(lh)
+                    }
+                }
+            }
+        }
+        #expect(harmonies.count == 2)
+        let ys = harmonies.map(\.y).sorted()
+        #expect(ys[0] < ys[1])
+        #expect(abs(harmonies[0].y - harmonies[1].y) > 0.5)
+    }
+
     @Test func basicFixtureExposesFiveHarmonies() throws {
         let url = try #require(Bundle.module.url(
             forResource: "harmony-basic", withExtension: "mscx"

@@ -1,3 +1,4 @@
+// swiftlint:disable function_body_length file_length
 import CoreGraphics
 import SheetMusicCore
 
@@ -95,6 +96,11 @@ extension LayoutEngine {
             return metrics.sp * 2.0 // Edwin 10 pt + line gap
         case .rehearsalMark:
             return metrics.sp * 2.6 // Edwin 14 pt + frame box
+        case .harmony:
+            // Approximate font height: text is `chordSymbolA` size
+            // (10 pt at 5 pt-spatium ≈ 2 sp). Add 0.4 sp gap so
+            // adjacent symbols don't touch.
+            return metrics.sp * 2.0
         default:
             return metrics.sp * 2.0
         }
@@ -109,6 +115,8 @@ extension LayoutEngine {
         _ element: LayoutElement
     ) -> Int? {
         switch element {
+        case .harmony:
+            return 0 // Closest to the staff (chord symbols hug the staff line).
         case .staffText:
             return 1
         case .rehearsalMark:
@@ -137,6 +145,9 @@ extension LayoutEngine {
         case .staffText:
             // `StaffTextRenderer` uses `.bottomLeading`.
             return .bottom
+        case .harmony:
+            // `HarmonyRenderer` anchors at `.leading` (centre Y).
+            return .center
         case .rehearsalMark:
             // `RehearsalMarkRenderer` anchors the FRAME box's
             // lower-left corner at `origin`; the box (and the text
@@ -171,6 +182,14 @@ extension LayoutEngine {
                 origin: CGPoint(x: p.x, y: y),
                 frame: frame, color: color
             )
+        case let .harmony(lh):
+            return .harmony(LayoutHarmony(
+                harmony: lh.harmony,
+                anchorX: lh.anchorX,
+                y: Double(y),
+                runs: lh.runs,
+                width: lh.width
+            ))
         default:
             return element
         }
@@ -228,6 +247,8 @@ extension LayoutEngine {
                  let .staffText(_, point, _, _),
                  let .rehearsalMark(_, point, _, _):
                 p = point
+            case let .harmony(lh):
+                p = CGPoint(x: CGFloat(lh.anchorX), y: CGFloat(lh.y))
             default:
                 continue
             }

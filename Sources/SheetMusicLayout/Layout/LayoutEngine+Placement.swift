@@ -730,13 +730,13 @@ extension LayoutEngine {
                     tickCursor += delta.ticks(division: division)
                 case let .harmony(harmony):
                     // Anchor at the next timed-element column (or
-                    // header start while still in the header). Mirror
-                    // .staffText: flush the header phase before
-                    // placing the harmony at the chord column.
+                    // header start while still in the header). Same
+                    // anchoring rule as .staffText so multiple
+                    // harmonies at the same tick share an X column
+                    // (which the autoplace stacking pass relies on).
                     let stX = inHeader
                         ? headerSchedule.contentStartX
                         : timedX(atTick: tickCursor)
-                    inHeader = false
                     let runs = HarmonyRendering.runs(
                         for: harmony, metrics: metrics
                     )
