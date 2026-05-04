@@ -21,6 +21,18 @@ public enum HarmonyRendering {
         for harmony: Harmony,
         metrics: StaffMetrics
     ) -> [HarmonyRun] {
+        // Force Bravura registration BEFORE measuring. The
+        // renderer also calls this in `ScoreView.init`, but layout
+        // can run earlier (e.g. when a host computes a
+        // `LayoutDocument` ahead of the view, or when a unit test
+        // exercises layout without instantiating a view). When
+        // Bravura isn't registered, CTLineGetImageBounds for the
+        // SMuFL codepoints falls back to the system font, which
+        // returns a ~12 pt missing-glyph "tofu" box per character.
+        // The renderer later draws the (small) real Bravura glyph
+        // at the layout-reserved (large) tofu-sized slot, leaving
+        // ~10 pt of conspicuous whitespace after every accidental.
+        _ = BravuraFont.register
         // Serialise the entire CT-using path. CoreText's
         // `CTFontCreateWithName` and `CTLineCreateWithAttributedString`
         // hit a global lock for unregistered family names and
@@ -62,12 +74,7 @@ public enum HarmonyRendering {
         // captures inter-character spacing because CTLine measures
         // the rendered pixel extent of the whole string.
         let textGap = textSize * 0.10
-        // Tighten the gap on either side of accidental glyphs to a
-        // hair (~0.04 em). Bravura's chord-symbol accidentals are
-        // visually inset enough that even 0.10 em looks like loose
-        // padding next to ASCII letters whose strokes butt right up
-        // to the cell edge.
-        let accidentalGap = glyphSize * 0.04
+        let accidentalGap = glyphSize * 0.10
         var runs: [HarmonyRun] = []
         var cursor: Double = 0
         for slice in kindedSlices {
