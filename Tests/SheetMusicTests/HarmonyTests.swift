@@ -1,3 +1,4 @@
+// swiftlint:disable file_length
 import Foundation
 @testable import SheetMusic
 @testable import SheetMusicCore
@@ -375,6 +376,64 @@ extension HarmonyTests {
         let ys = harmonies.map(\.y).sorted()
         #expect(ys[0] < ys[1])
         #expect(abs(harmonies[0].y - harmonies[1].y) > 0.5)
+    }
+
+    @available(macOS 15.0, iOS 16.0, *)
+    @Test func wideHarmonyExpandsChordSpacing() {
+        // Measure with two quarters; with a wide chord symbol on the
+        // first chord, the second chord must be pushed further right
+        // than the bare-chord baseline.
+        func chordXs(harmonyName: String?) -> [CGFloat] {
+            var elements: [VoiceElement] = [
+                .clef(Clef(concertClefType: "G")),
+                .timeSignature(TimeSignature(numerator: 2, denominator: 4)),
+            ]
+            if let name = harmonyName {
+                elements.append(.harmony(Harmony(name: name)))
+            }
+            elements.append(.chord(Chord(
+                duration: .quarter,
+                notes: [Note(pitch: 60, tpc: 14)]
+            )))
+            elements.append(.chord(Chord(
+                duration: .quarter,
+                notes: [Note(pitch: 62, tpc: 16)]
+            )))
+            let part = Part(
+                id: "P1",
+                instrument: Instrument(id: "voice"),
+                staves: [Staff(measures: [
+                    Measure(voices: [Voice(elements: elements)]),
+                ])]
+            )
+            let score = Score(division: 480, parts: [part])
+            // Use a tiny availableWidth so the layout doesn't add
+            // discretionary slack — we want a measure squeezed to its
+            // minimum so the harmony's contribution is visible.
+            let document = LayoutEngine.layout(
+                score: score,
+                options: ScoreViewOptions(staffSize: 28),
+                availableWidth: 100
+            )
+            var xs: [CGFloat] = []
+            for system in document.systems {
+                for measure in system.measures {
+                    for el in measure.elements {
+                        if case let .chord(_, _, _, so, _, _, _, _) = el {
+                            xs.append(so.x)
+                        }
+                    }
+                }
+            }
+            return xs
+        }
+        let bare = chordXs(harmonyName: nil)
+        let wide = chordXs(harmonyName: "F#m7b5/Ab")
+        #expect(bare.count == 2)
+        #expect(wide.count == 2)
+        // With the wide chord symbol, the SECOND chord's X must move
+        // further to the right than the bare baseline.
+        #expect(wide[1] > bare[1])
     }
 
     @Test func basicFixtureExposesFiveHarmonies() throws {

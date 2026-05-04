@@ -268,13 +268,18 @@ extension LayoutEngine {
             for voice in staff.measures[measureIdx].voices {
                 var elements: [TimedElement] = []
                 var tick = 0
+                // Width demand contributed by any `.harmony` not yet
+                // attached to a chord/rest at this tick. Folded into
+                // the next timed element's weight so the chord segment
+                // reserves enough room for the chord symbol.
+                var pendingHarmonyWidth: CGFloat = 0
                 for (idx, el) in voice.elements.enumerated() {
                     switch el {
                     case let .chord(c) where !c.notes.isEmpty:
                         let nextLyrics = nextChordLyrics(
                             in: voice.elements, after: idx
                         )
-                        let w = max(
+                        let baseWeight = max(
                             durationWidth(c.duration, metrics: metrics),
                             lyricsPairWidth(
                                 currentLyrics: c.lyrics,
@@ -282,6 +287,8 @@ extension LayoutEngine {
                                 metrics: metrics
                             )
                         )
+                        let w = max(baseWeight, pendingHarmonyWidth)
+                        pendingHarmonyWidth = 0
                         let end = tick + c.duration.ticks(division: division)
                         elements.append(TimedElement(
                             startTick: tick, endTick: end, weight: w
@@ -290,13 +297,29 @@ extension LayoutEngine {
                         tick = end
                     case let .chord(r):
                         // Empty chord = rest.
-                        let w = durationWidth(r.duration, metrics: metrics)
+                        let baseWeight = durationWidth(
+                            r.duration, metrics: metrics
+                        )
+                        let w = max(baseWeight, pendingHarmonyWidth)
+                        pendingHarmonyWidth = 0
                         let end = tick + r.duration.ticks(division: division)
                         elements.append(TimedElement(
                             startTick: tick, endTick: end, weight: w
                         ))
                         allTicks.insert(tick)
                         tick = end
+                    case let .harmony(harmony):
+                        // Pre-measure so the next chord/rest segment
+                        // carries demand to host the symbol without
+                        // colliding with the next chord. + 0.5 sp gap.
+                        let runs = HarmonyRendering.runs(
+                            for: harmony, metrics: metrics
+                        )
+                        pendingHarmonyWidth = max(
+                            pendingHarmonyWidth,
+                            CGFloat(HarmonyRendering.width(of: runs))
+                                + metrics.sp * 0.5
+                        )
                     default:
                         break
                     }
