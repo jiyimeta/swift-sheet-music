@@ -7,20 +7,12 @@ import Foundation
 ///
 /// MuseScore's runtime `Type` distinction (`Main` / `Additional`) is
 /// not serialized in MSCX and is omitted here; both are represented
-/// by the same struct, with the visible difference captured by
-/// `frame` (and, in future, by font/size when those are wired up).
+/// by the same struct.
 public struct RehearsalMark: Sendable, Equatable {
-    /// Frame around the text. Mirrors MuseScore's `FrameType`
-    /// (`engraving/types/types.h`) and MusicXML's `enclosure`
-    /// attribute on `<rehearsal>`.
-    public enum FrameKind: String, Sendable {
-        /// MuseScore `frameType=0` / MusicXML `enclosure="square"`.
-        case rectangle
-        /// MuseScore `frameType=1` / MusicXML `enclosure="circle"`.
-        case circle
-        /// MuseScore `frameType=2` / MusicXML `enclosure="none"`.
-        case none
-    }
+    /// Frame kind alias kept for source compatibility. New code
+    /// should reach for `TextFrameType` directly or read it via
+    /// `properties.frameType` / `TextStyleType.rehearsalMark`.
+    public typealias FrameKind = TextFrameType
 
     public var text: String
     /// Author-supplied X offset relative to the default placement,
@@ -34,19 +26,24 @@ public struct RehearsalMark: Sendable, Equatable {
     public var color: ScoreColor?
     /// Frame around the text. Defaults to `.rectangle`, matching
     /// MuseScore's `Sid::rehearsalMarkFrameType` default.
-    public var frame: FrameKind
+    public var frame: TextFrameType
+    /// Per-element font overrides. `nil`-fields inherit from the
+    /// `rehearsalMark` style row.
+    public var properties: TextProperties
 
     public init(
         text: String,
         offsetX: Double = 0,
         offsetY: Double = 0,
         color: ScoreColor? = nil,
-        frame: FrameKind = .rectangle
+        frame: TextFrameType = .rectangle,
+        properties: TextProperties = TextProperties()
     ) {
         self.text = text
         self.offsetX = offsetX
         self.offsetY = offsetY
         self.color = color
         self.frame = frame
+        self.properties = properties
     }
 }

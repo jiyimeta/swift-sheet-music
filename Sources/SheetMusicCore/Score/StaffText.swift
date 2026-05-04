@@ -25,19 +25,30 @@ public struct StaffText: Sendable, Equatable {
     /// above the top staff); staff texts attach to a specific
     /// staff.
     public var isSystemText: Bool
+    /// Per-element font overrides. `nil`-fields inherit from the
+    /// `staffText` / `systemText` row of `TextStyleDefaults`.
+    public var properties: TextProperties
 
     public init(
         text: String,
         offsetX: Double = 0,
         offsetY: Double = 0,
         color: ScoreColor? = nil,
-        isSystemText: Bool = false
+        isSystemText: Bool = false,
+        properties: TextProperties = TextProperties()
     ) {
         self.text = text
         self.offsetX = offsetX
         self.offsetY = offsetY
         self.color = color
         self.isSystemText = isSystemText
+        self.properties = properties
+    }
+
+    /// The `TextStyleType` row this element inherits from. Picks
+    /// `.systemText` when `isSystemText` is true.
+    public var styleType: TextStyleType {
+        isSystemText ? .systemText : .staffText
     }
 }
 
