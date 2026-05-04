@@ -76,6 +76,232 @@ extension LayoutEngine {
         }
     }
 
+    /// Per-element approximate vertical height (in sp) used when
+    /// stacking above-staff text marks. Errs on the generous side
+    /// so the gap stays visually clear without pixel-precise font
+    /// measurement: tracks one full text line plus small padding so
+    /// adjacent items don't touch when their underlying glyphs are
+    /// rendered.
+    private static func aboveStaffHeight(
+        _ element: LayoutElement, metrics: StaffMetrics
+    ) -> CGFloat {
+        switch element {
+        case .textMark(.tempo, _, _):
+            // Tempo strings start with "♩" (U+2669) whose tail
+            // dips well below the cap baseline of the digits, so
+            // the visible extent is taller than the 12 pt body.
+            return metrics.sp * 3.0
+        case .staffText:
+            return metrics.sp * 2.0 // Edwin 10 pt + line gap
+        case .rehearsalMark:
+            return metrics.sp * 2.6 // Edwin 14 pt + frame box
+        default:
+            return metrics.sp * 2.0
+        }
+    }
+
+    /// Stacking priority. Lower = closer to the staff (placed first
+    /// so subsequent items lift above it). Mirrors MuseScore's
+    /// default skyline order: chord symbols hug the staff, free-form
+    /// staff/system text sits a touch higher, rehearsal marks above
+    /// that, and tempo at the very top.
+    private static func aboveStaffPriority(
+        _ element: LayoutElement
+    ) -> Int? {
+        switch element {
+        case .staffText:
+            return 1
+        case .rehearsalMark:
+            return 2
+        case .textMark(.tempo, _, _):
+            return 3
+        default:
+            return nil
+        }
+    }
+
+    /// How an element's `origin.y` relates to its visual extent —
+    /// determined by the anchor each renderer passes to
+    /// `GraphicsContext.draw`. Used by stacking math to convert
+    /// between "where Y was emitted" and "actual top / bottom of
+    /// the rendered glyph."
+    private enum AboveStaffAnchor { case bottom, center }
+
+    private static func aboveStaffAnchor(
+        _ element: LayoutElement
+    ) -> AboveStaffAnchor {
+        switch element {
+        case .textMark(.tempo, _, _):
+            // `TextMarkRenderer.drawTempo` uses `.leading` (centre-Y).
+            return .center
+        case .staffText:
+            // `StaffTextRenderer` uses `.bottomLeading`.
+            return .bottom
+        case .rehearsalMark:
+            // `RehearsalMarkRenderer` anchors the FRAME box's
+            // lower-left corner at `origin`; the box (and the text
+            // inside) extend upward.
+            return .bottom
+        default:
+            return .center
+        }
+    }
+
+    /// Set `origin.y` of an above-staff text mark while preserving
+    /// the rest of its payload. Returns the element unchanged when
+    /// the kind isn't one of the supported text marks.
+    private static func setAboveStaffOriginY(
+        _ element: LayoutElement, y: CGFloat
+    ) -> LayoutElement {
+        switch element {
+        case let .textMark(kind, text, p):
+            return .textMark(
+                kind: kind, text: text,
+                origin: CGPoint(x: p.x, y: y)
+            )
+        case let .staffText(text, p, color, isSystem):
+            return .staffText(
+                text: text,
+                origin: CGPoint(x: p.x, y: y),
+                color: color, isSystemText: isSystem
+            )
+        case let .rehearsalMark(text, p, frame, color):
+            return .rehearsalMark(
+                text: text,
+                origin: CGPoint(x: p.x, y: y),
+                frame: frame, color: color
+            )
+        default:
+            return element
+        }
+    }
+
+    /// Same-tick collision avoidance for above-staff marks. Tempo,
+    /// rehearsal mark, staff text and system text all default to a
+    /// fixed Y just above the top staff line, so authors who attach
+    /// several to the same beat see them pile on top of each other.
+    /// MuseScore avoids this with its skyline + autoplace step,
+    /// stacking lower-priority items closer to the staff and
+    /// pushing higher-priority ones (tempo, rehearsal mark) further
+    /// up. We approximate by clustering elements at the same
+    /// X column and lifting each one above the previous.
+    static func autoStackAboveStaffMarks(
+        in out: inout [LayoutElement],
+        metrics: StaffMetrics
+    ) {
+        let entries = collectAboveStaffEntries(in: out, metrics: metrics)
+        guard !entries.isEmpty else { return }
+        // Bucket by integer X — `timedX` returns the same value for
+        // elements at the same tick, so an exact comparison is
+        // sufficient and we don't need a wider tolerance for items
+        // at distinct ticks.
+        let groups = Dictionary(grouping: entries) { entry in
+            Int(entry.originX.rounded())
+        }
+        let minDistance = metrics.sp * 0.5
+        for (_, group) in groups where group.count > 1 {
+            stackCluster(
+                group, in: &out, minDistance: minDistance
+            )
+        }
+    }
+
+    /// Stacking entry for a single above-staff text mark.
+    private struct AboveStaffEntry {
+        let index: Int
+        let originX: CGFloat
+        let defaultOriginY: CGFloat
+        let height: CGFloat
+        let anchor: AboveStaffAnchor
+        let priority: Int
+    }
+
+    private static func collectAboveStaffEntries(
+        in out: [LayoutElement], metrics: StaffMetrics
+    ) -> [AboveStaffEntry] {
+        var entries: [AboveStaffEntry] = []
+        for (i, el) in out.enumerated() {
+            guard let priority = aboveStaffPriority(el) else { continue }
+            let p: CGPoint
+            switch el {
+            case let .textMark(_, _, point),
+                 let .staffText(_, point, _, _),
+                 let .rehearsalMark(_, point, _, _):
+                p = point
+            default:
+                continue
+            }
+            entries.append(AboveStaffEntry(
+                index: i,
+                originX: p.x,
+                defaultOriginY: p.y,
+                height: aboveStaffHeight(el, metrics: metrics),
+                anchor: aboveStaffAnchor(el),
+                priority: priority
+            ))
+        }
+        return entries
+    }
+
+    /// Stack one X-aligned cluster from closest-to-staff outward,
+    /// lifting subsequent entries above whatever sits below them.
+    private static func stackCluster(
+        _ cluster: [AboveStaffEntry],
+        in out: inout [LayoutElement],
+        minDistance: CGFloat
+    ) {
+        let sorted = cluster.sorted {
+            if $0.priority != $1.priority {
+                return $0.priority < $1.priority
+            }
+            return $0.index < $1.index
+        }
+        // Smallest Y currently consumed by anything in this cluster —
+        // above-staff stacking is monotonically upward, so the top of
+        // the highest-placed item is the cluster top.
+        var stackTop = CGFloat.infinity
+        for entry in sorted {
+            let (newOriginY, newTop) = stackedPosition(
+                for: entry, stackTop: stackTop, minDistance: minDistance
+            )
+            stackTop = min(stackTop, newTop)
+            out[entry.index] = setAboveStaffOriginY(
+                out[entry.index], y: newOriginY
+            )
+        }
+    }
+
+    /// Decide where one entry should sit given the cluster's current
+    /// stack top. Returns `(origin.y to assign, new top of the entry)`.
+    private static func stackedPosition(
+        for entry: AboveStaffEntry,
+        stackTop: CGFloat,
+        minDistance: CGFloat
+    ) -> (originY: CGFloat, top: CGFloat) {
+        let halfHeight = entry.height / 2
+        let defaultTop: CGFloat
+        let defaultBottom: CGFloat
+        switch entry.anchor {
+        case .bottom:
+            defaultBottom = entry.defaultOriginY
+            defaultTop = defaultBottom - entry.height
+        case .center:
+            defaultTop = entry.defaultOriginY - halfHeight
+            defaultBottom = entry.defaultOriginY + halfHeight
+        }
+        if defaultBottom <= stackTop - minDistance {
+            return (entry.defaultOriginY, defaultTop)
+        }
+        let newBottom = stackTop - minDistance
+        let newTop = newBottom - entry.height
+        let newOriginY: CGFloat
+        switch entry.anchor {
+        case .bottom: newOriginY = newBottom
+        case .center: newOriginY = newBottom - halfHeight
+        }
+        return (newOriginY, newTop)
+    }
+
     /// Horizontal distance from a note's anchor x to its
     /// notehead right edge. Bravura's `noteheadBlack` is 1.18 sp
     /// wide (half-width 0.59 sp); whole / half noteheads are a

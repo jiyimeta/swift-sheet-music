@@ -744,6 +744,90 @@
             )
         }
 
+        // MARK: - 24 location-shift system text
+        //
+        // Voice has 4 quarter chords; a SystemText is appended at the
+        // tail of the voice with a `locationShift(-1/2)` immediately
+        // before it, so the text should attach to the THIRD chord
+        // (tick = 2 × quarter), not to the natural cursor at the bar
+        // line. Mirrors the mscx pattern MuseScore writes when a
+        // system text lives at a non-final tick.
+
+        static var locationSystemText: Score {
+            let c5 = Note(pitch: 72, tpc: 14)
+            let m1 = Measure(voices: [Voice(elements: [
+                .clef(Clef(concertClefType: "G")),
+                .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+                .chord(Chord(duration: .quarter, notes: [c5])),
+                .chord(Chord(duration: .quarter, notes: [c5])),
+                .chord(Chord(duration: .quarter, notes: [c5])),
+                .chord(Chord(duration: .quarter, notes: [c5])),
+                // After 4 quarters the natural cursor sits at the
+                // measure's end. Shift back by half a whole-note so
+                // the SystemText attaches to the third quarter.
+                .locationShift(delta: Fraction(numerator: -1, denominator: 2)),
+                .staffText(StaffText(text: "@1/2", isSystemText: true)),
+            ])])
+            return Score(
+                division: 480,
+                parts: [treblePart(measures: [m1])]
+            )
+        }
+
+        // MARK: - 23 above-staff text overlap (tempo + staff text +
+        //          system text + rehearsal mark all at the same tick)
+        //
+        // Without skyline-aware stacking, every above-staff label
+        // lands on the same Y row and they collide on top of each
+        // other. The fix should stack them upward.
+
+        static var aboveStaffOverlap: Score {
+            let c5 = Note(pitch: 72, tpc: 14)
+            let m1 = Measure(voices: [Voice(elements: [
+                .clef(Clef(concertClefType: "G")),
+                .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+                .rehearsalMark(RehearsalMark(text: "A")),
+                .tempo(Tempo(beatsPerSecond: 2.0)),
+                .staffText(StaffText(text: "Allegro", isSystemText: false)),
+                .staffText(StaffText(text: "C\u{266F}m7", isSystemText: false)),
+                .chord(Chord(duration: .quarter, notes: [c5])),
+                .chord(Chord(duration: .quarter, notes: [c5])),
+                .staffText(StaffText(text: "rit.", isSystemText: false)),
+                .tempo(Tempo(beatsPerSecond: 1.5)), // 90 BPM
+                .chord(Chord(duration: .half, notes: [c5])),
+            ])])
+            return Score(
+                division: 480,
+                parts: [treblePart(measures: [m1])]
+            )
+        }
+
+        // MARK: - 22 dynamics under low chord (regression repro)
+        //
+        // Treble-clef chord with notes well below the staff (G3 / C3) plus
+        // a leading dynamic. Without skyline-aware placement the dynamic
+        // glyph collides with the low noteheads.
+
+        static var dynamicsLowChord: Score {
+            let g3 = Note(pitch: 55, tpc: 15) // G3, on a ledger line below staff
+            let c3 = Note(pitch: 48, tpc: 14) // C3, two ledger lines further below
+            let f4 = Note(pitch: 65, tpc: 13) // F4, inside the staff
+            let m1 = Measure(voices: [Voice(elements: [
+                .clef(Clef(concertClefType: "G")),
+                .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+                .dynamic(Dynamic(subtype: "p", velocity: 50)),
+                .chord(Chord(duration: .quarter, notes: [f4])),
+                .dynamic(Dynamic(subtype: "f", velocity: 100)),
+                .chord(Chord(duration: .quarter, notes: [g3])),
+                .dynamic(Dynamic(subtype: "ff", velocity: 110)),
+                .chord(Chord(duration: .half, notes: [c3])),
+            ])])
+            return Score(
+                division: 480,
+                parts: [treblePart(measures: [m1])]
+            )
+        }
+
         // MARK: - helpers
 
         private static func treblePart(measures: [Measure] = []) -> Part {

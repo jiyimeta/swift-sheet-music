@@ -129,6 +129,12 @@ extension MidiRenderer {
             }
         case .clef, .barLine, .spanner, .measureRepeat, .staffText:
             return
+        case let .locationShift(delta):
+            // Voice cursor shift: applies the location's fractional
+            // delta to the running tick so subsequent tempo /
+            // dynamic / marker events land at the correct beat.
+            // Mirrors `LayoutEngine`'s placement-side handling.
+            localTick += delta.ticks(division: division)
         case let .rehearsalMark(rm):
             // Emit SMF Marker meta-event (0xFF 06). Mirrors how `.tempo` is
             // forwarded only on `voiceIndex == 0`: the same marker would

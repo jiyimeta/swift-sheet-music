@@ -173,6 +173,8 @@ enum ScoreSemanticComparison {
         case let .fermata(f): return "fermata(\(f.subtype))"
         case let .staffText(st): return "staffText(\"\(st.text)\")"
         case let .rehearsalMark(rm): return "rehearsalMark(\"\(rm.text)\")"
+        case let .locationShift(delta):
+            return "locationShift(\(delta.numerator)/\(delta.denominator))"
         }
     }
 

@@ -28,6 +28,14 @@ public enum VoiceElement: Sendable, Equatable {
     case fermata(Fermata)
     case staffText(StaffText)
     case rehearsalMark(RehearsalMark)
+    /// MuseScore `<location><fractions>N/D</fractions></location>`
+    /// at voice level — a cursor move that places the next attached
+    /// non-temporal element (system / staff text, dynamic, tempo,
+    /// rehearsal mark) at a tick offset from the natural cursor.
+    /// The delta is fraction-of-a-whole-note (resolved against the
+    /// score's PPQ at consumption time); negative values jog
+    /// backwards. C++: `mu::engraving::Location` for a segment.
+    case locationShift(delta: Fraction)
 }
 
 extension VoiceElement {

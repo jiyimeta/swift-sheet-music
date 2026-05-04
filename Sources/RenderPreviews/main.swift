@@ -60,6 +60,9 @@
             ("19-two-voice-rest-note", Samples.twoVoiceRestNote),
             ("20-multivoice-whole-rest", Samples.multiVoiceWholeRest),
             ("21-rest-note-overlap-repro", Samples.restNoteOverlapRepro),
+            ("22-dynamics-low-chord", Samples.dynamicsLowChord),
+            ("23-above-staff-overlap", Samples.aboveStaffOverlap),
+            ("24-location-system-text", Samples.locationSystemText),
         ]
 
         for (name, score) in samples {

@@ -195,6 +195,54 @@ extension LayoutEngine {
                     : metrics.sp * 2)
                 : 0
 
+            // Per-tick south-skyline of chords in this voice — the
+            // visual lowest Y of the chord's noteheads (and stem,
+            // for stem-down). Used to push dynamics below low
+            // chords so the glyph doesn't sit on top of ledger-line
+            // noteheads. Mirrors MuseScore's autoplace, where a
+            // Dynamic below the staff nudges its Y until it clears
+            // the chord skyline at the same segment plus
+            // `Sid::dynamicsMinDistance` (≈ 0.5 sp).
+            let voiceChordSouthByTick: [Int: CGFloat] = {
+                var map: [Int: CGFloat] = [:]
+                var t = 0
+                for el in voice.elements {
+                    guard case let .chord(chord) = el else { continue }
+                    let ticks = chord.duration.ticks(division: division)
+                    defer { t += ticks }
+                    guard !chord.notes.isEmpty else { continue }
+                    let steps: [Int] = chord.notes.map { note in
+                        if let drumLine = drumLineMap?[note.pitch] {
+                            return 4 - drumLine
+                        }
+                        return PitchStaffPosition.step(
+                            midiPitch: note.pitch, tpc: note.tpc,
+                            clef: currentClef
+                        ).step
+                    }
+                    guard let lowestStep = steps.min() else { continue }
+                    let lowestNoteY = staffMidY
+                        - CGFloat(lowestStep) * metrics.sp / 2
+                    var south = lowestNoteY + metrics.sp * 0.5
+                    let stemDir = forcedStem
+                        ?? StemDirectionRule.direction(for: steps)
+                    // Stem-down on a low chord (typical of voice 2 in
+                    // a piano grand staff) extends below the lowest
+                    // notehead by `defaultStemLength` measured from
+                    // the HIGHEST note's centre, mirroring
+                    // `StemRenderer`.
+                    if stemDir == .down, let highestStep = steps.max() {
+                        let highestNoteY = staffMidY
+                            - CGFloat(highestStep) * metrics.sp / 2
+                        let stemEnd = highestNoteY
+                            + metrics.defaultStemLength
+                        south = max(south, stemEnd)
+                    }
+                    map[t] = max(map[t] ?? -.infinity, south)
+                }
+                return map
+            }()
+
             // Final lyric centre Y for this voice — the max over
             // all chords' south-skyline-pushed Ys. Pre-computed
             // here (rather than ratcheted incrementally during
@@ -559,12 +607,27 @@ extension LayoutEngine {
                     let baseX = inHeader
                         ? headerSchedule.contentStartX
                         : timedX(atTick: tickCursor)
+                    // Default Y: 4 sp below the staff midline (= 2 sp
+                    // below the bottom staff line). When the anchor
+                    // chord at the same tick extends below the staff
+                    // (low ledger lines, stem-down low chord), push
+                    // the Y down so the SMuFL glyph clears the chord
+                    // skyline. Anchor `.leading` puts the glyph centre
+                    // at `origin.y` and the glyph height is ~4 sp, so
+                    // a centre Y of `chordSouth + 2.5 sp` leaves
+                    // ~0.5 sp of clearance above the glyph top —
+                    // matching MuseScore's `Sid::dynamicsMinDistance`.
+                    let defaultDynY = staffMidY + metrics.sp * 4
+                    let chordSouth = voiceChordSouthByTick[tickCursor]
+                        ?? -.infinity
+                    let chordAvoid = chordSouth + metrics.sp * 2.5
+                    let dynY = max(defaultDynY, chordAvoid)
                     out.append(.textMark(
                         kind: .dynamic,
                         text: d.subtype,
                         origin: CGPoint(
                             x: baseX - metrics.sp,
-                            y: staffMidY + metrics.sp * 4
+                            y: dynY
                         )
                     ))
                 case let .staffText(st):
@@ -601,8 +664,10 @@ extension LayoutEngine {
                         kind: .tempo,
                         text: "♩ = \(bpm)",
                         origin: CGPoint(
-                            x: tempoX,
+                            x: tempoX
+                                + CGFloat(t.offsetX) * metrics.sp,
                             y: staffMidY - metrics.sp * 4
+                                + CGFloat(t.offsetY) * metrics.sp
                         )
                     ))
                 case let .fermata(f):
@@ -655,6 +720,14 @@ extension LayoutEngine {
                             color: rm.color
                         ))
                     }
+                case let .locationShift(delta):
+                    // Voice-level cursor shift. Adds the location's
+                    // fractional delta to `tickCursor` so the next
+                    // non-temporal element (text mark, dynamic,
+                    // tempo, rehearsal mark) attaches at the
+                    // shifted tick. Mirrors MuseScore's
+                    // `setLocation` behaviour during voice read.
+                    tickCursor += delta.ticks(division: division)
                 }
             }
 
@@ -921,6 +994,10 @@ extension LayoutEngine {
         autoPlaceStaffText(
             in: &out, staffMidY: staffMidY, metrics: metrics
         )
+        // After per-element auto-place, resolve same-tick collisions
+        // among above-staff text marks (tempo / staff text / system
+        // text / rehearsal mark) by stacking them upward.
+        autoStackAboveStaffMarks(in: &out, metrics: metrics)
         return (out, currentClef, currentKey)
     }
 

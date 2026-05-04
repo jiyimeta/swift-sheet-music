@@ -87,6 +87,20 @@ extension Voice {
             case "RehearsalMark":
                 try elements.append(.rehearsalMark(
                     RehearsalMark.decode(child)))
+            case "location":
+                // Voice-level cursor shift. MuseScore uses
+                // `<location><fractions>N/D</fractions></location>`
+                // to attach the next non-temporal element (system /
+                // staff text, dynamic, tempo, rehearsal mark) at a
+                // tick that doesn't fall on a chord boundary. The
+                // shift is relative to the current cursor; negative
+                // values jog backwards. `<measures>` only appears in
+                // spanner contexts and is ignored here.
+                if let fracText = child.first("fractions")?.text,
+                   let frac = Fraction(mscxString: fracText)
+                {
+                    elements.append(.locationShift(delta: frac))
+                }
             default:
                 // Unknown elements are silently ignored. Decoder is permissive on purpose
                 // — once we see what features individual MIDI tests actually need, they

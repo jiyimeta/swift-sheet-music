@@ -452,7 +452,7 @@ extension LayoutEngine {
                     w += durationWidth(r.duration, metrics: metrics)
                 case .dynamic, .tempo, .fermata,
                      .measureRepeat, .spanner, .staffText,
-                     .rehearsalMark:
+                     .rehearsalMark, .locationShift:
                     break
                 }
             }
