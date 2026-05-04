@@ -80,7 +80,7 @@ struct SystemSliceCanvas: View {
 /// document canvases. Factored out of `ScoreCanvas` so `SystemCanvas`
 /// can call them too.
 @available(macOS 15.0, iOS 16.0, *)
-public enum ScoreCanvasDrawing {
+public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
     public static func drawSystem(
         _ system: LayoutSystem,
         metrics: StaffMetrics,
@@ -405,9 +405,17 @@ public enum ScoreCanvasDrawing {
                 color: color,
                 metrics: metrics
             )
-        case .harmony:
-            // Wired up in Task 10.
-            break
+        case let .harmony(lh):
+            let p = shift(CGPoint(
+                x: CGFloat(lh.anchorX),
+                y: CGFloat(lh.y)
+            ))
+            HarmonyRenderer.draw(
+                context: &context,
+                harmony: lh,
+                origin: p,
+                metrics: metrics
+            )
         case let .lyricsMelisma(from, to):
             var path = Path()
             path.move(to: shift(from))

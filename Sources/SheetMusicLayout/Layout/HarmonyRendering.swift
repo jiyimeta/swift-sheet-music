@@ -21,6 +21,14 @@ public enum HarmonyRendering {
         for harmony: Harmony,
         metrics: StaffMetrics
     ) -> [HarmonyRun] {
+        // Serialise the entire CT-using path. CoreText's
+        // `CTFontCreateWithName` and `CTLineCreateWithAttributedString`
+        // hit a global lock for unregistered family names and
+        // deadlock under concurrent access (Swift Testing runs test
+        // functions in parallel). One mutex around the whole pipeline
+        // is simpler and faster than diagnosing CT's lock topology.
+        ctLock.lock()
+        defer { ctLock.unlock() }
         let kindedSlices = parseSlices(
             name: harmony.name, harmonyType: harmony.harmonyType
         )
@@ -61,6 +69,9 @@ public enum HarmonyRendering {
         }
         return runs
     }
+
+    /// Single mutex guarding all CoreText calls in this enum.
+    private nonisolated(unsafe) static let ctLock = NSLock()
 
     /// Sum of the `advance` values. Equivalent to the rightmost
     /// run's `x + advance`. Provided as a separate helper because
@@ -167,10 +178,18 @@ public enum HarmonyRendering {
             ?? harmony.styleType.museScoreDefault.face
     }
 
+    /// Per-(face, size) CTFont cache. Caller already holds `ctLock`.
+    private nonisolated(unsafe) static var fontCache:
+        [String: CTFont] = [:]
+
     private static func makeFont(
         face: String, pointSize: CGFloat
     ) -> CTFont {
-        CTFontCreateWithName(face as CFString, pointSize, nil)
+        let key = "\(face)|\(pointSize)"
+        if let cached = fontCache[key] { return cached }
+        let font = CTFontCreateWithName(face as CFString, pointSize, nil)
+        fontCache[key] = font
+        return font
     }
 
     /// CoreText typesetting advance for a string in `font`. Falls
