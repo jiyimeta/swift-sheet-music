@@ -143,4 +143,22 @@ extension HarmonyTests {
                 "<Harmony><name>C</name></Harmony>".utf8)))
         #expect(h.harmonyType == .standard)
     }
+
+    @Test func voiceDecoderRecognizesHarmony() throws {
+        let xml = """
+        <voice>
+          <Harmony><name>Am7</name></Harmony>
+          <Chord><durationType>quarter</durationType>
+            <Note><pitch>60</pitch><tpc>14</tpc></Note></Chord>
+        </voice>
+        """
+        let voice = try Voice.decode(
+            XMLTreeParser.parse(Data(xml.utf8)))
+        #expect(voice.elements.count == 2)
+        guard case let .harmony(h) = voice.elements[0] else {
+            Issue.record("element 0 is not .harmony")
+            return
+        }
+        #expect(h.name == "Am7")
+    }
 }

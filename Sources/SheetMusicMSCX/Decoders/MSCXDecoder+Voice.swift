@@ -84,6 +84,8 @@ extension Voice {
             case "SystemText":
                 try elements.append(.staffText(
                     StaffText.decode(child, isSystemText: true)))
+            case "Harmony":
+                try elements.append(.harmony(Harmony.decode(child)))
             case "RehearsalMark":
                 try elements.append(.rehearsalMark(
                     RehearsalMark.decode(child)))
