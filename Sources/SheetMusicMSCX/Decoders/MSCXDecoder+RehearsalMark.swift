@@ -13,15 +13,20 @@ extension RehearsalMark {
         let color = node.first("color").flatMap(decodeColor(_:))
         let offset = node.first("offset")
             .map(decodeOffset(_:)) ?? (0, 0)
-        let frame = node.first("frameType")
-            .flatMap { Int($0.text) }
-            .map(decodeFrame(_:)) ?? .rectangle
+        var props = TextProperties.decode(node)
+        // RehearsalMark's per-element `frame` field already covers
+        // `<frameType>`; lift it out of `properties` so callers can
+        // keep using `mark.frame` directly. Default = SQUARE
+        // (matches `Sid::rehearsalMarkFrameType`).
+        let frame = props.frameType ?? .rectangle
+        props.frameType = nil
         return RehearsalMark(
             text: text,
             offsetX: offset.0,
             offsetY: offset.1,
             color: color,
-            frame: frame
+            frame: frame,
+            properties: props
         )
     }
 
@@ -57,14 +62,5 @@ extension RehearsalMark {
         let x = attrs["x"].flatMap(Double.init) ?? 0
         let y = attrs["y"].flatMap(Double.init) ?? 0
         return (x, y)
-    }
-
-    private static func decodeFrame(_ raw: Int) -> FrameKind {
-        switch raw {
-        case 0: .rectangle
-        case 1: .circle
-        case 2: .none
-        default: .rectangle
-        }
     }
 }

@@ -14,12 +14,14 @@ extension StaffText {
         let color = node.first("color").flatMap(decodeColor(_:))
         let offset = node.first("offset")
             .map(decodeOffset(_:)) ?? (0, 0)
+        let props = TextProperties.decode(node)
         return StaffText(
             text: text,
             offsetX: offset.0,
             offsetY: offset.1,
             color: color,
-            isSystemText: isSystemText
+            isSystemText: isSystemText,
+            properties: props
         )
     }
 

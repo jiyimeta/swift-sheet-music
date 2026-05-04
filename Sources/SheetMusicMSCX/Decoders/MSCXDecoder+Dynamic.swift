@@ -18,6 +18,10 @@ extension Dynamic {
         } else {
             velocity = defaultVelocity[subtype] ?? 80
         }
-        return Dynamic(subtype: subtype, velocity: velocity)
+        return Dynamic(
+            subtype: subtype,
+            velocity: velocity,
+            properties: TextProperties.decode(node)
+        )
     }
 }

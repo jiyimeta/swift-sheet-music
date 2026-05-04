@@ -34,12 +34,16 @@ extension Chord {
                 .flatMap(Syllabic.init(mscxValue:)) ?? .single
             let ticks = Int(lyricsNode.first("ticks")?.text ?? "0") ?? 0
             lyricsMap[verse] = Lyric(
-                text: text, syllabic: syllabic, ticks: ticks
+                text: text, syllabic: syllabic, ticks: ticks,
+                verse: verse,
+                properties: TextProperties.decode(lyricsNode)
             )
         }
         let maxVerse = lyricsMap.keys.max() ?? -1
         let lyrics: [Lyric] = maxVerse >= 0
-            ? (0 ... maxVerse).map { lyricsMap[$0] ?? Lyric(text: "") }
+            ? (0 ... maxVerse).map { i in
+                lyricsMap[i] ?? Lyric(text: "", verse: i)
+            }
             : []
 
         return Chord(
