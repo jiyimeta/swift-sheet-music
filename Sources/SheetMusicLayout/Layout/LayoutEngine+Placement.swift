@@ -728,9 +728,37 @@ extension LayoutEngine {
                     // shifted tick. Mirrors MuseScore's
                     // `setLocation` behaviour during voice read.
                     tickCursor += delta.ticks(division: division)
-                case .harmony:
-                    // Wired up in Task 7.
-                    break
+                case let .harmony(harmony):
+                    // Anchor at the next timed-element column (or
+                    // header start while still in the header). Mirror
+                    // .staffText: flush the header phase before
+                    // placing the harmony at the chord column.
+                    let stX = inHeader
+                        ? headerSchedule.contentStartX
+                        : timedX(atTick: tickCursor)
+                    inHeader = false
+                    let runs = HarmonyRendering.runs(
+                        for: harmony, metrics: metrics
+                    )
+                    let width = HarmonyRendering.width(of: runs)
+                    // staffMidY → staffTop is `staffMidY - sp * 2`
+                    // (5-line staff). Shifting by harmonyPlacementAbove
+                    // (-2.5 sp) puts the symbol just clear of the top
+                    // line. The author's `<offset y>` adds on top.
+                    let staffTopLocal = staffMidY - metrics.sp * 2
+                    let yLocal = staffTopLocal
+                        + metrics.harmonyPlacementAbove
+                        + CGFloat(harmony.offsetY) * metrics.sp
+                    let anchorX = Double(
+                        stX + CGFloat(harmony.offsetX) * metrics.sp
+                    )
+                    out.append(.harmony(LayoutHarmony(
+                        harmony: harmony,
+                        anchorX: anchorX,
+                        y: Double(yLocal),
+                        runs: runs,
+                        width: width
+                    )))
                 }
             }
 

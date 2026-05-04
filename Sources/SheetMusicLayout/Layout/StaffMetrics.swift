@@ -32,4 +32,9 @@ public struct StaffMetrics: Sendable, Equatable {
     /// 4 sp value over-stretched measures, especially under
     /// lyrics, and reduced systems-per-page by ~40 %.
     public var spacePerQuarter: CGFloat { sp * 1.6 }
+    /// Default Y origin for chord symbols, in points (relative to
+    /// the staff top). Negative = above the staff. -2.5 sp matches
+    /// MuseScore's `Sid::chordSymbolAPlacement = above` with the
+    /// default 0.5 sp offset clear of the staff.
+    public var harmonyPlacementAbove: CGFloat { sp * -2.5 }
 }

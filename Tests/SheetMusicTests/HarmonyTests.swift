@@ -304,6 +304,42 @@ extension HarmonyTests {
         #expect(HarmonyAccidental.doubleSharp.codepoint == "\u{E263}")
     }
 
+    @available(macOS 15.0, iOS 16.0, *)
+    @Test func layoutEmitsHarmonyAboveStaff() throws {
+        let url = try #require(Bundle.module.url(
+            forResource: "harmony-basic", withExtension: "mscx"
+        ))
+        let score = try SheetMusic.loadScore(mscxURL: url)
+        let document = LayoutEngine.layout(
+            score: score,
+            options: ScoreViewOptions(staffSize: 28),
+            availableWidth: 800
+        )
+        var foundHarmony: LayoutHarmony?
+        var clefY: CGFloat?
+        outer: for system in document.systems {
+            for measure in system.measures {
+                for el in measure.elements {
+                    if case let .harmony(lh) = el, foundHarmony == nil {
+                        foundHarmony = lh
+                    }
+                    if case let .clef(_, p) = el, clefY == nil {
+                        clefY = p.y
+                    }
+                    if foundHarmony != nil, clefY != nil { break outer }
+                }
+            }
+        }
+        let lh = try #require(foundHarmony)
+        let clefMidY = try #require(clefY)
+        // Harmony sits ABOVE the staff (clef glyph anchored at staff
+        // mid-line). With y measured downward, harmony.y must be
+        // less than the clef's anchor.
+        #expect(lh.y < Double(clefMidY))
+        #expect(lh.runs.isEmpty == false)
+        #expect(lh.harmony.name == "C")
+    }
+
     @Test func basicFixtureExposesFiveHarmonies() throws {
         let url = try #require(Bundle.module.url(
             forResource: "harmony-basic", withExtension: "mscx"
