@@ -313,12 +313,10 @@ extension ScoreLayerBuilder {
         return composite.isEmpty ? nil : composite
     }
 
-    /// Text-layer "kind" — picks the font family. MuseScore's
-    /// engraving uses different fonts for chrome (system serif),
-    /// dynamics / tempo (italic system), and lyrics (Edwin / Times
-    /// at regular weight). We approximate Edwin with Times, which
-    /// renders ~25 % narrower than the SF Pro semibold the rest
-    /// of the score uses.
+    /// Legacy text-layer "kind" knob, kept for renderers that
+    /// haven't yet been migrated to `ResolvedTextStyle`. New code
+    /// should pass an explicit `font:` (a `CTFont` derived from a
+    /// `TextStyleType`) and ignore this enum.
     enum TextLayerKind { case expression, lyrics }
 
     static func textLayer(
@@ -330,21 +328,25 @@ extension ScoreLayerBuilder {
         rotation: CGFloat = 0,
         color: CGColor = inkColor,
         kind: TextLayerKind = .expression,
+        font explicitFont: CTFont? = nil,
         height: CGFloat
     ) -> CAShapeLayer? {
         guard !text.isEmpty else { return nil }
         let font: CTFont
-        switch kind {
-        case .expression:
-            font = systemFont(size: size, italic: italic)
-        case .lyrics:
-            // System font at regular weight — ~15 % narrower
-            // than the semibold used for expression text, with
-            // proper CJK fallback. See `drawLyricText` in
-            // `GraphicsContext+Glyph.swift` for the matching
-            // Canvas-side rendering and the font-choice
-            // rationale.
-            font = lyricFont(size: size)
+        if let explicitFont {
+            font = explicitFont
+        } else {
+            switch kind {
+            case .expression:
+                font = systemFont(size: size, italic: italic)
+            case .lyrics:
+                // Fallback used by older call sites; the in-scope
+                // text styles (dynamics, tempo, rehearsalMark,
+                // staffText, lyrics, pedal) now go through
+                // `ResolvedTextStyle` and pass an explicit
+                // Edwin-based CTFont via the `font:` parameter.
+                font = lyricFont(size: size)
+            }
         }
         guard let path = textPath(text, font: font) else { return nil }
         let bbox = path.boundingBoxOfPath

@@ -71,29 +71,40 @@ extension ScoreLayerBuilder {
                 context: &context, into: parent
             )
         case let .textMark(.dynamic, text, p):
+            let style = ResolvedTextStyle.resolve(
+                .dynamics, metrics: metrics
+            )
             if let layer = textLayer(
                 text: text, at: shift(p),
-                size: metrics.sp * 2.5, italic: true,
+                size: style.pointSize, italic: style.isItalic,
                 anchor: CGPoint(x: 0, y: 0.5),
+                font: style.ctFont,
                 height: height
             ) {
                 parent.addSublayer(layer)
             }
         case let .textMark(.tempo, text, p):
+            let style = ResolvedTextStyle.resolve(
+                .tempo, metrics: metrics
+            )
             if let layer = textLayer(
                 text: text, at: shift(p),
-                size: metrics.sp * 2.2, italic: false,
+                size: style.pointSize, italic: style.isItalic,
                 anchor: CGPoint(x: 0, y: 0.5),
+                font: style.ctFont,
                 height: height
             ) {
                 parent.addSublayer(layer)
             }
         case let .textMark(.lyrics, text, p):
+            let style = ResolvedTextStyle.resolve(
+                .lyricsOdd, metrics: metrics
+            )
             if let layer = textLayer(
                 text: text, at: shift(p),
-                size: metrics.sp * 2.2, italic: false,
+                size: style.pointSize, italic: style.isItalic,
                 anchor: CGPoint(x: 0.5, y: 0.5),
-                kind: .lyrics,
+                font: style.ctFont,
                 height: height
             ) {
                 parent.addSublayer(layer)
@@ -188,18 +199,22 @@ extension ScoreLayerBuilder {
             {
                 parent.addSublayer(layer)
             }
-        case let .staffText(text, p, color, _):
+        case let .staffText(text, p, color, isSystem):
             // Author-supplied staff/system text. Colour and offset
             // (already baked into `p` by placement) come from the
             // source `.mscx`. Bottom-leading anchor at `p` matches
             // the placement convention used for dynamics/tempo.
+            let style = ResolvedTextStyle.resolve(
+                isSystem ? .systemText : .staffText, metrics: metrics
+            )
             if !text.isEmpty,
                let layer = textLayer(
                    text: text, at: shift(p),
-                   size: metrics.sp * 2.2, italic: false,
+                   size: style.pointSize, italic: style.isItalic,
                    anchor: CGPoint(x: 0, y: 1),
                    color: color.map(scoreColorToCGColor)
                        ?? Self.inkColor,
+                   font: style.ctFont,
                    height: height
                )
             {

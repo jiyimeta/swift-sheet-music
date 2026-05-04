@@ -146,18 +146,24 @@ extension ScoreLayerBuilder {
         metrics: StaffMetrics, height: CGFloat,
         into parent: CALayer
     ) {
+        // MuseScore default: Edwin 10 pt (`Sid::pedalFontFace/Size`).
+        let style = ResolvedTextStyle.resolve(
+            .pedal, metrics: metrics
+        )
         if let layer = textLayer(
             text: "Ped.", at: from,
-            size: metrics.sp * 2.5, italic: true,
+            size: style.pointSize, italic: style.isItalic,
             anchor: CGPoint(x: 0, y: 0.5),
+            font: style.ctFont,
             height: height
         ) {
             parent.addSublayer(layer)
         }
         if let layer = textLayer(
             text: "*", at: to,
-            size: metrics.sp * 3, italic: false,
+            size: style.pointSize, italic: style.isItalic,
             anchor: CGPoint(x: 0, y: 0.5),
+            font: style.ctFont,
             height: height
         ) {
             parent.addSublayer(layer)

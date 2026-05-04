@@ -1,3 +1,4 @@
+import SheetMusicCore
 import SheetMusicLayout
 import SwiftUI
 
@@ -122,14 +123,16 @@ enum SpannerRenderer {
         context: inout GraphicsContext, from: CGPoint, to: CGPoint,
         metrics: StaffMetrics
     ) {
-        context.drawExpressionText(
-            "Ped.", at: from,
-            size: metrics.sp * 2.5, italic: true
-        )
-        context.drawExpressionText(
-            "*", at: to,
-            size: metrics.sp * 3, italic: false
-        )
+        // MuseScore default: Edwin 10 pt, normal weight (the actual
+        // pedal glyph is a SMuFL keyboardPedalPed; rendering it with
+        // the SMuFL font is a follow-up task).
+        let style = ResolvedTextStyle.resolve(.pedal, metrics: metrics)
+        let pedText = context.resolve(
+            Text("Ped.").foregroundColor(.primary).font(style.font))
+        context.draw(pedText, at: from, anchor: .leading)
+        let starText = context.resolve(
+            Text("*").foregroundColor(.primary).font(style.font))
+        context.draw(starText, at: to, anchor: .leading)
     }
 
     private static func drawOttava(

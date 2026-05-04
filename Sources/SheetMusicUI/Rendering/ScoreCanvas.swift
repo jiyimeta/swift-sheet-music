@@ -301,10 +301,9 @@ public enum ScoreCanvasDrawing {
                 origin: shift(p), metrics: metrics
             )
         case let .textMark(.lyrics, text, p):
-            context.drawLyricText(
-                text, at: shift(p),
-                size: metrics.sp * 2.2,
-                anchor: .center
+            TextMarkRenderer.drawLyric(
+                context: &context, text: text,
+                origin: shift(p), metrics: metrics
             )
         case let .beam(from, to, direction, level):
             BeamRenderer.draw(

@@ -231,16 +231,19 @@ extension ScoreLayerBuilder {
 
     static func drawRehearsalMark(
         text: String, origin: CGPoint,
-        frame: RehearsalMark.FrameKind, color: CGColor,
+        frame: TextFrameType, color: CGColor,
         metrics: StaffMetrics, height: CGFloat,
         into parent: CALayer
     ) {
         guard !text.isEmpty else { return }
-        // MuseScore `Sid::rehearsalMarkFontSize` = 14pt at the
-        // engraving reference of 1 sp = 5 pt with `FontSpatiumDependent
-        // = true` ⇒ 14/5 = 2.8 sp.
-        let textSize = metrics.sp * 2.8
-        let font = systemFont(size: textSize, italic: false)
+        // MuseScore `Sid::rehearsalMarkFontSize` = 14 pt with
+        // `FontSpatiumDependent = true`; resolved through
+        // `TextStyleType.rehearsalMark` (Edwin 14 pt bold).
+        let style = ResolvedTextStyle.resolve(
+            .rehearsalMark, metrics: metrics
+        )
+        let textSize = style.pointSize
+        let font = style.ctFont
 
         // Measure the text via CTLine so we know the frame's
         // typographic bounds. Bounding the path's ink would clip the
@@ -269,9 +272,10 @@ extension ScoreLayerBuilder {
 
         if let layer = textLayer(
             text: text, at: textOrigin,
-            size: textSize, italic: false,
+            size: textSize, italic: style.isItalic,
             anchor: CGPoint(x: 0, y: 1),
             color: color,
+            font: font,
             height: height
         ) {
             parent.addSublayer(layer)

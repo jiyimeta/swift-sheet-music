@@ -8,16 +8,18 @@ enum RehearsalMarkRenderer {
         context: inout GraphicsContext,
         text: String,
         origin: CGPoint,
-        frame: RehearsalMark.FrameKind,
+        frame: TextFrameType,
         color: ScoreColor?,
+        properties: TextProperties = TextProperties(),
         metrics: StaffMetrics
     ) {
         guard !text.isEmpty else { return }
-        // MuseScore defaults: `Sid::rehearsalMarkFontSize` = 14pt with
-        // FontSpatiumDependent ⇒ 14/5 = 2.8 sp.
-        // `Sid::rehearsalMarkFramePadding` = 0.5 sp.
-        let textSize = metrics.sp * 2.8
-        let pad = metrics.sp * 0.5
+        // MuseScore defaults via TextStyleType.rehearsalMark:
+        // Edwin 14 pt bold, frameType=square, framePadding=0.5 sp.
+        let style = ResolvedTextStyle.resolve(
+            .rehearsalMark, overrides: properties, metrics: metrics
+        )
+        let pad = style.framePadding
 
         let textColor: Color
         if let c = color {
@@ -34,7 +36,7 @@ enum RehearsalMarkRenderer {
         let resolved = context.resolve(
             Text(text)
                 .foregroundColor(textColor)
-                .font(.system(size: textSize, weight: .semibold)))
+                .font(style.font))
         let measured = resolved.measure(in: CGSize(
             width: CGFloat.greatestFiniteMagnitude,
             height: CGFloat.greatestFiniteMagnitude
@@ -59,28 +61,31 @@ enum RehearsalMarkRenderer {
             width: boxWidth,
             height: boxHeight
         )
-        // `Sid::rehearsalMarkFrameWidth` default.
-        let lineWidth = metrics.sp * 0.16
-        var framePath: Path?
+        if let p = framePath(for: frame, around: boxRect) {
+            // `Sid::rehearsalMarkFrameWidth` default.
+            context.stroke(
+                p, with: .color(textColor),
+                lineWidth: metrics.sp * 0.16
+            )
+        }
+    }
+
+    private static func framePath(
+        for frame: TextFrameType, around boxRect: CGRect
+    ) -> Path? {
         switch frame {
         case .none:
-            framePath = nil
+            return nil
         case .rectangle:
-            framePath = Path(boxRect)
+            return Path(boxRect)
         case .circle:
             let diameter = max(boxRect.width, boxRect.height)
-            framePath = Path(ellipseIn: CGRect(
+            return Path(ellipseIn: CGRect(
                 x: boxRect.midX - diameter / 2,
                 y: boxRect.midY - diameter / 2,
                 width: diameter,
                 height: diameter
             ))
-        }
-        if let p = framePath {
-            context.stroke(
-                p, with: .color(textColor),
-                lineWidth: lineWidth
-            )
         }
     }
 }
