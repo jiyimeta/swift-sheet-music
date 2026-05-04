@@ -73,6 +73,8 @@ extension LayoutEngine {
         case let .lyricsMelisma(from, to),
              let .lyricHyphen(from, to):
             return [from.y, to.y]
+        case let .harmony(lh):
+            return [CGFloat(lh.y)]
         }
     }
 

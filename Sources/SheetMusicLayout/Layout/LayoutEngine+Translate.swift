@@ -133,6 +133,17 @@ extension LayoutEngine {
                 text: text, origin: shift(p),
                 frame: frame, color: color
             )
+        case let .harmony(lh):
+            // Apply per-staff dy to the anchor point. The runs are
+            // laid out relative to `anchorX`, so their `x` values
+            // are unaffected.
+            return .harmony(LayoutHarmony(
+                harmony: lh.harmony,
+                anchorX: lh.anchorX,
+                y: lh.y + Double(dy),
+                runs: lh.runs,
+                width: lh.width
+            ))
         case .note, .marker, .jump, .measureNumber, .staffName,
              .spannerSegment, .tieArc:
             return element

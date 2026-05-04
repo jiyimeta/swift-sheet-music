@@ -1,6 +1,7 @@
 import Foundation
 @testable import SheetMusic
 @testable import SheetMusicCore
+@testable import SheetMusicLayout
 @testable import SheetMusicMSCX
 @testable import SheetMusicXMLTools
 import Testing
@@ -161,6 +162,35 @@ extension HarmonyTests {
             return
         }
         #expect(h.name == "Am7")
+    }
+
+    @available(macOS 15.0, iOS 16.0, *)
+    @Test func layoutHarmonyTypeShapeCompiles() {
+        let runs: [HarmonyRun] = [
+            HarmonyRun(
+                kind: .text, content: "F",
+                advance: 5.0, x: 0
+            ),
+            HarmonyRun(
+                kind: .accidental(.sharp), content: "",
+                advance: 4.0, x: 5.0
+            ),
+        ]
+        let lh = LayoutHarmony(
+            harmony: Harmony(name: "F#"),
+            anchorX: 100, y: -10,
+            runs: runs, width: 9.0
+        )
+        let element: LayoutElement = .harmony(lh)
+        guard case let .harmony(unwrapped) = element else {
+            Issue.record("expected .harmony case"); return
+        }
+        #expect(unwrapped.runs.count == 2)
+        #expect(unwrapped.width == 9.0)
+        #expect(HarmonyAccidental.flat.codepoint == "\u{E260}")
+        #expect(HarmonyAccidental.doubleFlat.codepoint == "\u{E264}")
+        #expect(HarmonyAccidental.sharp.codepoint == "\u{E262}")
+        #expect(HarmonyAccidental.doubleSharp.codepoint == "\u{E263}")
     }
 
     @Test func basicFixtureExposesFiveHarmonies() throws {

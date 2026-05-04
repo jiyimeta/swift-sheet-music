@@ -239,6 +239,9 @@ extension ScoreLayerBuilder {
             {
                 parent.addSublayer(layer)
             }
+        case .harmony:
+            // Wired up in Task 11.
+            break
         case let .staffName(text, p):
             // Staff name in the sticky pane: bottom-leading anchor
             // so the text sits ABOVE the staff with its left edge at

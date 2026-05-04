@@ -405,6 +405,9 @@ public enum ScoreCanvasDrawing {
                 color: color,
                 metrics: metrics
             )
+        case .harmony:
+            // Wired up in Task 10.
+            break
         case let .lyricsMelisma(from, to):
             var path = Path()
             path.move(to: shift(from))

@@ -71,6 +71,11 @@ public enum LayoutElement: Sendable, Equatable {
         color: ScoreColor?,
         isSystemText: Bool
     )
+    /// Pre-typeset chord symbol with a baked-in run list (text +
+    /// SMuFL accidental glyphs) and total width. The placement
+    /// and run structure are computed at layout time so renderers
+    /// just walk the runs.
+    case harmony(LayoutHarmony)
     case fermata(subtype: String, origin: CGPoint)
     case marker(kind: Marker.Kind, text: String, origin: CGPoint)
     /// Rehearsal letter / number drawn above the top staff at the
