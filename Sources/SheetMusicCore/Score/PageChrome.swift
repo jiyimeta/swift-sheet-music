@@ -154,4 +154,5 @@ public struct FontStyleSet: OptionSet, Sendable, Hashable {
     public static let bold = FontStyleSet(rawValue: 1 << 0)
     public static let italic = FontStyleSet(rawValue: 1 << 1)
     public static let underline = FontStyleSet(rawValue: 1 << 2)
+    public static let strike = FontStyleSet(rawValue: 1 << 3)
 }
