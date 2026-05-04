@@ -25,6 +25,7 @@ targets:
         excludes:
           - macOS
           - Sounds
+          - Resources/Fonts
       # Folder reference (blue folder) — preserves the `Sounds/`
       # subdirectory inside the .app bundle so
       # `Bundle.url(forResource:..., subdirectory: "Sounds")`
@@ -33,6 +34,12 @@ targets:
       - path: SheetMusicExample/Sounds
         type: folder
         optional: true
+      # Edwin (OFL) — MuseScore's default text font. Bundled into
+      # the example app (not into the SheetMusic SwiftPM package)
+      # so library consumers can supply their own face if they
+      # prefer. `SheetMusicFonts.register` is called at app launch.
+      - path: SheetMusicExample/Resources/Fonts
+        type: folder
     dependencies:
       - package: swift-sheet-music
         product: SheetMusic
@@ -57,9 +64,12 @@ targets:
       - path: SheetMusicExample
         excludes:
           - Sounds
+          - Resources/Fonts
       - path: SheetMusicExample/Sounds
         type: folder
         optional: true
+      - path: SheetMusicExample/Resources/Fonts
+        type: folder
     dependencies:
       - package: swift-sheet-music
         product: SheetMusic

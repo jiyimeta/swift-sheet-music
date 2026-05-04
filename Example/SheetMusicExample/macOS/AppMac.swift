@@ -3,6 +3,10 @@
 
     @main
     struct SheetMusicExampleMacApp: App {
+        init() {
+            EdwinFontLoader.registerOnce()
+        }
+
         var body: some Scene {
             WindowGroup {
                 ContentViewMac()

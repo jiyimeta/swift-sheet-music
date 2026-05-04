@@ -3,6 +3,10 @@
 
     @main
     struct SheetMusicExampleApp: App {
+        init() {
+            EdwinFontLoader.registerOnce()
+        }
+
         var body: some Scene {
             WindowGroup {
                 ContentView()
