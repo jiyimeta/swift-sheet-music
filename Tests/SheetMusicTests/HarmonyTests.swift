@@ -165,6 +165,117 @@ extension HarmonyTests {
     }
 
     @available(macOS 15.0, iOS 16.0, *)
+    @Test func sharpAfterLetterIsSubstituted() {
+        let runs = HarmonyRendering.runs(
+            for: Harmony(name: "F#"),
+            metrics: StaffMetrics(staffSize: 28)
+        )
+        #expect(runs.count == 2)
+        #expect(runs[0].kind == .text)
+        #expect(runs[0].content == "F")
+        #expect(runs[1].kind == .accidental(.sharp))
+    }
+
+    @available(macOS 15.0, iOS 16.0, *)
+    @Test func flatAfterLetterIsSubstituted() {
+        let runs = HarmonyRendering.runs(
+            for: Harmony(name: "Bb"),
+            metrics: StaffMetrics(staffSize: 28)
+        )
+        #expect(runs.count == 2)
+        #expect(runs[0].content == "B")
+        #expect(runs[1].kind == .accidental(.flat))
+    }
+
+    @available(macOS 15.0, iOS 16.0, *)
+    @Test func doubleFlatIsSubstituted() {
+        let runs = HarmonyRendering.runs(
+            for: Harmony(name: "Bbb"),
+            metrics: StaffMetrics(staffSize: 28)
+        )
+        #expect(runs.count == 2)
+        #expect(runs[0].content == "B")
+        #expect(runs[1].kind == .accidental(.doubleFlat))
+    }
+
+    @available(macOS 15.0, iOS 16.0, *)
+    @Test func doubleSharpIsSubstituted() {
+        let runs = HarmonyRendering.runs(
+            for: Harmony(name: "F##"),
+            metrics: StaffMetrics(staffSize: 28)
+        )
+        #expect(runs.count == 2)
+        #expect(runs[0].content == "F")
+        #expect(runs[1].kind == .accidental(.doubleSharp))
+    }
+
+    @available(macOS 15.0, iOS 16.0, *)
+    @Test func slashChordHasMultipleAccidentals() {
+        let runs = HarmonyRendering.runs(
+            for: Harmony(name: "F#m7b5/Ab"),
+            metrics: StaffMetrics(staffSize: 28)
+        )
+        let kinds = runs.map(\.kind)
+        #expect(kinds == [
+            .text,
+            .accidental(.sharp),
+            .text,
+            .accidental(.flat),
+            .text,
+            .accidental(.flat),
+        ])
+    }
+
+    @available(macOS 15.0, iOS 16.0, *)
+    @Test func romanLeadingFlatIsSubstituted() {
+        let runs = HarmonyRendering.runs(
+            for: Harmony(name: "bIII", harmonyType: .roman),
+            metrics: StaffMetrics(staffSize: 28)
+        )
+        #expect(runs.count == 2)
+        #expect(runs[0].kind == .accidental(.flat))
+        #expect(runs[1].content == "III")
+    }
+
+    @available(macOS 15.0, iOS 16.0, *)
+    @Test func standardLeadingFlatIsNotSubstituted() {
+        let runs = HarmonyRendering.runs(
+            for: Harmony(name: "bVII", harmonyType: .standard),
+            metrics: StaffMetrics(staffSize: 28)
+        )
+        #expect(runs.count == 1)
+        #expect(runs[0].content == "bVII")
+    }
+
+    @available(macOS 15.0, iOS 16.0, *)
+    @Test func widthAccumulatesAcrossRuns() {
+        let runs = HarmonyRendering.runs(
+            for: Harmony(name: "F#"),
+            metrics: StaffMetrics(staffSize: 28)
+        )
+        let width = HarmonyRendering.width(of: runs)
+        let summed = runs.reduce(0.0) { $0 + $1.advance }
+        #expect(width == summed)
+        #expect(width > 0)
+        var cumulative = 0.0
+        for run in runs {
+            #expect(run.x == cumulative)
+            cumulative += run.advance
+        }
+    }
+
+    @available(macOS 15.0, iOS 16.0, *)
+    @Test func nashvilleLeadingSharpIsSubstituted() {
+        let runs = HarmonyRendering.runs(
+            for: Harmony(name: "#1", harmonyType: .nashville),
+            metrics: StaffMetrics(staffSize: 28)
+        )
+        #expect(runs.count == 2)
+        #expect(runs[0].kind == .accidental(.sharp))
+        #expect(runs[1].content == "1")
+    }
+
+    @available(macOS 15.0, iOS 16.0, *)
     @Test func layoutHarmonyTypeShapeCompiles() {
         let runs: [HarmonyRun] = [
             HarmonyRun(
