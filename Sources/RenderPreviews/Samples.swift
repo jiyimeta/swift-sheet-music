@@ -828,6 +828,46 @@
             )
         }
 
+        // MARK: - 25 chord symbols (harmony) above the staff
+
+        /// Five-measure scale with one chord symbol per measure. Bar 1
+        /// is plain `C`; bar 2 a 7th chord; bar 3 exercises both
+        /// accidental substitutions inside one slash chord; bar 4 is
+        /// a Roman numeral with a leading flat (Campania face); bar 5
+        /// repeats `C` to give a baseline at the end.
+        static var harmonyBasic: Score {
+            let c4 = Note(pitch: 60, tpc: 14)
+            func bar(
+                _ harmonies: [Harmony],
+                isFirst: Bool = false
+            ) -> Measure {
+                var elements: [VoiceElement] = []
+                if isFirst {
+                    elements.append(.clef(Clef(concertClefType: "G")))
+                    elements.append(.timeSignature(
+                        TimeSignature(numerator: 4, denominator: 4)))
+                }
+                for h in harmonies {
+                    elements.append(.harmony(h))
+                }
+                elements.append(.chord(Chord(duration: .whole, notes: [c4])))
+                return Measure(voices: [Voice(elements: elements)])
+            }
+            return Score(
+                division: 480,
+                parts: [treblePart(measures: [
+                    bar([Harmony(name: "C")], isFirst: true),
+                    bar([Harmony(name: "Am7")]),
+                    bar([Harmony(name: "F#m7b5/Ab")]),
+                    bar([Harmony(name: "bIII", harmonyType: .roman)]),
+                    bar([Harmony(
+                        name: "C",
+                        leftParen: true, rightParen: true
+                    )]),
+                ])]
+            )
+        }
+
         // MARK: - helpers
 
         private static func treblePart(measures: [Measure] = []) -> Part {
