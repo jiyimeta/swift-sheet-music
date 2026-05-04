@@ -62,7 +62,12 @@ public enum HarmonyRendering {
         // captures inter-character spacing because CTLine measures
         // the rendered pixel extent of the whole string.
         let textGap = textSize * 0.10
-        let accidentalGap = glyphSize * 0.10
+        // Tighten the gap on either side of accidental glyphs to a
+        // hair (~0.04 em). Bravura's chord-symbol accidentals are
+        // visually inset enough that even 0.10 em looks like loose
+        // padding next to ASCII letters whose strokes butt right up
+        // to the cell edge.
+        let accidentalGap = glyphSize * 0.04
         var runs: [HarmonyRun] = []
         var cursor: Double = 0
         for slice in kindedSlices {
