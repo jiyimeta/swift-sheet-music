@@ -1,4 +1,5 @@
 import Foundation
+@testable import SheetMusic
 @testable import SheetMusicCore
 @testable import SheetMusicMSCX
 @testable import SheetMusicXMLTools
@@ -160,5 +161,23 @@ extension HarmonyTests {
             return
         }
         #expect(h.name == "Am7")
+    }
+
+    @Test func basicFixtureExposesFiveHarmonies() throws {
+        let url = try #require(Bundle.module.url(
+            forResource: "harmony-basic", withExtension: "mscx"
+        ))
+        let score = try SheetMusic.loadScore(mscxURL: url)
+        let harmonies: [Harmony] = score.parts[0].staves[0].measures
+            .flatMap { $0.voices[0].elements }
+            .compactMap {
+                if case let .harmony(h) = $0 { return h } else { return nil }
+            }
+        #expect(harmonies.count == 5)
+        #expect(harmonies.map(\.name)
+            == ["C", "Am7", "F#m7b5/A", "bIII", "C"])
+        #expect(harmonies[3].harmonyType == .roman)
+        #expect(harmonies[4].leftParen)
+        #expect(harmonies[4].rightParen)
     }
 }

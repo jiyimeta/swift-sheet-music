@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<museScore version="4.40">
+  <Score>
+    <Division>480</Division>
+    <Part id="1">
+      <Staff id="1">
+        <StaffType group="pitched">
+          <name>stdNormal</name>
+        </StaffType>
+      </Staff>
+      <Instrument id="voice">
+        <longName>Voice</longName>
+        <shortName>Vo.</shortName>
+        <trackName>Voice</trackName>
+        <Channel>
+          <program value="0"/>
+        </Channel>
+      </Instrument>
+    </Part>
+    <Staff id="1">
+      <Measure>
+        <voice>
+          <Clef><concertClefType>G</concertClefType></Clef>
+          <KeySig><concertKey>0</concertKey></KeySig>
+          <TimeSig><sigN>4</sigN><sigD>4</sigD></TimeSig>
+          <Harmony><name>C</name></Harmony>
+          <Rest><durationType>measure</durationType><duration>4/4</duration></Rest>
+        </voice>
+      </Measure>
+      <Measure>
+        <voice>
+          <Harmony><name>Am7</name></Harmony>
+          <Rest><durationType>measure</durationType><duration>4/4</duration></Rest>
+        </voice>
+      </Measure>
+      <Measure>
+        <voice>
+          <Harmony><name>F#m7b5/A</name></Harmony>
+          <Rest><durationType>measure</durationType><duration>4/4</duration></Rest>
+        </voice>
+      </Measure>
+      <Measure>
+        <voice>
+          <Harmony>
+            <name>bIII</name>
+            <harmonyType>1</harmonyType>
+          </Harmony>
+          <Rest><durationType>measure</durationType><duration>4/4</duration></Rest>
+        </voice>
+      </Measure>
+      <Measure>
+        <voice>
+          <Harmony>
+            <name>C</name>
+            <leftParen/>
+            <rightParen/>
+          </Harmony>
+          <Rest><durationType>measure</durationType><duration>4/4</duration></Rest>
+        </voice>
+      </Measure>
+    </Staff>
+  </Score>
+</museScore>
