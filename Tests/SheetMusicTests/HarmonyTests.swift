@@ -266,6 +266,64 @@ extension HarmonyTests {
     }
 
     @available(macOS 15.0, iOS 16.0, *)
+    @Test func rootTpcReconstructsLetterAndAccidental() {
+        // <root>12</root>: TPC 12 = E flat. <name>m7</name> is the
+        // suffix only. Display must be "E" + flat + "m7".
+        let runs = HarmonyRendering.runs(
+            for: Harmony(name: "m7", rootTpc: 12),
+            metrics: StaffMetrics(staffSize: 28)
+        )
+        let kinds = runs.map(\.kind)
+        #expect(kinds == [.text, .accidental(.flat), .text])
+        #expect(runs[0].content == "E")
+        #expect(runs[2].content == "m7")
+    }
+
+    @available(macOS 15.0, iOS 16.0, *)
+    @Test func rootTpcNaturalEmitsLetterOnly() {
+        // TPC 17 = D natural — no accidental.
+        let runs = HarmonyRendering.runs(
+            for: Harmony(name: "aug", rootTpc: 17),
+            metrics: StaffMetrics(staffSize: 28)
+        )
+        // Letter + suffix coalesce into a single text run.
+        #expect(runs.count == 1)
+        #expect(runs[0].content == "Daug")
+    }
+
+    @available(macOS 15.0, iOS 16.0, *)
+    @Test func slashChordReconstructsBassFromTpc() {
+        // <root>11</root><name>7</name><base>12</base>
+        //   = A flat + 7 + / + E flat
+        let runs = HarmonyRendering.runs(
+            for: Harmony(
+                name: "7", rootTpc: 11, bassTpc: 12
+            ),
+            metrics: StaffMetrics(staffSize: 28)
+        )
+        let kinds = runs.map(\.kind)
+        #expect(kinds == [
+            .text, // "A"
+            .accidental(.flat),
+            .text, // "7/E"
+            .accidental(.flat),
+        ])
+        #expect(runs[0].content == "A")
+        #expect(runs[2].content == "7/E")
+    }
+
+    @available(macOS 15.0, iOS 16.0, *)
+    @Test func glyphPointSizeMatchesTextSize() {
+        // Chord-symbol accidentals must size with the text, not the
+        // staff glyph (which is sp * 4 = 4× too big at 10 pt text).
+        let metrics = StaffMetrics(staffSize: 28)
+        let h = Harmony(name: "C")
+        #expect(HarmonyRendering.glyphPointSize(
+            for: h, metrics: metrics
+        ) < metrics.glyphFontSize)
+    }
+
+    @available(macOS 15.0, iOS 16.0, *)
     @Test func nashvilleLeadingSharpIsSubstituted() {
         let runs = HarmonyRendering.runs(
             for: Harmony(name: "#1", harmonyType: .nashville),

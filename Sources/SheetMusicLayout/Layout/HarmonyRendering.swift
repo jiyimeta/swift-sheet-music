@@ -29,20 +29,23 @@ public enum HarmonyRendering {
         // is simpler and faster than diagnosing CT's lock topology.
         ctLock.lock()
         defer { ctLock.unlock() }
+        let displayName = displayedName(for: harmony)
         let kindedSlices = parseSlices(
-            name: harmony.name, harmonyType: harmony.harmonyType
+            name: displayName, harmonyType: harmony.harmonyType
         )
-        let textPointSize = textPointSize(
+        let textSize = textPointSize(
             for: harmony, metrics: metrics
         )
-        let glyphPointSize = glyphPointSize(metrics: metrics)
+        let glyphSize = glyphPointSize(
+            for: harmony, metrics: metrics
+        )
         let textFont = makeFont(
             face: textFace(for: harmony),
-            pointSize: textPointSize
+            pointSize: textSize
         )
         let glyphFont = makeFont(
             face: "Bravura",
-            pointSize: glyphPointSize
+            pointSize: glyphSize
         )
         var runs: [HarmonyRun] = []
         var cursor: Double = 0
@@ -166,11 +169,70 @@ public enum HarmonyRendering {
         return CGFloat(defaults.size)
     }
 
-    /// SMuFL convention: 1 em = 4 sp. Match `StaffMetrics.glyphFontSize`.
-    private static func glyphPointSize(
+    /// Glyph point size for chord-symbol accidentals. MuseScore renders
+    /// chord-symbol accidentals at the chord text size — NOT at the
+    /// staff `glyphFontSize` (which is sized for noteheads, 1 em = 4 sp
+    /// ≈ 28 pt at default staff). Matching the text size keeps the
+    /// `b` / `#` glyphs visually balanced with the surrounding letters
+    /// and prevents the staff-sized SMuFL accidentals from dominating
+    /// the symbol. Exposed publicly so renderers configure their
+    /// Bravura `Font.custom` / `CTFont` instances at the same size the
+    /// width measurement used.
+    public static func glyphPointSize(
+        for harmony: Harmony,
         metrics: StaffMetrics
     ) -> CGFloat {
-        metrics.glyphFontSize
+        textPointSize(for: harmony, metrics: metrics)
+    }
+
+    /// Reconstruct the displayed chord name. MuseScore stores
+    /// `<name>` as either:
+    ///   - the *complete* chord text (when no `<root>` is present), OR
+    ///   - just the *quality suffix* (when `<root>` TPC is set —
+    ///     e.g. `<root>12</root><name>m7</name>` displays as `E♭m7`).
+    /// We detect the second case by `rootTpc != nil` and prepend the
+    /// root letter + accidental; if `bassTpc` is also present, append
+    /// `/` + bass letter + accidental. The `b` / `#` characters
+    /// produced here flow back through `parseSlices`'s normal
+    /// substitution path and end up as Bravura glyphs in the runs.
+    static func displayedName(for harmony: Harmony) -> String {
+        guard let rootTpc = harmony.rootTpc else {
+            return harmony.name
+        }
+        var s = tpcToText(rootTpc)
+        s += harmony.name
+        if let bassTpc = harmony.bassTpc {
+            s += "/"
+            s += tpcToText(bassTpc)
+        }
+        return s
+    }
+
+    /// MuseScore TPC → letter + ASCII accidental (`b` / `#`).
+    /// Convention (`engraving/dom/pitchspelling.cpp`): the cycle of
+    /// fifths starts at F♭♭ = 0 and ascends in fifths, so
+    ///     row = floor(tpc / 7) - 2 → -2 / -1 / 0 / 1 / 2
+    ///         (double-flat / flat / natural / sharp / double-sharp)
+    ///     letter = tpc mod 7 → 0=F, 1=C, 2=G, 3=D, 4=A, 5=E, 6=B.
+    /// `tpc < 0` (TPC_INVALID) is normalised to `nil` at decode time
+    /// and never reaches here.
+    private static func tpcToText(_ tpc: Int) -> String {
+        let letters: [Character] = ["F", "C", "G", "D", "A", "E", "B"]
+        let letter = letters[((tpc % 7) + 7) % 7]
+        // Floor division — Swift's `/` truncates toward zero, which
+        // gives the wrong sign for negative TPCs. We never see
+        // negative TPCs in practice (decoder normalises -1 → nil),
+        // but using floor keeps the math correct if someone ever
+        // passes a raw value through.
+        let row = Int((Double(tpc) / 7.0).rounded(.down)) - 2
+        switch row {
+        case -2: return "\(letter)bb"
+        case -1: return "\(letter)b"
+        case 0: return String(letter)
+        case 1: return "\(letter)#"
+        case 2: return "\(letter)##"
+        default: return String(letter)
+        }
     }
 
     private static func textFace(for harmony: Harmony) -> String {

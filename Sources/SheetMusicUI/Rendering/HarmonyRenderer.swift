@@ -23,7 +23,9 @@ enum HarmonyRenderer {
             ?? .primary
         let glyphFont = Font.custom(
             BravuraFont.familyName,
-            size: metrics.glyphFontSize
+            size: HarmonyRendering.glyphPointSize(
+                for: lh.harmony, metrics: metrics
+            )
         )
         for run in lh.runs {
             let p = CGPoint(

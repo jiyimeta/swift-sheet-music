@@ -250,9 +250,12 @@ extension ScoreLayerBuilder {
             )
             let textColor: CGColor = lh.harmony.color
                 .map(scoreColorToCGColor) ?? Self.inkColor
+            let glyphSize = HarmonyRendering.glyphPointSize(
+                for: lh.harmony, metrics: metrics
+            )
             let bravura = CTFontCreateWithName(
                 BravuraFont.familyName as CFString,
-                metrics.glyphFontSize, nil
+                glyphSize, nil
             )
             let originPoint = shift(CGPoint(
                 x: CGFloat(lh.anchorX),
@@ -279,7 +282,7 @@ extension ScoreLayerBuilder {
                 case let .accidental(acc):
                     if let layer = textLayer(
                         text: String(acc.codepoint), at: p,
-                        size: metrics.glyphFontSize,
+                        size: glyphSize,
                         italic: false,
                         anchor: CGPoint(x: 0, y: 0.5),
                         color: textColor,
