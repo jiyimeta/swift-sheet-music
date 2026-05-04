@@ -239,9 +239,57 @@ extension ScoreLayerBuilder {
             {
                 parent.addSublayer(layer)
             }
-        case .harmony:
-            // Wired up in Task 11.
-            break
+        case let .harmony(lh):
+            // Per-run dispatch: text runs go through the
+            // ResolvedTextStyle path (Edwin/Campania); accidental
+            // runs render the SMuFL glyph in Bravura at glyph size.
+            let style = ResolvedTextStyle.resolve(
+                lh.harmony.styleType,
+                overrides: lh.harmony.properties,
+                metrics: metrics
+            )
+            let textColor: CGColor = lh.harmony.color
+                .map(scoreColorToCGColor) ?? Self.inkColor
+            let bravura = CTFontCreateWithName(
+                BravuraFont.familyName as CFString,
+                metrics.glyphFontSize, nil
+            )
+            let originPoint = shift(CGPoint(
+                x: CGFloat(lh.anchorX),
+                y: CGFloat(lh.y)
+            ))
+            for run in lh.runs {
+                let p = CGPoint(
+                    x: originPoint.x + CGFloat(run.x),
+                    y: originPoint.y
+                )
+                switch run.kind {
+                case .text:
+                    if let layer = textLayer(
+                        text: run.content, at: p,
+                        size: style.pointSize,
+                        italic: style.isItalic,
+                        anchor: CGPoint(x: 0, y: 0.5),
+                        color: textColor,
+                        font: style.ctFont,
+                        height: height
+                    ) {
+                        parent.addSublayer(layer)
+                    }
+                case let .accidental(acc):
+                    if let layer = textLayer(
+                        text: String(acc.codepoint), at: p,
+                        size: metrics.glyphFontSize,
+                        italic: false,
+                        anchor: CGPoint(x: 0, y: 0.5),
+                        color: textColor,
+                        font: bravura,
+                        height: height
+                    ) {
+                        parent.addSublayer(layer)
+                    }
+                }
+            }
         case let .staffName(text, p):
             // Staff name in the sticky pane: bottom-leading anchor
             // so the text sits ABOVE the staff with its left edge at
