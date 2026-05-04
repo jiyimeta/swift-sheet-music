@@ -47,18 +47,22 @@ public enum HarmonyRendering {
             face: "Bravura",
             pointSize: glyphSize
         )
-        // Both text and accidental runs trim their natural side
-        // bearings. The font advance includes left/right bearings
-        // tuned for default typography (Edwin/Campania text) or
-        // staff-line clearance (Bravura accidentals); in a tight
-        // chord symbol those bearings show up as visible whitespace
-        // at every run boundary. We shift each run left by its own
-        // left bearing so the visible ink left edge lands at
-        // `cursor`, and use ink width + a small fixed trailing gap
-        // as the advance so the next run sits flush against the
-        // visible right edge.
-        let textGap = textSize * 0.04
-        let accidentalGap = glyphSize * 0.08
+        // Both renderers (`HarmonyRenderer`/SwiftUI and
+        // `ScoreLayerBuilder`/CALayer) place a run by aligning the
+        // run's INK left edge with `run.x` — see the
+        // `bbox.minX`-based anchor math in
+        // `ScoreLayerBuilder+Helpers.textLayer`. So `run.x` is
+        // already an ink-aligned position; we just set it to
+        // `cursor`. For the advance we use `inkWidth + small_gap`
+        // (NOT typographic advance) — the font's natural side
+        // bearings would otherwise show up as conspicuous
+        // whitespace around every accidental glyph (Bravura's b/#
+        // are sized for staff clearance, not chord-symbol use).
+        // For multi-character text runs the inkWidth still
+        // captures inter-character spacing because CTLine measures
+        // the rendered pixel extent of the whole string.
+        let textGap = textSize * 0.10
+        let accidentalGap = glyphSize * 0.10
         var runs: [HarmonyRun] = []
         var cursor: Double = 0
         for slice in kindedSlices {
@@ -69,7 +73,7 @@ public enum HarmonyRendering {
                 run = HarmonyRun(
                     kind: .text, content: s,
                     advance: bounds.width + textGap,
-                    x: cursor - bounds.leftBearing
+                    x: cursor
                 )
             case let .accidental(a):
                 let bounds = inkBounds(
@@ -78,7 +82,7 @@ public enum HarmonyRendering {
                 run = HarmonyRun(
                     kind: .accidental(a), content: "",
                     advance: bounds.width + accidentalGap,
-                    x: cursor - bounds.leftBearing
+                    x: cursor
                 )
             }
             runs.append(run)
