@@ -253,4 +253,20 @@ import Testing
         // Two explicit breaks → three systems.
         #expect(doc.systems.count == 3)
     }
+
+    /// `LayoutBreakPolicy` is `Sendable & Equatable`, has the three
+    /// designed cases, and `ScoreViewOptions` defaults `breakPolicy`
+    /// to `.honor` for source-compatibility.
+    @Test func breakPolicyDefault() {
+        guard #available(macOS 15.0, iOS 16.0, *) else { return }
+        let opts = ScoreViewOptions()
+        #expect(opts.breakPolicy == .honor)
+        let custom = ScoreViewOptions(breakPolicy: .ignoreAll)
+        #expect(custom.breakPolicy == .ignoreAll)
+        // All three cases distinct.
+        let cases: [LayoutBreakPolicy] = [
+            .honor, .ignoreSystemBreaks, .ignoreAll,
+        ]
+        #expect(Set(cases.map { "\($0)" }).count == 3)
+    }
 }
