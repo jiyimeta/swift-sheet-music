@@ -300,6 +300,12 @@ public final class PlaybackEngine: ObservableObject {
                 sequencerScore = score
             }
             guard let sequencer else { return }
+            // Resume the audio graph if a previous `pause()` paused it.
+            // `AVAudioEngine.start()` is the documented resume path after
+            // `pause()`; safe no-op if already running.
+            if !engine.isRunning {
+                try engine.start()
+            }
             // Position by beats. `currentPositionInSeconds` is derived
             // from beats using the player's current tempo (not the
             // tempo map), so seeking via seconds on a tempo-curved
@@ -340,9 +346,19 @@ public final class PlaybackEngine: ObservableObject {
 
     /// Pause playback at the current position. `play(...)` resumes
     /// from there.
+    ///
+    /// Also pauses the underlying `AVAudioEngine`. Stopping just the
+    /// sequencer leaves the engine running and rendering, which iOS
+    /// Control Center reads as "audio is still active" and uses to
+    /// override `MPNowPlayingInfoCenter.playbackState` — the visible
+    /// symptom is the CC pause button briefly flipping to play and
+    /// then snapping back to pause after a single tap.
     public func pause() {
         sequencer?.stop()
         stopCursorTimer()
+        if engine.isRunning {
+            engine.pause()
+        }
         state = .paused
     }
 
@@ -353,6 +369,9 @@ public final class PlaybackEngine: ObservableObject {
         sequencer?.stop()
         sequencer?.currentPositionInBeats = 0
         stopCursorTimer()
+        if engine.isRunning {
+            engine.pause()
+        }
         state = .stopped
         currentCursor = nil
     }
