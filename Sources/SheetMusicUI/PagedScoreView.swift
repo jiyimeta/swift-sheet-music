@@ -83,14 +83,26 @@ public struct PagedScoreView: View {
                     localY += system.size.height
                 }
             }
-            // Indicator overlay laid out in this page's
-            // coord space. The Canvas above translates each
-            // system by `localY - system.origin.y` so that
-            // system N's local-(x, y) lines up with
-            // page-(x, y - system.origin.y + sumOfPriorHeights).
-            // We mirror that mapping by passing a synthetic
-            // `documentYOffset` per system; cleanest way is
-            // to overlay one per-system indicator strip.
+            indicatorOverlay(
+                pageSystems: pageSystems, metrics: doc.metrics
+            )
+        }
+        .frame(width: doc.size.width, height: proxy.size.height)
+        .environment(\.colorScheme, .light)
+        .preference(key: PageCountKey.self, value: count)
+    }
+
+    /// Indicator overlay laid out in this page's coord space. The
+    /// Canvas in `pageContent` translates each system by
+    /// `localY - system.origin.y`, so we mirror that mapping here
+    /// by overlaying one badge strip per system at its page-local
+    /// origin.
+    @ViewBuilder
+    private func indicatorOverlay(
+        pageSystems: [LayoutSystem],
+        metrics: StaffMetrics
+    ) -> some View {
+        if options.showBreakIndicators {
             let pageOrigins = Self.systemPageOrigins(
                 pageSystems: pageSystems)
             ForEach(
@@ -99,7 +111,7 @@ public struct PagedScoreView: View {
             ) { idx, sys in
                 BreakIndicatorOverlay(
                     mode: .system(system: sys),
-                    metrics: doc.metrics,
+                    metrics: metrics,
                     policy: options.breakPolicy
                 )
                 .frame(
@@ -107,15 +119,9 @@ public struct PagedScoreView: View {
                     height: sys.size.height,
                     alignment: .topLeading
                 )
-                .offset(
-                    x: sys.origin.x,
-                    y: pageOrigins[idx]
-                )
+                .offset(x: sys.origin.x, y: pageOrigins[idx])
             }
         }
-        .frame(width: doc.size.width, height: proxy.size.height)
-        .environment(\.colorScheme, .light)
-        .preference(key: PageCountKey.self, value: count)
     }
 
     static func paginate(

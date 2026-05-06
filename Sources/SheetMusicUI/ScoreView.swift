@@ -150,11 +150,13 @@ public struct ScoreView: View {
                     selection: selection
                 )
                 .overlay(alignment: .topLeading) {
-                    BreakIndicatorOverlay(
-                        mode: .system(system: sys),
-                        metrics: doc.metrics,
-                        policy: options.breakPolicy
-                    )
+                    if options.showBreakIndicators {
+                        BreakIndicatorOverlay(
+                            mode: .system(system: sys),
+                            metrics: doc.metrics,
+                            policy: options.breakPolicy
+                        )
+                    }
                 }
                 .offset(y: sys.origin.y)
             }
@@ -202,11 +204,13 @@ public struct ScoreView: View {
                         // Horizontal mode honours no breaks at
                         // layout time, but the indicator badges
                         // are still useful as authoring hints.
-                        BreakIndicatorOverlay(
-                            mode: .system(system: system),
-                            metrics: doc.metrics,
-                            policy: options.breakPolicy
-                        )
+                        if options.showBreakIndicators {
+                            BreakIndicatorOverlay(
+                                mode: .system(system: system),
+                                metrics: doc.metrics,
+                                policy: options.breakPolicy
+                            )
+                        }
                     }
                 }
                 PlaybackCursorView(

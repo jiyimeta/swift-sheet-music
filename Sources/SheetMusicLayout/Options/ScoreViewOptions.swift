@@ -53,18 +53,24 @@ public struct ScoreViewOptions: Sendable, Equatable {
     /// How to consume authored `<LayoutBreak>` markup. Default
     /// `.honor` reproduces behavior from before this option existed.
     public var breakPolicy: LayoutBreakPolicy
+    /// When true, system / page break badges are drawn over each
+    /// system as authoring hints. Default `true` matches behavior
+    /// from before this option existed.
+    public var showBreakIndicators: Bool
 
     public init(
         staffSize: CGFloat = 28,
         systemGap: CGFloat = 40,
         wrapToViewWidth: Bool = true,
         includeTitleFrame: Bool = true,
-        breakPolicy: LayoutBreakPolicy = .honor
+        breakPolicy: LayoutBreakPolicy = .honor,
+        showBreakIndicators: Bool = true
     ) {
         self.staffSize = staffSize
         self.systemGap = systemGap
         self.wrapToViewWidth = wrapToViewWidth
         self.includeTitleFrame = includeTitleFrame
         self.breakPolicy = breakPolicy
+        self.showBreakIndicators = showBreakIndicators
     }
 }
