@@ -39,6 +39,10 @@ public struct PDFPageView: View {
     /// `PDFExporter.export` passes `false` so the saved file is
     /// indicator-free.
     let showBreakIndicators: Bool
+    /// Layout-break consumption policy. Forwarded to
+    /// `BreakIndicatorOverlay` so badges hide for breaks that the
+    /// active policy ignored.
+    let policy: LayoutBreakPolicy
 
     public init(
         systems: [LayoutSystem],
@@ -48,7 +52,8 @@ public struct PDFPageView: View {
         pageSize: CGSize,
         margins: PageMargins,
         renderScale: CGFloat = 1,
-        showBreakIndicators: Bool = false
+        showBreakIndicators: Bool = false,
+        policy: LayoutBreakPolicy = .honor
     ) {
         self.systems = systems
         self.pageStartY = pageStartY
@@ -58,6 +63,7 @@ public struct PDFPageView: View {
         self.margins = margins
         self.renderScale = renderScale
         self.showBreakIndicators = showBreakIndicators
+        self.policy = policy
     }
 
     public var body: some View {
@@ -104,7 +110,8 @@ public struct PDFPageView: View {
                         documentYOffset: pageStartY - margins.top,
                         xOffset: margins.leading
                     ),
-                    metrics: metrics
+                    metrics: metrics,
+                    policy: policy
                 )
                 .scaleEffect(renderScale, anchor: .topLeading)
             }

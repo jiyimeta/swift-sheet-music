@@ -99,7 +99,8 @@ public struct PagedScoreView: View {
             ) { idx, sys in
                 BreakIndicatorOverlay(
                     mode: .system(system: sys),
-                    metrics: doc.metrics
+                    metrics: doc.metrics,
+                    policy: options.breakPolicy
                 )
                 .frame(
                     width: sys.size.width,

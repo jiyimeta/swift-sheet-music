@@ -36,10 +36,16 @@ public struct BreakIndicatorOverlay: View {
 
     public let mode: Mode
     public let metrics: StaffMetrics
+    public let policy: LayoutBreakPolicy
 
-    public init(mode: Mode, metrics: StaffMetrics) {
+    public init(
+        mode: Mode,
+        metrics: StaffMetrics,
+        policy: LayoutBreakPolicy = .honor
+    ) {
         self.mode = mode
         self.metrics = metrics
+        self.policy = policy
     }
 
     public var body: some View {
@@ -85,9 +91,19 @@ public struct BreakIndicatorOverlay: View {
     }
 
     private func breakKind(for m: LayoutMeasure) -> BreakKind? {
-        if m.pageBreak { return .page }
-        if m.lineBreak { return .line }
-        return nil
+        switch policy {
+        case .honor:
+            if m.pageBreak { return .page }
+            if m.lineBreak { return .line }
+            return nil
+        case .ignoreSystemBreaks:
+            // Page indicators only — line breaks are ignored at
+            // layout time, so showing their badges would mislead.
+            if m.pageBreak { return .page }
+            return nil
+        case .ignoreAll:
+            return nil
+        }
     }
 
     /// Badge centre's distance from the system's top edge. We sit
