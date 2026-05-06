@@ -56,6 +56,11 @@ public final class PlaybackEngine: ObservableObject {
     /// against a different score, the sequencer is torn down so
     /// the next `play` rebuilds it.
     private var sequencerScore: Score?
+    /// Most recent rate set by the host. Stored separately from the
+    /// sequencer so the value survives `buildSequencer` rebuilds —
+    /// every fresh `AVAudioSequencer` starts at 1.0 and we re-apply
+    /// this value once it's built.
+    private var pendingRate: Float = 1.0
     /// Pre-computed time → item mapping, used by the cursor poll
     /// to translate `sequencer.currentPositionInSeconds` into a
     /// `ScoreItemID`.
@@ -83,6 +88,16 @@ public final class PlaybackEngine: ObservableObject {
     public init(soundfontResolver: SoundfontResolver) {
         resolver = soundfontResolver
         metronome = MetronomeController(engine: engine)
+    }
+
+    /// Scale playback speed. `1.0` is the score's native tempo;
+    /// `0.5`–`2.0` is the host's typical slider range, but no
+    /// clamping is applied here — the caller is expected to enforce
+    /// musically reasonable bounds. The new value persists across
+    /// sequencer rebuilds (e.g. `play(from:in:)` on a fresh score).
+    public func setRate(_ rate: Float) {
+        pendingRate = rate
+        sequencer?.rate = rate
     }
 
     // MARK: Internal accessors for `PlaybackEngine+Mixer`
@@ -463,6 +478,7 @@ public final class PlaybackEngine: ObservableObject {
             }
         }
         metronome.attach(to: sequencer)
+        sequencer.rate = pendingRate
         sequencer.prepareToPlay()
         self.sequencer = sequencer
     }
