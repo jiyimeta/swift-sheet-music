@@ -47,7 +47,8 @@ public struct PagedScoreView: View {
         let pageOpts = ScoreViewOptions(
             staffSize: options.staffSize,
             systemGap: options.systemGap,
-            wrapToViewWidth: true
+            wrapToViewWidth: true,
+            breakPolicy: options.breakPolicy
         )
         let doc = LayoutEngine.layout(
             score: score, options: pageOpts,
@@ -55,7 +56,8 @@ public struct PagedScoreView: View {
         )
         let pages = Self.paginate(
             systems: doc.systems,
-            pageHeight: proxy.size.height
+            pageHeight: proxy.size.height,
+            policy: options.breakPolicy
         )
         let count = max(1, pages.count)
         let safe = min(max(pageIndex, 0), count - 1)
@@ -117,7 +119,8 @@ public struct PagedScoreView: View {
 
     static func paginate(
         systems: [LayoutSystem],
-        pageHeight: CGFloat
+        pageHeight: CGFloat,
+        policy: LayoutBreakPolicy = .honor
     ) -> [[LayoutSystem]] {
         guard !systems.isEmpty, pageHeight > 0 else { return [] }
         var pages: [[LayoutSystem]] = []
@@ -133,10 +136,13 @@ public struct PagedScoreView: View {
             }
             current.append(system)
             usedHeight += h
-            // `<LayoutBreak>page` on the last measure of this
-            // system forces the page to close immediately, even
-            // if more systems would still fit vertically.
-            if system.measures.last?.pageBreak == true {
+            // `<LayoutBreak>page` on the last measure of this system
+            // closes the page immediately under `.honor` /
+            // `.ignoreSystemBreaks`. `.ignoreAll` lets the page keep
+            // packing until vertical overflow.
+            if policy != .ignoreAll,
+               system.measures.last?.pageBreak == true
+            {
                 pages.append(current)
                 current = []
                 usedHeight = 0

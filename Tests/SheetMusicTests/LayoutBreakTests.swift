@@ -1,3 +1,4 @@
+// swiftlint:disable file_length
 import Foundation
 @testable import SheetMusic
 @testable import SheetMusicCore
@@ -378,6 +379,68 @@ import Testing
         // wraps from horizontal overflow
         // Two explicit breaks → three systems.
         #expect(doc.systems.count == 3)
+    }
+
+    /// `PagedScoreView.paginate` honours `<LayoutBreak>page` under
+    /// `.honor` (closing the page early) and ignores it under
+    /// `.ignoreAll` (only vertical overflow closes pages).
+    /// Mirrors spec test case 3.
+    @Test func paginateHonoursPolicy() {
+        guard #available(macOS 15.0, iOS 16.0, *) else { return }
+        // Three lightweight systems, each 100 pt tall. Page height
+        // 1000 pt easily fits them all on one page — only a
+        // pageBreak flag should split them.
+        func makeSystem(pageBreak: Bool) -> LayoutSystem {
+            let m = LayoutMeasure(
+                measureIndex: 0,
+                origin: .zero,
+                width: 100,
+                elements: [],
+                pageBreak: pageBreak
+            )
+            return LayoutSystem(
+                origin: .zero,
+                size: CGSize(width: 100, height: 100),
+                measures: [m],
+                staffOrigins: [],
+                partLabels: [],
+                spanners: [],
+                sp: 7
+            )
+        }
+        let systems = [
+            makeSystem(pageBreak: false),
+            makeSystem(pageBreak: true), // forces page close
+            makeSystem(pageBreak: false),
+        ]
+
+        let honor = PagedScoreView.paginate(
+            systems: systems, pageHeight: 1000, policy: .honor
+        )
+        #expect(
+            honor.count == 2,
+            "page break on system 1 should close page after it"
+        )
+        #expect(honor[0].count == 2)
+        #expect(honor[1].count == 1)
+
+        let ignoreSysBreaks = PagedScoreView.paginate(
+            systems: systems, pageHeight: 1000,
+            policy: .ignoreSystemBreaks
+        )
+        #expect(
+            ignoreSysBreaks.count == 2,
+            ".ignoreSystemBreaks still closes pages on pageBreak"
+        )
+
+        let ignoreAll = PagedScoreView.paginate(
+            systems: systems, pageHeight: 1000, policy: .ignoreAll
+        )
+        #expect(
+            ignoreAll.count == 1,
+            ".ignoreAll lets all systems share one page"
+        )
+        #expect(ignoreAll[0].count == 3)
     }
 
     /// `LayoutBreakPolicy` is `Sendable & Equatable`, has the three
