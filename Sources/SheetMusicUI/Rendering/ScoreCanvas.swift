@@ -88,6 +88,7 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
         visibleX: ClosedRange<CGFloat>? = nil
     ) {
         // Staves
+        let staffEndX = StaffRenderer.endX(for: system)
         for origin in system.staffOrigins {
             StaffRenderer.draw(
                 context: &context,
@@ -95,7 +96,7 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                     x: system.origin.x + origin.x,
                     y: system.origin.y + origin.y
                 ),
-                width: system.size.width - origin.x,
+                width: staffEndX - origin.x,
                 metrics: metrics
             )
         }

@@ -18,9 +18,10 @@ extension ScoreLayerBuilder {
         height: CGFloat,
         into parent: CALayer
     ) {
+        let staffEndX = StaffRenderer.endX(for: system)
         for origin in system.staffOrigins {
             let path = CGMutablePath()
-            let width = system.size.width - origin.x
+            let width = staffEndX - origin.x
             for i in 0 ..< 5 {
                 let y = origin.y + CGFloat(i) * metrics.sp
                 path.move(to: CGPoint(x: origin.x, y: y))

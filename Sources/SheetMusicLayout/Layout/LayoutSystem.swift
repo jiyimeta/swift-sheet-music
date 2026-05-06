@@ -72,6 +72,28 @@ public struct LayoutSystem: Sendable, Equatable {
         staffAddresses.firstIndex(of: address)
     }
 
+    /// Subtype + system-local origin X of the rightmost barline in the
+    /// last measure. Returned to renderers that need to know where the
+    /// system's terminal barline lives — e.g. to clip staff lines so
+    /// they end flush with it instead of extending through the
+    /// trailing-barline gutter (≈ 0.5 sp) baked into each measure's
+    /// width. `subtype == nil` means a default thin barline; an empty
+    /// `measures` array (defensive — never expected in practice)
+    /// returns `nil`.
+    public var trailingBarLine: (subtype: String?, x: CGFloat)? {
+        guard let last = measures.last else { return nil }
+        var rightmostX: CGFloat = -.infinity
+        var rightmostSubtype: String?
+        for el in last.elements {
+            if case let .barLine(s, p) = el, p.x > rightmostX {
+                rightmostX = p.x
+                rightmostSubtype = s
+            }
+        }
+        guard rightmostX.isFinite else { return nil }
+        return (rightmostSubtype, last.origin.x + rightmostX)
+    }
+
     private static func buildEventColumns(
         measures: [LayoutMeasure],
         sp: CGFloat

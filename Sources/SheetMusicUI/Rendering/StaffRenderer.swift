@@ -4,6 +4,21 @@ import SwiftUI
 
 @available(macOS 15.0, iOS 16.0, *)
 enum StaffRenderer {
+    /// Right edge (in system-local coords) for the five staff lines
+    /// in `system`. Anchored to the rightmost stroke of the last
+    /// measure's terminal barline so the staff passes through every
+    /// component of a double / end / end-repeat pair, instead of
+    /// running 0.5 sp past a plain barline through the trailing
+    /// gutter baked into each measure's width.
+    static func endX(for system: LayoutSystem) -> CGFloat {
+        guard let bar = system.trailingBarLine else {
+            return system.size.width
+        }
+        return bar.x + BarLineRenderer.rightExtent(
+            subtype: bar.subtype, sp: system.sp
+        )
+    }
+
     /// Draw five horizontal staff lines. `origin` is the top-left of the
     /// top line; `width` is how far they run. The fifth (bottom) line lies
     /// at `origin.y + 4 * sp`.
