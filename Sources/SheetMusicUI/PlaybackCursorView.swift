@@ -29,15 +29,18 @@ public struct PlaybackCursorView: View {
     private let cursor: ScoreCursor?
     private let document: LayoutDocument
     private let score: Score
+    private let color: Color
 
     public init(
         cursor: ScoreCursor?,
         document: LayoutDocument,
-        score: Score
+        score: Score,
+        color: Color = Color.blue.opacity(0.15)
     ) {
         self.cursor = cursor
         self.document = document
         self.score = score
+        self.color = color
     }
 
     public var body: some View {
@@ -45,7 +48,7 @@ public struct PlaybackCursorView: View {
            let frame = document.cursorFrame(for: cursor, in: score)
         {
             Rectangle()
-                .fill(Color.blue.opacity(0.15))
+                .fill(color)
                 .frame(width: frame.width, height: frame.height)
                 .offset(x: frame.minX, y: frame.minY)
                 .allowsHitTesting(false)

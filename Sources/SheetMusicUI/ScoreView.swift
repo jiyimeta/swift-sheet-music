@@ -28,6 +28,7 @@ public struct ScoreView: View {
     private let selection: ScoreSelection
     private let voiceColors: [Int: Color]
     private let playbackCursor: ScoreCursor?
+    private let playbackCursorColor: Color
 
     public init(
         score: Score,
@@ -35,6 +36,7 @@ public struct ScoreView: View {
         selection: ScoreSelection = .none,
         voiceColors: [Int: Color] = [:],
         playbackCursor: ScoreCursor? = nil,
+        playbackCursorColor: Color = Color.blue.opacity(0.15),
         availableWidth: CGFloat? = nil
     ) {
         _ = BravuraFont.register
@@ -45,6 +47,7 @@ public struct ScoreView: View {
         self.selection = selection
         self.voiceColors = voiceColors
         self.playbackCursor = playbackCursor
+        self.playbackCursorColor = playbackCursorColor
     }
 
     /// Render a pre-computed `LayoutDocument` instead of running the
@@ -59,7 +62,8 @@ public struct ScoreView: View {
         score: Score,
         selection: ScoreSelection = .none,
         voiceColors: [Int: Color] = [:],
-        playbackCursor: ScoreCursor? = nil
+        playbackCursor: ScoreCursor? = nil,
+        playbackCursorColor: Color = Color.blue.opacity(0.15)
     ) {
         _ = BravuraFont.register
         self.score = score
@@ -69,6 +73,7 @@ public struct ScoreView: View {
         self.selection = selection
         self.voiceColors = voiceColors
         self.playbackCursor = playbackCursor
+        self.playbackCursorColor = playbackCursorColor
     }
 
     public var body: some View {
@@ -155,7 +160,8 @@ public struct ScoreView: View {
             PlaybackCursorView(
                 cursor: playbackCursor,
                 document: doc,
-                score: score
+                score: score,
+                color: playbackCursorColor
             )
         }
         .frame(
@@ -204,7 +210,8 @@ public struct ScoreView: View {
                 PlaybackCursorView(
                     cursor: playbackCursor,
                     document: doc,
-                    score: score
+                    score: score,
+                    color: playbackCursorColor
                 )
             }
             .frame(width: doc.size.width, alignment: .leading)
