@@ -20,16 +20,22 @@ public struct Spanner: Sendable, Equatable {
     public var rawType: String // original "type" attribute
     public var nextMeasuresOffset: Int // distance to the spanner end in measures
     public var voltaEndings: [Int] // for Volta: the take-numbers (1, 2, …)
+    /// MuseScore `<visible>0</visible>` flag. When false the spanner
+    /// is hidden — layout omits it entirely (no glyphs, no reserved
+    /// space). Playback / MIDI continue to honour the spanner.
+    public var visible: Bool
 
     public init(
         kind: Kind,
         rawType: String,
         nextMeasuresOffset: Int = 0,
-        voltaEndings: [Int] = []
+        voltaEndings: [Int] = [],
+        visible: Bool = true
     ) {
         self.kind = kind
         self.rawType = rawType
         self.nextMeasuresOffset = nextMeasuresOffset
         self.voltaEndings = voltaEndings
+        self.visible = visible
     }
 }

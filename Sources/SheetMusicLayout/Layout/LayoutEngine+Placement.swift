@@ -631,6 +631,10 @@ extension LayoutEngine {
                         )
                     ))
                 case let .staffText(st):
+                    // Hidden text contributes neither glyphs nor
+                    // vertical extent — drop before any layout
+                    // measurement so collision avoidance ignores it.
+                    if !st.visible { break }
                     // Place at the current tick column (or header
                     // start if we haven't reached any timed element
                     // yet). Default Y is `sp * 3` above the top
@@ -653,6 +657,10 @@ extension LayoutEngine {
                         isSystemText: st.isSystemText
                     ))
                 case let .tempo(t):
+                    // Hidden tempo still drives playback (see MIDI
+                    // renderer) but contributes no glyph or
+                    // vertical extent here.
+                    if !t.visible { break }
                     let bpm = Int((t.beatsPerSecond * 60.0).rounded())
                     // "♩" is Unicode U+2669, rendered in the system text font,
                     // not a SMuFL/Bravura glyph — do not migrate to a SMuFL
@@ -729,6 +737,12 @@ extension LayoutEngine {
                     // `setLocation` behaviour during voice read.
                     tickCursor += delta.ticks(division: division)
                 case let .harmony(harmony):
+                    // Hidden chord symbols contribute neither glyphs
+                    // nor width — drop before measurement so the
+                    // pre-spacing pass and autoplace stacking ignore
+                    // them. Playback (`harmony.play`) is independent
+                    // of visibility.
+                    if !harmony.visible { break }
                     // Anchor at the next timed-element column (or
                     // header start while still in the header). Same
                     // anchoring rule as .staffText so multiple
@@ -1023,6 +1037,14 @@ extension LayoutEngine {
         // visual outcome — text never overlaps a stem or beam —
         // matches.
         autoPlaceStaffText(
+            in: &out, staffMidY: staffMidY, metrics: metrics
+        )
+        // Same chord-clearance pass for chord symbols. Without this,
+        // a chord whose noteheads or beam reach above the harmony's
+        // default Y (`staffTop - 2.5 sp`) collides with the symbol —
+        // common when the staff carries notes more than one ledger
+        // line above the top staff line.
+        autoPlaceHarmony(
             in: &out, staffMidY: staffMidY, metrics: metrics
         )
         // After per-element auto-place, resolve same-tick collisions

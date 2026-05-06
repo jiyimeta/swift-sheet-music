@@ -15,17 +15,23 @@ public struct Tempo: Sendable, Equatable {
     /// `nil`-fields inherit from `TextStyleType.tempo`
     /// (Edwin 12 pt bold by default). Has no effect on MIDI output.
     public var properties: TextProperties
+    /// MuseScore `<visible>0</visible>` flag. When false the tempo
+    /// label is hidden — layout drops it (no glyph, no reserved
+    /// space) but the tempo change still applies to playback / MIDI.
+    public var visible: Bool
 
     public init(
         beatsPerSecond: Double,
         offsetX: Double = 0,
         offsetY: Double = 0,
-        properties: TextProperties = TextProperties()
+        properties: TextProperties = TextProperties(),
+        visible: Bool = true
     ) {
         self.beatsPerSecond = beatsPerSecond
         self.offsetX = offsetX
         self.offsetY = offsetY
         self.properties = properties
+        self.visible = visible
     }
 
     /// Microseconds per quarter note for SMF tempo meta event.

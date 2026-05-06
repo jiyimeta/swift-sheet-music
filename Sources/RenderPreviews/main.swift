@@ -64,6 +64,7 @@
             ("23-above-staff-overlap", Samples.aboveStaffOverlap),
             ("24-location-system-text", Samples.locationSystemText),
             ("25-harmony-basic", Samples.harmonyBasic),
+            ("26-harmony-high-chord", Samples.harmonyHighChord),
         ]
 
         for (name, score) in samples {

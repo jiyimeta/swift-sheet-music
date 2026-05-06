@@ -25,6 +25,7 @@ extension Harmony {
         let offset = node.first("offset")
             .map(StaffText.decodeOffset(_:)) ?? (0, 0)
         let properties = TextProperties.decode(node)
+        let visible = (node.first("visible")?.text ?? "1") != "0"
         return Harmony(
             name: name,
             harmonyType: harmonyType,
@@ -38,7 +39,8 @@ extension Harmony {
             offsetX: offset.0,
             offsetY: offset.1,
             color: color,
-            properties: properties
+            properties: properties,
+            visible: visible
         )
     }
 

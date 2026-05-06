@@ -28,6 +28,10 @@ public struct StaffText: Sendable, Equatable {
     /// Per-element font overrides. `nil`-fields inherit from the
     /// `staffText` / `systemText` row of `TextStyleDefaults`.
     public var properties: TextProperties
+    /// MuseScore `<visible>0</visible>` flag. When false the text is
+    /// hidden — layout drops it entirely so it neither draws nor
+    /// reserves vertical space.
+    public var visible: Bool
 
     public init(
         text: String,
@@ -35,7 +39,8 @@ public struct StaffText: Sendable, Equatable {
         offsetY: Double = 0,
         color: ScoreColor? = nil,
         isSystemText: Bool = false,
-        properties: TextProperties = TextProperties()
+        properties: TextProperties = TextProperties(),
+        visible: Bool = true
     ) {
         self.text = text
         self.offsetX = offsetX
@@ -43,6 +48,7 @@ public struct StaffText: Sendable, Equatable {
         self.color = color
         self.isSystemText = isSystemText
         self.properties = properties
+        self.visible = visible
     }
 
     /// The `TextStyleType` row this element inherits from. Picks

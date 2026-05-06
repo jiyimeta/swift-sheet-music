@@ -21,7 +21,31 @@ extension Spanner {
             kind: kind,
             rawType: raw,
             nextMeasuresOffset: nextMeasures,
-            voltaEndings: voltaEndings
+            voltaEndings: voltaEndings,
+            visible: decodeVisible(node)
         )
+    }
+
+    /// MuseScore writes a spanner as a *pair* of `<Spanner>` elements
+    /// — the begin-side carries the subtype payload (`<Pedal>`,
+    /// `<HairPin>`, `<Volta>`, ...) plus a `<next>` location to the
+    /// end tick; the end-side is a placeholder with only a `<prev>`
+    /// location pointing back. The end-side has no own glyph and
+    /// would otherwise emit a duplicate zero-length anchor at the
+    /// end tick — treat it as hidden so the layout filter drops it.
+    ///
+    /// On the begin-side, MuseScore stores `<visible>0</visible>` on
+    /// the inner subtype child (not on the `<Spanner>` wrapper). We
+    /// honour either location and treat any `0` as hidden.
+    private static func decodeVisible(_ node: XMLTreeNode) -> Bool {
+        if (node.first("visible")?.text ?? "1") == "0" { return false }
+        var hasPayload = false
+        for child in node.children
+            where child.name != "next" && child.name != "prev"
+        {
+            hasPayload = true
+            if child.first("visible")?.text == "0" { return false }
+        }
+        return hasPayload
     }
 }

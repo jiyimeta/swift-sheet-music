@@ -308,7 +308,7 @@ extension LayoutEngine {
                         ))
                         allTicks.insert(tick)
                         tick = end
-                    case let .harmony(harmony):
+                    case let .harmony(harmony) where harmony.visible:
                         // Pre-measure so the next chord/rest segment
                         // carries demand to host the symbol without
                         // colliding with the next chord. + 0.5 sp gap.

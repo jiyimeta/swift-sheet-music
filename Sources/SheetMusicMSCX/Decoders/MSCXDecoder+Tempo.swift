@@ -11,11 +11,13 @@ extension Tempo {
             let y = attrs["y"].flatMap(Double.init) ?? 0
             return (x, y)
         } ?? (0, 0)
+        let visible = (node.first("visible")?.text ?? "1") != "0"
         return Tempo(
             beatsPerSecond: bps,
             offsetX: offset.0,
             offsetY: offset.1,
-            properties: TextProperties.decode(node)
+            properties: TextProperties.decode(node),
+            visible: visible
         )
     }
 }

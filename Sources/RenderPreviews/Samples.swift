@@ -868,6 +868,40 @@
             )
         }
 
+        // MARK: - 26 chord symbols above high chords (auto-place above ledger lines)
+
+        /// Three-measure progression where each chord stacks notes that
+        /// extend several ledger lines above the staff. Without
+        /// chord-aware harmony auto-placement the chord symbols sit at
+        /// their default `harmonyPlacementAbove` (-2.5 sp) and overlap
+        /// the topmost noteheads. This sample is the visual gauge for
+        /// the `autoPlaceHarmony` pass.
+        static var harmonyHighChord: Score {
+            // Treble-clef pitches well above the top line:
+            //   E5 (top space), C6 (2 ledger lines), F6 (3 ledger lines).
+            let e5 = Note(pitch: 76, tpc: 18)
+            let c6 = Note(pitch: 84, tpc: 14)
+            let f6 = Note(pitch: 89, tpc: 13)
+            let m1 = Measure(voices: [Voice(elements: [
+                .clef(Clef(concertClefType: "G")),
+                .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+                .harmony(Harmony(name: "C")),
+                .chord(Chord(duration: .whole, notes: [c6])),
+            ])])
+            let m2 = Measure(voices: [Voice(elements: [
+                .harmony(Harmony(name: "Am7")),
+                .chord(Chord(duration: .whole, notes: [e5, f6])),
+            ])])
+            let m3 = Measure(voices: [Voice(elements: [
+                .harmony(Harmony(name: "F#m7b5")),
+                .chord(Chord(duration: .whole, notes: [f6])),
+            ])])
+            return Score(
+                division: 480,
+                parts: [treblePart(measures: [m1, m2, m3])]
+            )
+        }
+
         // MARK: - helpers
 
         private static func treblePart(measures: [Measure] = []) -> Part {

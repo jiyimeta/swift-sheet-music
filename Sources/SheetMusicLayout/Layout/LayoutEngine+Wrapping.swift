@@ -43,10 +43,7 @@ extension LayoutEngine {
                     ?? part.trackName
                     ?? ""
             } else {
-                part.instrument.shortName
-                    ?? part.instrument.longName.map { String($0.prefix(3)) }
-                    ?? part.trackName.map { String($0.prefix(3)) }
-                    ?? ""
+                part.instrument.shortName ?? ""
             }
         }
         let fontSize = metrics.sp * 2.5

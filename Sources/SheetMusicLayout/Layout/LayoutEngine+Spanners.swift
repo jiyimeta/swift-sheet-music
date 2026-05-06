@@ -29,7 +29,12 @@ extension LayoutEngine {
                 for voice in measure.voices {
                     var tick = 0
                     for el in voice.elements {
-                        if case let .spanner(sp) = el {
+                        // Skip hidden spanners entirely — `<visible>0</visible>`
+                        // on Pedal/HairPin/etc. should produce neither
+                        // glyph nor reserved space at the system level.
+                        // Playback / MIDI consumers read `voice.elements`
+                        // directly and remain unaffected.
+                        if case let .spanner(sp) = el, sp.visible {
                             out.append(SpannerAnchor(
                                 kind: sp.kind,
                                 rawType: sp.rawType,

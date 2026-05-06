@@ -15,13 +15,15 @@ extension StaffText {
         let offset = node.first("offset")
             .map(decodeOffset(_:)) ?? (0, 0)
         let props = TextProperties.decode(node)
+        let visible = (node.first("visible")?.text ?? "1") != "0"
         return StaffText(
             text: text,
             offsetX: offset.0,
             offsetY: offset.1,
             color: color,
             isSystemText: isSystemText,
-            properties: props
+            properties: props,
+            visible: visible
         )
     }
 

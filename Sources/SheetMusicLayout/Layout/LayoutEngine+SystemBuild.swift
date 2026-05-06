@@ -453,10 +453,7 @@ extension LayoutEngine {
                     ?? part.trackName
                     ?? ""
             } else {
-                text = part.instrument.shortName
-                    ?? part.instrument.longName.map { String($0.prefix(3)) }
-                    ?? part.trackName.map { String($0.prefix(3)) }
-                    ?? ""
+                text = part.instrument.shortName ?? ""
             }
             // Locate the part's flat-staff range. A part with no
             // entries in `allStaves` (shouldn't normally happen — a

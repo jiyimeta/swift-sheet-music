@@ -77,6 +77,41 @@ extension LayoutEngine {
         }
     }
 
+    /// Shift every `.harmony` in `out` upward as needed so that its
+    /// Y clears the topmost chord/beam in the measure. The author's
+    /// `<offset y>` is preserved — only the BASE position changes.
+    /// Mirrors `autoPlaceStaffText`; harmony sits 1.5 sp above the
+    /// chord top (0.5 sp clearance + ~1 sp half-height of the centre-
+    /// anchored chord-symbol text body).
+    static func autoPlaceHarmony(
+        in out: inout [LayoutElement],
+        staffMidY: CGFloat,
+        metrics: StaffMetrics
+    ) {
+        let chordTop = chordTopExtent(in: out)
+        guard chordTop.isFinite else { return }
+        // Default base matches the constant used at emission
+        // (`staffTopLocal + harmonyPlacementAbove`, i.e.
+        // `staffMidY - sp*2 - sp*2.5`). Auto base puts the symbol's
+        // centre 1.5 sp above the highest chord/beam point.
+        let staffTopLocal = staffMidY - metrics.sp * 2
+        let defaultBase = staffTopLocal + metrics.harmonyPlacementAbove
+        let autoBase = chordTop - metrics.sp * 1.5
+        guard autoBase < defaultBase else { return }
+        let shift = autoBase - defaultBase
+        for i in 0 ..< out.count {
+            if case let .harmony(lh) = out[i] {
+                out[i] = .harmony(LayoutHarmony(
+                    harmony: lh.harmony,
+                    anchorX: lh.anchorX,
+                    y: lh.y + Double(shift),
+                    runs: lh.runs,
+                    width: lh.width
+                ))
+            }
+        }
+    }
+
     /// Per-element approximate vertical height (in sp) used when
     /// stacking above-staff text marks. Errs on the generous side
     /// so the gap stays visually clear without pixel-precise font

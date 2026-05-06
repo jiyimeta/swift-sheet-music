@@ -31,6 +31,10 @@ public struct Harmony: Sendable, Equatable {
     /// Per-element font overrides. `nil`-fields inherit from
     /// `styleType`'s row in `TextStyleDefaults`.
     public var properties: TextProperties
+    /// MuseScore `<visible>0</visible>` flag. When false the chord
+    /// symbol is hidden — layout drops it entirely (no glyphs, no
+    /// reserved horizontal/vertical space).
+    public var visible: Bool
 
     public init(
         name: String,
@@ -45,7 +49,8 @@ public struct Harmony: Sendable, Equatable {
         offsetX: Double = 0,
         offsetY: Double = 0,
         color: ScoreColor? = nil,
-        properties: TextProperties = TextProperties()
+        properties: TextProperties = TextProperties(),
+        visible: Bool = true
     ) {
         self.name = name
         self.harmonyType = harmonyType
@@ -60,6 +65,7 @@ public struct Harmony: Sendable, Equatable {
         self.offsetY = offsetY
         self.color = color
         self.properties = properties
+        self.visible = visible
     }
 
     /// The `TextStyleType` row this element inherits from. Roman
