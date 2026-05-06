@@ -59,19 +59,25 @@ public enum PDFExporter {
         public var systemGap: CGFloat
         public var title: String?
         public var author: String?
+        /// How to consume authored `<LayoutBreak>` markup. Default
+        /// `.honor` reproduces export behavior from before this option
+        /// existed.
+        public var breakPolicy: LayoutBreakPolicy
 
         public init(
             page: PageGeometry = .fromScore,
             staffSize: StaffSize = .fromScore,
             systemGap: CGFloat = 16,
             title: String? = nil,
-            author: String? = nil
+            author: String? = nil,
+            breakPolicy: LayoutBreakPolicy = .honor
         ) {
             self.page = page
             self.staffSize = staffSize
             self.systemGap = systemGap
             self.title = title
             self.author = author
+            self.breakPolicy = breakPolicy
         }
     }
 
@@ -90,7 +96,8 @@ public enum PDFExporter {
         let layoutOptions = ScoreViewOptions(
             staffSize: resolved.staffSize,
             systemGap: options.systemGap,
-            wrapToViewWidth: true
+            wrapToViewWidth: true,
+            breakPolicy: options.breakPolicy
         )
         let availableWidth = max(
             resolved.staffSize * 4,
@@ -103,7 +110,9 @@ public enum PDFExporter {
             availableWidth: availableWidth
         )
         let pages = paginate(
-            systems: document.systems, page: resolved.page
+            systems: document.systems,
+            page: resolved.page,
+            policy: options.breakPolicy
         )
 
         let data = NSMutableData()
@@ -128,7 +137,8 @@ public enum PDFExporter {
                 margins: margins,
                 // Authoring overlay is for previews only; the
                 // exported file must not show it.
-                showBreakIndicators: false
+                showBreakIndicators: false,
+                policy: options.breakPolicy
             )
             let renderer = ImageRenderer(content: view)
             renderer.proposedSize = ProposedViewSize(
@@ -199,7 +209,8 @@ public enum PDFExporter {
     /// dropped.
     public static func paginate(
         systems: [LayoutSystem],
-        page: EngravingPage
+        page: EngravingPage,
+        policy: LayoutBreakPolicy = .honor
     ) -> [PageBatch] {
         var pages: [PageBatch] = []
         var currentSystems: [LayoutSystem] = []
@@ -211,7 +222,8 @@ public enum PDFExporter {
         }
 
         func systemEndsPage(_ system: LayoutSystem) -> Bool {
-            system.measures.last?.pageBreak ?? false
+            guard policy != .ignoreAll else { return false }
+            return system.measures.last?.pageBreak ?? false
         }
 
         for system in systems {

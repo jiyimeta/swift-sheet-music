@@ -147,7 +147,8 @@ public struct ScoreView: View {
                 .overlay(alignment: .topLeading) {
                     BreakIndicatorOverlay(
                         mode: .system(system: sys),
-                        metrics: doc.metrics
+                        metrics: doc.metrics,
+                        policy: options.breakPolicy
                     )
                 }
                 .offset(y: sys.origin.y)
@@ -197,7 +198,8 @@ public struct ScoreView: View {
                         // are still useful as authoring hints.
                         BreakIndicatorOverlay(
                             mode: .system(system: system),
-                            metrics: doc.metrics
+                            metrics: doc.metrics,
+                            policy: options.breakPolicy
                         )
                     }
                 }

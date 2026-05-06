@@ -164,7 +164,8 @@ extension LayoutEngine {
                     minWidths: minWidths,
                     firstHeaderBoost: firstHeaderBoost,
                     contentAvail: contentAvail,
-                    staves: staves
+                    staves: staves,
+                    policy: context.options.breakPolicy
                 )
                 : Int.max
             // MuseScore-style natural-stretch target. Systems
@@ -227,7 +228,8 @@ extension LayoutEngine {
                    cursor > systemStart,
                    measureForcesLineBreak(
                        at: cursor - 1,
-                       staves: staves
+                       staves: staves,
+                       policy: context.options.breakPolicy
                    )
                 {
                     break
