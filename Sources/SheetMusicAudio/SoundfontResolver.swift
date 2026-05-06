@@ -7,7 +7,7 @@ import Foundation
 ///
 /// Two tiers, in priority order:
 ///
-/// 1. `soundfontURL(forBank:program:)` — a per-program file. These
+/// 1. `soundfontURL(forBank:program:isDrums:)` — a per-program file. These
 ///    are tiny (typically a few hundred KB to a few MB), so loading
 ///    only the patches the score actually uses keeps memory pressure
 ///    low — important on iPhone, where a full GM SF2 (>= ~100 MB)
