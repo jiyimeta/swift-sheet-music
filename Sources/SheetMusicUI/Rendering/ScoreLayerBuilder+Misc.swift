@@ -62,6 +62,10 @@ extension ScoreLayerBuilder {
         metrics: StaffMetrics, height: CGFloat,
         into parent: CALayer
     ) {
+        // SMuFL wiggle/arrow glyphs are drawn horizontally; vertical
+        // arpeggios rotate each segment -90° around its anchor.
+        // Mirrors MuseScore's `Arpeggio::draw` (`painter->rotate(-90)`).
+        let rotation: CGFloat = -.pi / 2
         let x = top.x - metrics.sp * 1.5
         var y = top.y
         while y <= bottom.y {
@@ -69,6 +73,7 @@ extension ScoreLayerBuilder {
                 SMuFLGlyph.arpeggioWiggle,
                 at: CGPoint(x: x, y: y),
                 size: metrics.glyphFontSize,
+                rotation: rotation,
                 height: height
             ) {
                 parent.addSublayer(layer)
@@ -81,6 +86,7 @@ extension ScoreLayerBuilder {
                 SMuFLGlyph.arpeggioUpArrow,
                 at: CGPoint(x: x, y: top.y - metrics.sp),
                 size: metrics.glyphFontSize,
+                rotation: rotation,
                 height: height
             ) {
                 parent.addSublayer(layer)
@@ -90,6 +96,7 @@ extension ScoreLayerBuilder {
                 SMuFLGlyph.arpeggioDownArrow,
                 at: CGPoint(x: x, y: bottom.y + metrics.sp),
                 size: metrics.glyphFontSize,
+                rotation: rotation,
                 height: height
             ) {
                 parent.addSublayer(layer)

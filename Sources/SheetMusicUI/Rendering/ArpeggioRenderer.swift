@@ -6,6 +6,11 @@ enum ArpeggioRenderer {
     /// Draw a vertical stack of arpeggio "wiggle" segments from `top` to
     /// `bottom`, to the left of the chord. `subtype` selects the optional
     /// arrow glyph at one end.
+    ///
+    /// SMuFL `wiggleArpeggiatoUp` (and the arrow variants) are drawn
+    /// horizontally in the font; vertical arpeggios rotate each segment
+    /// -90° around its anchor. Mirrors MuseScore's `Arpeggio::draw`
+    /// (`painter->rotate(-90)`).
     static func draw(
         context: inout GraphicsContext,
         top: CGPoint,
@@ -15,11 +20,10 @@ enum ArpeggioRenderer {
     ) {
         let x = top.x - metrics.sp * 1.5
         var y = top.y
-        // Step by ~sp; the wiggle glyph is taller than one staff line
-        // but this is a v1 approximation.
         while y <= bottom.y {
-            context.drawGlyph(
-                SMuFLGlyph.arpeggioWiggle,
+            drawRotated(
+                &context,
+                glyph: SMuFLGlyph.arpeggioWiggle,
                 at: CGPoint(x: x, y: y),
                 size: metrics.glyphFontSize
             )
@@ -27,19 +31,34 @@ enum ArpeggioRenderer {
         }
         switch subtype {
         case "up":
-            context.drawGlyph(
-                SMuFLGlyph.arpeggioUpArrow,
+            drawRotated(
+                &context,
+                glyph: SMuFLGlyph.arpeggioUpArrow,
                 at: CGPoint(x: x, y: top.y - metrics.sp),
                 size: metrics.glyphFontSize
             )
         case "down":
-            context.drawGlyph(
-                SMuFLGlyph.arpeggioDownArrow,
+            drawRotated(
+                &context,
+                glyph: SMuFLGlyph.arpeggioDownArrow,
                 at: CGPoint(x: x, y: bottom.y + metrics.sp),
                 size: metrics.glyphFontSize
             )
         default:
             break
+        }
+    }
+
+    private static func drawRotated(
+        _ context: inout GraphicsContext,
+        glyph: Character,
+        at origin: CGPoint,
+        size: CGFloat
+    ) {
+        context.drawLayer { ctx in
+            ctx.translateBy(x: origin.x, y: origin.y)
+            ctx.rotate(by: .degrees(-90))
+            ctx.drawGlyph(glyph, at: .zero, size: size)
         }
     }
 }

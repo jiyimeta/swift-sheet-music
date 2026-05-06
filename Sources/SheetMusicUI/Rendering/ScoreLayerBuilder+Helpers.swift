@@ -183,6 +183,7 @@ extension ScoreLayerBuilder {
         at origin: CGPoint,
         size: CGFloat,
         anchor: CGPoint = CGPoint(x: 0.5, y: 0.5),
+        rotation: CGFloat = 0,
         color: CGColor = inkColor,
         height: CGFloat
     ) -> CAShapeLayer? {
@@ -191,9 +192,21 @@ extension ScoreLayerBuilder {
             return nil
         }
         let bbox = path.boundingBoxOfPath
-        let t = textAnchoringTransform(
+        var t = textAnchoringTransform(
             bbox: bbox, font: font, origin: origin, anchor: anchor
         )
+        if rotation != 0 {
+            // Rotate around `origin` (post-anchoring): translate origin
+            // to (0,0), rotate, translate back. Used by arpeggio so the
+            // SMuFL horizontal wiggle becomes a vertical segment.
+            t = t.concatenating(
+                CGAffineTransform(translationX: -origin.x, y: -origin.y)
+            )
+            .concatenating(CGAffineTransform(rotationAngle: rotation))
+            .concatenating(
+                CGAffineTransform(translationX: origin.x, y: origin.y)
+            )
+        }
         var transformMut = t
         guard let transformed = path.copy(using: &transformMut) else {
             return nil
