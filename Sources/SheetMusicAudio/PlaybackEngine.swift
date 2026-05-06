@@ -344,6 +344,49 @@ public final class PlaybackEngine: ObservableObject {
         currentCursor = frame.cursor
     }
 
+    /// Current playback position in seconds, derived from the
+    /// sequencer's beat clock against the score's tempo map (not the
+    /// sequencer's `currentPositionInSeconds`, which uses the
+    /// instantaneous tempo and drifts on tempo-curved scores). Zero
+    /// when no sequencer has been built yet.
+    public var currentTimeSeconds: TimeInterval {
+        guard let timeline, let sequencer else { return 0 }
+        let tick = Int(
+            (sequencer.currentPositionInBeats * Double(timeline.division))
+                .rounded()
+        )
+        return timeline.frame(atTick: tick)?.timeSeconds ?? 0
+    }
+
+    /// Total playable duration in seconds for the loaded score.
+    /// Zero before `prepare(score:)` runs.
+    public var totalTimeSeconds: TimeInterval {
+        timeline?.totalSeconds ?? 0
+    }
+
+    /// Skip playback forward (`seconds > 0`) or backward
+    /// (`seconds < 0`) relative to the current position, clamped to
+    /// `[0, totalTimeSeconds]`. Preserves play / pause state — when
+    /// playing, restarts the sequencer at the new position so audio
+    /// keeps flowing; when paused, just moves the cursor and the next
+    /// `play()` resumes from there. No-op when no sequencer is built.
+    public func skip(by seconds: TimeInterval) {
+        guard let timeline, let sequencer else { return }
+        let now = currentTimeSeconds
+        let target = max(0, min(timeline.totalSeconds, now + seconds))
+        guard let frame = timeline.frame(atTime: target) else { return }
+        if state == .playing, let score = sequencerScore {
+            // Mirror `play(from:in:)` semantics — writing
+            // `currentPositionInBeats` while the sequencer is running
+            // halts it and freezes the cursor timer on its next tick.
+            play(from: frame.cursor, in: score)
+        } else {
+            sequencer.currentPositionInBeats =
+                Double(frame.tick) / Double(timeline.division)
+            currentCursor = frame.cursor
+        }
+    }
+
     /// Pause playback at the current position. `play(...)` resumes
     /// from there.
     ///
