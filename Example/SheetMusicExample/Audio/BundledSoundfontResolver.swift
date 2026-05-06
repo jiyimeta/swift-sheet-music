@@ -6,9 +6,12 @@ import SheetMusicAudio
 /// Convention used by the example app — matches the layout produced
 /// by https://github.com/jiyimeta/musescore-general-sf2-split:
 ///
-///   * `Sounds/BBB_PPP.sf2` — per-(bank, program) files, where BBB
-///     and PPP are three-digit decimal numbers (e.g. `000_000.sf2`
-///     for Acoustic Grand Piano on bank 0).
+///   * `Sounds/BBB_PPP.sf2` — per-(bank, program) files for melodic
+///     staves, where BBB and PPP are three-digit decimal numbers
+///     (e.g. `000_000.sf2` for Acoustic Grand Piano on bank 0).
+///   * `Sounds/128_PPP.sf2` — per-program drum kits. The `128` prefix
+///     follows the SF2 convention of treating the percussion bank as
+///     bank index 128 (e.g. `128_000.sf2` for the Standard Drum Kit).
 ///   * `Sounds/MuseScore_General.sf2` — the full GM fallback,
 ///     consulted when no per-program file matches.
 ///
@@ -20,8 +23,9 @@ import SheetMusicAudio
 struct BundledSoundfontResolver: SoundfontResolver {
     private let bundle: Bundle = .main
 
-    func soundfontURL(forBank bank: UInt8, program: UInt8) -> URL? {
-        let name = String(format: "%03d_%03d", bank, program)
+    func soundfontURL(forBank bank: UInt8, program: UInt8, isDrums: Bool) -> URL? {
+        let bankPrefix = isDrums ? 128 : Int(bank)
+        let name = String(format: "%03d_%03d", bankPrefix, program)
         return bundle.url(
             forResource: name,
             withExtension: "sf2",

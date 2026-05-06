@@ -17,6 +17,12 @@ import Foundation
 ///    Returning `nil` here too is allowed; voices without a matched
 ///    sound just stay silent.
 public protocol SoundfontResolver: Sendable {
-    func soundfontURL(forBank bank: UInt8, program: UInt8) -> URL?
+    /// Resolve a `(bank, program)` to a SoundFont 2 file URL. Drum
+    /// staves and metronome lookups pass `isDrums: true`; melodic
+    /// staves pass `false`. Allows the host to disambiguate
+    /// `(0, 0)` between Acoustic Grand Piano and the Standard Drum
+    /// Kit, which the engine otherwise loads at different
+    /// `bankMSB`s but identical `(bank, program)`.
+    func soundfontURL(forBank bank: UInt8, program: UInt8, isDrums: Bool) -> URL?
     var defaultGMSoundfontURL: URL? { get }
 }

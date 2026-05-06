@@ -119,7 +119,7 @@ public final class PlaybackEngine: ObservableObject {
             let sampler = staffSamplers[idx],
             let params = staffLoadParams[idx],
             let url = resolver.soundfontURL(
-                forBank: params.bankLSB, program: program
+                forBank: params.bankLSB, program: program, isDrums: params.isDrums
             )
             ?? resolver.defaultGMSoundfontURL
         else { return }
@@ -151,7 +151,16 @@ public final class PlaybackEngine: ObservableObject {
         sequencerScore = nil
         timeline = PlaybackTimeline(score: score)
         metronomeBeats = PlaybackTimeline.metronomeBeats(score: score)
-        metronome.prepare(soundfontURL: resolver.defaultGMSoundfontURL)
+        // Metronome always plays GM percussion (hi/low wood block on
+        // notes 76 / 77). Ask the resolver for the drum kit at
+        // (bank: 0, program: 0, isDrums: true) so a host that doesn't
+        // ship a full GM SoundFont can still serve the metronome from
+        // a per-(bank, program) split file. Falls back to the GM URL
+        // for hosts that haven't moved over.
+        let metronomeURL =
+            resolver.soundfontURL(forBank: 0, program: 0, isDrums: true)
+            ?? resolver.defaultGMSoundfontURL
+        metronome.prepare(soundfontURL: metronomeURL)
         // Tear down any samplers from a previous score.
         for sampler in staffSamplers.values {
             engine.disconnectNodeOutput(sampler)
@@ -175,7 +184,7 @@ public final class PlaybackEngine: ObservableObject {
             let program = UInt8(clamping: channel.program)
 
             let url = resolver.soundfontURL(
-                forBank: bank, program: program
+                forBank: bank, program: program, isDrums: isDrums
             )
                 ?? resolver.defaultGMSoundfontURL
 
