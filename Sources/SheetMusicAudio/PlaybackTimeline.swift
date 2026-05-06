@@ -29,6 +29,10 @@ public struct PlaybackTimeline: Sendable, Equatable {
 
     public let frames: [Frame]
     public let totalSeconds: TimeInterval
+    /// End-of-piece tick (last note's offset, not its onset). The
+    /// playback engine compares `currentPositionInBeats * division`
+    /// against this to detect end of playback.
+    public let totalTicks: Int
     public let division: Int
     /// Maps EVERY selectable chord-note / rest in the score to its
     /// onset tick. `frames` carries one representative item per
@@ -53,6 +57,32 @@ public struct PlaybackTimeline: Sendable, Equatable {
         while lo <= hi {
             let mid = (lo + hi) / 2
             if frames[mid].timeSeconds <= t {
+                best = mid
+                lo = mid + 1
+            } else {
+                hi = mid - 1
+            }
+        }
+        return frames[best]
+    }
+
+    /// Latest frame whose `tick` is at or before `tick`. Used by the
+    /// cursor poller in preference to `frame(atTime:)` because
+    /// `AVAudioSequencer.currentPositionInSeconds` is converted from
+    /// beats using the sequencer's *current* tempo (not the integrated
+    /// tempo map), which makes it unsuitable for cursor sync on a
+    /// score with tempo changes — the cursor can race ahead of the
+    /// audio when a slower tempo is active. `currentPositionInBeats`
+    /// is the stable monotonic clock, so we convert to ticks and look
+    /// up by tick directly.
+    public func frame(atTick tick: Int) -> Frame? {
+        guard !frames.isEmpty, tick >= frames[0].tick else {
+            return nil
+        }
+        var lo = 0, hi = frames.count - 1, best = 0
+        while lo <= hi {
+            let mid = (lo + hi) / 2
+            if frames[mid].tick <= tick {
                 best = mid
                 lo = mid + 1
             } else {
@@ -189,6 +219,18 @@ extension PlaybackTimeline {
                     var tick = measureStartTick
                     for (elemIdx, el) in voice.elements.enumerated() {
                         switch el {
+                        case let .locationShift(delta):
+                            // Mirrors `MidiRenderer.renderVoiceElement`'s
+                            // handling — the running tick cursor jogs by
+                            // the location's fractional delta so any
+                            // following Tempo / chord / rest lands at the
+                            // same absolute tick the MIDI sequencer uses.
+                            // Without this, tempo events emitted after a
+                            // `<location>` shift would be recorded at the
+                            // wrong tick, making `timeSeconds` drift away
+                            // from `currentPositionInSeconds` and the
+                            // playback cursor jump ahead of the audio.
+                            tick += delta.ticks(division: division)
                         case let .chord(chord) where !chord.notes.isEmpty:
                             for noteIdx in chord.notes.indices {
                                 let nid = NoteID(
@@ -223,13 +265,33 @@ extension PlaybackTimeline {
                                 elementIndex: elemIdx
                             )
                             itemTicks[.rest(id)] = tick
-                            pending.append(.init(
-                                tick: tick,
-                                sortKey: (staffIdx, voiceIdx),
-                                cursor: .item(.rest(id))
-                            ))
-                            tick += rest.duration.ticks(
+                            // Whole-note rests render *centered* in the
+                            // measure, not at the rhythmic onset
+                            // column (`LayoutEngine+Placement.swift`'s
+                            // `isWholeRest` branch). Letting one win
+                            // the cursor-frame slot would park the
+                            // cursor halfway through the bar while
+                            // audio is still on beat 1 — visible as
+                            // the cursor being ~5/16 ahead at every
+                            // measure with a `<durationType>measure
+                            // </durationType>` rest on staff 0. Skip
+                            // those from the cursor's pending entries
+                            // so the dedup falls through to a chord
+                            // onset on another staff (or a `.beat`
+                            // entry for that tick), both of which sit
+                            // on the correct rhythmic column.
+                            let restTicks = rest.duration.ticks(
                                 division: division)
+                            let isWholeNoteRest =
+                                restTicks >= 4 * division
+                            if !isWholeNoteRest {
+                                pending.append(.init(
+                                    tick: tick,
+                                    sortKey: (staffIdx, voiceIdx),
+                                    cursor: .item(.rest(id))
+                                ))
+                            }
+                            tick += restTicks
                         case let .tempo(t):
                             tempoEvents.append(
                                 (tick, t.microsecondsPerQuarter))
@@ -333,6 +395,7 @@ extension PlaybackTimeline {
 
         self.frames = frames
         totalSeconds = currentTime
+        totalTicks = maxEndTick
         self.division = division
         self.itemTicks = itemTicks
     }

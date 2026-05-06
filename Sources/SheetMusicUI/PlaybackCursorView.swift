@@ -176,12 +176,21 @@ extension LayoutDocument {
                             voiceIndex: voiceIdx,
                             elementIndex: elemIdx
                         )
-                        if ticksToX[t] == nil,
+                        // Skip whole-note rests: they're centered in
+                        // the measure, not at their tick column
+                        // (`LayoutEngine+Placement.swift`'s
+                        // `isWholeRest` branch), so their X would
+                        // anchor the cursor mid-bar instead of at
+                        // tick 0. Mirrors the same skip done in
+                        // `PlaybackTimeline`'s pending build.
+                        let restTicks = rest.duration.ticks(division: division)
+                        let isWholeNoteRest = restTicks >= 4 * division
+                        if !isWholeNoteRest, ticksToX[t] == nil,
                            let x = itemX(.rest(rid), in: layoutMeasure)
                         {
                             ticksToX[t] = x
                         }
-                        t += rest.duration.ticks(division: division)
+                        t += restTicks
                     default:
                         break
                     }

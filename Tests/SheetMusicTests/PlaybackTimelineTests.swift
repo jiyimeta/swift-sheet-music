@@ -216,6 +216,118 @@ struct PlaybackTimelineTests {
         }
     }
 
+    /// Regression for the idea8.mscx playback-cursor drift: a `<Tempo>`
+    /// preceded by `<location>` shifts (e.g. `rit. … a tempo` clusters)
+    /// must land at the shifted tick, not the chord-walk tick. The
+    /// MIDI sequencer respects the location shift, so if the timeline
+    /// records the tempo at the wrong tick its `timeSeconds` drifts
+    /// away from `currentPositionInSeconds` and the cursor jumps
+    /// ahead of the audio at later beats.
+    @Test("locationShift before a Tempo offsets the tempo's tick")
+    func locationShiftMovesTempoTick() {
+        let half = Chord(
+            duration: .half, notes: [Note(pitch: 60, tpc: 14)]
+        )
+        // 4/4 measure: half | locShift(+1/8) | tempo→60bpm | locShift(-1/8) | half.
+        // With division=480, +1/8 = +240 ticks. Without the fix, the
+        // tempo lands at tick 480 (chord-walk position) instead of 720.
+        let voice = Voice(elements: [
+            .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+            .chord(half),
+            .locationShift(delta: Fraction(numerator: 1, denominator: 8)),
+            .tempo(Tempo(beatsPerSecond: 1.0)),
+            .locationShift(delta: Fraction(numerator: -1, denominator: 8)),
+            .chord(half),
+        ])
+        let staff = Staff(measures: [Measure(voices: [voice])])
+        let part = Part(
+            id: "P1",
+            instrument: Instrument(
+                id: "i",
+                articulations: [InstrumentArticulation()]
+            ),
+            staves: [staff]
+        )
+        let score = Score(division: 480, parts: [part])
+        let timeline = PlaybackTimeline(score: score)
+
+        // Frame at the second half-note onset (tick 960). With the
+        // tempo correctly placed at tick 720:
+        //   0..720  @ 120 bpm (default) = 720 / (2 * 480) = 0.75 s
+        //   720..960 @ 60 bpm           = 240 / (1 * 480) = 0.50 s
+        // total = 1.25 s. With the bug (tempo at tick 480) it'd be
+        // 0.5 + 1.0 = 1.5 s.
+        // A frame at the second chord onset (tick 960) is reached
+        // before the tempo fires in either branch — what matters is
+        // the *total* runtime past the bracketed tempo. With the fix,
+        // tempo lands at tick 1200; the final 720 ticks play at 60 bpm,
+        // giving total = 1.25 + 1.5 = 2.75 s. Without the fix the
+        // tempo lands at tick 960 and the final 960 ticks play at
+        // 60 bpm, giving 1.0 + 2.0 = 3.0 s.
+        #expect(abs(timeline.totalSeconds - 2.75) < 1e-9)
+    }
+
+    /// Regression for the idea8.mscx playback-cursor "lead" symptom:
+    /// when the lowest staff carries a whole-measure rest, the
+    /// engraver renders that rest *centred* in the bar (not at the
+    /// rhythmic onset column), so a `.item(.rest)` cursor on it
+    /// would park visually around beat 2.5 while audio is still on
+    /// beat 1. The timeline must skip whole-note rests so a chord
+    /// onset on another staff wins the cursor-frame slot at tick 0.
+    @Test("Whole-measure rest on staff 0 does not win the cursor at its tick")
+    func wholeRestSkippedInPending() {
+        let restWhole = Chord(
+            duration: .fraction(Fraction(numerator: 4, denominator: 4)),
+            notes: []
+        )
+        let quarter = Chord(
+            duration: .quarter,
+            notes: [Note(pitch: 60, tpc: 14)]
+        )
+        // Staff 0: whole-measure rest only. Staff 1: 4 quarter notes.
+        let staff0 = Staff(
+            measures: [Measure(voices: [Voice(elements: [.chord(restWhole)])])]
+        )
+        let staff1 = Staff(measures: [Measure(voices: [Voice(elements: [
+            .chord(quarter), .chord(quarter), .chord(quarter), .chord(quarter),
+        ])])])
+        let instrument = Instrument(
+            id: "i", articulations: [InstrumentArticulation()]
+        )
+        let score = Score(
+            division: 480,
+            parts: [
+                Part(id: "P0", instrument: instrument, staves: [staff0]),
+                Part(id: "P1", instrument: instrument, staves: [staff1]),
+            ]
+        )
+        let timeline = PlaybackTimeline(score: score)
+
+        // Tick 0 must resolve to the staff 1 chord, not the staff 0
+        // whole-rest. Without the skip, dedup would prefer staff 0's
+        // rest (sortKey (0, 0) wins over staff 1's (1, 0)) and the
+        // cursor would render at the centred rest glyph.
+        let frame0 = timeline.frame(atTick: 0)
+        if case let .item(.note(id)) = frame0?.cursor {
+            #expect(id.staff.partIndex == 1)
+        } else {
+            Issue.record(
+                "Expected .item(.note) on staff 1 at tick 0, got \(String(describing: frame0?.cursor))"
+            )
+        }
+
+        // The whole-measure rest is still seekable via
+        // `frame(forCursor:)` — `itemTicks` keeps mapping it so
+        // play-from-selection on the rest still works.
+        let restID = RestID(
+            staff: StaffAddress(partIndex: 0, staffIndexInPart: 0),
+            measureIndex: 0,
+            voiceIndex: 0,
+            elementIndex: 0
+        )
+        #expect(timeline.frame(forCursor: .item(.rest(restID)))?.tick == 0)
+    }
+
     /// 6/8 → step = division / 2 (eighth ticks), 6 beats per measure.
     @Test("6/8 emits beats at the eighth-note interval, six per measure")
     func compoundTimeSigBeatStep() {

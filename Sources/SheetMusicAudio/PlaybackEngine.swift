@@ -291,13 +291,16 @@ public final class PlaybackEngine: ObservableObject {
                 sequencerScore = score
             }
             guard let sequencer else { return }
-            // Position. AVAudioSequencer expects beats; `currentPositionInSeconds`
-            // is the convenient entry point and works regardless of tempo curves.
+            // Position by beats. `currentPositionInSeconds` is derived
+            // from beats using the player's current tempo (not the
+            // tempo map), so seeking via seconds on a tempo-curved
+            // score lands at the wrong tick. Beats / ticks bypass that.
             if let cursor, let frame = timeline.frame(forCursor: cursor) {
-                sequencer.currentPositionInSeconds = frame.timeSeconds
+                sequencer.currentPositionInBeats =
+                    Double(frame.tick) / Double(timeline.division)
                 currentCursor = frame.cursor
             } else if state == .stopped {
-                sequencer.currentPositionInSeconds = 0
+                sequencer.currentPositionInBeats = 0
                 currentCursor = timeline.frames.first?.cursor
             }
             try sequencer.start()
@@ -321,7 +324,8 @@ public final class PlaybackEngine: ObservableObject {
         else {
             return
         }
-        sequencer.currentPositionInSeconds = frame.timeSeconds
+        sequencer.currentPositionInBeats =
+            Double(frame.tick) / Double(timeline.division)
         currentCursor = frame.cursor
     }
 
@@ -338,7 +342,7 @@ public final class PlaybackEngine: ObservableObject {
     /// from the supplied item).
     public func stop() {
         sequencer?.stop()
-        sequencer?.currentPositionInSeconds = 0
+        sequencer?.currentPositionInBeats = 0
         stopCursorTimer()
         state = .stopped
         currentCursor = nil
@@ -413,21 +417,29 @@ public final class PlaybackEngine: ObservableObject {
 
     private func tickCursor() {
         guard let sequencer, let timeline else { return }
-        // Auto-stop at the end. AVAudioSequencer doesn't fire a
-        // "finished" callback, so we detect end-of-piece by the
-        // absence of more frames past the current time.
-        let t = sequencer.currentPositionInSeconds
+        // Drive the cursor off `currentPositionInBeats`, not
+        // `currentPositionInSeconds`. AVAudioSequencer derives
+        // `…InSeconds` from `…InBeats` using the sequencer's *current*
+        // tempo (not the integrated tempo map), so on a score with
+        // tempo changes the seconds value can race ahead of real
+        // playback. Beats are the stable monotonic clock — convert to
+        // ticks via the score's division and look up by tick.
+        let beats = sequencer.currentPositionInBeats
         if !sequencer.isPlaying {
             stopCursorTimer()
             state = .stopped
             return
         }
-        if let frame = timeline.frame(atTime: t) {
+        let tick = Int((beats * Double(timeline.division)).rounded())
+        if let frame = timeline.frame(atTick: tick) {
             if frame.cursor != currentCursor {
                 currentCursor = frame.cursor
             }
         }
-        if t >= timeline.totalSeconds + 0.05 {
+        // Slack of a tick lets us catch the very last frame even if
+        // the sequencer reports a sample-accurate beats value just
+        // shy of the final onset.
+        if tick >= timeline.totalTicks {
             stop()
         }
     }
