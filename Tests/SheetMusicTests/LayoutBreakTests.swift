@@ -87,21 +87,147 @@ import Testing
             Staff(measures: [mPlain, mPlain, mPlain]),
         ]
         #expect(LayoutEngine.measureForcesLineBreak(
-            at: 0, staves: staves
+            at: 0, staves: staves, policy: .honor
         ) == true)
         #expect(
             LayoutEngine.measureForcesLineBreak(
-                at: 1, staves: staves
+                at: 1, staves: staves, policy: .honor
             ) == true,
             "page break should also force a system break"
         )
         #expect(LayoutEngine.measureForcesLineBreak(
-            at: 2, staves: staves
+            at: 2, staves: staves, policy: .honor
         ) == false)
         // Out-of-range index returns false rather than crashing.
         #expect(LayoutEngine.measureForcesLineBreak(
-            at: 99, staves: staves
+            at: 99, staves: staves, policy: .honor
         ) == false)
+    }
+
+    /// `measureForcesLineBreak` honours `LayoutBreakPolicy`:
+    /// `.honor` keeps the existing line-or-page logic;
+    /// `.ignoreSystemBreaks` only respects page breaks;
+    /// `.ignoreAll` returns false unconditionally.
+    @Test func helperHonoursPolicy() {
+        guard #available(macOS 15.0, iOS 16.0, *) else { return }
+        let mLine = Measure(voices: [], lineBreak: true)
+        let mPage = Measure(voices: [], pageBreak: true)
+        let mPlain = Measure(voices: [])
+        let staves = [Staff(measures: [mLine, mPage, mPlain])]
+
+        // .honor — line and page both force.
+        #expect(LayoutEngine.measureForcesLineBreak(
+            at: 0, staves: staves, policy: .honor
+        ) == true)
+        #expect(LayoutEngine.measureForcesLineBreak(
+            at: 1, staves: staves, policy: .honor
+        ) == true)
+        // .ignoreSystemBreaks — line ignored, page still forces.
+        #expect(LayoutEngine.measureForcesLineBreak(
+            at: 0, staves: staves, policy: .ignoreSystemBreaks
+        ) == false)
+        #expect(LayoutEngine.measureForcesLineBreak(
+            at: 1, staves: staves, policy: .ignoreSystemBreaks
+        ) == true)
+        // .ignoreAll — neither forces.
+        #expect(LayoutEngine.measureForcesLineBreak(
+            at: 0, staves: staves, policy: .ignoreAll
+        ) == false)
+        #expect(LayoutEngine.measureForcesLineBreak(
+            at: 1, staves: staves, policy: .ignoreAll
+        ) == false)
+        // Plain measure: false under every policy.
+        for p: LayoutBreakPolicy in [.honor, .ignoreSystemBreaks, .ignoreAll] {
+            #expect(LayoutEngine.measureForcesLineBreak(
+                at: 2, staves: staves, policy: p
+            ) == false)
+        }
+    }
+
+    /// `.ignoreAll` collapses authored line breaks: the same fixture
+    /// that produces three systems under `.honor` produces a single
+    /// system when the policy ignores breaks. Mirrors spec test case 1.
+    @Test func ignoreAllCollapsesAuthoredLineBreaks() {
+        guard #available(macOS 15.0, iOS 16.0, *) else { return }
+        let chord = Chord(
+            duration: .quarter,
+            notes: [Note(pitch: 60, tpc: 14)]
+        )
+        // Six measures with a forced line break on indices 1 and 3 —
+        // identical fixture to `layoutBreakForcesSystemSplit`.
+        let measures = (0 ..< 6).map { idx in
+            Measure(
+                voices: [Voice(elements: [
+                    .chord(chord), .chord(chord),
+                    .chord(chord), .chord(chord),
+                ])],
+                lineBreak: idx == 1 || idx == 3
+            )
+        }
+        let staff = Staff(measures: measures)
+        let part = Part(
+            id: "P1",
+            instrument: Instrument(
+                id: "i",
+                articulations: [InstrumentArticulation()]
+            ),
+            staves: [staff]
+        )
+        let score = Score(division: 480, parts: [part])
+        let opts = ScoreViewOptions(
+            staffSize: 16, systemGap: 16,
+            wrapToViewWidth: true,
+            breakPolicy: .ignoreAll
+        )
+        // Wide enough that no width-driven wrap fires either.
+        let doc = LayoutEngine.layout(
+            score: score, options: opts, availableWidth: 4000
+        )
+        #expect(doc.systems.count == 1)
+        #expect(doc.systems.first?.measures.count == 6)
+    }
+
+    /// `.ignoreSystemBreaks` keeps `<LayoutBreak>page`-implied system
+    /// breaks. Mirrors spec test case 2.
+    @Test func ignoreSystemBreaksKeepsPageImpliedSystemBreaks() {
+        guard #available(macOS 15.0, iOS 16.0, *) else { return }
+        let chord = Chord(
+            duration: .quarter,
+            notes: [Note(pitch: 60, tpc: 14)]
+        )
+        // Six measures, page break on measure 2 (index 2).
+        let measures = (0 ..< 6).map { idx in
+            Measure(
+                voices: [Voice(elements: [
+                    .chord(chord), .chord(chord),
+                    .chord(chord), .chord(chord),
+                ])],
+                pageBreak: idx == 2
+            )
+        }
+        let staff = Staff(measures: measures)
+        let part = Part(
+            id: "P1",
+            instrument: Instrument(
+                id: "i",
+                articulations: [InstrumentArticulation()]
+            ),
+            staves: [staff]
+        )
+        let score = Score(division: 480, parts: [part])
+        let opts = ScoreViewOptions(
+            staffSize: 16, systemGap: 16,
+            wrapToViewWidth: true,
+            breakPolicy: .ignoreSystemBreaks
+        )
+        let doc = LayoutEngine.layout(
+            score: score, options: opts, availableWidth: 4000
+        )
+        // Page break on measure 2 → still forces a system break,
+        // even under .ignoreSystemBreaks. Two systems: 3 + 3.
+        #expect(doc.systems.count == 2)
+        #expect(doc.systems[0].measures.count == 3)
+        #expect(doc.systems[1].measures.count == 3)
     }
 
     /// Between two forced breaks (or between start-of-score and the

@@ -3,22 +3,26 @@ import SheetMusicCore
 
 @available(macOS 15.0, iOS 16.0, *)
 extension LayoutEngine {
-    /// True when the measure at `idx` carries `<LayoutBreak>line`
-    /// or `<LayoutBreak>page`, forcing the next measure onto a new
-    /// system. Looks only at staff 0 — line / page breaks are a
-    /// document-level engraving decision, not per-staff (MuseScore
-    /// stores them on `MeasureBase`, which is shared across
-    /// staves). Mirrors `engraving/dom/measurebase.h::lineBreak()`
-    /// + the page-break promotion in
-    /// `engraving/rendering/score/systemlayout.cpp:262` (a page
-    /// break implies a system break).
+    /// True when the measure at `idx` should force the next measure
+    /// onto a new system, given `policy`. Looks only at staff 0 — line
+    /// / page breaks are a document-level engraving decision, not
+    /// per-staff (MuseScore stores them on `MeasureBase`, which is
+    /// shared across staves). Mirrors
+    /// `engraving/dom/measurebase.h::lineBreak()` plus the page-break
+    /// promotion in `engraving/rendering/score/systemlayout.cpp:262`
+    /// (a page break implies a system break) — promotion is gated on
+    /// `policy` per `LayoutBreakPolicy`.
     static func measureForcesLineBreak(
-        at idx: Int, staves: [Staff]
+        at idx: Int, staves: [Staff], policy: LayoutBreakPolicy
     ) -> Bool {
         guard let s0 = staves.first,
               idx < s0.measures.count else { return false }
         let m = s0.measures[idx]
-        return m.lineBreak || m.pageBreak
+        switch policy {
+        case .honor: return m.lineBreak || m.pageBreak
+        case .ignoreSystemBreaks: return m.pageBreak
+        case .ignoreAll: return false
+        }
     }
 
     /// Dynamic part-label width = max(measured label widths) +
@@ -93,12 +97,15 @@ extension LayoutEngine {
         minWidths: [CGFloat],
         firstHeaderBoost: CGFloat,
         contentAvail: CGFloat,
-        staves: [Staff]
+        staves: [Staff],
+        policy: LayoutBreakPolicy
     ) -> Int {
         // Find the END of the current break-bounded span.
         var endIdx = measureCount
         for i in startIdx ..< measureCount
-            where measureForcesLineBreak(at: i, staves: staves)
+            where measureForcesLineBreak(
+                at: i, staves: staves, policy: policy
+            )
         {
             endIdx = i + 1
             break
