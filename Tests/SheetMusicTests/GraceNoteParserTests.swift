@@ -186,4 +186,31 @@ struct VoiceGraceAttachmentTests {
         let v = try voiceXML(chordXML("grace8after", dur: "eighth", pitch: 62, tpc: 16))
         #expect(v.elements.isEmpty)
     }
+
+    @Test("Grace inside a triplet does not consume tuplet wall-clock time")
+    func graceInsideTuplet() throws {
+        // <Tuplet> opens a 2/3 ratio; the inner main chord is a quarter
+        // scaled to 2/3, but the acciaccatura keeps its original eighth
+        // (graces don't contribute to tuplet time — see
+        // CompatMidiRender::renderGraceNotesBefore).
+        let v = try voiceXML("""
+        <Tuplet><normalNotes>2</normalNotes><actualNotes>3</actualNotes></Tuplet>\
+        \(chordXML("acciaccatura", dur: "eighth", pitch: 62, tpc: 16))\
+        \(chordXML(dur: "quarter", pitch: 60, tpc: 14))\
+        \(chordXML(dur: "quarter", pitch: 64, tpc: 18))\
+        \(chordXML(dur: "quarter", pitch: 67, tpc: 15))\
+        <endTuplet/>
+        """)
+        #expect(v.elements.count == 3)
+        guard case let .chord(first) = v.elements[0] else {
+            Issue.record("expected first triplet chord"); return
+        }
+        #expect(first.graceNotesBefore.count == 1)
+        #expect(first.graceNotesBefore[0].graceType == .acciaccatura)
+        // Grace duration is the unscaled eighth (1/8), NOT the
+        // tuplet-scaled 1/12 the main chord receives.
+        #expect(first.graceNotesBefore[0].duration == .eighth)
+        // Main chord did get tuplet scaling (quarter × 2/3 = 1/6).
+        #expect(first.duration.asFraction == Fraction(numerator: 2, denominator: 12))
+    }
 }
