@@ -58,4 +58,25 @@ struct MSCXEncoderTests {
             #expect(decoded.accidental == acc, "accidental \(acc) failed to round-trip")
         }
     }
+
+    @Test("NoteDuration appends durationType for named cases")
+    func durationTypeNamed() {
+        var children: [XMLTreeNode] = []
+        NoteDuration.quarter.appendDurationXML(to: &children)
+        #expect(children.count == 1)
+        #expect(children[0].name == "durationType")
+        #expect(children[0].text == "quarter")
+    }
+
+    @Test("NoteDuration appends durationType=measure + duration for fractions")
+    func durationTypeFraction() {
+        var children: [XMLTreeNode] = []
+        NoteDuration.fraction(.init(numerator: 3, denominator: 8))
+            .appendDurationXML(to: &children)
+        #expect(children.count == 2)
+        #expect(children[0].name == "durationType")
+        #expect(children[0].text == "measure")
+        #expect(children[1].name == "duration")
+        #expect(children[1].text == "3/8")
+    }
 }
