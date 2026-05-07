@@ -42,7 +42,30 @@ extension ScoreLayerBuilder {
             base: base, metrics: scaled, height: height,
             context: &context, into: parent
         )
-        guard hasSlash else { return }
+        guard hasSlash,
+              let xMin = notes.map(\.origin.x).min(),
+              let xMax = notes.map(\.origin.x).max(),
+              let yTop = notes.map(\.origin.y).min(),
+              let yBot = notes.map(\.origin.y).max()
+        else { return }
+        // Slash position must track the rendered stem geometry —
+        // anchoring at `stemOrigin` (chord-column center, staff
+        // middle Y) misses the stem on both axes when the grace
+        // sits off-centre or above/below the staff. Mirrors
+        // `StemRenderer.draw` so the slash crosses the actual stem.
+        let stemAttachDx = scaled.sp * 0.59
+        let stemX: CGFloat
+        let stemMidY: CGFloat
+        switch stem {
+        case .up:
+            stemX = xMax + stemAttachDx
+            let stemTopY = yTop - scaled.defaultStemLength
+            stemMidY = (stemTopY + yBot) / 2
+        case .down:
+            stemX = xMin - stemAttachDx
+            let stemBotY = yBot + scaled.defaultStemLength
+            stemMidY = (yTop + stemBotY) / 2
+        }
         let glyph = stem == .up
             ? SMuFLGlyph.graceNoteSlashStemUp
             : SMuFLGlyph.graceNoteSlashStemDown
@@ -50,11 +73,9 @@ extension ScoreLayerBuilder {
         let bravura = CTFontCreateWithName(
             BravuraFont.familyName as CFString, glyphSize, nil
         )
-        // Slash sits ~1.5 sp up the stem from the notehead end.
-        let dy: CGFloat = stem == .up ? -scaled.sp * 1.5 : scaled.sp * 1.5
         let position = CGPoint(
-            x: base.x + stemOrigin.x,
-            y: base.y + stemOrigin.y + dy
+            x: base.x + stemX,
+            y: base.y + stemMidY
         )
         if let layer = textLayer(
             text: String(glyph), at: position,
