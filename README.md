@@ -1,9 +1,10 @@
 # swift-sheet-music
 
 A Swift package for working with engraved music notation: parsing
-MuseScore (`.mscx`) score files, modelling them as Swift value types, and
-exporting them to Standard MIDI Files. Built from scratch in Swift, with
-no direct runtime dependency on the MuseScore application.
+MuseScore (`.mscx` / `.mscz`) score files, modelling them as Swift value
+types, and exporting them back to MuseScore format or to Standard MIDI
+Files. Built from scratch in Swift, with no direct runtime dependency
+on the MuseScore application.
 
 > **Status:** unofficial. Not affiliated with MuseScore Limited / Muse Group,
 > nor with Apple's `MusicKit` framework (which is for Apple Music integration).
@@ -16,7 +17,7 @@ The package is split into focused libraries; pick what you need.
 |---|---|
 | `SheetMusic` | **Umbrella.** Re-exports the libraries below + a small convenience façade. Most consumers want this. |
 | `SheetMusicCore` | Score data model (Score, Part, Measure, Voice, Note, Chord, …) and the shared error type. No format I/O. |
-| `SheetMusicMSCX` | MuseScore file I/O: `.mscx` parsing and `.mscz` read/write (main score only). |
+| `SheetMusicMSCX` | MuseScore file I/O: `.mscx` / `.mscz` read and write (main score only). |
 | `SheetMusicMIDI` | In-memory MIDI model, score → MIDI rendering, SMF read/write. |
 | `SheetMusicUI` | SwiftUI read-only notation viewer (macOS 15+), bundles Bravura SMuFL font (SIL OFL). |
 | `SheetMusicAudio` | AVAudioEngine-backed playback. Per-staff `AVAudioUnitSampler`s, `SoundfontResolver` protocol, single-note preview, and full timeline-driven playback (chord-by-chord cursor via `PlaybackEngine.currentCursor`). |
@@ -67,6 +68,16 @@ let data  = try Data(contentsOf: someMscxURL)
 let score = try SheetMusic.loadScore(mscxData: data)
 let midi  = try SheetMusic.exportMIDI(score: score)
 try midi.write(to: someOutputMIDIURL)
+```
+
+Round-trip a score back to MuseScore format after editing the model:
+
+```swift
+let score = try SheetMusic.loadScore(mscxURL: input)
+// … mutate `score` …
+try SheetMusic.exportMSCX(score, to: outputMSCX)
+// or, packaged as a .mscz archive:
+try SheetMusic.exportMSCZ(score, to: outputMSCZ)
 ```
 
 If you only need the score model:
