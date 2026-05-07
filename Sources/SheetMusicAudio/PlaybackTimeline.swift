@@ -42,6 +42,12 @@ public struct PlaybackTimeline: Sendable, Equatable {
     /// `frame(forCursor:)` and `earliest(of:)` can resolve any
     /// selectable item to its tick.
     public let itemTicks: [ScoreItemID: Int]
+    /// Companion to `itemTicks` carrying each item's offset tick
+    /// (onset + notated duration). All notes inside a chord share the
+    /// same end tick. Used by playback features that need to span
+    /// "through the end of an item" — e.g. loop regions that should
+    /// include the last note's full ringing duration.
+    public let itemEndTicks: [ScoreItemID: Int]
 
     /// Latest frame whose `timeSeconds` is at or before `t`. Used by
     /// the cursor poller — returns `nil` for `t` before the first
@@ -156,6 +162,7 @@ extension PlaybackTimeline {
         var tempoEvents: [(tick: Int, mpq: Int)] = []
         var maxEndTick = 0
         var itemTicks: [ScoreItemID: Int] = [:]
+        var itemEndTicks: [ScoreItemID: Int] = [:]
 
         // Per-measure cache: absolute start tick of each measure
         // (from staff 0's voice 0 spine) and the time signature
@@ -232,6 +239,8 @@ extension PlaybackTimeline {
                             // playback cursor jump ahead of the audio.
                             tick += delta.ticks(division: division)
                         case let .chord(chord) where !chord.notes.isEmpty:
+                            let chordDur = chord.duration.ticks(
+                                division: division)
                             for noteIdx in chord.notes.indices {
                                 let nid = NoteID(
                                     staff: entry.address,
@@ -241,6 +250,7 @@ extension PlaybackTimeline {
                                     noteIndexInChord: noteIdx
                                 )
                                 itemTicks[.note(nid)] = tick
+                                itemEndTicks[.note(nid)] = tick + chordDur
                             }
                             let id = NoteID(
                                 staff: entry.address,
@@ -254,8 +264,7 @@ extension PlaybackTimeline {
                                 sortKey: (staffIdx, voiceIdx),
                                 cursor: .item(.note(id))
                             ))
-                            tick += chord.duration.ticks(
-                                division: division)
+                            tick += chordDur
                         case let .chord(rest):
                             // Empty chord = rest.
                             let id = RestID(
@@ -265,6 +274,8 @@ extension PlaybackTimeline {
                                 elementIndex: elemIdx
                             )
                             itemTicks[.rest(id)] = tick
+                            itemEndTicks[.rest(id)] = tick
+                                + rest.duration.ticks(division: division)
                             // Whole-note rests render *centered* in the
                             // measure, not at the rhythmic onset
                             // column (`LayoutEngine+Placement.swift`'s
@@ -398,6 +409,7 @@ extension PlaybackTimeline {
         totalTicks = maxEndTick
         self.division = division
         self.itemTicks = itemTicks
+        self.itemEndTicks = itemEndTicks
     }
 }
 

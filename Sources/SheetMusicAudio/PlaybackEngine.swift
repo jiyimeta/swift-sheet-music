@@ -1,4 +1,4 @@
-// swiftlint:disable function_body_length file_length
+// swiftlint:disable function_body_length file_length type_body_length
 import AVFoundation
 import Combine
 import Foundation
@@ -22,6 +22,22 @@ import SheetMusicMIDI
 /// needs to switch between play / pause icons.
 public enum PlaybackState: Sendable, Equatable {
     case stopped, playing, paused
+}
+
+/// Half-open tick range `[startTick, endTick)` the engine should
+/// loop while playing. Tick-based rather than cursor-based because
+/// `setLoop(from:throughEndOf:)` wraps at an item's offset, which
+/// rarely coincides with a `ScoreCursor` column. Hosts that want a
+/// cursor for the boundaries can resolve via
+/// `PlaybackTimeline.frame(atTick:)`.
+public struct LoopRange: Sendable, Equatable {
+    public let startTick: Int
+    public let endTick: Int
+
+    public init(startTick: Int, endTick: Int) {
+        self.startTick = startTick
+        self.endTick = endTick
+    }
 }
 
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
@@ -79,6 +95,21 @@ public final class PlaybackEngine: ObservableObject {
 
     @Published public private(set) var state: PlaybackState = .stopped
     @Published public private(set) var currentCursor: ScoreCursor?
+    /// When non-nil, every track in the sequencer is configured with
+    /// `lengthInBeats = endTick / division` and
+    /// `loopRange = (start: startTick / division, length: …)`, with
+    /// `isLoopingEnabled = true`. AVAudioSequencer wraps natively at
+    /// the boundary (sample-accurate, no audible glitch). Setting or
+    /// clearing the loop pauses playback first because live
+    /// mutations on a running track aren't safely supported by the
+    /// sequencer; `play(...)` and `seek(...)` snap back into the
+    /// region when called outside it.
+    @Published public private(set) var loopRange: LoopRange?
+    /// Per-track `lengthInBeats` snapshot taken before the loop
+    /// truncates each track. Restored by `clearLoop()` so the score
+    /// past the loop end is playable again. Re-snapshotted whenever
+    /// `buildSequencer` recreates the tracks.
+    private var originalTrackLengths: [Double]?
     /// One strip per staff plus a metronome strip. Rebuilt on each
     /// `prepare(score:)` call; mutated through `setVolume / setMuted
     /// / setSoloed`. Hosts bind a SwiftUI mixer view directly to
@@ -162,6 +193,10 @@ public final class PlaybackEngine: ObservableObject {
     public func prepare(score: Score) throws {
         // Stop any in-flight playback before tearing down samplers.
         stop()
+        // Loop ticks are resolved against the previous timeline; clear
+        // them so a stale region from the prior score can't fire on
+        // the new one.
+        clearLoop()
         sequencer = nil
         sequencerScore = nil
         timeline = PlaybackTimeline(score: score)
@@ -325,13 +360,31 @@ public final class PlaybackEngine: ObservableObject {
             // from beats using the player's current tempo (not the
             // tempo map), so seeking via seconds on a tempo-curved
             // score lands at the wrong tick. Beats / ticks bypass that.
+            //
+            // `targetTick == nil` means "resume from the paused
+            // position" — leave the sequencer's beat alone unless a
+            // loop snap forces a move.
+            var targetTick: Int?
             if let cursor, let frame = timeline.frame(forCursor: cursor) {
-                sequencer.currentPositionInBeats =
-                    Double(frame.tick) / Double(timeline.division)
-                currentCursor = frame.cursor
+                targetTick = frame.tick
             } else if state == .stopped {
-                sequencer.currentPositionInBeats = 0
-                currentCursor = timeline.frames.first?.cursor
+                targetTick = 0
+            }
+            if let loop = loopRange {
+                let probeTick = targetTick ?? Int(
+                    (sequencer.currentPositionInBeats
+                        * Double(timeline.division)).rounded()
+                )
+                if probeTick < loop.startTick
+                    || probeTick >= loop.endTick
+                {
+                    targetTick = loop.startTick
+                }
+            }
+            if let t = targetTick {
+                sequencer.currentPositionInBeats =
+                    Double(t) / Double(timeline.division)
+                currentCursor = timeline.frame(atTick: t)?.cursor
             }
             try sequencer.start()
             state = .playing
@@ -354,9 +407,109 @@ public final class PlaybackEngine: ObservableObject {
         else {
             return
         }
+        let tick = snapTickToLoop(frame.tick)
         sequencer.currentPositionInBeats =
-            Double(frame.tick) / Double(timeline.division)
-        currentCursor = frame.cursor
+            Double(tick) / Double(timeline.division)
+        currentCursor = timeline.frame(atTick: tick)?.cursor
+    }
+
+    /// Loop the half-open region `[start, end)` — playback wraps at
+    /// `end`'s onset tick (the item under `end` is NOT sounded). Use
+    /// `setLoop(from:throughEndOf:)` to include the last item's full
+    /// ringing duration.
+    ///
+    /// Pauses playback when called while playing — live track-length
+    /// mutations on a running AVAudioSequencer aren't safely
+    /// supported. The host resumes via `play(...)` after.
+    ///
+    /// No-op when `start`/`end` don't resolve in the current timeline,
+    /// when `start >= end`, or when no sequencer has been built yet.
+    public func setLoop(from start: ScoreCursor, to end: ScoreCursor) {
+        guard let timeline,
+              let s = timeline.frame(forCursor: start),
+              let e = timeline.frame(forCursor: end),
+              s.tick < e.tick
+        else { return }
+        apply(loop: LoopRange(startTick: s.tick, endTick: e.tick))
+    }
+
+    /// Loop from `start` through the *end* of `last`'s notated
+    /// duration — i.e. the loop wraps once playback has finished
+    /// sounding `last`. Equivalent to a half-open `[start, lastEnd)`
+    /// region, where `lastEnd` is `last`'s onset tick + its duration
+    /// (read from `PlaybackTimeline.itemEndTicks`).
+    ///
+    /// Use this when looping a range *selection* on the score: the
+    /// user expects the last selected note to ring before the loop
+    /// wraps, which `setLoop(from:to:)` cuts short.
+    public func setLoop(
+        from start: ScoreCursor, throughEndOf last: ScoreItemID
+    ) {
+        guard let timeline,
+              let s = timeline.frame(forCursor: start),
+              let endTick = timeline.itemEndTicks[last],
+              s.tick < endTick
+        else { return }
+        apply(loop: LoopRange(startTick: s.tick, endTick: endTick))
+    }
+
+    /// Disable looping and restore each track's original length so
+    /// playback past the previous loop end is audible again. Pauses
+    /// first if currently playing — same rationale as `setLoop`.
+    public func clearLoop() {
+        if state == .playing {
+            pause()
+        }
+        if let sequencer, let originals = originalTrackLengths {
+            for (i, track) in sequencer.tracks.enumerated()
+                where i < originals.count
+            {
+                track.isLoopingEnabled = false
+                track.lengthInBeats = originals[i]
+            }
+        }
+        originalTrackLengths = nil
+        loopRange = nil
+    }
+
+    private func apply(loop: LoopRange) {
+        if state == .playing {
+            pause()
+        }
+        loopRange = loop
+        applyLoopToSequencerTracks()
+    }
+
+    /// Push the current `loopRange` onto every track in the
+    /// sequencer. Called from `apply(loop:)` and from
+    /// `buildSequencer` (so a loop set before the first `play(...)`
+    /// survives the lazy sequencer build).
+    private func applyLoopToSequencerTracks() {
+        guard let timeline, let sequencer, let loop = loopRange
+        else { return }
+        if originalTrackLengths == nil {
+            originalTrackLengths = sequencer.tracks.map(\.lengthInBeats)
+        }
+        let startBeats = Double(loop.startTick) / Double(timeline.division)
+        let endBeats = Double(loop.endTick) / Double(timeline.division)
+        let length = endBeats - startBeats
+        for track in sequencer.tracks {
+            track.lengthInBeats = endBeats
+            track.loopRange = AVBeatRange(
+                start: startBeats, length: length
+            )
+            track.isLoopingEnabled = true
+        }
+    }
+
+    /// Clamp `tick` into the active loop region. Returns `tick`
+    /// unchanged when no loop is set or the tick is already inside.
+    private func snapTickToLoop(_ tick: Int) -> Int {
+        guard let loop = loopRange else { return tick }
+        if tick < loop.startTick || tick >= loop.endTick {
+            return loop.startTick
+        }
+        return tick
     }
 
     /// Current playback position in seconds, derived from the
@@ -396,9 +549,10 @@ public final class PlaybackEngine: ObservableObject {
             // halts it and freezes the cursor timer on its next tick.
             play(from: frame.cursor, in: score)
         } else {
+            let tick = snapTickToLoop(frame.tick)
             sequencer.currentPositionInBeats =
-                Double(frame.tick) / Double(timeline.division)
-            currentCursor = frame.cursor
+                Double(tick) / Double(timeline.division)
+            currentCursor = timeline.frame(atTick: tick)?.cursor
         }
     }
 
@@ -481,6 +635,13 @@ public final class PlaybackEngine: ObservableObject {
         sequencer.rate = pendingRate
         sequencer.prepareToPlay()
         self.sequencer = sequencer
+        // Cached lengths refer to the previous (now-released) tracks;
+        // discard so `applyLoopToSequencerTracks` re-snapshots from
+        // the fresh ones.
+        originalTrackLengths = nil
+        if loopRange != nil {
+            applyLoopToSequencerTracks()
+        }
     }
 
     private func startCursorTimer() {
@@ -517,7 +678,20 @@ public final class PlaybackEngine: ObservableObject {
             state = .stopped
             return
         }
-        let tick = Int((beats * Double(timeline.division)).rounded())
+        let rawTick = Int((beats * Double(timeline.division)).rounded())
+        // `AVAudioSequencer.currentPositionInBeats` keeps advancing
+        // monotonically even while individual tracks wrap via
+        // `AVMusicTrack.loopRange` — only the per-track playhead
+        // wraps, not the player's beat counter. Fold the raw counter
+        // back into `[startTick, endTick)` ourselves so the cursor
+        // tracks audio.
+        let tick: Int
+        if let loop = loopRange, rawTick >= loop.endTick {
+            let len = loop.endTick - loop.startTick
+            tick = loop.startTick + (rawTick - loop.startTick) % len
+        } else {
+            tick = rawTick
+        }
         if let frame = timeline.frame(atTick: tick) {
             if frame.cursor != currentCursor {
                 currentCursor = frame.cursor
@@ -525,8 +699,10 @@ public final class PlaybackEngine: ObservableObject {
         }
         // Slack of a tick lets us catch the very last frame even if
         // the sequencer reports a sample-accurate beats value just
-        // shy of the final onset.
-        if tick >= timeline.totalTicks {
+        // shy of the final onset. Skip while looping — the
+        // sequencer wraps natively inside `[startTick, endTick)`,
+        // and a stale read at the boundary mustn't fire `stop()`.
+        if loopRange == nil, tick >= timeline.totalTicks {
             stop()
         }
     }
@@ -535,6 +711,7 @@ public final class PlaybackEngine: ObservableObject {
     /// times; subsequent `prepare(score:)` calls will spin it back up.
     public func teardown() {
         stop()
+        clearLoop()
         sequencer = nil
         sequencerScore = nil
         for sampler in staffSamplers.values {

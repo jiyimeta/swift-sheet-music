@@ -291,6 +291,25 @@
             )
         }
 
+        /// Toggle a playback loop bracketing the current range
+        /// selection. Bound to bare `L` from the key monitor — see
+        /// `installKeyMonitor`. The loop wraps once the last selected
+        /// note has finished its notated duration, so the user hears
+        /// the full selection before each loop iteration.
+        private func toggleLoopForSelection() {
+            if playbackEngine.loopRange != nil {
+                playbackEngine.clearLoop()
+                return
+            }
+            guard case let .range(a, b) = selection else { return }
+            let first = playbackEngine.earliest(of: [a, b]) ?? a
+            let last = (first == a) ? b : a
+            playbackEngine.setLoop(
+                from: .item(first), throughEndOf: last
+            )
+            playbackEngine.seek(to: .item(first))
+        }
+
         private func installKeyMonitor() {
             guard keyMonitor == nil else { return }
             // keyCode 49 is spacebar on every keyboard layout (it's a
@@ -315,6 +334,23 @@
                         return nil
                     }
                     togglePlayback()
+                    return nil
+                }
+                // Bare `L` toggles a playback loop over the current
+                // range selection. ⌘L (handled below) opens the lyric
+                // editor, so we filter to no-modifier presses. While
+                // the lyric editor is up we let the keystroke through
+                // so the user can type the letter.
+                if !event.isARepeat,
+                   event.modifierFlags
+                       .intersection(
+                           [.command, .control, .option, .shift]
+                       ).isEmpty,
+                       let chars = event.charactersIgnoringModifiers,
+                       chars.first?.lowercased() == "l",
+                       lyricEditTarget == nil
+                {
+                    toggleLoopForSelection()
                     return nil
                 }
                 // ⌘Z / ⌘⇧Z routed to our editor directly. SwiftUI's
