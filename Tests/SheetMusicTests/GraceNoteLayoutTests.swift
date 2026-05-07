@@ -1,3 +1,4 @@
+import CoreGraphics
 @testable import SheetMusicCore
 @testable import SheetMusicLayout
 import Testing
@@ -94,5 +95,67 @@ struct GracePlacementTests {
         guard case let .graceChord(_, _, _, _, _, slash, _, _) = graceEl
         else { Issue.record("no grace"); return }
         #expect(slash == false)
+    }
+}
+
+@Suite("Grace spacing")
+struct GraceSpacingTests {
+    @Test("Three before-graces push the main chord X to the right vs. zero graces")
+    func extraSpacing() {
+        guard #available(macOS 15.0, iOS 16.0, *) else { return }
+        func mainX(_ before: [GraceType]) -> CGFloat {
+            let main = Chord(
+                duration: .quarter,
+                notes: ChordNotes([Note(pitch: 60, tpc: 14)]),
+                graceNotesBefore: before.map { gt in
+                    GraceChord(
+                        graceType: gt,
+                        duration: .eighth,
+                        notes: ChordNotes([Note(pitch: 62, tpc: 16)])
+                    )
+                }
+            )
+            let measure = Measure(voices: [Voice(elements: [
+                .chord(Chord(
+                    duration: .quarter,
+                    notes: ChordNotes([Note(pitch: 55, tpc: 13)])
+                )),
+                .chord(main),
+            ])])
+            let staff = Staff(measures: [measure])
+            let part = Part(
+                id: "p1",
+                instrument: Instrument(id: "piano"),
+                staves: [staff]
+            )
+            let score = Score(division: 480, parts: [part])
+            let doc = LayoutEngine.layout(
+                score: score, options: ScoreViewOptions(), availableWidth: 800
+            )
+            let elements = doc.systems.flatMap { sys in sys.measures.flatMap(\.elements) }
+            // Find the second chord — that's `main` (pitch 60, C4).
+            // The first chord is pitch 55 (G3); `main` is the next chord.
+            var chordCount = 0
+            for el in elements {
+                if case .chord = el {
+                    chordCount += 1
+                    if chordCount == 2 { return el.stemX }
+                }
+            }
+            return 0
+        }
+        let withGraces = mainX([.grace16, .grace16, .grace16])
+        let noGraces = mainX([])
+        #expect(withGraces > noGraces)
+    }
+}
+
+// Local helper for the test above — mirrors `LayoutDocument`'s
+// internal way of grabbing a chord's stem X.
+@available(macOS 15.0, iOS 16.0, *)
+extension LayoutElement {
+    var stemX: CGFloat {
+        if case let .chord(_, _, _, so, _, _, _, _) = self { return so.x }
+        return 0
     }
 }
