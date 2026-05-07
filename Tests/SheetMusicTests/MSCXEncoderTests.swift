@@ -102,4 +102,27 @@ struct MSCXEncoderTests {
         #expect(xml.name == "Rest")
         #expect(xml.first("durationType")?.text == "quarter")
     }
+
+    @Test("KeySignature, TimeSignature, Clef round-trip")
+    func staticElementsRoundTrip() throws {
+        func roundTripParse<T>(_ node: XMLTreeNode, name: String, _ decode: (XMLTreeNode) throws -> T) throws -> T {
+            let bytes = XMLTreeSerializer.serialize(
+                XMLTreeNode(name: "root", children: [node])
+            )
+            let reparsed = try XMLTreeParser.parse(bytes)
+            return try decode(#require(reparsed.first(name)))
+        }
+
+        let key = KeySignature(concertKey: 1)
+        let decKey = try roundTripParse(key.encode(), name: "KeySig", KeySignature.decode)
+        #expect(decKey == key)
+
+        let time = TimeSignature(numerator: 4, denominator: 4)
+        let decTime = try roundTripParse(time.encode(), name: "TimeSig", TimeSignature.decode)
+        #expect(decTime == time)
+
+        let clef = Clef(concertClefType: "G")
+        let decClef = try roundTripParse(clef.encode(), name: "Clef", Clef.decode)
+        #expect(decClef == clef)
+    }
 }
