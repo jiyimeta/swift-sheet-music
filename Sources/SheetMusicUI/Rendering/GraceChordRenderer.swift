@@ -1,4 +1,4 @@
-import CoreText
+import CoreGraphics
 import QuartzCore
 import SheetMusicCore
 import SheetMusicLayout
@@ -14,7 +14,7 @@ extension ScoreLayerBuilder {
     // swiftlint:disable:next function_parameter_count
     /// Draw a `LayoutElement.graceChord` by recursively reusing the
     /// main-chord renderers at a `mag`-scaled `StaffMetrics`.
-    /// Acciaccatura adds a SMuFL slash glyph over the stem.
+    /// Acciaccatura adds a stroked slash line across the stem.
     static func drawGraceChord(
         notes: [LayoutChordNote],
         duration: NoteDuration,
@@ -42,49 +42,74 @@ extension ScoreLayerBuilder {
             base: base, metrics: scaled, height: height,
             context: &context, into: parent
         )
-        guard hasSlash,
-              let xMin = notes.map(\.origin.x).min(),
+        guard hasSlash else { return }
+        drawAcciaccaturaSlash(
+            notes: notes, stem: stem,
+            base: base, scaled: scaled, height: height,
+            into: parent
+        )
+    }
+
+    /// Acciaccatura slash. Mirrors `TLayout::layoutStemSlash`
+    /// (`engraving/rendering/score/tlayout.cpp:5249`): a stroked line
+    /// crossing the stem at `stemSlashAngle = 40°`, starting
+    /// `stemSlashPosition = 2 sp` from the stem tip, with thickness
+    /// `stemSlashThickness = 0.125 sp`. We use the no-hook geometry
+    /// from MuseScore's `else` branch: span the slash one notehead
+    /// width across the stem, optically centred by subtracting the
+    /// stem width from the right hang.
+    private static func drawAcciaccaturaSlash(
+        notes: [LayoutChordNote],
+        stem: StemDirection,
+        base: CGPoint,
+        scaled: StaffMetrics,
+        height: CGFloat,
+        into parent: CALayer
+    ) {
+        guard let xMin = notes.map(\.origin.x).min(),
               let xMax = notes.map(\.origin.x).max(),
               let yTop = notes.map(\.origin.y).min(),
               let yBot = notes.map(\.origin.y).max()
         else { return }
-        // Slash position must track the rendered stem geometry —
-        // anchoring at `stemOrigin` (chord-column center, staff
-        // middle Y) misses the stem on both axes when the grace
-        // sits off-centre or above/below the staff. Mirrors
-        // `StemRenderer.draw` so the slash crosses the actual stem.
+        // Mirror `StemRenderer.draw` for stem geometry so the slash
+        // anchors on the same line the stem renderer drew.
         let stemAttachDx = scaled.sp * 0.59
+        let up: CGFloat = stem == .up ? -1 : 1
         let stemX: CGFloat
-        let stemMidY: CGFloat
+        let stemTipY: CGFloat
         switch stem {
         case .up:
             stemX = xMax + stemAttachDx
-            let stemTopY = yTop - scaled.defaultStemLength
-            stemMidY = (stemTopY + yBot) / 2
+            stemTipY = yTop - scaled.defaultStemLength
         case .down:
             stemX = xMin - stemAttachDx
-            let stemBotY = yBot + scaled.defaultStemLength
-            stemMidY = (yTop + stemBotY) / 2
+            stemTipY = yBot + scaled.defaultStemLength
         }
-        let glyph = stem == .up
-            ? SMuFLGlyph.graceNoteSlashStemUp
-            : SMuFLGlyph.graceNoteSlashStemDown
-        let glyphSize = scaled.sp * 4
-        let bravura = CTFontCreateWithName(
-            BravuraFont.familyName as CFString, glyphSize, nil
-        )
-        let position = CGPoint(
-            x: base.x + stemX,
-            y: base.y + stemMidY
-        )
-        if let layer = textLayer(
-            text: String(glyph), at: position,
-            size: glyphSize, italic: false,
-            anchor: CGPoint(x: 0.5, y: 0.5),
-            font: bravura,
-            height: height
-        ) {
-            parent.addSublayer(layer)
-        }
+        // Style values from MuseScore Sid::stemSlash* (defaults at
+        // `style/styledef.cpp:242-244`).
+        let slashPosition = scaled.sp * 2.0
+        let slashAngle = 40.0 * .pi / 180.0
+        let slashThickness = scaled.sp * 0.125
+        let stemWidth = scaled.sp * 0.12
+        // `noteHeadWidth() * mag / 2` in MuseScore. Bravura's
+        // `noteheadBlack` is 1.18 sp wide; halved gives 0.59 sp in
+        // scaled-sp units (`scaled.sp = parentSp * mag`).
+        let leftHang = scaled.sp * 0.59
+        // `(noteHeadWidth() * mag / 2) - stemWidth`. Pulling rightHang
+        // inward by stemWidth keeps the slash optically centred ON
+        // the stem instead of on the geometric column axis.
+        let rightHang = leftHang - stemWidth
+        // `stem.bbox().right()` ≈ `stemX + stemWidth/2`.
+        let stemRight = stemX + stemWidth / 2
+        let startX = stemRight - leftHang
+        let startY = stemTipY - up * slashPosition
+        let endX = stemRight + rightHang
+        let endY = startY + up * (endX - startX) * tan(slashAngle)
+        let path = CGMutablePath()
+        path.move(to: CGPoint(x: base.x + startX, y: base.y + startY))
+        path.addLine(to: CGPoint(x: base.x + endX, y: base.y + endY))
+        parent.addSublayer(strokeLayer(
+            path: path, height: height, lineWidth: slashThickness
+        ))
     }
 }
