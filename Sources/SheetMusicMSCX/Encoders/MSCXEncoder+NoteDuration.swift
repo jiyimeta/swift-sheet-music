@@ -5,7 +5,8 @@ import SheetMusicXMLTools
 extension NoteDuration {
     /// MuseScore `<durationType>` text for the named cases.
     /// Inverse of `init?(mscxName:)`. `.fraction` returns nil — the
-    /// caller emits `measure` + `<duration>` instead.
+    /// caller emits `measure` + `<duration>` instead, or attempts
+    /// `decomposed()` first.
     var mscxName: String? {
         switch self {
         case .whole: "whole"
@@ -21,18 +22,43 @@ extension NoteDuration {
         }
     }
 
-    /// Append `<durationType>` (and `<duration>` for fractions)
-    /// children to `children`. Used by Chord and Rest encoders.
+    /// Try to express this duration as a named base + 0–3 dots.
+    /// Returns nil for `.fraction` values that don't match any
+    /// such combination (which is rare but possible — e.g., a
+    /// 5/64 duration produced by an exotic tuplet ratio).
+    func decomposed() -> (name: String, dots: Int)? {
+        let target = asFraction
+        let bases: [NoteDuration] = [
+            .whole, .half, .quarter, .eighth, .sixteenth,
+            .thirtySecond, .sixtyFourth, .oneTwentyEighth, .twoFiftySixth,
+        ]
+        for base in bases {
+            // mscxName is non-nil for every element of `bases`.
+            guard let name = base.mscxName else { continue }
+            for dots in 0 ... 3 where base.dotted(dots).asFraction == target {
+                return (name, dots)
+            }
+        }
+        return nil
+    }
+
+    /// Append `<durationType>` (and optionally `<dots>` or
+    /// `<duration>`) children to `children`.
+    ///
+    /// Prefers a named base + dots when possible (the form Chord
+    /// requires); falls back to `<durationType>measure</durationType>`
+    /// + `<duration>N/D</duration>` only for `.fraction` values that
+    /// cannot be decomposed (Rest accepts this form; Chord does not).
     func appendDurationXML(to children: inout [XMLTreeNode]) {
-        if let name = mscxName {
-            children.append(XMLTreeNode(name: "durationType", text: name))
+        if let parts = decomposed() {
+            children.append(XMLTreeNode(name: "durationType", text: parts.name))
+            if parts.dots > 0 {
+                children.append(XMLTreeNode(name: "dots", text: String(parts.dots)))
+            }
             return
         }
-        // fraction: emit `measure` durationType + concrete fraction
         if case let .fraction(f) = self {
-            children.append(XMLTreeNode(
-                name: "durationType", text: "measure"
-            ))
+            children.append(XMLTreeNode(name: "durationType", text: "measure"))
             children.append(XMLTreeNode(
                 name: "duration",
                 text: "\(f.numerator)/\(f.denominator)"

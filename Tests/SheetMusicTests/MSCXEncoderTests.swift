@@ -68,16 +68,18 @@ struct MSCXEncoderTests {
         #expect(children[0].text == "quarter")
     }
 
-    @Test("NoteDuration appends durationType=measure + duration for fractions")
+    @Test("NoteDuration appends durationType=measure + duration for non-decomposable fractions")
     func durationTypeFraction() {
+        // 5/64 is not expressible as any named base with 0–3 dots,
+        // so it falls through to the measure + duration fallback.
         var children: [XMLTreeNode] = []
-        NoteDuration.fraction(.init(numerator: 3, denominator: 8))
+        NoteDuration.fraction(.init(numerator: 5, denominator: 64))
             .appendDurationXML(to: &children)
         #expect(children.count == 2)
         #expect(children[0].name == "durationType")
         #expect(children[0].text == "measure")
         #expect(children[1].name == "duration")
-        #expect(children[1].text == "3/8")
+        #expect(children[1].text == "5/64")
     }
 
     @Test("Chord round-trips through Chord.decode")
@@ -262,6 +264,82 @@ struct MSCXEncoderTests {
 
         #expect(throws: SheetMusicError.self) {
             try MSCXEncoder.encode(score)
+        }
+    }
+
+    @Test("Dotted quarter chord round-trips through Chord.decode")
+    func dottedQuarterChordRoundTrip() throws {
+        let chord = Chord(
+            duration: .quarter.dotted(1),
+            notes: ChordNotes([Note(pitch: 60, tpc: 14)])
+        )
+        let xml = chord.encodeAsChord()
+        let bytes = XMLTreeSerializer.serialize(XMLTreeNode(name: "root", children: [xml]))
+        let reparsed = try XMLTreeParser.parse(bytes)
+        let chordNode = try #require(reparsed.first("Chord"))
+        let decoded = try Chord.decode(chordNode)
+        #expect(decoded == chord)
+    }
+
+    @Test("NoteDuration.decomposed handles named, dotted, and fractional cases")
+    func decomposedCases() {
+        #expect(NoteDuration.quarter.decomposed()?.name == "quarter")
+        #expect(NoteDuration.quarter.decomposed()?.dots == 0)
+
+        let dottedHalf = NoteDuration.half.dotted(1)
+        let decomposed = dottedHalf.decomposed()
+        #expect(decomposed?.name == "half")
+        #expect(decomposed?.dots == 1)
+
+        // 5/64 is not a base-with-dots — should return nil
+        let exotic = NoteDuration.fraction(.init(numerator: 5, denominator: 64))
+        #expect(exotic.decomposed() == nil)
+    }
+
+    @Test("Triplet of quarters round-trips through Voice.decode")
+    func tripletRoundTrip() throws {
+        // A triplet (2:3) of three quarter notes occupies the time of
+        // two quarters. Each member's stored duration is quarter*2/3 = 1/6.
+        let scaledQuarter = NoteDuration.fraction(.init(numerator: 1, denominator: 6))
+        let voice = Voice(
+            elements: [
+                .chord(Chord(duration: scaledQuarter, notes: ChordNotes([Note(pitch: 60, tpc: 14)]))),
+                .chord(Chord(duration: scaledQuarter, notes: ChordNotes([Note(pitch: 62, tpc: 16)]))),
+                .chord(Chord(duration: scaledQuarter, notes: ChordNotes([Note(pitch: 64, tpc: 18)]))),
+            ],
+            tuplets: [
+                Tuplet(normalNotes: 2, actualNotes: 3, startIndex: 0, endIndex: 2),
+            ]
+        )
+
+        let xml = try voice.encode()
+        let bytes = XMLTreeSerializer.serialize(XMLTreeNode(name: "root", children: [xml]))
+        let reparsed = try XMLTreeParser.parse(bytes)
+        let voiceNode = try #require(reparsed.first("voice"))
+        let decoded = try Voice.decode(voiceNode)
+        #expect(decoded == voice)
+    }
+
+    @Test("Nested tuplets throw")
+    func nestedTupletsThrow() {
+        let voice = Voice(
+            elements: [
+                .chord(Chord(
+                    duration: .fraction(.init(numerator: 1, denominator: 6)),
+                    notes: ChordNotes([Note(pitch: 60, tpc: 14)])
+                )),
+                .chord(Chord(
+                    duration: .fraction(.init(numerator: 1, denominator: 6)),
+                    notes: ChordNotes([Note(pitch: 62, tpc: 16)])
+                )),
+            ],
+            tuplets: [
+                Tuplet(normalNotes: 2, actualNotes: 3, startIndex: 0, endIndex: 1),
+                Tuplet(normalNotes: 2, actualNotes: 3, startIndex: 1, endIndex: 1),
+            ]
+        )
+        #expect(throws: SheetMusicError.self) {
+            try voice.encode()
         }
     }
 }
