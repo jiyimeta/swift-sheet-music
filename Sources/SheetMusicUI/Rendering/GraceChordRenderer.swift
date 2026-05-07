@@ -53,11 +53,14 @@ extension ScoreLayerBuilder {
     /// Acciaccatura slash. Mirrors `TLayout::layoutStemSlash`
     /// (`engraving/rendering/score/tlayout.cpp:5249`): a stroked line
     /// crossing the stem at `stemSlashAngle = 40°`, starting
-    /// `stemSlashPosition = 2 sp` from the stem tip, with thickness
-    /// `stemSlashThickness = 0.125 sp`. We use the no-hook geometry
-    /// from MuseScore's `else` branch: span the slash one notehead
-    /// width across the stem, optically centred by subtracting the
-    /// stem width from the right hang.
+    /// `stemSlashPosition = 2 sp` from the stem tip. We use the
+    /// no-hook geometry from MuseScore's `else` branch (line 5307):
+    /// span the slash one notehead width across the stem, optically
+    /// centred by subtracting the stem width from the right hang.
+    /// Thickness is bumped from MuseScore's default `0.125 sp` to
+    /// match the rendered stem's weight — at on-screen zoom levels
+    /// `0.125 sp × mag` aliases below one device pixel and the
+    /// slash disappears.
     private static func drawAcciaccaturaSlash(
         notes: [LayoutChordNote],
         stem: StemDirection,
@@ -71,9 +74,12 @@ extension ScoreLayerBuilder {
               let yTop = notes.map(\.origin.y).min(),
               let yBot = notes.map(\.origin.y).max()
         else { return }
-        // Mirror `StemRenderer.draw` for stem geometry so the slash
-        // anchors on the same line the stem renderer drew.
-        let stemAttachDx = scaled.sp * 0.59
+        // Match `ScoreLayerBuilder+Chord.drawStem`'s formula exactly so
+        // the slash centres on the stem the renderer actually drew.
+        // The CALayer-pipeline stem pulls inward by stemThickness/2
+        // (compared to the SwiftUI Canvas formula) — the slash must
+        // follow.
+        let stemAttachDx = scaled.sp * 0.59 - scaled.stemThickness / 2
         let up: CGFloat = stem == .up ? -1 : 1
         let stemX: CGFloat
         let stemTipY: CGFloat
@@ -89,8 +95,7 @@ extension ScoreLayerBuilder {
         // `style/styledef.cpp:242-244`).
         let slashPosition = scaled.sp * 2.0
         let slashAngle = 40.0 * .pi / 180.0
-        let slashThickness = scaled.sp * 0.125
-        let stemWidth = scaled.sp * 0.12
+        let stemWidth = scaled.stemThickness
         // `noteHeadWidth() * mag / 2` in MuseScore. Bravura's
         // `noteheadBlack` is 1.18 sp wide; halved gives 0.59 sp in
         // scaled-sp units (`scaled.sp = parentSp * mag`).
@@ -99,7 +104,6 @@ extension ScoreLayerBuilder {
         // inward by stemWidth keeps the slash optically centred ON
         // the stem instead of on the geometric column axis.
         let rightHang = leftHang - stemWidth
-        // `stem.bbox().right()` ≈ `stemX + stemWidth/2`.
         let stemRight = stemX + stemWidth / 2
         let startX = stemRight - leftHang
         let startY = stemTipY - up * slashPosition
@@ -108,8 +112,15 @@ extension ScoreLayerBuilder {
         let path = CGMutablePath()
         path.move(to: CGPoint(x: base.x + startX, y: base.y + startY))
         path.addLine(to: CGPoint(x: base.x + endX, y: base.y + endY))
+        // Use the SAME thickness as the rendered grace stem
+        // (`scaled.stemThickness`) so the slash reads as a stroke of
+        // matching weight at on-screen sizes. MuseScore's
+        // `stemSlashThickness = 0.125 sp` is even thinner than the
+        // stem (`stemThickness = 0.12 sp` × mag) and disappears under
+        // typical screen DPIs once mag (~0.6) is folded in.
         parent.addSublayer(strokeLayer(
-            path: path, height: height, lineWidth: slashThickness
+            path: path, height: height,
+            lineWidth: scaled.stemThickness
         ))
     }
 }
