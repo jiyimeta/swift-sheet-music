@@ -1,4 +1,7 @@
+import Foundation
 @testable import SheetMusicCore
+@testable import SheetMusicMSCX
+@testable import SheetMusicXMLTools
 import Testing
 
 @Suite("GraceType")
@@ -73,5 +76,42 @@ struct ChordWithGracesTests {
         )
         #expect(c.graceNotesBefore == [g])
         #expect(c.graceNotesAfter.isEmpty)
+    }
+}
+
+@Suite("Chord grace detection")
+struct ChordGraceDetectionTests {
+    private func chordNode(_ xml: String) -> XMLTreeNode {
+        guard let parsed = try? XMLTreeParser.parse(Data(xml.utf8)) else {
+            fatalError("Failed to parse test XML")
+        }
+        return parsed
+    }
+
+    @Test("acciaccatura tag detected")
+    func acciaccatura() throws {
+        let node = chordNode("""
+        <Chord><acciaccatura/><durationType>eighth</durationType>\
+        <Note><pitch>60</pitch><tpc>14</tpc></Note></Chord>
+        """)
+        #expect(Chord.graceType(in: node) == .acciaccatura)
+    }
+
+    @Test("grace32after tag detected")
+    func grace32after() throws {
+        let node = chordNode("""
+        <Chord><grace32after/><durationType>32nd</durationType>\
+        <Note><pitch>62</pitch><tpc>16</tpc></Note></Chord>
+        """)
+        #expect(Chord.graceType(in: node) == .grace32after)
+    }
+
+    @Test("Plain chord returns nil")
+    func plain() throws {
+        let node = chordNode("""
+        <Chord><durationType>quarter</durationType>\
+        <Note><pitch>60</pitch><tpc>14</tpc></Note></Chord>
+        """)
+        #expect(Chord.graceType(in: node) == nil)
     }
 }
