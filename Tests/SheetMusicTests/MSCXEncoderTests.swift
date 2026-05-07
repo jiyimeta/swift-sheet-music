@@ -125,4 +125,20 @@ struct MSCXEncoderTests {
         let decClef = try roundTripParse(clef.encode(), name: "Clef", Clef.decode)
         #expect(decClef == clef)
     }
+
+    @Test("Voice round-trips KeySig + TimeSig + two chords")
+    func voiceRoundTrip() throws {
+        let original = Voice(elements: [
+            .keySignature(KeySignature(concertKey: 1)),
+            .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+            .chord(Chord(duration: .quarter, notes: ChordNotes([Note(pitch: 60, tpc: 14)]))),
+            .chord(Chord(duration: .quarter, notes: ChordNotes([Note(pitch: 62, tpc: 16)]))),
+        ])
+        let xml = original.encode()
+        let bytes = XMLTreeSerializer.serialize(XMLTreeNode(name: "root", children: [xml]))
+        let reparsed = try XMLTreeParser.parse(bytes)
+        let voiceNode = try #require(reparsed.first("voice"))
+        let decoded = try Voice.decode(voiceNode)
+        #expect(decoded == original)
+    }
 }
