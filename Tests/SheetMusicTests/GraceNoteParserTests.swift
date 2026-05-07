@@ -28,3 +28,24 @@ struct GraceTypeTests {
         #expect(GraceType(mscxTag: "Note") == nil)
     }
 }
+
+@Suite("GraceChord")
+struct GraceChordTests {
+    @Test("Stores graceType, duration, notes; Equatable")
+    func basics() {
+        let n = Note(pitch: 60, tpc: 14)
+        let g = GraceChord(
+            graceType: .acciaccatura,
+            duration: .eighth,
+            notes: ChordNotes([n])
+        )
+        #expect(g.graceType == .acciaccatura)
+        #expect(g.duration == .eighth)
+        #expect(g.notes.count == 1)
+        #expect(g == GraceChord(
+            graceType: .acciaccatura,
+            duration: .eighth,
+            notes: ChordNotes([n])
+        ))
+    }
+}
