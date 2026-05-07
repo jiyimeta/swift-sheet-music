@@ -323,7 +323,7 @@ extension ScoreLayerBuilder {
                 from: shift(from), to: shift(to),
                 metrics: metrics, height: height, into: parent
             )
-        case .note:
+        case .note, .graceChord:
             break
         }
     }

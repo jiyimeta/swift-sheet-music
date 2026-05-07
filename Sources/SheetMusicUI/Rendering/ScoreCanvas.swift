@@ -437,7 +437,7 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                 with: .color(.primary),
                 lineWidth: metrics.sp * 0.1
             )
-        case .note:
+        case .note, .graceChord:
             break
         }
     }

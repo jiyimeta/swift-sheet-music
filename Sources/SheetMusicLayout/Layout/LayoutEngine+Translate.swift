@@ -144,6 +144,32 @@ extension LayoutEngine {
                 runs: lh.runs,
                 width: lh.width
             ))
+        case let .graceChord(
+            notes, dur, stem, so, relX, slash, mag, vi
+        ):
+            let shiftedNotes = notes.map {
+                LayoutChordNote(
+                    noteID: $0.noteID,
+                    step: $0.step,
+                    accidental: $0.accidental,
+                    origin: shift($0.origin),
+                    tieForward: $0.tieForward,
+                    tieBack: $0.tieBack,
+                    hasGlissando: $0.hasGlissando,
+                    headType: $0.headType,
+                    mirror: $0.mirror
+                )
+            }
+            return .graceChord(
+                notes: shiftedNotes,
+                duration: dur,
+                stem: stem,
+                stemOrigin: shift(so),
+                relativeX: relX,
+                hasSlash: slash,
+                mag: mag,
+                voiceIndex: vi
+            )
         case .note, .marker, .jump, .measureNumber, .staffName,
              .spannerSegment, .tieArc:
             return element
