@@ -197,4 +197,29 @@ struct MSCXEncoderTests {
         #expect(decoded.volume == 80)
         #expect(decoded.pan == 30)
     }
+
+    @Test("Instrument round-trip with articulations + channel")
+    func instrumentRoundTrip() throws {
+        let original = Instrument(
+            id: "voice",
+            longName: "Voice",
+            shortName: "Vo.",
+            trackName: "Voice",
+            minPitchPlayable: 38,
+            maxPitchPlayable: 84,
+            minPitchAmateur: 41,
+            maxPitchAmateur: 79,
+            articulations: [
+                InstrumentArticulation(),
+                InstrumentArticulation(name: "staccato", velocity: 100, gateTime: 50),
+            ],
+            channels: [InstrumentChannel(program: 52)]
+        )
+        let xml = original.encode()
+        let bytes = XMLTreeSerializer.serialize(XMLTreeNode(name: "root", children: [xml]))
+        let reparsed = try XMLTreeParser.parse(bytes)
+        let instrumentNode = try #require(reparsed.first("Instrument"))
+        let decoded = try Instrument.decode(instrumentNode)
+        #expect(decoded == original)
+    }
 }
