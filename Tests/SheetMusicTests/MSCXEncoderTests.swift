@@ -342,4 +342,46 @@ struct MSCXEncoderTests {
             try voice.encode()
         }
     }
+
+    @Test("Measure with all measure-level fields round-trips")
+    func measureFieldsRoundTrip() throws {
+        let voice = Voice(elements: [
+            .chord(Chord(duration: .quarter, notes: ChordNotes([Note(pitch: 60, tpc: 14)]))),
+        ])
+        let measure = Measure(
+            voices: [voice],
+            startRepeat: true,
+            endRepeatCount: 2,
+            measureRepeatCount: 1,
+            markers: [
+                Marker(kind: .segno, label: "segno", text: "Segno"),
+            ],
+            jumps: [
+                Jump(jumpTo: "segno", playUntil: "end", continueAt: "", text: "D.S. al Fine"),
+            ],
+            lineBreak: true,
+            pageBreak: false
+        )
+
+        let xml = try measure.encode()
+        let bytes = XMLTreeSerializer.serialize(XMLTreeNode(name: "root", children: [xml]))
+        let reparsed = try XMLTreeParser.parse(bytes)
+        let measureNode = try #require(reparsed.first("Measure"))
+        let decoded = try Measure.decode(measureNode)
+        #expect(decoded == measure)
+    }
+
+    @Test("Layout breaks: pageBreak round-trips independently of lineBreak")
+    func pageBreakRoundTrip() throws {
+        let voice = Voice(elements: [
+            .chord(Chord(duration: .quarter, notes: ChordNotes([Note(pitch: 60, tpc: 14)]))),
+        ])
+        let measure = Measure(voices: [voice], pageBreak: true)
+        let xml = try measure.encode()
+        let bytes = XMLTreeSerializer.serialize(XMLTreeNode(name: "root", children: [xml]))
+        let reparsed = try XMLTreeParser.parse(bytes)
+        let decoded = try Measure.decode(#require(reparsed.first("Measure")))
+        #expect(decoded.pageBreak == true)
+        #expect(decoded.lineBreak == false)
+    }
 }

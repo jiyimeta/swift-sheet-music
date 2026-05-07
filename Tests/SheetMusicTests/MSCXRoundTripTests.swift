@@ -55,4 +55,15 @@ struct MSCXRoundTripTests {
         let roundTripped = try SheetMusic.loadScore(msczURL: tmp)
         #expect(roundTripped == original)
     }
+
+    @Test("testRepeatsWithKeySigs.mscx round-trips through MSCXEncoder")
+    func repeatsWithKeySigsRoundTrip() throws {
+        let originalData = try MSCXFixtureLoader.mscxData("testRepeatsWithKeySigs")
+        let original = try MSCXParser.parse(originalData)
+
+        let encoded = try MSCXEncoder.encode(original)
+        let roundTripped = try MSCXParser.parse(encoded)
+
+        #expect(roundTripped == original)
+    }
 }
