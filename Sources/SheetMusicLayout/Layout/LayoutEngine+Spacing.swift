@@ -279,8 +279,23 @@ extension LayoutEngine {
                         let nextLyrics = nextChordLyrics(
                             in: voice.elements, after: idx
                         )
+                        // Reserve column width for grace clusters whose
+                        // glyphs live inside THIS column's horizontal
+                        // span (from THIS tick to the NEXT tick):
+                        //   • after-graces of THIS chord appear at the
+                        //     right end of this column.
+                        //   • before-graces of the NEXT chord appear at
+                        //     the left end of the next column — but that
+                        //     space is carved from THIS column (the gap
+                        //     from THIS tick to the next tick IS this
+                        //     column's weight in the proportional spacer).
+                        let nextBeforeCount = nextChordBeforeGraceCount(
+                            in: voice.elements, after: idx
+                        )
+                        let graceBudget = LayoutEngine.graceWidth(sp: metrics.sp)
+                            * CGFloat(c.graceNotesAfter.count + nextBeforeCount)
                         let baseWeight = max(
-                            durationWidth(c.duration, metrics: metrics),
+                            durationWidth(c.duration, metrics: metrics) + graceBudget,
                             lyricsPairWidth(
                                 currentLyrics: c.lyrics,
                                 nextLyrics: nextLyrics,
@@ -594,5 +609,28 @@ extension LayoutEngine {
             }
         }
         return []
+    }
+
+    /// Number of before-graces on the next note-chord after `startIndex`.
+    /// Used to widen THIS chord's column weight so the graces of the NEXT
+    /// chord don't collide with THIS chord's notehead: the gap from THIS
+    /// tick to the NEXT tick is THIS column's responsibility in the
+    /// proportional spacer.
+    static func nextChordBeforeGraceCount(
+        in elements: [VoiceElement], after startIndex: Int
+    ) -> Int {
+        guard startIndex + 1 < elements.count else { return 0 }
+        for j in (startIndex + 1) ..< elements.count {
+            switch elements[j] {
+            case let .chord(nc) where !nc.notes.isEmpty:
+                return nc.graceNotesBefore.count
+            case .chord:
+                // Rest — no graces.
+                return 0
+            default:
+                continue
+            }
+        }
+        return 0
     }
 }

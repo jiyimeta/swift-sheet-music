@@ -36,6 +36,21 @@ public enum LayoutElement: Sendable, Equatable {
         isBeamed: Bool,
         voiceIndex: Int
     )
+    /// A grace note (or grace chord) drawn at reduced size next to
+    /// its parent main chord. Carries a `relativeX` offset from the
+    /// main notehead (negative for before-graces, positive for
+    /// after-graces) so the renderer can position it without
+    /// holding a reference to the parent.
+    case graceChord(
+        notes: [LayoutChordNote],
+        duration: NoteDuration,
+        stem: StemDirection,
+        stemOrigin: CGPoint,
+        relativeX: CGFloat,
+        hasSlash: Bool,
+        mag: CGFloat,
+        voiceIndex: Int
+    )
     case rest(
         duration: NoteDuration,
         origin: CGPoint,

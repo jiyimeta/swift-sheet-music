@@ -56,6 +56,10 @@ extension LayoutEngine {
             var ys = notes.map(\.origin.y)
             ys.append(so.y)
             return ys
+        case let .graceChord(notes, _, _, so, _, _, _, _):
+            var ys = notes.map(\.origin.y)
+            ys.append(so.y)
+            return ys
         case let .beam(from, to, _, _):
             // fromOrigin, toOrigin, direction, level — only endpoints
             // contribute to the bbox at the primary-beam y; secondary

@@ -128,5 +128,6 @@ public final class LayoutCache: @unchecked Sendable {
         let isLastMeasure: Bool
         let incomingMelismas: [MelismaContinuation]
         let effectiveMelismaTicks: [MelismaLyricKey: Int]
+        let graceNoteMag: CGFloat
     }
 }

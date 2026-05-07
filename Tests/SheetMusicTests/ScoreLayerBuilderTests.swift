@@ -102,5 +102,49 @@
             }
             return all
         }
+
+        @MainActor
+        @Test("Acciaccatura emits a diagonal stroke (the slash)")
+        func acciaccaturaSlashIsDrawn() throws {
+            guard #available(macOS 15.0, *) else { return }
+            _ = BravuraFont.register
+            // Build: <acciaccatura/> before a quarter chord on middle C.
+            let main = Chord(
+                duration: .quarter,
+                notes: ChordNotes([Note(pitch: 60, tpc: 14)]),
+                graceNotesBefore: [GraceChord(
+                    graceType: .acciaccatura, duration: .eighth,
+                    notes: ChordNotes([Note(pitch: 62, tpc: 16)])
+                )]
+            )
+            let staff = Staff(measures: [Measure(voices: [Voice(elements: [.chord(main)])])])
+            let score = Score(division: 480, parts: [
+                Part(id: "1", instrument: Instrument(id: "x"), staves: [staff]),
+            ])
+            let opts = ScoreViewOptions(staffSize: 28, systemGap: 40, wrapToViewWidth: false)
+            let natW = LayoutEngine.naturalContentWidth(score: score, options: opts)
+            let doc = LayoutEngine.layout(
+                score: score, options: opts, availableWidth: natW
+            )
+            let system = try #require(doc.systems.first)
+            let tree = ScoreLayerBuilder.buildSystem(system, metrics: doc.metrics)
+            // Slash is a stroked line — distinguished from filled glyph
+            // layers (noteheads/clef) and from vertical stems (which
+            // start.x == end.x). A diagonal stroke with a small bbox is
+            // the acciaccatura slash signature.
+            let strokes = collectAllLayers(tree)
+                .compactMap { $0 as? CAShapeLayer }
+                .filter { $0.strokeColor != nil && $0.fillColor == nil }
+            let diagonal = strokes.first { l in
+                guard let p = l.path else { return false }
+                let bb = p.boundingBoxOfPath
+                return bb.width > 0.5 && bb.height > 0.5
+                    && bb.width < 20 && bb.height < 20
+            }
+            #expect(
+                diagonal != nil,
+                "no diagonal stroke layer found among \(strokes.count) strokes"
+            )
+        }
     }
 #endif

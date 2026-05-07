@@ -51,4 +51,15 @@ extension Chord {
             arpeggio: arpeggio, lyrics: lyrics
         )
     }
+
+    /// Inspect a `<Chord>` node and return its grace category if any
+    /// of the 8 grace child-tags is present. nil = ordinary chord.
+    /// C++: `MeasureRead::readChord` sets `_noteType` from these tags
+    /// (`engraving/dom/measure/measureread.cpp`).
+    static func graceType(in node: XMLTreeNode) -> GraceType? {
+        for child in node.children {
+            if let g = GraceType(mscxTag: child.name) { return g }
+        }
+        return nil
+    }
 }

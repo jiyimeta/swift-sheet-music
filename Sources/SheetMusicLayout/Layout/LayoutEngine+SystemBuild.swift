@@ -142,7 +142,8 @@ extension LayoutEngine {
                     drumLineMap: drumMap,
                     isLastMeasure: lastMeasure,
                     incomingMelismas: incomingMelismas,
-                    effectiveMelismaTicks: context.effectiveMelismaTicks
+                    effectiveMelismaTicks: context.effectiveMelismaTicks,
+                    graceNoteMag: context.options.graceNoteMag
                 )
                 let els: [LayoutElement]
                 let newClef: NotatedClef
@@ -162,6 +163,7 @@ extension LayoutEngine {
                         measureIndex: measureIdx,
                         width: w,
                         metrics: metrics,
+                        options: context.options,
                         activeClef: clefs[staffIdx],
                         activeKey: keys[staffIdx],
                         initialClefRawType: synthClef,
