@@ -146,17 +146,6 @@ public enum LayoutEngine {
         metrics: StaffMetrics,
         docWidth: CGFloat
     ) -> LayoutTitleFrame {
-        // MuseScore's `<height>` is in spatium units. Clamp to a
-        // tiny minimum so a malformed VBox doesn't drop text on top
-        // of the first staff, but otherwise honour what the score
-        // declared (and any `<offset>` overrides on individual
-        // texts).
-        let frameHeight = max(
-            metrics.sp * 4,
-            source.heightSp * metrics.sp
-        )
-        let center = docWidth / 2
-
         // MuseScore stores offsets for the title-block styles in
         // millimetres (`OffsetType::ABS` — see `styledef.cpp`).
         // Conversion to typographic points: 72 pt ÷ 25.4 mm.  We use
@@ -164,6 +153,45 @@ public enum LayoutEngine {
         // (`<offset>` in `.mscx`) and the styledef defaults (e.g.
         // `subTitleOffset = PointF(0, 10)` ⇒ 10 mm below VBox top).
         let mmToPt: CGFloat = 72.0 / 25.4
+
+        // MuseScore's `<height>` is in spatium units. We use it as a
+        // *minimum* — never shrink — but if the declared VBox is too
+        // small to fit its own top-anchored texts (typical when the
+        // user hand-edits `<height>` shorter than the subtitle stack
+        // needs), grow the frame to keep them from being clipped by
+        // the renderer's canvas. Bottom-anchored texts (composer /
+        // lyricist) follow the resolved bottom edge.
+        // SwiftUI `Text` resolved by `GraphicsContext.resolve` uses
+        // the system font's natural line height (~1.2 × point size);
+        // 1.3 leaves a small breathing margin above the next system.
+        let textHeightFactor: CGFloat = 1.3
+        var requiredFromTopAnchors: CGFloat = 0
+        for (idx, t) in source.texts.enumerated() {
+            let dy = (t.offsetMm?.y ?? 0) * mmToPt
+            let topY: CGFloat
+            let fontSize: CGFloat
+            switch t.style {
+            case .title:
+                topY = 0; fontSize = 22
+            case .subtitle:
+                topY = 10 * mmToPt; fontSize = 14
+            case .other:
+                topY = 10 * mmToPt + CGFloat(idx) * 4 * mmToPt
+                fontSize = 10
+            case .composer, .lyricist:
+                continue // anchored to frame bottom — no top-side overflow
+            }
+            let bottom = topY + dy + fontSize * textHeightFactor
+            if bottom > requiredFromTopAnchors {
+                requiredFromTopAnchors = bottom
+            }
+        }
+        let frameHeight = max(
+            metrics.sp * 4,
+            source.heightSp * metrics.sp,
+            requiredFromTopAnchors
+        )
+        let center = docWidth / 2
 
         var laidOut: [LayoutFrameText] = []
         for (idx, t) in source.texts.enumerated() {
