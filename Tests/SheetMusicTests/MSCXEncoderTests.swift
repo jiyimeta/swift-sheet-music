@@ -141,4 +141,19 @@ struct MSCXEncoderTests {
         let decoded = try Voice.decode(voiceNode)
         #expect(decoded == original)
     }
+
+    @Test("Measure round-trips a single voice")
+    func measureRoundTrip() throws {
+        let voice = Voice(elements: [
+            .chord(Chord(duration: .quarter, notes: ChordNotes([Note(pitch: 60, tpc: 14)]))),
+        ])
+        let measure = Measure(voices: [voice])
+
+        let xml = measure.encode()
+        let bytes = XMLTreeSerializer.serialize(XMLTreeNode(name: "root", children: [xml]))
+        let reparsed = try XMLTreeParser.parse(bytes)
+        let measureNode = try #require(reparsed.first("Measure"))
+        let decoded = try Measure.decode(measureNode)
+        #expect(decoded == measure)
+    }
 }
