@@ -156,4 +156,45 @@ struct MSCXEncoderTests {
         let decoded = try Measure.decode(measureNode)
         #expect(decoded == measure)
     }
+
+    @Test("InstrumentArticulation default + named round-trip")
+    func articulationRoundTrip() throws {
+        let cases = [
+            InstrumentArticulation(name: nil, velocity: 100, gateTime: 100),
+            InstrumentArticulation(name: "staccato", velocity: 100, gateTime: 50),
+        ]
+        for art in cases {
+            let xml = art.encode()
+            let bytes = XMLTreeSerializer.serialize(XMLTreeNode(name: "root", children: [xml]))
+            let reparsed = try XMLTreeParser.parse(bytes)
+            let artNode = try #require(reparsed.first("Articulation"))
+            let decoded = try InstrumentArticulation.decode(artNode)
+            #expect(decoded == art)
+        }
+    }
+
+    @Test("InstrumentChannel program-only round-trip matches default fields")
+    func channelProgramRoundTrip() throws {
+        let original = InstrumentChannel(program: 52)
+        let xml = original.encode()
+        let bytes = XMLTreeSerializer.serialize(XMLTreeNode(name: "root", children: [xml]))
+        let reparsed = try XMLTreeParser.parse(bytes)
+        let channelNode = try #require(reparsed.first("Channel"))
+        let decoded = try InstrumentChannel.decode(channelNode)
+        #expect(decoded == original)
+    }
+
+    @Test("InstrumentChannel non-default volume emits controller and round-trips")
+    func channelNonDefaultControllerRoundTrip() throws {
+        var channel = InstrumentChannel(program: 0)
+        channel.volume = 80
+        channel.pan = 30
+        let xml = channel.encode()
+        let bytes = XMLTreeSerializer.serialize(XMLTreeNode(name: "root", children: [xml]))
+        let reparsed = try XMLTreeParser.parse(bytes)
+        let channelNode = try #require(reparsed.first("Channel"))
+        let decoded = try InstrumentChannel.decode(channelNode)
+        #expect(decoded.volume == 80)
+        #expect(decoded.pan == 30)
+    }
 }
