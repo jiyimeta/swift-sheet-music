@@ -49,3 +49,29 @@ struct GraceChordTests {
         ))
     }
 }
+
+@Suite("Chord with graces")
+struct ChordWithGracesTests {
+    @Test("Default init leaves grace arrays empty (source compat)")
+    func defaultsEmpty() {
+        let c = Chord(duration: .quarter, notes: ChordNotes([Note(pitch: 60, tpc: 14)]))
+        #expect(c.graceNotesBefore.isEmpty)
+        #expect(c.graceNotesAfter.isEmpty)
+    }
+
+    @Test("graceNotesBefore / After are stored and Equatable")
+    func storesGraces() {
+        let g = GraceChord(
+            graceType: .acciaccatura, duration: .eighth,
+            notes: ChordNotes([Note(pitch: 62, tpc: 16)])
+        )
+        let c = Chord(
+            duration: .quarter,
+            notes: ChordNotes([Note(pitch: 60, tpc: 14)]),
+            graceNotesBefore: [g],
+            graceNotesAfter: []
+        )
+        #expect(c.graceNotesBefore == [g])
+        #expect(c.graceNotesAfter.isEmpty)
+    }
+}
