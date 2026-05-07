@@ -222,4 +222,31 @@ struct MSCXEncoderTests {
         let decoded = try Instrument.decode(instrumentNode)
         #expect(decoded == original)
     }
+
+    @Test("Single-staff Part round-trips through encode + parse")
+    func partWithStaffRoundTrip() throws {
+        let staff = Staff(
+            staffType: "stdNormal",
+            group: "pitched",
+            defaultClefType: nil,
+            measures: [
+                Measure(voices: [Voice(elements: [
+                    .chord(Chord(duration: .quarter, notes: ChordNotes([Note(pitch: 60, tpc: 14)]))),
+                ])]),
+            ]
+        )
+        let part = Part(
+            id: "1",
+            trackName: "Voice",
+            instrument: Instrument(id: "voice"),
+            staves: [staff]
+        )
+        let original = Score(division: 480, parts: [part])
+
+        let bytes = try MSCXEncoder.encode(original)
+        let reparsed = try MSCXParser.parse(bytes)
+
+        #expect(reparsed.parts.count == 1)
+        #expect(reparsed.parts[0] == part)
+    }
 }
