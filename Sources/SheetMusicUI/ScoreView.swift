@@ -57,9 +57,16 @@ public struct ScoreView: View {
     /// `ScoreHitTester`, or cached across selection changes). The
     /// caller controls when layout re-runs — typically in response
     /// to `score` / `options` / container-width changes.
+    ///
+    /// `options` controls render-time concerns the document doesn't
+    /// already bake in — currently `showBreakIndicators` and
+    /// `breakPolicy` (used by the indicator overlay). Pass the same
+    /// options you used to build `document` so toggles like
+    /// "hide break badges" survive the doc handoff.
     public init(
         document: LayoutDocument,
         score: Score,
+        options: ScoreViewOptions = .init(),
         selection: ScoreSelection = .none,
         voiceColors: [Int: Color] = [:],
         playbackCursor: ScoreCursor? = nil,
@@ -67,7 +74,7 @@ public struct ScoreView: View {
     ) {
         _ = BravuraFont.register
         self.score = score
-        options = ScoreViewOptions()
+        self.options = options
         explicitWidth = nil
         providedDocument = document
         self.selection = selection
