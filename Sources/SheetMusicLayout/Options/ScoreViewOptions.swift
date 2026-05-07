@@ -57,6 +57,11 @@ public struct ScoreViewOptions: Sendable, Equatable {
     /// system as authoring hints. Default `true` matches behavior
     /// from before this option existed.
     public var showBreakIndicators: Bool
+    /// Visual scale factor applied to grace-note glyphs (notehead +
+    /// stem + flag) relative to a main chord. MuseScore's
+    /// `Sid::graceNoteMag` default is 0.7; we use 0.6 to stay
+    /// closer to the historical "Petrucci" look used in Bravura.
+    public var graceNoteMag: CGFloat
 
     public init(
         staffSize: CGFloat = 28,
@@ -64,7 +69,8 @@ public struct ScoreViewOptions: Sendable, Equatable {
         wrapToViewWidth: Bool = true,
         includeTitleFrame: Bool = true,
         breakPolicy: LayoutBreakPolicy = .honor,
-        showBreakIndicators: Bool = true
+        showBreakIndicators: Bool = true,
+        graceNoteMag: CGFloat = 0.6
     ) {
         self.staffSize = staffSize
         self.systemGap = systemGap
@@ -72,5 +78,6 @@ public struct ScoreViewOptions: Sendable, Equatable {
         self.includeTitleFrame = includeTitleFrame
         self.breakPolicy = breakPolicy
         self.showBreakIndicators = showBreakIndicators
+        self.graceNoteMag = graceNoteMag
     }
 }

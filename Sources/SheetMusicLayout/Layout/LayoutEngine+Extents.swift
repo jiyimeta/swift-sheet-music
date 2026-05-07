@@ -427,6 +427,14 @@ extension LayoutEngine {
         sp * 0.7
     }
 
+    /// Horizontal width budget for one grace note in measure-local
+    /// units. Picked once-and-for-all at 1.5 sp — wide enough for a
+    /// 0.6×-scaled notehead + flag, narrow enough that three graces
+    /// can stack before bumping into the previous chord.
+    static func graceWidth(sp: CGFloat) -> CGFloat {
+        sp * 1.5
+    }
+
     /// Lowest Y a chord's geometry occupies BELOW the staff,
     /// in measure-local coords. Used to push lyrics below low
     /// noteheads / ties-below so they don't overlap.

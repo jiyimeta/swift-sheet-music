@@ -49,6 +49,7 @@ extension LayoutEngine {
         measureIndex: Int,
         width: CGFloat,
         metrics: StaffMetrics,
+        options: ScoreViewOptions = ScoreViewOptions(),
         activeClef: NotatedClef,
         activeKey: Int = 0,
         initialClefRawType: String? = nil,
@@ -477,8 +478,7 @@ extension LayoutEngine {
                     let chordNotes = applyChordMirroring(
                         preliminaryNotes, stem: stem
                     )
-                    voiceChordOutIndex[voiceElemIdx] = out.count
-                    out.append(.chord(
+                    let mainElement: LayoutElement = .chord(
                         notes: chordNotes,
                         duration: chord.duration,
                         stem: stem,
@@ -487,7 +487,65 @@ extension LayoutEngine {
                         arpeggioRawType: chord.arpeggio.flatMap(arpeggioSubtype),
                         isBeamed: false,
                         voiceIndex: voiceIdx
-                    ))
+                    )
+                    let graceW = LayoutEngine.graceWidth(sp: metrics.sp)
+                    let mag = options.graceNoteMag
+                    for (gIdx, g) in chord.graceNotesBefore.enumerated() {
+                        let relX = -graceW * CGFloat(chord.graceNotesBefore.count - gIdx)
+                        let layoutNotes = makeGraceLayoutNotes(
+                            grace: g, atX: chordX + relX,
+                            staffMidY: staffMidY, metrics: metrics,
+                            currentClef: currentClef,
+                            staffAddress: staffAddress,
+                            measureIndex: measureIndex,
+                            voiceIdx: voiceIdx,
+                            voiceElemIdx: voiceElemIdx,
+                            graceIdx: gIdx, isAfter: false,
+                            drumLineMap: drumLineMap
+                        )
+                        let graceStem = StemDirectionRule.direction(
+                            for: layoutNotes.map(\.step)
+                        )
+                        out.append(.graceChord(
+                            notes: layoutNotes,
+                            duration: g.duration,
+                            stem: graceStem,
+                            stemOrigin: CGPoint(x: chordX + relX, y: staffMidY),
+                            relativeX: relX,
+                            hasSlash: g.graceType == .acciaccatura,
+                            mag: mag,
+                            voiceIndex: voiceIdx
+                        ))
+                    }
+                    voiceChordOutIndex[voiceElemIdx] = out.count
+                    out.append(mainElement)
+                    for (gIdx, g) in chord.graceNotesAfter.enumerated() {
+                        let relX = graceW * CGFloat(gIdx + 1)
+                        let layoutNotes = makeGraceLayoutNotes(
+                            grace: g, atX: chordX + relX,
+                            staffMidY: staffMidY, metrics: metrics,
+                            currentClef: currentClef,
+                            staffAddress: staffAddress,
+                            measureIndex: measureIndex,
+                            voiceIdx: voiceIdx,
+                            voiceElemIdx: voiceElemIdx,
+                            graceIdx: gIdx, isAfter: true,
+                            drumLineMap: drumLineMap
+                        )
+                        let graceStem = StemDirectionRule.direction(
+                            for: layoutNotes.map(\.step)
+                        )
+                        out.append(.graceChord(
+                            notes: layoutNotes,
+                            duration: g.duration,
+                            stem: graceStem,
+                            stemOrigin: CGPoint(x: chordX + relX, y: staffMidY),
+                            relativeX: relX,
+                            hasSlash: false,
+                            mag: mag,
+                            voiceIndex: voiceIdx
+                        ))
+                    }
                     if let arp = chord.arpeggio {
                         let ys = chordNotes.map(\.origin.y)
                         let top = ys.min() ?? staffMidY
@@ -1104,4 +1162,63 @@ extension LayoutEngine {
             )
         }
     }
+
+    // swiftlint:disable function_parameter_count
+    /// Build `LayoutChordNote` values for a single `GraceChord`.
+    /// Mirrors the inline notehead construction used for main chords
+    /// but takes `graceIdx` / `isAfter` so synthesized `NoteID`s
+    /// don't collide with the parent chord's notes — important for
+    /// hit-testing and the chord-origin lookup.
+    fileprivate static func makeGraceLayoutNotes(
+        grace: GraceChord,
+        atX x: CGFloat,
+        staffMidY: CGFloat,
+        metrics: StaffMetrics,
+        currentClef: NotatedClef,
+        staffAddress: StaffAddress,
+        measureIndex: Int,
+        voiceIdx: Int,
+        voiceElemIdx: Int,
+        graceIdx: Int,
+        isAfter: Bool,
+        drumLineMap: [Int: Int]?
+    ) -> [LayoutChordNote] {
+        // Grace NoteIDs reuse the parent's element index but encode
+        // the grace position in `noteIndexInChord` so they stay
+        // unique across the (parent, grace) cluster:
+        //   before-grace #i  → 1000 + i*100 + noteIdx
+        //   after-grace  #i  → 2000 + i*100 + noteIdx
+        // Cap at 8 graces × 16 notes per grace — well above
+        // anything seen in real scores.
+        let base = (isAfter ? 2000 : 1000) + graceIdx * 100
+        return grace.notes.enumerated().map { noteIdx, note in
+            let step: Int
+            if let drumLine = drumLineMap?[note.pitch] {
+                step = 4 - drumLine
+            } else {
+                step = PitchStaffPosition.step(
+                    midiPitch: note.pitch, tpc: note.tpc,
+                    clef: currentClef
+                ).step
+            }
+            let y = staffMidY - CGFloat(step) * metrics.sp / 2
+            let id = NoteID(
+                staff: staffAddress,
+                measureIndex: measureIndex,
+                voiceIndex: voiceIdx,
+                elementIndex: voiceElemIdx,
+                noteIndexInChord: base + noteIdx
+            )
+            return LayoutChordNote(
+                noteID: id,
+                step: step,
+                accidental: note.accidental,
+                origin: CGPoint(x: x, y: y),
+                tieForward: nil, tieBack: nil,
+                hasGlissando: false,
+                headType: note.headType
+            )
+        }
+    }
+    // swiftlint:enable function_parameter_count
 }
