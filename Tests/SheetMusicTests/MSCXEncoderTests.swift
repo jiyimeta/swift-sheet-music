@@ -134,7 +134,7 @@ struct MSCXEncoderTests {
             .chord(Chord(duration: .quarter, notes: ChordNotes([Note(pitch: 60, tpc: 14)]))),
             .chord(Chord(duration: .quarter, notes: ChordNotes([Note(pitch: 62, tpc: 16)]))),
         ])
-        let xml = original.encode()
+        let xml = try original.encode()
         let bytes = XMLTreeSerializer.serialize(XMLTreeNode(name: "root", children: [xml]))
         let reparsed = try XMLTreeParser.parse(bytes)
         let voiceNode = try #require(reparsed.first("voice"))
@@ -149,7 +149,7 @@ struct MSCXEncoderTests {
         ])
         let measure = Measure(voices: [voice])
 
-        let xml = measure.encode()
+        let xml = try measure.encode()
         let bytes = XMLTreeSerializer.serialize(XMLTreeNode(name: "root", children: [xml]))
         let reparsed = try XMLTreeParser.parse(bytes)
         let measureNode = try #require(reparsed.first("Measure"))
@@ -248,5 +248,20 @@ struct MSCXEncoderTests {
 
         #expect(reparsed.parts.count == 1)
         #expect(reparsed.parts[0] == part)
+    }
+
+    @Test("Voice with unsupported element throws malformedScore")
+    func unsupportedVoiceElementThrows() {
+        let voice = Voice(elements: [
+            .tempo(Tempo(beatsPerSecond: 2.0)),
+        ])
+        let measure = Measure(voices: [voice])
+        let staff = Staff(measures: [measure])
+        let part = Part(id: "1", instrument: Instrument(id: "x"), staves: [staff])
+        let score = Score(division: 480, parts: [part])
+
+        #expect(throws: SheetMusicError.self) {
+            try MSCXEncoder.encode(score)
+        }
     }
 }

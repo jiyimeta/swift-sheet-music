@@ -6,9 +6,10 @@ extension Voice {
     /// Build the `<voice>` element. Phase 1 supports the element
     /// kinds present in `midi01.mscx`: chords (with rests as
     /// notes-empty chords), key/time/clef changes. Other cases
-    /// (Tempo, Dynamic, Spanner, Harmony, …) are added in follow-up
-    /// specs and trap here with a clear message until then.
-    func encode() -> XMLTreeNode {
+    /// (Tempo, Dynamic, Spanner, Harmony, …) throw
+    /// `SheetMusicError.malformedScore` until follow-up specs add
+    /// proper encoders.
+    func encode() throws -> XMLTreeNode {
         var children: [XMLTreeNode] = []
         for element in elements {
             switch element {
@@ -25,10 +26,10 @@ extension Voice {
             case .barLine, .tempo, .dynamic, .spanner,
                  .measureRepeat, .fermata, .staffText, .harmony,
                  .rehearsalMark, .locationShift:
-                fatalError(
-                    "VoiceElement \(element) not yet supported by " +
-                        "MSCXEncoder Phase 1 — see " +
-                        "docs/superpowers/specs/2026-05-07-mscx-export-design.md"
+                throw SheetMusicError.malformedScore(
+                    reason: "VoiceElement \(element) not yet supported "
+                        + "by MSCXEncoder Phase 1 — see "
+                        + "docs/superpowers/specs/2026-05-07-mscx-export-design.md"
                 )
             }
         }

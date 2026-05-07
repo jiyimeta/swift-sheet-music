@@ -4,7 +4,7 @@ import SheetMusicXMLTools
 
 extension Score {
     /// Build the `<museScore><Score>…</Score></museScore>` root.
-    func encode() -> XMLTreeNode {
+    func encode() throws -> XMLTreeNode {
         var scoreChildren: [XMLTreeNode] = []
         scoreChildren.append(XMLTreeNode(
             name: "Division", text: String(division)
@@ -33,7 +33,7 @@ extension Score {
         }
         for (part, ids) in allStaffIDs {
             for (staff, id) in zip(part.staves, ids) {
-                scoreChildren.append(staff.encodeTopLevel(staffID: id))
+                try scoreChildren.append(staff.encodeTopLevel(staffID: id))
             }
         }
 

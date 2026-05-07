@@ -39,11 +39,11 @@ extension Staff {
     }
 
     /// Encode the top-level `<Staff id="N">` block carrying measures.
-    func encodeTopLevel(staffID: String) -> XMLTreeNode {
-        XMLTreeNode(
+    func encodeTopLevel(staffID: String) throws -> XMLTreeNode {
+        try XMLTreeNode(
             name: "Staff",
             attributes: ["id": staffID],
-            children: measures.map { $0.encode() }
+            children: measures.map { try $0.encode() }
         )
     }
 }

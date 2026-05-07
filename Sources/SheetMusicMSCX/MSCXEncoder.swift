@@ -11,7 +11,7 @@ import SheetMusicXMLTools
 public enum MSCXEncoder {
     /// Serialize a `Score` to `.mscx` XML bytes.
     public static func encode(_ score: Score) throws -> Data {
-        let root = score.encode()
+        let root = try score.encode()
         return XMLTreeSerializer.serialize(root)
     }
 
