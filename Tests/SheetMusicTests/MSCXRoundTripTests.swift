@@ -15,4 +15,15 @@ struct MSCXRoundTripTests {
 
         #expect(roundTripped == original)
     }
+
+    @Test("midi01 round-trips through MSCZWriter.write(score:) → MSCZReader")
+    func midi01MSCZRoundTrip() throws {
+        let originalData = try MSCXFixtureLoader.mscxData("midi01")
+        let original = try MSCXParser.parse(originalData)
+
+        let mscz = try MSCZWriter.write(score: original)
+        let roundTripped = try MSCZReader.parse(mscz)
+
+        #expect(roundTripped == original)
+    }
 }
