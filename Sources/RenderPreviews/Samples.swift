@@ -902,6 +902,39 @@
             )
         }
 
+        // MARK: - 27 chord symbols above tied high chords
+
+        /// High chords carrying ties on their top notes. The tie arc
+        /// extends UPWARD past the notehead by ~headClearance + tie
+        /// shoulder; without tie-aware skyline the harmony auto-placer
+        /// puts the symbol just above the notehead and the tie cuts
+        /// through the chord text. Visual gauge for the tie-aware
+        /// path inside `chordTopExtent`.
+        static var harmonyHighChordTied: Score {
+            let f6Tied = Note(pitch: 89, tpc: 13, tieForward: 1)
+            let f6Land = Note(pitch: 89, tpc: 13, tieBack: 1)
+            let c6Tied = Note(pitch: 84, tpc: 14, tieForward: 2)
+            let c6Land = Note(pitch: 84, tpc: 14, tieBack: 2)
+            let m1 = Measure(voices: [Voice(elements: [
+                .clef(Clef(concertClefType: "G")),
+                .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+                .harmony(Harmony(name: "C")),
+                .chord(Chord(duration: .half, notes: [f6Tied])),
+                .harmony(Harmony(name: "Am7")),
+                .chord(Chord(duration: .half, notes: [f6Land])),
+            ])])
+            let m2 = Measure(voices: [Voice(elements: [
+                .harmony(Harmony(name: "F#m7b5")),
+                .chord(Chord(duration: .half, notes: [c6Tied])),
+                .harmony(Harmony(name: "G7")),
+                .chord(Chord(duration: .half, notes: [c6Land])),
+            ])])
+            return Score(
+                division: 480,
+                parts: [treblePart(measures: [m1, m2])]
+            )
+        }
+
         // MARK: - helpers
 
         private static func treblePart(measures: [Measure] = []) -> Part {

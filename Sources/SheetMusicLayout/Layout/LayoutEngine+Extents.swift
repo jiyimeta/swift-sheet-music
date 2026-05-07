@@ -5,11 +5,19 @@ import SheetMusicCore
 @available(macOS 15.0, iOS 16.0, *)
 extension LayoutEngine {
     /// Maximum upward extent (smallest Y) of any chord stem-tip,
-    /// notehead, or beam in `elements`. Used by the staff-text
-    /// auto-placement post-pass. Returns `+infinity` when the
-    /// measure has no chords/beams.
+    /// notehead, beam, or above-arcing tie in `elements`. Used by
+    /// the staff-text and harmony auto-placement post-passes.
+    /// Returns `+infinity` when the measure has no chords/beams.
+    ///
+    /// Tie contribution mirrors MuseScore's skyline-with-ties: an
+    /// "above" tie on the topmost note extends the north skyline
+    /// past the notehead by the tie's head-clearance plus its
+    /// shoulder. Without this, a chord symbol auto-placed at
+    /// `chordTop − 1.5 sp` lands inside the tie arc whenever the
+    /// chord protrudes above the staff and carries an upward tie.
     private static func chordTopExtent(
-        in elements: [LayoutElement]
+        in elements: [LayoutElement],
+        metrics: StaffMetrics
     ) -> CGFloat {
         var minY = CGFloat.infinity
         for el in elements {
@@ -30,6 +38,11 @@ extension LayoutEngine {
                     ? min(stemOrigin.y, topNote)
                     : topNote
                 minY = min(minY, extent)
+                if let tieTop = aboveTieExtent(
+                    notes: notes, stem: dir, metrics: metrics
+                ) {
+                    minY = min(minY, tieTop)
+                }
             case let .beam(from, to, _, _):
                 minY = min(minY, from.y, to.y)
             default:
@@ -37,6 +50,52 @@ extension LayoutEngine {
             }
         }
         return minY
+    }
+
+    /// Smallest (highest) Y reached by any above-arcing tie on the
+    /// chord's notes, or `nil` when no note carries an "above" tie.
+    /// Tie direction rule mirrors `LayoutEngine+Ties.swift::resolveTies`:
+    /// single note → above when stem is down; multi-note top note →
+    /// always above; multi-note middle note → above when stem is
+    /// down; bottom note → never above.
+    ///
+    /// The arc apex sits at `noteY − headClearance − shoulderH`. We
+    /// use `headClearance = 0.6 sp` (matching `TieRenderer`) and a
+    /// fixed `shoulderH ≈ 1.0 sp` because tie length isn't known
+    /// until tie pairing runs at the document level. 1.0 sp is the
+    /// midpoint of MuseScore's `tieMinShoulderHeight = 0.3 sp` and
+    /// `tieMaxShoulderHeight = 2.0 sp`, which keeps clearance
+    /// generous for typical ties without over-reserving space for
+    /// very short ones.
+    private static func aboveTieExtent(
+        notes: [LayoutChordNote],
+        stem: StemDirection,
+        metrics: StaffMetrics
+    ) -> CGFloat? {
+        let steps = notes.map(\.step)
+        guard let maxStep = steps.max(),
+              let minStep = steps.min()
+        else { return nil }
+        let isSingle = maxStep == minStep
+        var top: CGFloat?
+        for n in notes {
+            guard n.tieForward != nil || n.tieBack != nil
+            else { continue }
+            let above: Bool
+            if isSingle {
+                above = stem == .down
+            } else if n.step == maxStep {
+                above = true
+            } else if n.step == minStep {
+                above = false
+            } else {
+                above = stem == .down
+            }
+            guard above else { continue }
+            let apex = n.origin.y - metrics.sp * 1.6
+            top = min(top ?? apex, apex)
+        }
+        return top
     }
 
     /// Shift every `.staffText` in `out` upward as needed so that
@@ -49,7 +108,7 @@ extension LayoutEngine {
         staffMidY: CGFloat,
         metrics: StaffMetrics
     ) {
-        let chordTop = chordTopExtent(in: out)
+        let chordTop = chordTopExtent(in: out, metrics: metrics)
         guard chordTop.isFinite else { return }
         // Default placement Y matches the constant used when the
         // text was first emitted (`staffMidY - sp * 3`). The auto
@@ -88,7 +147,7 @@ extension LayoutEngine {
         staffMidY: CGFloat,
         metrics: StaffMetrics
     ) {
-        let chordTop = chordTopExtent(in: out)
+        let chordTop = chordTopExtent(in: out, metrics: metrics)
         guard chordTop.isFinite else { return }
         // Default base matches the constant used at emission
         // (`staffTopLocal + harmonyPlacementAbove`, i.e.

@@ -65,6 +65,7 @@
             ("24-location-system-text", Samples.locationSystemText),
             ("25-harmony-basic", Samples.harmonyBasic),
             ("26-harmony-high-chord", Samples.harmonyHighChord),
+            ("27-harmony-high-chord-tied", Samples.harmonyHighChordTied),
         ]
 
         for (name, score) in samples {

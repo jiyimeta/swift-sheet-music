@@ -496,6 +496,80 @@ extension HarmonyTests {
         #expect(wide[1] > bare[1])
     }
 
+    @available(macOS 15.0, iOS 16.0, *)
+    @Test func aboveArchingTieLiftsHarmonyClearOfArc() {
+        // A high chord (well above the top staff line) carrying a tie
+        // on its top note: the tie arcs UPWARD past the notehead. The
+        // harmony auto-placer must lift the chord symbol above the
+        // tie's apex, not just above the notehead. We compare the
+        // tied vs. untied case by the GAP between the chord notehead
+        // and the harmony in document-absolute coords. (Absolute
+        // harmony Y alone is not a useful gauge: the per-staff top
+        // padding expands to absorb the autoplace shift, so the
+        // harmony's absolute Y stays roughly constant — but the staff
+        // sinks down and the gap above the notehead grows.)
+        func gap(withTie: Bool) -> Double {
+            let topNote = Note(
+                pitch: 89, // F6, three ledger lines above treble staff
+                tpc: 13,
+                tieForward: withTie ? 1 : nil
+            )
+            let landingNote = Note(
+                pitch: 89,
+                tpc: 13,
+                tieBack: withTie ? 1 : nil
+            )
+            let m1 = Measure(voices: [Voice(elements: [
+                .clef(Clef(concertClefType: "G")),
+                .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+                .harmony(Harmony(name: "C")),
+                .chord(Chord(duration: .whole, notes: [topNote])),
+            ])])
+            let m2 = Measure(voices: [Voice(elements: [
+                .chord(Chord(duration: .whole, notes: [landingNote])),
+            ])])
+            let part = Part(
+                id: "P1",
+                instrument: Instrument(id: "voice"),
+                staves: [Staff(measures: [m1, m2])]
+            )
+            let score = Score(division: 480, parts: [part])
+            let document = LayoutEngine.layout(
+                score: score,
+                options: ScoreViewOptions(staffSize: 28),
+                availableWidth: 800
+            )
+            var harmonyY: Double?
+            var noteY: Double?
+            for system in document.systems {
+                for measure in system.measures {
+                    for el in measure.elements {
+                        if case let .harmony(lh) = el, harmonyY == nil {
+                            harmonyY = lh.y + Double(system.origin.y
+                                + measure.origin.y)
+                        }
+                        if case let .chord(notes, _, _, _, _, _, _, _) = el,
+                           noteY == nil,
+                           let n = notes.first
+                        {
+                            noteY = Double(n.origin.y + system.origin.y
+                                + measure.origin.y)
+                        }
+                    }
+                }
+            }
+            guard let h = harmonyY, let n = noteY else { return .nan }
+            return n - h
+        }
+        let untied = gap(withTie: false)
+        let tied = gap(withTie: true)
+        // Tied case must sit at least 1 sp (= 7 pt at staffSize=28)
+        // further above the notehead than the untied case to clear
+        // the tie's shoulder.
+        #expect(tied > untied)
+        #expect(tied - untied > 7.0)
+    }
+
     @Test func basicFixtureExposesFiveHarmonies() throws {
         let url = try #require(Bundle.module.url(
             forResource: "harmony-basic", withExtension: "mscx"
