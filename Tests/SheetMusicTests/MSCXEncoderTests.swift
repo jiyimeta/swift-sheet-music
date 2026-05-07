@@ -79,4 +79,27 @@ struct MSCXEncoderTests {
         #expect(children[1].name == "duration")
         #expect(children[1].text == "3/8")
     }
+
+    @Test("Chord round-trips through Chord.decode")
+    func chordRoundTrip() throws {
+        let chord = Chord(
+            duration: .quarter,
+            notes: ChordNotes([Note(pitch: 60, tpc: 14)])
+        )
+        let xml = chord.encodeAsChord()
+        let document = XMLTreeNode(name: "root", children: [xml])
+        let bytes = XMLTreeSerializer.serialize(document)
+        let reparsed = try XMLTreeParser.parse(bytes)
+        let chordNode = try #require(reparsed.first("Chord"))
+        let decoded = try Chord.decode(chordNode)
+        #expect(decoded == chord)
+    }
+
+    @Test("rest chord emits as <Rest>")
+    func restEmitsAsRestElement() {
+        let rest = Chord(duration: .quarter, notes: [])
+        let xml = rest.encodeAsRest()
+        #expect(xml.name == "Rest")
+        #expect(xml.first("durationType")?.text == "quarter")
+    }
 }
