@@ -170,7 +170,7 @@ extension MidiRenderer {
                     voiceIndex: voiceIndex
                 )
                 : nil
-            renderChord(
+            renderChordWithGraces(
                 chord,
                 tick: localTick,
                 velocity: velocity,
@@ -188,61 +188,6 @@ extension MidiRenderer {
             // they don't affect MIDI output (MuseScore performs them via
             // tempomap stretching — not replicated here).
             break
-        }
-    }
-
-    // swiftlint:disable:next function_parameter_count
-    private static func renderChord(
-        _ chord: Chord,
-        tick: Int,
-        velocity: Int,
-        channel: Int,
-        instrument: Instrument,
-        tempoBps: Double,
-        division: Int,
-        glissandoEndPitch: Int?,
-        currentKey: Int,
-        events: inout [TimedMidiEvent]
-    ) {
-        let durationTicks = chord.duration.ticks(division: division)
-        if let arpeggio = chord.arpeggio {
-            let pairs = arpeggioNoteEvents(
-                noteCount: chord.notes.count,
-                chordTicks: durationTicks,
-                stretch: arpeggio.timeStretch,
-                tempoBps: tempoBps
-            )
-            let order = arpeggio.isAscending
-                ? Array(0 ..< chord.notes.count)
-                : Array((0 ..< chord.notes.count).reversed())
-            for (i, noteIndex) in order.enumerated() {
-                let note = chord.notes[noteIndex]
-                let onTick = tick + pairs[i].onOffset
-                let offTick = tick + pairs[i].offOffset
-                emitNoteEvents(
-                    note: note, channel: channel, velocity: velocity,
-                    onTick: onTick, offTick: offTick, events: &events
-                )
-            }
-        } else {
-            let gate = defaultArticulationGateTime(for: instrument)
-            let gatedTicks = durationTicks * gate / 100
-            let offTick = tick + gatedTicks - 1
-            for note in chord.notes {
-                if let glissando = note.glissando, let endPitch = glissandoEndPitch {
-                    renderGlissandoNote(
-                        note: note, glissando: glissando, endPitch: endPitch,
-                        startTick: tick, durationTicks: durationTicks,
-                        velocity: velocity, channel: channel,
-                        currentKey: currentKey, events: &events
-                    )
-                } else {
-                    emitNoteEvents(
-                        note: note, channel: channel, velocity: velocity,
-                        onTick: tick, offTick: offTick, events: &events
-                    )
-                }
-            }
         }
     }
 

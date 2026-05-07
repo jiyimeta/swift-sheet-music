@@ -99,3 +99,120 @@ struct GraceTotalStealTests {
         ) == division / 2) // capped
     }
 }
+
+@Suite("Grace MIDI integration")
+struct GraceMidiIntegrationTests {
+    /// Build a single-staff, single-voice score with `chords` as
+    /// the body of measure 0. Returns the rendered events and the PPQ.
+    private func render(_ chords: [Chord]) -> (events: [TimedMidiEvent], ppq: Int) {
+        let division = 480
+        let measure = Measure(voices: [Voice(elements: chords.map { .chord($0) })])
+        let staff = Staff(measures: [measure])
+        let instrument = Instrument(id: "piano", articulations: [InstrumentArticulation()])
+        let part = Part(id: "P1", instrument: instrument, staves: [staff])
+        let score = Score(division: division, parts: [part])
+        // swiftlint:disable:next force_try
+        let file = try! MidiRenderer.render(score: score)
+        return (file.tracks.flatMap(\.events), Int(file.division))
+    }
+
+    private func note(_ pitch: Int) -> Note { Note(pitch: pitch, tpc: 14) }
+
+    @Test("acciaccatura: prev chord noteOff is pulled in by grace ticks")
+    func acciaccaturaStealsPrev() {
+        let prev = Chord(duration: .quarter, notes: ChordNotes([note(60)]))
+        let main = Chord(
+            duration: .quarter,
+            notes: ChordNotes([note(64)]),
+            graceNotesBefore: [GraceChord(
+                graceType: .acciaccatura, duration: .eighth,
+                notes: ChordNotes([note(62)])
+            )]
+        )
+        let (events, ppq) = render([prev, main])
+        let prevOff = events.first { e in
+            if case let .noteOff(_, p, _) = e.event, p == 60 { return true }
+            return false
+        }
+        // prev quarter starts at 0 with gate ≈ 100% → off ~ ppq-1.
+        // Acciaccatura steals ppq/8.
+        #expect(prevOff?.tick == ppq - 1 - ppq / 8)
+
+        // Grace note-on lands BEFORE main onset (= ppq).
+        let graceOn = events.first { e in
+            if case let .noteOn(_, p, _) = e.event, p == 62 { return true }
+            return false
+        }
+        #expect(graceOn?.tick == ppq - ppq / 8)
+
+        // Main onset still at ppq (acciaccatura doesn't shift main).
+        let mainOn = events.first { e in
+            if case let .noteOn(_, p, _) = e.event, p == 64 { return true }
+            return false
+        }
+        #expect(mainOn?.tick == ppq)
+    }
+
+    @Test("appoggiatura: main onset shifts forward by grace ticks")
+    func appoggiaturaStealsMain() {
+        let main = Chord(
+            duration: .quarter,
+            notes: ChordNotes([note(60)]),
+            graceNotesBefore: [GraceChord(
+                graceType: .appoggiatura, duration: .eighth,
+                notes: ChordNotes([note(62)])
+            )]
+        )
+        let (events, ppq) = render([main])
+        let graceOn = events.first { e in
+            if case let .noteOn(_, p, _) = e.event, p == 62 { return true }; return false
+        }
+        let mainOn = events.first { e in
+            if case let .noteOn(_, p, _) = e.event, p == 60 { return true }; return false
+        }
+        #expect(graceOn?.tick == 0)
+        #expect(mainOn?.tick == ppq / 2)
+    }
+
+    @Test("grace8after: emitted after main, main tail shortened")
+    func afterGrace() {
+        let main = Chord(
+            duration: .quarter,
+            notes: ChordNotes([note(60)]),
+            graceNotesAfter: [GraceChord(
+                graceType: .grace8after, duration: .eighth,
+                notes: ChordNotes([note(62)])
+            )]
+        )
+        let (events, ppq) = render([main])
+        let mainOff = events.first { e in
+            if case let .noteOff(_, p, _) = e.event, p == 60 { return true }; return false
+        }
+        let graceOn = events.first { e in
+            if case let .noteOn(_, p, _) = e.event, p == 62 { return true }; return false
+        }
+        // Main quarter = ppq ticks, tail steal = ppq/2 → main plays
+        // for ppq/2; off-tick = mainOnset + playedTicks - 1 = ppq/2 - 1.
+        #expect(mainOff?.tick == ppq / 2 - 1)
+        #expect(graceOn?.tick == ppq / 2)
+    }
+
+    @Test("acciaccatura on first chord: steal-from-prev gracefully clamps")
+    func acciaccaturaNoPrev() {
+        // No previous chord → graceTick would be negative; renderer
+        // must clamp and still emit grace + main without crashing.
+        let main = Chord(
+            duration: .quarter,
+            notes: ChordNotes([note(60)]),
+            graceNotesBefore: [GraceChord(
+                graceType: .acciaccatura, duration: .eighth,
+                notes: ChordNotes([note(62)])
+            )]
+        )
+        let (events, _) = render([main])
+        let graceOn = events.first { e in
+            if case let .noteOn(_, p, _) = e.event, p == 62 { return true }; return false
+        }
+        #expect(graceOn?.tick == 0) // clamped to ≥ 0
+    }
+}
