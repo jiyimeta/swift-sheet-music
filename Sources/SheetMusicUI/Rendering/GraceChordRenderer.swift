@@ -50,17 +50,18 @@ extension ScoreLayerBuilder {
         )
     }
 
-    /// Acciaccatura slash. Mirrors `TLayout::layoutStemSlash`
-    /// (`engraving/rendering/score/tlayout.cpp:5249`): a stroked line
-    /// crossing the stem at `stemSlashAngle = 40°`, starting
-    /// `stemSlashPosition = 2 sp` from the stem tip. We use the
-    /// no-hook geometry from MuseScore's `else` branch (line 5307):
-    /// span the slash one notehead width across the stem, optically
-    /// centred by subtracting the stem width from the right hang.
-    /// Thickness is bumped from MuseScore's default `0.125 sp` to
-    /// match the rendered stem's weight — at on-screen zoom levels
-    /// `0.125 sp × mag` aliases below one device pixel and the
-    /// slash disappears.
+    /// Acciaccatura slash position. Uses Bravura's
+    /// `graceNoteSlash{NE,SW,NW,SE}` glyph anchors (from
+    /// `bravura_metadata.json`) instead of MuseScore's
+    /// algorithmic placement (`tlayout.cpp:5249`'s
+    /// `stemSlashPosition = 2 sp`, `stemSlashAngle = 40°`). The
+    /// anchors are the font designer's intended slash endpoints and
+    /// produce a crossing point biased toward the notehead — the
+    /// algorithm-derived placement crosses noticeably closer to the
+    /// flag than the engraving convention. Anchors are in glyph
+    /// em-units with math y-axis (y > 0 = up); 1 em = 1 sp at
+    /// glyph rendering size, so multiplying by `scaled.sp` gives
+    /// the on-screen pixel offset relative to the stem tip.
     private static func drawAcciaccaturaSlash(
         notes: [LayoutChordNote],
         stem: StemDirection,
@@ -74,50 +75,42 @@ extension ScoreLayerBuilder {
               let yTop = notes.map(\.origin.y).min(),
               let yBot = notes.map(\.origin.y).max()
         else { return }
-        // Match `ScoreLayerBuilder+Chord.drawStem`'s formula exactly so
-        // the slash centres on the stem the renderer actually drew.
-        // The CALayer-pipeline stem pulls inward by stemThickness/2
-        // (compared to the SwiftUI Canvas formula) — the slash must
-        // follow.
+        // Stem geometry — match `ScoreLayerBuilder+Chord.drawStem`
+        // exactly so the slash crosses the rendered stem.
         let stemAttachDx = scaled.sp * 0.59 - scaled.stemThickness / 2
-        let up: CGFloat = stem == .up ? -1 : 1
         let stemX: CGFloat
         let stemTipY: CGFloat
+        // Bravura `graceNoteSlash` endpoints in em-units, math y.
+        // First tuple = SW (or NW for stem-down) bottom/top-left
+        // end; second = NE (or SE) top/bottom-right end.
+        let endA: (x: CGFloat, y: CGFloat)
+        let endB: (x: CGFloat, y: CGFloat)
         switch stem {
         case .up:
             stemX = xMax + stemAttachDx
             stemTipY = yTop - scaled.defaultStemLength
+            // flag8thUp: graceNoteSlashSW / graceNoteSlashNE.
+            endA = (-0.644, -2.456)
+            endB = (1.284, -0.796)
         case .down:
             stemX = xMin - stemAttachDx
             stemTipY = yBot + scaled.defaultStemLength
+            // flag8thDown: graceNoteSlashNW / graceNoteSlashSE.
+            endA = (-0.596, 2.168)
+            endB = (1.328, 0.628)
         }
-        // Style values from MuseScore Sid::stemSlash* (defaults at
-        // `style/styledef.cpp:242-244`).
-        let slashPosition = scaled.sp * 2.0
-        let slashAngle = 40.0 * .pi / 180.0
-        let stemWidth = scaled.stemThickness
-        // `noteHeadWidth() * mag / 2` in MuseScore. Bravura's
-        // `noteheadBlack` is 1.18 sp wide; halved gives 0.59 sp in
-        // scaled-sp units (`scaled.sp = parentSp * mag`).
-        let leftHang = scaled.sp * 0.59
-        // `(noteHeadWidth() * mag / 2) - stemWidth`. Pulling rightHang
-        // inward by stemWidth keeps the slash optically centred ON
-        // the stem instead of on the geometric column axis.
-        let rightHang = leftHang - stemWidth
-        let stemRight = stemX + stemWidth / 2
-        let startX = stemRight - leftHang
-        let startY = stemTipY - up * slashPosition
-        let endX = stemRight + rightHang
-        let endY = startY + up * (endX - startX) * tan(slashAngle)
+        // Convert anchor (x, math-y) → screen (x, y-down), anchored
+        // at the stem tip and scaled by `scaled.sp` (= 1 em).
+        let startX = stemX + endA.x * scaled.sp
+        let startY = stemTipY - endA.y * scaled.sp
+        let endX = stemX + endB.x * scaled.sp
+        let endY = stemTipY - endB.y * scaled.sp
         let path = CGMutablePath()
         path.move(to: CGPoint(x: base.x + startX, y: base.y + startY))
         path.addLine(to: CGPoint(x: base.x + endX, y: base.y + endY))
-        // Use the SAME thickness as the rendered grace stem
-        // (`scaled.stemThickness`) so the slash reads as a stroke of
-        // matching weight at on-screen sizes. MuseScore's
-        // `stemSlashThickness = 0.125 sp` is even thinner than the
-        // stem (`stemThickness = 0.12 sp` × mag) and disappears under
-        // typical screen DPIs once mag (~0.6) is folded in.
+        // Match the rendered grace stem's weight so the slash reads
+        // at on-screen DPIs. MuseScore's `stemSlashThickness =
+        // 0.125 sp × mag` aliases below one device pixel.
         parent.addSublayer(strokeLayer(
             path: path, height: height,
             lineWidth: scaled.stemThickness
