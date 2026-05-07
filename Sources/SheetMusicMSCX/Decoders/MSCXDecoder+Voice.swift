@@ -21,16 +21,54 @@ extension Voice {
         // the tuplet's first member landed so we can finalise a
         // `Tuplet` range at `<endTuplet>`.
         var tupletStack: [OpenTuplet] = []
+        // Buffer for `<Chord><acciaccatura/>...` etc. encountered
+        // before the next ordinary chord in this voice. Cleared
+        // whenever attached to the next main `Chord`. Stranded
+        // entries (left over at end-of-voice) are dropped — MuseScore
+        // doesn't play them either.
+        var pendingGracesBefore: [GraceChord] = []
         func tupletFractions() -> [Fraction] {
             tupletStack.map(\.ratio)
         }
         for child in node.children {
             switch child.name {
             case "Chord":
+                if let graceType = Chord.graceType(in: child) {
+                    // Decode shape but do NOT scale by tuplet ratios:
+                    // graces don't consume tuplet time — see
+                    // CompatMidiRender::renderGraceNotesBefore.
+                    let inner = try Chord.decode(child)
+                    let g = GraceChord(
+                        graceType: graceType,
+                        duration: inner.duration,
+                        notes: inner.notes
+                    )
+                    if graceType.isAfter {
+                        // Attach to the most recently emitted chord.
+                        // Walk backwards because tempo / dynamic /
+                        // location elements may sit between the
+                        // grace and its parent chord.
+                        for i in stride(from: elements.count - 1, through: 0, by: -1) {
+                            if case var .chord(parent) = elements[i] {
+                                parent.graceNotesAfter.append(g)
+                                elements[i] = .chord(parent)
+                                break
+                            }
+                        }
+                        // No preceding chord → drop silently.
+                    } else {
+                        pendingGracesBefore.append(g)
+                    }
+                    continue
+                }
                 var chord = try Chord.decode(child)
                 chord.duration = scaled(
                     chord.duration, by: tupletFractions()
                 )
+                if !pendingGracesBefore.isEmpty {
+                    chord.graceNotesBefore = pendingGracesBefore
+                    pendingGracesBefore.removeAll(keepingCapacity: true)
+                }
                 elements.append(.chord(chord))
             case "Rest":
                 var rest = try MSCXRestDecoder.decode(child)
@@ -110,6 +148,8 @@ extension Voice {
                 continue
             }
         }
+        // Stranded `pendingGracesBefore` (no following chord in this
+        // voice) intentionally dropped — see comment on the buffer.
         return Voice(elements: elements, tuplets: tuplets)
     }
 

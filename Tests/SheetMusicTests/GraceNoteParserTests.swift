@@ -115,3 +115,75 @@ struct ChordGraceDetectionTests {
         #expect(Chord.graceType(in: node) == nil)
     }
 }
+
+@Suite("Voice grace attachment")
+struct VoiceGraceAttachmentTests {
+    private func voiceXML(_ inner: String) throws -> Voice {
+        let xml = "<voice>\(inner)</voice>"
+        let node = try XMLTreeParser.parse(Data(xml.utf8))
+        return try Voice.decode(node)
+    }
+
+    private func chordXML(
+        _ tag: String? = nil, dur: String, pitch: Int, tpc: Int
+    ) -> String {
+        let g = tag.map { "<\($0)/>" } ?? ""
+        return """
+        <Chord>\(g)<durationType>\(dur)</durationType>\
+        <Note><pitch>\(pitch)</pitch><tpc>\(tpc)</tpc></Note></Chord>
+        """
+    }
+
+    @Test("acciaccatura before main chord attaches as graceNotesBefore")
+    func beforeAttaches() throws {
+        let v = try voiceXML(
+            chordXML("acciaccatura", dur: "eighth", pitch: 62, tpc: 16)
+                + chordXML(dur: "quarter", pitch: 60, tpc: 14)
+        )
+        #expect(v.elements.count == 1)
+        guard case let .chord(c) = v.elements[0] else {
+            Issue.record("expected single .chord"); return
+        }
+        #expect(c.graceNotesBefore.count == 1)
+        #expect(c.graceNotesBefore[0].graceType == .acciaccatura)
+        #expect(c.graceNotesBefore[0].notes.first?.pitch == 62)
+        #expect(c.graceNotesAfter.isEmpty)
+    }
+
+    @Test("Multiple before-graces preserve mscx order")
+    func beforeOrder() throws {
+        let v = try voiceXML(
+            chordXML("grace16", dur: "16th", pitch: 64, tpc: 18)
+                + chordXML("grace16", dur: "16th", pitch: 65, tpc: 13)
+                + chordXML(dur: "quarter", pitch: 60, tpc: 14)
+        )
+        guard case let .chord(c) = v.elements.first else {
+            Issue.record("no chord"); return
+        }
+        #expect(c.graceNotesBefore.map { $0.notes.first?.pitch } == [64, 65])
+    }
+
+    @Test("grace8after attaches to preceding chord")
+    func afterAttaches() throws {
+        let v = try voiceXML(
+            chordXML(dur: "quarter", pitch: 60, tpc: 14)
+                + chordXML("grace8after", dur: "eighth", pitch: 62, tpc: 16)
+        )
+        #expect(v.elements.count == 1)
+        guard case let .chord(c) = v.elements[0] else { return }
+        #expect(c.graceNotesAfter.count == 1)
+        #expect(c.graceNotesAfter[0].graceType == .grace8after)
+    }
+
+    @Test("Stranded before-graces (no following main chord) are dropped")
+    func stranded() throws {
+        let v = try voiceXML(chordXML("acciaccatura", dur: "eighth", pitch: 62, tpc: 16))
+        #expect(v.elements.isEmpty)
+    }
+
+    @Test("Stranded after-grace (no preceding chord) is dropped")
+    func strandedAfter() throws {
+        let v = try voiceXML(chordXML("grace8after", dur: "eighth", pitch: 62, tpc: 16))
+        #expect(v.elements.isEmpty)
+    }
+}
