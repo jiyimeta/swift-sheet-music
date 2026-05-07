@@ -40,6 +40,11 @@ enum SMuFLGlyph {
 
     // Flags
     static let flag8thUp: Character = "\u{E240}"
+    // Grace-note slash glyphs (SMuFL `graceNoteSlash`)
+    // Used for `acciaccatura` indication: one diagonal slash
+    // through the stem. Up = U+E564, Down = U+E565.
+    static let graceNoteSlashStemUp: Character = "\u{E564}"
+    static let graceNoteSlashStemDown: Character = "\u{E565}"
     static let flag8thDown: Character = "\u{E241}"
     static let flag16thUp: Character = "\u{E242}"
     static let flag16thDown: Character = "\u{E243}"

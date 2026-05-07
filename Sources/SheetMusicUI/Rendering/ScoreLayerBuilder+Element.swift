@@ -323,7 +323,16 @@ extension ScoreLayerBuilder {
                 from: shift(from), to: shift(to),
                 metrics: metrics, height: height, into: parent
             )
-        case .note, .graceChord:
+        case let .graceChord(
+            notes, dur, stem, so, _, slash, mag, _
+        ):
+            drawGraceChord(
+                notes: notes, duration: dur, stem: stem,
+                stemOrigin: so, hasSlash: slash, mag: mag,
+                base: base, metrics: metrics, height: height,
+                context: &context, into: parent
+            )
+        case .note:
             break
         }
     }
