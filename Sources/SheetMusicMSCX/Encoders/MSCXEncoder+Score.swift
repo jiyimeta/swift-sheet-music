@@ -9,6 +9,7 @@ extension Score {
         scoreChildren.append(XMLTreeNode(
             name: "Division", text: String(division)
         ))
+        scoreChildren.append(style.encode())
         // metaTags are emitted in sorted key order for stable output.
         for key in metaTags.keys.sorted() {
             scoreChildren.append(XMLTreeNode(
