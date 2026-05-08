@@ -92,6 +92,18 @@ public enum LayoutElement: Sendable, Equatable {
     /// just walk the runs.
     case harmony(LayoutHarmony)
     case fermata(subtype: String, origin: CGPoint)
+    /// Per-chord articulation glyph (staccato dot / staccatissimo wedge /
+    /// tenuto bar). Emitted from `placeMeasureElements` for each
+    /// `ChordArticulation` whose `kind` is in scope; round-trip-only
+    /// `.unknown(...)` entries are filtered out before reaching layout.
+    /// `origin` is the SMuFL glyph anchor in measure-local coords;
+    /// `isAbove` selects the above-vs-below glyph variant and is also
+    /// used by the YBounds pass.
+    case articulation(
+        kind: ArticulationKind,
+        origin: CGPoint,
+        isAbove: Bool
+    )
     case marker(kind: Marker.Kind, text: String, origin: CGPoint)
     /// Rehearsal letter / number drawn above the top staff at the
     /// start of its containing measure. `frame` controls whether
@@ -175,6 +187,16 @@ public enum LayoutElement: Sendable, Equatable {
         isAbove: Bool,
         tupletID: TupletID?
     )
+
+    /// Layout-local subset of `ChordArticulation.Kind` containing only
+    /// the renderable cases. The emitter filters `.unknown(...)` out
+    /// before producing a `LayoutElement`, so the renderer's switch
+    /// stays exhaustive without a `default` clause.
+    public enum ArticulationKind: Sendable, Equatable {
+        case staccato
+        case staccatissimo
+        case tenuto
+    }
 
     public enum TextMarkKind: Sendable, Equatable {
         case dynamic
