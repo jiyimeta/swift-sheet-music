@@ -10,6 +10,7 @@ extension Score {
             name: "Division", text: String(division)
         ))
         scoreChildren.append(style.encode(options: options))
+        scoreChildren.append(contentsOf: Self.showFlags(options: options))
         // metaTags are emitted in sorted key order for stable output.
         for key in metaTags.keys.sorted() {
             scoreChildren.append(XMLTreeNode(
@@ -84,6 +85,18 @@ extension Score {
                 attributes: ["id": "0", "tag": "default"]
             ),
             XMLTreeNode(name: "currentLayer", text: "0"),
+        ]
+    }
+
+    /// `<show*>` visibility flags MuseScore 3 emits after `<Style>`.
+    /// Empty for v4.
+    private static func showFlags(options: MSCXEncoderOptions) -> [XMLTreeNode] {
+        guard options.targetVersion == .v3 else { return [] }
+        return [
+            XMLTreeNode(name: "showInvisible", text: "1"),
+            XMLTreeNode(name: "showUnprintable", text: "1"),
+            XMLTreeNode(name: "showFrames", text: "1"),
+            XMLTreeNode(name: "showMargins", text: "0"),
         ]
     }
 }

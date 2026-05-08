@@ -113,4 +113,20 @@ struct MSCXEncoderMS3Tests {
         #expect(!names.contains("LayerTag"))
         #expect(!names.contains("currentLayer"))
     }
+
+    @Test("v3 emits show* flags after Style")
+    func v3EmitsShowFlagsAfterStyle() throws {
+        let score = try MSCXParser.parse(MSCXFixtureLoader.mscxData("midi01"))
+        let bytes = try MSCXEncoder.encode(score, options: .init(targetVersion: .v3))
+        let root = try XMLTreeParser.parse(bytes)
+        let scoreElement = try #require(root.first("Score"))
+        let names = scoreElement.children.map(\.name)
+        let styleIndex = try #require(names.firstIndex(of: "Style"))
+        #expect(Array(names[(styleIndex + 1) ... (styleIndex + 4)])
+            == ["showInvisible", "showUnprintable", "showFrames", "showMargins"])
+        #expect(scoreElement.first("showInvisible")?.text == "1")
+        #expect(scoreElement.first("showUnprintable")?.text == "1")
+        #expect(scoreElement.first("showFrames")?.text == "1")
+        #expect(scoreElement.first("showMargins")?.text == "0")
+    }
 }
