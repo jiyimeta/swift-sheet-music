@@ -192,6 +192,9 @@ enum ScoreSemanticComparison {
         // the MusicXML decoder doesn't translate them. Reset to defaults
         // on both sides so the comparison reflects the music itself.
         s.style = .museScoreDefaults
+        // `source` is loader-set; MusicXML and MSCX inputs naturally
+        // disagree. Clear it so the comparison reflects the notation.
+        s.source = .unknown
         if options.ignoreEmptyMetaTags {
             s.metaTags = s.metaTags.filter { !$0.value.isEmpty }
         }

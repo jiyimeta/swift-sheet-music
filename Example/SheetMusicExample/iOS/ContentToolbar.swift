@@ -62,6 +62,10 @@
 
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
+                    Section("Source: \(score?.source.displayName ?? "No Score")") {
+                        EmptyView()
+                    }
+
                     Button {
                         isMixerPresented = true
                     } label: {

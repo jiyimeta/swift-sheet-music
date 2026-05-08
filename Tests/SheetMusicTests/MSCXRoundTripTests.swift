@@ -14,7 +14,7 @@ struct MSCXRoundTripTests {
         let encoded = try MSCXEncoder.encode(original)
         let roundTripped = try MSCXParser.parse(encoded)
 
-        #expect(roundTripped == original)
+        #expect(roundTripped.withSource(.unknown) == original.withSource(.unknown))
     }
 
     @Test("midi01 round-trips through MSCZWriter.write(score:) → MSCZReader")
@@ -25,7 +25,7 @@ struct MSCXRoundTripTests {
         let mscz = try MSCZWriter.write(score: original)
         let roundTripped = try MSCZReader.parse(mscz)
 
-        #expect(roundTripped == original)
+        #expect(roundTripped.withSource(.unknown) == original.withSource(.unknown))
     }
 
     @Test("SheetMusic.exportMSCX writes a parseable file")
@@ -39,7 +39,7 @@ struct MSCXRoundTripTests {
         defer { try? FileManager.default.removeItem(at: tmp) }
 
         let roundTripped = try SheetMusic.loadScore(mscxURL: tmp)
-        #expect(roundTripped == original)
+        #expect(roundTripped.withSource(.unknown) == original.withSource(.unknown))
     }
 
     @Test("SheetMusic.exportMSCZ writes a parseable archive")
@@ -53,7 +53,7 @@ struct MSCXRoundTripTests {
         defer { try? FileManager.default.removeItem(at: tmp) }
 
         let roundTripped = try SheetMusic.loadScore(msczURL: tmp)
-        #expect(roundTripped == original)
+        #expect(roundTripped.withSource(.unknown) == original.withSource(.unknown))
     }
 
     @Test("testRepeatsWithKeySigs.mscx round-trips through MSCXEncoder")
@@ -64,7 +64,7 @@ struct MSCXRoundTripTests {
         let encoded = try MSCXEncoder.encode(original)
         let roundTripped = try MSCXParser.parse(encoded)
 
-        #expect(roundTripped == original)
+        #expect(roundTripped.withSource(.unknown) == original.withSource(.unknown))
     }
 
     @Test("testVoltaTemp.mscx Volta spanners survive a parse → encode → parse")
@@ -97,5 +97,16 @@ struct MSCXRoundTripTests {
                 }
             }
         }
+    }
+}
+
+extension Score {
+    /// Returns a copy with `source` overridden — used in round-trip
+    /// equality checks since `source` is loader-set metadata (which
+    /// version of the file format we read), not score content.
+    fileprivate func withSource(_ source: ScoreSource) -> Score {
+        var copy = self
+        copy.source = source
+        return copy
     }
 }

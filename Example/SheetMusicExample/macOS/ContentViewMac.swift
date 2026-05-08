@@ -193,6 +193,15 @@
             .onAppear(perform: installKeyMonitor)
             .onDisappear(perform: removeKeyMonitor)
             .toolbar {
+                ToolbarItem(placement: .navigation) {
+                    Label(
+                        score?.source.displayName ?? "No Score",
+                        systemImage: "doc.badge.gearshape"
+                    )
+                    .labelStyle(.titleAndIcon)
+                    .foregroundStyle(.secondary)
+                    .help("Format the current score was loaded from.")
+                }
                 ToolbarItem(placement: .primaryAction) {
                     Button {
                         inputController?.isInputModeOn.toggle()

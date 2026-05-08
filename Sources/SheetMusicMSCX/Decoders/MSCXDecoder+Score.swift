@@ -52,9 +52,32 @@ extension Score {
         } else {
             style = .museScoreDefaults
         }
+        let version = detectVersion(root: root, scoreNode: scoreNode)
         return Score(
             division: division, parts: parts,
-            metaTags: metaTags, titleFrame: titleFrame, style: style
+            metaTags: metaTags, titleFrame: titleFrame, style: style,
+            source: .museScore(version)
         )
+    }
+
+    /// Detect MuseScore wire-format major version from the
+    /// `<museScore version="…">` attribute. Falls back to `<programVersion>`
+    /// (used by 3.x exports) and finally defaults to `.v4` when no
+    /// recognisable marker is present.
+    private static func detectVersion(
+        root: XMLTreeNode, scoreNode: XMLTreeNode
+    ) -> MSCXVersion {
+        if let versionAttr = root.attributes["version"],
+           let major = versionAttr.split(separator: ".").first,
+           let majorInt = Int(major)
+        {
+            return majorInt <= 3 ? .v3 : .v4
+        }
+        if let programVersion = scoreNode.first("programVersion")?.text,
+           programVersion.hasPrefix("3.")
+        {
+            return .v3
+        }
+        return .v4
     }
 }
