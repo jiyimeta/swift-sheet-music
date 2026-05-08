@@ -150,17 +150,22 @@ struct MSCXEncoderSpannersTests {
 
     @Test("Voice-level HairPin / Pedal / Ottava / TextLine begin round-trip")
     func miscVoiceSpannerKindsRoundTrip() throws {
-        let kinds: [(Spanner.Kind, String)] = [
-            (.hairpin, "HairPin"),
-            (.pedal, "Pedal"),
-            (.ottava, "Ottava"),
-            (.textLine, "TextLine"),
+        // For .hairpin: a bare `<HairPin/>` payload re-decodes to a
+        // defaulted HairpinPayload (subtype: .crescendo, …) — the
+        // MSCX wire format always carries the payload child, so the
+        // begin-side input must do the same to round-trip.
+        let kinds: [(Spanner.Kind, String, Spanner.HairpinPayload?)] = [
+            (.hairpin, "HairPin", .init(subtype: .crescendo)),
+            (.pedal, "Pedal", nil),
+            (.ottava, "Ottava", nil),
+            (.textLine, "TextLine", nil),
         ]
-        for (kind, raw) in kinds {
+        for (kind, raw, hairpin) in kinds {
             let begin = Spanner(
                 kind: kind, rawType: raw,
                 nextMeasuresOffset: 2,
-                visible: true
+                visible: true,
+                hairpin: hairpin
             )
             let voice = Voice(elements: [.spanner(begin)])
             let decoded = try voiceRoundTrip(voice)
