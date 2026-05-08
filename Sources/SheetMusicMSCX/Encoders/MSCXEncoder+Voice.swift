@@ -78,7 +78,9 @@ extension Voice {
             return tempo.encode()
         case let .dynamic(dynamic):
             return dynamic.encode()
-        case .barLine, .spanner,
+        case let .barLine(barLine):
+            return barLine.encode()
+        case .spanner,
              .measureRepeat, .fermata, .staffText, .harmony,
              .rehearsalMark, .locationShift:
             throw SheetMusicError.malformedScore(

@@ -28,6 +28,18 @@ struct MSCXEncoderTextElementsTests {
         #expect(decoded == voice)
     }
 
+    @Test("BarLine round-trips with and without subtype")
+    func barLineRoundTrip() throws {
+        for subtype in [nil, "end", "double", "start-repeat"] as [String?] {
+            let voice = Voice(elements: [
+                .chord(Chord(duration: .quarter, notes: ChordNotes([Note(pitch: 60, tpc: 14)]))),
+                .barLine(BarLine(subtype: subtype)),
+            ])
+            let decoded = try voiceRoundTrip(voice)
+            #expect(decoded == voice, "BarLine subtype=\(subtype ?? "nil") failed")
+        }
+    }
+
     @Test("Dynamic round-trips subtype + velocity + TextProperties")
     func dynamicRoundTrip() throws {
         let dynamic = Dynamic(
