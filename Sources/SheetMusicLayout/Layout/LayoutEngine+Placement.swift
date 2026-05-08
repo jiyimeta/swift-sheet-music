@@ -184,7 +184,18 @@ extension LayoutEngine {
             }
 
             // Forced stem direction for multi-voice measures.
-            let forcedStem: StemDirection? = isMultiVoice
+            //
+            // Drum staves additionally force the same voice-based rule
+            // even when only one voice has chords: in MuseScore's
+            // Drumset, every pitch carries a fixed `<voice>` (0/1) and
+            // `<stem>` (up/down) that the input UI assigns at note
+            // entry, so a properly authored drum measure has voice 0
+            // chords intended for stem-up and voice 1 for stem-down
+            // regardless of whether the other voice is currently
+            // populated. The pitched-staff median rule would otherwise
+            // flip stems on top-half drum lines (e.g. snare, mid toms).
+            let isDrumStaff = drumLineMap != nil
+            let forcedStem: StemDirection? = (isMultiVoice || isDrumStaff)
                 ? (voiceIdx.isMultiple(of: 2) ? .up : .down)
                 : nil
             // Rest y offset when multiple voices coexist — even if the
