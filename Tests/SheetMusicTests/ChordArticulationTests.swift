@@ -23,4 +23,22 @@ import Testing
                 != ChordArticulation(kind: .staccatissimo)
         )
     }
+
+    @Test func chordStoresArticulations() {
+        let chord = Chord(
+            duration: .quarter,
+            notes: ChordNotes([Note(pitch: 60, tpc: 14)]),
+            articulations: [ChordArticulation(kind: .staccato, anchor: .above)]
+        )
+        #expect(chord.articulations.count == 1)
+        #expect(chord.articulations[0].kind == .staccato)
+    }
+
+    @Test func chordDefaultsToEmptyArticulations() {
+        let chord = Chord(
+            duration: .quarter,
+            notes: ChordNotes([Note(pitch: 60, tpc: 14)])
+        )
+        #expect(chord.articulations.isEmpty)
+    }
 }
