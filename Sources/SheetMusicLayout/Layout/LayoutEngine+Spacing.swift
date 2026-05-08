@@ -489,7 +489,7 @@ extension LayoutEngine {
                     // Empty chord = rest.
                     w += durationWidth(r.duration, metrics: metrics)
                 case .dynamic, .tempo, .fermata,
-                     .measureRepeat, .spanner, .staffText,
+                     .measureRepeat, .spanner, .staffText, .swing,
                      .rehearsalMark, .locationShift, .harmony:
                     break
                 }

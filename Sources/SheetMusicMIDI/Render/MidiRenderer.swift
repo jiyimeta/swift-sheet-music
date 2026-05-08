@@ -17,6 +17,9 @@ public enum MidiRenderer {
         var tracks: [MidiTrack] = []
         let channelAssignments = assignChannels(score: score)
         var trackIndex = 0
+        let initialSwing = SwingState(
+            style: score.style, division: score.division
+        )
         for (partIndex, part) in score.parts.enumerated() {
             let channels = channelAssignments[partIndex]
             let primaryChannel = channels.first?.channel ?? partIndex
@@ -30,7 +33,8 @@ public enum MidiRenderer {
                     port: port,
                     isFirstTrack: trackIndex == 0,
                     isTopOfPart: s == 0,
-                    division: score.division
+                    division: score.division,
+                    initialSwing: initialSwing
                 )
                 tracks.append(track)
                 trackIndex += 1
@@ -53,7 +57,8 @@ public enum MidiRenderer {
         port: Int,
         isFirstTrack: Bool,
         isTopOfPart: Bool,
-        division: Int
+        division: Int,
+        initialSwing: SwingState
     ) -> MidiTrack {
         var events: [TimedMidiEvent] = headerEvents(
             staff: staff,
@@ -72,7 +77,8 @@ public enum MidiRenderer {
                 staff: staff,
                 part: part,
                 channel: primaryChannel,
-                division: division
+                division: division,
+                initialSwing: initialSwing
             )
             voiceEventBuckets.append(voiceEvents)
         }

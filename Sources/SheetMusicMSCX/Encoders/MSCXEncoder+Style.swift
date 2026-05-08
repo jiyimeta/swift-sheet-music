@@ -44,6 +44,10 @@ extension ScoreStyle {
                 defaults: defaults.pageChrome.pageNumber,
                 into: &children
             )
+            appendSwing(
+                unit: swingUnit, ratio: swingRatio,
+                defaults: defaults, into: &children
+            )
             return XMLTreeNode(name: "Style", children: children)
         }
     }
@@ -111,6 +115,20 @@ private func appendFooter(
     emitIfNotDefault("footerFontFace", footer.fontFace, default: d.fontFace, text, into: &children)
     emitIfNotDefault("footerFontSize", footer.fontSize, default: d.fontSize, double, into: &children)
     emitIfNotDefault("footerFontStyle", footer.fontStyle.rawValue, default: d.fontStyle.rawValue, int, into: &children)
+}
+
+private func appendSwing(
+    unit: SwingUnit,
+    ratio: Int,
+    defaults: ScoreStyle,
+    into children: inout [XMLTreeNode]
+) {
+    if unit != defaults.swingUnit {
+        children.append(XMLTreeNode(name: "swingUnit", text: unit.mscxString))
+    }
+    if ratio != defaults.swingRatio {
+        children.append(XMLTreeNode(name: "swingRatio", text: String(ratio)))
+    }
 }
 
 private func appendPageNumber(

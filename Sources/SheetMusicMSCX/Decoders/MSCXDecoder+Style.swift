@@ -18,7 +18,24 @@ extension ScoreStyle {
         decodePageLayout(node, into: &s.pageLayout)
         decodeSpatium(node, into: &s.spatium)
         decodeChrome(node, into: &s.pageChrome)
+        decodeSwing(node, into: &s)
         return s
+    }
+}
+
+/// Parse `<swingUnit>` (DurationType string: "eighth"/"16th"/"") and
+/// `<swingRatio>` (int). Mirrors `Staff::swing()` which reads the
+/// same fields off the global style block.
+private func decodeSwing(
+    _ node: XMLTreeNode, into s: inout ScoreStyle
+) {
+    if let raw = node.first("swingUnit")?.text,
+       let unit = SwingUnit(mscxString: raw)
+    {
+        s.swingUnit = unit
+    }
+    if let raw = node.first("swingRatio")?.text, let v = Int(raw) {
+        s.swingRatio = v
     }
 }
 
