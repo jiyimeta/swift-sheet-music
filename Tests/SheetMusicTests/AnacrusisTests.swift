@@ -85,4 +85,28 @@ import Testing
         #expect(measures[1].actualLength == nil)
         #expect(measures[1].irregular == false)
     }
+
+    @Test func mscxRoundTripsAnacrusisFields() throws {
+        let pickup = Measure(
+            voices: [Voice(elements: [])],
+            actualLength: Fraction(numerator: 1, denominator: 4),
+            irregular: true
+        )
+        let normal = Measure(voices: [Voice(elements: [])])
+        let staff = Staff(measures: [pickup, normal])
+        let part = Part(
+            id: "1",
+            instrument: Instrument(id: "x", longName: "Piano"),
+            staves: [staff]
+        )
+        let score = Score(division: 480, parts: [part])
+
+        let data = try MSCXEncoder.encode(score)
+        let decoded = try MSCXParser.parse(data)
+        let roundTripped = decoded.parts[0].staves[0].measures
+        #expect(roundTripped[0].actualLength == Fraction(numerator: 1, denominator: 4))
+        #expect(roundTripped[0].irregular == true)
+        #expect(roundTripped[1].actualLength == nil)
+        #expect(roundTripped[1].irregular == false)
+    }
 }
