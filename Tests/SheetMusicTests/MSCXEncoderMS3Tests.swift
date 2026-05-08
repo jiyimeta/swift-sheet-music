@@ -88,4 +88,29 @@ struct MSCXEncoderMS3Tests {
         let names = root.children.map(\.name)
         #expect(names == ["Score"])
     }
+
+    @Test("v3 emits LayerTag and currentLayer before Division")
+    func v3EmitsLayerTagBeforeDivision() throws {
+        let score = try MSCXParser.parse(MSCXFixtureLoader.mscxData("midi01"))
+        let bytes = try MSCXEncoder.encode(score, options: .init(targetVersion: .v3))
+        let root = try XMLTreeParser.parse(bytes)
+        let scoreElement = try #require(root.first("Score"))
+        let firstThree = scoreElement.children.prefix(3).map(\.name)
+        #expect(firstThree == ["LayerTag", "currentLayer", "Division"])
+        let layerTag = try #require(scoreElement.first("LayerTag"))
+        #expect(layerTag.attributes["id"] == "0")
+        #expect(layerTag.attributes["tag"] == "default")
+        #expect(scoreElement.first("currentLayer")?.text == "0")
+    }
+
+    @Test("v4 has no LayerTag or currentLayer")
+    func v4OmitsLayerTag() throws {
+        let score = try MSCXParser.parse(MSCXFixtureLoader.mscxData("midi01"))
+        let bytes = try MSCXEncoder.encode(score, options: .init(targetVersion: .v4))
+        let root = try XMLTreeParser.parse(bytes)
+        let scoreElement = try #require(root.first("Score"))
+        let names = scoreElement.children.map(\.name)
+        #expect(!names.contains("LayerTag"))
+        #expect(!names.contains("currentLayer"))
+    }
 }

@@ -5,7 +5,7 @@ import SheetMusicXMLTools
 extension Score {
     /// Build the `<museScore><Score>…</Score></museScore>` root.
     func encode(options: MSCXEncoderOptions = .init()) throws -> XMLTreeNode {
-        var scoreChildren: [XMLTreeNode] = []
+        var scoreChildren: [XMLTreeNode] = Self.layerHeader(options: options)
         scoreChildren.append(XMLTreeNode(
             name: "Division", text: String(division)
         ))
@@ -72,5 +72,18 @@ extension Score {
             attributes: ["version": museScoreVersion],
             children: rootChildren
         )
+    }
+
+    /// Leading `<LayerTag>` / `<currentLayer>` pair MuseScore 3 expects
+    /// before `<Division>`. Empty for v4.
+    private static func layerHeader(options: MSCXEncoderOptions) -> [XMLTreeNode] {
+        guard options.targetVersion == .v3 else { return [] }
+        return [
+            XMLTreeNode(
+                name: "LayerTag",
+                attributes: ["id": "0", "tag": "default"]
+            ),
+            XMLTreeNode(name: "currentLayer", text: "0"),
+        ]
     }
 }
