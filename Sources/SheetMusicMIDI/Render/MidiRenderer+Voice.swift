@@ -310,4 +310,37 @@ extension MidiRenderer {
         }
         return defaultArticulationGateTime(for: instrument)
     }
+
+    /// Per-chord velocity-scale lookup. Filters `chord.articulations`
+    /// to the in-scope velocity-shaping kinds (accent / marcato /
+    /// accentStaccato / marcatoStaccato), looks each up in the
+    /// instrument preset table, and returns the **maximum** velocity %
+    /// among the candidates (matches MuseScore's
+    /// `MidiArticulation::aggregateOf` — loudest wins). When no
+    /// in-scope articulation is present, falls through to
+    /// `defaultArticulationVelocityScale(for:)` so existing behaviour
+    /// is preserved. C++:
+    ///   engraving/compat/midi/compatmidirender.cpp
+    ///   `CompatMidiRender::collectMeasureEvents` — articulation velocity.
+    static func effectiveVelocityScale(for chord: Chord, instrument: Instrument) -> Int {
+        let scales = chord.articulations.compactMap { art -> Int? in
+            let presetName: String
+            let hardcodedDefault: Int
+            switch art.kind {
+            case .accent, .accentStaccato:
+                presetName = "accent"; hardcodedDefault = 120
+            case .marcato, .marcatoStaccato:
+                presetName = "marcato"; hardcodedDefault = 120
+            case .staccato, .staccatissimo, .tenuto, .unknown:
+                return nil
+            }
+            return instrument.articulations
+                .first(where: { $0.name == presetName })?
+                .velocity ?? hardcodedDefault
+        }
+        if let maximum = scales.max() {
+            return maximum
+        }
+        return defaultArticulationVelocityScale(for: instrument)
+    }
 }
