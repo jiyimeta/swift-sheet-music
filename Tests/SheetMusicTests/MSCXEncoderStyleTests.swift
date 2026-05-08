@@ -36,7 +36,11 @@ struct MSCXEncoderStyleTests {
             enabled: true,
             showOnFirstPage: true,
             oddEvenDifferent: false,
-            even: TextRow(left: "", center: "", right: ""),
+            // even is dead state when oddEvenDifferent == false.
+            // The encoder elides even-side fields in that mode, so
+            // the decoder rehydrates them from the default — assert
+            // only the live fields here.
+            even: style.pageChrome.header.even,
             odd: TextRow(left: "L", center: "C", right: "R"),
             fontFace: "Helvetica",
             fontSize: 10,
