@@ -26,4 +26,30 @@ struct MSCXEncoderMS3Tests {
         let opts = MSCXEncoderOptions(targetVersion: .v3)
         #expect(opts.targetVersion == .v3)
     }
+
+    @Test("MSCXEncoder.encode(_:options:) v4 default matches zero-arg")
+    func encodeOptionsV4DefaultMatchesLegacy() throws {
+        let score = try MSCXParser.parse(MSCXFixtureLoader.mscxData("midi01"))
+        let legacy = try MSCXEncoder.encode(score)
+        let options = try MSCXEncoder.encode(score, options: .init())
+        #expect(legacy == options)
+    }
+
+    @Test("MSCZWriter.write(score:options:) round-trips score")
+    func msczWriteOptionsRoundTrips() throws {
+        let score = try MSCXParser.parse(MSCXFixtureLoader.mscxData("midi01"))
+        let bytes = try MSCZWriter.write(score: score, options: .init())
+        let reparsed = try MSCZReader.parse(bytes)
+        #expect(reparsed.parts.count == score.parts.count)
+    }
+
+    @Test("SheetMusic.exportMSCZ accepts options")
+    func sheetMusicExportMSCZAcceptsOptions() throws {
+        let score = try MSCXParser.parse(MSCXFixtureLoader.mscxData("midi01"))
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(
+            "ms3-export-\(UUID().uuidString).mscz")
+        defer { try? FileManager.default.removeItem(at: url) }
+        try SheetMusic.exportMSCZ(score, options: .init(targetVersion: .v3), to: url)
+        #expect(FileManager.default.fileExists(atPath: url.path))
+    }
 }

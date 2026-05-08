@@ -61,6 +61,22 @@ public enum SheetMusic {
         try MSCZWriter.write(score: score, to: url)
     }
 
+    /// Serialize a `Score` to `.mscx` with the given options and
+    /// write the result to a file URL.
+    public static func exportMSCX(
+        _ score: Score, options: MSCXEncoderOptions, to url: URL
+    ) throws {
+        try MSCXEncoder.encode(score, options: options, to: url)
+    }
+
+    /// Serialize a `Score` to `.mscz` with the given options and
+    /// write the result to a file URL.
+    public static func exportMSCZ(
+        _ score: Score, options: MSCXEncoderOptions, to url: URL
+    ) throws {
+        try MSCZWriter.write(score: score, options: options, to: url)
+    }
+
     /// Render a `Score` to SMF (Standard MIDI File) bytes.
     public static func exportMIDI(score: Score) throws -> Data {
         let midiFile = try MidiRenderer.render(score: score)
