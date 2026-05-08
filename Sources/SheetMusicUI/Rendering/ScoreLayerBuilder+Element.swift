@@ -139,6 +139,12 @@ extension ScoreLayerBuilder {
                 subtype: subtype, origin: shift(p),
                 metrics: metrics, height: height, into: parent
             )
+        case let .articulation(kind, p, isAbove):
+            drawArticulation(
+                kind: kind, isAbove: isAbove,
+                origin: shift(p),
+                metrics: metrics, height: height, into: parent
+            )
         case let .measureRepeat(c, p):
             drawMeasureRepeat(
                 count: c, origin: shift(p),
