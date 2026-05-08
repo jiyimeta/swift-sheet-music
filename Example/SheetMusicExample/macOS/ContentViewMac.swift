@@ -172,7 +172,8 @@
                     onLoadHarmonyBasic: loadHarmonyBasic,
                     onOpenFile: showOpenPanel,
                     onTogglePlayback: togglePlayback,
-                    onExportPDF: exportPDF
+                    onExportPDF: exportPDF,
+                    onExportMSCX: exportMSCX
                 )
             } detail: {
                 if let score {
@@ -281,6 +282,25 @@
                 NSWorkspace.shared.activateFileViewerSelecting([url])
             } catch {
                 errorMessage = "PDF export failed: \(error.localizedDescription)"
+            }
+        }
+
+        private func exportMSCX() {
+            guard let score else { return }
+            let panel = NSSavePanel()
+            if let mscx = UTType(filenameExtension: "mscx") {
+                panel.allowedContentTypes = [mscx]
+            }
+            panel.nameFieldStringValue = (sourceName as NSString)
+                .deletingPathExtension + ".mscx"
+            panel.canCreateDirectories = true
+            panel.title = "Save Score as MSCX"
+            guard panel.runModal() == .OK, let url = panel.url else { return }
+            do {
+                try SheetMusic.exportMSCX(score, to: url)
+                NSWorkspace.shared.activateFileViewerSelecting([url])
+            } catch {
+                errorMessage = "MSCX export failed: \(error.localizedDescription)"
             }
         }
 

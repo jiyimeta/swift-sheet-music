@@ -1,4 +1,5 @@
 #if os(macOS)
+    import AppKit
     import SheetMusic
     import SheetMusicAudio
     import SwiftUI
@@ -24,6 +25,7 @@
         let onOpenFile: () -> Void
         let onTogglePlayback: () -> Void
         let onExportPDF: () -> Void
+        let onExportMSCX: () -> Void
 
         var body: some View {
             List {
@@ -69,6 +71,8 @@
                 }
                 Section("Export") {
                     Button("Save as PDF…", action: onExportPDF)
+                        .disabled(score == nil)
+                    Button("Save as MSCX…", action: onExportMSCX)
                         .disabled(score == nil)
                 }
                 if !playbackEngine.mixerChannels.isEmpty {
@@ -130,9 +134,21 @@
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                     if let message = errorMessage {
-                        Text(message)
-                            .font(.footnote)
-                            .foregroundStyle(.red)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(message)
+                                .font(.footnote)
+                                .foregroundStyle(.red)
+                                .textSelection(.enabled)
+                            Button {
+                                let pb = NSPasteboard.general
+                                pb.clearContents()
+                                pb.setString(message, forType: .string)
+                            } label: {
+                                Label("Copy", systemImage: "doc.on.doc")
+                                    .font(.caption)
+                            }
+                            .buttonStyle(.borderless)
+                        }
                     }
                 }
             }
