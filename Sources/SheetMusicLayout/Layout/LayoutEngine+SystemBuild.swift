@@ -81,6 +81,7 @@ extension LayoutEngine {
             let width: CGFloat
             var perStaffElements: [Int: [LayoutElement]]
             let staff0Measure: Measure?
+            let tickCols: [Int: CGFloat]
         }
         var untranslated: [UntranslatedMeasure] = []
         var clefs = activeClefs
@@ -203,7 +204,8 @@ extension LayoutEngine {
                 measureIdx: measureIdx,
                 width: w,
                 perStaffElements: perStaff,
-                staff0Measure: staff0Measure
+                staff0Measure: staff0Measure,
+                tickCols: tickCols
             ))
         }
 
@@ -569,7 +571,8 @@ extension LayoutEngine {
                 markers: markers,
                 jumps: jumps,
                 lineBreak: sourceMeasure?.lineBreak ?? false,
-                pageBreak: sourceMeasure?.pageBreak ?? false
+                pageBreak: sourceMeasure?.pageBreak ?? false,
+                tickColumns: um.tickCols
             ))
             xCursor += w
         }

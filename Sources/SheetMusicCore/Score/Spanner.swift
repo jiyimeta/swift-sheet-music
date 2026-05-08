@@ -30,6 +30,10 @@ public struct Spanner: Sendable, Equatable {
     /// space). Playback / MIDI continue to honour the spanner.
     public var visible: Bool
     public var hairpin: HairpinPayload?
+    /// MuseScore `<Ottava><subtype>8va</subtype></Ottava>` payload.
+    /// Meaningful only when `kind == .ottava`. Drives MIDI pitch
+    /// transposition during playback.
+    public var ottava: OttavaPayload?
 
     public init(
         kind: Kind,
@@ -38,7 +42,8 @@ public struct Spanner: Sendable, Equatable {
         nextFractionsOffset: Fraction? = nil,
         voltaEndings: [Int] = [],
         visible: Bool = true,
-        hairpin: HairpinPayload? = nil
+        hairpin: HairpinPayload? = nil,
+        ottava: OttavaPayload? = nil
     ) {
         self.kind = kind
         self.rawType = rawType
@@ -47,6 +52,7 @@ public struct Spanner: Sendable, Equatable {
         self.voltaEndings = voltaEndings
         self.visible = visible
         self.hairpin = hairpin
+        self.ottava = ottava
     }
 
     /// MuseScore `<HairPin>` payload needed for MIDI playback.
@@ -83,6 +89,68 @@ public struct Spanner: Sendable, Equatable {
             self.subtype = subtype
             self.veloChange = veloChange
             self.veloChangeMethod = veloChangeMethod
+        }
+    }
+
+    /// MuseScore `<Ottava>` payload. The subtype string drives the
+    /// pitch shift applied during MIDI playback.
+    /// C++: `mu::engraving::Ottava`.
+    public struct OttavaPayload: Sendable, Equatable {
+        /// One of MuseScore's documented ottava subtypes. Unknown
+        /// subtypes round-trip via `.other(rawValue)` and fall back
+        /// to the `8va` shift (+12) for playback.
+        public enum Subtype: Sendable, Equatable {
+            case eightVA // 8va — up one octave
+            case eightVB // 8vb — down one octave
+            case fifteenMA // 15ma — up two octaves
+            case fifteenMB // 15mb — down two octaves
+            case twentyTwoMA // 22ma — up three octaves
+            case twentyTwoMB // 22mb — down three octaves
+            case other(String)
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "8va": self = .eightVA
+                case "8vb": self = .eightVB
+                case "15ma": self = .fifteenMA
+                case "15mb": self = .fifteenMB
+                case "22ma": self = .twentyTwoMA
+                case "22mb": self = .twentyTwoMB
+                default: self = .other(rawValue)
+                }
+            }
+
+            /// Pitch shift in semitones for MIDI playback. Unknown
+            /// subtypes fall back to `8va` (+12).
+            public var semitones: Int {
+                switch self {
+                case .eightVA: 12
+                case .eightVB: -12
+                case .fifteenMA: 24
+                case .fifteenMB: -24
+                case .twentyTwoMA: 36
+                case .twentyTwoMB: -36
+                case .other: 12
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .eightVA: return "8va"
+                case .eightVB: return "8vb"
+                case .fifteenMA: return "15ma"
+                case .fifteenMB: return "15mb"
+                case .twentyTwoMA: return "22ma"
+                case .twentyTwoMB: return "22mb"
+                case let .other(s): return s
+                }
+            }
+        }
+
+        public var subtype: Subtype
+
+        public init(subtype: Subtype) {
+            self.subtype = subtype
         }
     }
 }

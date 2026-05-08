@@ -56,6 +56,11 @@ extension Spanner {
             }
             return XMLTreeNode(name: rawType, children: children)
         }
+        if kind == .ottava, let ottava {
+            return XMLTreeNode(name: rawType, children: [
+                XMLTreeNode(name: "subtype", text: ottava.subtype.rawValue),
+            ])
+        }
         return XMLTreeNode(name: rawType)
     }
 

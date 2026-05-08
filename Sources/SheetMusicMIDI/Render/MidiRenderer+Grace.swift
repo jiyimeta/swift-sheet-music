@@ -77,7 +77,7 @@ extension MidiRenderer {
     /// `renderGraceNotesAfter` semantics, simplified for this codebase
     /// (no per-grace velocity scaling — see spec Non-goals).
     static func renderChordWithGraces(
-        _ chord: Chord,
+        _ originalChord: Chord,
         tick: Int,
         velocity: Int,
         channel: Int,
@@ -87,8 +87,18 @@ extension MidiRenderer {
         glissandoEndPitch: Int?,
         currentKey: Int,
         events: inout [TimedMidiEvent],
-        playedTicksOverride: Int? = nil
+        playedTicksOverride: Int? = nil,
+        pitchShift: Int = 0
     ) {
+        // Apply an ottava transposition to every sounding pitch
+        // (parent + grace notes). Clamping to MIDI's 0..127 keeps a
+        // 22ma chord audible at the extremes rather than wrapping.
+        let chord = pitchShift == 0
+            ? originalChord
+            : transpose(originalChord, by: pitchShift)
+        let shiftedGlissandoEnd = glissandoEndPitch.map {
+            min(127, max(0, $0 + pitchShift))
+        }
         // `playedTicksOverride` is set by the swing pass to express
         // a chord whose audible length differs from its written
         // duration (off-beat shift / down-beat extension). The grace
@@ -197,7 +207,7 @@ extension MidiRenderer {
             }
         } else {
             for note in chord.notes {
-                if let glissando = note.glissando, let endPitch = glissandoEndPitch {
+                if let glissando = note.glissando, let endPitch = shiftedGlissandoEnd {
                     renderGlissandoNote(
                         note: note, glissando: glissando, endPitch: endPitch,
                         startTick: mainOnset, durationTicks: playedTicks,
@@ -238,6 +248,37 @@ extension MidiRenderer {
     }
 
     // swiftlint:enable function_parameter_count function_body_length
+
+    /// Return a copy of `chord` with every parent and grace-note pitch
+    /// shifted by `semitones` and clamped to MIDI's 0..127 range. Used
+    /// only by the ottava transposition path; pitches that overflow
+    /// pin to the extreme rather than wrapping octaves.
+    static func transpose(_ chord: Chord, by semitones: Int) -> Chord {
+        guard semitones != 0 else { return chord }
+        var result = chord
+        result.notes = ChordNotes(chord.notes.map { transpose($0, by: semitones) })
+        result.graceNotesBefore = chord.graceNotesBefore.map {
+            transpose($0, by: semitones)
+        }
+        result.graceNotesAfter = chord.graceNotesAfter.map {
+            transpose($0, by: semitones)
+        }
+        return result
+    }
+
+    private static func transpose(
+        _ grace: GraceChord, by semitones: Int
+    ) -> GraceChord {
+        var copy = grace
+        copy.notes = ChordNotes(grace.notes.map { transpose($0, by: semitones) })
+        return copy
+    }
+
+    private static func transpose(_ note: Note, by semitones: Int) -> Note {
+        var copy = note
+        copy.pitch = min(127, max(0, note.pitch + semitones))
+        return copy
+    }
 
     /// Map of pitch → most recent noteOn tick on `channel`. Used by
     /// the prev-chord shortening pass to avoid pulling a noteOff in

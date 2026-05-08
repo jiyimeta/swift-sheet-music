@@ -25,6 +25,13 @@ public struct LayoutMeasure: Sendable, Equatable {
     /// pagination uses this to force a page boundary; UI indicator
     /// overlay also consults it.
     public let pageBreak: Bool
+    /// Cross-staff aggregated tick → measure-local X map produced by
+    /// `LayoutEngine.tickColumns` during placement. Spanner anchoring
+    /// consults this to position partial-measure spanners (an 8va
+    /// covering only the last chord, a slur starting mid-measure, …)
+    /// at the actual chord X rather than the measure's left edge.
+    /// Empty for measures with no timed content.
+    public let tickColumns: [Int: CGFloat]
 
     public init(
         measureIndex: Int,
@@ -34,7 +41,8 @@ public struct LayoutMeasure: Sendable, Equatable {
         markers: [LayoutElement] = [],
         jumps: [LayoutElement] = [],
         lineBreak: Bool = false,
-        pageBreak: Bool = false
+        pageBreak: Bool = false,
+        tickColumns: [Int: CGFloat] = [:]
     ) {
         self.measureIndex = measureIndex
         self.origin = origin
@@ -44,5 +52,6 @@ public struct LayoutMeasure: Sendable, Equatable {
         self.jumps = jumps
         self.lineBreak = lineBreak
         self.pageBreak = pageBreak
+        self.tickColumns = tickColumns
     }
 }

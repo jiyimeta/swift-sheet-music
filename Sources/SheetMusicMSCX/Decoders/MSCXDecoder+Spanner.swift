@@ -39,6 +39,14 @@ extension Spanner {
             )
         }
 
+        var ottava: Spanner.OttavaPayload?
+        if kind == .ottava, let ot = node.first("Ottava") {
+            let subtypeText = ot.first("subtype")?.text ?? "8va"
+            ottava = Spanner.OttavaPayload(
+                subtype: Spanner.OttavaPayload.Subtype(rawValue: subtypeText)
+            )
+        }
+
         return Spanner(
             kind: kind,
             rawType: raw,
@@ -46,7 +54,8 @@ extension Spanner {
             nextFractionsOffset: nextFractions,
             voltaEndings: voltaEndings,
             visible: decodeVisible(node),
-            hairpin: hairpin
+            hairpin: hairpin,
+            ottava: ottava
         )
     }
 

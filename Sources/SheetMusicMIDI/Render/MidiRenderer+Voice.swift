@@ -32,6 +32,11 @@ extension MidiRenderer {
             instrument: part.instrument,
             division: division
         )
+        let ottavaRanges = OttavaRanges.collect(
+            voiceIndex: voiceIndex,
+            staff: staff,
+            division: division
+        )
         // Original-tick base for each measure index, used to map
         // playback ticks (which include unrolled repeats) back to
         // pre-repeat ticks for ramp lookup.
@@ -108,6 +113,7 @@ extension MidiRenderer {
                     division: division,
                     events: &events,
                     hairpinRamps: hairpinRamps,
+                    ottavaRanges: ottavaRanges,
                     originalTickDelta: originalTickDelta
                 )
             }
@@ -141,6 +147,7 @@ extension MidiRenderer {
         division: Int,
         events: inout [TimedMidiEvent],
         hairpinRamps: [HairpinRamp],
+        ottavaRanges: [OttavaRange],
         originalTickDelta: Int
     ) {
         switch element {
@@ -247,6 +254,9 @@ extension MidiRenderer {
                 HairpinRamps.active(in: hairpinRamps, at: onsetOriginalTick)
                 .map { HairpinRamps.interpolate(ramp: $0, atOriginalTick: onsetOriginalTick) }
                 ?? velocity
+            let ottavaShift = OttavaRanges.semitones(
+                in: ottavaRanges, at: onsetOriginalTick
+            )
             renderChordWithGraces(
                 chord,
                 tick: localTick + adjust.onsetShift,
@@ -260,7 +270,8 @@ extension MidiRenderer {
                 events: &events,
                 playedTicksOverride: adjust == .none
                     ? nil
-                    : max(1, chordTicks + adjust.lengthDelta)
+                    : max(1, chordTicks + adjust.lengthDelta),
+                pitchShift: ottavaShift
             )
             localTick += chordTicks
         case .fermata:

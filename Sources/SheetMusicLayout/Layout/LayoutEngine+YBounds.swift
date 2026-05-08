@@ -131,7 +131,8 @@ extension LayoutEngine {
             markers: measure.markers.map { translate(element: $0, dy: dy) },
             jumps: measure.jumps.map { translate(element: $0, dy: dy) },
             lineBreak: measure.lineBreak,
-            pageBreak: measure.pageBreak
+            pageBreak: measure.pageBreak,
+            tickColumns: measure.tickColumns
         )
     }
 }
