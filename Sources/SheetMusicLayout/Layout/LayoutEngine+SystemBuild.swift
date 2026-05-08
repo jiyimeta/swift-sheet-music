@@ -536,10 +536,15 @@ extension LayoutEngine {
             // Measure number at every system head — TOP STAFF
             // ONLY. Engraving convention places a single number
             // above the topmost staff at the start of each system.
-            if j == 0, !staves.isEmpty {
+            // Irregular measures (anacrusis) suppress the label.
+            if j == 0, !staves.isEmpty,
+               let displayed = context.score.displayedMeasureNumber(
+                   at: measureIdx
+               )
+            {
                 let staffTopY = staffOrigins[0].y
                 markers.append(.measureNumber(
-                    text: "\(measureIdx + 1)",
+                    text: "\(displayed)",
                     origin: CGPoint(
                         x: -metrics.sp * 0.5,
                         y: staffTopY - metrics.sp * 1.5

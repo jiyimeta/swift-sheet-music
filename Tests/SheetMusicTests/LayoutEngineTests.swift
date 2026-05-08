@@ -228,5 +228,79 @@
                 downMirrored?.mirrorDx(stem: downResult.stem, sp: 5))
             #expect(abs(downDx - -5.9) < 1e-9)
         }
+
+        // MARK: - Drum-staff stem direction
+
+        /// Build a single-measure drum-staff score and return the
+        /// stem direction of the first chord laid out in `voiceIndex`.
+        @available(macOS 15.0, *)
+        private static func drumStaffStem(
+            voices: [Voice],
+            drumLineMap: [Int: Int],
+            voiceIndex: Int = 0
+        ) -> StemDirection? {
+            let measure = Measure(voices: voices)
+            let staff = Staff(measures: [measure])
+            let part = Part(
+                id: "drum",
+                instrument: Instrument(
+                    id: "drumset",
+                    useDrumset: true,
+                    drumLineMap: drumLineMap
+                ),
+                staves: [staff]
+            )
+            let score = Score(division: 480, parts: [part])
+            let doc = LayoutEngine.layout(
+                score: score, options: .init(), availableWidth: 800
+            )
+            var seen = -1
+            for el in doc.systems[0].measures[0].elements {
+                if case let .chord(_, _, s, _, _, _, _, _) = el {
+                    seen += 1
+                    if seen == voiceIndex { return s }
+                }
+            }
+            return nil
+        }
+
+        @Test("Drum staff: voice 1 forced stem-up even when voice 2 is empty")
+        func drumStaffSingleVoiceForcesUp() throws {
+            guard #available(macOS 15.0, *) else { return }
+            // Pitch 47 (Low-Mid Tom) sits at line=1 → step=3 (above
+            // the middle line). The median heuristic picks DOWN for a
+            // step-3 chord, but MuseScore's Drumset says stem=up for
+            // pitch 47. The renderer must honour the drum-staff
+            // convention (voice 1 = up) regardless of multi-voice state.
+            let chord = Chord(
+                duration: .quarter,
+                notes: ChordNotes([Note(pitch: 47, tpc: 19)])
+            )
+            let stem = try #require(Self.drumStaffStem(
+                voices: [Voice(elements: [.chord(chord)])],
+                drumLineMap: [47: 1]
+            ))
+            #expect(stem == .up)
+        }
+
+        @Test("Drum staff: voice 1 still up when voice 2 holds only rests")
+        func drumStaffVoice2RestOnlyStillForcesUp() throws {
+            guard #available(macOS 15.0, *) else { return }
+            // Mirrors the test-now.mscx measure-62 layout: voice 1 has
+            // chords, voice 2 has only a half rest. Without the
+            // drum-staff guard, `isMultiVoice` is false (only one
+            // voice has chords) and the median rule wins.
+            let chord = Chord(
+                duration: .quarter,
+                notes: ChordNotes([Note(pitch: 38, tpc: 16)])
+            )
+            let voice1 = Voice(elements: [.chord(chord)])
+            let voice2 = Voice(elements: [.rest(duration: .half)])
+            let stem = try #require(Self.drumStaffStem(
+                voices: [voice1, voice2],
+                drumLineMap: [38: 3]
+            ))
+            #expect(stem == .up)
+        }
     }
 #endif

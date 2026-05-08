@@ -33,6 +33,15 @@ extension Measure {
             }
         }
 
+        // `<Measure len="N/D">` — actual length when it differs from
+        // the prevailing time signature. Malformed values fall back to
+        // nil; the parser stays permissive about optional metadata.
+        let actualLength = node.attributes["len"]
+            .flatMap(Fraction.init(mscxString:))
+        // `<irregular>1</irregular>` — exclude this measure from the
+        // running displayed measure number (typical on anacrusis).
+        let irregular = node.first("irregular")?.text == "1"
+
         return Measure(
             voices: voices,
             startRepeat: startRepeat,
@@ -41,7 +50,9 @@ extension Measure {
             markers: markers,
             jumps: jumps,
             lineBreak: lineBreak,
-            pageBreak: pageBreak
+            pageBreak: pageBreak,
+            actualLength: actualLength,
+            irregular: irregular
         )
     }
 
