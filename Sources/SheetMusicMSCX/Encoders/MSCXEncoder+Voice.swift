@@ -103,12 +103,8 @@ extension Voice {
                     text: "\(delta.numerator)/\(delta.denominator)"
                 )]
             )
-        case .spanner:
-            throw SheetMusicError.malformedScore(
-                reason: "VoiceElement \(element) not yet supported "
-                    + "by MSCXEncoder Phase 1 — see "
-                    + "docs/superpowers/specs/2026-05-07-mscx-export-design.md"
-            )
+        case let .spanner(spanner):
+            return spanner.encode()
         }
     }
 

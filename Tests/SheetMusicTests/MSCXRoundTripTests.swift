@@ -66,4 +66,36 @@ struct MSCXRoundTripTests {
 
         #expect(roundTripped == original)
     }
+
+    @Test("testVoltaTemp.mscx Volta spanners survive a parse → encode → parse")
+    func voltaSpannersRoundTrip() throws {
+        // Full Score equality on this fixture is gated on the deferred
+        // `titleFrame` / `pageLayout` encoder work — see memory note
+        // “MSCX export — Phase 2 follow-ups” item 4. Until then,
+        // narrow the assertion to the bit this commit unlocks: every
+        // `.spanner` element survives the encoder unchanged.
+        let originalData = try MSCXFixtureLoader.mscxData("testVoltaTemp")
+        let original = try MSCXParser.parse(originalData)
+
+        let encoded = try MSCXEncoder.encode(original)
+        let roundTripped = try MSCXParser.parse(encoded)
+
+        #expect(spanners(in: roundTripped) == spanners(in: original))
+        #expect(!spanners(in: original).isEmpty)
+    }
+
+    private func spanners(in score: Score) -> [Spanner] {
+        score.parts.flatMap { part in
+            part.staves.flatMap { staff in
+                staff.measures.flatMap { measure in
+                    measure.voices.flatMap { voice in
+                        voice.elements.compactMap {
+                            if case let .spanner(s) = $0 { return s }
+                            return nil
+                        }
+                    }
+                }
+            }
+        }
+    }
 }

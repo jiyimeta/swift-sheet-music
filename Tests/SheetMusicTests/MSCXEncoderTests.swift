@@ -252,24 +252,6 @@ struct MSCXEncoderTests {
         #expect(reparsed.parts[0] == part)
     }
 
-    @Test("Voice with unsupported element throws malformedScore")
-    func unsupportedVoiceElementThrows() {
-        // Spanner remains unsupported until the dedicated spanner
-        // encoding pass. All other VoiceElement cases were promoted
-        // to first-class encoders in Phase 2.3.
-        let voice = Voice(elements: [
-            .spanner(Spanner(kind: .slur, rawType: "Slur")),
-        ])
-        let measure = Measure(voices: [voice])
-        let staff = Staff(measures: [measure])
-        let part = Part(id: "1", instrument: Instrument(id: "x"), staves: [staff])
-        let score = Score(division: 480, parts: [part])
-
-        #expect(throws: SheetMusicError.self) {
-            try MSCXEncoder.encode(score)
-        }
-    }
-
     @Test("Dotted quarter chord round-trips through Chord.decode")
     func dottedQuarterChordRoundTrip() throws {
         let chord = Chord(
