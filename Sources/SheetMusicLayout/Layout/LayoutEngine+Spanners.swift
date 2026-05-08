@@ -337,15 +337,23 @@ extension LayoutEngine {
                 rawTick -= mTicks
                 measureIdx += 1
             }
-            // Snapping a tick that lands exactly on the right barline
-            // to the right-edge sentinel keeps the layout's `endX`
-            // path falling through to "right edge of measure" rather
-            // than chasing an absent `tickColumns[mTicks]` entry.
+            // Snapping a tick that lands exactly on a barline back
+            // to the right-edge sentinel of the *previous* measure
+            // keeps `attachSpanners.endX` from drawing one extra
+            // measure: a hairpin written as `<measures>2</measures>
+            // <fractions>-1/8</fractions>` (= "ends 1/8 before the
+            // start of (start+2)") resolves here to (start+1, 1680);
+            // a hairpin with `<measures>1</measures>` (= "ends at
+            // the start of (start+1)") resolves to the start measure
+            // with the right-edge sentinel.
             if measureIdx < measures.count {
                 let mTicks = measureTickCount(
                     measures[measureIdx], division: division
                 )
                 if rawTick == mTicks { return (measureIdx, 0) }
+                if rawTick == 0, measureIdx > startMeasureIdx {
+                    return (measureIdx - 1, 0)
+                }
                 return (measureIdx, max(0, rawTick))
             }
             return (max(0, measures.count - 1), 0)
@@ -356,6 +364,9 @@ extension LayoutEngine {
             rawTick += measureTickCount(
                 measures[measureIdx], division: division
             )
+        }
+        if rawTick == 0, measureIdx > startMeasureIdx {
+            return (measureIdx - 1, 0)
         }
         return (max(0, measureIdx), max(0, rawTick))
     }
@@ -407,7 +418,7 @@ extension LayoutEngine {
             guard mIdx < measures.count else { break }
             let m = measures[mIdx]
             for el in m.elements {
-                guard let (yMin, yMax) = elementYExtent(el)
+                guard let (yMin, yMax) = elementYExtent(el, sp: metrics.sp)
                 else { continue }
                 // Convert measure-local Y to system-local.
                 let elTop = m.origin.y + yMin
@@ -421,12 +432,16 @@ extension LayoutEngine {
                 if elBottom > deepest { deepest = elBottom }
             }
         }
-        // 1.25 sp clearance below the deepest obstacle, capped at the
-        // next staff's top minus a small inset so the hairpin never
-        // collides with the next system staff.
-        let withClearance = deepest + metrics.sp * 1.25
-        let ceiling = nextStaffTop - metrics.sp * 0.5
-        return min(max(defaultBelow, withClearance), ceiling)
+        // The hairpin glyph is a "<" / ">" shape: its centerline sits
+        // at `anchorY`, but the ink reaches `anchorY ± sp` at the
+        // wide end. To clear the deepest obstacle by `marginSp` of
+        // empty staff space, anchor at `obstacle + sp + marginSp`.
+        let marginSp: CGFloat = 0.6
+        let withClearance = deepest + metrics.sp * (1 + marginSp)
+        // Cap at the next staff's top minus the same hairpin extent
+        // so the line never collides with the next system staff.
+        let ceiling = nextStaffTop - metrics.sp * (1 + marginSp)
+        return min(max(defaultBelow, withClearance), max(defaultBelow, ceiling))
     }
 
     /// Approximate Y extent (in measure-local coords) for elements
@@ -435,16 +450,27 @@ extension LayoutEngine {
     /// glyphs, key/time sigs, etc. — those live on/above the staff
     /// and don't push hairpins lower).
     private static func elementYExtent(
-        _ el: LayoutElement
+        _ el: LayoutElement, sp: CGFloat
     ) -> (yMin: CGFloat, yMax: CGFloat)? {
         switch el {
         case let .textMark(.lyrics, _, origin):
-            // Lyric text is rendered with `origin.y` as the baseline.
-            // Cap-height ≈ 1.4 sp above, descender ≈ 0.4 sp below.
-            // Caller doesn't know `metrics.sp` so we pad with absolute
-            // values that work for typical staff sizes — the goal is
-            // a *lower bound* on the descender, not pixel precision.
-            return (origin.y - 6, origin.y + 4)
+            // Lyric text uses `origin.y` as the baseline. Cap-height
+            // ≈ 1.0 sp above, descender ≈ 0.4 sp below. Both rough
+            // upper bounds — exactness isn't required, just a lower
+            // bound on where the ink ends.
+            return (origin.y - sp, origin.y + sp * 0.4)
+        case let .chord(notes, _, _, stemOrigin, _, _, _, _):
+            // Notehead extends ~0.55 sp above/below its origin; stems
+            // can dip further on stem-down low chords, so include
+            // `stemOrigin.y` in the extent. Skips empty (rest) chords.
+            guard !notes.isEmpty else { return nil }
+            var lo = stemOrigin.y
+            var hi = stemOrigin.y
+            for n in notes {
+                lo = min(lo, n.origin.y - sp * 0.55)
+                hi = max(hi, n.origin.y + sp * 0.55)
+            }
+            return (lo, hi)
         default:
             return nil
         }
