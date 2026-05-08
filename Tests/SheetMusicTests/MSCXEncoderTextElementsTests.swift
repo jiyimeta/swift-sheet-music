@@ -40,6 +40,33 @@ struct MSCXEncoderTextElementsTests {
         }
     }
 
+    @Test("StaffText round-trips text, offset, colour, visibility")
+    func staffTextRoundTrip() throws {
+        let staffText = StaffText(
+            text: "rit.",
+            offsetX: 1.0,
+            offsetY: -0.5,
+            color: ScoreColor(red: 200, green: 0, blue: 0, alpha: 200),
+            isSystemText: false,
+            properties: TextProperties(face: "Edwin", size: 10),
+            visible: false
+        )
+        let voice = Voice(elements: [.staffText(staffText)])
+        let decoded = try voiceRoundTrip(voice)
+        #expect(decoded == voice)
+    }
+
+    @Test("SystemText round-trips through <SystemText>")
+    func systemTextRoundTrip() throws {
+        let systemText = StaffText(
+            text: "Allegro",
+            isSystemText: true
+        )
+        let voice = Voice(elements: [.staffText(systemText)])
+        let decoded = try voiceRoundTrip(voice)
+        #expect(decoded == voice)
+    }
+
     @Test("Dynamic round-trips subtype + velocity + TextProperties")
     func dynamicRoundTrip() throws {
         let dynamic = Dynamic(

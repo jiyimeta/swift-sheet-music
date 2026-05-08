@@ -80,8 +80,10 @@ extension Voice {
             return dynamic.encode()
         case let .barLine(barLine):
             return barLine.encode()
+        case let .staffText(staffText):
+            return staffText.encode()
         case .spanner,
-             .measureRepeat, .fermata, .staffText, .harmony,
+             .measureRepeat, .fermata, .harmony,
              .rehearsalMark, .locationShift:
             throw SheetMusicError.malformedScore(
                 reason: "VoiceElement \(element) not yet supported "
