@@ -170,7 +170,7 @@ extension MidiRenderer {
         //    shortened by stealFromHead + stealFromTail.
         let mainOnset = tick + stealFromHead
         let playedTicks = max(1, mainTicks - stealFromHead - stealFromTail)
-        let gate = defaultArticulationGateTime(for: instrument)
+        let gate = effectiveGateTime(for: chord, instrument: instrument)
         let gatedTicks = playedTicks * gate / 100
         let mainOff = mainOnset + gatedTicks - 1
         if let arpeggio = chord.arpeggio {
