@@ -68,4 +68,24 @@ struct MSCXEncoderMS3Tests {
         let root = try XMLTreeParser.parse(bytes)
         #expect(root.attributes["version"] == "4.60")
     }
+
+    @Test("v3 emits programVersion and programRevision before Score")
+    func v3EmitsProgramVersionAndRevision() throws {
+        let score = try MSCXParser.parse(MSCXFixtureLoader.mscxData("midi01"))
+        let bytes = try MSCXEncoder.encode(score, options: .init(targetVersion: .v3))
+        let root = try XMLTreeParser.parse(bytes)
+        let names = root.children.map(\.name)
+        #expect(names == ["programVersion", "programRevision", "Score"])
+        #expect(root.first("programVersion")?.text == "3.6.2")
+        #expect(root.first("programRevision")?.text == "3224f34")
+    }
+
+    @Test("v4 does not emit programVersion or programRevision")
+    func v4OmitsProgramVersionAndRevision() throws {
+        let score = try MSCXParser.parse(MSCXFixtureLoader.mscxData("midi01"))
+        let bytes = try MSCXEncoder.encode(score, options: .init(targetVersion: .v4))
+        let root = try XMLTreeParser.parse(bytes)
+        let names = root.children.map(\.name)
+        #expect(names == ["Score"])
+    }
 }

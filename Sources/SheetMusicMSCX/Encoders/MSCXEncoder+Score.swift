@@ -57,12 +57,20 @@ extension Score {
         case .v3: museScoreVersion = "3.02"
         case .v4: museScoreVersion = "4.60"
         }
+        var rootChildren: [XMLTreeNode] = []
+        if options.targetVersion == .v3 {
+            rootChildren.append(XMLTreeNode(
+                name: "programVersion", text: "3.6.2"
+            ))
+            rootChildren.append(XMLTreeNode(
+                name: "programRevision", text: "3224f34"
+            ))
+        }
+        rootChildren.append(XMLTreeNode(name: "Score", children: scoreChildren))
         return XMLTreeNode(
             name: "museScore",
             attributes: ["version": museScoreVersion],
-            children: [
-                XMLTreeNode(name: "Score", children: scoreChildren),
-            ]
+            children: rootChildren
         )
     }
 }
