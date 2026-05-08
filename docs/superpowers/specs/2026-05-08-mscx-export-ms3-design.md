@@ -398,13 +398,10 @@ encoder output to find the missing element.
 
 ## Follow-ups (out of scope, separate PRs)
 
-1. Apply "skip initial KeySig=0" decision to the MS4 path
-   independently if compatibility allows (already covered by §C as
-   a shared change, so this is informational).
-2. Drumset population from MIDI import (so §G actually fires for
+1. Drumset population from MIDI import (so §G actually fires for
    MIDI-imported drum tracks). Track in a separate spec when there's
    a concrete consumer.
-3. Mac example: add an MS3 export button alongside the existing MS4
+2. Mac example: add an MS3 export button alongside the existing MS4
    export.
-4. Future MS5 (or later) target — extend `MSCXVersion` with a new
+3. Future MS5 (or later) target — extend `MSCXVersion` with a new
    case and per-section branches as the wire form diverges.
