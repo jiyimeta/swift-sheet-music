@@ -204,26 +204,50 @@ case .accent, .marcato:
 This guarantees `[.accentStaccato]` and `[.accent, .staccato]` produce
 identical noteOff ticks.
 
-### `effectiveVelocity` signature change
+### Per-chord modifier (applied only to main-chord notes)
 
-`effectiveVelocity(forDynamic:instrument:)` becomes
-`effectiveVelocity(forDynamic:instrument:chord:)`. Internally:
+The voice-level running `velocity` is left as-is — it continues to be
+re-derived from the active Dynamic via `effectiveVelocity(forDynamic:
+instrument:)`. For each chord, `renderChordWithGraces` adjusts the
+velocity used **only for the main-chord noteOns** (graces stay on the
+unboosted `velocity`, matching MuseScore: articulations attach to the
+parent chord, not to its grace satellites).
 
 ```swift
-let base = dynamic?.velocity ?? defaultDynamicVelocity
-let scale = (chord.map { effectiveVelocityScale(for: $0, instrument: instrument) }
-              ?? defaultArticulationVelocityScale(for: instrument))
-return min(127, max(1, base * scale / 100))
+static func adjustVelocityForChord(
+    baseVelocity: Int,
+    chord: Chord,
+    instrument: Instrument
+) -> Int {
+    let defaultScale = defaultArticulationVelocityScale(for: instrument)
+    let effectiveScale = effectiveVelocityScale(for: chord, instrument: instrument)
+    if defaultScale == effectiveScale { return baseVelocity }
+    return min(127, max(1, baseVelocity * effectiveScale / defaultScale))
+}
 ```
 
-`chord` is `Chord?` so the existing call sites that have no chord in
-hand (instrument warm-up, post-MeasureRepeat reset) keep their current
-behaviour.
+`baseVelocity` already has the **default** articulation scale baked in
+(set by `effectiveVelocity` at lines 20 / 67 / 179). The modifier
+swaps the default scale for the chord-effective scale via
+`base * eff / def`. When the chord has no velocity-shaping
+articulation, `effectiveScale == defaultScale` and the function is a
+no-op (regression-safe).
 
 ### Call sites
 
-`MidiRenderer+Voice.swift` lines 20, 67, 179 — pass `chord:` where a
-chord is in scope; pass `chord: nil` where it isn't.
+`MidiRenderer+Voice.swift` lines 20 / 67 / 179 are unchanged.
+
+`MidiRenderer+Grace.swift::renderChordWithGraces`:
+
+- Before emitting **before-graces** (line ~152 region): keep
+  `velocity` as-is.
+- Before emitting the **main chord notes** (arpeggio + non-arpeggio
+  branches, lines ~189–211): compute
+  `let mainVelocity = adjustVelocityForChord(baseVelocity: velocity,
+   chord: chord, instrument: instrument)` and substitute `mainVelocity`
+  in the relevant `velocity:` arguments.
+- Before emitting **after-graces** (line ~226 region): keep `velocity`
+  as-is.
 
 ## Layout
 
@@ -352,9 +376,13 @@ Sources/SheetMusicMSCX/Encoders/MSCXEncoder+ChordArticulation.swift
 
 Sources/SheetMusicMIDI/Render/MidiRenderer+Voice.swift
   + effectiveVelocityScale(for:instrument:)
+  + adjustVelocityForChord(baseVelocity:chord:instrument:)
   ~ effectiveGateTime: + combined cases / explicit nil for velocity-only kinds
-  ~ effectiveVelocity: chord-aware
-  ~ 3 call sites pass chord:
+  (effectiveVelocity / 3 call sites at lines 20/67/179 unchanged)
+
+Sources/SheetMusicMIDI/Render/MidiRenderer+Grace.swift
+  ~ renderChordWithGraces: compute mainVelocity via adjustVelocityForChord;
+    use it for arpeggio + non-arpeggio main-note emit only (graces unchanged)
 
 Sources/SheetMusicLayout/Layout/LayoutElement.swift
   + 4 new ArticulationKind cases
