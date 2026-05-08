@@ -55,4 +55,69 @@ struct MSCXEncoderSpannerFractionsTests {
         #expect(spanner.nextFractionsOffset == nil)
         #expect(spanner.nextMeasuresOffset == 2)
     }
+
+    /// Round-trip: encode → reparse → compare.
+    private func roundTrip(_ spanner: Spanner) throws -> Spanner {
+        let xml = spanner.encode()
+        let bytes = XMLTreeSerializer.serialize(
+            XMLTreeNode(name: "root", children: [xml]))
+        let reparsed = try XMLTreeParser.parse(bytes)
+        return try Spanner.decode(#require(reparsed.first("Spanner")))
+    }
+
+    @Test("Encoder emits <fractions> before <measures>")
+    func encoderEmitsFractionsBeforeMeasures() throws {
+        let spanner = Spanner(
+            kind: .hairpin,
+            rawType: "HairPin",
+            nextMeasuresOffset: 1,
+            nextFractionsOffset: Fraction(numerator: 1, denominator: 4)
+        )
+        let xml = spanner.encode()
+        let location = try #require(
+            xml.first("next")?.first("location"))
+        let names = location.children.map(\.name)
+        #expect(names == ["fractions", "measures"])
+        #expect(location.first("fractions")?.text == "1/4")
+        #expect(location.first("measures")?.text == "1")
+    }
+
+    @Test("Round-trip preserves nextFractionsOffset alongside measures")
+    func roundTripPreservesBothOffsets() throws {
+        let spanner = Spanner(
+            kind: .hairpin,
+            rawType: "HairPin",
+            nextMeasuresOffset: 2,
+            nextFractionsOffset: Fraction(numerator: 3, denominator: 8)
+        )
+        let decoded = try roundTrip(spanner)
+        #expect(decoded.nextMeasuresOffset == 2)
+        #expect(decoded.nextFractionsOffset == Fraction(numerator: 3, denominator: 8))
+    }
+
+    @Test("Round-trip preserves nextFractionsOffset with measures = 0")
+    func roundTripFractionsOnly() throws {
+        let spanner = Spanner(
+            kind: .hairpin,
+            rawType: "HairPin",
+            nextMeasuresOffset: 0,
+            nextFractionsOffset: Fraction(numerator: 1, denominator: 2)
+        )
+        let decoded = try roundTrip(spanner)
+        #expect(decoded.nextMeasuresOffset == 0)
+        #expect(decoded.nextFractionsOffset == Fraction(numerator: 1, denominator: 2))
+    }
+
+    @Test("Round-trip preserves measures-only spanner (fractions stays nil)")
+    func roundTripMeasuresOnly() throws {
+        let spanner = Spanner(
+            kind: .volta,
+            rawType: "Volta",
+            nextMeasuresOffset: 1,
+            voltaEndings: [1]
+        )
+        let decoded = try roundTrip(spanner)
+        #expect(decoded.nextMeasuresOffset == 1)
+        #expect(decoded.nextFractionsOffset == nil)
+    }
 }

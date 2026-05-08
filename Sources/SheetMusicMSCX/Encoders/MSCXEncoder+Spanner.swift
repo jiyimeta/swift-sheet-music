@@ -9,16 +9,15 @@ extension Spanner {
     /// the end tick, and an end-side placeholder with only `<prev>`.
     ///
     /// We dispatch on `visible`: a begin-side preserves the payload
-    /// (and Volta endings / measures offset), an end-side emits just
-    /// `<prev/>` so the parser recovers `visible == false`.
+    /// (and Volta endings / measures + fractions offsets), an
+    /// end-side emits just `<prev/>` so the parser recovers
+    /// `visible == false`.
     func encode() -> XMLTreeNode {
         var children: [XMLTreeNode] = []
         if visible {
             children.append(payloadElement())
-            if nextMeasuresOffset != 0 {
-                children.append(locationWrapper(
-                    name: "next", measures: nextMeasuresOffset
-                ))
+            if let next = nextLocationElement() {
+                children.append(next)
             }
         } else {
             children.append(XMLTreeNode(name: "prev"))
@@ -45,11 +44,28 @@ extension Spanner {
         return XMLTreeNode(name: rawType)
     }
 
-    private func locationWrapper(name: String, measures: Int) -> XMLTreeNode {
-        XMLTreeNode(name: name, children: [
-            XMLTreeNode(name: "location", children: [
-                XMLTreeNode(name: "measures", text: String(measures)),
-            ]),
+    /// `<next><location>…</location></next>`. Returns nil when both
+    /// offsets are at their defaults (no end-side anchor needed).
+    /// Element order inside `<location>`: `<fractions>` then
+    /// `<measures>`, mirroring MuseScore's writer
+    /// (`engraving/types/location.cpp::Location::write`).
+    private func nextLocationElement() -> XMLTreeNode? {
+        var locationChildren: [XMLTreeNode] = []
+        if let frac = nextFractionsOffset {
+            locationChildren.append(XMLTreeNode(
+                name: "fractions",
+                text: "\(frac.numerator)/\(frac.denominator)"
+            ))
+        }
+        if nextMeasuresOffset != 0 {
+            locationChildren.append(XMLTreeNode(
+                name: "measures",
+                text: String(nextMeasuresOffset)
+            ))
+        }
+        guard !locationChildren.isEmpty else { return nil }
+        return XMLTreeNode(name: "next", children: [
+            XMLTreeNode(name: "location", children: locationChildren),
         ])
     }
 }
