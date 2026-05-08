@@ -73,7 +73,10 @@ extension MidiImporter {
             parts.append(makePart(for: track, staff: staff))
         }
         let meta = resolveTitle(file: file, sourceFilename: sourceFilename)
-        return Score(division: file.division, parts: parts, metaTags: meta)
+        return Score(
+            division: file.division, parts: parts, metaTags: meta,
+            source: .midi
+        )
     }
 
     // MARK: - Drum voice splitting

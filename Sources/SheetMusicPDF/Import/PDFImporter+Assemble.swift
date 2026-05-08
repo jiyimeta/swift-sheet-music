@@ -20,7 +20,7 @@ extension PDFImporter {
         options: PDFImportOptions
     ) -> Score {
         guard let firstSystem = systems.first else {
-            return Score(division: 480)
+            return Score(division: 480, source: .pdf)
         }
         let shape = partShape(from: firstSystem)
         var stavesContent: [[Measure]] = Array(
@@ -56,7 +56,8 @@ extension PDFImporter {
         return Score(
             division: 480,
             parts: assembledParts,
-            titleFrame: titleFrame
+            titleFrame: titleFrame,
+            source: .pdf
         )
     }
 
