@@ -117,11 +117,21 @@ extension Voice {
                 let subtype = child.first("subtype")?.text ?? ""
                 elements.append(.fermata(Fermata(subtype: subtype)))
             case "StaffText":
-                try elements.append(.staffText(
-                    StaffText.decode(child, isSystemText: false)))
+                if Swing.isSwingMarker(child) {
+                    elements.append(.swing(
+                        Swing.decode(child, isSystemText: false)))
+                } else {
+                    try elements.append(.staffText(
+                        StaffText.decode(child, isSystemText: false)))
+                }
             case "SystemText":
-                try elements.append(.staffText(
-                    StaffText.decode(child, isSystemText: true)))
+                if Swing.isSwingMarker(child) {
+                    elements.append(.swing(
+                        Swing.decode(child, isSystemText: true)))
+                } else {
+                    try elements.append(.staffText(
+                        StaffText.decode(child, isSystemText: true)))
+                }
             case "Harmony":
                 try elements.append(.harmony(Harmony.decode(child)))
             case "RehearsalMark":

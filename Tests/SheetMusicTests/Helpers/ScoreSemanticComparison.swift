@@ -172,6 +172,8 @@ enum ScoreSemanticComparison {
         case .measureRepeat: return "measureRepeat"
         case let .fermata(f): return "fermata(\(f.subtype))"
         case let .staffText(st): return "staffText(\"\(st.text)\")"
+        case let .swing(s):
+            return "swing(\"\(s.text)\", \(s.unit), \(s.ratio))"
         case let .harmony(h): return "harmony(\"\(h.name)\")"
         case let .rehearsalMark(rm): return "rehearsalMark(\"\(rm.text)\")"
         case let .locationShift(delta):

@@ -27,6 +27,10 @@ public enum VoiceElement: Sendable, Equatable {
     case measureRepeat(MeasureRepeat)
     case fermata(Fermata)
     case staffText(StaffText)
+    /// Swing-rhythm directive (a swing-flagged staff/system text).
+    /// Switches the active swing setting at this tick; affects
+    /// MIDI render only — visually it lays out as a system text.
+    case swing(Swing)
     case harmony(Harmony)
     case rehearsalMark(RehearsalMark)
     /// MuseScore `<location><fractions>N/D</fractions></location>`

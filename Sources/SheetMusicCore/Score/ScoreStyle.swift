@@ -17,22 +17,37 @@ public struct ScoreStyle: Sendable, Equatable {
     public var spatium: Double
     public var pageLayout: PageLayout
     public var pageChrome: PageChrome
+    /// Global swing subdivision. `.off` (the MuseScore default) means
+    /// no swing unless an in-piece `Swing` directive turns it on.
+    /// C++: `Sid::swingUnit` (style.cpp / styledef.cpp).
+    public var swingUnit: SwingUnit
+    /// Global swing ratio in percent. 50 = straight, 60 = MuseScore's
+    /// default soft swing. Has no audible effect when `swingUnit` is
+    /// `.off`. C++: `Sid::swingRatio`.
+    public var swingRatio: Int
 
     public init(
         spatium: Double,
         pageLayout: PageLayout,
-        pageChrome: PageChrome
+        pageChrome: PageChrome,
+        swingUnit: SwingUnit = .off,
+        swingRatio: Int = 60
     ) {
         self.spatium = spatium
         self.pageLayout = pageLayout
         self.pageChrome = pageChrome
+        self.swingUnit = swingUnit
+        self.swingRatio = swingRatio
     }
 
     /// MuseScore's documented defaults: 1.75 mm spatium, A4 paper
-    /// with 15 mm margins, two-sided, default header/footer chrome.
+    /// with 15 mm margins, two-sided, default header/footer chrome,
+    /// swing off (ratio 60 retained as the default-on value).
     public static let museScoreDefaults = ScoreStyle(
         spatium: 1.75,
         pageLayout: .museScoreA4,
-        pageChrome: .museScoreDefaults
+        pageChrome: .museScoreDefaults,
+        swingUnit: .off,
+        swingRatio: 60
     )
 }
