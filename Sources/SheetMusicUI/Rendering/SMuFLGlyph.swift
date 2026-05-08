@@ -90,6 +90,17 @@ enum SMuFLGlyph {
     static let fermataAbove: Character = "\u{E4C0}"
     static let fermataBelow: Character = "\u{E4C1}"
 
+    // Articulations — SMuFL Articulation range (U+E4A0..U+E4BF).
+    // Above/below pairs render the same shape mirrored across the
+    // baseline; MuseScore picks the variant from the articulation's
+    // resolved anchor side. Codepoints from SMuFL `glyphnames.json`.
+    static let articStaccatoAbove: Character = "\u{E4A2}"
+    static let articStaccatoBelow: Character = "\u{E4A3}"
+    static let articTenutoAbove: Character = "\u{E4A4}"
+    static let articTenutoBelow: Character = "\u{E4A5}"
+    static let articStaccatissimoAbove: Character = "\u{E4A6}"
+    static let articStaccatissimoBelow: Character = "\u{E4A7}"
+
     // Bracket caps + brace variants. The brace family lives in
     // Bravura's PUA optionalGlyphs range — MuseScore picks one of
     // four per number of spanned staves (`engraving/dom/bracket.cpp::
