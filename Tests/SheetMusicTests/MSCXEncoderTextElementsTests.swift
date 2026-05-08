@@ -136,6 +136,33 @@ struct MSCXEncoderTextElementsTests {
         }
     }
 
+    @Test("Fermata round-trips subtype")
+    func fermataRoundTrip() throws {
+        for subtype in ["fermataAbove", "fermataBelow", "fermataLongAbove"] {
+            let voice = Voice(elements: [
+                .chord(Chord(duration: .quarter, notes: ChordNotes([Note(pitch: 60, tpc: 14)]))),
+                .fermata(Fermata(subtype: subtype)),
+            ])
+            let decoded = try voiceRoundTrip(voice)
+            #expect(decoded == voice, "fermata subtype \(subtype) failed")
+        }
+    }
+
+    @Test("locationShift round-trips positive and negative deltas")
+    func locationShiftRoundTrip() throws {
+        for delta in [
+            Fraction(numerator: 1, denominator: 4),
+            Fraction(numerator: -3, denominator: 8),
+        ] {
+            let voice = Voice(elements: [
+                .locationShift(delta: delta),
+                .staffText(StaffText(text: "swing")),
+            ])
+            let decoded = try voiceRoundTrip(voice)
+            #expect(decoded == voice, "locationShift \(delta) failed")
+        }
+    }
+
     @Test("Dynamic round-trips subtype + velocity + TextProperties")
     func dynamicRoundTrip() throws {
         let dynamic = Dynamic(

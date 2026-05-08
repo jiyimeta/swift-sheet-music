@@ -88,7 +88,22 @@ extension Voice {
             return harmony.encode()
         case let .measureRepeat(measureRepeat):
             return measureRepeat.encode()
-        case .spanner, .fermata, .locationShift:
+        case let .fermata(fermata):
+            return fermata.encode()
+        case let .locationShift(delta):
+            // Inverse of the inline `<location>` decode: the
+            // voice-level cursor shift is `<location><fractions>N/D
+            // </fractions></location>`. Negative numerators jog
+            // backwards so the next non-temporal element attaches at
+            // a sub-chord tick offset.
+            return XMLTreeNode(
+                name: "location",
+                children: [XMLTreeNode(
+                    name: "fractions",
+                    text: "\(delta.numerator)/\(delta.denominator)"
+                )]
+            )
+        case .spanner:
             throw SheetMusicError.malformedScore(
                 reason: "VoiceElement \(element) not yet supported "
                     + "by MSCXEncoder Phase 1 — see "
