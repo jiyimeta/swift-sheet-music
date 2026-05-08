@@ -26,6 +26,8 @@
         let onTogglePlayback: () -> Void
         let onExportPDF: () -> Void
         let onExportMSCX: () -> Void
+        let onExportMSCXv3: () -> Void
+        let onExportMSCZv3: () -> Void
 
         var body: some View {
             List {
@@ -72,7 +74,11 @@
                 Section("Export") {
                     Button("Save as PDF…", action: onExportPDF)
                         .disabled(score == nil)
-                    Button("Save as MSCX…", action: onExportMSCX)
+                    Button("Save as MSCX (MS4)…", action: onExportMSCX)
+                        .disabled(score == nil)
+                    Button("Save as MSCX (MS3)…", action: onExportMSCXv3)
+                        .disabled(score == nil)
+                    Button("Save as MSCZ (MS3)…", action: onExportMSCZv3)
                         .disabled(score == nil)
                 }
                 if !playbackEngine.mixerChannels.isEmpty {
