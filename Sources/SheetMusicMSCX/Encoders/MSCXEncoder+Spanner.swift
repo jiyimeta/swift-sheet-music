@@ -12,11 +12,11 @@ extension Spanner {
     /// (and Volta endings / measures + fractions offsets), an
     /// end-side emits just `<prev/>` so the parser recovers
     /// `visible == false`.
-    func encode() -> XMLTreeNode {
+    func encode(options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
         var children: [XMLTreeNode] = []
         if visible {
-            children.append(payloadElement())
-            if let next = nextLocationElement() {
+            children.append(payloadElement(options: options))
+            if let next = nextLocationElement(options: options) {
                 children.append(next)
             }
         } else {
@@ -34,7 +34,7 @@ extension Spanner {
     /// Volta carries `<endings>` (comma-joined ending numbers); other
     /// kinds are emitted as empty placeholders, since the only fields
     /// the decoder recovers from them are positional.
-    private func payloadElement() -> XMLTreeNode {
+    private func payloadElement(options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
         if kind == .volta, !voltaEndings.isEmpty {
             let endingsText = voltaEndings.map(String.init).joined(separator: ", ")
             return XMLTreeNode(name: rawType, children: [
@@ -49,7 +49,7 @@ extension Spanner {
     /// Element order inside `<location>`: `<fractions>` then
     /// `<measures>`, mirroring MuseScore's writer
     /// (`engraving/types/location.cpp::Location::write`).
-    private func nextLocationElement() -> XMLTreeNode? {
+    private func nextLocationElement(options: MSCXEncoderOptions = .init()) -> XMLTreeNode? {
         var locationChildren: [XMLTreeNode] = []
         if let frac = nextFractionsOffset {
             locationChildren.append(XMLTreeNode(

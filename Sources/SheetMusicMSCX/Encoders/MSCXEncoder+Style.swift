@@ -12,7 +12,7 @@ extension ScoreStyle {
     /// is always emitted (MuseScore's writer also always anchors
     /// it). The decoder overlays the same defaults, so elided fields
     /// round-trip back to the same value.
-    func encode() -> XMLTreeNode {
+    func encode(options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
         let defaults = ScoreStyle.museScoreDefaults
         var children: [XMLTreeNode] = []
         appendPageLayout(pageLayout, defaults: defaults.pageLayout, into: &children)

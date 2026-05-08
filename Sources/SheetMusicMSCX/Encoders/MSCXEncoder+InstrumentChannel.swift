@@ -12,7 +12,7 @@ extension InstrumentChannel {
     /// current value differs from those defaults, so a value parsed
     /// from a fixture without explicit controllers re-encodes to the
     /// same shape.
-    func encode() -> XMLTreeNode {
+    func encode(options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
         let defaults = InstrumentChannel()
         var children: [XMLTreeNode] = []
         children.append(XMLTreeNode(

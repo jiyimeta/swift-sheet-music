@@ -12,8 +12,8 @@ extension Measure {
     /// permissive about ordering so semantic round-trip would work
     /// in any order, but matching MuseScore's order keeps diffs
     /// against fixtures readable.
-    func encode() throws -> XMLTreeNode {
-        try encode(carryInVoiceTieCarries: []).node
+    func encode(options: MSCXEncoderOptions = .init()) throws -> XMLTreeNode {
+        try encode(carryInVoiceTieCarries: [], options: options).node
     }
 
     /// `carryInVoiceTieCarries[i]` is the previous measure's voice
@@ -23,7 +23,8 @@ extension Measure {
     /// bar line. The returned array is `carryOutVoiceTieCarries[i]`
     /// for the next measure.
     func encode(
-        carryInVoiceTieCarries: [Voice.VoiceTieCarry]
+        carryInVoiceTieCarries: [Voice.VoiceTieCarry],
+        options: MSCXEncoderOptions = .init()
     ) throws -> (node: XMLTreeNode, carryOutVoiceTieCarries: [Voice.VoiceTieCarry]) {
         var children: [XMLTreeNode] = []
         for marker in markers {
@@ -39,7 +40,7 @@ extension Measure {
             let carryIn = index < carryInVoiceTieCarries.count
                 ? carryInVoiceTieCarries[index]
                 : Voice.VoiceTieCarry()
-            let result = try voice.encode(carryIn: carryIn)
+            let result = try voice.encode(carryIn: carryIn, options: options)
             children.append(result.node)
             carryOut[index] = result.carryOut
         }
@@ -80,12 +81,13 @@ extension Measure {
     /// rest of the codebase still calls the older shape; new
     /// callers should pass `[Voice.VoiceTieCarry]` directly.
     func encode(
-        carryInLastChordDurations: [Fraction?]
+        carryInLastChordDurations: [Fraction?],
+        options: MSCXEncoderOptions = .init()
     ) throws -> (node: XMLTreeNode, carryOutLastChordDurations: [Fraction?]) {
         let carries = carryInLastChordDurations.map {
             Voice.VoiceTieCarry(prevChordDuration: $0, prevVoiceTotal: nil)
         }
-        let result = try encode(carryInVoiceTieCarries: carries)
+        let result = try encode(carryInVoiceTieCarries: carries, options: options)
         return (result.node, result.carryOutVoiceTieCarries.map(\.prevChordDuration))
     }
 }

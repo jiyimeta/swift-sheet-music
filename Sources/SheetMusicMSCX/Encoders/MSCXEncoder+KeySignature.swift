@@ -3,7 +3,7 @@ import SheetMusicCore
 import SheetMusicXMLTools
 
 extension KeySignature {
-    func encode() -> XMLTreeNode {
+    func encode(options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
         XMLTreeNode(
             name: "KeySig",
             children: [

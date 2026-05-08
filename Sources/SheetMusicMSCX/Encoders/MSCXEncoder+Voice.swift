@@ -12,8 +12,8 @@ extension Voice {
     /// re-scaling reproduces the original fraction. Properly
     /// nested tuplets — disjoint or fully containing — are
     /// supported; truly overlapping ranges throw.
-    func encode() throws -> XMLTreeNode {
-        try encode(carryIn: VoiceTieCarry()).node
+    func encode(options: MSCXEncoderOptions = .init()) throws -> XMLTreeNode {
+        try encode(carryIn: VoiceTieCarry(), options: options).node
     }
 
     /// Carry data threaded measure-to-measure for cross-measure tie
@@ -37,7 +37,8 @@ extension Voice {
     /// encoded `<voice>` plus the carry-out (last chord duration and
     /// total voice played duration) for the next measure.
     func encode(
-        carryIn: VoiceTieCarry
+        carryIn: VoiceTieCarry,
+        options: MSCXEncoderOptions = .init()
     ) throws -> (node: XMLTreeNode, carryOut: VoiceTieCarry) {
         try Self.validateProperlyNested(tuplets)
         // At a given startIndex, push outer tuplets (longer range)
@@ -87,7 +88,8 @@ extension Voice {
                 isFirstChordOfVoice: !seenChordInVoice,
                 isLastChordOfVoice: isLastChord,
                 prevVoiceTotal: carryIn.prevVoiceTotal,
-                voiceBarLength: voiceBarLength
+                voiceBarLength: voiceBarLength,
+                options: options
             ))
             if case let .chord(chord) = element {
                 previousChordDuration = chord.duration.asFraction
@@ -141,7 +143,8 @@ extension Voice {
         isFirstChordOfVoice: Bool,
         isLastChordOfVoice: Bool,
         prevVoiceTotal: Fraction?,
-        voiceBarLength: Fraction
+        voiceBarLength: Fraction,
+        options: MSCXEncoderOptions = .init()
     ) throws -> XMLTreeNode {
         switch element {
         case let .chord(chord):
@@ -164,13 +167,14 @@ extension Voice {
                 prevVoiceTotal: prevVoiceTotal
             )
             return unscaledChord.notes.isEmpty
-                ? unscaledChord.encodeAsRest()
+                ? unscaledChord.encodeAsRest(options: options)
                 : unscaledChord.encodeAsChord(
                     tieForwardLocation: tieForward,
-                    tieBackLocation: tieBack
+                    tieBackLocation: tieBack,
+                    options: options
                 )
         case let .keySignature(key):
-            return key.encode()
+            return key.encode(options: options)
         case let .timeSignature(time):
             return time.encode()
         case let .clef(clef):
@@ -205,7 +209,7 @@ extension Voice {
                 )]
             )
         case let .spanner(spanner):
-            return spanner.encode()
+            return spanner.encode(options: options)
         }
     }
 

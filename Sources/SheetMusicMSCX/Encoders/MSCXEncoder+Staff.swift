@@ -6,7 +6,9 @@ extension Staff {
     /// Encode the per-Part `<Staff>` declaration block — staff type,
     /// bracket information, default clef. Measures are emitted by
     /// `encodeTopLevel(staffID:)` separately.
-    func encodeDeclaration(staffID: String) -> XMLTreeNode {
+    func encodeDeclaration(
+        staffID: String, options: MSCXEncoderOptions = .init()
+    ) -> XMLTreeNode {
         var children: [XMLTreeNode] = []
         children.append(XMLTreeNode(
             name: "StaffType",
@@ -44,7 +46,9 @@ extension Staff {
     /// staff body, so callers should set it only on staff index 0 of
     /// part index 0.
     func encodeTopLevel(
-        staffID: String, titleFrame: ScoreFrame? = nil
+        staffID: String,
+        titleFrame: ScoreFrame? = nil,
+        options: MSCXEncoderOptions = .init()
     ) throws -> XMLTreeNode {
         var children: [XMLTreeNode] = []
         if let titleFrame {
@@ -58,7 +62,7 @@ extension Staff {
         // MuseScore match the wrong destination chord).
         var carry: [Voice.VoiceTieCarry] = []
         for measure in measures {
-            let result = try measure.encode(carryInVoiceTieCarries: carry)
+            let result = try measure.encode(carryInVoiceTieCarries: carry, options: options)
             children.append(result.node)
             carry = result.carryOutVoiceTieCarries
         }

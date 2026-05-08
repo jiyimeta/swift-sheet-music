@@ -14,21 +14,23 @@ extension Chord {
     /// crosses the bar line.
     func encodeAsChord(
         tieForwardLocation: TieLocation? = nil,
-        tieBackLocation: TieLocation? = nil
+        tieBackLocation: TieLocation? = nil,
+        options: MSCXEncoderOptions = .init()
     ) -> XMLTreeNode {
         var children: [XMLTreeNode] = []
         duration.appendDurationXML(to: &children)
         for note in notes {
             children.append(note.encode(
                 tieForwardLocation: tieForwardLocation,
-                tieBackLocation: tieBackLocation
+                tieBackLocation: tieBackLocation,
+                options: options
             ))
         }
         return XMLTreeNode(name: "Chord", children: children)
     }
 
     /// Encode as a `<Rest>` (notes-empty representation).
-    func encodeAsRest() -> XMLTreeNode {
+    func encodeAsRest(options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
         var children: [XMLTreeNode] = []
         duration.appendDurationXML(to: &children)
         return XMLTreeNode(name: "Rest", children: children)

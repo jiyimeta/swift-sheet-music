@@ -9,7 +9,7 @@ extension Score {
         scoreChildren.append(XMLTreeNode(
             name: "Division", text: String(division)
         ))
-        scoreChildren.append(style.encode())
+        scoreChildren.append(style.encode(options: options))
         // metaTags are emitted in sorted key order for stable output.
         for key in metaTags.keys.sorted() {
             scoreChildren.append(XMLTreeNode(
@@ -39,7 +39,7 @@ extension Score {
         }
         for (part, partID, ids) in allStaffIDs {
             scoreChildren.append(
-                part.encodeDeclaration(partID: partID, staffIDs: ids))
+                part.encodeDeclaration(partID: partID, staffIDs: ids, options: options))
         }
         var titleFrameSlot = titleFrame
         for (part, _, ids) in allStaffIDs {
@@ -47,7 +47,7 @@ extension Score {
                 let frame = titleFrameSlot
                 titleFrameSlot = nil
                 try scoreChildren.append(
-                    staff.encodeTopLevel(staffID: id, titleFrame: frame)
+                    staff.encodeTopLevel(staffID: id, titleFrame: frame, options: options)
                 )
             }
         }

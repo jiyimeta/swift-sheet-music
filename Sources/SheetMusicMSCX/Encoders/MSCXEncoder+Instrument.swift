@@ -3,7 +3,7 @@ import SheetMusicCore
 import SheetMusicXMLTools
 
 extension Instrument {
-    func encode() -> XMLTreeNode {
+    func encode(options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
         var children: [XMLTreeNode] = []
         if let longName {
             children.append(XMLTreeNode(name: "longName", text: longName))
@@ -69,7 +69,7 @@ extension Instrument {
             children.append(art.encode())
         }
         for chan in channels {
-            children.append(chan.encode())
+            children.append(chan.encode(options: options))
         }
         return XMLTreeNode(
             name: "Instrument",

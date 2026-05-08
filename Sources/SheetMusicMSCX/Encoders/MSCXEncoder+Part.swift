@@ -11,19 +11,23 @@ extension Part {
     /// sequential 1-based integers so `Part.id` from the model is
     /// shadowed by the encoder-assigned value — preserves
     /// MuseScore Studio compatibility for hand-built scores.
-    func encodeDeclaration(partID: String, staffIDs: [String]) -> XMLTreeNode {
+    func encodeDeclaration(
+        partID: String,
+        staffIDs: [String],
+        options: MSCXEncoderOptions = .init()
+    ) -> XMLTreeNode {
         precondition(
             staffIDs.count == staves.count,
             "staffIDs must match staves count"
         )
         var children: [XMLTreeNode] = []
         for (staff, id) in zip(staves, staffIDs) {
-            children.append(staff.encodeDeclaration(staffID: id))
+            children.append(staff.encodeDeclaration(staffID: id, options: options))
         }
         if let trackName {
             children.append(XMLTreeNode(name: "trackName", text: trackName))
         }
-        children.append(instrument.encode())
+        children.append(instrument.encode(options: options))
         return XMLTreeNode(
             name: "Part",
             attributes: ["id": partID],

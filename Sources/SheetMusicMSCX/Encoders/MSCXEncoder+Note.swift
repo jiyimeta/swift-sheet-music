@@ -30,7 +30,8 @@ extension Note {
     /// `<Spanner type="Glissando">` block when `glissando` is set.
     func encode(
         tieForwardLocation: TieLocation? = nil,
-        tieBackLocation: TieLocation? = nil
+        tieBackLocation: TieLocation? = nil,
+        options: MSCXEncoderOptions = .init()
     ) -> XMLTreeNode {
         var children: [XMLTreeNode] = []
         if let accidental {
