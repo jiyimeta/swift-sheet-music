@@ -60,7 +60,8 @@ extension LayoutEngine {
         drumLineMap: [Int: Int]? = nil,
         isLastMeasure: Bool = false,
         incomingMelismas: [MelismaContinuation] = [],
-        effectiveMelismaTicks: [MelismaLyricKey: Int] = [:]
+        effectiveMelismaTicks: [MelismaLyricKey: Int] = [:],
+        coversBelowStaffSpanner: Bool = false
     ) -> (elements: [LayoutElement], clef: NotatedClef, key: Int) {
         let staffMidY = metrics.staffHeight / 2 + metrics.sp * 2
         var out: [LayoutElement] = []
@@ -263,7 +264,14 @@ extension LayoutEngine {
             // value than later ones and the in-measure lyric row
             // is jagged.
             let voiceMaxLyricCenterY: CGFloat = {
-                var maxY = staffMidY + metrics.sp * 4
+                // Default 2 sp below staff; bumped further when a
+                // below-staff spanner (hairpin, pedal) shares the
+                // measure, so the spanner glyph sits between staff
+                // and lyric (the MuseScore convention).
+                var maxY = lyricBaseFloor(
+                    staffMidY: staffMidY, metrics: metrics,
+                    coversBelowStaffSpanner: coversBelowStaffSpanner
+                )
                 for el in voice.elements {
                     guard case let .chord(chord) = el else { continue }
                     let steps: [Int] = chord.notes.map { note in
@@ -279,9 +287,8 @@ extension LayoutEngine {
                         ?? StemDirectionRule.direction(for: steps)
                     guard let lowestStep = steps.min()
                     else { continue }
-                    let lowestNoteY = staffMidY
+                    let noteheadBottom = staffMidY
                         - CGFloat(lowestStep) * metrics.sp / 2
-                    let noteheadBottom = lowestNoteY
                         + metrics.sp * 0.5
                     var south = noteheadBottom
                     if stemDir == .up {
@@ -1314,6 +1321,26 @@ extension LayoutEngine {
     }
 
     // swiftlint:enable function_parameter_count
+
+    /// Verse-0 lyric baseline floor before any chord-driven push. Sits
+    /// 2 sp below the staff by default; when a visible below-staff
+    /// spanner (hairpin, pedal, ...) covers this measure, drop another
+    /// ~3 sp so the spanner's glyph fits between staff and lyric.
+    /// `staffBottom = staffMidY + 2 sp`; hairpin centerline rests at
+    /// `staffBottom + 3 sp`, ink reaches `staffBottom + 4 sp`. Lyric
+    /// baseline 1.4 sp under that leaves room for cap-height + a
+    /// small visual gap.
+    private static func lyricBaseFloor(
+        staffMidY: CGFloat,
+        metrics: StaffMetrics,
+        coversBelowStaffSpanner: Bool
+    ) -> CGFloat {
+        let base = staffMidY + metrics.sp * 4
+        if coversBelowStaffSpanner {
+            return max(base, staffMidY + metrics.sp * 7.4)
+        }
+        return base
+    }
 
     /// Map a `ChordArticulation.Kind` to the renderable layout-local
     /// kind, returning `nil` for `.unknown(_)` so callers skip emission.

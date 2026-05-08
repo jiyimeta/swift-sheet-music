@@ -22,6 +22,40 @@ extension LayoutEngine {
         let voltaEndings: [Int]
     }
 
+    /// Per-staff set of measure indices covered by a visible
+    /// below-staff spanner (hairpin, pedal). Used by lyric placement
+    /// to push the verse-0 baseline below the spanner band so a
+    /// hairpin can sit between the staff and the lyric row — the
+    /// MuseScore convention. Crescendo / decrescendo direction and
+    /// in-measure tick offsets are irrelevant here; the question is
+    /// purely "does this measure host a below-staff spanner glyph?"
+    static func belowStaffSpannerCoverage(score: Score) -> [Int: Set<Int>] {
+        var out: [Int: Set<Int>] = [:]
+        for (staffIdx, entry) in score.allStaves.enumerated() {
+            let staff = entry.staff
+            var covered: Set<Int> = []
+            for (measureIdx, measure) in staff.measures.enumerated() {
+                for voice in measure.voices {
+                    for el in voice.elements {
+                        guard case let .spanner(sp) = el,
+                              sp.visible,
+                              isBelowStaff(kind: sp.kind)
+                        else { continue }
+                        let lastIdx = min(
+                            staff.measures.count - 1,
+                            measureIdx + max(0, sp.nextMeasuresOffset)
+                        )
+                        for m in measureIdx ... lastIdx {
+                            covered.insert(m)
+                        }
+                    }
+                }
+            }
+            if !covered.isEmpty { out[staffIdx] = covered }
+        }
+        return out
+    }
+
     /// Walk every staff / measure / voice and collect Spanner anchors.
     /// `endTick` carries the in-measure offset of the end anchor when
     /// the source provided `<next><fractions>` (partial-measure span);
@@ -375,105 +409,34 @@ extension LayoutEngine {
         in system: LayoutSystem,
         belowStaff: Bool,
         staffIndex: Int,
-        measureRange: R,
+        measureRange _: R,
         metrics: StaffMetrics
     ) -> CGFloat where R: RangeExpression, R.Bound == Int {
+        anchorY(
+            in: system, belowStaff: belowStaff,
+            staffIndex: staffIndex, metrics: metrics
+        )
+    }
+
+    static func anchorY(
+        in system: LayoutSystem,
+        belowStaff: Bool,
+        staffIndex: Int,
+        metrics: StaffMetrics
+    ) -> CGFloat {
         let origins = system.staffOrigins
         let clamped = max(0, min(staffIndex, origins.count - 1))
         let origin = origins.indices.contains(clamped)
             ? origins[clamped] : CGPoint(x: 0, y: 0)
-        let staffTop = origin.y
-        let staffBottom = origin.y + metrics.staffHeight
-        // Default fallback band, kept for above-staff spanners and as
-        // a floor when the obstacle scan finds nothing.
-        let defaultBelow = staffBottom + metrics.sp * 3
-        let defaultAbove = staffTop - metrics.sp * 4
-        guard belowStaff else { return defaultAbove }
-        // Boundary of the next staff — staying above it prevents a
-        // below-staff hairpin on staff K from sliding into staff K+1's
-        // ink. For the bottom staff, fall through to the system's
-        // bottom edge so we never push the line off-canvas.
-        let nextStaffTop: CGFloat = {
-            let nextIdx = clamped + 1
-            if origins.indices.contains(nextIdx) {
-                return origins[nextIdx].y
-            }
-            return system.size.height
-        }()
-
-        // Scan obstacles in the range and use the deepest
-        // (largest-Y) one. Walk system.measures slice for performance.
-        let measures = system.measures
-        let validRange: ClosedRange<Int>
-        do {
-            let upper = max(0, measures.count - 1)
-            let raw = measureRange.relative(to: 0 ..< measures.count)
-            let lo = max(0, min(raw.lowerBound, upper))
-            let hi = max(lo, min(raw.upperBound - 1, upper))
-            validRange = lo ... hi
+        if belowStaff {
+            // MuseScore convention: hairpin sits in the band just below
+            // the staff, between staff bottom and any lyric row. Lyric
+            // placement (`voiceMaxLyricCenterY`) is hairpin-aware and
+            // pushes itself further down when a hairpin covers the
+            // measure, so we keep the spanner Y at a stable offset.
+            return origin.y + metrics.staffHeight + metrics.sp * 3
         }
-
-        var deepest: CGFloat = staffBottom
-        for mIdx in validRange {
-            guard mIdx < measures.count else { break }
-            let m = measures[mIdx]
-            for el in m.elements {
-                guard let (yMin, yMax) = elementYExtent(el, sp: metrics.sp)
-                else { continue }
-                // Convert measure-local Y to system-local.
-                let elTop = m.origin.y + yMin
-                let elBottom = m.origin.y + yMax
-                // Only consider obstacles below the staff bottom AND
-                // above the next staff. This keeps lyrics on the
-                // staff above us out of the way.
-                guard elBottom > staffBottom + metrics.sp * 0.5,
-                      elTop < nextStaffTop
-                else { continue }
-                if elBottom > deepest { deepest = elBottom }
-            }
-        }
-        // The hairpin glyph is a "<" / ">" shape: its centerline sits
-        // at `anchorY`, but the ink reaches `anchorY ± sp` at the
-        // wide end. To clear the deepest obstacle by `marginSp` of
-        // empty staff space, anchor at `obstacle + sp + marginSp`.
-        let marginSp: CGFloat = 0.6
-        let withClearance = deepest + metrics.sp * (1 + marginSp)
-        // Cap at the next staff's top minus the same hairpin extent
-        // so the line never collides with the next system staff.
-        let ceiling = nextStaffTop - metrics.sp * (1 + marginSp)
-        return min(max(defaultBelow, withClearance), max(defaultBelow, ceiling))
-    }
-
-    /// Approximate Y extent (in measure-local coords) for elements
-    /// that sit below the staff and could collide with a below-staff
-    /// spanner. Returns nil for elements we don't care about (chord
-    /// glyphs, key/time sigs, etc. — those live on/above the staff
-    /// and don't push hairpins lower).
-    private static func elementYExtent(
-        _ el: LayoutElement, sp: CGFloat
-    ) -> (yMin: CGFloat, yMax: CGFloat)? {
-        switch el {
-        case let .textMark(.lyrics, _, origin):
-            // Lyric text uses `origin.y` as the baseline. Cap-height
-            // ≈ 1.0 sp above, descender ≈ 0.4 sp below. Both rough
-            // upper bounds — exactness isn't required, just a lower
-            // bound on where the ink ends.
-            return (origin.y - sp, origin.y + sp * 0.4)
-        case let .chord(notes, _, _, stemOrigin, _, _, _, _):
-            // Notehead extends ~0.55 sp above/below its origin; stems
-            // can dip further on stem-down low chords, so include
-            // `stemOrigin.y` in the extent. Skips empty (rest) chords.
-            guard !notes.isEmpty else { return nil }
-            var lo = stemOrigin.y
-            var hi = stemOrigin.y
-            for n in notes {
-                lo = min(lo, n.origin.y - sp * 0.55)
-                hi = max(hi, n.origin.y + sp * 0.55)
-            }
-            return (lo, hi)
-        default:
-            return nil
-        }
+        return origin.y - metrics.sp * 4
     }
 
     static func layoutKind(

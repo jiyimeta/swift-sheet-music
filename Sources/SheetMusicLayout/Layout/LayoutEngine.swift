@@ -64,7 +64,8 @@ public enum LayoutEngine {
             availableWidth: availableWidth,
             melismaContinuations: melismas,
             effectiveMelismaTicks: effectiveMelismaTicks,
-            cache: cache
+            cache: cache,
+            belowStaffSpannerCoverage: belowStaffSpannerCoverage(score: score)
         )
         let packedSystems = packSystems(context: context)
         // Title block at the top of the document. Built first so we
@@ -335,5 +336,11 @@ public enum LayoutEngine {
         /// rebuilds it in place with this call's results. See
         /// `LayoutCache`.
         let cache: LayoutCache?
+        /// Per-staff set of measure indices that fall under a visible
+        /// below-staff spanner (today: hairpin / pedal). Lyric placement
+        /// reads this to push its baseline below the spanner band so
+        /// the spanner glyph and lyric row don't overlap. Computed
+        /// once at layout entry — cheap walk across spanners.
+        let belowStaffSpannerCoverage: [Int: Set<Int>]
     }
 }

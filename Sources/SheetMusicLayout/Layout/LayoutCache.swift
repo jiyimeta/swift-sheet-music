@@ -129,5 +129,8 @@ public final class LayoutCache: @unchecked Sendable {
         let incomingMelismas: [MelismaContinuation]
         let effectiveMelismaTicks: [MelismaLyricKey: Int]
         let graceNoteMag: CGFloat
+        /// Whether a visible below-staff spanner (hairpin/pedal) covers
+        /// this measure for this staff. Affects lyric Y placement.
+        let coversBelowStaffSpanner: Bool
     }
 }

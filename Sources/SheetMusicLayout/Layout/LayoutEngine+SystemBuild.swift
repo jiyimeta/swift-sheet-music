@@ -129,6 +129,9 @@ extension LayoutEngine {
                     .indices.contains(measureIdx)
                     ? context.melismaContinuations[staffIdx][measureIdx]
                     : []
+                let coversBelowStaffSpanner = context
+                    .belowStaffSpannerCoverage[staffIdx]?
+                    .contains(measureIdx) ?? false
                 let placementInputs = LayoutCache.PlacementInputs(
                     measure: m,
                     width: w,
@@ -144,7 +147,8 @@ extension LayoutEngine {
                     isLastMeasure: lastMeasure,
                     incomingMelismas: incomingMelismas,
                     effectiveMelismaTicks: context.effectiveMelismaTicks,
-                    graceNoteMag: context.options.graceNoteMag
+                    graceNoteMag: context.options.graceNoteMag,
+                    coversBelowStaffSpanner: coversBelowStaffSpanner
                 )
                 let els: [LayoutElement]
                 let newClef: NotatedClef
@@ -175,7 +179,8 @@ extension LayoutEngine {
                         drumLineMap: drumMap,
                         isLastMeasure: lastMeasure,
                         incomingMelismas: incomingMelismas,
-                        effectiveMelismaTicks: context.effectiveMelismaTicks
+                        effectiveMelismaTicks: context.effectiveMelismaTicks,
+                        coversBelowStaffSpanner: coversBelowStaffSpanner
                     )
                     els = result.elements
                     newClef = result.clef
