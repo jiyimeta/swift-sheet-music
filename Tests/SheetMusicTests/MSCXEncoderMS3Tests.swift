@@ -185,4 +185,26 @@ struct MSCXEncoderMS3Tests {
             .compactMap { $0.attributes["name"] }
         #expect(metaNames == ["arranger", "composer"])
     }
+
+    @Test("v3 Style block has only <Spatium> child (capital S)")
+    func v3StyleEmitsOnlyCapitalSpatium() throws {
+        let score = try MSCXParser.parse(MSCXFixtureLoader.mscxData("midi01"))
+        let bytes = try MSCXEncoder.encode(score, options: .init(targetVersion: .v3))
+        let root = try XMLTreeParser.parse(bytes)
+        let style = try #require(root.first("Score")?.first("Style"))
+        #expect(style.children.count == 1)
+        #expect(style.children[0].name == "Spatium")
+        #expect(style.children[0].text == String(score.style.spatium))
+    }
+
+    @Test("v4 Style block keeps existing emission (lowercase spatium)")
+    func v4StyleEmissionUnchanged() throws {
+        let score = try MSCXParser.parse(MSCXFixtureLoader.mscxData("midi01"))
+        let bytes = try MSCXEncoder.encode(score, options: .init(targetVersion: .v4))
+        let root = try XMLTreeParser.parse(bytes)
+        let style = try #require(root.first("Score")?.first("Style"))
+        let names = style.children.map(\.name)
+        #expect(names.contains("spatium"))
+        #expect(!names.contains("Spatium"))
+    }
 }

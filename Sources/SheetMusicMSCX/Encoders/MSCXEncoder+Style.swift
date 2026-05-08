@@ -13,29 +13,39 @@ extension ScoreStyle {
     /// it). The decoder overlays the same defaults, so elided fields
     /// round-trip back to the same value.
     func encode(options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
-        let defaults = ScoreStyle.museScoreDefaults
-        var children: [XMLTreeNode] = []
-        appendPageLayout(pageLayout, defaults: defaults.pageLayout, into: &children)
-        // Spatium is unconditionally emitted: MuseScore Studio always
-        // writes a `<spatium>` anchor, and downstream readers expect
-        // it as the canonical place to discover engraving units.
-        children.append(double("spatium", spatium))
-        appendHeader(
-            pageChrome.header,
-            defaults: defaults.pageChrome.header,
-            into: &children
-        )
-        appendFooter(
-            pageChrome.footer,
-            defaults: defaults.pageChrome.footer,
-            into: &children
-        )
-        appendPageNumber(
-            pageChrome.pageNumber,
-            defaults: defaults.pageChrome.pageNumber,
-            into: &children
-        )
-        return XMLTreeNode(name: "Style", children: children)
+        switch options.targetVersion {
+        case .v3:
+            // MuseScore Studio 3 writes only the engraving unit anchor
+            // inside <Style> for round-tripped fixtures (capital-S
+            // <Spatium>); see ms3-target spec, Style block.
+            return XMLTreeNode(name: "Style", children: [
+                XMLTreeNode(name: "Spatium", text: String(spatium)),
+            ])
+        case .v4:
+            let defaults = ScoreStyle.museScoreDefaults
+            var children: [XMLTreeNode] = []
+            appendPageLayout(pageLayout, defaults: defaults.pageLayout, into: &children)
+            // Spatium is unconditionally emitted: MuseScore Studio always
+            // writes a `<spatium>` anchor, and downstream readers expect
+            // it as the canonical place to discover engraving units.
+            children.append(double("spatium", spatium))
+            appendHeader(
+                pageChrome.header,
+                defaults: defaults.pageChrome.header,
+                into: &children
+            )
+            appendFooter(
+                pageChrome.footer,
+                defaults: defaults.pageChrome.footer,
+                into: &children
+            )
+            appendPageNumber(
+                pageChrome.pageNumber,
+                defaults: defaults.pageChrome.pageNumber,
+                into: &children
+            )
+            return XMLTreeNode(name: "Style", children: children)
+        }
     }
 }
 
