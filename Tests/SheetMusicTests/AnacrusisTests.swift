@@ -26,4 +26,33 @@ import Testing
             actualLength: Fraction(numerator: 1, denominator: 4)
         ))
     }
+
+    @Test func displayedMeasureNumberSkipsIrregular() {
+        let staff = Staff(measures: [
+            Measure(voices: [Voice(elements: [])], irregular: true),
+            Measure(voices: [Voice(elements: [])]),
+            Measure(voices: [Voice(elements: [])]),
+        ])
+        let part = Part(
+            id: "1",
+            instrument: Instrument(id: "x", longName: "Piano"),
+            staves: [staff]
+        )
+        let score = Score(division: 480, parts: [part])
+
+        #expect(score.displayedMeasureNumber(at: 0) == nil)
+        #expect(score.displayedMeasureNumber(at: 1) == 1)
+        #expect(score.displayedMeasureNumber(at: 2) == 2)
+
+        let regular = Score(division: 480, parts: [Part(
+            id: "1",
+            instrument: Instrument(id: "x", longName: "Piano"),
+            staves: [Staff(measures: [
+                Measure(voices: [Voice(elements: [])]),
+                Measure(voices: [Voice(elements: [])]),
+            ])]
+        )])
+        #expect(regular.displayedMeasureNumber(at: 0) == 1)
+        #expect(regular.displayedMeasureNumber(at: 1) == 2)
+    }
 }
