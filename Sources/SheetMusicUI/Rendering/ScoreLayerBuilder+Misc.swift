@@ -32,6 +32,27 @@ extension ScoreLayerBuilder {
         }
     }
 
+    // MARK: - Articulation
+
+    static func drawArticulation(
+        kind: LayoutElement.ArticulationKind,
+        isAbove: Bool,
+        origin: CGPoint,
+        metrics: StaffMetrics, height: CGFloat,
+        into parent: CALayer
+    ) {
+        let glyph = ArticulationRenderer.glyph(
+            kind: kind, isAbove: isAbove
+        )
+        if let layer = glyphLayer(
+            glyph, at: origin,
+            size: metrics.glyphFontSize,
+            height: height
+        ) {
+            parent.addSublayer(layer)
+        }
+    }
+
     // MARK: - Measure repeat
 
     static func drawMeasureRepeat(

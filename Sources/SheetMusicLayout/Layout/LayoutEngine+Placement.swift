@@ -548,6 +548,50 @@ extension LayoutEngine {
                     }
                     voiceChordOutIndex[voiceElemIdx] = out.count
                     out.append(mainElement)
+                    // Chord-level articulation glyphs (staccato / staccatissimo /
+                    // tenuto). Round-trip-only `.unknown` kinds are filtered.
+                    // Anchor: explicit `art.anchor` wins; `nil` falls back to
+                    // Gould's opposite-side rule (stem-up → below).
+                    // Stacking: each additional glyph on the same side adds
+                    // 1 sp away from the staff. Outside-staff push: if the
+                    // base Y lands inside the staff, clamp it past the
+                    // nearest staff edge by 0.5 sp.
+                    let staffTopY = staffMidY - metrics.sp * 2
+                    let staffBottomY = staffMidY + metrics.sp * 2
+                    var aboveCount = 0
+                    var belowCount = 0
+                    for art in chord.articulations {
+                        guard let artKind = renderableArticulationKind(art.kind)
+                        else { continue }
+                        let isAbove: Bool
+                        switch art.anchor {
+                        case .above: isAbove = true
+                        case .below: isAbove = false
+                        case nil: isAbove = (stem == .down)
+                        }
+                        let noteYs = chordNotes.map(\.origin.y)
+                        let baseY: CGFloat
+                        if isAbove {
+                            baseY = (noteYs.min() ?? staffMidY) - metrics.sp * 0.5
+                        } else {
+                            baseY = (noteYs.max() ?? staffMidY) + metrics.sp * 0.5
+                        }
+                        let pushed: CGFloat
+                        if isAbove {
+                            pushed = min(baseY, staffTopY - metrics.sp * 0.5)
+                        } else {
+                            pushed = max(baseY, staffBottomY + metrics.sp * 0.5)
+                        }
+                        let stackUnits = isAbove ? aboveCount : belowCount
+                        let stackOffset = metrics.sp * CGFloat(stackUnits)
+                        let y = pushed + (isAbove ? -stackOffset : stackOffset)
+                        out.append(.articulation(
+                            kind: artKind,
+                            origin: CGPoint(x: chordX, y: y),
+                            isAbove: isAbove
+                        ))
+                        if isAbove { aboveCount += 1 } else { belowCount += 1 }
+                    }
                     for (gIdx, g) in chord.graceNotesAfter.enumerated() {
                         let relX = graceW * CGFloat(gIdx + 1)
                         let layoutNotes = makeGraceLayoutNotes(
@@ -1268,5 +1312,19 @@ extension LayoutEngine {
             )
         }
     }
+
     // swiftlint:enable function_parameter_count
+
+    /// Map a `ChordArticulation.Kind` to the renderable layout-local
+    /// kind, returning `nil` for `.unknown(_)` so callers skip emission.
+    static func renderableArticulationKind(
+        _ kind: ChordArticulation.Kind
+    ) -> LayoutElement.ArticulationKind? {
+        switch kind {
+        case .staccato: .staccato
+        case .staccatissimo: .staccatissimo
+        case .tenuto: .tenuto
+        case .unknown: nil
+        }
+    }
 }
