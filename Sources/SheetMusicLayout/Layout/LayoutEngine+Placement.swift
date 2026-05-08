@@ -352,7 +352,25 @@ extension LayoutEngine {
                         origin: CGPoint(x: tsX, y: staffMidY)
                     ))
                 case let .barLine(b):
-                    let barX = inHeader ? metrics.sp : timedX(atTick: tickCursor)
+                    // A trailing `<BarLine>` appears AFTER the voice's
+                    // last chord/rest, so `tickCursor` sits at the
+                    // measure's end tick. `tickColumns` only carries
+                    // entries for ticks that host content, so end-tick
+                    // lookups miss — falling back through `timedX`
+                    // would land the bar at `contentStartX + sp`
+                    // (the start of the measure body). Mirror the
+                    // implicit-trailing-barline path and pin the bar
+                    // to `width - sp/2` whenever the cursor sits on
+                    // a non-content tick. Mid-measure bars (rare)
+                    // still resolve via `tickColumns`.
+                    let barX: CGFloat
+                    if inHeader {
+                        barX = metrics.sp
+                    } else if let columnX = tickColumns[tickCursor] {
+                        barX = columnX
+                    } else {
+                        barX = width - metrics.sp / 2
+                    }
                     out.append(.barLine(
                         subtype: b.subtype,
                         origin: CGPoint(x: barX, y: staffMidY)
