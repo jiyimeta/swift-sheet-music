@@ -330,6 +330,44 @@ struct MSCXEncoderMS3Tests {
         #expect(!keySig.children.map(\.name).contains("concertKey"))
     }
 
+    @Test("v3 Spanner location emits <measures> before <fractions>")
+    func v3SpannerLocationOrderReversed() throws {
+        let spanner = Spanner(
+            kind: .hairpin,
+            rawType: "HairPin",
+            nextMeasuresOffset: 1,
+            nextFractionsOffset: Fraction(numerator: 1, denominator: 4)
+        )
+        let xml = spanner.encode(options: .init(targetVersion: .v3))
+        let location = try #require(xml.first("next")?.first("location"))
+        #expect(location.children.map(\.name) == ["measures", "fractions"])
+    }
+
+    @Test("v4 Spanner location order unchanged (fractions first)")
+    func v4SpannerLocationOrderUnchanged() throws {
+        let spanner = Spanner(
+            kind: .hairpin,
+            rawType: "HairPin",
+            nextMeasuresOffset: 1,
+            nextFractionsOffset: Fraction(numerator: 1, denominator: 4)
+        )
+        let xml = spanner.encode(options: .init(targetVersion: .v4))
+        let location = try #require(xml.first("next")?.first("location"))
+        #expect(location.children.map(\.name) == ["fractions", "measures"])
+    }
+
+    @Test("v3 Spanner skip-if-default still applies")
+    func v3SpannerSkipIfDefault() throws {
+        let spanner = Spanner(
+            kind: .hairpin,
+            rawType: "HairPin",
+            nextMeasuresOffset: 0,
+            nextFractionsOffset: nil
+        )
+        let xml = spanner.encode(options: .init(targetVersion: .v3))
+        #expect(!xml.children.map(\.name).contains("next"))
+    }
+
     @Test("v4 KeySig body keeps <concertKey>")
     func v4KeySigKeepsConcertKey() throws {
         var score = try MSCXParser.parse(MSCXFixtureLoader.mscxData("midi01"))

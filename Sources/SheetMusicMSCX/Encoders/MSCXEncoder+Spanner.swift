@@ -46,22 +46,28 @@ extension Spanner {
 
     /// `<next><location>…</location></next>`. Returns nil when both
     /// offsets are at their defaults (no end-side anchor needed).
-    /// Element order inside `<location>`: `<fractions>` then
-    /// `<measures>`, mirroring MuseScore's writer
-    /// (`engraving/types/location.cpp::Location::write`).
+    /// Element order inside `<location>` differs by target version:
+    /// v4 emits `<fractions>` then `<measures>`, matching MuseScore 4
+    /// (`engraving/types/location.cpp::Location::write`); v3 emits
+    /// `<measures>` then `<fractions>`, matching MuseScore 3.
     private func nextLocationElement(options: MSCXEncoderOptions = .init()) -> XMLTreeNode? {
-        var locationChildren: [XMLTreeNode] = []
-        if let frac = nextFractionsOffset {
-            locationChildren.append(XMLTreeNode(
+        let fractionsNode: XMLTreeNode? = nextFractionsOffset.map {
+            XMLTreeNode(
                 name: "fractions",
-                text: "\(frac.numerator)/\(frac.denominator)"
-            ))
+                text: "\($0.numerator)/\($0.denominator)"
+            )
         }
-        if nextMeasuresOffset != 0 {
-            locationChildren.append(XMLTreeNode(
-                name: "measures",
-                text: String(nextMeasuresOffset)
-            ))
+        let measuresNode: XMLTreeNode? = nextMeasuresOffset != 0
+            ? XMLTreeNode(name: "measures", text: String(nextMeasuresOffset))
+            : nil
+        var locationChildren: [XMLTreeNode] = []
+        switch options.targetVersion {
+        case .v3:
+            if let measuresNode { locationChildren.append(measuresNode) }
+            if let fractionsNode { locationChildren.append(fractionsNode) }
+        case .v4:
+            if let fractionsNode { locationChildren.append(fractionsNode) }
+            if let measuresNode { locationChildren.append(measuresNode) }
         }
         guard !locationChildren.isEmpty else { return nil }
         return XMLTreeNode(name: "next", children: [
