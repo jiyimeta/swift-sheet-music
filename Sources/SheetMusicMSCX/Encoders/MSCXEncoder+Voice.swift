@@ -84,8 +84,10 @@ extension Voice {
             return staffText.encode()
         case let .rehearsalMark(rehearsalMark):
             return rehearsalMark.encode()
+        case let .harmony(harmony):
+            return harmony.encode()
         case .spanner,
-             .measureRepeat, .fermata, .harmony,
+             .measureRepeat, .fermata,
              .locationShift:
             throw SheetMusicError.malformedScore(
                 reason: "VoiceElement \(element) not yet supported "

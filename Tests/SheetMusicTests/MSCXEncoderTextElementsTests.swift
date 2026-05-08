@@ -90,6 +90,39 @@ struct MSCXEncoderTextElementsTests {
         #expect(decoded == voice)
     }
 
+    @Test("Harmony round-trips standard chord with root/bass/parens")
+    func harmonyStandardRoundTrip() throws {
+        let harmony = Harmony(
+            name: "Cmaj7",
+            harmonyType: .standard,
+            rootTpc: 14,
+            rootCase: .upper,
+            bassTpc: 7,
+            bassCase: .lower,
+            leftParen: true,
+            rightParen: true,
+            play: false,
+            offsetX: 0.5,
+            offsetY: -0.25,
+            color: ScoreColor(red: 100, green: 100, blue: 100),
+            properties: TextProperties(face: "Edwin", size: 11),
+            visible: false
+        )
+        let voice = Voice(elements: [.harmony(harmony)])
+        let decoded = try voiceRoundTrip(voice)
+        #expect(decoded == voice)
+    }
+
+    @Test("Harmony round-trips Roman and Nashville types")
+    func harmonyTypeVariantsRoundTrip() throws {
+        for type in [HarmonyType.roman, .nashville] as [HarmonyType] {
+            let harmony = Harmony(name: "I", harmonyType: type)
+            let voice = Voice(elements: [.harmony(harmony)])
+            let decoded = try voiceRoundTrip(voice)
+            #expect(decoded == voice, "harmonyType \(type) failed")
+        }
+    }
+
     @Test("Dynamic round-trips subtype + velocity + TextProperties")
     func dynamicRoundTrip() throws {
         let dynamic = Dynamic(
