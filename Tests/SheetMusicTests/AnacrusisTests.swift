@@ -55,4 +55,34 @@ import Testing
         #expect(regular.displayedMeasureNumber(at: 0) == 1)
         #expect(regular.displayedMeasureNumber(at: 1) == 2)
     }
+
+    @Test func decodesLenAttributeAndIrregularElement() throws {
+        let mscx = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <museScore version="4.60">
+          <Score>
+            <Division>480</Division>
+            <Part id="1">
+              <Staff id="1"><StaffType group="pitched"><name>stdNormal</name></StaffType></Staff>
+              <Instrument id="x"><longName>X</longName></Instrument>
+            </Part>
+            <Staff id="1">
+              <Measure len="1/4">
+                <irregular>1</irregular>
+                <voice></voice>
+              </Measure>
+              <Measure>
+                <voice></voice>
+              </Measure>
+            </Staff>
+          </Score>
+        </museScore>
+        """
+        let score = try MSCXParser.parse(Data(mscx.utf8))
+        let measures = score.parts[0].staves[0].measures
+        #expect(measures[0].actualLength == Fraction(numerator: 1, denominator: 4))
+        #expect(measures[0].irregular == true)
+        #expect(measures[1].actualLength == nil)
+        #expect(measures[1].irregular == false)
+    }
 }
