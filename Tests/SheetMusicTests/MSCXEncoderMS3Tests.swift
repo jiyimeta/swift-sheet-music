@@ -301,4 +301,56 @@ struct MSCXEncoderMS3Tests {
         let voiceChildNames = firstVoice.children.map(\.name)
         #expect(voiceChildNames.contains("KeySig"))
     }
+
+    @Test("v3 KeySig body emits <accidental>")
+    func v3KeySigEmitsAccidental() throws {
+        var score = try MSCXParser.parse(MSCXFixtureLoader.mscxData("midi01"))
+        // Use an initial non-zero KeySig — that path actually emits
+        // (initial concertKey == 0 is suppressed at the staff head),
+        // and midi01 has only one measure so a mid-piece change isn't
+        // available here.
+        var voice = score.parts[0].staves[0].measures[0].voices[0]
+        let withoutKeySig = voice.elements.filter {
+            if case .keySignature = $0 { false } else { true }
+        }
+        var newElements: [VoiceElement] = [
+            .keySignature(KeySignature(concertKey: 2)),
+        ]
+        newElements.append(contentsOf: withoutKeySig)
+        voice.elements = newElements
+        score.parts[0].staves[0].measures[0].voices[0] = voice
+
+        let bytes = try MSCXEncoder.encode(score, options: .init(targetVersion: .v3))
+        let root = try XMLTreeParser.parse(bytes)
+        let staffBody = root.first("Score")?.children
+            .last(where: { $0.name == "Staff" })
+        let firstMeasure = try #require(staffBody?.first("Measure"))
+        let keySig = try #require(firstMeasure.first("voice")?.first("KeySig"))
+        #expect(keySig.first("accidental")?.text == "2")
+        #expect(!keySig.children.map(\.name).contains("concertKey"))
+    }
+
+    @Test("v4 KeySig body keeps <concertKey>")
+    func v4KeySigKeepsConcertKey() throws {
+        var score = try MSCXParser.parse(MSCXFixtureLoader.mscxData("midi01"))
+        var voice = score.parts[0].staves[0].measures[0].voices[0]
+        let withoutKeySig = voice.elements.filter {
+            if case .keySignature = $0 { false } else { true }
+        }
+        var newElements: [VoiceElement] = [
+            .keySignature(KeySignature(concertKey: 2)),
+        ]
+        newElements.append(contentsOf: withoutKeySig)
+        voice.elements = newElements
+        score.parts[0].staves[0].measures[0].voices[0] = voice
+
+        let bytes = try MSCXEncoder.encode(score, options: .init(targetVersion: .v4))
+        let root = try XMLTreeParser.parse(bytes)
+        let staffBody = root.first("Score")?.children
+            .last(where: { $0.name == "Staff" })
+        let firstMeasure = try #require(staffBody?.first("Measure"))
+        let keySig = try #require(firstMeasure.first("voice")?.first("KeySig"))
+        #expect(keySig.first("concertKey")?.text == "2")
+        #expect(!keySig.children.map(\.name).contains("accidental"))
+    }
 }
