@@ -8,6 +8,18 @@ public struct XMLTreeNode: Sendable, Equatable {
     public var text: String
     public var children: [XMLTreeNode]
 
+    public init(
+        name: String,
+        attributes: [String: String] = [:],
+        text: String = "",
+        children: [XMLTreeNode] = []
+    ) {
+        self.name = name
+        self.attributes = attributes
+        self.text = text
+        self.children = children
+    }
+
     /// First direct child element with this name, or nil.
     public func first(_ name: String) -> XMLTreeNode? {
         children.first(where: { $0.name == name })

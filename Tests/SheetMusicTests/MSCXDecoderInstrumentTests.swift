@@ -128,7 +128,7 @@ import Testing
         </Part>
         """
         let node = try XMLTreeParser.parse(Data(xml.utf8))
-        let pairing = try Part.decodePairing(node)
+        let pairing = try Part.decodePairing(node, fallbackIndex: 1)
         #expect(pairing.partID == "1")
         #expect(pairing.trackName == "Voice")
         #expect(pairing.instrument.id == "voice")

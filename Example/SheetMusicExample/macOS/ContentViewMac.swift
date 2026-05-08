@@ -172,7 +172,10 @@
                     onLoadHarmonyBasic: loadHarmonyBasic,
                     onOpenFile: showOpenPanel,
                     onTogglePlayback: togglePlayback,
-                    onExportPDF: exportPDF
+                    onExportPDF: exportPDF,
+                    onExportMSCX: exportMSCX,
+                    onExportMSCXv3: exportMSCXv3,
+                    onExportMSCZv3: exportMSCZv3
                 )
             } detail: {
                 if let score {
@@ -281,6 +284,60 @@
                 NSWorkspace.shared.activateFileViewerSelecting([url])
             } catch {
                 errorMessage = "PDF export failed: \(error.localizedDescription)"
+            }
+        }
+
+        private func exportMSCX() {
+            exportMSCX(targetVersion: .v4, title: "Save Score as MSCX (MS4)")
+        }
+
+        private func exportMSCXv3() {
+            exportMSCX(targetVersion: .v3, title: "Save Score as MSCX (MS3)")
+        }
+
+        private func exportMSCX(targetVersion: MSCXVersion, title: String) {
+            guard let score else { return }
+            let panel = NSSavePanel()
+            if let mscx = UTType(filenameExtension: "mscx") {
+                panel.allowedContentTypes = [mscx]
+            }
+            panel.nameFieldStringValue = (sourceName as NSString)
+                .deletingPathExtension + ".mscx"
+            panel.canCreateDirectories = true
+            panel.title = title
+            guard panel.runModal() == .OK, let url = panel.url else { return }
+            do {
+                try SheetMusic.exportMSCX(
+                    score,
+                    options: MSCXEncoderOptions(targetVersion: targetVersion),
+                    to: url
+                )
+                NSWorkspace.shared.activateFileViewerSelecting([url])
+            } catch {
+                errorMessage = "MSCX export failed: \(error.localizedDescription)"
+            }
+        }
+
+        private func exportMSCZv3() {
+            guard let score else { return }
+            let panel = NSSavePanel()
+            if let mscz = UTType(filenameExtension: "mscz") {
+                panel.allowedContentTypes = [mscz]
+            }
+            panel.nameFieldStringValue = (sourceName as NSString)
+                .deletingPathExtension + ".mscz"
+            panel.canCreateDirectories = true
+            panel.title = "Save Score as MSCZ (MS3)"
+            guard panel.runModal() == .OK, let url = panel.url else { return }
+            do {
+                try SheetMusic.exportMSCZ(
+                    score,
+                    options: MSCXEncoderOptions(targetVersion: .v3),
+                    to: url
+                )
+                NSWorkspace.shared.activateFileViewerSelecting([url])
+            } catch {
+                errorMessage = "MSCZ export failed: \(error.localizedDescription)"
             }
         }
 

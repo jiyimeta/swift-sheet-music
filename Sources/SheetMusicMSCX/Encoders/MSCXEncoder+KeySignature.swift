@@ -1,0 +1,19 @@
+import Foundation
+import SheetMusicCore
+import SheetMusicXMLTools
+
+extension KeySignature {
+    func encode(options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
+        let childName: String
+        switch options.targetVersion {
+        case .v3: childName = "accidental"
+        case .v4: childName = "concertKey"
+        }
+        return XMLTreeNode(
+            name: "KeySig",
+            children: [
+                XMLTreeNode(name: childName, text: String(concertKey)),
+            ]
+        )
+    }
+}

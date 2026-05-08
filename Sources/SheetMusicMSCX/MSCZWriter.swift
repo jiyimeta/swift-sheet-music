@@ -66,6 +66,53 @@ public enum MSCZWriter {
         }
     }
 
+    /// Serialize a `Score` to `.mscx` and package the result as
+    /// `.mscz` bytes.
+    public static func write(
+        score: Score, mainFileName: String = "score.mscx"
+    ) throws -> Data {
+        let mscxData = try MSCXEncoder.encode(score)
+        return try write(mscxData: mscxData, mainFileName: mainFileName)
+    }
+
+    /// Serialize a `Score` to `.mscx` and write the resulting
+    /// `.mscz` to a file URL.
+    public static func write(
+        score: Score, to url: URL, mainFileName: String = "score.mscx"
+    ) throws {
+        let bytes = try write(score: score, mainFileName: mainFileName)
+        do {
+            try bytes.write(to: url, options: .atomic)
+        } catch {
+            throw SheetMusicError.ioError(url: url, underlying: error)
+        }
+    }
+
+    /// Serialize a `Score` with options and package as `.mscz` bytes.
+    public static func write(
+        score: Score, options: MSCXEncoderOptions,
+        mainFileName: String = "score.mscx"
+    ) throws -> Data {
+        let mscxData = try MSCXEncoder.encode(score, options: options)
+        return try write(mscxData: mscxData, mainFileName: mainFileName)
+    }
+
+    /// Serialize a `Score` with options and write the resulting
+    /// `.mscz` to a file URL.
+    public static func write(
+        score: Score, options: MSCXEncoderOptions, to url: URL,
+        mainFileName: String = "score.mscx"
+    ) throws {
+        let bytes = try write(
+            score: score, options: options, mainFileName: mainFileName
+        )
+        do {
+            try bytes.write(to: url, options: .atomic)
+        } catch {
+            throw SheetMusicError.ioError(url: url, underlying: error)
+        }
+    }
+
     private static func validate(mainFileName: String) throws {
         guard !mainFileName.isEmpty else {
             throw SheetMusicError.corruptedContainer(

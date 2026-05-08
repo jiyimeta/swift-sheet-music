@@ -5,8 +5,15 @@ import SheetMusicXMLTools
 extension Part {
     /// Decode the per-`<Part>` declaration. Top-level `<Staff>` measures
     /// are paired in afterwards by `assembleParts`.
-    static func decodePairing(_ node: XMLTreeNode) throws -> MSCXStaffPairing {
-        let id = node.attributes["id"] ?? ""
+    /// `fallbackIndex` (1-based) is the position of this `<Part>` in
+    /// document order; it backstops missing/empty `id` attributes
+    /// with a sequential integer so the decoded `Part.id` is always
+    /// non-empty (matches the encoder's id-synthesis convention).
+    static func decodePairing(
+        _ node: XMLTreeNode, fallbackIndex: Int
+    ) throws -> MSCXStaffPairing {
+        let raw = node.attributes["id"] ?? ""
+        let id = raw.isEmpty ? String(fallbackIndex) : raw
         let declared = node.all("Staff").map { Staff.declared($0) }
         guard let instrNode = node.first("Instrument") else {
             throw SheetMusicError.malformedScore(reason: "Part missing <Instrument>")
