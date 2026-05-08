@@ -80,6 +80,8 @@ try SheetMusic.exportMSCX(score, to: outputMSCX)
 try SheetMusic.exportMSCZ(score, to: outputMSCZ)
 ```
 
+`MSCXEncoderOptions(targetVersion: .v3)` produces MuseScore-3.6.2-flavoured `.mscx` / `.mscz`; `.v4` (default) keeps the current MuseScore-4 wire form.
+
 If you only need the score model:
 
 ```swift
