@@ -3,62 +3,76 @@ import SheetMusicCore
 import SheetMusicXMLTools
 
 extension Voice {
-    /// Build the `<voice>` element. Phase 1 supports the element
-    /// kinds present in `midi01.mscx`: chords (with rests as
-    /// notes-empty chords), key/time/clef changes. Other cases
-    /// (Tempo, Dynamic, Spanner, Harmony, …) throw
-    /// `SheetMusicError.malformedScore` until follow-up specs add
-    /// proper encoders.
+    /// Build the `<voice>` element.
     ///
     /// Tuplets are emitted as `<Tuplet>` … `<endTuplet/>` markers
     /// around the elements they cover. Chord/rest durations within
-    /// a tuplet are un-scaled (divided by the tuplet ratio) so the
-    /// parser's positional re-scaling produces the original
-    /// fraction. Nested tuplets are not yet supported and throw.
+    /// a tuplet are un-scaled (divided by the product of every
+    /// containing tuplet's ratio) so the parser's positional
+    /// re-scaling reproduces the original fraction. Properly
+    /// nested tuplets — disjoint or fully containing — are
+    /// supported; truly overlapping ranges throw.
     func encode() throws -> XMLTreeNode {
-        try Self.validateNoNestedTuplets(tuplets)
-        let tupletByStart = Dictionary(uniqueKeysWithValues: tuplets.map { ($0.startIndex, $0) })
-        let tupletByEnd = Dictionary(uniqueKeysWithValues: tuplets.map { ($0.endIndex, $0) })
+        try Self.validateProperlyNested(tuplets)
+        // At a given startIndex, push outer tuplets (longer range)
+        // before inner ones so the close-side LIFO pops innermost first.
+        var startsByIndex: [Int: [Tuplet]] = [:]
+        for tuplet in tuplets {
+            startsByIndex[tuplet.startIndex, default: []].append(tuplet)
+        }
+        for key in startsByIndex.keys {
+            startsByIndex[key]?.sort { $0.endIndex > $1.endIndex }
+        }
+        var endCountByIndex: [Int: Int] = [:]
+        for tuplet in tuplets {
+            endCountByIndex[tuplet.endIndex, default: 0] += 1
+        }
 
         var children: [XMLTreeNode] = []
+        var stack: [Tuplet] = []
         for (index, element) in elements.enumerated() {
-            if let starting = tupletByStart[index] {
-                children.append(starting.encode())
+            for opening in startsByIndex[index] ?? [] {
+                children.append(opening.encode())
+                stack.append(opening)
             }
-            let activeTuplet = tupletByStart[index]
-                ?? tupletByEnd[index]
-                ?? tupletContaining(index: index)
-            try children.append(encode(element: element, activeTuplet: activeTuplet))
-            if tupletByEnd[index] != nil {
+            try children.append(encode(element: element, activeTuplets: stack))
+            for _ in 0 ..< (endCountByIndex[index] ?? 0) {
+                stack.removeLast()
                 children.append(XMLTreeNode(name: "endTuplet"))
             }
         }
         return XMLTreeNode(name: "voice", children: children)
     }
 
-    private func tupletContaining(index: Int) -> Tuplet? {
-        tuplets.first(where: { index >= $0.startIndex && index <= $0.endIndex })
-    }
-
-    private static func validateNoNestedTuplets(_ tuplets: [Tuplet]) throws {
-        let sorted = tuplets.sorted { $0.startIndex < $1.startIndex }
-        for (i, current) in sorted.enumerated() {
-            for next in sorted.dropFirst(i + 1) where next.startIndex <= current.endIndex {
-                throw SheetMusicError.malformedScore(
-                    reason: "Nested or overlapping tuplets not yet "
-                        + "supported by MSCXEncoder Phase 2.1 — see "
-                        + "docs/superpowers/specs/2026-05-07-mscx-export-design.md"
-                )
+    private static func validateProperlyNested(_ tuplets: [Tuplet]) throws {
+        // A laminar family: every pair is disjoint or fully nested.
+        for (i, current) in tuplets.enumerated() {
+            for other in tuplets.dropFirst(i + 1) {
+                let disjoint = current.endIndex < other.startIndex
+                    || other.endIndex < current.startIndex
+                let currentContainsOther = current.startIndex <= other.startIndex
+                    && current.endIndex >= other.endIndex
+                let otherContainsCurrent = other.startIndex <= current.startIndex
+                    && other.endIndex >= current.endIndex
+                if !(disjoint || currentContainsOther || otherContainsCurrent) {
+                    throw SheetMusicError.malformedScore(
+                        reason: "Tuplets [\(current.startIndex)..."
+                            + "\(current.endIndex)] and [\(other.startIndex)..."
+                            + "\(other.endIndex)] overlap without "
+                            + "nesting; MSCXEncoder accepts only "
+                            + "properly nested or disjoint tuplets."
+                    )
+                }
             }
         }
     }
 
     private func encode(
-        element: VoiceElement, activeTuplet: Tuplet?
+        element: VoiceElement, activeTuplets: [Tuplet]
     ) throws -> XMLTreeNode {
         switch element {
         case let .chord(chord):
-            let unscaled = try unscaledDuration(chord.duration, in: activeTuplet)
+            let unscaled = try unscaledDuration(chord.duration, in: activeTuplets)
             let unscaledChord = Chord(
                 duration: unscaled,
                 notes: chord.notes,
@@ -108,28 +122,34 @@ extension Voice {
         }
     }
 
-    /// Divide the stored (already-scaled) duration by the tuplet's
-    /// `actualNotes/normalNotes` ratio so the decoder's positional
-    /// scaling reproduces the original fraction.
+    /// Divide the stored (already-scaled) duration by the product
+    /// of every containing tuplet's `actualNotes/normalNotes` ratio
+    /// so the decoder's positional scaling reproduces the original
+    /// fraction.
     private func unscaledDuration(
-        _ duration: NoteDuration, in tuplet: Tuplet?
+        _ duration: NoteDuration, in tuplets: [Tuplet]
     ) throws -> NoteDuration {
-        guard let tuplet else { return duration }
+        guard !tuplets.isEmpty else { return duration }
         let scaled = duration.asFraction
-        // Decoder scales by normalNotes/actualNotes. To invert:
-        // multiply by actualNotes/normalNotes.
-        let unscaled = Fraction(
-            numerator: scaled.numerator * tuplet.actualNotes,
-            denominator: scaled.denominator * tuplet.normalNotes
-        )
+        // Decoder scales by ∏ normalNotes/actualNotes. To invert:
+        // multiply by ∏ actualNotes/normalNotes.
+        var unscaled = scaled
+        for tuplet in tuplets {
+            unscaled = Fraction(
+                numerator: unscaled.numerator * tuplet.actualNotes,
+                denominator: unscaled.denominator * tuplet.normalNotes
+            )
+        }
         let candidate = NoteDuration.fraction(unscaled)
         guard candidate.decomposed() != nil else {
+            let ratios = tuplets
+                .map { "\($0.actualNotes)/\($0.normalNotes)" }
+                .joined(separator: " × ")
             throw SheetMusicError.malformedScore(
                 reason: "Tuplet member duration \(scaled) does not "
                     + "decompose to a named base + dots after "
-                    + "un-scaling by \(tuplet.actualNotes)/"
-                    + "\(tuplet.normalNotes); MSCXEncoder Phase 2.1 "
-                    + "supports only common cases."
+                    + "un-scaling by \(ratios); MSCXEncoder supports "
+                    + "only durations representable as base + dots."
             )
         }
         return candidate

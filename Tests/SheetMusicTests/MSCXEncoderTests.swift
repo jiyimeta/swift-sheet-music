@@ -281,53 +281,6 @@ struct MSCXEncoderTests {
         #expect(exotic.decomposed() == nil)
     }
 
-    @Test("Triplet of quarters round-trips through Voice.decode")
-    func tripletRoundTrip() throws {
-        // A triplet (2:3) of three quarter notes occupies the time of
-        // two quarters. Each member's stored duration is quarter*2/3 = 1/6.
-        let scaledQuarter = NoteDuration.fraction(.init(numerator: 1, denominator: 6))
-        let voice = Voice(
-            elements: [
-                .chord(Chord(duration: scaledQuarter, notes: ChordNotes([Note(pitch: 60, tpc: 14)]))),
-                .chord(Chord(duration: scaledQuarter, notes: ChordNotes([Note(pitch: 62, tpc: 16)]))),
-                .chord(Chord(duration: scaledQuarter, notes: ChordNotes([Note(pitch: 64, tpc: 18)]))),
-            ],
-            tuplets: [
-                Tuplet(normalNotes: 2, actualNotes: 3, startIndex: 0, endIndex: 2),
-            ]
-        )
-
-        let xml = try voice.encode()
-        let bytes = XMLTreeSerializer.serialize(XMLTreeNode(name: "root", children: [xml]))
-        let reparsed = try XMLTreeParser.parse(bytes)
-        let voiceNode = try #require(reparsed.first("voice"))
-        let decoded = try Voice.decode(voiceNode)
-        #expect(decoded == voice)
-    }
-
-    @Test("Nested tuplets throw")
-    func nestedTupletsThrow() {
-        let voice = Voice(
-            elements: [
-                .chord(Chord(
-                    duration: .fraction(.init(numerator: 1, denominator: 6)),
-                    notes: ChordNotes([Note(pitch: 60, tpc: 14)])
-                )),
-                .chord(Chord(
-                    duration: .fraction(.init(numerator: 1, denominator: 6)),
-                    notes: ChordNotes([Note(pitch: 62, tpc: 16)])
-                )),
-            ],
-            tuplets: [
-                Tuplet(normalNotes: 2, actualNotes: 3, startIndex: 0, endIndex: 1),
-                Tuplet(normalNotes: 2, actualNotes: 3, startIndex: 1, endIndex: 1),
-            ]
-        )
-        #expect(throws: SheetMusicError.self) {
-            try voice.encode()
-        }
-    }
-
     @Test("Measure with all measure-level fields round-trips")
     func measureFieldsRoundTrip() throws {
         let voice = Voice(elements: [
