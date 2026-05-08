@@ -21,9 +21,13 @@ extension Measure {
     /// of this measure picks it up so a chord at the head of the
     /// measure with `tieBack` can encode the back offset across the
     /// bar line. The returned array is `carryOutVoiceTieCarries[i]`
-    /// for the next measure.
+    /// for the next measure. `isFirstMeasureOfStaff` flags voice 0
+    /// of this measure as the staff-head voice so the encoder can
+    /// drop an implicit C-major KeySig (matching MuseScore Studio's
+    /// writer convention).
     func encode(
         carryInVoiceTieCarries: [Voice.VoiceTieCarry],
+        isFirstMeasureOfStaff: Bool = false,
         options: MSCXEncoderOptions = .init()
     ) throws -> (node: XMLTreeNode, carryOutVoiceTieCarries: [Voice.VoiceTieCarry]) {
         var children: [XMLTreeNode] = []
@@ -40,7 +44,11 @@ extension Measure {
             let carryIn = index < carryInVoiceTieCarries.count
                 ? carryInVoiceTieCarries[index]
                 : Voice.VoiceTieCarry()
-            let result = try voice.encode(carryIn: carryIn, options: options)
+            let result = try voice.encode(
+                carryIn: carryIn,
+                isStaffHead: isFirstMeasureOfStaff && index == 0,
+                options: options
+            )
             children.append(result.node)
             carryOut[index] = result.carryOut
         }

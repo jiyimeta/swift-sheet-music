@@ -61,8 +61,12 @@ extension Staff {
         // offsets — the same-`<fractions>`-only encoding makes
         // MuseScore match the wrong destination chord).
         var carry: [Voice.VoiceTieCarry] = []
-        for measure in measures {
-            let result = try measure.encode(carryInVoiceTieCarries: carry, options: options)
+        for (measureIndex, measure) in measures.enumerated() {
+            let result = try measure.encode(
+                carryInVoiceTieCarries: carry,
+                isFirstMeasureOfStaff: measureIndex == 0,
+                options: options
+            )
             children.append(result.node)
             carry = result.carryOutVoiceTieCarries
         }

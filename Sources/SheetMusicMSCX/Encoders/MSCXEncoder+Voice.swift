@@ -36,8 +36,16 @@ extension Voice {
     /// Encode the voice with cross-measure tie carry-in. Returns the
     /// encoded `<voice>` plus the carry-out (last chord duration and
     /// total voice played duration) for the next measure.
+    ///
+    /// `isStaffHead` is true only for voice 0 of measure 0 of a staff.
+    /// MuseScore Studio's writer omits the implicit C-major key
+    /// signature at the staff head — emitting `<KeySig><concertKey>0
+    /// </concertKey></KeySig>` causes Studio to display a redundant
+    /// "natural" sign at the start of the system on file open. We
+    /// mirror that omission here.
     func encode(
         carryIn: VoiceTieCarry,
+        isStaffHead: Bool = false,
         options: MSCXEncoderOptions = .init()
     ) throws -> (node: XMLTreeNode, carryOut: VoiceTieCarry) {
         try Self.validateProperlyNested(tuplets)
@@ -66,51 +74,98 @@ extension Voice {
         }
 
         let voiceBarLength = computedBarLength()
+        // Staff-head suppression of an implicit C-major KeySig: drop
+        // the very first VoiceElement when this voice sits at the
+        // staff head and that element is `keySignature` with
+        // concertKey == 0. Tuplets do not span key signatures, so
+        // the open/close tuplet bookkeeping at index 0 is unaffected.
+        let dropInitialZeroKeySig = shouldDropInitialZeroKeySig(isStaffHead: isStaffHead)
 
-        var children: [XMLTreeNode] = []
-        var stack: [Tuplet] = []
-        var previousChordDuration: Fraction? = carryIn.prevChordDuration
-        var seenChordInVoice = false
-        var voiceTotal = Fraction(numerator: 0, denominator: 1)
+        var state = EncodeState(carryIn: carryIn)
         for (index, element) in elements.enumerated() {
             for opening in startsByIndex[index] ?? [] {
-                children.append(opening.encode())
-                stack.append(opening)
+                state.children.append(opening.encode())
+                state.stack.append(opening)
             }
-            let isLastChord: Bool = {
-                if case .chord = element { return index == lastChordIndex }
-                return false
-            }()
-            try children.append(encode(
-                element: element,
-                activeTuplets: stack,
-                previousChordDuration: previousChordDuration,
-                isFirstChordOfVoice: !seenChordInVoice,
-                isLastChordOfVoice: isLastChord,
-                prevVoiceTotal: carryIn.prevVoiceTotal,
-                voiceBarLength: voiceBarLength,
-                options: options
-            ))
-            if case let .chord(chord) = element {
-                previousChordDuration = chord.duration.asFraction
-                seenChordInVoice = true
-                // Fraction defines `+` but no `+=`; rewriting as
-                // shorthand would not compile.
-                // swiftlint:disable:next shorthand_operator
-                voiceTotal = voiceTotal + chord.duration.asFraction
+            if !(dropInitialZeroKeySig && index == 0) {
+                try emitElement(
+                    element: element,
+                    index: index,
+                    lastChordIndex: lastChordIndex,
+                    voiceBarLength: voiceBarLength,
+                    carryIn: carryIn,
+                    state: &state,
+                    options: options
+                )
             }
             for _ in 0 ..< (endCountByIndex[index] ?? 0) {
-                stack.removeLast()
-                children.append(XMLTreeNode(name: "endTuplet"))
+                state.stack.removeLast()
+                state.children.append(XMLTreeNode(name: "endTuplet"))
             }
         }
         return (
-            XMLTreeNode(name: "voice", children: children),
+            XMLTreeNode(name: "voice", children: state.children),
             VoiceTieCarry(
-                prevChordDuration: previousChordDuration,
-                prevVoiceTotal: voiceTotal
+                prevChordDuration: state.previousChordDuration,
+                prevVoiceTotal: state.voiceTotal
             )
         )
+    }
+
+    /// Per-iteration state of the voice-encoding loop. Bundled so
+    /// the loop body can stay below the function-body-length limit
+    /// after factoring out `emitElement`.
+    private struct EncodeState {
+        var children: [XMLTreeNode] = []
+        var stack: [Tuplet] = []
+        var previousChordDuration: Fraction?
+        var seenChordInVoice = false
+        var voiceTotal = Fraction(numerator: 0, denominator: 1)
+
+        init(carryIn: VoiceTieCarry) {
+            previousChordDuration = carryIn.prevChordDuration
+        }
+    }
+
+    private func shouldDropInitialZeroKeySig(isStaffHead: Bool) -> Bool {
+        guard isStaffHead, let first = elements.first else { return false }
+        if case let .keySignature(key) = first, key.concertKey == 0 {
+            return true
+        }
+        return false
+    }
+
+    private func emitElement(
+        element: VoiceElement,
+        index: Int,
+        lastChordIndex: Int?,
+        voiceBarLength: Fraction,
+        carryIn: VoiceTieCarry,
+        state: inout EncodeState,
+        options: MSCXEncoderOptions
+    ) throws {
+        let isLastChord: Bool = {
+            if case .chord = element { return index == lastChordIndex }
+            return false
+        }()
+        try state.children.append(encode(
+            element: element,
+            activeTuplets: state.stack,
+            previousChordDuration: state.previousChordDuration,
+            isFirstChordOfVoice: !state.seenChordInVoice,
+            isLastChordOfVoice: isLastChord,
+            prevVoiceTotal: carryIn.prevVoiceTotal,
+            voiceBarLength: voiceBarLength,
+            options: options
+        ))
+        if case let .chord(chord) = element {
+            state.previousChordDuration = chord.duration.asFraction
+            state.seenChordInVoice = true
+            // Fraction defines `+` but no `+=`; rewriting as
+            // shorthand would not compile.
+            // swiftlint:disable:next shorthand_operator
+            state.voiceTotal = state.voiceTotal + chord.duration.asFraction
+        }
     }
 
     private static func validateProperlyNested(_ tuplets: [Tuplet]) throws {

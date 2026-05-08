@@ -207,4 +207,98 @@ struct MSCXEncoderMS3Tests {
         #expect(names.contains("spatium"))
         #expect(!names.contains("Spatium"))
     }
+
+    @Test("Initial KeySig with concertKey 0 is omitted (v4)")
+    func initialZeroKeySigOmittedV4() throws {
+        var score = try MSCXParser.parse(MSCXFixtureLoader.mscxData("midi01"))
+        // Force a leading C-major KeySig on staff 0 / measure 0 / voice 0.
+        var voice = score.parts[0].staves[0].measures[0].voices[0]
+        let withoutKeySig = voice.elements.filter {
+            if case .keySignature = $0 { false } else { true }
+        }
+        var newElements: [VoiceElement] = [
+            .keySignature(KeySignature(concertKey: 0)),
+        ]
+        newElements.append(contentsOf: withoutKeySig)
+        voice.elements = newElements
+        score.parts[0].staves[0].measures[0].voices[0] = voice
+
+        let bytes = try MSCXEncoder.encode(score, options: .init(targetVersion: .v4))
+        let root = try XMLTreeParser.parse(bytes)
+        // Top-level (body) Staff comes after Part-scoped declaration Staffs.
+        let staffBody = root.first("Score")?.children
+            .last(where: { $0.name == "Staff" })
+        let firstMeasure = try #require(staffBody?.first("Measure"))
+        let firstVoice = try #require(firstMeasure.first("voice"))
+        let voiceChildNames = firstVoice.children.map(\.name)
+        #expect(!voiceChildNames.contains("KeySig"))
+    }
+
+    @Test("Initial KeySig with concertKey 0 is omitted (v3)")
+    func initialZeroKeySigOmittedV3() throws {
+        var score = try MSCXParser.parse(MSCXFixtureLoader.mscxData("midi01"))
+        var voice = score.parts[0].staves[0].measures[0].voices[0]
+        let withoutKeySig = voice.elements.filter {
+            if case .keySignature = $0 { false } else { true }
+        }
+        var newElements: [VoiceElement] = [
+            .keySignature(KeySignature(concertKey: 0)),
+        ]
+        newElements.append(contentsOf: withoutKeySig)
+        voice.elements = newElements
+        score.parts[0].staves[0].measures[0].voices[0] = voice
+
+        let bytes = try MSCXEncoder.encode(score, options: .init(targetVersion: .v3))
+        let root = try XMLTreeParser.parse(bytes)
+        let staffBody = root.first("Score")?.children
+            .last(where: { $0.name == "Staff" })
+        let firstMeasure = try #require(staffBody?.first("Measure"))
+        let firstVoice = try #require(firstMeasure.first("voice"))
+        let voiceChildNames = firstVoice.children.map(\.name)
+        #expect(!voiceChildNames.contains("KeySig"))
+    }
+
+    @Test("Mid-piece KeySig change still emitted (v4)")
+    func midKeySigChangeStillEmittedV4() throws {
+        var score = try MSCXParser.parse(MSCXFixtureLoader.mscxData("midi01"))
+        // Need at least two measures in staff 0 to test mid-piece change.
+        guard score.parts[0].staves[0].measures.count >= 2 else { return }
+        var v = score.parts[0].staves[0].measures[1].voices[0]
+        v.elements.insert(.keySignature(KeySignature(concertKey: 2)), at: 0)
+        score.parts[0].staves[0].measures[1].voices[0] = v
+
+        let bytes = try MSCXEncoder.encode(score, options: .init(targetVersion: .v4))
+        let root = try XMLTreeParser.parse(bytes)
+        let staffBody = root.first("Score")?.children
+            .last(where: { $0.name == "Staff" })
+        let measures = staffBody?.children.filter { $0.name == "Measure" } ?? []
+        let secondMeasure = try #require(measures.count >= 2 ? measures[1] : nil)
+        let secondVoice = try #require(secondMeasure.first("voice"))
+        let voiceChildNames = secondVoice.children.map(\.name)
+        #expect(voiceChildNames.contains("KeySig"))
+    }
+
+    @Test("Initial non-zero KeySig is still emitted (v4)")
+    func initialNonZeroKeySigStillEmittedV4() throws {
+        var score = try MSCXParser.parse(MSCXFixtureLoader.mscxData("midi01"))
+        var voice = score.parts[0].staves[0].measures[0].voices[0]
+        let withoutKeySig = voice.elements.filter {
+            if case .keySignature = $0 { false } else { true }
+        }
+        var newElements: [VoiceElement] = [
+            .keySignature(KeySignature(concertKey: 3)),
+        ]
+        newElements.append(contentsOf: withoutKeySig)
+        voice.elements = newElements
+        score.parts[0].staves[0].measures[0].voices[0] = voice
+
+        let bytes = try MSCXEncoder.encode(score, options: .init(targetVersion: .v4))
+        let root = try XMLTreeParser.parse(bytes)
+        let staffBody = root.first("Score")?.children
+            .last(where: { $0.name == "Staff" })
+        let firstMeasure = try #require(staffBody?.first("Measure"))
+        let firstVoice = try #require(firstMeasure.first("voice"))
+        let voiceChildNames = firstVoice.children.map(\.name)
+        #expect(voiceChildNames.contains("KeySig"))
+    }
 }
