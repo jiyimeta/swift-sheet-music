@@ -254,8 +254,11 @@ struct MSCXEncoderTests {
 
     @Test("Voice with unsupported element throws malformedScore")
     func unsupportedVoiceElementThrows() {
+        // Spanner remains unsupported until the dedicated spanner
+        // encoding pass. All other VoiceElement cases were promoted
+        // to first-class encoders in Phase 2.3.
         let voice = Voice(elements: [
-            .tempo(Tempo(beatsPerSecond: 2.0)),
+            .spanner(Spanner(kind: .slur, rawType: "Slur")),
         ])
         let measure = Measure(voices: [voice])
         let staff = Staff(measures: [measure])
