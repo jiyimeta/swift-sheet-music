@@ -86,9 +86,16 @@ extension MidiRenderer {
         division: Int,
         glissandoEndPitch: Int?,
         currentKey: Int,
-        events: inout [TimedMidiEvent]
+        events: inout [TimedMidiEvent],
+        playedTicksOverride: Int? = nil
     ) {
-        let mainTicks = chord.duration.ticks(division: division)
+        // `playedTicksOverride` is set by the swing pass to express
+        // a chord whose audible length differs from its written
+        // duration (off-beat shift / down-beat extension). The grace
+        // allocation and gate-time math work off the audible length
+        // so swung chords keep proportional grace timing.
+        let mainTicks = playedTicksOverride
+            ?? chord.duration.ticks(division: division)
         let stealFromPrev = totalStealFromPrev(
             chord.graceNotesBefore, division: division
         )

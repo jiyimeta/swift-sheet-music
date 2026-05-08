@@ -260,6 +260,8 @@ extension Voice {
             return barLine.encode()
         case let .staffText(staffText):
             return staffText.encode()
+        case let .swing(swing):
+            return swing.encode()
         case let .rehearsalMark(rehearsalMark):
             return rehearsalMark.encode()
         case let .harmony(harmony):

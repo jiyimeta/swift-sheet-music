@@ -12,13 +12,19 @@ extension MidiRenderer {
         staff: Staff,
         part: Part,
         channel: Int,
-        division: Int
+        division: Int,
+        initialSwing: SwingState = .off
     ) -> (events: [TimedMidiEvent], endTick: Int) {
         let plan = playbackPlan(for: staff.measures, division: division)
         var events: [TimedMidiEvent] = []
         var velocity = effectiveVelocity(forDynamic: nil, instrument: part.instrument)
         // Tempo in beats-per-second; default is 2 bps (120 BPM = MuseScore's DEFAULT_TEMPO).
         var currentTempoBps = 2.0
+        // Swing state walks alongside tempo / velocity / key-sig: it
+        // starts from the score-level default and gets overridden by
+        // any in-piece `Swing` directive. Mirrors the per-tick lookup
+        // of `Staff::swing()` in MuseScore (staff.cpp:1006).
+        var swingState = initialSwing
 
         for entry in plan {
             // Splice in the source measure's notes if this measure is a
@@ -69,12 +75,14 @@ extension MidiRenderer {
                     element,
                     elementIndex: elementIndex,
                     voiceElements: effectiveVoice.elements,
+                    voiceTuplets: effectiveVoice.tuplets,
                     measures: staff.measures,
                     measureIndex: entry.measureIndex,
                     currentKey: currentKey,
                     localTick: &localTick,
                     velocity: &velocity,
                     currentTempoBps: &currentTempoBps,
+                    swingState: &swingState,
                     voiceIndex: voiceIndex,
                     channel: channel,
                     instrument: part.instrument,
@@ -98,12 +106,14 @@ extension MidiRenderer {
         _ element: VoiceElement,
         elementIndex: Int,
         voiceElements: [VoiceElement],
+        voiceTuplets: [Tuplet],
         measures: [Measure],
         measureIndex: Int,
         currentKey: Int,
         localTick: inout Int,
         velocity: inout Int,
         currentTempoBps: inout Double,
+        swingState: inout SwingState,
         voiceIndex: Int,
         channel: Int,
         instrument: Instrument,
@@ -129,6 +139,16 @@ extension MidiRenderer {
             }
         case .clef, .barLine, .spanner, .measureRepeat, .staffText, .harmony:
             return
+        case let .swing(s):
+            // Mid-piece swing change: update the running state so
+            // every subsequent chord uses these parameters until the
+            // next swing directive. Mirrors `Score::updateSwing` /
+            // `Staff::swing(tick)` lookup in MuseScore (score.cpp:6081,
+            // staff.cpp:1006). Has no MIDI event of its own.
+            swingState = SwingState(
+                unitTicks: s.swingUnitTicks(division: division),
+                ratio: s.ratio
+            )
         case let .locationShift(delta):
             // Voice cursor shift: applies the location's fractional
             // delta to the running tick so subsequent tempo /
@@ -170,9 +190,33 @@ extension MidiRenderer {
                     voiceIndex: voiceIndex
                 )
                 : nil
+            // Apply swing: shift the onset and adjust the played
+            // duration per the active swing state. `localTick` itself
+            // continues to advance by the chord's nominal duration so
+            // the swing grid stays aligned to the bar.
+            let chordTicks = chord.duration.ticks(division: division)
+            let adjust = swingAdjustment(
+                startTick: localTick,
+                chordTicks: chordTicks,
+                prevChordTicks: previousChordTicks(
+                    in: voiceElements,
+                    before: elementIndex,
+                    division: division
+                ),
+                nextChordTicks: nextChordTicks(
+                    in: voiceElements,
+                    after: elementIndex,
+                    division: division
+                ),
+                isInTuplet: isChordInTuplet(
+                    elementIndex: elementIndex,
+                    voiceTuplets: voiceTuplets
+                ),
+                state: swingState
+            )
             renderChordWithGraces(
                 chord,
-                tick: localTick,
+                tick: localTick + adjust.onsetShift,
                 velocity: velocity,
                 channel: channel,
                 instrument: instrument,
@@ -180,9 +224,12 @@ extension MidiRenderer {
                 division: division,
                 glissandoEndPitch: glissandoEndPitch,
                 currentKey: currentKey,
-                events: &events
+                events: &events,
+                playedTicksOverride: adjust == .none
+                    ? nil
+                    : max(1, chordTicks + adjust.lengthDelta)
             )
-            localTick += chord.duration.ticks(division: division)
+            localTick += chordTicks
         case .fermata:
             // Fermatas are a display-only annotation in our current Score;
             // they don't affect MIDI output (MuseScore performs them via

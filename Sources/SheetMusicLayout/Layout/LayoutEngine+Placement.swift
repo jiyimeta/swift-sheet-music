@@ -714,6 +714,25 @@ extension LayoutEngine {
                         color: st.color,
                         isSystemText: st.isSystemText
                     ))
+                case let .swing(s):
+                    // Swing directives display as ordinary system /
+                    // staff text — MuseScore renders them with the
+                    // same `StaffText` glyph stack and only the
+                    // `<swing>` marker child changes playback.
+                    if !s.visible { break }
+                    let stX = inHeader
+                        ? headerSchedule.contentStartX
+                        : timedX(atTick: tickCursor)
+                    out.append(.staffText(
+                        text: s.text,
+                        origin: CGPoint(
+                            x: stX + CGFloat(s.offsetX) * metrics.sp,
+                            y: staffMidY - metrics.sp * 3
+                                + CGFloat(s.offsetY) * metrics.sp
+                        ),
+                        color: s.color,
+                        isSystemText: s.isSystemText
+                    ))
                 case let .tempo(t):
                     // Hidden tempo still drives playback (see MIDI
                     // renderer) but contributes no glyph or
