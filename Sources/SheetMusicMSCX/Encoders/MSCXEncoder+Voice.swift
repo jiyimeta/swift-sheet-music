@@ -76,7 +76,9 @@ extension Voice {
             return clef.encode()
         case let .tempo(tempo):
             return tempo.encode()
-        case .barLine, .dynamic, .spanner,
+        case let .dynamic(dynamic):
+            return dynamic.encode()
+        case .barLine, .spanner,
              .measureRepeat, .fermata, .staffText, .harmony,
              .rehearsalMark, .locationShift:
             throw SheetMusicError.malformedScore(

@@ -28,6 +28,18 @@ struct MSCXEncoderTextElementsTests {
         #expect(decoded == voice)
     }
 
+    @Test("Dynamic round-trips subtype + velocity + TextProperties")
+    func dynamicRoundTrip() throws {
+        let dynamic = Dynamic(
+            subtype: "ff",
+            velocity: 110,
+            properties: TextProperties(face: "Edwin", size: 11, style: [.italic])
+        )
+        let voice = Voice(elements: [.dynamic(dynamic)])
+        let decoded = try voiceRoundTrip(voice)
+        #expect(decoded == voice)
+    }
+
     @Test("Tempo round-trips offset, hidden flag, and TextProperties")
     func tempoFullRoundTrip() throws {
         let tempo = Tempo(
