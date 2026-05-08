@@ -19,6 +19,11 @@ public struct Spanner: Sendable, Equatable {
     public var kind: Kind
     public var rawType: String // original "type" attribute
     public var nextMeasuresOffset: Int // distance to the spanner end in measures
+    /// MuseScore `<next><location><fractions>N/D</fractions></location></next>`
+    /// inside a `<Spanner>`. Optional because most cross-measure
+    /// spanners only emit `<measures>` (whole-measure offsets); the
+    /// non-nil case is spanners that end mid-measure.
+    public var nextFractionsOffset: Fraction?
     public var voltaEndings: [Int] // for Volta: the take-numbers (1, 2, …)
     /// MuseScore `<visible>0</visible>` flag. When false the spanner
     /// is hidden — layout omits it entirely (no glyphs, no reserved
@@ -29,12 +34,14 @@ public struct Spanner: Sendable, Equatable {
         kind: Kind,
         rawType: String,
         nextMeasuresOffset: Int = 0,
+        nextFractionsOffset: Fraction? = nil,
         voltaEndings: [Int] = [],
         visible: Bool = true
     ) {
         self.kind = kind
         self.rawType = rawType
         self.nextMeasuresOffset = nextMeasuresOffset
+        self.nextFractionsOffset = nextFractionsOffset
         self.voltaEndings = voltaEndings
         self.visible = visible
     }
