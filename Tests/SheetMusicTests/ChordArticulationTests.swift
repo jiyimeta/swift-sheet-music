@@ -94,4 +94,67 @@ import Testing
             ChordArticulation(kind: .unknown(subtype: "")),
         ])
     }
+
+    private func encodedSubtypes(_ articulations: [ChordArticulation]) -> [String] {
+        let chord = Chord(
+            duration: .quarter,
+            notes: ChordNotes([Note(pitch: 60, tpc: 14)]),
+            articulations: articulations
+        )
+        let xml = chord.encodeAsChord()
+        return xml.all("Articulation").compactMap { $0.first("subtype")?.text }
+    }
+
+    @Test func encodesDefaultAnchorAsAbove() {
+        // anchor == nil should serialize as the "Above" SymId variant.
+        #expect(encodedSubtypes([.init(kind: .staccato)]) == ["articStaccatoAbove"])
+    }
+
+    @Test func encodesExplicitBelowAnchor() {
+        #expect(
+            encodedSubtypes([.init(kind: .staccatissimo, anchor: .below)])
+                == ["articStaccatissimoBelow"]
+        )
+    }
+
+    @Test func encodesUnknownVerbatim() {
+        // Unknown round-trips its raw string and ignores anchor.
+        #expect(
+            encodedSubtypes([.init(kind: .unknown(subtype: "articAccentAbove"))])
+                == ["articAccentAbove"]
+        )
+    }
+
+    @Test func articulationsEncodeBetweenDurationAndNotes() throws {
+        let chord = Chord(
+            duration: .quarter,
+            notes: ChordNotes([Note(pitch: 60, tpc: 14)]),
+            articulations: [.init(kind: .staccato, anchor: .above)]
+        )
+        let xml = chord.encodeAsChord()
+        let names = xml.children.map(\.name)
+        let durIdx = try #require(names.firstIndex(of: "durationType"))
+        let artIdx = try #require(names.firstIndex(of: "Articulation"))
+        let noteIdx = try #require(names.firstIndex(of: "Note"))
+        #expect(durIdx < artIdx)
+        #expect(artIdx < noteIdx)
+    }
+
+    @Test func encodeDecodeRoundTripsAllKinds() throws {
+        let original = Chord(
+            duration: .quarter,
+            notes: ChordNotes([Note(pitch: 60, tpc: 14)]),
+            articulations: [
+                .init(kind: .staccato, anchor: .above),
+                .init(kind: .staccatissimo, anchor: .below),
+                .init(kind: .tenuto, anchor: .above),
+                .init(kind: .unknown(subtype: "articAccentAbove")),
+            ]
+        )
+        let xml = original.encodeAsChord()
+        let serialized = XMLTreeSerializer.serialize(xml)
+        let parsed = try XMLTreeParser.parse(serialized)
+        let roundTripped = try Chord.decode(parsed)
+        #expect(roundTripped.articulations == original.articulations)
+    }
 }

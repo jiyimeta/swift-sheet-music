@@ -33,6 +33,15 @@ extension Chord {
             ))
         }
         duration.appendDurationXML(to: &children)
+        // Articulations sit between durationType and the first
+        // <Lyrics>/<Note>: matches MuseScore's Chord::write ordering
+        // and is accepted by both MS3 (3.6.2+) and MS4 readers. C++:
+        //   engraving/dom/chord.cpp Chord::write — durationType →
+        //   StemDirection → ChordLine / Articulation / Tremolo →
+        //   Lyrics → Note.
+        for art in articulations {
+            children.append(art.encode(options: options))
+        }
         // Lyrics sit between durationType and the first <Note>: this
         // matches MuseScore's serializer (Chord::write) and is what
         // both MS3 and MS4 readers expect. Empty-text placeholders
