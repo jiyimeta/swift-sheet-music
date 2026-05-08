@@ -22,6 +22,9 @@ public struct Chord: Sendable, Equatable {
     /// as `graceNotesBefore`; their playback time is stolen from
     /// the tail of this chord.
     public var graceNotesAfter: [GraceChord]
+    /// Chord-level articulations (staccato / staccatissimo / tenuto and
+    /// round-trip-preserved unknowns). C++: `Chord::_articulations`.
+    public var articulations: [ChordArticulation]
 
     public init(
         duration: NoteDuration,
@@ -29,7 +32,8 @@ public struct Chord: Sendable, Equatable {
         arpeggio: Arpeggio? = nil,
         lyrics: [Lyric] = [],
         graceNotesBefore: [GraceChord] = [],
-        graceNotesAfter: [GraceChord] = []
+        graceNotesAfter: [GraceChord] = [],
+        articulations: [ChordArticulation] = []
     ) {
         self.duration = duration
         self.notes = notes
@@ -37,5 +41,6 @@ public struct Chord: Sendable, Equatable {
         self.lyrics = lyrics
         self.graceNotesBefore = graceNotesBefore
         self.graceNotesAfter = graceNotesAfter
+        self.articulations = articulations
     }
 }

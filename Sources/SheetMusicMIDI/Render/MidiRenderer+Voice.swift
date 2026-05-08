@@ -277,4 +277,34 @@ extension MidiRenderer {
     static func defaultArticulationGateTime(for instrument: Instrument) -> Int {
         instrument.articulations.first(where: { $0.name == nil })?.gateTime ?? 100
     }
+
+    /// Per-chord gateTime lookup. Filters `chord.articulations` to the
+    /// in-scope duration-shaping kinds (staccato / staccatissimo /
+    /// tenuto), looks each up in the instrument preset table, and
+    /// returns the **minimum** gateTime% among the candidates (matches
+    /// MuseScore's `MidiArticulation::aggregateOf` — most-shortening
+    /// wins). When no in-scope articulation is present, falls through
+    /// to `defaultArticulationGateTime(for:)` so existing behaviour is
+    /// preserved. C++:
+    ///   engraving/compat/midi/compatmidirender.cpp
+    ///   `CompatMidiRender::collectMeasureEvents` — `articulationGateTime`.
+    static func effectiveGateTime(for chord: Chord, instrument: Instrument) -> Int {
+        let gates = chord.articulations.compactMap { art -> Int? in
+            let presetName: String
+            let hardcodedDefault: Int
+            switch art.kind {
+            case .staccato: presetName = "staccato"; hardcodedDefault = 50
+            case .staccatissimo: presetName = "staccatissimo"; hardcodedDefault = 33
+            case .tenuto: presetName = "tenuto"; hardcodedDefault = 100
+            case .unknown: return nil
+            }
+            return instrument.articulations
+                .first(where: { $0.name == presetName })?
+                .gateTime ?? hardcodedDefault
+        }
+        if let minimum = gates.min() {
+            return minimum
+        }
+        return defaultArticulationGateTime(for: instrument)
+    }
 }

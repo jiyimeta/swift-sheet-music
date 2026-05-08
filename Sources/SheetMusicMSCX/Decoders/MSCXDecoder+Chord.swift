@@ -46,9 +46,15 @@ extension Chord {
             }
             : []
 
+        let articulations = node.all("Articulation").map { artNode -> ChordArticulation in
+            let subtype = artNode.first("subtype")?.text ?? ""
+            return ChordArticulation.fromSubtypeXML(subtype)
+        }
+
         return Chord(
             duration: duration, notes: ChordNotes(notes),
-            arpeggio: arpeggio, lyrics: lyrics
+            arpeggio: arpeggio, lyrics: lyrics,
+            articulations: articulations
         )
     }
 
@@ -61,5 +67,31 @@ extension Chord {
             if let g = GraceType(mscxTag: child.name) { return g }
         }
         return nil
+    }
+}
+
+extension ChordArticulation {
+    /// Map an MS4 SymId-style `<subtype>` string to a ChordArticulation.
+    /// Unknown / empty values fall through to `.unknown(...)` with
+    /// `anchor == nil` so the original string round-trips verbatim.
+    static func fromSubtypeXML(_ subtype: String) -> ChordArticulation {
+        let anchor: ChordArticulation.Anchor?
+        let base: String
+        if subtype.hasSuffix("Above") {
+            anchor = .above
+            base = String(subtype.dropLast("Above".count))
+        } else if subtype.hasSuffix("Below") {
+            anchor = .below
+            base = String(subtype.dropLast("Below".count))
+        } else {
+            anchor = nil
+            base = subtype
+        }
+        switch base {
+        case "articStaccato": return .init(kind: .staccato, anchor: anchor)
+        case "articStaccatissimo": return .init(kind: .staccatissimo, anchor: anchor)
+        case "articTenuto": return .init(kind: .tenuto, anchor: anchor)
+        default: return .init(kind: .unknown(subtype: subtype))
+        }
     }
 }
