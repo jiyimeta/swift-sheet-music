@@ -109,4 +109,47 @@ import Testing
         #expect(roundTripped[1].actualLength == nil)
         #expect(roundTripped[1].irregular == false)
     }
+
+    @available(macOS 15.0, iOS 16.0, *)
+    @Test func layoutSkipsMeasureNumberOnIrregularMeasures() throws {
+        // Per-system head labels are only emitted for the first
+        // measure of each system. Force a line break after every
+        // measure so each becomes a system head and the label test
+        // covers all three.
+        let irregular = Measure(
+            voices: [Voice(elements: [])],
+            lineBreak: true,
+            irregular: true
+        )
+        let m1 = Measure(voices: [Voice(elements: [])], lineBreak: true)
+        let m2 = Measure(voices: [Voice(elements: [])])
+        let staff = Staff(measures: [irregular, m1, m2])
+        let part = Part(
+            id: "1",
+            instrument: Instrument(id: "x", longName: "Piano"),
+            staves: [staff]
+        )
+        let score = Score(division: 480, parts: [part])
+
+        let contexts = LayoutEngine.measureContexts(for: score)
+        #expect(contexts[0].displayedMeasureNumber == nil)
+        #expect(contexts[1].displayedMeasureNumber == 1)
+        #expect(contexts[2].displayedMeasureNumber == 2)
+
+        let document = LayoutEngine.layout(
+            score: score, options: .init(), availableWidth: 800
+        )
+        let measures = document.systems.flatMap(\.measures)
+        func numberLabel(at index: Int) -> String? {
+            guard let m = measures.first(where: { $0.measureIndex == index })
+            else { return nil }
+            for marker in m.markers {
+                if case let .measureNumber(text, _) = marker { return text }
+            }
+            return nil
+        }
+        #expect(numberLabel(at: 0) == nil)
+        #expect(numberLabel(at: 1) == "1")
+        #expect(numberLabel(at: 2) == "2")
+    }
 }
