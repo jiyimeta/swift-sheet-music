@@ -15,12 +15,16 @@ extension Spanner {
                 .compactMap { Int($0) }
         }
 
-        let nextMeasures = Int(node.first("next")?.first("location")?.first("measures")?.text ?? "0") ?? 0
+        let nextLocation = node.first("next")?.first("location")
+        let nextMeasures = Int(nextLocation?.first("measures")?.text ?? "0") ?? 0
+        let nextFractions = nextLocation?.first("fractions")
+            .flatMap { Fraction(mscxString: $0.text) }
 
         return Spanner(
             kind: kind,
             rawType: raw,
             nextMeasuresOffset: nextMeasures,
+            nextFractionsOffset: nextFractions,
             voltaEndings: voltaEndings,
             visible: decodeVisible(node)
         )
