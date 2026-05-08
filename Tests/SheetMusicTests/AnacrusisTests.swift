@@ -1,7 +1,9 @@
 import Foundation
 @testable import SheetMusic
+@testable import SheetMusicAudio
 @testable import SheetMusicCore
 @testable import SheetMusicLayout
+@testable import SheetMusicMIDI
 @testable import SheetMusicMSCX
 import Testing
 
@@ -151,5 +153,53 @@ import Testing
         #expect(numberLabel(at: 0) == nil)
         #expect(numberLabel(at: 1) == "1")
         #expect(numberLabel(at: 2) == "2")
+    }
+
+    /// A 1-beat anacrusis in 4/4 must not emit metronome beats past
+    /// its actual length. Otherwise the per-measure count overflows
+    /// into the next measure and the resulting events are unsorted —
+    /// `MidiWriter` then crashes on a negative VLQ delta.
+    @Test func metronomeBeatsClampToAnacrusisLength() throws {
+        let note = Note(pitch: 60, tpc: 14)
+        let pickup = Measure(
+            voices: [Voice(elements: [
+                .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+                .chord(Chord(duration: .quarter, notes: [note])),
+            ])],
+            actualLength: Fraction(numerator: 1, denominator: 4),
+            irregular: true
+        )
+        let bar1 = Measure(voices: [Voice(elements: [
+            .chord(Chord(duration: .quarter, notes: [note])),
+            .chord(Chord(duration: .quarter, notes: [note])),
+            .chord(Chord(duration: .quarter, notes: [note])),
+            .chord(Chord(duration: .quarter, notes: [note])),
+        ])])
+        let staff = Staff(measures: [pickup, bar1])
+        let part = Part(
+            id: "1",
+            instrument: Instrument(id: "x", longName: "Piano"),
+            staves: [staff]
+        )
+        let score = Score(division: 480, parts: [part])
+
+        let beats = PlaybackTimeline.metronomeBeats(score: score)
+
+        // Beats must be monotonically non-decreasing in tick.
+        for i in 1 ..< beats.count {
+            #expect(beats[i].tick >= beats[i - 1].tick)
+        }
+
+        // Anacrusis emits a single (non-downbeat) click at tick 0;
+        // the next measure's downbeat lands at tick 480.
+        #expect(beats.prefix(1).map(\.tick) == [0])
+        #expect(beats.first?.isDownbeat == false)
+        let downbeats = beats.filter(\.isDownbeat).map(\.tick)
+        #expect(downbeats == [480])
+
+        // End-to-end: the full render+write path must not trip the
+        // sorted-tick precondition in MidiWriter.
+        let midi = try MidiRenderer.render(score: score)
+        _ = try MidiWriter.write(midi)
     }
 }
