@@ -67,6 +67,29 @@ struct MSCXEncoderTextElementsTests {
         #expect(decoded == voice)
     }
 
+    @Test("RehearsalMark round-trips text, frame, offset, colour")
+    func rehearsalMarkRoundTrip() throws {
+        let mark = RehearsalMark(
+            text: "A",
+            offsetX: 0.5,
+            offsetY: -1.0,
+            color: ScoreColor(red: 0, green: 0, blue: 200),
+            frame: .circle,
+            properties: TextProperties(face: "Edwin", size: 12, style: [.bold])
+        )
+        let voice = Voice(elements: [.rehearsalMark(mark)])
+        let decoded = try voiceRoundTrip(voice)
+        #expect(decoded == voice)
+    }
+
+    @Test("RehearsalMark default rectangle frame round-trips")
+    func rehearsalMarkDefaultFrameRoundTrip() throws {
+        let mark = RehearsalMark(text: "B")
+        let voice = Voice(elements: [.rehearsalMark(mark)])
+        let decoded = try voiceRoundTrip(voice)
+        #expect(decoded == voice)
+    }
+
     @Test("Dynamic round-trips subtype + velocity + TextProperties")
     func dynamicRoundTrip() throws {
         let dynamic = Dynamic(

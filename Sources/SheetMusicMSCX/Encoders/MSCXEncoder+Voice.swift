@@ -82,9 +82,11 @@ extension Voice {
             return barLine.encode()
         case let .staffText(staffText):
             return staffText.encode()
+        case let .rehearsalMark(rehearsalMark):
+            return rehearsalMark.encode()
         case .spanner,
              .measureRepeat, .fermata, .harmony,
-             .rehearsalMark, .locationShift:
+             .locationShift:
             throw SheetMusicError.malformedScore(
                 reason: "VoiceElement \(element) not yet supported "
                     + "by MSCXEncoder Phase 1 — see "
