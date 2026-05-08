@@ -41,6 +41,21 @@ extension Spanner {
                 XMLTreeNode(name: "endings", text: endingsText),
             ])
         }
+        if kind == .hairpin, let hairpin {
+            var children: [XMLTreeNode] = [
+                XMLTreeNode(name: "subtype", text: String(hairpin.subtype.rawValue)),
+            ]
+            if let velo = hairpin.veloChange {
+                children.append(XMLTreeNode(name: "veloChange", text: String(velo)))
+            }
+            if hairpin.veloChangeMethod != .normal {
+                children.append(XMLTreeNode(
+                    name: "veloChangeMethod",
+                    text: hairpin.veloChangeMethod.rawValue
+                ))
+            }
+            return XMLTreeNode(name: rawType, children: children)
+        }
         return XMLTreeNode(name: rawType)
     }
 
