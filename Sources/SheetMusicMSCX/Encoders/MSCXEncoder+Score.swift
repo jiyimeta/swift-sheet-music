@@ -52,9 +52,14 @@ extension Score {
             }
         }
 
+        let museScoreVersion: String
+        switch options.targetVersion {
+        case .v3: museScoreVersion = "3.02"
+        case .v4: museScoreVersion = "4.60"
+        }
         return XMLTreeNode(
             name: "museScore",
-            attributes: ["version": "4.60"],
+            attributes: ["version": museScoreVersion],
             children: [
                 XMLTreeNode(name: "Score", children: scoreChildren),
             ]

@@ -52,4 +52,20 @@ struct MSCXEncoderMS3Tests {
         try SheetMusic.exportMSCZ(score, options: .init(targetVersion: .v3), to: url)
         #expect(FileManager.default.fileExists(atPath: url.path))
     }
+
+    @Test("v3 root museScore version is 3.02")
+    func v3RootVersionIs302() throws {
+        let score = try MSCXParser.parse(MSCXFixtureLoader.mscxData("midi01"))
+        let bytes = try MSCXEncoder.encode(score, options: .init(targetVersion: .v3))
+        let root = try XMLTreeParser.parse(bytes)
+        #expect(root.attributes["version"] == "3.02")
+    }
+
+    @Test("v4 root museScore version is 4.60")
+    func v4RootVersionIs460() throws {
+        let score = try MSCXParser.parse(MSCXFixtureLoader.mscxData("midi01"))
+        let bytes = try MSCXEncoder.encode(score, options: .init(targetVersion: .v4))
+        let root = try XMLTreeParser.parse(bytes)
+        #expect(root.attributes["version"] == "4.60")
+    }
 }
