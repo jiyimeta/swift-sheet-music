@@ -41,15 +41,9 @@ extension ScoreLayerBuilder {
         metrics: StaffMetrics, height: CGFloat,
         into parent: CALayer
     ) {
-        let glyph: Character
-        switch (kind, isAbove) {
-        case (.staccato, true): glyph = SMuFLGlyph.articStaccatoAbove
-        case (.staccato, false): glyph = SMuFLGlyph.articStaccatoBelow
-        case (.staccatissimo, true): glyph = SMuFLGlyph.articStaccatissimoAbove
-        case (.staccatissimo, false): glyph = SMuFLGlyph.articStaccatissimoBelow
-        case (.tenuto, true): glyph = SMuFLGlyph.articTenutoAbove
-        case (.tenuto, false): glyph = SMuFLGlyph.articTenutoBelow
-        }
+        let glyph = ArticulationRenderer.glyph(
+            kind: kind, isAbove: isAbove
+        )
         if let layer = glyphLayer(
             glyph, at: origin,
             size: metrics.glyphFontSize,
