@@ -1,5 +1,7 @@
 import Foundation
 @testable import SheetMusicCore
+@testable import SheetMusicMSCX
+@testable import SheetMusicXMLTools
 import Testing
 
 @Suite struct ChordArticulationTests {
@@ -40,5 +42,56 @@ import Testing
             notes: ChordNotes([Note(pitch: 60, tpc: 14)])
         )
         #expect(chord.articulations.isEmpty)
+    }
+
+    private func parseChord(_ inner: String) throws -> Chord {
+        let xml = "<Chord>\(inner)</Chord>"
+        let root = try XMLTreeParser.parse(Data(xml.utf8))
+        return try Chord.decode(root)
+    }
+
+    @Test func decodesSingleStaccatoAbove() throws {
+        let chord = try parseChord("""
+        <durationType>quarter</durationType>
+        <Articulation><subtype>articStaccatoAbove</subtype></Articulation>
+        <Note><pitch>60</pitch><tpc>14</tpc></Note>
+        """)
+        #expect(chord.articulations == [ChordArticulation(kind: .staccato, anchor: .above)])
+    }
+
+    @Test func decodesMultipleArticulationsPreservingOrderAndAnchors() throws {
+        let chord = try parseChord("""
+        <durationType>quarter</durationType>
+        <Articulation><subtype>articStaccatoAbove</subtype></Articulation>
+        <Articulation><subtype>articTenutoBelow</subtype></Articulation>
+        <Note><pitch>60</pitch><tpc>14</tpc></Note>
+        """)
+        #expect(chord.articulations == [
+            ChordArticulation(kind: .staccato, anchor: .above),
+            ChordArticulation(kind: .tenuto, anchor: .below),
+        ])
+    }
+
+    @Test func decodesUnknownSubtypeAsUnknownVariant() throws {
+        let chord = try parseChord("""
+        <durationType>quarter</durationType>
+        <Articulation><subtype>articAccentAbove</subtype></Articulation>
+        <Note><pitch>60</pitch><tpc>14</tpc></Note>
+        """)
+        #expect(chord.articulations == [
+            ChordArticulation(kind: .unknown(subtype: "articAccentAbove")),
+        ])
+    }
+
+    @Test func decodesEmptySubtypeAsUnknownEmpty() throws {
+        // MuseScore never emits this; permissive-parser convention says don't throw.
+        let chord = try parseChord("""
+        <durationType>quarter</durationType>
+        <Articulation><subtype></subtype></Articulation>
+        <Note><pitch>60</pitch><tpc>14</tpc></Note>
+        """)
+        #expect(chord.articulations == [
+            ChordArticulation(kind: .unknown(subtype: "")),
+        ])
     }
 }
