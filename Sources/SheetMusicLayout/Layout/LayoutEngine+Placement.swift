@@ -1324,6 +1324,10 @@ extension LayoutEngine {
         case .staccato: .staccato
         case .staccatissimo: .staccatissimo
         case .tenuto: .tenuto
+        case .accent: .accent
+        case .marcato: .marcato
+        case .accentStaccato: .accentStaccato
+        case .marcatoStaccato: .marcatoStaccato
         case .unknown: nil
         }
     }

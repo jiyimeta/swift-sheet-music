@@ -340,7 +340,10 @@ extension MidiRenderer {
             case .staccato: presetName = "staccato"; hardcodedDefault = 50
             case .staccatissimo: presetName = "staccatissimo"; hardcodedDefault = 33
             case .tenuto: presetName = "tenuto"; hardcodedDefault = 100
-            case .unknown: return nil
+            case .accentStaccato, .marcatoStaccato:
+                presetName = "staccato"; hardcodedDefault = 50
+            case .accent, .marcato, .unknown:
+                return nil
             }
             return instrument.articulations
                 .first(where: { $0.name == presetName })?
@@ -350,5 +353,57 @@ extension MidiRenderer {
             return minimum
         }
         return defaultArticulationGateTime(for: instrument)
+    }
+
+    /// Per-chord velocity-scale lookup. Filters `chord.articulations`
+    /// to the in-scope velocity-shaping kinds (accent / marcato /
+    /// accentStaccato / marcatoStaccato), looks each up in the
+    /// instrument preset table, and returns the **maximum** velocity %
+    /// among the candidates (matches MuseScore's
+    /// `MidiArticulation::aggregateOf` — loudest wins). When no
+    /// in-scope articulation is present, falls through to
+    /// `defaultArticulationVelocityScale(for:)` so existing behaviour
+    /// is preserved. C++:
+    ///   engraving/compat/midi/compatmidirender.cpp
+    ///   `CompatMidiRender::collectMeasureEvents` — articulation velocity.
+    static func effectiveVelocityScale(for chord: Chord, instrument: Instrument) -> Int {
+        let scales = chord.articulations.compactMap { art -> Int? in
+            let presetName: String
+            let hardcodedDefault: Int
+            switch art.kind {
+            case .accent, .accentStaccato:
+                presetName = "accent"; hardcodedDefault = 120
+            case .marcato, .marcatoStaccato:
+                presetName = "marcato"; hardcodedDefault = 120
+            case .staccato, .staccatissimo, .tenuto, .unknown:
+                return nil
+            }
+            return instrument.articulations
+                .first(where: { $0.name == presetName })?
+                .velocity ?? hardcodedDefault
+        }
+        if let maximum = scales.max() {
+            return maximum
+        }
+        return defaultArticulationVelocityScale(for: instrument)
+    }
+
+    /// Apply per-chord velocity scaling on top of the running voice
+    /// velocity. `baseVelocity` already has the **default** articulation
+    /// scale baked in (set by `effectiveVelocity` at voice setup /
+    /// Dynamic events); the modifier swaps that default scale for the
+    /// chord-effective scale via `base * eff / def`. Returns
+    /// `baseVelocity` unchanged when the chord has no velocity-shaping
+    /// articulation, so existing playback for unarticulated chords is
+    /// bit-identical.
+    static func adjustVelocityForChord(
+        baseVelocity: Int,
+        chord: Chord,
+        instrument: Instrument
+    ) -> Int {
+        let defaultScale = defaultArticulationVelocityScale(for: instrument)
+        let effectiveScale = effectiveVelocityScale(for: chord, instrument: instrument)
+        if defaultScale == effectiveScale { return baseVelocity }
+        return min(127, max(1, baseVelocity * effectiveScale / defaultScale))
     }
 }

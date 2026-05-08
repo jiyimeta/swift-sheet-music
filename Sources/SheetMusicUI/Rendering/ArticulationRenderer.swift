@@ -19,6 +19,14 @@ enum ArticulationRenderer {
         case (.staccatissimo, false): return SMuFLGlyph.articStaccatissimoBelow
         case (.tenuto, true): return SMuFLGlyph.articTenutoAbove
         case (.tenuto, false): return SMuFLGlyph.articTenutoBelow
+        case (.accent, true): return SMuFLGlyph.articAccentAbove
+        case (.accent, false): return SMuFLGlyph.articAccentBelow
+        case (.marcato, true): return SMuFLGlyph.articMarcatoAbove
+        case (.marcato, false): return SMuFLGlyph.articMarcatoBelow
+        case (.accentStaccato, true): return SMuFLGlyph.articAccentStaccatoAbove
+        case (.accentStaccato, false): return SMuFLGlyph.articAccentStaccatoBelow
+        case (.marcatoStaccato, true): return SMuFLGlyph.articMarcatoStaccatoAbove
+        case (.marcatoStaccato, false): return SMuFLGlyph.articMarcatoStaccatoBelow
         }
     }
 

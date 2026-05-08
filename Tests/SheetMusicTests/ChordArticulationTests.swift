@@ -75,11 +75,11 @@ import Testing
     @Test func decodesUnknownSubtypeAsUnknownVariant() throws {
         let chord = try parseChord("""
         <durationType>quarter</durationType>
-        <Articulation><subtype>articAccentAbove</subtype></Articulation>
+        <Articulation><subtype>articSoftAccentAbove</subtype></Articulation>
         <Note><pitch>60</pitch><tpc>14</tpc></Note>
         """)
         #expect(chord.articulations == [
-            ChordArticulation(kind: .unknown(subtype: "articAccentAbove")),
+            ChordArticulation(kind: .unknown(subtype: "articSoftAccentAbove")),
         ])
     }
 
@@ -120,8 +120,8 @@ import Testing
     @Test func encodesUnknownVerbatim() {
         // Unknown round-trips its raw string and ignores anchor.
         #expect(
-            encodedSubtypes([.init(kind: .unknown(subtype: "articAccentAbove"))])
-                == ["articAccentAbove"]
+            encodedSubtypes([.init(kind: .unknown(subtype: "articSoftAccentAbove"))])
+                == ["articSoftAccentAbove"]
         )
     }
 
@@ -148,7 +148,7 @@ import Testing
                 .init(kind: .staccato, anchor: .above),
                 .init(kind: .staccatissimo, anchor: .below),
                 .init(kind: .tenuto, anchor: .above),
-                .init(kind: .unknown(subtype: "articAccentAbove")),
+                .init(kind: .unknown(subtype: "articSoftAccentAbove")),
             ]
         )
         let xml = original.encodeAsChord()
