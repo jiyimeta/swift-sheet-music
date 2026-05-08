@@ -100,6 +100,14 @@ enum SMuFLGlyph {
     static let articTenutoBelow: Character = "\u{E4A5}"
     static let articStaccatissimoAbove: Character = "\u{E4A6}"
     static let articStaccatissimoBelow: Character = "\u{E4A7}"
+    static let articAccentAbove: Character = "\u{E4AC}"
+    static let articAccentBelow: Character = "\u{E4AD}"
+    static let articMarcatoAbove: Character = "\u{E4A8}"
+    static let articMarcatoBelow: Character = "\u{E4A9}"
+    static let articAccentStaccatoAbove: Character = "\u{E4B0}"
+    static let articAccentStaccatoBelow: Character = "\u{E4B1}"
+    static let articMarcatoStaccatoAbove: Character = "\u{E4AE}"
+    static let articMarcatoStaccatoBelow: Character = "\u{E4AF}"
 
     // Bracket caps + brace variants. The brace family lives in
     // Bravura's PUA optionalGlyphs range — MuseScore picks one of

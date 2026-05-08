@@ -31,6 +31,10 @@ extension ChordArticulation {
         case .staccato: return "articStaccato\(suffix)"
         case .staccatissimo: return "articStaccatissimo\(suffix)"
         case .tenuto: return "articTenuto\(suffix)"
+        case .accent: return "articAccent\(suffix)"
+        case .marcato: return "articMarcato\(suffix)"
+        case .accentStaccato: return "articAccentStaccato\(suffix)"
+        case .marcatoStaccato: return "articMarcatoStaccato\(suffix)"
         case .unknown: return "" // unreachable — handled above
         }
     }

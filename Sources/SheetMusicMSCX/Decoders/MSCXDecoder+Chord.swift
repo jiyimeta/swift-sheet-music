@@ -91,6 +91,10 @@ extension ChordArticulation {
         case "articStaccato": return .init(kind: .staccato, anchor: anchor)
         case "articStaccatissimo": return .init(kind: .staccatissimo, anchor: anchor)
         case "articTenuto": return .init(kind: .tenuto, anchor: anchor)
+        case "articAccent": return .init(kind: .accent, anchor: anchor)
+        case "articMarcato": return .init(kind: .marcato, anchor: anchor)
+        case "articAccentStaccato": return .init(kind: .accentStaccato, anchor: anchor)
+        case "articMarcatoStaccato": return .init(kind: .marcatoStaccato, anchor: anchor)
         default: return .init(kind: .unknown(subtype: subtype))
         }
     }

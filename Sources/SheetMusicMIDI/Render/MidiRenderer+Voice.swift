@@ -296,6 +296,10 @@ extension MidiRenderer {
             case .staccato: presetName = "staccato"; hardcodedDefault = 50
             case .staccatissimo: presetName = "staccatissimo"; hardcodedDefault = 33
             case .tenuto: presetName = "tenuto"; hardcodedDefault = 100
+            case .accent: presetName = "accent"; hardcodedDefault = 100
+            case .marcato: presetName = "marcato"; hardcodedDefault = 100
+            case .accentStaccato: presetName = "accentStaccato"; hardcodedDefault = 50
+            case .marcatoStaccato: presetName = "marcatoStaccato"; hardcodedDefault = 50
             case .unknown: return nil
             }
             return instrument.articulations
