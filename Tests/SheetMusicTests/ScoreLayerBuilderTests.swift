@@ -197,5 +197,56 @@
                 "no staccato-sized glyph layer found among \(glyphLayers.count) filled layers"
             )
         }
+
+        @MainActor
+        @Test("Accent chord emits a glyph sublayer above the staff")
+        func accentEmitsGlyphLayer() throws {
+            guard #available(macOS 15.0, *) else { return }
+            _ = BravuraFont.register
+            let chord = Chord(
+                duration: .quarter,
+                notes: ChordNotes([Note(pitch: 60, tpc: 14)]),
+                articulations: [.init(kind: .accent, anchor: .above)]
+            )
+            let staff = Staff(measures: [
+                Measure(voices: [Voice(elements: [.chord(chord)])]),
+            ])
+            let score = Score(division: 480, parts: [
+                Part(
+                    id: "1",
+                    instrument: Instrument(id: "x"),
+                    staves: [staff]
+                ),
+            ])
+            let opts = ScoreViewOptions(
+                staffSize: 28, systemGap: 40, wrapToViewWidth: false
+            )
+            let natW = LayoutEngine.naturalContentWidth(
+                score: score, options: opts
+            )
+            let doc = LayoutEngine.layout(
+                score: score, options: opts, availableWidth: natW
+            )
+            let system = try #require(doc.systems.first)
+            let tree = ScoreLayerBuilder.buildSystem(
+                system, metrics: doc.metrics
+            )
+            let sp = doc.metrics.sp
+            let glyphLayers = collectAllLayers(tree)
+                .compactMap { $0 as? CAShapeLayer }
+                .filter { $0.fillColor != nil && $0.path != nil }
+            // Accent glyph is roughly 1 sp wide / 1 sp tall — looser bound
+            // than staccato to accommodate Bravura's actual glyph metrics.
+            let accent = glyphLayers.first { l in
+                guard let p = l.path else { return false }
+                let bb = p.boundingBoxOfPath
+                return bb.width > sp * 0.5 && bb.width < sp * 2.0
+                    && bb.height > 0 && bb.height < sp * 1.5
+            }
+            #expect(
+                accent != nil,
+                "no accent-sized glyph layer found among \(glyphLayers.count) filled layers"
+            )
+        }
     }
 #endif
