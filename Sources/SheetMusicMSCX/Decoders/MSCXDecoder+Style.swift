@@ -19,7 +19,29 @@ extension ScoreStyle {
         decodeSpatium(node, into: &s.spatium)
         decodeChrome(node, into: &s.pageChrome)
         decodeSwing(node, into: &s)
+        decodeTitleBlockAlign(node, into: &s)
         return s
+    }
+}
+
+/// Parse the four `<{role}Align>` children that the `<VBox>` title
+/// block honours. Each holds the MuseScore `"horiz,vert"` form
+/// (e.g. `"center,bottom"`). `nil` is preserved for fields the
+/// score did not override, so encoders can elide them.
+private func decodeTitleBlockAlign(
+    _ node: XMLTreeNode, into s: inout ScoreStyle
+) {
+    if let raw = node.first("titleAlign")?.text {
+        s.titleAlign = TextAlign(mscxString: raw)
+    }
+    if let raw = node.first("subtitleAlign")?.text {
+        s.subtitleAlign = TextAlign(mscxString: raw)
+    }
+    if let raw = node.first("composerAlign")?.text {
+        s.composerAlign = TextAlign(mscxString: raw)
+    }
+    if let raw = node.first("lyricistAlign")?.text {
+        s.lyricistAlign = TextAlign(mscxString: raw)
     }
 }
 

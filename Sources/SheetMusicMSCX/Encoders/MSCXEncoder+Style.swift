@@ -48,6 +48,13 @@ extension ScoreStyle {
                 unit: swingUnit, ratio: swingRatio,
                 defaults: defaults, into: &children
             )
+            appendTitleBlockAlign(
+                title: titleAlign,
+                subtitle: subtitleAlign,
+                composer: composerAlign,
+                lyricist: lyricistAlign,
+                into: &children
+            )
             return XMLTreeNode(name: "Style", children: children)
         }
     }
@@ -128,6 +135,31 @@ private func appendSwing(
     }
     if ratio != defaults.swingRatio {
         children.append(XMLTreeNode(name: "swingRatio", text: String(ratio)))
+    }
+}
+
+/// Emit `<{role}Align>` for any title-block role whose align was
+/// explicitly set on `ScoreStyle`. `nil` ⇒ score uses the styledef
+/// default; we elide the field so the resulting XML stays compact
+/// and round-trips.
+private func appendTitleBlockAlign(
+    title: TextAlign?,
+    subtitle: TextAlign?,
+    composer: TextAlign?,
+    lyricist: TextAlign?,
+    into children: inout [XMLTreeNode]
+) {
+    if let v = title {
+        children.append(XMLTreeNode(name: "titleAlign", text: v.mscxString))
+    }
+    if let v = subtitle {
+        children.append(XMLTreeNode(name: "subtitleAlign", text: v.mscxString))
+    }
+    if let v = composer {
+        children.append(XMLTreeNode(name: "composerAlign", text: v.mscxString))
+    }
+    if let v = lyricist {
+        children.append(XMLTreeNode(name: "lyricistAlign", text: v.mscxString))
     }
 }
 

@@ -25,19 +25,38 @@ public struct ScoreStyle: Sendable, Equatable {
     /// default soft swing. Has no audible effect when `swingUnit` is
     /// `.off`. C++: `Sid::swingRatio`.
     public var swingRatio: Int
+    /// Title-block (`<VBox>`) text-style align overrides. `nil`
+    /// means use the styledef.cpp default for that role:
+    /// title `(center, top)`, subtitle `(center, top)`,
+    /// composer `(right, bottom)`, lyricist `(left, bottom)`.
+    /// MSCX fields: `<titleAlign>`, `<subtitleAlign>`,
+    /// `<composerAlign>`, `<lyricistAlign>` — each holding the
+    /// `"horizontal,vertical"` form used by MuseScore.
+    public var titleAlign: TextAlign?
+    public var subtitleAlign: TextAlign?
+    public var composerAlign: TextAlign?
+    public var lyricistAlign: TextAlign?
 
     public init(
         spatium: Double,
         pageLayout: PageLayout,
         pageChrome: PageChrome,
         swingUnit: SwingUnit = .off,
-        swingRatio: Int = 60
+        swingRatio: Int = 60,
+        titleAlign: TextAlign? = nil,
+        subtitleAlign: TextAlign? = nil,
+        composerAlign: TextAlign? = nil,
+        lyricistAlign: TextAlign? = nil
     ) {
         self.spatium = spatium
         self.pageLayout = pageLayout
         self.pageChrome = pageChrome
         self.swingUnit = swingUnit
         self.swingRatio = swingRatio
+        self.titleAlign = titleAlign
+        self.subtitleAlign = subtitleAlign
+        self.composerAlign = composerAlign
+        self.lyricistAlign = lyricistAlign
     }
 
     /// MuseScore's documented defaults: 1.75 mm spatium, A4 paper

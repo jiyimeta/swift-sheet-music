@@ -75,6 +75,7 @@ public enum LayoutEngine {
             else { return nil }
             return buildTitleFrame(
                 source: src,
+                style: score.style,
                 metrics: metrics,
                 docWidth: max(
                     availableWidth,
@@ -143,6 +144,7 @@ public enum LayoutEngine {
 
     private static func buildTitleFrame(
         source: ScoreFrame,
+        style: ScoreStyle,
         metrics: StaffMetrics,
         docWidth: CGFloat
     ) -> LayoutTitleFrame {
@@ -167,21 +169,17 @@ public enum LayoutEngine {
         let textHeightFactor: CGFloat = 1.3
         var requiredFromTopAnchors: CGFloat = 0
         for (idx, t) in source.texts.enumerated() {
+            let layout = titleBlockLayout(
+                for: t.style, idx: idx, style: style, mmToPt: mmToPt
+            )
+            // Bottom-anchored texts grow downward from the frame
+            // bottom — they don't constrain how *tall* the frame
+            // needs to be.
+            guard layout.align.vertical == .top else { continue }
+            let fontSize = CGFloat(t.fontSize ?? Double(layout.fontSize))
             let dy = (t.offsetMm?.y ?? 0) * mmToPt
-            let topY: CGFloat
-            let fontSize: CGFloat
-            switch t.style {
-            case .title:
-                topY = 0; fontSize = 22
-            case .subtitle:
-                topY = 10 * mmToPt; fontSize = 14
-            case .other:
-                topY = 10 * mmToPt + CGFloat(idx) * 4 * mmToPt
-                fontSize = 10
-            case .composer, .lyricist:
-                continue // anchored to frame bottom — no top-side overflow
-            }
-            let bottom = topY + dy + fontSize * textHeightFactor
+            let bottom = layout.topOffset + dy
+                + fontSize * textHeightFactor
             if bottom > requiredFromTopAnchors {
                 requiredFromTopAnchors = bottom
             }
@@ -191,64 +189,125 @@ public enum LayoutEngine {
             source.heightSp * metrics.sp,
             requiredFromTopAnchors
         )
-        let center = docWidth / 2
 
         var laidOut: [LayoutFrameText] = []
         for (idx, t) in source.texts.enumerated() {
-            // Defaults sourced from MuseScore's
-            // `engraving/style/styledef.cpp`:
-            //   Title    — Align(HCENTER, TOP),    offset (0,  0) mm, font 22pt
-            //   Subtitle — Align(HCENTER, TOP),    offset (0, 10) mm, font 14pt
-            //   Composer — Align(RIGHT,   BOTTOM), offset (0,  0) mm, font 10pt
-            //   Lyricist — Align(LEFT,    BOTTOM), offset (0,  0) mm, font 10pt
-            // All four are `FontStyle::Normal` (no bold / italic).
-            // `<Text>` inline `<b>` / `<font>` markup is stripped
-            // at parse time.
-            let fontSize: CGFloat
-            let baseY: CGFloat
-            let baseX: CGFloat
-            let anchor: LayoutFrameText.Anchor
-            switch t.style {
-            case .title:
-                fontSize = 22
-                baseY = 0
-                baseX = center
-                anchor = .top
-            case .subtitle:
-                fontSize = 14
-                baseY = 10 * mmToPt
-                baseX = center
-                anchor = .top
-            case .composer:
-                fontSize = 10
-                baseY = frameHeight
-                baseX = docWidth
-                anchor = .bottomTrailing
-            case .lyricist:
-                fontSize = 10
-                baseY = frameHeight
-                baseX = 0
-                anchor = .bottomLeading
-            case .other:
-                fontSize = 10
-                baseY = 10 * mmToPt
-                    + CGFloat(idx) * 4 * mmToPt
-                baseX = center
-                anchor = .top
-            }
+            let layout = titleBlockLayout(
+                for: t.style, idx: idx, style: style, mmToPt: mmToPt
+            )
+            let baseX = baseX(for: layout.align, docWidth: docWidth)
+            let baseY: CGFloat = layout.align.vertical == .top
+                ? layout.topOffset
+                : frameHeight
             let dx = (t.offsetMm?.x ?? 0) * mmToPt
             let dy = (t.offsetMm?.y ?? 0) * mmToPt
+            // Per-element `<size>` overrides the styledef default.
+            // Used by scores that hand-tune font sizes — e.g.
+            // test-platinum.mscx ships `<size>7</size>` on its
+            // three Lyricist columns to tighten each verse block.
+            let fontSize = CGFloat(t.fontSize ?? Double(layout.fontSize))
             laidOut.append(LayoutFrameText(
                 text: t.text,
                 style: t.style,
                 position: CGPoint(x: baseX + dx, y: baseY + dy),
                 fontSize: fontSize,
-                anchor: anchor
+                anchor: anchor(for: layout.align)
             ))
         }
         return LayoutTitleFrame(
             height: frameHeight, texts: laidOut
         )
+    }
+
+    /// Resolved layout properties for a title-block text style.
+    /// `align` picks horizontal/vertical anchor, `topOffset` is the
+    /// styledef vertical offset applied when `align.vertical == .top`
+    /// (e.g. subtitle's 10 mm), `fontSize` is the styledef default.
+    private struct TitleBlockLayout {
+        let align: TextAlign
+        let topOffset: CGFloat
+        let fontSize: CGFloat
+    }
+
+    /// Defaults sourced from MuseScore's `engraving/style/styledef.cpp`:
+    ///   Title    — Align(HCENTER, TOP),    offset (0,  0) mm, font 22pt
+    ///   Subtitle — Align(HCENTER, TOP),    offset (0, 10) mm, font 14pt
+    ///   Composer — Align(RIGHT,   BOTTOM), offset (0,  0) mm, font 10pt
+    ///   Lyricist — Align(LEFT,    BOTTOM), offset (0,  0) mm, font 10pt
+    /// Per-style align overrides on `ScoreStyle` (e.g.
+    /// `<lyricistAlign>center,bottom</lyricistAlign>`) replace the
+    /// styledef horizontal/vertical pair while leaving the offset
+    /// and font size unchanged.
+    private static func titleBlockLayout(
+        for textStyle: FrameText.Style,
+        idx: Int,
+        style scoreStyle: ScoreStyle,
+        mmToPt: CGFloat
+    ) -> TitleBlockLayout {
+        switch textStyle {
+        case .title:
+            TitleBlockLayout(
+                align: scoreStyle.titleAlign
+                    ?? TextAlign(horizontal: .center, vertical: .top),
+                topOffset: 0,
+                fontSize: 22
+            )
+        case .subtitle:
+            TitleBlockLayout(
+                align: scoreStyle.subtitleAlign
+                    ?? TextAlign(horizontal: .center, vertical: .top),
+                topOffset: 10 * mmToPt,
+                fontSize: 14
+            )
+        case .composer:
+            TitleBlockLayout(
+                align: scoreStyle.composerAlign
+                    ?? TextAlign(horizontal: .right, vertical: .bottom),
+                topOffset: 0,
+                fontSize: 10
+            )
+        case .lyricist:
+            TitleBlockLayout(
+                align: scoreStyle.lyricistAlign
+                    ?? TextAlign(horizontal: .left, vertical: .bottom),
+                topOffset: 0,
+                fontSize: 10
+            )
+        case .other:
+            TitleBlockLayout(
+                align: TextAlign(horizontal: .center, vertical: .top),
+                topOffset: 10 * mmToPt + CGFloat(idx) * 4 * mmToPt,
+                fontSize: 10
+            )
+        }
+    }
+
+    private static func baseX(
+        for align: TextAlign, docWidth: CGFloat
+    ) -> CGFloat {
+        switch align.horizontal {
+        case .left: 0
+        case .center: docWidth / 2
+        case .right: docWidth
+        }
+    }
+
+    /// `LayoutFrameText.Anchor` only models the six rectangular
+    /// corners. Vertical `.center` / `.baseline` (rare for title
+    /// roles) collapse to the top-side anchor of the same horizontal
+    /// axis — adequate for the cases that actually appear in MSCX
+    /// title blocks.
+    private static func anchor(
+        for align: TextAlign
+    ) -> LayoutFrameText.Anchor {
+        switch (align.horizontal, align.vertical) {
+        case (.left, .bottom): return .bottomLeading
+        case (.center, .bottom): return .bottom
+        case (.right, .bottom): return .bottomTrailing
+        case (.left, _): return .topLeading
+        case (.center, _): return .top
+        case (.right, _): return .topTrailing
+        }
     }
 
     // MARK: - Context

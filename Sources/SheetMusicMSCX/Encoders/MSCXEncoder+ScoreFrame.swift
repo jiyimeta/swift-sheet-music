@@ -33,6 +33,12 @@ extension FrameText {
                 name: "style", text: style.rawValue
             ))
         }
+        if let fontSize {
+            children.append(XMLTreeNode(
+                name: "size",
+                text: String(format: "%g", fontSize)
+            ))
+        }
         if let offsetMm {
             children.append(XMLTreeNode(
                 name: "offset",

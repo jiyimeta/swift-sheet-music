@@ -45,12 +45,21 @@ public struct FrameText: Sendable, Equatable, Hashable {
     /// in `styledef.cpp`). The renderer multiplies by `72/25.4`
     /// to get typographic points.
     public var offsetMm: CGPoint?
+    /// Per-element `<size>` override in typographic points. `nil`
+    /// inherits the styledef default for `style`. MuseScore writes
+    /// this child only when the element diverges from the role's
+    /// font size (e.g. a custom-sized Lyricist used as a multi-line
+    /// lyric column).
+    public var fontSize: Double?
 
     public init(
-        style: Style, text: String, offsetMm: CGPoint? = nil
+        style: Style, text: String,
+        offsetMm: CGPoint? = nil,
+        fontSize: Double? = nil
     ) {
         self.style = style
         self.text = text
         self.offsetMm = offsetMm
+        self.fontSize = fontSize
     }
 }

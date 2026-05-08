@@ -32,8 +32,13 @@ extension FrameText {
         {
             offsetMm = CGPoint(x: x, y: y)
         }
+        var fontSize: Double?
+        if let raw = node.first("size")?.text, let v = Double(raw) {
+            fontSize = v
+        }
         return FrameText(
-            style: style, text: stripped, offsetMm: offsetMm
+            style: style, text: stripped,
+            offsetMm: offsetMm, fontSize: fontSize
         )
     }
 }
