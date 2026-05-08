@@ -11,14 +11,7 @@ extension Score {
         ))
         scoreChildren.append(style.encode(options: options))
         scoreChildren.append(contentsOf: Self.showFlags(options: options))
-        // metaTags are emitted in sorted key order for stable output.
-        for key in metaTags.keys.sorted() {
-            scoreChildren.append(XMLTreeNode(
-                name: "metaTag",
-                attributes: ["name": key],
-                text: metaTags[key] ?? ""
-            ))
-        }
+        scoreChildren.append(contentsOf: encodedMetaTags(options: options))
 
         // Synthesize sequential 1-based integer IDs for parts and
         // staves. MuseScore Studio's loader expects numeric IDs and
@@ -98,5 +91,53 @@ extension Score {
             XMLTreeNode(name: "showFrames", text: "1"),
             XMLTreeNode(name: "showMargins", text: "0"),
         ]
+    }
+}
+
+extension Score {
+    /// Emit `<metaTag>` children. v4 keeps the existing sorted-by-key
+    /// emission; v3 emits the fixed 13-element canonical set MuseScore
+    /// Studio expects, falling back to defaults for missing keys.
+    private func encodedMetaTags(options: MSCXEncoderOptions) -> [XMLTreeNode] {
+        switch options.targetVersion {
+        case .v4:
+            metaTags.keys.sorted().map { key in
+                XMLTreeNode(
+                    name: "metaTag",
+                    attributes: ["name": key],
+                    text: metaTags[key] ?? ""
+                )
+            }
+        case .v3:
+            Self.canonicalMS3MetaTagNames.map { name in
+                XMLTreeNode(
+                    name: "metaTag",
+                    attributes: ["name": name],
+                    text: ms3MetaValue(for: name)
+                )
+            }
+        }
+    }
+
+    private func ms3MetaValue(for name: String) -> String {
+        if let supplied = metaTags[name], !supplied.isEmpty { return supplied }
+        switch name {
+        case "creationDate": return Self.todayISODate
+        case "platform": return "Apple Macintosh"
+        default: return ""
+        }
+    }
+
+    fileprivate static let canonicalMS3MetaTagNames: [String] = [
+        "arranger", "composer", "copyright", "creationDate",
+        "lyricist", "movementNumber", "movementTitle", "platform",
+        "poet", "source", "translator", "workNumber", "workTitle",
+    ]
+
+    fileprivate static var todayISODate: String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withFullDate]
+        formatter.timeZone = TimeZone(identifier: "UTC")
+        return formatter.string(from: Date())
     }
 }

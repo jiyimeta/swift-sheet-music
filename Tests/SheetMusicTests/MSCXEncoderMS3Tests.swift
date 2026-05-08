@@ -129,4 +129,60 @@ struct MSCXEncoderMS3Tests {
         #expect(scoreElement.first("showFrames")?.text == "1")
         #expect(scoreElement.first("showMargins")?.text == "0")
     }
+
+    @Test("v3 emits canonical 13 metaTags in fixed order")
+    func v3EmitsCanonical13MetaTags() throws {
+        let score = try MSCXParser.parse(MSCXFixtureLoader.mscxData("midi01"))
+        let bytes = try MSCXEncoder.encode(score, options: .init(targetVersion: .v3))
+        let root = try XMLTreeParser.parse(bytes)
+        let scoreElement = try #require(root.first("Score"))
+        let metaNames = scoreElement.children
+            .filter { $0.name == "metaTag" }
+            .compactMap { $0.attributes["name"] }
+        #expect(metaNames == [
+            "arranger", "composer", "copyright", "creationDate",
+            "lyricist", "movementNumber", "movementTitle", "platform",
+            "poet", "source", "translator", "workNumber", "workTitle",
+        ])
+        let platform = scoreElement.children
+            .first { $0.name == "metaTag" && $0.attributes["name"] == "platform" }
+        #expect(platform?.text == "Apple Macintosh")
+        let creationDate = scoreElement.children
+            .first { $0.name == "metaTag" && $0.attributes["name"] == "creationDate" }
+        let date = try #require(creationDate?.text)
+        let regex = try Regex(#"^\d{4}-\d{2}-\d{2}$"#)
+        #expect(date.wholeMatch(of: regex) != nil)
+    }
+
+    @Test("v3 metaTags use score-supplied values when present")
+    func v3MetaTagsUseScoreValues() throws {
+        var score = try MSCXParser.parse(MSCXFixtureLoader.mscxData("midi01"))
+        score.metaTags["composer"] = "J. S. Bach"
+        score.metaTags["platform"] = "Linux"
+        score.metaTags["creationDate"] = "1750-07-28"
+        let bytes = try MSCXEncoder.encode(score, options: .init(targetVersion: .v3))
+        let root = try XMLTreeParser.parse(bytes)
+        let scoreElement = try #require(root.first("Score"))
+        func value(_ name: String) -> String? {
+            scoreElement.children
+                .first { $0.name == "metaTag" && $0.attributes["name"] == name }?
+                .text
+        }
+        #expect(value("composer") == "J. S. Bach")
+        #expect(value("platform") == "Linux")
+        #expect(value("creationDate") == "1750-07-28")
+    }
+
+    @Test("v4 metaTags use existing sorted-by-key emission")
+    func v4MetaTagsUnchanged() throws {
+        var score = try MSCXParser.parse(MSCXFixtureLoader.mscxData("midi01"))
+        score.metaTags = ["composer": "X", "arranger": "Y"]
+        let bytes = try MSCXEncoder.encode(score, options: .init(targetVersion: .v4))
+        let root = try XMLTreeParser.parse(bytes)
+        let scoreElement = try #require(root.first("Score"))
+        let metaNames = scoreElement.children
+            .filter { $0.name == "metaTag" }
+            .compactMap { $0.attributes["name"] }
+        #expect(metaNames == ["arranger", "composer"])
+    }
 }
