@@ -343,4 +343,23 @@ extension MidiRenderer {
         }
         return defaultArticulationVelocityScale(for: instrument)
     }
+
+    /// Apply per-chord velocity scaling on top of the running voice
+    /// velocity. `baseVelocity` already has the **default** articulation
+    /// scale baked in (set by `effectiveVelocity` at voice setup /
+    /// Dynamic events); the modifier swaps that default scale for the
+    /// chord-effective scale via `base * eff / def`. Returns
+    /// `baseVelocity` unchanged when the chord has no velocity-shaping
+    /// articulation, so existing playback for unarticulated chords is
+    /// bit-identical.
+    static func adjustVelocityForChord(
+        baseVelocity: Int,
+        chord: Chord,
+        instrument: Instrument
+    ) -> Int {
+        let defaultScale = defaultArticulationVelocityScale(for: instrument)
+        let effectiveScale = effectiveVelocityScale(for: chord, instrument: instrument)
+        if defaultScale == effectiveScale { return baseVelocity }
+        return min(127, max(1, baseVelocity * effectiveScale / defaultScale))
+    }
 }

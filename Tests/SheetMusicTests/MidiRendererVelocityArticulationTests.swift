@@ -137,4 +137,80 @@ import Testing
         )
         #expect(scale == 100)
     }
+
+    private func renderSingleChord(
+        _ chord: Chord,
+        division: Int = 480,
+        instrument: Instrument = Instrument(id: "test")
+    ) throws -> [TimedMidiEvent] {
+        let voice = Voice(elements: [.chord(chord)])
+        let measure = Measure(voices: [voice])
+        let staff = Staff(measures: [measure])
+        let part = Part(id: "P1", instrument: instrument, staves: [staff])
+        let score = Score(division: division, parts: [part])
+        let file = try MidiRenderer.render(score: score)
+        return try #require(file.tracks.first).events
+    }
+
+    private func firstNoteOnVelocity(_ events: [TimedMidiEvent]) -> Int {
+        for e in events {
+            if case let .noteOn(_, _, v) = e.event, v > 0 { return v }
+        }
+        return -1
+    }
+
+    private func gateTicks(from events: [TimedMidiEvent]) -> Int {
+        guard let on = events.first(where: {
+            if case let .noteOn(_, _, v) = $0.event { return v > 0 }
+            return false
+        }) else { return -1 }
+        guard let off = events.first(where: {
+            if case .noteOff = $0.event { return true }
+            if case let .noteOn(_, _, v) = $0.event { return v == 0 }
+            return false
+        }) else { return -1 }
+        return off.tick - on.tick + 1
+    }
+
+    @Test func endToEndAccentBoostsVelocity() throws {
+        // Default running velocity = mf (80). accent scale = 120%.
+        // 80 * 120 / 100 = 96.
+        let events = try renderSingleChord(chord([.accent]))
+        #expect(firstNoteOnVelocity(events) == 96)
+    }
+
+    @Test func endToEndMarcatoBoostsVelocity() throws {
+        let events = try renderSingleChord(chord([.marcato]))
+        #expect(firstNoteOnVelocity(events) == 96)
+    }
+
+    @Test func endToEndAccentStaccatoBoostsVelocityAndShortens() throws {
+        let events = try renderSingleChord(chord([.accentStaccato]))
+        #expect(firstNoteOnVelocity(events) == 96)
+        #expect(gateTicks(from: events) == 240) // 480 * 50%
+    }
+
+    @Test func endToEndMarcatoStaccatoBoostsVelocityAndShortens() throws {
+        let events = try renderSingleChord(chord([.marcatoStaccato]))
+        #expect(firstNoteOnVelocity(events) == 96)
+        #expect(gateTicks(from: events) == 240)
+    }
+
+    @Test func endToEndPlainAccentDoesNotShortenGate() throws {
+        let events = try renderSingleChord(chord([.accent]))
+        #expect(gateTicks(from: events) == 480) // full quarter
+    }
+
+    @Test func endToEndCombinedAndSplitMatchExactly() throws {
+        let combined = try renderSingleChord(chord([.accentStaccato]))
+        let split = try renderSingleChord(chord([.accent, .staccato]))
+        #expect(firstNoteOnVelocity(combined) == firstNoteOnVelocity(split))
+        #expect(gateTicks(from: combined) == gateTicks(from: split))
+    }
+
+    @Test func endToEndNoVelocityArticulationKeepsRunningVelocity() throws {
+        let events = try renderSingleChord(chord([.staccato]))
+        // No velocity-shaping articulation → mf (80) untouched.
+        #expect(firstNoteOnVelocity(events) == 80)
+    }
 }

@@ -173,6 +173,11 @@ extension MidiRenderer {
         let gate = effectiveGateTime(for: chord, instrument: instrument)
         let gatedTicks = playedTicks * gate / 100
         let mainOff = mainOnset + gatedTicks - 1
+        let mainVelocity = adjustVelocityForChord(
+            baseVelocity: velocity,
+            chord: chord,
+            instrument: instrument
+        )
         if let arpeggio = chord.arpeggio {
             // Keep arpeggio behaviour intact: same call as the
             // pre-grace path, just with the shifted onset / shortened
@@ -191,7 +196,7 @@ extension MidiRenderer {
                 let onTick = mainOnset + pairs[i].onOffset
                 let offTick = mainOnset + pairs[i].offOffset
                 emitNoteEventsForGrace(
-                    note: note, channel: channel, velocity: velocity,
+                    note: note, channel: channel, velocity: mainVelocity,
                     onTick: onTick, offTick: offTick, events: &events
                 )
             }
@@ -201,12 +206,12 @@ extension MidiRenderer {
                     renderGlissandoNote(
                         note: note, glissando: glissando, endPitch: endPitch,
                         startTick: mainOnset, durationTicks: playedTicks,
-                        velocity: velocity, channel: channel,
+                        velocity: mainVelocity, channel: channel,
                         currentKey: currentKey, events: &events
                     )
                 } else {
                     emitNoteEventsForGrace(
-                        note: note, channel: channel, velocity: velocity,
+                        note: note, channel: channel, velocity: mainVelocity,
                         onTick: mainOnset, offTick: mainOff, events: &events
                     )
                 }
