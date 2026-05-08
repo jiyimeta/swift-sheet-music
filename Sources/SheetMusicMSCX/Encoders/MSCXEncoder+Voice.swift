@@ -265,7 +265,7 @@ extension Voice {
         case let .harmony(harmony):
             return harmony.encode()
         case let .measureRepeat(measureRepeat):
-            return measureRepeat.encode()
+            return measureRepeat.encode(options: options)
         case let .fermata(fermata):
             return fermata.encode()
         case let .locationShift(delta):

@@ -33,6 +33,15 @@ extension Chord {
             ))
         }
         duration.appendDurationXML(to: &children)
+        // Lyrics sit between durationType and the first <Note>: this
+        // matches MuseScore's serializer (Chord::write) and is what
+        // both MS3 and MS4 readers expect. Empty-text placeholders
+        // (verse-padding entries inserted by the decoder when verse N
+        // exists without verse N-1) are skipped — emitting them
+        // produces stray empty syllables on screen.
+        for lyric in lyrics where !lyric.text.isEmpty {
+            children.append(lyric.encode(options: options))
+        }
         for note in notes {
             children.append(note.encode(
                 tieForwardLocation: tieForwardLocation,
