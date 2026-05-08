@@ -213,4 +213,53 @@ import Testing
         // No velocity-shaping articulation → mf (80) untouched.
         #expect(firstNoteOnVelocity(events) == 80)
     }
+
+    @Test func endToEndDynamicAndAccentMultiply() throws {
+        // A `<Dynamic>` event sets the running velocity; then the
+        // accent multiplies on top per `base * eff / def`. With base
+        // = 100 (Dynamic.velocity) and eff = 120 (accent default), the
+        // result is 100 * 120 / 100 = 120.
+        let dynamic = Dynamic(subtype: "f", velocity: 100)
+        let chord = Chord(
+            duration: .quarter,
+            notes: ChordNotes([Note(pitch: 60, tpc: 14)]),
+            articulations: [.init(kind: .accent)]
+        )
+        let voice = Voice(elements: [.dynamic(dynamic), .chord(chord)])
+        let measure = Measure(voices: [voice])
+        let staff = Staff(measures: [measure])
+        let part = Part(
+            id: "P1", instrument: Instrument(id: "test"), staves: [staff]
+        )
+        let score = Score(division: 480, parts: [part])
+        let file = try MidiRenderer.render(score: score)
+        let events = try #require(file.tracks.first).events
+        #expect(firstNoteOnVelocity(events) == 120)
+    }
+
+    @Test func endToEndAccentBoostsMainOnlyNotGraces() throws {
+        // The main chord carries `.accent` and gets boosted; the leading
+        // grace note (acciaccatura) must NOT inherit the boost — graces
+        // are unarticulated satellites of the parent chord. Default mf
+        // (80) for the grace, accent-boosted (96) for the main.
+        let grace = GraceChord(
+            graceType: .acciaccatura,
+            duration: .eighth,
+            notes: ChordNotes([Note(pitch: 62, tpc: 16)])
+        )
+        let main = Chord(
+            duration: .quarter,
+            notes: ChordNotes([Note(pitch: 60, tpc: 14)]),
+            graceNotesBefore: [grace],
+            articulations: [.init(kind: .accent)]
+        )
+        let events = try renderSingleChord(main)
+        let onVelocities = events.compactMap { e -> Int? in
+            if case let .noteOn(_, _, v) = e.event, v > 0 { return v }
+            return nil
+        }
+        #expect(onVelocities.count == 2)
+        #expect(onVelocities.first == 80) // grace pitch=62, unaffected
+        #expect(onVelocities.last == 96) // main pitch=60, accent-boosted
+    }
 }
