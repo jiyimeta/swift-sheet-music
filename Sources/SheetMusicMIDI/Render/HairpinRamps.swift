@@ -120,7 +120,12 @@ enum HairpinRamps {
                 dynList.append(DynPoint(tick: runningTick, velocity: v))
                 runningVel = v
             case let .spanner(s) where s.kind == .hairpin:
-                let payload = s.hairpin ?? Spanner.HairpinPayload(subtype: .crescendo)
+                // Only the begin-side spanner carries a non-nil
+                // payload. End-side placeholders (`<prev>` only) have
+                // hairpin == nil and must NOT be treated as a new
+                // ramp — otherwise they create a phantom zero-length
+                // hairpin that overrides the real ramp's endpoint.
+                guard let payload = s.hairpin else { break }
                 let endTick = computeEndTick(
                     startTick: runningTick,
                     startMeasureIndex: measureIdx,
