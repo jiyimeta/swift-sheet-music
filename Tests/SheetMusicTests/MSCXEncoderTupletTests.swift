@@ -103,4 +103,31 @@ struct MSCXEncoderTupletTests {
             try voice.encode()
         }
     }
+
+    /// MuseScore 3's `Tuplet::read` leaves `_baseLen` invalid when
+    /// `<baseNote>` is missing, then crashes with SIGFPE in
+    /// `Ms::Measure::readVoice` on the first member's tick math.
+    /// The encoder must emit `<baseNote>` derived from each member's
+    /// unscaled (written) duration. MS4 readers tolerate the field.
+    @Test("Tuplet emits <baseNote> matching member's written duration")
+    func tupletEmitsBaseNote() throws {
+        // Eighth-note triplet (2:3): each chord stored as 1/12.
+        let scaledEighth = NoteDuration.fraction(.init(numerator: 1, denominator: 12))
+        let voice = Voice(
+            elements: [
+                .chord(Chord(duration: scaledEighth, notes: ChordNotes([Note(pitch: 60, tpc: 14)]))),
+                .chord(Chord(duration: scaledEighth, notes: ChordNotes([Note(pitch: 62, tpc: 16)]))),
+                .chord(Chord(duration: scaledEighth, notes: ChordNotes([Note(pitch: 64, tpc: 18)]))),
+            ],
+            tuplets: [
+                Tuplet(normalNotes: 2, actualNotes: 3, startIndex: 0, endIndex: 2),
+            ]
+        )
+        let xml = try voice.encode()
+        let tuplet = try #require(xml.first("Tuplet"))
+        #expect(tuplet.first("baseNote")?.text == "eighth")
+        // normalNotes/actualNotes preserved.
+        #expect(tuplet.first("normalNotes")?.text == "2")
+        #expect(tuplet.first("actualNotes")?.text == "3")
+    }
 }

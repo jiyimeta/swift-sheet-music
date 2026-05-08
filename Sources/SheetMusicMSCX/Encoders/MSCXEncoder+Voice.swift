@@ -102,7 +102,12 @@ extension Voice {
         var state = EncodeState(carryIn: carryIn)
         for (index, element) in elements.enumerated() {
             for opening in startsByIndex[index] ?? [] {
-                state.children.append(opening.encode())
+                let activeWithOpening = state.stack + [opening]
+                let base = tupletBaseDuration(
+                    opening: opening,
+                    activeTuplets: activeWithOpening
+                )
+                state.children.append(opening.encode(baseDuration: base))
                 state.stack.append(opening)
             }
             if !(dropInitialZeroKeySig && index == 0) {
@@ -341,6 +346,21 @@ extension Voice {
         }
     }
 
+    /// Resolve the "written" duration of the tuplet's first member
+    /// for emission as `<baseNote>{name}</baseNote>`. Returns nil for
+    /// degenerate tuplets (empty range or non-chord/rest member) and
+    /// for durations that cannot be expressed as a named base.
+    private func tupletBaseDuration(
+        opening: Tuplet,
+        activeTuplets: [Tuplet]
+    ) -> NoteDuration? {
+        guard opening.startIndex < elements.count else { return nil }
+        guard case let .chord(chord) = elements[opening.startIndex] else {
+            return nil
+        }
+        return try? unscaledDuration(chord.duration, in: activeTuplets)
+    }
+
     /// Divide the stored (already-scaled) duration by the product
     /// of every containing tuplet's `actualNotes/normalNotes` ratio
     /// so the decoder's positional scaling reproduces the original
@@ -372,18 +392,5 @@ extension Voice {
             )
         }
         return candidate
-    }
-}
-
-extension Tuplet {
-    /// Build the `<Tuplet>` opening marker.
-    func encode() -> XMLTreeNode {
-        XMLTreeNode(
-            name: "Tuplet",
-            children: [
-                XMLTreeNode(name: "normalNotes", text: String(normalNotes)),
-                XMLTreeNode(name: "actualNotes", text: String(actualNotes)),
-            ]
-        )
     }
 }
