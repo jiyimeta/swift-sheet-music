@@ -39,11 +39,22 @@ extension Staff {
     }
 
     /// Encode the top-level `<Staff id="N">` block carrying measures.
-    func encodeTopLevel(staffID: String) throws -> XMLTreeNode {
-        try XMLTreeNode(
+    /// Pass `titleFrame` to prepend a `<VBox>` ahead of the measures —
+    /// MuseScore stores the title block inside the first top-level
+    /// staff body, so callers should set it only on staff index 0 of
+    /// part index 0.
+    func encodeTopLevel(
+        staffID: String, titleFrame: ScoreFrame? = nil
+    ) throws -> XMLTreeNode {
+        var children: [XMLTreeNode] = []
+        if let titleFrame {
+            children.append(titleFrame.encodeAsVBox())
+        }
+        try children.append(contentsOf: measures.map { try $0.encode() })
+        return XMLTreeNode(
             name: "Staff",
             attributes: ["id": staffID],
-            children: measures.map { try $0.encode() }
+            children: children
         )
     }
 }

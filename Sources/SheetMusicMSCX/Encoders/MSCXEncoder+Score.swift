@@ -31,9 +31,14 @@ extension Score {
         for (part, ids) in allStaffIDs {
             scoreChildren.append(part.encodeDeclaration(staffIDs: ids))
         }
+        var titleFrameSlot = titleFrame
         for (part, ids) in allStaffIDs {
             for (staff, id) in zip(part.staves, ids) {
-                try scoreChildren.append(staff.encodeTopLevel(staffID: id))
+                let frame = titleFrameSlot
+                titleFrameSlot = nil
+                try scoreChildren.append(
+                    staff.encodeTopLevel(staffID: id, titleFrame: frame)
+                )
             }
         }
 
