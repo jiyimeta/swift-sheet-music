@@ -66,6 +66,12 @@ extension LayoutEngine {
             return .textMark(kind: k, text: t, origin: shift(p))
         case let .fermata(s, p):
             return .fermata(subtype: s, origin: shift(p))
+        case let .articulation(kind, p, isAbove):
+            return .articulation(
+                kind: kind,
+                origin: shift(p),
+                isAbove: isAbove
+            )
         case let .measureRepeat(c, p):
             return .measureRepeat(count: c, origin: shift(p))
         case let .beam(from, to, direction, level):
