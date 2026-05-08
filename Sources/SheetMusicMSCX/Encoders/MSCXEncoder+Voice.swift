@@ -16,6 +16,22 @@ extension Voice {
         try encode(carryIn: VoiceTieCarry(), options: options).node
     }
 
+    /// Convenience overload threading drum-staff context: callers that
+    /// already know the staff group and voice index can request
+    /// percussion-aware emission without pre-building a `VoiceTieCarry`.
+    func encode(
+        staffGroup: String,
+        voiceIndex: Int,
+        options: MSCXEncoderOptions = .init()
+    ) throws -> XMLTreeNode {
+        try encode(
+            carryIn: VoiceTieCarry(),
+            options: options,
+            staffGroup: staffGroup,
+            voiceIndex: voiceIndex
+        ).node
+    }
+
     /// Carry data threaded measure-to-measure for cross-measure tie
     /// location math. `prevChordDuration` is the played duration of
     /// the last chord in the previous measure's voice — used as the
@@ -46,7 +62,9 @@ extension Voice {
     func encode(
         carryIn: VoiceTieCarry,
         isStaffHead: Bool = false,
-        options: MSCXEncoderOptions = .init()
+        options: MSCXEncoderOptions = .init(),
+        staffGroup: String = "pitched",
+        voiceIndex: Int = 0
     ) throws -> (node: XMLTreeNode, carryOut: VoiceTieCarry) {
         try Self.validateProperlyNested(tuplets)
         // At a given startIndex, push outer tuplets (longer range)
@@ -95,7 +113,9 @@ extension Voice {
                     voiceBarLength: voiceBarLength,
                     carryIn: carryIn,
                     state: &state,
-                    options: options
+                    options: options,
+                    staffGroup: staffGroup,
+                    voiceIndex: voiceIndex
                 )
             }
             for _ in 0 ..< (endCountByIndex[index] ?? 0) {
@@ -142,7 +162,9 @@ extension Voice {
         voiceBarLength: Fraction,
         carryIn: VoiceTieCarry,
         state: inout EncodeState,
-        options: MSCXEncoderOptions
+        options: MSCXEncoderOptions,
+        staffGroup: String,
+        voiceIndex: Int
     ) throws {
         let isLastChord: Bool = {
             if case .chord = element { return index == lastChordIndex }
@@ -156,7 +178,9 @@ extension Voice {
             isLastChordOfVoice: isLastChord,
             prevVoiceTotal: carryIn.prevVoiceTotal,
             voiceBarLength: voiceBarLength,
-            options: options
+            options: options,
+            staffGroup: staffGroup,
+            voiceIndex: voiceIndex
         ))
         if case let .chord(chord) = element {
             state.previousChordDuration = chord.duration.asFraction
@@ -199,35 +223,24 @@ extension Voice {
         isLastChordOfVoice: Bool,
         prevVoiceTotal: Fraction?,
         voiceBarLength: Fraction,
-        options: MSCXEncoderOptions = .init()
+        options: MSCXEncoderOptions = .init(),
+        staffGroup: String = "pitched",
+        voiceIndex: Int = 0
     ) throws -> XMLTreeNode {
         switch element {
         case let .chord(chord):
-            let unscaled = try unscaledDuration(chord.duration, in: activeTuplets)
-            let unscaledChord = Chord(
-                duration: unscaled,
-                notes: chord.notes,
-                arpeggio: chord.arpeggio,
-                lyrics: chord.lyrics
-            )
-            let tieForward = forwardTieLocation(
+            return try encodeChord(
                 chord: chord,
-                isLastChordOfVoice: isLastChordOfVoice,
-                voiceBarLength: voiceBarLength
-            )
-            let tieBack = backwardTieLocation(
-                chord: chord,
-                isFirstChordOfVoice: isFirstChordOfVoice,
+                activeTuplets: activeTuplets,
                 previousChordDuration: previousChordDuration,
-                prevVoiceTotal: prevVoiceTotal
+                isFirstChordOfVoice: isFirstChordOfVoice,
+                isLastChordOfVoice: isLastChordOfVoice,
+                prevVoiceTotal: prevVoiceTotal,
+                voiceBarLength: voiceBarLength,
+                options: options,
+                staffGroup: staffGroup,
+                voiceIndex: voiceIndex
             )
-            return unscaledChord.notes.isEmpty
-                ? unscaledChord.encodeAsRest(options: options)
-                : unscaledChord.encodeAsChord(
-                    tieForwardLocation: tieForward,
-                    tieBackLocation: tieBack,
-                    options: options
-                )
         case let .keySignature(key):
             return key.encode(options: options)
         case let .timeSignature(time):
@@ -268,6 +281,52 @@ extension Voice {
         }
     }
 
+    /// Build the `<Chord>` / `<Rest>` element for one chord case of the
+    /// element switch. Factored out of `encode(element:…)` so that
+    /// dispatch fits within the function-body-length budget; carries
+    /// the same `staffGroup` / `voiceIndex` threading needed for
+    /// percussion-v3 stem direction and default note head emission.
+    private func encodeChord(
+        chord: Chord,
+        activeTuplets: [Tuplet],
+        previousChordDuration: Fraction?,
+        isFirstChordOfVoice: Bool,
+        isLastChordOfVoice: Bool,
+        prevVoiceTotal: Fraction?,
+        voiceBarLength: Fraction,
+        options: MSCXEncoderOptions,
+        staffGroup: String,
+        voiceIndex: Int
+    ) throws -> XMLTreeNode {
+        let unscaled = try unscaledDuration(chord.duration, in: activeTuplets)
+        let unscaledChord = Chord(
+            duration: unscaled,
+            notes: chord.notes,
+            arpeggio: chord.arpeggio,
+            lyrics: chord.lyrics
+        )
+        let tieForward = forwardTieLocation(
+            chord: chord,
+            isLastChordOfVoice: isLastChordOfVoice,
+            voiceBarLength: voiceBarLength
+        )
+        let tieBack = backwardTieLocation(
+            chord: chord,
+            isFirstChordOfVoice: isFirstChordOfVoice,
+            previousChordDuration: previousChordDuration,
+            prevVoiceTotal: prevVoiceTotal
+        )
+        return unscaledChord.notes.isEmpty
+            ? unscaledChord.encodeAsRest(options: options)
+            : unscaledChord.encodeAsChord(
+                tieForwardLocation: tieForward,
+                tieBackLocation: tieBack,
+                options: options,
+                staffGroup: staffGroup,
+                voiceIndex: voiceIndex
+            )
+    }
+
     /// Sum of all played durations in the voice. The cross-measure
     /// forward tie uses this as `barLength` to compute
     /// `<fractions>(source.duration - barLength)</fractions>`,
@@ -280,48 +339,6 @@ extension Voice {
             }
             return acc
         }
-    }
-
-    /// Build the `<Spanner type="Tie"><next><location>` payload
-    /// for a chord with `tieForward` set. MuseScore encodes the
-    /// `<location>` as a played-tick delta from source to target,
-    /// expressed as `(measures, fractions)` whose sum equals the
-    /// delta. For ties to the immediately following chord:
-    ///  - same bar: `<fractions>source.duration</fractions>` only
-    ///  - cross bar: `<measures>1</measures><fractions>(source.duration - barLength)</fractions>`
-    private func forwardTieLocation(
-        chord: Chord,
-        isLastChordOfVoice: Bool,
-        voiceBarLength: Fraction
-    ) -> TieLocation? {
-        guard chord.notes.contains(where: { $0.tieForward != nil })
-        else { return nil }
-        let dur = chord.duration.asFraction
-        return isLastChordOfVoice
-            ? .crossMeasure(measures: 1, fractions: dur - voiceBarLength)
-            : .sameMeasure(fractions: dur)
-    }
-
-    /// Build the `<Spanner type="Tie"><prev><location>` payload
-    /// for a chord with `tieBack` set. Mirrors `forwardTieLocation`
-    /// — same-bar back ties carry `-prev_chord_duration`;
-    /// cross-bar back ties carry `(measures: -1, fractions: prev_voice_total - prev_chord_duration)`.
-    private func backwardTieLocation(
-        chord: Chord,
-        isFirstChordOfVoice: Bool,
-        previousChordDuration: Fraction?,
-        prevVoiceTotal: Fraction?
-    ) -> TieLocation? {
-        guard chord.notes.contains(where: { $0.tieBack != nil }),
-              let prevDur = previousChordDuration
-        else { return nil }
-        if isFirstChordOfVoice, let prevTotal = prevVoiceTotal {
-            return .crossMeasure(measures: -1, fractions: prevTotal - prevDur)
-        }
-        return .sameMeasure(fractions: Fraction(
-            numerator: -prevDur.numerator,
-            denominator: prevDur.denominator
-        ))
     }
 
     /// Divide the stored (already-scaled) duration by the product

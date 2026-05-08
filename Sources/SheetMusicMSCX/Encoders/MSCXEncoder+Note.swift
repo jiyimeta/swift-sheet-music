@@ -31,7 +31,8 @@ extension Note {
     func encode(
         tieForwardLocation: TieLocation? = nil,
         tieBackLocation: TieLocation? = nil,
-        options: MSCXEncoderOptions = .init()
+        options: MSCXEncoderOptions = .init(),
+        drumDefaultHead: String? = nil
     ) -> XMLTreeNode {
         var children: [XMLTreeNode] = []
         if let accidental {
@@ -62,6 +63,8 @@ extension Note {
         children.append(XMLTreeNode(name: "tpc", text: String(tpc)))
         if let headType {
             children.append(XMLTreeNode(name: "head", text: headType))
+        } else if let drumDefaultHead {
+            children.append(XMLTreeNode(name: "head", text: drumDefaultHead))
         }
         return XMLTreeNode(name: "Note", children: children)
     }

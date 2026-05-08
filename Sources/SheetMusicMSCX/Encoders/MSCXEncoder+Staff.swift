@@ -65,7 +65,8 @@ extension Staff {
             let result = try measure.encode(
                 carryInVoiceTieCarries: carry,
                 isFirstMeasureOfStaff: measureIndex == 0,
-                options: options
+                options: options,
+                staffGroup: group
             )
             children.append(result.node)
             carry = result.carryOutVoiceTieCarries

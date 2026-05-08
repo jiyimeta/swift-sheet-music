@@ -28,7 +28,8 @@ extension Measure {
     func encode(
         carryInVoiceTieCarries: [Voice.VoiceTieCarry],
         isFirstMeasureOfStaff: Bool = false,
-        options: MSCXEncoderOptions = .init()
+        options: MSCXEncoderOptions = .init(),
+        staffGroup: String = "pitched"
     ) throws -> (node: XMLTreeNode, carryOutVoiceTieCarries: [Voice.VoiceTieCarry]) {
         var children: [XMLTreeNode] = []
         for marker in markers {
@@ -47,7 +48,9 @@ extension Measure {
             let result = try voice.encode(
                 carryIn: carryIn,
                 isStaffHead: isFirstMeasureOfStaff && index == 0,
-                options: options
+                options: options,
+                staffGroup: staffGroup,
+                voiceIndex: index
             )
             children.append(result.node)
             carryOut[index] = result.carryOut
