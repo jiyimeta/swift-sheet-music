@@ -26,6 +26,24 @@ extension MidiRenderer {
         // of `Staff::swing()` in MuseScore (staff.cpp:1006).
         var swingState = initialSwing
 
+        let hairpinRamps = HairpinRamps.collect(
+            voiceIndex: voiceIndex,
+            staff: staff,
+            instrument: part.instrument,
+            division: division
+        )
+        // Original-tick base for each measure index, used to map
+        // playback ticks (which include unrolled repeats) back to
+        // pre-repeat ticks for ramp lookup.
+        var originalMeasureBase: [Int] = []
+        do {
+            var acc = 0
+            for m in staff.measures {
+                originalMeasureBase.append(acc)
+                acc += measureTicks(measure: m, division: division)
+            }
+        }
+
         for entry in plan {
             // Splice in the source measure's notes if this measure is a
             // measure-repeat. Returns nil only when neither the current
@@ -69,6 +87,7 @@ extension MidiRenderer {
 
             var localTick = entry.tickOffset
             var currentKey = firstKeySignature(in: staff)?.concertKey ?? 0
+            let originalTickDelta = originalMeasureBase[entry.measureIndex] - entry.tickOffset
             for (elementIndex, element) in effectiveVoice.elements.enumerated() {
                 if case let .keySignature(k) = element { currentKey = k.concertKey }
                 renderVoiceElement(
@@ -87,7 +106,9 @@ extension MidiRenderer {
                     channel: channel,
                     instrument: part.instrument,
                     division: division,
-                    events: &events
+                    events: &events,
+                    hairpinRamps: hairpinRamps,
+                    originalTickDelta: originalTickDelta
                 )
             }
         }
@@ -118,7 +139,9 @@ extension MidiRenderer {
         channel: Int,
         instrument: Instrument,
         division: Int,
-        events: inout [TimedMidiEvent]
+        events: inout [TimedMidiEvent],
+        hairpinRamps: [HairpinRamp],
+        originalTickDelta: Int
     ) {
         switch element {
         case let .keySignature(key):
@@ -214,10 +237,20 @@ extension MidiRenderer {
                 ),
                 state: swingState
             )
+            // Hairpin influence is scoped to the chord onset; the
+            // running `velocity` is untouched, so the next .dynamic
+            // resets it normally for post-ramp playback. Look up the
+            // ramp at the swing-adjusted onset so the velocity tracks
+            // the audible attack rather than the nominal grid.
+            let onsetOriginalTick = (localTick + adjust.onsetShift) + originalTickDelta
+            let chordVelocity =
+                HairpinRamps.active(in: hairpinRamps, at: onsetOriginalTick)
+                .map { HairpinRamps.interpolate(ramp: $0, atOriginalTick: onsetOriginalTick) }
+                ?? velocity
             renderChordWithGraces(
                 chord,
                 tick: localTick + adjust.onsetShift,
-                velocity: velocity,
+                velocity: chordVelocity,
                 channel: channel,
                 instrument: instrument,
                 tempoBps: currentTempoBps,

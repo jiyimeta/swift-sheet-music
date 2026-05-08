@@ -20,13 +20,33 @@ extension Spanner {
         let nextFractions = nextLocation?.first("fractions")
             .flatMap { Fraction(mscxString: $0.text) }
 
+        var hairpin: Spanner.HairpinPayload?
+        if kind == .hairpin, let hp = node.first("HairPin") {
+            let subtypeRaw = Int(hp.first("subtype")?.text ?? "0") ?? 0
+            let subtype = Spanner.HairpinPayload.Subtype(rawValue: subtypeRaw) ?? .crescendo
+
+            let veloChangeText = hp.first("veloChange")?.text
+            let veloChangeRaw = veloChangeText.flatMap(Int.init)
+            let veloChange = veloChangeRaw == 0 ? nil : veloChangeRaw
+
+            let methodRaw = hp.first("veloChangeMethod")?.text ?? ""
+            let method = Spanner.HairpinPayload.VeloChangeMethod(rawValue: methodRaw) ?? .normal
+
+            hairpin = Spanner.HairpinPayload(
+                subtype: subtype,
+                veloChange: veloChange,
+                veloChangeMethod: method
+            )
+        }
+
         return Spanner(
             kind: kind,
             rawType: raw,
             nextMeasuresOffset: nextMeasures,
             nextFractionsOffset: nextFractions,
             voltaEndings: voltaEndings,
-            visible: decodeVisible(node)
+            visible: decodeVisible(node),
+            hairpin: hairpin
         )
     }
 

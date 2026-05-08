@@ -2,7 +2,7 @@ The mscx, MIDI and MusicXML files in this directory are copies of test
 fixtures taken from the upstream MuseScore repository:
 
   https://github.com/musescore/MuseScore
-  - Root fixtures (midi*, testArpeggio, testVolta*, …):
+  - Root fixtures (midi*, testArpeggio, testVolta*, testSingleNoteDynamics, …):
       src/importexport/midi/tests/midiexport_data/
   - musicxml/ subdirectory:
       src/importexport/musicxml/tests/data/

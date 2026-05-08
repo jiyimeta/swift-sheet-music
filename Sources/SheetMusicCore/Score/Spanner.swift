@@ -29,6 +29,7 @@ public struct Spanner: Sendable, Equatable {
     /// is hidden — layout omits it entirely (no glyphs, no reserved
     /// space). Playback / MIDI continue to honour the spanner.
     public var visible: Bool
+    public var hairpin: HairpinPayload?
 
     public init(
         kind: Kind,
@@ -36,7 +37,8 @@ public struct Spanner: Sendable, Equatable {
         nextMeasuresOffset: Int = 0,
         nextFractionsOffset: Fraction? = nil,
         voltaEndings: [Int] = [],
-        visible: Bool = true
+        visible: Bool = true,
+        hairpin: HairpinPayload? = nil
     ) {
         self.kind = kind
         self.rawType = rawType
@@ -44,5 +46,43 @@ public struct Spanner: Sendable, Equatable {
         self.nextFractionsOffset = nextFractionsOffset
         self.voltaEndings = voltaEndings
         self.visible = visible
+        self.hairpin = hairpin
+    }
+
+    /// MuseScore `<HairPin>` payload needed for MIDI playback.
+    /// Meaningful only when `kind == .hairpin`. Nil for other kinds.
+    /// C++: `mu::engraving::Hairpin`.
+    public struct HairpinPayload: Sendable, Equatable {
+        public enum Subtype: Int, Sendable {
+            case crescendo = 0
+            case decrescendo = 1
+        }
+
+        /// Linear / ease curve. v1 implements `.normal` (linear) only;
+        /// other cases fall through to linear in `HairpinRamps.interpolate`.
+        public enum VeloChangeMethod: String, Sendable {
+            case normal
+            case easeIn = "ease-in"
+            case easeOut = "ease-out"
+            case easeInOut = "ease-in-out"
+            case exponential
+        }
+
+        public var subtype: Subtype
+        /// `<veloChange>` value (1..127). Used when bracket Dynamics
+        /// don't pin both endpoints. MuseScore's default of 0 is
+        /// normalised to nil at decode time.
+        public var veloChange: Int?
+        public var veloChangeMethod: VeloChangeMethod
+
+        public init(
+            subtype: Subtype,
+            veloChange: Int? = nil,
+            veloChangeMethod: VeloChangeMethod = .normal
+        ) {
+            self.subtype = subtype
+            self.veloChange = veloChange
+            self.veloChangeMethod = veloChangeMethod
+        }
     }
 }
