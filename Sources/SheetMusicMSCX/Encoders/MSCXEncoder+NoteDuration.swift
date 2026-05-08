@@ -49,12 +49,19 @@ extension NoteDuration {
     /// requires); falls back to `<durationType>measure</durationType>`
     /// + `<duration>N/D</duration>` only for `.fraction` values that
     /// cannot be decomposed (Rest accepts this form; Chord does not).
+    ///
+    /// Element order matches MuseScore Studio's writer: `<dots>`
+    /// precedes `<durationType>`. Emitting them in the reverse
+    /// order (durationType first) makes MuseScore's loader read the
+    /// duration without dots — the chord renders as a dotted half
+    /// but plays back as a plain half, with the missing 1/4 padded
+    /// out as an extra rest.
     func appendDurationXML(to children: inout [XMLTreeNode]) {
         if let parts = decomposed() {
-            children.append(XMLTreeNode(name: "durationType", text: parts.name))
             if parts.dots > 0 {
                 children.append(XMLTreeNode(name: "dots", text: String(parts.dots)))
             }
+            children.append(XMLTreeNode(name: "durationType", text: parts.name))
             return
         }
         if case let .fraction(f) = self {

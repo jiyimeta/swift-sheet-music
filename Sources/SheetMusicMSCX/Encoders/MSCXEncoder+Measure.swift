@@ -13,6 +13,18 @@ extension Measure {
     /// in any order, but matching MuseScore's order keeps diffs
     /// against fixtures readable.
     func encode() throws -> XMLTreeNode {
+        try encode(carryInVoiceTieCarries: []).node
+    }
+
+    /// `carryInVoiceTieCarries[i]` is the previous measure's voice
+    /// `i` carry-out (last chord duration + voice total). Voice `i`
+    /// of this measure picks it up so a chord at the head of the
+    /// measure with `tieBack` can encode the back offset across the
+    /// bar line. The returned array is `carryOutVoiceTieCarries[i]`
+    /// for the next measure.
+    func encode(
+        carryInVoiceTieCarries: [Voice.VoiceTieCarry]
+    ) throws -> (node: XMLTreeNode, carryOutVoiceTieCarries: [Voice.VoiceTieCarry]) {
         var children: [XMLTreeNode] = []
         for marker in markers {
             children.append(marker.encode())
@@ -20,8 +32,16 @@ extension Measure {
         if startRepeat {
             children.append(XMLTreeNode(name: "startRepeat"))
         }
-        for voice in voices {
-            try children.append(voice.encode())
+        var carryOut: [Voice.VoiceTieCarry] = Array(
+            repeating: Voice.VoiceTieCarry(), count: voices.count
+        )
+        for (index, voice) in voices.enumerated() {
+            let carryIn = index < carryInVoiceTieCarries.count
+                ? carryInVoiceTieCarries[index]
+                : Voice.VoiceTieCarry()
+            let result = try voice.encode(carryIn: carryIn)
+            children.append(result.node)
+            carryOut[index] = result.carryOut
         }
         if let endRepeatCount {
             children.append(XMLTreeNode(
@@ -48,7 +68,25 @@ extension Measure {
                 children: [XMLTreeNode(name: "subtype", text: "page")]
             ))
         }
-        return XMLTreeNode(name: "Measure", children: children)
+        return (
+            XMLTreeNode(name: "Measure", children: children),
+            carryOut
+        )
+    }
+
+    /// Public stable signature: encode using a per-voice
+    /// `lastChordDuration` array rather than the encoder-internal
+    /// `VoiceTieCarry`. Kept for source-compatibility while the
+    /// rest of the codebase still calls the older shape; new
+    /// callers should pass `[Voice.VoiceTieCarry]` directly.
+    func encode(
+        carryInLastChordDurations: [Fraction?]
+    ) throws -> (node: XMLTreeNode, carryOutLastChordDurations: [Fraction?]) {
+        let carries = carryInLastChordDurations.map {
+            Voice.VoiceTieCarry(prevChordDuration: $0, prevVoiceTotal: nil)
+        }
+        let result = try encode(carryInVoiceTieCarries: carries)
+        return (result.node, result.carryOutVoiceTieCarries.map(\.prevChordDuration))
     }
 }
 

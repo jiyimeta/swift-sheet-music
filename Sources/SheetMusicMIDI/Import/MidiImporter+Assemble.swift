@@ -50,8 +50,15 @@ extension MidiImporter {
             // Time signature is shared across every staff (bar lines
             // align). Key signature applies to all non-drum staves;
             // percussion staves render without a key sig.
+            // Drum tracks render on MuseScore's 5-line percussion
+            // staff — `perc5Line` is the StaffType name MuseScore
+            // matches against its built-in template. Using
+            // `stdNormal` for a percussion-grouped staff confuses
+            // MuseScore's loader: it treats the staff as a pitched
+            // one and ignores the per-pitch `<Drum>` line positions,
+            // collapsing every drum onto the same line visually.
             var staff = Staff(
-                staffType: "stdNormal",
+                staffType: track.isDrums ? "perc5Line" : "stdNormal",
                 group: track.isDrums ? "percussion" : "pitched",
                 defaultClefType: track.isDrums ? "PERC" : nil,
                 measures: scoreMeasures
@@ -235,9 +242,37 @@ extension MidiImporter {
         // Walking every track here would double-insert events and
         // — worse — let the drum track's spurious (0, 0) override
         // the real initial key on every non-drum staff.
-        let metas = (file.tracks.first?.events ?? []).filter {
-            if case .meta = $0.event { true } else { false }
+        // The final voice order MuseScore expects at the start of a
+        // measure is `KeySig → TimeSig → Tempo → Chord/Rest`. Each
+        // meta element is `insert(at: 0)`-ed below, which reverses
+        // the visit order — so visit them in the opposite of the
+        // desired final order: Tempo first, then TimeSig, then
+        // KeySig. Sorting by `(tick, reverse-priority)` keeps metas
+        // at later measures ordered correctly too.
+        let metaPriority: (TimedMidiEvent) -> Int = { ev in
+            if case let .meta(meta) = ev.event {
+                switch meta {
+                case .tempo: return 0
+                case .timeSignature: return 1
+                case .keySignature: return 2
+                default: return 3
+                }
+            }
+            return 4
         }
+        let metas = (file.tracks.first?.events ?? [])
+            .filter { if case .meta = $0.event { true } else { false } }
+            .enumerated()
+            .sorted { lhs, rhs in
+                if lhs.element.tick != rhs.element.tick {
+                    return lhs.element.tick < rhs.element.tick
+                }
+                let lp = metaPriority(lhs.element)
+                let rp = metaPriority(rhs.element)
+                if lp != rp { return lp < rp }
+                return lhs.offset < rhs.offset
+            }
+            .map(\.element)
         for meta in metas {
             let measureIdx = timeline.measureIndex(of: meta.tick)
             guard measureIdx < staff.measures.count else { continue }

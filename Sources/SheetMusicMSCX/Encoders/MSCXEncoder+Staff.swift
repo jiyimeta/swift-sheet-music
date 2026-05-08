@@ -50,7 +50,18 @@ extension Staff {
         if let titleFrame {
             children.append(titleFrame.encodeAsVBox())
         }
-        try children.append(contentsOf: measures.map { try $0.encode() })
+        // Thread per-voice tie-carry data across measures so a tie
+        // that crosses a measure boundary can encode the
+        // `<measures>±1</measures>` form (which MuseScore Studio
+        // requires to disambiguate cross-bar ties from same-bar
+        // offsets — the same-`<fractions>`-only encoding makes
+        // MuseScore match the wrong destination chord).
+        var carry: [Voice.VoiceTieCarry] = []
+        for measure in measures {
+            let result = try measure.encode(carryInVoiceTieCarries: carry)
+            children.append(result.node)
+            carry = result.carryOutVoiceTieCarries
+        }
         return XMLTreeNode(
             name: "Staff",
             attributes: ["id": staffID],

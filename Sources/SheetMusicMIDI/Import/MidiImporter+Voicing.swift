@@ -14,80 +14,6 @@ private struct VoiceNote {
     var endsTied: Bool = false
 }
 
-// MARK: - GM drum-kit tables
-
-extension MidiImporter {
-    /// GM drum-kit pitch → notehead shape. The standard
-    /// percussion-clef convention uses `cross` for any cymbal /
-    /// hi-hat (X notehead) and `normal` for membranophones (kick,
-    /// snare, toms, etc.). Pitches not listed get `nil` and render
-    /// as the default duration-based notehead.
-    static let gmDrumHeads: [Int: String] = [
-        // Membranophones (kick / snare / toms / hand-percussion)
-        35: "normal", 36: "normal", 37: "normal",
-        38: "normal", 39: "normal", 40: "normal",
-        41: "normal", 43: "normal", 45: "normal",
-        47: "normal", 48: "normal", 50: "normal",
-        // Cymbals + hi-hats — cross noteheads
-        42: "cross", 44: "cross", 46: "cross",
-        49: "cross", 51: "cross", 52: "cross",
-        53: "cross", 55: "cross", 57: "cross",
-        59: "cross",
-        // Cowbell / wood block / etc — triangle to set them apart
-        56: "triangle-up", 58: "triangle-up",
-        60: "triangle-up", 61: "triangle-up",
-    ]
-
-    /// Voice index a given GM drum pitch should belong to in the
-    /// engraved drum staff.
-    ///   - 0 = voice 1, stems up: cymbals, hi-hats, ride, snare,
-    ///         toms (= "hands")
-    ///   - 1 = voice 2, stems down: bass drum, low floor tom,
-    ///         pedal hi-hat (= "feet")
-    /// Matches MuseScore's default drumset partitioning.
-    static func gmDrumVoiceIndex(for pitch: Int) -> Int {
-        switch pitch {
-        case 35, 36, 41, 44: 1
-        default: 0
-        }
-    }
-
-    /// GM drum-kit pitch → percussion-staff line index
-    /// (0 = top line, 4 = middle, 8 = bottom line; negative =
-    /// above-staff ledger; ≥ 9 = below-staff). Used by the layout
-    /// engine via `Instrument.drumLineMap` to place the notehead
-    /// at the conventional position for that drum.
-    static let gmDrumLines: [Int: Int] = [
-        35: 6, // Acoustic Bass Drum (bottom space)
-        36: 6, // Bass Drum 1
-        37: 2, // Side Stick (3rd line)
-        38: 2, // Acoustic Snare (3rd line)
-        39: 2, // Hand Clap
-        40: 2, // Electric Snare
-        41: 8, // Low Floor Tom (bottom line)
-        42: -1, // Closed Hi-Hat (above top line)
-        43: 7, // High Floor Tom (between bottom space and bottom line)
-        44: 9, // Pedal Hi-Hat (below staff)
-        45: 5, // Low Tom (4th line)
-        46: -1, // Open Hi-Hat (above top line)
-        47: 4, // Low-Mid Tom (middle line)
-        48: 3, // Hi-Mid Tom
-        49: -1, // Crash Cymbal 1 (above top line)
-        50: 2, // High Tom
-        51: 0, // Ride Cymbal 1 (top line)
-        52: -1, // Chinese Cymbal
-        53: 0, // Ride Bell
-        54: 0, // Tambourine (top line, with diamond head ideally)
-        55: -1, // Splash Cymbal
-        56: 0, // Cowbell
-        57: -1, // Crash Cymbal 2
-        58: 1, // Vibraslap
-        59: 0, // Ride Cymbal 2
-        60: 1, // Hi Bongo
-        61: 2, // Low Bongo
-    ]
-}
-
 // MARK: - voice()
 
 extension MidiImporter {
@@ -114,8 +40,18 @@ extension MidiImporter {
 
         notes = snapVoiceNotesToGrid(notes, quantized: quantized)
 
+        // Include tuplet range edges so the chord-emission walk
+        // never spans a tuplet boundary. Without these, a held note
+        // crossing into a tuplet would emit a binary-decomposed
+        // chord whose later parts fall inside the tuplet range
+        // (and get wrapped by `resolvedTuplets`), but with stored
+        // durations whose un-scaled form (× actual/normal) is not
+        // a named base + dots — `MSCXEncoder` then refuses them.
+        let tupletEdges = quantized.tupletTickRanges
+            .flatMap { [$0.lowerBound, $0.upperBound] }
         let grid = Set(notes.flatMap { [$0.onTick, $0.offTick] })
             .union([measure.startTick, measure.endTick])
+            .union(tupletEdges)
             .sorted()
 
         var elements: [VoiceElement] = []
@@ -282,15 +218,26 @@ extension MidiImporter {
                 )
             }
         }
-        let inTuplet = quantized.tupletTickRanges.contains { $0.contains(prev) }
-        let durations: [NoteDuration] = inTuplet
-            ? [exactDuration(ticks: tick - prev, division: division)]
-            : decomposeIntoStandardDurations(
+        let durations: [NoteDuration]
+        if let tupletIdx = quantized.tupletTickRanges.firstIndex(where: { $0.contains(prev) }) {
+            let tuplet = quantized.tuplets[tupletIdx]
+            let tupletStart = quantized.tupletTickRanges[tupletIdx].lowerBound
+            durations = tupletDurations(
+                gap: tick - prev,
+                actualNotes: tuplet.actualNotes,
+                normalNotes: tuplet.normalNotes,
+                division: division,
+                offsetInTuplet: prev - tupletStart,
+                maxDots: coreNotes.isEmpty ? 0 : maxDots
+            )
+        } else {
+            durations = decomposeIntoStandardDurations(
                 ticks: tick - prev,
                 division: division,
                 offsetInMeasure: prev - measure.startTick,
                 maxDots: coreNotes.isEmpty ? 0 : maxDots
             )
+        }
         appendChordParts(
             durations: durations,
             coreNotes: coreNotes,
@@ -299,6 +246,50 @@ extension MidiImporter {
             elements: &elements,
             elementTicks: &elementTicks
         )
+    }
+
+    /// Decompose a played tick gap inside a tuplet into stored
+    /// `NoteDuration` parts whose un-scaled (notated) values are
+    /// representable as a named base + dots (the form
+    /// `MSCXEncoder` requires).
+    ///
+    /// Inside a tuplet of ratio actual:normal, the encoder un-scales
+    /// `stored × actual/normal` to recover the notated duration. So
+    /// `stored` must equal `notated.asFraction × normal/actual` for
+    /// some notated duration that decomposes. A single chord that
+    /// spans multiple tuplet slots may not match any single named
+    /// duration after un-scaling (e.g. 5/8 from a 5:4 quintuplet
+    /// half), and must be split into tied parts whose notated
+    /// durations each decompose.
+    ///
+    /// Strategy: convert the played gap to "notated ticks"
+    /// (gap × actual/normal), reuse `decomposeIntoStandardDurations`
+    /// to split that into named durations, then back-scale each
+    /// resulting duration by `× normal/actual` so the stored Voice
+    /// reflects played time.
+    private static func tupletDurations(
+        gap: Int,
+        actualNotes: Int,
+        normalNotes: Int,
+        division: Int,
+        offsetInTuplet: Int,
+        maxDots: Int
+    ) -> [NoteDuration] {
+        let notatedTicks = gap * actualNotes / normalNotes
+        let notatedOffset = offsetInTuplet * actualNotes / normalNotes
+        let parts = decomposeIntoStandardDurations(
+            ticks: notatedTicks,
+            division: division,
+            offsetInMeasure: notatedOffset,
+            maxDots: maxDots
+        )
+        return parts.map { notated in
+            let f = notated.asFraction
+            return .fraction(Fraction(
+                numerator: f.numerator * normalNotes,
+                denominator: f.denominator * actualNotes
+            ))
+        }
     }
 
     /// Append one or more chord elements covering a single grid

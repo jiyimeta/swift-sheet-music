@@ -19,20 +19,30 @@ extension Score {
             ))
         }
 
-        // Synthesize stable per-staff IDs. Decoder pairs declared <Staff>
-        // entries with top-level <Staff id="N"> bodies by id, so the
-        // declaration and body must agree. Encoding `partID-staffIndex`
-        // yields globally-unique strings even with multiple parts.
-        var allStaffIDs: [(part: Part, ids: [String])] = []
-        for part in parts {
-            let ids = part.staves.indices.map { "\(part.id)-\($0)" }
-            allStaffIDs.append((part, ids))
+        // Synthesize sequential 1-based integer IDs for parts and
+        // staves. MuseScore Studio's loader expects numeric IDs and
+        // refuses (or crashes on) tokens like "P0" / "P0-0" that
+        // hand-built `Score` values often carry. The decoder pairs
+        // declarations with bodies by string equality, so any
+        // consistent scheme round-trips; sequential integers also
+        // match MuseScore's own writer output.
+        var allStaffIDs: [(part: Part, partID: String, ids: [String])] = []
+        var nextStaffID = 1
+        for (partIndex, part) in parts.enumerated() {
+            let partID = String(partIndex + 1)
+            let ids = part.staves.indices.map { _ -> String in
+                let id = String(nextStaffID)
+                nextStaffID += 1
+                return id
+            }
+            allStaffIDs.append((part, partID, ids))
         }
-        for (part, ids) in allStaffIDs {
-            scoreChildren.append(part.encodeDeclaration(staffIDs: ids))
+        for (part, partID, ids) in allStaffIDs {
+            scoreChildren.append(
+                part.encodeDeclaration(partID: partID, staffIDs: ids))
         }
         var titleFrameSlot = titleFrame
-        for (part, ids) in allStaffIDs {
+        for (part, _, ids) in allStaffIDs {
             for (staff, id) in zip(part.staves, ids) {
                 let frame = titleFrameSlot
                 titleFrameSlot = nil

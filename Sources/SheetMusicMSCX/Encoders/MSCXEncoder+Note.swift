@@ -2,15 +2,36 @@ import Foundation
 import SheetMusicCore
 import SheetMusicXMLTools
 
+/// Encoder-internal description of a Tie spanner's `<location>`
+/// payload. MuseScore Studio interprets this in two distinct ways
+/// depending on whether `<measures>` is present:
+///
+/// * `.sameMeasure(fractions:)` — emits `<location><fractions>F</fractions></location>`.
+///   MuseScore reads this as a tick delta from the source position
+///   to the destination position within the same measure.
+///
+/// * `.crossMeasure(measures:fractions:)` — emits
+///   `<location><measures>M</measures><fractions>F</fractions></location>`
+///   (fractions omitted when nil). MuseScore reads this as
+///   `(measure delta, position-within-target-measure)`. The
+///   `<measures>` token is what disambiguates "this tie crosses a
+///   bar line" — without it, MuseScore matches the wrong chord on
+///   the source side of the bar, which is what produced the
+///   m21→m23 cross-wired ties in `test_export9.mscx`.
+enum TieLocation {
+    case sameMeasure(fractions: Fraction)
+    case crossMeasure(measures: Int, fractions: Fraction?)
+}
+
 extension Note {
     /// Build a `<Note>` element. Emits pitch / tpc / optional
     /// accidental / optional headType, plus `<Spanner type="Tie">`
     /// markers for `tieForward` / `tieBack` and a
     /// `<Spanner type="Glissando">` block when `glissando` is set.
-    /// The decoder recovers tie/glissando flags from the presence of
-    /// `<next>` / `<prev>` and the inner `<Glissando>` payload — no
-    /// cross-note location math is required.
-    func encode() -> XMLTreeNode {
+    func encode(
+        tieForwardLocation: TieLocation? = nil,
+        tieBackLocation: TieLocation? = nil
+    ) -> XMLTreeNode {
         var children: [XMLTreeNode] = []
         if let accidental {
             children.append(XMLTreeNode(
@@ -24,10 +45,14 @@ extension Note {
             ))
         }
         if tieForward != nil {
-            children.append(tieSpanner(side: "next"))
+            children.append(tieSpanner(
+                side: "next", location: tieForwardLocation
+            ))
         }
         if tieBack != nil {
-            children.append(tieSpanner(side: "prev"))
+            children.append(tieSpanner(
+                side: "prev", location: tieBackLocation
+            ))
         }
         if let glissando {
             children.append(glissandoSpanner(glissando))
@@ -40,18 +65,45 @@ extension Note {
         return XMLTreeNode(name: "Note", children: children)
     }
 
-    private func tieSpanner(side: String) -> XMLTreeNode {
-        // `<Spanner type="Tie"><Tie/><next/></Spanner>` for the
-        // start, `<Spanner type="Tie"><prev/></Spanner>` for the end.
-        // Decoder keys off the bare presence of `<next>` / `<prev>`
-        // — location values are not consulted.
+    private func tieSpanner(side: String, location: TieLocation?) -> XMLTreeNode {
         var inner: [XMLTreeNode] = []
         if side == "next" { inner.append(XMLTreeNode(name: "Tie")) }
-        inner.append(XMLTreeNode(name: side))
+        var sideChildren: [XMLTreeNode] = []
+        if let location {
+            sideChildren.append(locationElement(from: location))
+        }
+        inner.append(XMLTreeNode(name: side, children: sideChildren))
         return XMLTreeNode(
             name: "Spanner",
             attributes: ["type": "Tie"],
             children: inner
+        )
+    }
+
+    private func locationElement(from location: TieLocation) -> XMLTreeNode {
+        // Element order matches MuseScore Studio's own writer:
+        // `<measures>` precedes `<fractions>`. MuseScore's parser
+        // appears tolerant of either order, but matching upstream
+        // keeps diffs against MuseScore-saved files clean.
+        var children: [XMLTreeNode] = []
+        switch location {
+        case let .sameMeasure(fractions):
+            children.append(fractionsNode(fractions))
+        case let .crossMeasure(measures, fractions):
+            children.append(XMLTreeNode(
+                name: "measures", text: String(measures)
+            ))
+            if let fractions {
+                children.append(fractionsNode(fractions))
+            }
+        }
+        return XMLTreeNode(name: "location", children: children)
+    }
+
+    private func fractionsNode(_ f: Fraction) -> XMLTreeNode {
+        XMLTreeNode(
+            name: "fractions",
+            text: "\(f.numerator)/\(f.denominator)"
         )
     }
 

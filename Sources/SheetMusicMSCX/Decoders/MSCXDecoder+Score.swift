@@ -17,8 +17,8 @@ extension Score {
             throw SheetMusicError.malformedScore(reason: "missing <Division>")
         }
 
-        let partPairings = try scoreNode.all("Part").map {
-            try Part.decodePairing($0)
+        let partPairings = try scoreNode.all("Part").enumerated().map {
+            try Part.decodePairing($0.element, fallbackIndex: $0.offset + 1)
         }
         let topLevelStaves = try scoreNode.all("Staff").map {
             try MSCXTopLevelStaff.decode($0)
