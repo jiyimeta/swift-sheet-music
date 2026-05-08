@@ -1,3 +1,4 @@
+// swiftlint:disable function_body_length
 import Foundation
 import SheetMusicCore
 
@@ -22,13 +23,15 @@ extension PlaybackTimeline {
     /// the first marked as `BeatType::DOWNBEAT`.
     public static func metronomeBeats(score: Score) -> [MetronomeBeat] {
         let division = score.division
-        let measureCount = score.parts.first?.staves.first?.measures.count ?? 0
+        let measures = score.parts.first?.staves.first?.measures ?? []
+        let measureCount = measures.count
         guard measureCount > 0 else { return [] }
 
         // Per-measure cache: start tick (along voice 0 / staff 0's
-        // spine) + active time signature. Same scan used by
-        // `PlaybackTimeline.init`.
+        // spine), active time signature, and spine length consumed
+        // by the measure. Same scan used by `PlaybackTimeline.init`.
         var measureStarts = [Int](repeating: 0, count: measureCount)
+        var measureLengths = [Int](repeating: 0, count: measureCount)
         var measureTimeSigs = [TimeSignature](
             repeating: TimeSignature(numerator: 4, denominator: 4),
             count: measureCount
@@ -53,16 +56,19 @@ extension PlaybackTimeline {
                 }
             }
             measureTimeSigs[mi] = currentTimeSig
-            if let voice0 = score.parts.first?.staves.first?.measures[mi].voices.first {
+            var measureLen = 0
+            if let voice0 = measures[mi].voices.first {
                 for el in voice0.elements {
                     switch el {
                     case let .chord(c):
-                        spineTick += c.duration.ticks(division: division)
+                        measureLen += c.duration.ticks(division: division)
                     default:
                         break
                     }
                 }
             }
+            measureLengths[mi] = measureLen
+            spineTick += measureLen
         }
 
         var beats: [MetronomeBeat] = []
@@ -73,10 +79,18 @@ extension PlaybackTimeline {
             // 6/8 → division/2; 3/2 → division*2. See
             // `PlaybackTimeline.init` for the same step formula.
             let step = max(1, division * 4 / ts.denominator)
+            // Anacrusis / pickup measures (`Measure.irregular` or
+            // `actualLength` shorter than the nominal time signature)
+            // produce fewer than `numerator` beats and start without
+            // a downbeat — matching MuseScore's metronome convention.
+            let measureLen = measureLengths[mi]
+            let isIrregular = measures[mi].irregular
             for i in 0 ..< ts.numerator {
+                let offset = i * step
+                if offset >= measureLen { break }
                 beats.append(MetronomeBeat(
-                    tick: measureStarts[mi] + i * step,
-                    isDownbeat: i == 0
+                    tick: measureStarts[mi] + offset,
+                    isDownbeat: i == 0 && !isIrregular
                 ))
             }
         }

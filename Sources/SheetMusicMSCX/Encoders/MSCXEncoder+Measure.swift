@@ -1,3 +1,4 @@
+// swiftlint:disable function_body_length
 import Foundation
 import SheetMusicCore
 import SheetMusicXMLTools
@@ -37,6 +38,9 @@ extension Measure {
         }
         if startRepeat {
             children.append(XMLTreeNode(name: "startRepeat"))
+        }
+        if irregular {
+            children.append(XMLTreeNode(name: "irregular", text: "1"))
         }
         var carryOut: [Voice.VoiceTieCarry] = Array(
             repeating: Voice.VoiceTieCarry(), count: voices.count
@@ -80,8 +84,15 @@ extension Measure {
                 children: [XMLTreeNode(name: "subtype", text: "page")]
             ))
         }
+        var attributes: [String: String] = [:]
+        if let actualLength {
+            attributes["len"] =
+                "\(actualLength.numerator)/\(actualLength.denominator)"
+        }
         return (
-            XMLTreeNode(name: "Measure", children: children),
+            XMLTreeNode(
+                name: "Measure", attributes: attributes, children: children
+            ),
             carryOut
         )
     }

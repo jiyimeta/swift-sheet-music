@@ -18,6 +18,11 @@ public struct LayoutMeasureContext: Sendable, Equatable {
     public let keySignatures: [Int]
     public let timeSignature: TimeSignaturePair?
     public let partLabels: [String]
+    /// 1-based displayed number for this measure, with irregular
+    /// measures excluded from the running count. `nil` when this
+    /// measure is irregular and no number should be drawn (anacrusis
+    /// convention). Mirrors `Score.displayedMeasureNumber(at:)`.
+    public let displayedMeasureNumber: Int?
 
     public struct TimeSignaturePair: Sendable, Equatable {
         public let numerator: Int
@@ -33,13 +38,15 @@ public struct LayoutMeasureContext: Sendable, Equatable {
         clefRawTypes: [String],
         keySignatures: [Int],
         timeSignature: TimeSignaturePair?,
-        partLabels: [String]
+        partLabels: [String],
+        displayedMeasureNumber: Int? = nil
     ) {
         self.measureIndex = measureIndex
         self.clefRawTypes = clefRawTypes
         self.keySignatures = keySignatures
         self.timeSignature = timeSignature
         self.partLabels = partLabels
+        self.displayedMeasureNumber = displayedMeasureNumber
     }
 }
 
@@ -106,7 +113,10 @@ extension LayoutEngine {
                 clefRawTypes: clefs,
                 keySignatures: keys,
                 timeSignature: timeSig,
-                partLabels: partLabels
+                partLabels: partLabels,
+                displayedMeasureNumber: score.displayedMeasureNumber(
+                    at: measureIdx
+                )
             ))
         }
         return contexts
@@ -276,20 +286,21 @@ extension LayoutEngine {
             }
         }
         var markers: [LayoutElement] = []
-        if let topStaffOrigin = staffOrigins.first {
+        if let topStaffOrigin = staffOrigins.first,
+           let displayed = context.displayedMeasureNumber
+        {
             // Sticky measure number, MuseScore-style:
             //   - "#N" prefix (continuouspanel.cpp:420 emits
             //     `String(u"#%1").arg(currentMeasure->measureNumber()
             //     + 1)`).
             //   - X = `labelX` (= clef-right-edge), same column as
-            //     the staff name — both stack vertically at
-            //     `clefLeftMargin + widthClef`
-            //     (continuouspanel.cpp:424).
+            //     the staff name.
             //   - Y = `sp * 2.5` above the staff so the digits sit
-            //     above the staff name (which lives at sp * 0.5
-            //     above the staff with sp * 2 font height).
+            //     above the staff name.
+            //   - Irregular measures (anacrusis) get no label, matching
+            //     MuseScore's measure-numbering rule.
             markers.append(.measureNumber(
-                text: "#\(context.measureIndex + 1)",
+                text: "#\(displayed)",
                 origin: CGPoint(
                     x: labelX,
                     y: topStaffOrigin.y - metrics.sp * 2.5

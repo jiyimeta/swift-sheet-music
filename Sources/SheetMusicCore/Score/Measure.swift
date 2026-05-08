@@ -29,6 +29,14 @@ public struct Measure: Sendable, Equatable {
     /// `engraving/rendering/score/systemlayout.cpp:262` treats
     /// `pageBreak()` as ALSO triggering a line break.
     public var pageBreak: Bool
+    /// `<Measure len="N/D">` — actual measure length when it differs from
+    /// the prevailing time signature. `nil` means "follow the time
+    /// signature". Mirrors `Measure::ticks()` vs `nominalTicks()` in
+    /// MuseScore.
+    public var actualLength: Fraction?
+    /// `<irregular>1</irregular>` — exclude this measure from the running
+    /// displayed measure number. Typically set on an anacrusis.
+    public var irregular: Bool
 
     public init(
         voices: [Voice],
@@ -38,7 +46,9 @@ public struct Measure: Sendable, Equatable {
         markers: [Marker] = [],
         jumps: [Jump] = [],
         lineBreak: Bool = false,
-        pageBreak: Bool = false
+        pageBreak: Bool = false,
+        actualLength: Fraction? = nil,
+        irregular: Bool = false
     ) {
         self.voices = voices
         self.startRepeat = startRepeat
@@ -48,5 +58,7 @@ public struct Measure: Sendable, Equatable {
         self.jumps = jumps
         self.lineBreak = lineBreak
         self.pageBreak = pageBreak
+        self.actualLength = actualLength
+        self.irregular = irregular
     }
 }
