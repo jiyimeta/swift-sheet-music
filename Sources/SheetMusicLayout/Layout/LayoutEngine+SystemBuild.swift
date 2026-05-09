@@ -18,26 +18,19 @@ extension LayoutEngine {
         let metrics = context.metrics
         let allStaves = context.score.allStaves
         let staves = allStaves.map(\.staff)
-        // Bracket-column count: max column index across every staff's
-        // BracketItems, +1. Zero when no part declares a bracket.
-        let bracketColumnCount: Int = {
-            var maxCol: Int = -1
-            for part in context.score.parts {
-                for staff in part.staves {
-                    for bi in staff.brackets where bi.visible
-                        && bi.type != .noBracket
-                    {
-                        if bi.column > maxCol { maxCol = bi.column }
-                    }
-                }
-            }
-            return maxCol + 1
-        }()
+        // Bracket gutter inputs: max column index +1, plus the largest
+        // brace `staffCount` so tall braces (`braceLarge` /
+        // `braceLarger`, whose glyph width balloons with `magx`) don't
+        // overrun the staff name area.
+        let gutterInfo = bracketGutterInfo(score: context.score)
+        let bracketColumnCount = gutterInfo.columnCount
+        let maxBraceStaffCount = gutterInfo.maxBraceStaffCount
         let partLabelWidth: CGFloat = labelWidth(
             score: context.score,
             metrics: metrics,
             useLong: isFirstSystem,
-            bracketColumnCount: bracketColumnCount
+            bracketColumnCount: bracketColumnCount,
+            maxBraceStaffCount: maxBraceStaffCount
         )
 
         // Inter-system breathing room. MuseScore's style defaults
@@ -479,10 +472,28 @@ extension LayoutEngine {
             // Right-edge X for the trailing-anchored label glyphs.
             // Sits one `sp` left of the staff plus one extra `sp`
             // per bracket column, so the rightmost glyph never
-            // overlaps a brace or angle bracket spine.
+            // overlaps a brace or angle bracket spine. For tall
+            // braces (`staffCount ≥ 3`) the glyph width exceeds the
+            // column-only allowance — `extraBraceShift` pushes the
+            // label further left to maintain a 0.5 sp clearance from
+            // the brace's left edge (right edge sits 0.3 sp inside
+            // `staffOriginX`, glyph extends `glyphHorizontalExtent`
+            // further to the left).
+            let braceExtent = maxBraceStaffCount > 0
+                ? BraceMetrics.glyphHorizontalExtent(
+                    staffCount: maxBraceStaffCount, sp: metrics.sp
+                )
+                : 0
+            let extraBraceShift = max(
+                0,
+                braceExtent
+                    - metrics.sp * 0.2
+                    - CGFloat(bracketColumnCount) * metrics.sp
+            )
             let labelRightX = partLabelWidth
                 - metrics.sp
                 - CGFloat(bracketColumnCount) * metrics.sp
+                - extraBraceShift
             return LayoutPartLabel(
                 text: text,
                 origin: CGPoint(x: labelRightX, y: centerY)

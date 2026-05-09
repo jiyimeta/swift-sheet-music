@@ -35,11 +35,21 @@ extension LayoutEngine {
     /// bracket column so stacked brackets have room to draw.
     /// One column ≈ sp * 1 of horizontal stride; the base inset
     /// (sp * 0.5) is the bracket-spine-to-staff distance.
+    ///
+    /// `maxBraceStaffCount` is the largest staff span among visible
+    /// braces in the score. Tall braces use `braceLarge` /
+    /// `braceLarger` glyphs whose width grows with `Bracket::
+    /// computeMagx` — for `staffCount ≥ 3` the glyph extends far
+    /// enough left that the column-only gutter (one `sp` per
+    /// column) no longer covers it, so the staff name visibly
+    /// overlaps the brace. Pass the brace span here and the gutter
+    /// is widened by the actual measured glyph extent.
     static func labelWidth(
         score: Score,
         metrics: StaffMetrics,
         useLong: Bool,
-        bracketColumnCount: Int = 0
+        bracketColumnCount: Int = 0,
+        maxBraceStaffCount: Int = 0
     ) -> CGFloat {
         let labels: [String] = score.parts.map { part in
             if useLong {
@@ -67,10 +77,53 @@ extension LayoutEngine {
         // Reserve room for bracket columns on the staff's left side.
         // One column ≈ sp * 1 of horizontal stride; the base inset
         // (sp * 0.5) is the bracket-spine-to-staff distance.
-        let bracketGutter: CGFloat = bracketColumnCount > 0
+        let columnGutter: CGFloat = bracketColumnCount > 0
             ? CGFloat(bracketColumnCount) * metrics.sp + metrics.sp * 0.5
             : 0
+        // Brace gutter: glyph extends LEFT from `staffOriginX -
+        // 0.3 sp` by `BraceMetrics.glyphHorizontalExtent`. Add the
+        // 0.3 sp inset plus a 0.5 sp clearance so the staff name's
+        // right edge stays clear of the brace outline.
+        let braceGutter: CGFloat = maxBraceStaffCount > 0
+            ? BraceMetrics.glyphHorizontalExtent(
+                staffCount: maxBraceStaffCount, sp: metrics.sp
+            ) + metrics.sp * 0.8
+            : 0
+        let bracketGutter = max(columnGutter, braceGutter)
         return max(floor, widest + pad) + bracketGutter
+    }
+
+    /// Bracket gutter info computed once from `score.parts`. Returns
+    /// the maximum bracket-column count (`maxColumn + 1`) and the
+    /// largest visible-brace `staffCount` (declared `span`, clamped to
+    /// the score's total flat staff count). Both `LayoutEngine
+    /// +SystemBuild` and `LayoutEngine+Packing` consume these so they
+    /// agree on the gutter width.
+    static func bracketGutterInfo(
+        score: Score
+    ) -> (columnCount: Int, maxBraceStaffCount: Int) {
+        var maxCol: Int = -1
+        var maxBraceSpan = 0
+        let totalStaffCount = score.parts.reduce(0) {
+            $0 + $1.staves.count
+        }
+        for part in score.parts {
+            for staff in part.staves {
+                for bi in staff.brackets where bi.visible
+                    && bi.type != .noBracket
+                {
+                    if bi.column > maxCol { maxCol = bi.column }
+                    if bi.type == .brace {
+                        let clamped = max(1, min(bi.span, totalStaffCount))
+                        if clamped > maxBraceSpan { maxBraceSpan = clamped }
+                    }
+                }
+            }
+        }
+        return (
+            columnCount: maxCol + 1,
+            maxBraceStaffCount: maxBraceSpan
+        )
     }
 
     /// Threshold (in measures) for switching between balanced

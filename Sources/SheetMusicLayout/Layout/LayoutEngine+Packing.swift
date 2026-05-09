@@ -114,15 +114,23 @@ extension LayoutEngine {
         // pushed the first system noticeably right of the page's
         // content margin even for short labels like "Lead" /
         // "Top".
+        // Same gutter inputs as `buildSystem` consumes — keeping the
+        // wrap estimate aligned with the actual indent so measures
+        // don't overflow when a tall brace widens the gutter.
+        let gutterInfo = bracketGutterInfo(score: context.score)
         let firstSystemLabelW = labelWidth(
             score: context.score,
             metrics: context.metrics,
-            useLong: true
+            useLong: true,
+            bracketColumnCount: gutterInfo.columnCount,
+            maxBraceStaffCount: gutterInfo.maxBraceStaffCount
         )
         let continuationLabelW = labelWidth(
             score: context.score,
             metrics: context.metrics,
-            useLong: false
+            useLong: false,
+            bracketColumnCount: gutterInfo.columnCount,
+            maxBraceStaffCount: gutterInfo.maxBraceStaffCount
         )
         while cursor < measureCount {
             // Part-label width depends on whether this is the first

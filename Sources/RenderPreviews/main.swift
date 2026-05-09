@@ -44,6 +44,7 @@
             ("03-c-major-scale", Samples.cMajorScale),
             ("04-eighths-beamed", Samples.eighthsBeamed),
             ("05-piano-grand", Samples.pianoGrand),
+            ("05b-tall-brace", Samples.tallBrace),
             ("06-accidentals", Samples.accidentals),
             ("07-rests", Samples.rests),
             ("08-key-sigs", Samples.keySignatures),

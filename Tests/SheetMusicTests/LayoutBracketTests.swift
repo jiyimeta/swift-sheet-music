@@ -288,6 +288,56 @@ import Testing
         #expect(brace.staffCount == 2)
     }
 
+    /// `staffCount ≥ 3` braces use `braceLarge` / `braceLarger`,
+    /// whose horizontal extent (`bbox.width × magx`) overruns the
+    /// column-only gutter (`bracketColumnCount × sp + 0.5 sp`). The
+    /// gutter must widen so the brace's left edge clears the staff
+    /// name's right edge — verified against the actual measured
+    /// brace glyph extent.
+    @available(macOS 15.0, iOS 16.0, *)
+    @Test func tallBraceWidensLabelGutter() {
+        let measure = Measure(voices: [
+            Voice(elements: [
+                .rest(duration: .fraction(Fraction(numerator: 1, denominator: 1))),
+            ]),
+        ])
+        // 4-staff part with a single brace spanning all 4 staves.
+        // braceVariant returns `braceLarger` with magx ≈ 8.875.
+        let part = Part(
+            id: "1",
+            trackName: "Organ",
+            instrument: Instrument(id: "org", longName: "Organ"),
+            staves: [
+                Staff(
+                    defaultClefType: "G",
+                    brackets: [BracketItem(type: .brace, span: 4)],
+                    measures: [measure]
+                ),
+                Staff(defaultClefType: "G", measures: [measure]),
+                Staff(defaultClefType: "F", measures: [measure]),
+                Staff(defaultClefType: "F", measures: [measure]),
+            ]
+        )
+        let score = Score(division: 480, parts: [part])
+        let doc = LayoutEngine.layout(
+            score: score, options: .init(), availableWidth: 800
+        )
+        let system = doc.systems[0]
+        let sp = doc.metrics.sp
+        let staffOriginX = system.staffOrigins[0].x
+
+        // Label right edge must sit at least 0.5 sp left of the brace
+        // glyph's left edge (right edge at staffOriginX − 0.3 sp,
+        // glyph extends `glyphHorizontalExtent` further left).
+        let braceExtent = BraceMetrics.glyphHorizontalExtent(
+            staffCount: 4, sp: sp
+        )
+        let braceLeftX = staffOriginX - sp * 0.3 - braceExtent
+        for label in system.partLabels {
+            #expect(label.origin.x <= braceLeftX - sp * 0.5 + 0.001)
+        }
+    }
+
     @available(macOS 15.0, iOS 16.0, *)
     @Test func labelRightEdgeUnchangedWithoutBrackets() {
         let measure = Measure(voices: [

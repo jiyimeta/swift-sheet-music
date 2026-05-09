@@ -133,6 +133,52 @@
             )
         }
 
+        // MARK: - 05b tall brace (4-staff organ-style)
+        //
+        // Visual regression for `staffCount ≥ 3` braces, where the
+        // glyph (`braceLarge` / `braceLarger`) extends far enough left
+        // that the column-only gutter (`bracketColumnCount × sp`) used
+        // to under-reserve space — the part label "Organ" then
+        // overlapped the brace outline. `BraceMetrics
+        // .glyphHorizontalExtent` now widens the gutter using the
+        // measured Bravura bbox × `magx`.
+        static var tallBrace: Score {
+            let m = Measure(voices: [Voice(elements: [
+                .clef(Clef(concertClefType: "G")),
+                .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+                .chord(Chord(
+                    duration: .whole,
+                    notes: [Note(pitch: 60, tpc: 14)]
+                )),
+            ])])
+            let bass = Measure(voices: [Voice(elements: [
+                .clef(Clef(concertClefType: "F")),
+                .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+                .chord(Chord(
+                    duration: .whole,
+                    notes: [Note(pitch: 36, tpc: 14)]
+                )),
+            ])])
+            let part = Part(
+                id: "P1",
+                trackName: "Organ",
+                instrument: Instrument(
+                    id: "organ", longName: "Organ", shortName: "Org."
+                ),
+                staves: [
+                    Staff(
+                        defaultClefType: "G",
+                        brackets: [BracketItem(type: .brace, span: 4)],
+                        measures: [m]
+                    ),
+                    Staff(defaultClefType: "G", measures: [m]),
+                    Staff(defaultClefType: "F", measures: [bass]),
+                    Staff(defaultClefType: "F", measures: [bass]),
+                ]
+            )
+            return Score(division: 480, parts: [part])
+        }
+
         // MARK: - 06 accidentals
 
         static var accidentals: Score {
