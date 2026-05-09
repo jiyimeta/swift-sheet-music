@@ -30,6 +30,26 @@ import Testing
         }
     }
 
+    @Test func decodeCustomKeySigDefaultsToZero() throws {
+        // MuseScore writes custom key signatures (atonal / modal pieces) as
+        // <custom>1</custom> with <mode>none</mode> and no <concertKey>. The
+        // accidentals live in <KeySym> children we don't model — fall back to
+        // C major rather than rejecting the whole file.
+        let xml = """
+        <voice>
+          <KeySig><custom>1</custom><mode>none</mode></KeySig>
+          <Rest><durationType>measure</durationType><duration>4/4</duration></Rest>
+        </voice>
+        """
+        let node = try XMLTreeParser.parse(Data(xml.utf8))
+        let voice = try Voice.decode(node)
+        guard case let .keySignature(key) = voice.elements.first else {
+            Issue.record("expected leading key signature, got \(voice.elements)")
+            return
+        }
+        #expect(key.concertKey == 0)
+    }
+
     @Test func decodeVoiceSkipsUnknownChild() throws {
         // The decoder is permissive: unknown elements are silently ignored so that
         // mscx files using features we haven't promoted to first-class still parse.
