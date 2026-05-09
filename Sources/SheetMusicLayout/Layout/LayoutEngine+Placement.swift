@@ -274,38 +274,15 @@ extension LayoutEngine {
                 )
                 for el in voice.elements {
                     guard case let .chord(chord) = el else { continue }
-                    let steps: [Int] = chord.notes.map { note in
-                        if let drumLine = drumLineMap?[note.pitch] {
-                            return 4 - drumLine
-                        }
-                        return PitchStaffPosition.step(
-                            midiPitch: note.pitch, tpc: note.tpc,
-                            clef: currentClef
-                        ).step
-                    }
-                    let stemDir = forcedStem
-                        ?? StemDirectionRule.direction(for: steps)
-                    guard let lowestStep = steps.min()
-                    else { continue }
-                    let noteheadBottom = staffMidY
-                        - CGFloat(lowestStep) * metrics.sp / 2
-                        + metrics.sp * 0.5
-                    var south = noteheadBottom
-                    if stemDir == .up {
-                        let hasTie = chord.notes.contains {
-                            $0.tieForward != nil
-                                || $0.tieBack != nil
-                        }
-                        if hasTie {
-                            south = max(
-                                south,
-                                noteheadBottom + metrics.sp * 0.8
-                            )
-                        }
-                    }
-                    let southAvoidY = south
-                        + metrics.sp * (1 + 1.1)
-                    maxY = max(maxY, southAvoidY)
+                    guard let avoidY = chordLyricAvoidY(
+                        chord: chord,
+                        forcedStem: forcedStem,
+                        currentClef: currentClef,
+                        drumLineMap: drumLineMap,
+                        staffMidY: staffMidY,
+                        metrics: metrics
+                    ) else { continue }
+                    maxY = max(maxY, avoidY)
                 }
                 return maxY
             }()
@@ -1330,6 +1307,93 @@ extension LayoutEngine {
     /// `staffBottom + 3 sp`, ink reaches `staffBottom + 4 sp`. Lyric
     /// baseline 1.4 sp under that leaves room for cap-height + a
     /// small visual gap.
+    /// Conservative below-stem-end extent of an isolated short
+    /// note's flag glyph, in points. Bravura's flag glyphs grow by
+    /// ~0.5 sp per added flag tab; values here cap at 64th to match
+    /// what the renderer can draw via `StemRenderer.flagGlyph`. For
+    /// beamed chords the actual extent is the beam Y (computed in a
+    /// later pass) — using the unbeamed flag estimate here is a
+    /// safe over-allocation that keeps lyrics clear in either case.
+    static func flagSouthExtent(
+        duration: NoteDuration, metrics: StaffMetrics
+    ) -> CGFloat {
+        switch duration {
+        case .eighth: metrics.sp * 1.5
+        case .sixteenth: metrics.sp * 2.0
+        case .thirtySecond: metrics.sp * 2.5
+        case .sixtyFourth: metrics.sp * 3.0
+        default: 0
+        }
+    }
+
+    /// Lowest lyric-center Y a chord forces, taking the max of
+    /// the per-obstacle clearances. Returns `nil` for empty chords.
+    ///
+    /// Two clearance regimes match MuseScore's south-skyline plus
+    /// `Sid::lyricsMinDistance` semantics (default 0.25 sp;
+    /// `styledef.cpp:78`):
+    ///
+    /// * **Notehead** — uses the historical 2.1 sp pad so a low-
+    ///   pitched chord (notehead well below the staff) still gets a
+    ///   generous lyric gap matching the existing visual.
+    /// * **Stem / flag** — uses a tighter 1.35 sp pad (= 0.25 sp
+    ///   minDistance + 1.1 sp lyric ascender). Stems and flags are
+    ///   thin obstacles; pushing the lyric a full 2.1 sp below them
+    ///   over-spaces visibly when the protrusion is small.
+    /// * **Stem-up + tie** — same notehead pad applied to a slightly
+    ///   lowered south so the tie arc clears.
+    private static func chordLyricAvoidY(
+        chord: Chord,
+        forcedStem: StemDirection?,
+        currentClef: NotatedClef,
+        drumLineMap: [Int: Int]?,
+        staffMidY: CGFloat,
+        metrics: StaffMetrics
+    ) -> CGFloat? {
+        let steps: [Int] = chord.notes.map { note in
+            if let drumLine = drumLineMap?[note.pitch] {
+                return 4 - drumLine
+            }
+            return PitchStaffPosition.step(
+                midiPitch: note.pitch, tpc: note.tpc,
+                clef: currentClef
+            ).step
+        }
+        let stemDir = forcedStem
+            ?? StemDirectionRule.direction(for: steps)
+        guard let lowestStep = steps.min() else { return nil }
+        let lowestNoteY = staffMidY
+            - CGFloat(lowestStep) * metrics.sp / 2
+        let noteheadBottom = lowestNoteY + metrics.sp * 0.5
+        let noteheadPad = metrics.sp * (1 + 1.1)
+        let stemFlagPad = metrics.sp * (0.25 + 1.1)
+
+        var avoidY = noteheadBottom + noteheadPad
+        // Stem-down: stem extends to `lowestNoteY +
+        // defaultStemLength` (StemRenderer:47); flag glyph hangs
+        // further. Mirrors MuseScore's south-skyline contribution
+        // from `Stem` + `Hook` (lyricslayout.cpp:662).
+        if stemDir == .down {
+            let stemEnd = lowestNoteY + metrics.defaultStemLength
+            let stemSouth = stemEnd + flagSouthExtent(
+                duration: chord.duration, metrics: metrics
+            )
+            avoidY = max(avoidY, stemSouth + stemFlagPad)
+        }
+        // Stem-up + tied: tie arc curls below the lowest notehead;
+        // 0.8 sp keeps it clear of the lyric row.
+        if stemDir == .up {
+            let hasTie = chord.notes.contains {
+                $0.tieForward != nil || $0.tieBack != nil
+            }
+            if hasTie {
+                let tieSouth = noteheadBottom + metrics.sp * 0.8
+                avoidY = max(avoidY, tieSouth + noteheadPad)
+            }
+        }
+        return avoidY
+    }
+
     private static func lyricBaseFloor(
         staffMidY: CGFloat,
         metrics: StaffMetrics,
