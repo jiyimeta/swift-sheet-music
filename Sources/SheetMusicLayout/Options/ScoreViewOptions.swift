@@ -31,6 +31,20 @@ public enum LayoutBreakPolicy: Sendable, Equatable {
     case ignoreAll
 }
 
+/// Policy for collapsing runs of consecutive rest measures into a
+/// single multi-measure-rest bar (the H-bar + count notation).
+/// Affects layout only — `Score` and MIDI are untouched.
+@available(macOS 15.0, iOS 16.0, *)
+public enum MultiMeasureRestPolicy: Sendable, Equatable {
+    /// Default — every rest measure renders individually.
+    case disabled
+
+    /// Collapse runs of `>= minimumMeasures` consecutive rest
+    /// measures into one H-bar. Typical value is 2. Values < 2 are
+    /// clamped to 2 by the planner.
+    case collapse(minimumMeasures: Int)
+}
+
 /// Tunable knobs for `ScoreView`. v1 intentionally keeps this small —
 /// layout is driven by the view's available width and these values.
 @available(macOS 15.0, iOS 16.0, *)
@@ -62,6 +76,9 @@ public struct ScoreViewOptions: Sendable, Equatable {
     /// `Sid::graceNoteMag` default is 0.7; we use 0.6 to stay
     /// closer to the historical "Petrucci" look used in Bravura.
     public var graceNoteMag: CGFloat
+    /// Multi-measure rest collapse policy. Default `.disabled` matches
+    /// pre-existing behavior — every rest measure renders individually.
+    public var multiMeasureRest: MultiMeasureRestPolicy
 
     public init(
         staffSize: CGFloat = 28,
@@ -70,7 +87,8 @@ public struct ScoreViewOptions: Sendable, Equatable {
         includeTitleFrame: Bool = true,
         breakPolicy: LayoutBreakPolicy = .honor,
         showBreakIndicators: Bool = true,
-        graceNoteMag: CGFloat = 0.6
+        graceNoteMag: CGFloat = 0.6,
+        multiMeasureRest: MultiMeasureRestPolicy = .disabled
     ) {
         self.staffSize = staffSize
         self.systemGap = systemGap
@@ -79,5 +97,6 @@ public struct ScoreViewOptions: Sendable, Equatable {
         self.breakPolicy = breakPolicy
         self.showBreakIndicators = showBreakIndicators
         self.graceNoteMag = graceNoteMag
+        self.multiMeasureRest = multiMeasureRest
     }
 }
