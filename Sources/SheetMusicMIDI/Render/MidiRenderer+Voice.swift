@@ -13,18 +13,13 @@ extension MidiRenderer {
         part: Part,
         channel: Int,
         division: Int,
-        initialSwing: SwingState = .off
+        swingMap: SwingMap = .empty
     ) -> (events: [TimedMidiEvent], endTick: Int) {
         let plan = playbackPlan(for: staff.measures, division: division)
         var events: [TimedMidiEvent] = []
         var velocity = effectiveVelocity(forDynamic: nil, instrument: part.instrument)
         // Tempo in beats-per-second; default is 2 bps (120 BPM = MuseScore's DEFAULT_TEMPO).
         var currentTempoBps = 2.0
-        // Swing state walks alongside tempo / velocity / key-sig: it
-        // starts from the score-level default and gets overridden by
-        // any in-piece `Swing` directive. Mirrors the per-tick lookup
-        // of `Staff::swing()` in MuseScore (staff.cpp:1006).
-        var swingState = initialSwing
 
         let hairpinRamps = HairpinRamps.collect(
             voiceIndex: voiceIndex,
@@ -106,7 +101,7 @@ extension MidiRenderer {
                     localTick: &localTick,
                     velocity: &velocity,
                     currentTempoBps: &currentTempoBps,
-                    swingState: &swingState,
+                    swingMap: swingMap,
                     voiceIndex: voiceIndex,
                     channel: channel,
                     instrument: part.instrument,
@@ -140,7 +135,7 @@ extension MidiRenderer {
         localTick: inout Int,
         velocity: inout Int,
         currentTempoBps: inout Double,
-        swingState: inout SwingState,
+        swingMap: SwingMap,
         voiceIndex: Int,
         channel: Int,
         instrument: Instrument,
@@ -169,16 +164,12 @@ extension MidiRenderer {
             }
         case .clef, .barLine, .spanner, .measureRepeat, .staffText, .harmony:
             return
-        case let .swing(s):
-            // Mid-piece swing change: update the running state so
-            // every subsequent chord uses these parameters until the
-            // next swing directive. Mirrors `Score::updateSwing` /
-            // `Staff::swing(tick)` lookup in MuseScore (score.cpp:6081,
-            // staff.cpp:1006). Has no MIDI event of its own.
-            swingState = SwingState(
-                unitTicks: s.swingUnitTicks(division: division),
-                ratio: s.ratio
-            )
+        case .swing:
+            // Pre-collected into the staff's `SwingMap`; per-element
+            // state mutation is no longer needed. Chord rendering
+            // looks up the active state by natural tick (mirrors
+            // `Staff::swing(tick)`, staff.cpp:1022).
+            return
         case let .locationShift(delta):
             // Voice cursor shift: applies the location's fractional
             // delta to the running tick so subsequent tempo /
@@ -242,7 +233,7 @@ extension MidiRenderer {
                     elementIndex: elementIndex,
                     voiceTuplets: voiceTuplets
                 ),
-                state: swingState
+                state: swingMap.state(atTick: localTick + originalTickDelta)
             )
             // Hairpin influence is scoped to the chord onset; the
             // running `velocity` is untouched, so the next .dynamic

@@ -31,6 +31,106 @@ extension MidiRenderer {
         }
     }
 
+    /// Per-staff sorted lookup of `(tick, SwingState)` entries.
+    /// Mirrors MuseScore's `Staff::m_swingList` (staff.h:312); each
+    /// staff carries its own list, populated by `Score::updateSwing`
+    /// (score.cpp:6081). `initial` is the score-level Style swing,
+    /// returned when `tick` precedes every entry.
+    struct SwingMap: Equatable {
+        let entries: [Entry]
+        let initial: SwingState
+
+        struct Entry: Equatable {
+            let tick: Int
+            let state: SwingState
+        }
+
+        static let empty = SwingMap(entries: [], initial: .off)
+
+        /// Active swing state at `tick`. Mirrors `Staff::swing(tick)`
+        /// (staff.cpp:1022) — `upper_bound` on the tick map, returning
+        /// the entry one before the boundary.
+        func state(atTick tick: Int) -> SwingState {
+            var lo = 0, hi = entries.count
+            while lo < hi {
+                let mid = (lo + hi) / 2
+                if entries[mid].tick <= tick {
+                    lo = mid + 1
+                } else {
+                    hi = mid
+                }
+            }
+            return lo == 0 ? initial : entries[lo - 1].state
+        }
+    }
+
+    /// Build a `SwingMap` per staff in `score.allStaves` order.
+    /// Walks every voice once, accumulating natural ticks via
+    /// `measureTicks` so the result keys match the natural-tick
+    /// lookups in `renderVoiceElement`.
+    ///
+    /// `Swing` directives flagged `isSystemText == true` are inserted
+    /// into every staff's map (system flag = system-wide), matching
+    /// the `if (st->systemFlag())` branch of `Score::updateSwing`
+    /// (score.cpp:6106). Staff-flagged directives go only into the
+    /// owning staff's map.
+    static func collectSwingMaps(
+        score: Score, division: Int
+    ) -> [SwingMap] {
+        let initial = SwingState(style: score.style, division: division)
+        let allStaves = score.allStaves
+        let staffCount = allStaves.count
+        guard staffCount > 0 else { return [] }
+        var perStaff: [[SwingMap.Entry]] = Array(
+            repeating: [], count: staffCount
+        )
+        for (staffIdx, entry) in allStaves.enumerated() {
+            let staff = entry.staff
+            var measureBase = 0
+            for measure in staff.measures {
+                let mTicks = measureTicks(
+                    measure: measure, division: division
+                )
+                for voice in measure.voices {
+                    var tick = measureBase
+                    for el in voice.elements {
+                        switch el {
+                        case let .chord(c):
+                            tick += c.duration.ticks(division: division)
+                        case let .swing(s):
+                            let state = SwingState(
+                                unitTicks: s.swingUnitTicks(
+                                    division: division),
+                                ratio: s.ratio
+                            )
+                            let mapEntry = SwingMap.Entry(
+                                tick: tick, state: state
+                            )
+                            if s.isSystemText {
+                                for i in 0 ..< staffCount {
+                                    perStaff[i].append(mapEntry)
+                                }
+                            } else {
+                                perStaff[staffIdx].append(mapEntry)
+                            }
+                        case let .locationShift(delta):
+                            tick += delta.ticks(division: division)
+                        default:
+                            break
+                        }
+                    }
+                }
+                measureBase += mTicks
+            }
+        }
+        return perStaff.map { entries in
+            SwingMap(
+                entries: entries.sorted { $0.tick < $1.tick },
+                initial: initial
+            )
+        }
+    }
+
     /// Result of applying swing to one chord. Both deltas are in
     /// ticks; positive `onsetShift` pushes the note-on later, positive
     /// `lengthDelta` extends the chord's sounding duration.

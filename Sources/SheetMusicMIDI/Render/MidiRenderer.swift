@@ -17,8 +17,12 @@ public enum MidiRenderer {
         var tracks: [MidiTrack] = []
         let channelAssignments = assignChannels(score: score)
         var trackIndex = 0
-        let initialSwing = SwingState(
-            style: score.style, division: score.division
+        // Per-staff swing maps mirror MuseScore's `Score::updateSwing`
+        // (score.cpp:6081): SystemText-flagged swing markers fan out to
+        // every staff so the whole system swings; staff-flagged ones
+        // stay on their owning staff.
+        let swingMaps = collectSwingMaps(
+            score: score, division: score.division
         )
         for (partIndex, part) in score.parts.enumerated() {
             let channels = channelAssignments[partIndex]
@@ -34,7 +38,9 @@ public enum MidiRenderer {
                     isFirstTrack: trackIndex == 0,
                     isTopOfPart: s == 0,
                     division: score.division,
-                    initialSwing: initialSwing
+                    swingMap: trackIndex < swingMaps.count
+                        ? swingMaps[trackIndex]
+                        : .empty
                 )
                 tracks.append(track)
                 trackIndex += 1
@@ -58,7 +64,7 @@ public enum MidiRenderer {
         isFirstTrack: Bool,
         isTopOfPart: Bool,
         division: Int,
-        initialSwing: SwingState
+        swingMap: SwingMap
     ) -> MidiTrack {
         var events: [TimedMidiEvent] = headerEvents(
             staff: staff,
@@ -78,7 +84,7 @@ public enum MidiRenderer {
                 part: part,
                 channel: primaryChannel,
                 division: division,
-                initialSwing: initialSwing
+                swingMap: swingMap
             )
             voiceEventBuckets.append(voiceEvents)
         }
