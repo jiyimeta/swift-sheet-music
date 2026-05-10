@@ -565,7 +565,7 @@ extension LayoutEngine {
                     let staffY = staffOrigins[staffIdx].y
                     let staffCenterY = staffY + metrics.staffHeight / 2
                     elements.append(.multiMeasureRest(
-                        count: staffIdx == 0 ? runLen : 0,
+                        count: runLen,
                         origin: CGPoint(x: um.width / 2, y: staffCenterY)
                     ))
                     // Right-edge barline mirrors normal measures so the
