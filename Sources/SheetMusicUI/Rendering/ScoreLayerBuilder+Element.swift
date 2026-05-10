@@ -338,10 +338,11 @@ extension ScoreLayerBuilder {
                 base: base, metrics: metrics, height: height,
                 context: &context, into: parent
             )
-        case .multiMeasureRest:
-            // Drawn by MultiMeasureRestRenderer in Task 10/11. Stub for
-            // exhaustive switch; Task 11 replaces this with the real call.
-            break
+        case let .multiMeasureRest(c, p):
+            drawMultiMeasureRest(
+                count: c, origin: shift(p),
+                metrics: metrics, height: height, into: parent
+            )
         case .note:
             break
         }
