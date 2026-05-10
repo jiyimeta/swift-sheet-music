@@ -573,9 +573,12 @@ extension LayoutEngine {
                     // measures bypass placeMeasureElements, so we add it
                     // here directly. The subtype from the run's last source
                     // measure carries through (e.g. final / double barlines).
+                    // drawBarLine treats origin.y as the staff's vertical
+                    // center (line spans origin.y ± 2 sp), so anchor to
+                    // staffCenterY, not the staff top.
                     elements.append(.barLine(
                         subtype: barSubtype,
-                        origin: CGPoint(x: um.width, y: staffY)
+                        origin: CGPoint(x: um.width, y: staffCenterY)
                     ))
                 }
                 let sourceMeasure = um.staff0Measure
