@@ -48,7 +48,8 @@ public struct PagedScoreView: View {
             staffSize: options.staffSize,
             systemGap: options.systemGap,
             wrapToViewWidth: true,
-            breakPolicy: options.breakPolicy
+            breakPolicy: options.breakPolicy,
+            multiMeasureRest: options.multiMeasureRest
         )
         let doc = LayoutEngine.layout(
             score: score, options: pageOpts,

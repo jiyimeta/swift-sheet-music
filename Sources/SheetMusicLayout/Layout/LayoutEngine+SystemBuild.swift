@@ -75,11 +75,42 @@ extension LayoutEngine {
             var perStaffElements: [Int: [LayoutElement]]
             let staff0Measure: Measure?
             let tickCols: [Int: CGFloat]
+            /// When non-nil, this entry is a multi-measure-rest run-start
+            /// placeholder. Pass 2 emits a single H-bar LayoutMeasure for
+            /// the run instead of the per-staff aggregation. The value is
+            /// the source-measure count covered by the run.
+            let multiMeasureRestCount: Int?
         }
         var untranslated: [UntranslatedMeasure] = []
         var clefs = activeClefs
         var keys = activeKeys
+        let plan = context.multiMeasureRestPlan
         for (j, measureIdx) in measureRange.enumerated() {
+            if plan.isInteriorOfRun(measureIdx) {
+                // Run-interior: collapsed-bar emission is owned by the
+                // run-start. Don't compute placement, don't advance the
+                // active clef/key carry-over (rule 1 in the spec excludes
+                // clef/key changes inside a run).
+                continue
+            }
+            if let runLen = plan.runLength(startingAt: measureIdx) {
+                // Run-start: skip per-staff placement entirely. Pass 2 will
+                // synthesize an H-bar LayoutMeasure of width `widths[j]`
+                // (which Task 6 set to `collapsedRunWidth`).
+                let staff0Measure: Measure? = measureIdx
+                    < (staves.first?.measures.count ?? 0)
+                    ? staves.first?.measures[measureIdx]
+                    : nil
+                untranslated.append(UntranslatedMeasure(
+                    measureIdx: measureIdx,
+                    width: widths[j],
+                    perStaffElements: [:],
+                    staff0Measure: staff0Measure,
+                    tickCols: [:],
+                    multiMeasureRestCount: runLen
+                ))
+                continue
+            }
             let w = widths[j]
             let synthesizeClefHere = j == 0
             let synthesizeKeySigHere = j == 0
@@ -203,7 +234,8 @@ extension LayoutEngine {
                 width: w,
                 perStaffElements: perStaff,
                 staff0Measure: staff0Measure,
-                tickCols: tickCols
+                tickCols: tickCols,
+                multiMeasureRestCount: nil
             ))
         }
 
@@ -504,6 +536,76 @@ extension LayoutEngine {
         var layoutMeasures: [LayoutMeasure] = []
         var xCursor: CGFloat = partLabelWidth
         for (j, um) in untranslated.enumerated() {
+            if let runLen = um.multiMeasureRestCount {
+                // Determine barline subtype from the last source measure of
+                // the run. All staves agree on barline subtype (rule 1 of
+                // collapsibility excludes per-staff content differences).
+                // Mirrors the placeMeasureElements convention: prefer the
+                // last explicit `<BarLine>` voice element, otherwise fall
+                // back to "end" (thin + thick) when the run ends at the
+                // score's final measure, otherwise nil (single line).
+                let lastMeasureIdx = um.measureIdx + runLen - 1
+                let totalMeasures = staves.first?.measures.count ?? 0
+                let isLastMeasureOfScore = lastMeasureIdx == totalMeasures - 1
+                var barSubtype: String?
+                if let firstStaff = staves.first,
+                   lastMeasureIdx < firstStaff.measures.count
+                {
+                    let lastMeasure = firstStaff.measures[lastMeasureIdx]
+                    for voice in lastMeasure.voices {
+                        for el in voice.elements {
+                            if case let .barLine(b) = el {
+                                barSubtype = b.subtype
+                            }
+                        }
+                    }
+                }
+                if barSubtype == nil, isLastMeasureOfScore {
+                    barSubtype = "end"
+                }
+
+                // Emit one H-bar + one barline per staff.
+                // Count text appears only above the top staff (count == 0
+                // on lower staves instructs the renderer to draw the bar
+                // glyph without the number).
+                var elements: [LayoutElement] = []
+                for staffIdx in staves.indices {
+                    guard staffIdx < staffOrigins.count else { continue }
+                    let staffY = staffOrigins[staffIdx].y
+                    let staffCenterY = staffY + metrics.staffHeight / 2
+                    elements.append(.multiMeasureRest(
+                        count: runLen,
+                        origin: CGPoint(x: um.width / 2, y: staffCenterY)
+                    ))
+                    // Right-edge barline mirrors normal measures so the
+                    // system's visible separators stay continuous. Collapsed
+                    // measures bypass placeMeasureElements, so we add it
+                    // here directly. The subtype from the run's last source
+                    // measure carries through (e.g. final / double barlines).
+                    // drawBarLine treats origin.y as the staff's vertical
+                    // center (line spans origin.y ± 2 sp), so anchor to
+                    // staffCenterY, not the staff top.
+                    elements.append(.barLine(
+                        subtype: barSubtype,
+                        origin: CGPoint(x: um.width, y: staffCenterY)
+                    ))
+                }
+                let sourceMeasure = um.staff0Measure
+                layoutMeasures.append(LayoutMeasure(
+                    measureIndex: um.measureIdx,
+                    origin: CGPoint(x: xCursor, y: 0),
+                    width: um.width,
+                    elements: elements,
+                    markers: [],
+                    jumps: [],
+                    lineBreak: sourceMeasure?.lineBreak ?? false,
+                    pageBreak: sourceMeasure?.pageBreak ?? false,
+                    tickColumns: [:],
+                    multiMeasureRest: runLen
+                ))
+                xCursor += um.width
+                continue
+            }
             let w = um.width
             let measureIdx = um.measureIdx
             var aggregated: [LayoutElement] = []

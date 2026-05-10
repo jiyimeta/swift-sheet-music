@@ -143,18 +143,30 @@
         /// resolve to a marquee selection instead of falling through to
         /// scroll or click. Toggled from the sidebar.
         @State private var isMarqueeMode = false
+        @State private var collapseMultiMeasureRests = false
 
         // systemGap targets MuseScore's `Sid::minSystemDistance` of
         // 8.5 sp; with our staff-distance pads contributing ~3.5 sp
         // below the last lyric staff, ~5 sp here (≈ 1.25 × staffSize)
         // lands the visible system-to-system gap in MuseScore range.
-        private static let verticalOptions = ScoreViewOptions(
-            staffSize: 18, systemGap: 22, wrapToViewWidth: true
-        )
-        private static let horizontalOptions = ScoreViewOptions(
-            staffSize: 28, systemGap: 40, wrapToViewWidth: false,
-            includeTitleFrame: false
-        )
+        private var verticalOptions: ScoreViewOptions {
+            ScoreViewOptions(
+                staffSize: 18, systemGap: 22, wrapToViewWidth: true,
+                multiMeasureRest: collapseMultiMeasureRests
+                    ? .collapse(minimumMeasures: 2)
+                    : .disabled
+            )
+        }
+
+        private var horizontalOptions: ScoreViewOptions {
+            ScoreViewOptions(
+                staffSize: 28, systemGap: 40, wrapToViewWidth: false,
+                includeTitleFrame: false,
+                multiMeasureRest: collapseMultiMeasureRests
+                    ? .collapse(minimumMeasures: 2)
+                    : .disabled
+            )
+        }
 
         var body: some View {
             NavigationSplitView {
@@ -168,6 +180,7 @@
                     totalPages: totalPages,
                     magnification: $magnification,
                     isMarqueeMode: $isMarqueeMode,
+                    collapseMultiMeasureRests: $collapseMultiMeasureRests,
                     onLoadBundled: loadBundled,
                     onLoadHarmonyBasic: loadHarmonyBasic,
                     onOpenFile: showOpenPanel,
@@ -192,6 +205,9 @@
             .onAppear(perform: loadBundled)
             .onAppear(perform: installKeyMonitor)
             .onDisappear(perform: removeKeyMonitor)
+            .onChange(of: collapseMultiMeasureRests) { _, _ in
+                rebuildLayoutsForOptionsChange()
+            }
             .toolbar {
                 ToolbarItem(placement: .navigation) {
                     Label(
@@ -2310,7 +2326,7 @@
                 VerticalScoreContainer(
                     score: score,
                     verticalDoc: $verticalDoc,
-                    options: Self.verticalOptions,
+                    options: verticalOptions,
                     scoreVersion: scoreVersion,
                     selection: selection,
                     voiceColors: exampleVoiceColors,
@@ -2374,7 +2390,10 @@
                     score: score,
                     options: ScoreViewOptions(
                         staffSize: 18, systemGap: 16,
-                        wrapToViewWidth: true
+                        wrapToViewWidth: true,
+                        multiMeasureRest: collapseMultiMeasureRests
+                            ? .collapse(minimumMeasures: 2)
+                            : .disabled
                     ),
                     pageIndex: $pageIndex,
                     totalPages: $totalPages
@@ -2575,7 +2594,7 @@
             // natural content width), so there's no reason to defer
             // it to a .task — and an if-let gated Group can fail
             // to trigger .task(id:) when it starts empty.
-            let hOpts = Self.horizontalOptions
+            let hOpts = horizontalOptions
             // New score → drop the old cache; per-measure entries from
             // a previous score have no validity here.
             layoutCache = LayoutCache()
@@ -2624,6 +2643,31 @@
 
         /// Adopt a score edited via `inputController`.
         ///
+        /// Re-layout when a runtime `ScoreViewOptions` toggle (currently
+        /// just `collapseMultiMeasureRests`) changes without a score reload.
+        /// The vertical doc rebuilds via its `.task(id:)` once `scoreVersion`
+        /// advances; the horizontal doc must be rebuilt directly here,
+        /// matching the logic in `adoptEditedScore`.
+        private func rebuildLayoutsForOptionsChange() {
+            guard let score else { return }
+            // Drop the cache so the new policy (e.g. collapse toggle)
+            // re-derives per-measure widths and placements from scratch.
+            // Without this, cache hits return stale entries computed under
+            // the previous policy.
+            layoutCache = LayoutCache()
+            let hOpts = horizontalOptions
+            let availableWidth = horizontalDoc?.size.width
+                ?? LayoutEngine.naturalContentWidth(
+                    score: score, options: hOpts
+                )
+            horizontalDoc = LayoutEngine.layout(
+                score: score, options: hOpts,
+                availableWidth: availableWidth,
+                cache: layoutCache
+            )
+            scoreVersion = UUID()
+        }
+
         /// Optimised vs `adoptLoadedScore` to keep keystrokes responsive
         /// on large scores (`test.mscx` is ~1356 measures):
         ///   * `horizontalContexts` is NOT recomputed — a single-note
@@ -2635,7 +2679,7 @@
         ///     pass — saving the full-score `naturalContentWidth` walk.
         private func adoptEditedScore(_ edited: Score) {
             let t0 = Date()
-            let hOpts = Self.horizontalOptions
+            let hOpts = horizontalOptions
             // Reuse the previously-laid-out total width as the
             // `availableWidth` input. For a single-note edit this is
             // within a glyph's width of the true natural content width,

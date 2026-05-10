@@ -74,6 +74,10 @@ extension LayoutEngine {
             )
         case let .measureRepeat(c, p):
             return .measureRepeat(count: c, origin: shift(p))
+        case let .multiMeasureRest(c, p):
+            // Multi-measure rest contributes no special translation logic;
+            // shift the anchor origin for correct staff stacking.
+            return .multiMeasureRest(count: c, origin: shift(p))
         case let .beam(from, to, direction, level):
             return .beam(
                 fromOrigin: shift(from),

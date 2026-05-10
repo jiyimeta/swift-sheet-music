@@ -338,6 +338,11 @@ extension ScoreLayerBuilder {
                 base: base, metrics: metrics, height: height,
                 context: &context, into: parent
             )
+        case let .multiMeasureRest(c, p):
+            drawMultiMeasureRest(
+                count: c, origin: shift(p),
+                metrics: metrics, height: height, into: parent
+            )
         case .note:
             break
         }

@@ -981,6 +981,33 @@
             )
         }
 
+        // MARK: - 28 multi-measure rest
+
+        /// Eight whole-rest measures bracketed by a sounding measure on
+        /// each side. With the default `.disabled` policy the layout
+        /// shows ten individual measures; with
+        /// `.collapse(minimumMeasures: 2)` the eight rests fold into a
+        /// single H-bar bearing "8".
+        static var multiMeasureRest: Score {
+            let n = Note(pitch: 60, tpc: 14)
+            let sounding = Measure(voices: [Voice(elements: [
+                .clef(Clef(concertClefType: "G")),
+                .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+                .chord(Chord(duration: .whole, notes: [n])),
+            ])])
+            let rest = Measure(voices: [Voice(elements: [
+                .rest(duration: .whole),
+            ])])
+            return Score(
+                division: 480,
+                parts: [treblePart(measures: [
+                    sounding,
+                    rest, rest, rest, rest, rest, rest, rest, rest,
+                    sounding,
+                ])]
+            )
+        }
+
         // MARK: - helpers
 
         private static func treblePart(measures: [Measure] = []) -> Part {

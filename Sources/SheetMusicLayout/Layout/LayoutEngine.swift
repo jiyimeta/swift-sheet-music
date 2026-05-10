@@ -57,6 +57,9 @@ public enum LayoutEngine {
             score: score, division: score.division,
             effectiveTicks: effectiveMelismaTicks
         )
+        let multiMeasureRestPlan = MultiMeasureRestPlanner.plan(
+            for: score, policy: options.multiMeasureRest
+        )
         let context = RenderContext(
             score: score,
             options: options,
@@ -65,7 +68,8 @@ public enum LayoutEngine {
             melismaContinuations: melismas,
             effectiveMelismaTicks: effectiveMelismaTicks,
             cache: cache,
-            belowStaffSpannerCoverage: belowStaffSpannerCoverage(score: score)
+            belowStaffSpannerCoverage: belowStaffSpannerCoverage(score: score),
+            multiMeasureRestPlan: multiMeasureRestPlan
         )
         let packedSystems = packSystems(context: context)
         // Title block at the top of the document. Built first so we
@@ -342,5 +346,10 @@ public enum LayoutEngine {
         /// the spanner glyph and lyric row don't overlap. Computed
         /// once at layout entry — cheap walk across spanners.
         let belowStaffSpannerCoverage: [Int: Set<Int>]
+        /// Run plan for the multi-measure-rest collapse pass. Empty when
+        /// `options.multiMeasureRest == .disabled` (every rest measure
+        /// renders individually). Tasks 6 and 7 read this to override
+        /// per-measure widths and emit a single H-bar measure per run.
+        let multiMeasureRestPlan: MultiMeasureRestPlan
     }
 }

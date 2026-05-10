@@ -32,6 +32,12 @@ public struct LayoutMeasure: Sendable, Equatable {
     /// at the actual chord X rather than the measure's left edge.
     /// Empty for measures with no timed content.
     public let tickColumns: [Int: CGFloat]
+    /// When non-nil, this layout measure renders as a multi-measure-rest
+    /// H-bar covering `multiMeasureRest!` source measures. The
+    /// `elements` array carries the H-bar `LayoutElement` plus the
+    /// trailing barline; no chord/rest elements are emitted. Nil for
+    /// every normal measure.
+    public let multiMeasureRest: Int?
 
     public init(
         measureIndex: Int,
@@ -42,7 +48,8 @@ public struct LayoutMeasure: Sendable, Equatable {
         jumps: [LayoutElement] = [],
         lineBreak: Bool = false,
         pageBreak: Bool = false,
-        tickColumns: [Int: CGFloat] = [:]
+        tickColumns: [Int: CGFloat] = [:],
+        multiMeasureRest: Int? = nil
     ) {
         self.measureIndex = measureIndex
         self.origin = origin
@@ -53,5 +60,6 @@ public struct LayoutMeasure: Sendable, Equatable {
         self.lineBreak = lineBreak
         self.pageBreak = pageBreak
         self.tickColumns = tickColumns
+        self.multiMeasureRest = multiMeasureRest
     }
 }

@@ -44,6 +44,7 @@ extension LayoutEngine {
              let .marker(_, _, p),
              let .jump(_, p),
              let .measureRepeat(_, p),
+             let .multiMeasureRest(_, p),
              let .measureNumber(_, p),
              let .staffName(_, p),
              let .staffText(_, p, _, _),
@@ -132,7 +133,8 @@ extension LayoutEngine {
             jumps: measure.jumps.map { translate(element: $0, dy: dy) },
             lineBreak: measure.lineBreak,
             pageBreak: measure.pageBreak,
-            tickColumns: measure.tickColumns
+            tickColumns: measure.tickColumns,
+            multiMeasureRest: measure.multiMeasureRest
         )
     }
 }
