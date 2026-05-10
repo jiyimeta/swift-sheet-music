@@ -1,5 +1,7 @@
 import Foundation
 @testable import SheetMusicCore
+@testable import SheetMusicMSCX
+@testable import SheetMusicXMLTools
 import Testing
 
 @Suite struct FermataModelTests {
@@ -30,5 +32,37 @@ import Testing
     @Test func explicitTimeStretchOverridesDefault() {
         let fermata = Fermata(subtype: "fermataAbove", timeStretch: 2.5)
         #expect(fermata.timeStretch == 2.5)
+    }
+
+    @Test func mscxDecodesExplicitTimeStretch() throws {
+        let xml = """
+        <voice>
+          <Fermata>
+            <subtype>fermataAbove</subtype>
+            <timeStretch>2.5</timeStretch>
+          </Fermata>
+        </voice>
+        """
+        let voice = try Voice.decode(
+            XMLTreeParser.parse(Data(xml.utf8)))
+        guard case let .fermata(f) = voice.elements[0] else {
+            Issue.record("element 0 is not a fermata"); return
+        }
+        #expect(f.subtype == "fermataAbove")
+        #expect(f.timeStretch == 2.5)
+    }
+
+    @Test func mscxDecodeFallsBackToSubtypeDefault() throws {
+        let xml = """
+        <voice>
+          <Fermata><subtype>fermataLongAbove</subtype></Fermata>
+        </voice>
+        """
+        let voice = try Voice.decode(
+            XMLTreeParser.parse(Data(xml.utf8)))
+        guard case let .fermata(f) = voice.elements[0] else {
+            Issue.record("element 0 is not a fermata"); return
+        }
+        #expect(f.timeStretch == 2.0)
     }
 }
