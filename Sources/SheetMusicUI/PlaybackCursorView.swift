@@ -112,19 +112,41 @@ extension LayoutDocument {
             let bottomY = system.origin.y
                 + (system.staffOrigins.last?.y ?? 0)
                 + metrics.staffHeight
-            for measure in system.measures
-                where measure.measureIndex == measureIndex
-            {
-                guard let xInMeasure = beatXInMeasure(
-                    tickInMeasure: tickInMeasure,
-                    measureIndex: measureIndex,
-                    layoutMeasure: measure,
-                    score: score
-                )
-                else { return nil }
+            for measure in system.measures {
+                let xInMeasure: CGFloat?
+                if let span = measure.multiMeasureRest,
+                   measure.measureIndex <= measureIndex,
+                   measureIndex < measure.measureIndex + span
+                {
+                    // Collapsed multi-measure rest: the H-bar replaces
+                    // `span` source measures. Spread their cumulative
+                    // beat ticks linearly across the bar's width so
+                    // the cursor still moves per beat (at 1/span of
+                    // normal pace) instead of disappearing for the
+                    // whole H-bar.
+                    xInMeasure = collapsedRestBeatX(
+                        tickInMeasure: tickInMeasure,
+                        targetMeasureIndex: measureIndex,
+                        layoutMeasure: measure,
+                        span: span,
+                        score: score
+                    )
+                } else if measure.measureIndex == measureIndex,
+                          measure.multiMeasureRest == nil
+                {
+                    xInMeasure = beatXInMeasure(
+                        tickInMeasure: tickInMeasure,
+                        measureIndex: measureIndex,
+                        layoutMeasure: measure,
+                        score: score
+                    )
+                } else {
+                    continue
+                }
+                guard let x = xInMeasure else { return nil }
                 let absX = system.origin.x
                     + measure.origin.x
-                    + xInMeasure
+                    + x
                 let halfW = metrics.sp * 0.4
                 return CGRect(
                     x: absX - halfW,
@@ -135,6 +157,39 @@ extension LayoutDocument {
             }
         }
         return nil
+    }
+
+    /// X within a collapsed multi-measure-rest H-bar for a beat tick
+    /// in one of the underlying source measures. Each source measure
+    /// contributes its real tick length, so a 4-measure collapse of
+    /// equal-length bars advances the cursor at 1/4 the per-bar pace
+    /// of an uncollapsed measure.
+    private func collapsedRestBeatX(
+        tickInMeasure target: Int,
+        targetMeasureIndex: Int,
+        layoutMeasure: LayoutMeasure,
+        span: Int,
+        score: Score
+    ) -> CGFloat? {
+        let division = score.division
+        var ticksBefore = 0
+        for mi in layoutMeasure.measureIndex ..< targetMeasureIndex {
+            ticksBefore += measureTickLength(
+                measureIndex: mi, score: score, division: division
+            )
+        }
+        var totalTicks = ticksBefore
+        for mi in targetMeasureIndex
+            ..< (layoutMeasure.measureIndex + span)
+        {
+            totalTicks += measureTickLength(
+                measureIndex: mi, score: score, division: division
+            )
+        }
+        guard totalTicks > 0 else { return nil }
+        let pos = CGFloat(ticksBefore + target)
+        let frac = max(0, min(1, pos / CGFloat(totalTicks)))
+        return frac * layoutMeasure.width
     }
 
     /// Linearly interpolate the cursor's measure-local X for a beat
@@ -205,7 +260,21 @@ extension LayoutDocument {
         // Snap onto an existing column if there is one.
         if let exact = ticksToX[target] { return exact }
         // Find brackets: largest tick <= target, smallest tick > target.
-        guard var leftTick = sorted.first else { return nil }
+        guard var leftTick = sorted.first else {
+            // Every voice's content was skipped — typically a measure
+            // where all voices carry only a whole-measure rest. Those
+            // rests render centered (not at a tick column), so they
+            // can't anchor an interpolation. Fall back to spreading
+            // the beat ticks linearly across the measure's full width
+            // so the cursor still advances per beat instead of
+            // disappearing for the whole bar.
+            let measureTicks = measureTickLength(
+                measureIndex: measureIndex, score: score, division: division
+            )
+            guard measureTicks > 0 else { return nil }
+            let frac = max(0, min(1, CGFloat(target) / CGFloat(measureTicks)))
+            return frac * layoutMeasure.width
+        }
         var rightTick: Int?
         for tick in sorted {
             if tick <= target { leftTick = tick } else { rightTick = tick; break }
