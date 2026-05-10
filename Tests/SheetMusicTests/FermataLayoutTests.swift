@@ -133,4 +133,118 @@ struct FermataLayoutTests {
             "fermata x \(fermataX) should match D4 x \(chordXs[1])"
         )
     }
+
+    /// Fermata-above target chord has a notehead well above the top
+    /// staff line, so the chord's north skyline rises above the
+    /// fermata's default Y (`staffMidY - 3 sp`). The fermata must
+    /// be pushed further up so it clears the notehead by ≥ 0.5 sp.
+    private static func fermataAboveHighChordScore() -> Score {
+        // G6 (pitch 91) in treble clef → step ≈ +12, notehead ≈ 6 sp
+        // above the top staff line.
+        let highChord = Chord(
+            duration: .quarter,
+            notes: ChordNotes([Note(pitch: 91, tpc: 15)])
+        )
+        let fermata = Fermata(subtype: "fermataAbove")
+        let voice = Voice(elements: [
+            .fermata(fermata),
+            .chord(highChord),
+        ])
+        let measure = Measure(voices: [voice])
+        let staff = Staff(measures: [measure])
+        return Score(
+            division: 480,
+            parts: [Part(
+                id: "1",
+                instrument: Instrument(id: "x"),
+                staves: [staff]
+            )]
+        )
+    }
+
+    /// Fermata-below a low chord whose stem-up reaches well below the
+    /// staff. Used to verify the south-skyline mirroring path.
+    private static func fermataBelowLowChordScore() -> Score {
+        // C2 (pitch 36) in treble clef → step ≈ -20; stem-up because
+        // the chord sits far below the middle line. Notehead alone is
+        // already ~10 sp below `staffMidY`.
+        let lowChord = Chord(
+            duration: .quarter,
+            notes: ChordNotes([Note(pitch: 36, tpc: 14)])
+        )
+        let fermata = Fermata(subtype: "fermataBelow")
+        let voice = Voice(elements: [
+            .fermata(fermata),
+            .chord(lowChord),
+        ])
+        let measure = Measure(voices: [voice])
+        let staff = Staff(measures: [measure])
+        return Score(
+            division: 480,
+            parts: [Part(
+                id: "1",
+                instrument: Instrument(id: "x"),
+                staves: [staff]
+            )]
+        )
+    }
+
+    /// Pull the first fermata's origin and the first chord's notehead
+    /// extents (top, bottom) from a single-measure layout document.
+    @available(macOS 15.0, iOS 16.0, *)
+    private static func fermataAndChordExtents(
+        _ doc: LayoutDocument
+    ) -> (fermataOrigin: CGPoint, chordTopY: CGFloat, chordBottomY: CGFloat)? {
+        guard let measure = doc.systems.first?.measures.first
+        else { return nil }
+        var fermataOrigin: CGPoint?
+        var noteYs: [CGFloat] = []
+        for el in measure.elements {
+            switch el {
+            case let .fermata(_, origin):
+                fermataOrigin = origin
+            case let .chord(notes, _, _, _, _, _, _, _):
+                noteYs.append(contentsOf: notes.map(\.origin.y))
+            default:
+                break
+            }
+        }
+        guard let f = fermataOrigin,
+              let top = noteYs.min(),
+              let bot = noteYs.max()
+        else { return nil }
+        return (f, top, bot)
+    }
+
+    @Test("fermataAbove clears chord north skyline (high notehead)")
+    func aboveClearsHighChord() throws {
+        guard #available(macOS 15.0, iOS 16.0, *) else { return }
+        let doc = Self.laidOut(Self.fermataAboveHighChordScore())
+        let (fermata, chordTopY, _) = try #require(
+            Self.fermataAndChordExtents(doc)
+        )
+        let sp: CGFloat = 28.0 / 4 // staffSize=28
+        // Smaller Y = visually higher. The fermata must sit at least
+        // 0.5 sp above the highest notehead.
+        #expect(
+            fermata.y <= chordTopY - sp * 0.5,
+            "fermata y \(fermata.y) should be at least 0.5 sp above highest notehead y \(chordTopY)"
+        )
+    }
+
+    @Test("fermataBelow clears chord south skyline (low notehead)")
+    func belowClearsLowChord() throws {
+        guard #available(macOS 15.0, iOS 16.0, *) else { return }
+        let doc = Self.laidOut(Self.fermataBelowLowChordScore())
+        let (fermata, _, chordBottomY) = try #require(
+            Self.fermataAndChordExtents(doc)
+        )
+        let sp: CGFloat = 28.0 / 4 // staffSize=28
+        // Larger Y = visually lower. The fermata must sit at least
+        // 0.5 sp below the lowest notehead.
+        #expect(
+            fermata.y >= chordBottomY + sp * 0.5,
+            "fermata y \(fermata.y) should be at least 0.5 sp below lowest notehead y \(chordBottomY)"
+        )
+    }
 }

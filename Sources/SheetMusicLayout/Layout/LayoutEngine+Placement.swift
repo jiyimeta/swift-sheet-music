@@ -256,6 +256,55 @@ extension LayoutEngine {
                 return map
             }()
 
+            // Per-tick north-skyline of chords in this voice — the
+            // visual highest Y (smallest value) of the chord's
+            // noteheads (and stem, for stem-up). Used to push fermata
+            // glyphs above the chord so the SMuFL glyph clears
+            // ledger-line noteheads, stem-up endpoints, flags, and
+            // beams. Mirrors MuseScore's autoplace, where a Fermata
+            // above the staff nudges its Y until it clears the
+            // chord's north skyline at the same segment.
+            let voiceChordNorthByTick: [Int: CGFloat] = {
+                var map: [Int: CGFloat] = [:]
+                var t = 0
+                for el in voice.elements {
+                    guard case let .chord(chord) = el else { continue }
+                    let ticks = chord.duration.ticks(division: division)
+                    defer { t += ticks }
+                    guard !chord.notes.isEmpty else { continue }
+                    let steps: [Int] = chord.notes.map { note in
+                        if let drumLine = drumLineMap?[note.pitch] {
+                            return 4 - drumLine
+                        }
+                        return PitchStaffPosition.step(
+                            midiPitch: note.pitch, tpc: note.tpc,
+                            clef: currentClef
+                        ).step
+                    }
+                    guard let highestStep = steps.max() else { continue }
+                    let highestNoteY = staffMidY
+                        - CGFloat(highestStep) * metrics.sp / 2
+                    var north = highestNoteY - metrics.sp * 0.5
+                    let stemDir = forcedStem
+                        ?? StemDirectionRule.direction(for: steps)
+                    // Stem-up on a high chord extends above the
+                    // highest notehead by `defaultStemLength`
+                    // measured from the LOWEST note's centre,
+                    // mirroring `StemRenderer`. A flag/beam adds
+                    // ~0.5 sp of further vertical extent which the
+                    // existing 0.5 sp buffer subsumes for v1.
+                    if stemDir == .up, let lowestStep = steps.min() {
+                        let lowestNoteY = staffMidY
+                            - CGFloat(lowestStep) * metrics.sp / 2
+                        let stemEnd = lowestNoteY
+                            - metrics.defaultStemLength
+                        north = min(north, stemEnd)
+                    }
+                    map[t] = min(map[t] ?? .infinity, north)
+                }
+                return map
+            }()
+
             // Final lyric centre Y for this voice — the max over
             // all chords' south-skyline-pushed Ys. Pre-computed
             // here (rather than ratcheted incrementally during
@@ -320,6 +369,11 @@ extension LayoutEngine {
                 tickColumns[tick]
                     ?? (headerSchedule.contentStartX + metrics.sp)
             }
+
+            // Tick where the most recently emitted chord BEGAN. Used
+            // by the fermata case to look up the north/south skyline
+            // when no following chord exists in the same voice.
+            var lastEmittedChordTick: Int?
 
             for (voiceElemIdx, el) in voice.elements.enumerated() {
                 switch el {
@@ -713,6 +767,7 @@ extension LayoutEngine {
                             )
                         }
                     }
+                    lastEmittedChordTick = tickCursor
                     tickCursor += chordTicks
                 case let .dynamic(d):
                     // Dynamics sit below-left of the note they apply to
@@ -820,12 +875,14 @@ extension LayoutEngine {
                     // after Chord. Mirrors the MIDI anchor rule in
                     // `FermataRanges.collect`.
                     var lookaheadTick = tickCursor
-                    var nextChordX: CGFloat?
+                    var forwardChordTick: Int?
+                    var forwardChordX: CGFloat?
                     for j in (voiceElemIdx + 1) ..< voice.elements.count {
                         let next = voice.elements[j]
                         switch next {
                         case .chord:
-                            nextChordX = timedX(atTick: lookaheadTick)
+                            forwardChordTick = lookaheadTick
+                            forwardChordX = timedX(atTick: lookaheadTick)
                         case let .locationShift(delta):
                             lookaheadTick += delta.ticks(division: division)
                             continue
@@ -834,17 +891,38 @@ extension LayoutEngine {
                         }
                         break
                     }
-                    let anchorX = nextChordX
+                    let anchorX = forwardChordX
                         ?? lastChordOrRestX(in: out)
                         ?? (inHeader
                             ? headerSchedule.contentStartX
                             : timedX(atTick: tickCursor))
+                    // Y placement: subtype suffix selects which
+                    // skyline to clear. "Below" mirrors using south;
+                    // anything else (canonical "Above" / unspecified)
+                    // uses north. Default Y is 1 sp clear of the
+                    // staff; chord skyline + 1 sp clearance wins
+                    // when the chord pokes into that space.
+                    let anchorTick = forwardChordTick
+                        ?? lastEmittedChordTick
+                    let isBelow = f.subtype.hasSuffix("Below")
+                    let clearance = metrics.sp
+                    let anchorY: CGFloat
+                    if isBelow {
+                        let defaultY = staffMidY + metrics.sp * 3
+                        let chordSouth = anchorTick.flatMap {
+                            voiceChordSouthByTick[$0]
+                        } ?? -.infinity
+                        anchorY = max(defaultY, chordSouth + clearance)
+                    } else {
+                        let defaultY = staffMidY - metrics.sp * 3
+                        let chordNorth = anchorTick.flatMap {
+                            voiceChordNorthByTick[$0]
+                        } ?? .infinity
+                        anchorY = min(defaultY, chordNorth - clearance)
+                    }
                     out.append(.fermata(
                         subtype: f.subtype,
-                        origin: CGPoint(
-                            x: anchorX,
-                            y: staffMidY - metrics.sp * 3
-                        )
+                        origin: CGPoint(x: anchorX, y: anchorY)
                     ))
                 case .measureRepeat:
                     out.append(.measureRepeat(
