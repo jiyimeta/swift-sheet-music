@@ -71,5 +71,7 @@ func primaryItemID(of target: ScoreHitTarget?) -> ScoreItemID? {
         return notes.first.map { .note($0) }
     case let .tuplet(id):
         return .tuplet(id)
+    case let .clef(anchor):
+        return .clef(anchor)
     }
 }
