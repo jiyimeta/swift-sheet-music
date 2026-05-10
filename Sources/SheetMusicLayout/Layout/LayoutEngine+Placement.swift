@@ -900,12 +900,23 @@ extension LayoutEngine {
                     // skyline to clear. "Below" mirrors using south;
                     // anything else (canonical "Above" / unspecified)
                     // uses north. Default Y is 1 sp clear of the
-                    // staff; chord skyline + 1 sp clearance wins
-                    // when the chord pokes into that space.
+                    // staff; chord skyline + clearance wins when the
+                    // chord pokes into that space.
+                    //
+                    // Fermata SMuFL glyphs are drawn with anchor
+                    // .center (see GraphicsContext+Glyph.swift), so
+                    // the glyph extends ~1.25 sp on either side of
+                    // origin.y for Bravura `fermataAbove` /
+                    // `fermataBelow` at staff size = 4 sp. Clearance
+                    // must therefore include the glyph half-height
+                    // plus a 0.5 sp visual gap so the glyph EDGE —
+                    // not its centre — clears the skyline.
                     let anchorTick = forwardChordTick
                         ?? lastEmittedChordTick
                     let isBelow = f.subtype.hasSuffix("Below")
-                    let clearance = metrics.sp
+                    let glyphHalfHeight = metrics.sp * 1.25
+                    let visualGap = metrics.sp * 0.5
+                    let clearance = glyphHalfHeight + visualGap
                     let anchorY: CGFloat
                     if isBelow {
                         let defaultY = staffMidY + metrics.sp * 3

@@ -224,11 +224,12 @@ struct FermataLayoutTests {
             Self.fermataAndChordExtents(doc)
         )
         let sp: CGFloat = 28.0 / 4 // staffSize=28
-        // Smaller Y = visually higher. The fermata must sit at least
-        // 0.5 sp above the highest notehead.
+        // Glyph anchor is .center; bottom of glyph ≈ origin.y + 1.25 sp.
+        // Require glyph BOTTOM to clear the highest notehead by ≥ 0.5 sp.
+        let glyphBottom = fermata.y + sp * 1.25
         #expect(
-            fermata.y <= chordTopY - sp * 0.5,
-            "fermata y \(fermata.y) should be at least 0.5 sp above highest notehead y \(chordTopY)"
+            glyphBottom <= chordTopY - sp * 0.5,
+            "fermata glyph bottom \(glyphBottom) must clear notehead top \(chordTopY) by ≥ 0.5 sp"
         )
     }
 
@@ -240,11 +241,74 @@ struct FermataLayoutTests {
             Self.fermataAndChordExtents(doc)
         )
         let sp: CGFloat = 28.0 / 4 // staffSize=28
-        // Larger Y = visually lower. The fermata must sit at least
-        // 0.5 sp below the lowest notehead.
+        // Glyph anchor is .center; top of glyph ≈ origin.y - 1.25 sp.
+        let glyphTop = fermata.y - sp * 1.25
         #expect(
-            fermata.y >= chordBottomY + sp * 0.5,
-            "fermata y \(fermata.y) should be at least 0.5 sp below lowest notehead y \(chordBottomY)"
+            glyphTop >= chordBottomY + sp * 0.5,
+            "fermata glyph top \(glyphTop) must clear notehead bottom \(chordBottomY) by ≥ 0.5 sp"
+        )
+    }
+
+    /// Build a one-measure score whose voice contains
+    /// `[fermata, chord(B4)]`. B4 in treble clef sits on the middle
+    /// staff line and has a stem-up reaching ~3.5 sp above it (i.e.
+    /// ~1.5 sp above the top staff line). The fermata must clear the
+    /// stem TOP, not just the notehead.
+    private static func fermataAboveStemUpChordScore() -> Score {
+        let chord = Chord(
+            duration: .quarter,
+            notes: ChordNotes([Note(pitch: 71, tpc: 18)])
+        )
+        let fermata = Fermata(subtype: "fermataAbove")
+        let voice = Voice(elements: [
+            .fermata(fermata),
+            .chord(chord),
+        ])
+        let measure = Measure(voices: [voice])
+        let staff = Staff(measures: [measure])
+        return Score(
+            division: 480,
+            parts: [Part(
+                id: "1",
+                instrument: Instrument(id: "x"),
+                staves: [staff]
+            )]
+        )
+    }
+
+    @Test("fermataAbove clears stem-up endpoint")
+    func aboveClearsStemUp() throws {
+        guard #available(macOS 15.0, iOS 16.0, *) else { return }
+        let doc = Self.laidOut(Self.fermataAboveStemUpChordScore())
+        guard let measure = doc.systems.first?.measures.first
+        else { Issue.record("no measure"); return }
+        var fermataY: CGFloat?
+        var stemTopY: CGFloat?
+        for el in measure.elements {
+            switch el {
+            case let .fermata(_, origin):
+                fermataY = origin.y
+            case let .chord(notes, _, stem, stemOrigin, _, _, _, _):
+                // For stem-up, `LayoutEngine+Extents.chordTopExtent`
+                // treats `min(stemOrigin.y, topNote)` as the chord
+                // top — i.e. `stemOrigin.y` IS the stem-top endpoint
+                // for stem-up. Use it directly.
+                if stem == .up {
+                    stemTopY = stemOrigin.y
+                } else if let highest = notes.map(\.origin.y).min() {
+                    stemTopY = highest
+                }
+            default:
+                break
+            }
+        }
+        let sp: CGFloat = 28.0 / 4
+        let f = try #require(fermataY)
+        let stemTop = try #require(stemTopY)
+        let glyphBottom = f + sp * 1.25
+        #expect(
+            glyphBottom <= stemTop - sp * 0.5,
+            "fermata glyph bottom \(glyphBottom) must clear stem top \(stemTop) by ≥ 0.5 sp"
         )
     }
 }
