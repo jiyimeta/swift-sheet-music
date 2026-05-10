@@ -22,4 +22,8 @@ public enum ScoreHitTarget: Hashable, Sendable {
     /// Tuplet bracket / number area. Hit-target for clicking the
     /// "3" / "5" label or the bracket line that spans the tuplet.
     case tuplet(TupletID)
+    /// Selectable clef glyph. Only emitted for clefs whose
+    /// `LayoutElement.clef.anchor` is non-nil — continuation-system
+    /// header clef restatements are not hit-targets.
+    case clef(ClefAnchor)
 }

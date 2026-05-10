@@ -88,6 +88,7 @@ public struct ScoreHitTester: Sendable {
         case let .note(id): return .note(id)
         case let .rest(id): return .rest(id)
         case let .tuplet(id): return .tuplet(id)
+        case let .clef(anchor): return .clef(anchor)
         default: return nil
         }
     }
@@ -128,6 +129,13 @@ public struct ScoreHitTester: Sendable {
         //    of the tuplet's vertical extent, plus a small label
         //    box around the number.
         if let target = hitTuplet(measure: measure, base: base, point: point, sp: sp) {
+            return target
+        }
+        // 7. Clef glyph — last in the priority ladder. Header
+        //    column doesn't overlap note geometry so the position
+        //    is mostly cosmetic; keeping clefs last minimises
+        //    disruption to the existing ladder.
+        if let target = hitClef(measure: measure, base: base, point: point, sp: sp) {
             return target
         }
         return nil
@@ -406,6 +414,49 @@ public struct ScoreHitTester: Sendable {
         return nil
     }
 
+    // MARK: - Clef
+
+    /// Bounding-box hit-test for a clef glyph. Mirrors the
+    /// per-clef y-offset that `drawClef` applies (treble +1 sp,
+    /// bass −1 sp, C-clef 0). Returns nil for clefs without an
+    /// `anchor` (i.e. continuation-system header restatements).
+    private func hitClef(
+        measure: LayoutMeasure,
+        base: CGPoint, point: CGPoint, sp: CGFloat
+    ) -> ScoreHitTarget? {
+        let halfWidth = sp * 1.0 // glyph width ≈ 2 sp
+        let halfHeight = sp * 2.5 // glyph height ≈ 5 sp
+        for el in measure.elements {
+            guard case let .clef(rawType, origin, anchor) = el,
+                  let anchor
+            else { continue }
+            let yOffset = Self.clefYOffset(rawType: rawType, sp: sp)
+            let ax = base.x + origin.x
+            let ay = base.y + origin.y + yOffset
+            if abs(point.x - ax) <= halfWidth,
+               abs(point.y - ay) <= halfHeight
+            {
+                return .clef(anchor)
+            }
+        }
+        return nil
+    }
+
+    /// y-offset applied by the renderer for `rawType`. Kept in
+    /// sync with `ScoreLayerBuilder.drawClef`'s switch.
+    private static func clefYOffset(
+        rawType: String, sp: CGFloat
+    ) -> CGFloat {
+        switch NotatedClef(rawType: rawType) {
+        case .treble, .treble8va, .treble8vb, .treble15ma, .treble15mb:
+            sp
+        case .bass, .bass8va, .bass8vb:
+            -sp
+        case .alto, .tenor, .percussion:
+            0
+        }
+    }
+
     // MARK: - Utilities
 
     /// True when `dur` (considered after splitting off augmentation
@@ -441,5 +492,37 @@ public struct ScoreHitTester: Sendable {
         let ex = point.x - closestX
         let ey = point.y - closestY
         return (ex * ex + ey * ey).squareRoot()
+    }
+
+    /// Document-coord rectangle of the clef glyph identified by
+    /// `anchor`. Returns nil when no layout element matches —
+    /// e.g. after a re-layout invalidates the anchor.
+    public func clefHitRect(for anchor: ClefAnchor) -> CGRect? {
+        let sp = document.metrics.sp
+        for system in document.systems {
+            for measure in system.measures {
+                let base = CGPoint(
+                    x: system.origin.x + measure.origin.x,
+                    y: system.origin.y + measure.origin.y
+                )
+                for el in measure.elements {
+                    guard case let .clef(rawType, origin, elAnchor) = el,
+                          elAnchor == anchor
+                    else { continue }
+                    let yOffset = Self.clefYOffset(
+                        rawType: rawType, sp: sp
+                    )
+                    let centerX = base.x + origin.x
+                    let centerY = base.y + origin.y + yOffset
+                    return CGRect(
+                        x: centerX - sp,
+                        y: centerY - sp * 2.5,
+                        width: sp * 2,
+                        height: sp * 5
+                    )
+                }
+            }
+        }
+        return nil
     }
 }
