@@ -75,6 +75,20 @@ public enum MidiRenderer {
             isTopOfPart: isTopOfPart
         )
 
+        // Per-staff fermata ranges + tempo bookends. Built BEFORE
+        // voice walks so close events sort ahead of any same-tick
+        // `.tempo` from those walks; open events are appended AFTER
+        // so they sort after same-tick `.tempo`. The renderer's
+        // stable sort below realises the documented close → .tempo
+        // → open ordering at boundary ticks.
+        let fermataRanges = FermataRanges.collect(from: staff, division: division)
+        let timeline = TempoTimeline.build(from: staff, division: division)
+        let bookends = FermataRanges.tempoEvents(
+            ranges: fermataRanges, timeline: timeline
+        )
+
+        events.append(contentsOf: bookends.closeEvents)
+
         var voiceEventBuckets: [[TimedMidiEvent]] = []
         let voiceCount = staff.measures.map(\.voices.count).max() ?? 0
         for voiceIndex in 0 ..< voiceCount {
@@ -91,6 +105,8 @@ public enum MidiRenderer {
         // Multi-voice merge resolves same-pitch overlaps (the "muted unison" case).
         let merged = resolveUnisonOverlap(voiceEventBuckets.flatMap { $0 })
         events.append(contentsOf: merged)
+
+        events.append(contentsOf: bookends.openEvents)
 
         // EoT lands one tick after the last produced event (MuseScore convention):
         // for note-bearing tracks this is final-noteOff + 1; for empty tracks it's 1.
