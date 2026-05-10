@@ -2314,6 +2314,7 @@
             case .single(.rest): return "rest"
             case .single(.note): return "note"
             case .single(.tuplet): return "tuplet"
+            case .single(.clef): return "clef"
             case .range: return "range"
             case .multi: return "multi"
             }
@@ -2497,6 +2498,8 @@
                     return
                 }
                 primary = .note(first)
+            case let .clef(anchor):
+                primary = .clef(anchor)
             }
 
             if shift {
