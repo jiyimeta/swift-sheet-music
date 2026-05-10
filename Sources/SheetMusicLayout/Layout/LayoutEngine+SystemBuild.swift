@@ -537,26 +537,53 @@ extension LayoutEngine {
         var xCursor: CGFloat = partLabelWidth
         for (j, um) in untranslated.enumerated() {
             if let runLen = um.multiMeasureRestCount {
-                let staffTopY = staffOrigins.first?.y ?? 0
-                let centerY = staffTopY + metrics.staffHeight / 2
-                let hbar = LayoutElement.multiMeasureRest(
-                    count: runLen,
-                    origin: CGPoint(x: um.width / 2, y: centerY)
-                )
-                // Right-edge barline mirrors normal measures so the system's
-                // visible separators stay continuous. Existing measures emit
-                // their barline via placeMeasureElements; collapsed measures
-                // bypass that path, so we add it here directly.
-                let bar = LayoutElement.barLine(
-                    subtype: nil,
-                    origin: CGPoint(x: um.width, y: staffTopY)
-                )
+                // Determine barline subtype from the last source measure of
+                // the run. All staves agree on barline subtype (rule 1 of
+                // collapsibility excludes per-staff content differences).
+                let lastMeasureIdx = um.measureIdx + runLen - 1
+                var barSubtype: String?
+                if let firstStaff = staves.first,
+                   lastMeasureIdx < firstStaff.measures.count
+                {
+                    let lastMeasure = firstStaff.measures[lastMeasureIdx]
+                    for voice in lastMeasure.voices {
+                        for el in voice.elements {
+                            if case let .barLine(b) = el {
+                                barSubtype = b.subtype
+                            }
+                        }
+                    }
+                }
+
+                // Emit one H-bar + one barline per staff.
+                // Count text appears only above the top staff (count == 0
+                // on lower staves instructs the renderer to draw the bar
+                // glyph without the number).
+                var elements: [LayoutElement] = []
+                for staffIdx in staves.indices {
+                    guard staffIdx < staffOrigins.count else { continue }
+                    let staffY = staffOrigins[staffIdx].y
+                    let staffCenterY = staffY + metrics.staffHeight / 2
+                    elements.append(.multiMeasureRest(
+                        count: staffIdx == 0 ? runLen : 0,
+                        origin: CGPoint(x: um.width / 2, y: staffCenterY)
+                    ))
+                    // Right-edge barline mirrors normal measures so the
+                    // system's visible separators stay continuous. Collapsed
+                    // measures bypass placeMeasureElements, so we add it
+                    // here directly. The subtype from the run's last source
+                    // measure carries through (e.g. final / double barlines).
+                    elements.append(.barLine(
+                        subtype: barSubtype,
+                        origin: CGPoint(x: um.width, y: staffY)
+                    ))
+                }
                 let sourceMeasure = um.staff0Measure
                 layoutMeasures.append(LayoutMeasure(
                     measureIndex: um.measureIdx,
                     origin: CGPoint(x: xCursor, y: 0),
                     width: um.width,
-                    elements: [hbar, bar],
+                    elements: elements,
                     markers: [],
                     jumps: [],
                     lineBreak: sourceMeasure?.lineBreak ?? false,

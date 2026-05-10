@@ -96,6 +96,10 @@ extension ScoreLayerBuilder {
         ) {
             parent.addSublayer(bar)
         }
+        // count == 0 means "draw the bar glyph only, no count number".
+        // Lower staves in a multi-staff system use this to get the H-bar
+        // without duplicating the run-length label above each staff.
+        guard count > 0 else { return }
         let style = ResolvedTextStyle.resolve(
             .tempo, metrics: metrics
         )

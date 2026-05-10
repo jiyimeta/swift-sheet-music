@@ -2650,6 +2650,11 @@
         /// matching the logic in `adoptEditedScore`.
         private func rebuildLayoutsForOptionsChange() {
             guard let score else { return }
+            // Drop the cache so the new policy (e.g. collapse toggle)
+            // re-derives per-measure widths and placements from scratch.
+            // Without this, cache hits return stale entries computed under
+            // the previous policy.
+            layoutCache = LayoutCache()
             let hOpts = horizontalOptions
             let availableWidth = horizontalDoc?.size.width
                 ?? LayoutEngine.naturalContentWidth(
