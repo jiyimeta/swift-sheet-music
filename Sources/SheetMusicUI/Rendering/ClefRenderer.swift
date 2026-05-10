@@ -7,7 +7,7 @@ enum ClefRenderer {
         context: inout GraphicsContext,
         rawType: String,
         origin: CGPoint,
-        metrics: StaffMetrics
+        metrics: StaffMetrics,
     ) {
         let clef = NotatedClef(rawType: rawType)
         let glyph: Character
@@ -47,7 +47,7 @@ enum ClefRenderer {
         context.drawGlyph(
             glyph,
             at: CGPoint(x: origin.x, y: origin.y + yOffset),
-            size: metrics.glyphFontSize
+            size: metrics.glyphFontSize,
         )
     }
 }

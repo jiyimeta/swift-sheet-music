@@ -16,7 +16,7 @@ extension ScoreLayerBuilder {
     static func drawClef(
         rawType: String, origin: CGPoint,
         metrics: StaffMetrics, height: CGFloat,
-        into parent: CALayer
+        into parent: CALayer,
     ) -> CAShapeLayer? {
         let clef = NotatedClef(rawType: rawType)
         let glyph: Character
@@ -37,7 +37,7 @@ extension ScoreLayerBuilder {
             glyph,
             at: CGPoint(x: origin.x, y: origin.y + yOffset),
             size: metrics.glyphFontSize,
-            height: height
+            height: height,
         ) else {
             return nil
         }
@@ -53,7 +53,7 @@ extension ScoreLayerBuilder {
     static func drawKeySignature(
         sharps: Int, flats: Int, origin: CGPoint,
         metrics: StaffMetrics, height: CGFloat,
-        into parent: CALayer
+        into parent: CALayer,
     ) {
         let count = max(0, sharps) + max(0, flats)
         guard count > 0 else { return }
@@ -71,7 +71,7 @@ extension ScoreLayerBuilder {
                 glyph,
                 at: CGPoint(x: x, y: y),
                 size: metrics.glyphFontSize,
-                height: height
+                height: height,
             ) {
                 parent.addSublayer(layer)
             }
@@ -84,7 +84,7 @@ extension ScoreLayerBuilder {
         numerator: Int, denominator: Int,
         origin: CGPoint, metrics: StaffMetrics,
         height: CGFloat,
-        into parent: CALayer
+        into parent: CALayer,
     ) {
         let numStr = String(numerator)
         let denStr = String(denominator)
@@ -102,10 +102,10 @@ extension ScoreLayerBuilder {
                 at: CGPoint(
                     x: origin.x + numOffsetX
                         + CGFloat(i) * digitAdvance,
-                    y: origin.y - metrics.sp
+                    y: origin.y - metrics.sp,
                 ),
                 size: metrics.glyphFontSize,
-                height: height
+                height: height,
             ) {
                 parent.addSublayer(layer)
             }
@@ -117,10 +117,10 @@ extension ScoreLayerBuilder {
                 at: CGPoint(
                     x: origin.x + denOffsetX
                         + CGFloat(i) * digitAdvance,
-                    y: origin.y + metrics.sp
+                    y: origin.y + metrics.sp,
                 ),
                 size: metrics.glyphFontSize,
-                height: height
+                height: height,
             ) {
                 parent.addSublayer(layer)
             }
@@ -132,7 +132,7 @@ extension ScoreLayerBuilder {
     static func drawBarLine(
         subtype: String?, origin: CGPoint,
         metrics: StaffMetrics, height: CGFloat,
-        into parent: CALayer
+        into parent: CALayer,
     ) {
         let topY = origin.y - metrics.sp * 2
         let botY = origin.y + metrics.sp * 2
@@ -141,7 +141,7 @@ extension ScoreLayerBuilder {
             path.move(to: CGPoint(x: origin.x + dx, y: topY))
             path.addLine(to: CGPoint(x: origin.x + dx, y: botY))
             parent.addSublayer(strokeLayer(
-                path: path, height: height, lineWidth: width
+                path: path, height: height, lineWidth: width,
             ))
         }
         switch subtype {
@@ -156,12 +156,12 @@ extension ScoreLayerBuilder {
             line(dx: +metrics.sp * 0.3, width: metrics.sp * 0.15)
             drawRepeatDots(
                 origin: origin, xOffset: metrics.sp * 0.6,
-                metrics: metrics, height: height, into: parent
+                metrics: metrics, height: height, into: parent,
             )
         case "end-repeat":
             drawRepeatDots(
                 origin: origin, xOffset: -metrics.sp * 0.6,
-                metrics: metrics, height: height, into: parent
+                metrics: metrics, height: height, into: parent,
             )
             line(dx: 0, width: metrics.sp * 0.15)
             line(dx: +metrics.sp * 0.3, width: metrics.sp * 0.4)
@@ -173,27 +173,27 @@ extension ScoreLayerBuilder {
     private static func drawRepeatDots(
         origin: CGPoint, xOffset: CGFloat,
         metrics: StaffMetrics, height: CGFloat,
-        into parent: CALayer
+        into parent: CALayer,
     ) {
         let dotSize = metrics.sp * 0.3
         let half = dotSize / 2
         let top = CGRect(
             x: origin.x + xOffset - half,
             y: origin.y - metrics.sp / 2 - half,
-            width: dotSize, height: dotSize
+            width: dotSize, height: dotSize,
         )
         let bot = CGRect(
             x: origin.x + xOffset - half,
             y: origin.y + metrics.sp / 2 - half,
-            width: dotSize, height: dotSize
+            width: dotSize, height: dotSize,
         )
         parent.addSublayer(fillLayer(
             path: CGPath(ellipseIn: top, transform: nil),
-            height: height
+            height: height,
         ))
         parent.addSublayer(fillLayer(
             path: CGPath(ellipseIn: bot, transform: nil),
-            height: height
+            height: height,
         ))
     }
 
@@ -204,7 +204,7 @@ extension ScoreLayerBuilder {
         duration: NoteDuration, origin: CGPoint,
         hasLegerLine: Bool,
         metrics: StaffMetrics, height: CGFloat,
-        into parent: CALayer
+        into parent: CALayer,
     ) -> CAShapeLayer? {
         let (baseDur, dots) = DurationInterpretation.split(duration)
         let glyph: Character
@@ -226,7 +226,7 @@ extension ScoreLayerBuilder {
         }
         let glyphLayerRef = glyphLayer(
             glyph, at: origin, size: metrics.glyphFontSize,
-            height: height
+            height: height,
         )
         if let layer = glyphLayerRef {
             parent.addSublayer(layer)
@@ -234,7 +234,7 @@ extension ScoreLayerBuilder {
         drawDots(
             after: origin, count: dots,
             onStaffLine: true,
-            metrics: metrics, height: height, into: parent
+            metrics: metrics, height: height, into: parent,
         )
         return glyphLayerRef
     }

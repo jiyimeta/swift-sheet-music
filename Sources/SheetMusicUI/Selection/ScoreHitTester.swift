@@ -67,11 +67,11 @@ public struct ScoreHitTester: Sendable {
 
                 let base = CGPoint(
                     x: system.origin.x + measure.origin.x,
-                    y: system.origin.y + measure.origin.y
+                    y: system.origin.y + measure.origin.y,
                 )
                 if let target = hitTestMeasure(
                     measure: measure, base: base,
-                    point: point, sp: sp
+                    point: point, sp: sp,
                 ) {
                     return target
                 }
@@ -99,7 +99,7 @@ public struct ScoreHitTester: Sendable {
         measure: LayoutMeasure,
         base: CGPoint,
         point: CGPoint,
-        sp: CGFloat
+        sp: CGFloat,
     ) -> ScoreHitTarget? {
         // 1. Notehead (smallest, highest priority)
         if let target = hitNote(measure: measure, base: base, point: point, sp: sp) {
@@ -149,7 +149,7 @@ public struct ScoreHitTester: Sendable {
     /// without snagging clicks intended for notes nearby.
     private func hitTuplet(
         measure: LayoutMeasure,
-        base: CGPoint, point: CGPoint, sp: CGFloat
+        base: CGPoint, point: CGPoint, sp: CGFloat,
     ) -> ScoreHitTarget? {
         let bracketTolerance = sp * 0.6
         let labelHalfHeight = sp * 1.2
@@ -192,7 +192,7 @@ public struct ScoreHitTester: Sendable {
 
     private func hitNote(
         measure: LayoutMeasure,
-        base: CGPoint, point: CGPoint, sp: CGFloat
+        base: CGPoint, point: CGPoint, sp: CGFloat,
     ) -> ScoreHitTarget? {
         let radius = sp * 1.2
         let radiusSquared = radius * radius
@@ -215,7 +215,7 @@ public struct ScoreHitTester: Sendable {
 
     private func hitRest(
         measure: LayoutMeasure,
-        base: CGPoint, point: CGPoint, sp: CGFloat
+        base: CGPoint, point: CGPoint, sp: CGFloat,
     ) -> ScoreHitTarget? {
         let halfWidth = sp * 1.8
         let halfHeight = sp * 2.5
@@ -237,7 +237,7 @@ public struct ScoreHitTester: Sendable {
 
     private func hitBeam(
         measure: LayoutMeasure,
-        base: CGPoint, point: CGPoint, sp: CGFloat
+        base: CGPoint, point: CGPoint, sp: CGFloat,
     ) -> ScoreHitTarget? {
         let threshold = sp * 0.7
         for el in measure.elements {
@@ -253,17 +253,17 @@ public struct ScoreHitTester: Sendable {
             let levelDy = CGFloat(level - 1)
                 * (sp * 0.5 + sp * 0.3) * stackSign
             let a = CGPoint(
-                x: base.x + from.x, y: base.y + from.y + levelDy
+                x: base.x + from.x, y: base.y + from.y + levelDy,
             )
             let b = CGPoint(
-                x: base.x + to.x, y: base.y + to.y + levelDy
+                x: base.x + to.x, y: base.y + to.y + levelDy,
             )
             if distanceFromSegment(point: point, a: a, b: b) <= threshold {
                 let notes = beamedChordNotes(
                     measure: measure,
                     fromX: from.x, toX: to.x,
                     fromY: from.y, toY: to.y,
-                    sp: sp
+                    sp: sp,
                 )
                 return .beam(notes: notes)
             }
@@ -288,7 +288,7 @@ public struct ScoreHitTester: Sendable {
         measure: LayoutMeasure,
         fromX: CGFloat, toX: CGFloat,
         fromY: CGFloat, toY: CGFloat,
-        sp: CGFloat
+        sp: CGFloat,
     ) -> [NoteID] {
         let loX = min(fromX, toX)
         let hiX = max(fromX, toX)
@@ -299,7 +299,7 @@ public struct ScoreHitTester: Sendable {
         var result: [NoteID] = []
         for el in measure.elements {
             guard case let .chord(
-                notes, _, _, stemOrigin, _, _, isBeamed, _
+                notes, _, _, stemOrigin, _, _, isBeamed, _,
             ) = el,
                 isBeamed,
                 stemOrigin.x >= loX - xTolerance,
@@ -323,11 +323,11 @@ public struct ScoreHitTester: Sendable {
 
     private func hitFlag(
         measure: LayoutMeasure,
-        base: CGPoint, point: CGPoint, sp: CGFloat
+        base: CGPoint, point: CGPoint, sp: CGFloat,
     ) -> ScoreHitTarget? {
         for el in measure.elements {
             guard case let .chord(
-                notes, dur, stem, _, _, _, isBeamed, _
+                notes, dur, stem, _, _, _, isBeamed, _,
             ) = el,
                 !isBeamed,
                 Self.hasFlag(dur),
@@ -348,7 +348,7 @@ public struct ScoreHitTester: Sendable {
                     x: stemX - sp * 0.1,
                     y: tipY,
                     width: flagWidth,
-                    height: flagHeight
+                    height: flagHeight,
                 )
             } else {
                 let stemX = base.x + noteX - stemXOffset
@@ -357,7 +357,7 @@ public struct ScoreHitTester: Sendable {
                     x: stemX - flagWidth + sp * 0.1,
                     y: tipY - flagHeight,
                     width: flagWidth,
-                    height: flagHeight
+                    height: flagHeight,
                 )
             }
             if rect.contains(point) {
@@ -371,13 +371,13 @@ public struct ScoreHitTester: Sendable {
 
     private func hitStem(
         measure: LayoutMeasure,
-        base: CGPoint, point: CGPoint, sp: CGFloat
+        base: CGPoint, point: CGPoint, sp: CGFloat,
     ) -> ScoreHitTarget? {
         let halfWidth = sp * 0.5
         let stemXOffset = sp * 0.59
         for el in measure.elements {
             guard case let .chord(
-                notes, _, stem, stemOrigin, _, _, isBeamed, _
+                notes, _, stem, stemOrigin, _, _, isBeamed, _,
             ) = el,
                 let noteX = notes.first?.origin.x
             else { continue }
@@ -405,7 +405,7 @@ public struct ScoreHitTester: Sendable {
                 x: stemX - halfWidth,
                 y: stemMinY,
                 width: halfWidth * 2,
-                height: max(0, stemMaxY - stemMinY)
+                height: max(0, stemMaxY - stemMinY),
             )
             if rect.contains(point) {
                 return .stem(notes: notes.map(\.noteID))
@@ -422,7 +422,7 @@ public struct ScoreHitTester: Sendable {
     /// `anchor` (i.e. continuation-system header restatements).
     private func hitClef(
         measure: LayoutMeasure,
-        base: CGPoint, point: CGPoint, sp: CGFloat
+        base: CGPoint, point: CGPoint, sp: CGFloat,
     ) -> ScoreHitTarget? {
         let halfWidth = sp * 1.0 // glyph width ≈ 2 sp
         let halfHeight = sp * 2.5 // glyph height ≈ 5 sp
@@ -445,7 +445,7 @@ public struct ScoreHitTester: Sendable {
     /// y-offset applied by the renderer for `rawType`. Kept in
     /// sync with `ScoreLayerBuilder.drawClef`'s switch.
     private static func clefYOffset(
-        rawType: String, sp: CGFloat
+        rawType: String, sp: CGFloat,
     ) -> CGFloat {
         switch NotatedClef(rawType: rawType) {
         case .treble, .treble8va, .treble8vb, .treble15ma, .treble15mb:
@@ -475,7 +475,7 @@ public struct ScoreHitTester: Sendable {
 
     /// Shortest distance from `point` to the line segment `a`—`b`.
     private func distanceFromSegment(
-        point: CGPoint, a: CGPoint, b: CGPoint
+        point: CGPoint, a: CGPoint, b: CGPoint,
     ) -> CGFloat {
         let dx = b.x - a.x
         let dy = b.y - a.y
@@ -503,14 +503,14 @@ public struct ScoreHitTester: Sendable {
             for measure in system.measures {
                 let base = CGPoint(
                     x: system.origin.x + measure.origin.x,
-                    y: system.origin.y + measure.origin.y
+                    y: system.origin.y + measure.origin.y,
                 )
                 for el in measure.elements {
                     guard case let .clef(rawType, origin, elAnchor) = el,
                           elAnchor == anchor
                     else { continue }
                     let yOffset = Self.clefYOffset(
-                        rawType: rawType, sp: sp
+                        rawType: rawType, sp: sp,
                     )
                     let centerX = base.x + origin.x
                     let centerY = base.y + origin.y + yOffset
@@ -518,7 +518,7 @@ public struct ScoreHitTester: Sendable {
                         x: centerX - sp,
                         y: centerY - sp * 2.5,
                         width: sp * 2,
-                        height: sp * 5
+                        height: sp * 5,
                     )
                 }
             }
