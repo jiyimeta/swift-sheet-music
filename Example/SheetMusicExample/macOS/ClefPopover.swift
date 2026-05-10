@@ -75,6 +75,10 @@
                                     : Color.gray.opacity(0.3),
                                 lineWidth: choice == current ? 2 : 1
                             ))
+                    // Without this, `.buttonStyle(.plain)` hit-tests
+                    // only the glyph's visible ink, leaving most of
+                    // the 60×60 tile non-clickable.
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .help(choice.rawType)
