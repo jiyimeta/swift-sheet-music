@@ -61,6 +61,16 @@ enum SMuFLGlyph {
     // `restHBar`, the multi-measure I-beam, hence the wrong glyph).
     static let restWholeLegerLine: Character = "\u{E4F4}"
     static let restHalfLegerLine: Character = "\u{E4F5}"
+    /// Multi-measure rest H-bar (the thick horizontal beam used in
+    /// part scores to compress long stretches of silence).
+    /// SMuFL `restHBar` (U+E4EE).
+    static let restHBar: Character = "\u{E4EE}"
+    /// Left-side cap glyph for `restHBar`. Bravura ships
+    /// `restHBarLeft` at U+E4EF.
+    static let restHBarLeft: Character = "\u{E4EF}"
+    /// Right-side cap glyph for `restHBar`. Bravura ships
+    /// `restHBarRight` at U+E4F0.
+    static let restHBarRight: Character = "\u{E4F0}"
     static let restQuarter: Character = "\u{E4E5}"
     static let rest8th: Character = "\u{E4E6}"
     static let rest16th: Character = "\u{E4E7}"
