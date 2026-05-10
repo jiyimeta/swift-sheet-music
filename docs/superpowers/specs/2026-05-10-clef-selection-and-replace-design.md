@@ -150,19 +150,25 @@ shifted by the same per-clef y-offset `ClefRenderer.draw` applies
 `itemID(at:)` extends to return `.clef(anchor)` when the hit is a
 selectable clef.
 
-Hit priority: clefs are checked **before** notes/rests would not be
-correct (clefs sit before the notes in x); they are checked **after**
-notes/rests/beam/flag/stem/tuplet at the existing per-measure
-dispatch. Notes/rests almost never overlap clefs (clefs sit in the
-header column), so the priority order is robust either way.
+Hit priority: clefs are checked **after** notes/rests/beam/flag/stem/
+tuplet in the existing per-measure dispatch. Clefs sit in the header
+column where note/rest geometry doesn't overlap them, so the priority
+order doesn't matter in practice — keep clefs last to minimise
+disruption to the existing ladder.
 
 ### Selection rendering (SheetMusicUI)
 
-`SelectionRenderState.selectedIDs: Set<ScoreItemID>` already feeds
-the renderer. Extend `ScoreLayerBuilder`'s clef-drawing path so that
-when `selectedIDs.contains(.clef(anchor))`, the glyph is drawn in the
-selection tint instead of black. `ClefRenderer.draw` accepts an
-optional `tint: CGColor?` (or equivalent) so callers stay simple.
+`SelectionRenderState.make` already maps `ScoreSelection.single(id)`
+into `selectedIDs = [id]` (tuplet expansion aside), so passing
+`.single(.clef(anchor))` flows through unchanged. Extend
+`ScoreLayerBuilder`'s clef-drawing path so that when
+`selection.color(for: .clef(anchor), voiceIndex: 0)` returns a color,
+the glyph is drawn in that tint instead of default ink.
+
+For `.clef(.staffDefault(...))` we look up the color under
+`voiceIndex = 0`; for `.clef(.explicit(veID))` we use
+`veID.voiceIndex`. `ClefRenderer.draw` gains an optional
+`tint: CGColor?` parameter (nil = default ink).
 
 ## Example app (macOS)
 
