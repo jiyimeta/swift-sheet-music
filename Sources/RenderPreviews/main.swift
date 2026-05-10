@@ -67,6 +67,7 @@
             ("25-harmony-basic", Samples.harmonyBasic),
             ("26-harmony-high-chord", Samples.harmonyHighChord),
             ("27-harmony-high-chord-tied", Samples.harmonyHighChordTied),
+            ("28-multi-measure-rest", Samples.multiMeasureRest),
         ]
 
         for (name, score) in samples {
@@ -75,10 +76,32 @@
             print("wrote \(url.path)")
         }
 
-        // Real-world check: parse Example/SheetMusicExample/test.mscx if
-        // present and render the first couple of systems. Useful for
-        // spot-checking synthesized clefs on staves that rely on MuseScore
-        // instrument defaults.
+        // Multi-measure rest with collapse enabled — separate from the
+        // default-options samples loop because the option drives the
+        // visual difference.
+        let mmRestOpts = ScoreViewOptions(
+            staffSize: 28, systemGap: 40, wrapToViewWidth: false,
+            multiMeasureRest: .collapse(minimumMeasures: 2)
+        )
+        let mmRestURL = outputDir.appendingPathComponent(
+            "28b-multi-measure-rest-collapsed.png"
+        )
+        try renderScoreToPNG(
+            Samples.multiMeasureRest, to: mmRestURL, scale: 2,
+            options: mmRestOpts
+        )
+        print("wrote \(mmRestURL.path)")
+
+        try renderRealWorldCheck(outputDir: outputDir)
+    }
+
+    /// Render the real-world test.mscx sample if available.
+    @available(macOS 15.0, *)
+    @MainActor
+    func renderRealWorldCheck(outputDir: URL) throws {
+        // Parse Example/SheetMusicExample/test.mscx if present and render
+        // the first couple of systems. Useful for spot-checking synthesized
+        // clefs on staves that rely on MuseScore instrument defaults.
         let examplePath = URL(fileURLWithPath:
             "Example/SheetMusicExample/test.mscx")
         if FileManager.default.fileExists(atPath: examplePath.path),
@@ -109,9 +132,10 @@
     @available(macOS 15.0, *)
     @MainActor
     func renderScoreToPNG(
-        _ score: Score, to url: URL, scale: CGFloat
+        _ score: Score, to url: URL, scale: CGFloat,
+        options: ScoreViewOptions? = nil
     ) throws {
-        let opts = ScoreViewOptions(
+        let opts = options ?? ScoreViewOptions(
             staffSize: 28, systemGap: 40, wrapToViewWidth: false
         )
         let naturalWidth = LayoutEngine.naturalContentWidth(
