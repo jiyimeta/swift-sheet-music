@@ -50,6 +50,20 @@
         @State private var pageIndex = 0
         @State private var totalPages = 1
         @State private var selection: ScoreSelection = .none
+        @State private var clefPopover: ClefPopoverState?
+
+        struct ClefPopoverState: Equatable, Identifiable {
+            let anchor: ClefAnchor
+            let currentRawType: String
+            /// Document-coord rect of the clef glyph; SwiftUI's
+            /// `.popover(item:)` doesn't anchor against this directly,
+            /// but it's preserved here so a future PreferenceKey-based
+            /// tracker can place the popover precisely on the glyph.
+            let attachmentRect: CGRect
+
+            var id: ClefAnchor { anchor }
+        }
+
         /// Pre-computed layout for the current vertical viewport width.
         /// Rebuilt on width / score / mode changes; passed into both
         /// ScoreView (for rendering) and ScoreHitTester (for tap
@@ -193,6 +207,13 @@
             } detail: {
                 if let score {
                     scoreContent(score: score)
+                        .popover(item: $clefPopover, arrowEdge: .top) { state in
+                            ClefPopover(
+                                current: ClefChoice.from(rawType: state.currentRawType)
+                            ) { choice in
+                                applyClefChoice(choice, for: state.anchor)
+                            }
+                        }
                 } else {
                     ContentUnavailableView(
                         "No score loaded",
@@ -2120,6 +2141,61 @@
             }
         }
 
+        /// Look up the raw clef type string ("G", "F", "G8vb", …) for
+        /// the clef under `anchor`. Returns nil if the score is missing
+        /// or the anchor no longer resolves (e.g. the explicit clef
+        /// element was deleted before the popover opened).
+        private func currentClefRawType(for anchor: ClefAnchor) -> String? {
+            guard let score else { return nil }
+            switch anchor {
+            case let .explicit(veID):
+                if case let .clef(c) = score[veID] {
+                    return c.concertClefType
+                }
+                return nil
+            case let .staffDefault(staff):
+                return score[staff]?.defaultClefType
+            }
+        }
+
+        /// Dispatch the popover's pick into an edit command — replace
+        /// an explicit clef voice element, or set the staff's default
+        /// clef when the user tapped the synthesized opening clef.
+        /// Either path goes through `NoteInputController.apply` so the
+        /// `undoManager` records a reverse command for ⌘Z.
+        private func applyClefChoice(
+            _ choice: ClefChoice, for anchor: ClefAnchor
+        ) {
+            guard let controller = inputController else { return }
+            do {
+                switch anchor {
+                case let .explicit(veID):
+                    let newClef = Clef(concertClefType: choice.rawType)
+                    try controller.apply(
+                        ReplaceVoiceElement(
+                            at: veID,
+                            with: .clef(newClef)
+                        ),
+                        undoManager: undoManager
+                    )
+                case let .staffDefault(staff):
+                    try controller.apply(
+                        SetStaffDefaultClef(
+                            staff: staff,
+                            newRawType: choice.rawType
+                        ),
+                        undoManager: undoManager
+                    )
+                }
+                adoptEditedScore(controller.score)
+            } catch {
+                errorMessage = "Failed to change clef: " +
+                    error.localizedDescription
+            }
+            clefPopover = nil
+            selection = .none
+        }
+
         /// Remove a single note from its chord via
         /// `RemoveNoteFromChord`. When the chord had only that one note,
         /// the library collapses the element to a rest of the same
@@ -2469,6 +2545,25 @@
             // `togglePlayback` then reads the selection instead of the
             // stale cursor.
             playbackEngine.clearCursor()
+
+            // Clef tap (when not playing) — open the popover instead
+            // of falling through to the regular selection ladder.
+            if case let .clef(anchor) = target {
+                let raw = currentClefRawType(for: anchor) ?? "G"
+                let rect = tester.clefHitRect(for: anchor)
+                    ?? CGRect(
+                        x: location.x - 12, y: location.y - 24,
+                        width: 24, height: 48
+                    )
+                clefPopover = ClefPopoverState(
+                    anchor: anchor,
+                    currentRawType: raw,
+                    attachmentRect: rect
+                )
+                selection = .single(.clef(anchor))
+                return
+            }
+
             let shift = NSEvent.modifierFlags.contains(.shift)
 
             // Beam without shift: range-select every note under the beam
