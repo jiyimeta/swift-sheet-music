@@ -3,6 +3,15 @@ import Foundation
 @testable import SheetMusicMIDI
 import Testing
 
+// Tuple arrays aren't `Equatable`, so define the test-local comparison
+// here. SwiftLint's `static_operator` rule is intentionally bypassed —
+// you can't add a static operator to the built-in `Array<(Int, Int)>`.
+// swiftlint:disable:next static_operator
+private func == (lhs: [(Int, Int)], rhs: [(Int, Int)]) -> Bool {
+    guard lhs.count == rhs.count else { return false }
+    return zip(lhs, rhs).allSatisfy { $0.0 == $1.0 && $0.1 == $1.1 }
+}
+
 @Suite struct FermataRangesTests {
     private func chord(_ pitch: Int = 60, _ duration: NoteDuration = .quarter) -> VoiceElement {
         .chord(Chord(duration: duration, notes: [Note(pitch: pitch, tpc: 14)]))
@@ -108,5 +117,124 @@ import Testing
         ])
         let ranges = FermataRanges.collect(from: s, division: 480)
         #expect(ranges == [FermataRange(startTick: 0, endTick: 480, stretch: 2.0)])
+    }
+
+    // MARK: TempoTimeline lookup
+
+    @Test func tempoTimelineLookupPicksLastEntryAtOrBeforeTick() {
+        let timeline = TempoTimeline(entries: [
+            (tick: 0, bps: 2.0), // 120 BPM
+            (tick: 480, bps: 3.0), // 180 BPM
+            (tick: 1920, bps: 1.5), // 90 BPM
+        ])
+        #expect(timeline.bps(at: 0) == 2.0)
+        #expect(timeline.bps(at: 200) == 2.0)
+        #expect(timeline.bps(at: 480) == 3.0)
+        #expect(timeline.bps(at: 1000) == 3.0)
+        #expect(timeline.bps(at: 1920) == 1.5)
+        #expect(timeline.bps(at: 9999) == 1.5)
+    }
+
+    @Test func tempoTimelineDefaultIsTwoBps() {
+        let s = staff([[chord(60)]])
+        let timeline = TempoTimeline.build(from: s, division: 480)
+        #expect(timeline.bps(at: 0) == 2.0)
+        #expect(timeline.bps(at: 1000) == 2.0)
+    }
+
+    @Test func tempoTimelinePicksUpFromVoiceZero() {
+        let s = staff([[
+            chord(60), // 0..480
+            .tempo(Tempo(beatsPerSecond: 3.0)), // change at tick 480
+            chord(62), // 480..960
+        ]])
+        let timeline = TempoTimeline.build(from: s, division: 480)
+        #expect(timeline.bps(at: 0) == 2.0)
+        #expect(timeline.bps(at: 479) == 2.0)
+        #expect(timeline.bps(at: 480) == 3.0)
+        #expect(timeline.bps(at: 800) == 3.0)
+    }
+
+    // MARK: sweep-merge tempo events
+
+    @Test func singleRangeProducesOpenAndClosePair() {
+        let ranges = [FermataRange(startTick: 480, endTick: 960, stretch: 1.5)]
+        let timeline = TempoTimeline(entries: [(tick: 0, bps: 2.0)])
+        let result = FermataRanges.tempoEvents(ranges: ranges, timeline: timeline)
+        #expect(result.openEvents.map(eventSpec) == [
+            (480, microsForBpm(120 / 1.5)),
+        ])
+        #expect(result.closeEvents.map(eventSpec) == [
+            (960, microsForBpm(120)),
+        ])
+    }
+
+    @Test func partialOverlapRedundantBoundaryDropped() {
+        // Range A: [0, 720) stretch 2.0
+        // Range B: [0, 480) stretch 1.5
+        // [0,480) max=2.0; [480,720) max=2.0 (no transition); [720,∞) restore.
+        let ranges = [
+            FermataRange(startTick: 0, endTick: 720, stretch: 2.0),
+            FermataRange(startTick: 0, endTick: 480, stretch: 1.5),
+        ]
+        let timeline = TempoTimeline(entries: [(tick: 0, bps: 2.0)])
+        let result = FermataRanges.tempoEvents(ranges: ranges, timeline: timeline)
+        #expect(result.openEvents.map(eventSpec) == [
+            (0, microsForBpm(120 / 2.0)),
+        ])
+        #expect(result.closeEvents.map(eventSpec) == [
+            (720, microsForBpm(120)),
+        ])
+    }
+
+    @Test func partialOverlapWithDifferentEndsEmitsStaircase() {
+        // Range A: [0, 480)  stretch 2.0
+        // Range B: [240, 720) stretch 1.5
+        // [0,240) 2.0; [240,480) 2.0 (no change); [480,720) 1.5; [720,∞) 1.0.
+        let ranges = [
+            FermataRange(startTick: 0, endTick: 480, stretch: 2.0),
+            FermataRange(startTick: 240, endTick: 720, stretch: 1.5),
+        ]
+        let timeline = TempoTimeline(entries: [(tick: 0, bps: 2.0)])
+        let result = FermataRanges.tempoEvents(ranges: ranges, timeline: timeline)
+        #expect(result.openEvents.map(eventSpec) == [
+            (0, microsForBpm(60)), // 120/2.0
+            (480, microsForBpm(80)), // 120/1.5
+        ])
+        #expect(result.closeEvents.map(eventSpec) == [
+            (720, microsForBpm(120)),
+        ])
+    }
+
+    @Test func boundaryTempoChangeDrivesPostFermataValue() {
+        // Fermata: [0, 480) stretch 2.0; .tempo(3.0 bps) at tick 480.
+        // Open at 0: timeline.bps(at: 0)=2.0 → 60 BPM.
+        // Close at 480: timeline.bps(at: 480)=3.0 → 180 BPM.
+        let ranges = [FermataRange(startTick: 0, endTick: 480, stretch: 2.0)]
+        let timeline = TempoTimeline(entries: [
+            (tick: 0, bps: 2.0),
+            (tick: 480, bps: 3.0),
+        ])
+        let result = FermataRanges.tempoEvents(ranges: ranges, timeline: timeline)
+        #expect(result.openEvents.map(eventSpec) == [
+            (0, microsForBpm(60)),
+        ])
+        #expect(result.closeEvents.map(eventSpec) == [
+            (480, microsForBpm(180)),
+        ])
+    }
+
+    // MARK: helpers used by sweep-merge tests
+
+    private func eventSpec(_ event: TimedMidiEvent) -> (Int, Int) {
+        guard case let .meta(.tempo(micros)) = event.event else {
+            Issue.record("expected tempo meta, got \(event.event)")
+            return (event.tick, -1)
+        }
+        return (event.tick, micros)
+    }
+
+    private func microsForBpm(_ bpm: Double) -> Int {
+        Int((60_000_000.0 / bpm).rounded())
     }
 }
