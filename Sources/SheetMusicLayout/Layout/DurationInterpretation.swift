@@ -34,6 +34,22 @@ public enum DurationInterpretation {
             ) {
                 return direct
             }
+            // Reduced denominators that are powers of two encode
+            // regular (non-tuplet) durations — full-measure and
+            // pre-collapsed multi-measure rests written as
+            // `<duration>N/4>` land here. Tuplet scaling these
+            // produces false-positive dotted matches: e.g. `8/4`
+            // (= 2 wholes, the rest body of a 2-bar mmRest) is
+            // spuriously read as a *double-dotted whole* via the
+            // 7/8 septuplet scale. Render them as a plain whole
+            // rest, matching MuseScore's full-measure-rest
+            // convention.
+            let g = gcd(f.numerator, f.denominator)
+            if f.denominator > 0,
+               isPowerOfTwo(f.denominator / g)
+            {
+                return (.whole, 0)
+            }
             // Common tuplet ratios (actual:normal). A triplet has 3
             // notes in the time of 2, so each note is scaled by 2/3 —
             // we reverse that by multiplying by 3/2. More exotic
@@ -97,6 +113,10 @@ public enum DurationInterpretation {
         default: return nil
         }
         return (base, dots)
+    }
+
+    private static func isPowerOfTwo(_ n: Int) -> Bool {
+        n > 0 && (n & (n - 1)) == 0
     }
 
     private static func gcd(_ a: Int, _ b: Int) -> Int {
