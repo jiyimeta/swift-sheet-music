@@ -132,8 +132,11 @@ public enum MultiMeasureRestPlanner {
                   !m.irregular,
                   m.actualLength == nil
             else { return false }
-            // Rule 1: every voice element is a rest or location shift,
-            // and tuplets are absent.
+            // Rule 1: every voice element is a rest, location shift,
+            // or trailing barline (e.g. a double / final barline that
+            // marks a section end — semantically still a rest measure;
+            // its subtype is preserved when the H-bar emits its
+            // right-edge barline). Tuplets are absent.
             for voice in m.voices {
                 guard voice.tuplets.isEmpty else { return false }
                 for el in voice.elements {
@@ -141,6 +144,8 @@ public enum MultiMeasureRestPlanner {
                     case let .chord(c) where c.notes.isEmpty:
                         continue
                     case .locationShift:
+                        continue
+                    case .barLine:
                         continue
                     default:
                         return false
