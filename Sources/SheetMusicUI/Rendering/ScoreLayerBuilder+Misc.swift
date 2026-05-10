@@ -76,6 +76,46 @@ extension ScoreLayerBuilder {
         }
     }
 
+    // MARK: - Multi-measure rest
+
+    /// Draws the multi-measure-rest H-bar glyph (SMuFL `restHBar`) at
+    /// the supplied origin (horizontal center of the measure, vertical
+    /// middle of the top staff) plus the run-length count rendered as
+    /// bold tempo-style text directly above. v1 uses a single
+    /// `restHBar` glyph at native size; future tuning may scale or
+    /// stack multiple glyphs to fill wider bars.
+    static func drawMultiMeasureRest(
+        count: Int, origin: CGPoint,
+        metrics: StaffMetrics, height: CGFloat,
+        into parent: CALayer
+    ) {
+        if let bar = glyphLayer(
+            SMuFLGlyph.restHBar, at: origin,
+            size: metrics.glyphFontSize,
+            height: height
+        ) {
+            parent.addSublayer(bar)
+        }
+        let style = ResolvedTextStyle.resolve(
+            .tempo, metrics: metrics
+        )
+        let countOrigin = CGPoint(
+            x: origin.x,
+            y: origin.y - metrics.sp * 2.5
+        )
+        if let text = textLayer(
+            text: String(count),
+            at: countOrigin,
+            size: style.pointSize,
+            italic: style.isItalic,
+            anchor: CGPoint(x: 0.5, y: 0.5),
+            font: style.ctFont,
+            height: height
+        ) {
+            parent.addSublayer(text)
+        }
+    }
+
     // MARK: - Arpeggio
 
     static func drawArpeggio(
