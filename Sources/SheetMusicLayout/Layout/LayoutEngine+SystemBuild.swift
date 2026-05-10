@@ -540,7 +540,13 @@ extension LayoutEngine {
                 // Determine barline subtype from the last source measure of
                 // the run. All staves agree on barline subtype (rule 1 of
                 // collapsibility excludes per-staff content differences).
+                // Mirrors the placeMeasureElements convention: prefer the
+                // last explicit `<BarLine>` voice element, otherwise fall
+                // back to "end" (thin + thick) when the run ends at the
+                // score's final measure, otherwise nil (single line).
                 let lastMeasureIdx = um.measureIdx + runLen - 1
+                let totalMeasures = staves.first?.measures.count ?? 0
+                let isLastMeasureOfScore = lastMeasureIdx == totalMeasures - 1
                 var barSubtype: String?
                 if let firstStaff = staves.first,
                    lastMeasureIdx < firstStaff.measures.count
@@ -553,6 +559,9 @@ extension LayoutEngine {
                             }
                         }
                     }
+                }
+                if barSubtype == nil, isLastMeasureOfScore {
+                    barSubtype = "end"
                 }
 
                 // Emit one H-bar + one barline per staff.
