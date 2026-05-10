@@ -75,11 +75,42 @@ extension LayoutEngine {
             var perStaffElements: [Int: [LayoutElement]]
             let staff0Measure: Measure?
             let tickCols: [Int: CGFloat]
+            /// When non-nil, this entry is a multi-measure-rest run-start
+            /// placeholder. Pass 2 emits a single H-bar LayoutMeasure for
+            /// the run instead of the per-staff aggregation. The value is
+            /// the source-measure count covered by the run.
+            let multiMeasureRestCount: Int?
         }
         var untranslated: [UntranslatedMeasure] = []
         var clefs = activeClefs
         var keys = activeKeys
+        let plan = context.multiMeasureRestPlan
         for (j, measureIdx) in measureRange.enumerated() {
+            if plan.isInteriorOfRun(measureIdx) {
+                // Run-interior: collapsed-bar emission is owned by the
+                // run-start. Don't compute placement, don't advance the
+                // active clef/key carry-over (rule 1 in the spec excludes
+                // clef/key changes inside a run).
+                continue
+            }
+            if let runLen = plan.runLength(startingAt: measureIdx) {
+                // Run-start: skip per-staff placement entirely. Pass 2 will
+                // synthesize an H-bar LayoutMeasure of width `widths[j]`
+                // (which Task 6 set to `collapsedRunWidth`).
+                let staff0Measure: Measure? = measureIdx
+                    < (staves.first?.measures.count ?? 0)
+                    ? staves.first?.measures[measureIdx]
+                    : nil
+                untranslated.append(UntranslatedMeasure(
+                    measureIdx: measureIdx,
+                    width: widths[j],
+                    perStaffElements: [:],
+                    staff0Measure: staff0Measure,
+                    tickCols: [:],
+                    multiMeasureRestCount: runLen
+                ))
+                continue
+            }
             let w = widths[j]
             let synthesizeClefHere = j == 0
             let synthesizeKeySigHere = j == 0
@@ -203,7 +234,8 @@ extension LayoutEngine {
                 width: w,
                 perStaffElements: perStaff,
                 staff0Measure: staff0Measure,
-                tickCols: tickCols
+                tickCols: tickCols,
+                multiMeasureRestCount: nil
             ))
         }
 
@@ -504,6 +536,37 @@ extension LayoutEngine {
         var layoutMeasures: [LayoutMeasure] = []
         var xCursor: CGFloat = partLabelWidth
         for (j, um) in untranslated.enumerated() {
+            if let runLen = um.multiMeasureRestCount {
+                let staffTopY = staffOrigins.first?.y ?? 0
+                let centerY = staffTopY + metrics.staffHeight / 2
+                let hbar = LayoutElement.multiMeasureRest(
+                    count: runLen,
+                    origin: CGPoint(x: um.width / 2, y: centerY)
+                )
+                // Right-edge barline mirrors normal measures so the system's
+                // visible separators stay continuous. Existing measures emit
+                // their barline via placeMeasureElements; collapsed measures
+                // bypass that path, so we add it here directly.
+                let bar = LayoutElement.barLine(
+                    subtype: nil,
+                    origin: CGPoint(x: um.width, y: 0)
+                )
+                let sourceMeasure = um.staff0Measure
+                layoutMeasures.append(LayoutMeasure(
+                    measureIndex: um.measureIdx,
+                    origin: CGPoint(x: xCursor, y: 0),
+                    width: um.width,
+                    elements: [hbar, bar],
+                    markers: [],
+                    jumps: [],
+                    lineBreak: sourceMeasure?.lineBreak ?? false,
+                    pageBreak: sourceMeasure?.pageBreak ?? false,
+                    tickColumns: [:],
+                    multiMeasureRest: runLen
+                ))
+                xCursor += um.width
+                continue
+            }
             let w = um.width
             let measureIdx = um.measureIdx
             var aggregated: [LayoutElement] = []
