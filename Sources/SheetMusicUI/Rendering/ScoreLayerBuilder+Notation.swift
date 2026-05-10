@@ -12,11 +12,12 @@ import SheetMusicLayout
 extension ScoreLayerBuilder {
     // MARK: - Clef
 
+    @discardableResult
     static func drawClef(
         rawType: String, origin: CGPoint,
         metrics: StaffMetrics, height: CGFloat,
         into parent: CALayer
-    ) {
+    ) -> CAShapeLayer? {
         let clef = NotatedClef(rawType: rawType)
         let glyph: Character
         let yOffset: CGFloat
@@ -32,14 +33,16 @@ extension ScoreLayerBuilder {
         case .alto, .tenor: glyph = SMuFLGlyph.cClef; yOffset = 0
         case .percussion: glyph = SMuFLGlyph.percussionClef; yOffset = 0
         }
-        if let layer = glyphLayer(
+        guard let layer = glyphLayer(
             glyph,
             at: CGPoint(x: origin.x, y: origin.y + yOffset),
             size: metrics.glyphFontSize,
             height: height
-        ) {
-            parent.addSublayer(layer)
+        ) else {
+            return nil
         }
+        parent.addSublayer(layer)
+        return layer
     }
 
     // MARK: - Key signature

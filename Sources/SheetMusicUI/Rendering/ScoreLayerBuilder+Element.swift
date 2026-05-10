@@ -25,11 +25,14 @@ extension ScoreLayerBuilder {
             CGPoint(x: base.x + p.x, y: base.y + p.y)
         }
         switch element {
-        case let .clef(raw, p, _):
-            drawClef(
+        case let .clef(raw, p, anchor):
+            let layer = drawClef(
                 rawType: raw, origin: shift(p),
                 metrics: metrics, height: height, into: parent
             )
+            if let layer, let anchor {
+                context.attach(layer, to: .clef(anchor))
+            }
         case let .keySignature(s, f, p):
             drawKeySignature(
                 sharps: s, flats: f, origin: shift(p),
