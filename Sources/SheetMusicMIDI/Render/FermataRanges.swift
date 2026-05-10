@@ -6,7 +6,7 @@ import SheetMusicCore
 struct FermataRange: Sendable, Equatable {
     let startTick: Int // original (pre-repeat) tick
     let endTick: Int // exclusive
-    let stretch: Double // ≥ 1.0
+    let stretch: Double // ≥ 1.0; fermata hold multiplier applied to the note duration
 }
 
 enum FermataRanges {
@@ -100,13 +100,18 @@ enum FermataRanges {
         return nil
     }
 
+    private struct DedupeKey: Hashable {
+        let startTick: Int
+        let endTick: Int
+    }
+
     /// Group by (startTick, endTick); within each group keep the
     /// largest stretch. Returns ranges sorted by startTick then
     /// endTick — required by the sweep-merge consumer.
     private static func dedupeMaxStretch(_ ranges: [FermataRange]) -> [FermataRange] {
-        var bestByKey: [String: FermataRange] = [:]
+        var bestByKey: [DedupeKey: FermataRange] = [:]
         for r in ranges {
-            let key = "\(r.startTick)-\(r.endTick)"
+            let key = DedupeKey(startTick: r.startTick, endTick: r.endTick)
             if let prev = bestByKey[key], prev.stretch >= r.stretch { continue }
             bestByKey[key] = r
         }
