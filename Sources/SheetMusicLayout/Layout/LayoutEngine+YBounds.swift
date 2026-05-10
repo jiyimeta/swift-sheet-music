@@ -133,7 +133,8 @@ extension LayoutEngine {
             jumps: measure.jumps.map { translate(element: $0, dy: dy) },
             lineBreak: measure.lineBreak,
             pageBreak: measure.pageBreak,
-            tickColumns: measure.tickColumns
+            tickColumns: measure.tickColumns,
+            multiMeasureRest: measure.multiMeasureRest
         )
     }
 }
