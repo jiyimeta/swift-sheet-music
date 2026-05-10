@@ -19,6 +19,7 @@
         let totalPages: Int
         @Binding var magnification: CGFloat
         @Binding var isMarqueeMode: Bool
+        @Binding var collapseMultiMeasureRests: Bool
 
         let onLoadBundled: () -> Void
         let onLoadHarmonyBasic: () -> Void
@@ -106,6 +107,20 @@
                     .disabled(score == nil
                         || (layoutMode != .vertical
                             && layoutMode != .horizontal))
+                }
+                Section("Display") {
+                    Toggle(isOn: $collapseMultiMeasureRests) {
+                        Label(
+                            "Collapse rest measures",
+                            systemImage: "rectangle.compress.vertical"
+                        )
+                    }
+                    .disabled(score == nil)
+                    Text(
+                        "Folds runs of ≥2 consecutive whole rests into a single H-bar with a count."
+                    )
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
                 }
                 if layoutMode == .paged {
                     Section("Page") {
