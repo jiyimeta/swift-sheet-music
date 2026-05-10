@@ -176,21 +176,29 @@ exactly `max` of all covering fermatas.
 ### Emission order at the same tick
 
 The renderer's `[TimedMidiEvent]` sorter must enforce, for same-tick
-events, the order:
+tempo-meta events, the order:
 
-1. **fermata bookend (open)** — stretch increasing
+1. **fermata bookend (close)** — stretch decreasing / restore
 2. **score `.tempo` event** — user's intended tempo at that tick
-3. **fermata bookend (close)** — stretch decreasing / restore
+3. **fermata bookend (open)** — stretch increasing
 
-Rationale:
+Last-write-wins is the SMF convention for same-tick meta events, so the
+final emitted tempo is what plays from this tick onward. Both
+co-location cases fall out naturally:
 
-- **Start co-location**: a `.tempo` change exactly at a fermata's
-  startTick is consumed by the timeline pre-build, so the fermata
-  bookend already reads the new base. The order above is therefore
-  trivially safe.
-- **End co-location**: the fermata's restore comes first, then the
-  user's `.tempo` overrides it as last-write-wins. Subsequent music
-  plays at the user's intended tempo, not the pre-fermata base.
+- **Start co-location** — a `.tempo(newBps)` exactly at a fermata's
+  startTick: `.tempo` fires first, then the bookend (open) emits
+  `newBps / stretch`. The held region plays at the stretched new
+  tempo, not the pre-fermata one.
+- **End co-location** — a `.tempo(newBps)` exactly at a fermata's
+  endTick: bookend (close) restores the pre-fermata baseline, then
+  `.tempo` overrides with the user's intended new tempo. Post-fermata
+  music plays at `newBps`.
+
+The timeline pre-build already incorporates `.tempo` events at every
+tick, so `tempoTimeline.bps(at: t)` returns the post-`.tempo` value at
+boundary ticks where co-location occurs — fermata bookends always read
+the right base.
 
 ### Where to emit
 
