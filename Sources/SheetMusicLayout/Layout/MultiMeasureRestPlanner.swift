@@ -133,10 +133,14 @@ public enum MultiMeasureRestPlanner {
                   m.actualLength == nil
             else { return false }
             // Rule 1: every voice element is a rest, location shift,
-            // or trailing barline (e.g. a double / final barline that
-            // marks a section end — semantically still a rest measure;
-            // its subtype is preserved when the H-bar emits its
-            // right-edge barline). Tuplets are absent.
+            // or a *visual-only* trailing barline. A `<BarLine>` voice
+            // element with a structural subtype ("start-repeat" /
+            // "end-repeat") encodes a repeat boundary that must break
+            // the run even when the measure-level startRepeat /
+            // endRepeatCount flags are not set (MSCX permits either
+            // encoding). Visual subtypes (double, final, end, dashed,
+            // dotted) are preserved on the H-bar's right edge.
+            // Tuplets are absent.
             for voice in m.voices {
                 guard voice.tuplets.isEmpty else { return false }
                 for el in voice.elements {
@@ -145,7 +149,10 @@ public enum MultiMeasureRestPlanner {
                         continue
                     case .locationShift:
                         continue
-                    case .barLine:
+                    case let .barLine(b):
+                        if isStructuralBarLineSubtype(b.subtype) {
+                            return false
+                        }
                         continue
                     default:
                         return false
@@ -154,6 +161,21 @@ public enum MultiMeasureRestPlanner {
             }
         }
         return true
+    }
+
+    /// True when a `<BarLine>` voice-element subtype encodes a
+    /// repeat boundary. MSCX expresses end / start repeats either
+    /// via measure-level flags (`<startRepeat/>` / `<endRepeat>N`)
+    /// or via voice-level `<BarLine subtype="start-repeat">` /
+    /// `"end-repeat">`. The collapsibility predicate must reject
+    /// both encodings.
+    private static func isStructuralBarLineSubtype(
+        _ subtype: String?
+    ) -> Bool {
+        switch subtype {
+        case "start-repeat", "end-repeat": true
+        default: false
+        }
     }
 
     /// True when any staff at `i` has an authored lineBreak or

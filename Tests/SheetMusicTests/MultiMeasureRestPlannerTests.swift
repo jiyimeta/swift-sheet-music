@@ -206,6 +206,46 @@
             #expect(plan.runs == [0 ..< 2, 3 ..< 5])
         }
 
+        @Test("voice-level end-repeat barline breaks run")
+        func voiceEndRepeatBarLineBreaksRun() {
+            guard #available(macOS 15.0, iOS 16.0, *) else { return }
+            // MSCX may encode an end-repeat via `<BarLine subtype=
+            // "end-repeat"/>` rather than `<endRepeat>N</endRepeat>`.
+            // In that path `m.endRepeatCount == nil` but the barline
+            // is structurally a repeat — collapse must still break.
+            let m = Measure(voices: [Voice(elements: [
+                .rest(duration: .whole),
+                .barLine(BarLine(subtype: "end-repeat")),
+            ])])
+            let s = Self.score([
+                Self.restMeasure(), Self.restMeasure(), m,
+                Self.restMeasure(), Self.restMeasure(),
+            ])
+            let plan = MultiMeasureRestPlanner.plan(
+                for: s, policy: .collapse(minimumMeasures: 2)
+            )
+            #expect(plan.runs == [0 ..< 2, 3 ..< 5])
+        }
+
+        @Test("voice-level final barline is preserved in a run")
+        func voiceFinalBarLineDoesNotBreakRun() {
+            guard #available(macOS 15.0, iOS 16.0, *) else { return }
+            // A `<BarLine subtype="end">` (final barline) is a
+            // visual-only marker — it should NOT break the run; the
+            // collapsed bar's right edge will adopt its subtype.
+            let m = Measure(voices: [Voice(elements: [
+                .rest(duration: .whole),
+                .barLine(BarLine(subtype: "end")),
+            ])])
+            let s = Self.score([
+                Self.restMeasure(), Self.restMeasure(), m,
+            ])
+            let plan = MultiMeasureRestPlanner.plan(
+                for: s, policy: .collapse(minimumMeasures: 2)
+            )
+            #expect(plan.runs == [0 ..< 3])
+        }
+
         @Test("measure-level jump breaks run")
         func jumpBreaksRun() {
             guard #available(macOS 15.0, iOS 16.0, *) else { return }
