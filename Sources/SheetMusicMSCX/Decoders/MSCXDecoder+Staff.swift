@@ -77,7 +77,9 @@ extension MSCXTopLevelStaff {
                 reason: "top-level <Staff> missing id attribute"
             )
         }
-        let measures = try node.all("Measure").map { try Measure.decode($0) }
+        let measures = try node.all("Measure")
+            .filter { !Measure.isMultiMeasureRestContainer($0) }
+            .map { try Measure.decode($0) }
         return MSCXTopLevelStaff(mscxID: id, measures: measures)
     }
 }

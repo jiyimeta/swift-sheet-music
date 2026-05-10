@@ -3,6 +3,26 @@ import SheetMusicCore
 import SheetMusicXMLTools
 
 extension Measure {
+    /// True when a raw `<Measure>` XML node is MuseScore's mmRest
+    /// "annotation container" (`<Measure len="K×ts"><multiMeasureRest>K>`)
+    /// rather than a real bar.
+    ///
+    /// MuseScore writes a K-bar multi-measure rest as K+1 sibling
+    /// `<Measure>` entries: one regular rest measure leading the run,
+    /// the mmRest container, then K-1 regular rest measures trailing.
+    /// The container's own `<voice>` carries an oddly-shaped rest
+    /// (e.g. `<duration>8/4>` for any K) — it isn't a bar, just the
+    /// "this run of K rest bars renders as one H-bar with the number
+    /// K above" hint that older readers used to lay out the visual.
+    ///
+    /// Counting it as a bar inflates the bar count by one per mmRest
+    /// section (m111-115 instead of m111-114 for a 4-bar group). The
+    /// surrounding K real rest measures are kept; the layout-time
+    /// `MultiMeasureRestPlanner` collapses them on demand.
+    static func isMultiMeasureRestContainer(_ node: XMLTreeNode) -> Bool {
+        node.children.contains(where: { $0.name == "multiMeasureRest" })
+    }
+
     static func decode(_ node: XMLTreeNode) throws -> Measure {
         let startRepeat = node.children.contains(where: { $0.name == "startRepeat" })
         let endRepeatCount = node.first("endRepeat").flatMap { Int($0.text) }

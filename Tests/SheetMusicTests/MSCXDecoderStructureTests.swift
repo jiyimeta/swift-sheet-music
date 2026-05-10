@@ -77,6 +77,64 @@ import Testing
         #expect(measure.voices[0].elements.count == 1)
     }
 
+    /// MuseScore writes a K-bar multi-measure rest as K+1 sibling
+    /// `<Measure>` entries: K real rest measures (1 leading + K-1
+    /// trailing) plus one `<Measure len="K×ts"><multiMeasureRest>K>`
+    /// annotation container in the middle. The container is not a
+    /// bar — it's the "this run is mmRest #K" marker. Counting it
+    /// as a bar inflates the bar number by one per mmRest section,
+    /// which is exactly the m111-115 / m118-124 drift the user
+    /// reported. The decoder must drop the container so bar numbering
+    /// matches MuseScore's display.
+    @Test func multiMeasureRestContainerIsDroppedFromBarCount() throws {
+        let xml = """
+        <Staff id="1">
+          <Measure>
+            <voice>
+              <Rest><durationType>measure</durationType><duration>4/4</duration></Rest>
+            </voice>
+          </Measure>
+          <Measure len="16/4">
+            <multiMeasureRest>4</multiMeasureRest>
+            <voice>
+              <Rest><durationType>measure</durationType><duration>8/4</duration></Rest>
+            </voice>
+          </Measure>
+          <Measure>
+            <voice>
+              <Rest><durationType>measure</durationType><duration>4/4</duration></Rest>
+            </voice>
+          </Measure>
+          <Measure>
+            <voice>
+              <Rest><durationType>measure</durationType><duration>4/4</duration></Rest>
+            </voice>
+          </Measure>
+          <Measure>
+            <voice>
+              <Rest><durationType>measure</durationType><duration>4/4</duration></Rest>
+            </voice>
+          </Measure>
+        </Staff>
+        """
+        let node = try XMLTreeParser.parse(Data(xml.utf8))
+        let topLevel = try MSCXTopLevelStaff.decode(node)
+        // 5 sibling `<Measure>` entries (1 leading + 1 container + 3
+        // trailing), of which the container is dropped. The remaining
+        // 4 real rest measures form the K=4 mmRest run.
+        #expect(topLevel.measures.count == 4)
+        for m in topLevel.measures {
+            #expect(m.voices.count == 1)
+            #expect(m.voices[0].elements.count == 1)
+            guard case let .chord(c) = m.voices[0].elements[0],
+                  c.notes.isEmpty
+            else {
+                Issue.record("expected an empty-chord rest in every kept measure")
+                return
+            }
+        }
+    }
+
     @Test func decodeTopLevelStaff() throws {
         let xml = """
         <Staff id="1">
