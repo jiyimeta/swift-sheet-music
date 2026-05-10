@@ -443,6 +443,10 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                 with: .color(.primary),
                 lineWidth: metrics.sp * 0.1
             )
+        case .multiMeasureRest:
+            // Drawn by MultiMeasureRestRenderer in Task 10/11. Stub for
+            // exhaustive switch; Task 11 replaces this with the real call.
+            break
         case .note, .graceChord:
             break
         }

@@ -44,6 +44,7 @@ extension LayoutEngine {
              let .marker(_, _, p),
              let .jump(_, p),
              let .measureRepeat(_, p),
+             let .multiMeasureRest(_, p),
              let .measureNumber(_, p),
              let .staffName(_, p),
              let .staffText(_, p, _, _),

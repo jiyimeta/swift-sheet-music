@@ -338,6 +338,10 @@ extension ScoreLayerBuilder {
                 base: base, metrics: metrics, height: height,
                 context: &context, into: parent
             )
+        case .multiMeasureRest:
+            // Drawn by MultiMeasureRestRenderer in Task 10/11. Stub for
+            // exhaustive switch; Task 11 replaces this with the real call.
+            break
         case .note:
             break
         }

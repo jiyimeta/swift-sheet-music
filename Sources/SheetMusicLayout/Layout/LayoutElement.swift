@@ -116,6 +116,16 @@ public enum LayoutElement: Sendable, Equatable {
     )
     case jump(text: String, origin: CGPoint)
     case measureRepeat(count: Int, origin: CGPoint)
+    /// Multi-measure rest H-bar with a count printed above. Replaces
+    /// the `count` consecutive rest measures starting at this layout
+    /// measure's `measureIndex`. Origin is the SMuFL anchor at the
+    /// horizontal center of the measure, vertically centered on the
+    /// middle staff line. The width payload is added in Task 11
+    /// once the renderer requirements are clearer.
+    case multiMeasureRest(
+        count: Int,
+        origin: CGPoint
+    )
     /// 1-based measure number drawn above a staff. Emitted for every
     /// staff at the first measure of every system in vertical / page
     /// modes so that readers can locate themselves after a system
