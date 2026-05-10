@@ -1,10 +1,18 @@
-// swiftlint:disable function_body_length file_length
+// swiftlint:disable function_body_length file_length closure_body_length
 import CoreGraphics
 import SheetMusicCore
 
 @available(macOS 15.0, iOS 16.0, *)
 extension LayoutEngine {
     // MARK: - System packing
+
+    /// Fixed width of a multi-measure-rest collapsed bar. v1 uses a
+    /// constant `~6 * sp` regardless of `count`; the count above the
+    /// bar conveys magnitude, and a `log(N)` taper can be layered on
+    /// later behind the same field without API churn.
+    static func collapsedRunWidth(staffSpace sp: CGFloat) -> CGFloat {
+        sp * 6
+    }
 
     static func packSystems(
         context: RenderContext
@@ -42,6 +50,16 @@ extension LayoutEngine {
         // (Per-staff `minimumMeasureWidth` undercounts when other
         // staves subdivide a long element — see
         // `crossStaffMinimumMeasureWidth`.)
+        let plan = context.multiMeasureRestPlan
+        func collapsedOverride(for i: Int, baseline: CGFloat) -> CGFloat {
+            if plan.runLength(startingAt: i) != nil {
+                return collapsedRunWidth(staffSpace: sp)
+            }
+            if plan.isInteriorOfRun(i) {
+                return 0
+            }
+            return baseline
+        }
         let minWidths: [CGFloat] = (0 ..< measureCount).map { i in
             let measuresAt = staves.map { staff in
                 i < staff.measures.count ? staff.measures[i] : nil
@@ -51,12 +69,25 @@ extension LayoutEngine {
                prior.division == division,
                prior.measures == measuresAt
             {
-                // Cache hit: copy the prior entry forward verbatim.
-                // `buildSystem` will trust its `placements` only
-                // when the per-staff inputs also match.
-                context.cache?.entries[i] = prior
+                // Cache hit: copy the prior entry forward, then apply
+                // the collapsed-run override so subsequent reads see
+                // the correct width directly from the cache.
+                let overridden = collapsedOverride(for: i, baseline: prior.minWidth)
+                if overridden != prior.minWidth {
+                    // Rebuild entry with the overridden width so
+                    // subsequent cache reads see the collapsed value.
+                    context.cache?.entries[i] = LayoutCache.Entry(
+                        measures: prior.measures,
+                        sp: prior.sp,
+                        division: prior.division,
+                        minWidth: overridden,
+                        placements: prior.placements
+                    )
+                } else {
+                    context.cache?.entries[i] = prior
+                }
                 context.cache?.widthHits += 1
-                return prior.minWidth
+                return overridden
             }
             context.cache?.widthMisses += 1
             let baseHeader = computeHeaderSchedule(
@@ -73,14 +104,15 @@ extension LayoutEngine {
                 headerSchedule: baseHeader,
                 division: division
             )
+            let overridden = collapsedOverride(for: i, baseline: w)
             context.cache?.entries[i] = LayoutCache.Entry(
                 measures: measuresAt,
                 sp: sp,
                 division: division,
-                minWidth: w,
+                minWidth: overridden,
                 placements: [:]
             )
-            return w
+            return overridden
         }
 
         // Clef state persists ACROSS systems: engraving convention
@@ -191,6 +223,15 @@ extension LayoutEngine {
             let naturalStretch: CGFloat = 1.5
             let naturalAvail = contentAvail / naturalStretch
             while cursor < measureCount {
+                // Multi-measure-rest interior indices contribute width 0 and emit
+                // nothing; the run-start at `cursor.lowerBound` already accounted
+                // for the collapsed width. Advance cursor past the interior in a
+                // single jump so layout-break inspection stays anchored on the
+                // run's start.
+                if context.multiMeasureRestPlan.isInteriorOfRun(cursor) {
+                    cursor += 1
+                    continue
+                }
                 let baseW = minWidths[cursor]
                 let w = cursor == systemStart
                     ? baseW + firstHeaderBoost
