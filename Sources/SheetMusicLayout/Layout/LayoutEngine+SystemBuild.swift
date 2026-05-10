@@ -549,7 +549,7 @@ extension LayoutEngine {
                 // bypass that path, so we add it here directly.
                 let bar = LayoutElement.barLine(
                     subtype: nil,
-                    origin: CGPoint(x: um.width, y: 0)
+                    origin: CGPoint(x: um.width, y: staffTopY)
                 )
                 let sourceMeasure = um.staff0Measure
                 layoutMeasures.append(LayoutMeasure(
