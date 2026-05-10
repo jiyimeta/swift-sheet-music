@@ -266,9 +266,10 @@ extension MidiRenderer {
             )
             localTick += chordTicks
         case .fermata:
-            // Fermatas are a display-only annotation in our current Score;
-            // they don't affect MIDI output (MuseScore performs them via
-            // tempomap stretching — not replicated here).
+            // Held-duration is realised by per-staff tempo bookends
+            // emitted in `MidiRenderer.renderTrack` from
+            // `FermataRanges`. The voice walk does not need to
+            // touch tempo or tick state here.
             break
         }
     }

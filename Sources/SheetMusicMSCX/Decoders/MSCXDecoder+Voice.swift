@@ -115,7 +115,8 @@ extension Voice {
                 try elements.append(.measureRepeat(MeasureRepeat.decode(child)))
             case "Fermata":
                 let subtype = child.first("subtype")?.text ?? ""
-                elements.append(.fermata(Fermata(subtype: subtype)))
+                let stretch: Double? = child.first("timeStretch").flatMap { Double($0.text) }
+                elements.append(.fermata(Fermata(subtype: subtype, timeStretch: stretch)))
             case "StaffText":
                 if Swing.isSwingMarker(child) {
                     elements.append(.swing(

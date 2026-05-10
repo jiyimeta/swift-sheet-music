@@ -153,6 +153,24 @@ extension LayoutEngine {
             var tickCursor = 0
             var inHeader = true
             var voiceChordOutIndex: [Int: Int] = [:]
+            // Tick of each emitted chord, keyed by its index in `out`.
+            // Populated alongside `voiceChordOutIndex` so the post-
+            // beaming fermata clearance pass can map a chord's actual
+            // (post-beam) stemOrigin.y back to the tick whose skyline
+            // the fermata used during its initial placement.
+            var chordTickByOutIndex: [Int: Int] = [:]
+            // Fermata anchors recorded during the main switch loop so
+            // the post-beaming pass can re-clear each fermata against
+            // the chord's actual (beam-driven) stem tip. The static
+            // `voiceChordNorthByTick` / `…SouthByTick` maps used at
+            // emission time only know about per-chord standalone stem
+            // extensions, not the longer (or shorter) stems produced
+            // by the beaming pass.
+            var fermataPostProcessAnchors: [(
+                outIndex: Int,
+                anchorTick: Int?,
+                isBelow: Bool
+            )] = []
             // Parallel mapping for rest members. Used by
             // `emitTupletLabel` so a rest in a tuplet still
             // contributes to the bracket's horizontal span.
@@ -256,6 +274,55 @@ extension LayoutEngine {
                 return map
             }()
 
+            // Per-tick north-skyline of chords in this voice — the
+            // visual highest Y (smallest value) of the chord's
+            // noteheads (and stem, for stem-up). Used to push fermata
+            // glyphs above the chord so the SMuFL glyph clears
+            // ledger-line noteheads, stem-up endpoints, flags, and
+            // beams. Mirrors MuseScore's autoplace, where a Fermata
+            // above the staff nudges its Y until it clears the
+            // chord's north skyline at the same segment.
+            let voiceChordNorthByTick: [Int: CGFloat] = {
+                var map: [Int: CGFloat] = [:]
+                var t = 0
+                for el in voice.elements {
+                    guard case let .chord(chord) = el else { continue }
+                    let ticks = chord.duration.ticks(division: division)
+                    defer { t += ticks }
+                    guard !chord.notes.isEmpty else { continue }
+                    let steps: [Int] = chord.notes.map { note in
+                        if let drumLine = drumLineMap?[note.pitch] {
+                            return 4 - drumLine
+                        }
+                        return PitchStaffPosition.step(
+                            midiPitch: note.pitch, tpc: note.tpc,
+                            clef: currentClef
+                        ).step
+                    }
+                    guard let highestStep = steps.max() else { continue }
+                    let highestNoteY = staffMidY
+                        - CGFloat(highestStep) * metrics.sp / 2
+                    var north = highestNoteY - metrics.sp * 0.5
+                    let stemDir = forcedStem
+                        ?? StemDirectionRule.direction(for: steps)
+                    // Stem-up on a high chord extends above the
+                    // highest notehead by `defaultStemLength`
+                    // measured from the LOWEST note's centre,
+                    // mirroring `StemRenderer`. A flag/beam adds
+                    // ~0.5 sp of further vertical extent which the
+                    // existing 0.5 sp buffer subsumes for v1.
+                    if stemDir == .up, let lowestStep = steps.min() {
+                        let lowestNoteY = staffMidY
+                            - CGFloat(lowestStep) * metrics.sp / 2
+                        let stemEnd = lowestNoteY
+                            - metrics.defaultStemLength
+                        north = min(north, stemEnd)
+                    }
+                    map[t] = min(map[t] ?? .infinity, north)
+                }
+                return map
+            }()
+
             // Final lyric centre Y for this voice — the max over
             // all chords' south-skyline-pushed Ys. Pre-computed
             // here (rather than ratcheted incrementally during
@@ -320,6 +387,11 @@ extension LayoutEngine {
                 tickColumns[tick]
                     ?? (headerSchedule.contentStartX + metrics.sp)
             }
+
+            // Tick where the most recently emitted chord BEGAN. Used
+            // by the fermata case to look up the north/south skyline
+            // when no following chord exists in the same voice.
+            var lastEmittedChordTick: Int?
 
             for (voiceElemIdx, el) in voice.elements.enumerated() {
                 switch el {
@@ -531,6 +603,7 @@ extension LayoutEngine {
                         ))
                     }
                     voiceChordOutIndex[voiceElemIdx] = out.count
+                    chordTickByOutIndex[out.count] = tickCursor
                     out.append(mainElement)
                     // Chord-level articulation glyphs (staccato / staccatissimo /
                     // tenuto). Round-trip-only `.unknown` kinds are filtered.
@@ -713,6 +786,7 @@ extension LayoutEngine {
                             )
                         }
                     }
+                    lastEmittedChordTick = tickCursor
                     tickCursor += chordTicks
                 case let .dynamic(d):
                     // Dynamics sit below-left of the note they apply to
@@ -813,19 +887,88 @@ extension LayoutEngine {
                         )
                     ))
                 case let .fermata(f):
-                    // Fermata attaches to the preceding chord/rest; emit at
-                    // the last placed timed x (or header cursor if still in
-                    // header, though that's unusual).
-                    let lastChordX = lastChordOrRestX(in: out)
+                    // Anchor to the chord/rest the fermata applies to.
+                    // Forward search first (canonical MusicXML order:
+                    // fermata before chord). Backward fallback handles
+                    // MSCX layouts where Fermata appears as a sibling
+                    // after Chord. Mirrors the MIDI anchor rule in
+                    // `FermataRanges.collect`.
+                    var lookaheadTick = tickCursor
+                    var forwardChordTick: Int?
+                    var forwardChordX: CGFloat?
+                    for j in (voiceElemIdx + 1) ..< voice.elements.count {
+                        let next = voice.elements[j]
+                        switch next {
+                        case .chord:
+                            forwardChordTick = lookaheadTick
+                            forwardChordX = timedX(atTick: lookaheadTick)
+                        case let .locationShift(delta):
+                            lookaheadTick += delta.ticks(division: division)
+                            continue
+                        default:
+                            continue
+                        }
+                        break
+                    }
+                    let anchorX = forwardChordX
+                        ?? lastChordOrRestX(in: out)
                         ?? (inHeader
                             ? headerSchedule.contentStartX
                             : timedX(atTick: tickCursor))
+                    // Y placement: subtype suffix selects which
+                    // skyline to clear. "Below" mirrors using south;
+                    // anything else (canonical "Above" / unspecified)
+                    // uses north. Default Y is 1 sp clear of the
+                    // staff; chord skyline + clearance wins when the
+                    // chord pokes into that space.
+                    //
+                    // Fermata SMuFL glyphs are drawn with anchor
+                    // .center via SwiftUI Text (see
+                    // GraphicsContext+Glyph.swift), which aligns the
+                    // font's TYPOGRAPHIC bbox (ascent + descent) to
+                    // origin.y — NOT the visible glyph. Bravura's
+                    // ascent/descent are highly asymmetric, so the
+                    // visible glyph sits ~1.4 sp BELOW origin.y in
+                    // screen coords (not centred on it). Use measured
+                    // offsets via `FermataGlyphMetrics` so the visible
+                    // glyph EDGE — not its typographic bbox — clears
+                    // the chord skyline by the visual gap.
+                    let anchorTick = forwardChordTick
+                        ?? lastEmittedChordTick
+                    let isBelow = f.subtype.hasSuffix("Below")
+                    let visualGap = metrics.sp * 0.5
+                    let anchorY: CGFloat
+                    if isBelow {
+                        let defaultY = staffMidY + metrics.sp * 3
+                        let chordSouth = anchorTick.flatMap {
+                            voiceChordSouthByTick[$0]
+                        } ?? -.infinity
+                        // glyph TOP in screen = origin.y + topOffset.
+                        // Want: origin.y + topOffset >= chordSouth + gap.
+                        let topOffset =
+                            FermataGlyphMetrics.below.topOffset * metrics.sp
+                        let needed = chordSouth + visualGap - topOffset
+                        anchorY = max(defaultY, needed)
+                    } else {
+                        let defaultY = staffMidY - metrics.sp * 3
+                        let chordNorth = anchorTick.flatMap {
+                            voiceChordNorthByTick[$0]
+                        } ?? .infinity
+                        // glyph BOTTOM in screen = origin.y + bottomOffset.
+                        // Want: origin.y + bottomOffset <= chordNorth - gap.
+                        let bottomOffset =
+                            FermataGlyphMetrics.above.bottomOffset * metrics.sp
+                        let needed = chordNorth - visualGap - bottomOffset
+                        anchorY = min(defaultY, needed)
+                    }
+                    fermataPostProcessAnchors.append((
+                        outIndex: out.count,
+                        anchorTick: anchorTick,
+                        isBelow: isBelow
+                    ))
                     out.append(.fermata(
                         subtype: f.subtype,
-                        origin: CGPoint(
-                            x: lastChordX,
-                            y: staffMidY - metrics.sp * 3
-                        )
+                        origin: CGPoint(x: anchorX, y: anchorY)
                     ))
                 case .measureRepeat:
                     out.append(.measureRepeat(
@@ -1097,6 +1240,76 @@ extension LayoutEngine {
                             direction: groupDirection,
                             metrics: metrics,
                             out: &out
+                        )
+                    }
+                }
+            }
+
+            // --- Fermata post-beam re-clearance ---
+            //
+            // The static `voiceChordNorthByTick` / `…SouthByTick`
+            // maps used during fermata emission compute each chord's
+            // skyline assuming a STANDALONE `defaultStemLength` stem.
+            // Beamed chords have a different stem length: the beam Y
+            // is set by the GROUP's most extreme anchor (capped by
+            // the slope table), so the per-chord stem reaches a
+            // beam-driven endpoint that may extend further than the
+            // standalone stem — particularly on the lower-anchor
+            // members of a stem-up group, or the higher-anchor
+            // members of a stem-down group. Recompute each fermata's
+            // Y here against the actual post-beam `stemOrigin.y`
+            // values now stored in `out`.
+            if !fermataPostProcessAnchors.isEmpty {
+                var actualStemTipByTick: [Int: CGFloat] = [:]
+                for (outIdx, outEl) in out.enumerated() {
+                    guard case let .chord(_, _, stemDir, stemOrigin, _, _, _, _) = outEl,
+                          let tick = chordTickByOutIndex[outIdx]
+                    else { continue }
+                    // Per `LayoutEngine+Extents.swift`, the beam pass
+                    // writes the BEAM-side stem endpoint into
+                    // `stemOrigin.y`: smallest Y for stem-up, largest
+                    // Y for stem-down. Combine across multi-voice
+                    // shared ticks by taking the more extreme value
+                    // in the relevant direction.
+                    if let prev = actualStemTipByTick[tick] {
+                        actualStemTipByTick[tick] = stemDir == .up
+                            ? min(prev, stemOrigin.y)
+                            : max(prev, stemOrigin.y)
+                    } else {
+                        actualStemTipByTick[tick] = stemOrigin.y
+                    }
+                }
+                let fermataDefaultAboveY = staffMidY - metrics.sp * 3
+                let fermataDefaultBelowY = staffMidY + metrics.sp * 3
+                let visualGap = metrics.sp * 0.5
+                for entry in fermataPostProcessAnchors {
+                    guard entry.outIndex < out.count,
+                          case let .fermata(subtype, oldOrigin) =
+                          out[entry.outIndex]
+                    else { continue }
+                    guard let tick = entry.anchorTick,
+                          let stemTip = actualStemTipByTick[tick]
+                    else { continue }
+                    let newY: CGFloat
+                    if entry.isBelow {
+                        // glyph TOP = origin.y + topOffset.
+                        // Want origin.y + topOffset >= stemTip + gap.
+                        let topOffset = FermataGlyphMetrics.below.topOffset
+                            * metrics.sp
+                        let needed = stemTip + visualGap - topOffset
+                        newY = max(fermataDefaultBelowY, max(oldOrigin.y, needed))
+                    } else {
+                        // glyph BOTTOM = origin.y + bottomOffset.
+                        // Want origin.y + bottomOffset <= stemTip - gap.
+                        let bottomOffset = FermataGlyphMetrics.above.bottomOffset
+                            * metrics.sp
+                        let needed = stemTip - visualGap - bottomOffset
+                        newY = min(fermataDefaultAboveY, min(oldOrigin.y, needed))
+                    }
+                    if newY != oldOrigin.y {
+                        out[entry.outIndex] = .fermata(
+                            subtype: subtype,
+                            origin: CGPoint(x: oldOrigin.x, y: newY)
                         )
                     }
                 }
