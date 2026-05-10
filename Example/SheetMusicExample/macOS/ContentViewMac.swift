@@ -205,6 +205,9 @@
             .onAppear(perform: loadBundled)
             .onAppear(perform: installKeyMonitor)
             .onDisappear(perform: removeKeyMonitor)
+            .onChange(of: collapseMultiMeasureRests) { _, _ in
+                rebuildLayoutsForOptionsChange()
+            }
             .toolbar {
                 ToolbarItem(placement: .navigation) {
                     Label(
@@ -2387,7 +2390,10 @@
                     score: score,
                     options: ScoreViewOptions(
                         staffSize: 18, systemGap: 16,
-                        wrapToViewWidth: true
+                        wrapToViewWidth: true,
+                        multiMeasureRest: collapseMultiMeasureRests
+                            ? .collapse(minimumMeasures: 2)
+                            : .disabled
                     ),
                     pageIndex: $pageIndex,
                     totalPages: $totalPages
@@ -2637,6 +2643,26 @@
 
         /// Adopt a score edited via `inputController`.
         ///
+        /// Re-layout when a runtime `ScoreViewOptions` toggle (currently
+        /// just `collapseMultiMeasureRests`) changes without a score reload.
+        /// The vertical doc rebuilds via its `.task(id:)` once `scoreVersion`
+        /// advances; the horizontal doc must be rebuilt directly here,
+        /// matching the logic in `adoptEditedScore`.
+        private func rebuildLayoutsForOptionsChange() {
+            guard let score else { return }
+            let hOpts = horizontalOptions
+            let availableWidth = horizontalDoc?.size.width
+                ?? LayoutEngine.naturalContentWidth(
+                    score: score, options: hOpts
+                )
+            horizontalDoc = LayoutEngine.layout(
+                score: score, options: hOpts,
+                availableWidth: availableWidth,
+                cache: layoutCache
+            )
+            scoreVersion = UUID()
+        }
+
         /// Optimised vs `adoptLoadedScore` to keep keystrokes responsive
         /// on large scores (`test.mscx` is ~1356 measures):
         ///   * `horizontalContexts` is NOT recomputed — a single-note
