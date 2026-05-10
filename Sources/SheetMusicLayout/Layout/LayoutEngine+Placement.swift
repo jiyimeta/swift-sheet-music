@@ -813,17 +813,36 @@ extension LayoutEngine {
                         )
                     ))
                 case let .fermata(f):
-                    // Fermata attaches to the preceding chord/rest; emit at
-                    // the last placed timed x (or header cursor if still in
-                    // header, though that's unusual).
-                    let lastChordX = lastChordOrRestX(in: out)
+                    // Anchor to the chord/rest the fermata applies to.
+                    // Forward search first (canonical MusicXML order:
+                    // fermata before chord). Backward fallback handles
+                    // MSCX layouts where Fermata appears as a sibling
+                    // after Chord. Mirrors the MIDI anchor rule in
+                    // `FermataRanges.collect`.
+                    var lookaheadTick = tickCursor
+                    var nextChordX: CGFloat?
+                    for j in (voiceElemIdx + 1) ..< voice.elements.count {
+                        let next = voice.elements[j]
+                        switch next {
+                        case .chord:
+                            nextChordX = timedX(atTick: lookaheadTick)
+                        case let .locationShift(delta):
+                            lookaheadTick += delta.ticks(division: division)
+                            continue
+                        default:
+                            continue
+                        }
+                        break
+                    }
+                    let anchorX = nextChordX
+                        ?? lastChordOrRestX(in: out)
                         ?? (inHeader
                             ? headerSchedule.contentStartX
                             : timedX(atTick: tickCursor))
                     out.append(.fermata(
                         subtype: f.subtype,
                         origin: CGPoint(
-                            x: lastChordX,
+                            x: anchorX,
                             y: staffMidY - metrics.sp * 3
                         )
                     ))
