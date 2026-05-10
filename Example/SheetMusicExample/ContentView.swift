@@ -371,6 +371,10 @@
                 // hit target for future editing affordances. Clear
                 // selection so the tap reads as "deselect."
                 selection = .none
+            case .clef:
+                // Clef tap → no popover on iOS in this milestone
+                // (popover is macOS-only). Treat as a deselect.
+                selection = .none
             }
         }
 
