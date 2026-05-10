@@ -81,13 +81,39 @@ public enum MidiRenderer {
         // so they sort after same-tick `.tempo`. The renderer's
         // stable sort below realises the documented close → .tempo
         // → open ordering at boundary ticks.
+        //
+        // Bookends are collected at original (pre-repeat) ticks; we
+        // project them through `playbackPlan` so each repeat
+        // iteration re-fires its own pair. Without this projection a
+        // fermata inside `<startRepeat>...<endRepeat>` would hold
+        // only on the first take.
         let fermataRanges = FermataRanges.collect(from: staff, division: division)
         let timeline = TempoTimeline.build(from: staff, division: division)
         let bookends = FermataRanges.tempoEvents(
             ranges: fermataRanges, timeline: timeline
         )
+        let plan = playbackPlan(for: staff.measures, division: division)
+        var measureBases: [Int] = []
+        var measureSpans: [Int] = []
+        do {
+            var acc = 0
+            for m in staff.measures {
+                measureBases.append(acc)
+                let span = measureTicks(measure: m, division: division)
+                measureSpans.append(span)
+                acc += span
+            }
+        }
+        let projectedClose = projectBookends(
+            bookends.closeEvents, plan: plan,
+            measureBases: measureBases, measureSpans: measureSpans
+        )
+        let projectedOpen = projectBookends(
+            bookends.openEvents, plan: plan,
+            measureBases: measureBases, measureSpans: measureSpans
+        )
 
-        events.append(contentsOf: bookends.closeEvents)
+        events.append(contentsOf: projectedClose)
 
         var voiceEventBuckets: [[TimedMidiEvent]] = []
         let voiceCount = staff.measures.map(\.voices.count).max() ?? 0
@@ -106,7 +132,7 @@ public enum MidiRenderer {
         let merged = resolveUnisonOverlap(voiceEventBuckets.flatMap { $0 })
         events.append(contentsOf: merged)
 
-        events.append(contentsOf: bookends.openEvents)
+        events.append(contentsOf: projectedOpen)
 
         // EoT lands one tick after the last produced event (MuseScore convention):
         // for note-bearing tracks this is final-noteOff + 1; for empty tracks it's 1.
@@ -120,5 +146,63 @@ public enum MidiRenderer {
             .map(\.element)
 
         return MidiTrack(events: sorted)
+    }
+
+    /// Project a list of bookend events (originally collected at
+    /// pre-repeat ticks) through the unrolled `playbackPlan`. For
+    /// every plan entry whose `measureIndex` matches the event's
+    /// owning measure, a copy is emitted at the playback tick
+    /// `entry.tickOffset + (event.tick - measureBases[mi])`.
+    ///
+    /// Close events sit on the boundary between measures; an event
+    /// at `measureBases[mi] + measureSpans[mi]` is attributed to
+    /// measure `mi` (the bar that just ended) rather than `mi + 1`.
+    /// This matches how a fermata's anchor chord ends the bar it
+    /// lives in.
+    private static func projectBookends(
+        _ bookends: [TimedMidiEvent],
+        plan: [PlaybackEntry],
+        measureBases: [Int],
+        measureSpans: [Int]
+    ) -> [TimedMidiEvent] {
+        guard !bookends.isEmpty, !plan.isEmpty else { return [] }
+        var out: [TimedMidiEvent] = []
+        for event in bookends {
+            guard let mi = ownerMeasureIndex(
+                forTick: event.tick,
+                measureBases: measureBases,
+                measureSpans: measureSpans
+            ) else { continue }
+            let offsetWithinMeasure = event.tick - measureBases[mi]
+            for entry in plan where entry.measureIndex == mi {
+                out.append(TimedMidiEvent(
+                    tick: entry.tickOffset + offsetWithinMeasure,
+                    event: event.event
+                ))
+            }
+        }
+        return out
+    }
+
+    /// Half-open lookup `[base, base + span)` with one tweak: a tick
+    /// sitting exactly on the closing boundary belongs to the
+    /// measure that just ended (so close bookends at endTick stay
+    /// with their anchor chord's bar).
+    private static func ownerMeasureIndex(
+        forTick tick: Int,
+        measureBases: [Int],
+        measureSpans: [Int]
+    ) -> Int? {
+        for i in 0 ..< measureBases.count {
+            let base = measureBases[i]
+            let end = base + measureSpans[i]
+            if tick >= base && tick < end {
+                return i
+            }
+            if tick == end {
+                return i
+            }
+        }
+        return nil
     }
 }

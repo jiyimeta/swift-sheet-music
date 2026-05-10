@@ -168,6 +168,49 @@ private func == (lhs: [(Int, Int)], rhs: [(Int, Int)]) -> Bool {
         ])
     }
 
+    // 8. Fermata inside a repeat fires on every iteration.
+    @Test func fermataInsideRepeatFiresPerIteration() throws {
+        // One measure with startRepeat + endRepeatCount=2, a fermata on
+        // the only quarter note. Plays twice. Expect two pairs of
+        // tempo bookends (one per iteration), not just one.
+        let measure = Measure(
+            voices: [Voice(elements: [
+                fermata("fermataAbove"),
+                chord(60),
+            ])],
+            startRepeat: true,
+            endRepeatCount: 2
+        )
+        let staff = Staff(measures: [measure])
+        let part = Part(
+            id: "P1",
+            instrument: Instrument(
+                id: "voice",
+                articulations: [InstrumentArticulation()]
+            ),
+            staves: [staff]
+        )
+        let score = Score(division: 480, parts: [part])
+        let file = try MidiRenderer.render(score: score)
+        let tempos = tempoEvents(file)
+        // Iteration 1 ticks: [0, 480). Iteration 2 ticks: [480, 960).
+        // Header tempo at 0 (120). Open bookend at 0 (80). Close at 480.
+        // Iteration 2 reset: timeSig+tempo re-emitted at 480 by
+        // `isFreshSectionStart` IF measureIndex == 0 — which it is.
+        // So at tick 480 we expect: close from iter1 (80→120), then
+        // iter2's reset tempo 120, then iter2's open bookend (120→80).
+        // At tick 960 we expect close from iter2.
+        // Verify the *count* of fermata bookends (open+close pairs):
+        // 2 opens at ticks 0 and 480, 2 closes at ticks 480 and 960.
+        let opens = tempos.filter { $0.1 == micros(80) }
+        let closes = tempos.filter { $0.1 == micros(120) }
+        #expect(opens.count == 2, "expected 2 open bookends, got tempos=\(tempos)")
+        #expect(
+            closes.filter { $0.0 == 480 || $0.0 == 960 }.count >= 2,
+            "expected close bookends at 480 and 960, got tempos=\(tempos)"
+        )
+    }
+
     // 7. End-boundary co-location: .tempo lands at fermata's endTick.
     @Test func endBoundaryTempoChangeWins() throws {
         // Fermata covers [0, 480). At tick 480 a .tempo(3.0 bps = 180 BPM)
