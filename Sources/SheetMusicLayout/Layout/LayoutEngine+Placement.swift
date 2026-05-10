@@ -59,6 +59,7 @@ extension LayoutEngine {
         division: Int,
         drumLineMap: [Int: Int]? = nil,
         isLastMeasure: Bool = false,
+        isFirstSystem: Bool = false,
         incomingMelismas: [MelismaContinuation] = [],
         effectiveMelismaTicks: [MelismaLyricKey: Int] = [:],
         coversBelowStaffSpanner: Bool = false
@@ -357,11 +358,15 @@ extension LayoutEngine {
             // Emit the synthesized leading clef exactly once, at the top
             // of the first voice to process it.
             if remainingSynthClef, let rawType = initialClefRawType {
+                let synthAnchor: ClefAnchor? = isFirstSystem
+                    ? .staffDefault(staffAddress)
+                    : nil
                 out.append(.clef(
                     rawType: rawType,
                     origin: CGPoint(
                         x: headerSchedule.clefX, y: staffMidY
-                    )
+                    ),
+                    anchor: synthAnchor
                 ))
                 remainingSynthClef = false
             }
@@ -399,9 +404,16 @@ extension LayoutEngine {
                     currentClef = NotatedClef(rawType: clef.concertClefType)
                     let clefX = inHeader ? headerSchedule.clefX
                         : timedX(atTick: tickCursor)
+                    let veID = VoiceElementID(
+                        staff: staffAddress,
+                        measureIndex: measureIndex,
+                        voiceIndex: voiceIdx,
+                        elementIndex: voiceElemIdx
+                    )
                     out.append(.clef(
                         rawType: clef.concertClefType,
-                        origin: CGPoint(x: clefX, y: staffMidY)
+                        origin: CGPoint(x: clefX, y: staffMidY),
+                        anchor: .explicit(veID)
                     ))
                 case let .keySignature(key):
                     currentKey = key.concertKey

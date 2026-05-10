@@ -25,7 +25,7 @@ extension ScoreLayerBuilder {
             CGPoint(x: base.x + p.x, y: base.y + p.y)
         }
         switch element {
-        case let .clef(raw, p):
+        case let .clef(raw, p, _):
             drawClef(
                 rawType: raw, origin: shift(p),
                 metrics: metrics, height: height, into: parent

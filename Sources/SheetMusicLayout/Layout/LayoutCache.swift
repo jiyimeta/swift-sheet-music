@@ -126,6 +126,7 @@ public final class LayoutCache: @unchecked Sendable {
         let division: Int
         let drumLineMap: [Int: Int]?
         let isLastMeasure: Bool
+        let isFirstSystem: Bool
         let incomingMelismas: [MelismaContinuation]
         let effectiveMelismaTicks: [MelismaLyricKey: Int]
         let graceNoteMag: CGFloat

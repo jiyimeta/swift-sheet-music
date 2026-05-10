@@ -13,8 +13,8 @@ extension LayoutEngine {
             CGPoint(x: p.x, y: p.y + dy)
         }
         switch element {
-        case let .clef(t, p):
-            return .clef(rawType: t, origin: shift(p))
+        case let .clef(t, p, anchor):
+            return .clef(rawType: t, origin: shift(p), anchor: anchor)
         case let .keySignature(s, f, p):
             return .keySignature(sharps: s, flats: f, origin: shift(p))
         case let .timeSignature(n, d, p):

@@ -246,7 +246,8 @@ extension LayoutEngine {
             if staffIdx < context.clefRawTypes.count {
                 elements.append(.clef(
                     rawType: context.clefRawTypes[staffIdx],
-                    origin: CGPoint(x: clefX, y: staffMidY)
+                    origin: CGPoint(x: clefX, y: staffMidY),
+                    anchor: nil
                 ))
             }
             if staffIdx < context.keySignatures.count, keyAbs > 0 {

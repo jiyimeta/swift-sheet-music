@@ -12,7 +12,7 @@ public enum StemDirection: Sendable, Equatable { case up, down }
 /// line) corresponds to a y equal to `staffHeight / 2` within the measure.
 @available(macOS 15.0, iOS 16.0, *)
 public enum LayoutElement: Sendable, Equatable {
-    case clef(rawType: String, origin: CGPoint)
+    case clef(rawType: String, origin: CGPoint, anchor: ClefAnchor?)
     case keySignature(sharps: Int, flats: Int, origin: CGPoint)
     case timeSignature(numerator: Int, denominator: Int, origin: CGPoint)
     case barLine(subtype: String?, origin: CGPoint)

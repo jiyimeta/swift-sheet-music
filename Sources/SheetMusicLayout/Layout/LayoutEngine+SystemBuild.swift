@@ -169,6 +169,7 @@ extension LayoutEngine {
                     division: context.score.division,
                     drumLineMap: drumMap,
                     isLastMeasure: lastMeasure,
+                    isFirstSystem: isFirstSystem,
                     incomingMelismas: incomingMelismas,
                     effectiveMelismaTicks: context.effectiveMelismaTicks,
                     graceNoteMag: context.options.graceNoteMag,
@@ -202,6 +203,7 @@ extension LayoutEngine {
                         division: context.score.division,
                         drumLineMap: drumMap,
                         isLastMeasure: lastMeasure,
+                        isFirstSystem: isFirstSystem,
                         incomingMelismas: incomingMelismas,
                         effectiveMelismaTicks: context.effectiveMelismaTicks,
                         coversBelowStaffSpanner: coversBelowStaffSpanner
