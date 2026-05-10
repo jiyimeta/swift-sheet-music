@@ -904,32 +904,43 @@ extension LayoutEngine {
                     // chord pokes into that space.
                     //
                     // Fermata SMuFL glyphs are drawn with anchor
-                    // .center (see GraphicsContext+Glyph.swift), so
-                    // the glyph extends ~1.25 sp on either side of
-                    // origin.y for Bravura `fermataAbove` /
-                    // `fermataBelow` at staff size = 4 sp. Clearance
-                    // must therefore include the glyph half-height
-                    // plus a 0.5 sp visual gap so the glyph EDGE —
-                    // not its centre — clears the skyline.
+                    // .center via SwiftUI Text (see
+                    // GraphicsContext+Glyph.swift), which aligns the
+                    // font's TYPOGRAPHIC bbox (ascent + descent) to
+                    // origin.y — NOT the visible glyph. Bravura's
+                    // ascent/descent are highly asymmetric, so the
+                    // visible glyph sits ~1.4 sp BELOW origin.y in
+                    // screen coords (not centred on it). Use measured
+                    // offsets via `FermataGlyphMetrics` so the visible
+                    // glyph EDGE — not its typographic bbox — clears
+                    // the chord skyline by the visual gap.
                     let anchorTick = forwardChordTick
                         ?? lastEmittedChordTick
                     let isBelow = f.subtype.hasSuffix("Below")
-                    let glyphHalfHeight = metrics.sp * 1.25
                     let visualGap = metrics.sp * 0.5
-                    let clearance = glyphHalfHeight + visualGap
                     let anchorY: CGFloat
                     if isBelow {
                         let defaultY = staffMidY + metrics.sp * 3
                         let chordSouth = anchorTick.flatMap {
                             voiceChordSouthByTick[$0]
                         } ?? -.infinity
-                        anchorY = max(defaultY, chordSouth + clearance)
+                        // glyph TOP in screen = origin.y + topOffset.
+                        // Want: origin.y + topOffset >= chordSouth + gap.
+                        let topOffset =
+                            FermataGlyphMetrics.below.topOffset * metrics.sp
+                        let needed = chordSouth + visualGap - topOffset
+                        anchorY = max(defaultY, needed)
                     } else {
                         let defaultY = staffMidY - metrics.sp * 3
                         let chordNorth = anchorTick.flatMap {
                             voiceChordNorthByTick[$0]
                         } ?? .infinity
-                        anchorY = min(defaultY, chordNorth - clearance)
+                        // glyph BOTTOM in screen = origin.y + bottomOffset.
+                        // Want: origin.y + bottomOffset <= chordNorth - gap.
+                        let bottomOffset =
+                            FermataGlyphMetrics.above.bottomOffset * metrics.sp
+                        let needed = chordNorth - visualGap - bottomOffset
+                        anchorY = min(defaultY, needed)
                     }
                     out.append(.fermata(
                         subtype: f.subtype,

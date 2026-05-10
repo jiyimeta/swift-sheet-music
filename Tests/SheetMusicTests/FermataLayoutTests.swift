@@ -224,9 +224,11 @@ struct FermataLayoutTests {
             Self.fermataAndChordExtents(doc)
         )
         let sp: CGFloat = 28.0 / 4 // staffSize=28
-        // Glyph anchor is .center; bottom of glyph ≈ origin.y + 1.25 sp.
-        // Require glyph BOTTOM to clear the highest notehead by ≥ 0.5 sp.
-        let glyphBottom = fermata.y + sp * 1.25
+        // Glyph anchor is .center but Bravura's typographic bbox is
+        // asymmetric — use the runtime-measured bottom offset so the
+        // assertion matches the actual screen geometry.
+        let glyphBottom = fermata.y
+            + FermataGlyphMetrics.above.bottomOffset * sp
         #expect(
             glyphBottom <= chordTopY - sp * 0.5,
             "fermata glyph bottom \(glyphBottom) must clear notehead top \(chordTopY) by ≥ 0.5 sp"
@@ -241,8 +243,10 @@ struct FermataLayoutTests {
             Self.fermataAndChordExtents(doc)
         )
         let sp: CGFloat = 28.0 / 4 // staffSize=28
-        // Glyph anchor is .center; top of glyph ≈ origin.y - 1.25 sp.
-        let glyphTop = fermata.y - sp * 1.25
+        // Use runtime-measured top offset for the same reason as
+        // above: typographic bbox is asymmetric.
+        let glyphTop = fermata.y
+            + FermataGlyphMetrics.below.topOffset * sp
         #expect(
             glyphTop >= chordBottomY + sp * 0.5,
             "fermata glyph top \(glyphTop) must clear notehead bottom \(chordBottomY) by ≥ 0.5 sp"
@@ -305,7 +309,7 @@ struct FermataLayoutTests {
         let sp: CGFloat = 28.0 / 4
         let f = try #require(fermataY)
         let stemTop = try #require(stemTopY)
-        let glyphBottom = f + sp * 1.25
+        let glyphBottom = f + FermataGlyphMetrics.above.bottomOffset * sp
         #expect(
             glyphBottom <= stemTop - sp * 0.5,
             "fermata glyph bottom \(glyphBottom) must clear stem top \(stemTop) by ≥ 0.5 sp"
