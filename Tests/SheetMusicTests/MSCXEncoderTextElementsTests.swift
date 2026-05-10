@@ -18,6 +18,12 @@ struct MSCXEncoderTextElementsTests {
         return try Voice.decode(#require(reparsed.first("voice")))
     }
 
+    private func voiceRoundTripXMLString(_ voice: Voice) throws -> String {
+        let xml = try voice.encode()
+        let bytes = XMLTreeSerializer.serialize(XMLTreeNode(name: "root", children: [xml]))
+        return String(bytes: bytes, encoding: .utf8) ?? ""
+    }
+
     @Test("Tempo with default TextProperties round-trips")
     func tempoDefaultRoundTrip() throws {
         let voice = Voice(elements: [
@@ -136,15 +142,31 @@ struct MSCXEncoderTextElementsTests {
         }
     }
 
-    @Test("Fermata round-trips subtype")
+    @Test("Fermata round-trips subtype and explicit timeStretch")
     func fermataRoundTrip() throws {
-        for subtype in ["fermataAbove", "fermataBelow", "fermataLongAbove"] {
+        // (subtype, explicit timeStretch or nil → use default,
+        //  expectedXMLContainsTimeStretch)
+        let cases: [(String, Double?, Bool)] = [
+            ("fermataAbove", nil, false), // default 1.5 → omit
+            ("fermataLongAbove", nil, false), // default 2.0 → omit
+            ("fermataAbove", 2.5, true), // override → emit
+            ("fermataLongAbove", 2.0, false), // matches default → omit
+            ("fermataAbove", 1.0, true), // override to 1.0 → emit
+        ]
+        for (subtype, stretch, expectXML) in cases {
             let voice = Voice(elements: [
-                .chord(Chord(duration: .quarter, notes: ChordNotes([Note(pitch: 60, tpc: 14)]))),
-                .fermata(Fermata(subtype: subtype)),
+                .chord(Chord(
+                    duration: .quarter,
+                    notes: ChordNotes([Note(pitch: 60, tpc: 14)])
+                )),
+                .fermata(Fermata(subtype: subtype, timeStretch: stretch)),
             ])
+            let encoded = try voiceRoundTripXMLString(voice)
+            let hasTimeStretch = encoded.contains("<timeStretch>")
+            let tag = "subtype=\(subtype) stretch=\(String(describing: stretch))"
+            #expect(hasTimeStretch == expectXML, "\(tag) expectedTimeStretchEmitted=\(expectXML)")
             let decoded = try voiceRoundTrip(voice)
-            #expect(decoded == voice, "fermata subtype \(subtype) failed")
+            #expect(decoded == voice, "\(tag) failed round-trip")
         }
     }
 
