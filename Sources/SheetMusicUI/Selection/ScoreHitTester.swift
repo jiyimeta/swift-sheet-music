@@ -452,8 +452,14 @@ public struct ScoreHitTester: Sendable {
             sp
         case .bass, .bass8va, .bass8vb:
             -sp
-        case .alto, .tenor, .percussion:
+        case .soprano:
+            2 * sp
+        case .alto, .percussion:
             0
+        case .tenor:
+            -sp
+        case .baritone:
+            -2 * sp
         }
     }
 

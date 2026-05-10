@@ -37,9 +37,18 @@ enum ClefRenderer {
         case .bass8vb:
             glyph = SMuFLGlyph.fClef8vb
             yOffset = -metrics.sp
-        case .alto, .tenor:
+        case .soprano:
+            glyph = SMuFLGlyph.cClef
+            yOffset = 2 * metrics.sp
+        case .alto:
             glyph = SMuFLGlyph.cClef
             yOffset = 0
+        case .tenor:
+            glyph = SMuFLGlyph.cClef
+            yOffset = -metrics.sp
+        case .baritone:
+            glyph = SMuFLGlyph.cClef
+            yOffset = -2 * metrics.sp
         case .percussion:
             glyph = SMuFLGlyph.percussionClef
             yOffset = 0
