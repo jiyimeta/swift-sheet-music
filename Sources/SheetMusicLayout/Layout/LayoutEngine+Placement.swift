@@ -153,6 +153,24 @@ extension LayoutEngine {
             var tickCursor = 0
             var inHeader = true
             var voiceChordOutIndex: [Int: Int] = [:]
+            // Tick of each emitted chord, keyed by its index in `out`.
+            // Populated alongside `voiceChordOutIndex` so the post-
+            // beaming fermata clearance pass can map a chord's actual
+            // (post-beam) stemOrigin.y back to the tick whose skyline
+            // the fermata used during its initial placement.
+            var chordTickByOutIndex: [Int: Int] = [:]
+            // Fermata anchors recorded during the main switch loop so
+            // the post-beaming pass can re-clear each fermata against
+            // the chord's actual (beam-driven) stem tip. The static
+            // `voiceChordNorthByTick` / `…SouthByTick` maps used at
+            // emission time only know about per-chord standalone stem
+            // extensions, not the longer (or shorter) stems produced
+            // by the beaming pass.
+            var fermataPostProcessAnchors: [(
+                outIndex: Int,
+                anchorTick: Int?,
+                isBelow: Bool
+            )] = []
             // Parallel mapping for rest members. Used by
             // `emitTupletLabel` so a rest in a tuplet still
             // contributes to the bracket's horizontal span.
@@ -585,6 +603,7 @@ extension LayoutEngine {
                         ))
                     }
                     voiceChordOutIndex[voiceElemIdx] = out.count
+                    chordTickByOutIndex[out.count] = tickCursor
                     out.append(mainElement)
                     // Chord-level articulation glyphs (staccato / staccatissimo /
                     // tenuto). Round-trip-only `.unknown` kinds are filtered.
@@ -942,6 +961,11 @@ extension LayoutEngine {
                         let needed = chordNorth - visualGap - bottomOffset
                         anchorY = min(defaultY, needed)
                     }
+                    fermataPostProcessAnchors.append((
+                        outIndex: out.count,
+                        anchorTick: anchorTick,
+                        isBelow: isBelow
+                    ))
                     out.append(.fermata(
                         subtype: f.subtype,
                         origin: CGPoint(x: anchorX, y: anchorY)
@@ -1216,6 +1240,76 @@ extension LayoutEngine {
                             direction: groupDirection,
                             metrics: metrics,
                             out: &out
+                        )
+                    }
+                }
+            }
+
+            // --- Fermata post-beam re-clearance ---
+            //
+            // The static `voiceChordNorthByTick` / `…SouthByTick`
+            // maps used during fermata emission compute each chord's
+            // skyline assuming a STANDALONE `defaultStemLength` stem.
+            // Beamed chords have a different stem length: the beam Y
+            // is set by the GROUP's most extreme anchor (capped by
+            // the slope table), so the per-chord stem reaches a
+            // beam-driven endpoint that may extend further than the
+            // standalone stem — particularly on the lower-anchor
+            // members of a stem-up group, or the higher-anchor
+            // members of a stem-down group. Recompute each fermata's
+            // Y here against the actual post-beam `stemOrigin.y`
+            // values now stored in `out`.
+            if !fermataPostProcessAnchors.isEmpty {
+                var actualStemTipByTick: [Int: CGFloat] = [:]
+                for (outIdx, outEl) in out.enumerated() {
+                    guard case let .chord(_, _, stemDir, stemOrigin, _, _, _, _) = outEl,
+                          let tick = chordTickByOutIndex[outIdx]
+                    else { continue }
+                    // Per `LayoutEngine+Extents.swift`, the beam pass
+                    // writes the BEAM-side stem endpoint into
+                    // `stemOrigin.y`: smallest Y for stem-up, largest
+                    // Y for stem-down. Combine across multi-voice
+                    // shared ticks by taking the more extreme value
+                    // in the relevant direction.
+                    if let prev = actualStemTipByTick[tick] {
+                        actualStemTipByTick[tick] = stemDir == .up
+                            ? min(prev, stemOrigin.y)
+                            : max(prev, stemOrigin.y)
+                    } else {
+                        actualStemTipByTick[tick] = stemOrigin.y
+                    }
+                }
+                let fermataDefaultAboveY = staffMidY - metrics.sp * 3
+                let fermataDefaultBelowY = staffMidY + metrics.sp * 3
+                let visualGap = metrics.sp * 0.5
+                for entry in fermataPostProcessAnchors {
+                    guard entry.outIndex < out.count,
+                          case let .fermata(subtype, oldOrigin) =
+                          out[entry.outIndex]
+                    else { continue }
+                    guard let tick = entry.anchorTick,
+                          let stemTip = actualStemTipByTick[tick]
+                    else { continue }
+                    let newY: CGFloat
+                    if entry.isBelow {
+                        // glyph TOP = origin.y + topOffset.
+                        // Want origin.y + topOffset >= stemTip + gap.
+                        let topOffset = FermataGlyphMetrics.below.topOffset
+                            * metrics.sp
+                        let needed = stemTip + visualGap - topOffset
+                        newY = max(fermataDefaultBelowY, max(oldOrigin.y, needed))
+                    } else {
+                        // glyph BOTTOM = origin.y + bottomOffset.
+                        // Want origin.y + bottomOffset <= stemTip - gap.
+                        let bottomOffset = FermataGlyphMetrics.above.bottomOffset
+                            * metrics.sp
+                        let needed = stemTip - visualGap - bottomOffset
+                        newY = min(fermataDefaultAboveY, min(oldOrigin.y, needed))
+                    }
+                    if newY != oldOrigin.y {
+                        out[entry.outIndex] = .fermata(
+                            subtype: subtype,
+                            origin: CGPoint(x: oldOrigin.x, y: newY)
                         )
                     }
                 }

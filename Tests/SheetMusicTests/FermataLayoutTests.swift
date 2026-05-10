@@ -280,6 +280,76 @@ struct FermataLayoutTests {
         )
     }
 
+    /// Two beamed 8ths: A3 (step -5) and B4 (step 0). Both at-or-
+    /// below the middle staff line so the group's stem direction is
+    /// UP. The interval (5 steps) exceeds the per-beam slope cap, so
+    /// the beam slope is shorter than the anchor difference — the A3
+    /// stem must therefore extend much higher than its STANDALONE
+    /// `defaultStemLength` would put it (the beam Y at A3's stem-X is
+    /// pulled up by the cap). A fermata anchored to A3 must clear
+    /// the post-beam stem top, not just A3's standalone extension.
+    private static func fermataOnBeamedHighChordScore() -> Score {
+        let a3 = Chord(
+            duration: .eighth,
+            notes: ChordNotes([Note(pitch: 57, tpc: 17)])
+        )
+        let b4 = Chord(
+            duration: .eighth,
+            notes: ChordNotes([Note(pitch: 71, tpc: 18)])
+        )
+        let fermata = Fermata(subtype: "fermataAbove")
+        let voice = Voice(elements: [
+            .fermata(fermata),
+            .chord(a3),
+            .chord(b4),
+        ])
+        let measure = Measure(voices: [voice])
+        let staff = Staff(measures: [measure])
+        return Score(
+            division: 480,
+            parts: [Part(
+                id: "1",
+                instrument: Instrument(id: "x"),
+                staves: [staff]
+            )]
+        )
+    }
+
+    @Test("fermataAbove clears beam-extended stem on first member")
+    func aboveClearsBeamedStem() throws {
+        guard #available(macOS 15.0, iOS 16.0, *) else { return }
+        let doc = Self.laidOut(Self.fermataOnBeamedHighChordScore())
+        guard let measure = doc.systems.first?.measures.first
+        else { Issue.record("no measure"); return }
+        var fermataY: CGFloat?
+        var firstChordStemTopY: CGFloat?
+        var firstChordSeen = false
+        for el in measure.elements {
+            switch el {
+            case let .fermata(_, origin):
+                fermataY = origin.y
+            case let .chord(_, _, stem, stemOrigin, _, _, _, _):
+                // First chord emitted is B4. For stem-up, post-beam
+                // pass writes the beam Y into stemOrigin.y.
+                if !firstChordSeen {
+                    firstChordSeen = true
+                    if stem == .up {
+                        firstChordStemTopY = stemOrigin.y
+                    }
+                }
+            default: break
+            }
+        }
+        let sp: CGFloat = 28.0 / 4
+        let f = try #require(fermataY)
+        let stemTop = try #require(firstChordStemTopY)
+        let glyphBottom = f + FermataGlyphMetrics.above.bottomOffset * sp
+        #expect(
+            glyphBottom <= stemTop - sp * 0.5,
+            "fermata glyph bottom \(glyphBottom) must clear post-beam stem top \(stemTop) by >= 0.5 sp"
+        )
+    }
+
     @Test("fermataAbove clears stem-up endpoint")
     func aboveClearsStemUp() throws {
         guard #available(macOS 15.0, iOS 16.0, *) else { return }
