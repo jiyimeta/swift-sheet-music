@@ -13,7 +13,7 @@
         func middleCTreble() {
             guard #available(macOS 15.0, *) else { return }
             let result = PitchStaffPosition.step(
-                midiPitch: 60, tpc: 14, clef: .treble
+                midiPitch: 60, tpc: 14, clef: .treble,
             )
             #expect(result.step == -6)
         }
@@ -22,7 +22,7 @@
         func e4Treble() {
             guard #available(macOS 15.0, *) else { return }
             let result = PitchStaffPosition.step(
-                midiPitch: 64, tpc: 18, clef: .treble
+                midiPitch: 64, tpc: 18, clef: .treble,
             )
             #expect(result.step == -4)
         }
@@ -31,7 +31,7 @@
         func f5Treble() {
             guard #available(macOS 15.0, *) else { return }
             let result = PitchStaffPosition.step(
-                midiPitch: 77, tpc: 13, clef: .treble
+                midiPitch: 77, tpc: 13, clef: .treble,
             )
             #expect(result.step == 4)
         }
@@ -40,7 +40,7 @@
         func d3Bass() {
             guard #available(macOS 15.0, *) else { return }
             let result = PitchStaffPosition.step(
-                midiPitch: 50, tpc: 16, clef: .bass
+                midiPitch: 50, tpc: 16, clef: .bass,
             )
             #expect(result.step == 0)
         }
@@ -49,7 +49,7 @@
         func middleCBass() {
             guard #available(macOS 15.0, *) else { return }
             let result = PitchStaffPosition.step(
-                midiPitch: 60, tpc: 14, clef: .bass
+                midiPitch: 60, tpc: 14, clef: .bass,
             )
             #expect(result.step == 6)
         }
@@ -58,7 +58,7 @@
         func c4Alto() {
             guard #available(macOS 15.0, *) else { return }
             let result = PitchStaffPosition.step(
-                midiPitch: 60, tpc: 14, clef: .alto
+                midiPitch: 60, tpc: 14, clef: .alto,
             )
             #expect(result.step == 0)
         }
@@ -69,10 +69,10 @@
             // MIDI 61 spelled as C♯4 (tpc 21): same line as C4 → step -6
             // MIDI 61 spelled as D♭4 (tpc 9):  same line as D4 → step -5
             let cSharp = PitchStaffPosition.step(
-                midiPitch: 61, tpc: 21, clef: .treble
+                midiPitch: 61, tpc: 21, clef: .treble,
             )
             let dFlat = PitchStaffPosition.step(
-                midiPitch: 61, tpc: 9, clef: .treble
+                midiPitch: 61, tpc: 9, clef: .treble,
             )
             #expect(cSharp.step == -6)
             #expect(dFlat.step == -5)
@@ -86,6 +86,16 @@
             #expect(NotatedClef(rawType: "C3") == .alto)
             #expect(NotatedClef(rawType: "C4") == .tenor)
             #expect(NotatedClef(rawType: "unknown") == .treble)
+        }
+
+        @Test("PERC and PERC2 parse and round-trip distinctly")
+        func percussionClefRoundTrip() {
+            guard #available(macOS 15.0, *) else { return }
+            #expect(NotatedClef(rawType: "PERC") == .percussion)
+            #expect(NotatedClef(rawType: "PERC2") == .percussion2)
+            #expect(NotatedClef(rawType: "percussion") == .percussion)
+            #expect(NotatedClef.percussion.rawType == "PERC")
+            #expect(NotatedClef.percussion2.rawType == "PERC2")
         }
     }
 #endif

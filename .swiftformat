@@ -3,6 +3,13 @@
 --disable unusedArguments
 --disable opaqueGenericParameters
 --disable conditionalAssignment
+# swiftTestingTestCaseNames (SwiftFormat 0.61+) rewrites
+# `@Test("desc") func camelCase()` into `@Test func ` followed by
+# the description as a backtick-quoted identifier. Those rewritten
+# names then violate SwiftLint's `identifier_name` rule (capitalised
+# leading char, spaces). Keep the description-string form until
+# both tools agree.
+--disable swiftTestingTestCaseNames
 --lineaftermarks false
 --swiftversion 6.2
 --wraparguments before-first

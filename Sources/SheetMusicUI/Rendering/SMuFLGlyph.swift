@@ -15,6 +15,7 @@ enum SMuFLGlyph {
     static let fClef8va: Character = "\u{E065}"
     static let cClef: Character = "\u{E05C}"
     static let percussionClef: Character = "\u{E069}"
+    static let percussionClef2: Character = "\u{E06A}"
 
     // Noteheads — standard
     static let noteheadWhole: Character = "\u{E0A2}"
@@ -84,7 +85,7 @@ enum SMuFLGlyph {
     static let accidentalDoubleSharp: Character = "\u{E263}"
     static let accidentalDoubleFlat: Character = "\u{E264}"
 
-    // Time signature digits (0..9)
+    /// Time signature digits (0..9)
     static func timeSigDigit(_ d: Int) -> Character {
         // 0xE080..0xE089 are private-use SMuFL digits — always valid scalars.
         // swiftlint:disable:next force_unwrapping

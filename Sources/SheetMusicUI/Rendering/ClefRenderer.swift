@@ -52,6 +52,9 @@ enum ClefRenderer {
         case .percussion:
             glyph = SMuFLGlyph.percussionClef
             yOffset = 0
+        case .percussion2:
+            glyph = SMuFLGlyph.percussionClef2
+            yOffset = 0
         }
         context.drawGlyph(
             glyph,

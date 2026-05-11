@@ -16,7 +16,8 @@ public enum NotatedClef: Sendable, Equatable {
     case alto // C4 on middle line
     case tenor // C4 on line 4
     case baritone // C4 on line 5 (top)
-    case percussion // unpitched 5-line drum staff
+    case percussion // unpitched 5-line drum staff (single rectangle glyph)
+    case percussion2 // unpitched 5-line drum staff (two vertical bars glyph)
 
     /// Parse a `Clef.concertClefType` string (MuseScore encoding).
     public init(rawType: String) {
@@ -33,7 +34,8 @@ public enum NotatedClef: Sendable, Equatable {
         case "C3", "alto": self = .alto
         case "C4", "tenor": self = .tenor
         case "C5", "baritone": self = .baritone
-        case "PERC", "PERC2", "percussion": self = .percussion
+        case "PERC", "percussion": self = .percussion
+        case "PERC2": self = .percussion2
         default: self = .treble
         }
     }
@@ -57,6 +59,7 @@ public enum NotatedClef: Sendable, Equatable {
         case .tenor: return "C4"
         case .baritone: return "C5"
         case .percussion: return "PERC"
+        case .percussion2: return "PERC2"
         }
     }
 }
@@ -113,6 +116,7 @@ public enum PitchStaffPosition {
         case .tenor: midLineDiatonic = 3 * 7 + 5 // A3
         case .baritone: midLineDiatonic = 3 * 7 + 3 // F3
         case .percussion: midLineDiatonic = 4 * 7 + 6 // positional (B4)
+        case .percussion2: midLineDiatonic = 4 * 7 + 6 // positional (B4)
         }
         return StaffStep(diatonicAbs - midLineDiatonic)
     }
