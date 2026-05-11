@@ -87,11 +87,12 @@ struct MidiImporterPipelineTests {
         } }
         let counter = Counter()
 
-        var opts = MidiImportOptions()
-        opts.resolveSwingAsync = { _ in
-            await counter.incr()
-            return .treatAsWritten
-        }
+        let opts = MidiImportOptions(
+            resolveSwingAsync: { _ in
+                await counter.incr()
+                return .treatAsWritten
+            },
+        )
         _ = try await MidiImporter.parse(bytes, options: opts)
         let calls = await counter.count
         #expect(calls >= 1)

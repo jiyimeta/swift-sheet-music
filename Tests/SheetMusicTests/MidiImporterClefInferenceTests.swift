@@ -148,10 +148,9 @@ struct MidiImporterClefInferenceTests {
         ])
         let file = MidiFile(division: division, format: 1, tracks: [conductor, drums])
         let bytes = try MidiWriter.write(file)
-        var opts = MidiImportOptions()
         // Even if the caller restricts candidates to C clefs only,
         // the drum staff must still come out as PERC.
-        opts.clefCandidates = [.alto]
+        let opts = MidiImportOptions(clefCandidates: [.alto])
         let score = try MidiImporter.parse(bytes, options: opts)
         let drumPart = try #require(score.parts.first { $0.instrument.useDrumset })
         #expect(drumPart.staves[0].defaultClefType == NotatedClef.percussion.rawType)
@@ -175,8 +174,7 @@ struct MidiImporterClefInferenceTests {
         ])
         let file = MidiFile(division: division, format: 1, tracks: [conductor, low])
         let bytes = try MidiWriter.write(file)
-        var opts = MidiImportOptions()
-        opts.clefCandidates = [.treble]
+        let opts = MidiImportOptions(clefCandidates: [.treble])
         let score = try MidiImporter.parse(bytes, options: opts)
         let part = try #require(score.parts.first { $0.trackName == "Cello" })
         #expect(part.staves[0].defaultClefType == NotatedClef.treble.rawType)

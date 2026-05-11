@@ -177,9 +177,7 @@ struct MidiImporterQuantizeTests {
             ],
             carryIns: [], carryOuts: [],
         )
-        var opts = MidiImportOptions()
-        opts.tupletRatios = []
-        opts.onsetTolerance = 1
+        let opts = MidiImportOptions(onsetTolerance: 1, tupletRatios: [])
         let q = MidiImporter.quantize(measure: measure, division: 480, options: opts)
         // Must not throw (compile-time guarantee — quantize is non-throwing).
         // Must produce at least 3 elements: gap before onset1, gap between

@@ -63,9 +63,8 @@ enum ScoreLoader {
             let data = try Data(contentsOf: url)
             return try SheetMusic.loadScore(mxlData: data)
         case .midi:
-            var options = MidiImportOptions()
             // This example only renders treble and bass clefs.
-            options.clefCandidates = [.treble, .bass]
+            let options = MidiImportOptions(clefCandidates: [.treble, .bass])
             return try SheetMusic.loadScore(midiURL: url, options: options)
         case nil:
             throw LoadError.unsupported(filename: url.lastPathComponent)

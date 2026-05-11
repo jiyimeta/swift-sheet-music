@@ -3,27 +3,25 @@ import SheetMusicCore
 
 /// Options controlling MIDI import behaviour. All fields have
 /// defaults that produce a reasonable Score from a typical
-/// notation-style SMF (DAW exports, MuseScore exports).
+/// notation-style SMF (DAW exports, MuseScore exports). Construct
+/// with the memberwise initialiser and override only the fields you
+/// care about, e.g. `MidiImportOptions(clefCandidates: [.treble])`.
 public struct MidiImportOptions: Sendable {
     /// Smallest binary subdivision the quantizer will produce.
     /// Onsets finer than this snap to the grid (or to a tuplet).
-    public var quantizeGrid: NoteDuration = .sixteenth
+    public let quantizeGrid: NoteDuration
 
     /// Onset fit tolerance in ticks. `nil` means `division / 16`
     /// (= 30 ticks at 480 PPQ).
-    public var onsetTolerance: Int?
+    public let onsetTolerance: Int?
 
     /// Tuplet ratios attempted, in priority order. `[]` disables
     /// tuplet detection (everything force-snaps to the binary grid).
-    public var tupletRatios: [TupletRatio] = [
-        TupletRatio(actual: 3, normal: 2),
-        TupletRatio(actual: 5, normal: 4),
-        TupletRatio(actual: 7, normal: 4),
-    ]
+    public let tupletRatios: [TupletRatio]
 
     /// Pitch-bend → Glissando detection. Bend range is fixed at 12
     /// semitones (matching `MidiRenderer`'s pitch-bend range header).
-    public var detectGlissando = true
+    public let detectGlissando: Bool
 
     /// Maximum augmentation-dot count permitted in chord durations
     /// during the import-time rhythm decomposition. `0` = no dots
@@ -34,7 +32,7 @@ public struct MidiImportOptions: Sendable {
     /// less common rhythmic figures.
     /// Rests are always decomposed without dots regardless of this
     /// setting.
-    public var maxDots = 1
+    public let maxDots: Int
 
     /// Clefs the importer may assign to each pitched staff's
     /// `defaultClefType`. The track's note-on pitches are scored
@@ -45,17 +43,39 @@ public struct MidiImportOptions: Sendable {
     /// Drum tracks always get `.percussion` regardless of this list.
     /// Empty list or tracks with no note-ons fall back to the first
     /// entry (or `.treble` if the list itself is empty).
-    public var clefCandidates: [NotatedClef] = [.treble, .bass]
+    public let clefCandidates: [NotatedClef]
 
     /// Sync resolver, used by the non-async parse path.
-    public var resolveSwing: (@Sendable (SwingDetection) -> SwingResolution)?
+    public let resolveSwing: (@Sendable (SwingDetection) -> SwingResolution)?
 
     /// Async resolver, used by the async parse path. Falls back to
     /// `resolveSwing` if `nil` (and that is also `nil` → no swing
     /// rewrite).
-    public var resolveSwingAsync: (@Sendable (SwingDetection) async -> SwingResolution)?
+    public let resolveSwingAsync: (@Sendable (SwingDetection) async -> SwingResolution)?
 
-    public init() {}
+    public init(
+        quantizeGrid: NoteDuration = .sixteenth,
+        onsetTolerance: Int? = nil,
+        tupletRatios: [TupletRatio] = [
+            TupletRatio(actual: 3, normal: 2),
+            TupletRatio(actual: 5, normal: 4),
+            TupletRatio(actual: 7, normal: 4),
+        ],
+        detectGlissando: Bool = true,
+        maxDots: Int = 1,
+        clefCandidates: [NotatedClef] = [.treble, .bass],
+        resolveSwing: (@Sendable (SwingDetection) -> SwingResolution)? = nil,
+        resolveSwingAsync: (@Sendable (SwingDetection) async -> SwingResolution)? = nil,
+    ) {
+        self.quantizeGrid = quantizeGrid
+        self.onsetTolerance = onsetTolerance
+        self.tupletRatios = tupletRatios
+        self.detectGlissando = detectGlissando
+        self.maxDots = maxDots
+        self.clefCandidates = clefCandidates
+        self.resolveSwing = resolveSwing
+        self.resolveSwingAsync = resolveSwingAsync
+    }
 }
 
 /// Immutable tuplet ratio descriptor used in `MidiImportOptions`.
