@@ -68,7 +68,7 @@ extension NoteDuration {
             children.append(XMLTreeNode(name: "durationType", text: "measure"))
             children.append(XMLTreeNode(
                 name: "duration",
-                text: "\(f.numerator)/\(f.denominator)"
+                text: "\(f.numerator)/\(f.denominator)",
             ))
         }
     }

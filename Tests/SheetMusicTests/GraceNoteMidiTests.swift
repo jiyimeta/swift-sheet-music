@@ -10,7 +10,7 @@ struct GracePlaybackTicksTests {
     func acciaccatura() {
         let g = GraceChord(graceType: .acciaccatura, duration: .eighth, notes: [])
         #expect(MidiRenderer.playbackTicks(
-            for: g, mainTicks: division, division: division
+            for: g, mainTicks: division, division: division,
         ) == division / 8)
     }
 
@@ -18,7 +18,7 @@ struct GracePlaybackTicksTests {
     func appoggiatura() {
         let g = GraceChord(graceType: .appoggiatura, duration: .quarter, notes: [])
         #expect(MidiRenderer.playbackTicks(
-            for: g, mainTicks: division, division: division
+            for: g, mainTicks: division, division: division,
         ) == division / 2)
     }
 
@@ -28,13 +28,13 @@ struct GracePlaybackTicksTests {
             GraceChord(graceType: gt, duration: .eighth, notes: [])
         }
         #expect(MidiRenderer.playbackTicks(
-            for: mk(.grace4), mainTicks: division, division: division
+            for: mk(.grace4), mainTicks: division, division: division,
         ) == division)
         #expect(MidiRenderer.playbackTicks(
-            for: mk(.grace16), mainTicks: division, division: division
+            for: mk(.grace16), mainTicks: division, division: division,
         ) == division / 4)
         #expect(MidiRenderer.playbackTicks(
-            for: mk(.grace32), mainTicks: division, division: division
+            for: mk(.grace32), mainTicks: division, division: division,
         ) == division / 8)
     }
 
@@ -44,13 +44,13 @@ struct GracePlaybackTicksTests {
             GraceChord(graceType: gt, duration: .eighth, notes: [])
         }
         #expect(MidiRenderer.playbackTicks(
-            for: mk(.grace8after), mainTicks: division, division: division
+            for: mk(.grace8after), mainTicks: division, division: division,
         ) == division / 2)
         #expect(MidiRenderer.playbackTicks(
-            for: mk(.grace16after), mainTicks: division, division: division
+            for: mk(.grace16after), mainTicks: division, division: division,
         ) == division / 4)
         #expect(MidiRenderer.playbackTicks(
-            for: mk(.grace32after), mainTicks: division, division: division
+            for: mk(.grace32after), mainTicks: division, division: division,
         ) == division / 8)
     }
 }
@@ -63,8 +63,10 @@ struct GraceTotalStealTests {
     func stealPrev() {
         let g1 = GraceChord(graceType: .acciaccatura, duration: .eighth, notes: [])
         let g2 = GraceChord(graceType: .grace16, duration: .sixteenth, notes: [])
-        #expect(MidiRenderer.totalStealFromPrev([g1, g2], division: division)
-            == division / 8)
+        #expect(
+            MidiRenderer.totalStealFromPrev([g1, g2], division: division)
+                == division / 8,
+        )
     }
 
     @Test("totalStealFromMainHead = sum of non-acciaccatura before-grace ticks")
@@ -72,7 +74,7 @@ struct GraceTotalStealTests {
         let g1 = GraceChord(graceType: .acciaccatura, duration: .eighth, notes: [])
         let g2 = GraceChord(graceType: .grace16, duration: .sixteenth, notes: [])
         #expect(MidiRenderer.totalStealFromMainHead(
-            [g1, g2], mainTicks: division, division: division
+            [g1, g2], mainTicks: division, division: division,
         ) == division / 4)
     }
 
@@ -83,7 +85,7 @@ struct GraceTotalStealTests {
             GraceChord(graceType: .grace4, duration: .quarter, notes: [])
         }
         #expect(MidiRenderer.totalStealFromMainHead(
-            four, mainTicks: division, division: division
+            four, mainTicks: division, division: division,
         ) == division / 2)
     }
 
@@ -91,11 +93,11 @@ struct GraceTotalStealTests {
     func stealTail() {
         let g = GraceChord(graceType: .grace8after, duration: .eighth, notes: [])
         #expect(MidiRenderer.totalStealFromMainTail(
-            [g], mainTicks: division, division: division
+            [g], mainTicks: division, division: division,
         ) == division / 2)
         let many = (0 ..< 4).map { _ in g }
         #expect(MidiRenderer.totalStealFromMainTail(
-            many, mainTicks: division, division: division
+            many, mainTicks: division, division: division,
         ) == division / 2) // capped
     }
 }
@@ -116,7 +118,9 @@ struct GraceMidiIntegrationTests {
         return (file.tracks.flatMap(\.events), Int(file.division))
     }
 
-    private func note(_ pitch: Int) -> Note { Note(pitch: pitch, tpc: 14) }
+    private func note(_ pitch: Int) -> Note {
+        Note(pitch: pitch, tpc: 14)
+    }
 
     @Test("acciaccatura: prev chord noteOff is pulled in by grace ticks")
     func acciaccaturaStealsPrev() {
@@ -126,8 +130,8 @@ struct GraceMidiIntegrationTests {
             notes: ChordNotes([note(64)]),
             graceNotesBefore: [GraceChord(
                 graceType: .acciaccatura, duration: .eighth,
-                notes: ChordNotes([note(62)])
-            )]
+                notes: ChordNotes([note(62)]),
+            )],
         )
         let (events, ppq) = render([prev, main])
         let prevOff = events.first { e in
@@ -160,8 +164,8 @@ struct GraceMidiIntegrationTests {
             notes: ChordNotes([note(60)]),
             graceNotesBefore: [GraceChord(
                 graceType: .appoggiatura, duration: .eighth,
-                notes: ChordNotes([note(62)])
-            )]
+                notes: ChordNotes([note(62)]),
+            )],
         )
         let (events, ppq) = render([main])
         let graceOn = events.first { e in
@@ -181,8 +185,8 @@ struct GraceMidiIntegrationTests {
             notes: ChordNotes([note(60)]),
             graceNotesAfter: [GraceChord(
                 graceType: .grace8after, duration: .eighth,
-                notes: ChordNotes([note(62)])
-            )]
+                notes: ChordNotes([note(62)]),
+            )],
         )
         let (events, ppq) = render([main])
         let mainOff = events.first { e in
@@ -206,8 +210,8 @@ struct GraceMidiIntegrationTests {
             notes: ChordNotes([note(60)]),
             graceNotesBefore: [GraceChord(
                 graceType: .acciaccatura, duration: .eighth,
-                notes: ChordNotes([note(62)])
-            )]
+                notes: ChordNotes([note(62)]),
+            )],
         )
         let (events, _) = render([main])
         let graceOn = events.first { e in

@@ -33,18 +33,18 @@
                     Note(pitch: 79, tpc: 18), // G5
                     Note(pitch: 81, tpc: 20), // A5
                 ]),
-                lyrics: [Lyric(text: "ah", syllabic: .single)]
+                lyrics: [Lyric(text: "ah", syllabic: .single)],
             )
             let measure = Measure(voices: [Voice(elements: [.chord(chord)])])
             let staff = Staff(measures: [measure])
             let part = Part(
                 id: "1", instrument: Instrument(id: "voice"),
-                staves: [staff]
+                staves: [staff],
             )
             let score = Score(division: 480, parts: [part])
 
             let doc = LayoutEngine.layout(
-                score: score, options: .init(), availableWidth: 800
+                score: score, options: .init(), availableWidth: 800,
             )
             var lyricEl: LayoutElement?
             var chordEl: LayoutElement?
@@ -87,7 +87,7 @@
             let message = "Lyric center y=\(lyricOrigin.y) sits above the 8th flag bottom y=\(flagBottom)"
             #expect(
                 lyricOrigin.y >= flagBottom,
-                Comment(rawValue: message)
+                Comment(rawValue: message),
             )
         }
 
@@ -106,18 +106,18 @@
             let chord = Chord(
                 duration: .eighth,
                 notes: ChordNotes([Note(pitch: 77, tpc: 13)]), // F5
-                lyrics: [Lyric(text: "ah", syllabic: .single)]
+                lyrics: [Lyric(text: "ah", syllabic: .single)],
             )
             let measure = Measure(voices: [Voice(elements: [.chord(chord)])])
             let staff = Staff(measures: [measure])
             let part = Part(
                 id: "1", instrument: Instrument(id: "voice"),
-                staves: [staff]
+                staves: [staff],
             )
             let score = Score(division: 480, parts: [part])
 
             let doc = LayoutEngine.layout(
-                score: score, options: .init(), availableWidth: 800
+                score: score, options: .init(), availableWidth: 800,
             )
             var lyricEl: LayoutElement?
             var chordEl: LayoutElement?
@@ -161,7 +161,7 @@
             let message = "Lyric center y=\(lyricOrigin.y) overshoots the base floor (upperBound \(upperBound))"
             #expect(
                 lyricOrigin.y < upperBound,
-                Comment(rawValue: message)
+                Comment(rawValue: message),
             )
         }
     }

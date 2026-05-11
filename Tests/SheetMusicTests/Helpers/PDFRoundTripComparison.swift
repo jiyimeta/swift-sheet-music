@@ -21,23 +21,23 @@ enum PDFRoundTripComparison {
     static func assertLooselyEquivalent(
         _ a: Score,
         _ b: Score,
-        fixture: String
+        fixture: String,
     ) {
         // Parts: importer should recover at least 1.
         #expect(
             b.parts.count >= 1,
-            "[\(fixture)] expected ≥1 part imported; got \(b.parts.count)"
+            "[\(fixture)] expected ≥1 part imported; got \(b.parts.count)",
         )
         // Staves: importer should detect at least 1 staff.
         #expect(
             b.totalStaffCount >= 1,
-            "[\(fixture)] expected ≥1 staff imported; got \(b.totalStaffCount)"
+            "[\(fixture)] expected ≥1 staff imported; got \(b.totalStaffCount)",
         )
         // Measures: at least 1 measure on staff 0.
         if let firstStaff = b.allStaves.first?.staff {
             #expect(
                 !firstStaff.measures.isEmpty,
-                "[\(fixture)] expected ≥1 measure on staff 0"
+                "[\(fixture)] expected ≥1 measure on staff 0",
             )
         }
         // Reference the source score so the parameter isn't unused;

@@ -9,16 +9,17 @@ enum MSCXRestDecoder {
     static func decode(_ node: XMLTreeNode) throws -> Chord {
         guard let durationText = node.first("durationType")?.text else {
             throw SheetMusicError.malformedScore(
-                reason: "Rest missing <durationType>")
+                reason: "Rest missing <durationType>",
+            )
         }
         let duration = try duration(
-            forDurationType: durationText, node: node
+            forDurationType: durationText, node: node,
         )
         return Chord(duration: duration, notes: [])
     }
 
     private static func duration(
-        forDurationType type: String, node: XMLTreeNode
+        forDurationType type: String, node: XMLTreeNode,
     ) throws -> NoteDuration {
         if type == "measure" {
             // Full-measure rest: <duration>N/D</duration> gives the actual time.
@@ -29,7 +30,8 @@ enum MSCXRestDecoder {
         }
         guard let base = NoteDuration(mscxName: type) else {
             throw SheetMusicError.malformedScore(
-                reason: "Rest unknown durationType \"\(type)\"")
+                reason: "Rest unknown durationType \"\(type)\"",
+            )
         }
         let dots = Int(node.first("dots")?.text ?? "0") ?? 0
         return base.dotted(dots)

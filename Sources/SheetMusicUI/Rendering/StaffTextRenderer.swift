@@ -14,7 +14,7 @@ enum StaffTextRenderer {
         color: ScoreColor?,
         isSystemText: Bool = false,
         properties: TextProperties = TextProperties(),
-        metrics: StaffMetrics
+        metrics: StaffMetrics,
     ) {
         guard !text.isEmpty else { return }
         let swiftUIColor: Color = color.map(swiftUIColor(_:))
@@ -22,12 +22,13 @@ enum StaffTextRenderer {
         let style = ResolvedTextStyle.resolve(
             isSystemText ? .systemText : .staffText,
             overrides: properties,
-            metrics: metrics
+            metrics: metrics,
         )
         let resolved = context.resolve(
             Text(text)
                 .foregroundColor(swiftUIColor)
-                .font(style.font))
+                .font(style.font),
+        )
         context.draw(resolved, at: origin, anchor: .bottomLeading)
     }
 
@@ -36,7 +37,7 @@ enum StaffTextRenderer {
             red: Double(color.red) / 255,
             green: Double(color.green) / 255,
             blue: Double(color.blue) / 255,
-            opacity: Double(color.alpha) / 255
+            opacity: Double(color.alpha) / 255,
         )
     }
 }

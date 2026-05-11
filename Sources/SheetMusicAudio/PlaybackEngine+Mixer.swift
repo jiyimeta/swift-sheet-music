@@ -26,7 +26,7 @@ extension PlaybackEngine {
     /// the metronome, whose patch is fixed (Hi/Low Wood Block on
     /// the percussion bank).
     public func setProgram(
-        forChannel id: MixerChannel.Kind, to program: UInt8
+        forChannel id: MixerChannel.Kind, to program: UInt8,
     ) {
         guard case let .staff(idx) = id else { return }
         loadProgram(forStaff: idx, program: program)
@@ -35,7 +35,7 @@ extension PlaybackEngine {
 
     private func mutate(
         channel id: MixerChannel.Kind,
-        _ change: (inout MixerChannel) -> Void
+        _ change: (inout MixerChannel) -> Void,
     ) {
         guard let idx = mixerChannels.firstIndex(where: { $0.id == id })
         else { return }
@@ -57,12 +57,12 @@ extension PlaybackEngine {
                 id: .staff(idx),
                 name: staffName(at: entry.address, in: score),
                 volume: initialStaffVolume(at: entry.address, in: score),
-                program: initialStaffProgram(at: entry.address, in: score)
+                program: initialStaffProgram(at: entry.address, in: score),
             ))
         }
         channels.append(MixerChannel(
             id: .metronome,
-            name: "Metronome"
+            name: "Metronome",
         ))
         replaceMixerChannels(channels)
     }
@@ -72,7 +72,7 @@ extension PlaybackEngine {
     /// to MuseScore's default of 100/127 ≈ 0.787 when the part is
     /// missing or has no channel.
     private func initialStaffVolume(
-        at address: StaffAddress, in score: Score
+        at address: StaffAddress, in score: Score,
     ) -> Float {
         let cc7: Int = score.part(at: address)?.instrument.channel.volume ?? 100
         return Float(max(0, min(127, cc7))) / 127
@@ -82,7 +82,7 @@ extension PlaybackEngine {
     /// `<program value="…"/>` chose. Falls back to 0 (Acoustic
     /// Grand Piano) when the part is missing or has no channel.
     private func initialStaffProgram(
-        at address: StaffAddress, in score: Score
+        at address: StaffAddress, in score: Score,
     ) -> UInt8 {
         guard let part = score.part(at: address) else { return 0 }
         return UInt8(clamping: part.instrument.channel.program)

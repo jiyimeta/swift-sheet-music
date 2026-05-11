@@ -33,7 +33,7 @@ extension Instrument {
             // drums collapse onto the default line. The `id`
             // attribute alone (e.g. "drumset") is not enough.
             children.append(XMLTreeNode(
-                name: "instrumentId", text: "drum.group.set"
+                name: "instrumentId", text: "drum.group.set",
             ))
             children.append(XMLTreeNode(name: "useDrumset", text: "1"))
         }
@@ -62,7 +62,7 @@ extension Instrument {
             children.append(XMLTreeNode(
                 name: "Drum",
                 attributes: ["pitch": String(pitch)],
-                children: drumChildren
+                children: drumChildren,
             ))
         }
         for art in articulations {
@@ -74,7 +74,7 @@ extension Instrument {
         return XMLTreeNode(
             name: "Instrument",
             attributes: ["id": id],
-            children: children
+            children: children,
         )
     }
 }

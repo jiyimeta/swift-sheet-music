@@ -11,7 +11,7 @@ public enum TitleFrameRenderer {
     public static func draw(
         _ frame: LayoutTitleFrame,
         into context: inout GraphicsContext,
-        origin: CGPoint = .zero
+        origin: CGPoint = .zero,
     ) {
         for entry in frame.texts {
             drawEntry(entry, into: &context, origin: origin)
@@ -26,10 +26,10 @@ public enum TitleFrameRenderer {
     private static func drawEntry(
         _ entry: LayoutFrameText,
         into context: inout GraphicsContext,
-        origin: CGPoint
+        origin: CGPoint,
     ) {
         let lines = entry.text.split(
-            separator: "\n", omittingEmptySubsequences: false
+            separator: "\n", omittingEmptySubsequences: false,
         ).map(String.init)
         // SwiftUI's `Text` resolves with the system line-height
         // factor (~1.2× point size). Match that so per-line stacking
@@ -38,7 +38,7 @@ public enum TitleFrameRenderer {
         let lineHeight = entry.fontSize * 1.2
         let pos = CGPoint(
             x: origin.x + entry.position.x,
-            y: origin.y + entry.position.y
+            y: origin.y + entry.position.y,
         )
         let topY: CGFloat = entry.anchor.isBottom
             ? pos.y - CGFloat(lines.count) * lineHeight
@@ -48,21 +48,21 @@ public enum TitleFrameRenderer {
 
         for (idx, line) in lines.enumerated() {
             let resolved = context.resolve(
-                Text(line).font(lineFont).foregroundColor(.black)
+                Text(line).font(lineFont).foregroundColor(.black),
             )
             context.draw(
                 resolved,
                 at: CGPoint(
                     x: pos.x,
-                    y: topY + CGFloat(idx) * lineHeight
+                    y: topY + CGFloat(idx) * lineHeight,
                 ),
-                anchor: lineAnchor
+                anchor: lineAnchor,
             )
         }
     }
 
     private static func font(
-        for style: FrameText.Style, size: CGFloat
+        for style: FrameText.Style, size: CGFloat,
     ) -> Font {
         // MuseScore defaults all four title-block styles to
         // `FontStyle::Normal` (no bold, no italic) — see
@@ -76,7 +76,7 @@ public enum TitleFrameRenderer {
     /// case is handled by shifting the starting `y` upward, not by
     /// flipping the per-line anchor.
     private static func topAnchor(
-        for anchor: LayoutFrameText.Anchor
+        for anchor: LayoutFrameText.Anchor,
     ) -> UnitPoint {
         switch anchor {
         case .topLeading, .bottomLeading: .topLeading

@@ -35,7 +35,7 @@ public struct PlaybackCursorView: View {
         cursor: ScoreCursor?,
         document: LayoutDocument,
         score: Score,
-        color: Color = Color.blue.opacity(0.15)
+        color: Color = Color.blue.opacity(0.15),
     ) {
         self.cursor = cursor
         self.document = document
@@ -64,7 +64,7 @@ extension LayoutDocument {
     /// column can't be located (e.g. ID stale after a score swap, or
     /// beat tick out of range).
     public func cursorFrame(
-        for cursor: ScoreCursor, in score: Score
+        for cursor: ScoreCursor, in score: Score,
     ) -> CGRect? {
         switch cursor {
         case let .item(id):
@@ -73,7 +73,7 @@ extension LayoutDocument {
             return beatFrame(
                 measureIndex: measureIndex,
                 tickInMeasure: tickInMeasure,
-                score: score
+                score: score,
             )
         }
     }
@@ -93,7 +93,7 @@ extension LayoutDocument {
                         x: absX - halfW,
                         y: topY,
                         width: halfW * 2,
-                        height: bottomY - topY
+                        height: bottomY - topY,
                     )
                 }
             }
@@ -104,7 +104,7 @@ extension LayoutDocument {
     private func beatFrame(
         measureIndex: Int,
         tickInMeasure: Int,
-        score: Score
+        score: Score,
     ) -> CGRect? {
         for system in systems {
             let topY = system.origin.y
@@ -129,7 +129,7 @@ extension LayoutDocument {
                         targetMeasureIndex: measureIndex,
                         layoutMeasure: measure,
                         span: span,
-                        score: score
+                        score: score,
                     )
                 } else if measure.measureIndex == measureIndex,
                           measure.multiMeasureRest == nil
@@ -138,7 +138,7 @@ extension LayoutDocument {
                         tickInMeasure: tickInMeasure,
                         measureIndex: measureIndex,
                         layoutMeasure: measure,
-                        score: score
+                        score: score,
                     )
                 } else {
                     continue
@@ -152,7 +152,7 @@ extension LayoutDocument {
                     x: absX - halfW,
                     y: topY,
                     width: halfW * 2,
-                    height: bottomY - topY
+                    height: bottomY - topY,
                 )
             }
         }
@@ -169,13 +169,13 @@ extension LayoutDocument {
         targetMeasureIndex: Int,
         layoutMeasure: LayoutMeasure,
         span: Int,
-        score: Score
+        score: Score,
     ) -> CGFloat? {
         let division = score.division
         var ticksBefore = 0
         for mi in layoutMeasure.measureIndex ..< targetMeasureIndex {
             ticksBefore += measureTickLength(
-                measureIndex: mi, score: score, division: division
+                measureIndex: mi, score: score, division: division,
             )
         }
         var totalTicks = ticksBefore
@@ -183,7 +183,7 @@ extension LayoutDocument {
             ..< (layoutMeasure.measureIndex + span)
         {
             totalTicks += measureTickLength(
-                measureIndex: mi, score: score, division: division
+                measureIndex: mi, score: score, division: division,
             )
         }
         guard totalTicks > 0 else { return nil }
@@ -201,7 +201,7 @@ extension LayoutDocument {
         tickInMeasure target: Int,
         measureIndex: Int,
         layoutMeasure: LayoutMeasure,
-        score: Score
+        score: Score,
     ) -> CGFloat? {
         var ticksToX: [Int: CGFloat] = [:]
         let division = score.division
@@ -218,7 +218,7 @@ extension LayoutDocument {
                             measureIndex: measureIndex,
                             voiceIndex: voiceIdx,
                             elementIndex: elemIdx,
-                            noteIndexInChord: 0
+                            noteIndexInChord: 0,
                         )
                         if ticksToX[t] == nil,
                            let x = itemX(.note(nid), in: layoutMeasure)
@@ -232,7 +232,7 @@ extension LayoutDocument {
                             staff: address,
                             measureIndex: measureIndex,
                             voiceIndex: voiceIdx,
-                            elementIndex: elemIdx
+                            elementIndex: elemIdx,
                         )
                         // Skip whole-note rests: they're centered in
                         // the measure, not at their tick column
@@ -269,7 +269,7 @@ extension LayoutDocument {
             // so the cursor still advances per beat instead of
             // disappearing for the whole bar.
             let measureTicks = measureTickLength(
-                measureIndex: measureIndex, score: score, division: division
+                measureIndex: measureIndex, score: score, division: division,
             )
             guard measureTicks > 0 else { return nil }
             let frac = max(0, min(1, CGFloat(target) / CGFloat(measureTicks)))
@@ -295,7 +295,7 @@ extension LayoutDocument {
             // Use the measure's tick length (sum of voice 0
             // durations) to scale the remaining-beat offset.
             let measureTicks = measureTickLength(
-                measureIndex: measureIndex, score: score, division: division
+                measureIndex: measureIndex, score: score, division: division,
             )
             if measureTicks > leftTick {
                 let frac = CGFloat(target - leftTick)
@@ -307,7 +307,7 @@ extension LayoutDocument {
     }
 
     private func itemX(
-        _ id: ScoreItemID, in measure: LayoutMeasure
+        _ id: ScoreItemID, in measure: LayoutMeasure,
     ) -> CGFloat? {
         switch id {
         case let .note(target):
@@ -339,7 +339,7 @@ extension LayoutDocument {
 }
 
 private func measureTickLength(
-    measureIndex: Int, score: Score, division: Int
+    measureIndex: Int, score: Score, division: Int,
 ) -> Int {
     guard let voice0 = score.allStaves.first?.staff
         .measures[safe: measureIndex]?.voices.first

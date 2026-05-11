@@ -3,16 +3,16 @@ import Foundation
 @testable import SheetMusicMIDI
 import Testing
 
-@Suite struct MidiImporterTracksTests {
+struct MidiImporterTracksTests {
     private func noteOn(_ tick: Int, channel: Int, pitch: Int) -> TimedMidiEvent {
         TimedMidiEvent(
-            tick: tick, event: .noteOn(channel: channel, pitch: pitch, velocity: 80)
+            tick: tick, event: .noteOn(channel: channel, pitch: pitch, velocity: 80),
         )
     }
 
     private func noteOff(_ tick: Int, channel: Int, pitch: Int) -> TimedMidiEvent {
         TimedMidiEvent(
-            tick: tick, event: .noteOff(channel: channel, pitch: pitch, velocity: 0)
+            tick: tick, event: .noteOff(channel: channel, pitch: pitch, velocity: 0),
         )
     }
 

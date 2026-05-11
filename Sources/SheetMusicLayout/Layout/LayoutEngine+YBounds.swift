@@ -8,7 +8,7 @@ extension LayoutEngine {
     /// ledger lines, tempo glyphs, dynamics, etc. don't clip.
     static func elementYBounds(
         in measures: [LayoutMeasure],
-        metrics: StaffMetrics
+        metrics: StaffMetrics,
     ) -> (min: CGFloat, max: CGFloat) {
         var minY = CGFloat.infinity
         var maxY = -CGFloat.infinity
@@ -31,7 +31,7 @@ extension LayoutEngine {
 
     /// y values contributed by a single LayoutElement.
     static func elementYPoints(
-        _ element: LayoutElement
+        _ element: LayoutElement,
     ) -> [CGFloat] {
         switch element {
         case let .clef(_, p, _),
@@ -88,7 +88,7 @@ extension LayoutEngine {
     /// melisma rules, which are snapped absolutely by
     /// `setMelismaAbsoluteY` after this pass.
     static func shiftLyricTextY(
-        _ element: LayoutElement, dy: CGFloat
+        _ element: LayoutElement, dy: CGFloat,
     ) -> LayoutElement {
         func bump(_ p: CGPoint) -> CGPoint {
             CGPoint(x: p.x, y: p.y + dy)
@@ -99,7 +99,7 @@ extension LayoutEngine {
             return .textMark(kind: kind, text: text, origin: bump(p))
         case let .lyricHyphen(from, to):
             return .lyricHyphen(
-                fromOrigin: bump(from), toOrigin: bump(to)
+                fromOrigin: bump(from), toOrigin: bump(to),
             )
         default:
             return element
@@ -110,19 +110,19 @@ extension LayoutEngine {
     /// originating Y. See the call site in the system-wide
     /// alignment pass for the rationale.
     static func setMelismaAbsoluteY(
-        _ element: LayoutElement, y: CGFloat
+        _ element: LayoutElement, y: CGFloat,
     ) -> LayoutElement {
         if case let .lyricsMelisma(from, to) = element {
             return .lyricsMelisma(
                 fromOrigin: CGPoint(x: from.x, y: y),
-                toOrigin: CGPoint(x: to.x, y: y)
+                toOrigin: CGPoint(x: to.x, y: y),
             )
         }
         return element
     }
 
     static func shiftMeasure(
-        _ measure: LayoutMeasure, dy: CGFloat
+        _ measure: LayoutMeasure, dy: CGFloat,
     ) -> LayoutMeasure {
         LayoutMeasure(
             measureIndex: measure.measureIndex,
@@ -134,7 +134,7 @@ extension LayoutEngine {
             lineBreak: measure.lineBreak,
             pageBreak: measure.pageBreak,
             tickColumns: measure.tickColumns,
-            multiMeasureRest: measure.multiMeasureRest
+            multiMeasureRest: measure.multiMeasureRest,
         )
     }
 }

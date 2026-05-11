@@ -54,18 +54,18 @@ enum HairpinRamps {
         voiceIndex: Int,
         staff: Staff,
         instrument: Instrument,
-        division: Int
+        division: Int,
     ) -> [HairpinRamp] {
         var dynList: [DynPoint] = []
         var pending: [Pending] = []
         var runningVel = MidiRenderer.effectiveVelocity(
-            forDynamic: nil, instrument: instrument
+            forDynamic: nil, instrument: instrument,
         )
         var measureBase = 0
 
         for (measureIdx, measure) in staff.measures.enumerated() {
             let mTicks = MidiRenderer.measureTicks(
-                measure: measure, division: division
+                measure: measure, division: division,
             )
             // Read the literal voice — hairpins inside a
             // measure-repeat source apply each time the group plays
@@ -81,7 +81,7 @@ enum HairpinRamps {
                     division: division,
                     runningVel: &runningVel,
                     dynList: &dynList,
-                    pending: &pending
+                    pending: &pending,
                 )
             }
             measureBase += mTicks
@@ -108,14 +108,14 @@ enum HairpinRamps {
         division: Int,
         runningVel: inout Int,
         dynList: inout [DynPoint],
-        pending: inout [Pending]
+        pending: inout [Pending],
     ) {
         var runningTick = measureBase
         for element in voice.elements {
             switch element {
             case let .dynamic(d):
                 let v = MidiRenderer.effectiveVelocity(
-                    forDynamic: d, instrument: instrument
+                    forDynamic: d, instrument: instrument,
                 )
                 dynList.append(DynPoint(tick: runningTick, velocity: v))
                 runningVel = v
@@ -131,13 +131,13 @@ enum HairpinRamps {
                     startMeasureIndex: measureIdx,
                     spanner: s,
                     measures: measures,
-                    division: division
+                    division: division,
                 )
                 pending.append(Pending(
                     startTick: runningTick,
                     endTick: endTick,
                     startVelocity: runningVel,
-                    payload: payload
+                    payload: payload,
                 ))
             case let .chord(chord):
                 runningTick += chord.duration.ticks(division: division)
@@ -163,7 +163,7 @@ enum HairpinRamps {
             endTick: p.endTick,
             startVelocity: p.startVelocity,
             endVelocity: endVel,
-            method: p.payload.veloChangeMethod
+            method: p.payload.veloChangeMethod,
         )
     }
 
@@ -177,7 +177,7 @@ enum HairpinRamps {
         startMeasureIndex: Int,
         spanner: Spanner,
         measures: [Measure],
-        division: Int
+        division: Int,
     ) -> Int {
         // Sum measure-ticks from the start measure forward by
         // `nextMeasuresOffset` measures. The end tick is therefore the
@@ -185,16 +185,16 @@ enum HairpinRamps {
         var endMeasureBase = 0
         for i in 0 ..< startMeasureIndex {
             endMeasureBase += MidiRenderer.measureTicks(
-                measure: measures[i], division: division
+                measure: measures[i], division: division,
             )
         }
         let lastIndex = min(
             measures.count - 1,
-            startMeasureIndex + max(0, spanner.nextMeasuresOffset)
+            startMeasureIndex + max(0, spanner.nextMeasuresOffset),
         )
         for i in startMeasureIndex ..< lastIndex {
             endMeasureBase += MidiRenderer.measureTicks(
-                measure: measures[i], division: division
+                measure: measures[i], division: division,
             )
         }
         let fractionDelta = spanner.nextFractionsOffset?.ticks(division: division) ?? 0

@@ -20,7 +20,7 @@ public struct PagedScoreView: View {
         score: Score,
         options: ScoreViewOptions = .init(),
         pageIndex: Binding<Int>,
-        totalPages: Binding<Int>
+        totalPages: Binding<Int>,
     ) {
         _ = BravuraFont.register
         self.score = score
@@ -49,16 +49,16 @@ public struct PagedScoreView: View {
             systemGap: options.systemGap,
             wrapToViewWidth: true,
             breakPolicy: options.breakPolicy,
-            multiMeasureRest: options.multiMeasureRest
+            multiMeasureRest: options.multiMeasureRest,
         )
         let doc = LayoutEngine.layout(
             score: score, options: pageOpts,
-            availableWidth: w
+            availableWidth: w,
         )
         let pages = Self.paginate(
             systems: doc.systems,
             pageHeight: proxy.size.height,
-            policy: options.breakPolicy
+            policy: options.breakPolicy,
         )
         let count = max(1, pages.count)
         let safe = min(max(pageIndex, 0), count - 1)
@@ -69,23 +69,23 @@ public struct PagedScoreView: View {
             Canvas(opaque: true, rendersAsynchronously: true) { ctx, size in
                 ctx.fill(
                     Path(CGRect(origin: .zero, size: size)),
-                    with: .color(.white)
+                    with: .color(.white),
                 )
                 var localY: CGFloat = 0
                 for system in pageSystems {
                     var sub = ctx
                     sub.translateBy(
                         x: -system.origin.x,
-                        y: localY - system.origin.y
+                        y: localY - system.origin.y,
                     )
                     ScoreCanvasDrawing.drawSystem(
-                        system, metrics: doc.metrics, into: &sub
+                        system, metrics: doc.metrics, into: &sub,
                     )
                     localY += system.size.height
                 }
             }
             indicatorOverlay(
-                pageSystems: pageSystems, metrics: doc.metrics
+                pageSystems: pageSystems, metrics: doc.metrics,
             )
         }
         .frame(width: doc.size.width, height: proxy.size.height)
@@ -101,24 +101,25 @@ public struct PagedScoreView: View {
     @ViewBuilder
     private func indicatorOverlay(
         pageSystems: [LayoutSystem],
-        metrics: StaffMetrics
+        metrics: StaffMetrics,
     ) -> some View {
         if options.showBreakIndicators {
             let pageOrigins = Self.systemPageOrigins(
-                pageSystems: pageSystems)
+                pageSystems: pageSystems,
+            )
             ForEach(
                 Array(pageSystems.enumerated()),
-                id: \.offset
+                id: \.offset,
             ) { idx, sys in
                 BreakIndicatorOverlay(
                     mode: .system(system: sys),
                     metrics: metrics,
-                    policy: options.breakPolicy
+                    policy: options.breakPolicy,
                 )
                 .frame(
                     width: sys.size.width,
                     height: sys.size.height,
-                    alignment: .topLeading
+                    alignment: .topLeading,
                 )
                 .offset(x: sys.origin.x, y: pageOrigins[idx])
             }
@@ -128,7 +129,7 @@ public struct PagedScoreView: View {
     static func paginate(
         systems: [LayoutSystem],
         pageHeight: CGFloat,
-        policy: LayoutBreakPolicy = .honor
+        policy: LayoutBreakPolicy = .honor,
     ) -> [[LayoutSystem]] {
         guard !systems.isEmpty, pageHeight > 0 else { return [] }
         var pages: [[LayoutSystem]] = []
@@ -167,7 +168,7 @@ public struct PagedScoreView: View {
     /// Canvas drawing pass — required so the indicator overlay
     /// lands at the same on-screen position as the system itself.
     static func systemPageOrigins(
-        pageSystems: [LayoutSystem]
+        pageSystems: [LayoutSystem],
     ) -> [CGFloat] {
         var offsets: [CGFloat] = []
         var localY: CGFloat = 0

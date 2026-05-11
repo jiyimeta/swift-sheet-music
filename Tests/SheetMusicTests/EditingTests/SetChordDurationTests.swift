@@ -26,7 +26,7 @@ struct SetChordDurationTests {
 
     private static let chordID = VoiceElementID(
         staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
-        voiceIndex: 0, elementIndex: 0
+        voiceIndex: 0, elementIndex: 0,
     )
 
     @Test("Shorten quarter → eighth fills the leftover with an eighth rest")
@@ -38,7 +38,7 @@ struct SetChordDurationTests {
             rest(.eighth),
         ])
         let cmd = SetChordDuration(
-            at: Self.chordID, duration: .eighth
+            at: Self.chordID, duration: .eighth,
         )
         _ = try cmd.apply(to: &score)
         let els = first(score)
@@ -72,7 +72,7 @@ struct SetChordDurationTests {
             chord(.eighth), rest(.eighth), rest(.half), rest(.quarter),
         ])
         let cmd = SetChordDuration(
-            at: Self.chordID, duration: .quarter
+            at: Self.chordID, duration: .quarter,
         )
         _ = try cmd.apply(to: &score)
         let els = first(score)
@@ -99,7 +99,7 @@ struct SetChordDurationTests {
         // leaving 720 ticks (= dotted quarter, decomposed as
         // quarter + eighth).
         let cmd = SetChordDuration(
-            at: Self.chordID, duration: .quarter
+            at: Self.chordID, duration: .quarter,
         )
         _ = try cmd.apply(to: &score)
         let els = first(score)
@@ -132,7 +132,7 @@ struct SetChordDurationTests {
         ])
         let snapshot = score
         let cmd = SetChordDuration(
-            at: Self.chordID, duration: .eighth
+            at: Self.chordID, duration: .eighth,
         )
         let inverse = try cmd.apply(to: &score)
         _ = try inverse.apply(to: &score)
@@ -147,7 +147,7 @@ struct SetChordDurationTests {
         ])
         let snapshot = score
         let cmd = SetChordDuration(
-            at: Self.chordID, duration: .quarter
+            at: Self.chordID, duration: .quarter,
         )
         let inverse = try cmd.apply(to: &score)
         _ = try inverse.apply(to: &score)
@@ -162,7 +162,7 @@ struct SetChordDurationTests {
         // Available room = 1/4 + 1/8 = 3/8 < lengthening from
         // quarter to whole (needs +3/4).
         let cmd = SetChordDuration(
-            at: Self.chordID, duration: .whole
+            at: Self.chordID, duration: .whole,
         )
         #expect(throws: SheetMusicError.self) {
             _ = try cmd.apply(to: &score)
@@ -175,16 +175,16 @@ struct SetChordDurationTests {
             elements: [chord(.eighth), chord(.eighth), chord(.eighth)],
             tuplets: [Tuplet(
                 normalNotes: 2, actualNotes: 3,
-                startIndex: 0, endIndex: 2
-            )]
+                startIndex: 0, endIndex: 2,
+            )],
         )
         let measure = Measure(voices: [voice])
         var score = Score(
             division: 480,
-            parts: [Part(id: "1", instrument: Instrument(id: "x"), staves: [Staff(measures: [measure])])]
+            parts: [Part(id: "1", instrument: Instrument(id: "x"), staves: [Staff(measures: [measure])])],
         )
         let cmd = SetChordDuration(
-            at: Self.chordID, duration: .quarter
+            at: Self.chordID, duration: .quarter,
         )
         #expect(throws: SheetMusicError.self) {
             _ = try cmd.apply(to: &score)
@@ -201,7 +201,7 @@ struct SetChordDurationTests {
     func shortenWholeToEighthAligned() throws {
         var score = score([chord(.whole)])
         let cmd = SetChordDuration(
-            at: Self.chordID, duration: .eighth
+            at: Self.chordID, duration: .eighth,
         )
         _ = try cmd.apply(to: &score)
         let els = first(score)
@@ -237,7 +237,7 @@ struct SetChordDurationTests {
             rest(.half), rest(.quarter), rest(.eighth),
         ])
         let cmd = SetChordDuration(
-            at: Self.chordID, duration: .quarter
+            at: Self.chordID, duration: .quarter,
         )
         _ = try cmd.apply(to: &score)
         let els = first(score)
@@ -263,17 +263,17 @@ struct SetChordDurationTests {
         // chord A (eighth, pitch 60) + chord B (half, pitch 64) +
         // rest (quarter) + rest (eighth)
         let chordA: VoiceElement = .chord(Chord(
-            duration: .eighth, notes: [Note(pitch: 60, tpc: 14)]
+            duration: .eighth, notes: [Note(pitch: 60, tpc: 14)],
         ))
         let chordB: VoiceElement = .chord(Chord(
-            duration: .half, notes: [Note(pitch: 64, tpc: 18)]
+            duration: .half, notes: [Note(pitch: 64, tpc: 18)],
         ))
         var score = score([chordA, chordB, rest(.quarter), rest(.eighth)])
         // Lengthen A to quarter → consume +240 ticks of B.
         // B's overshoot = 720 ticks at rtick 480, decomposes as
         // quarter (480) + eighth (240).
         let cmd = SetChordDuration(
-            at: Self.chordID, duration: .quarter
+            at: Self.chordID, duration: .quarter,
         )
         _ = try cmd.apply(to: &score)
         let els = first(score)
@@ -317,15 +317,15 @@ struct SetChordDurationTests {
     @Test("Lengthen-into-chord round-trips through inverse")
     func lengthenIntoChordRoundTrip() throws {
         let chordA: VoiceElement = .chord(Chord(
-            duration: .eighth, notes: [Note(pitch: 60, tpc: 14)]
+            duration: .eighth, notes: [Note(pitch: 60, tpc: 14)],
         ))
         let chordB: VoiceElement = .chord(Chord(
-            duration: .half, notes: [Note(pitch: 64, tpc: 18)]
+            duration: .half, notes: [Note(pitch: 64, tpc: 18)],
         ))
         var score = score([chordA, chordB, rest(.quarter), rest(.eighth)])
         let snapshot = score
         let cmd = SetChordDuration(
-            at: Self.chordID, duration: .quarter
+            at: Self.chordID, duration: .quarter,
         )
         let inverse = try cmd.apply(to: &score)
         _ = try inverse.apply(to: &score)
@@ -344,28 +344,28 @@ struct SetChordDurationTests {
         // total time) at rticks 240..720 (tuplet members)
         // rest (half) at rtick 720
         let chordA: VoiceElement = .chord(Chord(
-            duration: .eighth, notes: [Note(pitch: 60, tpc: 14)]
+            duration: .eighth, notes: [Note(pitch: 60, tpc: 14)],
         ))
         let t1: VoiceElement = .chord(Chord(
-            duration: .eighth, notes: [Note(pitch: 64, tpc: 18)]
+            duration: .eighth, notes: [Note(pitch: 64, tpc: 18)],
         ))
         let t2: VoiceElement = .chord(Chord(
-            duration: .eighth, notes: [Note(pitch: 65, tpc: 13)]
+            duration: .eighth, notes: [Note(pitch: 65, tpc: 13)],
         ))
         let t3: VoiceElement = .chord(Chord(
-            duration: .eighth, notes: [Note(pitch: 67, tpc: 15)]
+            duration: .eighth, notes: [Note(pitch: 67, tpc: 15)],
         ))
         let voice = Voice(
             elements: [chordA, t1, t2, t3, rest(.half), rest(.eighth)],
             tuplets: [Tuplet(
                 normalNotes: 2, actualNotes: 3,
-                startIndex: 1, endIndex: 3
-            )]
+                startIndex: 1, endIndex: 3,
+            )],
         )
         let measure = Measure(voices: [voice])
         var score = Score(
             division: 480,
-            parts: [Part(id: "1", instrument: Instrument(id: "x"), staves: [Staff(measures: [measure])])]
+            parts: [Part(id: "1", instrument: Instrument(id: "x"), staves: [Staff(measures: [measure])])],
         )
         // Lengthen A from eighth (240) to half (960). Need +720.
         // The tuplet's three eighths within a 3:2 ratio of base
@@ -377,7 +377,7 @@ struct SetChordDurationTests {
         // would be 480 in the real engraving. For this unit test
         // the raw model-tick view is what matters.)
         let cmd = SetChordDuration(
-            at: Self.chordID, duration: .half
+            at: Self.chordID, duration: .half,
         )
         _ = try cmd.apply(to: &score)
         // After: chord A (half) at rtick 0, then alignedRests
@@ -401,7 +401,7 @@ struct SetChordDurationTests {
         ])
         let snapshot = score
         let cmd = SetChordDuration(
-            at: Self.chordID, duration: .quarter
+            at: Self.chordID, duration: .quarter,
         )
         _ = try cmd.apply(to: &score)
         #expect(score == snapshot)

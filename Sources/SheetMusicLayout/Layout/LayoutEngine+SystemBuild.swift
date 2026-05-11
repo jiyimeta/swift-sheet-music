@@ -13,7 +13,7 @@ extension LayoutEngine {
         isFirstSystem: Bool,
         activeClefs: inout [NotatedClef],
         activeKeys: inout [Int],
-        context: RenderContext
+        context: RenderContext,
     ) -> LayoutSystem {
         let metrics = context.metrics
         let allStaves = context.score.allStaves
@@ -30,7 +30,7 @@ extension LayoutEngine {
             metrics: metrics,
             useLong: isFirstSystem,
             bracketColumnCount: bracketColumnCount,
-            maxBraceStaffCount: maxBraceStaffCount
+            maxBraceStaffCount: maxBraceStaffCount,
         )
 
         // Inter-system breathing room. MuseScore's style defaults
@@ -107,7 +107,7 @@ extension LayoutEngine {
                     perStaffElements: [:],
                     staff0Measure: staff0Measure,
                     tickCols: [:],
-                    multiMeasureRestCount: runLen
+                    multiMeasureRestCount: runLen,
                 ))
                 continue
             }
@@ -120,7 +120,7 @@ extension LayoutEngine {
                 metrics: metrics,
                 synthesizeClefForAllStaves: synthesizeClefHere,
                 synthesizeKeySigForAllStaves: synthesizeKeySigHere,
-                activeKeys: keys
+                activeKeys: keys,
             )
             let tickCols = tickColumns(
                 staves: staves,
@@ -128,7 +128,7 @@ extension LayoutEngine {
                 metrics: metrics,
                 headerSchedule: schedule,
                 width: w,
-                division: context.score.division
+                division: context.score.division,
             )
             var perStaff: [Int: [LayoutElement]] = [:]
             for (staffIdx, staff) in staves.enumerated() {
@@ -173,7 +173,7 @@ extension LayoutEngine {
                     incomingMelismas: incomingMelismas,
                     effectiveMelismaTicks: context.effectiveMelismaTicks,
                     graceNoteMag: context.options.graceNoteMag,
-                    coversBelowStaffSpanner: coversBelowStaffSpanner
+                    coversBelowStaffSpanner: coversBelowStaffSpanner,
                 )
                 let els: [LayoutElement]
                 let newClef: NotatedClef
@@ -206,7 +206,7 @@ extension LayoutEngine {
                         isFirstSystem: isFirstSystem,
                         incomingMelismas: incomingMelismas,
                         effectiveMelismaTicks: context.effectiveMelismaTicks,
-                        coversBelowStaffSpanner: coversBelowStaffSpanner
+                        coversBelowStaffSpanner: coversBelowStaffSpanner,
                     )
                     els = result.elements
                     newClef = result.clef
@@ -218,7 +218,7 @@ extension LayoutEngine {
                                 inputs: placementInputs,
                                 elements: els,
                                 newClef: newClef,
-                                newKey: newKey
+                                newKey: newKey,
                             )
                         context.cache?.entries[measureIdx] = entry
                     }
@@ -237,7 +237,7 @@ extension LayoutEngine {
                 perStaffElements: perStaff,
                 staff0Measure: staff0Measure,
                 tickCols: tickCols,
-                multiMeasureRestCount: nil
+                multiMeasureRestCount: nil,
             ))
         }
 
@@ -334,10 +334,10 @@ extension LayoutEngine {
         let staffBottomLocal: CGFloat = staffTopLocal
             + metrics.staffHeight
         var staffMinY = Array(
-            repeating: CGFloat.infinity, count: staves.count
+            repeating: CGFloat.infinity, count: staves.count,
         )
         var staffMaxY = Array(
-            repeating: -CGFloat.infinity, count: staves.count
+            repeating: -CGFloat.infinity, count: staves.count,
         )
         for um in untranslated {
             for (staffIdx, els) in um.perStaffElements {
@@ -360,7 +360,7 @@ extension LayoutEngine {
                 ? max(
                     0,
                     staffTopLocal - staffMinY[idx]
-                        + metrics.sp * 0.5
+                        + metrics.sp * 0.5,
                 )
                 : 0
             // First staff falls under the system's `topPad`
@@ -401,11 +401,11 @@ extension LayoutEngine {
                 for voice in staff.measures[mIdx].voices {
                     for el in voice.elements {
                         if case let .chord(c) = el {
-                            let nonEmpty = c.lyrics.filter {
+                            let nonEmpty = c.lyrics.count(where: {
                                 !$0.text.isEmpty
-                            }.count
+                            })
                             maxLyricsVerses = max(
-                                maxLyricsVerses, nonEmpty
+                                maxLyricsVerses, nonEmpty,
                             )
                         }
                     }
@@ -437,7 +437,7 @@ extension LayoutEngine {
         for idx in 0 ..< staves.count {
             currentY += staffTopPads[idx]
             staffOrigins.append(CGPoint(
-                x: partLabelWidth, y: currentY
+                x: partLabelWidth, y: currentY,
             ))
             if idx < staves.count - 1 {
                 currentY += metrics.staffHeight
@@ -461,7 +461,7 @@ extension LayoutEngine {
                 {
                     let endFlat = min(
                         originFlat + bi.span - 1,
-                        staffOrigins.count - 1
+                        staffOrigins.count - 1,
                     )
                     let topY = staffOrigins[originFlat].y
                     let bottomY = staffOrigins[endFlat].y
@@ -471,7 +471,7 @@ extension LayoutEngine {
                         topY: topY,
                         bottomY: bottomY,
                         column: bi.column,
-                        staffCount: endFlat - originFlat + 1
+                        staffCount: endFlat - originFlat + 1,
                     ))
                 }
             }
@@ -515,14 +515,14 @@ extension LayoutEngine {
             // further to the left).
             let braceExtent = maxBraceStaffCount > 0
                 ? BraceMetrics.glyphHorizontalExtent(
-                    staffCount: maxBraceStaffCount, sp: metrics.sp
+                    staffCount: maxBraceStaffCount, sp: metrics.sp,
                 )
                 : 0
             let extraBraceShift = max(
                 0,
                 braceExtent
                     - metrics.sp * 0.2
-                    - CGFloat(bracketColumnCount) * metrics.sp
+                    - CGFloat(bracketColumnCount) * metrics.sp,
             )
             let labelRightX = partLabelWidth
                 - metrics.sp
@@ -530,7 +530,7 @@ extension LayoutEngine {
                 - extraBraceShift
             return LayoutPartLabel(
                 text: text,
-                origin: CGPoint(x: labelRightX, y: centerY)
+                origin: CGPoint(x: labelRightX, y: centerY),
             )
         }
 
@@ -577,7 +577,7 @@ extension LayoutEngine {
                     let staffCenterY = staffY + metrics.staffHeight / 2
                     elements.append(.multiMeasureRest(
                         count: runLen,
-                        origin: CGPoint(x: um.width / 2, y: staffCenterY)
+                        origin: CGPoint(x: um.width / 2, y: staffCenterY),
                     ))
                     // Right-edge barline mirrors normal measures so the
                     // system's visible separators stay continuous. Collapsed
@@ -589,7 +589,7 @@ extension LayoutEngine {
                     // staffCenterY, not the staff top.
                     elements.append(.barLine(
                         subtype: barSubtype,
-                        origin: CGPoint(x: um.width, y: staffCenterY)
+                        origin: CGPoint(x: um.width, y: staffCenterY),
                     ))
                 }
                 let sourceMeasure = um.staff0Measure
@@ -603,7 +603,7 @@ extension LayoutEngine {
                     lineBreak: sourceMeasure?.lineBreak ?? false,
                     pageBreak: sourceMeasure?.pageBreak ?? false,
                     tickColumns: [:],
-                    multiMeasureRest: runLen
+                    multiMeasureRest: runLen,
                 ))
                 xCursor += um.width
                 continue
@@ -641,8 +641,8 @@ extension LayoutEngine {
                         kind: marker.kind,
                         text: labelText,
                         origin: CGPoint(
-                            x: 4, y: staffTopY - metrics.sp
-                        )
+                            x: 4, y: staffTopY - metrics.sp,
+                        ),
                     ))
                 }
                 for jump in m.jumps {
@@ -650,8 +650,8 @@ extension LayoutEngine {
                         text: jump.text,
                         origin: CGPoint(
                             x: w - metrics.sp * 4,
-                            y: staffBottomY + metrics.sp
-                        )
+                            y: staffBottomY + metrics.sp,
+                        ),
                     ))
                 }
             }
@@ -661,7 +661,7 @@ extension LayoutEngine {
             // Irregular measures (anacrusis) suppress the label.
             if j == 0, !staves.isEmpty,
                let displayed = context.score.displayedMeasureNumber(
-                   at: measureIdx
+                   at: measureIdx,
                )
             {
                 let staffTopY = staffOrigins[0].y
@@ -669,8 +669,8 @@ extension LayoutEngine {
                     text: "\(displayed)",
                     origin: CGPoint(
                         x: -metrics.sp * 0.5,
-                        y: staffTopY - metrics.sp * 1.5
-                    )
+                        y: staffTopY - metrics.sp * 1.5,
+                    ),
                 ))
             }
             // Surface the source measure's break flags so the
@@ -692,7 +692,7 @@ extension LayoutEngine {
                 jumps: jumps,
                 lineBreak: sourceMeasure?.lineBreak ?? false,
                 pageBreak: sourceMeasure?.pageBreak ?? false,
-                tickColumns: um.tickCols
+                tickColumns: um.tickCols,
             ))
             xCursor += w
         }
@@ -708,7 +708,7 @@ extension LayoutEngine {
         // bottom staff than the baseline allowed.
         let bbox = elementYBounds(
             in: layoutMeasures,
-            metrics: metrics
+            metrics: metrics,
         )
         let bottomSlack = max(0, bbox.max - baselineHeight) + metrics.sp * 2
         let totalHeight = baselineHeight + bottomSlack
@@ -728,7 +728,7 @@ extension LayoutEngine {
             ? labels.map {
                 LayoutPartLabel(
                     text: $0.text,
-                    origin: CGPoint(x: $0.origin.x, y: $0.origin.y + topShift)
+                    origin: CGPoint(x: $0.origin.x, y: $0.origin.y + topShift),
                 )
             }
             : labels
@@ -739,7 +739,7 @@ extension LayoutEngine {
                     topY: $0.topY + topShift,
                     bottomY: $0.bottomY + topShift,
                     column: $0.column,
-                    staffCount: $0.staffCount
+                    staffCount: $0.staffCount,
                 )
             }
             : brackets
@@ -759,7 +759,7 @@ extension LayoutEngine {
             partLabels: adjustedLabels,
             brackets: adjustedBrackets,
             spanners: [],
-            sp: metrics.sp
+            sp: metrics.sp,
         )
     }
 }

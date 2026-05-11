@@ -5,7 +5,7 @@ import Testing
 struct PasteVoiceElementsTests {
     private static let restID = VoiceElementID(
         staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
-        voiceIndex: 0, elementIndex: 1
+        voiceIndex: 0, elementIndex: 1,
     )
 
     @Test("paste a same-total-duration sequence does a clean splice")
@@ -15,14 +15,14 @@ struct PasteVoiceElementsTests {
         var score = EditingFixtures.fourQuarterRests()
         let payload: [VoiceElement] = [
             .chord(Chord(
-                duration: .eighth, notes: [Note(pitch: 60, tpc: 14)]
+                duration: .eighth, notes: [Note(pitch: 60, tpc: 14)],
             )),
             .chord(Chord(
-                duration: .eighth, notes: [Note(pitch: 62, tpc: 16)]
+                duration: .eighth, notes: [Note(pitch: 62, tpc: 16)],
             )),
         ]
         let cmd = PasteVoiceElements(
-            at: Self.restID, elements: payload
+            at: Self.restID, elements: payload,
         )
         _ = try cmd.apply(to: &score)
         let voice = score.parts[0].staves[0].measures[0].voices[0]
@@ -44,17 +44,17 @@ struct PasteVoiceElementsTests {
         var score = EditingFixtures.fourQuarterRests()
         let payload: [VoiceElement] = [
             .chord(Chord(
-                duration: .quarter, notes: [Note(pitch: 60, tpc: 14)]
+                duration: .quarter, notes: [Note(pitch: 60, tpc: 14)],
             )),
             .chord(Chord(
-                duration: .quarter, notes: [Note(pitch: 62, tpc: 16)]
+                duration: .quarter, notes: [Note(pitch: 62, tpc: 16)],
             )),
             .chord(Chord(
-                duration: .quarter, notes: [Note(pitch: 64, tpc: 18)]
+                duration: .quarter, notes: [Note(pitch: 64, tpc: 18)],
             )),
         ]
         let cmd = PasteVoiceElements(
-            at: Self.restID, elements: payload
+            at: Self.restID, elements: payload,
         )
         _ = try cmd.apply(to: &score)
         let voice = score.parts[0].staves[0].measures[0].voices[0]
@@ -85,20 +85,20 @@ struct PasteVoiceElementsTests {
         score.parts[0].staves[0].measures[0].voices[0] = v
         let halfRestID = VoiceElementID(
             staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
-            voiceIndex: 0, elementIndex: 1
+            voiceIndex: 0, elementIndex: 1,
         )
         // Paste two eighth chords (= 1 quarter) onto the half rest:
         // 2-quarter target, 1-quarter payload → leftover = 1 quarter.
         let payload: [VoiceElement] = [
             .chord(Chord(
-                duration: .eighth, notes: [Note(pitch: 60, tpc: 14)]
+                duration: .eighth, notes: [Note(pitch: 60, tpc: 14)],
             )),
             .chord(Chord(
-                duration: .eighth, notes: [Note(pitch: 62, tpc: 16)]
+                duration: .eighth, notes: [Note(pitch: 62, tpc: 16)],
             )),
         ]
         let cmd = PasteVoiceElements(
-            at: halfRestID, elements: payload
+            at: halfRestID, elements: payload,
         )
         _ = try cmd.apply(to: &score)
         let voice = score.parts[0].staves[0].measures[0].voices[0]
@@ -116,14 +116,14 @@ struct PasteVoiceElementsTests {
         let snapshot = score
         let payload: [VoiceElement] = [
             .chord(Chord(
-                duration: .quarter, notes: [Note(pitch: 60, tpc: 14)]
+                duration: .quarter, notes: [Note(pitch: 60, tpc: 14)],
             )),
             .chord(Chord(
-                duration: .quarter, notes: [Note(pitch: 62, tpc: 16)]
+                duration: .quarter, notes: [Note(pitch: 62, tpc: 16)],
             )),
         ]
         let cmd = PasteVoiceElements(
-            at: Self.restID, elements: payload
+            at: Self.restID, elements: payload,
         )
         let inverse = try cmd.apply(to: &score)
         _ = try inverse.apply(to: &score)
@@ -134,7 +134,7 @@ struct PasteVoiceElementsTests {
     func refusesEmpty() {
         var score = EditingFixtures.fourQuarterRests()
         let cmd = PasteVoiceElements(
-            at: Self.restID, elements: []
+            at: Self.restID, elements: [],
         )
         #expect(throws: SheetMusicError.self) {
             _ = try cmd.apply(to: &score)
@@ -156,32 +156,32 @@ struct PasteVoiceElementsTests {
             // Triplet: 3 eighths in a quarter (3:2).
             .chord(Chord(
                 duration: .eighth,
-                notes: [Note(pitch: 60, tpc: 14)]
+                notes: [Note(pitch: 60, tpc: 14)],
             )),
             .chord(Chord(
                 duration: .eighth,
-                notes: [Note(pitch: 62, tpc: 16)]
+                notes: [Note(pitch: 62, tpc: 16)],
             )),
             .chord(Chord(
                 duration: .eighth,
-                notes: [Note(pitch: 64, tpc: 18)]
+                notes: [Note(pitch: 64, tpc: 18)],
             )),
             .rest(duration: .quarter),
         ]
         v.tuplets = [Tuplet(
             normalNotes: 2, actualNotes: 3,
-            startIndex: 3, endIndex: 5
+            startIndex: 3, endIndex: 5,
         )]
         score.parts[0].staves[0].measures[0].voices[0] = v
         let restID = VoiceElementID(
             staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
-            voiceIndex: 0, elementIndex: 1
+            voiceIndex: 0, elementIndex: 1,
         )
         let halfChord = Chord(
-            duration: .half, notes: [Note(pitch: 67, tpc: 15)]
+            duration: .half, notes: [Note(pitch: 67, tpc: 15)],
         )
         let cmd = PasteVoiceElements(
-            at: restID, elements: [.chord(halfChord)]
+            at: restID, elements: [.chord(halfChord)],
         )
         _ = try cmd.apply(to: &score)
         let voice = score.parts[0].staves[0].measures[0].voices[0]
@@ -206,32 +206,32 @@ struct PasteVoiceElementsTests {
             .rest(duration: .quarter),
             .chord(Chord(
                 duration: .eighth,
-                notes: [Note(pitch: 60, tpc: 14)]
+                notes: [Note(pitch: 60, tpc: 14)],
             )),
             .chord(Chord(
                 duration: .eighth,
-                notes: [Note(pitch: 62, tpc: 16)]
+                notes: [Note(pitch: 62, tpc: 16)],
             )),
             .chord(Chord(
                 duration: .eighth,
-                notes: [Note(pitch: 64, tpc: 18)]
+                notes: [Note(pitch: 64, tpc: 18)],
             )),
             .rest(duration: .quarter),
         ]
         v.tuplets = [Tuplet(
             normalNotes: 2, actualNotes: 3,
-            startIndex: 3, endIndex: 5
+            startIndex: 3, endIndex: 5,
         )]
         score.parts[0].staves[0].measures[0].voices[0] = v
         let restID = VoiceElementID(
             staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
-            voiceIndex: 0, elementIndex: 1
+            voiceIndex: 0, elementIndex: 1,
         )
         let wholeChord = Chord(
-            duration: .whole, notes: [Note(pitch: 67, tpc: 15)]
+            duration: .whole, notes: [Note(pitch: 67, tpc: 15)],
         )
         let cmd = PasteVoiceElements(
-            at: restID, elements: [.chord(wholeChord)]
+            at: restID, elements: [.chord(wholeChord)],
         )
         _ = try cmd.apply(to: &score)
         let voice = score.parts[0].staves[0].measures[0].voices[0]
@@ -252,45 +252,45 @@ struct PasteVoiceElementsTests {
             .rest(duration: .quarter),
             .chord(Chord(
                 duration: .eighth,
-                notes: [Note(pitch: 60, tpc: 14)]
+                notes: [Note(pitch: 60, tpc: 14)],
             )),
             .chord(Chord(
                 duration: .eighth,
-                notes: [Note(pitch: 62, tpc: 16)]
+                notes: [Note(pitch: 62, tpc: 16)],
             )),
             .chord(Chord(
                 duration: .eighth,
-                notes: [Note(pitch: 64, tpc: 18)]
+                notes: [Note(pitch: 64, tpc: 18)],
             )),
             .rest(duration: .quarter),
         ]
         v.tuplets = [Tuplet(
             normalNotes: 2, actualNotes: 3,
-            startIndex: 3, endIndex: 5
+            startIndex: 3, endIndex: 5,
         )]
         score.parts[0].staves[0].measures[0].voices[0] = v
         let restID = VoiceElementID(
             staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
-            voiceIndex: 0, elementIndex: 1
+            voiceIndex: 0, elementIndex: 1,
         )
         // 3-quarters worth of payload — eats first quarter rest +
         // second quarter rest + part of the triplet.
         let payload: [VoiceElement] = [
             .chord(Chord(
                 duration: .quarter,
-                notes: [Note(pitch: 67, tpc: 15)]
+                notes: [Note(pitch: 67, tpc: 15)],
             )),
             .chord(Chord(
                 duration: .quarter,
-                notes: [Note(pitch: 69, tpc: 17)]
+                notes: [Note(pitch: 69, tpc: 17)],
             )),
             .chord(Chord(
                 duration: .quarter,
-                notes: [Note(pitch: 71, tpc: 19)]
+                notes: [Note(pitch: 71, tpc: 19)],
             )),
         ]
         let cmd = PasteVoiceElements(
-            at: restID, elements: payload
+            at: restID, elements: payload,
         )
         #expect(throws: SheetMusicError.self) {
             _ = try cmd.apply(to: &score)
@@ -305,35 +305,35 @@ struct PasteVoiceElementsTests {
             .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
             .chord(Chord(
                 duration: .eighth,
-                notes: [Note(pitch: 60, tpc: 14)]
+                notes: [Note(pitch: 60, tpc: 14)],
             )),
             .chord(Chord(
                 duration: .eighth,
-                notes: [Note(pitch: 62, tpc: 16)]
+                notes: [Note(pitch: 62, tpc: 16)],
             )),
             .chord(Chord(
                 duration: .eighth,
-                notes: [Note(pitch: 64, tpc: 18)]
+                notes: [Note(pitch: 64, tpc: 18)],
             )),
             .rest(duration: .half),
             .rest(duration: .quarter),
         ]
         v.tuplets = [Tuplet(
             normalNotes: 2, actualNotes: 3,
-            startIndex: 1, endIndex: 3
+            startIndex: 1, endIndex: 3,
         )]
         score.parts[0].staves[0].measures[0].voices[0] = v
         // Target idx 2 = middle of the triplet.
         let middleID = VoiceElementID(
             staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
-            voiceIndex: 0, elementIndex: 2
+            voiceIndex: 0, elementIndex: 2,
         )
         let cmd = PasteVoiceElements(
             at: middleID,
             elements: [.chord(Chord(
                 duration: .eighth,
-                notes: [Note(pitch: 67, tpc: 15)]
-            ))]
+                notes: [Note(pitch: 67, tpc: 15)],
+            ))],
         )
         #expect(throws: SheetMusicError.self) {
             _ = try cmd.apply(to: &score)
@@ -347,18 +347,18 @@ struct PasteVoiceElementsTests {
         var score = EditingFixtures.fourQuarterRests()
         let lastID = VoiceElementID(
             staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
-            voiceIndex: 0, elementIndex: 4
+            voiceIndex: 0, elementIndex: 4,
         )
         let payload: [VoiceElement] = [
             .chord(Chord(
-                duration: .quarter, notes: [Note(pitch: 60, tpc: 14)]
+                duration: .quarter, notes: [Note(pitch: 60, tpc: 14)],
             )),
             .chord(Chord(
-                duration: .quarter, notes: [Note(pitch: 62, tpc: 16)]
+                duration: .quarter, notes: [Note(pitch: 62, tpc: 16)],
             )),
         ]
         let cmd = PasteVoiceElements(
-            at: lastID, elements: payload
+            at: lastID, elements: payload,
         )
         #expect(throws: SheetMusicError.self) {
             _ = try cmd.apply(to: &score)

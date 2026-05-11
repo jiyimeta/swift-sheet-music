@@ -3,7 +3,7 @@ import Foundation
 @testable import SheetMusicMIDI
 import Testing
 
-@Suite struct MidiImporterDrumTests {
+struct MidiImporterDrumTests {
     @Test func drumTrackPopulatesHeadTypeForCrossNotehead() {
         // Pitch 42 = closed hi-hat → "cross" notehead.
         let measure = ImportMeasure(
@@ -13,11 +13,11 @@ import Testing
                 TimedMidiEvent(tick: 0, event: .noteOn(channel: 9, pitch: 42, velocity: 80)),
                 TimedMidiEvent(tick: 240, event: .noteOff(channel: 9, pitch: 42, velocity: 0)),
             ],
-            carryIns: [], carryOuts: []
+            carryIns: [], carryOuts: [],
         )
         let q = MidiImporter.quantize(measure: measure, division: 480, options: .init())
         let voice = MidiImporter.voice(
-            quantized: q, measure: measure, division: 480, isDrumTrack: true
+            quantized: q, measure: measure, division: 480, isDrumTrack: true,
         )
         if case let .chord(c) = voice.elements.first {
             #expect(c.notes.first?.headType == "cross")
@@ -35,11 +35,11 @@ import Testing
                 TimedMidiEvent(tick: 0, event: .noteOn(channel: 9, pitch: 35, velocity: 80)),
                 TimedMidiEvent(tick: 240, event: .noteOff(channel: 9, pitch: 35, velocity: 0)),
             ],
-            carryIns: [], carryOuts: []
+            carryIns: [], carryOuts: [],
         )
         let q = MidiImporter.quantize(measure: measure, division: 480, options: .init())
         let voice = MidiImporter.voice(
-            quantized: q, measure: measure, division: 480, isDrumTrack: true
+            quantized: q, measure: measure, division: 480, isDrumTrack: true,
         )
         if case let .chord(c) = voice.elements.first {
             #expect(c.notes.first?.headType == "normal")
@@ -56,7 +56,7 @@ import Testing
                 TimedMidiEvent(tick: 0, event: .noteOn(channel: 0, pitch: 60, velocity: 80)),
                 TimedMidiEvent(tick: 240, event: .noteOff(channel: 0, pitch: 60, velocity: 0)),
             ],
-            carryIns: [], carryOuts: []
+            carryIns: [], carryOuts: [],
         )
         let q = MidiImporter.quantize(measure: measure, division: 480, options: .init())
         let voice = MidiImporter.voice(quantized: q, measure: measure, division: 480)
@@ -72,7 +72,7 @@ import Testing
         // should carry the two kicks.
         let track0 = MidiTrack(events: [
             TimedMidiEvent(tick: 0, event: .meta(.timeSignature(
-                numerator: 4, denominator: 4, clocksPerClick: 24, thirtySecondsPerQuarter: 8
+                numerator: 4, denominator: 4, clocksPerClick: 24, thirtySecondsPerQuarter: 8,
             ))),
             TimedMidiEvent(tick: 1920, event: .endOfTrack),
         ])
@@ -99,14 +99,16 @@ import Testing
         let measure = score.parts[drums].staves.first?.measures.first
         guard let measure else { Issue.record("expected measure"); return }
         #expect(measure.voices.count == 2)
-        // Walk every chord pitch in each voice — voice 0 should
-        // contain hi-hat (42) and snare (38); voice 1 should
-        // contain the two kicks (36).
+        /// Walk every chord pitch in each voice — voice 0 should
+        /// contain hi-hat (42) and snare (38); voice 1 should
+        /// contain the two kicks (36).
         func pitches(in v: Voice) -> Set<Int> {
             var out: Set<Int> = []
             for el in v.elements {
                 if case let .chord(c) = el {
-                    for n in c.notes { out.insert(n.pitch) }
+                    for n in c.notes {
+                        out.insert(n.pitch)
+                    }
                 }
             }
             return out
@@ -122,7 +124,7 @@ import Testing
         // should be omitted, leaving a single voice 0 with the hits.
         let track0 = MidiTrack(events: [
             TimedMidiEvent(tick: 0, event: .meta(.timeSignature(
-                numerator: 4, denominator: 4, clocksPerClick: 24, thirtySecondsPerQuarter: 8
+                numerator: 4, denominator: 4, clocksPerClick: 24, thirtySecondsPerQuarter: 8,
             ))),
             TimedMidiEvent(tick: 1920, event: .endOfTrack),
         ])
@@ -153,7 +155,7 @@ import Testing
         let track0 = MidiTrack(events: [
             TimedMidiEvent(tick: 0, event: .meta(.trackName("Conductor"))),
             TimedMidiEvent(tick: 0, event: .meta(.timeSignature(
-                numerator: 4, denominator: 4, clocksPerClick: 24, thirtySecondsPerQuarter: 8
+                numerator: 4, denominator: 4, clocksPerClick: 24, thirtySecondsPerQuarter: 8,
             ))),
             TimedMidiEvent(tick: 480, event: .endOfTrack),
         ])

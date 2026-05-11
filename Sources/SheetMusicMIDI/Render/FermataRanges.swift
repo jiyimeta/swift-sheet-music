@@ -3,7 +3,7 @@ import SheetMusicCore
 
 /// One resolved fermata: the original-tick range its anchor chord/rest
 /// occupies, and the hold ratio to apply during that range.
-struct FermataRange: Sendable, Equatable {
+struct FermataRange: Equatable {
     let startTick: Int // original (pre-repeat) tick
     let endTick: Int // exclusive
     let stretch: Double // ≥ 1.0; fermata hold multiplier applied to the note duration
@@ -18,11 +18,11 @@ enum FermataRanges {
         var measureBase = 0
         for measure in staff.measures {
             let mTicks = MidiRenderer.measureTicks(
-                measure: measure, division: division
+                measure: measure, division: division,
             )
             for voice in measure.voices {
                 ranges.append(contentsOf: collectInVoice(
-                    voice, measureBase: measureBase, division: division
+                    voice, measureBase: measureBase, division: division,
                 ))
             }
             measureBase += mTicks
@@ -37,12 +37,12 @@ enum FermataRanges {
     private static func collectInVoice(
         _ voice: Voice,
         measureBase: Int,
-        division: Int
+        division: Int,
     ) -> [FermataRange] {
         // Pre-compute each chord's start tick within the voice so both
         // forward and backward searches are O(1) lookups.
         var chordStartTicks: [Int?] = Array(
-            repeating: nil, count: voice.elements.count
+            repeating: nil, count: voice.elements.count,
         )
         var runningTick = measureBase
         for (i, element) in voice.elements.enumerated() {
@@ -66,7 +66,7 @@ enum FermataRanges {
             ranges.append(FermataRange(
                 startTick: anchor.startTick,
                 endTick: anchor.startTick + chordTicks,
-                stretch: f.timeStretch
+                stretch: f.timeStretch,
             ))
         }
         return ranges
@@ -77,7 +77,7 @@ enum FermataRanges {
     private static func anchorForFermata(
         at index: Int,
         in voice: Voice,
-        chordStartTicks: [Int?]
+        chordStartTicks: [Int?],
     ) -> Anchor? {
         // Forward search.
         for j in (index + 1) ..< voice.elements.count {
@@ -125,9 +125,9 @@ enum FermataRanges {
 /// last entry whose tick is ≤ the queried tick. Defaults to a single
 /// `(0, 2.0)` entry (= 120 BPM, MuseScore default) so empty scores
 /// still answer correctly.
-struct TempoTimeline: Sendable, Equatable {
+struct TempoTimeline: Equatable {
     let entries: [Entry]
-    struct Entry: Sendable, Equatable {
+    struct Entry: Equatable {
         let tick: Int
         let bps: Double
     }
@@ -165,7 +165,7 @@ struct TempoTimeline: Sendable, Equatable {
         var measureBase = 0
         for measure in staff.measures {
             let mTicks = MidiRenderer.measureTicks(
-                measure: measure, division: division
+                measure: measure, division: division,
             )
             if let voice = measure.voices.first {
                 var localTick = measureBase
@@ -195,7 +195,7 @@ extension FermataRanges {
     /// sort before same-tick `.tempo`). The renderer's stable sort
     /// realises the close → .tempo → open ordering documented in the
     /// fermata-midi spec.
-    struct TempoEvents: Sendable, Equatable {
+    struct TempoEvents: Equatable {
         var openEvents: [TimedMidiEvent]
         var closeEvents: [TimedMidiEvent]
     }
@@ -207,7 +207,7 @@ extension FermataRanges {
     /// stretch transitions.
     static func tempoEvents(
         ranges: [FermataRange],
-        timeline: TempoTimeline
+        timeline: TempoTimeline,
     ) -> TempoEvents {
         guard !ranges.isEmpty else { return TempoEvents(openEvents: [], closeEvents: []) }
         var sortedByStart = ranges.sorted { $0.startTick < $1.startTick }
@@ -232,7 +232,7 @@ extension FermataRanges {
             let bookendBps = baseBps / effective
             let micros = Int((1_000_000.0 / bookendBps).rounded())
             let event = TimedMidiEvent(
-                tick: tick, event: .meta(.tempo(microsecondsPerQuarter: micros))
+                tick: tick, event: .meta(.tempo(microsecondsPerQuarter: micros)),
             )
             // Classification: "close" only when fully restored to the
             // baseline (no fermatas active). Any transition that leaves

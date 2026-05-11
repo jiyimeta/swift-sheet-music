@@ -4,11 +4,11 @@ import Foundation
 @testable import SheetMusicPDF
 import Testing
 
-@Suite @MainActor struct PDFImporterLyricsTests {
+@MainActor struct PDFImporterLyricsTests {
     // MARK: - Fixtures
 
     private func textGlyph(
-        _ text: String, x: CGFloat, y: CGFloat
+        _ text: String, x: CGFloat, y: CGFloat,
     ) -> TextGlyph {
         TextGlyph(
             text: text,
@@ -16,22 +16,22 @@ import Testing
             fontSize: 10,
             origin: CGPoint(x: x, y: y),
             bbox: CGRect(x: x, y: y, width: 20, height: 10),
-            pageIndex: 0
+            pageIndex: 0,
         )
     }
 
     private func chordElement(
-        x: CGFloat, midi: Int = 60
+        x: CGFloat, midi: Int = 60,
     ) -> RhythmElement {
         RhythmElement(
             chord: Chord(
                 duration: .quarter,
-                notes: ChordNotes([Note(pitch: midi, tpc: 14)])
+                notes: ChordNotes([Note(pitch: midi, tpc: 14)]),
             ),
             x: x,
             y: 500,
             stemDirection: .up,
-            beamGroup: nil
+            beamGroup: nil,
         )
     }
 
@@ -49,7 +49,7 @@ import Testing
             elements: elements,
             texts: texts,
             staffYLines: staffYLines,
-            pageIndex: 0
+            pageIndex: 0,
         )
         #expect(out.count == 1)
         #expect(out[0].chord.lyrics == [Lyric(text: "Hi", syllabic: .single)])
@@ -68,7 +68,7 @@ import Testing
             elements: elements,
             texts: texts,
             staffYLines: staffYLines,
-            pageIndex: 0
+            pageIndex: 0,
         )
         #expect(out[0].chord.lyrics == [Lyric(text: "Hap", syllabic: .begin)])
         #expect(out[1].chord.lyrics == [Lyric(text: "py", syllabic: .end)])
@@ -91,7 +91,7 @@ import Testing
             elements: elements,
             texts: texts,
             staffYLines: staffYLines,
-            pageIndex: 0
+            pageIndex: 0,
         )
         #expect(out[0].chord.lyrics == [Lyric(text: "Hap", syllabic: .begin)])
         #expect(out[1].chord.lyrics == [Lyric(text: "py", syllabic: .end)])
@@ -112,7 +112,7 @@ import Testing
             elements: elements,
             texts: texts,
             staffYLines: staffYLines,
-            pageIndex: 0
+            pageIndex: 0,
         )
         // First chord still gets a single syllable; underscore is not
         // attached as a new syllable. (Melisma `ticks` updating is
@@ -132,7 +132,7 @@ import Testing
             elements: elements,
             texts: texts,
             staffYLines: staffYLines,
-            pageIndex: 0
+            pageIndex: 0,
         )
         #expect(out[0].chord.lyrics.isEmpty)
     }

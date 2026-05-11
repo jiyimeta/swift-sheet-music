@@ -30,7 +30,9 @@ public struct PasteVoiceElement: EditCommand {
         self.element = element
     }
 
-    public var affectedLocation: VoiceElementID { location }
+    public var affectedLocation: VoiceElementID {
+        location
+    }
 
     @discardableResult
     public func apply(to score: inout Score) throws -> any EditCommand {
@@ -39,7 +41,8 @@ public struct PasteVoiceElement: EditCommand {
             voice.elements.indices.contains(location.elementIndex)
         else {
             throw SheetMusicError.invalidEdit(
-                reason: "PasteVoiceElement: no element at \(location)")
+                reason: "PasteVoiceElement: no element at \(location)",
+            )
         }
         let original = voice.elements[location.elementIndex]
         let division = score.division
@@ -64,12 +67,12 @@ public struct PasteVoiceElement: EditCommand {
         try DurationChangeAlgorithm.ensureNotInsideTuplet(
             voice: voice,
             elementIdx: location.elementIndex,
-            label: "PasteVoiceElement"
+            label: "PasteVoiceElement",
         )
         let targetRtick = DurationChangeAlgorithm.tickOffset(
             in: voice,
             ofElementAt: location.elementIndex,
-            division: division
+            division: division,
         )
         // `srcTicks` in DurationChangeAlgorithm = the OLD duration
         // at idx (i.e., the target we're replacing); `dstTicks` =
@@ -82,14 +85,14 @@ public struct PasteVoiceElement: EditCommand {
                 srcTicks: dst,
                 dstTicks: src,
                 targetRtick: targetRtick,
-                division: division
+                division: division,
             )
         let replace = ReplaceVoiceElements(
             staff: location.staff,
             measureIndex: location.measureIndex,
             voiceIndex: location.voiceIndex,
             elements: newElements,
-            tuplets: newTuplets
+            tuplets: newTuplets,
         )
         return try replace.apply(to: &score)
     }
@@ -97,7 +100,7 @@ public struct PasteVoiceElement: EditCommand {
     /// Tick count of a chord / rest; nil for non-timed elements
     /// so the duration check is skipped for those.
     private static func ticks(
-        of element: VoiceElement, division: Int
+        of element: VoiceElement, division: Int,
     ) -> Int? {
         switch element {
         case let .chord(c): return c.duration.ticks(division: division)

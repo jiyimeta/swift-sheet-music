@@ -28,13 +28,13 @@ public enum BravuraFont {
     public static let register: Bool = {
         let logger = Logger(
             subsystem: "swift-sheet-music.SheetMusicUI",
-            category: "BravuraFont"
+            category: "BravuraFont",
         )
 
         if let url = locateBravuraURL(logger: logger) {
             var error: Unmanaged<CFError>?
             let ok = CTFontManagerRegisterFontsForURL(
-                url as CFURL, .process, &error
+                url as CFURL, .process, &error,
             )
             if ok {
                 logger.info("Bravura registered from \(url.path, privacy: .public)")
@@ -78,7 +78,7 @@ public enum BravuraFont {
             // as a sibling .bundle; open it explicitly and search inside.
             if let nestedURL = bundle.url(
                 forResource: "swift-sheet-music_SheetMusicUI",
-                withExtension: "bundle"
+                withExtension: "bundle",
             ),
                 let nested = Bundle(url: nestedURL),
                 let url = find(in: nested)
@@ -92,13 +92,13 @@ public enum BravuraFont {
 
     private static func find(in bundle: Bundle) -> URL? {
         if let url = bundle.url(
-            forResource: "Bravura", withExtension: "otf"
+            forResource: "Bravura", withExtension: "otf",
         ) {
             return url
         }
         if let url = bundle.url(
             forResource: "Bravura", withExtension: "otf",
-            subdirectory: "Resources"
+            subdirectory: "Resources",
         ) {
             return url
         }

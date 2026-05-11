@@ -4,7 +4,7 @@ import Foundation
 @testable import SheetMusicPDF
 import Testing
 
-@Suite @MainActor struct PDFImporterDiagnosticsTests {
+@MainActor struct PDFImporterDiagnosticsTests {
     /// `PDFImportOptions.diagnostics` is `@Sendable`, so a captured
     /// `var` array can't be mutated from inside the closure under
     /// strict concurrency. A reference-typed sink sidesteps that —
@@ -31,7 +31,7 @@ import Testing
             fontSize: 20,
             origin: CGPoint(x: 100, y: 700),
             advance: 5,
-            pageIndex: 0
+            pageIndex: 0,
         )
     }
 
@@ -41,7 +41,7 @@ import Testing
         opts.diagnostics = { d in sink.append(d) }
         let glyph = ClassifiedGlyph(
             raw: Self.makeRawGlyph(codepoint: 0xE999),
-            semantic: .unknown(0xE999)
+            semantic: .unknown(0xE999),
         )
         PDFImporter.emitUnknownGlyphDiagnostics([glyph], options: opts)
         let captured = sink.snapshot
@@ -55,7 +55,7 @@ import Testing
         opts.diagnostics = nil
         let glyph = ClassifiedGlyph(
             raw: Self.makeRawGlyph(codepoint: 0xE999),
-            semantic: .unknown(0xE999)
+            semantic: .unknown(0xE999),
         )
         // Must not crash; no observable side-effect.
         PDFImporter.emitUnknownGlyphDiagnostics([glyph], options: opts)
@@ -67,7 +67,7 @@ import Testing
         opts.diagnostics = { d in sink.append(d) }
         let glyph = ClassifiedGlyph(
             raw: Self.makeRawGlyph(codepoint: 0xE0A4),
-            semantic: .noteheadBlack
+            semantic: .noteheadBlack,
         )
         PDFImporter.emitUnknownGlyphDiagnostics([glyph], options: opts)
         #expect(sink.snapshot.isEmpty)

@@ -4,7 +4,7 @@ import Foundation
 @testable import SheetMusicPDF
 import Testing
 
-@Suite struct PDFImporterFaçadeTests {
+struct PDFImporterFaçadeTests {
     @Test func emptyDataThrows() {
         #expect(throws: SheetMusicError.self) {
             _ = try PDFImporter.parse(pdfData: Data())
@@ -34,7 +34,7 @@ import Testing
         let paths = lineYs.map {
             PDFFixtureBuilder.PathPlacement(
                 origin: CGPoint(x: 50, y: $0),
-                kind: .horizontal(width: 400)
+                kind: .horizontal(width: 400),
             )
         }
         let data = PDFFixtureBuilder.build(paths: paths)

@@ -7,7 +7,7 @@ extension StaffText {
     /// the same XML shape (`<text>`, optional `<color>`, optional
     /// `<offset>`); only `isSystemText` differs.
     static func decode(
-        _ node: XMLTreeNode, isSystemText: Bool
+        _ node: XMLTreeNode, isSystemText: Bool,
     ) throws -> StaffText {
         let text = node.first("text")
             .map(plainText(of:)) ?? ""
@@ -23,7 +23,7 @@ extension StaffText {
             color: color,
             isSystemText: isSystemText,
             properties: props,
-            visible: visible
+            visible: visible,
         )
     }
 
@@ -45,7 +45,7 @@ extension StaffText {
     }
 
     static func decodeColor(
-        _ node: XMLTreeNode
+        _ node: XMLTreeNode,
     ) -> ScoreColor? {
         let attrs = node.attributes
         guard let r = attrs["r"].flatMap(Int.init),
@@ -57,7 +57,7 @@ extension StaffText {
     }
 
     static func decodeOffset(
-        _ node: XMLTreeNode
+        _ node: XMLTreeNode,
     ) -> (Double, Double) {
         let attrs = node.attributes
         let x = attrs["x"].flatMap(Double.init) ?? 0

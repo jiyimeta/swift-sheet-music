@@ -17,13 +17,25 @@ public struct StaffMetrics: Sendable, Equatable {
     }
 
     /// Thickness of a staff line. Engraving: typically 0.13 sp.
-    public var staffLineThickness: CGFloat { sp * 0.13 }
+    public var staffLineThickness: CGFloat {
+        sp * 0.13
+    }
+
     /// Thickness of a stem. Engraving: typically 0.12 sp.
-    public var stemThickness: CGFloat { sp * 0.12 }
+    public var stemThickness: CGFloat {
+        sp * 0.12
+    }
+
     /// Typical stem length for isolated notes: 3.5 sp.
-    public var defaultStemLength: CGFloat { sp * 3.5 }
+    public var defaultStemLength: CGFloat {
+        sp * 3.5
+    }
+
     /// Font size for Bravura glyphs (pt). One em = 4 sp by SMuFL convention.
-    public var glyphFontSize: CGFloat { sp * 4 }
+    public var glyphFontSize: CGFloat {
+        sp * 4
+    }
+
     /// Horizontal space allocated per quarter note (pre-stretch).
     /// Calibrated against MuseScore's
     /// `Sid::measureSpacing = 1.5_sp` default, modulated by the
@@ -31,10 +43,15 @@ public struct StaffMetrics: Sendable, Equatable {
     /// quarter beat the engraving target is ~1.6 sp. The previous
     /// 4 sp value over-stretched measures, especially under
     /// lyrics, and reduced systems-per-page by ~40 %.
-    public var spacePerQuarter: CGFloat { sp * 1.6 }
+    public var spacePerQuarter: CGFloat {
+        sp * 1.6
+    }
+
     /// Default Y origin for chord symbols, in points (relative to
     /// the staff top). Negative = above the staff. -2.5 sp matches
     /// MuseScore's `Sid::chordSymbolAPlacement = above` with the
     /// default 0.5 sp offset clear of the staff.
-    public var harmonyPlacementAbove: CGFloat { sp * -2.5 }
+    public var harmonyPlacementAbove: CGFloat {
+        sp * -2.5
+    }
 }

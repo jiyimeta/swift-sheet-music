@@ -22,7 +22,7 @@
         isPlaying: Bool,
         viewportHeight: CGFloat,
         systemFrames: [Int: CGRect],
-        proxy: ScrollViewProxy
+        proxy: ScrollViewProxy,
     ) {
         guard isPlaying, let cursor, let doc else { return }
         let mi = cursor.measureIndex
@@ -32,7 +32,7 @@
         if isAnchorFullyVisible(
             anchorMin: frame.minY, anchorMax: frame.maxY,
             anchorSize: frame.height,
-            viewportSize: viewportHeight
+            viewportSize: viewportHeight,
         ) { return }
         let pad: CGFloat = 8 * doc.metrics.sp
         let unit = paddedScrollAnchor(
@@ -40,12 +40,12 @@
             anchorSize: frame.height,
             viewportSize: viewportHeight,
             pad: pad,
-            horizontal: false
+            horizontal: false,
         )
         withAnimation(.easeInOut(duration: 0.25)) {
             proxy.scrollTo(
                 VerticalSystemAnchorID(systemIndex: sys),
-                anchor: unit
+                anchor: unit,
             )
         }
     }
@@ -65,7 +65,7 @@
         magnification: CGFloat,
         horizontalScrollX: CGFloat,
         horizontalScrollY: CGFloat,
-        pendingScroll: Binding<CGPoint?>
+        pendingScroll: Binding<CGPoint?>,
     ) {
         guard isPlaying,
               let cursor,
@@ -93,7 +93,7 @@
         // which is offset from doc by `inset`.
         let targetX = max(0, origin.x)
         pendingScroll.wrappedValue = CGPoint(
-            x: targetX, y: horizontalScrollY
+            x: targetX, y: horizontalScrollY,
         )
     }
 
@@ -119,7 +119,7 @@
         magnification: CGFloat,
         horizontalScrollX: CGFloat,
         horizontalScrollY: CGFloat,
-        pendingScroll: Binding<CGPoint?>
+        pendingScroll: Binding<CGPoint?>,
     ) {
         guard let origin = doc.measureOrigin(measureIndex: measureIndex)
         else { return }
@@ -173,7 +173,7 @@
             targetX = max(0, origin.x - visibleDocWidth * (1 - rightMarginRatio))
         }
         pendingScroll.wrappedValue = CGPoint(
-            x: targetX, y: horizontalScrollY
+            x: targetX, y: horizontalScrollY,
         )
     }
 #endif

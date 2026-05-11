@@ -64,7 +64,7 @@ public enum SheetMusic {
     /// Serialize a `Score` to `.mscx` with the given options and
     /// write the result to a file URL.
     public static func exportMSCX(
-        _ score: Score, options: MSCXEncoderOptions, to url: URL
+        _ score: Score, options: MSCXEncoderOptions, to url: URL,
     ) throws {
         try MSCXEncoder.encode(score, options: options, to: url)
     }
@@ -72,7 +72,7 @@ public enum SheetMusic {
     /// Serialize a `Score` to `.mscz` with the given options and
     /// write the result to a file URL.
     public static func exportMSCZ(
-        _ score: Score, options: MSCXEncoderOptions, to url: URL
+        _ score: Score, options: MSCXEncoderOptions, to url: URL,
     ) throws {
         try MSCZWriter.write(score: score, options: options, to: url)
     }
@@ -89,7 +89,7 @@ public enum SheetMusic {
     public static func loadScore(
         midiData: Data,
         options: MidiImportOptions = .init(),
-        sourceFilename: String? = nil
+        sourceFilename: String? = nil,
     ) throws -> Score {
         try MidiImporter.parse(midiData, options: options, sourceFilename: sourceFilename)
     }
@@ -100,7 +100,7 @@ public enum SheetMusic {
     public static func loadScore(
         midiData: Data,
         options: MidiImportOptions,
-        sourceFilename: String? = nil
+        sourceFilename: String? = nil,
     ) async throws -> Score {
         try await MidiImporter.parse(midiData, options: options, sourceFilename: sourceFilename)
     }
@@ -109,12 +109,12 @@ public enum SheetMusic {
     /// (without extension) is used as the title fallback when the SMF
     /// has no Track-Name meta on Track 0.
     public static func loadScore(
-        midiURL: URL, options: MidiImportOptions = .init()
+        midiURL: URL, options: MidiImportOptions = .init(),
     ) throws -> Score {
         let data = try Data(contentsOf: midiURL)
         return try MidiImporter.parse(
             data, options: options,
-            sourceFilename: midiURL.deletingPathExtension().lastPathComponent
+            sourceFilename: midiURL.deletingPathExtension().lastPathComponent,
         )
     }
 
@@ -122,12 +122,12 @@ public enum SheetMusic {
     /// The filename (without extension) is used as the title fallback
     /// when the SMF has no Track-Name meta on Track 0.
     public static func loadScore(
-        midiURL: URL, options: MidiImportOptions = .init()
+        midiURL: URL, options: MidiImportOptions = .init(),
     ) async throws -> Score {
         let data = try Data(contentsOf: midiURL)
         return try await MidiImporter.parse(
             data, options: options,
-            sourceFilename: midiURL.deletingPathExtension().lastPathComponent
+            sourceFilename: midiURL.deletingPathExtension().lastPathComponent,
         )
     }
 

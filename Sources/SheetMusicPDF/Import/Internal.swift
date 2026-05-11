@@ -121,7 +121,7 @@ enum ScoreStateEvent {
 /// against the lead notehead. Local to the PDF importer; the public
 /// score model has no equivalent flag (stems are auto-laid in
 /// engraving, not stored on chords).
-enum StemDirection: Sendable, Equatable { case up, down }
+enum StemDirection: Equatable { case up, down }
 
 /// Stage [6] output — one chord (or rest) decoded from a measure's
 /// glyph cluster. `chord.notes.isEmpty` ⇔ this element is a rest;
@@ -134,5 +134,7 @@ struct RhythmElement {
     var stemDirection: StemDirection?
     var beamGroup: Int?
 
-    var isRest: Bool { chord.notes.isEmpty }
+    var isRest: Bool {
+        chord.notes.isEmpty
+    }
 }

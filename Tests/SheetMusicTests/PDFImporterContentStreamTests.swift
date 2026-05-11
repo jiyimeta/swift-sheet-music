@@ -4,15 +4,15 @@ import PDFKit
 @testable import SheetMusicPDF
 import Testing
 
-@Suite @MainActor struct PDFImporterContentStreamTests {
+@MainActor struct PDFImporterContentStreamTests {
     @Test func extractsAsciiTextOrigin() throws {
         let data = PDFFixtureBuilder.build(
             glyphs: [.init(
                 unicodeScalar: "A",
                 fontName: "Helvetica",
                 fontSize: 12,
-                origin: CGPoint(x: 100, y: 700)
-            )]
+                origin: CGPoint(x: 100, y: 700),
+            )],
         )
         let doc = try #require(PDFDocument(data: data))
         let walker = PDFImporter.ContentStreamWalker(document: doc)
@@ -28,8 +28,8 @@ import Testing
         let data = PDFFixtureBuilder.build(
             paths: [.init(
                 origin: CGPoint(x: 50, y: 500),
-                kind: .horizontal(width: 400)
-            )]
+                kind: .horizontal(width: 400),
+            )],
         )
         let doc = try #require(PDFDocument(data: data))
         let walker = PDFImporter.ContentStreamWalker(document: doc)
@@ -45,8 +45,8 @@ import Testing
         let data = PDFFixtureBuilder.build(
             paths: [.init(
                 origin: CGPoint(x: 200, y: 400),
-                kind: .vertical(height: 80)
-            )]
+                kind: .vertical(height: 80),
+            )],
         )
         let doc = try #require(PDFDocument(data: data))
         let walker = PDFImporter.ContentStreamWalker(document: doc)
@@ -58,10 +58,10 @@ import Testing
     @Test func multiplePagesEnumerated() throws {
         // Build a 2-page document by concatenating two PDFs via PDFDocument
         let p0 = PDFFixtureBuilder.build(
-            paths: [.init(origin: CGPoint(x: 0, y: 100), kind: .horizontal(width: 100))]
+            paths: [.init(origin: CGPoint(x: 0, y: 100), kind: .horizontal(width: 100))],
         )
         let p1 = PDFFixtureBuilder.build(
-            paths: [.init(origin: CGPoint(x: 0, y: 200), kind: .horizontal(width: 100))]
+            paths: [.init(origin: CGPoint(x: 0, y: 200), kind: .horizontal(width: 100))],
         )
         let doc = try #require(PDFDocument(data: p0))
         let aux = try #require(PDFDocument(data: p1))

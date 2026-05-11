@@ -4,11 +4,11 @@ import Testing
 @Suite("Score.items(inRangeFrom:to:)")
 struct NoteRangeTests {
     private func makeSingleStaffScore() -> Score {
-        // One staff, two measures, each with one voice, four quarter notes.
+        /// One staff, two measures, each with one voice, four quarter notes.
         func chord(_ pitch: Int) -> VoiceElement {
             .chord(Chord(
                 duration: .quarter,
-                notes: [Note(pitch: pitch, tpc: 14)]
+                notes: [Note(pitch: pitch, tpc: 14)],
             ))
         }
         let m1 = Measure(voices: [
@@ -19,7 +19,7 @@ struct NoteRangeTests {
         ])
         return Score(
             division: 480,
-            parts: [Part(id: "1", instrument: Instrument(id: "x"), staves: [Staff(measures: [m1, m2])])]
+            parts: [Part(id: "1", instrument: Instrument(id: "x"), staves: [Staff(measures: [m1, m2])])],
         )
     }
 
@@ -29,19 +29,19 @@ struct NoteRangeTests {
             Voice(elements: [
                 .chord(Chord(
                     duration: .quarter,
-                    notes: [Note(pitch: 60, tpc: 14)]
+                    notes: [Note(pitch: 60, tpc: 14)],
                 )),
                 .rest(duration: .quarter),
                 .chord(Chord(
                     duration: .quarter,
-                    notes: [Note(pitch: 64, tpc: 14)]
+                    notes: [Note(pitch: 64, tpc: 14)],
                 )),
                 .rest(duration: .quarter),
             ]),
         ])
         return Score(
             division: 480,
-            parts: [Part(id: "1", instrument: Instrument(id: "x"), staves: [Staff(measures: [m1])])]
+            parts: [Part(id: "1", instrument: Instrument(id: "x"), staves: [Staff(measures: [m1])])],
         )
     }
 
@@ -49,7 +49,7 @@ struct NoteRangeTests {
         func chord(_ pitch: Int) -> VoiceElement {
             .chord(Chord(
                 duration: .quarter,
-                notes: [Note(pitch: pitch, tpc: 14)]
+                notes: [Note(pitch: pitch, tpc: 14)],
             ))
         }
         let m1a = Measure(voices: [
@@ -63,27 +63,27 @@ struct NoteRangeTests {
             parts: [
                 Part(id: "1", instrument: Instrument(id: "x"), staves: [Staff(measures: [m1a])]),
                 Part(id: "2", instrument: Instrument(id: "y"), staves: [Staff(measures: [m1b])]),
-            ]
+            ],
         )
     }
 
     private func note(
         _ staffIdx: Int, _ measure: Int, _ voice: Int,
-        _ element: Int, _ noteInChord: Int = 0
+        _ element: Int, _ noteInChord: Int = 0,
     ) -> ScoreItemID {
         .note(NoteID(
             staff: StaffAddress(partIndex: staffIdx, staffIndexInPart: 0), measureIndex: measure,
             voiceIndex: voice, elementIndex: element,
-            noteIndexInChord: noteInChord
+            noteIndexInChord: noteInChord,
         ))
     }
 
     private func rest(
-        _ staffIdx: Int, _ measure: Int, _ voice: Int, _ element: Int
+        _ staffIdx: Int, _ measure: Int, _ voice: Int, _ element: Int,
     ) -> ScoreItemID {
         .rest(RestID(
             staff: StaffAddress(partIndex: staffIdx, staffIndexInPart: 0), measureIndex: measure,
-            voiceIndex: voice, elementIndex: element
+            voiceIndex: voice, elementIndex: element,
         ))
     }
 
@@ -154,28 +154,28 @@ struct NoteRangeTests {
         let target = rest(0, 0, 0, 3)
         let result = score.items(inRangeFrom: anchor, to: target)
         #expect(result.count == 4)
-        let noteCount = result.filter {
+        let noteCount = result.count(where: {
             if case .note = $0 { true } else { false }
-        }.count
-        let restCount = result.filter {
+        })
+        let restCount = result.count(where: {
             if case .rest = $0 { true } else { false }
-        }.count
+        })
         #expect(noteCount == 2)
         #expect(restCount == 2)
     }
 
     @Test("Long note in another staff extends range across short notes")
     func longerEndpointExtendsCoverage() {
-        // staff 0: 8 eighths. staff 1: 1 whole — both starting at
-        // tick 0 of measure 0. Selecting the first eighth (staff 0)
-        // and shift-clicking the whole (staff 1) should cover EVERY
-        // eighth in staff 0, not just the two clicked endpoints,
-        // because the whole's duration extends the range to the
-        // end of the bar.
+        /// staff 0: 8 eighths. staff 1: 1 whole — both starting at
+        /// tick 0 of measure 0. Selecting the first eighth (staff 0)
+        /// and shift-clicking the whole (staff 1) should cover EVERY
+        /// eighth in staff 0, not just the two clicked endpoints,
+        /// because the whole's duration extends the range to the
+        /// end of the bar.
         func eighth(_ pitch: Int) -> VoiceElement {
             .chord(Chord(
                 duration: .eighth,
-                notes: [Note(pitch: pitch, tpc: 14)]
+                notes: [Note(pitch: pitch, tpc: 14)],
             ))
         }
         let s0m0 = Measure(voices: [
@@ -188,7 +188,7 @@ struct NoteRangeTests {
             Voice(elements: [
                 .chord(Chord(
                     duration: .whole,
-                    notes: [Note(pitch: 48, tpc: 14)]
+                    notes: [Note(pitch: 48, tpc: 14)],
                 )),
             ]),
         ])
@@ -197,12 +197,12 @@ struct NoteRangeTests {
             parts: [
                 Part(id: "1", instrument: Instrument(id: "x"), staves: [Staff(measures: [s0m0])]),
                 Part(id: "2", instrument: Instrument(id: "y"), staves: [Staff(measures: [s1m0])]),
-            ]
+            ],
         )
         let firstEighth = note(0, 0, 0, 0)
         let whole = note(1, 0, 0, 0)
         let result = score.items(
-            inRangeFrom: firstEighth, to: whole
+            inRangeFrom: firstEighth, to: whole,
         )
         // 8 notes from staff 0 + 1 note from staff 1 = 9 IDs.
         #expect(result.count == 9)

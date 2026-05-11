@@ -15,7 +15,7 @@ extension LayoutEngine {
     }
 
     static func packSystems(
-        context: RenderContext
+        context: RenderContext,
     ) -> [LayoutSystem] {
         let allStaves = context.score.allStaves
         let staves = allStaves.map(\.staff)
@@ -81,7 +81,7 @@ extension LayoutEngine {
                         sp: prior.sp,
                         division: prior.division,
                         minWidth: overridden,
-                        placements: prior.placements
+                        placements: prior.placements,
                     )
                 } else {
                     context.cache?.entries[i] = prior
@@ -95,14 +95,14 @@ extension LayoutEngine {
                 staves: staves,
                 metrics: context.metrics,
                 synthesizeClefForAllStaves: false,
-                synthesizeKeySigForAllStaves: false
+                synthesizeKeySigForAllStaves: false,
             )
             let w = crossStaffMinimumMeasureWidth(
                 staves: staves,
                 measureIdx: i,
                 metrics: context.metrics,
                 headerSchedule: baseHeader,
-                division: division
+                division: division,
             )
             let overridden = collapsedOverride(for: i, baseline: w)
             context.cache?.entries[i] = LayoutCache.Entry(
@@ -110,7 +110,7 @@ extension LayoutEngine {
                 sp: sp,
                 division: division,
                 minWidth: overridden,
-                placements: [:]
+                placements: [:],
             )
             return overridden
         }
@@ -121,7 +121,7 @@ extension LayoutEngine {
         // continuation systems would either omit the clef or restore
         // an outdated default, losing any mid-piece clef changes.
         var activeClefs: [NotatedClef] = defaultClefRawTypes(
-            addresses: allStaves
+            addresses: allStaves,
         ).map { NotatedClef(rawType: $0) }
 
         // Key signatures follow the same engraving rule: redraw the
@@ -130,7 +130,7 @@ extension LayoutEngine {
         // flats, 0 = C major (drawn as nothing).
         var activeKeys: [Int] = Array(
             repeating: 0,
-            count: stavesCount
+            count: stavesCount,
         )
 
         var systems: [LayoutSystem] = []
@@ -155,14 +155,14 @@ extension LayoutEngine {
             metrics: context.metrics,
             useLong: true,
             bracketColumnCount: gutterInfo.columnCount,
-            maxBraceStaffCount: gutterInfo.maxBraceStaffCount
+            maxBraceStaffCount: gutterInfo.maxBraceStaffCount,
         )
         let continuationLabelW = labelWidth(
             score: context.score,
             metrics: context.metrics,
             useLong: false,
             bracketColumnCount: gutterInfo.columnCount,
-            maxBraceStaffCount: gutterInfo.maxBraceStaffCount
+            maxBraceStaffCount: gutterInfo.maxBraceStaffCount,
         )
         while cursor < measureCount {
             // Part-label width depends on whether this is the first
@@ -186,7 +186,7 @@ extension LayoutEngine {
                 staves: staves,
                 measureIdx: systemStart,
                 activeKeys: activeKeys,
-                metrics: context.metrics
+                metrics: context.metrics,
             )
             // Targeted measures-per-system across the next forced
             // line-break boundary (or score end). MuseScore's
@@ -205,7 +205,7 @@ extension LayoutEngine {
                     firstHeaderBoost: firstHeaderBoost,
                     contentAvail: contentAvail,
                     staves: staves,
-                    policy: context.options.breakPolicy
+                    policy: context.options.breakPolicy,
                 )
                 : Int.max
             // MuseScore-style natural-stretch target. Systems
@@ -278,7 +278,7 @@ extension LayoutEngine {
                    measureForcesLineBreak(
                        at: cursor - 1,
                        staves: staves,
-                       policy: context.options.breakPolicy
+                       policy: context.options.breakPolicy,
                    )
                 {
                     break
@@ -293,7 +293,7 @@ extension LayoutEngine {
                 stretched = stretchWidths(
                     widths: widthsSlice,
                     availableWidth: contentAvail,
-                    shouldStretch: true
+                    shouldStretch: true,
                 )
             } else {
                 // Horizontal (no-wrap) mode: there's no viewport
@@ -317,7 +317,7 @@ extension LayoutEngine {
                 isFirstSystem: isFirstSystem,
                 activeClefsIn: activeClefsIn,
                 activeKeysIn: activeKeysIn,
-                context: context
+                context: context,
             )
             let system: LayoutSystem
             if let prior = priorSystemEntries[systemStart],
@@ -340,7 +340,7 @@ extension LayoutEngine {
                     isFirstSystem: isFirstSystem,
                     activeClefs: &activeClefs,
                     activeKeys: &activeKeys,
-                    context: context
+                    context: context,
                 )
                 system = shift(unshifted, byY: currentY)
                 context.cache?.systemEntries[systemStart] = LayoutCache
@@ -348,7 +348,7 @@ extension LayoutEngine {
                         inputs: inputs,
                         system: unshifted,
                         activeClefsOut: activeClefs,
-                        activeKeysOut: activeKeys
+                        activeKeysOut: activeKeys,
                     )
                 context.cache?.systemMisses += 1
             }
@@ -370,7 +370,7 @@ extension LayoutEngine {
     /// the first part. `StaffAddress` carries both `partIndex` and
     /// `staffIndexInPart`, so the lookup is now correct.
     static func defaultClefRawTypes(
-        addresses: [(address: StaffAddress, staff: Staff)]
+        addresses: [(address: StaffAddress, staff: Staff)],
     ) -> [String] {
         addresses.map { entry in
             let staff = entry.staff
@@ -393,7 +393,7 @@ extension LayoutEngine {
         isFirstSystem: Bool,
         activeClefsIn: [NotatedClef],
         activeKeysIn: [Int],
-        context: RenderContext
+        context: RenderContext,
     ) -> LayoutCache.SystemInputs {
         let allStaves = context.score.allStaves
         let staves = allStaves.map(\.staff)
@@ -434,14 +434,14 @@ extension LayoutEngine {
             melismaContinuationsForRange: melismaForRange,
             drumLineMaps: drumLineMaps,
             totalMeasures: staves.first?.measures.count ?? 0,
-            options: context.options
+            options: context.options,
         )
     }
 
     static func stretchWidths(
         widths: [CGFloat],
         availableWidth: CGFloat,
-        shouldStretch: Bool
+        shouldStretch: Bool,
     ) -> [CGFloat] {
         let total = widths.reduce(0, +)
         guard shouldStretch, total > 0, availableWidth > total else {

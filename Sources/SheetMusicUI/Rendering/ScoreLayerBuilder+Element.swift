@@ -19,7 +19,7 @@ extension ScoreLayerBuilder {
         metrics: StaffMetrics,
         height: CGFloat,
         context: inout BuildContext,
-        into parent: CALayer
+        into parent: CALayer,
     ) {
         func shift(_ p: CGPoint) -> CGPoint {
             CGPoint(x: base.x + p.x, y: base.y + p.y)
@@ -28,7 +28,7 @@ extension ScoreLayerBuilder {
         case let .clef(raw, p, anchor):
             let layer = drawClef(
                 rawType: raw, origin: shift(p),
-                metrics: metrics, height: height, into: parent
+                metrics: metrics, height: height, into: parent,
             )
             if let layer, let anchor {
                 context.attach(layer, to: .clef(anchor))
@@ -36,23 +36,23 @@ extension ScoreLayerBuilder {
         case let .keySignature(s, f, p):
             drawKeySignature(
                 sharps: s, flats: f, origin: shift(p),
-                metrics: metrics, height: height, into: parent
+                metrics: metrics, height: height, into: parent,
             )
         case let .timeSignature(n, d, p):
             drawTimeSignature(
                 numerator: n, denominator: d, origin: shift(p),
-                metrics: metrics, height: height, into: parent
+                metrics: metrics, height: height, into: parent,
             )
         case let .barLine(s, p):
             drawBarLine(
                 subtype: s, origin: shift(p),
-                metrics: metrics, height: height, into: parent
+                metrics: metrics, height: height, into: parent,
             )
         case let .rest(d, p, _, rid, hll):
             if let layer = drawRest(
                 duration: d, origin: shift(p),
                 hasLegerLine: hll,
-                metrics: metrics, height: height, into: parent
+                metrics: metrics, height: height, into: parent,
             ) {
                 context.attach(layer, to: .rest(rid))
             }
@@ -64,14 +64,14 @@ extension ScoreLayerBuilder {
             _,
             _,
             beamed,
-            _
+            _,
         ):
             drawChord(
                 notes: notes, duration: dur, stem: stem,
                 stemOrigin: so, isBeamed: beamed,
                 base: base,
                 metrics: metrics, height: height,
-                context: &context, into: parent
+                context: &context, into: parent,
             )
         case let .textMark(.dynamic, text, p):
             // Standard dynamics → Bravura SMuFL glyphs at 4 sp.
@@ -80,54 +80,54 @@ extension ScoreLayerBuilder {
             if let glyphs = DynamicSymbolMap.glyphs(for: text) {
                 let glyphSize = metrics.sp * 4
                 let bravura = CTFontCreateWithName(
-                    BravuraFont.familyName as CFString, glyphSize, nil
+                    BravuraFont.familyName as CFString, glyphSize, nil,
                 )
                 if let layer = textLayer(
                     text: String(glyphs), at: shift(p),
                     size: glyphSize, italic: false,
                     anchor: CGPoint(x: 0, y: 0.5),
                     font: bravura,
-                    height: height
+                    height: height,
                 ) {
                     parent.addSublayer(layer)
                 }
             } else {
                 let style = ResolvedTextStyle.resolve(
-                    .dynamics, metrics: metrics
+                    .dynamics, metrics: metrics,
                 )
                 if let layer = textLayer(
                     text: text, at: shift(p),
                     size: style.pointSize, italic: style.isItalic,
                     anchor: CGPoint(x: 0, y: 0.5),
                     font: style.ctFont,
-                    height: height
+                    height: height,
                 ) {
                     parent.addSublayer(layer)
                 }
             }
         case let .textMark(.tempo, text, p):
             let style = ResolvedTextStyle.resolve(
-                .tempo, metrics: metrics
+                .tempo, metrics: metrics,
             )
             if let layer = textLayer(
                 text: text, at: shift(p),
                 size: style.pointSize, italic: style.isItalic,
                 anchor: CGPoint(x: 0, y: 0.5),
                 font: style.ctFont,
-                height: height
+                height: height,
             ) {
                 parent.addSublayer(layer)
             }
         case let .textMark(.lyrics, text, p):
             let style = ResolvedTextStyle.resolve(
-                .lyricsOdd, metrics: metrics
+                .lyricsOdd, metrics: metrics,
             )
             if let layer = textLayer(
                 text: text, at: shift(p),
                 size: style.pointSize, italic: style.isItalic,
                 anchor: CGPoint(x: 0.5, y: 0.5),
                 font: style.ctFont,
-                height: height
+                height: height,
             ) {
                 parent.addSublayer(layer)
             }
@@ -135,69 +135,69 @@ extension ScoreLayerBuilder {
             drawBeam(
                 from: shift(from), to: shift(to),
                 direction: direction, level: level,
-                metrics: metrics, height: height, into: parent
+                metrics: metrics, height: height, into: parent,
             )
         case let .fermata(subtype, p):
             drawFermata(
                 subtype: subtype, origin: shift(p),
-                metrics: metrics, height: height, into: parent
+                metrics: metrics, height: height, into: parent,
             )
         case let .articulation(kind, p, isAbove):
             drawArticulation(
                 kind: kind, isAbove: isAbove,
                 origin: shift(p),
-                metrics: metrics, height: height, into: parent
+                metrics: metrics, height: height, into: parent,
             )
         case let .measureRepeat(c, p):
             drawMeasureRepeat(
                 count: c, origin: shift(p),
-                metrics: metrics, height: height, into: parent
+                metrics: metrics, height: height, into: parent,
             )
         case let .arpeggioWiggle(top, bot, sub):
             drawArpeggio(
                 top: shift(top), bottom: shift(bot), subtype: sub,
-                metrics: metrics, height: height, into: parent
+                metrics: metrics, height: height, into: parent,
             )
         case let .spannerSegment(
-            kind, from, to, cl, cr, text
+            kind, from, to, cl, cr, text,
         ):
             drawSpanner(
                 kind: kind, from: shift(from), to: shift(to),
                 continuesLeft: cl, continuesRight: cr, text: text,
-                metrics: metrics, height: height, into: parent
+                metrics: metrics, height: height, into: parent,
             )
         case let .tieArc(from, to, above):
             drawTieArc(
                 from: shift(from), to: shift(to), above: above,
-                metrics: metrics, height: height, into: parent
+                metrics: metrics, height: height, into: parent,
             )
         case let .glissandoLine(from, to, wavy, text):
             drawGlissando(
                 from: shift(from), to: shift(to), wavy: wavy,
                 text: text,
-                metrics: metrics, height: height, into: parent
+                metrics: metrics, height: height, into: parent,
             )
         case let .tupletLabel(
             from, to, text, bracket, above,
-            tid
+            tid,
         ):
             drawTuplet(
                 from: shift(from), to: shift(to),
                 text: text, hasBracket: bracket, isAbove: above,
                 tupletID: tid,
                 metrics: metrics, height: height,
-                context: &context, into: parent
+                context: &context, into: parent,
             )
         case let .marker(kind, text, p):
             drawMarker(
                 kind: kind, text: text, origin: shift(p),
-                metrics: metrics, height: height, into: parent
+                metrics: metrics, height: height, into: parent,
             )
         case let .rehearsalMark(text, p, frame, color):
             drawRehearsalMark(
                 text: text, origin: shift(p), frame: frame,
                 color: color.map(scoreColorToCGColor) ?? Self.inkColor,
-                metrics: metrics, height: height, into: parent
+                metrics: metrics, height: height, into: parent,
             )
         case let .jump(text, p):
             if !text.isEmpty,
@@ -205,7 +205,7 @@ extension ScoreLayerBuilder {
                    text: text, at: shift(p),
                    size: metrics.sp * 2.5, italic: true,
                    anchor: CGPoint(x: 0, y: 0.5),
-                   height: height
+                   height: height,
                )
             {
                 parent.addSublayer(layer)
@@ -222,7 +222,7 @@ extension ScoreLayerBuilder {
                    text: text, at: shift(p),
                    size: metrics.sp * 2.0, italic: false,
                    anchor: CGPoint(x: 0, y: 1),
-                   height: height
+                   height: height,
                )
             {
                 parent.addSublayer(layer)
@@ -233,7 +233,7 @@ extension ScoreLayerBuilder {
             // source `.mscx`. Bottom-leading anchor at `p` matches
             // the placement convention used for dynamics/tempo.
             let style = ResolvedTextStyle.resolve(
-                isSystem ? .systemText : .staffText, metrics: metrics
+                isSystem ? .systemText : .staffText, metrics: metrics,
             )
             if !text.isEmpty,
                let layer = textLayer(
@@ -243,7 +243,7 @@ extension ScoreLayerBuilder {
                    color: color.map(scoreColorToCGColor)
                        ?? Self.inkColor,
                    font: style.ctFont,
-                   height: height
+                   height: height,
                )
             {
                 parent.addSublayer(layer)
@@ -255,25 +255,25 @@ extension ScoreLayerBuilder {
             let style = ResolvedTextStyle.resolve(
                 lh.harmony.styleType,
                 overrides: lh.harmony.properties,
-                metrics: metrics
+                metrics: metrics,
             )
             let textColor: CGColor = lh.harmony.color
                 .map(scoreColorToCGColor) ?? Self.inkColor
             let glyphSize = HarmonyRendering.glyphPointSize(
-                for: lh.harmony, metrics: metrics
+                for: lh.harmony, metrics: metrics,
             )
             let bravura = CTFontCreateWithName(
                 BravuraFont.familyName as CFString,
-                glyphSize, nil
+                glyphSize, nil,
             )
             let originPoint = shift(CGPoint(
                 x: CGFloat(lh.anchorX),
-                y: CGFloat(lh.y)
+                y: CGFloat(lh.y),
             ))
             for run in lh.runs {
                 let p = CGPoint(
                     x: originPoint.x + CGFloat(run.x),
-                    y: originPoint.y
+                    y: originPoint.y,
                 )
                 switch run.kind {
                 case .text:
@@ -284,7 +284,7 @@ extension ScoreLayerBuilder {
                         anchor: CGPoint(x: 0, y: 0.5),
                         color: textColor,
                         font: style.ctFont,
-                        height: height
+                        height: height,
                     ) {
                         parent.addSublayer(layer)
                     }
@@ -296,7 +296,7 @@ extension ScoreLayerBuilder {
                         anchor: CGPoint(x: 0, y: 0.5),
                         color: textColor,
                         font: bravura,
-                        height: height
+                        height: height,
                     ) {
                         parent.addSublayer(layer)
                     }
@@ -317,7 +317,7 @@ extension ScoreLayerBuilder {
                    text: text, at: shift(p),
                    size: metrics.sp * 2.0, italic: false,
                    anchor: CGPoint(x: 0, y: 1),
-                   height: height
+                   height: height,
                )
             {
                 parent.addSublayer(layer)
@@ -330,21 +330,21 @@ extension ScoreLayerBuilder {
             // `LyricsLayout::layoutDashes`.
             drawLyricsMelisma(
                 from: shift(from), to: shift(to),
-                metrics: metrics, height: height, into: parent
+                metrics: metrics, height: height, into: parent,
             )
         case let .graceChord(
-            notes, dur, stem, so, _, slash, mag, _
+            notes, dur, stem, so, _, slash, mag, _,
         ):
             drawGraceChord(
                 notes: notes, duration: dur, stem: stem,
                 stemOrigin: so, hasSlash: slash, mag: mag,
                 base: base, metrics: metrics, height: height,
-                context: &context, into: parent
+                context: &context, into: parent,
             )
         case let .multiMeasureRest(c, p):
             drawMultiMeasureRest(
                 count: c, origin: shift(p),
-                metrics: metrics, height: height, into: parent
+                metrics: metrics, height: height, into: parent,
             )
         case .note:
             break
@@ -356,7 +356,7 @@ extension ScoreLayerBuilder {
     private static func drawLyricsMelisma(
         from: CGPoint, to: CGPoint,
         metrics: StaffMetrics, height: CGFloat,
-        into parent: CALayer
+        into parent: CALayer,
     ) {
         let path = CGMutablePath()
         path.move(to: from)
@@ -367,7 +367,7 @@ extension ScoreLayerBuilder {
         // visual weight from the noteheads above.
         parent.addSublayer(strokeLayer(
             path: path, height: height,
-            lineWidth: metrics.sp * 0.1
+            lineWidth: metrics.sp * 0.1,
         ))
     }
 }

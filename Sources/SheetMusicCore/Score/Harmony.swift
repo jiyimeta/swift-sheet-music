@@ -50,7 +50,7 @@ public struct Harmony: Sendable, Equatable {
         offsetY: Double = 0,
         color: ScoreColor? = nil,
         properties: TextProperties = TextProperties(),
-        visible: Bool = true
+        visible: Bool = true,
     ) {
         self.name = name
         self.harmonyType = harmonyType

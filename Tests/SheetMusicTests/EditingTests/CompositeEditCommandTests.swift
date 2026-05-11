@@ -5,36 +5,36 @@ import Testing
 struct CompositeEditCommandTests {
     private static let restID = VoiceElementID(
         staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
-        voiceIndex: 0, elementIndex: 2
+        voiceIndex: 0, elementIndex: 2,
     )
 
     @Test("apply runs each sub-command in order")
     func runsInOrder() throws {
         var score = EditingFixtures.fourQuarterRests()
         let chordA = Chord(
-            duration: .quarter, notes: [Note(pitch: 60, tpc: 14)]
+            duration: .quarter, notes: [Note(pitch: 60, tpc: 14)],
         )
         let chordB = Chord(
-            duration: .quarter, notes: [Note(pitch: 62, tpc: 16)]
+            duration: .quarter, notes: [Note(pitch: 62, tpc: 16)],
         )
         let composite = CompositeEditCommand(
             commands: [
                 ReplaceVoiceElement(
                     at: VoiceElementID(
                         staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
-                        voiceIndex: 0, elementIndex: 1
+                        voiceIndex: 0, elementIndex: 1,
                     ),
-                    with: .chord(chordA)
+                    with: .chord(chordA),
                 ),
                 ReplaceVoiceElement(
                     at: VoiceElementID(
                         staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
-                        voiceIndex: 0, elementIndex: 2
+                        voiceIndex: 0, elementIndex: 2,
                     ),
-                    with: .chord(chordB)
+                    with: .chord(chordB),
                 ),
             ],
-            location: Self.restID
+            location: Self.restID,
         )
         _ = try composite.apply(to: &score)
         let voice = score.parts[0].staves[0].measures[0].voices[0]
@@ -52,29 +52,29 @@ struct CompositeEditCommandTests {
         var score = EditingFixtures.fourQuarterRests()
         let snapshot = score
         let chordA = Chord(
-            duration: .quarter, notes: [Note(pitch: 60, tpc: 14)]
+            duration: .quarter, notes: [Note(pitch: 60, tpc: 14)],
         )
         let chordB = Chord(
-            duration: .quarter, notes: [Note(pitch: 62, tpc: 16)]
+            duration: .quarter, notes: [Note(pitch: 62, tpc: 16)],
         )
         let composite = CompositeEditCommand(
             commands: [
                 ReplaceVoiceElement(
                     at: VoiceElementID(
                         staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
-                        voiceIndex: 0, elementIndex: 1
+                        voiceIndex: 0, elementIndex: 1,
                     ),
-                    with: .chord(chordA)
+                    with: .chord(chordA),
                 ),
                 ReplaceVoiceElement(
                     at: VoiceElementID(
                         staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
-                        voiceIndex: 0, elementIndex: 2
+                        voiceIndex: 0, elementIndex: 2,
                     ),
-                    with: .chord(chordB)
+                    with: .chord(chordB),
                 ),
             ],
-            location: Self.restID
+            location: Self.restID,
         )
         let inverse = try composite.apply(to: &score)
         _ = try inverse.apply(to: &score)
@@ -89,27 +89,27 @@ struct CompositeEditCommandTests {
         var score = EditingFixtures.fourQuarterRests()
         let snapshot = score
         let chord = Chord(
-            duration: .quarter, notes: [Note(pitch: 60, tpc: 14)]
+            duration: .quarter, notes: [Note(pitch: 60, tpc: 14)],
         )
         let bogusID = VoiceElementID(
             staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
-            voiceIndex: 0, elementIndex: 99
+            voiceIndex: 0, elementIndex: 99,
         )
         let composite = CompositeEditCommand(
             commands: [
                 ReplaceVoiceElement(
                     at: VoiceElementID(
                         staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
-                        voiceIndex: 0, elementIndex: 1
+                        voiceIndex: 0, elementIndex: 1,
                     ),
-                    with: .chord(chord)
+                    with: .chord(chord),
                 ),
                 ReplaceVoiceElement(
                     at: bogusID,
-                    with: .rest(duration: .quarter)
+                    with: .rest(duration: .quarter),
                 ),
             ],
-            location: Self.restID
+            location: Self.restID,
         )
         #expect(throws: SheetMusicError.self) {
             _ = try composite.apply(to: &score)
@@ -121,32 +121,33 @@ struct CompositeEditCommandTests {
     @MainActor
     func oneUndoStep() throws {
         let editor = ScoreEditor(
-            score: EditingFixtures.fourQuarterRests())
+            score: EditingFixtures.fourQuarterRests(),
+        )
         let snapshot = editor.score
         let composite = CompositeEditCommand(
             commands: [
                 ReplaceVoiceElement(
                     at: VoiceElementID(
                         staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
-                        voiceIndex: 0, elementIndex: 1
+                        voiceIndex: 0, elementIndex: 1,
                     ),
                     with: .chord(Chord(
                         duration: .quarter,
-                        notes: [Note(pitch: 60, tpc: 14)]
-                    ))
+                        notes: [Note(pitch: 60, tpc: 14)],
+                    )),
                 ),
                 ReplaceVoiceElement(
                     at: VoiceElementID(
                         staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
-                        voiceIndex: 0, elementIndex: 2
+                        voiceIndex: 0, elementIndex: 2,
                     ),
                     with: .chord(Chord(
                         duration: .quarter,
-                        notes: [Note(pitch: 62, tpc: 16)]
-                    ))
+                        notes: [Note(pitch: 62, tpc: 16)],
+                    )),
                 ),
             ],
-            location: Self.restID
+            location: Self.restID,
         )
         try editor.apply(composite)
         // Single undo brings the score back — proves the composite

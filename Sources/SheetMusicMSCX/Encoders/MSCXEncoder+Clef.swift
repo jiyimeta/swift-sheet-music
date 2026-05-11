@@ -9,7 +9,7 @@ extension Clef {
         ]
         if let transposingClefType {
             children.append(XMLTreeNode(
-                name: "transposingClefType", text: transposingClefType
+                name: "transposingClefType", text: transposingClefType,
             ))
         }
         return XMLTreeNode(name: "Clef", children: children)

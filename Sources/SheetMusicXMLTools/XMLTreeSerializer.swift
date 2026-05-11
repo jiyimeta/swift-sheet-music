@@ -15,7 +15,7 @@ public enum XMLTreeSerializer {
     }
 
     private static func write(
-        _ node: XMLTreeNode, indent depth: Int, into out: inout String
+        _ node: XMLTreeNode, indent depth: Int, into out: inout String,
     ) {
         let pad = String(repeating: "  ", count: depth)
         let attrs = renderAttributes(node.attributes)

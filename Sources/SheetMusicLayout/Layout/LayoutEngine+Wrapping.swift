@@ -13,7 +13,7 @@ extension LayoutEngine {
     /// (a page break implies a system break) — promotion is gated on
     /// `policy` per `LayoutBreakPolicy`.
     static func measureForcesLineBreak(
-        at idx: Int, staves: [Staff], policy: LayoutBreakPolicy
+        at idx: Int, staves: [Staff], policy: LayoutBreakPolicy,
     ) -> Bool {
         guard let s0 = staves.first,
               idx < s0.measures.count else { return false }
@@ -49,7 +49,7 @@ extension LayoutEngine {
         metrics: StaffMetrics,
         useLong: Bool,
         bracketColumnCount: Int = 0,
-        maxBraceStaffCount: Int = 0
+        maxBraceStaffCount: Int = 0,
     ) -> CGFloat {
         let labels: [String] = score.parts.map { part in
             if useLong {
@@ -66,7 +66,7 @@ extension LayoutEngine {
             widest = max(
                 widest,
                 LayoutEngine.lyricsTextWidth(text, sp: metrics.sp)
-                    * (fontSize / (metrics.sp * 2.2))
+                    * (fontSize / (metrics.sp * 2.2)),
             )
         }
         // Floor: enough room for at least 2-3 characters even if
@@ -86,7 +86,7 @@ extension LayoutEngine {
         // right edge stays clear of the brace outline.
         let braceGutter: CGFloat = maxBraceStaffCount > 0
             ? BraceMetrics.glyphHorizontalExtent(
-                staffCount: maxBraceStaffCount, sp: metrics.sp
+                staffCount: maxBraceStaffCount, sp: metrics.sp,
             ) + metrics.sp * 0.8
             : 0
         let bracketGutter = max(columnGutter, braceGutter)
@@ -100,7 +100,7 @@ extension LayoutEngine {
     /// +SystemBuild` and `LayoutEngine+Packing` consume these so they
     /// agree on the gutter width.
     static func bracketGutterInfo(
-        score: Score
+        score: Score,
     ) -> (columnCount: Int, maxBraceStaffCount: Int) {
         var maxCol: Int = -1
         var maxBraceSpan = 0
@@ -122,7 +122,7 @@ extension LayoutEngine {
         }
         return (
             columnCount: maxCol + 1,
-            maxBraceStaffCount: maxBraceSpan
+            maxBraceStaffCount: maxBraceSpan,
         )
     }
 
@@ -151,13 +151,13 @@ extension LayoutEngine {
         firstHeaderBoost: CGFloat,
         contentAvail: CGFloat,
         staves: [Staff],
-        policy: LayoutBreakPolicy
+        policy: LayoutBreakPolicy,
     ) -> Int {
         // Find the END of the current break-bounded span.
         var endIdx = measureCount
         for i in startIdx ..< measureCount
             where measureForcesLineBreak(
-                at: i, staves: staves, policy: policy
+                at: i, staves: staves, policy: policy,
             )
         {
             endIdx = i + 1

@@ -36,12 +36,12 @@ public final class LayoutCache: @unchecked Sendable {
     /// width lookup and per per-(measure, staff) placement lookup.
     /// Reset to zero at the start of every `LayoutEngine.layout(...)`
     /// call.
-    var widthHits: Int = 0
-    var widthMisses: Int = 0
-    var placementHits: Int = 0
-    var placementMisses: Int = 0
-    var systemHits: Int = 0
-    var systemMisses: Int = 0
+    var widthHits = 0
+    var widthMisses = 0
+    var placementHits = 0
+    var placementMisses = 0
+    var systemHits = 0
+    var systemMisses = 0
 
     /// One measure's cached inputs and outputs. The width portion is
     /// consumed by `packSystems`; the per-staff `placements`
@@ -52,10 +52,10 @@ public final class LayoutCache: @unchecked Sendable {
         let sp: CGFloat
         let division: Int
 
-        // --- Output of crossStaffMinimumMeasureWidth ---
+        /// --- Output of crossStaffMinimumMeasureWidth ---
         let minWidth: CGFloat
 
-        // --- Per-staff placement results ---
+        /// --- Per-staff placement results ---
         var placements: [Int: StaffPlacement]
     }
 

@@ -12,7 +12,7 @@ private func == (lhs: [(Int, Int)], rhs: [(Int, Int)]) -> Bool {
     return zip(lhs, rhs).allSatisfy { $0.0 == $1.0 && $0.1 == $1.1 }
 }
 
-@Suite struct FermataMidiTests {
+struct FermataMidiTests {
     private func chord(_ pitch: Int, _ duration: NoteDuration = .quarter) -> VoiceElement {
         .chord(Chord(duration: duration, notes: [Note(pitch: pitch, tpc: 14)]))
     }
@@ -23,7 +23,7 @@ private func == (lhs: [(Int, Int)], rhs: [(Int, Int)]) -> Bool {
 
     private func fermata(
         _ subtype: String = "fermataAbove",
-        stretch: Double? = nil
+        stretch: Double? = nil,
     ) -> VoiceElement {
         .fermata(Fermata(subtype: subtype, timeStretch: stretch))
     }
@@ -35,9 +35,9 @@ private func == (lhs: [(Int, Int)], rhs: [(Int, Int)]) -> Bool {
             id: "P1",
             instrument: Instrument(
                 id: "voice",
-                articulations: [InstrumentArticulation()]
+                articulations: [InstrumentArticulation()],
             ),
-            staves: [staff]
+            staves: [staff],
         )
         return Score(division: 480, parts: [part])
     }
@@ -55,7 +55,7 @@ private func == (lhs: [(Int, Int)], rhs: [(Int, Int)]) -> Bool {
         Int((60_000_000.0 / bpm).rounded())
     }
 
-    // 1. Single normal fermata on quarter at 120 BPM.
+    /// 1. Single normal fermata on quarter at 120 BPM.
     @Test func singleNormalFermataOnQuarter() throws {
         let score = makeScore(voices: [[
             chord(60),
@@ -71,7 +71,7 @@ private func == (lhs: [(Int, Int)], rhs: [(Int, Int)]) -> Bool {
         ])
     }
 
-    // 2. Long fermata on rest (grand pause).
+    /// 2. Long fermata on rest (grand pause).
     @Test func longFermataOnRest() throws {
         let score = makeScore(voices: [[
             chord(60),
@@ -88,12 +88,12 @@ private func == (lhs: [(Int, Int)], rhs: [(Int, Int)]) -> Bool {
         ])
     }
 
-    // 3. Explicit timeStretch override.
-    //
-    // The header-pass emits a default tempo (120 BPM) at tick 0, and the
-    // fermata's open bookend emits its slowed tempo at tick 0 too. Both
-    // appear in the output; the stable sort keeps the bookend AFTER the
-    // header tempo so the bookend wins for playback at tick 0.
+    /// 3. Explicit timeStretch override.
+    ///
+    /// The header-pass emits a default tempo (120 BPM) at tick 0, and the
+    /// fermata's open bookend emits its slowed tempo at tick 0 too. Both
+    /// appear in the output; the stable sort keeps the bookend AFTER the
+    /// header tempo so the bookend wins for playback at tick 0.
     @Test func explicitTimeStretchOverride() throws {
         let score = makeScore(voices: [[
             fermata("fermataAbove", stretch: 2.5),
@@ -108,10 +108,10 @@ private func == (lhs: [(Int, Int)], rhs: [(Int, Int)]) -> Bool {
         ])
     }
 
-    // 4. Fermata after chord in MSCX order (backward fallback).
-    //
-    // Header tempo (120) and fermata open (80) co-locate at tick 0 — open
-    // sorts after the header so it wins for playback.
+    /// 4. Fermata after chord in MSCX order (backward fallback).
+    ///
+    /// Header tempo (120) and fermata open (80) co-locate at tick 0 — open
+    /// sorts after the header so it wins for playback.
     @Test func fermataAfterChordAnchorsBackwards() throws {
         let score = makeScore(voices: [[
             chord(60),
@@ -126,9 +126,9 @@ private func == (lhs: [(Int, Int)], rhs: [(Int, Int)]) -> Bool {
         ])
     }
 
-    // 5. Same-range fermata in two voices → single bookend pair (max stretch).
-    //
-    // Header tempo at tick 0 plus the merged open bookend at tick 0.
+    /// 5. Same-range fermata in two voices → single bookend pair (max stretch).
+    ///
+    /// Header tempo at tick 0 plus the merged open bookend at tick 0.
     @Test func sameRangeAcrossVoicesDeduped() throws {
         let score = makeScore(voices: [
             [fermata("fermataAbove"), chord(60)],
@@ -143,7 +143,7 @@ private func == (lhs: [(Int, Int)], rhs: [(Int, Int)]) -> Bool {
         ])
     }
 
-    // 6. Partial overlap → sweep-merge produces correct staircase.
+    /// 6. Partial overlap → sweep-merge produces correct staircase.
     @Test func partialOverlapTwoVoicesStaircase() throws {
         // Voice 1: dotted-quarter (720 ticks @ div=480) stretch 2.0
         // Voice 2: 8th rest (240 ticks) then quarter (240..720) stretch 1.5
@@ -168,7 +168,7 @@ private func == (lhs: [(Int, Int)], rhs: [(Int, Int)]) -> Bool {
         ])
     }
 
-    // 8. Fermata inside a repeat fires on every iteration.
+    /// 8. Fermata inside a repeat fires on every iteration.
     @Test func fermataInsideRepeatFiresPerIteration() throws {
         // One measure with startRepeat + endRepeatCount=2, a fermata on
         // the only quarter note. Plays twice. Expect two pairs of
@@ -179,16 +179,16 @@ private func == (lhs: [(Int, Int)], rhs: [(Int, Int)]) -> Bool {
                 chord(60),
             ])],
             startRepeat: true,
-            endRepeatCount: 2
+            endRepeatCount: 2,
         )
         let staff = Staff(measures: [measure])
         let part = Part(
             id: "P1",
             instrument: Instrument(
                 id: "voice",
-                articulations: [InstrumentArticulation()]
+                articulations: [InstrumentArticulation()],
             ),
-            staves: [staff]
+            staves: [staff],
         )
         let score = Score(division: 480, parts: [part])
         let file = try MidiRenderer.render(score: score)
@@ -206,12 +206,12 @@ private func == (lhs: [(Int, Int)], rhs: [(Int, Int)]) -> Bool {
         let closes = tempos.filter { $0.1 == micros(120) }
         #expect(opens.count == 2, "expected 2 open bookends, got tempos=\(tempos)")
         #expect(
-            closes.filter { $0.0 == 480 || $0.0 == 960 }.count >= 2,
-            "expected close bookends at 480 and 960, got tempos=\(tempos)"
+            closes.count(where: { $0.0 == 480 || $0.0 == 960 }) >= 2,
+            "expected close bookends at 480 and 960, got tempos=\(tempos)",
         )
     }
 
-    // 7. End-boundary co-location: .tempo lands at fermata's endTick.
+    /// 7. End-boundary co-location: .tempo lands at fermata's endTick.
     @Test func endBoundaryTempoChangeWins() throws {
         // Fermata covers [0, 480). At tick 480 a .tempo(3.0 bps = 180 BPM)
         // lands. Close emits 180 BPM (timeline lookup post-.tempo); .tempo

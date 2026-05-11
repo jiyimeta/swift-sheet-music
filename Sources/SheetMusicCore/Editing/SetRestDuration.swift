@@ -23,7 +23,9 @@ public struct SetRestDuration: EditCommand {
         self.duration = duration
     }
 
-    public var affectedLocation: VoiceElementID { location }
+    public var affectedLocation: VoiceElementID {
+        location
+    }
 
     @discardableResult
     public func apply(to score: inout Score) throws -> any EditCommand {
@@ -33,19 +35,21 @@ public struct SetRestDuration: EditCommand {
         else {
             throw SheetMusicError.invalidEdit(
                 reason: "SetRestDuration: location \(location) "
-                    + "doesn't resolve to a voice element")
+                    + "doesn't resolve to a voice element",
+            )
         }
         guard case var .chord(rest) = voice.elements[location.elementIndex],
               rest.notes.isEmpty
         else {
             throw SheetMusicError.invalidEdit(
                 reason: "SetRestDuration: element at \(location) "
-                    + "is not a rest (empty chord)")
+                    + "is not a rest (empty chord)",
+            )
         }
         try DurationChangeAlgorithm.ensureNotInsideTuplet(
             voice: voice,
             elementIdx: location.elementIndex,
-            label: "SetRestDuration"
+            label: "SetRestDuration",
         )
         let division = score.division
         let srcTicks = rest.duration.ticks(division: division)
@@ -56,7 +60,7 @@ public struct SetRestDuration: EditCommand {
         let targetRtick = DurationChangeAlgorithm.tickOffset(
             in: voice,
             ofElementAt: location.elementIndex,
-            division: division
+            division: division,
         )
         rest.duration = duration
         let (newElements, newTuplets) = try DurationChangeAlgorithm
@@ -67,14 +71,14 @@ public struct SetRestDuration: EditCommand {
                 srcTicks: srcTicks,
                 dstTicks: dstTicks,
                 targetRtick: targetRtick,
-                division: division
+                division: division,
             )
         let replace = ReplaceVoiceElements(
             staff: location.staff,
             measureIndex: location.measureIndex,
             voiceIndex: location.voiceIndex,
             elements: newElements,
-            tuplets: newTuplets
+            tuplets: newTuplets,
         )
         return try replace.apply(to: &score)
     }

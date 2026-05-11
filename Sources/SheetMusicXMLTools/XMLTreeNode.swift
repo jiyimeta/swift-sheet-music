@@ -12,7 +12,7 @@ public struct XMLTreeNode: Sendable, Equatable {
         name: String,
         attributes: [String: String] = [:],
         text: String = "",
-        children: [XMLTreeNode] = []
+        children: [XMLTreeNode] = [],
     ) {
         self.name = name
         self.attributes = attributes

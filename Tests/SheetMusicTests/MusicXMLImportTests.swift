@@ -88,7 +88,7 @@ struct MusicXMLImportTests {
     /// Core type that isn't in scope for this PR. A minimal unit test below
     /// confirms the enum case is wired up and round-trips via `Spanner`'s
     /// Equatable.
-    @Test func phase4_glissando_enumExists() throws {
+    @Test func phase4_glissando_enumExists() {
         let spanner = Spanner(kind: .glissando, rawType: "Glissando")
         #expect(spanner.kind == .glissando)
         #expect(spanner.kind.rawValue == "Glissando")
@@ -154,7 +154,7 @@ struct MusicXMLImportTests {
 
         ScoreSemanticComparison.assertEquivalent(
             produced: fromXml,
-            reference: fromMscx
+            reference: fromMscx,
         )
     }
 

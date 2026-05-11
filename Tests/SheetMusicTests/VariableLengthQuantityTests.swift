@@ -5,7 +5,7 @@ import Foundation
 @testable import SheetMusicMSCX
 import Testing
 
-@Suite struct VariableLengthQuantityTests {
+struct VariableLengthQuantityTests {
     @Test func encodeZero() {
         #expect(VariableLengthQuantity.encode(0) == Data([0x00]))
     }

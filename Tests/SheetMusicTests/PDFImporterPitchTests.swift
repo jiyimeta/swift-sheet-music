@@ -4,44 +4,44 @@ import Foundation
 @testable import SheetMusicPDF
 import Testing
 
-@Suite @MainActor struct PDFImporterPitchTests {
+@MainActor struct PDFImporterPitchTests {
     // MARK: - Fixtures
 
     private func makeMeasure(
         glyphs: [ClassifiedGlyph],
-        yLines: [CGFloat] = [490, 495, 500, 505, 510]
+        yLines: [CGFloat] = [490, 495, 500, 505, 510],
     ) -> ImportMeasure {
         ImportMeasure(
             xRange: 50 ... 550,
             glyphs: glyphs,
             leadingBarline: nil,
             trailingBarline: nil,
-            staffYLines: yLines
+            staffYLines: yLines,
         )
     }
 
     private func notehead(
         x: CGFloat, y: CGFloat,
-        semantic: SMuFLSemantic = .noteheadBlack
+        semantic: SMuFLSemantic = .noteheadBlack,
     ) -> ClassifiedGlyph {
         ClassifiedGlyph(
             raw: RawGlyph(
                 codepoint: 0xE0A4, fontName: "Bravura", fontSize: 20,
-                origin: CGPoint(x: x, y: y), advance: 5, pageIndex: 0
+                origin: CGPoint(x: x, y: y), advance: 5, pageIndex: 0,
             ),
-            semantic: semantic
+            semantic: semantic,
         )
     }
 
     private func accidental(
-        x: CGFloat, y: CGFloat, kind: SMuFLSemantic
+        x: CGFloat, y: CGFloat, kind: SMuFLSemantic,
     ) -> ClassifiedGlyph {
         ClassifiedGlyph(
             raw: RawGlyph(
                 codepoint: 0, fontName: "Bravura", fontSize: 20,
-                origin: CGPoint(x: x, y: y), advance: 5, pageIndex: 0
+                origin: CGPoint(x: x, y: y), advance: 5, pageIndex: 0,
             ),
-            semantic: kind
+            semantic: kind,
         )
     }
 
@@ -56,7 +56,7 @@ import Testing
     @Test func trebleBottomLineIsE4() {
         let m = makeMeasure(glyphs: [notehead(x: 100, y: 490)])
         let pitches = PDFImporter.decodePitches(
-            measure: m, activeClef: trebleClef, activeKey: cMajor
+            measure: m, activeClef: trebleClef, activeKey: cMajor,
         )
         #expect(pitches.count == 1)
         #expect(pitches.first?.midi == 64)
@@ -65,7 +65,7 @@ import Testing
     @Test func trebleMidLineIsB4() {
         let m = makeMeasure(glyphs: [notehead(x: 100, y: 500)])
         let pitches = PDFImporter.decodePitches(
-            measure: m, activeClef: trebleClef, activeKey: cMajor
+            measure: m, activeClef: trebleClef, activeKey: cMajor,
         )
         #expect(pitches.first?.midi == 71)
     }
@@ -73,7 +73,7 @@ import Testing
     @Test func trebleTopLineIsF5() {
         let m = makeMeasure(glyphs: [notehead(x: 100, y: 510)])
         let pitches = PDFImporter.decodePitches(
-            measure: m, activeClef: trebleClef, activeKey: cMajor
+            measure: m, activeClef: trebleClef, activeKey: cMajor,
         )
         #expect(pitches.first?.midi == 77)
     }
@@ -81,7 +81,7 @@ import Testing
     @Test func bassBottomLineIsG2() {
         let m = makeMeasure(glyphs: [notehead(x: 100, y: 490)])
         let pitches = PDFImporter.decodePitches(
-            measure: m, activeClef: bassClef, activeKey: cMajor
+            measure: m, activeClef: bassClef, activeKey: cMajor,
         )
         #expect(pitches.first?.midi == 43)
     }
@@ -89,7 +89,7 @@ import Testing
     @Test func bassTopLineIsA3() {
         let m = makeMeasure(glyphs: [notehead(x: 100, y: 510)])
         let pitches = PDFImporter.decodePitches(
-            measure: m, activeClef: bassClef, activeKey: cMajor
+            measure: m, activeClef: bassClef, activeKey: cMajor,
         )
         #expect(pitches.first?.midi == 57)
     }
@@ -100,7 +100,7 @@ import Testing
         // F line (top line in treble) under G major (1 sharp = F#).
         let m = makeMeasure(glyphs: [notehead(x: 100, y: 510)])
         let pitches = PDFImporter.decodePitches(
-            measure: m, activeClef: trebleClef, activeKey: gMajor
+            measure: m, activeClef: trebleClef, activeKey: gMajor,
         )
         #expect(pitches.first?.midi == 78)
     }
@@ -109,7 +109,7 @@ import Testing
         // B line (mid line in treble) under F major (1 flat = Bb).
         let m = makeMeasure(glyphs: [notehead(x: 100, y: 500)])
         let pitches = PDFImporter.decodePitches(
-            measure: m, activeClef: trebleClef, activeKey: fMajor
+            measure: m, activeClef: trebleClef, activeKey: fMajor,
         )
         #expect(pitches.first?.midi == 70)
     }
@@ -124,7 +124,7 @@ import Testing
             notehead(x: 105, y: 510),
         ])
         let pitches = PDFImporter.decodePitches(
-            measure: m, activeClef: trebleClef, activeKey: cMajor
+            measure: m, activeClef: trebleClef, activeKey: cMajor,
         )
         #expect(pitches.first?.midi == 78)
     }
@@ -139,7 +139,7 @@ import Testing
             notehead(x: 200, y: 510),
         ])
         let pitches = PDFImporter.decodePitches(
-            measure: m, activeClef: trebleClef, activeKey: cMajor
+            measure: m, activeClef: trebleClef, activeKey: cMajor,
         )
         #expect(pitches.count == 2)
         #expect(pitches.allSatisfy { $0.midi == 78 })
@@ -153,7 +153,7 @@ import Testing
             notehead(x: 105, y: 510),
         ])
         let pitches = PDFImporter.decodePitches(
-            measure: m, activeClef: trebleClef, activeKey: gMajor
+            measure: m, activeClef: trebleClef, activeKey: gMajor,
         )
         #expect(pitches.first?.midi == 77)
     }

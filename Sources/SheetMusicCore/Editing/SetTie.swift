@@ -29,7 +29,7 @@ public struct SetTie: EditCommand {
         from sourceID: NoteID,
         to targetID: NoteID,
         sourceTieForward: Int?,
-        targetTieBack: Int?
+        targetTieBack: Int?,
     ) {
         self.sourceID = sourceID
         self.targetID = targetID
@@ -45,44 +45,48 @@ public struct SetTie: EditCommand {
     public func apply(to score: inout Score) throws -> any EditCommand {
         guard let oldSource = score[sourceID] else {
             throw SheetMusicError.invalidEdit(
-                reason: "SetTie: no note at source \(sourceID)")
+                reason: "SetTie: no note at source \(sourceID)",
+            )
         }
         guard let oldTarget = score[targetID] else {
             throw SheetMusicError.invalidEdit(
-                reason: "SetTie: no note at target \(targetID)")
+                reason: "SetTie: no note at target \(targetID)",
+            )
         }
         let priorSourceForward = oldSource.tieForward
         let priorTargetBack = oldTarget.tieBack
         try Self.update(
             score: &score, noteID: sourceID,
-            mutate: { $0.tieForward = sourceTieForward }
+            mutate: { $0.tieForward = sourceTieForward },
         )
         try Self.update(
             score: &score, noteID: targetID,
-            mutate: { $0.tieBack = targetTieBack }
+            mutate: { $0.tieBack = targetTieBack },
         )
         return SetTie(
             from: sourceID, to: targetID,
             sourceTieForward: priorSourceForward,
-            targetTieBack: priorTargetBack
+            targetTieBack: priorTargetBack,
         )
     }
 
     private static func update(
         score: inout Score,
         noteID: NoteID,
-        mutate: (inout Note) -> Void
+        mutate: (inout Note) -> Void,
     ) throws {
         let veID = VoiceElementID(noteID)
         guard case var .chord(chord) = score[veID] else {
             throw SheetMusicError.invalidEdit(
-                reason: "SetTie: element at \(veID) is not a chord")
+                reason: "SetTie: element at \(veID) is not a chord",
+            )
         }
         guard chord.notes.indices
             .contains(noteID.noteIndexInChord)
         else {
             throw SheetMusicError.invalidEdit(
-                reason: "SetTie: noteIndex out of range at \(noteID)")
+                reason: "SetTie: noteIndex out of range at \(noteID)",
+            )
         }
         var note = chord.notes[noteID.noteIndexInChord]
         mutate(&note)

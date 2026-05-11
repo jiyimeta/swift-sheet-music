@@ -3,7 +3,7 @@ import Foundation
 @testable import SheetMusicMIDI
 import Testing
 
-@Suite struct MidiImporterAccidentalTests {
+struct MidiImporterAccidentalTests {
     private func nOn(_ tick: Int, _ pitch: Int) -> TimedMidiEvent {
         TimedMidiEvent(tick: tick, event: .noteOn(channel: 0, pitch: pitch, velocity: 80))
     }
@@ -49,9 +49,9 @@ import Testing
     }
 
     @Test func tpcStaffPositionForFlatKeysMatchesNaturalLetter() {
-        // Cross-check via the layout's tpc-to-letter mapping: each
-        // black-key flat must place its notehead on the higher
-        // diatonic letter (Db on D, Ab on A, etc.).
+        /// Cross-check via the layout's tpc-to-letter mapping: each
+        /// black-key flat must place its notehead on the higher
+        /// diatonic letter (Db on D, Ab on A, etc.).
         func letter(_ tpc: Int) -> String {
             let row = ((tpc + 1) % 7 + 7) % 7
             return ["F", "C", "G", "D", "A", "E", "B"][row]
@@ -77,7 +77,7 @@ import Testing
                 nOn(960, 67), nOff(1440, 67), // G
                 nOn(1440, 71), nOff(1920, 71), // B
             ],
-            carryIns: [], carryOuts: []
+            carryIns: [], carryOuts: [],
         )
         let q = MidiImporter.quantize(measure: measure, division: 480, options: .init())
         let voice = MidiImporter.voice(quantized: q, measure: measure, division: 480)
@@ -114,12 +114,12 @@ import Testing
                 nOn(960, 70), nOff(1440, 70), // Bb — in key, nil
                 nOn(1440, 71), nOff(1920, 71), // B natural — chromatic
             ],
-            carryIns: [], carryOuts: []
+            carryIns: [], carryOuts: [],
         )
         let q = MidiImporter.quantize(measure: measure, division: 480, options: .init())
         let voice = MidiImporter.voice(
             quantized: q, measure: measure, division: 480,
-            concertKey: -4
+            concertKey: -4,
         )
         let pitchesAndAccs: [(pitch: Int, acc: Accidental?)] = voice.elements.compactMap { el in
             if case let .chord(c) = el, let n = c.notes.first {
@@ -149,7 +149,7 @@ import Testing
             TimedMidiEvent(tick: 0, event: .meta(.trackName("Conductor"))),
             TimedMidiEvent(tick: 0, event: .meta(.keySignature(sharpsFlats: -4, isMinor: false))),
             TimedMidiEvent(tick: 0, event: .meta(.timeSignature(
-                numerator: 4, denominator: 4, clocksPerClick: 24, thirtySecondsPerQuarter: 8
+                numerator: 4, denominator: 4, clocksPerClick: 24, thirtySecondsPerQuarter: 8,
             ))),
             TimedMidiEvent(tick: 1920, event: .endOfTrack),
         ])
@@ -202,7 +202,7 @@ import Testing
             TimedMidiEvent(tick: 0, event: .meta(.trackName("Conductor"))),
             TimedMidiEvent(tick: 0, event: .meta(.keySignature(sharpsFlats: -4, isMinor: false))),
             TimedMidiEvent(tick: 0, event: .meta(.timeSignature(
-                numerator: 4, denominator: 4, clocksPerClick: 24, thirtySecondsPerQuarter: 8
+                numerator: 4, denominator: 4, clocksPerClick: 24, thirtySecondsPerQuarter: 8,
             ))),
             // Key change at bar 1 (tick 1920).
             TimedMidiEvent(tick: 1920, event: .meta(.keySignature(sharpsFlats: 3, isMinor: false))),
@@ -254,12 +254,12 @@ import Testing
                 nOn(960, 65), nOff(1440, 65), // F natural — needs cancellation
                 nOn(1440, 65), nOff(1920, 65), // F natural again — already cancelled
             ],
-            carryIns: [], carryOuts: []
+            carryIns: [], carryOuts: [],
         )
         let q = MidiImporter.quantize(measure: measure, division: 480, options: .init())
         let voice = MidiImporter.voice(
             quantized: q, measure: measure, division: 480,
-            concertKey: 0
+            concertKey: 0,
         )
         let accs = voice.elements.compactMap { el -> Accidental?? in
             if case let .chord(c) = el, let n = c.notes.first {

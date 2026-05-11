@@ -16,7 +16,7 @@ enum ArpeggioRenderer {
         top: CGPoint,
         bottom: CGPoint,
         subtype: String?,
-        metrics: StaffMetrics
+        metrics: StaffMetrics,
     ) {
         let x = top.x - metrics.sp * 1.5
         var y = top.y
@@ -25,7 +25,7 @@ enum ArpeggioRenderer {
                 &context,
                 glyph: SMuFLGlyph.arpeggioWiggle,
                 at: CGPoint(x: x, y: y),
-                size: metrics.glyphFontSize
+                size: metrics.glyphFontSize,
             )
             y += metrics.sp
         }
@@ -35,14 +35,14 @@ enum ArpeggioRenderer {
                 &context,
                 glyph: SMuFLGlyph.arpeggioUpArrow,
                 at: CGPoint(x: x, y: top.y - metrics.sp),
-                size: metrics.glyphFontSize
+                size: metrics.glyphFontSize,
             )
         case "down":
             drawRotated(
                 &context,
                 glyph: SMuFLGlyph.arpeggioDownArrow,
                 at: CGPoint(x: x, y: bottom.y + metrics.sp),
-                size: metrics.glyphFontSize
+                size: metrics.glyphFontSize,
             )
         default:
             break
@@ -53,7 +53,7 @@ enum ArpeggioRenderer {
         _ context: inout GraphicsContext,
         glyph: Character,
         at origin: CGPoint,
-        size: CGFloat
+        size: CGFloat,
     ) {
         context.drawLayer { ctx in
             ctx.translateBy(x: origin.x, y: origin.y)

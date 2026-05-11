@@ -3,7 +3,7 @@ import Foundation
 @testable import SheetMusicMIDI
 import Testing
 
-@Suite struct MidiImporterVoicingTests {
+struct MidiImporterVoicingTests {
     private func nOn(_ tick: Int, _ pitch: Int) -> TimedMidiEvent {
         TimedMidiEvent(tick: tick, event: .noteOn(channel: 0, pitch: pitch, velocity: 80))
     }
@@ -17,7 +17,7 @@ import Testing
             startTick: 0, endTick: 480, measureIndex: 0,
             timeSignature: TimeSignature(numerator: 1, denominator: 4),
             events: [nOn(0, 60), nOn(0, 64), nOff(480, 60), nOff(480, 64)],
-            carryIns: [], carryOuts: []
+            carryIns: [], carryOuts: [],
         )
         let q = MidiImporter.quantize(measure: measure, division: 480, options: .init())
         let voice = MidiImporter.voice(quantized: q, measure: measure, division: 480)
@@ -33,7 +33,7 @@ import Testing
             startTick: 0, endTick: 480, measureIndex: 0,
             timeSignature: TimeSignature(numerator: 1, denominator: 4),
             events: [nOn(0, 60), nOn(0, 64), nOff(240, 64), nOff(480, 60)],
-            carryIns: [], carryOuts: []
+            carryIns: [], carryOuts: [],
         )
         let q = MidiImporter.quantize(measure: measure, division: 480, options: .init())
         let voice = MidiImporter.voice(quantized: q, measure: measure, division: 480)
@@ -59,7 +59,7 @@ import Testing
             startTick: 0, endTick: 480, measureIndex: 0,
             timeSignature: TimeSignature(numerator: 1, denominator: 4),
             events: [nOn(0, 60), nOff(240, 60), nOn(360, 62), nOff(480, 62)],
-            carryIns: [], carryOuts: []
+            carryIns: [], carryOuts: [],
         )
         let q = MidiImporter.quantize(measure: measure, division: 480, options: .init())
         let voice = MidiImporter.voice(quantized: q, measure: measure, division: 480)
@@ -84,45 +84,45 @@ import Testing
                 // Triplet on pitch 60.
                 TimedMidiEvent(
                     tick: 0,
-                    event: .noteOn(channel: 0, pitch: 60, velocity: 80)
+                    event: .noteOn(channel: 0, pitch: 60, velocity: 80),
                 ),
                 TimedMidiEvent(
                     tick: 160,
-                    event: .noteOff(channel: 0, pitch: 60, velocity: 0)
+                    event: .noteOff(channel: 0, pitch: 60, velocity: 0),
                 ),
                 TimedMidiEvent(
                     tick: 160,
-                    event: .noteOn(channel: 0, pitch: 62, velocity: 80)
+                    event: .noteOn(channel: 0, pitch: 62, velocity: 80),
                 ),
                 TimedMidiEvent(
                     tick: 320,
-                    event: .noteOff(channel: 0, pitch: 62, velocity: 0)
+                    event: .noteOff(channel: 0, pitch: 62, velocity: 0),
                 ),
                 TimedMidiEvent(
                     tick: 320,
-                    event: .noteOn(channel: 0, pitch: 64, velocity: 80)
+                    event: .noteOn(channel: 0, pitch: 64, velocity: 80),
                 ),
                 TimedMidiEvent(
                     tick: 480,
-                    event: .noteOff(channel: 0, pitch: 64, velocity: 0)
+                    event: .noteOff(channel: 0, pitch: 64, velocity: 0),
                 ),
                 // Sustained pitch 67, ends mid-triplet at tick 240.
                 TimedMidiEvent(
                     tick: 0,
-                    event: .noteOn(channel: 0, pitch: 67, velocity: 80)
+                    event: .noteOn(channel: 0, pitch: 67, velocity: 80),
                 ),
                 TimedMidiEvent(
                     tick: 240,
-                    event: .noteOff(channel: 0, pitch: 67, velocity: 0)
+                    event: .noteOff(channel: 0, pitch: 67, velocity: 0),
                 ),
             ],
-            carryIns: [], carryOuts: []
+            carryIns: [], carryOuts: [],
         )
         let q = MidiImporter.quantize(
-            measure: measure, division: 480, options: .init()
+            measure: measure, division: 480, options: .init(),
         )
         let voice = MidiImporter.voice(
-            quantized: q, measure: measure, division: 480
+            quantized: q, measure: measure, division: 480,
         )
         #expect(voice.tuplets.count == 1)
         let tuplet = voice.tuplets[0]
@@ -136,7 +136,7 @@ import Testing
             return []
         }
         // Each tuplet member should contain at least one of {60, 62, 64}.
-        let tripletPitchesFlat = Set(tripletPitches.flatMap { $0 })
+        let tripletPitchesFlat = Set(tripletPitches.flatMap(\.self))
         #expect(tripletPitchesFlat.contains(60))
         #expect(tripletPitchesFlat.contains(62))
         #expect(tripletPitchesFlat.contains(64))
@@ -147,7 +147,7 @@ import Testing
         // at tick 0 (measure 0), ends at tick 3000 (measure 1, partway).
         let crossing = CarriedNote(
             pitch: 60, channel: 0, sourceMeasureIndex: 0,
-            noteOnTick: 0, noteOffTick: 3000
+            noteOnTick: 0, noteOffTick: 3000,
         )
         let m1 = ImportMeasure(
             startTick: 0, endTick: 1920, measureIndex: 0,
@@ -157,7 +157,7 @@ import Testing
                 TimedMidiEvent(tick: 1920, event: .endOfTrack),
             ],
             carryIns: [],
-            carryOuts: [crossing]
+            carryOuts: [crossing],
         )
         let m2 = ImportMeasure(
             startTick: 1920, endTick: 3840, measureIndex: 1,
@@ -166,16 +166,16 @@ import Testing
                 TimedMidiEvent(tick: 3000, event: .noteOff(channel: 0, pitch: 60, velocity: 0)),
             ],
             carryIns: [crossing],
-            carryOuts: []
+            carryOuts: [],
         )
 
         let v1 = MidiImporter.voice(
             quantized: MidiImporter.quantize(measure: m1, division: 480, options: .init()),
-            measure: m1, division: 480
+            measure: m1, division: 480,
         )
         let v2 = MidiImporter.voice(
             quantized: MidiImporter.quantize(measure: m2, division: 480, options: .init()),
-            measure: m2, division: 480
+            measure: m2, division: 480,
         )
 
         // Last chord of m1: tieForward set on pitch 60.
@@ -219,7 +219,7 @@ import Testing
                 nOn(0, 60), nOff(720, 60), // dotted quarter chord
                 // 720..1920 has no note → rest of 1200 ticks.
             ],
-            carryIns: [], carryOuts: []
+            carryIns: [], carryOuts: [],
         )
         let q = MidiImporter.quantize(measure: measure, division: 480, options: .init())
         let voice = MidiImporter.voice(quantized: q, measure: measure, division: 480)
@@ -248,7 +248,7 @@ import Testing
                 nOn(963, 64), nOff(1437, 64),
                 nOn(1437, 65), nOff(1922, 65),
             ],
-            carryIns: [], carryOuts: []
+            carryIns: [], carryOuts: [],
         )
         let q = MidiImporter.quantize(measure: measure, division: 480, options: .init())
         let voice = MidiImporter.voice(quantized: q, measure: measure, division: 480)
@@ -275,7 +275,7 @@ import Testing
                 nOn(1322, 64), nOff(1438, 64), // sixteenth
                 nOn(1438, 65), nOff(1920, 65), // quarter
             ],
-            carryIns: [], carryOuts: []
+            carryIns: [], carryOuts: [],
         )
         let q = MidiImporter.quantize(measure: measure, division: 480, options: .init())
         let voice = MidiImporter.voice(quantized: q, measure: measure, division: 480)
@@ -309,7 +309,7 @@ import Testing
                 nOn(0, 60), nOff(720, 60), // dotted quarter
                 nOn(720, 62), nOff(1920, 62), // dotted half
             ],
-            carryIns: [], carryOuts: []
+            carryIns: [], carryOuts: [],
         )
         let q = MidiImporter.quantize(measure: measure, division: 480, options: .init())
         let voice = MidiImporter.voice(quantized: q, measure: measure, division: 480)

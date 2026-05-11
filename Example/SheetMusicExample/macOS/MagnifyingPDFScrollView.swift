@@ -38,7 +38,8 @@
             scrollView.magnification = magnification
             context.coordinator.binding = $magnification
             context.coordinator.lastDocId = ObjectIdentifier(
-                doc.systems as AnyObject)
+                doc.systems as AnyObject,
+            )
 
             // NSScrollView fires `didEndLiveMagnify` once after the
             // gesture settles; we mirror its final value into the
@@ -48,13 +49,13 @@
                 context.coordinator,
                 selector: #selector(Coordinator.magnificationDidEnd(_:)),
                 name: NSScrollView.didEndLiveMagnifyNotification,
-                object: scrollView
+                object: scrollView,
             )
             NotificationCenter.default.addObserver(
                 context.coordinator,
                 selector: #selector(Coordinator.willStartLiveMagnify(_:)),
                 name: NSScrollView.willStartLiveMagnifyNotification,
-                object: scrollView
+                object: scrollView,
             )
 
             return scrollView
@@ -101,11 +102,11 @@
                                 titleFrame: idx == 0 ? doc.titleFrame : nil,
                                 metrics: doc.metrics,
                                 pageSize: pageSize,
-                                margins: page.margins(forPageIndex: idx)
+                                margins: page.margins(forPageIndex: idx),
                             )
                             .frame(
                                 width: pageSize.width,
-                                height: pageSize.height
+                                height: pageSize.height,
                             )
                             // Authoring overlay: line / page break
                             // badges on the on-screen preview only.
@@ -120,13 +121,13 @@
                                         documentYOffset:
                                         batch.startY
                                             - page.margins(
-                                                forPageIndex: idx
+                                                forPageIndex: idx,
                                             ).top,
                                         xOffset: page.margins(
-                                            forPageIndex: idx
-                                        ).leading
+                                            forPageIndex: idx,
+                                        ).leading,
                                     ),
-                                    metrics: doc.metrics
+                                    metrics: doc.metrics,
                                 )
                             }
                             .border(Color.gray.opacity(0.4))
@@ -137,10 +138,13 @@
                         }
                     }
                 }
-                .padding(24))
+                .padding(24),
+            )
         }
 
-        func makeCoordinator() -> Coordinator { Coordinator() }
+        func makeCoordinator() -> Coordinator {
+            Coordinator()
+        }
 
         final class Coordinator: NSObject {
             var binding: Binding<CGFloat>?

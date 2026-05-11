@@ -5,7 +5,7 @@ import Testing
 struct DeleteVoiceElementTests {
     private static let chordID = VoiceElementID(
         staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
-        voiceIndex: 0, elementIndex: 1
+        voiceIndex: 0, elementIndex: 1,
     )
 
     @Test("apply replaces a chord with a rest of the same duration")
@@ -36,7 +36,7 @@ struct DeleteVoiceElementTests {
         var score = EditingFixtures.fourQuarterRests()
         let restID = VoiceElementID(
             staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
-            voiceIndex: 0, elementIndex: 2
+            voiceIndex: 0, elementIndex: 2,
         )
         let before = score
         let cmd = DeleteVoiceElement(at: restID)
@@ -52,7 +52,7 @@ struct DeleteVoiceElementTests {
         var score = EditingFixtures.fourQuarterRests()
         let timeSigID = VoiceElementID(
             staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
-            voiceIndex: 0, elementIndex: 0
+            voiceIndex: 0, elementIndex: 0,
         )
         let cmd = DeleteVoiceElement(at: timeSigID)
         #expect(throws: SheetMusicError.self) {
@@ -65,7 +65,7 @@ struct DeleteVoiceElementTests {
         var score = EditingFixtures.fourQuarterRests()
         let bogus = VoiceElementID(
             staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
-            voiceIndex: 0, elementIndex: 99
+            voiceIndex: 0, elementIndex: 99,
         )
         let cmd = DeleteVoiceElement(at: bogus)
         #expect(throws: SheetMusicError.self) {

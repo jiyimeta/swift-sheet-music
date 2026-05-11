@@ -9,7 +9,7 @@ enum MeasureRepeatRenderer {
         context: inout GraphicsContext,
         count: Int,
         origin: CGPoint,
-        metrics: StaffMetrics
+        metrics: StaffMetrics,
     ) {
         let glyph: Character
         switch count {
@@ -19,7 +19,7 @@ enum MeasureRepeatRenderer {
         default: glyph = SMuFLGlyph.repeat1Bar
         }
         context.drawGlyph(
-            glyph, at: origin, size: metrics.glyphFontSize
+            glyph, at: origin, size: metrics.glyphFontSize,
         )
     }
 }

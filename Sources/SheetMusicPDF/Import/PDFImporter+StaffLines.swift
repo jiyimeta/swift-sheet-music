@@ -7,19 +7,19 @@ extension PDFImporter {
     static func detectStaves(
         paths: [PathSegment],
         classified: [ClassifiedGlyph],
-        pageIndex: Int
+        pageIndex: Int,
     ) -> [Staff] {
         let clusters = clusterHorizontals(paths, pageIndex: pageIndex)
         var staves = pathDetectedStaves(
             clusters: clusters,
             paths: paths,
-            pageIndex: pageIndex
+            pageIndex: pageIndex,
         )
         appendGlyphDetectedStaves(
             classified: classified,
             paths: paths,
             pageIndex: pageIndex,
-            into: &staves
+            into: &staves,
         )
         return staves.sorted { midline($0.yLines) < midline($1.yLines) }
     }
@@ -40,7 +40,7 @@ extension PDFImporter {
     /// in `pathDetectedStaves` does the actual non-staff rejection.
     private static func clusterHorizontals(
         _ paths: [PathSegment],
-        pageIndex: Int
+        pageIndex: Int,
     ) -> [[PathSegment]] {
         let horiz = paths.filter {
             $0.pageIndex == pageIndex
@@ -64,7 +64,7 @@ extension PDFImporter {
     private static func pathDetectedStaves(
         clusters: [[PathSegment]],
         paths: [PathSegment],
-        pageIndex: Int
+        pageIndex: Int,
     ) -> [Staff] {
         var staves: [Staff] = []
         let lineYs: [CGFloat] = clusters.map { c in
@@ -81,7 +81,7 @@ extension PDFImporter {
                     yLines: ys,
                     xRange: xMin ... xMax,
                     paths: paths,
-                    pageIndex: pageIndex
+                    pageIndex: pageIndex,
                 ))
                 i += 5
             } else {
@@ -108,7 +108,7 @@ extension PDFImporter {
         classified: [ClassifiedGlyph],
         paths: [PathSegment],
         pageIndex: Int,
-        into staves: inout [Staff]
+        into staves: inout [Staff],
     ) {
         for g in classified where g.raw.pageIndex == pageIndex {
             guard case .staff5Lines = g.semantic else { continue }
@@ -124,7 +124,7 @@ extension PDFImporter {
                 yLines: ys,
                 xRange: xMin ... xMax,
                 paths: paths,
-                pageIndex: pageIndex
+                pageIndex: pageIndex,
             ))
         }
     }
@@ -133,7 +133,7 @@ extension PDFImporter {
         yLines: [CGFloat],
         xRange: ClosedRange<CGFloat>,
         paths: [PathSegment],
-        pageIndex: Int
+        pageIndex: Int,
     ) -> Staff {
         Staff(
             pageIndex: pageIndex,
@@ -143,8 +143,8 @@ extension PDFImporter {
                 in: paths,
                 xRange: xRange,
                 yRange: (yLines.first ?? 0) ... (yLines.last ?? 0),
-                pageIndex: pageIndex
-            )
+                pageIndex: pageIndex,
+            ),
         )
     }
 
@@ -152,7 +152,7 @@ extension PDFImporter {
         in paths: [PathSegment],
         xRange: ClosedRange<CGFloat>,
         yRange: ClosedRange<CGFloat>,
-        pageIndex: Int
+        pageIndex: Int,
     ) -> [PathSegment] {
         paths.filter {
             $0.pageIndex == pageIndex

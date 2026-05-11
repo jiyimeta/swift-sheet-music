@@ -12,7 +12,7 @@ public struct Part: Sendable, Equatable {
         id: String,
         trackName: String? = nil,
         instrument: Instrument,
-        staves: [Staff] = []
+        staves: [Staff] = [],
     ) {
         self.id = id
         self.trackName = trackName

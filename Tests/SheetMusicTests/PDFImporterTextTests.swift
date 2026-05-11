@@ -4,22 +4,22 @@ import Foundation
 @testable import SheetMusicPDF
 import Testing
 
-@Suite @MainActor struct PDFImporterTextTests {
+@MainActor struct PDFImporterTextTests {
     private let pageSize = CGSize(width: 595, height: 842)
 
     private func text(
-        _ s: String, x: CGFloat, y: CGFloat, size: CGFloat = 12
+        _ s: String, x: CGFloat, y: CGFloat, size: CGFloat = 12,
     ) -> TextGlyph {
         TextGlyph(
             text: s, fontName: "Helvetica", fontSize: size,
             origin: CGPoint(x: x, y: y),
             bbox: CGRect(x: x, y: y, width: 100, height: size),
-            pageIndex: 0
+            pageIndex: 0,
         )
     }
 
     private func defaultOptions(
-        useMetadataAsFallback: Bool = true
+        useMetadataAsFallback: Bool = true,
     ) -> PDFImportOptions {
         var opts = PDFImportOptions()
         opts.useMetadataAsFallback = useMetadataAsFallback
@@ -33,7 +33,7 @@ import Testing
         ]
         let frame = PDFImporter.extractTitleFrame(
             texts: texts, pageSize: pageSize,
-            documentAttributes: nil, options: defaultOptions()
+            documentAttributes: nil, options: defaultOptions(),
         )
         #expect(frame != nil)
         let titles = frame?.texts.filter { $0.style == .title } ?? []
@@ -48,7 +48,7 @@ import Testing
         ]
         let frame = PDFImporter.extractTitleFrame(
             texts: texts, pageSize: pageSize,
-            documentAttributes: nil, options: defaultOptions()
+            documentAttributes: nil, options: defaultOptions(),
         )
         let composers = frame?.texts.filter { $0.style == .composer } ?? []
         #expect(composers.count == 1)
@@ -59,7 +59,7 @@ import Testing
         let frame = PDFImporter.extractTitleFrame(
             texts: [], pageSize: pageSize,
             documentAttributes: ["Title": "From Metadata"],
-            options: defaultOptions()
+            options: defaultOptions(),
         )
         #expect(frame != nil)
         let titles = frame?.texts.filter { $0.style == .title } ?? []
@@ -70,7 +70,7 @@ import Testing
         let frame = PDFImporter.extractTitleFrame(
             texts: [], pageSize: pageSize,
             documentAttributes: ["Title": "From Metadata"],
-            options: defaultOptions(useMetadataAsFallback: false)
+            options: defaultOptions(useMetadataAsFallback: false),
         )
         #expect(frame == nil)
     }
@@ -81,7 +81,7 @@ import Testing
         ]
         let frame = PDFImporter.extractTitleFrame(
             texts: texts, pageSize: pageSize,
-            documentAttributes: nil, options: defaultOptions()
+            documentAttributes: nil, options: defaultOptions(),
         )
         #expect(frame == nil)
     }

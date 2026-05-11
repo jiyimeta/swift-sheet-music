@@ -4,36 +4,36 @@ import SheetMusicCore
 @testable import SheetMusicPDF
 import Testing
 
-@Suite @MainActor struct PDFImporterScoreStateTests {
+@MainActor struct PDFImporterScoreStateTests {
     private func synthStaff() -> SheetMusicPDF.Staff {
         SheetMusicPDF.Staff(
             pageIndex: 0,
             yLines: [490, 495, 500, 505, 510],
             xRange: 50 ... 550,
-            barlineCandidates: []
+            barlineCandidates: [],
         )
     }
 
     private func classified(
         _ semantic: SMuFLSemantic, x: CGFloat, y: CGFloat,
-        codepoint: UInt32 = 0xE0A4
+        codepoint: UInt32 = 0xE0A4,
     ) -> ClassifiedGlyph {
         ClassifiedGlyph(
             raw: RawGlyph(
                 codepoint: codepoint, fontName: "Bravura",
                 fontSize: 20, origin: CGPoint(x: x, y: y),
-                advance: 5, pageIndex: 0
+                advance: 5, pageIndex: 0,
             ),
-            semantic: semantic
+            semantic: semantic,
         )
     }
 
     private func measure(
-        _ xRange: ClosedRange<CGFloat>, glyphs: [ClassifiedGlyph]
+        _ xRange: ClosedRange<CGFloat>, glyphs: [ClassifiedGlyph],
     ) -> ImportMeasure {
         ImportMeasure(
             xRange: xRange, glyphs: glyphs,
-            leadingBarline: nil, trailingBarline: nil
+            leadingBarline: nil, trailingBarline: nil,
         )
     }
 

@@ -19,9 +19,9 @@ struct TitleFrameView: View {
             context.fill(
                 Path(CGRect(
                     origin: .zero,
-                    size: CGSize(width: width, height: frame.height)
+                    size: CGSize(width: width, height: frame.height),
                 )),
-                with: .color(.white)
+                with: .color(.white),
             )
             TitleFrameRenderer.draw(frame, into: &context)
         }

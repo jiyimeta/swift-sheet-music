@@ -15,16 +15,16 @@
         {
             let url = try #require(Bundle.module.url(
                 forResource: "multiPartMixedStaves",
-                withExtension: "mscx"
+                withExtension: "mscx",
             ))
             let score = try MSCXParser.parse(contentsOf: url)
             let doc = LayoutEngine.layout(
                 score: score,
                 options: ScoreViewOptions(
                     staffSize: 18, systemGap: 16,
-                    wrapToViewWidth: false
+                    wrapToViewWidth: false,
                 ),
-                availableWidth: width
+                availableWidth: width,
             )
             return (doc, score)
         }
@@ -46,7 +46,7 @@
             }
             let point = CGPoint(
                 x: system.origin.x + measure.origin.x + origin.x,
-                y: system.origin.y + measure.origin.y + origin.y
+                y: system.origin.y + measure.origin.y + origin.y,
             )
             let target = tester.hitTest(at: point)
             guard case let .clef(anchor) = target else {
@@ -68,14 +68,14 @@
             let system = try #require(doc.systems.first)
             let measure = try #require(system.measures.first)
             guard case let .clef(_, origin, _) = (
-                measure.elements.first { if case .clef = $0 { return true }; return false }
+                measure.elements.first { if case .clef = $0 { return true }; return false },
             ) else {
                 Issue.record("no clef element")
                 return
             }
             let point = CGPoint(
                 x: system.origin.x + measure.origin.x + origin.x,
-                y: system.origin.y + measure.origin.y + origin.y
+                y: system.origin.y + measure.origin.y + origin.y,
             )
             guard case .clef = tester.itemID(at: point) else {
                 Issue.record("itemID did not return .clef")

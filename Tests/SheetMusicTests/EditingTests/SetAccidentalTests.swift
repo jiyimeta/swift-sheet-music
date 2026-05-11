@@ -5,11 +5,11 @@ import Testing
 struct SetAccidentalTests {
     private static let chordVE = VoiceElementID(
         staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
-        voiceIndex: 0, elementIndex: 1
+        voiceIndex: 0, elementIndex: 1,
     )
     private static let noteID = NoteID(
         staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
-        voiceIndex: 0, elementIndex: 1, noteIndexInChord: 0
+        voiceIndex: 0, elementIndex: 1, noteIndexInChord: 0,
     )
 
     @Test("sharp on C natural becomes C♯ (+1 semitone)")
@@ -46,7 +46,7 @@ struct SetAccidentalTests {
         // D♭4: pitch 61, tpc 9, accidental .flat.
         score[Self.chordVE] = .chord(Chord(
             duration: .quarter,
-            notes: [Note(pitch: 61, tpc: 9, accidental: .flat)]
+            notes: [Note(pitch: 61, tpc: 9, accidental: .flat)],
         ))
         let cmd = SetAccidental(at: Self.noteID, accidental: .sharp)
         _ = try cmd.apply(to: &score)
@@ -65,7 +65,7 @@ struct SetAccidentalTests {
         // C♯4 with accidental display.
         score[Self.chordVE] = .chord(Chord(
             duration: .quarter,
-            notes: [Note(pitch: 61, tpc: 21, accidental: .sharp)]
+            notes: [Note(pitch: 61, tpc: 21, accidental: .sharp)],
         ))
         let cmd = SetAccidental(at: Self.noteID, accidental: nil)
         _ = try cmd.apply(to: &score)
@@ -83,7 +83,7 @@ struct SetAccidentalTests {
         var score = EditingFixtures.fourQuarterRests()
         score[Self.chordVE] = .chord(Chord(
             duration: .quarter,
-            notes: [Note(pitch: 61, tpc: 9, accidental: .flat)]
+            notes: [Note(pitch: 61, tpc: 9, accidental: .flat)],
         ))
         let snapshot = score
         let cmd = SetAccidental(at: Self.noteID, accidental: .sharp)
@@ -97,7 +97,7 @@ struct SetAccidentalTests {
         var score = EditingFixtures.fourQuarterRests()
         let restNoteID = NoteID(
             staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
-            voiceIndex: 0, elementIndex: 2, noteIndexInChord: 0
+            voiceIndex: 0, elementIndex: 2, noteIndexInChord: 0,
         )
         let cmd = SetAccidental(at: restNoteID, accidental: .sharp)
         #expect(throws: SheetMusicError.self) {

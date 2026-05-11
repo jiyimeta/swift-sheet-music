@@ -27,7 +27,7 @@ struct SetRestDurationTests {
 
     private static let restID = VoiceElementID(
         staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
-        voiceIndex: 0, elementIndex: 0
+        voiceIndex: 0, elementIndex: 0,
     )
 
     @Test("Shorten quarter rest → eighth fills leftover with eighth rest")
@@ -38,7 +38,7 @@ struct SetRestDurationTests {
             rest(.quarter),
         ])
         let cmd = SetRestDuration(
-            at: Self.restID, duration: .eighth
+            at: Self.restID, duration: .eighth,
         )
         _ = try cmd.apply(to: &score)
         let els = first(score)
@@ -66,7 +66,7 @@ struct SetRestDurationTests {
     func shortenWholeToEighthAligned() throws {
         var score = score([rest(.whole)])
         let cmd = SetRestDuration(
-            at: Self.restID, duration: .eighth
+            at: Self.restID, duration: .eighth,
         )
         _ = try cmd.apply(to: &score)
         let els = first(score)
@@ -90,7 +90,7 @@ struct SetRestDurationTests {
         // Lengthen first rest to quarter; should consume the
         // following eighth rest.
         let cmd = SetRestDuration(
-            at: Self.restID, duration: .quarter
+            at: Self.restID, duration: .quarter,
         )
         _ = try cmd.apply(to: &score)
         let els = first(score)
@@ -116,7 +116,7 @@ struct SetRestDurationTests {
         // clones of the chord (pitch 64): quarter at rtick 480 +
         // eighth at rtick 960.
         let cmd = SetRestDuration(
-            at: Self.restID, duration: .quarter
+            at: Self.restID, duration: .quarter,
         )
         _ = try cmd.apply(to: &score)
         let els = first(score)
@@ -151,7 +151,7 @@ struct SetRestDurationTests {
         ])
         let snapshot = score
         let cmd = SetRestDuration(
-            at: Self.restID, duration: .eighth
+            at: Self.restID, duration: .eighth,
         )
         let inverse = try cmd.apply(to: &score)
         _ = try inverse.apply(to: &score)
@@ -168,7 +168,7 @@ struct SetRestDurationTests {
         ])
         let snapshot = score
         let cmd = SetRestDuration(
-            at: Self.restID, duration: .quarter
+            at: Self.restID, duration: .quarter,
         )
         let inverse = try cmd.apply(to: &score)
         _ = try inverse.apply(to: &score)
@@ -179,7 +179,7 @@ struct SetRestDurationTests {
     func refusesPastMeasureEnd() {
         var score = score([rest(.quarter), rest(.eighth)])
         let cmd = SetRestDuration(
-            at: Self.restID, duration: .whole
+            at: Self.restID, duration: .whole,
         )
         #expect(throws: SheetMusicError.self) {
             _ = try cmd.apply(to: &score)
@@ -190,7 +190,7 @@ struct SetRestDurationTests {
     func refusesOnChord() {
         var score = score([chord(.quarter)])
         let cmd = SetRestDuration(
-            at: Self.restID, duration: .eighth
+            at: Self.restID, duration: .eighth,
         )
         #expect(throws: SheetMusicError.self) {
             _ = try cmd.apply(to: &score)

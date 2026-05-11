@@ -41,7 +41,7 @@ extension Voice {
                     let g = GraceChord(
                         graceType: graceType,
                         duration: inner.duration,
-                        notes: inner.notes
+                        notes: inner.notes,
                     )
                     if graceType.isAfter {
                         // Attach to the most recently emitted chord.
@@ -63,7 +63,7 @@ extension Voice {
                 }
                 var chord = try Chord.decode(child)
                 chord.duration = scaled(
-                    chord.duration, by: tupletFractions()
+                    chord.duration, by: tupletFractions(),
                 )
                 if !pendingGracesBefore.isEmpty {
                     chord.graceNotesBefore = pendingGracesBefore
@@ -73,14 +73,14 @@ extension Voice {
             case "Rest":
                 var rest = try MSCXRestDecoder.decode(child)
                 rest.duration = scaled(
-                    rest.duration, by: tupletFractions()
+                    rest.duration, by: tupletFractions(),
                 )
                 elements.append(.chord(rest))
             case "Tuplet":
                 if let ratio = tupletRatio(from: child) {
                     tupletStack.append(OpenTuplet(
                         ratio: ratio,
-                        firstElementIndex: elements.count
+                        firstElementIndex: elements.count,
                     ))
                 }
             case "endTuplet":
@@ -91,7 +91,7 @@ extension Voice {
                             normalNotes: top.ratio.numerator,
                             actualNotes: top.ratio.denominator,
                             startIndex: top.firstElementIndex,
-                            endIndex: endIndex
+                            endIndex: endIndex,
                         ))
                     }
                 }
@@ -120,24 +120,29 @@ extension Voice {
             case "StaffText":
                 if Swing.isSwingMarker(child) {
                     elements.append(.swing(
-                        Swing.decode(child, isSystemText: false)))
+                        Swing.decode(child, isSystemText: false),
+                    ))
                 } else {
                     try elements.append(.staffText(
-                        StaffText.decode(child, isSystemText: false)))
+                        StaffText.decode(child, isSystemText: false),
+                    ))
                 }
             case "SystemText":
                 if Swing.isSwingMarker(child) {
                     elements.append(.swing(
-                        Swing.decode(child, isSystemText: true)))
+                        Swing.decode(child, isSystemText: true),
+                    ))
                 } else {
                     try elements.append(.staffText(
-                        StaffText.decode(child, isSystemText: true)))
+                        StaffText.decode(child, isSystemText: true),
+                    ))
                 }
             case "Harmony":
                 try elements.append(.harmony(Harmony.decode(child)))
             case "RehearsalMark":
                 try elements.append(.rehearsalMark(
-                    RehearsalMark.decode(child)))
+                    RehearsalMark.decode(child),
+                ))
             case "location":
                 // Voice-level cursor shift. MuseScore uses
                 // `<location><fractions>N/D</fractions></location>`
@@ -184,7 +189,7 @@ extension Voice {
         for ratio in tupletStack {
             frac = Fraction(
                 numerator: frac.numerator * ratio.numerator,
-                denominator: frac.denominator * ratio.denominator
+                denominator: frac.denominator * ratio.denominator,
             )
         }
         return .fraction(frac)

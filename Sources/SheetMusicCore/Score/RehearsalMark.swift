@@ -37,7 +37,7 @@ public struct RehearsalMark: Sendable, Equatable {
         offsetY: Double = 0,
         color: ScoreColor? = nil,
         frame: TextFrameType = .rectangle,
-        properties: TextProperties = TextProperties()
+        properties: TextProperties = TextProperties(),
     ) {
         self.text = text
         self.offsetX = offsetX

@@ -13,7 +13,7 @@ extension KeySignature {
             name: "KeySig",
             children: [
                 XMLTreeNode(name: childName, text: String(concertKey)),
-            ]
+            ],
         )
     }
 }

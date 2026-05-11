@@ -15,7 +15,7 @@ enum StaffRenderer {
             return system.size.width
         }
         return bar.x + BarLineRenderer.rightExtent(
-            subtype: bar.subtype, sp: system.sp
+            subtype: bar.subtype, sp: system.sp,
         )
     }
 
@@ -26,7 +26,7 @@ enum StaffRenderer {
         context: inout GraphicsContext,
         origin: CGPoint,
         width: CGFloat,
-        metrics: StaffMetrics
+        metrics: StaffMetrics,
     ) {
         for i in 0 ..< 5 {
             let y = origin.y + CGFloat(i) * metrics.sp
@@ -36,7 +36,7 @@ enum StaffRenderer {
             context.stroke(
                 path,
                 with: .color(.primary),
-                lineWidth: metrics.staffLineThickness
+                lineWidth: metrics.staffLineThickness,
             )
         }
     }
@@ -48,7 +48,7 @@ enum StaffRenderer {
     static func drawBrackets(
         context: inout GraphicsContext,
         system: LayoutSystem,
-        metrics: StaffMetrics
+        metrics: StaffMetrics,
     ) {
         guard !system.brackets.isEmpty,
               let firstStaffOrigin = system.staffOrigins.first
@@ -66,7 +66,7 @@ enum StaffRenderer {
                     staffOriginX: staffOriginX,
                     topY: topY, bottomY: bottomY,
                     staffCount: b.staffCount,
-                    metrics: metrics
+                    metrics: metrics,
                 )
             case .normal:
                 drawNormalBracket(
@@ -74,7 +74,7 @@ enum StaffRenderer {
                     column: b.column,
                     staffOriginX: staffOriginX,
                     topY: topY, bottomY: bottomY,
-                    metrics: metrics
+                    metrics: metrics,
                 )
             case .square:
                 drawSquareBracket(
@@ -82,7 +82,7 @@ enum StaffRenderer {
                     column: b.column,
                     staffOriginX: staffOriginX,
                     topY: topY, bottomY: bottomY,
-                    metrics: metrics
+                    metrics: metrics,
                 )
             case .line:
                 drawLineBracket(
@@ -90,14 +90,14 @@ enum StaffRenderer {
                     column: b.column,
                     staffOriginX: staffOriginX,
                     topY: topY, bottomY: bottomY,
-                    metrics: metrics
+                    metrics: metrics,
                 )
             }
         }
     }
 
     private static func bracketSpineX(
-        column: Int, staffOriginX: CGFloat, sp: CGFloat
+        column: Int, staffOriginX: CGFloat, sp: CGFloat,
     ) -> CGFloat {
         staffOriginX - sp * 0.5 - CGFloat(column) * sp
     }
@@ -109,11 +109,11 @@ enum StaffRenderer {
         column: Int,
         staffOriginX: CGFloat,
         topY: CGFloat, bottomY: CGFloat,
-        metrics: StaffMetrics
+        metrics: StaffMetrics,
     ) {
         let sp = metrics.sp
         let x = bracketSpineX(
-            column: column, staffOriginX: staffOriginX, sp: sp
+            column: column, staffOriginX: staffOriginX, sp: sp,
         )
         let w = sp * 0.45
         let bd = sp * 0.25
@@ -127,7 +127,7 @@ enum StaffRenderer {
             codepoint: 0xE003,
             fontSize: fontSize,
             originX: glyphLeftX,
-            originY: topY - bd
+            originY: topY - bd,
         ) {
             context.fill(Path(topPath), with: .color(.primary))
         }
@@ -135,7 +135,7 @@ enum StaffRenderer {
             codepoint: 0xE004,
             fontSize: fontSize,
             originX: glyphLeftX,
-            originY: bottomY + bd
+            originY: bottomY + bd,
         ) {
             context.fill(Path(bottomPath), with: .color(.primary))
         }
@@ -148,11 +148,11 @@ enum StaffRenderer {
         column: Int,
         staffOriginX: CGFloat,
         topY: CGFloat, bottomY: CGFloat,
-        metrics: StaffMetrics
+        metrics: StaffMetrics,
     ) {
         let sp = metrics.sp
         let x = bracketSpineX(
-            column: column, staffOriginX: staffOriginX, sp: sp
+            column: column, staffOriginX: staffOriginX, sp: sp,
         )
         let lineW = metrics.staffLineThickness
         let serifLength = sp * 0.45
@@ -165,7 +165,7 @@ enum StaffRenderer {
             serif.move(to: CGPoint(x: x - lineW * 0.5, y: y))
             serif.addLine(to: CGPoint(x: x + serifLength, y: y))
             context.stroke(
-                serif, with: .color(.primary), lineWidth: lineW
+                serif, with: .color(.primary), lineWidth: lineW,
             )
         }
     }
@@ -178,11 +178,11 @@ enum StaffRenderer {
         column: Int,
         staffOriginX: CGFloat,
         topY: CGFloat, bottomY: CGFloat,
-        metrics: StaffMetrics
+        metrics: StaffMetrics,
     ) {
         let sp = metrics.sp
         let x = bracketSpineX(
-            column: column, staffOriginX: staffOriginX, sp: sp
+            column: column, staffOriginX: staffOriginX, sp: sp,
         )
         let w = 0.67 * sp * 0.45
         let bd = metrics.staffLineThickness * 0.5
@@ -202,11 +202,11 @@ enum StaffRenderer {
         staffOriginX: CGFloat,
         topY: CGFloat, bottomY: CGFloat,
         staffCount: Int,
-        metrics: StaffMetrics
+        metrics: StaffMetrics,
     ) {
         let rightEdge = staffOriginX - metrics.sp * 0.3
         let (codepoint, magx) = SMuFLGlyph.braceVariant(
-            staffCount: staffCount
+            staffCount: staffCount,
         )
         guard let path = smuflGlyphPathStretched(
             codepoint: codepoint,
@@ -214,7 +214,7 @@ enum StaffRenderer {
             rightEdgeX: rightEdge,
             topY: topY,
             bottomY: bottomY,
-            xScale: magx
+            xScale: magx,
         ) else { return }
         context.fill(Path(path), with: .color(.primary))
     }
@@ -225,21 +225,21 @@ enum StaffRenderer {
         codepoint: UInt16,
         fontSize: CGFloat,
         originX: CGFloat,
-        originY: CGFloat
+        originY: CGFloat,
     ) -> CGPath? {
         _ = BravuraFont.register
         let font = CTFontCreateWithName(
-            BravuraFont.familyName as CFString, fontSize, nil
+            BravuraFont.familyName as CFString, fontSize, nil,
         )
         var unichars: [UniChar] = [codepoint]
         var glyphs: [CGGlyph] = [0]
         guard CTFontGetGlyphsForCharacters(
-            font, &unichars, &glyphs, 1
+            font, &unichars, &glyphs, 1,
         ), let path = CTFontCreatePathForGlyph(font, glyphs[0], nil)
         else { return nil }
         var t = CGAffineTransform(
             a: 1, b: 0, c: 0, d: -1,
-            tx: originX, ty: originY
+            tx: originX, ty: originY,
         )
         return path.copy(using: &t) ?? path
     }
@@ -253,16 +253,16 @@ enum StaffRenderer {
         rightEdgeX: CGFloat,
         topY: CGFloat,
         bottomY: CGFloat,
-        xScale: CGFloat = 1
+        xScale: CGFloat = 1,
     ) -> CGPath? {
         _ = BravuraFont.register
         let font = CTFontCreateWithName(
-            BravuraFont.familyName as CFString, fontSize, nil
+            BravuraFont.familyName as CFString, fontSize, nil,
         )
         var unichars: [UniChar] = [codepoint]
         var glyphs: [CGGlyph] = [0]
         guard CTFontGetGlyphsForCharacters(
-            font, &unichars, &glyphs, 1
+            font, &unichars, &glyphs, 1,
         ), let path = CTFontCreatePathForGlyph(font, glyphs[0], nil)
         else { return nil }
         let bbox = path.boundingBox
@@ -271,7 +271,7 @@ enum StaffRenderer {
         var t = CGAffineTransform(
             a: xScale, b: 0, c: 0, d: -scaleY,
             tx: rightEdgeX - bbox.maxX * xScale,
-            ty: topY + bbox.maxY * scaleY
+            ty: topY + bbox.maxY * scaleY,
         )
         return path.copy(using: &t) ?? path
     }

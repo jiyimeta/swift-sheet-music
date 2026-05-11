@@ -20,7 +20,7 @@ public struct ReplaceVoiceElements: EditCommand {
         measureIndex: Int,
         voiceIndex: Int,
         elements: [VoiceElement],
-        tuplets: [Tuplet] = []
+        tuplets: [Tuplet] = [],
     ) {
         self.staff = staff
         self.measureIndex = measureIndex
@@ -34,7 +34,7 @@ public struct ReplaceVoiceElements: EditCommand {
             staff: staff,
             measureIndex: measureIndex,
             voiceIndex: voiceIndex,
-            elementIndex: 0
+            elementIndex: 0,
         )
     }
 
@@ -46,7 +46,8 @@ public struct ReplaceVoiceElements: EditCommand {
         else {
             throw SheetMusicError.invalidEdit(
                 reason: "ReplaceVoiceElements: staff \(staff) "
-                    + "out of range")
+                    + "out of range",
+            )
         }
         let p = staff.partIndex
         let s = staff.staffIndexInPart
@@ -55,7 +56,8 @@ public struct ReplaceVoiceElements: EditCommand {
         else {
             throw SheetMusicError.invalidEdit(
                 reason: "ReplaceVoiceElements: measure "
-                    + "\(measureIndex) out of range")
+                    + "\(measureIndex) out of range",
+            )
         }
         guard score.parts[p].staves[s]
             .measures[measureIndex].voices
@@ -63,21 +65,22 @@ public struct ReplaceVoiceElements: EditCommand {
         else {
             throw SheetMusicError.invalidEdit(
                 reason: "ReplaceVoiceElements: voice "
-                    + "\(voiceIndex) out of range")
+                    + "\(voiceIndex) out of range",
+            )
         }
         let priorVoice = score.parts[p].staves[s]
             .measures[measureIndex].voices[voiceIndex]
         score.parts[p].staves[s]
             .measures[measureIndex]
             .voices[voiceIndex] = Voice(
-                elements: elements, tuplets: tuplets
+                elements: elements, tuplets: tuplets,
             )
         return ReplaceVoiceElements(
             staff: staff,
             measureIndex: measureIndex,
             voiceIndex: voiceIndex,
             elements: priorVoice.elements,
-            tuplets: priorVoice.tuplets
+            tuplets: priorVoice.tuplets,
         )
     }
 }

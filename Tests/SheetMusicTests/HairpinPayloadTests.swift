@@ -1,7 +1,7 @@
 @testable import SheetMusicCore
 import Testing
 
-@Suite struct HairpinPayloadTests {
+struct HairpinPayloadTests {
     @Test func defaultSpannerHasNilHairpin() {
         let s = Spanner(kind: .hairpin, rawType: "HairPin")
         #expect(s.hairpin == nil)
@@ -11,17 +11,17 @@ import Testing
         let a = Spanner.HairpinPayload(
             subtype: .crescendo,
             veloChange: 20,
-            veloChangeMethod: .normal
+            veloChangeMethod: .normal,
         )
         let b = Spanner.HairpinPayload(
             subtype: .crescendo,
             veloChange: 20,
-            veloChangeMethod: .normal
+            veloChangeMethod: .normal,
         )
         let c = Spanner.HairpinPayload(
             subtype: .decrescendo,
             veloChange: 20,
-            veloChangeMethod: .normal
+            veloChangeMethod: .normal,
         )
         #expect(a == b)
         #expect(a != c)

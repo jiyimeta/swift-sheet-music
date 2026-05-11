@@ -7,20 +7,20 @@ struct SetStaffDefaultClefTests {
 
     private func twoStaffScore(
         firstDefault: String? = "G",
-        secondDefault: String? = "F"
+        secondDefault: String? = "F",
     ) -> Score {
         let staff0 = Staff(
             defaultClefType: firstDefault,
-            measures: [Measure(voices: [Voice(elements: [])])]
+            measures: [Measure(voices: [Voice(elements: [])])],
         )
         let staff1 = Staff(
             defaultClefType: secondDefault,
-            measures: [Measure(voices: [Voice(elements: [])])]
+            measures: [Measure(voices: [Voice(elements: [])])],
         )
         let part = Part(
             id: "P1",
             instrument: Instrument(id: "x"),
-            staves: [staff0, staff1]
+            staves: [staff0, staff1],
         )
         return Score(division: 480, parts: [part])
     }
@@ -54,7 +54,7 @@ struct SetStaffDefaultClefTests {
         var score = twoStaffScore()
         let cmd = SetStaffDefaultClef(
             staff: StaffAddress(partIndex: 9, staffIndexInPart: 0),
-            newRawType: "G"
+            newRawType: "G",
         )
         #expect(throws: SheetMusicError.self) {
             _ = try cmd.apply(to: &score)

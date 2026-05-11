@@ -18,7 +18,7 @@ public enum XMLTreeParser {
                 throw SheetMusicError.invalidXML(underlying: parserError)
             }
             throw SheetMusicError.invalidXML(
-                underlying: NSError(domain: "XMLTreeParser", code: -1)
+                underlying: NSError(domain: "XMLTreeParser", code: -1),
             )
         }
         guard let root = delegate.root else {
@@ -38,7 +38,7 @@ private final class TreeBuildingDelegate: NSObject, XMLParserDelegate {
         didStartElement elementName: String,
         namespaceURI: String?,
         qualifiedName qName: String?,
-        attributes attributeDict: [String: String]
+        attributes attributeDict: [String: String],
     ) {
         let node = XMLTreeNode(name: elementName, attributes: attributeDict, text: "", children: [])
         stack.append(node)
@@ -53,7 +53,7 @@ private final class TreeBuildingDelegate: NSObject, XMLParserDelegate {
         _ parser: XMLParser,
         didEndElement elementName: String,
         namespaceURI: String?,
-        qualifiedName qName: String?
+        qualifiedName qName: String?,
     ) {
         guard let finished = stack.popLast() else { return }
         var trimmed = finished

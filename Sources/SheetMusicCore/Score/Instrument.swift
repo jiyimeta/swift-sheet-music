@@ -44,7 +44,7 @@ public struct Instrument: Sendable, Equatable {
         articulations: [InstrumentArticulation] = [],
         channels: [InstrumentChannel] = [InstrumentChannel()],
         useDrumset: Bool = false,
-        drumLineMap: [Int: Int] = [:]
+        drumLineMap: [Int: Int] = [:],
     ) {
         self.id = id
         self.longName = longName

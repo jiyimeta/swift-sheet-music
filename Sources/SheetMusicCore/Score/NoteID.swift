@@ -16,7 +16,7 @@ public struct NoteID: Hashable, Sendable {
         measureIndex: Int,
         voiceIndex: Int,
         elementIndex: Int,
-        noteIndexInChord: Int
+        noteIndexInChord: Int,
     ) {
         self.staff = staff
         self.measureIndex = measureIndex

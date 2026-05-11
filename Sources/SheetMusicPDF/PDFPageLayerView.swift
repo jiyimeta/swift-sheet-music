@@ -34,7 +34,7 @@
             titleFrame: LayoutTitleFrame? = nil,
             metrics: StaffMetrics,
             pageSize: CGSize,
-            margins: PageMargins
+            margins: PageMargins,
         ) {
             self.systems = systems
             self.pageStartY = pageStartY
@@ -46,32 +46,32 @@
 
         public func makeNSView(context: Context) -> PDFPageLayerHostView {
             let view = PDFPageLayerHostView(frame: NSRect(
-                origin: .zero, size: pageSize
+                origin: .zero, size: pageSize,
             ))
             view.configure(
                 systems: systems, pageStartY: pageStartY,
                 titleFrame: titleFrame, metrics: metrics,
-                pageSize: pageSize, margins: margins
+                pageSize: pageSize, margins: margins,
             )
             return view
         }
 
         public func updateNSView(
-            _ nsView: PDFPageLayerHostView, context: Context
+            _ nsView: PDFPageLayerHostView, context: Context,
         ) {
             nsView.configure(
                 systems: systems, pageStartY: pageStartY,
                 titleFrame: titleFrame, metrics: metrics,
-                pageSize: pageSize, margins: margins
+                pageSize: pageSize, margins: margins,
             )
         }
     }
 
     @available(macOS 15.0, *)
     public final class PDFPageLayerHostView: NSView {
-        // Identity of the configuration we last applied. Body re-evals
-        // during scroll / live magnify must NOT rebuild the layer tree
-        // unless an actual input changed.
+        /// Identity of the configuration we last applied. Body re-evals
+        /// during scroll / live magnify must NOT rebuild the layer tree
+        /// unless an actual input changed.
         private var lastSignature: ConfigSignature?
 
         override public init(frame frameRect: NSRect) {
@@ -82,7 +82,9 @@
         }
 
         @available(*, unavailable)
-        public required init?(coder: NSCoder) { fatalError("init(coder:) is unavailable") }
+        public required init?(coder: NSCoder) {
+            fatalError("init(coder:) is unavailable")
+        }
 
         fileprivate func configure(
             systems: [LayoutSystem],
@@ -90,19 +92,20 @@
             titleFrame: LayoutTitleFrame?,
             metrics: StaffMetrics,
             pageSize: CGSize,
-            margins: PageMargins
+            margins: PageMargins,
         ) {
             let signature = ConfigSignature(
                 systemCount: systems.count,
                 firstSystemId: systems.first.map { ObjectIdentifier(
-                    $0.measures as AnyObject)
+                    $0.measures as AnyObject,
+                )
                 },
                 pageStartY: pageStartY,
                 titleHash: titleFrame?.texts.map(\.text)
                     .joined(separator: "|"),
                 pageSize: pageSize,
                 margins: margins,
-                staffSize: metrics.staffHeight
+                staffSize: metrics.staffHeight,
             )
             if signature == lastSignature { return }
             lastSignature = signature
@@ -120,7 +123,7 @@
                 for entry in titleFrame.texts {
                     if let textLayer = makeTitleTextLayer(
                         entry: entry,
-                        pageSize: pageSize, margins: margins
+                        pageSize: pageSize, margins: margins,
                     ) {
                         host.addSublayer(textLayer)
                     }
@@ -131,7 +134,7 @@
             for system in systems {
                 let systemLayer = SheetMusicUI
                     .ScoreLayerBuilder.buildSystem(
-                        system, metrics: metrics
+                        system, metrics: metrics,
                     )
                 // The system layer is built in the platform-native Y
                 // (Y-up on macOS, post-`flipForPlatform`). Place its
@@ -140,7 +143,7 @@
                     - (system.origin.y - pageStartY)
                 systemLayer.frame.origin = CGPoint(
                     x: margins.leading + system.origin.x,
-                    y: topYUp - (system.size.height + 1)
+                    y: topYUp - (system.size.height + 1),
                 )
                 host.addSublayer(systemLayer)
             }
@@ -163,12 +166,12 @@
     private func makeTitleTextLayer(
         entry: LayoutFrameText,
         pageSize: CGSize,
-        margins: PageMargins
+        margins: PageMargins,
     ) -> CAShapeLayer? {
         // MuseScore's title-block defaults are all `FontStyle::Normal`
         // (no bold / italic) — see `engraving/style/styledef.cpp`.
         let font = systemTextFont(
-            size: entry.fontSize, italic: false, bold: false
+            size: entry.fontSize, italic: false, bold: false,
         )
         guard let path = textPath(entry.text, font: font) else {
             return nil
@@ -211,12 +214,12 @@
         var compose = CGAffineTransform(
             a: 1, b: 0, c: 0, d: -1,
             tx: anchorX,
-            ty: topPageDown + ascent
+            ty: topPageDown + ascent,
         )
         guard let down = path.copy(using: &compose) else { return nil }
 
         var flip = CGAffineTransform(
-            a: 1, b: 0, c: 0, d: -1, tx: 0, ty: pageSize.height
+            a: 1, b: 0, c: 0, d: -1, tx: 0, ty: pageSize.height,
         )
         guard let up = down.copy(using: &flip) else { return nil }
 
@@ -230,7 +233,7 @@
     @available(macOS 15.0, iOS 16.0, *)
     private func textPath(_ text: String, font: CTFont) -> CGPath? {
         let attr = NSAttributedString(
-            string: text, attributes: [.font: font]
+            string: text, attributes: [.font: font],
         )
         let line = CTLineCreateWithAttributedString(attr)
         let composite = CGMutablePath()
@@ -248,11 +251,11 @@
             let runFont: CTFont
             if let attrs = CTRunGetAttributes(run) as? [String: Any],
                let runFontValue = attrs[
-                   kCTFontAttributeName as String
+                   kCTFontAttributeName as String,
                ]
             {
                 runFont = unsafeBitCast(
-                    runFontValue as AnyObject, to: CTFont.self
+                    runFontValue as AnyObject, to: CTFont.self,
                 )
             } else {
                 runFont = font
@@ -260,10 +263,10 @@
             for i in 0 ..< count {
                 var t = CGAffineTransform(
                     translationX: positions[i].x,
-                    y: positions[i].y
+                    y: positions[i].y,
                 )
                 if let gPath = CTFontCreatePathForGlyph(
-                    runFont, glyphs[i], &t
+                    runFont, glyphs[i], &t,
                 ) {
                     composite.addPath(gPath)
                 }
@@ -274,24 +277,24 @@
 
     @available(macOS 15.0, iOS 16.0, *)
     private func systemTextFont(
-        size: CGFloat, italic: Bool, bold: Bool
+        size: CGFloat, italic: Bool, bold: Bool,
     ) -> CTFont {
         var traits: CTFontSymbolicTraits = []
         if italic { traits.insert(.italicTrait) }
         if bold { traits.insert(.boldTrait) }
         let baseDescriptor = CTFontDescriptorCreateWithNameAndSize(
-            "Helvetica" as CFString, size
+            "Helvetica" as CFString, size,
         )
         if traits.isEmpty {
             return CTFontCreateWithFontDescriptor(
-                baseDescriptor, size, nil
+                baseDescriptor, size, nil,
             )
         }
         if let traitDescriptor = CTFontDescriptorCreateCopyWithSymbolicTraits(
-            baseDescriptor, traits, traits
+            baseDescriptor, traits, traits,
         ) {
             return CTFontCreateWithFontDescriptor(
-                traitDescriptor, size, nil
+                traitDescriptor, size, nil,
             )
         }
         return CTFontCreateWithFontDescriptor(baseDescriptor, size, nil)

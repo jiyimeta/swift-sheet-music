@@ -31,8 +31,8 @@ extension Score {
                 result.append(
                     (
                         StaffAddress(partIndex: p, staffIndexInPart: s),
-                        staff
-                    )
+                        staff,
+                    ),
                 )
             }
         }

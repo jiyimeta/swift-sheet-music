@@ -20,7 +20,7 @@ struct PlaybackTimelineTests {
             parts: [
                 Part(id: "P1", instrument: instrument, staves: [staff]),
                 Part(id: "P2", instrument: instrument, staves: [staff]),
-            ]
+            ],
         )
     }
 
@@ -53,7 +53,7 @@ struct PlaybackTimelineTests {
         let s0n0 = NoteID(
             staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
             voiceIndex: 0, elementIndex: 0,
-            noteIndexInChord: 0
+            noteIndexInChord: 0,
         )
         #expect(timeline.frame(forCursor: .item(.note(s0n0)))?.tick == 0)
 
@@ -62,12 +62,12 @@ struct PlaybackTimelineTests {
         let s1n0 = NoteID(
             staff: StaffAddress(partIndex: 1, staffIndexInPart: 0), measureIndex: 0,
             voiceIndex: 0, elementIndex: 0,
-            noteIndexInChord: 0
+            noteIndexInChord: 0,
         )
         let s1n1 = NoteID(
             staff: StaffAddress(partIndex: 1, staffIndexInPart: 0), measureIndex: 0,
             voiceIndex: 0, elementIndex: 1,
-            noteIndexInChord: 0
+            noteIndexInChord: 0,
         )
         #expect(timeline.frame(forCursor: .item(.note(s1n0)))?.tick == 0)
         #expect(timeline.frame(forCursor: .item(.note(s1n1)))?.tick == 480)
@@ -77,23 +77,24 @@ struct PlaybackTimelineTests {
     func earliestPicksSmallestTick() {
         let chord = Chord(
             duration: .quarter,
-            notes: [Note(pitch: 60, tpc: 14)]
+            notes: [Note(pitch: 60, tpc: 14)],
         )
         let voice = Voice(elements: [
             .chord(chord), .chord(chord), .chord(chord),
         ])
-        let staff = Staff(measures: [Measure(voices: [voice])]
+        let staff = Staff(
+            measures: [Measure(voices: [voice])],
         )
         let part = Part(
             id: "P1",
             instrument: Instrument(
                 id: "i",
-                articulations: [InstrumentArticulation()]
+                articulations: [InstrumentArticulation()],
             ),
-            staves: [staff]
+            staves: [staff],
         )
         let score = Score(
-            division: 480, parts: [part]
+            division: 480, parts: [part],
         )
 
         let timeline = PlaybackTimeline(score: score)
@@ -101,12 +102,12 @@ struct PlaybackTimelineTests {
         let n0 = NoteID(
             staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
             voiceIndex: 0, elementIndex: 0,
-            noteIndexInChord: 0
+            noteIndexInChord: 0,
         )
         let n2 = NoteID(
             staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
             voiceIndex: 0, elementIndex: 2,
-            noteIndexInChord: 0
+            noteIndexInChord: 0,
         )
 
         // Anchor-then-target order: target is later → earliest is anchor.
@@ -126,21 +127,22 @@ struct PlaybackTimelineTests {
                 Note(pitch: 60, tpc: 14),
                 Note(pitch: 64, tpc: 18),
                 Note(pitch: 67, tpc: 15),
-            ]
+            ],
         )
         let voice = Voice(elements: [.chord(chord)])
-        let staff = Staff(measures: [Measure(voices: [voice])]
+        let staff = Staff(
+            measures: [Measure(voices: [voice])],
         )
         let part = Part(
             id: "P1",
             instrument: Instrument(
                 id: "i",
-                articulations: [InstrumentArticulation()]
+                articulations: [InstrumentArticulation()],
             ),
-            staves: [staff]
+            staves: [staff],
         )
         let score = Score(
-            division: 480, parts: [part]
+            division: 480, parts: [part],
         )
 
         let timeline = PlaybackTimeline(score: score)
@@ -151,7 +153,7 @@ struct PlaybackTimelineTests {
             let id = NoteID(
                 staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
                 voiceIndex: 0, elementIndex: 0,
-                noteIndexInChord: noteIdx
+                noteIndexInChord: noteIdx,
             )
             #expect(timeline.frame(forCursor: .item(.note(id)))?.tick == 0)
         }
@@ -166,13 +168,13 @@ struct PlaybackTimelineTests {
     @Test("Beat ticks fill in between chord onsets per time-sig denominator")
     func beatTicksAddedBetweenOnsets() {
         let half = Chord(
-            duration: .half, notes: [Note(pitch: 60, tpc: 14)]
+            duration: .half, notes: [Note(pitch: 60, tpc: 14)],
         )
         let eighth = Chord(
-            duration: .eighth, notes: [Note(pitch: 60, tpc: 14)]
+            duration: .eighth, notes: [Note(pitch: 60, tpc: 14)],
         )
         let quarter = Chord(
-            duration: .quarter, notes: [Note(pitch: 60, tpc: 14)]
+            duration: .quarter, notes: [Note(pitch: 60, tpc: 14)],
         )
         let voice = Voice(elements: [
             .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
@@ -181,18 +183,19 @@ struct PlaybackTimelineTests {
             .chord(eighth),
             .chord(quarter),
         ])
-        let staff = Staff(measures: [Measure(voices: [voice])]
+        let staff = Staff(
+            measures: [Measure(voices: [voice])],
         )
         let part = Part(
             id: "P1",
             instrument: Instrument(
                 id: "i",
-                articulations: [InstrumentArticulation()]
+                articulations: [InstrumentArticulation()],
             ),
-            staves: [staff]
+            staves: [staff],
         )
         let score = Score(
-            division: 480, parts: [part]
+            division: 480, parts: [part],
         )
 
         let timeline = PlaybackTimeline(score: score)
@@ -206,7 +209,7 @@ struct PlaybackTimelineTests {
             switch frame.tick {
             case 480:
                 #expect(frame.cursor == .beat(
-                    measureIndex: 0, tickInMeasure: 480
+                    measureIndex: 0, tickInMeasure: 480,
                 ))
             default:
                 if case .item = frame.cursor { } else {
@@ -226,7 +229,7 @@ struct PlaybackTimelineTests {
     @Test("locationShift before a Tempo offsets the tempo's tick")
     func locationShiftMovesTempoTick() {
         let half = Chord(
-            duration: .half, notes: [Note(pitch: 60, tpc: 14)]
+            duration: .half, notes: [Note(pitch: 60, tpc: 14)],
         )
         // 4/4 measure: half | locShift(+1/8) | tempo→60bpm | locShift(-1/8) | half.
         // With division=480, +1/8 = +240 ticks. Without the fix, the
@@ -244,9 +247,9 @@ struct PlaybackTimelineTests {
             id: "P1",
             instrument: Instrument(
                 id: "i",
-                articulations: [InstrumentArticulation()]
+                articulations: [InstrumentArticulation()],
             ),
-            staves: [staff]
+            staves: [staff],
         )
         let score = Score(division: 480, parts: [part])
         let timeline = PlaybackTimeline(score: score)
@@ -278,28 +281,28 @@ struct PlaybackTimelineTests {
     func wholeRestSkippedInPending() {
         let restWhole = Chord(
             duration: .fraction(Fraction(numerator: 4, denominator: 4)),
-            notes: []
+            notes: [],
         )
         let quarter = Chord(
             duration: .quarter,
-            notes: [Note(pitch: 60, tpc: 14)]
+            notes: [Note(pitch: 60, tpc: 14)],
         )
         // Staff 0: whole-measure rest only. Staff 1: 4 quarter notes.
         let staff0 = Staff(
-            measures: [Measure(voices: [Voice(elements: [.chord(restWhole)])])]
+            measures: [Measure(voices: [Voice(elements: [.chord(restWhole)])])],
         )
         let staff1 = Staff(measures: [Measure(voices: [Voice(elements: [
             .chord(quarter), .chord(quarter), .chord(quarter), .chord(quarter),
         ])])])
         let instrument = Instrument(
-            id: "i", articulations: [InstrumentArticulation()]
+            id: "i", articulations: [InstrumentArticulation()],
         )
         let score = Score(
             division: 480,
             parts: [
                 Part(id: "P0", instrument: instrument, staves: [staff0]),
                 Part(id: "P1", instrument: instrument, staves: [staff1]),
-            ]
+            ],
         )
         let timeline = PlaybackTimeline(score: score)
 
@@ -312,7 +315,7 @@ struct PlaybackTimelineTests {
             #expect(id.staff.partIndex == 1)
         } else {
             Issue.record(
-                "Expected .item(.note) on staff 1 at tick 0, got \(String(describing: frame0?.cursor))"
+                "Expected .item(.note) on staff 1 at tick 0, got \(String(describing: frame0?.cursor))",
             )
         }
 
@@ -323,7 +326,7 @@ struct PlaybackTimelineTests {
             staff: StaffAddress(partIndex: 0, staffIndexInPart: 0),
             measureIndex: 0,
             voiceIndex: 0,
-            elementIndex: 0
+            elementIndex: 0,
         )
         #expect(timeline.frame(forCursor: .item(.rest(restID)))?.tick == 0)
     }
@@ -332,7 +335,7 @@ struct PlaybackTimelineTests {
     @Test("6/8 emits beats at the eighth-note interval, six per measure")
     func compoundTimeSigBeatStep() {
         let qDot = Chord(
-            duration: .quarter, notes: [Note(pitch: 60, tpc: 14)]
+            duration: .quarter, notes: [Note(pitch: 60, tpc: 14)],
         )
         // Fill a 6/8 measure with three quarter notes — chord onsets
         // at ticks 0, 480, 960; missing beat ticks at 240, 720, 1200.
@@ -340,18 +343,19 @@ struct PlaybackTimelineTests {
             .timeSignature(TimeSignature(numerator: 6, denominator: 8)),
             .chord(qDot), .chord(qDot), .chord(qDot),
         ])
-        let staff = Staff(measures: [Measure(voices: [voice])]
+        let staff = Staff(
+            measures: [Measure(voices: [voice])],
         )
         let part = Part(
             id: "P1",
             instrument: Instrument(
                 id: "i",
-                articulations: [InstrumentArticulation()]
+                articulations: [InstrumentArticulation()],
             ),
-            staves: [staff]
+            staves: [staff],
         )
         let score = Score(
-            division: 480, parts: [part]
+            division: 480, parts: [part],
         )
 
         let timeline = PlaybackTimeline(score: score)

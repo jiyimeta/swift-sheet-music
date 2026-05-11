@@ -8,7 +8,7 @@ import SheetMusicCore
 /// handled inside `emitMelismaLine`; instances of this type describe
 /// the left-hand continuation rule drawn on the following measures.
 @available(macOS 15.0, iOS 16.0, *)
-struct MelismaContinuation: Sendable, Equatable {
+struct MelismaContinuation: Equatable {
     let voiceIndex: Int
     let verseIndex: Int
     /// Tick (within this measure's voice time) where the line
@@ -25,7 +25,7 @@ struct MelismaContinuation: Sendable, Equatable {
 /// for pre-computed per-lyric data (e.g. effective melisma ticks
 /// after following ties forward).
 @available(macOS 15.0, iOS 16.0, *)
-struct MelismaLyricKey: Hashable, Sendable {
+struct MelismaLyricKey: Hashable {
     let staffIndex: Int
     let measureIndex: Int
     let voiceIndex: Int
@@ -62,7 +62,7 @@ extension LayoutEngine {
         isFirstSystem: Bool = false,
         incomingMelismas: [MelismaContinuation] = [],
         effectiveMelismaTicks: [MelismaLyricKey: Int] = [:],
-        coversBelowStaffSpanner: Bool = false
+        coversBelowStaffSpanner: Bool = false,
     ) -> (elements: [LayoutElement], clef: NotatedClef, key: Int) {
         let staffMidY = metrics.staffHeight / 2 + metrics.sp * 2
         var out: [LayoutElement] = []
@@ -130,20 +130,20 @@ extension LayoutEngine {
         //       below voice 0's melody line; and drives whole-rest
         //       tick anchoring so centering doesn't drop the rest
         //       onto a melody note.
-        let voicesWithChords = measure.voices.filter { v in
+        let voicesWithChords = measure.voices.count(where: { v in
             v.elements.contains {
                 if case let .chord(c) = $0, !c.notes.isEmpty {
                     return true
                 }
                 return false
             }
-        }.count
-        let voicesWithContent = measure.voices.filter { v in
+        })
+        let voicesWithContent = measure.voices.count(where: { v in
             v.elements.contains {
                 if case .chord = $0 { return true }
                 return false
             }
-        }.count
+        })
         let hasMultiChordVoices = voicesWithChords > 1
         let hasMultiContentVoices = voicesWithContent > 1
         let isMultiVoice = hasMultiChordVoices
@@ -170,7 +170,7 @@ extension LayoutEngine {
             var fermataPostProcessAnchors: [(
                 outIndex: Int,
                 anchorTick: Int?,
-                isBelow: Bool
+                isBelow: Bool,
             )] = []
             // Parallel mapping for rest members. Used by
             // `emitTupletLabel` so a rest in a tuplet still
@@ -222,9 +222,11 @@ extension LayoutEngine {
             // second voice only carries rests, we still need to pull
             // them out of the way of voice 0's melody.
             let restVoiceOffset: CGFloat = hasMultiContentVoices
-                ? (voiceIdx.isMultiple(of: 2)
-                    ? -metrics.sp * 2
-                    : metrics.sp * 2)
+                ? (
+                    voiceIdx.isMultiple(of: 2)
+                        ? -metrics.sp * 2
+                        : metrics.sp * 2
+                )
                 : 0
 
             // Per-tick south-skyline of chords in this voice — the
@@ -249,7 +251,7 @@ extension LayoutEngine {
                         }
                         return PitchStaffPosition.step(
                             midiPitch: note.pitch, tpc: note.tpc,
-                            clef: currentClef
+                            clef: currentClef,
                         ).step
                     }
                     guard let lowestStep = steps.min() else { continue }
@@ -297,7 +299,7 @@ extension LayoutEngine {
                         }
                         return PitchStaffPosition.step(
                             midiPitch: note.pitch, tpc: note.tpc,
-                            clef: currentClef
+                            clef: currentClef,
                         ).step
                     }
                     guard let highestStep = steps.max() else { continue }
@@ -338,7 +340,7 @@ extension LayoutEngine {
                 // and lyric (the MuseScore convention).
                 var maxY = lyricBaseFloor(
                     staffMidY: staffMidY, metrics: metrics,
-                    coversBelowStaffSpanner: coversBelowStaffSpanner
+                    coversBelowStaffSpanner: coversBelowStaffSpanner,
                 )
                 for el in voice.elements {
                     guard case let .chord(chord) = el else { continue }
@@ -348,7 +350,7 @@ extension LayoutEngine {
                         currentClef: currentClef,
                         drumLineMap: drumLineMap,
                         staffMidY: staffMidY,
-                        metrics: metrics
+                        metrics: metrics,
                     ) else { continue }
                     maxY = max(maxY, avoidY)
                 }
@@ -364,9 +366,9 @@ extension LayoutEngine {
                 out.append(.clef(
                     rawType: rawType,
                     origin: CGPoint(
-                        x: headerSchedule.clefX, y: staffMidY
+                        x: headerSchedule.clefX, y: staffMidY,
                     ),
-                    anchor: synthAnchor
+                    anchor: synthAnchor,
                 ))
                 remainingSynthClef = false
             }
@@ -377,8 +379,8 @@ extension LayoutEngine {
                     sharps: max(0, k),
                     flats: max(0, -k),
                     origin: CGPoint(
-                        x: headerSchedule.keySigX, y: staffMidY
-                    )
+                        x: headerSchedule.keySigX, y: staffMidY,
+                    ),
                 ))
                 remainingSynthKeySig = false
             }
@@ -408,12 +410,12 @@ extension LayoutEngine {
                         staff: staffAddress,
                         measureIndex: measureIndex,
                         voiceIndex: voiceIdx,
-                        elementIndex: voiceElemIdx
+                        elementIndex: voiceElemIdx,
                     )
                     out.append(.clef(
                         rawType: clef.concertClefType,
                         origin: CGPoint(x: clefX, y: staffMidY),
-                        anchor: .explicit(veID)
+                        anchor: .explicit(veID),
                     ))
                 case let .keySignature(key):
                     currentKey = key.concertKey
@@ -421,14 +423,14 @@ extension LayoutEngine {
                     out.append(.keySignature(
                         sharps: max(0, key.concertKey),
                         flats: max(0, -key.concertKey),
-                        origin: CGPoint(x: keyX, y: staffMidY)
+                        origin: CGPoint(x: keyX, y: staffMidY),
                     ))
                 case let .timeSignature(ts):
                     let tsX = inHeader ? headerSchedule.timeSigX : timedX(atTick: tickCursor)
                     out.append(.timeSignature(
                         numerator: ts.numerator,
                         denominator: ts.denominator,
-                        origin: CGPoint(x: tsX, y: staffMidY)
+                        origin: CGPoint(x: tsX, y: staffMidY),
                     ))
                 case let .barLine(b):
                     // A trailing `<BarLine>` appears AFTER the voice's
@@ -452,12 +454,13 @@ extension LayoutEngine {
                     }
                     out.append(.barLine(
                         subtype: b.subtype,
-                        origin: CGPoint(x: barX, y: staffMidY)
+                        origin: CGPoint(x: barX, y: staffMidY),
                     ))
                 case let .chord(r) where r.notes.isEmpty:
                     inHeader = false
                     let (restBase, _) = DurationInterpretation.split(
-                        r.duration)
+                        r.duration,
+                    )
                     // Whole rest hangs from the 2nd line from the top
                     // (step +2). Half rest sits on the middle line
                     // (step 0 = staffMidY). Others center on the
@@ -492,8 +495,10 @@ extension LayoutEngine {
                         // otherwise the rest drifts off-centre
                         // whenever those constants are tuned.
                         let trailingPad = metrics.sp * 1
-                        restX = (headerSchedule.contentStartX
-                            + width - trailingPad) / 2
+                        restX = (
+                            headerSchedule.contentStartX
+                                + width - trailingPad,
+                        ) / 2
                     } else {
                         restX = timedX(atTick: tickCursor)
                     }
@@ -501,7 +506,7 @@ extension LayoutEngine {
                         staff: staffAddress,
                         measureIndex: measureIndex,
                         voiceIndex: voiceIdx,
-                        elementIndex: voiceElemIdx
+                        elementIndex: voiceElemIdx,
                     )
                     // Staff lines span y = sp*2 (top) to y = sp*6
                     // (bottom). When a whole / half rest lands
@@ -512,17 +517,21 @@ extension LayoutEngine {
                     let staffTopLocal = metrics.sp * 2
                     let staffBottomLocal = metrics.sp * 2
                         + metrics.staffHeight
-                    let needsLeger = (restBase == .whole
-                        || restBase == .half)
-                        && (restY < staffTopLocal
-                            || restY > staffBottomLocal)
+                    let needsLeger = (
+                        restBase == .whole
+                            || restBase == .half,
+                    )
+                        && (
+                            restY < staffTopLocal
+                                || restY > staffBottomLocal
+                        )
                     voiceRestOutIndex[voiceElemIdx] = out.count
                     out.append(.rest(
                         duration: r.duration,
                         origin: CGPoint(x: restX, y: restY),
                         voiceIndex: voiceIdx,
                         restID: restID,
-                        hasLegerLine: needsLeger
+                        hasLegerLine: needsLeger,
                     ))
                     tickCursor += r.duration.ticks(division: division)
                 case let .chord(chord):
@@ -547,7 +556,7 @@ extension LayoutEngine {
                         } else {
                             step = PitchStaffPosition.step(
                                 midiPitch: note.pitch, tpc: note.tpc,
-                                clef: currentClef
+                                clef: currentClef,
                             ).step
                         }
                         let y = staffMidY - CGFloat(step) * metrics.sp / 2
@@ -556,7 +565,7 @@ extension LayoutEngine {
                             measureIndex: measureIndex,
                             voiceIndex: voiceIdx,
                             elementIndex: voiceElemIdx,
-                            noteIndexInChord: noteIdx
+                            noteIndexInChord: noteIdx,
                         )
                         return LayoutChordNote(
                             noteID: id,
@@ -566,14 +575,15 @@ extension LayoutEngine {
                             tieForward: note.tieForward,
                             tieBack: note.tieBack,
                             hasGlissando: note.glissando != nil,
-                            headType: note.headType
+                            headType: note.headType,
                         )
                     }
                     let stem = forcedStem
                         ?? StemDirectionRule.direction(
-                            for: preliminaryNotes.map(\.step))
+                            for: preliminaryNotes.map(\.step),
+                        )
                     let chordNotes = applyChordMirroring(
-                        preliminaryNotes, stem: stem
+                        preliminaryNotes, stem: stem,
                     )
                     let mainElement: LayoutElement = .chord(
                         notes: chordNotes,
@@ -583,7 +593,7 @@ extension LayoutEngine {
                         hasArpeggio: chord.arpeggio != nil,
                         arpeggioRawType: chord.arpeggio.flatMap(arpeggioSubtype),
                         isBeamed: false,
-                        voiceIndex: voiceIdx
+                        voiceIndex: voiceIdx,
                     )
                     let graceW = LayoutEngine.graceWidth(sp: metrics.sp)
                     let mag = options.graceNoteMag
@@ -598,10 +608,10 @@ extension LayoutEngine {
                             voiceIdx: voiceIdx,
                             voiceElemIdx: voiceElemIdx,
                             graceIdx: gIdx, isAfter: false,
-                            drumLineMap: drumLineMap
+                            drumLineMap: drumLineMap,
                         )
                         let graceStem = StemDirectionRule.direction(
-                            for: layoutNotes.map(\.step)
+                            for: layoutNotes.map(\.step),
                         )
                         out.append(.graceChord(
                             notes: layoutNotes,
@@ -611,7 +621,7 @@ extension LayoutEngine {
                             relativeX: relX,
                             hasSlash: g.graceType == .acciaccatura,
                             mag: mag,
-                            voiceIndex: voiceIdx
+                            voiceIndex: voiceIdx,
                         ))
                     }
                     voiceChordOutIndex[voiceElemIdx] = out.count
@@ -657,7 +667,7 @@ extension LayoutEngine {
                         out.append(.articulation(
                             kind: artKind,
                             origin: CGPoint(x: chordX, y: y),
-                            isAbove: isAbove
+                            isAbove: isAbove,
                         ))
                         if isAbove { aboveCount += 1 } else { belowCount += 1 }
                     }
@@ -672,10 +682,10 @@ extension LayoutEngine {
                             voiceIdx: voiceIdx,
                             voiceElemIdx: voiceElemIdx,
                             graceIdx: gIdx, isAfter: true,
-                            drumLineMap: drumLineMap
+                            drumLineMap: drumLineMap,
                         )
                         let graceStem = StemDirectionRule.direction(
-                            for: layoutNotes.map(\.step)
+                            for: layoutNotes.map(\.step),
                         )
                         out.append(.graceChord(
                             notes: layoutNotes,
@@ -685,7 +695,7 @@ extension LayoutEngine {
                             relativeX: relX,
                             hasSlash: false,
                             mag: mag,
-                            voiceIndex: voiceIdx
+                            voiceIndex: voiceIdx,
                         ))
                     }
                     if let arp = chord.arpeggio {
@@ -695,14 +705,15 @@ extension LayoutEngine {
                         out.append(.arpeggioWiggle(
                             top: CGPoint(x: chordX, y: top),
                             bottom: CGPoint(x: chordX, y: bot),
-                            subtype: arpeggioSubtype(arp)
+                            subtype: arpeggioSubtype(arp),
                         ))
                     }
                     // Lyrics: emit the syllable text + (if the lyric
                     // extends beyond this chord) a melisma rule that
                     // stretches to the end of the last note it covers.
                     let chordTicks = chord.duration.ticks(
-                        division: division)
+                        division: division,
+                    )
                     // Use the voice's pre-computed max south-driven
                     // Y so every chord in the measure shares the
                     // same lyric centre (within-measure horizontal
@@ -723,17 +734,17 @@ extension LayoutEngine {
                         out.append(.textMark(
                             kind: .lyrics,
                             text: lyric.text,
-                            origin: CGPoint(x: chordX, y: lyricsY)
+                            origin: CGPoint(x: chordX, y: lyricsY),
                         ))
                         let textWidth = Self.lyricsTextWidth(
-                            lyric.text, sp: metrics.sp
+                            lyric.text, sp: metrics.sp,
                         )
                         // Hyphens between this syllable and the
                         // previous one in the same verse.
                         if let prev = previousLyric[verseIdx],
                            connectsWithHyphen(
                                prev: prev.syllabic,
-                               curr: lyric.syllabic
+                               curr: lyric.syllabic,
                            )
                         {
                             let prevRight = prev.centerX
@@ -746,14 +757,14 @@ extension LayoutEngine {
                                 toX: currLeft,
                                 y: lyricsY,
                                 metrics: metrics,
-                                out: &out
+                                out: &out,
                             )
                         }
                         previousLyric[verseIdx] = LyricTrail(
                             centerX: chordX,
                             textWidth: textWidth,
                             lyricsY: lyricsY,
-                            syllabic: lyric.syllabic
+                            syllabic: lyric.syllabic,
                         )
                         // `<ticks>N</ticks>` in MuseScore marks a
                         // melisma whose visual rule reaches the
@@ -794,7 +805,7 @@ extension LayoutEngine {
                                 measureWidth: width,
                                 continuesPastMeasure: continuesPastMeasure,
                                 metrics: metrics,
-                                out: &out
+                                out: &out,
                             )
                         }
                     }
@@ -828,8 +839,8 @@ extension LayoutEngine {
                         text: d.subtype,
                         origin: CGPoint(
                             x: baseX - metrics.sp,
-                            y: dynY
-                        )
+                            y: dynY,
+                        ),
                     ))
                 case let .staffText(st):
                     // Hidden text contributes neither glyphs nor
@@ -852,10 +863,10 @@ extension LayoutEngine {
                         origin: CGPoint(
                             x: stX + CGFloat(st.offsetX) * metrics.sp,
                             y: staffMidY - metrics.sp * 3
-                                + CGFloat(st.offsetY) * metrics.sp
+                                + CGFloat(st.offsetY) * metrics.sp,
                         ),
                         color: st.color,
-                        isSystemText: st.isSystemText
+                        isSystemText: st.isSystemText,
                     ))
                 case let .swing(s):
                     // Swing directives display as ordinary system /
@@ -871,10 +882,10 @@ extension LayoutEngine {
                         origin: CGPoint(
                             x: stX + CGFloat(s.offsetX) * metrics.sp,
                             y: staffMidY - metrics.sp * 3
-                                + CGFloat(s.offsetY) * metrics.sp
+                                + CGFloat(s.offsetY) * metrics.sp,
                         ),
                         color: s.color,
-                        isSystemText: s.isSystemText
+                        isSystemText: s.isSystemText,
                     ))
                 case let .tempo(t):
                     // Hidden tempo still drives playback (see MIDI
@@ -895,8 +906,8 @@ extension LayoutEngine {
                             x: tempoX
                                 + CGFloat(t.offsetX) * metrics.sp,
                             y: staffMidY - metrics.sp * 4
-                                + CGFloat(t.offsetY) * metrics.sp
-                        )
+                                + CGFloat(t.offsetY) * metrics.sp,
+                        ),
                     ))
                 case let .fermata(f):
                     // Anchor to the chord/rest the fermata applies to.
@@ -924,9 +935,11 @@ extension LayoutEngine {
                     }
                     let anchorX = forwardChordX
                         ?? lastChordOrRestX(in: out)
-                        ?? (inHeader
-                            ? headerSchedule.contentStartX
-                            : timedX(atTick: tickCursor))
+                        ?? (
+                            inHeader
+                                ? headerSchedule.contentStartX
+                                : timedX(atTick: tickCursor)
+                        )
                     // Y placement: subtype suffix selects which
                     // skyline to clear. "Below" mirrors using south;
                     // anything else (canonical "Above" / unspecified)
@@ -976,16 +989,16 @@ extension LayoutEngine {
                     fermataPostProcessAnchors.append((
                         outIndex: out.count,
                         anchorTick: anchorTick,
-                        isBelow: isBelow
+                        isBelow: isBelow,
                     ))
                     out.append(.fermata(
                         subtype: f.subtype,
-                        origin: CGPoint(x: anchorX, y: anchorY)
+                        origin: CGPoint(x: anchorX, y: anchorY),
                     ))
                 case .measureRepeat:
                     out.append(.measureRepeat(
                         count: 1,
-                        origin: CGPoint(x: width / 2, y: staffMidY)
+                        origin: CGPoint(x: width / 2, y: staffMidY),
                     ))
                 case .spanner:
                     // Resolved at system level in the spanner-attach pass.
@@ -1011,10 +1024,10 @@ extension LayoutEngine {
                                 x: originX
                                     + CGFloat(rm.offsetX) * metrics.sp,
                                 y: staffMidY - metrics.sp * 3.5
-                                    + CGFloat(rm.offsetY) * metrics.sp
+                                    + CGFloat(rm.offsetY) * metrics.sp,
                             ),
                             frame: rm.frame,
-                            color: rm.color
+                            color: rm.color,
                         ))
                     }
                 case let .locationShift(delta):
@@ -1041,7 +1054,7 @@ extension LayoutEngine {
                         ? headerSchedule.contentStartX
                         : timedX(atTick: tickCursor)
                     let runs = HarmonyRendering.runs(
-                        for: harmony, metrics: metrics
+                        for: harmony, metrics: metrics,
                     )
                     let width = HarmonyRendering.width(of: runs)
                     // staffMidY → staffTop is `staffMidY - sp * 2`
@@ -1053,14 +1066,14 @@ extension LayoutEngine {
                         + metrics.harmonyPlacementAbove
                         + CGFloat(harmony.offsetY) * metrics.sp
                     let anchorX = Double(
-                        stX + CGFloat(harmony.offsetX) * metrics.sp
+                        stX + CGFloat(harmony.offsetX) * metrics.sp,
                     )
                     out.append(.harmony(LayoutHarmony(
                         harmony: harmony,
                         anchorX: anchorX,
                         y: Double(yLocal),
                         runs: runs,
-                        width: width
+                        width: width,
                     )))
                 }
             }
@@ -1103,14 +1116,14 @@ extension LayoutEngine {
                 out.append(.glissandoLine(
                     fromOrigin: CGPoint(
                         x: fromNote.origin.x + metrics.sp * 0.8,
-                        y: fromNote.origin.y
+                        y: fromNote.origin.y,
                     ),
                     toOrigin: CGPoint(
                         x: toNote.origin.x - metrics.sp * 0.8,
-                        y: toNote.origin.y
+                        y: toNote.origin.y,
                     ),
                     wavy: gliss.visualType == .wavy,
-                    text: gliss.text
+                    text: gliss.text,
                 ))
             }
 
@@ -1118,7 +1131,7 @@ extension LayoutEngine {
             let groups = beamGroups(
                 voice: voice,
                 timeSignature: measureTimeSig,
-                division: division
+                division: division,
             )
             for group in groups {
                 // --- Phase 1: collect all note steps for direction ---
@@ -1178,7 +1191,7 @@ extension LayoutEngine {
                     anchorYs: anchorYs,
                     stemXs: memberStemXs,
                     direction: groupDirection,
-                    metrics: metrics
+                    metrics: metrics,
                 )
                 let beamSpan = beamEndX - beamStartX
                 func beamYAt(_ x: CGFloat) -> CGFloat {
@@ -1199,7 +1212,7 @@ extension LayoutEngine {
                               arp,
                               art,
                               _,
-                              vi
+                              vi,
                           ) = out[outIdx]
                     else { continue }
                     out[outIdx] = .chord(
@@ -1207,12 +1220,12 @@ extension LayoutEngine {
                         duration: d,
                         stem: groupDirection,
                         stemOrigin: CGPoint(
-                            x: so.x, y: memberStemYs[i]
+                            x: so.x, y: memberStemYs[i],
                         ),
                         hasArpeggio: arp,
                         arpeggioRawType: art,
                         isBeamed: true,
-                        voiceIndex: vi
+                        voiceIndex: vi,
                     )
                 }
 
@@ -1235,7 +1248,7 @@ extension LayoutEngine {
                                 beamYAt: beamYAt,
                                 direction: groupDirection,
                                 metrics: metrics,
-                                out: &out
+                                out: &out,
                             )
                             runStart = nil
                         }
@@ -1251,7 +1264,7 @@ extension LayoutEngine {
                             beamYAt: beamYAt,
                             direction: groupDirection,
                             metrics: metrics,
-                            out: &out
+                            out: &out,
                         )
                     }
                 }
@@ -1321,7 +1334,7 @@ extension LayoutEngine {
                     if newY != oldOrigin.y {
                         out[entry.outIndex] = .fermata(
                             subtype: subtype,
-                            origin: CGPoint(x: oldOrigin.x, y: newY)
+                            origin: CGPoint(x: oldOrigin.x, y: newY),
                         )
                     }
                 }
@@ -1348,7 +1361,7 @@ extension LayoutEngine {
                     beamGroups: beamGroups(
                         voice: voice,
                         timeSignature: measureTimeSig,
-                        division: division
+                        division: division,
                     ),
                     staffMidY: staffMidY,
                     metrics: metrics,
@@ -1356,8 +1369,8 @@ extension LayoutEngine {
                         staff: staffAddress,
                         measureIndex: measureIndex,
                         voiceIndex: voiceIdx,
-                        startElementIndex: tuplet.startIndex
-                    )
+                        startElementIndex: tuplet.startIndex,
+                    ),
                 )
             }
         }
@@ -1373,8 +1386,8 @@ extension LayoutEngine {
                 subtype: isLastMeasure ? "end" : nil,
                 origin: CGPoint(
                     x: width - metrics.sp / 2,
-                    y: staffMidY
-                )
+                    y: staffMidY,
+                ),
             ))
         }
         for continuation in incomingMelismas {
@@ -1385,7 +1398,7 @@ extension LayoutEngine {
                 headerContentStartX: headerSchedule.contentStartX,
                 measureWidth: width,
                 metrics: metrics,
-                out: &out
+                out: &out,
             )
         }
         // Auto-place staff text: shift it above any chord stem /
@@ -1396,7 +1409,7 @@ extension LayoutEngine {
         // visual outcome — text never overlaps a stem or beam —
         // matches.
         autoPlaceStaffText(
-            in: &out, staffMidY: staffMidY, metrics: metrics
+            in: &out, staffMidY: staffMidY, metrics: metrics,
         )
         // Same chord-clearance pass for chord symbols. Without this,
         // a chord whose noteheads or beam reach above the harmony's
@@ -1404,7 +1417,7 @@ extension LayoutEngine {
         // common when the staff carries notes more than one ledger
         // line above the top staff line.
         autoPlaceHarmony(
-            in: &out, staffMidY: staffMidY, metrics: metrics
+            in: &out, staffMidY: staffMidY, metrics: metrics,
         )
         // After per-element auto-place, resolve same-tick collisions
         // among above-staff text marks (tempo / staff text / system
@@ -1423,7 +1436,7 @@ extension LayoutEngine {
     /// to the default side once the gap reopens.
     static func applyChordMirroring(
         _ notes: [LayoutChordNote],
-        stem: StemDirection
+        stem: StemDirection,
     ) -> [LayoutChordNote] {
         guard notes.count >= 2 else { return notes }
         let isUp = stem == .up
@@ -1459,7 +1472,7 @@ extension LayoutEngine {
                 tieBack: n.tieBack,
                 hasGlissando: n.hasGlissando,
                 headType: n.headType,
-                mirror: mirrors[i]
+                mirror: mirrors[i],
             )
         }
     }
@@ -1482,7 +1495,7 @@ extension LayoutEngine {
         voiceElemIdx: Int,
         graceIdx: Int,
         isAfter: Bool,
-        drumLineMap: [Int: Int]?
+        drumLineMap: [Int: Int]?,
     ) -> [LayoutChordNote] {
         // Grace NoteIDs reuse the parent's element index but encode
         // the grace position in `noteIndexInChord` so they stay
@@ -1499,7 +1512,7 @@ extension LayoutEngine {
             } else {
                 step = PitchStaffPosition.step(
                     midiPitch: note.pitch, tpc: note.tpc,
-                    clef: currentClef
+                    clef: currentClef,
                 ).step
             }
             let y = staffMidY - CGFloat(step) * metrics.sp / 2
@@ -1508,7 +1521,7 @@ extension LayoutEngine {
                 measureIndex: measureIndex,
                 voiceIndex: voiceIdx,
                 elementIndex: voiceElemIdx,
-                noteIndexInChord: base + noteIdx
+                noteIndexInChord: base + noteIdx,
             )
             return LayoutChordNote(
                 noteID: id,
@@ -1517,7 +1530,7 @@ extension LayoutEngine {
                 origin: CGPoint(x: x, y: y),
                 tieForward: nil, tieBack: nil,
                 hasGlissando: false,
-                headType: note.headType
+                headType: note.headType,
             )
         }
     }
@@ -1540,7 +1553,7 @@ extension LayoutEngine {
     /// later pass) — using the unbeamed flag estimate here is a
     /// safe over-allocation that keeps lyrics clear in either case.
     static func flagSouthExtent(
-        duration: NoteDuration, metrics: StaffMetrics
+        duration: NoteDuration, metrics: StaffMetrics,
     ) -> CGFloat {
         switch duration {
         case .eighth: metrics.sp * 1.5
@@ -1573,7 +1586,7 @@ extension LayoutEngine {
         currentClef: NotatedClef,
         drumLineMap: [Int: Int]?,
         staffMidY: CGFloat,
-        metrics: StaffMetrics
+        metrics: StaffMetrics,
     ) -> CGFloat? {
         let steps: [Int] = chord.notes.map { note in
             if let drumLine = drumLineMap?[note.pitch] {
@@ -1581,7 +1594,7 @@ extension LayoutEngine {
             }
             return PitchStaffPosition.step(
                 midiPitch: note.pitch, tpc: note.tpc,
-                clef: currentClef
+                clef: currentClef,
             ).step
         }
         let stemDir = forcedStem
@@ -1601,7 +1614,7 @@ extension LayoutEngine {
         if stemDir == .down {
             let stemEnd = lowestNoteY + metrics.defaultStemLength
             let stemSouth = stemEnd + flagSouthExtent(
-                duration: chord.duration, metrics: metrics
+                duration: chord.duration, metrics: metrics,
             )
             avoidY = max(avoidY, stemSouth + stemFlagPad)
         }
@@ -1622,7 +1635,7 @@ extension LayoutEngine {
     private static func lyricBaseFloor(
         staffMidY: CGFloat,
         metrics: StaffMetrics,
-        coversBelowStaffSpanner: Bool
+        coversBelowStaffSpanner: Bool,
     ) -> CGFloat {
         let base = staffMidY + metrics.sp * 4
         if coversBelowStaffSpanner {
@@ -1634,7 +1647,7 @@ extension LayoutEngine {
     /// Map a `ChordArticulation.Kind` to the renderable layout-local
     /// kind, returning `nil` for `.unknown(_)` so callers skip emission.
     static func renderableArticulationKind(
-        _ kind: ChordArticulation.Kind
+        _ kind: ChordArticulation.Kind,
     ) -> LayoutElement.ArticulationKind? {
         switch kind {
         case .staccato: .staccato

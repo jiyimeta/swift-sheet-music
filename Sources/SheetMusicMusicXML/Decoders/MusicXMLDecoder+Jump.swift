@@ -35,7 +35,7 @@ enum MusicXMLJumpDecoder {
             result.markers.append(Marker(
                 kind: Marker.Kind(rawValue: label) ?? .other,
                 label: label,
-                text: ""
+                text: "",
             ))
         }
         if directionType.children.contains(where: { $0.name == "coda" }) {
@@ -43,7 +43,7 @@ enum MusicXMLJumpDecoder {
             result.markers.append(Marker(
                 kind: Marker.Kind(rawValue: label) ?? .other,
                 label: label,
-                text: ""
+                text: "",
             ))
         }
 
@@ -72,7 +72,7 @@ enum MusicXMLJumpDecoder {
                 jumpTo: segno,
                 playUntil: sound.attributes["tocoda"] ?? (sound.attributes["fine"] != nil ? "end" : "end"),
                 continueAt: sound.attributes["coda"] ?? "",
-                text: words.isEmpty ? "D.S." : words
+                text: words.isEmpty ? "D.S." : words,
             )
         }
         if sound.attributes["dacapo"] != nil {
@@ -80,7 +80,7 @@ enum MusicXMLJumpDecoder {
                 jumpTo: "start",
                 playUntil: sound.attributes["tocoda"] ?? (sound.attributes["fine"] != nil ? "fine" : "end"),
                 continueAt: sound.attributes["coda"] ?? "",
-                text: words.isEmpty ? "D.C." : words
+                text: words.isEmpty ? "D.C." : words,
             )
         }
         return nil
@@ -94,7 +94,7 @@ enum MusicXMLJumpDecoder {
         return Marker(
             kind: .coda,
             label: sound.attributes["tocoda"] ?? "coda",
-            text: words.isEmpty ? "To Coda" : words
+            text: words.isEmpty ? "To Coda" : words,
         )
     }
 
@@ -103,7 +103,7 @@ enum MusicXMLJumpDecoder {
         return Marker(
             kind: .fine,
             label: "fine",
-            text: words.isEmpty ? "Fine" : words
+            text: words.isEmpty ? "Fine" : words,
         )
     }
 }

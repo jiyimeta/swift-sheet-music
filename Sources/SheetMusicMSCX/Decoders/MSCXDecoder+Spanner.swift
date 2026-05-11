@@ -35,7 +35,7 @@ extension Spanner {
             hairpin = Spanner.HairpinPayload(
                 subtype: subtype,
                 veloChange: veloChange,
-                veloChangeMethod: method
+                veloChangeMethod: method,
             )
         }
 
@@ -43,7 +43,7 @@ extension Spanner {
         if kind == .ottava, let ot = node.first("Ottava") {
             let subtypeText = ot.first("subtype")?.text ?? "8va"
             ottava = Spanner.OttavaPayload(
-                subtype: Spanner.OttavaPayload.Subtype(rawValue: subtypeText)
+                subtype: Spanner.OttavaPayload.Subtype(rawValue: subtypeText),
             )
         }
 
@@ -55,7 +55,7 @@ extension Spanner {
             voltaEndings: voltaEndings,
             visible: decodeVisible(node),
             hairpin: hairpin,
-            ottava: ottava
+            ottava: ottava,
         )
     }
 

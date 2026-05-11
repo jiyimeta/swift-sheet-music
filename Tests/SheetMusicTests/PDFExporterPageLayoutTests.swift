@@ -8,17 +8,18 @@ import PDFKit
 @testable import SheetMusicUI
 import Testing
 
-@Suite @MainActor struct PDFExporterPageLayoutTests {
+@MainActor struct PDFExporterPageLayoutTests {
     /// Default options should yield a MediaBox matching
     /// `pageLayout.{width,height} × 72`. testArpeggio.mscx declares
     /// A4-sized paper.
-    @Test func mediaBoxMatchesScorePageSize() async throws {
+    @Test func mediaBoxMatchesScorePageSize() throws {
         guard #available(macOS 15.0, iOS 16.0, *) else { return }
         let url = try #require(Bundle.module.url(
-            forResource: "testArpeggio", withExtension: "mscx"
+            forResource: "testArpeggio", withExtension: "mscx",
         ))
         let score = try MSCXParser.parse(
-            Data(contentsOf: url))
+            Data(contentsOf: url),
+        )
         let data = try PDFExporter.export(score: score)
         let doc = try #require(PDFDocument(data: data))
         let page = try #require(doc.page(at: 0))
@@ -32,28 +33,30 @@ import Testing
     /// `staffSize` denotes total staff height (= 4 × sp), so it
     /// resolves to `4 × spatium_mm × 72 / 25.4`. With a 1.76389mm
     /// spatium that's ~20.0 pt.
-    @Test func staffSizeFollowsSpatium() async throws {
+    @Test func staffSizeFollowsSpatium() throws {
         guard #available(macOS 15.0, iOS 16.0, *) else { return }
         let url = try #require(Bundle.module.url(
-            forResource: "testArpeggio", withExtension: "mscx"
+            forResource: "testArpeggio", withExtension: "mscx",
         ))
         let score = try MSCXParser.parse(
-            Data(contentsOf: url))
+            Data(contentsOf: url),
+        )
         let resolved = PDFExporter.resolve(
-            options: PDFExporter.Options(), score: score
+            options: PDFExporter.Options(), score: score,
         )
         let expected = CGFloat(4 * score.style.spatium * 72.0 / 25.4)
         #expect(abs(resolved.staffSize - expected) < 1e-6)
     }
 
     /// Explicit override beats `.fromScore` resolution.
-    @Test func explicitStaffSizeWins() async throws {
+    @Test func explicitStaffSizeWins() {
         guard #available(macOS 15.0, iOS 16.0, *) else { return }
         let score = Score(division: 480)
         let resolved = PDFExporter.resolve(
             options: PDFExporter.Options(
-                staffSize: .explicit(14)),
-            score: score
+                staffSize: .explicit(14),
+            ),
+            score: score,
         )
         #expect(resolved.staffSize == 14)
     }
@@ -66,12 +69,18 @@ import Testing
         layout.evenLeftMargin = 1.0
         layout.twosided = true
         let page = EngravingPage.from(layout)
-        #expect(page.margins(forPageIndex: 0).leading
-            == 0.5 * 72)
-        #expect(page.margins(forPageIndex: 1).leading
-            == 1.0 * 72)
-        #expect(page.margins(forPageIndex: 2).leading
-            == 0.5 * 72)
+        #expect(
+            page.margins(forPageIndex: 0).leading
+                == 0.5 * 72,
+        )
+        #expect(
+            page.margins(forPageIndex: 1).leading
+                == 1.0 * 72,
+        )
+        #expect(
+            page.margins(forPageIndex: 2).leading
+                == 0.5 * 72,
+        )
     }
 
     @Test func singleSidedKeepsOddMargins() {
@@ -80,10 +89,14 @@ import Testing
         layout.evenLeftMargin = 1.0
         layout.twosided = false
         let page = EngravingPage.from(layout)
-        #expect(page.margins(forPageIndex: 0).leading
-            == 0.5 * 72)
-        #expect(page.margins(forPageIndex: 1).leading
-            == 0.5 * 72)
+        #expect(
+            page.margins(forPageIndex: 0).leading
+                == 0.5 * 72,
+        )
+        #expect(
+            page.margins(forPageIndex: 1).leading
+                == 0.5 * 72,
+        )
     }
 
     /// `<LayoutBreak>page` on a measure forces the next system to
@@ -95,17 +108,17 @@ import Testing
             size: CGSize(width: 600, height: 1200),
             oddMargins: PageMargins(uniform: 30),
             evenMargins: PageMargins(uniform: 30),
-            twosided: false
+            twosided: false,
         )
-        // Three short systems that together fit on one page.
-        // System 1's last measure carries pageBreak → forces close.
+        /// Three short systems that together fit on one page.
+        /// System 1's last measure carries pageBreak → forces close.
         func sys(
             originY: CGFloat,
-            lastMeasurePageBreak: Bool
+            lastMeasurePageBreak: Bool,
         ) -> LayoutSystem {
             let m = LayoutMeasure(
                 measureIndex: 0, origin: .zero, width: 100,
-                elements: [], pageBreak: lastMeasurePageBreak
+                elements: [], pageBreak: lastMeasurePageBreak,
             )
             return LayoutSystem(
                 origin: CGPoint(x: 0, y: originY),
@@ -114,14 +127,14 @@ import Testing
                 staffOrigins: [.zero],
                 partLabels: [],
                 spanners: [],
-                sp: 7.0
+                sp: 7.0,
             )
         }
         let s0 = sys(originY: 0, lastMeasurePageBreak: true)
         let s1 = sys(originY: 220, lastMeasurePageBreak: false)
         let s2 = sys(originY: 440, lastMeasurePageBreak: false)
         let pages = PDFExporter.paginate(
-            systems: [s0, s1, s2], page: pageGeom
+            systems: [s0, s1, s2], page: pageGeom,
         )
         // s0 closes its page (page 1) by the explicit pageBreak;
         // s1 + s2 share page 2.

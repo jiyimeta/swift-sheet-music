@@ -10,7 +10,7 @@ extension Part {
     /// with a sequential integer so the decoded `Part.id` is always
     /// non-empty (matches the encoder's id-synthesis convention).
     static func decodePairing(
-        _ node: XMLTreeNode, fallbackIndex: Int
+        _ node: XMLTreeNode, fallbackIndex: Int,
     ) throws -> MSCXStaffPairing {
         let raw = node.attributes["id"] ?? ""
         let id = raw.isEmpty ? String(fallbackIndex) : raw
@@ -23,7 +23,7 @@ extension Part {
             partID: id,
             trackName: node.first("trackName")?.text,
             instrument: instrument,
-            declared: declared
+            declared: declared,
         )
     }
 }

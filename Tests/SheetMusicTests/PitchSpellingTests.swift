@@ -11,15 +11,15 @@ struct PitchSpellingTests {
     func ascendingFromNatural() {
         // C4 (60, tpc 14) +1 → C#4 (61, tpc 21)
         #expect(PitchSpelling.shiftedTpc(
-            from: 60, priorTpc: 14, to: 61
+            from: 60, priorTpc: 14, to: 61,
         ) == 21)
         // D4 (62, tpc 16) +1 → D#4 (63, tpc 23)
         #expect(PitchSpelling.shiftedTpc(
-            from: 62, priorTpc: 16, to: 63
+            from: 62, priorTpc: 16, to: 63,
         ) == 23)
         // F4 (65, tpc 13) +1 → F#4 (66, tpc 20)
         #expect(PitchSpelling.shiftedTpc(
-            from: 65, priorTpc: 13, to: 66
+            from: 65, priorTpc: 13, to: 66,
         ) == 20)
     }
 
@@ -27,15 +27,15 @@ struct PitchSpellingTests {
     func descendingFromNatural() {
         // D4 (62, tpc 16) −1 → Db4 (61, tpc 9)
         #expect(PitchSpelling.shiftedTpc(
-            from: 62, priorTpc: 16, to: 61
+            from: 62, priorTpc: 16, to: 61,
         ) == 9)
         // E4 (64, tpc 18) −1 → Eb4 (63, tpc 11)
         #expect(PitchSpelling.shiftedTpc(
-            from: 64, priorTpc: 18, to: 63
+            from: 64, priorTpc: 18, to: 63,
         ) == 11)
         // A4 (69, tpc 17) −1 → Ab4 (68, tpc 10)
         #expect(PitchSpelling.shiftedTpc(
-            from: 69, priorTpc: 17, to: 68
+            from: 69, priorTpc: 17, to: 68,
         ) == 10)
     }
 
@@ -43,11 +43,11 @@ struct PitchSpellingTests {
     func ascendingNaturalLetter() {
         // E4 (64) +1 → F4 (65, tpc 13)
         #expect(PitchSpelling.shiftedTpc(
-            from: 64, priorTpc: 18, to: 65
+            from: 64, priorTpc: 18, to: 65,
         ) == 13)
         // B4 (71) +1 → C5 (72, tpc 14)
         #expect(PitchSpelling.shiftedTpc(
-            from: 71, priorTpc: 19, to: 72
+            from: 71, priorTpc: 19, to: 72,
         ) == 14)
     }
 
@@ -55,11 +55,11 @@ struct PitchSpellingTests {
     func descendingNaturalLetter() {
         // F4 (65) −1 → E4 (64, tpc 18)
         #expect(PitchSpelling.shiftedTpc(
-            from: 65, priorTpc: 13, to: 64
+            from: 65, priorTpc: 13, to: 64,
         ) == 18)
         // C4 (60) −1 → B3 (59, tpc 19)
         #expect(PitchSpelling.shiftedTpc(
-            from: 60, priorTpc: 14, to: 59
+            from: 60, priorTpc: 14, to: 59,
         ) == 19)
     }
 
@@ -67,11 +67,11 @@ struct PitchSpellingTests {
     func ascendingFromSharp() {
         // C#4 (61, tpc 21) +1 → D4 (62, tpc 16)
         #expect(PitchSpelling.shiftedTpc(
-            from: 61, priorTpc: 21, to: 62
+            from: 61, priorTpc: 21, to: 62,
         ) == 16)
         // D#4 (63, tpc 23) +1 → E4 (64, tpc 18)
         #expect(PitchSpelling.shiftedTpc(
-            from: 63, priorTpc: 23, to: 64
+            from: 63, priorTpc: 23, to: 64,
         ) == 18)
     }
 
@@ -97,7 +97,7 @@ struct PitchSpellingTests {
         let original = Note(
             pitch: 60, tpc: 14,
             accidental: .natural,
-            tieForward: 1
+            tieForward: 1,
         )
         // +2 semitones in C major: 60 → 62 (D natural). D matches
         // C major's key alt for D (0) → recomputed accidental is
@@ -114,30 +114,30 @@ struct PitchSpellingTests {
         let aFlatMajor = -4
         // In key (no symbol)
         #expect(PitchSpelling.displayedAccidental(
-            forTpc: 14, in: aFlatMajor
+            forTpc: 14, in: aFlatMajor,
         ) == nil) // C natural
         #expect(PitchSpelling.displayedAccidental(
-            forTpc: 12, in: aFlatMajor
+            forTpc: 12, in: aFlatMajor,
         ) == nil) // B♭ in key
         #expect(PitchSpelling.displayedAccidental(
-            forTpc: 10, in: aFlatMajor
+            forTpc: 10, in: aFlatMajor,
         ) == nil) // A♭ in key
         // Out of key — needs symbol
         #expect(PitchSpelling.displayedAccidental(
-            forTpc: 7, in: aFlatMajor
+            forTpc: 7, in: aFlatMajor,
         ) == .flat) // C♭
         #expect(PitchSpelling.displayedAccidental(
-            forTpc: 5, in: aFlatMajor
+            forTpc: 5, in: aFlatMajor,
         ) == .doubleFlat) // B♭♭
         #expect(PitchSpelling.displayedAccidental(
-            forTpc: 16, in: aFlatMajor
+            forTpc: 16, in: aFlatMajor,
         ) == .natural) // D♮ cancels D♭
         // C major (no flats / sharps)
         #expect(PitchSpelling.displayedAccidental(
-            forTpc: 21, in: 0
+            forTpc: 21, in: 0,
         ) == .sharp) // C♯
         #expect(PitchSpelling.displayedAccidental(
-            forTpc: 14, in: 0
+            forTpc: 14, in: 0,
         ) == nil) // C natural
     }
 

@@ -72,7 +72,7 @@ extension Measure {
             lineBreak: lineBreak,
             pageBreak: pageBreak,
             actualLength: actualLength,
-            irregular: irregular
+            irregular: irregular,
         )
     }
 
@@ -83,7 +83,7 @@ extension Measure {
         return Marker(
             kind: Marker.Kind(rawValue: markerType) ?? .other,
             label: label,
-            text: text
+            text: text,
         )
     }
 
@@ -92,7 +92,7 @@ extension Measure {
             jumpTo: node.first("jumpTo")?.text ?? "",
             playUntil: node.first("playUntil")?.text ?? "",
             continueAt: node.first("continueAt")?.text ?? "",
-            text: node.first("text")?.text ?? ""
+            text: node.first("text")?.text ?? "",
         )
     }
 }

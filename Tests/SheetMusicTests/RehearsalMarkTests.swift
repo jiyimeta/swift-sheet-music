@@ -6,7 +6,7 @@ import Foundation
 @testable import SheetMusicXMLTools
 import Testing
 
-@Suite struct RehearsalMarkTests {
+struct RehearsalMarkTests {
     // MARK: - MSCX decoder
 
     @Test func mscxDecodesPlainRehearsalMark() throws {
@@ -18,7 +18,8 @@ import Testing
         </voice>
         """
         let voice = try Voice.decode(
-            XMLTreeParser.parse(Data(xml.utf8)))
+            XMLTreeParser.parse(Data(xml.utf8)),
+        )
         #expect(voice.elements.count == 2)
         guard case let .rehearsalMark(rm) = voice.elements[0] else {
             Issue.record("element 0 is not a rehearsal mark")
@@ -42,7 +43,8 @@ import Testing
         </voice>
         """
         let voice = try Voice.decode(
-            XMLTreeParser.parse(Data(xml.utf8)))
+            XMLTreeParser.parse(Data(xml.utf8)),
+        )
         guard case let .rehearsalMark(rm) = voice.elements[0] else {
             Issue.record("element 0 is not a rehearsal mark")
             return
@@ -65,7 +67,7 @@ import Testing
         let mark = RehearsalMark(text: "A")
         let chord = Chord(
             duration: .quarter,
-            notes: [Note(pitch: 60, tpc: 14)]
+            notes: [Note(pitch: 60, tpc: 14)],
         )
         let measure = Measure(voices: [Voice(elements: [
             .rehearsalMark(mark),
@@ -76,12 +78,12 @@ import Testing
             id: "P1",
             instrument: Instrument(
                 id: "voice",
-                articulations: [InstrumentArticulation()]
+                articulations: [InstrumentArticulation()],
             ),
-            staves: [staff]
+            staves: [staff],
         )
         let score = Score(
-            division: 480, parts: [part]
+            division: 480, parts: [part],
         )
 
         let file = try MidiRenderer.render(score: score)
@@ -102,7 +104,7 @@ import Testing
             MidiTrack(events: [
                 TimedMidiEvent(
                     tick: 0,
-                    event: .meta(.marker("AB"))
+                    event: .meta(.marker("AB")),
                 ),
                 TimedMidiEvent(tick: 0, event: .endOfTrack),
             ]),
@@ -124,7 +126,7 @@ import Testing
         let mark = RehearsalMark(text: "")
         let chord = Chord(
             duration: .quarter,
-            notes: [Note(pitch: 60, tpc: 14)]
+            notes: [Note(pitch: 60, tpc: 14)],
         )
         let measure = Measure(voices: [Voice(elements: [
             .rehearsalMark(mark),
@@ -135,12 +137,12 @@ import Testing
             id: "P1",
             instrument: Instrument(
                 id: "voice",
-                articulations: [InstrumentArticulation()]
+                articulations: [InstrumentArticulation()],
             ),
-            staves: [staff]
+            staves: [staff],
         )
         let score = Score(
-            division: 480, parts: [part]
+            division: 480, parts: [part],
         )
         let file = try MidiRenderer.render(score: score)
         for evt in file.tracks[0].events {

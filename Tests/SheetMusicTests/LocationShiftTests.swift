@@ -25,25 +25,26 @@
                 .chord(Chord(duration: .quarter, notes: [c5])),
                 .chord(Chord(duration: .quarter, notes: [c5])),
                 .locationShift(
-                    delta: Fraction(numerator: -1, denominator: 2)),
+                    delta: Fraction(numerator: -1, denominator: 2),
+                ),
                 .staffText(StaffText(
-                    text: "tag", isSystemText: true
+                    text: "tag", isSystemText: true,
                 )),
             ])])
             let part = Part(
                 id: "P1",
                 instrument: Instrument(id: "x"),
-                staves: [Staff(measures: [m1])]
+                staves: [Staff(measures: [m1])],
             )
             let score = Score(division: 480, parts: [part])
             let opts = ScoreViewOptions(
-                staffSize: 28, systemGap: 40, wrapToViewWidth: false
+                staffSize: 28, systemGap: 40, wrapToViewWidth: false,
             )
             let nat = LayoutEngine.naturalContentWidth(
-                score: score, options: opts
+                score: score, options: opts,
             )
             let doc = LayoutEngine.layout(
-                score: score, options: opts, availableWidth: nat
+                score: score, options: opts, availableWidth: nat,
             )
             // Collect chord stem Xs and the SystemText X.
             var chordXs: [CGFloat] = []
@@ -87,18 +88,22 @@
             let node = try XMLTreeParser.parse(Data(xml.utf8))
             let voice = try Voice.decode(node)
             guard voice.elements.count == 2 else {
-                Issue.record(Comment(rawValue:
+                Issue.record(Comment(
+                    rawValue:
                     "expected 2 elements, got "
-                        + "\(voice.elements.count)"))
+                        + "\(voice.elements.count)",
+                ))
                 return
             }
             if case let .locationShift(delta) = voice.elements[0] {
                 #expect(delta.numerator == -1)
                 #expect(delta.denominator == 2)
             } else {
-                Issue.record(Comment(rawValue:
+                Issue.record(Comment(
+                    rawValue:
                     "first element should be locationShift, got "
-                        + "\(voice.elements[0])"))
+                        + "\(voice.elements[0])",
+                ))
             }
         }
     }

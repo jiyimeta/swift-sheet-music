@@ -16,7 +16,7 @@
 enum DynamicSymbolMap {
     static func glyphs(for subtype: String) -> [Character]? {
         let trimmed = subtype.trimmingCharacters(
-            in: .whitespacesAndNewlines
+            in: .whitespacesAndNewlines,
         )
         guard !trimmed.isEmpty else { return nil }
         // Only attempt the mapping when every character is one of

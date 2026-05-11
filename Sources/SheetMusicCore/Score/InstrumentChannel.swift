@@ -25,7 +25,7 @@ public struct InstrumentChannel: Sendable, Equatable {
         reverb: Int = 0,
         chorus: Int = 0,
         midiChannel: Int? = nil,
-        midiPort: Int? = nil
+        midiPort: Int? = nil,
     ) {
         self.name = name
         self.program = program

@@ -7,7 +7,9 @@ public struct GMInstrument: Sendable, Equatable, Identifiable {
     public let program: UInt8 // 0...127
     public let name: String
     public let family: Family
-    public var id: UInt8 { program }
+    public var id: UInt8 {
+        program
+    }
 
     /// 16 GM families, each spanning 8 consecutive programs. Used
     /// to group the picker's 128-item list under collapsible
@@ -42,7 +44,7 @@ public struct GMInstrument: Sendable, Equatable, Identifiable {
             GMInstrument(
                 program: program,
                 name: name,
-                family: GMInstrument.family(for: program)
+                family: GMInstrument.family(for: program),
             )
         }
 
@@ -54,7 +56,7 @@ public struct GMInstrument: Sendable, Equatable, Identifiable {
         return GMInstrument(
             program: program,
             name: "Program \(program)",
-            family: .soundEffects
+            family: .soundEffects,
         )
     }
 

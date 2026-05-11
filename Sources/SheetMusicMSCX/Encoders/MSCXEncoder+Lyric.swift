@@ -18,7 +18,7 @@ extension Lyric {
         }
         if syllabic != .single {
             children.append(XMLTreeNode(
-                name: "syllabic", text: syllabicMSCXName
+                name: "syllabic", text: syllabicMSCXName,
             ))
         }
         if ticks > 0 {

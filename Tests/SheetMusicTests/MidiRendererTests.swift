@@ -5,7 +5,7 @@ import Foundation
 @testable import SheetMusicMSCX
 import Testing
 
-@Suite struct MidiRendererTests {
+struct MidiRendererTests {
     @Test func rendersMidi01HeaderAndNotes() throws {
         let url = try #require(Bundle.module.url(forResource: "midi01", withExtension: "mscx"))
         let score = try MSCXParser.parse(Data(contentsOf: url))
@@ -20,7 +20,7 @@ import Testing
         let tickZeroEvents = track.events.filter { $0.tick == 0 }.map(\.event)
         #expect(tickZeroEvents.contains(.meta(.trackName("Voice"))))
         let expectedTimeSig = MetaEvent.timeSignature(
-            numerator: 4, denominator: 4, clocksPerClick: 24, thirtySecondsPerQuarter: 8
+            numerator: 4, denominator: 4, clocksPerClick: 24, thirtySecondsPerQuarter: 8,
         )
         #expect(tickZeroEvents.contains(.meta(expectedTimeSig)))
         #expect(tickZeroEvents.contains(.meta(.keySignature(sharpsFlats: 1, isMinor: false))))

@@ -4,7 +4,7 @@ import Foundation
 import SheetMusicXMLTools
 import Testing
 
-@Suite struct HairpinDecoderTests {
+struct HairpinDecoderTests {
     private func decode(_ xml: String) throws -> Spanner {
         let node = try XMLTreeParser.parse(Data(xml.utf8))
         return try Spanner.decode(node)

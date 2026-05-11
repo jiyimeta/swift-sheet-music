@@ -3,7 +3,7 @@ import Foundation
 @testable import SheetMusicMIDI
 import Testing
 
-@Suite struct MidiImporterPipelineTests {
+struct MidiImporterPipelineTests {
     /// Smoke test: a Format 1 SMF with one piano track + one drum
     /// track produces a Score with two Parts (one drumset).
     @Test func parsesTwoTrackFormat1WithDrumset() throws {
@@ -16,7 +16,7 @@ import Testing
         let pianoPart = Part(
             id: "P1",
             instrument: Instrument(id: "piano", longName: "Piano"),
-            staves: [pianoStaff]
+            staves: [pianoStaff],
         )
         let drumNote = Note(pitch: 36, tpc: 0, headType: "normal")
         let drumChord = Chord(duration: .quarter, notes: ChordNotes([drumNote]))
@@ -26,13 +26,13 @@ import Testing
         let drumPart = Part(
             id: "P2",
             instrument: Instrument(
-                id: "drumset", longName: "Drumset", useDrumset: true
+                id: "drumset", longName: "Drumset", useDrumset: true,
             ),
-            staves: [drumStaff]
+            staves: [drumStaff],
         )
         let score = Score(
             division: 480,
-            parts: [pianoPart, drumPart]
+            parts: [pianoPart, drumPart],
         )
         let smfBytes = try MidiWriter.write(MidiRenderer.render(score: score))
         let imported = try MidiImporter.parse(smfBytes)
@@ -60,27 +60,31 @@ import Testing
             let beatStart = b * 480
             events.append(TimedMidiEvent(
                 tick: beatStart,
-                event: .noteOn(channel: 0, pitch: 60, velocity: 80)
+                event: .noteOn(channel: 0, pitch: 60, velocity: 80),
             ))
             events.append(TimedMidiEvent(
                 tick: beatStart + 160,
-                event: .noteOff(channel: 0, pitch: 60, velocity: 0)
+                event: .noteOff(channel: 0, pitch: 60, velocity: 0),
             ))
             events.append(TimedMidiEvent(
                 tick: beatStart + 160,
-                event: .noteOn(channel: 0, pitch: 62, velocity: 80)
+                event: .noteOn(channel: 0, pitch: 62, velocity: 80),
             ))
             events.append(TimedMidiEvent(
                 tick: beatStart + 480,
-                event: .noteOff(channel: 0, pitch: 62, velocity: 0)
+                event: .noteOff(channel: 0, pitch: 62, velocity: 0),
             ))
         }
-        let track = MidiTrack(events: events
-            + [TimedMidiEvent(tick: 16 * 480, event: .endOfTrack)])
+        let track = MidiTrack(
+            events: events
+                + [TimedMidiEvent(tick: 16 * 480, event: .endOfTrack)],
+        )
         let file = MidiFile(division: 480, format: 0, tracks: [track])
         let bytes = try MidiWriter.write(file)
 
-        actor Counter { var count = 0; func incr() { count += 1 } }
+        actor Counter { var count = 0; func incr() {
+            count += 1
+        } }
         let counter = Counter()
 
         var opts = MidiImportOptions()
@@ -104,7 +108,7 @@ import Testing
             TimedMidiEvent(tick: 0, event: .meta(.tempo(microsecondsPerQuarter: 500_000))),
             TimedMidiEvent(tick: 0, event: .meta(.keySignature(sharpsFlats: 3, isMinor: false))),
             TimedMidiEvent(tick: 0, event: .meta(.timeSignature(
-                numerator: 4, denominator: 4, clocksPerClick: 24, thirtySecondsPerQuarter: 8
+                numerator: 4, denominator: 4, clocksPerClick: 24, thirtySecondsPerQuarter: 8,
             ))),
             TimedMidiEvent(tick: 1920, event: .endOfTrack),
         ])
@@ -174,7 +178,7 @@ import Testing
             TimedMidiEvent(tick: 0, event: .meta(.tempo(microsecondsPerQuarter: 500_000))),
             TimedMidiEvent(tick: 0, event: .meta(.keySignature(sharpsFlats: 0, isMinor: false))),
             TimedMidiEvent(tick: 0, event: .meta(.timeSignature(
-                numerator: 4, denominator: 4, clocksPerClick: 24, thirtySecondsPerQuarter: 8
+                numerator: 4, denominator: 4, clocksPerClick: 24, thirtySecondsPerQuarter: 8,
             ))),
             TimedMidiEvent(tick: 1920, event: .endOfTrack),
         ])
@@ -231,7 +235,7 @@ import Testing
             TimedMidiEvent(tick: 0, event: .meta(.trackName("Conductor"))),
             TimedMidiEvent(tick: 0, event: .meta(.keySignature(sharpsFlats: -2, isMinor: false))),
             TimedMidiEvent(tick: 0, event: .meta(.timeSignature(
-                numerator: 4, denominator: 4, clocksPerClick: 24, thirtySecondsPerQuarter: 8
+                numerator: 4, denominator: 4, clocksPerClick: 24, thirtySecondsPerQuarter: 8,
             ))),
             TimedMidiEvent(tick: 1920, event: .endOfTrack),
         ])

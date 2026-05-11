@@ -11,14 +11,14 @@ enum FermataRenderer {
         context: inout GraphicsContext,
         subtype: String,
         origin: CGPoint,
-        metrics: StaffMetrics
+        metrics: StaffMetrics,
     ) {
         let below = subtype.hasPrefix("fermataBelow")
         let glyph = below
             ? SMuFLGlyph.fermataBelow
             : SMuFLGlyph.fermataAbove
         context.drawGlyph(
-            glyph, at: origin, size: metrics.glyphFontSize
+            glyph, at: origin, size: metrics.glyphFontSize,
         )
     }
 }

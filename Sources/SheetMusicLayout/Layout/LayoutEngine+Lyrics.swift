@@ -11,7 +11,7 @@ extension LayoutEngine {
     /// boundary cases (`single→…`, `…→single`, `…→begin`) start a
     /// new word so no hyphen is drawn.
     static func connectsWithHyphen(
-        prev: Syllabic, curr: Syllabic
+        prev: Syllabic, curr: Syllabic,
     ) -> Bool {
         let prevContinues = prev == .begin || prev == .middle
         let currContinues = curr == .middle || curr == .end
@@ -38,7 +38,7 @@ extension LayoutEngine {
         toX: CGFloat,
         y: CGFloat,
         metrics: StaffMetrics,
-        out: inout [LayoutElement]
+        out: inout [LayoutElement],
     ) {
         let curLength = toX - fromX
         guard curLength > 0 else { return }
@@ -69,11 +69,11 @@ extension LayoutEngine {
             let centerX = fromX + xCenter
             out.append(.lyricHyphen(
                 fromOrigin: CGPoint(
-                    x: centerX - 0.5 * dashWidth, y: y
+                    x: centerX - 0.5 * dashWidth, y: y,
                 ),
                 toOrigin: CGPoint(
-                    x: centerX + 0.5 * dashWidth, y: y
-                )
+                    x: centerX + 0.5 * dashWidth, y: y,
+                ),
             ))
         }
     }
@@ -87,7 +87,7 @@ extension LayoutEngine {
         headerContentStartX: CGFloat,
         measureWidth: CGFloat,
         metrics: StaffMetrics,
-        out: inout [LayoutElement]
+        out: inout [LayoutElement],
     ) {
         // Use the same Y the anchor rule uses — the lyric font's
         // underline level (baseline + underline offset) rather
@@ -109,7 +109,7 @@ extension LayoutEngine {
             : 0
         let withinMeasureRightX = max(
             headerContentStartX + metrics.sp,
-            measureWidth - metrics.sp
+            measureWidth - metrics.sp,
         )
         let crossingRightX = measureWidth
         let sortedTicks = tickColumns.keys.sorted()
@@ -117,7 +117,8 @@ extension LayoutEngine {
         if continuation.continuesPastMeasure {
             endX = crossingRightX
         } else if let t = sortedTicks.first(
-            where: { $0 >= continuation.endTick }),
+            where: { $0 >= continuation.endTick },
+        ),
             let nextX = tickColumns[t]
         {
             // Match MuseScore: extend through the end-note's
@@ -130,7 +131,7 @@ extension LayoutEngine {
         guard endX > lineStartX + metrics.sp * 0.5 else { return }
         out.append(.lyricsMelisma(
             fromOrigin: CGPoint(x: lineStartX, y: lyricsY),
-            toOrigin: CGPoint(x: endX, y: lyricsY)
+            toOrigin: CGPoint(x: endX, y: lyricsY),
         ))
     }
 
@@ -143,7 +144,7 @@ extension LayoutEngine {
     /// has a single place to compute the per-lyric duration and the
     /// per-measure continuation plan stays consistent.
     static func computeEffectiveMelismaTicks(
-        score: Score, division: Int
+        score: Score, division: Int,
     ) -> [MelismaLyricKey: Int] {
         var map: [MelismaLyricKey: Int] = [:]
         for (staffIdx, entry) in score.allStaves.enumerated() {
@@ -161,7 +162,7 @@ extension LayoutEngine {
                                 measureIndex: mIdx,
                                 voiceIndex: vIdx,
                                 elementIndex: eIdx,
-                                verseIndex: verseIdx
+                                verseIndex: verseIdx,
                             )] = lyric.ticks
                         }
                     }
@@ -190,7 +191,7 @@ extension LayoutEngine {
     ///   barline — the melisma continues to the NEXT measure.
     static func computeMelismaContinuations(
         score: Score, division: Int,
-        effectiveTicks: [MelismaLyricKey: Int]
+        effectiveTicks: [MelismaLyricKey: Int],
     ) -> [[[MelismaContinuation]]] {
         var result: [[[MelismaContinuation]]] = score.allStaves.map { entry in
             Array(repeating: [], count: entry.staff.measures.count)
@@ -234,7 +235,7 @@ extension LayoutEngine {
                                     measureIndex: mIdx,
                                     voiceIndex: voiceIdx,
                                     elementIndex: eIdx,
-                                    verseIndex: verseIdx
+                                    verseIndex: verseIdx,
                                 )
                                 let ticks = effectiveTicks[key]
                                     ?? lyric.ticks
@@ -246,7 +247,7 @@ extension LayoutEngine {
                                     voiceIdx: voiceIdx,
                                     verseIdx: verseIdx,
                                     tickCounts: tickCounts,
-                                    result: &result[staffIdx]
+                                    result: &result[staffIdx],
                                 )
                             }
                             tickInMeasure += chordTicks
@@ -271,7 +272,7 @@ extension LayoutEngine {
         voiceIdx: Int,
         verseIdx: Int,
         tickCounts: [Int],
-        result: inout [[MelismaContinuation]]
+        result: inout [[MelismaContinuation]],
     ) {
         var remaining = lyricTicks
         var currentMeasure = startMeasureIdx
@@ -286,7 +287,7 @@ extension LayoutEngine {
                         voiceIndex: voiceIdx,
                         verseIndex: verseIdx,
                         endTick: tickCounts[currentMeasure],
-                        continuesPastMeasure: true
+                        continuesPastMeasure: true,
                     ))
                 }
                 currentMeasure += 1
@@ -307,7 +308,7 @@ extension LayoutEngine {
                         voiceIndex: voiceIdx,
                         verseIndex: verseIdx,
                         endTick: currentTick + remaining,
-                        continuesPastMeasure: false
+                        continuesPastMeasure: false,
                     ))
                 }
                 return
@@ -328,7 +329,7 @@ extension LayoutEngine {
                     voiceIndex: voiceIdx,
                     verseIndex: verseIdx,
                     endTick: tickCounts[currentMeasure],
-                    continuesPastMeasure: true
+                    continuesPastMeasure: true,
                 ))
             }
             currentMeasure += 1
@@ -348,7 +349,7 @@ extension LayoutEngine {
     /// accumulates into adjacent-syllable overlap on tight runs of
     /// eighth notes (m. 32 "Pa ra di so!").
     static func lyricsTextWidth(
-        _ text: String, sp: CGFloat
+        _ text: String, sp: CGFloat,
     ) -> CGFloat {
         guard !text.isEmpty else { return 0 }
         let fontSize = sp * 2.2
@@ -368,12 +369,13 @@ extension LayoutEngine {
             kCTFontAttributeName: font,
         ] as CFDictionary
         guard let attrString = CFAttributedStringCreate(
-            nil, text as CFString, attrs
+            nil, text as CFString, attrs,
         )
         else { return 0 }
         let line = CTLineCreateWithAttributedString(attrString)
         return CGFloat(
-            CTLineGetTypographicBounds(line, nil, nil, nil))
+            CTLineGetTypographicBounds(line, nil, nil, nil),
+        )
     }
 
     /// Y offset from the lyric text's center anchor down to where
@@ -428,7 +430,7 @@ extension LayoutEngine {
         measureWidth: CGFloat,
         continuesPastMeasure: Bool,
         metrics: StaffMetrics,
-        out: inout [LayoutElement]
+        out: inout [LayoutElement],
     ) {
         let endTick = tickCursor + lyricTicks
         // When the melisma keeps going into the next measure, take
@@ -439,7 +441,7 @@ extension LayoutEngine {
         // barline (which sits at `measureWidth - sp/2`).
         let withinMeasureRightX = max(
             headerContentStartX + metrics.sp,
-            measureWidth - metrics.sp
+            measureWidth - metrics.sp,
         )
         let crossingRightX = measureWidth
         let sortedTicks = tickColumns.keys.sorted()
@@ -466,7 +468,7 @@ extension LayoutEngine {
         // glyph). MuseScore matches the rule to the syllable's
         // bbox right edge plus a quarter-staff-space.
         let textWidth = Self.lyricsTextWidth(
-            lyricText, sp: metrics.sp
+            lyricText, sp: metrics.sp,
         )
         let lineStartX = chordX + textWidth / 2 + metrics.sp * 0.25
         // Only emit if there is actually a visible line to draw —
@@ -475,7 +477,7 @@ extension LayoutEngine {
         guard endX > lineStartX + metrics.sp * 0.5 else { return }
         out.append(.lyricsMelisma(
             fromOrigin: CGPoint(x: lineStartX, y: lyricsY),
-            toOrigin: CGPoint(x: endX, y: lyricsY)
+            toOrigin: CGPoint(x: endX, y: lyricsY),
         ))
     }
 }

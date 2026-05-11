@@ -12,7 +12,7 @@ extension InstrumentArticulation {
             children: [
                 XMLTreeNode(name: "velocity", text: String(velocity)),
                 XMLTreeNode(name: "gateTime", text: String(gateTime)),
-            ]
+            ],
         )
     }
 }

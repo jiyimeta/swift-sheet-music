@@ -29,7 +29,7 @@ public enum DurationChangeAlgorithm {
         srcTicks: Int,
         dstTicks: Int,
         targetRtick: Int,
-        division: Int
+        division: Int,
     ) throws -> (elements: [VoiceElement], tuplets: [Tuplet]) {
         var newElements = voice.elements
         newElements[idx] = mutatedTarget
@@ -43,7 +43,7 @@ public enum DurationChangeAlgorithm {
             let rests = alignedRests(
                 forTicks: leftover,
                 rtickStart: targetRtick + dstTicks,
-                division: division
+                division: division,
             )
             newElements.insert(contentsOf: rests, at: idx + 1)
         } else if dstTicks > srcTicks {
@@ -74,7 +74,8 @@ public enum DurationChangeAlgorithm {
                         switch newElements[j] {
                         case let .chord(c):
                             tupletTicks += c.duration.ticks(
-                                division: division)
+                                division: division,
+                            )
                         // Rests are empty chords, picked up by the
                         // .chord case above.
                         default:
@@ -104,7 +105,8 @@ public enum DurationChangeAlgorithm {
                     throw SheetMusicError.invalidEdit(
                         reason: "DurationChange: lengthening "
                             + "blocked by non-timed element at "
-                            + "index \(i)")
+                            + "index \(i)",
+                    )
                 }
                 if consumed + elTicks <= needed {
                     consumed += elTicks
@@ -122,7 +124,8 @@ public enum DurationChangeAlgorithm {
                 throw SheetMusicError.invalidEdit(
                     reason: "DurationChange: not enough room "
                         + "in the measure to lengthen "
-                        + "(need \(needed), have \(consumed))")
+                        + "(need \(needed), have \(consumed))",
+                )
             }
             consumedEndIdx = lastConsumedIdx
             let lastEl = newElements[lastConsumedIdx]
@@ -131,7 +134,7 @@ public enum DurationChangeAlgorithm {
                 let durations = alignedDurations(
                     forTicks: partial,
                     rtickStart: targetRtick + dstTicks,
-                    division: division
+                    division: division,
                 )
                 let pieces: [VoiceElement]
                 if lastConsumedWasTuplet {
@@ -143,7 +146,7 @@ public enum DurationChangeAlgorithm {
                     case let .chord(consumedChord)
                         where !consumedChord.notes.isEmpty:
                         pieces = makeChordChain(
-                            from: consumedChord, durations: durations
+                            from: consumedChord, durations: durations,
                         )
                     default:
                         // Rest overshoot (or empty chord) — leftover
@@ -154,7 +157,7 @@ public enum DurationChangeAlgorithm {
                     }
                 }
                 newElements.insert(
-                    contentsOf: pieces, at: idx + 1
+                    contentsOf: pieces, at: idx + 1,
                 )
             }
         }
@@ -177,7 +180,7 @@ public enum DurationChangeAlgorithm {
                     normalNotes: t.normalNotes,
                     actualNotes: t.actualNotes,
                     startIndex: t.startIndex + netDelta,
-                    endIndex: t.endIndex + netDelta
+                    endIndex: t.endIndex + netDelta,
                 )
             }
             // Partial overlap — should not occur given our
@@ -192,7 +195,7 @@ public enum DurationChangeAlgorithm {
     /// non-timed elements (clef, key sig, ...) don't advance the
     /// cursor.
     static func tickOffset(
-        in voice: Voice, ofElementAt idx: Int, division: Int
+        in voice: Voice, ofElementAt idx: Int, division: Int,
     ) -> Int {
         var t = 0
         for i in 0 ..< min(idx, voice.elements.count) {
@@ -217,7 +220,7 @@ public enum DurationChangeAlgorithm {
     public static func alignedDurations(
         forTicks length: Int,
         rtickStart: Int,
-        division: Int
+        division: Int,
     ) -> [NoteDuration] {
         var result: [NoteDuration] = []
         var rtick = rtickStart
@@ -239,7 +242,7 @@ public enum DurationChangeAlgorithm {
             guard let pick = picked else {
                 result.append(.fraction(Fraction(
                     numerator: remaining,
-                    denominator: division * 4
+                    denominator: division * 4,
                 )))
                 break
             }
@@ -254,16 +257,16 @@ public enum DurationChangeAlgorithm {
     public static func alignedRests(
         forTicks length: Int,
         rtickStart: Int,
-        division: Int
+        division: Int,
     ) -> [VoiceElement] {
         alignedDurations(
             forTicks: length, rtickStart: rtickStart,
-            division: division
+            division: division,
         ).map { .rest(duration: $0) }
     }
 
     public static func makeChordChain(
-        from src: Chord, durations: [NoteDuration]
+        from src: Chord, durations: [NoteDuration],
     ) -> [VoiceElement] {
         guard !durations.isEmpty else { return [] }
         var pieces: [VoiceElement] = []
@@ -281,7 +284,7 @@ public enum DurationChangeAlgorithm {
                 duration: dur,
                 notes: notes,
                 arpeggio: isFirst ? src.arpeggio : nil,
-                lyrics: isFirst ? src.lyrics : []
+                lyrics: isFirst ? src.lyrics : [],
             )))
         }
         return pieces
@@ -290,7 +293,7 @@ public enum DurationChangeAlgorithm {
     /// Find the voice at the given location, returning nil when the
     /// indices are out of range. Shared by both commands.
     static func voice(
-        in score: Score, at id: VoiceElementID
+        in score: Score, at id: VoiceElementID,
     ) -> Voice? {
         guard score.parts.indices.contains(id.staff.partIndex),
               score.parts[id.staff.partIndex].staves.indices
@@ -309,14 +312,15 @@ public enum DurationChangeAlgorithm {
     /// Common precondition: refuse when the target element sits
     /// inside any tuplet span.
     static func ensureNotInsideTuplet(
-        voice: Voice, elementIdx: Int, label: String
+        voice: Voice, elementIdx: Int, label: String,
     ) throws {
         if voice.tuplets.contains(where: {
             $0.startIndex <= elementIdx && elementIdx <= $0.endIndex
         }) {
             throw SheetMusicError.invalidEdit(
                 reason: "\(label): target is inside a tuplet "
-                    + "(changing duration would invalidate the ratio)")
+                    + "(changing duration would invalidate the ratio)",
+            )
         }
     }
 }

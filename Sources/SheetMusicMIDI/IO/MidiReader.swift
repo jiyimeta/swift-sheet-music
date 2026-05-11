@@ -12,7 +12,7 @@ public enum MidiReader {
         func require(_ n: Int) throws {
             guard cursor + n <= data.count else {
                 throw SheetMusicError.malformedScore(
-                    reason: "SMF truncated at offset \(cursor)"
+                    reason: "SMF truncated at offset \(cursor)",
                 )
             }
         }
@@ -60,7 +60,7 @@ public enum MidiReader {
         }
         guard divisionRaw & 0x8000 == 0 else {
             throw SheetMusicError.unsupportedFeature(
-                name: "SMPTE timecode division", location: nil
+                name: "SMPTE timecode division", location: nil,
             )
         }
         let division = Int(divisionRaw)
@@ -91,7 +91,7 @@ public enum MidiReader {
                     let pitch = try Int(readUInt8()), vel = try Int(readUInt8())
                     events.append(TimedMidiEvent(
                         tick: tick,
-                        event: .noteOff(channel: channel, pitch: pitch, velocity: vel)
+                        event: .noteOff(channel: channel, pitch: pitch, velocity: vel),
                     ))
                 case 0x90:
                     let pitch = try Int(readUInt8()), vel = try Int(readUInt8())
@@ -105,13 +105,13 @@ public enum MidiReader {
                     let cc = try Int(readUInt8()), value = try Int(readUInt8())
                     events.append(TimedMidiEvent(
                         tick: tick,
-                        event: .controlChange(channel: channel, controller: cc, value: value)
+                        event: .controlChange(channel: channel, controller: cc, value: value),
                     ))
                 case 0xC0:
                     let prog = try Int(readUInt8())
                     events.append(TimedMidiEvent(
                         tick: tick,
-                        event: .programChange(channel: channel, program: prog)
+                        event: .programChange(channel: channel, program: prog),
                     ))
                 case 0xD0:
                     _ = try readUInt8()
@@ -119,7 +119,7 @@ public enum MidiReader {
                     let lsb = try Int(readUInt8()), msb = try Int(readUInt8())
                     events.append(TimedMidiEvent(
                         tick: tick,
-                        event: .pitchBend(channel: channel, value: (msb << 7) | lsb)
+                        event: .pitchBend(channel: channel, value: (msb << 7) | lsb),
                     ))
                 default:
                     if status == 0xFF {
@@ -128,14 +128,14 @@ public enum MidiReader {
                         let payload = try readBytes(len)
                         try parseMeta(
                             metaType: metaType, payload: payload,
-                            tick: tick, into: &events
+                            tick: tick, into: &events,
                         )
                     } else if status == 0xF0 || status == 0xF7 {
                         let len = try readVLQ()
                         cursor += len
                     } else {
                         throw SheetMusicError.malformedScore(
-                            reason: "unknown status 0x\(String(status, radix: 16))"
+                            reason: "unknown status 0x\(String(status, radix: 16))",
                         )
                     }
                 }
@@ -150,7 +150,7 @@ public enum MidiReader {
         metaType: UInt8,
         payload: Data,
         tick: Int,
-        into events: inout [TimedMidiEvent]
+        into events: inout [TimedMidiEvent],
     ) throws {
         let start = payload.startIndex
         switch metaType {
@@ -169,7 +169,7 @@ public enum MidiReader {
         case 0x21 where payload.count == 1:
             events.append(TimedMidiEvent(
                 tick: tick,
-                event: .meta(.portChange(port: Int(payload[start])))
+                event: .meta(.portChange(port: Int(payload[start]))),
             ))
         case 0x2F:
             events.append(TimedMidiEvent(tick: tick, event: .endOfTrack))
@@ -179,7 +179,7 @@ public enum MidiReader {
                 | Int(payload[start + 2])
             events.append(TimedMidiEvent(
                 tick: tick,
-                event: .meta(.tempo(microsecondsPerQuarter: micros))
+                event: .meta(.tempo(microsecondsPerQuarter: micros)),
             ))
         case 0x58 where payload.count == 4:
             let n = Int(payload[start])
@@ -187,14 +187,14 @@ public enum MidiReader {
             let cc = Int(payload[start + 2])
             let t = Int(payload[start + 3])
             events.append(TimedMidiEvent(tick: tick, event: .meta(.timeSignature(
-                numerator: n, denominator: d, clocksPerClick: cc, thirtySecondsPerQuarter: t
+                numerator: n, denominator: d, clocksPerClick: cc, thirtySecondsPerQuarter: t,
             ))))
         case 0x59 where payload.count == 2:
             let sf = Int(Int8(bitPattern: payload[start]))
             let isMinor = payload[start + 1] != 0
             events.append(TimedMidiEvent(
                 tick: tick,
-                event: .meta(.keySignature(sharpsFlats: sf, isMinor: isMinor))
+                event: .meta(.keySignature(sharpsFlats: sf, isMinor: isMinor)),
             ))
         default:
             break

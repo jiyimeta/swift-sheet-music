@@ -9,7 +9,7 @@ import Testing
 /// while 4.x uses `<MeasureRepeat>`. The reader treats them as aliases
 /// (`MeasureRead::readVoice` in `measureread.cpp:336`). We must recognise both
 /// or 3.x scores end up with silent measures where they should replay the prior bar.
-@Suite struct RepeatMeasureAliasTests {
+struct RepeatMeasureAliasTests {
     @Test func parsesRepeatMeasureAsMeasureRepeat() throws {
         // Exact shape from a MuseScore 3.x export: <RepeatMeasure> with no
         // <subtype> (defaults to numMeasures=1) and a measure-duration body.
@@ -53,7 +53,7 @@ import Testing
         let markerVoice = Voice(elements: [
             .measureRepeat(MeasureRepeat(
                 numMeasures: 1,
-                duration: .fraction(Fraction(numerator: 4, denominator: 4))
+                duration: .fraction(Fraction(numerator: 4, denominator: 4)),
             )),
         ])
         let repeatMeasure = Measure(voices: [markerVoice])
@@ -85,7 +85,7 @@ import Testing
         let markerVoice1 = Voice(elements: [
             .measureRepeat(MeasureRepeat(
                 numMeasures: 1,
-                duration: .fraction(Fraction(numerator: 4, denominator: 4))
+                duration: .fraction(Fraction(numerator: 4, denominator: 4)),
             )),
         ])
         let repeatMeasure = Measure(voices: [emptyVoice0, markerVoice1])
@@ -118,17 +118,17 @@ import Testing
         // member of the group); both members carry measureRepeatCount.
         let m3 = Measure(
             voices: [Voice(elements: []), Voice(elements: [])],
-            measureRepeatCount: 1
+            measureRepeatCount: 1,
         )
         let m4MarkerVoice = Voice(elements: [
             .measureRepeat(MeasureRepeat(
                 numMeasures: 2,
-                duration: .fraction(Fraction(numerator: 4, denominator: 4))
+                duration: .fraction(Fraction(numerator: 4, denominator: 4)),
             )),
         ])
         let m4 = Measure(
             voices: [m4MarkerVoice, Voice(elements: [])],
-            measureRepeatCount: 2
+            measureRepeatCount: 2,
         )
         let staff = Staff(measures: [m1, m2, m3, m4])
         let part = Part(id: "P1", instrument: instrument, staves: [staff])
@@ -159,7 +159,7 @@ import Testing
         let repeatVoice = Voice(elements: [
             .measureRepeat(MeasureRepeat(
                 numMeasures: 1,
-                duration: .fraction(Fraction(numerator: 4, denominator: 4))
+                duration: .fraction(Fraction(numerator: 4, denominator: 4)),
             )),
         ])
         let repeatMeasure = Measure(voices: [repeatVoice])

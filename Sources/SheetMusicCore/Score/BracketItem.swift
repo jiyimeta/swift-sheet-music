@@ -28,7 +28,7 @@ public struct BracketItem: Sendable, Equatable, Codable {
         type: BracketType,
         span: Int,
         column: Int = 0,
-        visible: Bool = true
+        visible: Bool = true,
     ) {
         self.type = type
         self.span = max(span, 1)

@@ -17,7 +17,7 @@ extension LayoutEngine {
     /// chord protrudes above the staff and carries an upward tie.
     private static func chordTopExtent(
         in elements: [LayoutElement],
-        metrics: StaffMetrics
+        metrics: StaffMetrics,
     ) -> CGFloat {
         var minY = CGFloat.infinity
         for el in elements {
@@ -30,7 +30,7 @@ extension LayoutEngine {
                 _,
                 _,
                 _,
-                _
+                _,
             ):
                 let topNote = notes.map(\.origin.y).min()
                     ?? stemOrigin.y
@@ -39,7 +39,7 @@ extension LayoutEngine {
                     : topNote
                 minY = min(minY, extent)
                 if let tieTop = aboveTieExtent(
-                    notes: notes, stem: dir, metrics: metrics
+                    notes: notes, stem: dir, metrics: metrics,
                 ) {
                     minY = min(minY, tieTop)
                 }
@@ -70,7 +70,7 @@ extension LayoutEngine {
     private static func aboveTieExtent(
         notes: [LayoutChordNote],
         stem: StemDirection,
-        metrics: StaffMetrics
+        metrics: StaffMetrics,
     ) -> CGFloat? {
         let steps = notes.map(\.step)
         guard let maxStep = steps.max(),
@@ -106,7 +106,7 @@ extension LayoutEngine {
     static func autoPlaceStaffText(
         in out: inout [LayoutElement],
         staffMidY: CGFloat,
-        metrics: StaffMetrics
+        metrics: StaffMetrics,
     ) {
         let chordTop = chordTopExtent(in: out, metrics: metrics)
         guard chordTop.isFinite else { return }
@@ -124,13 +124,13 @@ extension LayoutEngine {
                 text,
                 p,
                 color,
-                isSystem
+                isSystem,
             ) = out[i] {
                 out[i] = .staffText(
                     text: text,
                     origin: CGPoint(x: p.x, y: p.y + shift),
                     color: color,
-                    isSystemText: isSystem
+                    isSystemText: isSystem,
                 )
             }
         }
@@ -145,7 +145,7 @@ extension LayoutEngine {
     static func autoPlaceHarmony(
         in out: inout [LayoutElement],
         staffMidY: CGFloat,
-        metrics: StaffMetrics
+        metrics: StaffMetrics,
     ) {
         let chordTop = chordTopExtent(in: out, metrics: metrics)
         guard chordTop.isFinite else { return }
@@ -165,7 +165,7 @@ extension LayoutEngine {
                     anchorX: lh.anchorX,
                     y: lh.y + Double(shift),
                     runs: lh.runs,
-                    width: lh.width
+                    width: lh.width,
                 ))
             }
         }
@@ -178,7 +178,7 @@ extension LayoutEngine {
     /// adjacent items don't touch when their underlying glyphs are
     /// rendered.
     private static func aboveStaffHeight(
-        _ element: LayoutElement, metrics: StaffMetrics
+        _ element: LayoutElement, metrics: StaffMetrics,
     ) -> CGFloat {
         switch element {
         case .textMark(.tempo, _, _):
@@ -206,7 +206,7 @@ extension LayoutEngine {
     /// staff/system text sits a touch higher, rehearsal marks above
     /// that, and tempo at the very top.
     private static func aboveStaffPriority(
-        _ element: LayoutElement
+        _ element: LayoutElement,
     ) -> Int? {
         switch element {
         case .harmony:
@@ -230,7 +230,7 @@ extension LayoutEngine {
     private enum AboveStaffAnchor { case bottom, center }
 
     private static func aboveStaffAnchor(
-        _ element: LayoutElement
+        _ element: LayoutElement,
     ) -> AboveStaffAnchor {
         switch element {
         case .textMark(.tempo, _, _):
@@ -256,25 +256,25 @@ extension LayoutEngine {
     /// the rest of its payload. Returns the element unchanged when
     /// the kind isn't one of the supported text marks.
     private static func setAboveStaffOriginY(
-        _ element: LayoutElement, y: CGFloat
+        _ element: LayoutElement, y: CGFloat,
     ) -> LayoutElement {
         switch element {
         case let .textMark(kind, text, p):
             return .textMark(
                 kind: kind, text: text,
-                origin: CGPoint(x: p.x, y: y)
+                origin: CGPoint(x: p.x, y: y),
             )
         case let .staffText(text, p, color, isSystem):
             return .staffText(
                 text: text,
                 origin: CGPoint(x: p.x, y: y),
-                color: color, isSystemText: isSystem
+                color: color, isSystemText: isSystem,
             )
         case let .rehearsalMark(text, p, frame, color):
             return .rehearsalMark(
                 text: text,
                 origin: CGPoint(x: p.x, y: y),
-                frame: frame, color: color
+                frame: frame, color: color,
             )
         case let .harmony(lh):
             return .harmony(LayoutHarmony(
@@ -282,7 +282,7 @@ extension LayoutEngine {
                 anchorX: lh.anchorX,
                 y: Double(y),
                 runs: lh.runs,
-                width: lh.width
+                width: lh.width,
             ))
         default:
             return element
@@ -300,7 +300,7 @@ extension LayoutEngine {
     /// X column and lifting each one above the previous.
     static func autoStackAboveStaffMarks(
         in out: inout [LayoutElement],
-        metrics: StaffMetrics
+        metrics: StaffMetrics,
     ) {
         let entries = collectAboveStaffEntries(in: out, metrics: metrics)
         guard !entries.isEmpty else { return }
@@ -314,7 +314,7 @@ extension LayoutEngine {
         let minDistance = metrics.sp * 0.5
         for (_, group) in groups where group.count > 1 {
             stackCluster(
-                group, in: &out, minDistance: minDistance
+                group, in: &out, minDistance: minDistance,
             )
         }
     }
@@ -330,7 +330,7 @@ extension LayoutEngine {
     }
 
     private static func collectAboveStaffEntries(
-        in out: [LayoutElement], metrics: StaffMetrics
+        in out: [LayoutElement], metrics: StaffMetrics,
     ) -> [AboveStaffEntry] {
         var entries: [AboveStaffEntry] = []
         for (i, el) in out.enumerated() {
@@ -352,7 +352,7 @@ extension LayoutEngine {
                 defaultOriginY: p.y,
                 height: aboveStaffHeight(el, metrics: metrics),
                 anchor: aboveStaffAnchor(el),
-                priority: priority
+                priority: priority,
             ))
         }
         return entries
@@ -363,7 +363,7 @@ extension LayoutEngine {
     private static func stackCluster(
         _ cluster: [AboveStaffEntry],
         in out: inout [LayoutElement],
-        minDistance: CGFloat
+        minDistance: CGFloat,
     ) {
         let sorted = cluster.sorted {
             if $0.priority != $1.priority {
@@ -377,11 +377,11 @@ extension LayoutEngine {
         var stackTop = CGFloat.infinity
         for entry in sorted {
             let (newOriginY, newTop) = stackedPosition(
-                for: entry, stackTop: stackTop, minDistance: minDistance
+                for: entry, stackTop: stackTop, minDistance: minDistance,
             )
             stackTop = min(stackTop, newTop)
             out[entry.index] = setAboveStaffOriginY(
-                out[entry.index], y: newOriginY
+                out[entry.index], y: newOriginY,
             )
         }
     }
@@ -391,7 +391,7 @@ extension LayoutEngine {
     private static func stackedPosition(
         for entry: AboveStaffEntry,
         stackTop: CGFloat,
-        minDistance: CGFloat
+        minDistance: CGFloat,
     ) -> (originY: CGFloat, top: CGFloat) {
         let halfHeight = entry.height / 2
         let defaultTop: CGFloat
@@ -455,7 +455,7 @@ extension LayoutEngine {
         notes: [LayoutChordNote],
         stem: StemDirection,
         staffMidY: CGFloat,
-        metrics: StaffMetrics
+        metrics: StaffMetrics,
     ) -> CGFloat {
         guard let lowestStep = notes.map(\.step).min() else {
             return staffMidY
@@ -473,7 +473,7 @@ extension LayoutEngine {
             }
             if hasTie {
                 south = max(
-                    south, noteheadBottom + metrics.sp * 0.8
+                    south, noteheadBottom + metrics.sp * 0.8,
                 )
             }
         }
@@ -498,7 +498,7 @@ extension LayoutEngine {
     static func headerWidth(
         measure: Measure,
         metrics: StaffMetrics,
-        startPadding: CGFloat
+        startPadding: CGFloat,
     ) -> CGFloat {
         var w = startPadding
         let voice = measure.voices.first

@@ -15,7 +15,7 @@ extension Fermata {
         if timeStretch != defaultStretch {
             children.append(XMLTreeNode(
                 name: "timeStretch",
-                text: formatStretch(timeStretch)
+                text: formatStretch(timeStretch),
             ))
         }
         return XMLTreeNode(name: "Fermata", children: children)

@@ -5,13 +5,13 @@ import Foundation
 @testable import SheetMusicMSCX
 import Testing
 
-@Suite struct HairpinMidiTests {
+struct HairpinMidiTests {
     @Test func testSingleNoteDynamicsVelocityRamp() throws {
         let scoreURL = try #require(
-            Bundle.module.url(forResource: "testSingleNoteDynamics", withExtension: "mscx")
+            Bundle.module.url(forResource: "testSingleNoteDynamics", withExtension: "mscx"),
         )
         let refURL = try #require(
-            Bundle.module.url(forResource: "testSingleNoteDynamics-ref", withExtension: "mid")
+            Bundle.module.url(forResource: "testSingleNoteDynamics-ref", withExtension: "mid"),
         )
         let score = try SheetMusic.loadScore(mscxData: Data(contentsOf: scoreURL))
         let produced = try SheetMusic.exportMIDI(score: score)
@@ -27,7 +27,7 @@ import Testing
             try MidiSemanticComparison.assertEquivalent(
                 produced: produced,
                 reference: reference,
-                options: .init(ignoreControlChange: true)
+                options: .init(ignoreControlChange: true),
             )
         }
     }

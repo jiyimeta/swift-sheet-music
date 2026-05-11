@@ -9,7 +9,7 @@ extension TimeSignature {
             children: [
                 XMLTreeNode(name: "sigN", text: String(numerator)),
                 XMLTreeNode(name: "sigD", text: String(denominator)),
-            ]
+            ],
         )
     }
 }

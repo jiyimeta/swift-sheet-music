@@ -15,30 +15,30 @@
             try #require(ok)
 
             let font = CTFontCreateWithName(
-                "Bravura" as CFString, 28, nil
+                "Bravura" as CFString, 28, nil,
             )
             let resolved = CTFontCopyFamilyName(font) as String
             try #require(
                 resolved == "Bravura",
-                "Bravura did not resolve — got \(resolved)"
+                "Bravura did not resolve — got \(resolved)",
             )
 
             // SMuFL noteheadBlack is U+E0A4.
             let chars: [UniChar] = [0xE0A4]
             var glyphs = [CGGlyph](repeating: 0, count: 1)
             let found = CTFontGetGlyphsForCharacters(
-                font, chars, &glyphs, 1
+                font, chars, &glyphs, 1,
             )
             #expect(found, "Bravura missing glyph for U+E0A4")
             try #require(
                 glyphs[0] != 0,
-                "Bravura returned .notdef for U+E0A4"
+                "Bravura returned .notdef for U+E0A4",
             )
 
             var t = CGAffineTransform.identity
             let path = try #require(
                 CTFontCreatePathForGlyph(font, glyphs[0], &t),
-                "CTFont returned nil path for notehead"
+                "CTFont returned nil path for notehead",
             )
             let bbox = path.boundingBoxOfPath
             #expect(bbox.width > 0, "Notehead bbox has zero width")
@@ -60,19 +60,19 @@
 
             let opts = ScoreViewOptions(
                 staffSize: 28, systemGap: 40,
-                wrapToViewWidth: false
+                wrapToViewWidth: false,
             )
             let natW = LayoutEngine.naturalContentWidth(
-                score: score, options: opts
+                score: score, options: opts,
             )
             let doc = LayoutEngine.layout(
                 score: score, options: opts,
-                availableWidth: natW
+                availableWidth: natW,
             )
             let system = try #require(doc.systems.first)
 
             let tree = ScoreLayerBuilder.buildSystem(
-                system, metrics: doc.metrics
+                system, metrics: doc.metrics,
             )
 
             let sublayers = collectAllLayers(tree)
@@ -80,7 +80,7 @@
             // notehead glyph layers at minimum.
             #expect(
                 sublayers.count >= 3,
-                "tree has only \(sublayers.count) sublayers"
+                "tree has only \(sublayers.count) sublayers",
             )
 
             // Noteheads are filled CAShapeLayers whose path covers an
@@ -91,7 +91,7 @@
             }.filter { $0.fillColor != nil && $0.path != nil }
             #expect(
                 !glyphLayers.isEmpty,
-                "no filled CAShapeLayers found"
+                "no filled CAShapeLayers found",
             )
         }
 
@@ -114,8 +114,8 @@
                 notes: ChordNotes([Note(pitch: 60, tpc: 14)]),
                 graceNotesBefore: [GraceChord(
                     graceType: .acciaccatura, duration: .eighth,
-                    notes: ChordNotes([Note(pitch: 62, tpc: 16)])
-                )]
+                    notes: ChordNotes([Note(pitch: 62, tpc: 16)]),
+                )],
             )
             let staff = Staff(measures: [Measure(voices: [Voice(elements: [.chord(main)])])])
             let score = Score(division: 480, parts: [
@@ -124,7 +124,7 @@
             let opts = ScoreViewOptions(staffSize: 28, systemGap: 40, wrapToViewWidth: false)
             let natW = LayoutEngine.naturalContentWidth(score: score, options: opts)
             let doc = LayoutEngine.layout(
-                score: score, options: opts, availableWidth: natW
+                score: score, options: opts, availableWidth: natW,
             )
             let system = try #require(doc.systems.first)
             let tree = ScoreLayerBuilder.buildSystem(system, metrics: doc.metrics)
@@ -143,7 +143,7 @@
             }
             #expect(
                 diagonal != nil,
-                "no diagonal stroke layer found among \(strokes.count) strokes"
+                "no diagonal stroke layer found among \(strokes.count) strokes",
             )
         }
 
@@ -157,7 +157,7 @@
                 notes: ChordNotes([Note(pitch: 60, tpc: 14)]),
                 articulations: [
                     .init(kind: .staccato, anchor: .above),
-                ]
+                ],
             )
             let staff = Staff(measures: [
                 Measure(voices: [Voice(elements: [.chord(chord)])]),
@@ -166,21 +166,21 @@
                 Part(
                     id: "1",
                     instrument: Instrument(id: "x"),
-                    staves: [staff]
+                    staves: [staff],
                 ),
             ])
             let opts = ScoreViewOptions(
-                staffSize: 28, systemGap: 40, wrapToViewWidth: false
+                staffSize: 28, systemGap: 40, wrapToViewWidth: false,
             )
             let natW = LayoutEngine.naturalContentWidth(
-                score: score, options: opts
+                score: score, options: opts,
             )
             let doc = LayoutEngine.layout(
-                score: score, options: opts, availableWidth: natW
+                score: score, options: opts, availableWidth: natW,
             )
             let system = try #require(doc.systems.first)
             let tree = ScoreLayerBuilder.buildSystem(
-                system, metrics: doc.metrics
+                system, metrics: doc.metrics,
             )
             let sp = doc.metrics.sp
             let glyphLayers = collectAllLayers(tree)
@@ -194,7 +194,7 @@
             }
             #expect(
                 dot != nil,
-                "no staccato-sized glyph layer found among \(glyphLayers.count) filled layers"
+                "no staccato-sized glyph layer found among \(glyphLayers.count) filled layers",
             )
         }
 
@@ -206,7 +206,7 @@
             let chord = Chord(
                 duration: .quarter,
                 notes: ChordNotes([Note(pitch: 60, tpc: 14)]),
-                articulations: [.init(kind: .accent, anchor: .above)]
+                articulations: [.init(kind: .accent, anchor: .above)],
             )
             let staff = Staff(measures: [
                 Measure(voices: [Voice(elements: [.chord(chord)])]),
@@ -215,21 +215,21 @@
                 Part(
                     id: "1",
                     instrument: Instrument(id: "x"),
-                    staves: [staff]
+                    staves: [staff],
                 ),
             ])
             let opts = ScoreViewOptions(
-                staffSize: 28, systemGap: 40, wrapToViewWidth: false
+                staffSize: 28, systemGap: 40, wrapToViewWidth: false,
             )
             let natW = LayoutEngine.naturalContentWidth(
-                score: score, options: opts
+                score: score, options: opts,
             )
             let doc = LayoutEngine.layout(
-                score: score, options: opts, availableWidth: natW
+                score: score, options: opts, availableWidth: natW,
             )
             let system = try #require(doc.systems.first)
             let tree = ScoreLayerBuilder.buildSystem(
-                system, metrics: doc.metrics
+                system, metrics: doc.metrics,
             )
             let sp = doc.metrics.sp
             let glyphLayers = collectAllLayers(tree)
@@ -245,7 +245,7 @@
             }
             #expect(
                 accent != nil,
-                "no accent-sized glyph layer found among \(glyphLayers.count) filled layers"
+                "no accent-sized glyph layer found among \(glyphLayers.count) filled layers",
             )
         }
     }

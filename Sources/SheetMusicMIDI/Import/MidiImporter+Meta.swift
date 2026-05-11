@@ -7,7 +7,7 @@ extension MidiImporter {
     /// ImportTrack contribute to the global map.
     static func segmentBars(
         imports: [ImportTrack],
-        division: Int
+        division: Int,
     ) -> [[ImportMeasure]] {
         let timeline = buildBarTimeline(imports: imports, division: division)
         return imports.map { segment(track: $0, timeline: timeline) }
@@ -22,7 +22,7 @@ extension MidiImporter {
                 if case let .meta(.timeSignature(n, d, _, _)) = ev.event {
                     changes.append(Change(
                         tick: ev.tick,
-                        sig: TimeSignature(numerator: n, denominator: d)
+                        sig: TimeSignature(numerator: n, denominator: d),
                     ))
                 }
             }
@@ -31,7 +31,7 @@ extension MidiImporter {
         if changes.first?.tick != 0 {
             changes.insert(
                 Change(tick: 0, sig: TimeSignature(numerator: 4, denominator: 4)),
-                at: 0
+                at: 0,
             )
         }
 
@@ -48,7 +48,7 @@ extension MidiImporter {
                     index: measureIndex,
                     startTick: t,
                     endTick: min(t + barLen, segmentEnd),
-                    timeSignature: change.sig
+                    timeSignature: change.sig,
                 ))
                 measureIndex += 1
                 t += barLen
@@ -65,7 +65,7 @@ extension MidiImporter {
     }
 
     static func segment(
-        track: ImportTrack, timeline: BarTimeline
+        track: ImportTrack, timeline: BarTimeline,
     ) -> [ImportMeasure] {
         // Pair noteOn with noteOff (per channel/pitch) so we can
         // detect bar-crossing notes.
@@ -101,7 +101,7 @@ extension MidiImporter {
                 timeSignature: bar.timeSignature,
                 events: track.events.filter { bar.startTick <= $0.tick && $0.tick < bar.endTick },
                 carryIns: [],
-                carryOuts: []
+                carryOuts: [],
             )
             for p in pairs {
                 let onBar = timeline.measureIndex(of: p.on)
@@ -111,14 +111,14 @@ extension MidiImporter {
                         slice.carryOuts.append(CarriedNote(
                             pitch: p.pitch, channel: p.channel,
                             sourceMeasureIndex: onBar,
-                            noteOnTick: p.on, noteOffTick: p.off
+                            noteOnTick: p.on, noteOffTick: p.off,
                         ))
                     }
                     if onBar < bar.index && bar.index <= offBar {
                         slice.carryIns.append(CarriedNote(
                             pitch: p.pitch, channel: p.channel,
                             sourceMeasureIndex: onBar,
-                            noteOnTick: p.on, noteOffTick: p.off
+                            noteOnTick: p.on, noteOffTick: p.off,
                         ))
                     }
                 }

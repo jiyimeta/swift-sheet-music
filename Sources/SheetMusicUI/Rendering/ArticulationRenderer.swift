@@ -10,7 +10,7 @@ enum ArticulationRenderer {
     /// path here and the `CALayer` path in `ScoreLayerBuilder+Misc`.
     static func glyph(
         kind: LayoutElement.ArticulationKind,
-        isAbove: Bool
+        isAbove: Bool,
     ) -> Character {
         switch (kind, isAbove) {
         case (.staccato, true): return SMuFLGlyph.articStaccatoAbove
@@ -36,12 +36,12 @@ enum ArticulationRenderer {
         kind: LayoutElement.ArticulationKind,
         isAbove: Bool,
         origin: CGPoint,
-        metrics: StaffMetrics
+        metrics: StaffMetrics,
     ) {
         context.drawGlyph(
             glyph(kind: kind, isAbove: isAbove),
             at: origin,
-            size: metrics.glyphFontSize
+            size: metrics.glyphFontSize,
         )
     }
 }

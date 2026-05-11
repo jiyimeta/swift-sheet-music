@@ -11,10 +11,10 @@ extension MidiImporter {
         track: ImportTrack,
         timeline: BarTimeline,
         division: Int,
-        resolve: (SwingDetection) -> SwingResolution
+        resolve: (SwingDetection) -> SwingResolution,
     ) -> ImportTrack {
         guard let detection = detectSwing(
-            track: track, timeline: timeline, division: division
+            track: track, timeline: timeline, division: division,
         ) else { return track }
         switch resolve(detection) {
         case .treatAsWritten: return track
@@ -29,7 +29,7 @@ extension MidiImporter {
     static func detectSwing(
         track: ImportTrack,
         timeline: BarTimeline,
-        division: Int
+        division: Int,
     ) -> SwingDetection? {
         let onsets = track.events.compactMap { ev -> Int? in
             if case let .noteOn(_, _, v) = ev.event, v > 0 { return ev.tick }
@@ -65,7 +65,7 @@ extension MidiImporter {
             measureRange: 0 ..< (timeline.bars.last?.index ?? 0) + 1,
             estimatedRatio: mean,
             confidence: max(0, min(1, 1 - stddev / 0.2)),
-            sampleSize: ratios.count
+            sampleSize: ratios.count,
         )
     }
 
@@ -86,7 +86,7 @@ extension MidiImporter {
                 snapped = beat
             }
             copy.events[i] = TimedMidiEvent(
-                tick: beatStart + snapped, event: copy.events[i].event
+                tick: beatStart + snapped, event: copy.events[i].event,
             )
         }
         copy.events.sort { $0.tick < $1.tick }

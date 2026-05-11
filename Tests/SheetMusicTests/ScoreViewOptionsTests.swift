@@ -15,7 +15,7 @@
         func collapseCarriesMinimum() {
             guard #available(macOS 15.0, iOS 16.0, *) else { return }
             let opts = ScoreViewOptions(
-                multiMeasureRest: .collapse(minimumMeasures: 4)
+                multiMeasureRest: .collapse(minimumMeasures: 4),
             )
             if case let .collapse(min) = opts.multiMeasureRest {
                 #expect(min == 4)

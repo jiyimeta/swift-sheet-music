@@ -12,7 +12,7 @@ enum StemRenderer {
         duration: NoteDuration,
         isBeamed: Bool,
         beamY: CGFloat?,
-        metrics: StaffMetrics
+        metrics: StaffMetrics,
     ) {
         guard !notes.isEmpty else { return }
         // Whole notes are stemless.
@@ -52,7 +52,7 @@ enum StemRenderer {
         context.stroke(
             path,
             with: .color(.primary),
-            lineWidth: metrics.stemThickness
+            lineWidth: metrics.stemThickness,
         )
         // Beamed chords get their flag replaced by a BeamRenderer bar —
         // skip the flag glyph here.
@@ -66,7 +66,7 @@ enum StemRenderer {
                 stemX: xStem,
                 startY: startY,
                 endY: endY,
-                metrics: metrics
+                metrics: metrics,
             )
         }
     }
@@ -94,7 +94,7 @@ enum StemRenderer {
         stemX: CGFloat,
         startY: CGFloat,
         endY: CGFloat,
-        metrics: StaffMetrics
+        metrics: StaffMetrics,
     ) {
         let tipY: CGFloat = direction == .up ? startY : endY
         let font = cachedBravuraFont(size: metrics.glyphFontSize)
@@ -103,7 +103,7 @@ enum StemRenderer {
             glyph,
             at: CGPoint(x: stemX, y: tipY - ascent),
             size: metrics.glyphFontSize,
-            anchor: .topLeading
+            anchor: .topLeading,
         )
     }
 
@@ -116,7 +116,7 @@ enum StemRenderer {
     private static func cachedBravuraFont(size: CGFloat) -> CTFont {
         if let font = cachedFont, cachedSize == size { return font }
         let font = CTFontCreateWithName(
-            BravuraFont.familyName as CFString, size, nil
+            BravuraFont.familyName as CFString, size, nil,
         )
         cachedFont = font
         cachedSize = size
@@ -124,7 +124,7 @@ enum StemRenderer {
     }
 
     private static func flagGlyph(
-        for dur: NoteDuration, direction: StemDirection
+        for dur: NoteDuration, direction: StemDirection,
     ) -> Character? {
         switch (dur, direction) {
         case (.eighth, .up): return SMuFLGlyph.flag8thUp

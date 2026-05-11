@@ -8,7 +8,7 @@ extension MidiRenderer {
     /// constants in PPQ. `acciaccatura` is intentionally short
     /// (1/32 of a quarter) so it reads as a "crushed" ornament.
     static func playbackTicks(
-        for grace: GraceChord, mainTicks: Int, division: Int
+        for grace: GraceChord, mainTicks: Int, division: Int,
     ) -> Int {
         switch grace.graceType {
         case .acciaccatura: return division / 8 // 1/32 of a quarter
@@ -27,7 +27,7 @@ extension MidiRenderer {
     /// before-grace steals from the parent chord's head.
     /// Mirrors `CompatMidiRender::renderGraceNotesBefore`.
     static func totalStealFromPrev(
-        _ before: [GraceChord], division: Int
+        _ before: [GraceChord], division: Int,
     ) -> Int {
         before.reduce(0) { acc, g in
             g.graceType == .acciaccatura
@@ -44,7 +44,7 @@ extension MidiRenderer {
     /// a single proportional clamp because it handles every realistic
     /// score and stays simple.
     static func totalStealFromMainHead(
-        _ before: [GraceChord], mainTicks: Int, division: Int
+        _ before: [GraceChord], mainTicks: Int, division: Int,
     ) -> Int {
         let raw = before.reduce(0) { acc, g in
             g.graceType == .acciaccatura
@@ -57,7 +57,7 @@ extension MidiRenderer {
     /// Time stolen from the *parent* chord's tail to fit
     /// after-graces. Same capping rule as the head.
     static func totalStealFromMainTail(
-        _ after: [GraceChord], mainTicks: Int, division: Int
+        _ after: [GraceChord], mainTicks: Int, division: Int,
     ) -> Int {
         let raw = after.reduce(0) { acc, g in
             acc + playbackTicks(for: g, mainTicks: mainTicks, division: division)
@@ -88,7 +88,7 @@ extension MidiRenderer {
         currentKey: Int,
         events: inout [TimedMidiEvent],
         playedTicksOverride: Int? = nil,
-        pitchShift: Int = 0
+        pitchShift: Int = 0,
     ) {
         // Apply an ottava transposition to every sounding pitch
         // (parent + grace notes). Clamping to MIDI's 0..127 keeps a
@@ -107,13 +107,13 @@ extension MidiRenderer {
         let mainTicks = playedTicksOverride
             ?? chord.duration.ticks(division: division)
         let stealFromPrev = totalStealFromPrev(
-            chord.graceNotesBefore, division: division
+            chord.graceNotesBefore, division: division,
         )
         let stealFromHead = totalStealFromMainHead(
-            chord.graceNotesBefore, mainTicks: mainTicks, division: division
+            chord.graceNotesBefore, mainTicks: mainTicks, division: division,
         )
         let stealFromTail = totalStealFromMainTail(
-            chord.graceNotesAfter, mainTicks: mainTicks, division: division
+            chord.graceNotesAfter, mainTicks: mainTicks, division: division,
         )
 
         // 1. Pull preceding noteOffs (this voice / channel only) back
@@ -122,7 +122,7 @@ extension MidiRenderer {
         // followed by a very short prev chord would overlap.
         if stealFromPrev > 0 {
             let prevNoteOnTicks = collectPriorNoteOnTicks(
-                in: events, channel: channel
+                in: events, channel: channel,
             )
             for i in events.indices.reversed() {
                 guard events[i].tick <= tick - 1,
@@ -134,7 +134,7 @@ extension MidiRenderer {
                 let target = max(onTick + 1, events[i].tick - stealFromPrev)
                 events[i] = TimedMidiEvent(
                     tick: target,
-                    event: .noteOff(channel: ch, pitch: pitch, velocity: vel)
+                    event: .noteOff(channel: ch, pitch: pitch, velocity: vel),
                 )
             }
         }
@@ -148,7 +148,7 @@ extension MidiRenderer {
         var headCursor = tick
         for g in chord.graceNotesBefore {
             let dur = playbackTicks(
-                for: g, mainTicks: mainTicks, division: division
+                for: g, mainTicks: mainTicks, division: division,
             )
             let onset: Int
             if g.graceType == .acciaccatura {
@@ -164,14 +164,14 @@ extension MidiRenderer {
                     event: .noteOn(
                         channel: channel,
                         pitch: note.pitch,
-                        velocity: velocity
-                    )
+                        velocity: velocity,
+                    ),
                 ))
                 events.append(TimedMidiEvent(
                     tick: max(0, onset + dur - 1),
                     event: .noteOff(
-                        channel: channel, pitch: note.pitch, velocity: 0
-                    )
+                        channel: channel, pitch: note.pitch, velocity: 0,
+                    ),
                 ))
             }
         }
@@ -186,7 +186,7 @@ extension MidiRenderer {
         let mainVelocity = adjustVelocityForChord(
             baseVelocity: velocity,
             chord: chord,
-            instrument: instrument
+            instrument: instrument,
         )
         if let arpeggio = chord.arpeggio {
             // Keep arpeggio behaviour intact: same call as the
@@ -196,7 +196,7 @@ extension MidiRenderer {
                 noteCount: chord.notes.count,
                 chordTicks: playedTicks,
                 stretch: arpeggio.timeStretch,
-                tempoBps: tempoBps
+                tempoBps: tempoBps,
             )
             let order = arpeggio.isAscending
                 ? Array(0 ..< chord.notes.count)
@@ -207,7 +207,7 @@ extension MidiRenderer {
                 let offTick = mainOnset + pairs[i].offOffset
                 emitNoteEventsForGrace(
                     note: note, channel: channel, velocity: mainVelocity,
-                    onTick: onTick, offTick: offTick, events: &events
+                    onTick: onTick, offTick: offTick, events: &events,
                 )
             }
         } else {
@@ -217,12 +217,12 @@ extension MidiRenderer {
                         note: note, glissando: glissando, endPitch: endPitch,
                         startTick: mainOnset, durationTicks: playedTicks,
                         velocity: mainVelocity, channel: channel,
-                        currentKey: currentKey, events: &events
+                        currentKey: currentKey, events: &events,
                     )
                 } else {
                     emitNoteEventsForGrace(
                         note: note, channel: channel, velocity: mainVelocity,
-                        onTick: mainOnset, offTick: mainOff, events: &events
+                        onTick: mainOnset, offTick: mainOff, events: &events,
                     )
                 }
             }
@@ -232,20 +232,20 @@ extension MidiRenderer {
         var afterCursor = mainOnset + playedTicks
         for g in chord.graceNotesAfter {
             let dur = playbackTicks(
-                for: g, mainTicks: mainTicks, division: division
+                for: g, mainTicks: mainTicks, division: division,
             )
             for note in g.notes {
                 events.append(TimedMidiEvent(
                     tick: afterCursor,
                     event: .noteOn(
-                        channel: channel, pitch: note.pitch, velocity: velocity
-                    )
+                        channel: channel, pitch: note.pitch, velocity: velocity,
+                    ),
                 ))
                 events.append(TimedMidiEvent(
                     tick: afterCursor + dur - 1,
                     event: .noteOff(
-                        channel: channel, pitch: note.pitch, velocity: 0
-                    )
+                        channel: channel, pitch: note.pitch, velocity: 0,
+                    ),
                 ))
             }
             afterCursor += dur
@@ -272,7 +272,7 @@ extension MidiRenderer {
     }
 
     private static func transpose(
-        _ grace: GraceChord, by semitones: Int
+        _ grace: GraceChord, by semitones: Int,
     ) -> GraceChord {
         var copy = grace
         copy.notes = ChordNotes(grace.notes.map { transpose($0, by: semitones) })
@@ -289,7 +289,7 @@ extension MidiRenderer {
     /// the prev-chord shortening pass to avoid pulling a noteOff in
     /// past its own noteOn.
     private static func collectPriorNoteOnTicks(
-        in events: [TimedMidiEvent], channel: Int
+        in events: [TimedMidiEvent], channel: Int,
     ) -> [Int: Int] {
         var map: [Int: Int] = [:]
         for e in events {
@@ -309,18 +309,18 @@ extension MidiRenderer {
         velocity: Int,
         onTick: Int,
         offTick: Int,
-        events: inout [TimedMidiEvent]
+        events: inout [TimedMidiEvent],
     ) {
         if note.tieBack == nil {
             events.append(TimedMidiEvent(
                 tick: onTick,
-                event: .noteOn(channel: channel, pitch: note.pitch, velocity: velocity)
+                event: .noteOn(channel: channel, pitch: note.pitch, velocity: velocity),
             ))
         }
         if note.tieForward == nil {
             events.append(TimedMidiEvent(
                 tick: offTick,
-                event: .noteOff(channel: channel, pitch: note.pitch, velocity: 0)
+                event: .noteOff(channel: channel, pitch: note.pitch, velocity: 0),
             ))
         }
     }

@@ -8,7 +8,7 @@ struct ClefAnchorTests {
         let staff = StaffAddress(partIndex: 0, staffIndexInPart: 0)
         let veID = VoiceElementID(
             staff: staff, measureIndex: 0,
-            voiceIndex: 0, elementIndex: 0
+            voiceIndex: 0, elementIndex: 0,
         )
         let a: ClefAnchor = .explicit(veID)
         let b: ClefAnchor = .staffDefault(staff)
@@ -19,9 +19,12 @@ struct ClefAnchorTests {
     @Test("equal staffDefault anchors hash equal")
     func staffDefaultEquality() {
         let staff = StaffAddress(partIndex: 1, staffIndexInPart: 0)
-        // swiftlint:disable:next identical_operands
-        #expect(ClefAnchor.staffDefault(staff)
-            == ClefAnchor.staffDefault(staff))
+        // swiftlint:disable identical_operands
+        #expect(
+            ClefAnchor.staffDefault(staff)
+                == ClefAnchor.staffDefault(staff),
+        )
+        // swiftlint:enable identical_operands
     }
 }
 
@@ -42,7 +45,7 @@ struct ScoreItemIDClefTests {
         let staff = StaffAddress(partIndex: 0, staffIndexInPart: 0)
         let veID = VoiceElementID(
             staff: staff, measureIndex: 3,
-            voiceIndex: 1, elementIndex: 2
+            voiceIndex: 1, elementIndex: 2,
         )
         let id: ScoreItemID = .clef(.explicit(veID))
         #expect(id.staff == staff)

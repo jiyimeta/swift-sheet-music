@@ -38,7 +38,7 @@ extension FrameText {
         }
         return FrameText(
             style: style, text: stripped,
-            offsetMm: offsetMm, fontSize: fontSize
+            offsetMm: offsetMm, fontSize: fontSize,
         )
     }
 }

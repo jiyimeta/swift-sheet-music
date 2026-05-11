@@ -2,7 +2,7 @@
 @testable import SheetMusicLayout
 import Testing
 
-@Suite struct DurationInterpretationTests {
+struct DurationInterpretationTests {
     // MARK: plain durations
 
     @available(macOS 15.0, iOS 16.0, *)
@@ -81,11 +81,11 @@ import Testing
             let split = DurationInterpretation.split(.fraction(f))
             #expect(
                 split.dots == 0,
-                "fraction \(f.numerator)/\(f.denominator) should not be dotted"
+                "fraction \(f.numerator)/\(f.denominator) should not be dotted",
             )
             #expect(
                 split.base == .whole,
-                "fraction \(f.numerator)/\(f.denominator) should render as whole rest"
+                "fraction \(f.numerator)/\(f.denominator) should render as whole rest",
             )
         }
     }

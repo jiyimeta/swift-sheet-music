@@ -4,28 +4,28 @@ import Foundation
 @testable import SheetMusicPDF
 import Testing
 
-@Suite @MainActor struct PDFImporterStructureTests {
+@MainActor struct PDFImporterStructureTests {
     private func vertical(
         x: CGFloat, lineWidth: CGFloat = 0.5,
-        yRange: ClosedRange<CGFloat> = 480 ... 520
+        yRange: ClosedRange<CGFloat> = 480 ... 520,
     ) -> PathSegment {
         PathSegment(
             kind: .vertical,
             rect: CGRect(
                 x: x, y: yRange.lowerBound,
                 width: lineWidth,
-                height: yRange.upperBound - yRange.lowerBound
+                height: yRange.upperBound - yRange.lowerBound,
             ),
-            lineWidth: lineWidth, pageIndex: 0
+            lineWidth: lineWidth, pageIndex: 0,
         )
     }
 
     private func rectangle(
-        _ rect: CGRect, lineWidth: CGFloat = 0.5
+        _ rect: CGRect, lineWidth: CGFloat = 0.5,
     ) -> PathSegment {
         PathSegment(
             kind: .rectangle, rect: rect,
-            lineWidth: lineWidth, pageIndex: 0
+            lineWidth: lineWidth, pageIndex: 0,
         )
     }
 
@@ -34,15 +34,15 @@ import Testing
             raw: RawGlyph(
                 codepoint: 0xE043, fontName: "Bravura",
                 fontSize: 20, origin: point,
-                advance: 5, pageIndex: 0
+                advance: 5, pageIndex: 0,
             ),
-            semantic: .repeatBarlineDots
+            semantic: .repeatBarlineDots,
         )
     }
 
     private func text(
         _ str: String, at origin: CGPoint,
-        fontSize: CGFloat = 10
+        fontSize: CGFloat = 10,
     ) -> TextGlyph {
         // Approx bbox: width ≈ str.count * 0.6 * fontSize, height ≈ fontSize.
         let width = CGFloat(str.count) * 0.6 * fontSize
@@ -51,9 +51,9 @@ import Testing
             fontSize: fontSize, origin: origin,
             bbox: CGRect(
                 x: origin.x, y: origin.y,
-                width: width, height: fontSize
+                width: width, height: fontSize,
             ),
-            pageIndex: 0
+            pageIndex: 0,
         )
     }
 
@@ -66,7 +66,7 @@ import Testing
             primary: primary,
             in: 200 ... 400,
             paths: [primary],
-            glyphs: [dots]
+            glyphs: [dots],
         )
         #expect(bar.subtype == "start-repeat")
     }
@@ -78,7 +78,7 @@ import Testing
             primary: primary,
             in: 200 ... 400,
             paths: [primary],
-            glyphs: [dots]
+            glyphs: [dots],
         )
         #expect(bar.subtype == "end-repeat")
     }
@@ -90,7 +90,7 @@ import Testing
             primary: primary,
             in: 100 ... 300,
             paths: [primary, secondary],
-            glyphs: []
+            glyphs: [],
         )
         #expect(bar.subtype == "double")
     }
@@ -101,7 +101,7 @@ import Testing
             primary: primary,
             in: 100 ... 300,
             paths: [primary],
-            glyphs: []
+            glyphs: [],
         )
         #expect(bar.subtype == nil)
     }
@@ -122,7 +122,7 @@ import Testing
             measures: measures,
             paths: [rect],
             texts: [label],
-            systemTopY: 480, pageIndex: 0
+            systemTopY: 480, pageIndex: 0,
         )
         #expect(result.count == 1)
         #expect(result.first?.measureIndex == 0)
@@ -144,7 +144,7 @@ import Testing
             measures: measures,
             paths: [box],
             texts: [label],
-            systemTopY: 480, pageIndex: 0
+            systemTopY: 480, pageIndex: 0,
         )
         #expect(result.count == 1)
         #expect(result.first?.measureIndex == 0)
@@ -163,12 +163,12 @@ import Testing
         let label = text(
             "D.C. al Fine",
             at: CGPoint(x: 360, y: 470),
-            fontSize: 10
+            fontSize: 10,
         )
         let result = PDFImporter.detectMarkersAndJumps(
             texts: [label],
             measures: measures,
-            systemTopY: 480, pageIndex: 0
+            systemTopY: 480, pageIndex: 0,
         )
         #expect(result.markers.isEmpty)
         #expect(result.jumps.count == 1)
@@ -188,7 +188,7 @@ import Testing
         let result = PDFImporter.detectMarkersAndJumps(
             texts: [label],
             measures: measures,
-            systemTopY: 480, pageIndex: 0
+            systemTopY: 480, pageIndex: 0,
         )
         #expect(result.jumps.isEmpty)
         #expect(result.markers.count == 1)

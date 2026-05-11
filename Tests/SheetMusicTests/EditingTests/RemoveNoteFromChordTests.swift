@@ -5,7 +5,7 @@ import Testing
 struct RemoveNoteFromChordTests {
     private static let chordVE = VoiceElementID(
         staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
-        voiceIndex: 0, elementIndex: 1
+        voiceIndex: 0, elementIndex: 1,
     )
 
     @Test("apply drops one note from a multi-note chord")
@@ -18,7 +18,7 @@ struct RemoveNoteFromChordTests {
         }
         let removeID = NoteID(
             staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
-            voiceIndex: 0, elementIndex: 1, noteIndexInChord: 1
+            voiceIndex: 0, elementIndex: 1, noteIndexInChord: 1,
         )
         let cmd = RemoveNoteFromChord(at: removeID)
         _ = try cmd.apply(to: &score)
@@ -34,7 +34,7 @@ struct RemoveNoteFromChordTests {
         var score = EditingFixtures.chordAtIndex1()
         let removeID = NoteID(
             staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
-            voiceIndex: 0, elementIndex: 1, noteIndexInChord: 0
+            voiceIndex: 0, elementIndex: 1, noteIndexInChord: 0,
         )
         let cmd = RemoveNoteFromChord(at: removeID)
         _ = try cmd.apply(to: &score)
@@ -50,12 +50,12 @@ struct RemoveNoteFromChordTests {
         score[Self.chordVE] = .chord(Chord(
             duration: .quarter,
             notes: [Note(pitch: 60, tpc: 14)],
-            lyrics: [Lyric(text: "do")]
+            lyrics: [Lyric(text: "do")],
         ))
         let snapshot = score
         let removeID = NoteID(
             staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
-            voiceIndex: 0, elementIndex: 1, noteIndexInChord: 0
+            voiceIndex: 0, elementIndex: 1, noteIndexInChord: 0,
         )
         let cmd = RemoveNoteFromChord(at: removeID)
         let inverse = try cmd.apply(to: &score)
@@ -73,7 +73,7 @@ struct RemoveNoteFromChordTests {
         let snapshot = score
         let removeID = NoteID(
             staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
-            voiceIndex: 0, elementIndex: 1, noteIndexInChord: 1
+            voiceIndex: 0, elementIndex: 1, noteIndexInChord: 1,
         )
         let cmd = RemoveNoteFromChord(at: removeID)
         let inverse = try cmd.apply(to: &score)
@@ -86,7 +86,7 @@ struct RemoveNoteFromChordTests {
         var score = EditingFixtures.fourQuarterRests()
         let restNoteID = NoteID(
             staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
-            voiceIndex: 0, elementIndex: 2, noteIndexInChord: 0
+            voiceIndex: 0, elementIndex: 2, noteIndexInChord: 0,
         )
         let cmd = RemoveNoteFromChord(at: restNoteID)
         #expect(throws: SheetMusicError.self) {
@@ -99,7 +99,7 @@ struct RemoveNoteFromChordTests {
         var score = EditingFixtures.chordAtIndex1()
         let badID = NoteID(
             staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
-            voiceIndex: 0, elementIndex: 1, noteIndexInChord: 7
+            voiceIndex: 0, elementIndex: 1, noteIndexInChord: 7,
         )
         let cmd = RemoveNoteFromChord(at: badID)
         #expect(throws: SheetMusicError.self) {

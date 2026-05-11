@@ -25,7 +25,7 @@ public enum BraceMetrics {
     ///   v=1 → braceSmall, v=2 → brace, v=3 → braceLarge, v≥4 → braceLarger.
     /// `magx = v + (v − 1) × 1.625` for v ≥ 2; 1 for v = 1.
     public static func variant(
-        staffCount: Int
+        staffCount: Int,
     ) -> (codepoint: UInt16, magx: CGFloat) {
         let v = max(staffCount, 1)
         let magx: CGFloat = v == 1
@@ -51,7 +51,7 @@ public enum BraceMetrics {
     /// when a brace's leftward extent would otherwise overrun the staff
     /// name area — visible from `staffCount ≥ 3` (`braceLarge` and up).
     public static func glyphHorizontalExtent(
-        staffCount: Int, sp: CGFloat
+        staffCount: Int, sp: CGFloat,
     ) -> CGFloat {
         let (codepoint, magx) = variant(staffCount: staffCount)
         let naturalAtUnitSp = naturalBBoxWidth(codepoint: codepoint)
@@ -73,18 +73,18 @@ public enum BraceMetrics {
     private nonisolated(unsafe) static var bboxCache: [UInt16: CGFloat] = [:]
 
     private static func measureNaturalBBoxWidth(
-        codepoint: UInt16
+        codepoint: UInt16,
     ) -> CGFloat {
         _ = BravuraFont.register
         // sp = 1 → fontSize = 4. bbox.width is then expressed in
         // sp-units directly (Bravura's 1 em = 4 sp).
         let font = CTFontCreateWithName(
-            BravuraFont.familyName as CFString, 4, nil
+            BravuraFont.familyName as CFString, 4, nil,
         )
         var unichars: [UniChar] = [codepoint]
         var glyphs: [CGGlyph] = [0]
         guard CTFontGetGlyphsForCharacters(
-            font, &unichars, &glyphs, 1
+            font, &unichars, &glyphs, 1,
         ), glyphs[0] != 0,
         let path = CTFontCreatePathForGlyph(font, glyphs[0], nil)
         else { return 0 }

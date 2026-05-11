@@ -10,7 +10,7 @@ extension LayoutEngine {
     /// places its time signature at the same x as a pitched staff that
     /// does. Without this, drum/tab time signatures would slide left
     /// and break vertical alignment across the system.
-    struct HeaderSchedule: Sendable, Equatable {
+    struct HeaderSchedule: Equatable {
         let clefX: CGFloat
         let keySigX: CGFloat
         let timeSigX: CGFloat
@@ -32,7 +32,7 @@ extension LayoutEngine {
         metrics: StaffMetrics,
         synthesizeClefForAllStaves: Bool,
         synthesizeKeySigForAllStaves: Bool = false,
-        activeKeys: [Int]? = nil
+        activeKeys: [Int]? = nil,
     ) -> HeaderSchedule {
         var clefWidth: CGFloat = 0
         var keySigWidth: CGFloat = 0
@@ -58,7 +58,7 @@ extension LayoutEngine {
             {
                 keySigWidth = max(
                     keySigWidth,
-                    metrics.sp * (CGFloat(abs(keys[idx])) + 1.5)
+                    metrics.sp * (CGFloat(abs(keys[idx])) + 1.5),
                 )
             }
             let leading = measure.voices.first?.elements ?? []
@@ -70,7 +70,7 @@ extension LayoutEngine {
                 case let .keySignature(k):
                     keySigWidth = max(
                         keySigWidth,
-                        metrics.sp * (CGFloat(abs(k.concertKey)) + 1.5)
+                        metrics.sp * (CGFloat(abs(k.concertKey)) + 1.5),
                     )
                 case .timeSignature:
                     timeSigWidth = max(timeSigWidth, metrics.sp * 3)
@@ -92,7 +92,7 @@ extension LayoutEngine {
             clefX: clefX,
             keySigX: keySigX,
             timeSigX: timeSigX,
-            contentStartX: contentStartX
+            contentStartX: contentStartX,
         )
     }
 
@@ -104,7 +104,7 @@ extension LayoutEngine {
     /// collapse when a parent proposes nil/tiny width (e.g. inside
     /// `ScrollView([.vertical, .horizontal])`).
     public static func naturalContentWidth(
-        score: Score, options: ScoreViewOptions
+        score: Score, options: ScoreViewOptions,
     ) -> CGFloat {
         let metrics = StaffMetrics(staffSize: options.staffSize)
         let partLabelWidth: CGFloat = 80
@@ -123,14 +123,14 @@ extension LayoutEngine {
                 staves: staves,
                 metrics: metrics,
                 synthesizeClefForAllStaves: false,
-                synthesizeKeySigForAllStaves: false
+                synthesizeKeySigForAllStaves: false,
             )
             let w = crossStaffMinimumMeasureWidth(
                 staves: staves,
                 measureIdx: i,
                 metrics: metrics,
                 headerSchedule: baseHeader,
-                division: score.division
+                division: score.division,
             )
             total += w
         }
@@ -165,11 +165,11 @@ extension LayoutEngine {
         metrics: StaffMetrics,
         headerSchedule: HeaderSchedule,
         width: CGFloat,
-        division: Int
+        division: Int,
     ) -> [Int: CGFloat] {
         let agg = aggregatedTickWeights(
             staves: staves, measureIdx: measureIdx,
-            metrics: metrics, division: division
+            metrics: metrics, division: division,
         )
         guard !agg.sortedTicks.isEmpty else { return [:] }
 
@@ -189,8 +189,8 @@ extension LayoutEngine {
             agg.totalWeight,
             max(
                 metrics.sp * 4,
-                width - headerSchedule.contentStartX - trailingGap
-            )
+                width - headerSchedule.contentStartX - trailingGap,
+            ),
         )
         let baseX = headerSchedule.contentStartX + metrics.sp
 
@@ -222,11 +222,11 @@ extension LayoutEngine {
         measureIdx: Int,
         metrics: StaffMetrics,
         headerSchedule: HeaderSchedule,
-        division: Int
+        division: Int,
     ) -> CGFloat {
         let agg = aggregatedTickWeights(
             staves: staves, measureIdx: measureIdx,
-            metrics: metrics, division: division
+            metrics: metrics, division: division,
         )
         // Must match `tickColumns`' trailingGap so the spacing engine
         // and the placement engine size every measure identically.
@@ -248,12 +248,12 @@ extension LayoutEngine {
         staves: [Staff],
         measureIdx: Int,
         metrics: StaffMetrics,
-        division: Int
+        division: Int,
     ) -> (
         sortedTicks: [Int],
         gapWeights: [CGFloat],
         totalWeight: CGFloat,
-        measureEnd: Int
+        measureEnd: Int,
     ) {
         struct TimedElement {
             let startTick: Int
@@ -277,7 +277,7 @@ extension LayoutEngine {
                     switch el {
                     case let .chord(c) where !c.notes.isEmpty:
                         let nextLyrics = nextChordLyrics(
-                            in: voice.elements, after: idx
+                            in: voice.elements, after: idx,
                         )
                         // Reserve column width for grace clusters whose
                         // glyphs live inside THIS column's horizontal
@@ -290,7 +290,7 @@ extension LayoutEngine {
                         //     from THIS tick to the next tick IS this
                         //     column's weight in the proportional spacer).
                         let nextBeforeCount = nextChordBeforeGraceCount(
-                            in: voice.elements, after: idx
+                            in: voice.elements, after: idx,
                         )
                         let graceBudget = LayoutEngine.graceWidth(sp: metrics.sp)
                             * CGFloat(c.graceNotesAfter.count + nextBeforeCount)
@@ -299,27 +299,27 @@ extension LayoutEngine {
                             lyricsPairWidth(
                                 currentLyrics: c.lyrics,
                                 nextLyrics: nextLyrics,
-                                metrics: metrics
-                            )
+                                metrics: metrics,
+                            ),
                         )
                         let w = max(baseWeight, pendingHarmonyWidth)
                         pendingHarmonyWidth = 0
                         let end = tick + c.duration.ticks(division: division)
                         elements.append(TimedElement(
-                            startTick: tick, endTick: end, weight: w
+                            startTick: tick, endTick: end, weight: w,
                         ))
                         allTicks.insert(tick)
                         tick = end
                     case let .chord(r):
                         // Empty chord = rest.
                         let baseWeight = durationWidth(
-                            r.duration, metrics: metrics
+                            r.duration, metrics: metrics,
                         )
                         let w = max(baseWeight, pendingHarmonyWidth)
                         pendingHarmonyWidth = 0
                         let end = tick + r.duration.ticks(division: division)
                         elements.append(TimedElement(
-                            startTick: tick, endTick: end, weight: w
+                            startTick: tick, endTick: end, weight: w,
                         ))
                         allTicks.insert(tick)
                         tick = end
@@ -328,12 +328,12 @@ extension LayoutEngine {
                         // carries demand to host the symbol without
                         // colliding with the next chord. + 0.5 sp gap.
                         let runs = HarmonyRendering.runs(
-                            for: harmony, metrics: metrics
+                            for: harmony, metrics: metrics,
                         )
                         pendingHarmonyWidth = max(
                             pendingHarmonyWidth,
                             CGFloat(HarmonyRendering.width(of: runs))
-                                + metrics.sp * 0.5
+                                + metrics.sp * 0.5,
                         )
                     default:
                         break
@@ -400,7 +400,7 @@ extension LayoutEngine {
         staves: [Staff],
         measureIdx: Int,
         activeKeys: [Int],
-        metrics: StaffMetrics
+        metrics: StaffMetrics,
     ) -> CGFloat {
         var clefBoost: CGFloat = 0
         var keyBoost: CGFloat = 0
@@ -416,7 +416,7 @@ extension LayoutEngine {
                 case let .keySignature(k):
                     explicitKeyWidth = max(
                         explicitKeyWidth,
-                        metrics.sp * (CGFloat(abs(k.concertKey)) + 1)
+                        metrics.sp * (CGFloat(abs(k.concertKey)) + 1),
                     )
                 case .chord:
                     break scan
@@ -434,7 +434,7 @@ extension LayoutEngine {
                     * (CGFloat(abs(activeKey)) + 1.5)
                 keyBoost = max(
                     keyBoost,
-                    max(0, synthKeyW - explicitKeyWidth)
+                    max(0, synthKeyW - explicitKeyWidth),
                 )
             }
         }
@@ -443,7 +443,7 @@ extension LayoutEngine {
 
     static func minimumMeasureWidth(
         measure: Measure,
-        metrics: StaffMetrics
+        metrics: StaffMetrics,
     ) -> CGFloat {
         // Edge padding inside the barlines. `rightPadding` must
         // be wide enough that a flagged 8th / 16th at the end of
@@ -477,12 +477,12 @@ extension LayoutEngine {
                 case let .chord(c) where !c.notes.isEmpty:
                     let tickW = durationWidth(c.duration, metrics: metrics)
                     let nextLyrics = nextChordLyrics(
-                        in: voice.elements, after: idx
+                        in: voice.elements, after: idx,
                     )
                     let lyricW = lyricsPairWidth(
                         currentLyrics: c.lyrics,
                         nextLyrics: nextLyrics,
-                        metrics: metrics
+                        metrics: metrics,
                     )
                     w += max(tickW, lyricW)
                 case let .chord(r):
@@ -500,7 +500,7 @@ extension LayoutEngine {
     }
 
     static func durationWidth(
-        _ dur: NoteDuration, metrics: StaffMetrics
+        _ dur: NoteDuration, metrics: StaffMetrics,
     ) -> CGFloat {
         // Linear in quarter-equivalent length, with a minimum floor so
         // very short notes (32nd, 64th) don't collapse to zero space.
@@ -557,7 +557,7 @@ extension LayoutEngine {
     static func lyricsPairWidth(
         currentLyrics: [Lyric],
         nextLyrics: [Lyric],
-        metrics: StaffMetrics
+        metrics: StaffMetrics,
     ) -> CGFloat {
         let curWidth = chordLyricMaxWidth(currentLyrics, metrics: metrics)
         guard curWidth > 0 else { return 0 }
@@ -578,13 +578,13 @@ extension LayoutEngine {
     /// Widest rendered lyric in a chord (verse-aware: takes the max
     /// across verses). Returns 0 when no syllable has text.
     static func chordLyricMaxWidth(
-        _ lyrics: [Lyric], metrics: StaffMetrics
+        _ lyrics: [Lyric], metrics: StaffMetrics,
     ) -> CGFloat {
         var widest: CGFloat = 0
         for lyric in lyrics where !lyric.text.isEmpty {
             widest = max(
                 widest,
-                lyricsTextWidth(lyric.text, sp: metrics.sp)
+                lyricsTextWidth(lyric.text, sp: metrics.sp),
             )
         }
         return widest
@@ -594,7 +594,7 @@ extension LayoutEngine {
     /// `elements`, looking past clefs / key sigs / barlines / etc. that
     /// don't carry a tick. Empty when no further chord exists.
     static func nextChordLyrics(
-        in elements: [VoiceElement], after startIndex: Int
+        in elements: [VoiceElement], after startIndex: Int,
     ) -> [Lyric] {
         guard startIndex + 1 < elements.count else { return [] }
         for j in (startIndex + 1) ..< elements.count {
@@ -617,7 +617,7 @@ extension LayoutEngine {
     /// tick to the NEXT tick is THIS column's responsibility in the
     /// proportional spacer.
     static func nextChordBeforeGraceCount(
-        in elements: [VoiceElement], after startIndex: Int
+        in elements: [VoiceElement], after startIndex: Int,
     ) -> Int {
         guard startIndex + 1 < elements.count else { return 0 }
         for j in (startIndex + 1) ..< elements.count {

@@ -4,7 +4,7 @@
 @testable import SheetMusicMSCX
 import Testing
 
-@Suite struct FractionTests {
+struct FractionTests {
     @Test func reducedOnInit() {
         let f = Fraction(numerator: 2, denominator: 4)
         #expect(f.numerator == 1)

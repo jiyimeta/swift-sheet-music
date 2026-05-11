@@ -22,29 +22,29 @@ extension TextProperties {
             // emitted we emit all four for symmetric round-trip.
             children.append(XMLTreeNode(
                 name: "bold",
-                text: style.contains(.bold) ? "1" : "0"
+                text: style.contains(.bold) ? "1" : "0",
             ))
             children.append(XMLTreeNode(
                 name: "italic",
-                text: style.contains(.italic) ? "1" : "0"
+                text: style.contains(.italic) ? "1" : "0",
             ))
             children.append(XMLTreeNode(
                 name: "underline",
-                text: style.contains(.underline) ? "1" : "0"
+                text: style.contains(.underline) ? "1" : "0",
             ))
             children.append(XMLTreeNode(
                 name: "strike",
-                text: style.contains(.strike) ? "1" : "0"
+                text: style.contains(.strike) ? "1" : "0",
             ))
         }
         if let frameType {
             children.append(XMLTreeNode(
-                name: "frameType", text: String(encodeFrame(frameType))
+                name: "frameType", text: String(encodeFrame(frameType)),
             ))
         }
         if let framePadding {
             children.append(XMLTreeNode(
-                name: "framePadding", text: formatDouble(framePadding)
+                name: "framePadding", text: formatDouble(framePadding),
             ))
         }
     }

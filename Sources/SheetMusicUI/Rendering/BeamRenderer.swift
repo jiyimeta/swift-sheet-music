@@ -17,7 +17,7 @@ enum BeamRenderer {
         to: CGPoint,
         direction: StemDirection,
         level: Int,
-        metrics: StaffMetrics
+        metrics: StaffMetrics,
     ) {
         guard level >= 1 else { return }
         let beamThickness = metrics.sp * 0.5

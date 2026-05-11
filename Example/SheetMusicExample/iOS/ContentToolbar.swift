@@ -32,8 +32,10 @@
             // they never get pushed into auto-overflow.
             ToolbarItemGroup(placement: .topBarLeading) {
                 Button(action: onTogglePlayback) {
-                    Image(systemName: playbackEngine.state == .playing
-                        ? "pause.fill" : "play.fill")
+                    Image(
+                        systemName: playbackEngine.state == .playing
+                            ? "pause.fill" : "play.fill",
+                    )
                 }
                 .disabled(score == nil)
 
@@ -76,7 +78,7 @@
                     Button(action: onExportPDF) {
                         Label(
                             "Export PDF",
-                            systemImage: "square.and.arrow.up"
+                            systemImage: "square.and.arrow.up",
                         )
                     }
                     .disabled(score == nil)
@@ -90,12 +92,16 @@
                     Toggle(isOn: $isMarqueeMode) {
                         Label(
                             "Marquee Select",
-                            systemImage: "rectangle.dashed"
+                            systemImage: "rectangle.dashed",
                         )
                     }
-                    .disabled(score == nil
-                        || (layoutMode != .vertical
-                            && layoutMode != .horizontal))
+                    .disabled(
+                        score == nil
+                            || (
+                                layoutMode != .vertical
+                                    && layoutMode != .horizontal
+                            ),
+                    )
 
                     Divider()
 
@@ -104,7 +110,7 @@
                     } label: {
                         Label(
                             "Zoom Out",
-                            systemImage: "minus.magnifyingglass"
+                            systemImage: "minus.magnifyingglass",
                         )
                     }
                     .disabled(staffSize <= 8)
@@ -114,7 +120,7 @@
                     } label: {
                         Label(
                             "Zoom In",
-                            systemImage: "plus.magnifyingglass"
+                            systemImage: "plus.magnifyingglass",
                         )
                     }
                     .disabled(staffSize >= 32)

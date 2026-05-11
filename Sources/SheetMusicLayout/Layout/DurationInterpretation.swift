@@ -20,7 +20,7 @@ public enum DurationInterpretation {
     ///   renders as an 8th (beams / flags included).
     /// - Anything else → `(dur, 0)`.
     public static func split(
-        _ dur: NoteDuration
+        _ dur: NoteDuration,
     ) -> (base: NoteDuration, dots: Int) {
         switch dur {
         case .whole, .half, .quarter, .eighth, .sixteenth,
@@ -30,7 +30,7 @@ public enum DurationInterpretation {
         case let .fraction(f):
             if let direct = baseAndDots(
                 numerator: f.numerator,
-                denominator: f.denominator
+                denominator: f.denominator,
             ) {
                 return direct
             }
@@ -69,7 +69,7 @@ public enum DurationInterpretation {
                 let num = f.numerator * scale.num
                 let den = f.denominator * scale.den
                 if let match = baseAndDots(
-                    numerator: num, denominator: den
+                    numerator: num, denominator: den,
                 ) {
                     return match
                 }
@@ -82,7 +82,7 @@ public enum DurationInterpretation {
     /// duration. Returns nil for anything that isn't
     /// `2^(d+1)−1 / base×2^d` (after gcd reduction).
     private static func baseAndDots(
-        numerator: Int, denominator: Int
+        numerator: Int, denominator: Int,
     ) -> (base: NoteDuration, dots: Int)? {
         guard numerator > 0, denominator > 0 else { return nil }
         let g = gcd(numerator, denominator)

@@ -68,18 +68,18 @@
         /// document-size short-circuit. Pass nil to keep the legacy
         /// "size only" gate (the perf-tuned default for scroll-driven
         /// reflow).
-        var contentVersion: AnyHashable? = nil
+        var contentVersion: AnyHashable?
         /// Optional content rendered ON TOP of the score, in the score's
         /// own document-coord space (so it scrolls + magnifies with the
         /// staff). Used to host an inline lyric-editor TextField anchored
         /// to a specific chord's lyric line. Caller positions content
         /// via `.position(x:, y:)` in document coords.
-        var inDocumentOverlay: AnyView? = nil
+        var inDocumentOverlay: AnyView?
         /// Hashable identity of the in-document overlay used to decide
         /// when `updateNSView` should rebuild `rootView`. AnyView is not
         /// Equatable, so callers pass a key that changes whenever the
         /// overlay's identity / visibility flips.
-        var inDocumentOverlayKey: AnyHashable? = nil
+        var inDocumentOverlayKey: AnyHashable?
 
         private var rootView: AnyView {
             AnyView(
@@ -88,14 +88,15 @@
                         document: document, score: score,
                         selection: selection,
                         voiceColors: voiceColors,
-                        playbackCursor: playbackCursor
+                        playbackCursor: playbackCursor,
                     )
                     if let overlay = inDocumentOverlay {
                         overlay
                     }
                 }
                 .overlay(MarqueeOverlay(rect: marqueeRect))
-                .padding(Self.contentInset))
+                .padding(Self.contentInset),
+            )
         }
 
         func makeNSView(context: Context) -> NSScrollView {
@@ -123,7 +124,7 @@
             // on the correct notehead at any zoom level.
             let click = NSClickGestureRecognizer(
                 target: context.coordinator,
-                action: #selector(Coordinator.handleClick(_:))
+                action: #selector(Coordinator.handleClick(_:)),
             )
             click.buttonMask = 0x1
             hosting.addGestureRecognizer(click)
@@ -136,7 +137,7 @@
             // doesn't surprise the user.
             let pan = NSPanGestureRecognizer(
                 target: context.coordinator,
-                action: #selector(Coordinator.handlePan(_:))
+                action: #selector(Coordinator.handlePan(_:)),
             )
             pan.buttonMask = 0x1
             pan.isEnabled = isMarqueeMode
@@ -164,7 +165,7 @@
                 context.coordinator,
                 selector: #selector(Coordinator.magnificationDidEnd(_:)),
                 name: NSScrollView.didEndLiveMagnifyNotification,
-                object: scrollView
+                object: scrollView,
             )
             // Pinch gesture: NSScrollView fires bounds-changed every
             // frame while magnifying because clipView's size shrinks
@@ -179,7 +180,7 @@
                 context.coordinator,
                 selector: #selector(Coordinator.willStartLiveMagnify(_:)),
                 name: NSScrollView.willStartLiveMagnifyNotification,
-                object: scrollView
+                object: scrollView,
             )
 
             // Track the document-space scroll offset live. NSClipView's
@@ -192,7 +193,7 @@
                 context.coordinator,
                 selector: #selector(Coordinator.boundsDidChange(_:)),
                 name: NSView.boundsDidChangeNotification,
-                object: clipView
+                object: clipView,
             )
 
             return scrollView
@@ -261,15 +262,15 @@
             {
                 coord.lastHandledScrollTarget = target
                 let clipView = nsView.contentView
-                NSAnimationContext.runAnimationGroup({ ctx in
+                NSAnimationContext.runAnimationGroup { ctx in
                     ctx.duration = 0.25
                     ctx.timingFunction = .init(name: .easeInEaseOut)
                     ctx.allowsImplicitAnimation = true
                     clipView.animator().setBoundsOrigin(target)
                     nsView.reflectScrolledClipView(clipView)
-                }, completionHandler: {
+                } completionHandler: {
                     DispatchQueue.main.async { pendingScrollTarget = nil }
-                })
+                }
             } else if pendingScrollTarget == nil {
                 coord.lastHandledScrollTarget = nil
             }
@@ -336,7 +337,7 @@
                 // to get coords in the document/ScoreView coord space.
                 let docPoint = CGPoint(
                     x: local.x - contentInset,
-                    y: local.y - contentInset
+                    y: local.y - contentInset,
                 )
                 if isMarqueeMode {
                     // Tap-without-movement during marquee mode mirrors
@@ -354,7 +355,7 @@
                 let local = gr.location(in: hosting)
                 let docPoint = CGPoint(
                     x: local.x - contentInset,
-                    y: local.y - contentInset
+                    y: local.y - contentInset,
                 )
                 switch gr.state {
                 case .began:
@@ -364,12 +365,12 @@
                 case .changed:
                     guard let start = marqueeStart else { return }
                     marqueeRectBinding?.wrappedValue = makeMarqueeRect(
-                        from: start, to: docPoint
+                        from: start, to: docPoint,
                     )
                 case .ended:
                     guard let start = marqueeStart else { return }
                     let rect = makeMarqueeRect(
-                        from: start, to: docPoint
+                        from: start, to: docPoint,
                     )
                     marqueeStart = nil
                     marqueeRectBinding?.wrappedValue = nil
@@ -392,7 +393,7 @@
                 guard let scrollView = notification.object as? NSScrollView
                 else { return }
                 magnificationObservation = scrollView.observe(
-                    \.magnification, options: [.new]
+                    \.magnification, options: [.new],
                 ) { [weak self] _, change in
                     guard let self, let value = change.newValue else { return }
                     magnificationBinding?.wrappedValue = value

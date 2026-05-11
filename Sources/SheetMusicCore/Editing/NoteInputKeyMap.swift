@@ -12,7 +12,7 @@ public enum NoteInputKeyMap {
     /// `nil` if `letter` is not one of `c d e f g a b` (case
     /// insensitive).
     public static func pitch(
-        forLetter letter: Character, octave: Int
+        forLetter letter: Character, octave: Int,
     ) -> (pitch: Int, tpc: Int)? {
         let lower = Character(letter.lowercased())
         let pitchOffset: Int
@@ -38,7 +38,7 @@ public enum NoteInputKeyMap {
     ///   5 → quarter, 6 → half, 7 → whole.
     /// Returns `nil` for any other character.
     public static func duration(
-        forCharacter character: String
+        forCharacter character: String,
     ) -> NoteDuration? {
         switch character {
         case "1": return .sixtyFourth

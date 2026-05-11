@@ -22,13 +22,13 @@ extension Voice {
     func encode(
         staffGroup: String,
         voiceIndex: Int,
-        options: MSCXEncoderOptions = .init()
+        options: MSCXEncoderOptions = .init(),
     ) throws -> XMLTreeNode {
         try encode(
             carryIn: VoiceTieCarry(),
             options: options,
             staffGroup: staffGroup,
-            voiceIndex: voiceIndex
+            voiceIndex: voiceIndex,
         ).node
     }
 
@@ -39,7 +39,7 @@ extension Voice {
     /// `prevVoiceTotal` is that voice's total played duration (= bar
     /// length) — used to compute the source's position-within-its-bar
     /// for `<measures>-1</measures><fractions>P</fractions>` form.
-    struct VoiceTieCarry: Sendable {
+    struct VoiceTieCarry {
         var prevChordDuration: Fraction?
         var prevVoiceTotal: Fraction?
 
@@ -64,7 +64,7 @@ extension Voice {
         isStaffHead: Bool = false,
         options: MSCXEncoderOptions = .init(),
         staffGroup: String = "pitched",
-        voiceIndex: Int = 0
+        voiceIndex: Int = 0,
     ) throws -> (node: XMLTreeNode, carryOut: VoiceTieCarry) {
         try Self.validateProperlyNested(tuplets)
         // At a given startIndex, push outer tuplets (longer range)
@@ -105,7 +105,7 @@ extension Voice {
                 let activeWithOpening = state.stack + [opening]
                 let base = tupletBaseDuration(
                     opening: opening,
-                    activeTuplets: activeWithOpening
+                    activeTuplets: activeWithOpening,
                 )
                 state.children.append(opening.encode(baseDuration: base))
                 state.stack.append(opening)
@@ -120,7 +120,7 @@ extension Voice {
                     state: &state,
                     options: options,
                     staffGroup: staffGroup,
-                    voiceIndex: voiceIndex
+                    voiceIndex: voiceIndex,
                 )
             }
             for _ in 0 ..< (endCountByIndex[index] ?? 0) {
@@ -132,8 +132,8 @@ extension Voice {
             XMLTreeNode(name: "voice", children: state.children),
             VoiceTieCarry(
                 prevChordDuration: state.previousChordDuration,
-                prevVoiceTotal: state.voiceTotal
-            )
+                prevVoiceTotal: state.voiceTotal,
+            ),
         )
     }
 
@@ -169,7 +169,7 @@ extension Voice {
         state: inout EncodeState,
         options: MSCXEncoderOptions,
         staffGroup: String,
-        voiceIndex: Int
+        voiceIndex: Int,
     ) throws {
         let isLastChord: Bool = {
             if case .chord = element { return index == lastChordIndex }
@@ -185,7 +185,7 @@ extension Voice {
             voiceBarLength: voiceBarLength,
             options: options,
             staffGroup: staffGroup,
-            voiceIndex: voiceIndex
+            voiceIndex: voiceIndex,
         ))
         if case let .chord(chord) = element {
             state.previousChordDuration = chord.duration.asFraction
@@ -213,7 +213,7 @@ extension Voice {
                             + "\(current.endIndex)] and [\(other.startIndex)..."
                             + "\(other.endIndex)] overlap without "
                             + "nesting; MSCXEncoder accepts only "
-                            + "properly nested or disjoint tuplets."
+                            + "properly nested or disjoint tuplets.",
                     )
                 }
             }
@@ -230,7 +230,7 @@ extension Voice {
         voiceBarLength: Fraction,
         options: MSCXEncoderOptions = .init(),
         staffGroup: String = "pitched",
-        voiceIndex: Int = 0
+        voiceIndex: Int = 0,
     ) throws -> XMLTreeNode {
         switch element {
         case let .chord(chord):
@@ -244,7 +244,7 @@ extension Voice {
                 voiceBarLength: voiceBarLength,
                 options: options,
                 staffGroup: staffGroup,
-                voiceIndex: voiceIndex
+                voiceIndex: voiceIndex,
             )
         case let .keySignature(key):
             return key.encode(options: options)
@@ -280,8 +280,8 @@ extension Voice {
                 name: "location",
                 children: [XMLTreeNode(
                     name: "fractions",
-                    text: "\(delta.numerator)/\(delta.denominator)"
-                )]
+                    text: "\(delta.numerator)/\(delta.denominator)",
+                )],
             )
         case let .spanner(spanner):
             return spanner.encode(options: options)
@@ -303,25 +303,25 @@ extension Voice {
         voiceBarLength: Fraction,
         options: MSCXEncoderOptions,
         staffGroup: String,
-        voiceIndex: Int
+        voiceIndex: Int,
     ) throws -> XMLTreeNode {
         let unscaled = try unscaledDuration(chord.duration, in: activeTuplets)
         let unscaledChord = Chord(
             duration: unscaled,
             notes: chord.notes,
             arpeggio: chord.arpeggio,
-            lyrics: chord.lyrics
+            lyrics: chord.lyrics,
         )
         let tieForward = forwardTieLocation(
             chord: chord,
             isLastChordOfVoice: isLastChordOfVoice,
-            voiceBarLength: voiceBarLength
+            voiceBarLength: voiceBarLength,
         )
         let tieBack = backwardTieLocation(
             chord: chord,
             isFirstChordOfVoice: isFirstChordOfVoice,
             previousChordDuration: previousChordDuration,
-            prevVoiceTotal: prevVoiceTotal
+            prevVoiceTotal: prevVoiceTotal,
         )
         return unscaledChord.notes.isEmpty
             ? unscaledChord.encodeAsRest(options: options)
@@ -330,7 +330,7 @@ extension Voice {
                 tieBackLocation: tieBack,
                 options: options,
                 staffGroup: staffGroup,
-                voiceIndex: voiceIndex
+                voiceIndex: voiceIndex,
             )
     }
 
@@ -354,7 +354,7 @@ extension Voice {
     /// for durations that cannot be expressed as a named base.
     private func tupletBaseDuration(
         opening: Tuplet,
-        activeTuplets: [Tuplet]
+        activeTuplets: [Tuplet],
     ) -> NoteDuration? {
         guard opening.startIndex < elements.count else { return nil }
         guard case let .chord(chord) = elements[opening.startIndex] else {
@@ -368,7 +368,7 @@ extension Voice {
     /// so the decoder's positional scaling reproduces the original
     /// fraction.
     private func unscaledDuration(
-        _ duration: NoteDuration, in tuplets: [Tuplet]
+        _ duration: NoteDuration, in tuplets: [Tuplet],
     ) throws -> NoteDuration {
         guard !tuplets.isEmpty else { return duration }
         let scaled = duration.asFraction
@@ -378,7 +378,7 @@ extension Voice {
         for tuplet in tuplets {
             unscaled = Fraction(
                 numerator: unscaled.numerator * tuplet.actualNotes,
-                denominator: unscaled.denominator * tuplet.normalNotes
+                denominator: unscaled.denominator * tuplet.normalNotes,
             )
         }
         let candidate = NoteDuration.fraction(unscaled)
@@ -390,7 +390,7 @@ extension Voice {
                 reason: "Tuplet member duration \(scaled) does not "
                     + "decompose to a named base + dots after "
                     + "un-scaling by \(ratios); MSCXEncoder supports "
-                    + "only durations representable as base + dots."
+                    + "only durations representable as base + dots.",
             )
         }
         return candidate

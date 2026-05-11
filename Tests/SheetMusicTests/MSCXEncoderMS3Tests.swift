@@ -47,7 +47,8 @@ struct MSCXEncoderMS3Tests {
     func sheetMusicExportMSCZAcceptsOptions() throws {
         let score = try MSCXParser.parse(MSCXFixtureLoader.mscxData("midi01"))
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(
-            "ms3-export-\(UUID().uuidString).mscz")
+            "ms3-export-\(UUID().uuidString).mscz",
+        )
         defer { try? FileManager.default.removeItem(at: url) }
         try SheetMusic.exportMSCZ(score, options: .init(targetVersion: .v3), to: url)
         #expect(FileManager.default.fileExists(atPath: url.path))
@@ -122,8 +123,10 @@ struct MSCXEncoderMS3Tests {
         let scoreElement = try #require(root.first("Score"))
         let names = scoreElement.children.map(\.name)
         let styleIndex = try #require(names.firstIndex(of: "Style"))
-        #expect(Array(names[(styleIndex + 1) ... (styleIndex + 4)])
-            == ["showInvisible", "showUnprintable", "showFrames", "showMargins"])
+        #expect(
+            Array(names[(styleIndex + 1) ... (styleIndex + 4)])
+                == ["showInvisible", "showUnprintable", "showFrames", "showMargins"],
+        )
         #expect(scoreElement.first("showInvisible")?.text == "1")
         #expect(scoreElement.first("showUnprintable")?.text == "1")
         #expect(scoreElement.first("showFrames")?.text == "1")
@@ -336,7 +339,7 @@ struct MSCXEncoderMS3Tests {
             kind: .hairpin,
             rawType: "HairPin",
             nextMeasuresOffset: 1,
-            nextFractionsOffset: Fraction(numerator: 1, denominator: 4)
+            nextFractionsOffset: Fraction(numerator: 1, denominator: 4),
         )
         let xml = spanner.encode(options: .init(targetVersion: .v3))
         let location = try #require(xml.first("next")?.first("location"))
@@ -349,7 +352,7 @@ struct MSCXEncoderMS3Tests {
             kind: .hairpin,
             rawType: "HairPin",
             nextMeasuresOffset: 1,
-            nextFractionsOffset: Fraction(numerator: 1, denominator: 4)
+            nextFractionsOffset: Fraction(numerator: 1, denominator: 4),
         )
         let xml = spanner.encode(options: .init(targetVersion: .v4))
         let location = try #require(xml.first("next")?.first("location"))
@@ -357,12 +360,12 @@ struct MSCXEncoderMS3Tests {
     }
 
     @Test("v3 Spanner skip-if-default still applies")
-    func v3SpannerSkipIfDefault() throws {
+    func v3SpannerSkipIfDefault() {
         let spanner = Spanner(
             kind: .hairpin,
             rawType: "HairPin",
             nextMeasuresOffset: 0,
-            nextFractionsOffset: nil
+            nextFractionsOffset: nil,
         )
         let xml = spanner.encode(options: .init(targetVersion: .v3))
         #expect(!xml.children.map(\.name).contains("next"))

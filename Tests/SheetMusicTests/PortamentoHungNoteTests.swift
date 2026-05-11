@@ -6,7 +6,7 @@ import Testing
 /// Regression guards for "音が継続" — hung notes after a portamento glissando.
 /// A score that uses portamento followed by several normal chords must
 /// terminate every pitch and reset the pitch wheel before the next chord.
-@Suite struct PortamentoHungNoteTests {
+struct PortamentoHungNoteTests {
     private static func makeScore(chords: [Chord]) -> Score {
         let instrument = Instrument(id: "test", articulations: [InstrumentArticulation()])
         let voice = Voice(elements: chords.map { .chord($0) })
@@ -19,7 +19,7 @@ import Testing
         let chords: [Chord] = [
             Chord(
                 duration: .quarter,
-                notes: [Note(pitch: 60, tpc: 14, glissando: Glissando(style: .portamento))]
+                notes: [Note(pitch: 60, tpc: 14, glissando: Glissando(style: .portamento))],
             ),
             Chord(duration: .quarter, notes: [Note(pitch: 67, tpc: 15)]),
             Chord(duration: .half, notes: [Note(pitch: 70, tpc: 16)]),
@@ -70,8 +70,8 @@ import Testing
                 notes: [Note(
                     pitch: 68, tpc: 22,
                     tieBack: 1,
-                    glissando: Glissando(style: .portamento)
-                )]
+                    glissando: Glissando(style: .portamento),
+                )],
             ),
             // Glissando target.
             Chord(duration: .half, notes: [Note(pitch: 71, tpc: 19)]),
@@ -94,7 +94,7 @@ import Testing
         // Pitch 68 must have exactly as many offs as ons (no hung note).
         #expect(
             pitch68Ons.count == pitch68Offs.count,
-            "pitch 68 ons=\(pitch68Ons.count) offs=\(pitch68Offs.count) — hung note"
+            "pitch 68 ons=\(pitch68Ons.count) offs=\(pitch68Offs.count) — hung note",
         )
         // Pitch 68's last off must land at or before the portamento source's
         // chord ends (predecessor.tick=0 + .quarter*2 + .eighth = 1200 ticks).
@@ -121,8 +121,8 @@ import Testing
                 notes: [Note(
                     pitch: 64, tpc: 18,
                     tieBack: 1,
-                    glissando: Glissando(style: .portamento)
-                )]
+                    glissando: Glissando(style: .portamento),
+                )],
             ),
             Chord(duration: .half, notes: [Note(pitch: 68, tpc: 22)]),
             Chord(duration: .quarter, notes: [Note(pitch: 64, tpc: 18)]),
@@ -136,7 +136,7 @@ import Testing
         // The very last pitch-bend in the entire track must be a centre reset.
         #expect(
             bends.last?.value == MidiEvent.pitchBendCenter,
-            "last bend was \(bends.last?.value ?? -1), should be centre"
+            "last bend was \(bends.last?.value ?? -1), should be centre",
         )
         // The peak (highest absolute deviation) must occur at a strictly
         // earlier tick than the reset that follows it.
@@ -148,7 +148,7 @@ import Testing
         let resetTick = try #require(firstResetAfterPeak?.tick)
         #expect(
             peakTick < resetTick,
-            "peak@\(peakTick) must precede reset@\(resetTick)"
+            "peak@\(peakTick) must precede reset@\(resetTick)",
         )
     }
 
@@ -156,7 +156,7 @@ import Testing
         let chords: [Chord] = [
             Chord(
                 duration: .quarter,
-                notes: [Note(pitch: 60, tpc: 14, glissando: Glissando(style: .portamento))]
+                notes: [Note(pitch: 60, tpc: 14, glissando: Glissando(style: .portamento))],
             ),
             Chord(duration: .quarter, notes: [Note(pitch: 67, tpc: 15)]),
         ]
@@ -179,7 +179,7 @@ import Testing
             .last
         #expect(
             lastBendValue == MidiEvent.pitchBendCenter,
-            "wheel was \(lastBendValue ?? -1) at next chord's tick \(nextChordTick) — should be 8192"
+            "wheel was \(lastBendValue ?? -1) at next chord's tick \(nextChordTick) — should be 8192",
         )
     }
 }

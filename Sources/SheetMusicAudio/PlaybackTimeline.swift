@@ -172,7 +172,7 @@ extension PlaybackTimeline {
         var measureStarts = [Int](repeating: 0, count: measureCount)
         var measureTimeSigs = [TimeSignature](
             repeating: TimeSignature(numerator: 4, denominator: 4),
-            count: measureCount
+            count: measureCount,
         )
         var spineTick = 0
         var currentTimeSig = TimeSignature(numerator: 4, denominator: 4)
@@ -240,14 +240,15 @@ extension PlaybackTimeline {
                             tick += delta.ticks(division: division)
                         case let .chord(chord) where !chord.notes.isEmpty:
                             let chordDur = chord.duration.ticks(
-                                division: division)
+                                division: division,
+                            )
                             for noteIdx in chord.notes.indices {
                                 let nid = NoteID(
                                     staff: entry.address,
                                     measureIndex: measureIdx,
                                     voiceIndex: voiceIdx,
                                     elementIndex: elemIdx,
-                                    noteIndexInChord: noteIdx
+                                    noteIndexInChord: noteIdx,
                                 )
                                 itemTicks[.note(nid)] = tick
                                 itemEndTicks[.note(nid)] = tick + chordDur
@@ -257,12 +258,12 @@ extension PlaybackTimeline {
                                 measureIndex: measureIdx,
                                 voiceIndex: voiceIdx,
                                 elementIndex: elemIdx,
-                                noteIndexInChord: 0
+                                noteIndexInChord: 0,
                             )
                             pending.append(.init(
                                 tick: tick,
                                 sortKey: (staffIdx, voiceIdx),
-                                cursor: .item(.note(id))
+                                cursor: .item(.note(id)),
                             ))
                             tick += chordDur
                         case let .chord(rest):
@@ -271,7 +272,7 @@ extension PlaybackTimeline {
                                 staff: entry.address,
                                 measureIndex: measureIdx,
                                 voiceIndex: voiceIdx,
-                                elementIndex: elemIdx
+                                elementIndex: elemIdx,
                             )
                             itemTicks[.rest(id)] = tick
                             itemEndTicks[.rest(id)] = tick
@@ -292,20 +293,22 @@ extension PlaybackTimeline {
                             // entry for that tick), both of which sit
                             // on the correct rhythmic column.
                             let restTicks = rest.duration.ticks(
-                                division: division)
+                                division: division,
+                            )
                             let isWholeNoteRest =
                                 restTicks >= 4 * division
                             if !isWholeNoteRest {
                                 pending.append(.init(
                                     tick: tick,
                                     sortKey: (staffIdx, voiceIdx),
-                                    cursor: .item(.rest(id))
+                                    cursor: .item(.rest(id)),
                                 ))
                             }
                             tick += restTicks
                         case let .tempo(t):
                             tempoEvents.append(
-                                (tick, t.microsecondsPerQuarter))
+                                (tick, t.microsecondsPerQuarter),
+                            )
                         default:
                             break
                         }
@@ -340,8 +343,8 @@ extension PlaybackTimeline {
                     sortKey: (Int.max, Int.max),
                     cursor: .beat(
                         measureIndex: mi,
-                        tickInMeasure: i * step
-                    )
+                        tickInMeasure: i * step,
+                    ),
                 ))
                 occupied.insert(beatTick)
             }
@@ -374,7 +377,7 @@ extension PlaybackTimeline {
                 let dt = te.tick - lastTick
                 if dt > 0 {
                     currentTime += secondsForTicks(
-                        dt, mpq: currentMpq, division: division
+                        dt, mpq: currentMpq, division: division,
                     )
                 }
                 currentMpq = te.mpq
@@ -384,7 +387,7 @@ extension PlaybackTimeline {
             let dt = targetTick - lastTick
             if dt > 0 {
                 currentTime += secondsForTicks(
-                    dt, mpq: currentMpq, division: division
+                    dt, mpq: currentMpq, division: division,
                 )
             }
             lastTick = targetTick
@@ -396,7 +399,7 @@ extension PlaybackTimeline {
                 frames.append(Frame(
                     tick: entry.tick,
                     timeSeconds: currentTime,
-                    cursor: entry.cursor
+                    cursor: entry.cursor,
                 ))
                 lastEmittedTick = entry.tick
             }
@@ -414,7 +417,7 @@ extension PlaybackTimeline {
 }
 
 private func secondsForTicks(
-    _ ticks: Int, mpq: Int, division: Int
+    _ ticks: Int, mpq: Int, division: Int,
 ) -> TimeInterval {
     TimeInterval(ticks) * TimeInterval(mpq)
         / TimeInterval(division) / 1_000_000

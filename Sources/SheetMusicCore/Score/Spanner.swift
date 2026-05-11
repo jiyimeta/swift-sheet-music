@@ -43,7 +43,7 @@ public struct Spanner: Sendable, Equatable {
         voltaEndings: [Int] = [],
         visible: Bool = true,
         hairpin: HairpinPayload? = nil,
-        ottava: OttavaPayload? = nil
+        ottava: OttavaPayload? = nil,
     ) {
         self.kind = kind
         self.rawType = rawType
@@ -84,7 +84,7 @@ public struct Spanner: Sendable, Equatable {
         public init(
             subtype: Subtype,
             veloChange: Int? = nil,
-            veloChangeMethod: VeloChangeMethod = .normal
+            veloChangeMethod: VeloChangeMethod = .normal,
         ) {
             self.subtype = subtype
             self.veloChange = veloChange

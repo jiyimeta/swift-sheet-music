@@ -11,7 +11,9 @@ public struct MultiMeasureRestPlan: Sendable, Equatable {
     /// `LayoutEngine`.
     public let runs: [Range<Int>]
 
-    public init(runs: [Range<Int>] = []) { self.runs = runs }
+    public init(runs: [Range<Int>] = []) {
+        self.runs = runs
+    }
 
     /// `runs` entry containing `measureIndex`, or nil when the
     /// measure renders individually.
@@ -46,7 +48,7 @@ public struct MultiMeasureRestPlan: Sendable, Equatable {
 public enum MultiMeasureRestPlanner {
     public static func plan(
         for score: Score,
-        policy: MultiMeasureRestPolicy
+        policy: MultiMeasureRestPolicy,
     ) -> MultiMeasureRestPlan {
         guard case let .collapse(rawMin) = policy else {
             return MultiMeasureRestPlan()
@@ -60,7 +62,7 @@ public enum MultiMeasureRestPlanner {
         // Per-measure open-spanner depth at the *start* of measure i.
         // Built first because per-measure collapsibility consults it.
         let openDepth = openSpannerDepth(
-            staves: staves, measureCount: measureCount
+            staves: staves, measureCount: measureCount,
         )
 
         var runs: [Range<Int>] = []
@@ -69,7 +71,7 @@ public enum MultiMeasureRestPlanner {
             let collapsible = isCollapsible(
                 measureIndex: i,
                 staves: staves,
-                openDepthAtStart: openDepth[i]
+                openDepthAtStart: openDepth[i],
             )
             if collapsible, runStart == nil {
                 runStart = i
@@ -78,19 +80,19 @@ public enum MultiMeasureRestPlanner {
             // the run *after* `i`. Determine that after this
             // measure is appended.
             let breaksAfter = anyStaffBreaksAfter(
-                measureIndex: i, staves: staves
+                measureIndex: i, staves: staves,
             )
             if !collapsible {
                 if let s = runStart {
                     appendIfMeetsMinimum(
-                        s ..< i, into: &runs, minimum: minimum
+                        s ..< i, into: &runs, minimum: minimum,
                     )
                     runStart = nil
                 }
             } else if breaksAfter {
                 if let s = runStart {
                     appendIfMeetsMinimum(
-                        s ..< (i + 1), into: &runs, minimum: minimum
+                        s ..< (i + 1), into: &runs, minimum: minimum,
                     )
                     runStart = nil
                 }
@@ -98,7 +100,7 @@ public enum MultiMeasureRestPlanner {
         }
         if let s = runStart {
             appendIfMeetsMinimum(
-                s ..< measureCount, into: &runs, minimum: minimum
+                s ..< measureCount, into: &runs, minimum: minimum,
             )
         }
         return MultiMeasureRestPlan(runs: runs)
@@ -114,7 +116,7 @@ public enum MultiMeasureRestPlanner {
     private static func isCollapsible(
         measureIndex i: Int,
         staves: [Staff],
-        openDepthAtStart: Int
+        openDepthAtStart: Int,
     ) -> Bool {
         // Rule 6: any spanner active at the start of `i` blocks
         // collapse. Spanners that *open* in `i` are caught below by
@@ -170,7 +172,7 @@ public enum MultiMeasureRestPlanner {
     /// `"end-repeat">`. The collapsibility predicate must reject
     /// both encodings.
     private static func isStructuralBarLineSubtype(
-        _ subtype: String?
+        _ subtype: String?,
     ) -> Bool {
         switch subtype {
         case "start-repeat", "end-repeat": true
@@ -182,7 +184,7 @@ public enum MultiMeasureRestPlanner {
     /// pageBreak, which closes the current run after this measure
     /// (spec rule 8).
     private static func anyStaffBreaksAfter(
-        measureIndex i: Int, staves: [Staff]
+        measureIndex i: Int, staves: [Staff],
     ) -> Bool {
         for staff in staves {
             guard i < staff.measures.count else { continue }
@@ -195,7 +197,7 @@ public enum MultiMeasureRestPlanner {
     private static func appendIfMeetsMinimum(
         _ range: Range<Int>,
         into runs: inout [Range<Int>],
-        minimum: Int
+        minimum: Int,
     ) {
         if range.count >= minimum { runs.append(range) }
     }
@@ -214,7 +216,7 @@ public enum MultiMeasureRestPlanner {
     /// `openSpannerBlocksCollapse`: `nextMeasuresOffset: 4` at m0
     /// blocks m0..m3 and clears at m4.
     private static func openSpannerDepth(
-        staves: [Staff], measureCount: Int
+        staves: [Staff], measureCount: Int,
     ) -> [Int] {
         var delta = Array(repeating: 0, count: measureCount + 1)
         for staff in staves {

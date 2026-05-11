@@ -19,7 +19,7 @@ struct MSCXEncoderTupletTests {
             ],
             tuplets: [
                 Tuplet(normalNotes: 2, actualNotes: 3, startIndex: 0, endIndex: 2),
-            ]
+            ],
         )
 
         let xml = try voice.encode()
@@ -45,7 +45,7 @@ struct MSCXEncoderTupletTests {
             tuplets: [
                 Tuplet(normalNotes: 2, actualNotes: 3, startIndex: 0, endIndex: 2),
                 Tuplet(normalNotes: 2, actualNotes: 3, startIndex: 0, endIndex: 2),
-            ]
+            ],
         )
         let xml = try voice.encode()
         let bytes = XMLTreeSerializer.serialize(XMLTreeNode(name: "root", children: [xml]))
@@ -74,7 +74,7 @@ struct MSCXEncoderTupletTests {
             tuplets: [
                 Tuplet(normalNotes: 2, actualNotes: 3, startIndex: 1, endIndex: 2),
                 Tuplet(normalNotes: 2, actualNotes: 3, startIndex: 0, endIndex: 3),
-            ]
+            ],
         )
         let xml = try voice.encode()
         let bytes = XMLTreeSerializer.serialize(XMLTreeNode(name: "root", children: [xml]))
@@ -91,13 +91,13 @@ struct MSCXEncoderTupletTests {
             elements: (0 ..< 4).map { i in
                 .chord(Chord(
                     duration: scaled,
-                    notes: ChordNotes([Note(pitch: 60 + i, tpc: 14)])
+                    notes: ChordNotes([Note(pitch: 60 + i, tpc: 14)]),
                 ))
             },
             tuplets: [
                 Tuplet(normalNotes: 2, actualNotes: 3, startIndex: 0, endIndex: 2),
                 Tuplet(normalNotes: 2, actualNotes: 3, startIndex: 1, endIndex: 3),
-            ]
+            ],
         )
         #expect(throws: SheetMusicError.self) {
             try voice.encode()
@@ -121,7 +121,7 @@ struct MSCXEncoderTupletTests {
             ],
             tuplets: [
                 Tuplet(normalNotes: 2, actualNotes: 3, startIndex: 0, endIndex: 2),
-            ]
+            ],
         )
         let xml = try voice.encode()
         let tuplet = try #require(xml.first("Tuplet"))

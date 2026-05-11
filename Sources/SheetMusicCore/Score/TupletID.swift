@@ -20,7 +20,7 @@ public struct TupletID: Hashable, Sendable {
         staff: StaffAddress,
         measureIndex: Int,
         voiceIndex: Int,
-        startElementIndex: Int
+        startElementIndex: Int,
     ) {
         self.staff = staff
         self.measureIndex = measureIndex

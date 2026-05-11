@@ -53,7 +53,7 @@ public final class PlaybackEngine: ObservableObject {
     /// having to consult the `Score` again.
     private var staffLoadParams: [Int: StaffLoadParams] = [:]
 
-    struct StaffLoadParams: Sendable {
+    struct StaffLoadParams {
         var bankLSB: UInt8
         var isDrums: Bool
     }
@@ -62,7 +62,7 @@ public final class PlaybackEngine: ObservableObject {
     /// torn down or a new score is prepared.
     private let previewQueue = DispatchQueue(
         label: "swift-sheet-music.playback.preview",
-        qos: .userInteractive
+        qos: .userInteractive,
     )
 
     /// Sequencer used for full-score playback. Lazily built the
@@ -150,7 +150,7 @@ public final class PlaybackEngine: ObservableObject {
     }
 
     func mutateMixerChannel(
-        at idx: Int, _ change: (inout MixerChannel) -> Void
+        at idx: Int, _ change: (inout MixerChannel) -> Void,
     ) {
         change(&mixerChannels[idx])
     }
@@ -165,7 +165,7 @@ public final class PlaybackEngine: ObservableObject {
             let sampler = staffSamplers[idx],
             let params = staffLoadParams[idx],
             let url = resolver.soundfontURL(
-                forBank: params.bankLSB, program: program, isDrums: params.isDrums
+                forBank: params.bankLSB, program: program, isDrums: params.isDrums,
             )
             ?? resolver.defaultGMSoundfontURL
         else { return }
@@ -176,7 +176,7 @@ public final class PlaybackEngine: ObservableObject {
             at: url,
             program: program,
             bankMSB: bankMSB,
-            bankLSB: params.bankLSB
+            bankLSB: params.bankLSB,
         )
     }
 
@@ -234,7 +234,7 @@ public final class PlaybackEngine: ObservableObject {
             let program = UInt8(clamping: channel.program)
 
             let url = resolver.soundfontURL(
-                forBank: bank, program: program, isDrums: isDrums
+                forBank: bank, program: program, isDrums: isDrums,
             )
                 ?? resolver.defaultGMSoundfontURL
 
@@ -243,7 +243,7 @@ public final class PlaybackEngine: ObservableObject {
             engine.connect(
                 sampler,
                 to: engine.mainMixerNode,
-                format: nil
+                format: nil,
             )
             if let url {
                 // `AVAudioUnitSampler` resolves a preset via
@@ -261,7 +261,7 @@ public final class PlaybackEngine: ObservableObject {
                         at: url,
                         program: program,
                         bankMSB: bankMSB,
-                        bankLSB: bankLSB
+                        bankLSB: bankLSB,
                     )
                 } catch {
                     // Don't fail the whole `prepare` if one staff's
@@ -272,7 +272,7 @@ public final class PlaybackEngine: ObservableObject {
             }
             staffSamplers[idx] = sampler
             staffLoadParams[idx] = StaffLoadParams(
-                bankLSB: bank, isDrums: isDrums
+                bankLSB: bank, isDrums: isDrums,
             )
         }
 
@@ -293,7 +293,7 @@ public final class PlaybackEngine: ObservableObject {
         noteID: NoteID,
         in score: Score,
         duration: TimeInterval = 0.3,
-        velocity: UInt8 = 96
+        velocity: UInt8 = 96,
     ) {
         guard let pitch = pitch(for: noteID, in: score) else { return }
         let flatIdx = score.allStaves.firstIndex(where: {
@@ -302,10 +302,10 @@ public final class PlaybackEngine: ObservableObject {
         guard let sampler = staffSamplers[flatIdx]
         else { return }
         sampler.startNote(
-            pitch, withVelocity: velocity, onChannel: 0
+            pitch, withVelocity: velocity, onChannel: 0,
         )
         previewQueue.asyncAfter(
-            deadline: .now() + duration
+            deadline: .now() + duration,
         ) { [weak sampler] in
             sampler?.stopNote(pitch, onChannel: 0)
         }
@@ -315,7 +315,7 @@ public final class PlaybackEngine: ObservableObject {
     /// `nil` if the score's structure has changed since the ID was
     /// created (out-of-range index, no longer a chord, etc.).
     private func pitch(
-        for noteID: NoteID, in score: Score
+        for noteID: NoteID, in score: Score,
     ) -> UInt8? {
         guard let staff = score[noteID.staff] else { return nil }
         guard noteID.measureIndex < staff.measures.count else {
@@ -372,8 +372,10 @@ public final class PlaybackEngine: ObservableObject {
             }
             if let loop = loopRange {
                 let probeTick = targetTick ?? Int(
-                    (sequencer.currentPositionInBeats
-                        * Double(timeline.division)).rounded()
+                    (
+                        sequencer.currentPositionInBeats
+                            * Double(timeline.division)
+                    ).rounded(),
                 )
                 if probeTick < loop.startTick
                     || probeTick >= loop.endTick
@@ -443,7 +445,7 @@ public final class PlaybackEngine: ObservableObject {
     /// user expects the last selected note to ring before the loop
     /// wraps, which `setLoop(from:to:)` cuts short.
     public func setLoop(
-        from start: ScoreCursor, throughEndOf last: ScoreItemID
+        from start: ScoreCursor, throughEndOf last: ScoreItemID,
     ) {
         guard let timeline,
               let s = timeline.frame(forCursor: start),
@@ -496,7 +498,7 @@ public final class PlaybackEngine: ObservableObject {
         for track in sequencer.tracks {
             track.lengthInBeats = endBeats
             track.loopRange = AVBeatRange(
-                start: startBeats, length: length
+                start: startBeats, length: length,
             )
             track.isLoopingEnabled = true
         }
@@ -521,7 +523,7 @@ public final class PlaybackEngine: ObservableObject {
         guard let timeline, let sequencer else { return 0 }
         let tick = Int(
             (sequencer.currentPositionInBeats * Double(timeline.division))
-                .rounded()
+                .rounded(),
         )
         return timeline.frame(atTick: tick)?.timeSeconds ?? 0
     }
@@ -619,7 +621,7 @@ public final class PlaybackEngine: ObservableObject {
         // pipeline injects them.
         var midi = try MidiRenderer.render(score: score)
         midi.tracks.append(metronome.metronomeTrack(
-            beats: metronomeBeats, division: midi.division
+            beats: metronomeBeats, division: midi.division,
         ))
         let bytes = try MidiWriter.write(midi)
         try sequencer.load(from: bytes, options: [])
@@ -648,7 +650,7 @@ public final class PlaybackEngine: ObservableObject {
         stopCursorTimer()
         let timer = Timer(
             timeInterval: 1.0 / 30.0,
-            repeats: true
+            repeats: true,
         ) { [weak self] _ in
             Task { @MainActor in
                 self?.tickCursor()

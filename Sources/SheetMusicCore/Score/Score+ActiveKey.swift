@@ -37,7 +37,7 @@ extension Score {
     public func activeKey(at noteID: NoteID) -> Int {
         activeKey(
             staff: noteID.staff,
-            measureIndex: noteID.measureIndex
+            measureIndex: noteID.measureIndex,
         )
     }
 }

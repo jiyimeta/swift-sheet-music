@@ -52,7 +52,7 @@ public struct Swing: Sendable, Equatable {
         offsetY: Double = 0,
         color: ScoreColor? = nil,
         properties: TextProperties = TextProperties(),
-        visible: Bool = true
+        visible: Bool = true,
     ) {
         self.text = text
         self.unit = unit

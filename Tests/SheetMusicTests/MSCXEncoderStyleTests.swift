@@ -19,7 +19,7 @@ struct MSCXEncoderStyleTests {
             evenTopMargin: 21.0 / 25.4,
             evenBottomMargin: 21.0 / 25.4,
             evenLeftMargin: 16.0 / 25.4,
-            twosided: false
+            twosided: false,
         )
         let original = Score(division: 480, style: style)
 
@@ -44,7 +44,7 @@ struct MSCXEncoderStyleTests {
             odd: TextRow(left: "L", center: "C", right: "R"),
             fontFace: "Helvetica",
             fontSize: 10,
-            fontStyle: [.bold, .italic]
+            fontStyle: [.bold, .italic],
         )
         style.pageChrome.footer = HeaderFooter(
             enabled: false,
@@ -54,7 +54,7 @@ struct MSCXEncoderStyleTests {
             odd: TextRow(left: "", center: "", right: "$P"),
             fontFace: "Times New Roman",
             fontSize: 8,
-            fontStyle: [.underline]
+            fontStyle: [.underline],
         )
         let original = Score(division: 480, style: style)
 
@@ -73,7 +73,7 @@ struct MSCXEncoderStyleTests {
             showOnFirstPage: true,
             oddEvenDifferent: false,
             fontFace: "Courier",
-            fontSize: 13
+            fontSize: 13,
         )
         let original = Score(division: 480, style: style)
 
@@ -82,14 +82,14 @@ struct MSCXEncoderStyleTests {
 
         #expect(
             reparsed.style.pageChrome.pageNumber
-                == style.pageChrome.pageNumber
+                == style.pageChrome.pageNumber,
         )
     }
 
     @Test("Style round-trips spatium when chrome is at defaults")
     func defaultsRoundTrip() throws {
         let original = Score(
-            division: 480, style: .museScoreDefaults
+            division: 480, style: .museScoreDefaults,
         )
         let bytes = try MSCXEncoder.encode(original)
         let reparsed = try MSCXParser.parse(bytes)

@@ -43,7 +43,9 @@ public struct Fraction: Hashable, Sendable {
 
     private static func gcd(_ a: Int, _ b: Int) -> Int {
         var (a, b) = (a, b)
-        while b != 0 { (a, b) = (b, a % b) }
+        while b != 0 {
+            (a, b) = (b, a % b)
+        }
         return a == 0 ? 1 : a
     }
 }

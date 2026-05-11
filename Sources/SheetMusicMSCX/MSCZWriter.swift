@@ -17,7 +17,7 @@ public enum MSCZWriter {
     /// Package `.mscx` XML bytes into `.mscz` bytes.
     public static func write(
         mscxData: Data,
-        mainFileName: String = "score.mscx"
+        mainFileName: String = "score.mscx",
     ) throws -> Data {
         try validate(mainFileName: mainFileName)
         let archive: Archive
@@ -25,7 +25,7 @@ public enum MSCZWriter {
             archive = try Archive(accessMode: .create)
         } catch {
             throw SheetMusicError.corruptedContainer(
-                reason: "could not create archive: \(error)"
+                reason: "could not create archive: \(error)",
             )
         }
         do {
@@ -33,7 +33,7 @@ public enum MSCZWriter {
                 with: mainFileName,
                 type: .file,
                 uncompressedSize: Int64(mscxData.count),
-                compressionMethod: .deflate
+                compressionMethod: .deflate,
             ) { position, size in
                 let start = Int(position)
                 let end = min(start + size, mscxData.count)
@@ -41,12 +41,12 @@ public enum MSCZWriter {
             }
         } catch {
             throw SheetMusicError.corruptedContainer(
-                reason: "failed to add entry \(mainFileName): \(error)"
+                reason: "failed to add entry \(mainFileName): \(error)",
             )
         }
         guard let bytes = archive.data else {
             throw SheetMusicError.corruptedContainer(
-                reason: "archive produced no bytes"
+                reason: "archive produced no bytes",
             )
         }
         return bytes
@@ -56,7 +56,7 @@ public enum MSCZWriter {
     public static func write(
         mscxData: Data,
         to url: URL,
-        mainFileName: String = "score.mscx"
+        mainFileName: String = "score.mscx",
     ) throws {
         let bytes = try write(mscxData: mscxData, mainFileName: mainFileName)
         do {
@@ -69,7 +69,7 @@ public enum MSCZWriter {
     /// Serialize a `Score` to `.mscx` and package the result as
     /// `.mscz` bytes.
     public static func write(
-        score: Score, mainFileName: String = "score.mscx"
+        score: Score, mainFileName: String = "score.mscx",
     ) throws -> Data {
         let mscxData = try MSCXEncoder.encode(score)
         return try write(mscxData: mscxData, mainFileName: mainFileName)
@@ -78,7 +78,7 @@ public enum MSCZWriter {
     /// Serialize a `Score` to `.mscx` and write the resulting
     /// `.mscz` to a file URL.
     public static func write(
-        score: Score, to url: URL, mainFileName: String = "score.mscx"
+        score: Score, to url: URL, mainFileName: String = "score.mscx",
     ) throws {
         let bytes = try write(score: score, mainFileName: mainFileName)
         do {
@@ -91,7 +91,7 @@ public enum MSCZWriter {
     /// Serialize a `Score` with options and package as `.mscz` bytes.
     public static func write(
         score: Score, options: MSCXEncoderOptions,
-        mainFileName: String = "score.mscx"
+        mainFileName: String = "score.mscx",
     ) throws -> Data {
         let mscxData = try MSCXEncoder.encode(score, options: options)
         return try write(mscxData: mscxData, mainFileName: mainFileName)
@@ -101,10 +101,10 @@ public enum MSCZWriter {
     /// `.mscz` to a file URL.
     public static func write(
         score: Score, options: MSCXEncoderOptions, to url: URL,
-        mainFileName: String = "score.mscx"
+        mainFileName: String = "score.mscx",
     ) throws {
         let bytes = try write(
-            score: score, options: options, mainFileName: mainFileName
+            score: score, options: options, mainFileName: mainFileName,
         )
         do {
             try bytes.write(to: url, options: .atomic)
@@ -116,12 +116,12 @@ public enum MSCZWriter {
     private static func validate(mainFileName: String) throws {
         guard !mainFileName.isEmpty else {
             throw SheetMusicError.corruptedContainer(
-                reason: "mainFileName must not be empty"
+                reason: "mainFileName must not be empty",
             )
         }
         guard !mainFileName.contains("/") else {
             throw SheetMusicError.corruptedContainer(
-                reason: "mainFileName must not contain '/': \(mainFileName)"
+                reason: "mainFileName must not contain '/': \(mainFileName)",
             )
         }
     }

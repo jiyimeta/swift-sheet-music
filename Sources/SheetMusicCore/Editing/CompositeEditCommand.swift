@@ -20,13 +20,15 @@ public struct CompositeEditCommand: EditCommand {
 
     public init(
         commands: [any EditCommand],
-        location: VoiceElementID
+        location: VoiceElementID,
     ) {
         self.commands = commands
         self.location = location
     }
 
-    public var affectedLocation: VoiceElementID { location }
+    public var affectedLocation: VoiceElementID {
+        location
+    }
 
     @discardableResult
     public func apply(to score: inout Score) throws -> any EditCommand {
@@ -49,7 +51,7 @@ public struct CompositeEditCommand: EditCommand {
         // back to where the previous sub-command had left it.
         return CompositeEditCommand(
             commands: inverses.reversed(),
-            location: location
+            location: location,
         )
     }
 }

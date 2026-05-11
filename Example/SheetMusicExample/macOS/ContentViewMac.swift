@@ -22,7 +22,7 @@
     /// single voice within a single measure. Offsets are relative to
     /// the range's top-left corner so paste can drop the same shape at
     /// any anchor point.
-    struct RangeCell: Sendable, Equatable {
+    struct RangeCell: Equatable {
         let staffOffset: Int
         let measureOffset: Int
         let voiceIndex: Int
@@ -34,7 +34,7 @@
     /// of each (staffOffset, voiceIndex) pair into a tick stream and
     /// places it starting at the destination's tick offset, splitting
     /// across measures as needed.
-    struct RangePayload: Sendable, Equatable {
+    struct RangePayload: Equatable {
         let cells: [RangeCell]
         let staffCount: Int
         let measureCount: Int
@@ -61,7 +61,9 @@
             /// tracker can place the popover precisely on the glyph.
             let attachmentRect: CGRect
 
-            var id: ClefAnchor { anchor }
+            var id: ClefAnchor {
+                anchor
+            }
         }
 
         /// Pre-computed layout for the current vertical viewport width.
@@ -82,7 +84,7 @@
         /// the chord at this location. Set by ⌘L on a selected note,
         /// cleared on submit / cancel.
         @State private var lyricEditTarget: VoiceElementID?
-        @State private var lyricEditText: String = ""
+        @State private var lyricEditText = ""
         /// Internal clipboard for ⌘C / ⌘X / ⌘V. Holds whatever
         /// `VoiceElement` was last copied — chord or rest typically.
         /// Not synced with the system pasteboard: the score model isn't
@@ -119,7 +121,8 @@
         /// button label and the playback cursor whenever the engine's
         /// `@Published` `state` / `currentCursor` change.
         @StateObject private var playbackEngine = PlaybackEngine(
-            soundfontResolver: BundledSoundfontResolver())
+            soundfontResolver: BundledSoundfontResolver(),
+        )
         /// Edit-mode controller. Lives across score reloads —
         /// `reset(score:)` is called from `adoptLoadedScore`.
         @State private var inputController: NoteInputController?
@@ -159,16 +162,16 @@
         @State private var isMarqueeMode = false
         @State private var collapseMultiMeasureRests = false
 
-        // systemGap targets MuseScore's `Sid::minSystemDistance` of
-        // 8.5 sp; with our staff-distance pads contributing ~3.5 sp
-        // below the last lyric staff, ~5 sp here (≈ 1.25 × staffSize)
-        // lands the visible system-to-system gap in MuseScore range.
+        /// systemGap targets MuseScore's `Sid::minSystemDistance` of
+        /// 8.5 sp; with our staff-distance pads contributing ~3.5 sp
+        /// below the last lyric staff, ~5 sp here (≈ 1.25 × staffSize)
+        /// lands the visible system-to-system gap in MuseScore range.
         private var verticalOptions: ScoreViewOptions {
             ScoreViewOptions(
                 staffSize: 18, systemGap: 22, wrapToViewWidth: true,
                 multiMeasureRest: collapseMultiMeasureRests
                     ? .collapse(minimumMeasures: 2)
-                    : .disabled
+                    : .disabled,
             )
         }
 
@@ -178,7 +181,7 @@
                 includeTitleFrame: false,
                 multiMeasureRest: collapseMultiMeasureRests
                     ? .collapse(minimumMeasures: 2)
-                    : .disabled
+                    : .disabled,
             )
         }
 
@@ -202,14 +205,14 @@
                     onExportPDF: exportPDF,
                     onExportMSCX: exportMSCX,
                     onExportMSCXv3: exportMSCXv3,
-                    onExportMSCZv3: exportMSCZv3
+                    onExportMSCZv3: exportMSCZv3,
                 )
             } detail: {
                 if let score {
                     scoreContent(score: score)
                         .popover(item: $clefPopover, arrowEdge: .top) { state in
                             ClefPopover(
-                                current: ClefChoice.from(rawType: state.currentRawType)
+                                current: ClefChoice.from(rawType: state.currentRawType),
                             ) { choice in
                                 applyClefChoice(choice, for: state.anchor)
                             }
@@ -219,7 +222,8 @@
                         "No score loaded",
                         systemImage: "music.note.list",
                         description: Text(
-                            "Load the bundled test.mscx from the sidebar.")
+                            "Load the bundled test.mscx from the sidebar.",
+                        ),
                     )
                 }
             }
@@ -233,7 +237,7 @@
                 ToolbarItem(placement: .navigation) {
                     Label(
                         score?.source.displayName ?? "No Score",
-                        systemImage: "doc.badge.gearshape"
+                        systemImage: "doc.badge.gearshape",
                     )
                     .labelStyle(.titleAndIcon)
                     .foregroundStyle(.secondary)
@@ -246,7 +250,7 @@
                         let on = inputController?.isInputModeOn ?? false
                         Label(
                             on ? "Input Mode (on)" : "Input Mode",
-                            systemImage: on ? "pencil.tip.crop.circle.fill" : "pencil.tip"
+                            systemImage: on ? "pencil.tip.crop.circle.fill" : "pencil.tip",
                         )
                         .symbolRenderingMode(.hierarchical)
                         .foregroundStyle(on ? Color.accentColor : .primary)
@@ -258,27 +262,27 @@
                     accidentalButton(
                         .doubleFlat,
                         glyph: "𝄫",
-                        help: "Double flat (𝄫) on the selected note"
+                        help: "Double flat (𝄫) on the selected note",
                     )
                     accidentalButton(
                         .flat,
                         glyph: "♭",
-                        help: "Flat (♭) on the selected note"
+                        help: "Flat (♭) on the selected note",
                     )
                     accidentalButton(
                         .natural,
                         glyph: "♮",
-                        help: "Natural (♮) on the selected note"
+                        help: "Natural (♮) on the selected note",
                     )
                     accidentalButton(
                         .sharp,
                         glyph: "♯",
-                        help: "Sharp (♯) on the selected note"
+                        help: "Sharp (♯) on the selected note",
                     )
                     accidentalButton(
                         .doubleSharp,
                         glyph: "𝄪",
-                        help: "Double sharp (𝄪) on the selected note"
+                        help: "Double sharp (𝄪) on the selected note",
                     )
                     Button {
                         if case let .single(.note(id)) = selection {
@@ -287,13 +291,15 @@
                     } label: {
                         Label(
                             "No Accidental",
-                            systemImage: "minus.circle"
+                            systemImage: "minus.circle",
                         )
                     }
                     .disabled(!isAccidentalActionable)
-                    .help("Clear the explicit accidental glyph; the "
-                        + "note reverts to whatever the key signature "
-                        + "implies.")
+                    .help(
+                        "Clear the explicit accidental glyph; the "
+                            + "note reverts to whatever the key signature "
+                            + "implies.",
+                    )
                 }
             }
         }
@@ -323,7 +329,8 @@
                     score: score,
                     to: url,
                     options: PDFExporter.Options(
-                        title: (sourceName as NSString).deletingPathExtension)
+                        title: (sourceName as NSString).deletingPathExtension,
+                    ),
                 )
                 // Reveal the resulting file so the user can inspect it
                 // without hunting through Finder.
@@ -356,7 +363,7 @@
                 try SheetMusic.exportMSCX(
                     score,
                     options: MSCXEncoderOptions(targetVersion: targetVersion),
-                    to: url
+                    to: url,
                 )
                 NSWorkspace.shared.activateFileViewerSelecting([url])
             } catch {
@@ -379,7 +386,7 @@
                 try SheetMusic.exportMSCZ(
                     score,
                     options: MSCXEncoderOptions(targetVersion: .v3),
-                    to: url
+                    to: url,
                 )
                 NSWorkspace.shared.activateFileViewerSelecting([url])
             } catch {
@@ -390,7 +397,7 @@
         private func togglePlayback() {
             guard let score else { return }
             playbackEngine.togglePlayback(
-                score: score, selection: selection
+                score: score, selection: selection,
             )
         }
 
@@ -408,7 +415,7 @@
             let first = playbackEngine.earliest(of: [a, b]) ?? a
             let last = (first == a) ? b : a
             playbackEngine.setLoop(
-                from: .item(first), throughEndOf: last
+                from: .item(first), throughEndOf: last,
             )
             playbackEngine.seek(to: .item(first))
         }
@@ -419,7 +426,7 @@
             // physical-key code). Skip auto-repeat so a held space
             // doesn't toggle dozens of times per second.
             keyMonitor = NSEvent.addLocalMonitorForEvents(
-                matching: .keyDown
+                matching: .keyDown,
             ) { event in
                 // Space (keyCode 49). Inside the lyric editor it
                 // advances to the next chord's syllable; otherwise it
@@ -447,7 +454,7 @@
                 if !event.isARepeat,
                    event.modifierFlags
                        .intersection(
-                           [.command, .control, .option, .shift]
+                           [.command, .control, .option, .shift],
                        ).isEmpty,
                        let chars = event.charactersIgnoringModifiers,
                        chars.first?.lowercased() == "l",
@@ -472,7 +479,7 @@
                     if let controller = inputController {
                         handleEditorUndoRedo(
                             controller: controller,
-                            redo: event.modifierFlags.contains(.shift)
+                            redo: event.modifierFlags.contains(.shift),
                         )
                         return nil
                     }
@@ -524,7 +531,7 @@
                 {
                     if applyCreateTuplet(
                         actualNotes: ratio.actual,
-                        normalNotes: ratio.normal
+                        normalNotes: ratio.normal,
                     ) {
                         return nil
                     }
@@ -541,7 +548,7 @@
         /// Map a digit to the (actual:normal) ratio of the tuplet it
         /// triggers. nil for digits that don't carry a default tuplet.
         private static func tupletRatio(
-            forCharacter char: Character?
+            forCharacter char: Character?,
         ) -> (actual: Int, normal: Int)? {
             switch char {
             case "3": return (3, 2) // triplet
@@ -555,7 +562,7 @@
 
         private func handleEditorUndoRedo(
             controller: NoteInputController,
-            redo: Bool
+            redo: Bool,
         ) {
             do {
                 if redo {
@@ -609,7 +616,7 @@
                 magnification: magnification,
                 horizontalScrollX: horizontalScrollX,
                 horizontalScrollY: horizontalScrollY,
-                pendingScroll: $pendingHorizontalScroll
+                pendingScroll: $pendingHorizontalScroll,
             )
         }
 
@@ -627,7 +634,7 @@
         /// reachable).
         private func handleInputModeKey(
             _ event: NSEvent,
-            controller: NoteInputController
+            controller: NoteInputController,
         ) -> Bool {
             // We only filter out the "real" modifier keys (cmd / ctrl /
             // option / shift). Arrow keys themselves carry `.function`
@@ -651,7 +658,7 @@
                 case let .single(.note(noteID)) = selection
             {
                 removeNoteFromChord(
-                    noteID: noteID, controller: controller
+                    noteID: noteID, controller: controller,
                 )
                 return true
             }
@@ -677,14 +684,14 @@
                 let delta = event.keyCode == 126 ? 1 : -1
                 if case let .single(.note(noteID)) = selection {
                     shiftSelectedNote(
-                        noteID: noteID, by: delta, controller: controller
+                        noteID: noteID, by: delta, controller: controller,
                     )
                 } else if !event.isARepeat {
                     // Octave shift only fires on the initial press —
                     // holding the key shouldn't crank the octave through
                     // the whole keyboard.
                     controller.inputOctave = max(
-                        0, min(8, controller.inputOctave + delta)
+                        0, min(8, controller.inputOctave + delta),
                     )
                     errorMessage = "Input octave: \(controller.inputOctave)"
                 }
@@ -700,7 +707,7 @@
                    case let .single(.note(noteID)) = selection
             {
                 toggleTieForward(
-                    noteID: noteID, controller: controller
+                    noteID: noteID, controller: controller,
                 )
                 return true
             }
@@ -713,19 +720,20 @@
             if event.modifierFlags
                 .intersection([.command, .control, .option]).isEmpty,
                 let duration = NoteInputKeyMap.duration(
-                    forCharacter: event.characters ?? "")
+                    forCharacter: event.characters ?? "",
+                )
             {
                 switch selection {
                 case let .single(.note(noteID)):
                     setSelectedChordDuration(
                         noteID: noteID, duration: duration,
-                        controller: controller
+                        controller: controller,
                     )
                     return true
                 case let .single(.rest(restID)):
                     setSelectedRestDuration(
                         restID: restID, duration: duration,
-                        controller: controller
+                        controller: controller,
                     )
                     return true
                 default:
@@ -739,7 +747,7 @@
             }
             guard let mapped = NoteInputKeyMap.pitch(
                 forLetter: letter,
-                octave: controller.inputOctave
+                octave: controller.inputOctave,
             )
             else {
                 // Letter unrelated to note entry — let other shortcuts /
@@ -757,7 +765,7 @@
             {
                 addNoteToChord(
                     noteID: noteID, mapped: mapped,
-                    controller: controller
+                    controller: controller,
                 )
                 return true
             }
@@ -773,9 +781,9 @@
                     InputNote(
                         at: restID,
                         pitch: mapped.pitch,
-                        tpc: mapped.tpc
+                        tpc: mapped.tpc,
                     ),
-                    undoManager: undoManager
+                    undoManager: undoManager,
                 )
                 // After successful insertion the rest is gone — select
                 // the freshly-inserted note so the user sees what they
@@ -785,20 +793,21 @@
                     measureIndex: restID.measureIndex,
                     voiceIndex: restID.voiceIndex,
                     elementIndex: restID.elementIndex,
-                    noteIndexInChord: 0
+                    noteIndexInChord: 0,
                 )
                 selection = .single(.note(noteID))
                 adoptEditedScore(controller.score)
                 // Match the click-on-note feedback path: brief preview
                 // of the just-inserted pitch via the playback engine.
                 playbackEngine.playPreview(
-                    noteID: noteID, in: controller.score
+                    noteID: noteID, in: controller.score,
                 )
                 // Pull the affected measure into view if it isn't
                 // already (handles fast typing past the visible window
                 // and edits on offscreen rests).
                 scrollToAffectedMeasure(
-                    measureIndex: restID.measureIndex)
+                    measureIndex: restID.measureIndex,
+                )
                 errorMessage = "Inserted \(String(letter).uppercased())\(controller.inputOctave) (MIDI \(mapped.pitch)). Click another rest to keep typing."
             } catch {
                 errorMessage = error.localizedDescription
@@ -812,7 +821,7 @@
         /// stem X / lyric-line Y, so it scrolls + magnifies along with
         /// the staff. Mirrors MuseScore's inline lyric input.
         private func inlineLyricEditorOverlay(
-            document: LayoutDocument
+            document: LayoutDocument,
         ) -> AnyView? {
             guard let target = lyricEditTarget,
                   let stemOrigin = document.chordStemOrigin(at: target),
@@ -844,7 +853,7 @@
                     .focused($lyricEditFocused)
                     .onSubmit { submitLyricEdit() }
                     .onExitCommand { closeLyricEditor() }
-                    .position(x: stemOrigin.x, y: lyricY)
+                    .position(x: stemOrigin.x, y: lyricY),
             )
         }
 
@@ -885,7 +894,7 @@
             do {
                 try controller.apply(
                     SetLyrics(at: target, lyrics: newLyrics),
-                    undoManager: undoManager
+                    undoManager: undoManager,
                 )
                 adoptEditedScore(controller.score)
                 errorMessage = lyricEditText.isEmpty
@@ -933,7 +942,7 @@
                     measureIndex: next.measureIndex,
                     voiceIndex: next.voiceIndex,
                     elementIndex: next.elementIndex,
-                    noteIndexInChord: 0
+                    noteIndexInChord: 0,
                 )))
                 _ = firstNote
             }
@@ -954,17 +963,17 @@
         private func addNoteToChord(
             noteID: NoteID,
             mapped: (pitch: Int, tpc: Int),
-            controller: NoteInputController
+            controller: NoteInputController,
         ) {
             let chordID = VoiceElementID(noteID)
             let activeKey = controller.score.activeKey(at: noteID)
             let accidental: Accidental? = isDrumStaff(
                 noteID: noteID,
-                controller: controller
+                controller: controller,
             )
                 ? nil
                 : PitchSpelling.displayedAccidental(
-                    forTpc: mapped.tpc, in: activeKey
+                    forTpc: mapped.tpc, in: activeKey,
                 )
             // Capture the chord's prior note count so we can address
             // the freshly-appended note after the apply.
@@ -980,9 +989,9 @@
                         at: chordID,
                         pitch: mapped.pitch,
                         tpc: mapped.tpc,
-                        accidental: accidental
+                        accidental: accidental,
                     ),
-                    undoManager: undoManager
+                    undoManager: undoManager,
                 )
                 adoptEditedScore(controller.score)
                 // Move selection to the freshly-added note (it sits at
@@ -994,11 +1003,11 @@
                     measureIndex: noteID.measureIndex,
                     voiceIndex: noteID.voiceIndex,
                     elementIndex: noteID.elementIndex,
-                    noteIndexInChord: priorNoteCount
+                    noteIndexInChord: priorNoteCount,
                 )
                 selection = .single(.note(newNoteID))
                 playbackEngine.playPreview(
-                    noteID: newNoteID, in: controller.score
+                    noteID: newNoteID, in: controller.score,
                 )
                 errorMessage = "Added \(mapped.pitch) to chord"
             } catch {
@@ -1008,7 +1017,7 @@
 
         private func isDrumStaff(
             noteID: NoteID,
-            controller: NoteInputController
+            controller: NoteInputController,
         ) -> Bool {
             controller.score.part(at: noteID.staff)?
                 .instrument.useDrumset ?? false
@@ -1023,13 +1032,13 @@
         private func setSelectedChordDuration(
             noteID: NoteID,
             duration: NoteDuration,
-            controller: NoteInputController
+            controller: NoteInputController,
         ) {
             let chordID = VoiceElementID(noteID)
             do {
                 try controller.apply(
                     SetChordDuration(at: chordID, duration: duration),
-                    undoManager: undoManager
+                    undoManager: undoManager,
                 )
                 adoptEditedScore(controller.score)
                 errorMessage = "Duration changed"
@@ -1044,13 +1053,13 @@
         private func setSelectedRestDuration(
             restID: RestID,
             duration: NoteDuration,
-            controller: NoteInputController
+            controller: NoteInputController,
         ) {
             let veID = VoiceElementID(restID)
             do {
                 try controller.apply(
                     SetRestDuration(at: veID, duration: duration),
-                    undoManager: undoManager
+                    undoManager: undoManager,
                 )
                 adoptEditedScore(controller.score)
                 errorMessage = "Duration changed"
@@ -1066,7 +1075,7 @@
         /// one is.
         private func toggleTieForward(
             noteID: NoteID,
-            controller: NoteInputController
+            controller: NoteInputController,
         ) {
             guard let source = controller.score[noteID] else {
                 errorMessage = "Selected note not found in score"
@@ -1083,7 +1092,7 @@
             let cmd = SetTie(
                 from: noteID, to: target,
                 sourceTieForward: alreadyTied ? nil : 1,
-                targetTieBack: alreadyTied ? nil : 1
+                targetTieBack: alreadyTied ? nil : 1,
             )
             do {
                 try controller.apply(cmd, undoManager: undoManager)
@@ -1113,7 +1122,7 @@
             case let .range(anchor, target):
                 guard let payload = collectRangePayload(
                     anchor: anchor, target: target,
-                    score: controller.score
+                    score: controller.score,
                 )
                 else {
                     errorMessage = "Range copy: nothing to copy."
@@ -1141,17 +1150,17 @@
         /// surprise the user). Returns `nil` if the range references
         /// elements that don't resolve in the score.
         private func collectRangePayload(
-            anchor: ScoreItemID, target: ScoreItemID, score: Score
+            anchor: ScoreItemID, target: ScoreItemID, score: Score,
         ) -> RangePayload? {
             let division = score.division
             guard let anchorStart = elementTickPosition(
-                of: anchor, in: score
+                of: anchor, in: score,
             ),
                 let targetStart = elementTickPosition(
-                    of: target, in: score
+                    of: target, in: score,
                 ),
                 let targetEnd = elementEndTickPosition(
-                    of: target, in: score
+                    of: target, in: score,
                 )
             else { return nil }
             let allStaves = score.allStaves
@@ -1174,11 +1183,11 @@
                 ? max(
                     targetEnd,
                     anchorEndPosition(of: anchor, in: score)
-                        ?? anchorStart
+                        ?? anchorStart,
                 )
                 : max(
                     anchorEndPosition(of: anchor, in: score) ?? anchorStart,
-                    targetEnd
+                    targetEnd,
                 )
 
             var cells: [RangeCell] = []
@@ -1227,7 +1236,7 @@
                                 measureOffset:
                                 measureIdx - timeLo.measure,
                                 voiceIndex: voiceIdx,
-                                elements: captured
+                                elements: captured,
                             ))
                         }
                     }
@@ -1237,7 +1246,7 @@
             return RangePayload(
                 cells: cells,
                 staffCount: staffHi - staffLo + 1,
-                measureCount: timeHi.measure - timeLo.measure + 1
+                measureCount: timeHi.measure - timeLo.measure + 1,
             )
         }
 
@@ -1253,7 +1262,7 @@
         }
 
         private func elementTickPosition(
-            of id: ScoreItemID, in score: Score
+            of id: ScoreItemID, in score: Score,
         ) -> MeasureTick? {
             guard let staffVal = score[id.staff] else {
                 return nil
@@ -1287,7 +1296,7 @@
         /// upper bound when copying so the target's full duration is
         /// included in the captured range.
         private func elementEndTickPosition(
-            of id: ScoreItemID, in score: Score
+            of id: ScoreItemID, in score: Score,
         ) -> MeasureTick? {
             guard let start = elementTickPosition(of: id, in: score),
                   let element = score[id.staff]
@@ -1309,12 +1318,12 @@
             case let .chord(c):
                 return MeasureTick(
                     measure: start.measure,
-                    tick: start.tick + c.duration.ticks(division: division)
+                    tick: start.tick + c.duration.ticks(division: division),
                 )
             case let .chord(r) where r.notes.isEmpty:
                 return MeasureTick(
                     measure: start.measure,
-                    tick: start.tick + r.duration.ticks(division: division)
+                    tick: start.tick + r.duration.ticks(division: division),
                 )
             default:
                 return start
@@ -1322,13 +1331,13 @@
         }
 
         private func anchorEndPosition(
-            of id: ScoreItemID, in score: Score
+            of id: ScoreItemID, in score: Score,
         ) -> MeasureTick? {
             elementEndTickPosition(of: id, in: score)
         }
 
         private static func totalTicks(
-            of voice: Voice, division: Int
+            of voice: Voice, division: Int,
         ) -> Int {
             voice.elements.reduce(0) { acc, el in
                 switch el {
@@ -1359,14 +1368,14 @@
                 do {
                     try controller.apply(
                         DeleteVoiceElement(at: id),
-                        undoManager: undoManager
+                        undoManager: undoManager,
                     )
                     adoptEditedScore(controller.score)
                     selection = .single(.rest(RestID(
                         staff: id.staff,
                         measureIndex: id.measureIndex,
                         voiceIndex: id.voiceIndex,
-                        elementIndex: id.elementIndex
+                        elementIndex: id.elementIndex,
                     )))
                     errorMessage = "Cut"
                 } catch {
@@ -1376,7 +1385,7 @@
             case let .range(anchor, target):
                 guard let payload = collectRangePayload(
                     anchor: anchor, target: target,
-                    score: controller.score
+                    score: controller.score,
                 )
                 else {
                     errorMessage = "Range cut: nothing to cut."
@@ -1402,7 +1411,7 @@
                     }) ?? 0
                     let staffBase = min(anchorFlatIdx, targetFlatIdx)
                     let measureBase = min(
-                        anchor.measureIndex, target.measureIndex
+                        anchor.measureIndex, target.measureIndex,
                     )
                     var subCommands: [any EditCommand] = []
                     for cell in payload.cells {
@@ -1416,19 +1425,19 @@
                         let voice = staffVal
                             .measures[measure].voices[cell.voiceIndex]
                         let baseIndices = Self.findContiguousIndices(
-                            of: cell.elements, in: voice.elements
+                            of: cell.elements, in: voice.elements,
                         )
                         guard let (lo, hi) = baseIndices else { continue }
                         // Schedule deletes back-to-front so indices
                         // stay valid as the composite executes.
                         for elemIdx in stride(
-                            from: hi, through: lo, by: -1
+                            from: hi, through: lo, by: -1,
                         ) {
                             let id = VoiceElementID(
                                 staff: staffAddress,
                                 measureIndex: measure,
                                 voiceIndex: cell.voiceIndex,
-                                elementIndex: elemIdx
+                                elementIndex: elemIdx,
                             )
                             subCommands.append(DeleteVoiceElement(at: id))
                         }
@@ -1445,10 +1454,10 @@
                                 measureIndex: measureBase,
                                 voiceIndex: payload.cells.first?
                                     .voiceIndex ?? 0,
-                                elementIndex: 0
-                            )
+                                elementIndex: 0,
+                            ),
                         ),
-                        undoManager: undoManager
+                        undoManager: undoManager,
                     )
                     adoptEditedScore(controller.score)
                     selection = .none
@@ -1469,7 +1478,7 @@
         /// live position of captured cells (we can't track by reference
         /// because VoiceElement is a value type).
         private static func findContiguousIndices(
-            of slice: [VoiceElement], in live: [VoiceElement]
+            of slice: [VoiceElement], in live: [VoiceElement],
         ) -> (Int, Int)? {
             guard !slice.isEmpty else { return nil }
             outer: for start in 0 ... (live.count - slice.count) {
@@ -1504,7 +1513,7 @@
             do {
                 if let payload = voiceRangeClipboard {
                     try pasteRangePayload(
-                        payload, at: id, controller: controller
+                        payload, at: id, controller: controller,
                     )
                 } else if let element = voiceElementClipboard {
                     // Reuse the cross-measure paste path so a single
@@ -1515,14 +1524,14 @@
                     let singleCell = RangeCell(
                         staffOffset: 0, measureOffset: 0,
                         voiceIndex: id.voiceIndex,
-                        elements: [element]
+                        elements: [element],
                     )
                     let payload = RangePayload(
                         cells: [singleCell],
-                        staffCount: 1, measureCount: 1
+                        staffCount: 1, measureCount: 1,
                     )
                     try pasteRangePayload(
-                        payload, at: id, controller: controller
+                        payload, at: id, controller: controller,
                     )
                 }
             } catch {
@@ -1544,11 +1553,11 @@
         private func pasteRangePayload(
             _ payload: RangePayload,
             at targetID: VoiceElementID,
-            controller: NoteInputController
+            controller: NoteInputController,
         ) throws {
             let score = controller.score
             let targetTick = Self.elementTickOffset(
-                of: targetID, in: score
+                of: targetID, in: score,
             ) ?? 0
 
             // Group cells into (staffOffset, voiceIndex) streams,
@@ -1563,7 +1572,7 @@
             for cell in payload.cells {
                 let key = StreamKey(
                     staffOffset: cell.staffOffset,
-                    voiceIndex: cell.voiceIndex
+                    voiceIndex: cell.voiceIndex,
                 )
                 streams[key, default: []].append(contentsOf: cell.elements)
             }
@@ -1578,7 +1587,8 @@
                 let destFlatStaff = targetFlatIdx + key.staffOffset
                 guard pasteAllStaves.indices.contains(destFlatStaff) else {
                     throw SheetMusicError.invalidEdit(
-                        reason: "Paste: no staff at flat index \(destFlatStaff)")
+                        reason: "Paste: no staff at flat index \(destFlatStaff)",
+                    )
                 }
                 let destAddress = pasteAllStaves[destFlatStaff].address
                 guard score[destAddress]?.measures
@@ -1587,7 +1597,8 @@
                     throw SheetMusicError.invalidEdit(
                         reason: "Paste: no measure "
                             + "\(targetID.measureIndex) on staff "
-                            + "\(destAddress)")
+                            + "\(destAddress)",
+                    )
                 }
 
                 // Walk the stream tick-by-tick across destination
@@ -1598,7 +1609,7 @@
                     destVoice: key.voiceIndex,
                     startMeasure: targetID.measureIndex,
                     startTickInMeasure: targetTick,
-                    score: score
+                    score: score,
                 )
 
                 for piece in pieces {
@@ -1608,7 +1619,7 @@
                         voice: key.voiceIndex,
                         tickStartInMeasure: piece.tickStartInMeasure,
                         pieceElements: piece.elements,
-                        score: score
+                        score: score,
                     )
                     subCommands.append(cmd)
                 }
@@ -1616,16 +1627,16 @@
 
             try controller.apply(
                 CompositeEditCommand(
-                    commands: subCommands, location: targetID
+                    commands: subCommands, location: targetID,
                 ),
-                undoManager: undoManager
+                undoManager: undoManager,
             )
             adoptEditedScore(controller.score)
             if let firstCell = payload.cells.first,
                let firstElement = firstCell.elements.first
             {
                 anchorSelectionAfterPaste(
-                    at: targetID, firstElement: firstElement
+                    at: targetID, firstElement: firstElement,
                 )
             }
             let total = payload.cells.reduce(0) {
@@ -1656,13 +1667,14 @@
             destVoice: Int,
             startMeasure: Int,
             startTickInMeasure: Int,
-            score: Score
+            score: Score,
         ) throws -> [DestinationPiece] {
             var result: [DestinationPiece] = []
             let division = score.division
             guard let destStaffVal = score[destStaffAddress] else {
                 throw SheetMusicError.invalidEdit(
-                    reason: "Paste: staff not found at \(destStaffAddress)")
+                    reason: "Paste: staff not found at \(destStaffAddress)",
+                )
             }
             let measures = destStaffVal.measures
 
@@ -1676,7 +1688,7 @@
                 result.append(DestinationPiece(
                     measureIdx: pieceMeasure,
                     tickStartInMeasure: pieceTickStart,
-                    elements: pieceElements
+                    elements: pieceElements,
                 ))
                 pieceElements = []
             }
@@ -1690,7 +1702,8 @@
                     throw SheetMusicError.invalidEdit(
                         reason: "Paste: ran out of destination "
                             + "measures past staff \(destStaffAddress) "
-                            + "measure \(measures.count - 1)")
+                            + "measure \(measures.count - 1)",
+                    )
                 }
             }
 
@@ -1712,7 +1725,7 @@
                     let voice = measures[pieceMeasure]
                         .voices[destVoice]
                     let measureTotal = totalTicks(
-                        of: voice, division: division
+                        of: voice, division: division,
                     )
                     if measureTickCursor >= measureTotal {
                         try advanceMeasure()
@@ -1720,7 +1733,7 @@
                     }
                     let measureRemaining = measureTotal - measureTickCursor
                     let partTicks = min(
-                        elementTicksRemaining, measureRemaining
+                        elementTicksRemaining, measureRemaining,
                     )
                     let isLastSplit = (partTicks == elementTicksRemaining)
 
@@ -1728,7 +1741,7 @@
                         .alignedDurations(
                             forTicks: partTicks,
                             rtickStart: measureTickCursor,
-                            division: division
+                            division: division,
                         )
                     switch srcEl {
                     case let .chord(c) where !c.notes.isEmpty:
@@ -1750,14 +1763,15 @@
                                 arpeggio: isFirstChain
                                     ? c.arpeggio : nil,
                                 lyrics: isFirstChain
-                                    ? c.lyrics : []
+                                    ? c.lyrics : [],
                             )))
                         }
                     case .chord:
                         // Empty chord = rest.
                         for dur in durations {
                             pieceElements.append(
-                                .rest(duration: dur))
+                                .rest(duration: dur),
+                            )
                         }
                     default:
                         break
@@ -1785,12 +1799,13 @@
             voice: Int,
             tickStartInMeasure: Int,
             pieceElements: [VoiceElement],
-            score: Score
+            score: Score,
         ) throws -> any EditCommand {
             let division = score.division
             guard let staffVal = score[staffAddress] else {
                 throw SheetMusicError.invalidEdit(
-                    reason: "Paste: staff not found at \(staffAddress)")
+                    reason: "Paste: staff not found at \(staffAddress)",
+                )
             }
             let v = staffVal.measures[measure].voices[voice]
             let pieceTicks = pieceElements.reduce(0) {
@@ -1832,7 +1847,8 @@
                 throw SheetMusicError.invalidEdit(
                     reason: "Paste: no element at tick "
                         + "\(tickStartInMeasure) on staff \(staffAddress) "
-                        + "measure \(measure) voice \(voice)")
+                        + "measure \(measure) voice \(voice)",
+                )
             }
             // Single-element overlap (loIdx == hiIdx) is fine — we
             // trim both ends of the same element. trailingIdx unset
@@ -1851,7 +1867,8 @@
                 throw SheetMusicError.invalidEdit(
                     reason: "Paste: trailing trim came out negative "
                         + "— consumed range \(tickStartInMeasure)..\(tickEnd) "
-                        + "vs trailing element \(hiStart)..\(hiEnd)")
+                        + "vs trailing element \(hiStart)..\(hiEnd)",
+                )
             }
 
             var replacement: [VoiceElement] = []
@@ -1863,7 +1880,7 @@
                     rtickStart: leadingStart,
                     tieBackKeepsOriginal: true,
                     tieForwardKeepsOriginal: false,
-                    division: division
+                    division: division,
                 ))
             }
             replacement.append(contentsOf: pieceElements)
@@ -1875,7 +1892,7 @@
                     rtickStart: tickEnd,
                     tieBackKeepsOriginal: false,
                     tieForwardKeepsOriginal: true,
-                    division: division
+                    division: division,
                 ))
             }
 
@@ -1884,9 +1901,9 @@
                     staff: staffAddress,
                     measureIndex: measure,
                     voiceIndex: voice,
-                    elementIndex: loIdx
+                    elementIndex: loIdx,
                 ),
-                elements: replacement
+                elements: replacement,
             )
         }
 
@@ -1903,12 +1920,12 @@
             rtickStart: Int,
             tieBackKeepsOriginal: Bool,
             tieForwardKeepsOriginal: Bool,
-            division: Int
+            division: Int,
         ) -> [VoiceElement] {
             let durations = DurationChangeAlgorithm.alignedDurations(
                 forTicks: ticks,
                 rtickStart: rtickStart,
-                division: division
+                division: division,
             )
             switch element {
             case let .chord(c) where !c.notes.isEmpty:
@@ -1919,12 +1936,16 @@
                     var notes = c.notes
                     for ni in notes.indices {
                         notes[ni].tieBack = isFirst
-                            ? (tieBackKeepsOriginal
-                                ? c.notes[ni].tieBack : nil)
+                            ? (
+                                tieBackKeepsOriginal
+                                    ? c.notes[ni].tieBack : nil
+                            )
                             : 1
                         notes[ni].tieForward = isLast
-                            ? (tieForwardKeepsOriginal
-                                ? c.notes[ni].tieForward : nil)
+                            ? (
+                                tieForwardKeepsOriginal
+                                    ? c.notes[ni].tieForward : nil
+                            )
                             : 1
                     }
                     pieces.append(.chord(Chord(
@@ -1933,7 +1954,7 @@
                         arpeggio: isFirst && tieBackKeepsOriginal
                             ? c.arpeggio : nil,
                         lyrics: isFirst && tieBackKeepsOriginal
-                            ? c.lyrics : []
+                            ? c.lyrics : [],
                     )))
                 }
                 return pieces
@@ -1946,7 +1967,7 @@
         }
 
         private static func tickOf(
-            _ el: VoiceElement, division: Int
+            _ el: VoiceElement, division: Int,
         ) -> Int {
             switch el {
             case let .chord(c):
@@ -1960,7 +1981,7 @@
         /// measure. Sums the ticks of preceding chord/rest elements;
         /// non-timed elements contribute zero.
         private static func elementTickOffset(
-            of id: VoiceElementID, in score: Score
+            of id: VoiceElementID, in score: Score,
         ) -> Int? {
             guard let staffVal = score[id.staff] else { return nil }
             let measures = staffVal.measures
@@ -1982,7 +2003,7 @@
         /// Re-anchor the selection on the first chord/rest produced by
         /// a paste so subsequent edits land where the user is looking.
         private func anchorSelectionAfterPaste(
-            at id: VoiceElementID, firstElement: VoiceElement?
+            at id: VoiceElementID, firstElement: VoiceElement?,
         ) {
             switch firstElement {
             case let .chord(c) where !c.notes.isEmpty:
@@ -1991,7 +2012,7 @@
                     measureIndex: id.measureIndex,
                     voiceIndex: id.voiceIndex,
                     elementIndex: id.elementIndex,
-                    noteIndexInChord: 0
+                    noteIndexInChord: 0,
                 )))
             case .chord:
                 // Empty chord = rest.
@@ -1999,7 +2020,7 @@
                     staff: id.staff,
                     measureIndex: id.measureIndex,
                     voiceIndex: id.voiceIndex,
-                    elementIndex: id.elementIndex
+                    elementIndex: id.elementIndex,
                 )))
             default:
                 break
@@ -2034,9 +2055,8 @@
         /// command when clicked and selects the resulting (respelled) note
         /// so the user can chain another edit. Disabled when no note is
         /// selected, or when the selected note sits on a drum staff.
-        @ViewBuilder
         private func accidentalButton(
-            _ accidental: Accidental, glyph: String, help: String
+            _ accidental: Accidental, glyph: String, help: String,
         ) -> some View {
             Button {
                 if case let .single(.note(id)) = selection {
@@ -2066,7 +2086,7 @@
         /// (target's ticks don't divide evenly, target isn't a
         /// chord/rest, etc.) are surfaced through `errorMessage`.
         private func applyCreateTuplet(
-            actualNotes: Int, normalNotes: Int
+            actualNotes: Int, normalNotes: Int,
         ) -> Bool {
             guard let id = selectedVoiceElementID(),
                   let controller = inputController
@@ -2088,7 +2108,7 @@
                 if alreadyInTuplet {
                     try controller.apply(
                         RemoveTuplet(at: id),
-                        undoManager: undoManager
+                        undoManager: undoManager,
                     )
                     errorMessage = "Tuplet removed"
                 } else {
@@ -2096,9 +2116,9 @@
                         CreateTuplet(
                             at: id,
                             actualNotes: actualNotes,
-                            normalNotes: normalNotes
+                            normalNotes: normalNotes,
                         ),
-                        undoManager: undoManager
+                        undoManager: undoManager,
                     )
                     errorMessage = "Tuplet \(actualNotes):\(normalNotes)"
                 }
@@ -2108,7 +2128,7 @@
                 // after removal).
                 let firstElement = controller.score[id]
                 anchorSelectionAfterPaste(
-                    at: id, firstElement: firstElement
+                    at: id, firstElement: firstElement,
                 )
             } catch {
                 errorMessage = error.localizedDescription
@@ -2117,13 +2137,13 @@
         }
 
         private func applyAccidental(
-            _ accidental: Accidental?, to noteID: NoteID
+            _ accidental: Accidental?, to noteID: NoteID,
         ) {
             guard let controller = inputController else { return }
             do {
                 try controller.apply(
                     SetAccidental(at: noteID, accidental: accidental),
-                    undoManager: undoManager
+                    undoManager: undoManager,
                 )
                 adoptEditedScore(controller.score)
                 // The note retained its NoteID — re-anchor selection so
@@ -2131,7 +2151,7 @@
                 // pitch / glyph.
                 selection = .single(.note(noteID))
                 playbackEngine.playPreview(
-                    noteID: noteID, in: controller.score
+                    noteID: noteID, in: controller.score,
                 )
                 errorMessage = accidental.map {
                     "Set accidental: \($0)"
@@ -2164,7 +2184,7 @@
         /// Either path goes through `NoteInputController.apply` so the
         /// `undoManager` records a reverse command for ⌘Z.
         private func applyClefChoice(
-            _ choice: ClefChoice, for anchor: ClefAnchor
+            _ choice: ClefChoice, for anchor: ClefAnchor,
         ) {
             guard let controller = inputController else { return }
             do {
@@ -2174,17 +2194,17 @@
                     try controller.apply(
                         ReplaceVoiceElement(
                             at: veID,
-                            with: .clef(newClef)
+                            with: .clef(newClef),
                         ),
-                        undoManager: undoManager
+                        undoManager: undoManager,
                     )
                 case let .staffDefault(staff):
                     try controller.apply(
                         SetStaffDefaultClef(
                             staff: staff,
-                            newRawType: choice.rawType
+                            newRawType: choice.rawType,
                         ),
-                        undoManager: undoManager
+                        undoManager: undoManager,
                     )
                 }
                 adoptEditedScore(controller.score)
@@ -2205,7 +2225,7 @@
         /// keep editing the same chord.
         private func removeNoteFromChord(
             noteID: NoteID,
-            controller: NoteInputController
+            controller: NoteInputController,
         ) {
             let veID = VoiceElementID(noteID)
             let priorNoteCount: Int
@@ -2217,7 +2237,7 @@
             do {
                 try controller.apply(
                     RemoveNoteFromChord(at: noteID),
-                    undoManager: undoManager
+                    undoManager: undoManager,
                 )
                 adoptEditedScore(controller.score)
                 if priorNoteCount <= 1 {
@@ -2225,7 +2245,7 @@
                         staff: veID.staff,
                         measureIndex: veID.measureIndex,
                         voiceIndex: veID.voiceIndex,
-                        elementIndex: veID.elementIndex
+                        elementIndex: veID.elementIndex,
                     )
                     selection = .single(.rest(newRest))
                 } else {
@@ -2235,15 +2255,15 @@
                         0,
                         min(
                             noteID.noteIndexInChord,
-                            priorNoteCount - 2
-                        )
+                            priorNoteCount - 2,
+                        ),
                     )
                     let surviving = NoteID(
                         staff: noteID.staff,
                         measureIndex: noteID.measureIndex,
                         voiceIndex: noteID.voiceIndex,
                         elementIndex: noteID.elementIndex,
-                        noteIndexInChord: newIdx
+                        noteIndexInChord: newIdx,
                     )
                     selection = .single(.note(surviving))
                 }
@@ -2259,7 +2279,7 @@
         /// target the new element. No-op when nothing actionable is
         /// selected.
         private func deleteSelectedElement(
-            controller: NoteInputController
+            controller: NoteInputController,
         ) {
             // Tuplet selection: collapse the tuplet to a rest of the
             // same total duration. RemoveTuplet alone keeps the first
@@ -2272,7 +2292,7 @@
                     staff: tid.staff,
                     measureIndex: tid.measureIndex,
                     voiceIndex: tid.voiceIndex,
-                    elementIndex: tid.startElementIndex
+                    elementIndex: tid.startElementIndex,
                 )
                 do {
                     try controller.apply(
@@ -2281,16 +2301,16 @@
                                 RemoveTuplet(at: veID),
                                 DeleteVoiceElement(at: veID),
                             ],
-                            location: veID
+                            location: veID,
                         ),
-                        undoManager: undoManager
+                        undoManager: undoManager,
                     )
                     adoptEditedScore(controller.score)
                     selection = .single(.rest(RestID(
                         staff: tid.staff,
                         measureIndex: tid.measureIndex,
                         voiceIndex: tid.voiceIndex,
-                        elementIndex: tid.startElementIndex
+                        elementIndex: tid.startElementIndex,
                     )))
                     errorMessage = "Tuplet deleted"
                 } catch {
@@ -2311,7 +2331,7 @@
             do {
                 try controller.apply(
                     DeleteVoiceElement(at: target),
-                    undoManager: undoManager
+                    undoManager: undoManager,
                 )
                 adoptEditedScore(controller.score)
                 // Select the freshly-created rest so the user can keep
@@ -2320,7 +2340,7 @@
                     staff: target.staff,
                     measureIndex: target.measureIndex,
                     voiceIndex: target.voiceIndex,
-                    elementIndex: target.elementIndex
+                    elementIndex: target.elementIndex,
                 )
                 selection = .single(.rest(newRest))
                 errorMessage = "Deleted"
@@ -2338,7 +2358,7 @@
         private func shiftSelectedNote(
             noteID: NoteID,
             by semitones: Int,
-            controller: NoteInputController
+            controller: NoteInputController,
         ) {
             guard let original = controller.score[noteID] else {
                 errorMessage = "Selected note not found in score"
@@ -2356,7 +2376,7 @@
                 ? 0
                 : controller.score.activeKey(at: noteID)
             guard let shifted = original.shifted(
-                bySemitones: semitones, in: keySigForSpelling
+                bySemitones: semitones, in: keySigForSpelling,
             )
             else {
                 errorMessage = "Pitch out of MIDI range (0…127)"
@@ -2369,13 +2389,13 @@
                         at: noteID,
                         pitch: shifted.pitch,
                         tpc: shifted.tpc,
-                        accidental: accidentalToWrite
+                        accidental: accidentalToWrite,
                     ),
-                    undoManager: undoManager
+                    undoManager: undoManager,
                 )
                 adoptEditedScore(controller.score)
                 playbackEngine.playPreview(
-                    noteID: noteID, in: controller.score
+                    noteID: noteID, in: controller.score,
                 )
                 scrollToAffectedMeasure(measureIndex: noteID.measureIndex)
                 errorMessage = "Shifted to MIDI \(shifted.pitch)"
@@ -2415,7 +2435,7 @@
                     },
                     onMarqueeEnd: { rect, doc in
                         applyMarquee(rect: rect, document: doc)
-                    }
+                    },
                 )
             case .horizontal:
                 // Native NSScrollView handles pinch-zoom-around-cursor
@@ -2449,17 +2469,18 @@
                                 magnification: magnification,
                                 horizontalScrollX: horizontalScrollX,
                                 horizontalScrollY: horizontalScrollY,
-                                pendingScroll: $pendingHorizontalScroll
+                                pendingScroll: $pendingHorizontalScroll,
                             )
                         },
                         contentVersion: AnyHashable(scoreVersion),
                         inDocumentOverlay: inlineLyricEditorOverlay(
-                            document: doc),
+                            document: doc,
+                        ),
                         inDocumentOverlayKey: lyricEditTarget
                             .map { AnyHashable($0) },
                         onViewportSizeChange: { size in
                             horizontalViewportSize = size
-                        }
+                        },
                     )
                 }
             case .paged:
@@ -2470,28 +2491,27 @@
                         wrapToViewWidth: true,
                         multiMeasureRest: collapseMultiMeasureRests
                             ? .collapse(minimumMeasures: 2)
-                            : .disabled
+                            : .disabled,
                     ),
                     pageIndex: $pageIndex,
-                    totalPages: $totalPages
+                    totalPages: $totalPages,
                 )
             case .pdf:
                 pdfPreview(score: score)
             }
         }
 
-        @ViewBuilder
         private func pdfPreview(score: Score) -> some View {
             Group {
                 if let layout = pdfLayout {
                     pdfPreviewContent(
                         doc: layout.doc, pages: layout.pages,
-                        page: layout.page
+                        page: layout.page,
                     )
                 } else {
                     ProgressView("Laying out…")
                         .frame(
-                            maxWidth: .infinity, maxHeight: .infinity
+                            maxWidth: .infinity, maxHeight: .infinity,
                         )
                         .background(Color(white: 0.92))
                 }
@@ -2501,11 +2521,10 @@
             }
         }
 
-        @ViewBuilder
         private func pdfPreviewContent(
             doc: LayoutDocument,
             pages: [PDFExporter.PageBatch],
-            page: EngravingPage
+            page: EngravingPage,
         ) -> some View {
             // Hosting the page deck inside an `NSScrollView` with
             // `allowsMagnification = true` mirrors how horizontal mode
@@ -2518,7 +2537,7 @@
                 magnification: $pdfScale,
                 doc: doc,
                 pages: pages,
-                page: page
+                page: page,
             )
         }
 
@@ -2553,12 +2572,12 @@
                 let rect = tester.clefHitRect(for: anchor)
                     ?? CGRect(
                         x: location.x - 12, y: location.y - 24,
-                        width: 24, height: 48
+                        width: 24, height: 48,
                     )
                 clefPopover = ClefPopoverState(
                     anchor: anchor,
                     currentRawType: raw,
-                    attachmentRect: rect
+                    attachmentRect: rect,
                 )
                 selection = .single(.clef(anchor))
                 return
@@ -2573,7 +2592,7 @@
                let first = notes.first, let last = notes.last
             {
                 selection = .range(
-                    anchor: .note(first), target: .note(last)
+                    anchor: .note(first), target: .note(last),
                 )
                 return
             }
@@ -2618,7 +2637,7 @@
                 // targets (rests, stems on chords without notes).
                 if case let .note(id) = primary, let score {
                     playbackEngine.playPreview(
-                        noteID: id, in: score
+                        noteID: id, in: score,
                     )
                 }
             }
@@ -2629,7 +2648,7 @@
         /// rect (no events overlap) clears the selection — same
         /// behaviour as a tap on empty space.
         private func applyMarquee(
-            rect: CGRect, document: LayoutDocument
+            rect: CGRect, document: LayoutDocument,
         ) {
             let tester = ScoreHitTester(document: document)
             let ids = tester.itemIDs(in: rect)
@@ -2656,7 +2675,7 @@
             do {
                 let loaded = try ScoreLoader.loadHarmonyBasic()
                 adoptLoadedScore(
-                    loaded, sourceName: "harmony-basic.mscx"
+                    loaded, sourceName: "harmony-basic.mscx",
                 )
             } catch {
                 errorMessage = "Failed: \(error.localizedDescription)"
@@ -2670,7 +2689,7 @@
             do {
                 let loaded = try ScoreLoader.load(from: url)
                 adoptLoadedScore(
-                    loaded, sourceName: url.lastPathComponent
+                    loaded, sourceName: url.lastPathComponent,
                 )
             } catch {
                 errorMessage =
@@ -2685,7 +2704,7 @@
         /// horizontal layout synchronously (macOS uses it in the
         /// horizontal-mode entry path).
         private func adoptLoadedScore(
-            _ loaded: Score, sourceName name: String
+            _ loaded: Score, sourceName name: String,
         ) {
             // Pre-build the horizontal layout synchronously. It
             // doesn't depend on the viewport (uses the score's
@@ -2699,12 +2718,13 @@
             horizontalDoc = LayoutEngine.layout(
                 score: loaded, options: hOpts,
                 availableWidth: LayoutEngine.naturalContentWidth(
-                    score: loaded, options: hOpts
+                    score: loaded, options: hOpts,
                 ),
-                cache: layoutCache
+                cache: layoutCache,
             )
             horizontalContexts = LayoutEngine.measureContexts(
-                for: loaded)
+                for: loaded,
+            )
             // Vertical layout still needs the viewport width, so it's
             // built by a .task in the .vertical case.
             verticalDoc = nil
@@ -2756,12 +2776,12 @@
             let hOpts = horizontalOptions
             let availableWidth = horizontalDoc?.size.width
                 ?? LayoutEngine.naturalContentWidth(
-                    score: score, options: hOpts
+                    score: score, options: hOpts,
                 )
             horizontalDoc = LayoutEngine.layout(
                 score: score, options: hOpts,
                 availableWidth: availableWidth,
-                cache: layoutCache
+                cache: layoutCache,
             )
             scoreVersion = UUID()
         }
@@ -2785,13 +2805,13 @@
             // saves a full-score width walk.
             let availableWidth = horizontalDoc?.size.width
                 ?? LayoutEngine.naturalContentWidth(
-                    score: edited, options: hOpts
+                    score: edited, options: hOpts,
                 )
             let tLayoutStart = Date()
             horizontalDoc = LayoutEngine.layout(
                 score: edited, options: hOpts,
                 availableWidth: availableWidth,
-                cache: layoutCache
+                cache: layoutCache,
             )
             let layoutMs = Date().timeIntervalSince(tLayoutStart) * 1000
             verticalDoc = nil
@@ -2814,7 +2834,7 @@
                         stateDoneMs - layoutMs,
                         tickMs - stateDoneMs,
                         paintMs - tickMs,
-                        paintMs
+                        paintMs,
                     ))
                 }
                 CATransaction.commit()

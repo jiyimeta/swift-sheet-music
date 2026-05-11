@@ -32,7 +32,7 @@ public struct MixerChannel: Sendable, Equatable, Identifiable {
         volume: Float = 1.0,
         isMuted: Bool = false,
         isSoloed: Bool = false,
-        program: UInt8? = nil
+        program: UInt8? = nil,
     ) {
         self.id = id
         self.name = name

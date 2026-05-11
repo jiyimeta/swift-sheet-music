@@ -12,7 +12,7 @@ extension MidiImporter {
     static func quantize(
         measure: ImportMeasure,
         division: Int,
-        options: MidiImportOptions
+        options: MidiImportOptions,
     ) -> QuantizedMeasure {
         let tolerance = options.onsetTolerance ?? max(division / 16, 1)
         let onsets = noteOnTicks(in: measure)
@@ -25,13 +25,13 @@ extension MidiImporter {
             grid: binaryGrid,
             tolerance: tolerance,
             tupletRatios: options.tupletRatios,
-            assignments: &assignments
+            assignments: &assignments,
         )
         return assemble(
             measure: measure,
             assignments: assignments,
             division: division,
-            binaryGrid: binaryGrid
+            binaryGrid: binaryGrid,
         )
     }
 
@@ -78,7 +78,7 @@ extension MidiImporter {
         grid: Int,
         tolerance: Int,
         tupletRatios: [TupletRatio],
-        assignments: inout [TupletAssignment]
+        assignments: inout [TupletAssignment],
     ) -> Bool {
         var covered: [Range<Int>] = []
         for span in spans {
@@ -104,7 +104,7 @@ extension MidiImporter {
     }
 
     static func fitsBinary(
-        onsets: [Int], span: Range<Int>, grid: Int, tolerance: Int
+        onsets: [Int], span: Range<Int>, grid: Int, tolerance: Int,
     ) -> Bool {
         guard grid > 0 else { return false }
         return onsets.allSatisfy { onset in
@@ -115,7 +115,7 @@ extension MidiImporter {
     }
 
     static func fitsTuplet(
-        onsets: [Int], span: Range<Int>, ratio: TupletRatio, tolerance: Int
+        onsets: [Int], span: Range<Int>, ratio: TupletRatio, tolerance: Int,
     ) -> Bool {
         let unit = (span.upperBound - span.lowerBound) / ratio.actual
         guard unit > 0 else { return false }
@@ -155,7 +155,7 @@ extension MidiImporter {
         onsets: [Int],
         assignments: [TupletAssignment],
         measure: ImportMeasure,
-        division: Int
+        division: Int,
     ) -> [(tick: Int, pitches: [Int])] {
         var grouped: [Int: [Int]] = [:]
         for tick in onsets {
@@ -170,7 +170,7 @@ extension MidiImporter {
         gap: Int,
         at tick: Int,
         assignments: [TupletAssignment],
-        division: Int
+        division: Int,
     ) -> NoteDuration {
         // Inside a tuplet, the *written* duration corresponds to
         // gap × actual / normal (the renderer scales it back).
@@ -227,13 +227,13 @@ extension MidiImporter {
         measure: ImportMeasure,
         assignments: [TupletAssignment],
         division: Int,
-        binaryGrid: Int
+        binaryGrid: Int,
     ) -> QuantizedMeasure {
         let snappedOnsets = snap(
             onsets: noteOnTicks(in: measure),
             assignments: assignments,
             measure: measure,
-            division: division
+            division: division,
         )
 
         var elements: [VoiceElement] = []
@@ -245,7 +245,7 @@ extension MidiImporter {
         for tick in allTicks where tick > prev {
             let gap = tick - prev
             let duration = durationFor(
-                gap: gap, at: prev, assignments: assignments, division: division
+                gap: gap, at: prev, assignments: assignments, division: division,
             )
             let pitches = snappedOnsets.first(where: { $0.tick == prev })?.pitches ?? []
             let notes = ChordNotes(pitches.map { Note(pitch: $0, tpc: tpc(forMidiPitch: $0)) })
@@ -265,7 +265,7 @@ extension MidiImporter {
                 inProgress = PendingTuplet(
                     startElement: elements.count - 1,
                     ratio: owningRatio,
-                    tickRange: owning.range
+                    tickRange: owning.range,
                 )
             } else if owningTuplet == nil, let pending = inProgress {
                 let r = pending.startElement ... (elements.count - 2)
@@ -284,7 +284,7 @@ extension MidiImporter {
                 normalNotes: $0.ratio.normal,
                 actualNotes: $0.ratio.actual,
                 startIndex: $0.elementRange.lowerBound,
-                endIndex: $0.elementRange.upperBound
+                endIndex: $0.elementRange.upperBound,
             )
         }
         return QuantizedMeasure(
@@ -292,7 +292,7 @@ extension MidiImporter {
             tuplets: tuplets,
             tupletTickRanges: tupletEntries.map(\.tickRange),
             assignments: assignments,
-            binaryGrid: binaryGrid
+            binaryGrid: binaryGrid,
         )
     }
 
@@ -302,7 +302,7 @@ extension MidiImporter {
     static func snapToQuantizedGrid(
         _ tick: Int,
         assignments: [TupletAssignment],
-        fallbackGrid: Int
+        fallbackGrid: Int,
     ) -> Int {
         if let owning = assignments.first(where: { $0.range.contains(tick) }) {
             let offset = tick - owning.range.lowerBound

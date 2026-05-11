@@ -58,7 +58,7 @@
                                 pageSize: pageSize,
                                 margins: page.margins(forPageIndex: idx),
                                 renderScale: pdfScale,
-                                showBreakIndicators: true
+                                showBreakIndicators: true,
                             )
                             .background(Color.white)
                             .border(Color.gray.opacity(0.4))
@@ -79,7 +79,7 @@
                 .frame(
                     width: naturalWidth * pdfGestureScale,
                     height: naturalHeight * pdfGestureScale,
-                    alignment: .topLeading
+                    alignment: .topLeading,
                 )
             }
             .background(Color(white: 0.92))
@@ -92,10 +92,11 @@
                     }
                     .onEnded { _ in
                         pdfScale = max(
-                            0.25, min(4.0, pdfScale * pdfGestureScale)
+                            0.25, min(4.0, pdfScale * pdfGestureScale),
                         )
                         pdfGestureScale = 1
-                    })
+                    },
+            )
         }
     }
 #endif

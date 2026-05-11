@@ -6,7 +6,7 @@ import Foundation
 @testable import SheetMusicXMLTools
 import Testing
 
-@Suite struct MSCXDecoderInstrumentTests {
+struct MSCXDecoderInstrumentTests {
     @Test func decodeArticulationWithName() throws {
         let xml = "<Articulation name=\"staccato\"><velocity>100</velocity><gateTime>50</gateTime></Articulation>"
         let node = try XMLTreeParser.parse(Data(xml.utf8))

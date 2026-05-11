@@ -4,7 +4,7 @@ import Foundation
 @testable import SheetMusicXMLTools
 import Testing
 
-@Suite struct ChordArticulationTests {
+struct ChordArticulationTests {
     @Test func constructsKnownKindWithAnchor() {
         let art = ChordArticulation(kind: .staccato, anchor: .above)
         #expect(art.kind == .staccato)
@@ -22,7 +22,7 @@ import Testing
         #expect(tenutoBelow == ChordArticulation(kind: .tenuto, anchor: .below))
         #expect(
             ChordArticulation(kind: .staccato)
-                != ChordArticulation(kind: .staccatissimo)
+                != ChordArticulation(kind: .staccatissimo),
         )
     }
 
@@ -30,7 +30,7 @@ import Testing
         let chord = Chord(
             duration: .quarter,
             notes: ChordNotes([Note(pitch: 60, tpc: 14)]),
-            articulations: [ChordArticulation(kind: .staccato, anchor: .above)]
+            articulations: [ChordArticulation(kind: .staccato, anchor: .above)],
         )
         #expect(chord.articulations.count == 1)
         #expect(chord.articulations[0].kind == .staccato)
@@ -39,7 +39,7 @@ import Testing
     @Test func chordDefaultsToEmptyArticulations() {
         let chord = Chord(
             duration: .quarter,
-            notes: ChordNotes([Note(pitch: 60, tpc: 14)])
+            notes: ChordNotes([Note(pitch: 60, tpc: 14)]),
         )
         #expect(chord.articulations.isEmpty)
     }
@@ -99,7 +99,7 @@ import Testing
         let chord = Chord(
             duration: .quarter,
             notes: ChordNotes([Note(pitch: 60, tpc: 14)]),
-            articulations: articulations
+            articulations: articulations,
         )
         let xml = chord.encodeAsChord()
         return xml.all("Articulation").compactMap { $0.first("subtype")?.text }
@@ -113,7 +113,7 @@ import Testing
     @Test func encodesExplicitBelowAnchor() {
         #expect(
             encodedSubtypes([.init(kind: .staccatissimo, anchor: .below)])
-                == ["articStaccatissimoBelow"]
+                == ["articStaccatissimoBelow"],
         )
     }
 
@@ -121,7 +121,7 @@ import Testing
         // Unknown round-trips its raw string and ignores anchor.
         #expect(
             encodedSubtypes([.init(kind: .unknown(subtype: "articSoftAccentAbove"))])
-                == ["articSoftAccentAbove"]
+                == ["articSoftAccentAbove"],
         )
     }
 
@@ -129,7 +129,7 @@ import Testing
         let chord = Chord(
             duration: .quarter,
             notes: ChordNotes([Note(pitch: 60, tpc: 14)]),
-            articulations: [.init(kind: .staccato, anchor: .above)]
+            articulations: [.init(kind: .staccato, anchor: .above)],
         )
         let xml = chord.encodeAsChord()
         let names = xml.children.map(\.name)
@@ -149,7 +149,7 @@ import Testing
                 .init(kind: .staccatissimo, anchor: .below),
                 .init(kind: .tenuto, anchor: .above),
                 .init(kind: .unknown(subtype: "articSoftAccentAbove")),
-            ]
+            ],
         )
         let xml = original.encodeAsChord()
         let serialized = XMLTreeSerializer.serialize(xml)

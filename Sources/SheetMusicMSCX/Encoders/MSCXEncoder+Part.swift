@@ -14,11 +14,11 @@ extension Part {
     func encodeDeclaration(
         partID: String,
         staffIDs: [String],
-        options: MSCXEncoderOptions = .init()
+        options: MSCXEncoderOptions = .init(),
     ) -> XMLTreeNode {
         precondition(
             staffIDs.count == staves.count,
-            "staffIDs must match staves count"
+            "staffIDs must match staves count",
         )
         var children: [XMLTreeNode] = []
         for (staff, id) in zip(staves, staffIDs) {
@@ -31,7 +31,7 @@ extension Part {
         return XMLTreeNode(
             name: "Part",
             attributes: ["id": partID],
-            children: children
+            children: children,
         )
     }
 }

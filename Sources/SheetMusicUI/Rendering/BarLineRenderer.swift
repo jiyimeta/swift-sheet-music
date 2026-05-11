@@ -7,7 +7,7 @@ enum BarLineRenderer {
         context: inout GraphicsContext,
         subtype: String?,
         origin: CGPoint,
-        metrics: StaffMetrics
+        metrics: StaffMetrics,
     ) {
         let top = CGPoint(x: origin.x, y: origin.y - metrics.sp * 2)
         let bot = CGPoint(x: origin.x, y: origin.y + metrics.sp * 2)
@@ -31,14 +31,14 @@ enum BarLineRenderer {
                 context: &context,
                 origin: origin,
                 xOffset: metrics.sp * 0.6,
-                metrics: metrics
+                metrics: metrics,
             )
         case "end-repeat":
             drawRepeatDots(
                 context: &context,
                 origin: origin,
                 xOffset: -metrics.sp * 0.6,
-                metrics: metrics
+                metrics: metrics,
             )
             line(dx: 0, width: metrics.sp * 0.15)
             line(dx: +metrics.sp * 0.3, width: metrics.sp * 0.4)
@@ -80,24 +80,24 @@ enum BarLineRenderer {
         context: inout GraphicsContext,
         origin: CGPoint,
         xOffset: CGFloat,
-        metrics: StaffMetrics
+        metrics: StaffMetrics,
     ) {
         let dotSize: CGFloat = metrics.sp * 0.3
         context.fill(
             Path(ellipseIn: CGRect(
                 x: origin.x + xOffset - dotSize / 2,
                 y: origin.y - metrics.sp / 2 - dotSize / 2,
-                width: dotSize, height: dotSize
+                width: dotSize, height: dotSize,
             )),
-            with: .color(.primary)
+            with: .color(.primary),
         )
         context.fill(
             Path(ellipseIn: CGRect(
                 x: origin.x + xOffset - dotSize / 2,
                 y: origin.y + metrics.sp / 2 - dotSize / 2,
-                width: dotSize, height: dotSize
+                width: dotSize, height: dotSize,
             )),
-            with: .color(.primary)
+            with: .color(.primary),
         )
     }
 }

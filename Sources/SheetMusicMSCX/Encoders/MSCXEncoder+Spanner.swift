@@ -25,7 +25,7 @@ extension Spanner {
         return XMLTreeNode(
             name: "Spanner",
             attributes: ["type": rawType],
-            children: children
+            children: children,
         )
     }
 
@@ -51,7 +51,7 @@ extension Spanner {
             if hairpin.veloChangeMethod != .normal {
                 children.append(XMLTreeNode(
                     name: "veloChangeMethod",
-                    text: hairpin.veloChangeMethod.rawValue
+                    text: hairpin.veloChangeMethod.rawValue,
                 ))
             }
             return XMLTreeNode(name: rawType, children: children)
@@ -74,7 +74,7 @@ extension Spanner {
         let fractionsNode: XMLTreeNode? = nextFractionsOffset.map {
             XMLTreeNode(
                 name: "fractions",
-                text: "\($0.numerator)/\($0.denominator)"
+                text: "\($0.numerator)/\($0.denominator)",
             )
         }
         let measuresNode: XMLTreeNode? = nextMeasuresOffset != 0

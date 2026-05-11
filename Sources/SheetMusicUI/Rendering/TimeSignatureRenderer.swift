@@ -8,7 +8,7 @@ enum TimeSignatureRenderer {
         numerator: Int,
         denominator: Int,
         origin: CGPoint,
-        metrics: StaffMetrics
+        metrics: StaffMetrics,
     ) {
         let numStr = String(numerator)
         let denStr = String(denominator)
@@ -31,9 +31,9 @@ enum TimeSignatureRenderer {
                 SMuFLGlyph.timeSigDigit(digit),
                 at: CGPoint(
                     x: origin.x + numOffsetX + CGFloat(i) * digitAdvance,
-                    y: origin.y - metrics.sp
+                    y: origin.y - metrics.sp,
                 ),
-                size: metrics.glyphFontSize
+                size: metrics.glyphFontSize,
             )
         }
         for (i, ch) in denStr.enumerated() {
@@ -42,9 +42,9 @@ enum TimeSignatureRenderer {
                 SMuFLGlyph.timeSigDigit(digit),
                 at: CGPoint(
                     x: origin.x + denOffsetX + CGFloat(i) * digitAdvance,
-                    y: origin.y + metrics.sp
+                    y: origin.y + metrics.sp,
                 ),
-                size: metrics.glyphFontSize
+                size: metrics.glyphFontSize,
             )
         }
     }

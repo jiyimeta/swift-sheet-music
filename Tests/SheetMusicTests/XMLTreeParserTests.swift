@@ -6,7 +6,7 @@ import Foundation
 @testable import SheetMusicXMLTools
 import Testing
 
-@Suite struct XMLTreeParserTests {
+struct XMLTreeParserTests {
     @Test func parsesSimpleNestedDocument() throws {
         let xml = #"<?xml version="1.0"?><root><a>hi</a><b key="v"/></root>"#
         let root = try XMLTreeParser.parse(Data(xml.utf8))

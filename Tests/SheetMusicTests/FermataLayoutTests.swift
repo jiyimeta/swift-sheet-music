@@ -11,11 +11,11 @@ struct FermataLayoutTests {
     private static func fermataBeforeTargetScore() -> Score {
         let cChord = Chord(
             duration: .quarter,
-            notes: ChordNotes([Note(pitch: 60, tpc: 14)])
+            notes: ChordNotes([Note(pitch: 60, tpc: 14)]),
         )
         let dChord = Chord(
             duration: .quarter,
-            notes: ChordNotes([Note(pitch: 62, tpc: 16)])
+            notes: ChordNotes([Note(pitch: 62, tpc: 16)]),
         )
         let fermata = Fermata(subtype: "fermataAbove")
         let voice = Voice(elements: [
@@ -30,8 +30,8 @@ struct FermataLayoutTests {
             parts: [Part(
                 id: "1",
                 instrument: Instrument(id: "x"),
-                staves: [staff]
-            )]
+                staves: [staff],
+            )],
         )
     }
 
@@ -41,11 +41,11 @@ struct FermataLayoutTests {
     private static func fermataAfterTargetScore() -> Score {
         let cChord = Chord(
             duration: .quarter,
-            notes: ChordNotes([Note(pitch: 60, tpc: 14)])
+            notes: ChordNotes([Note(pitch: 60, tpc: 14)]),
         )
         let dChord = Chord(
             duration: .quarter,
-            notes: ChordNotes([Note(pitch: 62, tpc: 16)])
+            notes: ChordNotes([Note(pitch: 62, tpc: 16)]),
         )
         let fermata = Fermata(subtype: "fermataAbove")
         let voice = Voice(elements: [
@@ -60,26 +60,26 @@ struct FermataLayoutTests {
             parts: [Part(
                 id: "1",
                 instrument: Instrument(id: "x"),
-                staves: [staff]
-            )]
+                staves: [staff],
+            )],
         )
     }
 
     @available(macOS 15.0, iOS 16.0, *)
     private static func laidOut(_ s: Score) -> LayoutDocument {
         let opts = ScoreViewOptions(
-            staffSize: 28, systemGap: 40, wrapToViewWidth: false
+            staffSize: 28, systemGap: 40, wrapToViewWidth: false,
         )
         let natW = LayoutEngine.naturalContentWidth(score: s, options: opts)
         return LayoutEngine.layout(
-            score: s, options: opts, availableWidth: natW
+            score: s, options: opts, availableWidth: natW,
         )
     }
 
     /// Pull (fermataX, chordXs) from the first measure.
     @available(macOS 15.0, iOS 16.0, *)
     private static func fermataAndChordXs(
-        _ doc: LayoutDocument
+        _ doc: LayoutDocument,
     ) -> (CGFloat, [CGFloat])? {
         guard let measure = doc.systems.first?.measures.first
         else { return nil }
@@ -104,17 +104,17 @@ struct FermataLayoutTests {
         guard #available(macOS 15.0, iOS 16.0, *) else { return }
         let doc = Self.laidOut(Self.fermataBeforeTargetScore())
         let (fermataX, chordXs) = try #require(
-            Self.fermataAndChordXs(doc)
+            Self.fermataAndChordXs(doc),
         )
         try #require(chordXs.count == 2)
         // Expectation: fermata anchors to D4 (second chord), NOT C4 (first).
         #expect(
             abs(fermataX - chordXs[1]) < 0.001,
-            "fermata x \(fermataX) should match D4 x \(chordXs[1]); C4 x is \(chordXs[0])"
+            "fermata x \(fermataX) should match D4 x \(chordXs[1]); C4 x is \(chordXs[0])",
         )
         #expect(
             abs(fermataX - chordXs[0]) > 0.5,
-            "fermata x \(fermataX) should NOT match C4 x \(chordXs[0])"
+            "fermata x \(fermataX) should NOT match C4 x \(chordXs[0])",
         )
     }
 
@@ -123,14 +123,14 @@ struct FermataLayoutTests {
         guard #available(macOS 15.0, iOS 16.0, *) else { return }
         let doc = Self.laidOut(Self.fermataAfterTargetScore())
         let (fermataX, chordXs) = try #require(
-            Self.fermataAndChordXs(doc)
+            Self.fermataAndChordXs(doc),
         )
         try #require(chordXs.count == 2)
         // No following chord exists, so the backward fallback must
         // anchor to the most recent chord (D4 — the second one).
         #expect(
             abs(fermataX - chordXs[1]) < 0.001,
-            "fermata x \(fermataX) should match D4 x \(chordXs[1])"
+            "fermata x \(fermataX) should match D4 x \(chordXs[1])",
         )
     }
 
@@ -143,7 +143,7 @@ struct FermataLayoutTests {
         // above the top staff line.
         let highChord = Chord(
             duration: .quarter,
-            notes: ChordNotes([Note(pitch: 91, tpc: 15)])
+            notes: ChordNotes([Note(pitch: 91, tpc: 15)]),
         )
         let fermata = Fermata(subtype: "fermataAbove")
         let voice = Voice(elements: [
@@ -157,8 +157,8 @@ struct FermataLayoutTests {
             parts: [Part(
                 id: "1",
                 instrument: Instrument(id: "x"),
-                staves: [staff]
-            )]
+                staves: [staff],
+            )],
         )
     }
 
@@ -170,7 +170,7 @@ struct FermataLayoutTests {
         // already ~10 sp below `staffMidY`.
         let lowChord = Chord(
             duration: .quarter,
-            notes: ChordNotes([Note(pitch: 36, tpc: 14)])
+            notes: ChordNotes([Note(pitch: 36, tpc: 14)]),
         )
         let fermata = Fermata(subtype: "fermataBelow")
         let voice = Voice(elements: [
@@ -184,8 +184,8 @@ struct FermataLayoutTests {
             parts: [Part(
                 id: "1",
                 instrument: Instrument(id: "x"),
-                staves: [staff]
-            )]
+                staves: [staff],
+            )],
         )
     }
 
@@ -193,7 +193,7 @@ struct FermataLayoutTests {
     /// extents (top, bottom) from a single-measure layout document.
     @available(macOS 15.0, iOS 16.0, *)
     private static func fermataAndChordExtents(
-        _ doc: LayoutDocument
+        _ doc: LayoutDocument,
     ) -> (fermataOrigin: CGPoint, chordTopY: CGFloat, chordBottomY: CGFloat)? {
         guard let measure = doc.systems.first?.measures.first
         else { return nil }
@@ -221,7 +221,7 @@ struct FermataLayoutTests {
         guard #available(macOS 15.0, iOS 16.0, *) else { return }
         let doc = Self.laidOut(Self.fermataAboveHighChordScore())
         let (fermata, chordTopY, _) = try #require(
-            Self.fermataAndChordExtents(doc)
+            Self.fermataAndChordExtents(doc),
         )
         let sp: CGFloat = 28.0 / 4 // staffSize=28
         // Glyph anchor is .center but Bravura's typographic bbox is
@@ -231,7 +231,7 @@ struct FermataLayoutTests {
             + FermataGlyphMetrics.above.bottomOffset * sp
         #expect(
             glyphBottom <= chordTopY - sp * 0.5,
-            "fermata glyph bottom \(glyphBottom) must clear notehead top \(chordTopY) by ≥ 0.5 sp"
+            "fermata glyph bottom \(glyphBottom) must clear notehead top \(chordTopY) by ≥ 0.5 sp",
         )
     }
 
@@ -240,7 +240,7 @@ struct FermataLayoutTests {
         guard #available(macOS 15.0, iOS 16.0, *) else { return }
         let doc = Self.laidOut(Self.fermataBelowLowChordScore())
         let (fermata, _, chordBottomY) = try #require(
-            Self.fermataAndChordExtents(doc)
+            Self.fermataAndChordExtents(doc),
         )
         let sp: CGFloat = 28.0 / 4 // staffSize=28
         // Use runtime-measured top offset for the same reason as
@@ -249,7 +249,7 @@ struct FermataLayoutTests {
             + FermataGlyphMetrics.below.topOffset * sp
         #expect(
             glyphTop >= chordBottomY + sp * 0.5,
-            "fermata glyph top \(glyphTop) must clear notehead bottom \(chordBottomY) by ≥ 0.5 sp"
+            "fermata glyph top \(glyphTop) must clear notehead bottom \(chordBottomY) by ≥ 0.5 sp",
         )
     }
 
@@ -261,7 +261,7 @@ struct FermataLayoutTests {
     private static func fermataAboveStemUpChordScore() -> Score {
         let chord = Chord(
             duration: .quarter,
-            notes: ChordNotes([Note(pitch: 71, tpc: 18)])
+            notes: ChordNotes([Note(pitch: 71, tpc: 18)]),
         )
         let fermata = Fermata(subtype: "fermataAbove")
         let voice = Voice(elements: [
@@ -275,8 +275,8 @@ struct FermataLayoutTests {
             parts: [Part(
                 id: "1",
                 instrument: Instrument(id: "x"),
-                staves: [staff]
-            )]
+                staves: [staff],
+            )],
         )
     }
 
@@ -291,11 +291,11 @@ struct FermataLayoutTests {
     private static func fermataOnBeamedHighChordScore() -> Score {
         let a3 = Chord(
             duration: .eighth,
-            notes: ChordNotes([Note(pitch: 57, tpc: 17)])
+            notes: ChordNotes([Note(pitch: 57, tpc: 17)]),
         )
         let b4 = Chord(
             duration: .eighth,
-            notes: ChordNotes([Note(pitch: 71, tpc: 18)])
+            notes: ChordNotes([Note(pitch: 71, tpc: 18)]),
         )
         let fermata = Fermata(subtype: "fermataAbove")
         let voice = Voice(elements: [
@@ -310,8 +310,8 @@ struct FermataLayoutTests {
             parts: [Part(
                 id: "1",
                 instrument: Instrument(id: "x"),
-                staves: [staff]
-            )]
+                staves: [staff],
+            )],
         )
     }
 
@@ -346,7 +346,7 @@ struct FermataLayoutTests {
         let glyphBottom = f + FermataGlyphMetrics.above.bottomOffset * sp
         #expect(
             glyphBottom <= stemTop - sp * 0.5,
-            "fermata glyph bottom \(glyphBottom) must clear post-beam stem top \(stemTop) by >= 0.5 sp"
+            "fermata glyph bottom \(glyphBottom) must clear post-beam stem top \(stemTop) by >= 0.5 sp",
         )
     }
 
@@ -382,7 +382,7 @@ struct FermataLayoutTests {
         let glyphBottom = f + FermataGlyphMetrics.above.bottomOffset * sp
         #expect(
             glyphBottom <= stemTop - sp * 0.5,
-            "fermata glyph bottom \(glyphBottom) must clear stem top \(stemTop) by ≥ 0.5 sp"
+            "fermata glyph bottom \(glyphBottom) must clear stem top \(stemTop) by ≥ 0.5 sp",
         )
     }
 }

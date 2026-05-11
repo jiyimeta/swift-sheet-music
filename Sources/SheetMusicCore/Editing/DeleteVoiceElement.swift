@@ -31,13 +31,16 @@ public struct DeleteVoiceElement: EditCommand {
         self.location = location
     }
 
-    public var affectedLocation: VoiceElementID { location }
+    public var affectedLocation: VoiceElementID {
+        location
+    }
 
     @discardableResult
     public func apply(to score: inout Score) throws -> any EditCommand {
         guard let original = score[location] else {
             throw SheetMusicError.invalidEdit(
-                reason: "DeleteVoiceElement: no element at \(location)")
+                reason: "DeleteVoiceElement: no element at \(location)",
+            )
         }
         let duration: NoteDuration
         switch original {
@@ -45,7 +48,8 @@ public struct DeleteVoiceElement: EditCommand {
         default:
             throw SheetMusicError.invalidEdit(
                 reason: "DeleteVoiceElement: element at \(location) "
-                    + "is not a chord or rest (\(original))")
+                    + "is not a chord or rest (\(original))",
+            )
         }
         score[location] = .rest(duration: duration)
         return ReplaceVoiceElement(at: location, with: original)

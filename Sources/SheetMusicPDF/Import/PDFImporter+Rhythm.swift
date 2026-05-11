@@ -13,10 +13,12 @@ extension PDFImporter {
     static func decodeRhythm(
         measure: ImportMeasure,
         decoded: [DecodedPitch],
-        paths: [PathSegment]
+        paths: [PathSegment],
     ) -> [RhythmElement] {
         var pitchByGlyph: [RawGlyph: DecodedPitch] = [:]
-        for dp in decoded { pitchByGlyph[dp.glyph.raw] = dp }
+        for dp in decoded {
+            pitchByGlyph[dp.glyph.raw] = dp
+        }
         let glyphs = measure.glyphs.sorted {
             $0.raw.origin.x < $1.raw.origin.x
         }
@@ -37,7 +39,7 @@ extension PDFImporter {
                     glyphs: glyphs,
                     stems: stems,
                     pitchByGlyph: pitchByGlyph,
-                    consumed: &consumed
+                    consumed: &consumed,
                 )
                 elements.append(element)
             default:
@@ -52,14 +54,14 @@ extension PDFImporter {
 
 extension PDFImporter {
     private static func makeRest(
-        glyph: ClassifiedGlyph, duration: NoteDuration
+        glyph: ClassifiedGlyph, duration: NoteDuration,
     ) -> RhythmElement {
         RhythmElement(
             chord: Chord(duration: duration, notes: []),
             x: glyph.raw.origin.x,
             y: glyph.raw.origin.y,
             stemDirection: nil,
-            beamGroup: nil
+            beamGroup: nil,
         )
     }
 
@@ -68,11 +70,11 @@ extension PDFImporter {
         glyphs: [ClassifiedGlyph],
         stems: [PathSegment],
         pitchByGlyph: [RawGlyph: DecodedPitch],
-        consumed: inout Set<Int>
+        consumed: inout Set<Int>,
     ) -> RhythmElement {
         let lead = glyphs[leadIndex]
         let cluster = stemCluster(
-            startingAt: leadIndex, in: glyphs, stems: stems
+            startingAt: leadIndex, in: glyphs, stems: stems,
         )
         consumed.formUnion(cluster.indices)
         let notes = cluster.indices.compactMap { idx -> Note? in
@@ -81,10 +83,10 @@ extension PDFImporter {
         }
         let base = baseDuration(for: lead.semantic)
         let withFlags = applyFlags(
-            base: base, glyphs: glyphs, stem: cluster.stem
+            base: base, glyphs: glyphs, stem: cluster.stem,
         )
         let withDots = applyDots(
-            duration: withFlags, glyphs: glyphs, lead: lead
+            duration: withFlags, glyphs: glyphs, lead: lead,
         )
         let dir = cluster.stem.map { stem in
             stem.rect.midY > lead.raw.origin.y
@@ -95,7 +97,7 @@ extension PDFImporter {
             x: lead.raw.origin.x,
             y: lead.raw.origin.y,
             stemDirection: dir,
-            beamGroup: nil
+            beamGroup: nil,
         )
     }
 }
@@ -104,7 +106,7 @@ extension PDFImporter {
 
 extension PDFImporter {
     private static func isStem(
-        in measure: ImportMeasure, _ path: PathSegment
+        in measure: ImportMeasure, _ path: PathSegment,
     ) -> Bool {
         path.kind == .vertical
             && measure.xRange.contains(path.rect.midX)
@@ -119,7 +121,7 @@ extension PDFImporter {
     fileprivate static func stemCluster(
         startingAt i: Int,
         in glyphs: [ClassifiedGlyph],
-        stems: [PathSegment]
+        stems: [PathSegment],
     ) -> Cluster {
         let lead = glyphs[i]
         guard let stem = nearestStem(toX: lead.raw.origin.x, stems: stems)
@@ -137,7 +139,7 @@ extension PDFImporter {
     }
 
     private static func nearestStem(
-        toX x: CGFloat, stems: [PathSegment]
+        toX x: CGFloat, stems: [PathSegment],
     ) -> PathSegment? {
         let best = stems.min {
             abs($0.rect.midX - x) < abs($1.rect.midX - x)
@@ -163,7 +165,7 @@ extension PDFImporter {
 
 extension PDFImporter {
     private static func baseDuration(
-        for sem: SMuFLSemantic
+        for sem: SMuFLSemantic,
     ) -> NoteDuration {
         switch sem {
         case .noteheadDoubleWhole, .noteheadWhole: .whole
@@ -176,7 +178,7 @@ extension PDFImporter {
     private static func applyFlags(
         base: NoteDuration,
         glyphs: [ClassifiedGlyph],
-        stem: PathSegment?
+        stem: PathSegment?,
     ) -> NoteDuration {
         guard let stem else { return base }
         let stemX = stem.rect.midX
@@ -197,7 +199,9 @@ extension PDFImporter {
             }
         }
         var d = base
-        for _ in 0 ..< flagCount { d = halve(d) }
+        for _ in 0 ..< flagCount {
+            d = halve(d)
+        }
         return d
     }
 
@@ -215,7 +219,7 @@ extension PDFImporter {
         case let .fraction(f):
             .fraction(Fraction(
                 numerator: f.numerator,
-                denominator: f.denominator * 2
+                denominator: f.denominator * 2,
             ))
         }
     }
@@ -223,7 +227,7 @@ extension PDFImporter {
     private static func applyDots(
         duration: NoteDuration,
         glyphs: [ClassifiedGlyph],
-        lead: ClassifiedGlyph
+        lead: ClassifiedGlyph,
     ) -> NoteDuration {
         var dotCount = 0
         let leadX = lead.raw.origin.x

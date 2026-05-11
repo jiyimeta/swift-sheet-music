@@ -34,7 +34,7 @@ private struct MixerStrip: View {
 
                 Button {
                     engine.setMuted(
-                        forChannel: channel.id, to: !channel.isMuted
+                        forChannel: channel.id, to: !channel.isMuted,
                     )
                 } label: {
                     Text("M")
@@ -47,7 +47,7 @@ private struct MixerStrip: View {
 
                 Button {
                     engine.setSoloed(
-                        forChannel: channel.id, to: !channel.isSoloed
+                        forChannel: channel.id, to: !channel.isSoloed,
                     )
                 } label: {
                     Text("S")
@@ -63,18 +63,18 @@ private struct MixerStrip: View {
                         get: { channel.volume },
                         set: { newValue in
                             engine.setVolume(
-                                forChannel: channel.id, to: newValue
+                                forChannel: channel.id, to: newValue,
                             )
-                        }
+                        },
                     ),
-                    in: 0 ... 1
+                    in: 0 ... 1,
                 )
             }
             if let program = channel.program {
                 ProgramMenu(
                     channelID: channel.id,
                     program: program,
-                    engine: engine
+                    engine: engine,
                 )
             }
         }
@@ -128,7 +128,7 @@ private struct ProgramMenu: View {
                             Button {
                                 engine.setProgram(
                                     forChannel: channelID,
-                                    to: instrument.program
+                                    to: instrument.program,
                                 )
                             } label: {
                                 Text(instrument.name)

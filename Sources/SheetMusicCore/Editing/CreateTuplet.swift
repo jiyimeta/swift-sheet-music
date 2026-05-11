@@ -33,22 +33,24 @@ public struct CreateTuplet: EditCommand {
     public init(
         at location: VoiceElementID,
         actualNotes: Int,
-        normalNotes: Int
+        normalNotes: Int,
     ) {
         precondition(
             actualNotes > 1,
-            "CreateTuplet: actualNotes must be > 1"
+            "CreateTuplet: actualNotes must be > 1",
         )
         precondition(
             normalNotes > 0,
-            "CreateTuplet: normalNotes must be > 0"
+            "CreateTuplet: normalNotes must be > 0",
         )
         self.location = location
         self.actualNotes = actualNotes
         self.normalNotes = normalNotes
     }
 
-    public var affectedLocation: VoiceElementID { location }
+    public var affectedLocation: VoiceElementID {
+        location
+    }
 
     @discardableResult
     public func apply(to score: inout Score) throws -> any EditCommand {
@@ -57,7 +59,8 @@ public struct CreateTuplet: EditCommand {
             voice.elements.indices.contains(location.elementIndex)
         else {
             throw SheetMusicError.invalidEdit(
-                reason: "CreateTuplet: no element at \(location)")
+                reason: "CreateTuplet: no element at \(location)",
+            )
         }
         if voice.tuplets.contains(where: {
             $0.startIndex <= location.elementIndex
@@ -65,14 +68,16 @@ public struct CreateTuplet: EditCommand {
         }) {
             throw SheetMusicError.invalidEdit(
                 reason: "CreateTuplet: target at \(location) "
-                    + "already sits inside another tuplet")
+                    + "already sits inside another tuplet",
+            )
         }
         guard case let .chord(target)
             = voice.elements[location.elementIndex]
         else {
             throw SheetMusicError.invalidEdit(
                 reason: "CreateTuplet: target at \(location) "
-                    + "is not a chord or rest")
+                    + "is not a chord or rest",
+            )
         }
         let division = score.division
         let targetTicks = target.duration.ticks(division: division)
@@ -80,12 +85,13 @@ public struct CreateTuplet: EditCommand {
             throw SheetMusicError.invalidEdit(
                 reason: "CreateTuplet: target's \(targetTicks) "
                     + "ticks don't divide evenly into "
-                    + "\(actualNotes) members")
+                    + "\(actualNotes) members",
+            )
         }
         let memberTicks = targetTicks / actualNotes
         let memberDuration: NoteDuration = .fraction(Fraction(
             numerator: memberTicks,
-            denominator: 4 * division
+            denominator: 4 * division,
         ))
 
         // Build the member sequence. The first one carries the
@@ -105,7 +111,7 @@ public struct CreateTuplet: EditCommand {
         var newElements = voice.elements
         newElements.replaceSubrange(
             location.elementIndex ... location.elementIndex,
-            with: members
+            with: members,
         )
 
         // Tuplets entirely past the spliced region shift by the
@@ -119,7 +125,7 @@ public struct CreateTuplet: EditCommand {
                     normalNotes: t.normalNotes,
                     actualNotes: t.actualNotes,
                     startIndex: t.startIndex + netDelta,
-                    endIndex: t.endIndex + netDelta
+                    endIndex: t.endIndex + netDelta,
                 )
             }
             return t
@@ -128,7 +134,7 @@ public struct CreateTuplet: EditCommand {
             normalNotes: normalNotes,
             actualNotes: actualNotes,
             startIndex: location.elementIndex,
-            endIndex: location.elementIndex + actualNotes - 1
+            endIndex: location.elementIndex + actualNotes - 1,
         ))
         // Sort by startIndex so downstream code that assumes ordered
         // tuplets doesn't break.
@@ -139,7 +145,7 @@ public struct CreateTuplet: EditCommand {
             measureIndex: location.measureIndex,
             voiceIndex: location.voiceIndex,
             elements: newElements,
-            tuplets: newTuplets
+            tuplets: newTuplets,
         )
         return try replace.apply(to: &score)
     }

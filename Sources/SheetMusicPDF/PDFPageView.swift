@@ -53,7 +53,7 @@ public struct PDFPageView: View {
         margins: PageMargins,
         renderScale: CGFloat = 1,
         showBreakIndicators: Bool = false,
-        policy: LayoutBreakPolicy = .honor
+        policy: LayoutBreakPolicy = .honor,
     ) {
         self.systems = systems
         self.pageStartY = pageStartY
@@ -77,11 +77,11 @@ public struct PDFPageView: View {
                 // `renderScale`.
                 let canvasSize = CGSize(
                     width: pageSize.width * renderScale,
-                    height: pageSize.height * renderScale
+                    height: pageSize.height * renderScale,
                 )
                 context.fill(
                     Path(CGRect(origin: .zero, size: canvasSize)),
-                    with: .color(.white)
+                    with: .color(.white),
                 )
                 var local = context
                 // Scale the drawing coordinates BEFORE translating
@@ -92,14 +92,14 @@ public struct PDFPageView: View {
                 }
                 local.translateBy(
                     x: margins.leading,
-                    y: margins.top - pageStartY
+                    y: margins.top - pageStartY,
                 )
                 if let titleFrame {
                     TitleFrameRenderer.draw(titleFrame, into: &local)
                 }
                 for system in systems {
                     ScoreCanvasDrawing.drawSystem(
-                        system, metrics: metrics, into: &local
+                        system, metrics: metrics, into: &local,
                     )
                 }
             }
@@ -108,17 +108,17 @@ public struct PDFPageView: View {
                     mode: .document(
                         systems: systems,
                         documentYOffset: pageStartY - margins.top,
-                        xOffset: margins.leading
+                        xOffset: margins.leading,
                     ),
                     metrics: metrics,
-                    policy: policy
+                    policy: policy,
                 )
                 .scaleEffect(renderScale, anchor: .topLeading)
             }
         }
         .frame(
             width: pageSize.width * renderScale,
-            height: pageSize.height * renderScale
+            height: pageSize.height * renderScale,
         )
         .environment(\.colorScheme, .light)
     }

@@ -35,17 +35,17 @@
         /// Bumped by the host when an edit changes glyph content
         /// without changing `document.size`, so the scroll view's
         /// optimisation guard doesn't swallow the refresh.
-        var contentVersion: AnyHashable? = nil
+        var contentVersion: AnyHashable?
         /// In-document overlay forwarded to `MagnifyingScoreScrollView`
         /// — used by the host to mount an inline lyric editor at a
         /// chord's lyric line. See `MagnifyingScoreScrollView`.
-        var inDocumentOverlay: AnyView? = nil
-        var inDocumentOverlayKey: AnyHashable? = nil
+        var inDocumentOverlay: AnyView?
+        var inDocumentOverlayKey: AnyHashable?
         /// Reports the score area's live viewport size to the host so
         /// it can decide whether an offscreen measure needs an
         /// auto-scroll on edit. Fires on first layout and on every
         /// resize. Optional — preserves callers that don't need it.
-        var onViewportSizeChange: ((CGSize) -> Void)? = nil
+        var onViewportSizeChange: ((CGSize) -> Void)?
 
         @State private var marqueeRect: CGRect?
 
@@ -69,7 +69,7 @@
             // Score-relative X (unmagnified) of the leftmost
             // visible score pixel.
             let scoreScrollX = max(
-                0, horizontalScrollX - inset
+                0, horizontalScrollX - inset,
             )
             // The measure to display in the sticky is driven by
             // its TRAILING edge, not the leftmost-visible pixel
@@ -80,7 +80,7 @@
             // becomes the first thing the user actually sees.
             let stickyLookupX = document.stickyTrailingX(
                 scoreScrollX: scoreScrollX,
-                measureContexts: measureContexts
+                measureContexts: measureContexts,
             )
             // Hide the sticky until the user has scrolled far
             // enough that the score's bracket has reached the
@@ -107,7 +107,7 @@
                     },
                     contentVersion: contentVersion,
                     inDocumentOverlay: inDocumentOverlay,
-                    inDocumentOverlayKey: inDocumentOverlayKey
+                    inDocumentOverlayKey: inDocumentOverlayKey,
                 )
                 .background(
                     GeometryReader { hgeo in
@@ -121,12 +121,13 @@
                             .onChange(of: playbackCursor) { _, newCursor in
                                 onCursorChange(newCursor, hgeo.size.width)
                             }
-                    })
+                    },
+                )
                 if horizontalScrollX > bracketHostingX {
                     StickyHeaderView(
                         document: document,
                         measureContexts: measureContexts,
-                        documentScrollX: stickyLookupX
+                        documentScrollX: stickyLookupX,
                     )
                     // Match the score's `.padding(inset)`
                     // exactly so vertical alignment is
@@ -150,10 +151,10 @@
                         // counterpart at that scroll amount.
                         .offset(
                             x: -bracketHostingX,
-                            y: -horizontalScrollY
+                            y: -horizontalScrollY,
                         )
                         .scaleEffect(
-                            magnification, anchor: .topLeading
+                            magnification, anchor: .topLeading,
                         )
                         .allowsHitTesting(false)
                 }

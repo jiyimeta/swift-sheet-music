@@ -10,7 +10,7 @@ extension LayoutDocument {
     /// Returns `nil` when the location resolves to a non-chord element
     /// (e.g. a rest at that index) or when the index is out of range.
     public func chordStemOrigin(
-        at id: VoiceElementID
+        at id: VoiceElementID,
     ) -> CGPoint? {
         for system in systems {
             for measure in system.measures
@@ -19,7 +19,7 @@ extension LayoutDocument {
                 for el in measure.elements {
                     guard case let .chord(
                         notes, _, _, stemOrigin,
-                        _, _, _, voiceIdx
+                        _, _, _, voiceIdx,
                     ) = el
                     else { continue }
                     guard voiceIdx == id.voiceIndex,
@@ -29,7 +29,7 @@ extension LayoutDocument {
                     else { continue }
                     return CGPoint(
                         x: system.origin.x + measure.origin.x + stemOrigin.x,
-                        y: system.origin.y + measure.origin.y + stemOrigin.y
+                        y: system.origin.y + measure.origin.y + stemOrigin.y,
                     )
                 }
             }
@@ -49,7 +49,7 @@ extension LayoutDocument {
     ///    plus a 2-sp lyric drop). This matches the un-ratcheted
     ///    `chordLyricCenterY` in `LayoutEngine+Placement`.
     public func lyricLineY(
-        at voiceElementID: VoiceElementID
+        at voiceElementID: VoiceElementID,
     ) -> CGFloat? {
         let measureIndex = voiceElementID.measureIndex
         for system in systems {

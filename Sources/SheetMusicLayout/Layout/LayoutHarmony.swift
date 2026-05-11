@@ -23,7 +23,7 @@ public struct LayoutHarmony: Sendable, Equatable {
         anchorX: Double,
         y: Double,
         runs: [HarmonyRun],
-        width: Double
+        width: Double,
     ) {
         self.harmony = harmony
         self.anchorX = anchorX
@@ -52,7 +52,7 @@ public struct HarmonyRun: Sendable, Equatable {
     public var x: Double
 
     public init(
-        kind: Kind, content: String, advance: Double, x: Double
+        kind: Kind, content: String, advance: Double, x: Double,
     ) {
         self.kind = kind
         self.content = content

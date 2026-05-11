@@ -28,7 +28,7 @@
         }
 
         @Test("Layout height grows with staffSize (vertical mode)")
-        func layoutHeightGrowsWithStaffSize() throws {
+        func layoutHeightGrowsWithStaffSize() {
             guard #available(macOS 15.0, *) else { return }
             let note = Note(pitch: 60, tpc: 14)
             var measures: [Measure] = []
@@ -47,22 +47,22 @@
             for size: CGFloat in [8, 14, 20, 26, 32] {
                 let opts = ScoreViewOptions(
                     staffSize: size, systemGap: size * 0.85,
-                    wrapToViewWidth: true
+                    wrapToViewWidth: true,
                 )
                 let doc = LayoutEngine.layout(
                     score: score, options: opts,
-                    availableWidth: 377
+                    availableWidth: 377,
                 )
                 #expect(
                     doc.size.height > prevH,
-                    "staffSize=\(size): height \(doc.size.height) should exceed \(prevH)"
+                    "staffSize=\(size): height \(doc.size.height) should exceed \(prevH)",
                 )
                 prevH = doc.size.height
             }
         }
 
         @Test("Layout width grows with staffSize (horizontal mode)")
-        func layoutWidthGrowsWithStaffSize() throws {
+        func layoutWidthGrowsWithStaffSize() {
             guard #available(macOS 15.0, *) else { return }
             let note = Note(pitch: 60, tpc: 14)
             var measures: [Measure] = []
@@ -79,18 +79,18 @@
             for size: CGFloat in [8, 14, 20, 26, 32] {
                 let opts = ScoreViewOptions(
                     staffSize: size, systemGap: size * 0.85,
-                    wrapToViewWidth: false
+                    wrapToViewWidth: false,
                 )
                 let natW = LayoutEngine.naturalContentWidth(
-                    score: score, options: opts
+                    score: score, options: opts,
                 )
                 let doc = LayoutEngine.layout(
                     score: score, options: opts,
-                    availableWidth: natW
+                    availableWidth: natW,
                 )
                 #expect(
                     doc.size.width > prevW,
-                    "staffSize=\(size): width \(doc.size.width) should exceed \(prevW)"
+                    "staffSize=\(size): width \(doc.size.width) should exceed \(prevW)",
                 )
                 prevW = doc.size.width
             }

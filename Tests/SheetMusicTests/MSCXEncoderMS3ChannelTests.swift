@@ -7,7 +7,7 @@ import Testing
 @Suite("MSCXEncoder MS3 Channel target")
 struct MSCXEncoderMS3ChannelTests {
     @Test("v3 default Channel omits <midiPort> and <midiChannel>")
-    func v3ChannelOmitsDefaults() throws {
+    func v3ChannelOmitsDefaults() {
         let chan = InstrumentChannel(midiChannel: nil, midiPort: nil)
         let xml = chan.encode(options: .init(targetVersion: .v3))
         #expect(!xml.children.map(\.name).contains("midiPort"))
@@ -15,7 +15,7 @@ struct MSCXEncoderMS3ChannelTests {
     }
 
     @Test("v3 zero Channel still omits <midiPort> and <midiChannel>")
-    func v3ChannelOmitsZeroDefaults() throws {
+    func v3ChannelOmitsZeroDefaults() {
         let chan = InstrumentChannel(midiChannel: 0, midiPort: 0)
         let xml = chan.encode(options: .init(targetVersion: .v3))
         #expect(!xml.children.map(\.name).contains("midiPort"))
@@ -23,7 +23,7 @@ struct MSCXEncoderMS3ChannelTests {
     }
 
     @Test("v4 Channel keeps existing <midiPort> / <midiChannel> emission")
-    func v4ChannelKeepsDefaults() throws {
+    func v4ChannelKeepsDefaults() {
         let chan = InstrumentChannel(midiChannel: 0, midiPort: 0)
         let xml = chan.encode(options: .init(targetVersion: .v4))
         #expect(xml.first("midiPort")?.text == "0")
@@ -47,7 +47,7 @@ struct MSCXEncoderMS3ChannelTests {
     }
 
     @Test("v3 always emits Bank MSB+LSB pair even when bank is 0")
-    func v3ChannelEmitsBankPairEvenWhenZero() throws {
+    func v3ChannelEmitsBankPairEvenWhenZero() {
         let chan = InstrumentChannel()
         let xml = chan.encode(options: .init(targetVersion: .v3))
         let controllers = xml.children.filter { $0.name == "controller" }
@@ -58,7 +58,7 @@ struct MSCXEncoderMS3ChannelTests {
     }
 
     @Test("v4 Channel emits no Bank MSB and uses ctrl 32 for bank")
-    func v4ChannelBankEmissionUnchanged() throws {
+    func v4ChannelBankEmissionUnchanged() {
         let chan = InstrumentChannel(bank: 5)
         let xml = chan.encode(options: .init(targetVersion: .v4))
         let controllers = xml.children.filter { $0.name == "controller" }

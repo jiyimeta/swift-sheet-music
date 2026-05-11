@@ -11,7 +11,7 @@
             let chord = { (p: Int) -> VoiceElement in
                 .chord(Chord(
                     duration: .quarter,
-                    notes: [Note(pitch: p, tpc: 14)]
+                    notes: [Note(pitch: p, tpc: 14)],
                 ))
             }
             let measure = Measure(voices: [
@@ -30,9 +30,9 @@
                         staffType: "stdNormal",
                         group: "pitched",
                         defaultClefType: "G",
-                        measures: [measure]
-                    )]
-                )]
+                        measures: [measure],
+                    )],
+                )],
             )
         }
 
@@ -43,7 +43,7 @@
             let doc = LayoutEngine.layout(
                 score: score,
                 options: ScoreViewOptions(),
-                availableWidth: 600
+                availableWidth: 600,
             )
             let tester = ScoreHitTester(document: doc)
 
@@ -73,7 +73,7 @@
             let doc = LayoutEngine.layout(
                 score: score,
                 options: ScoreViewOptions(),
-                availableWidth: 600
+                availableWidth: 600,
             )
             let tester = ScoreHitTester(document: doc)
 
@@ -102,7 +102,7 @@
             let doc = LayoutEngine.layout(
                 score: score,
                 options: ScoreViewOptions(),
-                availableWidth: 600
+                availableWidth: 600,
             )
             let tester = ScoreHitTester(document: doc)
             // Far above the system — definitely no notes or rests.
@@ -117,7 +117,7 @@
             let doc = LayoutEngine.layout(
                 score: score,
                 options: ScoreViewOptions(),
-                availableWidth: 600
+                availableWidth: 600,
             )
             let tester = ScoreHitTester(document: doc)
 
@@ -127,7 +127,7 @@
                 x: system.origin.x,
                 y: system.origin.y,
                 width: system.size.width,
-                height: system.size.height
+                height: system.size.height,
             )
             let allIds = tester.itemIDs(in: allRect)
             // 3 chords + 1 rest from sample().
@@ -135,13 +135,13 @@
         }
 
         @Test("itemIDs(in:) misses events outside the rect")
-        func marqueeEmpty() throws {
+        func marqueeEmpty() {
             guard #available(macOS 15.0, *) else { return }
             let score = sample()
             let doc = LayoutEngine.layout(
                 score: score,
                 options: ScoreViewOptions(),
-                availableWidth: 600
+                availableWidth: 600,
             )
             let tester = ScoreHitTester(document: doc)
             // Rect far below the system.
@@ -156,14 +156,14 @@
             let doc = LayoutEngine.layout(
                 score: score,
                 options: ScoreViewOptions(),
-                availableWidth: 600
+                availableWidth: 600,
             )
             let tester = ScoreHitTester(document: doc)
 
             let system = try #require(doc.systems.first)
             let allRect = CGRect(
                 x: system.origin.x, y: system.origin.y,
-                width: system.size.width, height: system.size.height
+                width: system.size.width, height: system.size.height,
             )
             let ids = tester.itemIDs(in: allRect)
             // Resolve each id back to its centerX via system.eventColumns
@@ -182,7 +182,7 @@
             let doc = LayoutEngine.layout(
                 score: score,
                 options: ScoreViewOptions(),
-                availableWidth: 600
+                availableWidth: 600,
             )
             let tester = ScoreHitTester(document: doc)
             let system = try #require(doc.systems.first)
@@ -200,7 +200,7 @@
                 x: docMinX - 5,
                 y: system.origin.y + bbox.minY,
                 width: 6, // overlaps bbox by 1 pt on the right
-                height: bbox.height
+                height: bbox.height,
             )
             let ids = tester.itemIDs(in: rect)
             #expect(ids.contains(firstColumn.id))

@@ -11,39 +11,41 @@ enum HarmonyRenderer {
         context: inout GraphicsContext,
         harmony lh: LayoutHarmony,
         origin: CGPoint,
-        metrics: StaffMetrics
+        metrics: StaffMetrics,
     ) {
         guard !lh.runs.isEmpty else { return }
         let style = ResolvedTextStyle.resolve(
             lh.harmony.styleType,
             overrides: lh.harmony.properties,
-            metrics: metrics
+            metrics: metrics,
         )
         let textColor: Color = lh.harmony.color.map(swiftUIColor)
             ?? .primary
         let glyphFont = Font.custom(
             BravuraFont.familyName,
             size: HarmonyRendering.glyphPointSize(
-                for: lh.harmony, metrics: metrics
-            )
+                for: lh.harmony, metrics: metrics,
+            ),
         )
         for run in lh.runs {
             let p = CGPoint(
                 x: origin.x + CGFloat(run.x),
-                y: origin.y
+                y: origin.y,
             )
             switch run.kind {
             case .text:
                 let resolved = context.resolve(
                     Text(run.content)
                         .font(style.font)
-                        .foregroundColor(textColor))
+                        .foregroundColor(textColor),
+                )
                 context.draw(resolved, at: p, anchor: .leading)
             case let .accidental(acc):
                 let resolved = context.resolve(
                     Text(String(acc.codepoint))
                         .font(glyphFont)
-                        .foregroundColor(textColor))
+                        .foregroundColor(textColor),
+                )
                 context.draw(resolved, at: p, anchor: .leading)
             }
         }
@@ -54,7 +56,7 @@ enum HarmonyRenderer {
             red: Double(color.red) / 255,
             green: Double(color.green) / 255,
             blue: Double(color.blue) / 255,
-            opacity: Double(color.alpha) / 255
+            opacity: Double(color.alpha) / 255,
         )
     }
 }

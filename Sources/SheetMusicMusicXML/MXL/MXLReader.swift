@@ -36,7 +36,7 @@ enum MXLReader {
             return try Archive(data: data, accessMode: .read)
         } catch {
             throw SheetMusicError.corruptedContainer(
-                reason: "MXL: could not open ZIP: \(error)"
+                reason: "MXL: could not open ZIP: \(error)",
             )
         }
     }
@@ -44,7 +44,7 @@ enum MXLReader {
     private static func readRootFiles(in archive: Archive) throws -> [MusicXMLContainer.RootFile] {
         guard let entry = archive[containerPath], entry.type == .file else {
             throw SheetMusicError.corruptedContainer(
-                reason: "MXL: container.xml missing or has no rootfiles"
+                reason: "MXL: container.xml missing or has no rootfiles",
             )
         }
         let data = try extractEntry(entry, from: archive)
@@ -53,12 +53,12 @@ enum MXLReader {
             root = try XMLTreeParser.parse(data)
         } catch {
             throw SheetMusicError.corruptedContainer(
-                reason: "MXL: container.xml is not valid XML: \(error)"
+                reason: "MXL: container.xml is not valid XML: \(error)",
             )
         }
         guard root.name == "container" else {
             throw SheetMusicError.corruptedContainer(
-                reason: "MXL: container.xml root is <\(root.name)>, expected <container>"
+                reason: "MXL: container.xml root is <\(root.name)>, expected <container>",
             )
         }
         let rootsNode = root.first("rootfiles")
@@ -69,12 +69,12 @@ enum MXLReader {
             }
             return MusicXMLContainer.RootFile(
                 path: path,
-                mediaType: node.attributes["media-type"]
+                mediaType: node.attributes["media-type"],
             )
         }
         guard !result.isEmpty else {
             throw SheetMusicError.corruptedContainer(
-                reason: "MXL: container.xml has no <rootfile> entries"
+                reason: "MXL: container.xml has no <rootfile> entries",
             )
         }
         return result
@@ -90,7 +90,7 @@ enum MXLReader {
     private static func extract(path: String, from archive: Archive) throws -> Data {
         guard let entry = archive[path], entry.type == .file else {
             throw SheetMusicError.corruptedContainer(
-                reason: "MXL: rootfile '\(path)' not found in archive"
+                reason: "MXL: rootfile '\(path)' not found in archive",
             )
         }
         return try extractEntry(entry, from: archive)
@@ -104,7 +104,7 @@ enum MXLReader {
             }
         } catch {
             throw SheetMusicError.corruptedContainer(
-                reason: "MXL: failed to extract \(entry.path): \(error)"
+                reason: "MXL: failed to extract \(entry.path): \(error)",
             )
         }
         return buffer

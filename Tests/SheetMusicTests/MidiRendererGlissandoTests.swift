@@ -10,17 +10,17 @@ import Testing
 ///   - portamento (continuous pitch-bend ramp).
 /// The renderer devotes ~33% of the start chord to the sweep and the leading
 /// 67% to the held start pitch, matching MuseScore's `compatmidirender.cpp`.
-@Suite struct MidiRendererGlissandoTests {
+struct MidiRendererGlissandoTests {
     // MARK: - Fixtures
 
     private static func makeScore(
         division: Int = 480,
         keySignature: Int = 0,
-        chords: [Chord]
+        chords: [Chord],
     ) -> Score {
         let instrument = Instrument(
             id: "test",
-            articulations: [InstrumentArticulation()]
+            articulations: [InstrumentArticulation()],
         )
         var elements: [VoiceElement] = []
         if keySignature != 0 {
@@ -53,7 +53,7 @@ import Testing
     /// (note-off or note-on vel 0) exactly once. Matched by pitch because the
     /// unison resolver is FIFO by (channel, pitch).
     private static func assertBalancedNoteEvents(
-        track: MidiTrack, file: StaticString = #filePath, line: UInt = #line
+        track: MidiTrack, file: StaticString = #filePath, line: UInt = #line,
     ) {
         let ons = noteOns(in: track).map(\.pitch).sorted()
         let offs = noteOffs(in: track).map(\.pitch).sorted()
@@ -67,7 +67,7 @@ import Testing
         // sweep ≈ 33% hosting pitches [60, 61, 62, 63]. End 64 plays next.
         let start = Chord(
             duration: .quarter,
-            notes: [Note(pitch: 60, tpc: 14, glissando: Glissando(style: .chromatic))]
+            notes: [Note(pitch: 60, tpc: 14, glissando: Glissando(style: .chromatic))],
         )
         let end = Chord(duration: .quarter, notes: [Note(pitch: 64, tpc: 18)])
         let file = try MidiRenderer.render(score: Self.makeScore(chords: [start, end]))
@@ -91,7 +91,7 @@ import Testing
     @Test func chromaticGlissando_targetNoteHasNoteOff() throws {
         let start = Chord(
             duration: .quarter,
-            notes: [Note(pitch: 60, tpc: 14, glissando: Glissando(style: .chromatic))]
+            notes: [Note(pitch: 60, tpc: 14, glissando: Glissando(style: .chromatic))],
         )
         let end = Chord(duration: .quarter, notes: [Note(pitch: 64, tpc: 18)])
         let file = try MidiRenderer.render(score: Self.makeScore(chords: [start, end]))
@@ -106,7 +106,7 @@ import Testing
         // 60 → 72 over a quarter note. White keys sweep: [60, 62, 64, 65, 67, 69, 71].
         let start = Chord(
             duration: .quarter,
-            notes: [Note(pitch: 60, tpc: 14, glissando: Glissando(style: .whiteKeys))]
+            notes: [Note(pitch: 60, tpc: 14, glissando: Glissando(style: .whiteKeys))],
         )
         let end = Chord(duration: .quarter, notes: [Note(pitch: 72, tpc: 14)])
         let file = try MidiRenderer.render(score: Self.makeScore(chords: [start, end]))
@@ -120,7 +120,7 @@ import Testing
     @Test func blackKeysGlissando_skipsWhiteKeys() throws {
         let start = Chord(
             duration: .quarter,
-            notes: [Note(pitch: 61, tpc: 11, glissando: Glissando(style: .blackKeys))]
+            notes: [Note(pitch: 61, tpc: 11, glissando: Glissando(style: .blackKeys))],
         )
         let end = Chord(duration: .quarter, notes: [Note(pitch: 73, tpc: 11)])
         let file = try MidiRenderer.render(score: Self.makeScore(chords: [start, end]))
@@ -135,11 +135,11 @@ import Testing
         // G major: sweep from G4 to G5 uses G A B C D E F# (not F natural).
         let start = Chord(
             duration: .quarter,
-            notes: [Note(pitch: 67, tpc: 15, glissando: Glissando(style: .diatonic))]
+            notes: [Note(pitch: 67, tpc: 15, glissando: Glissando(style: .diatonic))],
         )
         let end = Chord(duration: .quarter, notes: [Note(pitch: 79, tpc: 15)])
         let file = try MidiRenderer.render(
-            score: Self.makeScore(keySignature: 1, chords: [start, end])
+            score: Self.makeScore(keySignature: 1, chords: [start, end]),
         )
         let track = try #require(file.tracks.first)
 
@@ -152,7 +152,7 @@ import Testing
         // No end chord means no end pitch → renderer falls back to normal note.
         let lone = Chord(
             duration: .quarter,
-            notes: [Note(pitch: 60, tpc: 14, glissando: Glissando(style: .chromatic))]
+            notes: [Note(pitch: 60, tpc: 14, glissando: Glissando(style: .chromatic))],
         )
         let file = try MidiRenderer.render(score: Self.makeScore(chords: [lone]))
         let track = try #require(file.tracks.first)
@@ -175,12 +175,12 @@ import Testing
                 duration: .quarter,
                 notes: [Note(
                     pitch: 60, tpc: 14,
-                    glissando: Glissando(style: .chromatic, easeIn: easeIn, easeOut: 0)
-                )]
+                    glissando: Glissando(style: .chromatic, easeIn: easeIn, easeOut: 0),
+                )],
             )
             let end = Chord(duration: .quarter, notes: [Note(pitch: 66, tpc: 14)])
             let file = try MidiRenderer.render(
-                score: Self.makeScore(division: division, chords: [start, end])
+                score: Self.makeScore(division: division, chords: [start, end]),
             )
             return try Self.noteOns(in: #require(file.tracks.first))
                 .filter { $0.pitch < 66 } // drop the final chord
@@ -210,7 +210,7 @@ import Testing
         //   - next chord plays pitch 67 with no bend
         let start = Chord(
             duration: .quarter,
-            notes: [Note(pitch: 60, tpc: 14, glissando: Glissando(style: .portamento))]
+            notes: [Note(pitch: 60, tpc: 14, glissando: Glissando(style: .portamento))],
         )
         let end = Chord(duration: .quarter, notes: [Note(pitch: 67, tpc: 15)])
         let file = try MidiRenderer.render(score: Self.makeScore(chords: [start, end]))

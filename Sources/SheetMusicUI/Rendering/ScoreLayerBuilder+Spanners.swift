@@ -18,41 +18,41 @@ extension ScoreLayerBuilder {
         continuesLeft: Bool, continuesRight: Bool,
         text: String, metrics: StaffMetrics,
         height: CGFloat,
-        into parent: CALayer
+        into parent: CALayer,
     ) {
         switch kind {
         case .slur:
             drawSlur(
                 from: from, to: to,
-                metrics: metrics, height: height, into: parent
+                metrics: metrics, height: height, into: parent,
             )
         case let .volta(endings):
             drawVolta(
                 from: from, to: to, endings: endings,
                 continuesLeft: continuesLeft,
                 continuesRight: continuesRight,
-                metrics: metrics, height: height, into: parent
+                metrics: metrics, height: height, into: parent,
             )
         case .hairpinOpen, .hairpinClose:
             drawHairpin(
                 from: from, to: to,
                 open: kind == .hairpinOpen,
-                metrics: metrics, height: height, into: parent
+                metrics: metrics, height: height, into: parent,
             )
         case .pedal:
             drawPedal(
                 from: from, to: to,
-                metrics: metrics, height: height, into: parent
+                metrics: metrics, height: height, into: parent,
             )
         case .ottava:
             drawOttava(
                 from: from, to: to,
-                metrics: metrics, height: height, into: parent
+                metrics: metrics, height: height, into: parent,
             )
         case .textLine:
             drawTextLine(
                 from: from, to: to, text: text,
-                metrics: metrics, height: height, into: parent
+                metrics: metrics, height: height, into: parent,
             )
         }
     }
@@ -60,18 +60,18 @@ extension ScoreLayerBuilder {
     private static func drawSlur(
         from: CGPoint, to: CGPoint,
         metrics: StaffMetrics, height: CGFloat,
-        into parent: CALayer
+        into parent: CALayer,
     ) {
         let mid = CGPoint(
             x: (from.x + to.x) / 2,
-            y: min(from.y, to.y) - metrics.sp * 2
+            y: min(from.y, to.y) - metrics.sp * 2,
         )
         let p = CGMutablePath()
         p.move(to: from)
         p.addQuadCurve(to: to, control: mid)
         parent.addSublayer(strokeLayer(
             path: p, height: height,
-            lineWidth: metrics.sp * 0.15
+            lineWidth: metrics.sp * 0.15,
         ))
     }
 
@@ -80,7 +80,7 @@ extension ScoreLayerBuilder {
         endings: [Int],
         continuesLeft: Bool, continuesRight: Bool,
         metrics: StaffMetrics, height: CGFloat,
-        into parent: CALayer
+        into parent: CALayer,
     ) {
         let top = min(from.y, to.y)
         let p = CGMutablePath()
@@ -96,7 +96,7 @@ extension ScoreLayerBuilder {
         }
         parent.addSublayer(strokeLayer(
             path: p, height: height,
-            lineWidth: metrics.sp * 0.15
+            lineWidth: metrics.sp * 0.15,
         ))
         if !endings.isEmpty, !continuesLeft {
             let label = endings
@@ -106,11 +106,11 @@ extension ScoreLayerBuilder {
                 text: label,
                 at: CGPoint(
                     x: from.x + metrics.sp,
-                    y: top + metrics.sp / 2
+                    y: top + metrics.sp / 2,
                 ),
                 size: metrics.sp * 2, italic: false,
                 anchor: CGPoint(x: 0, y: 0.5),
-                height: height
+                height: height,
             ) {
                 parent.addSublayer(layer)
             }
@@ -120,7 +120,7 @@ extension ScoreLayerBuilder {
     private static func drawHairpin(
         from: CGPoint, to: CGPoint, open: Bool,
         metrics: StaffMetrics, height: CGFloat,
-        into parent: CALayer
+        into parent: CALayer,
     ) {
         let p = CGMutablePath()
         let y = max(from.y, to.y)
@@ -137,14 +137,14 @@ extension ScoreLayerBuilder {
         }
         parent.addSublayer(strokeLayer(
             path: p, height: height,
-            lineWidth: metrics.sp * 0.15
+            lineWidth: metrics.sp * 0.15,
         ))
     }
 
     private static func drawPedal(
         from: CGPoint, to: CGPoint,
         metrics: StaffMetrics, height: CGFloat,
-        into parent: CALayer
+        into parent: CALayer,
     ) {
         // MuseScore pedal marks are SMuFL glyphs from the music
         // font: `keyboardPedalPed` (U+E650) and `keyboardPedalUp`
@@ -153,7 +153,7 @@ extension ScoreLayerBuilder {
             SMuFLGlyph.keyboardPedalPed, at: from,
             size: metrics.glyphFontSize,
             anchor: CGPoint(x: 0, y: 0.5),
-            height: height
+            height: height,
         ) {
             parent.addSublayer(layer)
         }
@@ -161,7 +161,7 @@ extension ScoreLayerBuilder {
             SMuFLGlyph.keyboardPedalUp, at: to,
             size: metrics.glyphFontSize,
             anchor: CGPoint(x: 0, y: 0.5),
-            height: height
+            height: height,
         ) {
             parent.addSublayer(layer)
         }
@@ -170,13 +170,13 @@ extension ScoreLayerBuilder {
     private static func drawOttava(
         from: CGPoint, to: CGPoint,
         metrics: StaffMetrics, height: CGFloat,
-        into parent: CALayer
+        into parent: CALayer,
     ) {
         if let layer = textLayer(
             text: "8va", at: from,
             size: metrics.sp * 2.5, italic: true,
             anchor: CGPoint(x: 0, y: 0.5),
-            height: height
+            height: height,
         ) {
             parent.addSublayer(layer)
         }
@@ -186,21 +186,21 @@ extension ScoreLayerBuilder {
         parent.addSublayer(strokeLayer(
             path: p, height: height,
             lineWidth: metrics.sp * 0.1,
-            dashPattern: [3, 3]
+            dashPattern: [3, 3],
         ))
     }
 
     private static func drawTextLine(
         from: CGPoint, to: CGPoint, text: String,
         metrics: StaffMetrics, height: CGFloat,
-        into parent: CALayer
+        into parent: CALayer,
     ) {
         if !text.isEmpty,
            let layer = textLayer(
                text: text, at: from,
                size: metrics.sp * 2.2, italic: true,
                anchor: CGPoint(x: 0, y: 0.5),
-               height: height
+               height: height,
            )
         {
             parent.addSublayer(layer)
@@ -210,7 +210,7 @@ extension ScoreLayerBuilder {
         p.addLine(to: to)
         parent.addSublayer(strokeLayer(
             path: p, height: height,
-            lineWidth: metrics.sp * 0.1
+            lineWidth: metrics.sp * 0.1,
         ))
     }
 
@@ -219,17 +219,17 @@ extension ScoreLayerBuilder {
     static func drawTieArc(
         from: CGPoint, to: CGPoint, above: Bool,
         metrics: StaffMetrics, height: CGFloat,
-        into parent: CALayer
+        into parent: CALayer,
     ) {
         let headClearance = metrics.sp * 0.6
         let vertSign: CGFloat = above ? -1 : 1
         let startPt = CGPoint(
             x: from.x,
-            y: from.y + headClearance * vertSign
+            y: from.y + headClearance * vertSign,
         )
         let endPt = CGPoint(
             x: to.x,
-            y: to.y + headClearance * vertSign
+            y: to.y + headClearance * vertSign,
         )
 
         let minShoulder = metrics.sp * 0.3
@@ -247,11 +247,11 @@ extension ScoreLayerBuilder {
         let dy = endPt.y - startPt.y
         let ctrl1 = CGPoint(
             x: startPt.x + dx * 0.2,
-            y: startPt.y + dy * 0.2 + shoulderH * vertSign
+            y: startPt.y + dy * 0.2 + shoulderH * vertSign,
         )
         let ctrl2 = CGPoint(
             x: startPt.x + dx * 0.8,
-            y: startPt.y + dy * 0.8 + shoulderH * vertSign
+            y: startPt.y + dy * 0.8 + shoulderH * vertSign,
         )
         let thickDy = midThickness * vertSign * -1
 
@@ -260,16 +260,16 @@ extension ScoreLayerBuilder {
         path.addCurve(
             to: endPt,
             control1: CGPoint(x: ctrl1.x, y: ctrl1.y - thickDy),
-            control2: CGPoint(x: ctrl2.x, y: ctrl2.y - thickDy)
+            control2: CGPoint(x: ctrl2.x, y: ctrl2.y - thickDy),
         )
         path.addCurve(
             to: startPt,
             control1: CGPoint(x: ctrl2.x, y: ctrl2.y + thickDy),
-            control2: CGPoint(x: ctrl1.x, y: ctrl1.y + thickDy)
+            control2: CGPoint(x: ctrl1.x, y: ctrl1.y + thickDy),
         )
         path.closeSubpath()
         parent.addSublayer(fillLayer(
-            path: path, height: height
+            path: path, height: height,
         ))
     }
 
@@ -278,7 +278,7 @@ extension ScoreLayerBuilder {
     static func drawGlissando(
         from: CGPoint, to: CGPoint, wavy: Bool, text: String?,
         metrics: StaffMetrics, height: CGFloat,
-        into parent: CALayer
+        into parent: CALayer,
     ) {
         let dx = to.x - from.x
         let dy = to.y - from.y
@@ -307,13 +307,13 @@ extension ScoreLayerBuilder {
         // the chain must be translate-then-rotate:
         //   I.translatedBy(from) · R = T_from · R
         var transform = CGAffineTransform(
-            translationX: from.x, y: from.y
+            translationX: from.x, y: from.y,
         )
         transform = transform.rotated(by: angle)
         if let transformed = linePath.copy(using: &transform) {
             parent.addSublayer(strokeLayer(
                 path: transformed, height: height,
-                lineWidth: metrics.sp * 0.15
+                lineWidth: metrics.sp * 0.15,
             ))
         }
 
@@ -331,7 +331,7 @@ extension ScoreLayerBuilder {
                 italic: true,
                 anchor: CGPoint(x: 0.5, y: 0.5),
                 rotation: angle,
-                height: height
+                height: height,
             ) {
                 parent.addSublayer(layer)
             }

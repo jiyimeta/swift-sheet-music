@@ -15,22 +15,22 @@ public enum MidiImporter {
     public static func parse(
         _ midiData: Data,
         options: MidiImportOptions = .init(),
-        sourceFilename: String? = nil
+        sourceFilename: String? = nil,
     ) throws -> Score {
         let file = try MidiReader.read(midiData)
         return try assembleSync(
-            file: file, options: options, sourceFilename: sourceFilename
+            file: file, options: options, sourceFilename: sourceFilename,
         )
     }
 
     public static func parse(
         _ midiData: Data,
         options: MidiImportOptions,
-        sourceFilename: String? = nil
+        sourceFilename: String? = nil,
     ) async throws -> Score {
         let file = try MidiReader.read(midiData)
         return try await assembleAsync(
-            file: file, options: options, sourceFilename: sourceFilename
+            file: file, options: options, sourceFilename: sourceFilename,
         )
     }
 
@@ -39,7 +39,7 @@ public enum MidiImporter {
     static func assembleSync(
         file: MidiFile,
         options: MidiImportOptions,
-        sourceFilename: String?
+        sourceFilename: String?,
     ) throws -> Score {
         let imports = partition(file)
         let timeline = buildBarTimeline(imports: imports, division: file.division)
@@ -47,23 +47,23 @@ public enum MidiImporter {
             guard let resolve = options.resolveSwing else { return track }
             return analyzeSwing(
                 track: track, timeline: timeline,
-                division: file.division, resolve: resolve
+                division: file.division, resolve: resolve,
             )
         }
         return buildScore(
             file: file, imports: swung, timeline: timeline,
-            options: options, sourceFilename: sourceFilename
+            options: options, sourceFilename: sourceFilename,
         )
     }
 
     static func assembleAsync(
         file: MidiFile,
         options: MidiImportOptions,
-        sourceFilename: String?
+        sourceFilename: String?,
     ) async throws -> Score {
         if options.resolveSwingAsync == nil {
             return try assembleSync(
-                file: file, options: options, sourceFilename: sourceFilename
+                file: file, options: options, sourceFilename: sourceFilename,
             )
         }
         let imports = partition(file)
@@ -73,7 +73,7 @@ public enum MidiImporter {
             if let resolveAsync = options.resolveSwingAsync {
                 await swung.append(asyncSwing(
                     track: track, timeline: timeline,
-                    division: file.division, resolve: resolveAsync
+                    division: file.division, resolve: resolveAsync,
                 ))
             } else {
                 swung.append(track)
@@ -81,7 +81,7 @@ public enum MidiImporter {
         }
         return buildScore(
             file: file, imports: swung, timeline: timeline,
-            options: options, sourceFilename: sourceFilename
+            options: options, sourceFilename: sourceFilename,
         )
     }
 
@@ -89,10 +89,10 @@ public enum MidiImporter {
         track: ImportTrack,
         timeline: BarTimeline,
         division: Int,
-        resolve: @Sendable (SwingDetection) async -> SwingResolution
+        resolve: @Sendable (SwingDetection) async -> SwingResolution,
     ) async -> ImportTrack {
         guard let detection = detectSwing(
-            track: track, timeline: timeline, division: division
+            track: track, timeline: timeline, division: division,
         ) else { return track }
         switch await resolve(detection) {
         case .treatAsWritten: return track

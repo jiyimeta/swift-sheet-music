@@ -35,7 +35,7 @@ enum TieValidator {
                 startingAt: startIdx,
                 pitch: current.pitch,
                 tieNumber: tieNumber,
-                measures: mutable
+                measures: mutable,
             ) {
                 forwardValid[i] = true
                 backValid[matchIdx] = true
@@ -59,7 +59,7 @@ enum TieValidator {
                             voiceIndex: voiceIndex,
                             elementIndex: elementIndex,
                             noteIndex: noteIndex,
-                            pitch: note.pitch
+                            pitch: note.pitch,
                         ))
                     }
                 }
@@ -90,7 +90,7 @@ enum TieValidator {
         startingAt startIdx: Int,
         pitch: Int,
         tieNumber: Int,
-        measures: [Measure]
+        measures: [Measure],
     ) -> Int? {
         var j = startIdx
         let startMeasure = chords[startIdx].measureIndex
@@ -119,7 +119,7 @@ enum TieValidator {
         chords: [ChordRef],
         forwardValid: [Bool],
         backValid: [Bool],
-        to measures: [Measure]
+        to measures: [Measure],
     ) -> [Measure] {
         var out = measures
         for (index, ref) in chords.enumerated() {

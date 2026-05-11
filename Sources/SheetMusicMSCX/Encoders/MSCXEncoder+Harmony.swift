@@ -13,7 +13,7 @@ extension Harmony {
         var children: [XMLTreeNode] = [
             XMLTreeNode(name: "name", text: name),
             XMLTreeNode(
-                name: "harmonyType", text: encodeHarmonyType(harmonyType)
+                name: "harmonyType", text: encodeHarmonyType(harmonyType),
             ),
         ]
         if let rootTpc {
@@ -24,12 +24,12 @@ extension Harmony {
         }
         if rootCase != .auto {
             children.append(XMLTreeNode(
-                name: "rootCase", text: encodeNoteCase(rootCase)
+                name: "rootCase", text: encodeNoteCase(rootCase),
             ))
         }
         if bassCase != .auto {
             children.append(XMLTreeNode(
-                name: "baseCase", text: encodeNoteCase(bassCase)
+                name: "baseCase", text: encodeNoteCase(bassCase),
             ))
         }
         if leftParen {
@@ -49,7 +49,7 @@ extension Harmony {
                     "g": String(color.green),
                     "b": String(color.blue),
                     "a": String(color.alpha),
-                ]
+                ],
             ))
         }
         if offsetX != 0 || offsetY != 0 {
@@ -58,7 +58,7 @@ extension Harmony {
                 attributes: [
                     "x": formatDouble(offsetX),
                     "y": formatDouble(offsetY),
-                ]
+                ],
             ))
         }
         if !visible {

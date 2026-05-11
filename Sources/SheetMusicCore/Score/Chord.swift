@@ -33,7 +33,7 @@ public struct Chord: Sendable, Equatable {
         lyrics: [Lyric] = [],
         graceNotesBefore: [GraceChord] = [],
         graceNotesAfter: [GraceChord] = [],
-        articulations: [ChordArticulation] = []
+        articulations: [ChordArticulation] = [],
     ) {
         self.duration = duration
         self.notes = notes

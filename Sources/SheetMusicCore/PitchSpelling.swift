@@ -38,7 +38,7 @@ public enum PitchSpelling {
     public static func shiftedTpc(
         from priorPitch: Int, priorTpc: Int,
         to newPitch: Int,
-        in keySig: Int = 0
+        in keySig: Int = 0,
     ) -> Int {
         if newPitch > priorPitch {
             if priorTpc > tpcA + keySig {
@@ -98,7 +98,7 @@ public enum PitchSpelling {
     /// caller wants only to clear the displayed glyph (e.g. so a
     /// note revert to "implied by key signature").
     public static func respelled(
-        from note: Note, with accidental: Accidental?
+        from note: Note, with accidental: Accidental?,
     ) -> (pitch: Int, tpc: Int) {
         guard let target = accidental else {
             return (note.pitch, note.tpc)
@@ -108,8 +108,10 @@ public enum PitchSpelling {
         // Octave is whichever places the note's natural pitch
         // closest to the existing pitch — works for any current
         // accidental within ±2 semitones of natural.
-        let approxOctave = Int(((Double(note.pitch)
-                - Double(naturalSemi)) / 12.0).rounded()) - 1
+        let approxOctave = Int(((
+            Double(note.pitch)
+                - Double(naturalSemi)
+        ) / 12.0).rounded()) - 1
         let shift = semitoneShift(of: target)
         let newPitch = 12 * (approxOctave + 1) + naturalSemi + shift
         let newTpc = naturalTpcByLetter[letter] + 7 * shift
@@ -133,7 +135,7 @@ public enum PitchSpelling {
     /// (e.g. cancelling a mid-measure ♯ with ♮) should compute it
     /// themselves and override.
     public static func displayedAccidental(
-        forTpc tpc: Int, in keySig: Int
+        forTpc tpc: Int, in keySig: Int,
     ) -> Accidental? {
         let centred = tpc - 13
         // Position in line of fifths from F (FCGDAEB = 0…6).
@@ -179,7 +181,7 @@ extension Note {
             guard (0 ... 127).contains(nextPitch) else { return nil }
             current.tpc = PitchSpelling.shiftedTpc(
                 from: current.pitch, priorTpc: current.tpc,
-                to: nextPitch, in: keySig
+                to: nextPitch, in: keySig,
             )
             current.pitch = nextPitch
         }
@@ -189,7 +191,7 @@ extension Note {
         // the prior note had — usually nil, leaving newly-altered notes
         // with no visible flat / sharp / natural sign.
         current.accidental = PitchSpelling.displayedAccidental(
-            forTpc: current.tpc, in: keySig
+            forTpc: current.tpc, in: keySig,
         )
         return current
     }

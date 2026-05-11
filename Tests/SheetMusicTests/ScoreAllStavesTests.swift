@@ -1,7 +1,7 @@
 @testable import SheetMusicCore
 import Testing
 
-@Suite struct ScoreAllStavesTests {
+struct ScoreAllStavesTests {
     private static func minimalInstrument(id: String) -> Instrument {
         Instrument(id: id, longName: id)
     }

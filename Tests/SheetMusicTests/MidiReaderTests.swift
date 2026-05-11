@@ -3,7 +3,7 @@ import Foundation
 @testable import SheetMusicMIDI
 import Testing
 
-@Suite struct MidiReaderTests {
+struct MidiReaderTests {
     /// Build an SMF byte stream "by hand" so we don't depend on MidiWriter.
     private static func makeSMF(format: UInt16, division: UInt16, tracks: [Data]) -> Data {
         var data = Data()

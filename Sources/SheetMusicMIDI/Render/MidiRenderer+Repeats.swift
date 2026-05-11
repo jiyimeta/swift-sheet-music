@@ -56,7 +56,7 @@ extension MidiRenderer {
                 plan.append(PlaybackEntry(
                     measureIndex: index,
                     tickOffset: tick,
-                    isIterationStart: nextIsIterationStart
+                    isIterationStart: nextIsIterationStart,
                 ))
                 tick += measureTicks(measure: measure, division: division)
                 nextIsIterationStart = false
@@ -126,7 +126,7 @@ extension MidiRenderer {
     static func resolvedVoice(
         measureIndex: Int,
         staff: Staff,
-        voiceIndex: Int
+        voiceIndex: Int,
     ) -> Voice? {
         let measure = staff.measures[measureIndex]
         if let rep = explicitMeasureRepeatInAnyVoice(of: measure) {
@@ -157,7 +157,7 @@ extension MidiRenderer {
     static func groupRepeatMarker(
         measureIndex: Int,
         staff: Staff,
-        voiceIndex: Int
+        voiceIndex: Int,
     ) -> MeasureRepeat? {
         guard let count = staff.measures[measureIndex].measureRepeatCount else { return nil }
         let anchor = measureIndex - (count - 1)

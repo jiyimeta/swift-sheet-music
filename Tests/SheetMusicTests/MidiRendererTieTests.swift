@@ -8,13 +8,13 @@ import Testing
 /// Verifies that the MIDI renderer collapses tied chord sequences into a single
 /// sounding note, mirroring MuseScore's `Note::playTicksFraction()`:
 /// the tied chain spans from the first chord's tick to the last chord's end-tick.
-@Suite struct MidiRendererTieTests {
+struct MidiRendererTieTests {
     // MARK: - Helpers
 
     private static func makeScore(division: Int, chords: [Chord]) -> Score {
         let instrument = Instrument(
             id: "test",
-            articulations: [InstrumentArticulation()] // gate = 100, velocity = 100
+            articulations: [InstrumentArticulation()], // gate = 100, velocity = 100
         )
         let voice = Voice(elements: chords.map { .chord($0) })
         let measure = Measure(voices: [voice])
@@ -50,11 +50,11 @@ import Testing
         let division = 480
         let sixteenth = Chord(
             duration: .sixteenth,
-            notes: [Note(pitch: 75, tpc: 11, tieForward: 1)]
+            notes: [Note(pitch: 75, tpc: 11, tieForward: 1)],
         )
         let eighth = Chord(
             duration: .eighth,
-            notes: [Note(pitch: 75, tpc: 11, tieBack: 1)]
+            notes: [Note(pitch: 75, tpc: 11, tieBack: 1)],
         )
         let score = Self.makeScore(division: division, chords: [sixteenth, eighth])
         let file = try MidiRenderer.render(score: score)
@@ -114,14 +114,14 @@ import Testing
             notes: [
                 Note(pitch: 60, tpc: 14), // C4 — not tied
                 Note(pitch: 67, tpc: 15, tieForward: 1), // G4 — tied forward
-            ]
+            ],
         )
         let b = Chord(
             duration: .quarter,
             notes: [
                 Note(pitch: 64, tpc: 18), // E4 — unrelated
                 Note(pitch: 67, tpc: 15, tieBack: 1), // G4 — tied back
-            ]
+            ],
         )
         let score = Self.makeScore(division: division, chords: [a, b])
         let file = try MidiRenderer.render(score: score)
@@ -132,8 +132,8 @@ import Testing
         // Pitches emitted: C4 (60), G4 (67) in chord A; E4 (64) in chord B.
         // G4 emits a single note-on/off pair that spans both chords.
         #expect(Set(ons.map(\.pitch)) == [60, 64, 67])
-        #expect(ons.filter { $0.pitch == 67 }.count == 1)
-        #expect(offs.filter { $0.pitch == 67 }.count == 1)
+        #expect(ons.count(where: { $0.pitch == 67 }) == 1)
+        #expect(offs.count(where: { $0.pitch == 67 }) == 1)
         // G4 off is at the end of chord B (tick 480 + 480 - 1).
         let g4Off = try #require(offs.first { $0.pitch == 67 })
         #expect(g4Off.tick == 2 * division - 1)

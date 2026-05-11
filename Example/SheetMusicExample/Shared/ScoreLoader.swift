@@ -15,7 +15,7 @@ enum ScoreLoader {
     /// error instead of silently leaving the UI empty.
     static func loadBundled() throws -> Score {
         guard let url = Bundle.main.url(
-            forResource: "test", withExtension: "mscx"
+            forResource: "test", withExtension: "mscx",
         )
         else {
             throw LoadError.bundledMissing
@@ -31,9 +31,9 @@ enum ScoreLoader {
         guard let url = Bundle.main.url(
             forResource: "harmony-basic",
             withExtension: "mscx",
-            subdirectory: "Fixtures"
+            subdirectory: "Fixtures",
         ) ?? Bundle.main.url(
-            forResource: "harmony-basic", withExtension: "mscx"
+            forResource: "harmony-basic", withExtension: "mscx",
         )
         else {
             throw LoadError.bundledMissing

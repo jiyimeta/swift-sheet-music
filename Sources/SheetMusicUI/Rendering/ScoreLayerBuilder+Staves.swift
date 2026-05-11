@@ -16,7 +16,7 @@ extension ScoreLayerBuilder {
         system: LayoutSystem,
         metrics: StaffMetrics,
         height: CGFloat,
-        into parent: CALayer
+        into parent: CALayer,
     ) {
         let staffEndX = StaffRenderer.endX(for: system)
         for origin in system.staffOrigins {
@@ -26,12 +26,13 @@ extension ScoreLayerBuilder {
                 let y = origin.y + CGFloat(i) * metrics.sp
                 path.move(to: CGPoint(x: origin.x, y: y))
                 path.addLine(
-                    to: CGPoint(x: origin.x + width, y: y))
+                    to: CGPoint(x: origin.x + width, y: y),
+                )
             }
             parent.addSublayer(strokeLayer(
                 path: path,
                 height: height,
-                lineWidth: metrics.staffLineThickness
+                lineWidth: metrics.staffLineThickness,
             ))
         }
     }
@@ -40,7 +41,7 @@ extension ScoreLayerBuilder {
         system: LayoutSystem,
         metrics: StaffMetrics,
         height: CGFloat,
-        into parent: CALayer
+        into parent: CALayer,
     ) {
         guard !system.brackets.isEmpty else { return }
         let staffOriginX = system.staffOrigins.first?.x ?? 0
@@ -51,29 +52,29 @@ extension ScoreLayerBuilder {
             case .brace:
                 drawBrace(
                     bracket: b, staffOriginX: staffOriginX,
-                    metrics: metrics, height: height, into: parent
+                    metrics: metrics, height: height, into: parent,
                 )
             case .normal:
                 drawNormalBracket(
                     bracket: b, staffOriginX: staffOriginX,
-                    metrics: metrics, height: height, into: parent
+                    metrics: metrics, height: height, into: parent,
                 )
             case .square:
                 drawSquareBracket(
                     bracket: b, staffOriginX: staffOriginX,
-                    metrics: metrics, height: height, into: parent
+                    metrics: metrics, height: height, into: parent,
                 )
             case .line:
                 drawLineBracket(
                     bracket: b, staffOriginX: staffOriginX,
-                    metrics: metrics, height: height, into: parent
+                    metrics: metrics, height: height, into: parent,
                 )
             }
         }
     }
 
     private static func bracketSpineX(
-        column: Int, staffOriginX: CGFloat, sp: CGFloat
+        column: Int, staffOriginX: CGFloat, sp: CGFloat,
     ) -> CGFloat {
         staffOriginX - sp * 0.5 - CGFloat(column) * sp
     }
@@ -86,11 +87,11 @@ extension ScoreLayerBuilder {
         staffOriginX: CGFloat,
         metrics: StaffMetrics,
         height: CGFloat,
-        into parent: CALayer
+        into parent: CALayer,
     ) {
         let sp = metrics.sp
         let x = bracketSpineX(
-            column: b.column, staffOriginX: staffOriginX, sp: sp
+            column: b.column, staffOriginX: staffOriginX, sp: sp,
         )
         let w = sp * 0.45 // Sid::bracketWidth
         let bd = sp * 0.25 // bracket-distance offset
@@ -98,7 +99,7 @@ extension ScoreLayerBuilder {
         spine.move(to: CGPoint(x: x, y: b.topY - bd - w * 0.5))
         spine.addLine(to: CGPoint(x: x, y: b.bottomY + bd + w * 0.5))
         parent.addSublayer(strokeLayer(
-            path: spine, height: height, lineWidth: w
+            path: spine, height: height, lineWidth: w,
         ))
         let glyphLeftX = x - w * 0.5
         let fontSize = sp * 4 // Bravura: 1 em = 4 sp
@@ -106,7 +107,7 @@ extension ScoreLayerBuilder {
             codepoint: 0xE003, // SMuFLGlyph.bracketTop
             fontSize: fontSize,
             originX: glyphLeftX,
-            originY: b.topY - bd
+            originY: b.topY - bd,
         ) {
             parent.addSublayer(fillLayer(path: topPath, height: height))
         }
@@ -114,7 +115,7 @@ extension ScoreLayerBuilder {
             codepoint: 0xE004, // SMuFLGlyph.bracketBottom
             fontSize: fontSize,
             originX: glyphLeftX,
-            originY: b.bottomY + bd
+            originY: b.bottomY + bd,
         ) {
             parent.addSublayer(fillLayer(path: bottomPath, height: height))
         }
@@ -128,11 +129,11 @@ extension ScoreLayerBuilder {
         staffOriginX: CGFloat,
         metrics: StaffMetrics,
         height: CGFloat,
-        into parent: CALayer
+        into parent: CALayer,
     ) {
         let sp = metrics.sp
         let x = bracketSpineX(
-            column: b.column, staffOriginX: staffOriginX, sp: sp
+            column: b.column, staffOriginX: staffOriginX, sp: sp,
         )
         let lineW = metrics.staffLineThickness
         let serifLength = sp * 0.45
@@ -142,16 +143,16 @@ extension ScoreLayerBuilder {
         spine.move(to: topPt)
         spine.addLine(to: botPt)
         parent.addSublayer(strokeLayer(
-            path: spine, height: height, lineWidth: lineW
+            path: spine, height: height, lineWidth: lineW,
         ))
         for point in [topPt, botPt] {
             let serif = CGMutablePath()
             serif.move(to: CGPoint(x: point.x - lineW * 0.5, y: point.y))
             serif.addLine(to: CGPoint(
-                x: point.x + serifLength, y: point.y
+                x: point.x + serifLength, y: point.y,
             ))
             parent.addSublayer(strokeLayer(
-                path: serif, height: height, lineWidth: lineW
+                path: serif, height: height, lineWidth: lineW,
             ))
         }
     }
@@ -164,11 +165,11 @@ extension ScoreLayerBuilder {
         staffOriginX: CGFloat,
         metrics: StaffMetrics,
         height: CGFloat,
-        into parent: CALayer
+        into parent: CALayer,
     ) {
         let sp = metrics.sp
         let x = bracketSpineX(
-            column: b.column, staffOriginX: staffOriginX, sp: sp
+            column: b.column, staffOriginX: staffOriginX, sp: sp,
         )
         let w = 0.67 * sp * 0.45
         let bd = metrics.staffLineThickness * 0.5
@@ -176,7 +177,7 @@ extension ScoreLayerBuilder {
         spine.move(to: CGPoint(x: x, y: b.topY - bd))
         spine.addLine(to: CGPoint(x: x, y: b.bottomY + bd))
         parent.addSublayer(strokeLayer(
-            path: spine, height: height, lineWidth: w
+            path: spine, height: height, lineWidth: w,
         ))
     }
 
@@ -192,11 +193,11 @@ extension ScoreLayerBuilder {
         staffOriginX: CGFloat,
         metrics: StaffMetrics,
         height: CGFloat,
-        into parent: CALayer
+        into parent: CALayer,
     ) {
         let rightEdge = staffOriginX - metrics.sp * 0.3
         let (codepoint, magx) = SMuFLGlyph.braceVariant(
-            staffCount: b.staffCount
+            staffCount: b.staffCount,
         )
         guard let path = smuflGlyphPathStretched(
             codepoint: codepoint,
@@ -204,7 +205,7 @@ extension ScoreLayerBuilder {
             rightEdgeX: rightEdge,
             topY: b.topY,
             bottomY: b.bottomY,
-            xScale: magx
+            xScale: magx,
         ) else { return }
         parent.addSublayer(fillLayer(path: path, height: height))
     }
@@ -217,19 +218,19 @@ extension ScoreLayerBuilder {
         codepoint: UInt16,
         fontSize: CGFloat,
         originX: CGFloat,
-        originY: CGFloat
+        originY: CGFloat,
     ) -> CGPath? {
         let font = bravuraFont(size: fontSize)
         var unichars: [UniChar] = [codepoint]
         var glyphs: [CGGlyph] = [0]
         guard CTFontGetGlyphsForCharacters(
-            font, &unichars, &glyphs, 1
+            font, &unichars, &glyphs, 1,
         ), let path = CTFontCreatePathForGlyph(font, glyphs[0], nil)
         else { return nil }
         // Font path is y-up (baseline at y=0). Map: screen.y = originY - font.y.
         var t = CGAffineTransform(
             a: 1, b: 0, c: 0, d: -1,
-            tx: originX, ty: originY
+            tx: originX, ty: originY,
         )
         return path.copy(using: &t) ?? path
     }
@@ -245,13 +246,13 @@ extension ScoreLayerBuilder {
         rightEdgeX: CGFloat,
         topY: CGFloat,
         bottomY: CGFloat,
-        xScale: CGFloat = 1
+        xScale: CGFloat = 1,
     ) -> CGPath? {
         let font = bravuraFont(size: fontSize)
         var unichars: [UniChar] = [codepoint]
         var glyphs: [CGGlyph] = [0]
         guard CTFontGetGlyphsForCharacters(
-            font, &unichars, &glyphs, 1
+            font, &unichars, &glyphs, 1,
         ), let path = CTFontCreatePathForGlyph(font, glyphs[0], nil)
         else { return nil }
         let bbox = path.boundingBox
@@ -263,7 +264,7 @@ extension ScoreLayerBuilder {
         var t = CGAffineTransform(
             a: xScale, b: 0, c: 0, d: -scaleY,
             tx: rightEdgeX - bbox.maxX * xScale,
-            ty: topY + bbox.maxY * scaleY
+            ty: topY + bbox.maxY * scaleY,
         )
         return path.copy(using: &t) ?? path
     }
@@ -272,7 +273,7 @@ extension ScoreLayerBuilder {
         system: LayoutSystem,
         metrics: StaffMetrics,
         height: CGFloat,
-        into parent: CALayer
+        into parent: CALayer,
     ) {
         for label in system.partLabels {
             guard !label.text.isEmpty else { continue }
@@ -282,7 +283,7 @@ extension ScoreLayerBuilder {
                 size: metrics.sp * 2.5,
                 italic: false,
                 anchor: CGPoint(x: 1, y: 0.5),
-                height: height
+                height: height,
             ) {
                 parent.addSublayer(layer)
             }
@@ -297,7 +298,7 @@ extension ScoreLayerBuilder {
         system: LayoutSystem,
         metrics: StaffMetrics,
         height: CGFloat,
-        into parent: CALayer
+        into parent: CALayer,
     ) {
         guard let first = system.staffOrigins.first,
               let last = system.staffOrigins.last
@@ -305,12 +306,12 @@ extension ScoreLayerBuilder {
         let path = CGMutablePath()
         path.move(to: CGPoint(x: first.x, y: first.y))
         path.addLine(to: CGPoint(
-            x: first.x, y: last.y + metrics.staffHeight
+            x: first.x, y: last.y + metrics.staffHeight,
         ))
         parent.addSublayer(strokeLayer(
             path: path,
             height: height,
-            lineWidth: metrics.staffLineThickness
+            lineWidth: metrics.staffLineThickness,
         ))
     }
 }

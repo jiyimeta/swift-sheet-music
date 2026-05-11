@@ -18,7 +18,8 @@ struct MSCXEncoderSpannersTests {
     private func noteRoundTrip(_ note: Note) throws -> Note {
         let xml = note.encode()
         let bytes = XMLTreeSerializer.serialize(
-            XMLTreeNode(name: "root", children: [xml]))
+            XMLTreeNode(name: "root", children: [xml]),
+        )
         let reparsed = try XMLTreeParser.parse(bytes)
         return try Note.decode(#require(reparsed.first("Note")))
     }
@@ -26,7 +27,8 @@ struct MSCXEncoderSpannersTests {
     private func voiceRoundTrip(_ voice: Voice) throws -> Voice {
         let xml = try voice.encode()
         let bytes = XMLTreeSerializer.serialize(
-            XMLTreeNode(name: "root", children: [xml]))
+            XMLTreeNode(name: "root", children: [xml]),
+        )
         let reparsed = try XMLTreeParser.parse(bytes)
         return try Voice.decode(#require(reparsed.first("voice")))
     }
@@ -63,7 +65,7 @@ struct MSCXEncoderSpannersTests {
     func glissandoChromaticStraightRoundTrip() throws {
         let gliss = Glissando(
             style: .chromatic, visualType: .straight,
-            easeIn: 0, easeOut: 0, text: nil
+            easeIn: 0, easeOut: 0, text: nil,
         )
         let note = Note(pitch: 60, tpc: 14, glissando: gliss)
         let decoded = try noteRoundTrip(note)
@@ -74,7 +76,7 @@ struct MSCXEncoderSpannersTests {
     func glissandoWavyDiatonicRoundTrip() throws {
         let gliss = Glissando(
             style: .diatonic, visualType: .wavy,
-            easeIn: 25, easeOut: 75, text: "gliss."
+            easeIn: 25, easeOut: 75, text: "gliss.",
         )
         let note = Note(pitch: 67, tpc: 17, glissando: gliss)
         let decoded = try noteRoundTrip(note)
@@ -92,7 +94,7 @@ struct MSCXEncoderSpannersTests {
             let decoded = try noteRoundTrip(note)
             #expect(
                 decoded.glissando?.style == style,
-                "style \(style) failed to round-trip"
+                "style \(style) failed to round-trip",
             )
         }
     }
@@ -105,19 +107,19 @@ struct MSCXEncoderSpannersTests {
             kind: .volta, rawType: "Volta",
             nextMeasuresOffset: 1,
             voltaEndings: [1],
-            visible: true
+            visible: true,
         )
         let end = Spanner(
             kind: .volta, rawType: "Volta",
             nextMeasuresOffset: 0,
             voltaEndings: [],
-            visible: false
+            visible: false,
         )
         let voice = Voice(elements: [
             .spanner(begin),
             .chord(Chord(
                 duration: .quarter,
-                notes: ChordNotes([Note(pitch: 60, tpc: 14)])
+                notes: ChordNotes([Note(pitch: 60, tpc: 14)]),
             )),
             .spanner(end),
         ])
@@ -130,17 +132,17 @@ struct MSCXEncoderSpannersTests {
         let begin = Spanner(
             kind: .slur, rawType: "Slur",
             nextMeasuresOffset: 0,
-            visible: true
+            visible: true,
         )
         let end = Spanner(
             kind: .slur, rawType: "Slur",
-            visible: false
+            visible: false,
         )
         let voice = Voice(elements: [
             .spanner(begin),
             .chord(Chord(
                 duration: .quarter,
-                notes: ChordNotes([Note(pitch: 60, tpc: 14)])
+                notes: ChordNotes([Note(pitch: 60, tpc: 14)]),
             )),
             .spanner(end),
         ])
@@ -167,7 +169,7 @@ struct MSCXEncoderSpannersTests {
                 nextMeasuresOffset: 2,
                 visible: true,
                 hairpin: hairpin,
-                ottava: ottava
+                ottava: ottava,
             )
             let voice = Voice(elements: [.spanner(begin)])
             let decoded = try voiceRoundTrip(voice)
@@ -181,7 +183,7 @@ struct MSCXEncoderSpannersTests {
             kind: .volta, rawType: "Volta",
             nextMeasuresOffset: 2,
             voltaEndings: [1, 3],
-            visible: true
+            visible: true,
         )
         let voice = Voice(elements: [.spanner(begin)])
         let decoded = try voiceRoundTrip(voice)

@@ -10,7 +10,7 @@ import SheetMusicCore
 enum PDFImporter {
     static func parse(
         pdfURL: URL,
-        options: PDFImportOptions = .init()
+        options: PDFImportOptions = .init(),
     ) throws -> Score {
         let data = try Data(contentsOf: pdfURL)
         return try parse(pdfData: data, options: options)
@@ -18,7 +18,7 @@ enum PDFImporter {
 
     static func parse(
         pdfData: Data,
-        options: PDFImportOptions = .init()
+        options: PDFImportOptions = .init(),
     ) throws -> Score {
         guard !pdfData.isEmpty else {
             throw SheetMusicError.malformedScore(reason: "PDFImporter: empty data")
@@ -37,12 +37,12 @@ enum PDFImporter {
     /// / paths, or when no staff can be detected on any page.
     static func buildScore(
         document: PDFDocument,
-        options: PDFImportOptions
+        options: PDFImportOptions,
     ) throws -> Score {
         let walked = try ContentStreamWalker(document: document).walk()
         guard !walked.glyphs.isEmpty || !walked.texts.isEmpty || !walked.paths.isEmpty else {
             throw SheetMusicError.malformedScore(
-                reason: "PDFImporter: no glyphs/paths found"
+                reason: "PDFImporter: no glyphs/paths found",
             )
         }
         let classified = walked.glyphs.map {
@@ -57,19 +57,19 @@ enum PDFImporter {
             let pageStaves = detectStaves(
                 paths: pagePaths,
                 classified: pageClassified,
-                pageIndex: page
+                pageIndex: page,
             )
             let systems = layoutSystems(
                 staves: pageStaves,
                 paths: walked.paths,
                 classified: classified,
-                pageIndex: page
+                pageIndex: page,
             )
             systemsAllPages.append(contentsOf: systems)
         }
         guard !systemsAllPages.isEmpty else {
             throw SheetMusicError.malformedScore(
-                reason: "PDFImporter: no staff detected on any page"
+                reason: "PDFImporter: no staff detected on any page",
             )
         }
 
@@ -78,14 +78,14 @@ enum PDFImporter {
             systems: systemsAllPages,
             texts: walked.texts,
             classified: classified,
-            options: options
+            options: options,
         )
     }
 
     /// Emit one `.info` diagnostic per `.unknown` SMuFL codepoint.
     static func emitUnknownGlyphDiagnostics(
         _ classified: [ClassifiedGlyph],
-        options: PDFImportOptions
+        options: PDFImportOptions,
     ) {
         guard let cb = options.diagnostics else { return }
         for g in classified {
@@ -93,7 +93,7 @@ enum PDFImporter {
                 cb(PDFImportDiagnostic(
                     severity: .info,
                     location: "page \(g.raw.pageIndex)",
-                    message: "Unknown SMuFL codepoint U+\(String(cp, radix: 16, uppercase: true))"
+                    message: "Unknown SMuFL codepoint U+\(String(cp, radix: 16, uppercase: true))",
                 ))
             }
         }

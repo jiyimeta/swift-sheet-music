@@ -14,16 +14,16 @@ import Testing
 /// the expected-degradation throw. Strict per-measure equivalence is
 /// deferred until the content-stream walker decodes a real
 /// `/ToUnicode` CMap from the embedded font.
-@Suite @MainActor struct PDFImporterRoundTripTests {
+@MainActor struct PDFImporterRoundTripTests {
     /// Start with the smallest fixture; expand once CMap decoding
     /// makes strict comparison meaningful.
-    nonisolated static let fixtures: [String] = ["midi01"]
+    nonisolated static let fixtures = ["midi01"]
 
     @Test(arguments: fixtures)
     func mscxRoundTripsThroughPDF(name: String) throws {
         guard #available(macOS 15.0, iOS 16.0, *) else { return }
         let mscxURL = try #require(Bundle.module.url(
-            forResource: name, withExtension: "mscx"
+            forResource: name, withExtension: "mscx",
         ))
         let mscxData = try Data(contentsOf: mscxURL)
         let scoreA = try MSCXParser.parse(mscxData)
@@ -35,7 +35,7 @@ import Testing
         do {
             let scoreB = try PDFImporter.parse(pdfData: pdfData)
             PDFRoundTripComparison.assertLooselyEquivalent(
-                scoreA, scoreB, fixture: name
+                scoreA, scoreB, fixture: name,
             )
         } catch let error as SheetMusicError {
             // Acceptable v1 degradation: the exporter writes glyph
@@ -48,7 +48,7 @@ import Testing
             switch error {
             case let .malformedScore(reason):
                 Issue.record(
-                    "PDF roundtrip degraded for \(name): \(reason)"
+                    "PDF roundtrip degraded for \(name): \(reason)",
                 )
                 return
             default:

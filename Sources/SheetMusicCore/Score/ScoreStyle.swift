@@ -46,7 +46,7 @@ public struct ScoreStyle: Sendable, Equatable {
         titleAlign: TextAlign? = nil,
         subtitleAlign: TextAlign? = nil,
         composerAlign: TextAlign? = nil,
-        lyricistAlign: TextAlign? = nil
+        lyricistAlign: TextAlign? = nil,
     ) {
         self.spatium = spatium
         self.pageLayout = pageLayout
@@ -67,6 +67,6 @@ public struct ScoreStyle: Sendable, Equatable {
         pageLayout: .museScoreA4,
         pageChrome: .museScoreDefaults,
         swingUnit: .off,
-        swingRatio: 60
+        swingRatio: 60,
     )
 }

@@ -25,14 +25,14 @@ extension MeasureRepeat {
         case .v4:
             elementName = "MeasureRepeat"
             children.append(XMLTreeNode(
-                name: "subtype", text: String(numMeasures)
+                name: "subtype", text: String(numMeasures),
             ))
         }
         if case let .fraction(f) = duration {
             children.append(XMLTreeNode(name: "durationType", text: "measure"))
             children.append(XMLTreeNode(
                 name: "duration",
-                text: "\(f.numerator)/\(f.denominator)"
+                text: "\(f.numerator)/\(f.denominator)",
             ))
         } else {
             duration.appendDurationXML(to: &children)

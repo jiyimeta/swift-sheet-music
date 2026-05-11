@@ -16,7 +16,7 @@ public enum MSCXEncoder {
 
     /// Serialize a `Score` to `.mscx` XML bytes with the given options.
     public static func encode(
-        _ score: Score, options: MSCXEncoderOptions
+        _ score: Score, options: MSCXEncoderOptions,
     ) throws -> Data {
         let root = try score.encode(options: options)
         return XMLTreeSerializer.serialize(root)
@@ -35,7 +35,7 @@ public enum MSCXEncoder {
     /// Serialize a `Score` with the given options and write the
     /// resulting `.mscx` to a file URL.
     public static func encode(
-        _ score: Score, options: MSCXEncoderOptions, to url: URL
+        _ score: Score, options: MSCXEncoderOptions, to url: URL,
     ) throws {
         let bytes = try encode(score, options: options)
         do {

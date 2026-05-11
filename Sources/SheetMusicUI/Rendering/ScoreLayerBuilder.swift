@@ -35,13 +35,13 @@ public enum ScoreLayerBuilder {
     /// for `.staffText` (and any future author-coloured element) so
     /// the renderer can honour `<color>` attributes from `.mscx`.
     static func scoreColorToCGColor(
-        _ color: ScoreColor
+        _ color: ScoreColor,
     ) -> CGColor {
         CGColor(
             red: CGFloat(color.red) / 255,
             green: CGFloat(color.green) / 255,
             blue: CGFloat(color.blue) / 255,
-            alpha: CGFloat(color.alpha) / 255
+            alpha: CGFloat(color.alpha) / 255,
         )
     }
 
@@ -49,7 +49,7 @@ public enum ScoreLayerBuilder {
 
     public static func buildSystem(
         _ system: LayoutSystem,
-        metrics: StaffMetrics
+        metrics: StaffMetrics,
     ) -> CALayer {
         buildSystemWithItems(system, metrics: metrics).root
     }
@@ -64,7 +64,7 @@ public enum ScoreLayerBuilder {
     /// selection change does not force a full layer rebuild.
     static func buildSystemWithItems(
         _ system: LayoutSystem,
-        metrics: StaffMetrics
+        metrics: StaffMetrics,
     ) -> (root: CALayer, items: [ScoreItemID: [CAShapeLayer]]) {
         let root = CALayer()
         let height = system.size.height + 1
@@ -72,27 +72,27 @@ public enum ScoreLayerBuilder {
             origin: .zero,
             size: CGSize(
                 width: system.size.width,
-                height: height
-            )
+                height: height,
+            ),
         )
         root.masksToBounds = false
         root.backgroundColor = CGColor(gray: 1, alpha: 1)
 
         drawStaves(
             system: system, metrics: metrics,
-            height: height, into: root
+            height: height, into: root,
         )
         drawSystemBar(
             system: system, metrics: metrics,
-            height: height, into: root
+            height: height, into: root,
         )
         drawBrackets(
             system: system, metrics: metrics,
-            height: height, into: root
+            height: height, into: root,
         )
         drawPartLabels(
             system: system, metrics: metrics,
-            height: height, into: root
+            height: height, into: root,
         )
 
         var ctx = BuildContext()
@@ -102,21 +102,21 @@ public enum ScoreLayerBuilder {
                 drawElement(
                     element, base: base,
                     metrics: metrics, height: height,
-                    context: &ctx, into: root
+                    context: &ctx, into: root,
                 )
             }
             for el in measure.markers {
                 drawElement(
                     el, base: base,
                     metrics: metrics, height: height,
-                    context: &ctx, into: root
+                    context: &ctx, into: root,
                 )
             }
             for el in measure.jumps {
                 drawElement(
                     el, base: base,
                     metrics: metrics, height: height,
-                    context: &ctx, into: root
+                    context: &ctx, into: root,
                 )
             }
         }
@@ -124,7 +124,7 @@ public enum ScoreLayerBuilder {
             drawElement(
                 el, base: .zero,
                 metrics: metrics, height: height,
-                context: &ctx, into: root
+                context: &ctx, into: root,
             )
         }
         return (root, ctx.items)
@@ -136,7 +136,7 @@ public enum ScoreLayerBuilder {
         var items: [ScoreItemID: [CAShapeLayer]] = [:]
 
         mutating func attach(
-            _ layer: CAShapeLayer, to id: ScoreItemID
+            _ layer: CAShapeLayer, to id: ScoreItemID,
         ) {
             items[id, default: []].append(layer)
         }
@@ -152,7 +152,7 @@ public enum ScoreLayerBuilder {
     static func applySelection(
         items: [ScoreItemID: [CAShapeLayer]],
         previousSelection: SelectionRenderState,
-        newSelection: SelectionRenderState
+        newSelection: SelectionRenderState,
     ) {
         let toReset = previousSelection.selectedIDs
             .subtracting(newSelection.selectedIDs)

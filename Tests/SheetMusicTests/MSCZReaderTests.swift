@@ -4,13 +4,13 @@ import Foundation
 import Testing
 import ZIPFoundation
 
-@Suite struct MSCZReaderTests {
+struct MSCZReaderTests {
     @Test func parseMatchesDirectMSCX() throws {
         let mscz = try #require(
-            Bundle.module.url(forResource: "midi01", withExtension: "mscz")
+            Bundle.module.url(forResource: "midi01", withExtension: "mscz"),
         )
         let mscx = try #require(
-            Bundle.module.url(forResource: "midi01", withExtension: "mscx")
+            Bundle.module.url(forResource: "midi01", withExtension: "mscx"),
         )
         let msczScore = try MSCZReader.parse(Data(contentsOf: mscz))
         let mscxScore = try MSCXParser.parse(Data(contentsOf: mscx))
@@ -52,7 +52,7 @@ import ZIPFoundation
 
     @Test func parseContentsOfURLMatchesDataOverload() throws {
         let url = try #require(
-            Bundle.module.url(forResource: "midi01", withExtension: "mscz")
+            Bundle.module.url(forResource: "midi01", withExtension: "mscz"),
         )
         let viaData = try MSCZReader.parse(Data(contentsOf: url))
         let viaURL = try MSCZReader.parse(contentsOf: url)
@@ -79,7 +79,7 @@ import ZIPFoundation
         // Zip only contains "renamed.mscx" at root — the rule-2 fallback
         // in MSCZReader should still locate it.
         let mscx = try #require(
-            Bundle.module.url(forResource: "midi01", withExtension: "mscx")
+            Bundle.module.url(forResource: "midi01", withExtension: "mscx"),
         )
         let mscxBytes = try Data(contentsOf: mscx)
         let archive = try Archive(accessMode: .create)
@@ -87,7 +87,7 @@ import ZIPFoundation
             with: "renamed.mscx",
             type: .file,
             uncompressedSize: Int64(mscxBytes.count),
-            compressionMethod: .deflate
+            compressionMethod: .deflate,
         ) { position, size in
             let start = Int(position)
             let end = min(start + size, mscxBytes.count)

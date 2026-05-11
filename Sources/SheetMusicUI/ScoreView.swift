@@ -37,7 +37,7 @@ public struct ScoreView: View {
         voiceColors: [Int: Color] = [:],
         playbackCursor: ScoreCursor? = nil,
         playbackCursorColor: Color = Color.blue.opacity(0.15),
-        availableWidth: CGFloat? = nil
+        availableWidth: CGFloat? = nil,
     ) {
         _ = BravuraFont.register
         self.score = score
@@ -70,7 +70,7 @@ public struct ScoreView: View {
         selection: ScoreSelection = .none,
         voiceColors: [Int: Color] = [:],
         playbackCursor: ScoreCursor? = nil,
-        playbackCursorColor: Color = Color.blue.opacity(0.15)
+        playbackCursorColor: Color = Color.blue.opacity(0.15),
     ) {
         _ = BravuraFont.register
         self.score = score
@@ -87,7 +87,7 @@ public struct ScoreView: View {
         let selState = SelectionRenderState.make(
             selection: selection,
             voiceColors: voiceColors,
-            score: score
+            score: score,
         )
         if let doc = providedDocument {
             systemStack(doc: doc, selection: selState)
@@ -96,7 +96,7 @@ public struct ScoreView: View {
                 let w = max(ew, options.staffSize * 4)
                 let doc = LayoutEngine.layout(
                     score: score, options: options,
-                    availableWidth: w
+                    availableWidth: w,
                 )
                 systemStack(doc: doc, selection: selState)
             } else {
@@ -104,18 +104,18 @@ public struct ScoreView: View {
                     let w = max(proxy.size.width, options.staffSize * 4)
                     let doc = LayoutEngine.layout(
                         score: score, options: options,
-                        availableWidth: w
+                        availableWidth: w,
                     )
                     systemStack(doc: doc, selection: selState)
                 }
             }
         } else {
             let naturalWidth = LayoutEngine.naturalContentWidth(
-                score: score, options: options
+                score: score, options: options,
             )
             let doc = LayoutEngine.layout(
                 score: score, options: options,
-                availableWidth: naturalWidth
+                availableWidth: naturalWidth,
             )
             horizontalStack(doc: doc, selection: selState)
         }
@@ -123,10 +123,9 @@ public struct ScoreView: View {
 
     // MARK: - Vertical (multi-system) stack
 
-    @ViewBuilder
     private func systemStack(
         doc: LayoutDocument,
-        selection: SelectionRenderState
+        selection: SelectionRenderState,
     ) -> some View {
         // Each system is positioned at its doc-coord `origin.y`
         // via `.offset` rather than stacked by a `VStack`. The
@@ -148,20 +147,20 @@ public struct ScoreView: View {
         ZStack(alignment: .topLeading) {
             if let titleFrame = doc.titleFrame {
                 TitleFrameView(
-                    frame: titleFrame, width: doc.size.width
+                    frame: titleFrame, width: doc.size.width,
                 )
             }
             ForEach(Array(doc.systems.enumerated()), id: \.offset) { _, sys in
                 SystemLayerView(
                     system: sys, metrics: doc.metrics,
-                    selection: selection
+                    selection: selection,
                 )
                 .overlay(alignment: .topLeading) {
                     if options.showBreakIndicators {
                         BreakIndicatorOverlay(
                             mode: .system(system: sys),
                             metrics: doc.metrics,
-                            policy: options.breakPolicy
+                            policy: options.breakPolicy,
                         )
                     }
                 }
@@ -171,13 +170,13 @@ public struct ScoreView: View {
                 cursor: playbackCursor,
                 document: doc,
                 score: score,
-                color: playbackCursorColor
+                color: playbackCursorColor,
             )
         }
         .frame(
             width: doc.size.width,
             height: doc.size.height,
-            alignment: .topLeading
+            alignment: .topLeading,
         )
         .background(Color.white)
         .environment(\.colorScheme, .light)
@@ -188,7 +187,7 @@ public struct ScoreView: View {
     @ViewBuilder
     private func horizontalStack(
         doc: LayoutDocument,
-        selection: SelectionRenderState
+        selection: SelectionRenderState,
     ) -> some View {
         if let system = doc.systems.first {
             // No more 600pt-slice optimisation: each system is one
@@ -200,12 +199,12 @@ public struct ScoreView: View {
                 VStack(alignment: .leading, spacing: 0) {
                     if let titleFrame = doc.titleFrame {
                         TitleFrameView(
-                            frame: titleFrame, width: doc.size.width
+                            frame: titleFrame, width: doc.size.width,
                         )
                     }
                     SystemLayerView(
                         system: system, metrics: doc.metrics,
-                        selection: selection
+                        selection: selection,
                     )
                     .overlay(alignment: .topLeading) {
                         // Horizontal mode honours no breaks at
@@ -215,7 +214,7 @@ public struct ScoreView: View {
                             BreakIndicatorOverlay(
                                 mode: .system(system: system),
                                 metrics: doc.metrics,
-                                policy: options.breakPolicy
+                                policy: options.breakPolicy,
                             )
                         }
                     }
@@ -224,7 +223,7 @@ public struct ScoreView: View {
                     cursor: playbackCursor,
                     document: doc,
                     score: score,
-                    color: playbackCursorColor
+                    color: playbackCursorColor,
                 )
             }
             .frame(width: doc.size.width, alignment: .leading)

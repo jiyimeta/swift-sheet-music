@@ -7,12 +7,12 @@ enum JumpRenderer {
         context: inout GraphicsContext,
         text: String,
         origin: CGPoint,
-        metrics: StaffMetrics
+        metrics: StaffMetrics,
     ) {
         guard !text.isEmpty else { return }
         context.drawExpressionText(
             text, at: origin,
-            size: metrics.sp * 2.5, italic: true
+            size: metrics.sp * 2.5, italic: true,
         )
     }
 }

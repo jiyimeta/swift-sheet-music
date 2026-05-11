@@ -10,13 +10,13 @@ struct LayoutArticulationTests {
     /// just above the middle line).
     private static func score(
         pitch: Int = 60,
-        articulations: [ChordArticulation] = []
+        articulations: [ChordArticulation] = [],
     ) -> Score {
         let note = Note(pitch: pitch, tpc: 14)
         let chord = Chord(
             duration: .quarter,
             notes: ChordNotes([note]),
-            articulations: articulations
+            articulations: articulations,
         )
         let measure = Measure(voices: [Voice(elements: [.chord(chord)])])
         let staff = Staff(measures: [measure])
@@ -25,19 +25,19 @@ struct LayoutArticulationTests {
             parts: [Part(
                 id: "1",
                 instrument: Instrument(id: "x"),
-                staves: [staff]
-            )]
+                staves: [staff],
+            )],
         )
     }
 
     @available(macOS 15.0, iOS 16.0, *)
     private static func laidOut(_ s: Score) -> LayoutDocument {
         let opts = ScoreViewOptions(
-            staffSize: 28, systemGap: 40, wrapToViewWidth: false
+            staffSize: 28, systemGap: 40, wrapToViewWidth: false,
         )
         let natW = LayoutEngine.naturalContentWidth(score: s, options: opts)
         return LayoutEngine.layout(
-            score: s, options: opts, availableWidth: natW
+            score: s, options: opts, availableWidth: natW,
         )
     }
 
@@ -45,7 +45,7 @@ struct LayoutArticulationTests {
     /// single-staff document. Returns `nil` if not exactly one of each.
     @available(macOS 15.0, iOS 16.0, *)
     private static func soleArtAndChord(
-        _ doc: LayoutDocument
+        _ doc: LayoutDocument,
     ) -> (LayoutElement, LayoutElement)? {
         guard let measure = doc.systems.first?.measures.first
         else { return nil }
@@ -69,7 +69,7 @@ struct LayoutArticulationTests {
     func explicitAboveAnchor() throws {
         guard #available(macOS 15.0, iOS 16.0, *) else { return }
         let doc = Self.laidOut(Self.score(
-            articulations: [.init(kind: .staccato, anchor: .above)]
+            articulations: [.init(kind: .staccato, anchor: .above)],
         ))
         let (art, chord) = try #require(Self.soleArtAndChord(doc))
         guard case let .articulation(kind, origin, isAbove) = art
@@ -86,7 +86,7 @@ struct LayoutArticulationTests {
     func explicitBelowAnchor() throws {
         guard #available(macOS 15.0, iOS 16.0, *) else { return }
         let doc = Self.laidOut(Self.score(
-            articulations: [.init(kind: .staccato, anchor: .below)]
+            articulations: [.init(kind: .staccato, anchor: .below)],
         ))
         let (art, chord) = try #require(Self.soleArtAndChord(doc))
         guard case let .articulation(_, origin, isAbove) = art
@@ -103,7 +103,7 @@ struct LayoutArticulationTests {
         guard #available(macOS 15.0, iOS 16.0, *) else { return }
         let doc = Self.laidOut(Self.score(
             pitch: 60,
-            articulations: [.init(kind: .staccato, anchor: nil)]
+            articulations: [.init(kind: .staccato, anchor: nil)],
         ))
         let (art, _) = try #require(Self.soleArtAndChord(doc))
         guard case let .articulation(_, _, isAbove) = art
@@ -116,7 +116,7 @@ struct LayoutArticulationTests {
         guard #available(macOS 15.0, iOS 16.0, *) else { return }
         let doc = Self.laidOut(Self.score(
             pitch: 79,
-            articulations: [.init(kind: .staccato, anchor: nil)]
+            articulations: [.init(kind: .staccato, anchor: nil)],
         ))
         let (art, _) = try #require(Self.soleArtAndChord(doc))
         guard case let .articulation(_, _, isAbove) = art
@@ -129,7 +129,7 @@ struct LayoutArticulationTests {
         guard #available(macOS 15.0, iOS 16.0, *) else { return }
         let doc = Self.laidOut(Self.score(
             pitch: 71,
-            articulations: [.init(kind: .staccato, anchor: .above)]
+            articulations: [.init(kind: .staccato, anchor: .above)],
         ))
         let (art, _) = try #require(Self.soleArtAndChord(doc))
         guard case let .articulation(_, origin, _) = art
@@ -148,7 +148,7 @@ struct LayoutArticulationTests {
         guard #available(macOS 15.0, iOS 16.0, *) else { return }
         let doc = Self.laidOut(Self.score(
             pitch: 71,
-            articulations: [.init(kind: .staccato, anchor: .below)]
+            articulations: [.init(kind: .staccato, anchor: .below)],
         ))
         let (art, _) = try #require(Self.soleArtAndChord(doc))
         guard case let .articulation(_, origin, _) = art
@@ -169,7 +169,7 @@ struct LayoutArticulationTests {
             articulations: [
                 .init(kind: .staccato, anchor: .above),
                 .init(kind: .tenuto, anchor: .above),
-            ]
+            ],
         ))
         guard let measure = doc.systems.first?.measures.first
         else { Issue.record("no measure"); return }
@@ -184,15 +184,15 @@ struct LayoutArticulationTests {
     }
 
     @Test("Unknown articulation kind emits no .articulation element")
-    func unknownIsFiltered() throws {
+    func unknownIsFiltered() {
         guard #available(macOS 15.0, iOS 16.0, *) else { return }
         let doc = Self.laidOut(Self.score(
             articulations: [
                 .init(
                     kind: .unknown(subtype: "articAccentAbove"),
-                    anchor: .above
+                    anchor: .above,
                 ),
-            ]
+            ],
         ))
         guard let measure = doc.systems.first?.measures.first
         else { Issue.record("no measure"); return }
@@ -208,12 +208,12 @@ struct LayoutArticulationTests {
         for (input, expected) in [
             (
                 ChordArticulation.Kind.staccatissimo,
-                LayoutElement.ArticulationKind.staccatissimo
+                LayoutElement.ArticulationKind.staccatissimo,
             ),
             (.tenuto, .tenuto),
         ] {
             let doc = Self.laidOut(Self.score(
-                articulations: [.init(kind: input, anchor: .above)]
+                articulations: [.init(kind: input, anchor: .above)],
             ))
             let (art, _) = try #require(Self.soleArtAndChord(doc))
             guard case let .articulation(kind, _, _) = art

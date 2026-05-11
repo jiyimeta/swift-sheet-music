@@ -2,18 +2,18 @@
 @testable import SheetMusicMIDI
 import Testing
 
-@Suite struct HairpinRendererIntegrationTests {
+struct HairpinRendererIntegrationTests {
     private func makeStaffWithCresc() -> Staff {
         let mp = Dynamic(subtype: "mp", velocity: 64)
         let f = Dynamic(subtype: "f", velocity: 96)
         let q: VoiceElement = .chord(Chord(
             duration: .quarter,
-            notes: ChordNotes([Note(pitch: 60, tpc: 14)])
+            notes: ChordNotes([Note(pitch: 60, tpc: 14)]),
         ))
         let cresc = Spanner(
             kind: .hairpin, rawType: "HairPin",
             nextMeasuresOffset: 1,
-            hairpin: .init(subtype: .crescendo)
+            hairpin: .init(subtype: .crescendo),
         )
         return Staff(measures: [
             Measure(voices: [Voice(elements: [
@@ -32,11 +32,11 @@ import Testing
         let part = Part(
             id: "P1",
             instrument: Instrument(id: "piano", articulations: []),
-            staves: [staff]
+            staves: [staff],
         )
         let (events, _) = MidiRenderer.renderVoice(
             voiceIndex: 0, staff: staff, part: part,
-            channel: 0, division: 480
+            channel: 0, division: 480,
         )
         let velocities: [Int] = events.compactMap {
             if case let .noteOn(_, _, v) = $0.event { return v } else { return nil }

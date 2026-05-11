@@ -4,7 +4,7 @@ import Foundation
 import SheetMusicXMLTools
 import Testing
 
-@Suite struct HairpinEncoderTests {
+struct HairpinEncoderTests {
     @Test func nilHairpinEmitsBareElement() throws {
         let s = Spanner(kind: .hairpin, rawType: "HairPin")
         let hp = try #require(s.encode().first("HairPin"))
@@ -15,7 +15,7 @@ import Testing
         let s = Spanner(
             kind: .hairpin,
             rawType: "HairPin",
-            hairpin: .init(subtype: .crescendo, veloChange: 20)
+            hairpin: .init(subtype: .crescendo, veloChange: 20),
         )
         let hp = try #require(s.encode().first("HairPin"))
         #expect(hp.first("subtype")?.text == "0")
@@ -28,7 +28,7 @@ import Testing
         let s = Spanner(
             kind: .hairpin,
             rawType: "HairPin",
-            hairpin: .init(subtype: .decrescendo, veloChangeMethod: .easeInOut)
+            hairpin: .init(subtype: .decrescendo, veloChangeMethod: .easeInOut),
         )
         let hp = try #require(s.encode().first("HairPin"))
         #expect(hp.first("subtype")?.text == "1")
@@ -41,7 +41,7 @@ import Testing
             kind: .hairpin,
             rawType: "HairPin",
             nextMeasuresOffset: 1,
-            hairpin: .init(subtype: .crescendo, veloChange: 15, veloChangeMethod: .easeIn)
+            hairpin: .init(subtype: .crescendo, veloChange: 15, veloChangeMethod: .easeIn),
         )
         let encoded = original.encode()
         let xml = XMLTreeSerializer.serialize(encoded)

@@ -9,7 +9,7 @@ public struct Voice: Sendable, Equatable {
 
     public init(
         elements: [VoiceElement],
-        tuplets: [Tuplet] = []
+        tuplets: [Tuplet] = [],
     ) {
         self.elements = elements
         self.tuplets = tuplets

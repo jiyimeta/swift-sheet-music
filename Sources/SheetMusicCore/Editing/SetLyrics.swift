@@ -20,7 +20,9 @@ public struct SetLyrics: EditCommand {
         self.lyrics = lyrics
     }
 
-    public var affectedLocation: VoiceElementID { location }
+    public var affectedLocation: VoiceElementID {
+        location
+    }
 
     @discardableResult
     public func apply(to score: inout Score) throws -> any EditCommand {
@@ -29,7 +31,8 @@ public struct SetLyrics: EditCommand {
         else {
             throw SheetMusicError.invalidEdit(
                 reason: "SetLyrics: element at \(location) "
-                    + "is not a chord (rests can't carry lyrics)")
+                    + "is not a chord (rests can't carry lyrics)",
+            )
         }
         let prior = chord.lyrics
         chord.lyrics = lyrics

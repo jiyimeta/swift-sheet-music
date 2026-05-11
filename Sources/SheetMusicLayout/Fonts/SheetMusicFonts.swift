@@ -27,7 +27,7 @@ import os
 public enum SheetMusicFonts {
     private static let logger = Logger(
         subsystem: "swift-sheet-music.SheetMusicLayout",
-        category: "Fonts"
+        category: "Fonts",
     )
 
     /// Register one or more font files with CoreText for the lifetime
@@ -48,7 +48,7 @@ public enum SheetMusicFonts {
     private static func registerOne(url: URL) -> Bool {
         var error: Unmanaged<CFError>?
         let ok = CTFontManagerRegisterFontsForURL(
-            url as CFURL, .process, &error
+            url as CFURL, .process, &error,
         )
         if ok {
             logger.info("Registered font \(url.lastPathComponent, privacy: .public)")
@@ -60,14 +60,14 @@ public enum SheetMusicFonts {
            CFErrorGetCode(cfErr) == 105
         {
             logger.info(
-                "Font \(url.lastPathComponent, privacy: .public) already registered"
+                "Font \(url.lastPathComponent, privacy: .public) already registered",
             )
             return true
         }
         let desc = error?.takeRetainedValue().localizedDescription
             ?? "unknown CTFontManager error"
         logger.error(
-            "Failed to register \(url.lastPathComponent, privacy: .public): \(desc, privacy: .public)"
+            "Failed to register \(url.lastPathComponent, privacy: .public): \(desc, privacy: .public)",
         )
         return false
     }

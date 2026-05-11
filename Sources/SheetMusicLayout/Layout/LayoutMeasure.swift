@@ -49,7 +49,7 @@ public struct LayoutMeasure: Sendable, Equatable {
         lineBreak: Bool = false,
         pageBreak: Bool = false,
         tickColumns: [Int: CGFloat] = [:],
-        multiMeasureRest: Int? = nil
+        multiMeasureRest: Int? = nil,
     ) {
         self.measureIndex = measureIndex
         self.origin = origin

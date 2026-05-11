@@ -11,7 +11,7 @@ enum MSCXFixtureLoader {
     static func mscxData(_ name: String) throws -> Data {
         let url = try #require(
             Bundle.module.url(forResource: name, withExtension: "mscx"),
-            "fixture mscx not bundled: \(name).mscx"
+            "fixture mscx not bundled: \(name).mscx",
         )
         return try Data(contentsOf: url)
     }
@@ -19,7 +19,7 @@ enum MSCXFixtureLoader {
     static func msczData(_ name: String) throws -> Data {
         let url = try #require(
             Bundle.module.url(forResource: name, withExtension: "mscz"),
-            "fixture mscz not bundled: \(name).mscz"
+            "fixture mscz not bundled: \(name).mscz",
         )
         return try Data(contentsOf: url)
     }

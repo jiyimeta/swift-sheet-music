@@ -10,7 +10,7 @@ struct VoiceElementIDTests {
             staff: StaffAddress(partIndex: 0, staffIndexInPart: 0),
             measureIndex: 0,
             voiceIndex: 0,
-            elementIndex: 1
+            elementIndex: 1,
         )
         guard case let .chord(rest) = score[id], rest.notes.isEmpty else {
             Issue.record("expected a rest (empty chord) at index 1")
@@ -26,7 +26,7 @@ struct VoiceElementIDTests {
             staff: StaffAddress(partIndex: 0, staffIndexInPart: 0),
             measureIndex: 0,
             voiceIndex: 0,
-            elementIndex: 99
+            elementIndex: 99,
         )
         #expect(score[id] == nil)
     }
@@ -38,11 +38,11 @@ struct VoiceElementIDTests {
             staff: StaffAddress(partIndex: 0, staffIndexInPart: 0),
             measureIndex: 0,
             voiceIndex: 0,
-            elementIndex: 1
+            elementIndex: 1,
         )
         let chord = Chord(
             duration: .quarter,
-            notes: [Note(pitch: 60, tpc: 14)]
+            notes: [Note(pitch: 60, tpc: 14)],
         )
         score[id] = .chord(chord)
         guard case let .chord(c) = score[id] else {
@@ -58,7 +58,7 @@ struct VoiceElementIDTests {
             staff: StaffAddress(partIndex: 0, staffIndexInPart: 0),
             measureIndex: 0,
             voiceIndex: 0,
-            elementIndex: 1
+            elementIndex: 1,
         )
         let veID = VoiceElementID(restID)
         #expect(veID.staff == StaffAddress(partIndex: 0, staffIndexInPart: 0))

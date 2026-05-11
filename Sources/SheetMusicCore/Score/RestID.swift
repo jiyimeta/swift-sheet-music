@@ -11,7 +11,7 @@ public struct RestID: Hashable, Sendable {
         staff: StaffAddress,
         measureIndex: Int,
         voiceIndex: Int,
-        elementIndex: Int
+        elementIndex: Int,
     ) {
         self.staff = staff
         self.measureIndex = measureIndex

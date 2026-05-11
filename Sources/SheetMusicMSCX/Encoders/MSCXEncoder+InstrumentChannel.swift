@@ -30,16 +30,16 @@ extension InstrumentChannel {
         children.append(controllerNode(ctrl: 32, value: 0))
         children.append(XMLTreeNode(
             name: "program",
-            attributes: ["value": String(program)]
+            attributes: ["value": String(program)],
         ))
         if let midiChannel, midiChannel != 0 {
             children.append(XMLTreeNode(
-                name: "midiChannel", text: String(midiChannel)
+                name: "midiChannel", text: String(midiChannel),
             ))
         }
         if let midiPort, midiPort != 0 {
             children.append(XMLTreeNode(
-                name: "midiPort", text: String(midiPort)
+                name: "midiPort", text: String(midiPort),
             ))
         }
         if volume != defaults.volume {
@@ -62,16 +62,16 @@ extension InstrumentChannel {
         var children: [XMLTreeNode] = []
         children.append(XMLTreeNode(
             name: "program",
-            attributes: ["value": String(program)]
+            attributes: ["value": String(program)],
         ))
         if let midiChannel {
             children.append(XMLTreeNode(
-                name: "midiChannel", text: String(midiChannel)
+                name: "midiChannel", text: String(midiChannel),
             ))
         }
         if let midiPort {
             children.append(XMLTreeNode(
-                name: "midiPort", text: String(midiPort)
+                name: "midiPort", text: String(midiPort),
             ))
         }
         if volume != defaults.volume {
@@ -95,7 +95,7 @@ extension InstrumentChannel {
     private func controllerNode(ctrl: Int, value: Int) -> XMLTreeNode {
         XMLTreeNode(
             name: "controller",
-            attributes: ["ctrl": String(ctrl), "value": String(value)]
+            attributes: ["ctrl": String(ctrl), "value": String(value)],
         )
     }
 }

@@ -21,7 +21,7 @@ extension Dynamic {
         return Dynamic(
             subtype: subtype,
             velocity: velocity,
-            properties: TextProperties.decode(node)
+            properties: TextProperties.decode(node),
         )
     }
 }

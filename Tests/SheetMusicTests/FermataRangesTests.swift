@@ -12,7 +12,7 @@ private func == (lhs: [(Int, Int)], rhs: [(Int, Int)]) -> Bool {
     return zip(lhs, rhs).allSatisfy { $0.0 == $1.0 && $0.1 == $1.1 }
 }
 
-@Suite struct FermataRangesTests {
+struct FermataRangesTests {
     private func chord(_ pitch: Int = 60, _ duration: NoteDuration = .quarter) -> VoiceElement {
         .chord(Chord(duration: duration, notes: [Note(pitch: pitch, tpc: 14)]))
     }
@@ -23,7 +23,7 @@ private func == (lhs: [(Int, Int)], rhs: [(Int, Int)]) -> Bool {
 
     private func fermata(
         _ subtype: String = "fermataAbove",
-        stretch: Double? = nil
+        stretch: Double? = nil,
     ) -> VoiceElement {
         .fermata(Fermata(subtype: subtype, timeStretch: stretch))
     }

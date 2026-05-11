@@ -5,7 +5,7 @@ import Foundation
 @testable import SheetMusicMSCX
 import Testing
 
-@Suite struct MidiWriterTests {
+struct MidiWriterTests {
     @Test func writesHeaderChunkFormat1Division480() throws {
         let file = MidiFile(division: 480, format: 1, tracks: [
             MidiTrack(events: [TimedMidiEvent(tick: 0, event: .endOfTrack)]),

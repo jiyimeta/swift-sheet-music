@@ -62,7 +62,7 @@ public enum FermataGlyphMetrics {
         // sp = 1 → fontSize = 4 (Bravura's 1 em = 4 sp). Cached
         // values are then in sp-units; callers scale by their own sp.
         let font = CTFontCreateWithName(
-            BravuraFont.familyName as CFString, 4, nil
+            BravuraFont.familyName as CFString, 4, nil,
         )
         let ascent = CTFontGetAscent(font)
         let descent = CTFontGetDescent(font)
@@ -74,7 +74,7 @@ public enum FermataGlyphMetrics {
         var unichars: [UniChar] = [codepoint]
         var glyphs: [CGGlyph] = [0]
         guard CTFontGetGlyphsForCharacters(
-            font, &unichars, &glyphs, 1
+            font, &unichars, &glyphs, 1,
         ), glyphs[0] != 0,
         let path = CTFontCreatePathForGlyph(font, glyphs[0], nil)
         else {
@@ -82,7 +82,7 @@ public enum FermataGlyphMetrics {
             // assume a centred 0.7-sp tall glyph at the baseline.
             return FermataGlyphOffsets(
                 bottomOffset: baselineFromCenter,
-                topOffset: baselineFromCenter - 0.7
+                topOffset: baselineFromCenter - 0.7,
             )
         }
         let bbox = path.boundingBox
@@ -91,7 +91,7 @@ public enum FermataGlyphMetrics {
         //   Screen-Y of glyph top    = baseline - bbox.maxY
         return FermataGlyphOffsets(
             bottomOffset: baselineFromCenter - bbox.minY,
-            topOffset: baselineFromCenter - bbox.maxY
+            topOffset: baselineFromCenter - bbox.maxY,
         )
     }
 }

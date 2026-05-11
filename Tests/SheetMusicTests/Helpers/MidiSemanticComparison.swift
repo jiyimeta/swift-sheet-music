@@ -12,11 +12,11 @@ enum MidiSemanticComparison {
         /// section boundaries. The default normaliser already drops
         /// these; this flag is reserved for future tuning and is a
         /// no-op today (kept in the spec for API stability).
-        var ignoreTempoNoise: Bool = false
+        var ignoreTempoNoise = false
         /// Drop control-change events from both produced and reference
         /// before comparing. Used for Single Note Dynamics (CC11 etc.)
         /// where the v1 implementation only does note-on velocity.
-        var ignoreControlChange: Bool = false
+        var ignoreControlChange = false
     }
 
     /// Compare two MIDI byte streams semantically. Reports first divergence via Issue.record.
@@ -27,7 +27,7 @@ enum MidiSemanticComparison {
     static func assertEquivalent(
         produced: Data,
         reference: Data,
-        options: Options
+        options: Options,
     ) throws {
         let producedFile = try MidiReader.read(produced)
         let referenceFile = try MidiReader.read(reference)
@@ -224,5 +224,7 @@ enum MidiSemanticComparison {
 }
 
 extension Array {
-    fileprivate subscript(safe i: Int) -> Element? { indices.contains(i) ? self[i] : nil }
+    fileprivate subscript(safe i: Int) -> Element? {
+        indices.contains(i) ? self[i] : nil
+    }
 }

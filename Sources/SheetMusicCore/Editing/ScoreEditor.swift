@@ -24,8 +24,13 @@ public final class ScoreEditor {
         self.score = score
     }
 
-    public var canUndo: Bool { !undoStack.isEmpty }
-    public var canRedo: Bool { !redoStack.isEmpty }
+    public var canUndo: Bool {
+        !undoStack.isEmpty
+    }
+
+    public var canRedo: Bool {
+        !redoStack.isEmpty
+    }
 
     /// Applies `command`, pushes its inverse onto the undo stack,
     /// and clears the redo stack (a fresh edit invalidates redo).

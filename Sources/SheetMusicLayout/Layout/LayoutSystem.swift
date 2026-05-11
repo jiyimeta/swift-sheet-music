@@ -48,7 +48,7 @@ public struct LayoutSystem: Sendable, Equatable {
         partLabels: [LayoutPartLabel],
         brackets: [LayoutBracket] = [],
         spanners: [LayoutElement],
-        sp: CGFloat
+        sp: CGFloat,
     ) {
         self.origin = origin
         self.size = size
@@ -96,7 +96,7 @@ public struct LayoutSystem: Sendable, Equatable {
 
     private static func buildEventColumns(
         measures: [LayoutMeasure],
-        sp: CGFloat
+        sp: CGFloat,
     ) -> [EventColumn] {
         var result: [EventColumn] = []
         for measure in measures {
@@ -122,14 +122,14 @@ public struct LayoutSystem: Sendable, Equatable {
                         x: minX - pad,
                         y: minY - pad,
                         width: (maxX - minX) + pad * 2,
-                        height: (maxY - minY) + pad * 2
+                        height: (maxY - minY) + pad * 2,
                     )
                     result.append(EventColumn(
                         id: .note(topNote.noteID),
                         voiceIndex: voiceIndex,
                         centerX: (minX + maxX) / 2,
                         centerY: (minY + maxY) / 2,
-                        bbox: bbox
+                        bbox: bbox,
                     ))
                 case let .rest(_, origin, voiceIndex, restID, _):
                     let cx = mx + origin.x
@@ -139,14 +139,14 @@ public struct LayoutSystem: Sendable, Equatable {
                     let halfH: CGFloat = sp * 2.5
                     let bbox = CGRect(
                         x: cx - halfW, y: cy - halfH,
-                        width: halfW * 2, height: halfH * 2
+                        width: halfW * 2, height: halfH * 2,
                     )
                     result.append(EventColumn(
                         id: .rest(restID),
                         voiceIndex: voiceIndex,
                         centerX: cx,
                         centerY: cy,
-                        bbox: bbox
+                        bbox: bbox,
                     ))
                 default:
                     continue
@@ -190,7 +190,7 @@ public struct LayoutBracket: Sendable, Equatable {
         topY: CGFloat,
         bottomY: CGFloat,
         column: Int,
-        staffCount: Int = 1
+        staffCount: Int = 1,
     ) {
         self.type = type
         self.topY = topY

@@ -25,7 +25,7 @@ enum PageChromeMacroExpander {
     /// Tokens that don't match any known macro fall through as
     /// literal `$<char>` (matching MuseScore's `default:` branch).
     static func expand(
-        _ template: String, context: Context
+        _ template: String, context: Context,
     ) -> String {
         var output = ""
         let chars = Array(template)
@@ -66,7 +66,7 @@ enum PageChromeMacroExpander {
     }
 
     private static func expandToken(
-        _ token: Character, context: Context
+        _ token: Character, context: Context,
     ) -> String? {
         let pageNumber = context.pageIndex + 1
         let isFirstPage = context.pageIndex == 0

@@ -25,7 +25,7 @@ public struct StickyHeaderView: View {
     public init(
         document: LayoutDocument,
         measureContexts: [LayoutMeasureContext],
-        documentScrollX: CGFloat
+        documentScrollX: CGFloat,
     ) {
         self.document = document
         self.measureContexts = measureContexts
@@ -41,12 +41,12 @@ public struct StickyHeaderView: View {
     public init(
         document: LayoutDocument,
         score: Score,
-        documentScrollX: CGFloat
+        documentScrollX: CGFloat,
     ) {
         self.init(
             document: document,
             measureContexts: LayoutEngine.measureContexts(for: score),
-            documentScrollX: documentScrollX
+            documentScrollX: documentScrollX,
         )
     }
 
@@ -54,7 +54,7 @@ public struct StickyHeaderView: View {
         let measureIdx = document
             .measureIndex(atDocumentX: documentScrollX) ?? 0
         let safeIdx = min(
-            max(0, measureIdx), measureContexts.count - 1
+            max(0, measureIdx), measureContexts.count - 1,
         )
         if safeIdx >= 0,
            safeIdx < measureContexts.count,
@@ -64,12 +64,12 @@ public struct StickyHeaderView: View {
             let synth = LayoutEngine.stickyHeaderSystem(
                 for: context,
                 templateSystem: template,
-                metrics: document.metrics
+                metrics: document.metrics,
             )
             ZStack(alignment: .topLeading) {
                 Color.white
                 SystemLayerView(
-                    system: synth, metrics: document.metrics
+                    system: synth, metrics: document.metrics,
                 )
                 // Render the frozen elements at MuseScore's
                 // `invisibleColor()` (#808080, 50 % gray on
@@ -85,7 +85,7 @@ public struct StickyHeaderView: View {
             .frame(
                 width: synth.size.width,
                 height: synth.size.height + 1,
-                alignment: .topLeading
+                alignment: .topLeading,
             )
             .environment(\.colorScheme, .light)
         }

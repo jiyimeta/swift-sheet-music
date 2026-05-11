@@ -3,11 +3,11 @@ import Foundation
 @testable import SheetMusicPDF
 import Testing
 
-@Suite @MainActor struct PDFImporterLayoutTests {
+@MainActor struct PDFImporterLayoutTests {
     private func staff(
         yMid: CGFloat,
         xRange: ClosedRange<CGFloat>,
-        barlineXs: [CGFloat]
+        barlineXs: [CGFloat],
     ) -> Staff {
         let yLines = (-2 ... 2).map { yMid + CGFloat($0) * 5 }
         let yLo = yLines.first ?? yMid
@@ -17,14 +17,14 @@ import Testing
                 kind: .vertical,
                 rect: CGRect(x: $0, y: yLo, width: 0, height: yHi - yLo),
                 lineWidth: 0.5,
-                pageIndex: 0
+                pageIndex: 0,
             )
         }
         return Staff(
             pageIndex: 0,
             yLines: yLines,
             xRange: xRange,
-            barlineCandidates: bars
+            barlineCandidates: bars,
         )
     }
 
@@ -32,7 +32,7 @@ import Testing
         let s1 = staff(yMid: 700, xRange: 50 ... 550, barlineXs: [200, 400, 550])
         let s2 = staff(yMid: 660, xRange: 50 ... 550, barlineXs: [200, 400, 550])
         let systems = PDFImporter.layoutSystems(
-            staves: [s1, s2], paths: [], classified: [], pageIndex: 0
+            staves: [s1, s2], paths: [], classified: [], pageIndex: 0,
         )
         #expect(systems.count == 1)
         #expect(systems.first?.parts.flatMap(\.staves).count == 2)
@@ -42,7 +42,7 @@ import Testing
         let s1 = staff(yMid: 700, xRange: 50 ... 550, barlineXs: [550])
         let s2 = staff(yMid: 200, xRange: 50 ... 550, barlineXs: [550])
         let systems = PDFImporter.layoutSystems(
-            staves: [s1, s2], paths: [], classified: [], pageIndex: 0
+            staves: [s1, s2], paths: [], classified: [], pageIndex: 0,
         )
         #expect(systems.count == 2)
     }
@@ -50,7 +50,7 @@ import Testing
     @Test func barlinesSplitMeasures() {
         let s = staff(yMid: 500, xRange: 50 ... 550, barlineXs: [200, 400, 550])
         let systems = PDFImporter.layoutSystems(
-            staves: [s], paths: [], classified: [], pageIndex: 0
+            staves: [s], paths: [], classified: [], pageIndex: 0,
         )
         let measures = systems.first?.parts.first?.staves.first?.measures ?? []
         // 3 cells: (50,200), (200,400), (400,550)
@@ -65,11 +65,11 @@ import Testing
         let bracket = PathSegment(
             kind: .vertical,
             rect: CGRect(x: 48, y: 658, width: 0, height: 44),
-            lineWidth: 1.5, pageIndex: 0
+            lineWidth: 1.5, pageIndex: 0,
         )
         let systems = PDFImporter.layoutSystems(
             staves: [upper, lower], paths: [bracket],
-            classified: [], pageIndex: 0
+            classified: [], pageIndex: 0,
         )
         #expect(systems.first?.parts.count == 1)
         #expect(systems.first?.parts.first?.staves.count == 2)
@@ -84,12 +84,12 @@ import Testing
                 fontSize: 20,
                 origin: CGPoint(x: 250, y: 500),
                 advance: 5,
-                pageIndex: 0
+                pageIndex: 0,
             ),
-            semantic: .noteheadBlack
+            semantic: .noteheadBlack,
         )
         let systems = PDFImporter.layoutSystems(
-            staves: [s], paths: [], classified: [g], pageIndex: 0
+            staves: [s], paths: [], classified: [g], pageIndex: 0,
         )
         let measures = systems.first?.parts.first?.staves.first?.measures ?? []
         #expect(measures[0].glyphs.isEmpty)
@@ -101,7 +101,7 @@ import Testing
         let s1 = staff(yMid: 700, xRange: 50 ... 550, barlineXs: [200, 400, 550])
         let s2 = staff(yMid: 660, xRange: 50 ... 550, barlineXs: [400, 550])
         let systems = PDFImporter.layoutSystems(
-            staves: [s1, s2], paths: [], classified: [], pageIndex: 0
+            staves: [s1, s2], paths: [], classified: [], pageIndex: 0,
         )
         let counts = systems.first?.parts.flatMap { $0.staves.map(\.measures.count) }
         #expect(counts == [3, 3])

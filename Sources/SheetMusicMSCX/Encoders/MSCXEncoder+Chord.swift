@@ -17,7 +17,7 @@ extension Chord {
         tieBackLocation: TieLocation? = nil,
         options: MSCXEncoderOptions = .init(),
         staffGroup: String = "pitched",
-        voiceIndex: Int = 0
+        voiceIndex: Int = 0,
     ) -> XMLTreeNode {
         var children: [XMLTreeNode] = []
         let isPercussionV3 =
@@ -29,7 +29,7 @@ extension Chord {
             // convention from MS3 `Chord::write`).
             children.append(XMLTreeNode(
                 name: "StemDirection",
-                text: voiceIndex == 0 ? "up" : "down"
+                text: voiceIndex == 0 ? "up" : "down",
             ))
         }
         duration.appendDurationXML(to: &children)
@@ -56,7 +56,7 @@ extension Chord {
                 tieForwardLocation: tieForwardLocation,
                 tieBackLocation: tieBackLocation,
                 options: options,
-                drumDefaultHead: isPercussionV3 ? "normal" : nil
+                drumDefaultHead: isPercussionV3 ? "normal" : nil,
             ))
         }
         return XMLTreeNode(name: "Chord", children: children)

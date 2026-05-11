@@ -16,14 +16,14 @@ enum MeasureNumberRenderer {
         context: inout GraphicsContext,
         text: String,
         origin: CGPoint,
-        metrics: StaffMetrics
+        metrics: StaffMetrics,
     ) {
         guard !text.isEmpty else { return }
         context.drawExpressionText(
             text, at: origin,
             size: metrics.sp * 2.0,
             italic: false,
-            anchor: .bottomLeading
+            anchor: .bottomLeading,
         )
     }
 }

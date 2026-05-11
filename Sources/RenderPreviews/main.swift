@@ -21,7 +21,8 @@
 
     guard #available(macOS 15.0, *) else {
         FileHandle.standardError.write(Data(
-            "RenderPreviews requires macOS 15+\n".utf8))
+            "RenderPreviews requires macOS 15+\n".utf8,
+        ))
         exit(1)
     }
 
@@ -33,7 +34,7 @@
             ? URL(fileURLWithPath: args[1], isDirectory: true)
             : URL(fileURLWithPath: "tmp/previews", isDirectory: true)
         try FileManager.default.createDirectory(
-            at: outputDir, withIntermediateDirectories: true
+            at: outputDir, withIntermediateDirectories: true,
         )
 
         _ = BravuraFont.register
@@ -81,14 +82,14 @@
         // visual difference.
         let mmRestOpts = ScoreViewOptions(
             staffSize: 28, systemGap: 40, wrapToViewWidth: false,
-            multiMeasureRest: .collapse(minimumMeasures: 2)
+            multiMeasureRest: .collapse(minimumMeasures: 2),
         )
         let mmRestURL = outputDir.appendingPathComponent(
-            "28b-multi-measure-rest-collapsed.png"
+            "28b-multi-measure-rest-collapsed.png",
         )
         try renderScoreToPNG(
             Samples.multiMeasureRest, to: mmRestURL, scale: 2,
-            options: mmRestOpts
+            options: mmRestOpts,
         )
         print("wrote \(mmRestURL.path)")
 
@@ -102,8 +103,10 @@
         // Parse Example/SheetMusicExample/test.mscx if present and render
         // the first couple of systems. Useful for spot-checking synthesized
         // clefs on staves that rely on MuseScore instrument defaults.
-        let examplePath = URL(fileURLWithPath:
-            "Example/SheetMusicExample/test.mscx")
+        let examplePath = URL(
+            fileURLWithPath:
+            "Example/SheetMusicExample/test.mscx",
+        )
         if FileManager.default.fileExists(atPath: examplePath.path),
            let data = try? Data(contentsOf: examplePath),
            let realScore = try? SheetMusic.loadScore(mscxData: data)
@@ -133,17 +136,17 @@
     @MainActor
     func renderScoreToPNG(
         _ score: Score, to url: URL, scale: CGFloat,
-        options: ScoreViewOptions? = nil
+        options: ScoreViewOptions? = nil,
     ) throws {
         let opts = options ?? ScoreViewOptions(
-            staffSize: 28, systemGap: 40, wrapToViewWidth: false
+            staffSize: 28, systemGap: 40, wrapToViewWidth: false,
         )
         let naturalWidth = LayoutEngine.naturalContentWidth(
-            score: score, options: opts
+            score: score, options: opts,
         )
         let doc = LayoutEngine.layout(
             score: score, options: opts,
-            availableWidth: naturalWidth
+            availableWidth: naturalWidth,
         )
 
         let padding: CGFloat = 16
@@ -158,7 +161,7 @@
             bitsPerComponent: 8,
             bytesPerRow: pxW * 4,
             space: space,
-            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue,
         )
         else { throw RenderError.contextInitFailed }
 
@@ -171,7 +174,7 @@
             x: 0,
             y: 0,
             width: doc.size.width + 2 * padding,
-            height: doc.size.height + 2 * padding
+            height: doc.size.height + 2 * padding,
         ))
 
         // ScoreLayerBuilder emits Y-up paths (AppKit NSView convention on
@@ -182,7 +185,7 @@
         // = sys.origin.y + sys.size.height.
         for sys in doc.systems {
             let tree = ScoreLayerBuilder.buildSystem(
-                sys, metrics: doc.metrics
+                sys, metrics: doc.metrics,
             )
             tree.layoutIfNeeded()
             ctx.saveGState()

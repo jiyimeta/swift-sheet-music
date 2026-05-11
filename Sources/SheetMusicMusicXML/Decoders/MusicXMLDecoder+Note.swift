@@ -19,14 +19,14 @@ enum MusicXMLNoteDecoder {
         node: XMLTreeNode,
         divisions: DivisionsContext,
         existingVoiceElements: [VoiceElement],
-        drumTable: MusicXMLDrumTable = MusicXMLDrumTable()
+        drumTable: MusicXMLDrumTable = MusicXMLDrumTable(),
     ) throws -> Decoded {
         let isRest = node.children.contains(where: { $0.name == "rest" })
         let isChord = node.children.contains(where: { $0.name == "chord" })
 
         guard let duration = MusicXMLDuration.decode(note: node, divisions: divisions) else {
             throw SheetMusicError.malformedScore(
-                reason: "MusicXML: <note> missing a usable <duration> or <type>"
+                reason: "MusicXML: <note> missing a usable <duration> or <type>",
             )
         }
 
@@ -55,7 +55,7 @@ enum MusicXMLNoteDecoder {
             }
         } else {
             throw SheetMusicError.malformedScore(
-                reason: "MusicXML: <note> has neither <pitch>, <unpitched>, nor <rest>"
+                reason: "MusicXML: <note> has neither <pitch>, <unpitched>, nor <rest>",
             )
         }
         let accidental = decodeAccidental(node)
@@ -65,7 +65,7 @@ enum MusicXMLNoteDecoder {
             tpc: tpc,
             accidental: accidental,
             tieForward: tieForward,
-            tieBack: tieBack
+            tieBack: tieBack,
         )
 
         if isChord {
@@ -76,7 +76,7 @@ enum MusicXMLNoteDecoder {
         let lyrics = decodeLyrics(node)
         let chord = Chord(
             duration: duration, notes: [note],
-            arpeggio: arpeggio, lyrics: lyrics
+            arpeggio: arpeggio, lyrics: lyrics,
         )
         _ = existingVoiceElements // reserved for future use (e.g. tie backrefs)
         return .new(prefix + [.chord(chord)])
@@ -169,7 +169,7 @@ enum MusicXMLNoteDecoder {
             let syllabic = (lyricNode.first("syllabic")?.text)
                 .flatMap(Syllabic.init(mscxValue:)) ?? .single
             map[verse - 1] = Lyric(
-                text: text, syllabic: syllabic, ticks: 0
+                text: text, syllabic: syllabic, ticks: 0,
             )
         }
         guard let maxVerse = map.keys.max() else { return [] }

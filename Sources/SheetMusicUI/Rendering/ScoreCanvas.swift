@@ -20,21 +20,21 @@ struct SystemCanvas: View {
                 Path(CGRect(
                     origin: .zero,
                     size: CGSize(
-                        width: system.size.width, height: h
-                    )
+                        width: system.size.width, height: h,
+                    ),
                 )),
-                with: .color(.white)
+                with: .color(.white),
             )
             var local = context
             local.translateBy(x: -system.origin.x, y: -system.origin.y)
             ScoreCanvasDrawing.drawSystem(
-                system, metrics: metrics, into: &local
+                system, metrics: metrics, into: &local,
             )
         }
         .frame(
             width: system.size.width,
             height: h,
-            alignment: .topLeading
+            alignment: .topLeading,
         )
         .environment(\.colorScheme, .light)
     }
@@ -56,19 +56,19 @@ struct SystemSliceCanvas: View {
             context.fill(
                 Path(CGRect(
                     origin: .zero,
-                    size: CGSize(width: sliceWidth, height: h)
+                    size: CGSize(width: sliceWidth, height: h),
                 )),
-                with: .color(.white)
+                with: .color(.white),
             )
             var local = context
             local.translateBy(
                 x: -system.origin.x - xStart,
-                y: -system.origin.y
+                y: -system.origin.y,
             )
             let absX = system.origin.x + xStart
             ScoreCanvasDrawing.drawSystem(
                 system, metrics: metrics, into: &local,
-                visibleX: absX ... (absX + sliceWidth)
+                visibleX: absX ... (absX + sliceWidth),
             )
         }
         .frame(width: sliceWidth, height: h, alignment: .topLeading)
@@ -85,7 +85,7 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
         _ system: LayoutSystem,
         metrics: StaffMetrics,
         into context: inout GraphicsContext,
-        visibleX: ClosedRange<CGFloat>? = nil
+        visibleX: ClosedRange<CGFloat>? = nil,
     ) {
         // Staves
         let staffEndX = StaffRenderer.endX(for: system)
@@ -94,10 +94,10 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                 context: &context,
                 origin: CGPoint(
                     x: system.origin.x + origin.x,
-                    y: system.origin.y + origin.y
+                    y: system.origin.y + origin.y,
                 ),
                 width: staffEndX - origin.x,
-                metrics: metrics
+                metrics: metrics,
             )
         }
         // System barline — vertical line at the system's left edge
@@ -110,19 +110,19 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
             bar.move(to: CGPoint(x: x, y: system.origin.y + first.y))
             bar.addLine(to: CGPoint(
                 x: x,
-                y: system.origin.y + last.y + metrics.staffHeight
+                y: system.origin.y + last.y + metrics.staffHeight,
             ))
             context.stroke(
                 bar,
                 with: .color(.primary),
-                lineWidth: metrics.staffLineThickness
+                lineWidth: metrics.staffLineThickness,
             )
         }
         // Brackets / braces at the left edge of the system.
         StaffRenderer.drawBrackets(
             context: &context,
             system: system,
-            metrics: metrics
+            metrics: metrics,
         )
         // Part labels — `label.origin.x` already encodes the right-edge
         // X (in system coords) computed by the layout pass to clear any
@@ -133,9 +133,9 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                 text: label.text,
                 origin: CGPoint(
                     x: system.origin.x + label.origin.x,
-                    y: system.origin.y + label.origin.y
+                    y: system.origin.y + label.origin.y,
                 ),
-                metrics: metrics
+                metrics: metrics,
             )
         }
         // Measures — skip those entirely outside the visible x range.
@@ -149,14 +149,14 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
             }
             let base = CGPoint(
                 x: system.origin.x + measure.origin.x,
-                y: system.origin.y + measure.origin.y
+                y: system.origin.y + measure.origin.y,
             )
             for element in measure.elements {
                 drawElement(
                     element,
                     base: base,
                     metrics: metrics,
-                    into: &context
+                    into: &context,
                 )
             }
             for el in measure.markers {
@@ -164,7 +164,7 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                     el,
                     base: base,
                     metrics: metrics,
-                    into: &context
+                    into: &context,
                 )
             }
             for el in measure.jumps {
@@ -172,7 +172,7 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                     el,
                     base: base,
                     metrics: metrics,
-                    into: &context
+                    into: &context,
                 )
             }
         }
@@ -182,7 +182,7 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                 el,
                 base: system.origin,
                 metrics: metrics,
-                into: &context
+                into: &context,
             )
         }
     }
@@ -191,7 +191,7 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
         _ element: LayoutElement,
         base: CGPoint,
         metrics: StaffMetrics,
-        into context: inout GraphicsContext
+        into context: inout GraphicsContext,
     ) {
         func shift(_ p: CGPoint) -> CGPoint {
             CGPoint(x: base.x + p.x, y: base.y + p.y)
@@ -200,36 +200,36 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
         case let .clef(raw, p, _):
             ClefRenderer.draw(
                 context: &context, rawType: raw,
-                origin: shift(p), metrics: metrics
+                origin: shift(p), metrics: metrics,
             )
         case let .keySignature(s, f, p):
             KeySignatureRenderer.draw(
                 context: &context, sharps: s, flats: f,
-                origin: shift(p), metrics: metrics
+                origin: shift(p), metrics: metrics,
             )
         case let .timeSignature(n, d, p):
             TimeSignatureRenderer.draw(
                 context: &context, numerator: n, denominator: d,
-                origin: shift(p), metrics: metrics
+                origin: shift(p), metrics: metrics,
             )
         case let .barLine(s, p):
             BarLineRenderer.draw(
                 context: &context, subtype: s,
-                origin: shift(p), metrics: metrics
+                origin: shift(p), metrics: metrics,
             )
         case let .rest(d, p, _, _, hll):
             let (baseDur, dots) = DurationInterpretation.split(d)
             RestRenderer.draw(
                 context: &context, duration: baseDur,
                 hasLegerLine: hll,
-                origin: shift(p), metrics: metrics
+                origin: shift(p), metrics: metrics,
             )
             DotRenderer.draw(
                 context: &context,
                 after: shift(p),
                 count: dots,
                 onStaffLine: true,
-                metrics: metrics
+                metrics: metrics,
             )
         case let .chord(
             notes,
@@ -239,7 +239,7 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
             _,
             _,
             isBeamed,
-            _
+            _,
         ):
             let (baseDur, dots) = DurationInterpretation.split(dur)
             let shiftedNotes = notes.map {
@@ -252,23 +252,23 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                     tieBack: $0.tieBack,
                     hasGlissando: $0.hasGlissando,
                     headType: $0.headType,
-                    mirror: $0.mirror
+                    mirror: $0.mirror,
                 )
             }
             for n in shiftedNotes {
                 let mirrorDx = n.mirrorDx(stem: stem, sp: metrics.sp)
                 let visualOrigin = CGPoint(
-                    x: n.origin.x + mirrorDx, y: n.origin.y
+                    x: n.origin.x + mirrorDx, y: n.origin.y,
                 )
                 NoteheadRenderer.drawHead(
                     context: &context, at: visualOrigin,
                     duration: baseDur, headType: n.headType,
-                    metrics: metrics
+                    metrics: metrics,
                 )
                 if let acc = n.accidental {
                     AccidentalRenderer.draw(
                         context: &context, accidental: acc,
-                        origin: visualOrigin, metrics: metrics
+                        origin: visualOrigin, metrics: metrics,
                     )
                 }
                 DotRenderer.draw(
@@ -276,35 +276,35 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                     after: visualOrigin,
                     count: dots,
                     onStaffLine: n.step.isMultiple(of: 2),
-                    metrics: metrics
+                    metrics: metrics,
                 )
             }
             // Ledger lines
             drawLedgerLines(
                 context: &context,
                 notes: shiftedNotes, stem: stem,
-                metrics: metrics
+                metrics: metrics,
             )
             let beamY: CGFloat? = isBeamed ? shift(stemOrigin).y : nil
             StemRenderer.draw(
                 context: &context, notes: shiftedNotes,
                 direction: stem, duration: baseDur,
-                isBeamed: isBeamed, beamY: beamY, metrics: metrics
+                isBeamed: isBeamed, beamY: beamY, metrics: metrics,
             )
         case let .textMark(.dynamic, text, p):
             TextMarkRenderer.drawDynamic(
                 context: &context, text: text,
-                origin: shift(p), metrics: metrics
+                origin: shift(p), metrics: metrics,
             )
         case let .textMark(.tempo, text, p):
             TextMarkRenderer.drawTempo(
                 context: &context, text: text,
-                origin: shift(p), metrics: metrics
+                origin: shift(p), metrics: metrics,
             )
         case let .textMark(.lyrics, text, p):
             TextMarkRenderer.drawLyric(
                 context: &context, text: text,
-                origin: shift(p), metrics: metrics
+                origin: shift(p), metrics: metrics,
             )
         case let .beam(from, to, direction, level):
             BeamRenderer.draw(
@@ -313,29 +313,29 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                 to: shift(to),
                 direction: direction,
                 level: level,
-                metrics: metrics
+                metrics: metrics,
             )
         case let .fermata(subtype, p):
             FermataRenderer.draw(
                 context: &context, subtype: subtype,
-                origin: shift(p), metrics: metrics
+                origin: shift(p), metrics: metrics,
             )
         case let .articulation(kind, p, isAbove):
             ArticulationRenderer.draw(
                 context: &context, kind: kind,
                 isAbove: isAbove, origin: shift(p),
-                metrics: metrics
+                metrics: metrics,
             )
         case let .measureRepeat(c, p):
             MeasureRepeatRenderer.draw(
                 context: &context, count: c,
-                origin: shift(p), metrics: metrics
+                origin: shift(p), metrics: metrics,
             )
         case let .arpeggioWiggle(top, bot, sub):
             ArpeggioRenderer.draw(
                 context: &context, top: shift(top),
                 bottom: shift(bot), subtype: sub,
-                metrics: metrics
+                metrics: metrics,
             )
         case let .spannerSegment(
             kind,
@@ -343,25 +343,25 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
             to,
             cl,
             cr,
-            text
+            text,
         ):
             SpannerRenderer.draw(
                 context: &context, kind: kind,
                 from: shift(from), to: shift(to),
                 continuesLeft: cl, continuesRight: cr,
-                text: text, metrics: metrics
+                text: text, metrics: metrics,
             )
         case let .tieArc(from, to, above):
             TieRenderer.draw(
                 context: &context,
                 from: shift(from), to: shift(to),
-                above: above, metrics: metrics
+                above: above, metrics: metrics,
             )
         case let .glissandoLine(from, to, wavy, text):
             GlissandoRenderer.draw(
                 context: &context,
                 from: shift(from), to: shift(to),
-                wavy: wavy, text: text, metrics: metrics
+                wavy: wavy, text: text, metrics: metrics,
             )
         case let .tupletLabel(
             from,
@@ -369,7 +369,7 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
             text,
             bracket,
             above,
-            _
+            _,
         ):
             TupletRenderer.draw(
                 context: &context,
@@ -377,51 +377,51 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                 text: text,
                 hasBracket: bracket,
                 isAbove: above,
-                metrics: metrics
+                metrics: metrics,
             )
         case let .marker(kind, text, p):
             MarkerRenderer.draw(
                 context: &context, kind: kind, text: text,
-                origin: shift(p), metrics: metrics
+                origin: shift(p), metrics: metrics,
             )
         case let .rehearsalMark(text, p, frame, color):
             RehearsalMarkRenderer.draw(
                 context: &context, text: text,
                 origin: shift(p), frame: frame, color: color,
-                metrics: metrics
+                metrics: metrics,
             )
         case let .jump(text, p):
             JumpRenderer.draw(
                 context: &context, text: text,
-                origin: shift(p), metrics: metrics
+                origin: shift(p), metrics: metrics,
             )
         case let .measureNumber(text, p):
             MeasureNumberRenderer.draw(
                 context: &context, text: text,
-                origin: shift(p), metrics: metrics
+                origin: shift(p), metrics: metrics,
             )
         case let .staffName(text, p):
             StaffNameRenderer.draw(
                 context: &context, text: text,
-                origin: shift(p), metrics: metrics
+                origin: shift(p), metrics: metrics,
             )
         case let .staffText(text, p, color, _):
             StaffTextRenderer.draw(
                 context: &context, text: text,
                 origin: shift(p),
                 color: color,
-                metrics: metrics
+                metrics: metrics,
             )
         case let .harmony(lh):
             let p = shift(CGPoint(
                 x: CGFloat(lh.anchorX),
-                y: CGFloat(lh.y)
+                y: CGFloat(lh.y),
             ))
             HarmonyRenderer.draw(
                 context: &context,
                 harmony: lh,
                 origin: p,
-                metrics: metrics
+                metrics: metrics,
             )
         case let .lyricsMelisma(from, to):
             var path = Path()
@@ -430,7 +430,7 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
             context.stroke(
                 path,
                 with: .color(.primary),
-                lineWidth: metrics.sp * 0.1
+                lineWidth: metrics.sp * 0.1,
             )
         case let .lyricHyphen(from, to):
             // Same line thickness as the melisma rule; MuseScore's
@@ -441,7 +441,7 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
             context.stroke(
                 path,
                 with: .color(.primary),
-                lineWidth: metrics.sp * 0.1
+                lineWidth: metrics.sp * 0.1,
             )
         case .multiMeasureRest:
             // Drawn by MultiMeasureRestRenderer in Task 10/11. Stub for
@@ -458,7 +458,7 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
         context: inout GraphicsContext,
         notes: [LayoutChordNote],
         stem: StemDirection,
-        metrics: StaffMetrics
+        metrics: StaffMetrics,
     ) {
         guard let ref = notes.first else { return }
         let allSteps = notes.map(\.step)
@@ -483,7 +483,7 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
             }
             return (
                 chordX - halfWidth - leftExt,
-                chordX + halfWidth + rightExt
+                chordX + halfWidth + rightExt,
             )
         }
 
@@ -498,7 +498,7 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                 p.move(to: CGPoint(x: xL, y: y))
                 p.addLine(to: CGPoint(x: xR, y: y))
                 context.stroke(
-                    p, with: .color(.primary), lineWidth: lineWidth
+                    p, with: .color(.primary), lineWidth: lineWidth,
                 )
             }
         }
@@ -507,7 +507,7 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
             let botEven = minStep.isMultiple(of: 2)
                 ? minStep : minStep + 1
             for ledgerStep in stride(
-                from: -6, through: botEven, by: -2
+                from: -6, through: botEven, by: -2,
             ) {
                 let y = staffMidYAbs
                     - CGFloat(ledgerStep) * metrics.sp / 2
@@ -516,7 +516,7 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                 p.move(to: CGPoint(x: xL, y: y))
                 p.addLine(to: CGPoint(x: xR, y: y))
                 context.stroke(
-                    p, with: .color(.primary), lineWidth: lineWidth
+                    p, with: .color(.primary), lineWidth: lineWidth,
                 )
             }
         }

@@ -21,7 +21,7 @@ enum ResolvedTextStyle {
     static func resolve(
         _ style: TextStyleType,
         overrides: TextProperties = TextProperties(),
-        metrics: StaffMetrics
+        metrics: StaffMetrics,
     ) -> Resolution {
         let defaults = overrides.resolved(against: style)
         let pointSize = if defaults.spatiumDependent {
@@ -34,7 +34,7 @@ enum ResolvedTextStyle {
             pointSize: pointSize,
             style: defaults.style,
             frameType: defaults.frameType,
-            framePadding: CGFloat(defaults.framePadding) * metrics.sp
+            framePadding: CGFloat(defaults.framePadding) * metrics.sp,
         )
     }
 
@@ -50,10 +50,21 @@ enum ResolvedTextStyle {
         /// spatium, since MuseScore stores it in spatium units).
         let framePadding: CGFloat
 
-        var isBold: Bool { style.contains(.bold) }
-        var isItalic: Bool { style.contains(.italic) }
-        var isUnderline: Bool { style.contains(.underline) }
-        var isStrike: Bool { style.contains(.strike) }
+        var isBold: Bool {
+            style.contains(.bold)
+        }
+
+        var isItalic: Bool {
+            style.contains(.italic)
+        }
+
+        var isUnderline: Bool {
+            style.contains(.underline)
+        }
+
+        var isStrike: Bool {
+            style.contains(.strike)
+        }
 
         /// Build the SwiftUI font.
         ///
@@ -78,11 +89,11 @@ enum ResolvedTextStyle {
             if isBold { traits.insert(.boldTrait) }
             if isItalic { traits.insert(.italicTrait) }
             let base = CTFontCreateWithName(
-                face as CFString, pointSize, nil
+                face as CFString, pointSize, nil,
             )
             if traits.isEmpty { return base }
             return CTFontCreateCopyWithSymbolicTraits(
-                base, pointSize, nil, traits, traits
+                base, pointSize, nil, traits, traits,
             ) ?? base
         }
     }

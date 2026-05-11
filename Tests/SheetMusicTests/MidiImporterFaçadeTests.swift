@@ -3,7 +3,7 @@ import Foundation
 @testable import SheetMusicMIDI
 import Testing
 
-@Suite struct MidiImporterFaçadeTests {
+struct MidiImporterFaçadeTests {
     /// Minimal valid SMF: format 0, division 480, one MTrk containing
     /// only an end-of-track meta event.
     private static let emptySMFBytes = Data([

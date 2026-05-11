@@ -16,7 +16,7 @@ extension LayoutEngine {
         beamGroups: [BeamGroup],
         staffMidY: CGFloat,
         metrics: StaffMetrics,
-        tupletID: TupletID? = nil
+        tupletID: TupletID? = nil,
     ) {
         // Walk every member. Chord X positions also feed the
         // Y-anchor computation; rest X positions only widen the
@@ -42,7 +42,7 @@ extension LayoutEngine {
                           _,
                           _,
                           _,
-                          _
+                          _,
                       ) = out[outIdx]
                 else { continue }
                 memberSpanXs.append(so.x)
@@ -146,7 +146,7 @@ extension LayoutEngine {
             text: "\(tuplet.actualNotes)",
             hasBracket: !isBeamedGroup,
             isAbove: isAbove,
-            tupletID: tupletID
+            tupletID: tupletID,
         ))
     }
 
@@ -167,20 +167,20 @@ extension LayoutEngine {
         beamYAt: (CGFloat) -> CGFloat,
         direction: StemDirection,
         metrics: StaffMetrics,
-        out: inout [LayoutElement]
+        out: inout [LayoutElement],
     ) {
         if end > start {
             out.append(.beam(
                 fromOrigin: CGPoint(
                     x: memberStemXs[start],
-                    y: memberStemYs[start]
+                    y: memberStemYs[start],
                 ),
                 toOrigin: CGPoint(
                     x: memberStemXs[end],
-                    y: memberStemYs[end]
+                    y: memberStemYs[end],
                 ),
                 direction: direction,
-                level: level
+                level: level,
             ))
             return
         }
@@ -201,14 +201,14 @@ extension LayoutEngine {
             fromOrigin: CGPoint(x: fromX, y: beamYAt(fromX)),
             toOrigin: CGPoint(x: toX, y: beamYAt(toX)),
             direction: direction,
-            level: level
+            level: level,
         ))
     }
 
     /// True when the first voice's first element is a `<Clef>`. Used to
     /// decide whether to synthesize an implicit opening clef.
     static func firstVoiceStartsWithClef(
-        measure: Measure
+        measure: Measure,
     ) -> Bool {
         guard let firstElement = measure.voices.first?.elements.first
         else { return false }
@@ -220,7 +220,7 @@ extension LayoutEngine {
     /// contains a `<KeySig>`.  Used to skip key-signature synthesis
     /// when the measure already has an explicit one.
     static func firstVoiceHasLeadingKeySig(
-        measure: Measure
+        measure: Measure,
     ) -> Bool {
         guard let elements = measure.voices.first?.elements else {
             return false
@@ -241,7 +241,7 @@ extension LayoutEngine {
     /// Find the x coordinate of the most recently emitted chord or rest
     /// in `elements`, for positioning attached marks like fermatas.
     static func lastChordOrRestX(
-        in elements: [LayoutElement]
+        in elements: [LayoutElement],
     ) -> CGFloat? {
         for el in elements.reversed() {
             switch el {

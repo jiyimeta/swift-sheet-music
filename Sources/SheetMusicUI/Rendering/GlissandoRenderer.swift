@@ -13,7 +13,7 @@ enum GlissandoRenderer {
         to: CGPoint,
         wavy: Bool,
         text: String?,
-        metrics: StaffMetrics
+        metrics: StaffMetrics,
     ) {
         let dx = to.x - from.x
         let dy = to.y - from.y
@@ -45,7 +45,7 @@ enum GlissandoRenderer {
         }
         local.stroke(
             linePath, with: .color(.primary),
-            lineWidth: metrics.sp * 0.15
+            lineWidth: metrics.sp * 0.15,
         )
 
         // --- Text label (centred along the line) ---
@@ -59,7 +59,7 @@ enum GlissandoRenderer {
                 at: CGPoint(x: textX, y: yOffset),
                 size: fontSize,
                 italic: true,
-                anchor: .center
+                anchor: .center,
             )
         }
     }

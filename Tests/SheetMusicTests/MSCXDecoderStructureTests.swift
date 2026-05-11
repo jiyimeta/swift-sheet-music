@@ -6,7 +6,7 @@ import Foundation
 @testable import SheetMusicXMLTools
 import Testing
 
-@Suite struct MSCXDecoderStructureTests {
+struct MSCXDecoderStructureTests {
     @Test func decodeVoicePreservesOrder() throws {
         let xml = """
         <voice>

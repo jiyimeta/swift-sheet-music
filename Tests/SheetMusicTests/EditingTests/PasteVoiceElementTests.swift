@@ -5,21 +5,21 @@ import Testing
 struct PasteVoiceElementTests {
     private static let restID = VoiceElementID(
         staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
-        voiceIndex: 0, elementIndex: 2
+        voiceIndex: 0, elementIndex: 2,
     )
     private static let chordID = VoiceElementID(
         staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
-        voiceIndex: 0, elementIndex: 1
+        voiceIndex: 0, elementIndex: 1,
     )
 
     @Test("paste a same-duration chord onto a rest replaces it")
     func pasteChordOnMatchingRest() throws {
         var score = EditingFixtures.fourQuarterRests()
         let chord = Chord(
-            duration: .quarter, notes: [Note(pitch: 60, tpc: 14)]
+            duration: .quarter, notes: [Note(pitch: 60, tpc: 14)],
         )
         let cmd = PasteVoiceElement(
-            at: Self.restID, element: .chord(chord)
+            at: Self.restID, element: .chord(chord),
         )
         _ = try cmd.apply(to: &score)
         guard case let .chord(pasted) = score[Self.restID] else {
@@ -34,10 +34,10 @@ struct PasteVoiceElementTests {
         // the algorithm consumes the rest at idx 3 to make room.
         var score = EditingFixtures.fourQuarterRests()
         let halfChord = Chord(
-            duration: .half, notes: [Note(pitch: 60, tpc: 14)]
+            duration: .half, notes: [Note(pitch: 60, tpc: 14)],
         )
         let cmd = PasteVoiceElement(
-            at: Self.restID, element: .chord(halfChord)
+            at: Self.restID, element: .chord(halfChord),
         )
         _ = try cmd.apply(to: &score)
         let voice = score.parts[0].staves[0].measures[0].voices[0]
@@ -67,13 +67,13 @@ struct PasteVoiceElementTests {
         score.parts[0].staves[0].measures[0].voices[0] = v
         let halfRestID = VoiceElementID(
             staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
-            voiceIndex: 0, elementIndex: 1
+            voiceIndex: 0, elementIndex: 1,
         )
         let quarterChord = Chord(
-            duration: .quarter, notes: [Note(pitch: 60, tpc: 14)]
+            duration: .quarter, notes: [Note(pitch: 60, tpc: 14)],
         )
         let cmd = PasteVoiceElement(
-            at: halfRestID, element: .chord(quarterChord)
+            at: halfRestID, element: .chord(quarterChord),
         )
         _ = try cmd.apply(to: &score)
         let voice = score.parts[0].staves[0].measures[0].voices[0]
@@ -98,13 +98,13 @@ struct PasteVoiceElementTests {
         var score = EditingFixtures.fourQuarterRests()
         let lastID = VoiceElementID(
             staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
-            voiceIndex: 0, elementIndex: 4
+            voiceIndex: 0, elementIndex: 4,
         )
         let wholeChord = Chord(
-            duration: .whole, notes: [Note(pitch: 60, tpc: 14)]
+            duration: .whole, notes: [Note(pitch: 60, tpc: 14)],
         )
         let cmd = PasteVoiceElement(
-            at: lastID, element: .chord(wholeChord)
+            at: lastID, element: .chord(wholeChord),
         )
         #expect(throws: SheetMusicError.self) {
             _ = try cmd.apply(to: &score)
@@ -118,7 +118,7 @@ struct PasteVoiceElementTests {
         var score = EditingFixtures.fourQuarterRests()
         let clef = Clef(concertClefType: "F")
         let cmd = PasteVoiceElement(
-            at: Self.restID, element: .clef(clef)
+            at: Self.restID, element: .clef(clef),
         )
         _ = try cmd.apply(to: &score)
         guard case .clef = score[Self.restID] else {
@@ -132,7 +132,7 @@ struct PasteVoiceElementTests {
         let snapshot = score
         let restElement = VoiceElement.rest(duration: .quarter)
         let cmd = PasteVoiceElement(
-            at: Self.chordID, element: restElement
+            at: Self.chordID, element: restElement,
         )
         let inverse = try cmd.apply(to: &score)
         _ = try inverse.apply(to: &score)
@@ -144,11 +144,11 @@ struct PasteVoiceElementTests {
         var score = EditingFixtures.fourQuarterRests()
         let bogus = VoiceElementID(
             staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
-            voiceIndex: 0, elementIndex: 99
+            voiceIndex: 0, elementIndex: 99,
         )
         let cmd = PasteVoiceElement(
             at: bogus,
-            element: .rest(duration: .quarter)
+            element: .rest(duration: .quarter),
         )
         #expect(throws: SheetMusicError.self) {
             _ = try cmd.apply(to: &score)

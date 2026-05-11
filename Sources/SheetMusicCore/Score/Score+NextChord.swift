@@ -33,7 +33,7 @@ extension Score {
                                 staff: staffAddr,
                                 measureIndex: voiceElementID.measureIndex,
                                 voiceIndex: voiceIndex,
-                                elementIndex: idx
+                                elementIndex: idx,
                             )
                         }
                     }
@@ -54,7 +54,7 @@ extension Score {
                         staff: staffAddr,
                         measureIndex: mIdx,
                         voiceIndex: voiceIndex,
-                        elementIndex: idx
+                        elementIndex: idx,
                     )
                 }
             }

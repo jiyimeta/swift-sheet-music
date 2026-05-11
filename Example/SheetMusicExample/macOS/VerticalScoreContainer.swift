@@ -40,7 +40,7 @@
                                     document: doc, score: score,
                                     selection: selection,
                                     voiceColors: voiceColors,
-                                    playbackCursor: playbackCursor
+                                    playbackCursor: playbackCursor,
                                 )
                                 .onTapGesture { loc in
                                     guard !isMarqueeMode else { return }
@@ -49,9 +49,11 @@
                                 .gesture(
                                     isMarqueeMode
                                         ? marqueeDragGesture(document: doc)
-                                        : nil)
+                                        : nil,
+                                )
                                 .overlay(
-                                    MarqueeOverlay(rect: marqueeRect))
+                                    MarqueeOverlay(rect: marqueeRect),
+                                )
                                 VerticalSystemAnchors(document: doc)
                             }
                             .padding()
@@ -68,18 +70,19 @@
                             isPlaying: isPlaying,
                             viewportHeight: geo.size.height,
                             systemFrames: systemFrames,
-                            proxy: proxy
+                            proxy: proxy,
                         )
                     }
                 }
-                .task(id: VerticalLayoutKey(
-                    width: width, scoreVersion: scoreVersion
-                )
+                .task(
+                    id: VerticalLayoutKey(
+                        width: width, scoreVersion: scoreVersion,
+                    ),
                 ) {
                     verticalDoc = LayoutEngine.layout(
                         score: score,
                         options: options,
-                        availableWidth: max(100, width)
+                        availableWidth: max(100, width),
                     )
                 }
             }
@@ -92,19 +95,19 @@
         /// `LayoutDocument`'s coord system because the surrounding
         /// `.padding` shifts the content but the gesture sits inside it.
         private func marqueeDragGesture(
-            document: LayoutDocument
+            document: LayoutDocument,
         ) -> some Gesture {
             DragGesture(minimumDistance: 0)
                 .onChanged { value in
                     marqueeRect = makeMarqueeRect(
                         from: value.startLocation,
-                        to: value.location
+                        to: value.location,
                     )
                 }
                 .onEnded { value in
                     let rect = makeMarqueeRect(
                         from: value.startLocation,
-                        to: value.location
+                        to: value.location,
                     )
                     marqueeRect = nil
                     onMarqueeEnd(rect, document)

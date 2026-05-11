@@ -6,7 +6,7 @@ import SheetMusicCore
 extension LayoutEngine {
     /// Anchor describing a Spanner's position before it has been resolved
     /// to absolute system-level coordinates.
-    struct SpannerAnchor: Sendable, Equatable {
+    struct SpannerAnchor: Equatable {
         let kind: Spanner.Kind
         let rawType: String
         let startStaff: Int
@@ -43,7 +43,7 @@ extension LayoutEngine {
                         else { continue }
                         let lastIdx = min(
                             staff.measures.count - 1,
-                            measureIdx + max(0, sp.nextMeasuresOffset)
+                            measureIdx + max(0, sp.nextMeasuresOffset),
                         )
                         for m in measureIdx ... lastIdx {
                             covered.insert(m)
@@ -88,7 +88,7 @@ extension LayoutEngine {
                                 nextMeasuresOffset: sp.nextMeasuresOffset,
                                 nextFractionsOffset: sp.nextFractionsOffset,
                                 measures: staff.measures,
-                                division: score.division
+                                division: score.division,
                             )
                             out.append(SpannerAnchor(
                                 kind: sp.kind,
@@ -99,13 +99,14 @@ extension LayoutEngine {
                                 endStaff: staffIdx,
                                 endMeasure: endMeasure,
                                 endTick: endTick,
-                                voltaEndings: sp.voltaEndings
+                                voltaEndings: sp.voltaEndings,
                             ))
                         }
                         switch el {
                         case let .chord(c):
                             tick += c.duration.ticks(
-                                division: score.division)
+                                division: score.division,
+                            )
                         default: break
                         }
                     }
@@ -119,7 +120,7 @@ extension LayoutEngine {
         to systems: [LayoutSystem],
         anchors: [SpannerAnchor],
         score: Score,
-        metrics: StaffMetrics
+        metrics: StaffMetrics,
     ) -> [LayoutSystem] {
         guard !anchors.isEmpty, !systems.isEmpty else { return systems }
 
@@ -144,8 +145,8 @@ extension LayoutEngine {
                 anchor.startMeasure,
                 min(
                     anchor.endMeasure,
-                    measureLocation.keys.max() ?? anchor.startMeasure
-                )
+                    measureLocation.keys.max() ?? anchor.startMeasure,
+                ),
             )
             guard let (endSys, endLocal) = measureLocation[endGlobal]
             else { continue }
@@ -158,18 +159,18 @@ extension LayoutEngine {
                 let fromX = startX(
                     anchor: anchor,
                     measure: system.measures[startLocal],
-                    metrics: metrics
+                    metrics: metrics,
                 )
                 let toX = endX(
                     anchor: anchor,
                     measure: system.measures[endLocal],
-                    metrics: metrics
+                    metrics: metrics,
                 )
                 let y = anchorY(
                     in: system, belowStaff: belowStaff,
                     staffIndex: anchor.startStaff,
                     measureRange: startLocal ... endLocal,
-                    metrics: metrics
+                    metrics: metrics,
                 )
                 extraPerSystem[startSys].append(.spannerSegment(
                     kind: kind,
@@ -177,21 +178,21 @@ extension LayoutEngine {
                     toOrigin: CGPoint(x: toX, y: y),
                     continuesLeft: false,
                     continuesRight: false,
-                    text: anchor.rawType
+                    text: anchor.rawType,
                 ))
             } else {
                 let startSystem = systems[startSys]
                 let fromX = startX(
                     anchor: anchor,
                     measure: startSystem.measures[startLocal],
-                    metrics: metrics
+                    metrics: metrics,
                 )
                 let toXStart = startSystem.size.width - metrics.sp * 2
                 let yStart = anchorY(
                     in: startSystem, belowStaff: belowStaff,
                     staffIndex: anchor.startStaff,
                     measureRange: startLocal ..< startSystem.measures.count,
-                    metrics: metrics
+                    metrics: metrics,
                 )
                 extraPerSystem[startSys].append(.spannerSegment(
                     kind: kind,
@@ -199,7 +200,7 @@ extension LayoutEngine {
                     toOrigin: CGPoint(x: toXStart, y: yStart),
                     continuesLeft: false,
                     continuesRight: true,
-                    text: anchor.rawType
+                    text: anchor.rawType,
                 ))
                 if endSys > startSys + 1 {
                     for mid in (startSys + 1) ..< endSys {
@@ -208,20 +209,20 @@ extension LayoutEngine {
                             in: midSystem, belowStaff: belowStaff,
                             staffIndex: anchor.startStaff,
                             measureRange: 0 ..< midSystem.measures.count,
-                            metrics: metrics
+                            metrics: metrics,
                         )
                         extraPerSystem[mid].append(.spannerSegment(
                             kind: kind,
                             fromOrigin: CGPoint(
-                                x: metrics.sp * 2, y: y
+                                x: metrics.sp * 2, y: y,
                             ),
                             toOrigin: CGPoint(
                                 x: midSystem.size.width - metrics.sp * 2,
-                                y: y
+                                y: y,
                             ),
                             continuesLeft: true,
                             continuesRight: true,
-                            text: anchor.rawType
+                            text: anchor.rawType,
                         ))
                     }
                 }
@@ -230,13 +231,13 @@ extension LayoutEngine {
                 let toXEnd = endX(
                     anchor: anchor,
                     measure: endSystem.measures[endLocal],
-                    metrics: metrics
+                    metrics: metrics,
                 )
                 let yEnd = anchorY(
                     in: endSystem, belowStaff: belowStaff,
                     staffIndex: anchor.endStaff,
                     measureRange: 0 ... endLocal,
-                    metrics: metrics
+                    metrics: metrics,
                 )
                 extraPerSystem[endSys].append(.spannerSegment(
                     kind: kind,
@@ -244,7 +245,7 @@ extension LayoutEngine {
                     toOrigin: CGPoint(x: toXEnd, y: yEnd),
                     continuesLeft: true,
                     continuesRight: false,
-                    text: anchor.rawType
+                    text: anchor.rawType,
                 ))
             }
         }
@@ -258,7 +259,7 @@ extension LayoutEngine {
                 partLabels: system.partLabels,
                 brackets: system.brackets,
                 spanners: system.spanners + extraPerSystem[idx],
-                sp: system.sp
+                sp: system.sp,
             )
         }
     }
@@ -272,7 +273,7 @@ extension LayoutEngine {
     static func startX(
         anchor: SpannerAnchor,
         measure: LayoutMeasure,
-        metrics: StaffMetrics
+        metrics: StaffMetrics,
     ) -> CGFloat {
         if anchor.startTick > 0,
            let local = measure.tickColumns[anchor.startTick]
@@ -292,7 +293,7 @@ extension LayoutEngine {
     static func endX(
         anchor: SpannerAnchor,
         measure: LayoutMeasure,
-        metrics: StaffMetrics
+        metrics: StaffMetrics,
     ) -> CGFloat {
         if anchor.endTick > 0,
            let local = measure.tickColumns[anchor.endTick]
@@ -343,7 +344,7 @@ extension LayoutEngine {
         nextMeasuresOffset: Int,
         nextFractionsOffset: Fraction?,
         measures: [Measure],
-        division: Int
+        division: Int,
     ) -> (endMeasure: Int, endTick: Int) {
         let nMeas = max(0, nextMeasuresOffset)
         let fracTicks = nextFractionsOffset?.ticks(division: division) ?? 0
@@ -365,7 +366,7 @@ extension LayoutEngine {
         if rawTick >= 0 {
             while measureIdx < measures.count {
                 let mTicks = measureTickCount(
-                    measures[measureIdx], division: division
+                    measures[measureIdx], division: division,
                 )
                 if rawTick <= mTicks { break }
                 rawTick -= mTicks
@@ -382,7 +383,7 @@ extension LayoutEngine {
             // with the right-edge sentinel.
             if measureIdx < measures.count {
                 let mTicks = measureTickCount(
-                    measures[measureIdx], division: division
+                    measures[measureIdx], division: division,
                 )
                 if rawTick == mTicks { return (measureIdx, 0) }
                 if rawTick == 0, measureIdx > startMeasureIdx {
@@ -396,7 +397,7 @@ extension LayoutEngine {
         while measureIdx > 0, rawTick < 0 {
             measureIdx -= 1
             rawTick += measureTickCount(
-                measures[measureIdx], division: division
+                measures[measureIdx], division: division,
             )
         }
         if rawTick == 0, measureIdx > startMeasureIdx {
@@ -405,16 +406,16 @@ extension LayoutEngine {
         return (max(0, measureIdx), max(0, rawTick))
     }
 
-    static func anchorY<R>(
+    static func anchorY<R: RangeExpression>(
         in system: LayoutSystem,
         belowStaff: Bool,
         staffIndex: Int,
         measureRange _: R,
-        metrics: StaffMetrics
-    ) -> CGFloat where R: RangeExpression, R.Bound == Int {
+        metrics: StaffMetrics,
+    ) -> CGFloat where R.Bound == Int {
         anchorY(
             in: system, belowStaff: belowStaff,
-            staffIndex: staffIndex, metrics: metrics
+            staffIndex: staffIndex, metrics: metrics,
         )
     }
 
@@ -422,7 +423,7 @@ extension LayoutEngine {
         in system: LayoutSystem,
         belowStaff: Bool,
         staffIndex: Int,
-        metrics: StaffMetrics
+        metrics: StaffMetrics,
     ) -> CGFloat {
         let origins = system.staffOrigins
         let clamped = max(0, min(staffIndex, origins.count - 1))
@@ -440,7 +441,7 @@ extension LayoutEngine {
     }
 
     static func layoutKind(
-        anchor: SpannerAnchor
+        anchor: SpannerAnchor,
     ) -> LayoutElement.SpannerKind {
         switch anchor.kind {
         case .slur: return .slur

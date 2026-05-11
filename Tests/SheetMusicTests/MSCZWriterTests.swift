@@ -3,10 +3,10 @@ import Foundation
 @testable import SheetMusicMSCX
 import Testing
 
-@Suite struct MSCZWriterTests {
+struct MSCZWriterTests {
     @Test func roundTripDefaultMainName() throws {
         let mscx = try #require(
-            Bundle.module.url(forResource: "midi01", withExtension: "mscx")
+            Bundle.module.url(forResource: "midi01", withExtension: "mscx"),
         )
         let mscxData = try Data(contentsOf: mscx)
         let msczData = try MSCZWriter.write(mscxData: mscxData)
@@ -17,12 +17,12 @@ import Testing
 
     @Test func roundTripCustomMainName() throws {
         let mscx = try #require(
-            Bundle.module.url(forResource: "midi01", withExtension: "mscx")
+            Bundle.module.url(forResource: "midi01", withExtension: "mscx"),
         )
         let mscxData = try Data(contentsOf: mscx)
         let msczData = try MSCZWriter.write(
             mscxData: mscxData,
-            mainFileName: "renamed.mscx"
+            mainFileName: "renamed.mscx",
         )
         // Must round-trip via the reader's rule-2 fallback.
         let score = try MSCZReader.parse(msczData)
@@ -61,7 +61,7 @@ import Testing
 
     @Test func writeToURLThenReadBack() throws {
         let mscx = try #require(
-            Bundle.module.url(forResource: "midi01", withExtension: "mscx")
+            Bundle.module.url(forResource: "midi01", withExtension: "mscx"),
         )
         let mscxData = try Data(contentsOf: mscx)
 

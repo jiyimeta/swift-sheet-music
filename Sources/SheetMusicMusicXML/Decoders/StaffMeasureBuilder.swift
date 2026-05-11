@@ -109,7 +109,7 @@ struct StaffMeasureBuilder {
             startRepeat: startRepeat,
             endRepeatCount: endRepeatCount,
             markers: markers,
-            jumps: jumps
+            jumps: jumps,
         )
     }
 

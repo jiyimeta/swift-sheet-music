@@ -4,7 +4,7 @@
 @testable import SheetMusicMSCX
 import Testing
 
-@Suite struct NoteDurationTests {
+struct NoteDurationTests {
     @Test func quarterTicksAtPPQ480() {
         #expect(NoteDuration.quarter.ticks(division: 480) == 480)
     }

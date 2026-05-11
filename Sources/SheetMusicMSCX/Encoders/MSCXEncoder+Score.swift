@@ -7,7 +7,7 @@ extension Score {
     func encode(options: MSCXEncoderOptions = .init()) throws -> XMLTreeNode {
         var scoreChildren: [XMLTreeNode] = Self.layerHeader(options: options)
         scoreChildren.append(XMLTreeNode(
-            name: "Division", text: String(division)
+            name: "Division", text: String(division),
         ))
         scoreChildren.append(style.encode(options: options))
         scoreChildren.append(contentsOf: Self.showFlags(options: options))
@@ -33,7 +33,8 @@ extension Score {
         }
         for (part, partID, ids) in allStaffIDs {
             scoreChildren.append(
-                part.encodeDeclaration(partID: partID, staffIDs: ids, options: options))
+                part.encodeDeclaration(partID: partID, staffIDs: ids, options: options),
+            )
         }
         var titleFrameSlot = titleFrame
         for (part, _, ids) in allStaffIDs {
@@ -41,7 +42,7 @@ extension Score {
                 let frame = titleFrameSlot
                 titleFrameSlot = nil
                 try scoreChildren.append(
-                    staff.encodeTopLevel(staffID: id, titleFrame: frame, options: options)
+                    staff.encodeTopLevel(staffID: id, titleFrame: frame, options: options),
                 )
             }
         }
@@ -54,17 +55,17 @@ extension Score {
         var rootChildren: [XMLTreeNode] = []
         if options.targetVersion == .v3 {
             rootChildren.append(XMLTreeNode(
-                name: "programVersion", text: "3.6.2"
+                name: "programVersion", text: "3.6.2",
             ))
             rootChildren.append(XMLTreeNode(
-                name: "programRevision", text: "3224f34"
+                name: "programRevision", text: "3224f34",
             ))
         }
         rootChildren.append(XMLTreeNode(name: "Score", children: scoreChildren))
         return XMLTreeNode(
             name: "museScore",
             attributes: ["version": museScoreVersion],
-            children: rootChildren
+            children: rootChildren,
         )
     }
 
@@ -75,7 +76,7 @@ extension Score {
         return [
             XMLTreeNode(
                 name: "LayerTag",
-                attributes: ["id": "0", "tag": "default"]
+                attributes: ["id": "0", "tag": "default"],
             ),
             XMLTreeNode(name: "currentLayer", text: "0"),
         ]
@@ -105,7 +106,7 @@ extension Score {
                 XMLTreeNode(
                     name: "metaTag",
                     attributes: ["name": key],
-                    text: metaTags[key] ?? ""
+                    text: metaTags[key] ?? "",
                 )
             }
         case .v3:
@@ -113,7 +114,7 @@ extension Score {
                 XMLTreeNode(
                     name: "metaTag",
                     attributes: ["name": name],
-                    text: ms3MetaValue(for: name)
+                    text: ms3MetaValue(for: name),
                 )
             }
         }

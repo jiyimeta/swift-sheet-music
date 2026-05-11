@@ -5,25 +5,25 @@ import Foundation
 @testable import SheetMusicMSCX
 import Testing
 
-@Suite struct LayoutElementClefAnchorTests {
+struct LayoutElementClefAnchorTests {
     @available(macOS 15.0, iOS 16.0, *)
     @Test func staffDefaultAnchor() throws {
         let url = try #require(
             Bundle.module.url(
                 forResource: "multiPartMixedStaves",
-                withExtension: "mscx"
-            )
+                withExtension: "mscx",
+            ),
         )
         let score = try MSCXParser.parse(contentsOf: url)
         let doc = LayoutEngine.layout(
             score: score,
             options: ScoreViewOptions(
-                staffSize: 18, systemGap: 16, wrapToViewWidth: false
+                staffSize: 18, systemGap: 16, wrapToViewWidth: false,
             ),
-            availableWidth: 2000
+            availableWidth: 2000,
         )
         let firstMeasure = try #require(
-            doc.systems.first?.measures.first
+            doc.systems.first?.measures.first,
         )
         let anchors = firstMeasure.elements.compactMap { el -> ClefAnchor? in
             guard case let .clef(_, _, anchor) = el else { return nil }
@@ -41,17 +41,17 @@ import Testing
         let url = try #require(
             Bundle.module.url(
                 forResource: "multiPartMixedStaves",
-                withExtension: "mscx"
-            )
+                withExtension: "mscx",
+            ),
         )
         let score = try MSCXParser.parse(contentsOf: url)
         let doc = LayoutEngine.layout(
             score: score,
             options: ScoreViewOptions(
                 staffSize: 18, systemGap: 16,
-                wrapToViewWidth: false
+                wrapToViewWidth: false,
             ),
-            availableWidth: 2000
+            availableWidth: 2000,
         )
         let contexts = LayoutEngine.measureContexts(for: score)
         let firstContext = try #require(contexts.first)
@@ -59,7 +59,7 @@ import Testing
         let sticky = LayoutEngine.stickyHeaderSystem(
             for: firstContext,
             templateSystem: templateSystem,
-            metrics: doc.metrics
+            metrics: doc.metrics,
         )
         let stickyMeasure = try #require(sticky.measures.first)
         // Sticky-header builds at least one clef per staff; every
@@ -70,7 +70,7 @@ import Testing
         }
         #expect(
             hasClef,
-            "fixture should produce at least one clef in the sticky header"
+            "fixture should produce at least one clef in the sticky header",
         )
         for el in stickyMeasure.elements {
             if case let .clef(_, _, anchor) = el {
@@ -89,8 +89,8 @@ import Testing
         let url = try #require(
             Bundle.module.url(
                 forResource: "harmony-basic",
-                withExtension: "mscx"
-            )
+                withExtension: "mscx",
+            ),
         )
         let score = try MSCXParser.parse(contentsOf: url)
         // Force a wrap by giving a tight width.
@@ -98,16 +98,16 @@ import Testing
             score: score,
             options: ScoreViewOptions(
                 staffSize: 18, systemGap: 16,
-                wrapToViewWidth: true
+                wrapToViewWidth: true,
             ),
-            availableWidth: 200
+            availableWidth: 200,
         )
         guard doc.systems.count >= 2 else {
             Issue.record(
                 """
                 expected the fixture to wrap into ≥2 systems at \
                 availableWidth: 200; chose a different fixture / width if not
-                """
+                """,
             )
             return
         }
@@ -117,7 +117,7 @@ import Testing
                 if case let .clef(_, _, anchor) = el {
                     #expect(
                         anchor == nil,
-                        "continuation-system clefs must not be selectable"
+                        "continuation-system clefs must not be selectable",
                     )
                 }
             }

@@ -70,7 +70,7 @@ public enum PDFExporter {
             systemGap: CGFloat = 16,
             title: String? = nil,
             author: String? = nil,
-            breakPolicy: LayoutBreakPolicy = .honor
+            breakPolicy: LayoutBreakPolicy = .honor,
         ) {
             self.page = page
             self.staffSize = staffSize
@@ -84,7 +84,7 @@ public enum PDFExporter {
     /// Render `score` to a PDF document and return its raw bytes.
     public static func export(
         score: Score,
-        options: Options = Options()
+        options: Options = Options(),
     ) throws -> Data {
         // Trigger Bravura registration on the export thread. The
         // on-screen views do this via their own bodies, but
@@ -97,22 +97,22 @@ public enum PDFExporter {
             staffSize: resolved.staffSize,
             systemGap: options.systemGap,
             wrapToViewWidth: true,
-            breakPolicy: options.breakPolicy
+            breakPolicy: options.breakPolicy,
         )
         let availableWidth = max(
             resolved.staffSize * 4,
             resolved.page.size.width
                 - resolved.page.oddMargins.leading
-                - resolved.page.oddMargins.trailing
+                - resolved.page.oddMargins.trailing,
         )
         let document = LayoutEngine.layout(
             score: score, options: layoutOptions,
-            availableWidth: availableWidth
+            availableWidth: availableWidth,
         )
         let pages = paginate(
             systems: document.systems,
             page: resolved.page,
-            policy: options.breakPolicy
+            policy: options.breakPolicy,
         )
 
         let data = NSMutableData()
@@ -120,7 +120,7 @@ public enum PDFExporter {
               let pdfContext = CGContext(
                   consumer: consumer,
                   mediaBox: nil,
-                  makePDFInfo(options: options) as CFDictionary
+                  makePDFInfo(options: options) as CFDictionary,
               )
         else {
             throw PDFExportError.contextCreationFailed
@@ -138,24 +138,25 @@ public enum PDFExporter {
                 // Authoring overlay is for previews only; the
                 // exported file must not show it.
                 showBreakIndicators: false,
-                policy: options.breakPolicy
+                policy: options.breakPolicy,
             )
             let renderer = ImageRenderer(content: view)
             renderer.proposedSize = ProposedViewSize(
                 width: resolved.page.size.width,
-                height: resolved.page.size.height
+                height: resolved.page.size.height,
             )
             renderer.scale = 1
             renderer.isOpaque = true
             renderer.render { _, drawInto in
                 var mediaBox = CGRect(
-                    origin: .zero, size: resolved.page.size
+                    origin: .zero, size: resolved.page.size,
                 )
                 pdfContext.beginPDFPage(
                     [
                         kCGPDFContextMediaBox as String:
                             Data(bytes: &mediaBox, count: MemoryLayout<CGRect>.size),
-                    ] as CFDictionary)
+                    ] as CFDictionary,
+                )
                 drawInto(pdfContext)
                 PageChromeRenderer.draw(
                     chrome: score.style.pageChrome,
@@ -164,7 +165,7 @@ public enum PDFExporter {
                     pageSize: resolved.page.size,
                     margins: margins,
                     metaTags: score.metaTags,
-                    into: pdfContext
+                    into: pdfContext,
                 )
                 pdfContext.endPDFPage()
             }
@@ -178,7 +179,7 @@ public enum PDFExporter {
     public static func export(
         score: Score,
         to url: URL,
-        options: Options = Options()
+        options: Options = Options(),
     ) throws {
         let data = try export(score: score, options: options)
         try data.write(to: url, options: .atomic)
@@ -210,7 +211,7 @@ public enum PDFExporter {
     public static func paginate(
         systems: [LayoutSystem],
         page: EngravingPage,
-        policy: LayoutBreakPolicy = .honor
+        policy: LayoutBreakPolicy = .honor,
     ) -> [PageBatch] {
         var pages: [PageBatch] = []
         var currentSystems: [LayoutSystem] = []
@@ -238,7 +239,7 @@ public enum PDFExporter {
                 if systemEndsPage(system) {
                     pages.append(PageBatch(
                         startY: currentStartY,
-                        systems: currentSystems
+                        systems: currentSystems,
                     ))
                     currentSystems = []
                 }
@@ -249,7 +250,7 @@ public enum PDFExporter {
             if bottomOnPage > usableHeight(forPageIndex: pages.count) {
                 pages.append(PageBatch(
                     startY: currentStartY,
-                    systems: currentSystems
+                    systems: currentSystems,
                 ))
                 currentStartY = system.origin.y
                 currentSystems = [system]
@@ -259,7 +260,7 @@ public enum PDFExporter {
             if systemEndsPage(system) && !currentSystems.isEmpty {
                 pages.append(PageBatch(
                     startY: currentStartY,
-                    systems: currentSystems
+                    systems: currentSystems,
                 ))
                 currentSystems = []
             }
@@ -267,7 +268,7 @@ public enum PDFExporter {
         if !currentSystems.isEmpty {
             pages.append(PageBatch(
                 startY: currentStartY,
-                systems: currentSystems
+                systems: currentSystems,
             ))
         }
         return pages
@@ -285,7 +286,7 @@ public enum PDFExporter {
     }
 
     public static func resolve(
-        options: Options, score: Score
+        options: Options, score: Score,
     ) -> Resolved {
         let page: EngravingPage
         switch options.page {
@@ -303,7 +304,8 @@ public enum PDFExporter {
             // is `4 × spatium_mm × 72 / 25.4`. Source:
             // `engraving/dom/staff.cpp::Staff::staffHeight`.
             staffSize = CGFloat(
-                4 * score.style.spatium * 72.0 / 25.4)
+                4 * score.style.spatium * 72.0 / 25.4,
+            )
         case let .explicit(v):
             staffSize = v
         }
@@ -311,7 +313,7 @@ public enum PDFExporter {
     }
 
     private static func makePDFInfo(
-        options: Options
+        options: Options,
     ) -> [String: Any] {
         var info: [String: Any] = [
             kCGPDFContextCreator as String: "swift-sheet-music",

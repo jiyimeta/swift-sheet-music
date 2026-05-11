@@ -5,7 +5,7 @@ import Testing
 struct SetLyricsTests {
     private static let chordID = VoiceElementID(
         staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
-        voiceIndex: 0, elementIndex: 1
+        voiceIndex: 0, elementIndex: 1,
     )
 
     @Test("apply replaces the chord's lyrics array")
@@ -13,7 +13,7 @@ struct SetLyricsTests {
         var score = EditingFixtures.chordAtIndex1()
         let cmd = SetLyrics(
             at: Self.chordID,
-            lyrics: [Lyric(text: "hello")]
+            lyrics: [Lyric(text: "hello")],
         )
         _ = try cmd.apply(to: &score)
         guard case let .chord(chord) = score[Self.chordID] else {
@@ -31,13 +31,13 @@ struct SetLyricsTests {
         // restore.
         let prefill = SetLyrics(
             at: Self.chordID,
-            lyrics: [Lyric(text: "old")]
+            lyrics: [Lyric(text: "old")],
         )
         _ = try prefill.apply(to: &score)
         let snapshot = score
         let cmd = SetLyrics(
             at: Self.chordID,
-            lyrics: [Lyric(text: "new")]
+            lyrics: [Lyric(text: "new")],
         )
         let inverse = try cmd.apply(to: &score)
         _ = try inverse.apply(to: &score)
@@ -49,7 +49,7 @@ struct SetLyricsTests {
         var score = EditingFixtures.chordAtIndex1()
         let prefill = SetLyrics(
             at: Self.chordID,
-            lyrics: [Lyric(text: "hi")]
+            lyrics: [Lyric(text: "hi")],
         )
         _ = try prefill.apply(to: &score)
         let cmd = SetLyrics(at: Self.chordID, lyrics: [])
@@ -66,7 +66,7 @@ struct SetLyricsTests {
         var score = EditingFixtures.fourQuarterRests()
         let restID = VoiceElementID(
             staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
-            voiceIndex: 0, elementIndex: 2
+            voiceIndex: 0, elementIndex: 2,
         )
         let cmd = SetLyrics(at: restID, lyrics: [Lyric(text: "x")])
         #expect(throws: SheetMusicError.self) {

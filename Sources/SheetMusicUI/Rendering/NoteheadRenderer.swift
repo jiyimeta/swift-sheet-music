@@ -9,7 +9,7 @@ enum NoteheadRenderer {
     /// and the duration (whole, half, filled).
     static func glyph(
         for duration: NoteDuration,
-        headType: String? = nil
+        headType: String? = nil,
     ) -> Character {
         switch headType {
         case "cross":
@@ -43,12 +43,12 @@ enum NoteheadRenderer {
         at origin: CGPoint,
         duration: NoteDuration,
         headType: String? = nil,
-        metrics: StaffMetrics
+        metrics: StaffMetrics,
     ) {
         context.drawGlyph(
             glyph(for: duration, headType: headType),
             at: origin,
-            size: metrics.glyphFontSize
+            size: metrics.glyphFontSize,
         )
     }
 }

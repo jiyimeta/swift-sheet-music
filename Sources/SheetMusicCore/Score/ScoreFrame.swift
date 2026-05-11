@@ -55,7 +55,7 @@ public struct FrameText: Sendable, Equatable, Hashable {
     public init(
         style: Style, text: String,
         offsetMm: CGPoint? = nil,
-        fontSize: Double? = nil
+        fontSize: Double? = nil,
     ) {
         self.style = style
         self.text = text

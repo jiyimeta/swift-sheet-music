@@ -32,7 +32,7 @@ extension Note {
         tieForwardLocation: TieLocation? = nil,
         tieBackLocation: TieLocation? = nil,
         options: MSCXEncoderOptions = .init(),
-        drumDefaultHead: String? = nil
+        drumDefaultHead: String? = nil,
     ) -> XMLTreeNode {
         var children: [XMLTreeNode] = []
         if let accidental {
@@ -41,19 +41,19 @@ extension Note {
                 children: [
                     XMLTreeNode(
                         name: "subtype",
-                        text: accidental.mscxSubtype
+                        text: accidental.mscxSubtype,
                     ),
-                ]
+                ],
             ))
         }
         if tieForward != nil {
             children.append(tieSpanner(
-                side: "next", location: tieForwardLocation
+                side: "next", location: tieForwardLocation,
             ))
         }
         if tieBack != nil {
             children.append(tieSpanner(
-                side: "prev", location: tieBackLocation
+                side: "prev", location: tieBackLocation,
             ))
         }
         if let glissando {
@@ -80,7 +80,7 @@ extension Note {
         return XMLTreeNode(
             name: "Spanner",
             attributes: ["type": "Tie"],
-            children: inner
+            children: inner,
         )
     }
 
@@ -95,7 +95,7 @@ extension Note {
             children.append(fractionsNode(fractions))
         case let .crossMeasure(measures, fractions):
             children.append(XMLTreeNode(
-                name: "measures", text: String(measures)
+                name: "measures", text: String(measures),
             ))
             if let fractions {
                 children.append(fractionsNode(fractions))
@@ -107,7 +107,7 @@ extension Note {
     private func fractionsNode(_ f: Fraction) -> XMLTreeNode {
         XMLTreeNode(
             name: "fractions",
-            text: "\(f.numerator)/\(f.denominator)"
+            text: "\(f.numerator)/\(f.denominator)",
         )
     }
 
@@ -121,7 +121,7 @@ extension Note {
             children: [
                 glissando.encode(),
                 XMLTreeNode(name: "next"),
-            ]
+            ],
         )
     }
 }
@@ -136,7 +136,7 @@ extension Glissando {
         var children: [XMLTreeNode] = [
             XMLTreeNode(
                 name: "subtype",
-                text: visualType == .wavy ? "1" : "0"
+                text: visualType == .wavy ? "1" : "0",
             ),
             XMLTreeNode(name: "glissandoStyle", text: style.mscxToken),
             XMLTreeNode(name: "easeInSpin", text: String(easeIn)),

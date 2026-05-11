@@ -39,7 +39,7 @@ extension MidiImporter {
     /// `PitchStaffPosition.octaveFor` so the B/C boundary works for
     /// enharmonic spellings (B♯3 = MIDI 60, C♭5 = MIDI 59, etc.).
     static func letterAlterOctave(
-        pitch: Int, tpc: Int
+        pitch: Int, tpc: Int,
     ) -> (letter: Int, alter: Int, octave: Int) {
         let tpcLetters: [Int] = [3, 0, 4, 1, 5, 2, 6] // F C G D A E B → C-letter index
         let letter = tpcLetters[((tpc + 1) % 7 + 7) % 7]
@@ -97,7 +97,7 @@ extension MidiImporter {
     static func applyAccidental(
         _ note: inout SheetMusicCore.Note,
         concertKey: Int,
-        persistentAlters: inout [Int: Int]
+        persistentAlters: inout [Int: Int],
     ) {
         let (letter, alter, octave) = letterAlterOctave(pitch: note.pitch, tpc: note.tpc)
         let key = letter * 32 + (octave + 16) // pack (letter, octave) — handles negative octaves

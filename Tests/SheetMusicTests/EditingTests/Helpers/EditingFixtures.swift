@@ -28,13 +28,13 @@ enum EditingFixtures {
         var score = fourQuarterRests()
         let chord = Chord(
             duration: .quarter,
-            notes: [Note(pitch: 60, tpc: 14)]
+            notes: [Note(pitch: 60, tpc: 14)],
         )
         let id = VoiceElementID(
             staff: StaffAddress(partIndex: 0, staffIndexInPart: 0),
             measureIndex: 0,
             voiceIndex: 0,
-            elementIndex: 1
+            elementIndex: 1,
         )
         score[id] = .chord(chord)
         return score

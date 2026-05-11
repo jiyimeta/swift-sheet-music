@@ -11,7 +11,7 @@ extension ScoreFrame {
         var children: [XMLTreeNode] = [
             XMLTreeNode(
                 name: "height",
-                text: String(format: "%g", Double(heightSp))
+                text: String(format: "%g", Double(heightSp)),
             ),
         ]
         for text in texts {
@@ -30,13 +30,13 @@ extension FrameText {
         var children: [XMLTreeNode] = []
         if style != .other {
             children.append(XMLTreeNode(
-                name: "style", text: style.rawValue
+                name: "style", text: style.rawValue,
             ))
         }
         if let fontSize {
             children.append(XMLTreeNode(
                 name: "size",
-                text: String(format: "%g", fontSize)
+                text: String(format: "%g", fontSize),
             ))
         }
         if let offsetMm {
@@ -45,7 +45,7 @@ extension FrameText {
                 attributes: [
                     "x": String(format: "%g", Double(offsetMm.x)),
                     "y": String(format: "%g", Double(offsetMm.y)),
-                ]
+                ],
             ))
         }
         children.append(XMLTreeNode(name: "text", text: text))

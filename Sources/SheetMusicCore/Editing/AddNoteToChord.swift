@@ -30,7 +30,7 @@ public struct AddNoteToChord: EditCommand {
         at location: VoiceElementID,
         pitch: Int,
         tpc: Int,
-        accidental: Accidental? = nil
+        accidental: Accidental? = nil,
     ) {
         self.location = location
         self.pitch = pitch
@@ -38,7 +38,9 @@ public struct AddNoteToChord: EditCommand {
         self.accidental = accidental
     }
 
-    public var affectedLocation: VoiceElementID { location }
+    public var affectedLocation: VoiceElementID {
+        location
+    }
 
     @discardableResult
     public func apply(to score: inout Score) throws -> any EditCommand {
@@ -49,20 +51,22 @@ public struct AddNoteToChord: EditCommand {
                 reason: "AddNoteToChord: element at \(location) "
                     + "is not a chord (need at least one existing "
                     + "note; use ReplaceVoiceElement to seed a "
-                    + "chord onto a rest)")
+                    + "chord onto a rest)",
+            )
         }
         let original = chord
         let added = chord.notes.tryAppend(Note(
-            pitch: pitch, tpc: tpc, accidental: accidental
+            pitch: pitch, tpc: tpc, accidental: accidental,
         ))
         guard added else {
             throw SheetMusicError.invalidEdit(
                 reason: "AddNoteToChord: chord already contains a "
-                    + "note at MIDI pitch \(pitch)")
+                    + "note at MIDI pitch \(pitch)",
+            )
         }
         score[location] = .chord(chord)
         return ReplaceVoiceElement(
-            at: location, with: .chord(original)
+            at: location, with: .chord(original),
         )
     }
 }

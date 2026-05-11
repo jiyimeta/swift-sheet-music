@@ -26,7 +26,7 @@ public struct Note: Sendable, Equatable {
         tieForward: Int? = nil,
         tieBack: Int? = nil,
         glissando: Glissando? = nil,
-        headType: String? = nil
+        headType: String? = nil,
     ) {
         self.pitch = pitch
         self.tpc = tpc

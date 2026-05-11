@@ -4,7 +4,7 @@ import Foundation
 @testable import SheetMusicXMLTools
 import Testing
 
-@Suite struct TextPropertiesTests {
+struct TextPropertiesTests {
     // MARK: - TextStyleType defaults
 
     @Test func dynamicsDefaultIsEdwinItalic10pt() {

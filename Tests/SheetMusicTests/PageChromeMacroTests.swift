@@ -4,13 +4,13 @@ import Foundation
 @testable import SheetMusicPDF
 import Testing
 
-@Suite struct PageChromeMacroTests {
+struct PageChromeMacroTests {
     private func ctx(
         page: Int = 0, total: Int = 1,
-        meta: [String: String] = [:]
+        meta: [String: String] = [:],
     ) -> PageChromeMacroExpander.Context {
         PageChromeMacroExpander.Context(
-            pageIndex: page, pageCount: total, metaTags: meta
+            pageIndex: page, pageCount: total, metaTags: meta,
         )
     }
 
@@ -19,7 +19,7 @@ import Testing
             template: String,
             page: Int,
             total: Int,
-            expected: String
+            expected: String,
         )] = [
             ("$P", 0, 1, "1"),
             ("$P", 4, 5, "5"),
@@ -33,11 +33,11 @@ import Testing
         ]
         for (template, page, total, expected) in cases {
             let actual = PageChromeMacroExpander.expand(
-                template, context: ctx(page: page, total: total)
+                template, context: ctx(page: page, total: total),
             )
             #expect(
                 actual == expected,
-                "template '\(template)' (page \(page)/\(total))"
+                "template '\(template)' (page \(page)/\(total))",
             )
         }
     }
@@ -49,38 +49,48 @@ import Testing
             "movementTitle": "II. Slow",
         ]
         let c = ctx(meta: meta)
-        #expect(PageChromeMacroExpander.expand("$T", context: c)
-            == "My Title")
-        #expect(PageChromeMacroExpander.expand("$C", context: c)
-            == "(c) 2026")
+        #expect(
+            PageChromeMacroExpander.expand("$T", context: c)
+                == "My Title",
+        )
+        #expect(
+            PageChromeMacroExpander.expand("$C", context: c)
+                == "(c) 2026",
+        )
         #expect(PageChromeMacroExpander.expand(
-            "$:movementTitle:", context: c
+            "$:movementTitle:", context: c,
         ) == "II. Slow")
         // Unknown tag → empty string.
         #expect(PageChromeMacroExpander.expand(
-            "$:lyricist:", context: c
+            "$:lyricist:", context: c,
         ).isEmpty)
     }
 
     @Test func firstPageOnlyAndSkipFirstPage() {
         let meta = ["copyright": "(c) X"]
         // `$C` shows on page 1 only.
-        #expect(PageChromeMacroExpander.expand(
-            "$C", context: ctx(page: 0, total: 3, meta: meta)
+        #expect(
+            PageChromeMacroExpander.expand(
+                "$C", context: ctx(page: 0, total: 3, meta: meta),
+            )
+                == "(c) X",
         )
-            == "(c) X")
-        #expect(PageChromeMacroExpander.expand(
-            "$C", context: ctx(page: 1, total: 3, meta: meta)
+        #expect(
+            PageChromeMacroExpander.expand(
+                "$C", context: ctx(page: 1, total: 3, meta: meta),
+            )
+            .isEmpty,
         )
-        .isEmpty)
         // `$c` shows on every page.
-        #expect(PageChromeMacroExpander.expand(
-            "$c", context: ctx(page: 1, total: 3, meta: meta)
+        #expect(
+            PageChromeMacroExpander.expand(
+                "$c", context: ctx(page: 1, total: 3, meta: meta),
+            )
+                == "(c) X",
         )
-            == "(c) X")
         // `$p` skips page 1.
         #expect(PageChromeMacroExpander.expand(
-            "$p", context: ctx(page: 0, total: 3)
+            "$p", context: ctx(page: 0, total: 3),
         ).isEmpty)
     }
 
@@ -88,7 +98,7 @@ import Testing
         // `$:foo` (no closing colon) — emit as literal '$' and
         // continue, matching the C++ fallback.
         let out = PageChromeMacroExpander.expand(
-            "$:foo", context: ctx()
+            "$:foo", context: ctx(),
         )
         #expect(out == "$:foo")
     }
@@ -97,7 +107,7 @@ import Testing
         // `$Q` isn't defined; mirror MuseScore's `default:` branch
         // (`headerfooterlayout.cpp:397-400`).
         let out = PageChromeMacroExpander.expand(
-            "$Q", context: ctx()
+            "$Q", context: ctx(),
         )
         #expect(out == "$Q")
     }

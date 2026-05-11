@@ -61,7 +61,7 @@ enum MXLTestBuilder {
                     let start = Int(position)
                     let end = start + count
                     return entry.data.subdata(in: start ..< end)
-                }
+                },
             )
         }
         guard let data = archive.data else {

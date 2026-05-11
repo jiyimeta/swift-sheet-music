@@ -13,7 +13,7 @@ extension Voice {
     func forwardTieLocation(
         chord: Chord,
         isLastChordOfVoice: Bool,
-        voiceBarLength: Fraction
+        voiceBarLength: Fraction,
     ) -> TieLocation? {
         guard chord.notes.contains(where: { $0.tieForward != nil })
         else { return nil }
@@ -31,7 +31,7 @@ extension Voice {
         chord: Chord,
         isFirstChordOfVoice: Bool,
         previousChordDuration: Fraction?,
-        prevVoiceTotal: Fraction?
+        prevVoiceTotal: Fraction?,
     ) -> TieLocation? {
         guard chord.notes.contains(where: { $0.tieBack != nil }),
               let prevDur = previousChordDuration
@@ -41,7 +41,7 @@ extension Voice {
         }
         return .sameMeasure(fractions: Fraction(
             numerator: -prevDur.numerator,
-            denominator: prevDur.denominator
+            denominator: prevDur.denominator,
         ))
     }
 }

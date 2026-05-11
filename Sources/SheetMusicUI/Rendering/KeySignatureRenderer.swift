@@ -15,7 +15,7 @@ enum KeySignatureRenderer {
         sharps: Int,
         flats: Int,
         origin: CGPoint,
-        metrics: StaffMetrics
+        metrics: StaffMetrics,
     ) {
         let count = max(0, sharps) + max(0, flats)
         guard count > 0 else { return }
@@ -35,7 +35,7 @@ enum KeySignatureRenderer {
             context.drawGlyph(
                 glyph,
                 at: CGPoint(x: x, y: y),
-                size: metrics.glyphFontSize
+                size: metrics.glyphFontSize,
             )
         }
     }

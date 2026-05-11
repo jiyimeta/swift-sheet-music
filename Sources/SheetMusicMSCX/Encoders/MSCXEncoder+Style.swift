@@ -32,28 +32,28 @@ extension ScoreStyle {
             appendHeader(
                 pageChrome.header,
                 defaults: defaults.pageChrome.header,
-                into: &children
+                into: &children,
             )
             appendFooter(
                 pageChrome.footer,
                 defaults: defaults.pageChrome.footer,
-                into: &children
+                into: &children,
             )
             appendPageNumber(
                 pageChrome.pageNumber,
                 defaults: defaults.pageChrome.pageNumber,
-                into: &children
+                into: &children,
             )
             appendSwing(
                 unit: swingUnit, ratio: swingRatio,
-                defaults: defaults, into: &children
+                defaults: defaults, into: &children,
             )
             appendTitleBlockAlign(
                 title: titleAlign,
                 subtitle: subtitleAlign,
                 composer: composerAlign,
                 lyricist: lyricistAlign,
-                into: &children
+                into: &children,
             )
             return XMLTreeNode(name: "Style", children: children)
         }
@@ -63,7 +63,7 @@ extension ScoreStyle {
 private func appendPageLayout(
     _ layout: PageLayout,
     defaults d: PageLayout,
-    into children: inout [XMLTreeNode]
+    into children: inout [XMLTreeNode],
 ) {
     emitIfNotDefault("pageWidth", layout.width, default: d.width, double, into: &children)
     emitIfNotDefault("pageHeight", layout.height, default: d.height, double, into: &children)
@@ -74,7 +74,7 @@ private func appendPageLayout(
     emitIfNotDefault("pageEvenTopMargin", layout.evenTopMargin, default: d.evenTopMargin, double, into: &children)
     emitIfNotDefault(
         "pageEvenBottomMargin", layout.evenBottomMargin,
-        default: d.evenBottomMargin, double, into: &children
+        default: d.evenBottomMargin, double, into: &children,
     )
     emitIfNotDefault("pageEvenLeftMargin", layout.evenLeftMargin, default: d.evenLeftMargin, double, into: &children)
     emitIfNotDefault("pageTwosided", layout.twosided, default: d.twosided, bool, into: &children)
@@ -83,7 +83,7 @@ private func appendPageLayout(
 private func appendHeader(
     _ header: HeaderFooter,
     defaults d: HeaderFooter,
-    into children: inout [XMLTreeNode]
+    into children: inout [XMLTreeNode],
 ) {
     emitIfNotDefault("showHeader", header.enabled, default: d.enabled, bool, into: &children)
     emitIfNotDefault("headerFirstPage", header.showOnFirstPage, default: d.showOnFirstPage, bool, into: &children)
@@ -106,7 +106,7 @@ private func appendHeader(
 private func appendFooter(
     _ footer: HeaderFooter,
     defaults d: HeaderFooter,
-    into children: inout [XMLTreeNode]
+    into children: inout [XMLTreeNode],
 ) {
     emitIfNotDefault("showFooter", footer.enabled, default: d.enabled, bool, into: &children)
     emitIfNotDefault("footerFirstPage", footer.showOnFirstPage, default: d.showOnFirstPage, bool, into: &children)
@@ -128,7 +128,7 @@ private func appendSwing(
     unit: SwingUnit,
     ratio: Int,
     defaults: ScoreStyle,
-    into children: inout [XMLTreeNode]
+    into children: inout [XMLTreeNode],
 ) {
     if unit != defaults.swingUnit {
         children.append(XMLTreeNode(name: "swingUnit", text: unit.mscxString))
@@ -147,7 +147,7 @@ private func appendTitleBlockAlign(
     subtitle: TextAlign?,
     composer: TextAlign?,
     lyricist: TextAlign?,
-    into children: inout [XMLTreeNode]
+    into children: inout [XMLTreeNode],
 ) {
     if let v = title {
         children.append(XMLTreeNode(name: "titleAlign", text: v.mscxString))
@@ -166,7 +166,7 @@ private func appendTitleBlockAlign(
 private func appendPageNumber(
     _ pn: PageNumberStyle,
     defaults d: PageNumberStyle,
-    into children: inout [XMLTreeNode]
+    into children: inout [XMLTreeNode],
 ) {
     emitIfNotDefault("showPageNumber", pn.enabled, default: d.enabled, bool, into: &children)
     emitIfNotDefault("showPageNumberOne", pn.showOnFirstPage, default: d.showOnFirstPage, bool, into: &children)
@@ -183,7 +183,7 @@ private func emitIfNotDefault<T: Equatable>(
     _ value: T,
     default defaultValue: T,
     _ formatter: (String, T) -> XMLTreeNode,
-    into children: inout [XMLTreeNode]
+    into children: inout [XMLTreeNode],
 ) {
     guard value != defaultValue else { return }
     children.append(formatter(name, value))

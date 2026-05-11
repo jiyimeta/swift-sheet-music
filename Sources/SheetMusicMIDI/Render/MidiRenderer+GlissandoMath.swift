@@ -13,7 +13,7 @@ extension MidiRenderer {
         style: Glissando.Style,
         startPitch: Int,
         endPitch: Int,
-        keySignature: Int
+        keySignature: Int,
     ) -> [Int] {
         guard startPitch != endPitch else { return [] }
         let direction = endPitch > startPitch ? 1 : -1
@@ -25,32 +25,32 @@ extension MidiRenderer {
                 startPitch: startPitch,
                 endPitch: endPitch,
                 direction: direction,
-                pcs: Self.whiteKeyPCs
+                pcs: Self.whiteKeyPCs,
             )
         case .blackKeys:
             return filteredOffsets(
                 startPitch: startPitch,
                 endPitch: endPitch,
                 direction: direction,
-                pcs: Self.blackKeyPCs
+                pcs: Self.blackKeyPCs,
             )
         case .diatonic:
             return filteredOffsets(
                 startPitch: startPitch,
                 endPitch: endPitch,
                 direction: direction,
-                pcs: majorScalePCs(forKeySignature: keySignature)
+                pcs: majorScalePCs(forKeySignature: keySignature),
             )
         case .portamento:
             return [] // Portamento uses pitch-bend, not discrete pitches.
         }
     }
 
-    private static let whiteKeyPCs: Set<Int> = [0, 2, 4, 5, 7, 9, 11]
-    private static let blackKeyPCs: Set<Int> = [1, 3, 6, 8, 10]
+    private static let whiteKeyPCs: Set = [0, 2, 4, 5, 7, 9, 11]
+    private static let blackKeyPCs: Set = [1, 3, 6, 8, 10]
 
     private static func filteredOffsets(
-        startPitch: Int, endPitch: Int, direction: Int, pcs: Set<Int>
+        startPitch: Int, endPitch: Int, direction: Int, pcs: Set<Int>,
     ) -> [Int] {
         var offsets: [Int] = []
         var pitch = startPitch
@@ -80,7 +80,7 @@ extension MidiRenderer {
     /// distribution is linear. Mirrors `EaseInOut::timeList` in
     /// `dom/easeInOut.cpp:112`.
     static func easeTimeList(
-        segments: Int, duration: Int, easeIn: Int, easeOut: Int
+        segments: Int, duration: Int, easeIn: Int, easeOut: Int,
     ) -> [Int] {
         precondition(segments >= 1, "segments must be ≥ 1")
         let n = Double(segments)
@@ -119,7 +119,7 @@ extension MidiRenderer {
         afterElementIndex: Int,
         measures: [Measure],
         measureIndex: Int,
-        voiceIndex: Int
+        voiceIndex: Int,
     ) -> Int? {
         for i in (afterElementIndex + 1) ..< voiceElements.count {
             if case let .chord(next) = voiceElements[i], let first = next.notes.first {

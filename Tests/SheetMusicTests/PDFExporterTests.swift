@@ -18,8 +18,8 @@
             let data = try PDFExporter.export(
                 score: Self.smallScore(),
                 options: PDFExporter.Options(
-                    title: "test", author: "tester"
-                )
+                    title: "test", author: "tester",
+                ),
             )
             #expect(!data.isEmpty)
             // PDF files start with `%PDF-` (0x25 0x50 0x44 0x46 0x2D).
@@ -34,7 +34,8 @@
             let data = try PDFExporter.export(
                 score: Self.smallScore(),
                 options: PDFExporter.Options(
-                    page: .explicit(.usLetter))
+                    page: .explicit(.usLetter),
+                ),
             )
             guard let provider = CGDataProvider(data: data as CFData),
                   let pdf = CGPDFDocument(provider)
@@ -67,14 +68,14 @@
                 size: CGSize(width: 360, height: 200),
                 oddMargins: PageMargins(uniform: 18),
                 evenMargins: PageMargins(uniform: 18),
-                twosided: false
+                twosided: false,
             )
             let data = try PDFExporter.export(
                 score: Self.longScore(measureCount: 256),
                 options: PDFExporter.Options(
                     page: .explicit(shortPage),
-                    staffSize: .explicit(12)
-                )
+                    staffSize: .explicit(12),
+                ),
             )
             let provider = try #require(CGDataProvider(data: data as CFData))
             let pdf = try #require(CGPDFDocument(provider))
@@ -85,7 +86,7 @@
         func realFixture() throws {
             guard #available(macOS 15.0, *) else { return }
             guard let url = Bundle.module.url(
-                forResource: "midi01", withExtension: "mscx"
+                forResource: "midi01", withExtension: "mscx",
             )
             else {
                 Issue.record("Fixture midi01.mscx not bundled")
@@ -96,7 +97,8 @@
             let pdf = try PDFExporter.export(
                 score: score,
                 options: PDFExporter.Options(
-                    title: "midi01 — smoke test")
+                    title: "midi01 — smoke test",
+                ),
             )
             let provider = try #require(CGDataProvider(data: pdf as CFData))
             let doc = try #require(CGPDFDocument(provider))
@@ -121,10 +123,10 @@
                 size: CGSize(width: 400, height: 200),
                 oddMargins: PageMargins(uniform: 10),
                 evenMargins: PageMargins(uniform: 10),
-                twosided: false
+                twosided: false,
             )
             let pages = PDFExporter.paginate(
-                systems: [s0, s1, s2, s3], page: page
+                systems: [s0, s1, s2, s3], page: page,
             )
             #expect(pages.count == 4)
             for batch in pages {
@@ -137,32 +139,33 @@
         private static func smallScore() -> Score {
             let chord = Chord(
                 duration: .quarter,
-                notes: [Note(pitch: 60, tpc: 14)]
+                notes: [Note(pitch: 60, tpc: 14)],
             )
             let voice = Voice(elements: [
                 .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
                 .chord(chord), .chord(chord),
                 .chord(chord), .chord(chord),
             ])
-            let staff = Staff(measures: [Measure(voices: [voice])]
+            let staff = Staff(
+                measures: [Measure(voices: [voice])],
             )
             let part = Part(
                 id: "P1",
                 instrument: Instrument(
                     id: "i",
-                    articulations: [InstrumentArticulation()]
+                    articulations: [InstrumentArticulation()],
                 ),
-                staves: [staff]
+                staves: [staff],
             )
             return Score(
-                division: 480, parts: [part]
+                division: 480, parts: [part],
             )
         }
 
         private static func longScore(measureCount: Int) -> Score {
             let chord = Chord(
                 duration: .half,
-                notes: [Note(pitch: 60, tpc: 14)]
+                notes: [Note(pitch: 60, tpc: 14)],
             )
             let firstVoice = Voice(elements: [
                 .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
@@ -180,18 +183,18 @@
                 id: "P1",
                 instrument: Instrument(
                     id: "i",
-                    articulations: [InstrumentArticulation()]
+                    articulations: [InstrumentArticulation()],
                 ),
-                staves: [staff]
+                staves: [staff],
             )
             return Score(
-                division: 480, parts: [part]
+                division: 480, parts: [part],
             )
         }
 
         @available(macOS 15.0, iOS 16.0, *)
         private static func fakeSystem(
-            originY: CGFloat, height: CGFloat
+            originY: CGFloat, height: CGFloat,
         ) -> LayoutSystem {
             LayoutSystem(
                 origin: CGPoint(x: 0, y: originY),
@@ -200,7 +203,7 @@
                 staffOrigins: [.zero],
                 partLabels: [],
                 spanners: [],
-                sp: 7.0
+                sp: 7.0,
             )
         }
     }

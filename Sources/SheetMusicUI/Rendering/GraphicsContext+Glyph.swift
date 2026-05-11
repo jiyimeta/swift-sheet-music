@@ -13,7 +13,7 @@ extension GraphicsContext {
         at origin: CGPoint,
         size: CGFloat,
         color: Color = .primary,
-        anchor: UnitPoint = .center
+        anchor: UnitPoint = .center,
     ) {
         let text = Text(String(glyph))
             .font(.custom(BravuraFont.familyName, size: size))
@@ -29,7 +29,7 @@ extension GraphicsContext {
         size: CGFloat,
         italic: Bool = true,
         color: Color = .primary,
-        anchor: UnitPoint = .leading
+        anchor: UnitPoint = .leading,
     ) {
         let base = Text(string).foregroundColor(color)
         let styled = italic

@@ -4,13 +4,13 @@ import Foundation
 @testable import SheetMusicMSCX
 import Testing
 
-@Suite struct MSCXStyleTests {
+struct MSCXStyleTests {
     /// `testArpeggio.mscx` declares all eleven page geometry tags.
     /// We assert the parsed values match the literal XML to within
     /// 1e-5 (the file uses 6-digit fixed point).
     @Test func parsesAllPageGeometryTags() throws {
         let url = try #require(Bundle.module.url(
-            forResource: "testArpeggio", withExtension: "mscx"
+            forResource: "testArpeggio", withExtension: "mscx",
         ))
         let data = try Data(contentsOf: url)
         let score = try MSCXParser.parse(data)

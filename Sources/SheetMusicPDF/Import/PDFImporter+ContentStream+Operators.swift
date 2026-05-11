@@ -195,19 +195,25 @@ private func op_re(_ scanner: CGPDFScannerRef, _ info: UnsafeMutableRawPointer?)
 
 private func op_c(_ scanner: CGPDFScannerRef, _ info: UnsafeMutableRawPointer?) {
     guard let s = pageState(info) else { return }
-    for _ in 0 ..< 6 { _ = popNumber(scanner) }
+    for _ in 0 ..< 6 {
+        _ = popNumber(scanner)
+    }
     s.currentPoint = nil
 }
 
 private func op_v(_ scanner: CGPDFScannerRef, _ info: UnsafeMutableRawPointer?) {
     guard let s = pageState(info) else { return }
-    for _ in 0 ..< 4 { _ = popNumber(scanner) }
+    for _ in 0 ..< 4 {
+        _ = popNumber(scanner)
+    }
     s.currentPoint = nil
 }
 
 private func op_y(_ scanner: CGPDFScannerRef, _ info: UnsafeMutableRawPointer?) {
     guard let s = pageState(info) else { return }
-    for _ in 0 ..< 4 { _ = popNumber(scanner) }
+    for _ in 0 ..< 4 {
+        _ = popNumber(scanner)
+    }
     s.currentPoint = nil
 }
 
@@ -292,7 +298,7 @@ private func emitText(_ text: String, state: State) {
         fontSize: state.fontSize,
         origin: originPageSpace,
         bbox: .zero,
-        pageIndex: state.pageIndex
+        pageIndex: state.pageIndex,
     ))
     let approxAdvance = state.fontSize * 0.5 * CGFloat(text.count)
     state.textMatrix = CGAffineTransform(translationX: approxAdvance, y: 0)

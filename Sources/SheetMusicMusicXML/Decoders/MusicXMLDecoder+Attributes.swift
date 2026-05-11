@@ -22,7 +22,7 @@ enum AttributesDecoder {
         divisions: inout DivisionsContext,
         previous: inout MusicXMLAttributesSnapshot,
         isFirstMeasure: Bool,
-        staffCount: Int
+        staffCount: Int,
     ) -> [Emission] {
         if let divText = node.first("divisions")?.text,
            let div = Int(divText), div > 0
@@ -35,7 +35,7 @@ enum AttributesDecoder {
             node,
             previous: &previous,
             isFirstMeasure: isFirstMeasure,
-            staffCount: staffCount
+            staffCount: staffCount,
         ))
 
         if let fifths = decodeKeyFifths(node) {
@@ -52,7 +52,7 @@ enum AttributesDecoder {
             if shouldEmit {
                 output.append(Emission(
                     staffIndex: nil,
-                    element: .keySignature(KeySignature(concertKey: fifths))
+                    element: .keySignature(KeySignature(concertKey: fifths)),
                 ))
             }
             previous.keyFifths = fifths
@@ -65,8 +65,8 @@ enum AttributesDecoder {
                     staffIndex: nil,
                     element: .timeSignature(TimeSignature(
                         numerator: n,
-                        denominator: d
-                    ))
+                        denominator: d,
+                    )),
                 ))
                 previous.timeN = n
                 previous.timeD = d
@@ -84,7 +84,7 @@ enum AttributesDecoder {
         _ node: XMLTreeNode,
         previous: inout MusicXMLAttributesSnapshot,
         isFirstMeasure: Bool,
-        staffCount: Int
+        staffCount: Int,
     ) -> [Emission] {
         var output: [Emission] = []
         for clefNode in node.all("clef") {
@@ -101,8 +101,8 @@ enum AttributesDecoder {
                     staffIndex: staffIndex,
                     element: .clef(Clef(
                         concertClefType: concert,
-                        transposingClefType: concert
-                    ))
+                        transposingClefType: concert,
+                    )),
                 ))
                 previous.clefByStaff[staffIndex] = concert
             }

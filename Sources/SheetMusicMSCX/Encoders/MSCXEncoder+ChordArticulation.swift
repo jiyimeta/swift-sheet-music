@@ -10,7 +10,7 @@ extension ChordArticulation {
         _ = options // reserved for API consistency with neighbour encoders
         return XMLTreeNode(
             name: "Articulation",
-            children: [XMLTreeNode(name: "subtype", text: subtypeXML())]
+            children: [XMLTreeNode(name: "subtype", text: subtypeXML())],
         )
     }
 

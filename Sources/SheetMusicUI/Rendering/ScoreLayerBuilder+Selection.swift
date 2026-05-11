@@ -18,7 +18,7 @@ extension ScoreLayerBuilder {
         selection: SelectionRenderState,
         metrics: StaffMetrics,
         height: CGFloat,
-        into parent: CALayer
+        into parent: CALayer,
     ) {
         var minX = CGFloat.infinity
         var maxX = -CGFloat.infinity
@@ -62,7 +62,7 @@ extension ScoreLayerBuilder {
             x: minX - xPad,
             y: topY - yPad,
             width: max(0, maxX - minX) + xPad * 2,
-            height: (botY - topY) + metrics.staffHeight + yPad * 2
+            height: (botY - topY) + metrics.staffHeight + yPad * 2,
         )
 
         let path = CGPath(rect: rect, transform: nil)
@@ -71,7 +71,7 @@ extension ScoreLayerBuilder {
             // around `height` to match the other layers built in the
             // same tree (see `ScoreLayerBuilder.flipForPlatform`).
             var flip = CGAffineTransform(
-                a: 1, b: 0, c: 0, d: -1, tx: 0, ty: height
+                a: 1, b: 0, c: 0, d: -1, tx: 0, ty: height,
             )
             let drawPath = path.copy(using: &flip) ?? path
         #else

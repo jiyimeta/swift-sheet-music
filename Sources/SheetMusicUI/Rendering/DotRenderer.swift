@@ -16,7 +16,7 @@ enum DotRenderer {
         after origin: CGPoint,
         count: Int,
         onStaffLine: Bool,
-        metrics: StaffMetrics
+        metrics: StaffMetrics,
     ) {
         guard count > 0 else { return }
         let radius = metrics.sp * 0.22
@@ -30,10 +30,10 @@ enum DotRenderer {
                 x: x - radius,
                 y: y - radius,
                 width: radius * 2,
-                height: radius * 2
+                height: radius * 2,
             )
             context.fill(
-                Path(ellipseIn: rect), with: .color(.primary)
+                Path(ellipseIn: rect), with: .color(.primary),
             )
         }
     }

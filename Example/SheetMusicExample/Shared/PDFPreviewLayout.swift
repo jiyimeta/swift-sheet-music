@@ -19,28 +19,28 @@ struct PDFPreviewLayout {
     @MainActor
     static func build(score: Score) -> PDFPreviewLayout {
         let resolved = PDFExporter.resolve(
-            options: PDFExporter.Options(), score: score
+            options: PDFExporter.Options(), score: score,
         )
         let opts = ScoreViewOptions(
             staffSize: resolved.staffSize,
             systemGap: 16,
-            wrapToViewWidth: true
+            wrapToViewWidth: true,
         )
         let availableWidth = max(
             resolved.staffSize * 4,
             resolved.page.size.width
                 - resolved.page.oddMargins.leading
-                - resolved.page.oddMargins.trailing
+                - resolved.page.oddMargins.trailing,
         )
         let doc = LayoutEngine.layout(
             score: score, options: opts,
-            availableWidth: availableWidth
+            availableWidth: availableWidth,
         )
         let pages = PDFExporter.paginate(
-            systems: doc.systems, page: resolved.page
+            systems: doc.systems, page: resolved.page,
         )
         return PDFPreviewLayout(
-            doc: doc, pages: pages, page: resolved.page
+            doc: doc, pages: pages, page: resolved.page,
         )
     }
 }

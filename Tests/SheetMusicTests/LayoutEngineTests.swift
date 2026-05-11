@@ -13,7 +13,7 @@
             let doc = LayoutEngine.layout(
                 score: score,
                 options: .init(),
-                availableWidth: 800
+                availableWidth: 800,
             )
             #expect(doc.systems.isEmpty)
         }
@@ -24,17 +24,18 @@
             let note = Note(pitch: 60, tpc: 14)
             let chord = Chord(duration: .whole, notes: [note])
             let measure = Measure(
-                voices: [Voice(elements: [.chord(chord)])])
+                voices: [Voice(elements: [.chord(chord)])],
+            )
             let staff = Staff(measures: [measure])
             let score = Score(division: 480, parts: [Part(id: "1", instrument: Instrument(id: "x"), staves: [staff])])
             let doc = LayoutEngine.layout(
-                score: score, options: .init(), availableWidth: 800
+                score: score, options: .init(), availableWidth: 800,
             )
             #expect(doc.systems.count == 1)
             #expect(doc.systems[0].measures.count == 1)
-            let chordCount = doc.systems[0].measures[0].elements.filter {
+            let chordCount = doc.systems[0].measures[0].elements.count(where: {
                 if case .chord = $0 { true } else { false }
-            }.count
+            })
             #expect(chordCount == 1)
         }
 
@@ -47,12 +48,13 @@
                 .chord(Chord(duration: .whole, notes: [note])),
                 .chord(Chord(duration: .whole, notes: [note])),
             ])])
-            let staff = Staff(measures: [m, m, m, m, m, m, m, m]
+            let staff = Staff(
+                measures: [m, m, m, m, m, m, m, m],
             )
             let score = Score(division: 480, parts: [Part(id: "1", instrument: Instrument(id: "x"), staves: [staff])])
             let doc = LayoutEngine.layout(
                 score: score, options: .init(),
-                availableWidth: 120
+                availableWidth: 120,
             )
             #expect(doc.systems.count >= 2)
         }
@@ -68,21 +70,23 @@
             let part = Part(
                 id: "P1",
                 instrument: Instrument(
-                    id: "piano", longName: "Piano", shortName: "Pno."
+                    id: "piano", longName: "Piano", shortName: "Pno.",
                 ),
-                staves: [staff1, staff2]
+                staves: [staff1, staff2],
             )
             let score = Score(
                 division: 480,
-                parts: [part]
+                parts: [part],
             )
             let doc = LayoutEngine.layout(
-                score: score, options: .init(), availableWidth: 800
+                score: score, options: .init(), availableWidth: 800,
             )
             #expect(doc.systems.count == 1)
             #expect(doc.systems[0].staffOrigins.count == 2)
-            #expect(doc.systems[0].staffOrigins[0].y
-                < doc.systems[0].staffOrigins[1].y)
+            #expect(
+                doc.systems[0].staffOrigins[0].y
+                    < doc.systems[0].staffOrigins[1].y,
+            )
         }
 
         @Test("Part labels: long name on first system, short name after")
@@ -91,22 +95,23 @@
             let note = Note(pitch: 60, tpc: 14)
             let chord = Chord(duration: .whole, notes: [note])
             let m = Measure(voices: [Voice(elements: [.chord(chord)])])
-            let staff = Staff(measures: [m, m, m, m, m, m, m, m]
+            let staff = Staff(
+                measures: [m, m, m, m, m, m, m, m],
             )
             let part = Part(
                 id: "P1",
                 trackName: "Violin",
                 instrument: Instrument(
-                    id: "violin", longName: "Violin", shortName: "Vln."
+                    id: "violin", longName: "Violin", shortName: "Vln.",
                 ),
-                staves: [staff]
+                staves: [staff],
             )
             let score = Score(
                 division: 480,
-                parts: [part]
+                parts: [part],
             )
             let doc = LayoutEngine.layout(
-                score: score, options: .init(), availableWidth: 180
+                score: score, options: .init(), availableWidth: 180,
             )
             try #require(doc.systems.count >= 2)
             #expect(doc.systems[0].partLabels.first?.text == "Violin")
@@ -123,17 +128,18 @@
         /// return its laid-out chord notes + stem direction.
         @available(macOS 15.0, *)
         private static func layoutChord(
-            notes chordNotes: [Note]
+            notes chordNotes: [Note],
         ) -> (notes: [LayoutChordNote], stem: StemDirection)? {
             let chord = Chord(
-                duration: .quarter, notes: ChordNotes(chordNotes)
+                duration: .quarter, notes: ChordNotes(chordNotes),
             )
             let measure = Measure(
-                voices: [Voice(elements: [.chord(chord)])])
+                voices: [Voice(elements: [.chord(chord)])],
+            )
             let staff = Staff(measures: [measure])
             let score = Score(division: 480, parts: [Part(id: "1", instrument: Instrument(id: "x"), staves: [staff])])
             let doc = LayoutEngine.layout(
-                score: score, options: .init(), availableWidth: 800
+                score: score, options: .init(), availableWidth: 800,
             )
             for el in doc.systems[0].measures[0].elements {
                 if case let .chord(n, _, s, _, _, _, _, _) = el {
@@ -215,7 +221,8 @@
             ]))
             let upMirrored = upResult.notes.first { $0.mirror }
             let upDx = try #require(
-                upMirrored?.mirrorDx(stem: upResult.stem, sp: 5))
+                upMirrored?.mirrorDx(stem: upResult.stem, sp: 5),
+            )
             // 5 sp × 1.18 = 5.9, positive (to the right) for upstem.
             #expect(abs(upDx - 5.9) < 1e-9)
 
@@ -225,7 +232,8 @@
             ]))
             let downMirrored = downResult.notes.first { $0.mirror }
             let downDx = try #require(
-                downMirrored?.mirrorDx(stem: downResult.stem, sp: 5))
+                downMirrored?.mirrorDx(stem: downResult.stem, sp: 5),
+            )
             #expect(abs(downDx - -5.9) < 1e-9)
         }
 
@@ -237,7 +245,7 @@
         private static func drumStaffStem(
             voices: [Voice],
             drumLineMap: [Int: Int],
-            voiceIndex: Int = 0
+            voiceIndex: Int = 0,
         ) -> StemDirection? {
             let measure = Measure(voices: voices)
             let staff = Staff(measures: [measure])
@@ -246,13 +254,13 @@
                 instrument: Instrument(
                     id: "drumset",
                     useDrumset: true,
-                    drumLineMap: drumLineMap
+                    drumLineMap: drumLineMap,
                 ),
-                staves: [staff]
+                staves: [staff],
             )
             let score = Score(division: 480, parts: [part])
             let doc = LayoutEngine.layout(
-                score: score, options: .init(), availableWidth: 800
+                score: score, options: .init(), availableWidth: 800,
             )
             var seen = -1
             for el in doc.systems[0].measures[0].elements {
@@ -274,11 +282,11 @@
             // convention (voice 1 = up) regardless of multi-voice state.
             let chord = Chord(
                 duration: .quarter,
-                notes: ChordNotes([Note(pitch: 47, tpc: 19)])
+                notes: ChordNotes([Note(pitch: 47, tpc: 19)]),
             )
             let stem = try #require(Self.drumStaffStem(
                 voices: [Voice(elements: [.chord(chord)])],
-                drumLineMap: [47: 1]
+                drumLineMap: [47: 1],
             ))
             #expect(stem == .up)
         }
@@ -292,13 +300,13 @@
             // voice has chords) and the median rule wins.
             let chord = Chord(
                 duration: .quarter,
-                notes: ChordNotes([Note(pitch: 38, tpc: 16)])
+                notes: ChordNotes([Note(pitch: 38, tpc: 16)]),
             )
             let voice1 = Voice(elements: [.chord(chord)])
             let voice2 = Voice(elements: [.rest(duration: .half)])
             let stem = try #require(Self.drumStaffStem(
                 voices: [voice1, voice2],
-                drumLineMap: [38: 3]
+                drumLineMap: [38: 3],
             ))
             #expect(stem == .up)
         }

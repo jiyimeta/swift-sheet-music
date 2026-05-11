@@ -8,16 +8,16 @@ enum AccidentalRenderer {
         context: inout GraphicsContext,
         accidental: Accidental,
         origin: CGPoint,
-        metrics: StaffMetrics
+        metrics: StaffMetrics,
     ) {
         let glyph = glyphFor(accidental)
         context.drawGlyph(
             glyph,
             at: CGPoint(
                 x: origin.x - metrics.sp * 1.2,
-                y: origin.y
+                y: origin.y,
             ),
-            size: metrics.glyphFontSize
+            size: metrics.glyphFontSize,
         )
     }
 

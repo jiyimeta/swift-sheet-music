@@ -43,12 +43,12 @@ struct MSCXEncoderMS3RoundTripTests {
         let voice = Voice(elements: [
             .measureRepeat(MeasureRepeat(
                 numMeasures: 1,
-                duration: .fraction(.init(numerator: 4, denominator: 4))
+                duration: .fraction(.init(numerator: 4, denominator: 4)),
             )),
         ])
         let xml = try voice.encode(
             carryIn: .init(),
-            options: .init(targetVersion: .v3)
+            options: .init(targetVersion: .v3),
         ).node
         let voiceChildren = xml.children.map(\.name)
         #expect(voiceChildren.contains("RepeatMeasure"))
@@ -68,12 +68,12 @@ struct MSCXEncoderMS3RoundTripTests {
         let voice = Voice(elements: [
             .measureRepeat(MeasureRepeat(
                 numMeasures: 1,
-                duration: .fraction(.init(numerator: 4, denominator: 4))
+                duration: .fraction(.init(numerator: 4, denominator: 4)),
             )),
         ])
         let xml = try voice.encode(
             carryIn: .init(),
-            options: .init(targetVersion: .v4)
+            options: .init(targetVersion: .v4),
         ).node
         let voiceChildren = xml.children.map(\.name)
         #expect(voiceChildren.contains("MeasureRepeat"))
@@ -88,14 +88,14 @@ struct MSCXEncoderMS3RoundTripTests {
     /// missing. Encoder must place `<Lyrics>` between `<durationType>`
     /// and the first `<Note>` (Chord::write order on both readers).
     @Test("Chord with lyrics emits <Lyrics> children for v3 and v4")
-    func chordEmitsLyrics() throws {
+    func chordEmitsLyrics() {
         let chord = Chord(
             duration: .quarter,
             notes: ChordNotes([Note(pitch: 60, tpc: 14)]),
             lyrics: [
                 Lyric(text: "Sum", syllabic: .begin, verse: 0),
                 Lyric(text: "mer", syllabic: .end, verse: 0),
-            ]
+            ],
         )
         let v3Node = chord.encodeAsChord(options: .init(targetVersion: .v3))
         let v3Lyrics = v3Node.children.filter { $0.name == "Lyrics" }
@@ -114,7 +114,7 @@ struct MSCXEncoderMS3RoundTripTests {
     }
 
     @Test("Empty-text lyric placeholders are skipped on encode")
-    func emptyLyricPlaceholdersSkipped() throws {
+    func emptyLyricPlaceholdersSkipped() {
         // Decoder fills the verse-N gap with empty placeholders when
         // a chord only carries verse 1; the encoder should not emit
         // them as stray empty <Lyrics> blocks.
@@ -124,7 +124,7 @@ struct MSCXEncoderMS3RoundTripTests {
             lyrics: [
                 Lyric(text: "", verse: 0),
                 Lyric(text: "verse2", verse: 1),
-            ]
+            ],
         )
         let node = chord.encodeAsChord(options: .init(targetVersion: .v3))
         let lyrics = node.children.filter { $0.name == "Lyrics" }

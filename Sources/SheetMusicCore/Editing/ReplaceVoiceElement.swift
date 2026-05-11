@@ -13,13 +13,16 @@ public struct ReplaceVoiceElement: EditCommand {
         self.element = element
     }
 
-    public var affectedLocation: VoiceElementID { location }
+    public var affectedLocation: VoiceElementID {
+        location
+    }
 
     @discardableResult
     public func apply(to score: inout Score) throws -> any EditCommand {
         guard let old = score[location] else {
             throw SheetMusicError.invalidEdit(
-                reason: "ReplaceVoiceElement: no element at \(location)")
+                reason: "ReplaceVoiceElement: no element at \(location)",
+            )
         }
         score[location] = element
         return ReplaceVoiceElement(at: location, with: old)

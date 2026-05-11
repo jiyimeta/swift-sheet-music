@@ -12,7 +12,7 @@ extension Swing {
     /// Mirrors `read460/tread.cpp` swing-tag handling and
     /// `StaffTextBase`'s default `setSwingParameters(DIVISION/2, 60)`.
     static func decode(
-        _ node: XMLTreeNode, isSystemText: Bool
+        _ node: XMLTreeNode, isSystemText: Bool,
     ) -> Swing {
         let text = node.first("text")
             .map(StaffText.plainText(of:)) ?? ""
@@ -45,7 +45,7 @@ extension Swing {
             offsetY: offset.1,
             color: color,
             properties: props,
-            visible: visible
+            visible: visible,
         )
     }
 

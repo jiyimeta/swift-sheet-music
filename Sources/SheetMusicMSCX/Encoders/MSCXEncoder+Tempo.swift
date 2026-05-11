@@ -17,7 +17,7 @@ extension Tempo {
                 attributes: [
                     "x": formatDouble(offsetX),
                     "y": formatDouble(offsetY),
-                ]
+                ],
             ))
         }
         if !visible {

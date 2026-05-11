@@ -22,7 +22,7 @@ public enum MidiRenderer {
         // every staff so the whole system swings; staff-flagged ones
         // stay on their owning staff.
         let swingMaps = collectSwingMaps(
-            score: score, division: score.division
+            score: score, division: score.division,
         )
         for (partIndex, part) in score.parts.enumerated() {
             let channels = channelAssignments[partIndex]
@@ -40,7 +40,7 @@ public enum MidiRenderer {
                     division: score.division,
                     swingMap: trackIndex < swingMaps.count
                         ? swingMaps[trackIndex]
-                        : .empty
+                        : .empty,
                 )
                 tracks.append(track)
                 trackIndex += 1
@@ -64,7 +64,7 @@ public enum MidiRenderer {
         isFirstTrack: Bool,
         isTopOfPart: Bool,
         division: Int,
-        swingMap: SwingMap
+        swingMap: SwingMap,
     ) -> MidiTrack {
         var events: [TimedMidiEvent] = headerEvents(
             staff: staff,
@@ -72,7 +72,7 @@ public enum MidiRenderer {
             channels: channels,
             port: port,
             isFirstTrack: isFirstTrack,
-            isTopOfPart: isTopOfPart
+            isTopOfPart: isTopOfPart,
         )
 
         // Per-staff fermata ranges + tempo bookends. Built BEFORE
@@ -90,7 +90,7 @@ public enum MidiRenderer {
         let fermataRanges = FermataRanges.collect(from: staff, division: division)
         let timeline = TempoTimeline.build(from: staff, division: division)
         let bookends = FermataRanges.tempoEvents(
-            ranges: fermataRanges, timeline: timeline
+            ranges: fermataRanges, timeline: timeline,
         )
         let plan = playbackPlan(for: staff.measures, division: division)
         var measureBases: [Int] = []
@@ -106,11 +106,11 @@ public enum MidiRenderer {
         }
         let projectedClose = projectBookends(
             bookends.closeEvents, plan: plan,
-            measureBases: measureBases, measureSpans: measureSpans
+            measureBases: measureBases, measureSpans: measureSpans,
         )
         let projectedOpen = projectBookends(
             bookends.openEvents, plan: plan,
-            measureBases: measureBases, measureSpans: measureSpans
+            measureBases: measureBases, measureSpans: measureSpans,
         )
 
         events.append(contentsOf: projectedClose)
@@ -124,12 +124,12 @@ public enum MidiRenderer {
                 part: part,
                 channel: primaryChannel,
                 division: division,
-                swingMap: swingMap
+                swingMap: swingMap,
             )
             voiceEventBuckets.append(voiceEvents)
         }
         // Multi-voice merge resolves same-pitch overlaps (the "muted unison" case).
-        let merged = resolveUnisonOverlap(voiceEventBuckets.flatMap { $0 })
+        let merged = resolveUnisonOverlap(voiceEventBuckets.flatMap(\.self))
         events.append(contentsOf: merged)
 
         events.append(contentsOf: projectedOpen)
@@ -163,7 +163,7 @@ public enum MidiRenderer {
         _ bookends: [TimedMidiEvent],
         plan: [PlaybackEntry],
         measureBases: [Int],
-        measureSpans: [Int]
+        measureSpans: [Int],
     ) -> [TimedMidiEvent] {
         guard !bookends.isEmpty, !plan.isEmpty else { return [] }
         var out: [TimedMidiEvent] = []
@@ -171,13 +171,13 @@ public enum MidiRenderer {
             guard let mi = ownerMeasureIndex(
                 forTick: event.tick,
                 measureBases: measureBases,
-                measureSpans: measureSpans
+                measureSpans: measureSpans,
             ) else { continue }
             let offsetWithinMeasure = event.tick - measureBases[mi]
             for entry in plan where entry.measureIndex == mi {
                 out.append(TimedMidiEvent(
                     tick: entry.tickOffset + offsetWithinMeasure,
-                    event: event.event
+                    event: event.event,
                 ))
             }
         }
@@ -191,7 +191,7 @@ public enum MidiRenderer {
     private static func ownerMeasureIndex(
         forTick tick: Int,
         measureBases: [Int],
-        measureSpans: [Int]
+        measureSpans: [Int],
     ) -> Int? {
         for i in 0 ..< measureBases.count {
             let base = measureBases[i]

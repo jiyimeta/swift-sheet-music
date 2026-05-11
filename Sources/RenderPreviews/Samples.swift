@@ -20,7 +20,7 @@
             ])])
             return Score(
                 division: 480,
-                parts: [treblePart(measures: [measure])]
+                parts: [treblePart(measures: [measure])],
             )
         }
 
@@ -34,7 +34,7 @@
             let chords: [VoiceElement] = pitches.map { p, tpc in
                 .chord(Chord(
                     duration: .quarter,
-                    notes: [Note(pitch: p, tpc: tpc)]
+                    notes: [Note(pitch: p, tpc: tpc)],
                 ))
             }
             let m1 = Measure(voices: [Voice(elements: [
@@ -44,7 +44,7 @@
             let m2 = Measure(voices: [Voice(elements: Array(chords.suffix(4)))])
             return Score(
                 division: 480,
-                parts: [treblePart(measures: [m1, m2])]
+                parts: [treblePart(measures: [m1, m2])],
             )
         }
 
@@ -58,7 +58,7 @@
             let chords: [VoiceElement] = notes.map { p, tpc in
                 .chord(Chord(
                     duration: .eighth,
-                    notes: [Note(pitch: p, tpc: tpc)]
+                    notes: [Note(pitch: p, tpc: tpc)],
                 ))
             }
             let m = Measure(voices: [Voice(elements: [
@@ -67,7 +67,7 @@
             ] + chords)])
             return Score(
                 division: 480,
-                parts: [treblePart(measures: [m])]
+                parts: [treblePart(measures: [m])],
             )
         }
 
@@ -79,19 +79,19 @@
                 .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
                 .chord(Chord(
                     duration: .quarter,
-                    notes: [Note(pitch: 60, tpc: 14)]
+                    notes: [Note(pitch: 60, tpc: 14)],
                 )),
                 .chord(Chord(
                     duration: .quarter,
-                    notes: [Note(pitch: 64, tpc: 18)]
+                    notes: [Note(pitch: 64, tpc: 18)],
                 )),
                 .chord(Chord(
                     duration: .quarter,
-                    notes: [Note(pitch: 67, tpc: 15)]
+                    notes: [Note(pitch: 67, tpc: 15)],
                 )),
                 .chord(Chord(
                     duration: .quarter,
-                    notes: [Note(pitch: 72, tpc: 14)]
+                    notes: [Note(pitch: 72, tpc: 14)],
                 )),
             ])])
             let lh = Measure(voices: [Voice(elements: [
@@ -99,37 +99,37 @@
                 .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
                 .chord(Chord(
                     duration: .half,
-                    notes: [Note(pitch: 48, tpc: 14)]
+                    notes: [Note(pitch: 48, tpc: 14)],
                 )),
                 .chord(Chord(
                     duration: .half,
-                    notes: [Note(pitch: 52, tpc: 18)]
+                    notes: [Note(pitch: 52, tpc: 18)],
                 )),
             ])])
             let part = Part(
                 id: "P1",
                 trackName: "Piano",
                 instrument: Instrument(
-                    id: "pno", longName: "Piano", shortName: "Pno."
+                    id: "pno", longName: "Piano", shortName: "Pno.",
                 ),
                 staves: [
                     Staff(
                         staffType: "stdNormal",
                         group: "pitched",
                         defaultClefType: "G",
-                        measures: [rh]
+                        measures: [rh],
                     ),
                     Staff(
                         staffType: "stdNormal",
                         group: "pitched",
                         defaultClefType: "F",
-                        measures: [lh]
+                        measures: [lh],
                     ),
-                ]
+                ],
             )
             return Score(
                 division: 480,
-                parts: [part]
+                parts: [part],
             )
         }
 
@@ -148,7 +148,7 @@
                 .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
                 .chord(Chord(
                     duration: .whole,
-                    notes: [Note(pitch: 60, tpc: 14)]
+                    notes: [Note(pitch: 60, tpc: 14)],
                 )),
             ])])
             let bass = Measure(voices: [Voice(elements: [
@@ -156,25 +156,25 @@
                 .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
                 .chord(Chord(
                     duration: .whole,
-                    notes: [Note(pitch: 36, tpc: 14)]
+                    notes: [Note(pitch: 36, tpc: 14)],
                 )),
             ])])
             let part = Part(
                 id: "P1",
                 trackName: "Organ",
                 instrument: Instrument(
-                    id: "organ", longName: "Organ", shortName: "Org."
+                    id: "organ", longName: "Organ", shortName: "Org.",
                 ),
                 staves: [
                     Staff(
                         defaultClefType: "G",
                         brackets: [BracketItem(type: .brace, span: 4)],
-                        measures: [m]
+                        measures: [m],
                     ),
                     Staff(defaultClefType: "G", measures: [m]),
                     Staff(defaultClefType: "F", measures: [bass]),
                     Staff(defaultClefType: "F", measures: [bass]),
-                ]
+                ],
             )
             return Score(division: 480, parts: [part])
         }
@@ -196,7 +196,7 @@
             let chords: [VoiceElement] = notes.map { p, tpc, a in
                 .chord(Chord(
                     duration: .quarter,
-                    notes: [Note(pitch: p, tpc: tpc, accidental: a)]
+                    notes: [Note(pitch: p, tpc: tpc, accidental: a)],
                 ))
             }
             let m = Measure(voices: [Voice(elements: [
@@ -205,7 +205,7 @@
             ] + chords)])
             return Score(
                 division: 480,
-                parts: [treblePart(measures: [m])]
+                parts: [treblePart(measures: [m])],
             )
         }
 
@@ -226,7 +226,7 @@
             ] + restElements)])
             return Score(
                 division: 480,
-                parts: [treblePart(measures: [m])]
+                parts: [treblePart(measures: [m])],
             )
         }
 
@@ -243,7 +243,7 @@
             }
             return Score(
                 division: 480,
-                parts: [treblePart(measures: [m(3), m(-2), m(7)])]
+                parts: [treblePart(measures: [m(3), m(-2), m(7)])],
             )
         }
 
@@ -260,7 +260,7 @@
             }
             return Score(
                 division: 480,
-                parts: [treblePart(measures: [m(3, 4), m(6, 8), m(12, 8)])]
+                parts: [treblePart(measures: [m(3, 4), m(6, 8), m(12, 8)])],
             )
         }
 
@@ -278,32 +278,32 @@
                 // Stem up, 8th flag
                 .chord(Chord(
                     duration: .eighth,
-                    notes: [Note(pitch: 60, tpc: 14)]
+                    notes: [Note(pitch: 60, tpc: 14)],
                 )),
                 .chord(smallRest),
                 // Stem up, 16th flag
                 .chord(Chord(
                     duration: .sixteenth,
-                    notes: [Note(pitch: 62, tpc: 16)]
+                    notes: [Note(pitch: 62, tpc: 16)],
                 )),
                 .chord(smallRest),
                 .rest(duration: .sixteenth),
                 // Stem down, 8th flag
                 .chord(Chord(
                     duration: .eighth,
-                    notes: [Note(pitch: 72, tpc: 14)]
+                    notes: [Note(pitch: 72, tpc: 14)],
                 )),
                 .chord(smallRest),
                 // Stem down, 16th flag
                 .chord(Chord(
                     duration: .sixteenth,
-                    notes: [Note(pitch: 74, tpc: 16)]
+                    notes: [Note(pitch: 74, tpc: 16)],
                 )),
             ]
             let m = Measure(voices: [Voice(elements: elements)])
             return Score(
                 division: 480,
-                parts: [treblePart(measures: [m])]
+                parts: [treblePart(measures: [m])],
             )
         }
 
@@ -318,15 +318,15 @@
             // Septuplet 16th = sixteenth × 4/7 = Fraction(1/28).
             let tripletEighth = Chord(
                 duration: .fraction(Fraction(numerator: 1, denominator: 12)),
-                notes: [c4]
+                notes: [c4],
             )
             let quintupletSixteenth = Chord(
                 duration: .fraction(Fraction(numerator: 1, denominator: 20)),
-                notes: [c4]
+                notes: [c4],
             )
             let septupletSixteenth = Chord(
                 duration: .fraction(Fraction(numerator: 1, denominator: 28)),
-                notes: [c4]
+                notes: [c4],
             )
             let plain8th = Chord(duration: .eighth, notes: [c4])
             let elements: [VoiceElement] = [
@@ -355,19 +355,19 @@
                     normalNotes: 2,
                     actualNotes: 3,
                     startIndex: 2,
-                    endIndex: 4
+                    endIndex: 4,
                 ),
                 Tuplet(
                     normalNotes: 4,
                     actualNotes: 5,
                     startIndex: 7,
-                    endIndex: 11
+                    endIndex: 11,
                 ),
                 Tuplet(
                     normalNotes: 4,
                     actualNotes: 7,
                     startIndex: 12,
-                    endIndex: 18
+                    endIndex: 18,
                 ),
             ]
             let m = Measure(voices: [
@@ -375,7 +375,7 @@
             ])
             return Score(
                 division: 480,
-                parts: [treblePart(measures: [m])]
+                parts: [treblePart(measures: [m])],
             )
         }
 
@@ -386,7 +386,7 @@
             // Triplet quarter = quarter × 2/3 = Fraction(1/6)
             let tripletQuarter = Chord(
                 duration: .fraction(Fraction(numerator: 1, denominator: 6)),
-                notes: [c4]
+                notes: [c4],
             )
             let halfNote = Chord(duration: .half, notes: [c4])
             let elements: [VoiceElement] = [
@@ -404,7 +404,7 @@
                     normalNotes: 2,
                     actualNotes: 3,
                     startIndex: 2,
-                    endIndex: 4
+                    endIndex: 4,
                 ),
             ]
             let m = Measure(voices: [
@@ -412,7 +412,7 @@
             ])
             return Score(
                 division: 480,
-                parts: [treblePart(measures: [m])]
+                parts: [treblePart(measures: [m])],
             )
         }
 
@@ -424,7 +424,7 @@
             let eighth = Chord(duration: .eighth, notes: [c4])
             let sixteenth = Chord(duration: .sixteenth, notes: [e4])
             let dotted8th = Chord(
-                duration: NoteDuration.eighth.dotted(1), notes: [c4]
+                duration: NoteDuration.eighth.dotted(1), notes: [c4],
             )
             let elements: [VoiceElement] = [
                 .clef(Clef(concertClefType: "G")),
@@ -442,7 +442,7 @@
             let m = Measure(voices: [Voice(elements: elements)])
             return Score(
                 division: 480,
-                parts: [treblePart(measures: [m])]
+                parts: [treblePart(measures: [m])],
             )
         }
 
@@ -452,10 +452,10 @@
             let c4 = Note(pitch: 60, tpc: 14)
             let eighth = Chord(duration: .eighth, notes: [c4])
             let dotted8th = Chord(
-                duration: NoteDuration.eighth.dotted(1), notes: [c4]
+                duration: NoteDuration.eighth.dotted(1), notes: [c4],
             )
             let sixteenth = Chord(
-                duration: .sixteenth, notes: [Note(pitch: 64, tpc: 18)]
+                duration: .sixteenth, notes: [Note(pitch: 64, tpc: 18)],
             )
             let elements: [VoiceElement] = [
                 .clef(Clef(concertClefType: "G")),
@@ -470,7 +470,7 @@
             let m = Measure(voices: [Voice(elements: elements)])
             return Score(
                 division: 480,
-                parts: [treblePart(measures: [m])]
+                parts: [treblePart(measures: [m])],
             )
         }
 
@@ -507,7 +507,7 @@
                 .rest(duration: .eighth),
                 .chord(Chord(
                     duration: NoteDuration.eighth.dotted(1),
-                    notes: [c4]
+                    notes: [c4],
                 )),
                 .rest(duration: .sixteenth),
             ]
@@ -516,8 +516,8 @@
                 trackName: "Duo",
                 instrument: Instrument(
                     id: "synth",
-                    longName: "Duo", shortName: "D."
-                )
+                    longName: "Duo", shortName: "D.",
+                ),
             )
             return Score(
                 division: 480,
@@ -529,15 +529,15 @@
                         Staff(
                             staffType: "stdNormal",
                             group: "pitched",
-                            measures: [Measure(voices: [Voice(elements: s1)])]
+                            measures: [Measure(voices: [Voice(elements: s1)])],
                         ),
                         Staff(
                             staffType: "stdNormal",
                             group: "pitched",
-                            measures: [Measure(voices: [Voice(elements: s2)])]
+                            measures: [Measure(voices: [Voice(elements: s2)])],
                         ),
-                    ]
-                )]
+                    ],
+                )],
             )
         }
 
@@ -566,7 +566,7 @@
             ])
             return Score(
                 division: 480,
-                parts: [treblePart(measures: [m])]
+                parts: [treblePart(measures: [m])],
             )
         }
 
@@ -613,7 +613,7 @@
             ])
             return Score(
                 division: 480,
-                parts: [treblePart(measures: [m])]
+                parts: [treblePart(measures: [m])],
             )
         }
 
@@ -650,10 +650,10 @@
             for _ in 0 ..< 4 {
                 lhElems.append(.chord(Chord(
                     duration: NoteDuration.eighth.dotted(1),
-                    notes: [c3]
+                    notes: [c3],
                 )))
                 lhElems.append(.chord(Chord(
-                    duration: .sixteenth, notes: [e3]
+                    duration: .sixteenth, notes: [e3],
                 )))
             }
 
@@ -663,26 +663,26 @@
                 id: "P1",
                 trackName: "Piano",
                 instrument: Instrument(
-                    id: "pno", longName: "Piano", shortName: "Pno."
+                    id: "pno", longName: "Piano", shortName: "Pno.",
                 ),
                 staves: [
                     Staff(
                         staffType: "stdNormal",
                         group: "pitched",
                         defaultClefType: "G",
-                        measures: [rh]
+                        measures: [rh],
                     ),
                     Staff(
                         staffType: "stdNormal",
                         group: "pitched",
                         defaultClefType: "F",
-                        measures: [lh]
+                        measures: [lh],
                     ),
-                ]
+                ],
             )
             return Score(
                 division: 480,
-                parts: [part]
+                parts: [part],
             )
         }
 
@@ -727,7 +727,7 @@
 
             return Score(
                 division: 480,
-                parts: [treblePart(measures: [m1, m2])]
+                parts: [treblePart(measures: [m1, m2])],
             )
         }
 
@@ -741,24 +741,24 @@
                 // dotted half (3 beats)
                 .chord(Chord(
                     duration: NoteDuration.half.dotted(1),
-                    notes: [c4]
+                    notes: [c4],
                 )),
                 .rest(duration: NoteDuration.quarter),
                 // dotted quarter
                 .chord(Chord(
                     duration: NoteDuration.quarter.dotted(1),
-                    notes: [c4]
+                    notes: [c4],
                 )),
                 // dotted 8th
                 .chord(Chord(
                     duration: NoteDuration.eighth.dotted(1),
-                    notes: [c4]
+                    notes: [c4],
                 )),
                 .rest(duration: NoteDuration.sixteenth),
                 // double-dotted quarter
                 .chord(Chord(
                     duration: NoteDuration.quarter.dotted(2),
-                    notes: [c4]
+                    notes: [c4],
                 )),
                 // dotted rest
                 .rest(duration: NoteDuration.quarter.dotted(1)),
@@ -766,7 +766,7 @@
             let m = Measure(voices: [Voice(elements: elements)])
             return Score(
                 division: 480,
-                parts: [treblePart(measures: [m])]
+                parts: [treblePart(measures: [m])],
             )
         }
 
@@ -786,7 +786,7 @@
             ])])
             return Score(
                 division: 480,
-                parts: [treblePart(measures: [m])]
+                parts: [treblePart(measures: [m])],
             )
         }
 
@@ -816,7 +816,7 @@
             ])])
             return Score(
                 division: 480,
-                parts: [treblePart(measures: [m1])]
+                parts: [treblePart(measures: [m1])],
             )
         }
 
@@ -844,7 +844,7 @@
             ])])
             return Score(
                 division: 480,
-                parts: [treblePart(measures: [m1])]
+                parts: [treblePart(measures: [m1])],
             )
         }
 
@@ -870,7 +870,7 @@
             ])])
             return Score(
                 division: 480,
-                parts: [treblePart(measures: [m1])]
+                parts: [treblePart(measures: [m1])],
             )
         }
 
@@ -885,13 +885,14 @@
             let c4 = Note(pitch: 60, tpc: 14)
             func bar(
                 _ harmonies: [Harmony],
-                isFirst: Bool = false
+                isFirst: Bool = false,
             ) -> Measure {
                 var elements: [VoiceElement] = []
                 if isFirst {
                     elements.append(.clef(Clef(concertClefType: "G")))
                     elements.append(.timeSignature(
-                        TimeSignature(numerator: 4, denominator: 4)))
+                        TimeSignature(numerator: 4, denominator: 4),
+                    ))
                 }
                 for h in harmonies {
                     elements.append(.harmony(h))
@@ -908,9 +909,9 @@
                     bar([Harmony(name: "bIII", harmonyType: .roman)]),
                     bar([Harmony(
                         name: "C",
-                        leftParen: true, rightParen: true
+                        leftParen: true, rightParen: true,
                     )]),
-                ])]
+                ])],
             )
         }
 
@@ -944,7 +945,7 @@
             ])])
             return Score(
                 division: 480,
-                parts: [treblePart(measures: [m1, m2, m3])]
+                parts: [treblePart(measures: [m1, m2, m3])],
             )
         }
 
@@ -977,7 +978,7 @@
             ])])
             return Score(
                 division: 480,
-                parts: [treblePart(measures: [m1, m2])]
+                parts: [treblePart(measures: [m1, m2])],
             )
         }
 
@@ -1004,7 +1005,7 @@
                     sounding,
                     rest, rest, rest, rest, rest, rest, rest, rest,
                     sounding,
-                ])]
+                ])],
             )
         }
 
@@ -1015,9 +1016,9 @@
                 id: "P1",
                 trackName: nil,
                 instrument: Instrument(
-                    id: "synth", longName: "Treble", shortName: "Tr."
+                    id: "synth", longName: "Treble", shortName: "Tr.",
                 ),
-                staves: [Staff(staffType: "stdNormal", group: "pitched", measures: measures)]
+                staves: [Staff(staffType: "stdNormal", group: "pitched", measures: measures)],
             )
         }
     }

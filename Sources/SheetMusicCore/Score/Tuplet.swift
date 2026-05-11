@@ -19,7 +19,7 @@ public struct Tuplet: Sendable, Equatable {
         normalNotes: Int,
         actualNotes: Int,
         startIndex: Int,
-        endIndex: Int
+        endIndex: Int,
     ) {
         self.normalNotes = normalNotes
         self.actualNotes = actualNotes

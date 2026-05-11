@@ -7,16 +7,18 @@
     @testable import SheetMusicUI
     import Testing
 
-    @Suite struct BracketRenderingTests {
+    struct BracketRenderingTests {
         /// Counts shape (stroke) sublayers and text sublayers in a tree.
         private static func countLayerKinds(
-            _ root: CALayer
+            _ root: CALayer,
         ) -> (shapes: Int, texts: Int) {
             var shapes = 0, texts = 0
             func walk(_ layer: CALayer) {
                 if layer is CAShapeLayer { shapes += 1 }
                 if layer is CATextLayer { texts += 1 }
-                for sub in layer.sublayers ?? [] { walk(sub) }
+                for sub in layer.sublayers ?? [] {
+                    walk(sub)
+                }
             }
             walk(root)
             return (shapes, texts)
@@ -24,7 +26,7 @@
 
         @available(macOS 15.0, iOS 16.0, *)
         private static func sampleSystem(
-            type: BracketType
+            type: BracketType,
         ) -> LayoutSystem {
             let metrics = StaffMetrics(staffSize: 28)
             return LayoutSystem(
@@ -41,10 +43,10 @@
                     topY: 20,
                     bottomY: 80 + metrics.staffHeight,
                     column: 0,
-                    staffCount: 2
+                    staffCount: 2,
                 )],
                 spanners: [],
-                sp: metrics.sp
+                sp: metrics.sp,
             )
         }
 
@@ -55,7 +57,7 @@
             let root = CALayer()
             ScoreLayerBuilder.drawBrackets(
                 system: system, metrics: metrics,
-                height: system.size.height, into: root
+                height: system.size.height, into: root,
             )
             let counts = Self.countLayerKinds(root)
             #expect(counts.shapes >= 1)
@@ -69,7 +71,7 @@
             let root = CALayer()
             ScoreLayerBuilder.drawBrackets(
                 system: system, metrics: metrics,
-                height: system.size.height, into: root
+                height: system.size.height, into: root,
             )
             let counts = Self.countLayerKinds(root)
             // Brace draws as a filled CAShapeLayer (the SMuFL glyph
@@ -85,7 +87,7 @@
             let root = CALayer()
             ScoreLayerBuilder.drawBrackets(
                 system: system, metrics: metrics,
-                height: system.size.height, into: root
+                height: system.size.height, into: root,
             )
             let counts = Self.countLayerKinds(root)
             // 1 stroke (spine) + 2 fills (bracketTop + bracketBottom)
@@ -101,7 +103,7 @@
             let root = CALayer()
             ScoreLayerBuilder.drawBrackets(
                 system: system, metrics: metrics,
-                height: system.size.height, into: root
+                height: system.size.height, into: root,
             )
             let counts = Self.countLayerKinds(root)
             // Just the spine — exactly 1 stroke layer, no serif strokes.
@@ -119,12 +121,12 @@
                 partLabels: [],
                 brackets: [],
                 spanners: [],
-                sp: metrics.sp
+                sp: metrics.sp,
             )
             let root = CALayer()
             ScoreLayerBuilder.drawBrackets(
                 system: system, metrics: metrics,
-                height: system.size.height, into: root
+                height: system.size.height, into: root,
             )
             #expect((root.sublayers ?? []).isEmpty)
         }
@@ -143,12 +145,12 @@
                 partLabels: [],
                 brackets: [],
                 spanners: [],
-                sp: metrics.sp
+                sp: metrics.sp,
             )
             let root = CALayer()
             ScoreLayerBuilder.drawSystemBar(
                 system: system, metrics: metrics,
-                height: system.size.height, into: root
+                height: system.size.height, into: root,
             )
             // Exactly one shape layer for the joining bar.
             let counts = Self.countLayerKinds(root)
@@ -167,12 +169,12 @@
                 partLabels: [],
                 brackets: [],
                 spanners: [],
-                sp: metrics.sp
+                sp: metrics.sp,
             )
             let root = CALayer()
             ScoreLayerBuilder.drawSystemBar(
                 system: system, metrics: metrics,
-                height: system.size.height, into: root
+                height: system.size.height, into: root,
             )
             #expect((root.sublayers ?? []).isEmpty)
         }

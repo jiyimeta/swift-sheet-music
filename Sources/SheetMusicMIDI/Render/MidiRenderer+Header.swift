@@ -8,7 +8,7 @@ extension MidiRenderer {
         channels: [ChannelAssignment],
         port: Int,
         isFirstTrack: Bool,
-        isTopOfPart: Bool
+        isTopOfPart: Bool,
     ) -> [TimedMidiEvent] {
         var events: [TimedMidiEvent] = []
 
@@ -22,18 +22,18 @@ extension MidiRenderer {
                 numerator: initialTimeSig.numerator,
                 denominator: initialTimeSig.denominator,
                 clocksPerClick: 24,
-                thirtySecondsPerQuarter: 8
+                thirtySecondsPerQuarter: 8,
             ))))
         }
 
         let initialKey = firstKeySignature(in: staff) ?? KeySignature(concertKey: 0)
         events.append(TimedMidiEvent(tick: 0, event: .meta(.keySignature(
-            sharpsFlats: initialKey.concertKey, isMinor: false
+            sharpsFlats: initialKey.concertKey, isMinor: false,
         ))))
 
         if isFirstTrack {
             events.append(TimedMidiEvent(tick: 0, event: .meta(.tempo(
-                microsecondsPerQuarter: defaultMicrosPerQuarter
+                microsecondsPerQuarter: defaultMicrosPerQuarter,
             ))))
         }
 

@@ -9,7 +9,7 @@ import Testing
 /// mscx) are auto-routed to GM channel 10 (0-indexed 9) so DAWs like Logic
 /// Pro pick up a drum-kit patch automatically. Mirrors MuseScore's
 /// `MasterScore::reorderMidiMapping` in `dom/midimapping.cpp:300`.
-@Suite struct DrumChannelTests {
+struct DrumChannelTests {
     private static func makeChord(pitch: Int, tpc: Int = 14) -> Chord {
         Chord(duration: .quarter, notes: [Note(pitch: pitch, tpc: tpc)])
     }
@@ -22,14 +22,14 @@ import Testing
     private static func makePart(
         useDrumset: Bool,
         channelOverride: Int? = nil,
-        chordPitch: Int = 60
+        chordPitch: Int = 60,
     ) -> Part {
         let channel = InstrumentChannel(midiChannel: channelOverride)
         let instrument = Instrument(
             id: useDrumset ? "drum" : "test",
             articulations: [InstrumentArticulation()],
             channels: [channel],
-            useDrumset: useDrumset
+            useDrumset: useDrumset,
         )
         let staff = makeStaff(chordPitch: useDrumset ? 38 : chordPitch)
         return Part(id: "P1", instrument: instrument, staves: [staff])
@@ -90,12 +90,12 @@ import Testing
         let melodic1 = Part(
             id: "M1",
             instrument: Instrument(id: "melodic1", articulations: [InstrumentArticulation()]),
-            staves: [melodicStaff1]
+            staves: [melodicStaff1],
         )
         let melodic2 = Part(
             id: "M2",
             instrument: Instrument(id: "melodic2", articulations: [InstrumentArticulation()]),
-            staves: [melodicStaff2]
+            staves: [melodicStaff2],
         )
         let score = Score(division: 480, parts: [melodic1, drumPart, melodic2])
         let file = try MidiRenderer.render(score: score)
@@ -117,7 +117,7 @@ import Testing
             parts.append(Part(
                 id: "M\(i)",
                 instrument: Instrument(id: "m\(i)", articulations: [InstrumentArticulation()]),
-                staves: [staff]
+                staves: [staff],
             ))
         }
         let drumPart = Self.makePart(useDrumset: true)

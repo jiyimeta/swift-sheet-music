@@ -37,7 +37,7 @@ struct XMLTreeSerializerTests {
     func escapesAttrQuote() {
         let node = XMLTreeNode(
             name: "t",
-            attributes: ["msg": "say \"hi\""]
+            attributes: ["msg": "say \"hi\""],
         )
         let xml = serialize(node)
         #expect(xml.contains("msg=\"say &quot;hi&quot;\""))
@@ -47,7 +47,7 @@ struct XMLTreeSerializerTests {
     func attrSortStable() {
         let node = XMLTreeNode(
             name: "t",
-            attributes: ["b": "2", "a": "1", "c": "3"]
+            attributes: ["b": "2", "a": "1", "c": "3"],
         )
         let xml = serialize(node)
         let line = xml.split(separator: "\n").first(where: { $0.contains("<t ") })
@@ -71,7 +71,7 @@ struct XMLTreeSerializerTests {
                     XMLTreeNode(name: "c", text: "x"),
                 ]),
                 XMLTreeNode(name: "empty"),
-            ]
+            ],
         )
         let bytes = XMLTreeSerializer.serialize(original)
         let reparsed = try XMLTreeParser.parse(bytes)

@@ -3,7 +3,7 @@ import Foundation
 @testable import SheetMusicMIDI
 import Testing
 
-@Suite struct MidiImporterSwingTests {
+struct MidiImporterSwingTests {
     /// Build an ImportTrack with one note pair per beat. `frontLen`
     /// and `backLen` set the lengths of the two eighths in each beat.
     /// `beats` is the number of beats.
@@ -14,24 +14,24 @@ import Testing
             let beatStart = b * beatTicks
             events.append(TimedMidiEvent(
                 tick: beatStart,
-                event: .noteOn(channel: 0, pitch: 60, velocity: 80)
+                event: .noteOn(channel: 0, pitch: 60, velocity: 80),
             ))
             events.append(TimedMidiEvent(
                 tick: beatStart + frontLen,
-                event: .noteOff(channel: 0, pitch: 60, velocity: 0)
+                event: .noteOff(channel: 0, pitch: 60, velocity: 0),
             ))
             events.append(TimedMidiEvent(
                 tick: beatStart + frontLen,
-                event: .noteOn(channel: 0, pitch: 62, velocity: 80)
+                event: .noteOn(channel: 0, pitch: 62, velocity: 80),
             ))
             events.append(TimedMidiEvent(
                 tick: beatStart + beatTicks,
-                event: .noteOff(channel: 0, pitch: 62, velocity: 0)
+                event: .noteOff(channel: 0, pitch: 62, velocity: 0),
             ))
         }
         return ImportTrack(
             trackIndex: 0, trackName: nil, isDrums: false,
-            programChange: nil, events: events
+            programChange: nil, events: events,
         )
     }
 
@@ -44,7 +44,7 @@ import Testing
                 index: i,
                 startTick: i * measureLen,
                 endTick: (i + 1) * measureLen,
-                timeSignature: TimeSignature(numerator: 4, denominator: 4)
+                timeSignature: TimeSignature(numerator: 4, denominator: 4),
             )
         }
         return BarTimeline(bars: bars)
@@ -58,7 +58,7 @@ import Testing
             track: track,
             timeline: makeTimeline(beats: 16, division: 480),
             division: 480,
-            resolve: { _ in calls += 1; return .treatAsWritten }
+            resolve: { _ in calls += 1; return .treatAsWritten },
         )
         #expect(calls == 0)
     }
@@ -90,7 +90,7 @@ import Testing
             track: track,
             timeline: makeTimeline(beats: 16, division: 480),
             division: 480,
-            resolve: { d in captured = d; return .treatAsWritten }
+            resolve: { d in captured = d; return .treatAsWritten },
         )
         #expect(captured != nil)
         if let c = captured {
@@ -107,7 +107,7 @@ import Testing
             track: track,
             timeline: makeTimeline(beats: 16, division: 480),
             division: 480,
-            resolve: { _ in .treatAsSwing }
+            resolve: { _ in .treatAsSwing },
         )
         // After straightening, beat 0's first noteOff/second noteOn
         // should both be at tick 240, not 160.

@@ -7,7 +7,7 @@ extension LayoutEngine {
     /// Resolved tie arc: an absolute-coords pair ready to attach to a
     /// layout system (coordinates are system-absolute; the attach pass
     /// converts them to system-local).
-    struct TiePair: Sendable, Equatable {
+    struct TiePair: Equatable {
         let staff: Int // staff index (v1 only staff 0 considered)
         let fromOrigin: CGPoint // absolute (system + measure + note origin)
         let toOrigin: CGPoint
@@ -20,7 +20,7 @@ extension LayoutEngine {
     /// open origin + the current note's absolute origin.
     static func resolveTies(
         for document: LayoutDocument,
-        score: Score
+        score: Score,
     ) -> [TiePair] {
         var pairs: [TiePair] = []
         // For open ties: store (origin, above) so the arc direction is
@@ -73,7 +73,7 @@ extension LayoutEngine {
                                 + n.mirrorDx(stem: stem, sp: sp),
                             y: system.origin.y
                                 + measure.origin.y
-                                + n.origin.y
+                                + n.origin.y,
                         )
                         // Tie direction: opposite of stem for single notes
                         // (MuseScore's primary rule). For chords: top note
@@ -111,14 +111,14 @@ extension LayoutEngine {
                         if let back = n.tieBack {
                             let key = TieKey(
                                 number: back, step: n.step,
-                                staffIndex: staffIndex
+                                staffIndex: staffIndex,
                             )
                             if let openTie = open[key] {
                                 pairs.append(TiePair(
                                     staff: staffIndex,
                                     fromOrigin: openTie.origin,
                                     toOrigin: absolute,
-                                    above: openTie.above
+                                    above: openTie.above,
                                 ))
                                 open[key] = nil
                             }
@@ -126,7 +126,7 @@ extension LayoutEngine {
                         if let fwd = n.tieForward {
                             let key = TieKey(
                                 number: fwd, step: n.step,
-                                staffIndex: staffIndex
+                                staffIndex: staffIndex,
                             )
                             open[key] = (absolute, above)
                         }
@@ -140,7 +140,7 @@ extension LayoutEngine {
     static func attachTies(
         to systems: [LayoutSystem],
         pairs: [TiePair],
-        metrics: StaffMetrics
+        metrics: StaffMetrics,
     ) -> [LayoutSystem] {
         guard !pairs.isEmpty else { return systems }
 
@@ -149,25 +149,25 @@ extension LayoutEngine {
 
         for pair in pairs {
             let fromSysIdx = systemIndex(
-                for: pair.fromOrigin.y, in: systems
+                for: pair.fromOrigin.y, in: systems,
             )
             let toSysIdx = systemIndex(
-                for: pair.toOrigin.y, in: systems
+                for: pair.toOrigin.y, in: systems,
             )
             if fromSysIdx == toSysIdx, let idx = fromSysIdx {
                 let sys = systems[idx]
                 let localFrom = CGPoint(
                     x: pair.fromOrigin.x - sys.origin.x,
-                    y: pair.fromOrigin.y - sys.origin.y
+                    y: pair.fromOrigin.y - sys.origin.y,
                 )
                 let localTo = CGPoint(
                     x: pair.toOrigin.x - sys.origin.x,
-                    y: pair.toOrigin.y - sys.origin.y
+                    y: pair.toOrigin.y - sys.origin.y,
                 )
                 extraPerSystem[idx].append(.tieArc(
                     fromOrigin: localFrom,
                     toOrigin: localTo,
-                    above: pair.above
+                    above: pair.above,
                 ))
             } else if let from = fromSysIdx, let to = toSysIdx {
                 let fromSys = systems[from]
@@ -182,13 +182,13 @@ extension LayoutEngine {
                 extraPerSystem[from].append(.tieArc(
                     fromOrigin: CGPoint(
                         x: pair.fromOrigin.x - fromSys.origin.x,
-                        y: pair.fromOrigin.y - fromSys.origin.y
+                        y: pair.fromOrigin.y - fromSys.origin.y,
                     ),
                     toOrigin: CGPoint(
                         x: edgeX,
-                        y: pair.fromOrigin.y - fromSys.origin.y
+                        y: pair.fromOrigin.y - fromSys.origin.y,
                     ),
-                    above: pair.above
+                    above: pair.above,
                 ))
                 // END segment (start of target system): MuseScore
                 // anchors p1 at `system->firstNoteRestSegmentX(true)`
@@ -203,21 +203,21 @@ extension LayoutEngine {
                 let firstContent = firstContentX(in: toSys)
                 let endSegStart = max(
                     firstContent - metrics.sp * 0.5,
-                    toLocalChordX - metrics.sp * 4
+                    toLocalChordX - metrics.sp * 4,
                 )
                 extraPerSystem[to].append(.tieArc(
                     fromOrigin: CGPoint(
                         x: min(
                             endSegStart,
-                            toLocalChordX - metrics.sp
+                            toLocalChordX - metrics.sp,
                         ),
-                        y: pair.toOrigin.y - toSys.origin.y
+                        y: pair.toOrigin.y - toSys.origin.y,
                     ),
                     toOrigin: CGPoint(
                         x: toLocalChordX,
-                        y: pair.toOrigin.y - toSys.origin.y
+                        y: pair.toOrigin.y - toSys.origin.y,
                     ),
-                    above: pair.above
+                    above: pair.above,
                 ))
             }
         }
@@ -231,7 +231,7 @@ extension LayoutEngine {
                 partLabels: system.partLabels,
                 brackets: system.brackets,
                 spanners: system.spanners + extraPerSystem[idx],
-                sp: system.sp
+                sp: system.sp,
             )
         }
     }
@@ -250,13 +250,13 @@ extension LayoutEngine {
                 if let n = notes.first {
                     firstX = min(
                         firstX,
-                        firstMeasure.origin.x + n.origin.x
+                        firstMeasure.origin.x + n.origin.x,
                     )
                 }
             case let .rest(_, p, _, _, _):
                 firstX = min(
                     firstX,
-                    firstMeasure.origin.x + p.x
+                    firstMeasure.origin.x + p.x,
                 )
             default:
                 break
@@ -266,7 +266,7 @@ extension LayoutEngine {
     }
 
     static func systemIndex(
-        for absY: CGFloat, in systems: [LayoutSystem]
+        for absY: CGFloat, in systems: [LayoutSystem],
     ) -> Int? {
         for (i, s) in systems.enumerated() {
             if absY >= s.origin.y && absY <= s.origin.y + s.size.height {

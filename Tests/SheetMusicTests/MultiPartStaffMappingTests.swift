@@ -3,11 +3,11 @@ import Foundation
 @testable import SheetMusicMSCX
 import Testing
 
-@Suite struct MultiPartStaffMappingTests {
+struct MultiPartStaffMappingTests {
     private static func loadMixed() throws -> Score {
         let url = try #require(Bundle.module.url(
             forResource: "multiPartMixedStaves",
-            withExtension: "mscx"
+            withExtension: "mscx",
         ))
         return try MSCXParser.parse(contentsOf: url)
     }
@@ -35,7 +35,7 @@ import Testing
 
     @Test func midi01IdLessFallback() throws {
         let url = try #require(Bundle.module.url(
-            forResource: "midi01", withExtension: "mscx"
+            forResource: "midi01", withExtension: "mscx",
         ))
         let s = try MSCXParser.parse(contentsOf: url)
         #expect(s.parts.count == 1)

@@ -16,7 +16,7 @@ struct GraceLayoutElementTests {
             relativeX: -10,
             hasSlash: true,
             mag: 0.6,
-            voiceIndex: 0
+            voiceIndex: 0,
         )
         guard case let .graceChord(_, _, _, _, relX, slash, mag, _) = element else {
             Issue.record("not graceChord"); return
@@ -38,23 +38,23 @@ struct GracePlacementTests {
         let graceChords = before.map { gt in
             GraceChord(
                 graceType: gt, duration: .eighth,
-                notes: ChordNotes([Note(pitch: 62, tpc: 16)])
+                notes: ChordNotes([Note(pitch: 62, tpc: 16)]),
             )
         }
         let main = Chord(
             duration: .quarter, notes: ChordNotes([mainNote]),
-            graceNotesBefore: graceChords
+            graceNotesBefore: graceChords,
         )
         let measure = Measure(voices: [Voice(elements: [.chord(main)])])
         let staff = Staff(measures: [measure])
         let part = Part(
             id: "p1",
             instrument: Instrument(id: "piano"),
-            staves: [staff]
+            staves: [staff],
         )
         let score = Score(division: 480, parts: [part])
         let doc = LayoutEngine.layout(
-            score: score, options: ScoreViewOptions(), availableWidth: 800
+            score: score, options: ScoreViewOptions(), availableWidth: 800,
         )
         return doc.systems.flatMap { sys in sys.measures.flatMap(\.elements) }
     }
@@ -70,7 +70,9 @@ struct GracePlacementTests {
             if case .chord = $0 { return true }; return false
         }) else { Issue.record("no main chord"); return }
         #expect(graceIndices.count == 2)
-        for gi in graceIndices { #expect(gi < mainIndex) }
+        for gi in graceIndices {
+            #expect(gi < mainIndex)
+        }
     }
 
     @Test("acciaccatura sets hasSlash = true")
@@ -111,14 +113,14 @@ struct GraceSpacingTests {
                     GraceChord(
                         graceType: gt,
                         duration: .eighth,
-                        notes: ChordNotes([Note(pitch: 62, tpc: 16)])
+                        notes: ChordNotes([Note(pitch: 62, tpc: 16)]),
                     )
-                }
+                },
             )
             let measure = Measure(voices: [Voice(elements: [
                 .chord(Chord(
                     duration: .quarter,
-                    notes: ChordNotes([Note(pitch: 55, tpc: 13)])
+                    notes: ChordNotes([Note(pitch: 55, tpc: 13)]),
                 )),
                 .chord(main),
             ])])
@@ -126,11 +128,11 @@ struct GraceSpacingTests {
             let part = Part(
                 id: "p1",
                 instrument: Instrument(id: "piano"),
-                staves: [staff]
+                staves: [staff],
             )
             let score = Score(division: 480, parts: [part])
             let doc = LayoutEngine.layout(
-                score: score, options: ScoreViewOptions(), availableWidth: 800
+                score: score, options: ScoreViewOptions(), availableWidth: 800,
             )
             let elements = doc.systems.flatMap { sys in sys.measures.flatMap(\.elements) }
             // Find the second chord — that's `main` (pitch 60, C4).
@@ -150,8 +152,8 @@ struct GraceSpacingTests {
     }
 }
 
-// Local helper for the test above — mirrors `LayoutDocument`'s
-// internal way of grabbing a chord's stem X.
+/// Local helper for the test above — mirrors `LayoutDocument`'s
+/// internal way of grabbing a chord's stem X.
 @available(macOS 15.0, iOS 16.0, *)
 extension LayoutElement {
     var stemX: CGFloat {

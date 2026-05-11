@@ -5,20 +5,20 @@ import Testing
 struct RemoveTupletTests {
     private static let chordVE = VoiceElementID(
         staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
-        voiceIndex: 0, elementIndex: 1
+        voiceIndex: 0, elementIndex: 1,
     )
 
     @Test("removes a triplet, restoring a single chord of the total span")
     func removesTriplet() throws {
         var score = EditingFixtures.chordAtIndex1()
         _ = try CreateTuplet(
-            at: Self.chordVE, actualNotes: 3, normalNotes: 2
+            at: Self.chordVE, actualNotes: 3, normalNotes: 2,
         )
         .apply(to: &score)
         // Remove the triplet by targeting any member.
         let memberID = VoiceElementID(
             staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
-            voiceIndex: 0, elementIndex: 2
+            voiceIndex: 0, elementIndex: 2,
         )
         _ = try RemoveTuplet(at: memberID).apply(to: &score)
         let voice = score.parts[0].staves[0].measures[0].voices[0]
@@ -39,15 +39,15 @@ struct RemoveTupletTests {
         var score = EditingFixtures.fourQuarterRests()
         let restID = VoiceElementID(
             staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
-            voiceIndex: 0, elementIndex: 2
+            voiceIndex: 0, elementIndex: 2,
         )
         _ = try CreateTuplet(
-            at: restID, actualNotes: 3, normalNotes: 2
+            at: restID, actualNotes: 3, normalNotes: 2,
         )
         .apply(to: &score)
         let memberID = VoiceElementID(
             staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
-            voiceIndex: 0, elementIndex: 3
+            voiceIndex: 0, elementIndex: 3,
         )
         _ = try RemoveTuplet(at: memberID).apply(to: &score)
         let voice = score.parts[0].staves[0].measures[0].voices[0]
@@ -62,13 +62,13 @@ struct RemoveTupletTests {
     func inverseRoundTrip() throws {
         var score = EditingFixtures.chordAtIndex1()
         _ = try CreateTuplet(
-            at: Self.chordVE, actualNotes: 3, normalNotes: 2
+            at: Self.chordVE, actualNotes: 3, normalNotes: 2,
         )
         .apply(to: &score)
         let snapshot = score
         let memberID = VoiceElementID(
             staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
-            voiceIndex: 0, elementIndex: 2
+            voiceIndex: 0, elementIndex: 2,
         )
         let cmd = RemoveTuplet(at: memberID)
         let inverse = try cmd.apply(to: &score)

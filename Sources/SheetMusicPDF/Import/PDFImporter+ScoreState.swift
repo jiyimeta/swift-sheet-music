@@ -11,7 +11,7 @@ extension PDFImporter {
     /// Tempos are extracted from the page's text glyphs and tied to
     /// measure 0 of the staff (best-effort).
     static func scoreStateEvents(
-        staff: ImportStaff, texts: [TextGlyph]
+        staff: ImportStaff, texts: [TextGlyph],
     ) -> [ScoreStateEvent] {
         var events: [ScoreStateEvent] = []
         for (i, measure) in staff.measures.enumerated() {
@@ -100,7 +100,7 @@ extension PDFImporter {
     /// the denominator. Side-by-side digits (two distinct x-clusters)
     /// are read as `num / denom`.
     private static func parseStackedDigits(
-        from glyphs: [ClassifiedGlyph]
+        from glyphs: [ClassifiedGlyph],
     ) -> TimeSignature? {
         let digits = collectDigits(from: glyphs)
         guard !digits.isEmpty else { return nil }
@@ -110,13 +110,13 @@ extension PDFImporter {
             let sortedByY = firstCluster.sorted { $0.y > $1.y }
             return TimeSignature(
                 numerator: sortedByY[0].n,
-                denominator: sortedByY[1].n
+                denominator: sortedByY[1].n,
             )
         }
         if clusters.count >= 2 {
             return TimeSignature(
                 numerator: firstCluster[0].n,
-                denominator: clusters[1][0].n
+                denominator: clusters[1][0].n,
             )
         }
         return TimeSignature(numerator: firstCluster[0].n, denominator: 4)
@@ -129,7 +129,7 @@ extension PDFImporter {
     }
 
     private static func collectDigits(
-        from glyphs: [ClassifiedGlyph]
+        from glyphs: [ClassifiedGlyph],
     ) -> [DigitGlyph] {
         glyphs.compactMap { g in
             if case let .timeSignatureDigit(n) = g.semantic {
@@ -140,7 +140,7 @@ extension PDFImporter {
     }
 
     private static func clusterDigitsByX(
-        _ digits: [DigitGlyph]
+        _ digits: [DigitGlyph],
     ) -> [[DigitGlyph]] {
         let sorted = digits.sorted { $0.x < $1.x }
         var clusters: [[DigitGlyph]] = []

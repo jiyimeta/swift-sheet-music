@@ -5,8 +5,10 @@ import SheetMusicXMLTools
 extension Score {
     static func decode(_ root: XMLTreeNode) throws -> Score {
         guard root.name == "museScore" else {
-            throw SheetMusicError.malformedScore(reason:
-                "root is <\(root.name)>, expected <museScore>")
+            throw SheetMusicError.malformedScore(
+                reason:
+                "root is <\(root.name)>, expected <museScore>",
+            )
         }
         guard let scoreNode = root.first("Score") else {
             throw SheetMusicError.malformedScore(reason: "missing <Score>")
@@ -24,7 +26,7 @@ extension Score {
             try MSCXTopLevelStaff.decode($0)
         }
         let parts = try assembleParts(
-            decoded: partPairings, topLevel: topLevelStaves
+            decoded: partPairings, topLevel: topLevelStaves,
         )
 
         var metaTags: [String: String] = [:]
@@ -56,7 +58,7 @@ extension Score {
         return Score(
             division: division, parts: parts,
             metaTags: metaTags, titleFrame: titleFrame, style: style,
-            source: .museScore(version)
+            source: .museScore(version),
         )
     }
 
@@ -65,7 +67,7 @@ extension Score {
     /// (used by 3.x exports) and finally defaults to `.v4` when no
     /// recognisable marker is present.
     private static func detectVersion(
-        root: XMLTreeNode, scoreNode: XMLTreeNode
+        root: XMLTreeNode, scoreNode: XMLTreeNode,
     ) -> MSCXVersion {
         if let versionAttr = root.attributes["version"],
            let major = versionAttr.split(separator: ".").first,

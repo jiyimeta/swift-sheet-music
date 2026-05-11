@@ -36,7 +36,7 @@
                     Button("Load test.mscx", action: onLoadBundled)
                     Button(
                         "Load harmony-basic.mscx",
-                        action: onLoadHarmonyBasic
+                        action: onLoadHarmonyBasic,
                     )
                 }
                 Section("Open") {
@@ -50,8 +50,10 @@
                 Section("Playback") {
                     HStack {
                         Button(action: onTogglePlayback) {
-                            Image(systemName: playbackEngine.state == .playing
-                                ? "pause.fill" : "play.fill")
+                            Image(
+                                systemName: playbackEngine.state == .playing
+                                    ? "pause.fill" : "play.fill",
+                            )
                         }
                         .disabled(score == nil)
 
@@ -104,20 +106,24 @@
                     Toggle(isOn: $isMarqueeMode) {
                         Label("Marquee Drag", systemImage: "rectangle.dashed")
                     }
-                    .disabled(score == nil
-                        || (layoutMode != .vertical
-                            && layoutMode != .horizontal))
+                    .disabled(
+                        score == nil
+                            || (
+                                layoutMode != .vertical
+                                    && layoutMode != .horizontal
+                            ),
+                    )
                 }
                 Section("Display") {
                     Toggle(isOn: $collapseMultiMeasureRests) {
                         Label(
                             "Collapse rest measures",
-                            systemImage: "rectangle.compress.vertical"
+                            systemImage: "rectangle.compress.vertical",
                         )
                     }
                     .disabled(score == nil)
                     Text(
-                        "Folds runs of ≥2 consecutive whole rests into a single H-bar with a count."
+                        "Folds runs of ≥2 consecutive whole rests into a single H-bar with a count.",
                     )
                     .font(.caption2)
                     .foregroundStyle(.secondary)

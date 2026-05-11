@@ -18,7 +18,7 @@ extension ScoreLayerBuilder {
     /// layer's native orientation.  On macOS we flip around the given
     /// height; on iOS paths pass through unchanged.
     static func flipForPlatform(
-        _ path: CGPath, height: CGFloat
+        _ path: CGPath, height: CGFloat,
     ) -> CGPath {
         #if os(macOS)
             // (x, y) → (x, height - y).  Direct matrix construction
@@ -26,7 +26,7 @@ extension ScoreLayerBuilder {
             // post-multiplies operations in the transformed coord frame
             // rather than the outer frame — an easy trap).
             var t = CGAffineTransform(
-                a: 1, b: 0, c: 0, d: -1, tx: 0, ty: height
+                a: 1, b: 0, c: 0, d: -1, tx: 0, ty: height,
             )
             return path.copy(using: &t) ?? path
         #else
@@ -47,7 +47,7 @@ extension ScoreLayerBuilder {
         height: CGFloat,
         lineWidth: CGFloat,
         color: CGColor = inkColor,
-        dashPattern: [NSNumber]? = nil
+        dashPattern: [NSNumber]? = nil,
     ) -> CAShapeLayer {
         let layer = makeShapeLayer()
         layer.path = flipForPlatform(path, height: height)
@@ -63,7 +63,7 @@ extension ScoreLayerBuilder {
     static func fillLayer(
         path: CGPath,
         height: CGFloat,
-        color: CGColor = inkColor
+        color: CGColor = inkColor,
     ) -> CAShapeLayer {
         let layer = makeShapeLayer()
         layer.path = flipForPlatform(path, height: height)
@@ -82,7 +82,7 @@ extension ScoreLayerBuilder {
         }
         _ = BravuraFont.register
         let font = CTFontCreateWithName(
-            BravuraFont.familyName as CFString, size, nil
+            BravuraFont.familyName as CFString, size, nil,
         )
         cachedBravura = font
         cachedBravuraSize = size
@@ -101,11 +101,11 @@ extension ScoreLayerBuilder {
         }
         #if os(macOS)
             let font = NSFont.systemFont(
-                ofSize: size, weight: .regular
+                ofSize: size, weight: .regular,
             ) as CTFont
         #else
             let font = UIFont.systemFont(
-                ofSize: size, weight: .regular
+                ofSize: size, weight: .regular,
             ) as CTFont
         #endif
         cachedLyricFont = font
@@ -118,7 +118,7 @@ extension ScoreLayerBuilder {
         (size: CGFloat, italic: Bool) = (0, false)
 
     static func systemFont(
-        size: CGFloat, italic: Bool
+        size: CGFloat, italic: Bool,
     ) -> CTFont {
         if let font = cachedSystemFont,
            cachedSystemKey == (size, italic)
@@ -131,7 +131,7 @@ extension ScoreLayerBuilder {
                let italicNs = NSFont(
                    descriptor: nsfont.fontDescriptor
                        .withSymbolicTraits(.italic),
-                   size: size
+                   size: size,
                )
             {
                 nsfont = italicNs
@@ -157,12 +157,12 @@ extension ScoreLayerBuilder {
     // MARK: - Glyph layer (Bravura SMuFL)
 
     private static func glyphPath(
-        character: Character, font: CTFont
+        character: Character, font: CTFont,
     ) -> CGPath? {
         let uniChars = Array(String(character).utf16)
         var glyphs = [CGGlyph](repeating: 0, count: uniChars.count)
         guard CTFontGetGlyphsForCharacters(
-            font, uniChars, &glyphs, uniChars.count
+            font, uniChars, &glyphs, uniChars.count,
         ),
             let glyph = glyphs.first
         else { return nil }
@@ -185,7 +185,7 @@ extension ScoreLayerBuilder {
         anchor: CGPoint = CGPoint(x: 0.5, y: 0.5),
         rotation: CGFloat = 0,
         color: CGColor = inkColor,
-        height: CGFloat
+        height: CGFloat,
     ) -> CAShapeLayer? {
         let font = bravuraFont(size: size)
         guard let path = glyphPath(character: ch, font: font) else {
@@ -193,18 +193,18 @@ extension ScoreLayerBuilder {
         }
         let bbox = path.boundingBoxOfPath
         var t = textAnchoringTransform(
-            bbox: bbox, font: font, origin: origin, anchor: anchor
+            bbox: bbox, font: font, origin: origin, anchor: anchor,
         )
         if rotation != 0 {
             // Rotate around `origin` (post-anchoring): translate origin
             // to (0,0), rotate, translate back. Used by arpeggio so the
             // SMuFL horizontal wiggle becomes a vertical segment.
             t = t.concatenating(
-                CGAffineTransform(translationX: -origin.x, y: -origin.y)
+                CGAffineTransform(translationX: -origin.x, y: -origin.y),
             )
             .concatenating(CGAffineTransform(rotationAngle: rotation))
             .concatenating(
-                CGAffineTransform(translationX: origin.x, y: origin.y)
+                CGAffineTransform(translationX: origin.x, y: origin.y),
             )
         }
         var transformMut = t
@@ -212,7 +212,7 @@ extension ScoreLayerBuilder {
             return nil
         }
         return fillLayer(
-            path: transformed, height: height, color: color
+            path: transformed, height: height, color: color,
         )
     }
 
@@ -230,7 +230,7 @@ extension ScoreLayerBuilder {
     ///                             origin.y + A_CT.y)
     private static func textAnchoringTransform(
         bbox: CGRect, font: CTFont,
-        origin: CGPoint, anchor: CGPoint
+        origin: CGPoint, anchor: CGPoint,
     ) -> CGAffineTransform {
         let ascent = CTFontGetAscent(font)
         let descent = CTFontGetDescent(font)
@@ -239,14 +239,14 @@ extension ScoreLayerBuilder {
         return CGAffineTransform(
             a: 1, b: 0, c: 0, d: -1,
             tx: origin.x - aCTx,
-            ty: origin.y + aCTy
+            ty: origin.y + aCTy,
         )
     }
 
     // MARK: - Text layer (system font, via path for vector quality)
 
     private static func textPath(
-        _ text: String, font: CTFont
+        _ text: String, font: CTFont,
     ) -> CGPath? {
         // Split on `\n` so multi-line `<StaffText>` payloads (which
         // commonly contain literal newlines like
@@ -265,11 +265,11 @@ extension ScoreLayerBuilder {
         let composite = CGMutablePath()
         for (i, line) in lines.enumerated() {
             guard let linePath = textPathSingleLine(
-                line, font: font
+                line, font: font,
             ) else { continue }
             var t = CGAffineTransform(
                 translationX: 0,
-                y: -CGFloat(i) * lineHeight
+                y: -CGFloat(i) * lineHeight,
             )
             composite.addPath(linePath, transform: t)
         }
@@ -277,10 +277,10 @@ extension ScoreLayerBuilder {
     }
 
     private static func textPathSingleLine(
-        _ text: String, font: CTFont
+        _ text: String, font: CTFont,
     ) -> CGPath? {
         let attr = NSAttributedString(
-            string: text, attributes: [.font: font]
+            string: text, attributes: [.font: font],
         )
         let line = CTLineCreateWithAttributedString(attr)
         let composite = CGMutablePath()
@@ -301,11 +301,11 @@ extension ScoreLayerBuilder {
             if let attrs = CTRunGetAttributes(run)
                 as? [String: Any],
                 let runFontValue = attrs[
-                    kCTFontAttributeName as String
+                    kCTFontAttributeName as String,
                 ]
             {
                 runFont = unsafeBitCast(
-                    runFontValue as AnyObject, to: CTFont.self
+                    runFontValue as AnyObject, to: CTFont.self,
                 )
             } else {
                 runFont = font
@@ -314,10 +314,10 @@ extension ScoreLayerBuilder {
             for i in 0 ..< count {
                 var t = CGAffineTransform(
                     translationX: positions[i].x,
-                    y: positions[i].y
+                    y: positions[i].y,
                 )
                 if let gPath = CTFontCreatePathForGlyph(
-                    runFont, glyphs[i], &t
+                    runFont, glyphs[i], &t,
                 ) {
                     composite.addPath(gPath)
                 }
@@ -342,7 +342,7 @@ extension ScoreLayerBuilder {
         color: CGColor = inkColor,
         kind: TextLayerKind = .expression,
         font explicitFont: CTFont? = nil,
-        height: CGFloat
+        height: CGFloat,
     ) -> CAShapeLayer? {
         guard !text.isEmpty else { return nil }
         let font: CTFont
@@ -390,13 +390,13 @@ extension ScoreLayerBuilder {
             var t = CGAffineTransform(
                 a: 1, b: 0, c: 0, d: -1,
                 tx: origin.x - aCTx,
-                ty: origin.y + aCTy
+                ty: origin.y + aCTy,
             )
             guard let transformed = path.copy(using: &t) else {
                 return nil
             }
             return fillLayer(
-                path: transformed, height: height, color: color
+                path: transformed, height: height, color: color,
             )
         }
 
@@ -410,11 +410,11 @@ extension ScoreLayerBuilder {
         var t = CGAffineTransform(
             a: c, b: s, c: s, d: -c,
             tx: origin.x - c * aCTx - s * aCTy,
-            ty: origin.y - s * aCTx + c * aCTy
+            ty: origin.y - s * aCTx + c * aCTy,
         )
         guard let transformed = path.copy(using: &t) else { return nil }
         return fillLayer(
-            path: transformed, height: height, color: color
+            path: transformed, height: height, color: color,
         )
     }
 }

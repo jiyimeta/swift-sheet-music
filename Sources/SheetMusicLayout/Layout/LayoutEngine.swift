@@ -27,13 +27,13 @@ public enum LayoutEngine {
     public static func layout(
         score: Score,
         options: ScoreViewOptions,
-        availableWidth: CGFloat
+        availableWidth: CGFloat,
     ) -> LayoutDocument {
         layout(
             score: score,
             options: options,
             availableWidth: availableWidth,
-            cache: nil
+            cache: nil,
         )
     }
 
@@ -47,18 +47,18 @@ public enum LayoutEngine {
         score: Score,
         options: ScoreViewOptions,
         availableWidth: CGFloat,
-        cache: LayoutCache?
+        cache: LayoutCache?,
     ) -> LayoutDocument {
         let metrics = StaffMetrics(staffSize: options.staffSize)
         let effectiveMelismaTicks = computeEffectiveMelismaTicks(
-            score: score, division: score.division
+            score: score, division: score.division,
         )
         let melismas = computeMelismaContinuations(
             score: score, division: score.division,
-            effectiveTicks: effectiveMelismaTicks
+            effectiveTicks: effectiveMelismaTicks,
         )
         let multiMeasureRestPlan = MultiMeasureRestPlanner.plan(
-            for: score, policy: options.multiMeasureRest
+            for: score, policy: options.multiMeasureRest,
         )
         let context = RenderContext(
             score: score,
@@ -69,7 +69,7 @@ public enum LayoutEngine {
             effectiveMelismaTicks: effectiveMelismaTicks,
             cache: cache,
             belowStaffSpannerCoverage: belowStaffSpannerCoverage(score: score),
-            multiMeasureRestPlan: multiMeasureRestPlan
+            multiMeasureRestPlan: multiMeasureRestPlan,
         )
         let packedSystems = packSystems(context: context)
         // Title block at the top of the document. Built first so we
@@ -86,8 +86,8 @@ public enum LayoutEngine {
                     availableWidth,
                     packedSystems.reduce(CGFloat(0)) { acc, s in
                         max(acc, s.origin.x + s.size.width)
-                    }
-                )
+                    },
+                ),
             )
         }()
         let yShift = titleFrame?.height ?? 0
@@ -107,7 +107,7 @@ public enum LayoutEngine {
             to: systems,
             anchors: anchors,
             score: score,
-            metrics: metrics
+            metrics: metrics,
         )
         // Add a small right margin so the last barline doesn't
         // touch the canvas edge.
@@ -116,26 +116,26 @@ public enum LayoutEngine {
             size: CGSize(width: docWidth, height: totalHeight),
             systems: systemsWithSpanners,
             metrics: metrics,
-            titleFrame: titleFrame
+            titleFrame: titleFrame,
         )
         let ties = resolveTies(for: firstPass, score: score)
         let systemsWithTies = attachTies(
-            to: systemsWithSpanners, pairs: ties, metrics: metrics
+            to: systemsWithSpanners, pairs: ties, metrics: metrics,
         )
         return LayoutDocument(
             size: firstPass.size,
             systems: systemsWithTies,
             metrics: metrics,
-            titleFrame: titleFrame
+            titleFrame: titleFrame,
         )
     }
 
     static func shift(
-        _ system: LayoutSystem, byY dy: CGFloat
+        _ system: LayoutSystem, byY dy: CGFloat,
     ) -> LayoutSystem {
         LayoutSystem(
             origin: CGPoint(
-                x: system.origin.x, y: system.origin.y + dy
+                x: system.origin.x, y: system.origin.y + dy,
             ),
             size: system.size,
             measures: system.measures,
@@ -143,7 +143,7 @@ public enum LayoutEngine {
             partLabels: system.partLabels,
             brackets: system.brackets,
             spanners: system.spanners,
-            sp: system.sp
+            sp: system.sp,
         )
     }
 
@@ -151,7 +151,7 @@ public enum LayoutEngine {
         source: ScoreFrame,
         style: ScoreStyle,
         metrics: StaffMetrics,
-        docWidth: CGFloat
+        docWidth: CGFloat,
     ) -> LayoutTitleFrame {
         // MuseScore stores offsets for the title-block styles in
         // millimetres (`OffsetType::ABS` — see `styledef.cpp`).
@@ -175,7 +175,7 @@ public enum LayoutEngine {
         var requiredFromTopAnchors: CGFloat = 0
         for (idx, t) in source.texts.enumerated() {
             let layout = titleBlockLayout(
-                for: t.style, idx: idx, style: style, mmToPt: mmToPt
+                for: t.style, idx: idx, style: style, mmToPt: mmToPt,
             )
             // Bottom-anchored texts grow downward from the frame
             // bottom — they don't constrain how *tall* the frame
@@ -192,13 +192,13 @@ public enum LayoutEngine {
         let frameHeight = max(
             metrics.sp * 4,
             source.heightSp * metrics.sp,
-            requiredFromTopAnchors
+            requiredFromTopAnchors,
         )
 
         var laidOut: [LayoutFrameText] = []
         for (idx, t) in source.texts.enumerated() {
             let layout = titleBlockLayout(
-                for: t.style, idx: idx, style: style, mmToPt: mmToPt
+                for: t.style, idx: idx, style: style, mmToPt: mmToPt,
             )
             let baseX = baseX(for: layout.align, docWidth: docWidth)
             let baseY: CGFloat = layout.align.vertical == .top
@@ -216,11 +216,11 @@ public enum LayoutEngine {
                 style: t.style,
                 position: CGPoint(x: baseX + dx, y: baseY + dy),
                 fontSize: fontSize,
-                anchor: anchor(for: layout.align)
+                anchor: anchor(for: layout.align),
             ))
         }
         return LayoutTitleFrame(
-            height: frameHeight, texts: laidOut
+            height: frameHeight, texts: laidOut,
         )
     }
 
@@ -247,7 +247,7 @@ public enum LayoutEngine {
         for textStyle: FrameText.Style,
         idx: Int,
         style scoreStyle: ScoreStyle,
-        mmToPt: CGFloat
+        mmToPt: CGFloat,
     ) -> TitleBlockLayout {
         switch textStyle {
         case .title:
@@ -255,40 +255,40 @@ public enum LayoutEngine {
                 align: scoreStyle.titleAlign
                     ?? TextAlign(horizontal: .center, vertical: .top),
                 topOffset: 0,
-                fontSize: 22
+                fontSize: 22,
             )
         case .subtitle:
             TitleBlockLayout(
                 align: scoreStyle.subtitleAlign
                     ?? TextAlign(horizontal: .center, vertical: .top),
                 topOffset: 10 * mmToPt,
-                fontSize: 14
+                fontSize: 14,
             )
         case .composer:
             TitleBlockLayout(
                 align: scoreStyle.composerAlign
                     ?? TextAlign(horizontal: .right, vertical: .bottom),
                 topOffset: 0,
-                fontSize: 10
+                fontSize: 10,
             )
         case .lyricist:
             TitleBlockLayout(
                 align: scoreStyle.lyricistAlign
                     ?? TextAlign(horizontal: .left, vertical: .bottom),
                 topOffset: 0,
-                fontSize: 10
+                fontSize: 10,
             )
         case .other:
             TitleBlockLayout(
                 align: TextAlign(horizontal: .center, vertical: .top),
                 topOffset: 10 * mmToPt + CGFloat(idx) * 4 * mmToPt,
-                fontSize: 10
+                fontSize: 10,
             )
         }
     }
 
     private static func baseX(
-        for align: TextAlign, docWidth: CGFloat
+        for align: TextAlign, docWidth: CGFloat,
     ) -> CGFloat {
         switch align.horizontal {
         case .left: 0
@@ -303,7 +303,7 @@ public enum LayoutEngine {
     /// axis — adequate for the cases that actually appear in MSCX
     /// title blocks.
     private static func anchor(
-        for align: TextAlign
+        for align: TextAlign,
     ) -> LayoutFrameText.Anchor {
         switch (align.horizontal, align.vertical) {
         case (.left, .bottom): return .bottomLeading

@@ -24,7 +24,7 @@ public enum LayoutElement: Sendable, Equatable {
         origin: CGPoint,
         tieForward: Int?,
         tieBack: Int?,
-        hasGlissando: Bool
+        hasGlissando: Bool,
     )
     case chord(
         notes: [LayoutChordNote],
@@ -34,7 +34,7 @@ public enum LayoutElement: Sendable, Equatable {
         hasArpeggio: Bool,
         arpeggioRawType: String?,
         isBeamed: Bool,
-        voiceIndex: Int
+        voiceIndex: Int,
     )
     /// A grace note (or grace chord) drawn at reduced size next to
     /// its parent main chord. Carries a `relativeX` offset from the
@@ -49,20 +49,20 @@ public enum LayoutElement: Sendable, Equatable {
         relativeX: CGFloat,
         hasSlash: Bool,
         mag: CGFloat,
-        voiceIndex: Int
+        voiceIndex: Int,
     )
     case rest(
         duration: NoteDuration,
         origin: CGPoint,
         voiceIndex: Int,
         restID: RestID,
-        /// Set when the rest is hung above the top staff line or
-        /// below the bottom one (e.g. the voice-2 whole rest that
-        /// the placement nudges out of voice 1's way). The renderer
-        /// switches to MuseScore's `restWholeLegerLine` /
-        /// `restHalfLegerLine` glyphs in that case so the rest comes
-        /// with its own short ledger stroke.
-        hasLegerLine: Bool
+        // Set when the rest is hung above the top staff line or
+        // below the bottom one (e.g. the voice-2 whole rest that
+        // the placement nudges out of voice 1's way). The renderer
+        // switches to MuseScore's `restWholeLegerLine` /
+        // `restHalfLegerLine` glyphs in that case so the rest comes
+        // with its own short ledger stroke.
+        hasLegerLine: Bool,
     )
     /// A single beam bar at `level` (1 = primary, 2 = first secondary,
     /// …). A note group with mixed durations emits one `beam` per bar
@@ -73,7 +73,7 @@ public enum LayoutElement: Sendable, Equatable {
         fromOrigin: CGPoint,
         toOrigin: CGPoint,
         direction: StemDirection,
-        level: Int
+        level: Int,
     )
     case textMark(kind: TextMarkKind, text: String, origin: CGPoint)
     /// Free-form staff or system text imported from MuseScore.
@@ -84,7 +84,7 @@ public enum LayoutElement: Sendable, Equatable {
         text: String,
         origin: CGPoint,
         color: ScoreColor?,
-        isSystemText: Bool
+        isSystemText: Bool,
     )
     /// Pre-typeset chord symbol with a baked-in run list (text +
     /// SMuFL accidental glyphs) and total width. The placement
@@ -102,7 +102,7 @@ public enum LayoutElement: Sendable, Equatable {
     case articulation(
         kind: ArticulationKind,
         origin: CGPoint,
-        isAbove: Bool
+        isAbove: Bool,
     )
     case marker(kind: Marker.Kind, text: String, origin: CGPoint)
     /// Rehearsal letter / number drawn above the top staff at the
@@ -112,7 +112,7 @@ public enum LayoutElement: Sendable, Equatable {
         text: String,
         origin: CGPoint,
         frame: RehearsalMark.FrameKind,
-        color: ScoreColor?
+        color: ScoreColor?,
     )
     case jump(text: String, origin: CGPoint)
     case measureRepeat(count: Int, origin: CGPoint)
@@ -124,7 +124,7 @@ public enum LayoutElement: Sendable, Equatable {
     /// once the renderer requirements are clearer.
     case multiMeasureRest(
         count: Int,
-        origin: CGPoint
+        origin: CGPoint,
     )
     /// 1-based measure number drawn above a staff. Emitted for every
     /// staff at the first measure of every system in vertical / page
@@ -145,12 +145,12 @@ public enum LayoutElement: Sendable, Equatable {
         toOrigin: CGPoint,
         continuesLeft: Bool,
         continuesRight: Bool,
-        text: String
+        text: String,
     )
     case tieArc(
         fromOrigin: CGPoint,
         toOrigin: CGPoint,
-        above: Bool
+        above: Bool,
     )
     /// Horizontal melisma line drawn at the lyric baseline, from just
     /// past the syllable's text to the end of the last note the
@@ -159,7 +159,7 @@ public enum LayoutElement: Sendable, Equatable {
     /// rule matching MuseScore's convention.
     case lyricsMelisma(
         fromOrigin: CGPoint,
-        toOrigin: CGPoint
+        toOrigin: CGPoint,
     )
     /// One short horizontal stroke between two adjacent syllables of
     /// the same word ("Pa-ra-di-so" → three hyphens). Multiple
@@ -170,18 +170,18 @@ public enum LayoutElement: Sendable, Equatable {
     /// melisma rule, which sits on the underline.
     case lyricHyphen(
         fromOrigin: CGPoint,
-        toOrigin: CGPoint
+        toOrigin: CGPoint,
     )
     case glissandoLine(
         fromOrigin: CGPoint,
         toOrigin: CGPoint,
         wavy: Bool,
-        text: String?
+        text: String?,
     )
     case arpeggioWiggle(
         top: CGPoint,
         bottom: CGPoint,
-        subtype: String?
+        subtype: String?,
     )
     /// Tuplet marking — bracket (when `hasBracket` is true) with a
     /// number in the middle, or number alone (when beamed). `fromOrigin`
@@ -195,7 +195,7 @@ public enum LayoutElement: Sendable, Equatable {
         text: String,
         hasBracket: Bool,
         isAbove: Bool,
-        tupletID: TupletID?
+        tupletID: TupletID?,
     )
 
     /// Layout-local subset of `ChordArticulation.Kind` containing only
@@ -256,7 +256,7 @@ public struct LayoutChordNote: Sendable, Equatable {
         tieBack: Int?,
         hasGlissando: Bool,
         headType: String? = nil,
-        mirror: Bool = false
+        mirror: Bool = false,
     ) {
         self.noteID = noteID
         self.step = step

@@ -24,8 +24,8 @@
                 parts: [Part(
                     id: "1",
                     instrument: Instrument(id: "x"),
-                    staves: [Staff(measures: measures)]
-                )]
+                    staves: [Staff(measures: measures)],
+                )],
             )
         }
 
@@ -42,7 +42,7 @@
             ])
             let doc = LayoutEngine.layout(
                 score: s, options: ScoreViewOptions(),
-                availableWidth: 1200
+                availableWidth: 1200,
             )
             let total = doc.systems.reduce(0) { $0 + $1.measures.count }
             #expect(total == 6)
@@ -63,10 +63,10 @@
                 Self.soundingMeasure(),
             ])
             let opts = ScoreViewOptions(
-                multiMeasureRest: .collapse(minimumMeasures: 2)
+                multiMeasureRest: .collapse(minimumMeasures: 2),
             )
             let doc = LayoutEngine.layout(
-                score: s, options: opts, availableWidth: 1200
+                score: s, options: opts, availableWidth: 1200,
             )
             let allMeasures = doc.systems.flatMap(\.measures)
             // sounding + H-bar + sounding = 3 emitted measures.
@@ -86,10 +86,10 @@
                 Self.restMeasure(),
             ])
             let opts = ScoreViewOptions(
-                multiMeasureRest: .collapse(minimumMeasures: 2)
+                multiMeasureRest: .collapse(minimumMeasures: 2),
             )
             let doc = LayoutEngine.layout(
-                score: s, options: opts, availableWidth: 800
+                score: s, options: opts, availableWidth: 800,
             )
             let hbar = doc.systems.flatMap(\.measures)
                 .first { $0.multiMeasureRest != nil }
@@ -117,10 +117,10 @@
                 Self.restMeasure(), Self.restMeasure(),
             ])
             let opts = ScoreViewOptions(
-                multiMeasureRest: .collapse(minimumMeasures: 2)
+                multiMeasureRest: .collapse(minimumMeasures: 2),
             )
             let doc = LayoutEngine.layout(
-                score: s, options: opts, availableWidth: 1200
+                score: s, options: opts, availableWidth: 1200,
             )
             let hbarCounts = doc.systems.flatMap(\.measures)
                 .compactMap(\.multiMeasureRest)

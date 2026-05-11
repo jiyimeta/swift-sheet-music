@@ -23,7 +23,7 @@ import Foundation
 /// UI) it should use the `tryAppend(_:)` and `updateNote(at:_:)`
 /// APIs which return `Bool`.
 public struct ChordNotes: Sendable, Equatable {
-    @usableFromInline internal var storage: [Note]
+    @usableFromInline var storage: [Note]
 
     public init() {
         storage = []
@@ -58,7 +58,7 @@ public struct ChordNotes: Sendable, Equatable {
     /// Returns `true` when the mutation was applied.
     @discardableResult
     public mutating func updateNote(
-        at index: Int, _ transform: (inout Note) -> Void
+        at index: Int, _ transform: (inout Note) -> Void,
     ) -> Bool {
         var copy = storage[index]
         transform(&copy)
@@ -78,11 +78,22 @@ extension ChordNotes: RandomAccessCollection, MutableCollection {
     public typealias Index = Int
     public typealias Element = Note
 
-    public var startIndex: Int { storage.startIndex }
-    public var endIndex: Int { storage.endIndex }
+    public var startIndex: Int {
+        storage.startIndex
+    }
 
-    public func index(after i: Int) -> Int { storage.index(after: i) }
-    public func index(before i: Int) -> Int { storage.index(before: i) }
+    public var endIndex: Int {
+        storage.endIndex
+    }
+
+    public func index(after i: Int) -> Int {
+        storage.index(after: i)
+    }
+
+    public func index(before i: Int) -> Int {
+        storage.index(before: i)
+    }
+
     public func index(_ i: Int, offsetBy distance: Int) -> Int {
         storage.index(i, offsetBy: distance)
     }
@@ -113,10 +124,10 @@ extension ChordNotes: RandomAccessCollection, MutableCollection {
 // MARK: - RangeReplaceableCollection
 
 extension ChordNotes: RangeReplaceableCollection {
-    public mutating func replaceSubrange<C, R>(
-        _ subrange: R, with newElements: C
-    ) where C: Collection, C.Element == Note,
-    R: RangeExpression, R.Bound == Int {
+    public mutating func replaceSubrange<C: Collection, R: RangeExpression>(
+        _ subrange: R, with newElements: C,
+    ) where C.Element == Note,
+    R.Bound == Int {
         // Build the would-be sequence (existing minus subrange +
         // newElements) then dedupe with the same first-wins rule
         // used in `init(_:)`. Pitches that already exist outside

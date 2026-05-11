@@ -10,10 +10,12 @@
     /// set `SHEETMUSIC_RUN_LAYOUT_BENCH=1` in the environment to opt in.
     /// Loads `Example/SheetMusicExample/test.mscx` (1356 measures) from
     /// the package root and reports cold / warm / single-edit timings.
-    @Suite("LayoutCacheBenchmark", .enabled(if:
+    @Suite("LayoutCacheBenchmark", .enabled(
+        if:
         ProcessInfo.processInfo.environment[
-            "SHEETMUSIC_RUN_LAYOUT_BENCH"
-        ] == "1"))
+            "SHEETMUSIC_RUN_LAYOUT_BENCH",
+        ] == "1",
+    ))
     struct LayoutCacheBenchmark {
         @Test("test.mscx: cold vs warm vs single-edit")
         func benchmark() throws {
@@ -27,14 +29,14 @@
             print("score: \(measureCount) measures, \(score.totalStaffCount) staves")
             let opts = ScoreViewOptions()
             let availableWidth = LayoutEngine.naturalContentWidth(
-                score: score, options: opts
+                score: score, options: opts,
             )
 
             // --- Cold: cache-less ---
             let coldT0 = Date()
             _ = LayoutEngine.layout(
                 score: score, options: opts,
-                availableWidth: availableWidth
+                availableWidth: availableWidth,
             )
             let coldMs = Date().timeIntervalSince(coldT0) * 1000
             print(String(format: "cold (no cache):       %7.1f ms", coldMs))
@@ -44,32 +46,34 @@
             let coldCacheT0 = Date()
             _ = LayoutEngine.layout(
                 score: score, options: opts,
-                availableWidth: availableWidth, cache: cache
+                availableWidth: availableWidth, cache: cache,
             )
             let coldCacheMs = Date().timeIntervalSince(coldCacheT0) * 1000
             print(String(
                 format: "cold (populate cache): %7.1f ms",
-                coldCacheMs
+                coldCacheMs,
             ))
 
             // --- Warm: identical score, full cache hits ---
             let warmT0 = Date()
             _ = LayoutEngine.layout(
                 score: score, options: opts,
-                availableWidth: availableWidth, cache: cache
+                availableWidth: availableWidth, cache: cache,
             )
             let warmMs = Date().timeIntervalSince(warmT0) * 1000
             print(String(
                 format: "warm (all cached):     %7.1f ms",
-                warmMs
+                warmMs,
             ))
-            print("warm hits: width=\(cache.widthHits) "
-                + "placement=\(cache.placementHits)")
+            print(
+                "warm hits: width=\(cache.widthHits) "
+                    + "placement=\(cache.placementHits)",
+            )
             print(String(
                 format: "  speedup vs cold:    %.0f%% "
                     + "(saved %.1f ms)",
                 (1 - warmMs / coldMs) * 100,
-                coldMs - warmMs
+                coldMs - warmMs,
             ))
 
             // --- Single-measure edit: replace pitch in a chord ---
@@ -89,21 +93,23 @@
                     parts: editedParts,
                     metaTags: score.metaTags,
                     titleFrame: score.titleFrame,
-                    style: score.style
+                    style: score.style,
                 )
                 let editT0 = Date()
                 _ = LayoutEngine.layout(
                     score: edited, options: opts,
-                    availableWidth: availableWidth, cache: cache
+                    availableWidth: availableWidth, cache: cache,
                 )
                 let editMs = Date().timeIntervalSince(editT0) * 1000
                 print(String(
                     format: "edit (1 measure):      %7.1f ms",
-                    editMs
+                    editMs,
                 ))
-                print("edit hits/misses: width=\(cache.widthHits)/"
-                    + "\(cache.widthMisses) placement="
-                    + "\(cache.placementHits)/\(cache.placementMisses)")
+                print(
+                    "edit hits/misses: width=\(cache.widthHits)/"
+                        + "\(cache.widthMisses) placement="
+                        + "\(cache.placementHits)/\(cache.placementMisses)",
+                )
             }
         }
 
@@ -133,14 +139,14 @@
                         let n = c.notes[0]
                         c.notes[0] = Note(
                             pitch: n.pitch == 60 ? 62 : 60,
-                            tpc: n.pitch == 60 ? 16 : 14
+                            tpc: n.pitch == 60 ? 16 : 14,
                         )
                         elements[ei] = .chord(c)
                         voices[vi] = Voice(elements: elements)
                         return Measure(
                             voices: voices,
                             lineBreak: measure.lineBreak,
-                            pageBreak: measure.pageBreak
+                            pageBreak: measure.pageBreak,
                         )
                     }
                 }

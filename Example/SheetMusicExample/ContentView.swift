@@ -43,7 +43,8 @@
         /// playback cursor whenever the engine's `@Published` `state` /
         /// `currentCursor` changes.
         @StateObject private var playbackEngine = PlaybackEngine(
-            soundfontResolver: BundledSoundfontResolver())
+            soundfontResolver: BundledSoundfontResolver(),
+        )
         /// Set when the user taps the share button. Drives the
         /// `.sheet` modifier that presents `UIActivityViewController`
         /// for the freshly-exported PDF.
@@ -101,7 +102,7 @@
                         isImportingFile: $isImportingFile,
                         isMarqueeMode: $isMarqueeMode,
                         onTogglePlayback: togglePlayback,
-                        onExportPDF: exportPDF
+                        onExportPDF: exportPDF,
                     )
                 }
             }
@@ -109,7 +110,7 @@
             .fileImporter(
                 isPresented: $isImportingFile,
                 allowedContentTypes: ScoreFileType.allUTTypes,
-                allowsMultipleSelection: false
+                allowsMultipleSelection: false,
             ) { result in
                 handleFileImport(result)
             }
@@ -137,7 +138,7 @@
             do {
                 let data = try PDFExporter.export(
                     score: score,
-                    options: PDFExporter.Options(title: "test")
+                    options: PDFExporter.Options(title: "test"),
                 )
                 // Write to a temp file so UIActivityViewController can
                 // share it (Mail / Files / AirDrop / Save to Files).
@@ -153,7 +154,7 @@
         private func togglePlayback() {
             guard let score else { return }
             playbackEngine.togglePlayback(
-                score: score, selection: selection
+                score: score, selection: selection,
             )
         }
 
@@ -171,7 +172,7 @@
                 staffSize: staffSize,
                 systemGap: gap,
                 wrapToViewWidth: layoutMode != .horizontal,
-                includeTitleFrame: layoutMode != .horizontal
+                includeTitleFrame: layoutMode != .horizontal,
             )
             switch layoutMode {
             case .vertical:
@@ -185,7 +186,7 @@
                                         document: doc, score: score,
                                         selection: selection,
                                         voiceColors: exampleVoiceColors,
-                                        playbackCursor: playbackEngine.currentCursor
+                                        playbackCursor: playbackEngine.currentCursor,
                                     )
                                     .onTapGesture { loc in
                                         guard !isMarqueeMode else { return }
@@ -194,9 +195,11 @@
                                     .gesture(
                                         isMarqueeMode
                                             ? marqueeDragGesture(document: doc)
-                                            : nil)
+                                            : nil,
+                                    )
                                     .overlay(
-                                        MarqueeOverlay(rect: marqueeRect))
+                                        MarqueeOverlay(rect: marqueeRect),
+                                    )
                                     VerticalSystemAnchors(document: doc)
                                 }
                                 .padding(.horizontal, 8)
@@ -212,19 +215,20 @@
                                 cursor: newCursor, doc: verticalDoc,
                                 score: score,
                                 axis: .vertical,
-                                viewport: geo.size, proxy: proxy
+                                viewport: geo.size, proxy: proxy,
                             )
                         }
                     }
-                    .task(id: VerticalLayoutKey(
-                        width: width,
-                        staffSize: staffSize,
-                        scoreVersion: scoreVersion
-                    )
+                    .task(
+                        id: VerticalLayoutKey(
+                            width: width,
+                            staffSize: staffSize,
+                            scoreVersion: scoreVersion,
+                        ),
                     ) {
                         verticalDoc = LayoutEngine.layout(
                             score: score, options: opts,
-                            availableWidth: max(100, width)
+                            availableWidth: max(100, width),
                         )
                     }
                 }
@@ -238,7 +242,7 @@
                                         document: doc, score: score,
                                         selection: selection,
                                         voiceColors: exampleVoiceColors,
-                                        playbackCursor: playbackEngine.currentCursor
+                                        playbackCursor: playbackEngine.currentCursor,
                                     )
                                     .onTapGesture { loc in
                                         guard !isMarqueeMode else { return }
@@ -247,9 +251,11 @@
                                     .gesture(
                                         isMarqueeMode
                                             ? marqueeDragGesture(document: doc)
-                                            : nil)
+                                            : nil,
+                                    )
                                     .overlay(
-                                        MarqueeOverlay(rect: marqueeRect))
+                                        MarqueeOverlay(rect: marqueeRect),
+                                    )
                                     HorizontalMeasureAnchors(document: doc)
                                 }
                                 .frame(minHeight: geo.size.height)
@@ -265,21 +271,22 @@
                                 cursor: newCursor, doc: horizontalDoc,
                                 score: score,
                                 axis: .horizontal,
-                                viewport: geo.size, proxy: proxy
+                                viewport: geo.size, proxy: proxy,
                             )
                         }
                     }
-                    .task(id: HorizontalLayoutKey(
-                        staffSize: staffSize,
-                        scoreVersion: scoreVersion
-                    )
+                    .task(
+                        id: HorizontalLayoutKey(
+                            staffSize: staffSize,
+                            scoreVersion: scoreVersion,
+                        ),
                     ) {
                         let natural = LayoutEngine.naturalContentWidth(
-                            score: score, options: opts
+                            score: score, options: opts,
                         )
                         horizontalDoc = LayoutEngine.layout(
                             score: score, options: opts,
-                            availableWidth: natural
+                            availableWidth: natural,
                         )
                     }
                 }
@@ -287,26 +294,25 @@
                 PagedScoreContainer(
                     score: score, options: opts,
                     pageIndex: $pageIndex,
-                    totalPages: $totalPages
+                    totalPages: $totalPages,
                 )
             case .pdf:
                 pdfPreview(score: score)
             }
         }
 
-        @ViewBuilder
         private func pdfPreview(score: Score) -> some View {
             Group {
                 if let layout = pdfLayout {
                     PDFPreviewView(
                         doc: layout.doc, pages: layout.pages,
                         page: layout.page,
-                        pdfScale: $pdfScale
+                        pdfScale: $pdfScale,
                     )
                 } else {
                     ProgressView("Laying out…")
                         .frame(
-                            maxWidth: .infinity, maxHeight: .infinity
+                            maxWidth: .infinity, maxHeight: .infinity,
                         )
                         .background(Color(white: 0.92))
                 }
@@ -345,7 +351,7 @@
                 // MuseScore-style preview on tap.
                 if let score {
                     playbackEngine.playPreview(
-                        noteID: id, in: score
+                        noteID: id, in: score,
                     )
                 }
             case let .rest(id):
@@ -355,14 +361,14 @@
                     selection = .single(.note(first))
                     if let score {
                         playbackEngine.playPreview(
-                            noteID: first, in: score
+                            noteID: first, in: score,
                         )
                     }
                 }
             case let .beam(notes):
                 if let first = notes.first, let last = notes.last {
                     selection = .range(
-                        anchor: .note(first), target: .note(last)
+                        anchor: .note(first), target: .note(last),
                     )
                 }
             case .tuplet:
@@ -386,19 +392,19 @@
         /// as `LayoutDocument` because the `.padding` wrappers shift the
         /// content but the gesture sits inside the padding.
         private func marqueeDragGesture(
-            document: LayoutDocument
+            document: LayoutDocument,
         ) -> some Gesture {
             DragGesture(minimumDistance: 0)
                 .onChanged { value in
                     marqueeRect = makeMarqueeRect(
                         from: value.startLocation,
-                        to: value.location
+                        to: value.location,
                     )
                 }
                 .onEnded { value in
                     let rect = makeMarqueeRect(
                         from: value.startLocation,
-                        to: value.location
+                        to: value.location,
                     )
                     marqueeRect = nil
                     applyMarquee(rect: rect, document: document)
@@ -406,7 +412,7 @@
         }
 
         private func applyMarquee(
-            rect: CGRect, document: LayoutDocument
+            rect: CGRect, document: LayoutDocument,
         ) {
             let tester = ScoreHitTester(document: document)
             let ids = tester.itemIDs(in: rect)
@@ -445,7 +451,7 @@
             score: Score,
             axis: ScrollAxis,
             viewport: CGSize,
-            proxy: ScrollViewProxy
+            proxy: ScrollViewProxy,
         ) {
             guard playbackEngine.state == .playing,
                   let cursor, let doc
@@ -464,19 +470,19 @@
                 if isAnchorFullyVisible(
                     anchorMin: frame.minY, anchorMax: frame.maxY,
                     anchorSize: frame.height,
-                    viewportSize: viewport.height
+                    viewportSize: viewport.height,
                 ) { return }
                 let unit = paddedScrollAnchor(
                     aboveViewport: frame.minY < 0,
                     anchorSize: frame.height,
                     viewportSize: viewport.height,
                     pad: pad,
-                    horizontal: false
+                    horizontal: false,
                 )
                 withAnimation(.easeInOut(duration: 0.25)) {
                     proxy.scrollTo(
                         VerticalSystemAnchorID(systemIndex: sys),
-                        anchor: unit
+                        anchor: unit,
                     )
                 }
             case .horizontal:
@@ -485,19 +491,19 @@
                 if isAnchorFullyVisible(
                     anchorMin: frame.minX, anchorMax: frame.maxX,
                     anchorSize: frame.width,
-                    viewportSize: viewport.width
+                    viewportSize: viewport.width,
                 ) { return }
                 let unit = paddedScrollAnchor(
                     aboveViewport: frame.minX < 0,
                     anchorSize: frame.width,
                     viewportSize: viewport.width,
                     pad: pad,
-                    horizontal: true
+                    horizontal: true,
                 )
                 withAnimation(.easeInOut(duration: 0.25)) {
                     proxy.scrollTo(
                         HorizontalMeasureAnchorID(measureIndex: mi),
-                        anchor: unit
+                        anchor: unit,
                     )
                 }
             }
@@ -518,7 +524,7 @@
         /// read with `startAccessingSecurityScopedResource()` so loads
         /// from iCloud / external storage don't fail with EPERM.
         private func handleFileImport(
-            _ result: Result<[URL], Error>
+            _ result: Result<[URL], Error>,
         ) {
             switch result {
             case let .failure(err):
@@ -571,13 +577,13 @@
 
         func makeUIViewController(context: Context) -> UIActivityViewController {
             UIActivityViewController(
-                activityItems: items, applicationActivities: nil
+                activityItems: items, applicationActivities: nil,
             )
         }
 
         func updateUIViewController(
             _ uiViewController: UIActivityViewController,
-            context: Context
+            context: Context,
         ) {}
     }
 #endif

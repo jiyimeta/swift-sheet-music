@@ -4,7 +4,7 @@ import SheetMusicCore
 
 @available(macOS 15.0, iOS 16.0, *)
 extension LayoutEngine {
-    struct BeamGroup: Sendable, Equatable {
+    struct BeamGroup: Equatable {
         /// Voice-element indices (into `voice.elements`) of the chords in
         /// this beam group. Always length >= 2.
         let memberIndices: [Int]
@@ -27,13 +27,13 @@ extension LayoutEngine {
     static func beamGroups(
         voice: Voice,
         timeSignature: TimeSignature?,
-        division: Int
+        division: Int,
     ) -> [BeamGroup] {
         let beatLen = oneBeatTicks(
-            timeSignature: timeSignature, division: division
+            timeSignature: timeSignature, division: division,
         )
         let maxGroupLen = beamGroupTicks(
-            timeSignature: timeSignature, division: division
+            timeSignature: timeSignature, division: division,
         )
 
         // Pre-scan: for each beat, collect the DISTINCT beam levels so
@@ -70,7 +70,7 @@ extension LayoutEngine {
         func flush() {
             if currentIndices.count >= 2 && currentLevel >= 1 {
                 groups.append(BeamGroup(
-                    memberIndices: currentIndices, level: currentLevel
+                    memberIndices: currentIndices, level: currentLevel,
                 ))
             }
             currentIndices.removeAll()
@@ -145,7 +145,7 @@ extension LayoutEngine {
     /// check. Different from `beamGroupTicks` which is the OUTER
     /// (max) boundary.
     private static func oneBeatTicks(
-        timeSignature: TimeSignature?, division: Int
+        timeSignature: TimeSignature?, division: Int,
     ) -> Int {
         guard let ts = timeSignature else { return division }
         if ts.denominator == 8
@@ -184,7 +184,7 @@ extension LayoutEngine {
     ///   the natural beam break, not the individual beat.
     /// - **Other meters** (3/4, 5/4, 7/8, etc.): single beat.
     static func beamGroupTicks(
-        timeSignature: TimeSignature?, division: Int
+        timeSignature: TimeSignature?, division: Int,
     ) -> Int {
         guard let ts = timeSignature else { return division * 2 }
 
@@ -210,7 +210,7 @@ extension LayoutEngine {
     // MARK: - Beam slope
 
     /// Endpoint y-coordinates of a sloped beam line.
-    struct BeamLine: Sendable, Equatable {
+    struct BeamLine: Equatable {
         let startY: CGFloat
         let endY: CGFloat
     }
@@ -239,7 +239,7 @@ extension LayoutEngine {
         anchorYs: [CGFloat],
         stemXs: [CGFloat],
         direction: StemDirection,
-        metrics: StaffMetrics
+        metrics: StaffMetrics,
     ) -> BeamLine {
         precondition(anchorSteps.count == anchorYs.count)
         precondition(anchorSteps.count == stemXs.count)
@@ -296,7 +296,7 @@ extension LayoutEngine {
 
         let beamWidthSp = max(
             0.01,
-            (lastStemX - firstStemX) / metrics.sp
+            (lastStemX - firstStemX) / metrics.sp,
         )
         let maxByWidth: Int
         switch beamWidthSp {

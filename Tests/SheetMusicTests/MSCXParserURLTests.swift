@@ -3,10 +3,10 @@ import Foundation
 @testable import SheetMusicMSCX
 import Testing
 
-@Suite struct MSCXParserURLTests {
+struct MSCXParserURLTests {
     @Test func parseContentsOfURLMatchesDataOverload() throws {
         let url = try #require(
-            Bundle.module.url(forResource: "midi01", withExtension: "mscx")
+            Bundle.module.url(forResource: "midi01", withExtension: "mscx"),
         )
         let viaData = try MSCXParser.parse(Data(contentsOf: url))
         let viaURL = try MSCXParser.parse(contentsOf: url)

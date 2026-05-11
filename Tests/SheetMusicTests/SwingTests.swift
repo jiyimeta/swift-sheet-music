@@ -41,7 +41,7 @@ struct MSCXSwingTests {
             text: "Swing",
             unit: .eighth,
             ratio: 60,
-            isSystemText: true
+            isSystemText: true,
         )
         let staff = Staff(
             staffType: "stdNormal",
@@ -51,15 +51,15 @@ struct MSCXSwingTests {
                 .swing(swing),
                 .chord(Chord(
                     duration: .quarter,
-                    notes: ChordNotes([Note(pitch: 60, tpc: 14)])
+                    notes: ChordNotes([Note(pitch: 60, tpc: 14)]),
                 )),
-            ])])]
+            ])])],
         )
         let part = Part(
             id: "1",
             trackName: "Voice",
             instrument: Instrument(id: "voice"),
-            staves: [staff]
+            staves: [staff],
         )
         let original = Score(division: 480, parts: [part])
 
@@ -102,15 +102,15 @@ struct MSCXSwingTests {
                 .staffText(StaffText(text: "rit.", isSystemText: true)),
                 .chord(Chord(
                     duration: .quarter,
-                    notes: ChordNotes([Note(pitch: 60, tpc: 14)])
+                    notes: ChordNotes([Note(pitch: 60, tpc: 14)]),
                 )),
-            ])])]
+            ])])],
         )
         let part = Part(
             id: "1",
             trackName: "V",
             instrument: Instrument(id: "voice"),
-            staves: [staff]
+            staves: [staff],
         )
         let original = Score(division: 480, parts: [part])
 
@@ -136,7 +136,7 @@ struct MidiSwingRenderTests {
     private func eighthNoteRunScore(
         count: Int,
         styleUnit: SwingUnit,
-        styleRatio: Int = 60
+        styleRatio: Int = 60,
     ) -> Score {
         var style = ScoreStyle.museScoreDefaults
         style.swingUnit = styleUnit
@@ -144,20 +144,20 @@ struct MidiSwingRenderTests {
         let voice = Voice(elements: (0 ..< count).map { _ in
             .chord(Chord(
                 duration: .eighth,
-                notes: ChordNotes([Note(pitch: 60, tpc: 14)])
+                notes: ChordNotes([Note(pitch: 60, tpc: 14)]),
             ))
         })
         let staff = Staff(
             staffType: "stdNormal",
             group: "pitched",
             defaultClefType: nil,
-            measures: [Measure(voices: [voice])]
+            measures: [Measure(voices: [voice])],
         )
         let part = Part(
             id: "1",
             trackName: "V",
             instrument: Instrument(id: "voice"),
-            staves: [staff]
+            staves: [staff],
         )
         return Score(division: 480, parts: [part], style: style)
     }
@@ -214,13 +214,13 @@ struct MidiSwingRenderTests {
             staffType: "stdNormal",
             group: "pitched",
             defaultClefType: nil,
-            measures: [Measure(voices: [voice])]
+            measures: [Measure(voices: [voice])],
         )
         let part = Part(
             id: "1",
             trackName: "V",
             instrument: Instrument(id: "voice"),
-            staves: [staff]
+            staves: [staff],
         )
         let score = Score(division: 480, parts: [part], style: style)
         let midi = try MidiRenderer.render(score: score)
@@ -238,31 +238,31 @@ struct MidiSwingRenderTests {
         // Each member's scaled duration = 1/4 * 2/3 = 1/6 of a whole.
         let triplet = Tuplet(
             normalNotes: 2, actualNotes: 3,
-            startIndex: 0, endIndex: 2
+            startIndex: 0, endIndex: 2,
         )
         let scaled: NoteDuration = .fraction(
-            Fraction(numerator: 1, denominator: 6)
+            Fraction(numerator: 1, denominator: 6),
         )
         let voice = Voice(
             elements: (0 ..< 3).map { _ in
                 .chord(Chord(
                     duration: scaled,
-                    notes: ChordNotes([Note(pitch: 60, tpc: 14)])
+                    notes: ChordNotes([Note(pitch: 60, tpc: 14)]),
                 ))
             },
-            tuplets: [triplet]
+            tuplets: [triplet],
         )
         let staff = Staff(
             staffType: "stdNormal",
             group: "pitched",
             defaultClefType: nil,
-            measures: [Measure(voices: [voice])]
+            measures: [Measure(voices: [voice])],
         )
         let part = Part(
             id: "1",
             trackName: "V",
             instrument: Instrument(id: "voice"),
-            staves: [staff]
+            staves: [staff],
         )
         let score = Score(division: 480, parts: [part], style: style)
         let midi = try MidiRenderer.render(score: score)
@@ -284,7 +284,7 @@ struct SwingAdjustmentTests {
             prevChordTicks: nil,
             nextChordTicks: 240,
             isInTuplet: false,
-            state: MidiRenderer.SwingState(unitTicks: 240, ratio: 60)
+            state: MidiRenderer.SwingState(unitTicks: 240, ratio: 60),
         )
         #expect(adj.onsetShift == 0)
         // Down-beat extension active because endTick (240) lands at
@@ -300,7 +300,7 @@ struct SwingAdjustmentTests {
             prevChordTicks: 240,
             nextChordTicks: nil,
             isInTuplet: false,
-            state: MidiRenderer.SwingState(unitTicks: 240, ratio: 60)
+            state: MidiRenderer.SwingState(unitTicks: 240, ratio: 60),
         )
         #expect(adj.onsetShift == 48)
         // Length decreases to compensate.
@@ -316,7 +316,7 @@ struct SwingAdjustmentTests {
             prevChordTicks: 120,
             nextChordTicks: nil,
             isInTuplet: false,
-            state: MidiRenderer.SwingState(unitTicks: 240, ratio: 60)
+            state: MidiRenderer.SwingState(unitTicks: 240, ratio: 60),
         )
         #expect(adj == .none)
     }
@@ -329,7 +329,7 @@ struct SwingAdjustmentTests {
             prevChordTicks: 240,
             nextChordTicks: 240,
             isInTuplet: true,
-            state: MidiRenderer.SwingState(unitTicks: 240, ratio: 60)
+            state: MidiRenderer.SwingState(unitTicks: 240, ratio: 60),
         )
         #expect(adj == .none)
     }
@@ -342,7 +342,7 @@ struct SwingAdjustmentTests {
             prevChordTicks: 240,
             nextChordTicks: 240,
             isInTuplet: false,
-            state: MidiRenderer.SwingState(unitTicks: 0, ratio: 75)
+            state: MidiRenderer.SwingState(unitTicks: 0, ratio: 75),
         )
         #expect(adj == .none)
     }

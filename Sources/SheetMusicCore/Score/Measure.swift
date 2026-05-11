@@ -48,7 +48,7 @@ public struct Measure: Sendable, Equatable {
         lineBreak: Bool = false,
         pageBreak: Bool = false,
         actualLength: Fraction? = nil,
-        irregular: Bool = false
+        irregular: Bool = false,
     ) {
         self.voices = voices
         self.startRepeat = startRepeat

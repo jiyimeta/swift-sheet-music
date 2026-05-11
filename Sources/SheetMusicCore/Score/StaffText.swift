@@ -40,7 +40,7 @@ public struct StaffText: Sendable, Equatable {
         color: ScoreColor? = nil,
         isSystemText: Bool = false,
         properties: TextProperties = TextProperties(),
-        visible: Bool = true
+        visible: Bool = true,
     ) {
         self.text = text
         self.offsetX = offsetX

@@ -39,7 +39,7 @@ public struct LayoutMeasureContext: Sendable, Equatable {
         keySignatures: [Int],
         timeSignature: TimeSignaturePair?,
         partLabels: [String],
-        displayedMeasureNumber: Int? = nil
+        displayedMeasureNumber: Int? = nil,
     ) {
         self.measureIndex = measureIndex
         self.clefRawTypes = clefRawTypes
@@ -63,7 +63,7 @@ extension LayoutEngine {
     /// position 0, the sticky should already reflect measure 1's
     /// time signature so it stays visible after scrolling past it.
     public static func measureContexts(
-        for score: Score
+        for score: Score,
     ) -> [LayoutMeasureContext] {
         let allStaves = score.allStaves
         var clefs = defaultClefRawTypes(addresses: allStaves)
@@ -99,7 +99,7 @@ extension LayoutEngine {
                     case let .timeSignature(t):
                         timeSig = .init(
                             numerator: t.numerator,
-                            denominator: t.denominator
+                            denominator: t.denominator,
                         )
                     case .chord:
                         break scan
@@ -115,8 +115,8 @@ extension LayoutEngine {
                 timeSignature: timeSig,
                 partLabels: partLabels,
                 displayedMeasureNumber: score.displayedMeasureNumber(
-                    at: measureIdx
-                )
+                    at: measureIdx,
+                ),
             ))
         }
         return contexts
@@ -161,7 +161,7 @@ extension LayoutDocument {
     /// boundary.
     public func stickyTrailingX(
         scoreScrollX: CGFloat,
-        measureContexts: [LayoutMeasureContext]
+        measureContexts: [LayoutMeasureContext],
     ) -> CGFloat {
         guard let template = systems.first,
               !measureContexts.isEmpty
@@ -170,12 +170,12 @@ extension LayoutDocument {
             - metrics.sp / 2
         let initialIdx = measureIndex(atDocumentX: scoreScrollX) ?? 0
         let safeIdx = min(
-            max(0, initialIdx), measureContexts.count - 1
+            max(0, initialIdx), measureContexts.count - 1,
         )
         let synth = LayoutEngine.stickyHeaderSystem(
             for: measureContexts[safeIdx],
             templateSystem: template,
-            metrics: metrics
+            metrics: metrics,
         )
         // The pane visually covers viewport [0, (synth.W -
         // bracketLocalX) * mag], so the trailing edge in score
@@ -200,7 +200,7 @@ extension LayoutEngine {
     public static func stickyHeaderSystem(
         for context: LayoutMeasureContext,
         templateSystem: LayoutSystem,
-        metrics: StaffMetrics
+        metrics: StaffMetrics,
     ) -> LayoutSystem {
         let staffOrigins = templateSystem.staffOrigins
         // Staff lines start at `staffOrigins[*].x` (= the part-label
@@ -247,7 +247,7 @@ extension LayoutEngine {
                 elements.append(.clef(
                     rawType: context.clefRawTypes[staffIdx],
                     origin: CGPoint(x: clefX, y: staffMidY),
-                    anchor: nil
+                    anchor: nil,
                 ))
             }
             if staffIdx < context.keySignatures.count, keyAbs > 0 {
@@ -255,14 +255,14 @@ extension LayoutEngine {
                 elements.append(.keySignature(
                     sharps: max(0, key),
                     flats: max(0, -key),
-                    origin: CGPoint(x: keySigX, y: staffMidY)
+                    origin: CGPoint(x: keySigX, y: staffMidY),
                 ))
             }
             if let ts = context.timeSignature {
                 elements.append(.timeSignature(
                     numerator: ts.numerator,
                     denominator: ts.denominator,
-                    origin: CGPoint(x: timeSigX, y: staffMidY)
+                    origin: CGPoint(x: timeSigX, y: staffMidY),
                 ))
             }
             // Staff name above the staff, left-aligned at `labelX`
@@ -280,8 +280,8 @@ extension LayoutEngine {
                         text: name,
                         origin: CGPoint(
                             x: labelX,
-                            y: origin.y - metrics.sp * 0.5
-                        )
+                            y: origin.y - metrics.sp * 0.5,
+                        ),
                     ))
                 }
             }
@@ -304,8 +304,8 @@ extension LayoutEngine {
                 text: "#\(displayed)",
                 origin: CGPoint(
                     x: labelX,
-                    y: topStaffOrigin.y - metrics.sp * 2.5
-                )
+                    y: topStaffOrigin.y - metrics.sp * 2.5,
+                ),
             ))
         }
         let measure = LayoutMeasure(
@@ -314,13 +314,13 @@ extension LayoutEngine {
             width: headerW,
             elements: elements,
             markers: markers,
-            jumps: []
+            jumps: [],
         )
         return LayoutSystem(
             origin: .zero,
             size: CGSize(
                 width: headerW,
-                height: templateSystem.size.height
+                height: templateSystem.size.height,
             ),
             measures: [measure],
             staffOrigins: staffOrigins,
@@ -331,7 +331,7 @@ extension LayoutEngine {
             // the text is long.
             partLabels: [],
             spanners: [],
-            sp: metrics.sp
+            sp: metrics.sp,
         )
     }
 }

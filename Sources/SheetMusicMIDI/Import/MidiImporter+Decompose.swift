@@ -23,7 +23,7 @@ extension MidiImporter {
         ticks: Int,
         division: Int,
         offsetInMeasure: Int,
-        maxDots: Int
+        maxDots: Int,
     ) -> [NoteDuration] {
         let candidates = decompositionCandidates(maxDots: maxDots, division: division)
         var result: [NoteDuration] = []
@@ -33,7 +33,7 @@ extension MidiImporter {
             let chosen = candidates.first { c in
                 c.ticks > 0 && c.ticks <= remaining
                     && metricallyAligned(
-                        ticks: c.ticks, baseTicks: c.baseTicks, at: offset
+                        ticks: c.ticks, baseTicks: c.baseTicks, at: offset,
                     )
             }
             guard let c = chosen else { break }
@@ -64,7 +64,7 @@ extension MidiImporter {
     /// underlying base value so `metricallyAligned` can apply the
     /// same scope rule to single, double, and triple dots.
     static func decompositionCandidates(
-        maxDots: Int, division: Int
+        maxDots: Int, division: Int,
     ) -> [DurationCandidate] {
         let bases: [NoteDuration] = [
             .whole, .half, .quarter, .eighth, .sixteenth, .thirtySecond,
@@ -87,7 +87,7 @@ extension MidiImporter {
                     all.append(DurationCandidate(
                         duration: b.dotted(dots),
                         ticks: dottedT,
-                        baseTicks: baseT
+                        baseTicks: baseT,
                     ))
                 }
             }
@@ -111,7 +111,7 @@ extension MidiImporter {
     /// boxes (e.g. dotted-half at offset 240, dotted-eighth at
     /// offset 840).
     static func metricallyAligned(
-        ticks: Int, baseTicks: Int, at offset: Int
+        ticks: Int, baseTicks: Int, at offset: Int,
     ) -> Bool {
         guard ticks > 0, baseTicks > 0 else { return true }
         let stronger = baseTicks * 2

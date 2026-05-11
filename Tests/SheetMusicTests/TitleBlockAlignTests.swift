@@ -12,12 +12,18 @@ import Testing
 @Suite("Title-block align overrides") struct TitleBlockAlignTests {
     @Test("TextAlign parses MSCX 'h,v' form")
     func parsesMscxString() {
-        #expect(TextAlign(mscxString: "center,bottom")
-            == TextAlign(horizontal: .center, vertical: .bottom))
-        #expect(TextAlign(mscxString: "right,top")
-            == TextAlign(horizontal: .right, vertical: .top))
-        #expect(TextAlign(mscxString: "hcenter,vcenter")
-            == TextAlign(horizontal: .center, vertical: .center))
+        #expect(
+            TextAlign(mscxString: "center,bottom")
+                == TextAlign(horizontal: .center, vertical: .bottom),
+        )
+        #expect(
+            TextAlign(mscxString: "right,top")
+                == TextAlign(horizontal: .right, vertical: .top),
+        )
+        #expect(
+            TextAlign(mscxString: "hcenter,vcenter")
+                == TextAlign(horizontal: .center, vertical: .center),
+        )
         #expect(TextAlign(mscxString: "garbage") == nil)
     }
 
@@ -39,10 +45,14 @@ import Testing
         </museScore>
         """
         let score = try MSCXParser.parse(Data(mscx.utf8))
-        #expect(score.style.lyricistAlign
-            == TextAlign(horizontal: .center, vertical: .bottom))
-        #expect(score.style.composerAlign
-            == TextAlign(horizontal: .right, vertical: .top))
+        #expect(
+            score.style.lyricistAlign
+                == TextAlign(horizontal: .center, vertical: .bottom),
+        )
+        #expect(
+            score.style.composerAlign
+                == TextAlign(horizontal: .right, vertical: .top),
+        )
         #expect(score.style.titleAlign == nil)
         #expect(score.style.subtitleAlign == nil)
     }
@@ -77,10 +87,10 @@ import Testing
         // Default — LEFT, BOTTOM
         let defaultDoc = LayoutEngine.layout(
             score: makeScore(frame: frame, style: .museScoreDefaults),
-            options: options, availableWidth: availableWidth
+            options: options, availableWidth: availableWidth,
         )
         let defaultLyricist = try #require(
-            defaultDoc.titleFrame?.texts.first { $0.style == .lyricist }
+            defaultDoc.titleFrame?.texts.first { $0.style == .lyricist },
         )
         #expect(defaultLyricist.anchor == .bottomLeading)
         #expect(defaultLyricist.position.x == 0)
@@ -88,14 +98,14 @@ import Testing
         // Override — CENTER, BOTTOM
         var overridden = ScoreStyle.museScoreDefaults
         overridden.lyricistAlign = TextAlign(
-            horizontal: .center, vertical: .bottom
+            horizontal: .center, vertical: .bottom,
         )
         let centeredDoc = LayoutEngine.layout(
             score: makeScore(frame: frame, style: overridden),
-            options: options, availableWidth: availableWidth
+            options: options, availableWidth: availableWidth,
         )
         let centered = try #require(
-            centeredDoc.titleFrame?.texts.first { $0.style == .lyricist }
+            centeredDoc.titleFrame?.texts.first { $0.style == .lyricist },
         )
         #expect(centered.anchor == .bottom)
         // `buildTitleFrame` uses `availableWidth` as docWidth (the
@@ -130,17 +140,17 @@ import Testing
         """
         let score = try MSCXParser.parse(Data(mscx.utf8))
         let lyricist = try #require(
-            score.titleFrame?.texts.first { $0.style == .lyricist }
+            score.titleFrame?.texts.first { $0.style == .lyricist },
         )
         #expect(lyricist.fontSize == 7)
 
         let doc = LayoutEngine.layout(
             score: score,
             options: ScoreViewOptions(includeTitleFrame: true),
-            availableWidth: 600
+            availableWidth: 600,
         )
         let laid = try #require(
-            doc.titleFrame?.texts.first { $0.style == .lyricist }
+            doc.titleFrame?.texts.first { $0.style == .lyricist },
         )
         #expect(laid.fontSize == 7)
     }
@@ -153,10 +163,10 @@ import Testing
         let part = Part(
             id: "p1",
             instrument: Instrument(id: "x"),
-            staves: [Staff(measures: [Measure(voices: [])])]
+            staves: [Staff(measures: [Measure(voices: [])])],
         )
         let original = Score(
-            division: 480, parts: [part], titleFrame: frame
+            division: 480, parts: [part], titleFrame: frame,
         )
 
         let bytes = try MSCXEncoder.encode(original)
@@ -175,16 +185,16 @@ import Testing
         ])
         var overridden = ScoreStyle.museScoreDefaults
         overridden.composerAlign = TextAlign(
-            horizontal: .right, vertical: .top
+            horizontal: .right, vertical: .top,
         )
         let availableWidth: CGFloat = 600
         let doc = LayoutEngine.layout(
             score: makeScore(frame: frame, style: overridden),
             options: ScoreViewOptions(includeTitleFrame: true),
-            availableWidth: availableWidth
+            availableWidth: availableWidth,
         )
         let composer = try #require(
-            doc.titleFrame?.texts.first { $0.style == .composer }
+            doc.titleFrame?.texts.first { $0.style == .composer },
         )
         #expect(composer.anchor == .topTrailing)
         #expect(composer.position.x == availableWidth)
@@ -192,16 +202,16 @@ import Testing
     }
 
     private func makeScore(
-        frame: ScoreFrame, style: ScoreStyle
+        frame: ScoreFrame, style: ScoreStyle,
     ) -> Score {
         let part = Part(
             id: "p1",
             instrument: Instrument(id: "x"),
-            staves: [Staff(measures: [Measure(voices: [])])]
+            staves: [Staff(measures: [Measure(voices: [])])],
         )
         return Score(
             division: 480, parts: [part],
-            titleFrame: frame, style: style
+            titleFrame: frame, style: style,
         )
     }
 }

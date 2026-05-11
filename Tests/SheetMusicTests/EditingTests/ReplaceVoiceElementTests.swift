@@ -4,10 +4,10 @@ import Testing
 @Suite("ReplaceVoiceElement")
 struct ReplaceVoiceElementTests {
     private static let restAt1 = VoiceElementID(
-        staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0, voiceIndex: 0, elementIndex: 1
+        staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0, voiceIndex: 0, elementIndex: 1,
     )
     private static let outOfRange = VoiceElementID(
-        staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0, voiceIndex: 0, elementIndex: 99
+        staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0, voiceIndex: 0, elementIndex: 99,
     )
 
     @Test("apply replaces the element")
@@ -15,7 +15,7 @@ struct ReplaceVoiceElementTests {
         var score = EditingFixtures.fourQuarterRests()
         let chord = Chord(
             duration: .quarter,
-            notes: [Note(pitch: 60, tpc: 14)]
+            notes: [Note(pitch: 60, tpc: 14)],
         )
         let cmd = ReplaceVoiceElement(at: Self.restAt1, with: .chord(chord))
         _ = try cmd.apply(to: &score)
@@ -32,7 +32,7 @@ struct ReplaceVoiceElementTests {
         let original = score
         let chord = Chord(
             duration: .quarter,
-            notes: [Note(pitch: 60, tpc: 14)]
+            notes: [Note(pitch: 60, tpc: 14)],
         )
         let cmd = ReplaceVoiceElement(at: Self.restAt1, with: .chord(chord))
         let inverse = try cmd.apply(to: &score)
@@ -45,10 +45,10 @@ struct ReplaceVoiceElementTests {
         var score = EditingFixtures.fourQuarterRests()
         let chord = Chord(
             duration: .quarter,
-            notes: [Note(pitch: 60, tpc: 14)]
+            notes: [Note(pitch: 60, tpc: 14)],
         )
         let cmd = ReplaceVoiceElement(
-            at: Self.outOfRange, with: .chord(chord)
+            at: Self.outOfRange, with: .chord(chord),
         )
         #expect(throws: SheetMusicError.self) {
             _ = try cmd.apply(to: &score)

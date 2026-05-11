@@ -9,7 +9,7 @@ struct LayoutSystemEventColumnsTests {
         let chord = { (p: Int) -> VoiceElement in
             .chord(Chord(
                 duration: .quarter,
-                notes: [Note(pitch: p, tpc: 14)]
+                notes: [Note(pitch: p, tpc: 14)],
             ))
         }
         let measure = Measure(voices: [
@@ -28,9 +28,9 @@ struct LayoutSystemEventColumnsTests {
                     staffType: "stdNormal",
                     group: "pitched",
                     defaultClefType: "G",
-                    measures: [measure]
-                )]
-            )]
+                    measures: [measure],
+                )],
+            )],
         )
     }
 
@@ -40,7 +40,7 @@ struct LayoutSystemEventColumnsTests {
         let doc = LayoutEngine.layout(
             score: sample(),
             options: ScoreViewOptions(),
-            availableWidth: 600
+            availableWidth: 600,
         )
         let system = try #require(doc.systems.first)
 
@@ -72,7 +72,7 @@ struct LayoutSystemEventColumnsTests {
         let doc = LayoutEngine.layout(
             score: sample(),
             options: ScoreViewOptions(),
-            availableWidth: 600
+            availableWidth: 600,
         )
         let system = try #require(doc.systems.first)
 

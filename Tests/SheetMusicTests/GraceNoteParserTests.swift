@@ -40,7 +40,7 @@ struct GraceChordTests {
         let g = GraceChord(
             graceType: .acciaccatura,
             duration: .eighth,
-            notes: ChordNotes([n])
+            notes: ChordNotes([n]),
         )
         #expect(g.graceType == .acciaccatura)
         #expect(g.duration == .eighth)
@@ -48,7 +48,7 @@ struct GraceChordTests {
         #expect(g == GraceChord(
             graceType: .acciaccatura,
             duration: .eighth,
-            notes: ChordNotes([n])
+            notes: ChordNotes([n]),
         ))
     }
 }
@@ -66,13 +66,13 @@ struct ChordWithGracesTests {
     func storesGraces() {
         let g = GraceChord(
             graceType: .acciaccatura, duration: .eighth,
-            notes: ChordNotes([Note(pitch: 62, tpc: 16)])
+            notes: ChordNotes([Note(pitch: 62, tpc: 16)]),
         )
         let c = Chord(
             duration: .quarter,
             notes: ChordNotes([Note(pitch: 60, tpc: 14)]),
             graceNotesBefore: [g],
-            graceNotesAfter: []
+            graceNotesAfter: [],
         )
         #expect(c.graceNotesBefore == [g])
         #expect(c.graceNotesAfter.isEmpty)
@@ -89,7 +89,7 @@ struct ChordGraceDetectionTests {
     }
 
     @Test("acciaccatura tag detected")
-    func acciaccatura() throws {
+    func acciaccatura() {
         let node = chordNode("""
         <Chord><acciaccatura/><durationType>eighth</durationType>\
         <Note><pitch>60</pitch><tpc>14</tpc></Note></Chord>
@@ -98,7 +98,7 @@ struct ChordGraceDetectionTests {
     }
 
     @Test("grace32after tag detected")
-    func grace32after() throws {
+    func grace32after() {
         let node = chordNode("""
         <Chord><grace32after/><durationType>32nd</durationType>\
         <Note><pitch>62</pitch><tpc>16</tpc></Note></Chord>
@@ -107,7 +107,7 @@ struct ChordGraceDetectionTests {
     }
 
     @Test("Plain chord returns nil")
-    func plain() throws {
+    func plain() {
         let node = chordNode("""
         <Chord><durationType>quarter</durationType>\
         <Note><pitch>60</pitch><tpc>14</tpc></Note></Chord>
@@ -125,7 +125,7 @@ struct VoiceGraceAttachmentTests {
     }
 
     private func chordXML(
-        _ tag: String? = nil, dur: String, pitch: Int, tpc: Int
+        _ tag: String? = nil, dur: String, pitch: Int, tpc: Int,
     ) -> String {
         let g = tag.map { "<\($0)/>" } ?? ""
         return """
@@ -138,7 +138,7 @@ struct VoiceGraceAttachmentTests {
     func beforeAttaches() throws {
         let v = try voiceXML(
             chordXML("acciaccatura", dur: "eighth", pitch: 62, tpc: 16)
-                + chordXML(dur: "quarter", pitch: 60, tpc: 14)
+                + chordXML(dur: "quarter", pitch: 60, tpc: 14),
         )
         #expect(v.elements.count == 1)
         guard case let .chord(c) = v.elements[0] else {
@@ -155,7 +155,7 @@ struct VoiceGraceAttachmentTests {
         let v = try voiceXML(
             chordXML("grace16", dur: "16th", pitch: 64, tpc: 18)
                 + chordXML("grace16", dur: "16th", pitch: 65, tpc: 13)
-                + chordXML(dur: "quarter", pitch: 60, tpc: 14)
+                + chordXML(dur: "quarter", pitch: 60, tpc: 14),
         )
         guard case let .chord(c) = v.elements.first else {
             Issue.record("no chord"); return
@@ -167,7 +167,7 @@ struct VoiceGraceAttachmentTests {
     func afterAttaches() throws {
         let v = try voiceXML(
             chordXML(dur: "quarter", pitch: 60, tpc: 14)
-                + chordXML("grace8after", dur: "eighth", pitch: 62, tpc: 16)
+                + chordXML("grace8after", dur: "eighth", pitch: 62, tpc: 16),
         )
         #expect(v.elements.count == 1)
         guard case let .chord(c) = v.elements[0] else { return }

@@ -11,11 +11,11 @@ struct MSCXEncoderScoreFrameTests {
     func minimalTitleFrameRoundTrip() throws {
         let frame = ScoreFrame(
             heightSp: 10,
-            texts: [FrameText(style: .title, text: "Invention")]
+            texts: [FrameText(style: .title, text: "Invention")],
         )
         let xml = frame.encodeAsVBox()
         let bytes = XMLTreeSerializer.serialize(
-            XMLTreeNode(name: "root", children: [xml])
+            XMLTreeNode(name: "root", children: [xml]),
         )
         let reparsed = try XMLTreeParser.parse(bytes)
         let vbox = try #require(reparsed.first("VBox"))
@@ -31,11 +31,11 @@ struct MSCXEncoderScoreFrameTests {
         for style in cases {
             let frame = ScoreFrame(
                 heightSp: 10,
-                texts: [FrameText(style: style, text: "x")]
+                texts: [FrameText(style: style, text: "x")],
             )
             let xml = frame.encodeAsVBox()
             let bytes = XMLTreeSerializer.serialize(
-                XMLTreeNode(name: "root", children: [xml])
+                XMLTreeNode(name: "root", children: [xml]),
             )
             let reparsed = try XMLTreeParser.parse(bytes)
             let vbox = try #require(reparsed.first("VBox"))
@@ -52,13 +52,13 @@ struct MSCXEncoderScoreFrameTests {
                 FrameText(
                     style: .composer,
                     text: "J.S. Bach",
-                    offsetMm: CGPoint(x: 0, y: 4.5)
+                    offsetMm: CGPoint(x: 0, y: 4.5),
                 ),
-            ]
+            ],
         )
         let xml = frame.encodeAsVBox()
         let bytes = XMLTreeSerializer.serialize(
-            XMLTreeNode(name: "root", children: [xml])
+            XMLTreeNode(name: "root", children: [xml]),
         )
         let reparsed = try XMLTreeParser.parse(bytes)
         let vbox = try #require(reparsed.first("VBox"))
@@ -73,7 +73,7 @@ struct MSCXEncoderScoreFrameTests {
             texts: [
                 FrameText(style: .title, text: "Invention"),
                 FrameText(style: .composer, text: "J.S. Bach"),
-            ]
+            ],
         )
         let staff = Staff(
             staffType: "stdNormal",
@@ -83,19 +83,19 @@ struct MSCXEncoderScoreFrameTests {
                 Measure(voices: [Voice(elements: [
                     .chord(Chord(
                         duration: .quarter,
-                        notes: ChordNotes([Note(pitch: 60, tpc: 14)])
+                        notes: ChordNotes([Note(pitch: 60, tpc: 14)]),
                     )),
                 ])]),
-            ]
+            ],
         )
         let part = Part(
             id: "1",
             trackName: "Voice",
             instrument: Instrument(id: "voice"),
-            staves: [staff]
+            staves: [staff],
         )
         let original = Score(
-            division: 480, parts: [part], titleFrame: titleFrame
+            division: 480, parts: [part], titleFrame: titleFrame,
         )
 
         let bytes = try MSCXEncoder.encode(original)

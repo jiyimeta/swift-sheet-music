@@ -14,7 +14,7 @@ extension MidiRenderer {
         noteCount: Int,
         chordTicks: Int,
         stretch: Double,
-        tempoBps: Double
+        tempoBps: Double,
     ) -> [(onOffset: Int, offOffset: Int)] {
         guard noteCount > 0, chordTicks > 0 else { return [] }
         var l = 64

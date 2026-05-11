@@ -3,7 +3,7 @@ import Foundation
 @testable import SheetMusicMIDI
 import Testing
 
-@Suite struct MidiImporterQuantizeTests {
+struct MidiImporterQuantizeTests {
     private func nOn(_ tick: Int, _ pitch: Int) -> TimedMidiEvent {
         TimedMidiEvent(tick: tick, event: .noteOn(channel: 0, pitch: pitch, velocity: 80))
     }
@@ -21,10 +21,10 @@ import Testing
                 nOn(0, 60), nOn(480, 62), nOn(960, 64), nOn(1440, 65),
                 nOff(1920, 65),
             ],
-            carryIns: [], carryOuts: []
+            carryIns: [], carryOuts: [],
         )
         let quantized = MidiImporter.quantize(
-            measure: measure, division: 480, options: .init()
+            measure: measure, division: 480, options: .init(),
         )
         #expect(quantized.elements.count == 4)
         #expect(quantized.tuplets.isEmpty)
@@ -43,10 +43,10 @@ import Testing
                 TimedMidiEvent(tick: 320, event: .noteOn(channel: 0, pitch: 64, velocity: 80)),
                 TimedMidiEvent(tick: 480, event: .noteOff(channel: 0, pitch: 64, velocity: 0)),
             ],
-            carryIns: [], carryOuts: []
+            carryIns: [], carryOuts: [],
         )
         let quantized = MidiImporter.quantize(
-            measure: measure, division: 480, options: .init()
+            measure: measure, division: 480, options: .init(),
         )
         #expect(quantized.tuplets.count == 1)
         #expect(quantized.tuplets[0].normalNotes == 2)
@@ -77,7 +77,7 @@ import Testing
                 TimedMidiEvent(tick: 640, event: .noteOn(channel: 0, pitch: 62, velocity: 80)),
                 TimedMidiEvent(tick: 960, event: .noteOff(channel: 0, pitch: 62, velocity: 0)),
             ],
-            carryIns: [], carryOuts: []
+            carryIns: [], carryOuts: [],
         )
         let q = MidiImporter.quantize(measure: measure, division: 480, options: .init())
         #expect(q.tuplets.count == 1)
@@ -101,17 +101,17 @@ import Testing
         var events: [TimedMidiEvent] = []
         for i in 0 ..< 5 {
             events.append(TimedMidiEvent(
-                tick: i * 96, event: .noteOn(channel: 0, pitch: 60 + i, velocity: 80)
+                tick: i * 96, event: .noteOn(channel: 0, pitch: 60 + i, velocity: 80),
             ))
             events.append(TimedMidiEvent(
-                tick: i * 96 + 80, event: .noteOff(channel: 0, pitch: 60 + i, velocity: 0)
+                tick: i * 96 + 80, event: .noteOff(channel: 0, pitch: 60 + i, velocity: 0),
             ))
         }
         let measure = ImportMeasure(
             startTick: 0, endTick: 480, measureIndex: 0,
             timeSignature: TimeSignature(numerator: 1, denominator: 4),
             events: events,
-            carryIns: [], carryOuts: []
+            carryIns: [], carryOuts: [],
         )
         let q = MidiImporter.quantize(measure: measure, division: 480, options: .init())
         #expect(q.tuplets.count == 1)
@@ -134,17 +134,17 @@ import Testing
         var events: [TimedMidiEvent] = []
         for (i, tick) in onsetTicks.enumerated() {
             events.append(TimedMidiEvent(
-                tick: tick, event: .noteOn(channel: 0, pitch: 60 + i, velocity: 80)
+                tick: tick, event: .noteOn(channel: 0, pitch: 60 + i, velocity: 80),
             ))
             events.append(TimedMidiEvent(
-                tick: tick + 50, event: .noteOff(channel: 0, pitch: 60 + i, velocity: 0)
+                tick: tick + 50, event: .noteOff(channel: 0, pitch: 60 + i, velocity: 0),
             ))
         }
         let measure = ImportMeasure(
             startTick: 0, endTick: 480, measureIndex: 0,
             timeSignature: TimeSignature(numerator: 1, denominator: 4),
             events: events,
-            carryIns: [], carryOuts: []
+            carryIns: [], carryOuts: [],
         )
         let q = MidiImporter.quantize(measure: measure, division: 480, options: .init())
         #expect(q.tuplets.count == 1)
@@ -175,7 +175,7 @@ import Testing
                 TimedMidiEvent(tick: 953, event: .noteOn(channel: 0, pitch: 62, velocity: 80)),
                 TimedMidiEvent(tick: 1400, event: .noteOff(channel: 0, pitch: 62, velocity: 0)),
             ],
-            carryIns: [], carryOuts: []
+            carryIns: [], carryOuts: [],
         )
         var opts = MidiImportOptions()
         opts.tupletRatios = []

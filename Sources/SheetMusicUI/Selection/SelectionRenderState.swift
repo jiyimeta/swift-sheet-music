@@ -20,14 +20,14 @@ struct SelectionRenderState {
     let rangeBoxColor: CGColor
 
     static let defaultBoxColor = CGColor(
-        red: 0.0, green: 0.45, blue: 0.95, alpha: 1.0
+        red: 0.0, green: 0.45, blue: 0.95, alpha: 1.0,
     )
 
     static let empty = SelectionRenderState(
         selectedIDs: [],
         voiceColors: [:],
         drawRangeBox: false,
-        rangeBoxColor: defaultBoxColor
+        rangeBoxColor: defaultBoxColor,
     )
 
     /// Selected ink colour for an item of `voiceIndex`, or `nil` when
@@ -41,7 +41,7 @@ struct SelectionRenderState {
     static func make(
         selection: ScoreSelection,
         voiceColors: [Int: Color],
-        score: Score
+        score: Score,
     ) -> SelectionRenderState {
         let cgColors = voiceColors.mapValues(resolveCGColor)
         switch selection {
@@ -50,7 +50,7 @@ struct SelectionRenderState {
                 selectedIDs: [],
                 voiceColors: cgColors,
                 drawRangeBox: false,
-                rangeBoxColor: defaultBoxColor
+                rangeBoxColor: defaultBoxColor,
             )
         case let .single(id):
             // Tuplet selection expands to the set of member IDs
@@ -62,7 +62,7 @@ struct SelectionRenderState {
                 selectedIDs: expandedIDs,
                 voiceColors: cgColors,
                 drawRangeBox: false,
-                rangeBoxColor: defaultBoxColor
+                rangeBoxColor: defaultBoxColor,
             )
         case let .range(anchor, target):
             let ids = Set(score.items(inRangeFrom: anchor, to: target))
@@ -70,7 +70,7 @@ struct SelectionRenderState {
                 selectedIDs: ids,
                 voiceColors: cgColors,
                 drawRangeBox: true,
-                rangeBoxColor: defaultBoxColor
+                rangeBoxColor: defaultBoxColor,
             )
         case let .multi(ids):
             let expanded = ids.reduce(into: Set<ScoreItemID>()) {
@@ -80,7 +80,7 @@ struct SelectionRenderState {
                 selectedIDs: expanded,
                 voiceColors: cgColors,
                 drawRangeBox: false,
-                rangeBoxColor: defaultBoxColor
+                rangeBoxColor: defaultBoxColor,
             )
         }
     }
@@ -91,7 +91,7 @@ struct SelectionRenderState {
     /// renderer tint the bracket / number, while the member IDs
     /// drive notehead / rest tinting through the same pipeline.
     private static func expand(
-        _ id: ScoreItemID, in score: Score
+        _ id: ScoreItemID, in score: Score,
     ) -> Set<ScoreItemID> {
         guard case let .tuplet(tid) = id,
               let tuplet = score[tid],
@@ -114,7 +114,7 @@ struct SelectionRenderState {
                     staff: tid.staff,
                     measureIndex: tid.measureIndex,
                     voiceIndex: tid.voiceIndex,
-                    elementIndex: j
+                    elementIndex: j,
                 )))
             } else {
                 for ni in c.notes.indices {
@@ -123,7 +123,7 @@ struct SelectionRenderState {
                         measureIndex: tid.measureIndex,
                         voiceIndex: tid.voiceIndex,
                         elementIndex: j,
-                        noteIndexInChord: ni
+                        noteIndexInChord: ni,
                     )))
                 }
             }

@@ -27,24 +27,24 @@ enum PageChromeRenderer {
         pageSize: CGSize,
         margins: PageMargins,
         metaTags: [String: String],
-        into ctx: CGContext
+        into ctx: CGContext,
     ) {
         let macroContext = PageChromeMacroExpander.Context(
             pageIndex: pageIndex,
             pageCount: pageCount,
-            metaTags: metaTags
+            metaTags: metaTags,
         )
         drawBlock(
             chrome.header, kind: .header,
             pageIndex: pageIndex,
             pageSize: pageSize, margins: margins,
-            macroContext: macroContext, into: ctx
+            macroContext: macroContext, into: ctx,
         )
         drawBlock(
             chrome.footer, kind: .footer,
             pageIndex: pageIndex,
             pageSize: pageSize, margins: margins,
-            macroContext: macroContext, into: ctx
+            macroContext: macroContext, into: ctx,
         )
     }
 
@@ -57,7 +57,7 @@ enum PageChromeRenderer {
         pageSize: CGSize,
         margins: PageMargins,
         macroContext: PageChromeMacroExpander.Context,
-        into ctx: CGContext
+        into ctx: CGContext,
     ) {
         guard block.enabled else { return }
         if pageIndex == 0 && !block.showOnFirstPage { return }
@@ -66,37 +66,39 @@ enum PageChromeRenderer {
         let font = makeFont(
             face: block.fontFace,
             size: CGFloat(block.fontSize),
-            style: block.fontStyle
+            style: block.fontStyle,
         )
         let baselineY = baseline(
             kind: kind, font: font,
-            pageSize: pageSize, margins: margins
+            pageSize: pageSize, margins: margins,
         )
 
         let leftText = PageChromeMacroExpander.expand(
-            row.left, context: macroContext
+            row.left, context: macroContext,
         )
         let centerText = PageChromeMacroExpander.expand(
-            row.center, context: macroContext
+            row.center, context: macroContext,
         )
         let rightText = PageChromeMacroExpander.expand(
-            row.right, context: macroContext
+            row.right, context: macroContext,
         )
 
         if !leftText.isEmpty {
             drawLine(
                 leftText, font: font,
                 x: margins.leading, alignment: .leading,
-                baselineY: baselineY, into: ctx
+                baselineY: baselineY, into: ctx,
             )
         }
         if !centerText.isEmpty {
-            let mid = (margins.leading
-                + (pageSize.width - margins.trailing)) / 2
+            let mid = (
+                margins.leading
+                    + (pageSize.width - margins.trailing),
+            ) / 2
             drawLine(
                 centerText, font: font,
                 x: mid, alignment: .center,
-                baselineY: baselineY, into: ctx
+                baselineY: baselineY, into: ctx,
             )
         }
         if !rightText.isEmpty {
@@ -104,13 +106,13 @@ enum PageChromeRenderer {
                 rightText, font: font,
                 x: pageSize.width - margins.trailing,
                 alignment: .trailing,
-                baselineY: baselineY, into: ctx
+                baselineY: baselineY, into: ctx,
             )
         }
     }
 
     private static func activeRow(
-        block: HeaderFooter, pageIndex: Int
+        block: HeaderFooter, pageIndex: Int,
     ) -> TextRow {
         guard block.oddEvenDifferent else { return block.odd }
         // Page 1 (index 0) is odd; alternate from there.
@@ -122,7 +124,7 @@ enum PageChromeRenderer {
     /// honored on first pass (see Risks in the design doc).
     private static func baseline(
         kind: BlockKind, font: CTFont,
-        pageSize: CGSize, margins: PageMargins
+        pageSize: CGSize, margins: PageMargins,
     ) -> CGFloat {
         let ascent = CTFontGetAscent(font)
         let descent = CTFontGetDescent(font)
@@ -149,17 +151,17 @@ enum PageChromeRenderer {
         _ text: String, font: CTFont,
         x: CGFloat, alignment: HorizontalAlignment,
         baselineY: CGFloat,
-        into ctx: CGContext
+        into ctx: CGContext,
     ) {
         let attr = NSAttributedString(
             string: text, attributes: [
                 .font: font,
                 .foregroundColor: cgBlack(),
-            ]
+            ],
         )
         let line = CTLineCreateWithAttributedString(attr)
         let bounds = CTLineGetBoundsWithOptions(
-            line, [.useGlyphPathBounds]
+            line, [.useGlyphPathBounds],
         )
         let width = bounds.width
         let originX: CGFloat
@@ -174,7 +176,7 @@ enum PageChromeRenderer {
         // purposes; we draw with `textMatrix` flipped so glyph
         // outlines go up-right rather than down-right.
         ctx.textMatrix = CGAffineTransform(
-            a: 1, b: 0, c: 0, d: -1, tx: 0, ty: 0
+            a: 1, b: 0, c: 0, d: -1, tx: 0, ty: 0,
         )
         ctx.textPosition = CGPoint(x: originX, y: baselineY)
         CTLineDraw(line, ctx)
@@ -186,26 +188,26 @@ enum PageChromeRenderer {
     }
 
     private static func makeFont(
-        face: String, size: CGFloat, style: FontStyleSet
+        face: String, size: CGFloat, style: FontStyleSet,
     ) -> CTFont {
         var traits: CTFontSymbolicTraits = []
         if style.contains(.bold) { traits.insert(.boldTrait) }
         if style.contains(.italic) { traits.insert(.italicTrait) }
         let descriptor = CTFontDescriptorCreateWithNameAndSize(
-            face as CFString, size
+            face as CFString, size,
         )
         let withTraits: CTFontDescriptor
         if traits.isEmpty {
             withTraits = descriptor
         } else if let d = CTFontDescriptorCreateCopyWithSymbolicTraits(
-            descriptor, traits, traits
+            descriptor, traits, traits,
         ) {
             withTraits = d
         } else {
             withTraits = descriptor
         }
         let font = CTFontCreateWithFontDescriptor(
-            withTraits, size, nil
+            withTraits, size, nil,
         )
         // CT happily creates a stub for missing faces; check by
         // round-tripping the family name and falling back to a
@@ -218,7 +220,7 @@ enum PageChromeRenderer {
     }
 
     private static func systemFallback(
-        size: CGFloat, traits: CTFontSymbolicTraits
+        size: CGFloat, traits: CTFontSymbolicTraits,
     ) -> CTFont {
         #if canImport(AppKit)
             let nsFont = NSFont.systemFont(ofSize: size)
@@ -228,7 +230,7 @@ enum PageChromeRenderer {
             return uiFont as CTFont
         #else
             return CTFontCreateWithName(
-                "Helvetica" as CFString, size, nil
+                "Helvetica" as CFString, size, nil,
             )
         #endif
     }

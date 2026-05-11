@@ -5,14 +5,14 @@ import Testing
 struct AddNoteToChordTests {
     private static let chordID = VoiceElementID(
         staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
-        voiceIndex: 0, elementIndex: 1
+        voiceIndex: 0, elementIndex: 1,
     )
 
     @Test("apply appends a new note to the chord")
     func appendsNote() throws {
         var score = EditingFixtures.chordAtIndex1()
         let cmd = AddNoteToChord(
-            at: Self.chordID, pitch: 64, tpc: 18
+            at: Self.chordID, pitch: 64, tpc: 18,
         ) // E4
         _ = try cmd.apply(to: &score)
         guard case let .chord(chord) = score[Self.chordID] else {
@@ -30,12 +30,12 @@ struct AddNoteToChordTests {
         var score = EditingFixtures.fourQuarterRests()
         let id = VoiceElementID(
             staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
-            voiceIndex: 0, elementIndex: 1
+            voiceIndex: 0, elementIndex: 1,
         )
         score[id] = .chord(Chord(
             duration: .quarter,
             notes: [Note(pitch: 60, tpc: 14)],
-            lyrics: [Lyric(text: "do")]
+            lyrics: [Lyric(text: "do")],
         ))
         let cmd = AddNoteToChord(at: id, pitch: 67, tpc: 15)
         _ = try cmd.apply(to: &score)
@@ -52,7 +52,7 @@ struct AddNoteToChordTests {
         var score = EditingFixtures.chordAtIndex1()
         let snapshot = score
         let cmd = AddNoteToChord(
-            at: Self.chordID, pitch: 64, tpc: 18
+            at: Self.chordID, pitch: 64, tpc: 18,
         )
         let inverse = try cmd.apply(to: &score)
         _ = try inverse.apply(to: &score)
@@ -63,7 +63,7 @@ struct AddNoteToChordTests {
     func refusesDuplicate() {
         var score = EditingFixtures.chordAtIndex1()
         let cmd = AddNoteToChord(
-            at: Self.chordID, pitch: 60, tpc: 14
+            at: Self.chordID, pitch: 60, tpc: 14,
         )
         #expect(throws: SheetMusicError.self) {
             _ = try cmd.apply(to: &score)
@@ -75,10 +75,10 @@ struct AddNoteToChordTests {
         var score = EditingFixtures.fourQuarterRests()
         let restID = VoiceElementID(
             staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
-            voiceIndex: 0, elementIndex: 2
+            voiceIndex: 0, elementIndex: 2,
         )
         let cmd = AddNoteToChord(
-            at: restID, pitch: 60, tpc: 14
+            at: restID, pitch: 60, tpc: 14,
         )
         #expect(throws: SheetMusicError.self) {
             _ = try cmd.apply(to: &score)

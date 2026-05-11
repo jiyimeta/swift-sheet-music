@@ -9,11 +9,11 @@ struct SetTieTests {
             .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
             .chord(Chord(
                 duration: .quarter,
-                notes: [Note(pitch: 60, tpc: 14)]
+                notes: [Note(pitch: 60, tpc: 14)],
             )),
             .chord(Chord(
                 duration: .quarter,
-                notes: [Note(pitch: 60, tpc: 14)]
+                notes: [Note(pitch: 60, tpc: 14)],
             )),
             .rest(duration: .half),
         ])
@@ -24,11 +24,11 @@ struct SetTieTests {
 
     private static let firstC = NoteID(
         staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
-        voiceIndex: 0, elementIndex: 1, noteIndexInChord: 0
+        voiceIndex: 0, elementIndex: 1, noteIndexInChord: 0,
     )
     private static let secondC = NoteID(
         staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
-        voiceIndex: 0, elementIndex: 2, noteIndexInChord: 0
+        voiceIndex: 0, elementIndex: 2, noteIndexInChord: 0,
     )
 
     @Test("apply sets tieForward and tieBack")
@@ -36,7 +36,7 @@ struct SetTieTests {
         var score = Self.twoCQuarters()
         let cmd = SetTie(
             from: Self.firstC, to: Self.secondC,
-            sourceTieForward: 1, targetTieBack: 1
+            sourceTieForward: 1, targetTieBack: 1,
         )
         _ = try cmd.apply(to: &score)
         #expect(score[Self.firstC]?.tieForward == 1)
@@ -49,7 +49,7 @@ struct SetTieTests {
         let original = score
         let cmd = SetTie(
             from: Self.firstC, to: Self.secondC,
-            sourceTieForward: 1, targetTieBack: 1
+            sourceTieForward: 1, targetTieBack: 1,
         )
         let inverse = try cmd.apply(to: &score)
         _ = try inverse.apply(to: &score)
@@ -62,14 +62,14 @@ struct SetTieTests {
         // Pre-tie the notes manually.
         let pre = SetTie(
             from: Self.firstC, to: Self.secondC,
-            sourceTieForward: 1, targetTieBack: 1
+            sourceTieForward: 1, targetTieBack: 1,
         )
         _ = try pre.apply(to: &score)
         let snapshot = score
         // Now clear via SetTie(...nil).
         let clear = SetTie(
             from: Self.firstC, to: Self.secondC,
-            sourceTieForward: nil, targetTieBack: nil
+            sourceTieForward: nil, targetTieBack: nil,
         )
         let inverse = try clear.apply(to: &score)
         #expect(score[Self.firstC]?.tieForward == nil)
@@ -86,26 +86,26 @@ struct ScoreNextTieTargetTests {
         let voice = Voice(elements: [
             .chord(Chord(
                 duration: .quarter,
-                notes: [Note(pitch: 60, tpc: 14)]
+                notes: [Note(pitch: 60, tpc: 14)],
             )),
             .chord(Chord(
                 duration: .quarter,
-                notes: [Note(pitch: 60, tpc: 14)]
+                notes: [Note(pitch: 60, tpc: 14)],
             )),
         ])
         let score = Score(
             division: 480,
             parts: [Part(
                 id: "1", instrument: Instrument(id: "x"),
-                staves: [Staff(measures: [Measure(voices: [voice])])]
-            )]
+                staves: [Staff(measures: [Measure(voices: [voice])])],
+            )],
         )
         let source = NoteID(
             staff: StaffAddress(partIndex: 0, staffIndexInPart: 0),
             measureIndex: 0,
             voiceIndex: 0,
             elementIndex: 0,
-            noteIndexInChord: 0
+            noteIndexInChord: 0,
         )
         let target = score.nextTieTarget(after: source)
         #expect(target?.elementIndex == 1)
@@ -117,26 +117,26 @@ struct ScoreNextTieTargetTests {
         let voice = Voice(elements: [
             .chord(Chord(
                 duration: .quarter,
-                notes: [Note(pitch: 60, tpc: 14)]
+                notes: [Note(pitch: 60, tpc: 14)],
             )),
             .chord(Chord(
                 duration: .quarter,
-                notes: [Note(pitch: 62, tpc: 16)]
+                notes: [Note(pitch: 62, tpc: 16)],
             )),
         ])
         let score = Score(
             division: 480,
             parts: [Part(
                 id: "1", instrument: Instrument(id: "x"),
-                staves: [Staff(measures: [Measure(voices: [voice])])]
-            )]
+                staves: [Staff(measures: [Measure(voices: [voice])])],
+            )],
         )
         let source = NoteID(
             staff: StaffAddress(partIndex: 0, staffIndexInPart: 0),
             measureIndex: 0,
             voiceIndex: 0,
             elementIndex: 0,
-            noteIndexInChord: 0
+            noteIndexInChord: 0,
         )
         #expect(score.nextTieTarget(after: source) == nil)
     }
@@ -146,27 +146,27 @@ struct ScoreNextTieTargetTests {
         let voice = Voice(elements: [
             .chord(Chord(
                 duration: .quarter,
-                notes: [Note(pitch: 60, tpc: 14)]
+                notes: [Note(pitch: 60, tpc: 14)],
             )),
             .rest(duration: .quarter),
             .chord(Chord(
                 duration: .quarter,
-                notes: [Note(pitch: 60, tpc: 14)]
+                notes: [Note(pitch: 60, tpc: 14)],
             )),
         ])
         let score = Score(
             division: 480,
             parts: [Part(
                 id: "1", instrument: Instrument(id: "x"),
-                staves: [Staff(measures: [Measure(voices: [voice])])]
-            )]
+                staves: [Staff(measures: [Measure(voices: [voice])])],
+            )],
         )
         let source = NoteID(
             staff: StaffAddress(partIndex: 0, staffIndexInPart: 0),
             measureIndex: 0,
             voiceIndex: 0,
             elementIndex: 0,
-            noteIndexInChord: 0
+            noteIndexInChord: 0,
         )
         #expect(score.nextTieTarget(after: source) == nil)
     }
@@ -176,27 +176,27 @@ struct ScoreNextTieTargetTests {
         let voice = Voice(elements: [
             .chord(Chord(
                 duration: .quarter,
-                notes: [Note(pitch: 60, tpc: 14)]
+                notes: [Note(pitch: 60, tpc: 14)],
             )),
             .barLine(BarLine()),
             .chord(Chord(
                 duration: .quarter,
-                notes: [Note(pitch: 60, tpc: 14)]
+                notes: [Note(pitch: 60, tpc: 14)],
             )),
         ])
         let score = Score(
             division: 480,
             parts: [Part(
                 id: "1", instrument: Instrument(id: "x"),
-                staves: [Staff(measures: [Measure(voices: [voice])])]
-            )]
+                staves: [Staff(measures: [Measure(voices: [voice])])],
+            )],
         )
         let source = NoteID(
             staff: StaffAddress(partIndex: 0, staffIndexInPart: 0),
             measureIndex: 0,
             voiceIndex: 0,
             elementIndex: 0,
-            noteIndexInChord: 0
+            noteIndexInChord: 0,
         )
         let target = score.nextTieTarget(after: source)
         #expect(target?.elementIndex == 2)

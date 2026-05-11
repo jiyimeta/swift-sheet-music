@@ -23,7 +23,7 @@ public struct MidiImportOptions: Sendable {
 
     /// Pitch-bend → Glissando detection. Bend range is fixed at 12
     /// semitones (matching `MidiRenderer`'s pitch-bend range header).
-    public var detectGlissando: Bool = true
+    public var detectGlissando = true
 
     /// Maximum augmentation-dot count permitted in chord durations
     /// during the import-time rhythm decomposition. `0` = no dots
@@ -34,7 +34,7 @@ public struct MidiImportOptions: Sendable {
     /// less common rhythmic figures.
     /// Rests are always decomposed without dots regardless of this
     /// setting.
-    public var maxDots: Int = 1
+    public var maxDots = 1
 
     /// Sync resolver, used by the non-async parse path.
     public var resolveSwing: (@Sendable (SwingDetection) -> SwingResolution)?
@@ -78,7 +78,7 @@ public struct SwingDetection: Sendable {
         measureRange: Range<Int>,
         estimatedRatio: Double,
         confidence: Double,
-        sampleSize: Int
+        sampleSize: Int,
     ) {
         self.trackIndex = trackIndex
         self.measureRange = measureRange

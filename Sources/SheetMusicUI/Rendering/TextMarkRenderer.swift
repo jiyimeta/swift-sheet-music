@@ -20,23 +20,24 @@ enum TextMarkRenderer {
         text: String,
         origin: CGPoint,
         properties: TextProperties = TextProperties(),
-        metrics: StaffMetrics
+        metrics: StaffMetrics,
     ) {
         if let glyphs = DynamicSymbolMap.glyphs(for: text) {
             drawDynamicGlyphs(
                 context: &context, glyphs: glyphs,
-                origin: origin, metrics: metrics
+                origin: origin, metrics: metrics,
             )
         } else {
             // Custom / non-symbol dynamic — fall back to Edwin
             // italic 10 pt (the style-row default).
             let style = ResolvedTextStyle.resolve(
-                .dynamics, overrides: properties, metrics: metrics
+                .dynamics, overrides: properties, metrics: metrics,
             )
             let resolved = context.resolve(
                 Text(text)
                     .foregroundColor(.primary)
-                    .font(style.font))
+                    .font(style.font),
+            )
             context.draw(resolved, at: origin, anchor: .leading)
         }
     }
@@ -45,7 +46,7 @@ enum TextMarkRenderer {
         context: inout GraphicsContext,
         glyphs: [Character],
         origin: CGPoint,
-        metrics: StaffMetrics
+        metrics: StaffMetrics,
     ) {
         // SMuFL music-font convention: 1 em = 4 sp. MuseScore's
         // `MUSICAL_SYMBOLS_DEFAULT_FONT_SIZE = 10 pt` × 2 = 20 pt
@@ -55,7 +56,8 @@ enum TextMarkRenderer {
         let resolved = context.resolve(
             Text(str)
                 .foregroundColor(.primary)
-                .font(.custom(BravuraFont.familyName, size: glyphSize)))
+                .font(.custom(BravuraFont.familyName, size: glyphSize)),
+        )
         // Anchor: glyph's baseline at `origin.y`; use SwiftUI
         // `.leading` (vertically centred) since callers position
         // dynamics at staff-relative Y already accounting for
@@ -71,16 +73,17 @@ enum TextMarkRenderer {
         origin: CGPoint,
         properties: TextProperties = TextProperties(),
         verse: Int = 0,
-        metrics: StaffMetrics
+        metrics: StaffMetrics,
     ) {
         let style = ResolvedTextStyle.resolve(
             verse.isMultiple(of: 2) ? .lyricsOdd : .lyricsEven,
-            overrides: properties, metrics: metrics
+            overrides: properties, metrics: metrics,
         )
         let resolved = context.resolve(
             Text(text)
                 .foregroundColor(.primary)
-                .font(style.font))
+                .font(style.font),
+        )
         context.draw(resolved, at: origin, anchor: .center)
     }
 
@@ -90,15 +93,16 @@ enum TextMarkRenderer {
         text: String,
         origin: CGPoint,
         properties: TextProperties = TextProperties(),
-        metrics: StaffMetrics
+        metrics: StaffMetrics,
     ) {
         let style = ResolvedTextStyle.resolve(
-            .tempo, overrides: properties, metrics: metrics
+            .tempo, overrides: properties, metrics: metrics,
         )
         let resolved = context.resolve(
             Text(text)
                 .foregroundColor(.primary)
-                .font(style.font))
+                .font(style.font),
+        )
         context.draw(resolved, at: origin, anchor: .leading)
     }
 }

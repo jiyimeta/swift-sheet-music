@@ -45,7 +45,7 @@ extension Note {
             tieForward: tieForward,
             tieBack: tieBack,
             glissando: glissando,
-            headType: headType
+            headType: headType,
         )
     }
 
@@ -74,7 +74,7 @@ extension Note {
             visualType: visualType,
             easeIn: Int(easeIn) ?? 0,
             easeOut: Int(easeOut) ?? 0,
-            text: text?.isEmpty == false ? text : nil
+            text: text?.isEmpty == false ? text : nil,
         )
     }
 

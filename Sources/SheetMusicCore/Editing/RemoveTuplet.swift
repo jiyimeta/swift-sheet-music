@@ -28,7 +28,9 @@ public struct RemoveTuplet: EditCommand {
         self.location = location
     }
 
-    public var affectedLocation: VoiceElementID { location }
+    public var affectedLocation: VoiceElementID {
+        location
+    }
 
     @discardableResult
     public func apply(to score: inout Score) throws -> any EditCommand {
@@ -37,7 +39,8 @@ public struct RemoveTuplet: EditCommand {
             voice.elements.indices.contains(location.elementIndex)
         else {
             throw SheetMusicError.invalidEdit(
-                reason: "RemoveTuplet: no element at \(location)")
+                reason: "RemoveTuplet: no element at \(location)",
+            )
         }
         guard let tuplet = voice.tuplets.first(where: {
             $0.startIndex <= location.elementIndex
@@ -45,7 +48,8 @@ public struct RemoveTuplet: EditCommand {
         }) else {
             throw SheetMusicError.invalidEdit(
                 reason: "RemoveTuplet: element at \(location) "
-                    + "isn't inside any tuplet of its voice")
+                    + "isn't inside any tuplet of its voice",
+            )
         }
         let division = score.division
         var totalTicks = 0
@@ -58,7 +62,7 @@ public struct RemoveTuplet: EditCommand {
             }
         }
         let totalDuration: NoteDuration = .fraction(Fraction(
-            numerator: totalTicks, denominator: 4 * division
+            numerator: totalTicks, denominator: 4 * division,
         ))
         // Pick the first chord with notes (if any) inside the
         // tuplet — its content survives in the single replacement
@@ -82,7 +86,7 @@ public struct RemoveTuplet: EditCommand {
         var newElements = voice.elements
         newElements.replaceSubrange(
             tuplet.startIndex ... tuplet.endIndex,
-            with: [replacement]
+            with: [replacement],
         )
         let netDelta = 1 - (tuplet.endIndex - tuplet.startIndex + 1)
 
@@ -98,7 +102,7 @@ public struct RemoveTuplet: EditCommand {
                     normalNotes: t.normalNotes,
                     actualNotes: t.actualNotes,
                     startIndex: t.startIndex + netDelta,
-                    endIndex: t.endIndex + netDelta
+                    endIndex: t.endIndex + netDelta,
                 ))
             } else {
                 newTuplets.append(t)
@@ -110,7 +114,7 @@ public struct RemoveTuplet: EditCommand {
             measureIndex: location.measureIndex,
             voiceIndex: location.voiceIndex,
             elements: newElements,
-            tuplets: newTuplets
+            tuplets: newTuplets,
         )
         return try replace.apply(to: &score)
     }

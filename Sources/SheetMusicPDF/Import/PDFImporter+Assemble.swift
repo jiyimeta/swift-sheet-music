@@ -17,14 +17,14 @@ extension PDFImporter {
         systems: [ImportSystem],
         texts: [TextGlyph],
         classified: [ClassifiedGlyph],
-        options: PDFImportOptions
+        options: PDFImportOptions,
     ) -> Score {
         guard let firstSystem = systems.first else {
             return Score(division: 480, source: .pdf)
         }
         let shape = partShape(from: firstSystem)
         var stavesContent: [[Measure]] = Array(
-            repeating: [], count: shape.totalStaffSlots
+            repeating: [], count: shape.totalStaffSlots,
         )
         var state = StaffStateMap()
         let pageBoundaries = systemPageBoundaries(systems)
@@ -39,7 +39,7 @@ extension PDFImporter {
                 texts: texts,
                 stavesContent: &stavesContent,
                 state: &state,
-                options: options
+                options: options,
             )
         }
 
@@ -51,13 +51,13 @@ extension PDFImporter {
             }
         }
         let titleFrame = makeTitleFrame(
-            document: document, texts: texts, options: options
+            document: document, texts: texts, options: options,
         )
         return Score(
             division: 480,
             parts: assembledParts,
             titleFrame: titleFrame,
-            source: .pdf
+            source: .pdf,
         )
     }
 
@@ -83,8 +83,8 @@ extension PDFImporter {
                 instrument: Instrument(id: "voice"),
                 staves: Array(
                     repeating: SheetMusicCore.Staff(staffType: "stdNormal", group: "pitched"),
-                    count: staffCount
-                )
+                    count: staffCount,
+                ),
             )
             parts.append(part)
             var slots: [Int] = []
@@ -97,7 +97,7 @@ extension PDFImporter {
         return PartShape(
             parts: parts,
             slotsByPartIndex: slotsByPartIndex,
-            totalStaffSlots: nextSlot
+            totalStaffSlots: nextSlot,
         )
     }
 
@@ -116,7 +116,7 @@ extension PDFImporter {
         texts: [TextGlyph],
         stavesContent: inout [[Measure]],
         state: inout StaffStateMap,
-        options: PDFImportOptions
+        options: PDFImportOptions,
     ) {
         for (partIdx, importPart) in system.parts.enumerated() {
             guard let slots = shape.slotsByPartIndex[partIdx] else { continue }
@@ -132,7 +132,7 @@ extension PDFImporter {
                     state: &state,
                     slot: slot,
                     location: location,
-                    options: options
+                    options: options,
                 )
                 stavesContent[slot].append(contentsOf: measures)
                 applyBreaks(
@@ -140,7 +140,7 @@ extension PDFImporter {
                     appended: measures.count,
                     isLastInPage: isLastInPage,
                     isLastSystem: isLastSystem,
-                    options: options
+                    options: options,
                 )
             }
         }
@@ -151,7 +151,7 @@ extension PDFImporter {
         appended: Int,
         isLastInPage: Bool,
         isLastSystem: Bool,
-        options: PDFImportOptions
+        options: PDFImportOptions,
     ) {
         guard options.preserveBreaks, appended > 0, !measures.isEmpty else { return }
         let last = measures.count - 1
@@ -168,7 +168,7 @@ extension PDFImporter {
     private static func makeTitleFrame(
         document: PDFDocument,
         texts: [TextGlyph],
-        options: PDFImportOptions
+        options: PDFImportOptions,
     ) -> ScoreFrame? {
         let firstPage = document.page(at: 0)
         let pageSize = firstPage?.bounds(for: .mediaBox).size
@@ -177,7 +177,7 @@ extension PDFImporter {
             texts: texts,
             pageSize: pageSize,
             documentAttributes: document.documentAttributes as? [String: Any],
-            options: options
+            options: options,
         )
     }
 
@@ -215,7 +215,7 @@ extension PDFImporter {
         state: inout StaffStateMap,
         slot: Int,
         location: String,
-        options: PDFImportOptions
+        options: PDFImportOptions,
     ) -> [Measure] {
         let events = scoreStateEvents(staff: importStaff, texts: [])
         var clef = state.clef[slot] ?? Clef(concertClefType: "G")
@@ -234,7 +234,7 @@ extension PDFImporter {
                 pageIndex: importStaff.staff.pageIndex,
                 measureIndex: mi,
                 location: location,
-                options: options
+                options: options,
             ))
         }
         state.clef[slot] = clef
@@ -248,7 +248,7 @@ extension PDFImporter {
         atMeasure mi: Int,
         clef: Clef,
         key: KeySignature,
-        ts: TimeSignature
+        ts: TimeSignature,
     ) -> (Clef, KeySignature, TimeSignature) {
         var c = clef
         var k = key
@@ -287,7 +287,7 @@ extension PDFImporter {
         pageIndex: Int,
         measureIndex: Int,
         location: String,
-        options: PDFImportOptions
+        options: PDFImportOptions,
     ) -> Measure {
         let decoded = decodePitches(measure: importMeasure, activeClef: clef, activeKey: key)
         let rhythm = decodeRhythm(measure: importMeasure, decoded: decoded, paths: [])
@@ -295,7 +295,7 @@ extension PDFImporter {
             elements: rhythm,
             texts: texts,
             staffYLines: importMeasure.staffYLines,
-            pageIndex: pageIndex
+            pageIndex: pageIndex,
         )
         let staffMidY = staffMidline(importMeasure.staffYLines)
         let voices = assignVoices(
@@ -304,7 +304,7 @@ extension PDFImporter {
             timeSignature: ts,
             staffMidY: staffMidY,
             diagnostics: options.diagnostics,
-            location: "\(location), measure \(measureIndex)"
+            location: "\(location), measure \(measureIndex)",
         )
         return Measure(voices: voices.isEmpty ? [Voice(elements: [])] : voices)
     }

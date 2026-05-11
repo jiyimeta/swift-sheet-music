@@ -13,7 +13,7 @@ extension MidiRenderer {
         part: Part,
         channel: Int,
         division: Int,
-        swingMap: SwingMap = .empty
+        swingMap: SwingMap = .empty,
     ) -> (events: [TimedMidiEvent], endTick: Int) {
         let plan = playbackPlan(for: staff.measures, division: division)
         var events: [TimedMidiEvent] = []
@@ -25,12 +25,12 @@ extension MidiRenderer {
             voiceIndex: voiceIndex,
             staff: staff,
             instrument: part.instrument,
-            division: division
+            division: division,
         )
         let ottavaRanges = OttavaRanges.collect(
             voiceIndex: voiceIndex,
             staff: staff,
-            division: division
+            division: division,
         )
         // Original-tick base for each measure index, used to map
         // playback ticks (which include unrolled repeats) back to
@@ -54,7 +54,7 @@ extension MidiRenderer {
             guard let effectiveVoice = MidiRenderer.resolvedVoice(
                 measureIndex: entry.measureIndex,
                 staff: staff,
-                voiceIndex: voiceIndex
+                voiceIndex: voiceIndex,
             ) else { continue }
 
             // When a new iteration loops back to original measure 0 (e.g. volta
@@ -72,11 +72,11 @@ extension MidiRenderer {
                         numerator: timeSig.numerator,
                         denominator: timeSig.denominator,
                         clocksPerClick: 24,
-                        thirtySecondsPerQuarter: 8
+                        thirtySecondsPerQuarter: 8,
                     )
                     events.append(TimedMidiEvent(tick: entry.tickOffset, event: .meta(timeSigMeta)))
                     events.append(TimedMidiEvent(tick: entry.tickOffset, event: .meta(.tempo(
-                        microsecondsPerQuarter: defaultMicrosPerQuarter
+                        microsecondsPerQuarter: defaultMicrosPerQuarter,
                     ))))
                     currentTempoBps = 2.0
                 }
@@ -109,7 +109,7 @@ extension MidiRenderer {
                     events: &events,
                     hairpinRamps: hairpinRamps,
                     ottavaRanges: ottavaRanges,
-                    originalTickDelta: originalTickDelta
+                    originalTickDelta: originalTickDelta,
                 )
             }
         }
@@ -143,7 +143,7 @@ extension MidiRenderer {
         events: inout [TimedMidiEvent],
         hairpinRamps: [HairpinRamp],
         ottavaRanges: [OttavaRange],
-        originalTickDelta: Int
+        originalTickDelta: Int,
     ) {
         switch element {
         case let .keySignature(key):
@@ -158,7 +158,7 @@ extension MidiRenderer {
                     numerator: t.numerator,
                     denominator: t.denominator,
                     clocksPerClick: 24,
-                    thirtySecondsPerQuarter: 8
+                    thirtySecondsPerQuarter: 8,
                 )
                 events.append(TimedMidiEvent(tick: localTick, event: .meta(meta)))
             }
@@ -186,14 +186,14 @@ extension MidiRenderer {
             if voiceIndex == 0 && !rm.text.isEmpty {
                 events.append(TimedMidiEvent(
                     tick: localTick,
-                    event: .meta(.marker(rm.text))
+                    event: .meta(.marker(rm.text)),
                 ))
             }
         case let .tempo(tempo):
             currentTempoBps = tempo.beatsPerSecond
             if voiceIndex == 0 {
                 events.append(TimedMidiEvent(tick: localTick, event: .meta(.tempo(
-                    microsecondsPerQuarter: tempo.microsecondsPerQuarter
+                    microsecondsPerQuarter: tempo.microsecondsPerQuarter,
                 ))))
             }
         case let .dynamic(dynamic):
@@ -208,7 +208,7 @@ extension MidiRenderer {
                     afterElementIndex: elementIndex,
                     measures: measures,
                     measureIndex: measureIndex,
-                    voiceIndex: voiceIndex
+                    voiceIndex: voiceIndex,
                 )
                 : nil
             // Apply swing: shift the onset and adjust the played
@@ -222,18 +222,18 @@ extension MidiRenderer {
                 prevChordTicks: previousChordTicks(
                     in: voiceElements,
                     before: elementIndex,
-                    division: division
+                    division: division,
                 ),
                 nextChordTicks: nextChordTicks(
                     in: voiceElements,
                     after: elementIndex,
-                    division: division
+                    division: division,
                 ),
                 isInTuplet: isChordInTuplet(
                     elementIndex: elementIndex,
-                    voiceTuplets: voiceTuplets
+                    voiceTuplets: voiceTuplets,
                 ),
-                state: swingMap.state(atTick: localTick + originalTickDelta)
+                state: swingMap.state(atTick: localTick + originalTickDelta),
             )
             // Hairpin influence is scoped to the chord onset; the
             // running `velocity` is untouched, so the next .dynamic
@@ -246,7 +246,7 @@ extension MidiRenderer {
                 .map { HairpinRamps.interpolate(ramp: $0, atOriginalTick: onsetOriginalTick) }
                 ?? velocity
             let ottavaShift = OttavaRanges.semitones(
-                in: ottavaRanges, at: onsetOriginalTick
+                in: ottavaRanges, at: onsetOriginalTick,
             )
             renderChordWithGraces(
                 chord,
@@ -262,7 +262,7 @@ extension MidiRenderer {
                 playedTicksOverride: adjust == .none
                     ? nil
                     : max(1, chordTicks + adjust.lengthDelta),
-                pitchShift: ottavaShift
+                pitchShift: ottavaShift,
             )
             localTick += chordTicks
         case .fermata:
@@ -288,7 +288,7 @@ extension MidiRenderer {
         velocity: Int,
         onTick: Int,
         offTick: Int,
-        events: inout [TimedMidiEvent]
+        events: inout [TimedMidiEvent],
     ) {
         if note.tieBack == nil {
             let on = MidiEvent.noteOn(channel: channel, pitch: note.pitch, velocity: velocity)
@@ -391,7 +391,7 @@ extension MidiRenderer {
     static func adjustVelocityForChord(
         baseVelocity: Int,
         chord: Chord,
-        instrument: Instrument
+        instrument: Instrument,
     ) -> Int {
         let defaultScale = defaultArticulationVelocityScale(for: instrument)
         let effectiveScale = effectiveVelocityScale(for: chord, instrument: instrument)

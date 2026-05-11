@@ -9,7 +9,9 @@ extension MidiRenderer {
         var unitTicks: Int
         var ratio: Int
 
-        var isOn: Bool { unitTicks > 0 }
+        var isOn: Bool {
+            unitTicks > 0
+        }
 
         static let off = SwingState(unitTicks: 0, ratio: 60)
 
@@ -75,21 +77,21 @@ extension MidiRenderer {
     /// (score.cpp:6106). Staff-flagged directives go only into the
     /// owning staff's map.
     static func collectSwingMaps(
-        score: Score, division: Int
+        score: Score, division: Int,
     ) -> [SwingMap] {
         let initial = SwingState(style: score.style, division: division)
         let allStaves = score.allStaves
         let staffCount = allStaves.count
         guard staffCount > 0 else { return [] }
         var perStaff: [[SwingMap.Entry]] = Array(
-            repeating: [], count: staffCount
+            repeating: [], count: staffCount,
         )
         for (staffIdx, entry) in allStaves.enumerated() {
             let staff = entry.staff
             var measureBase = 0
             for measure in staff.measures {
                 let mTicks = measureTicks(
-                    measure: measure, division: division
+                    measure: measure, division: division,
                 )
                 for voice in measure.voices {
                     var tick = measureBase
@@ -100,11 +102,12 @@ extension MidiRenderer {
                         case let .swing(s):
                             let state = SwingState(
                                 unitTicks: s.swingUnitTicks(
-                                    division: division),
-                                ratio: s.ratio
+                                    division: division,
+                                ),
+                                ratio: s.ratio,
                             )
                             let mapEntry = SwingMap.Entry(
-                                tick: tick, state: state
+                                tick: tick, state: state,
                             )
                             if s.isSystemText {
                                 for i in 0 ..< staffCount {
@@ -126,7 +129,7 @@ extension MidiRenderer {
         return perStaff.map { entries in
             SwingMap(
                 entries: entries.sorted { $0.tick < $1.tick },
-                initial: initial
+                initial: initial,
             )
         }
     }
@@ -162,7 +165,7 @@ extension MidiRenderer {
         prevChordTicks: Int?,
         nextChordTicks: Int?,
         isInTuplet: Bool,
-        state: SwingState
+        state: SwingState,
     ) -> SwingAdjustment {
         guard state.isOn, !isInTuplet else { return .none }
         let swingBeat = state.unitTicks * 2
@@ -195,7 +198,7 @@ extension MidiRenderer {
         }
         return SwingAdjustment(
             onsetShift: onsetShift,
-            lengthDelta: lengthDelta
+            lengthDelta: lengthDelta,
         )
     }
 
@@ -206,7 +209,7 @@ extension MidiRenderer {
     static func previousChordTicks(
         in elements: [VoiceElement],
         before index: Int,
-        division: Int
+        division: Int,
     ) -> Int? {
         guard index > 0 else { return nil }
         for i in stride(from: index - 1, through: 0, by: -1) {
@@ -223,7 +226,7 @@ extension MidiRenderer {
     static func nextChordTicks(
         in elements: [VoiceElement],
         after index: Int,
-        division: Int
+        division: Int,
     ) -> Int? {
         guard index + 1 < elements.count else { return nil }
         for i in (index + 1) ..< elements.count {
@@ -239,7 +242,7 @@ extension MidiRenderer {
     /// check in compatmidirender.cpp:172).
     static func isChordInTuplet(
         elementIndex index: Int,
-        voiceTuplets tuplets: [Tuplet]
+        voiceTuplets tuplets: [Tuplet],
     ) -> Bool {
         tuplets.contains { $0.startIndex <= index && index <= $0.endIndex }
     }

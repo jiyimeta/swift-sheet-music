@@ -7,7 +7,7 @@ import Foundation
 @testable import SheetMusicXMLTools
 import Testing
 
-@Suite struct HarmonyTests {
+struct HarmonyTests {
     @Test func defaultsAreInert() {
         let h = Harmony(name: "C")
         #expect(h.name == "C")
@@ -26,12 +26,18 @@ import Testing
     }
 
     @Test func styleTypeFollowsHarmonyType() {
-        #expect(Harmony(name: "C", harmonyType: .standard).styleType
-            == .chordSymbolA)
-        #expect(Harmony(name: "I", harmonyType: .roman).styleType
-            == .chordSymbolRomanNumeral)
-        #expect(Harmony(name: "1", harmonyType: .nashville).styleType
-            == .chordSymbolA)
+        #expect(
+            Harmony(name: "C", harmonyType: .standard).styleType
+                == .chordSymbolA,
+        )
+        #expect(
+            Harmony(name: "I", harmonyType: .roman).styleType
+                == .chordSymbolRomanNumeral,
+        )
+        #expect(
+            Harmony(name: "1", harmonyType: .nashville).styleType
+                == .chordSymbolA,
+        )
     }
 
     @Test func voiceElementHarmonyCaseExists() {
@@ -48,7 +54,8 @@ extension HarmonyTests {
     @Test func decodesStandardChordNameAndType() throws {
         let xml = "<Harmony><name>C</name></Harmony>"
         let h = try Harmony.decode(
-            XMLTreeParser.parse(Data(xml.utf8)))
+            XMLTreeParser.parse(Data(xml.utf8)),
+        )
         #expect(h.name == "C")
         #expect(h.harmonyType == .standard)
     }
@@ -62,7 +69,8 @@ extension HarmonyTests {
         </Harmony>
         """
         let h = try Harmony.decode(
-            XMLTreeParser.parse(Data(xml.utf8)))
+            XMLTreeParser.parse(Data(xml.utf8)),
+        )
         #expect(h.name == "F#m7b5/A")
         #expect(h.rootTpc == 20)
         #expect(h.bassTpc == 17)
@@ -76,7 +84,8 @@ extension HarmonyTests {
         </Harmony>
         """
         let h = try Harmony.decode(
-            XMLTreeParser.parse(Data(xml.utf8)))
+            XMLTreeParser.parse(Data(xml.utf8)),
+        )
         #expect(h.harmonyType == .roman)
         #expect(h.styleType == .chordSymbolRomanNumeral)
     }
@@ -90,7 +99,8 @@ extension HarmonyTests {
         </Harmony>
         """
         let h = try Harmony.decode(
-            XMLTreeParser.parse(Data(xml.utf8)))
+            XMLTreeParser.parse(Data(xml.utf8)),
+        )
         #expect(h.leftParen)
         #expect(h.rightParen)
     }
@@ -104,7 +114,8 @@ extension HarmonyTests {
         </Harmony>
         """
         let h = try Harmony.decode(
-            XMLTreeParser.parse(Data(xml.utf8)))
+            XMLTreeParser.parse(Data(xml.utf8)),
+        )
         #expect(h.rootTpc == nil)
         #expect(h.bassTpc == nil)
     }
@@ -118,7 +129,8 @@ extension HarmonyTests {
         </Harmony>
         """
         let h = try Harmony.decode(
-            XMLTreeParser.parse(Data(xml.utf8)))
+            XMLTreeParser.parse(Data(xml.utf8)),
+        )
         #expect(h.offsetX == 0.5)
         #expect(h.offsetY == -1.2)
         #expect(h.color?.red == 200)
@@ -129,21 +141,26 @@ extension HarmonyTests {
     @Test func decodesPlayDefaultsTrue() throws {
         let h = try Harmony.decode(
             XMLTreeParser.parse(Data(
-                "<Harmony><name>C</name></Harmony>".utf8)))
+                "<Harmony><name>C</name></Harmony>".utf8,
+            )),
+        )
         #expect(h.play == true)
     }
 
     @Test func decodesPlayFalseFromZero() throws {
         let xml = "<Harmony><name>C</name><play>0</play></Harmony>"
         let h = try Harmony.decode(
-            XMLTreeParser.parse(Data(xml.utf8)))
+            XMLTreeParser.parse(Data(xml.utf8)),
+        )
         #expect(h.play == false)
     }
 
     @Test func missingHarmonyTypeDefaultsToStandard() throws {
         let h = try Harmony.decode(
             XMLTreeParser.parse(Data(
-                "<Harmony><name>C</name></Harmony>".utf8)))
+                "<Harmony><name>C</name></Harmony>".utf8,
+            )),
+        )
         #expect(h.harmonyType == .standard)
     }
 
@@ -156,7 +173,8 @@ extension HarmonyTests {
         </voice>
         """
         let voice = try Voice.decode(
-            XMLTreeParser.parse(Data(xml.utf8)))
+            XMLTreeParser.parse(Data(xml.utf8)),
+        )
         #expect(voice.elements.count == 2)
         guard case let .harmony(h) = voice.elements[0] else {
             Issue.record("element 0 is not .harmony")
@@ -169,7 +187,7 @@ extension HarmonyTests {
     @Test func sharpAfterLetterIsSubstituted() {
         let runs = HarmonyRendering.runs(
             for: Harmony(name: "F#"),
-            metrics: StaffMetrics(staffSize: 28)
+            metrics: StaffMetrics(staffSize: 28),
         )
         #expect(runs.count == 2)
         #expect(runs[0].kind == .text)
@@ -181,7 +199,7 @@ extension HarmonyTests {
     @Test func flatAfterLetterIsSubstituted() {
         let runs = HarmonyRendering.runs(
             for: Harmony(name: "Bb"),
-            metrics: StaffMetrics(staffSize: 28)
+            metrics: StaffMetrics(staffSize: 28),
         )
         #expect(runs.count == 2)
         #expect(runs[0].content == "B")
@@ -192,7 +210,7 @@ extension HarmonyTests {
     @Test func doubleFlatIsSubstituted() {
         let runs = HarmonyRendering.runs(
             for: Harmony(name: "Bbb"),
-            metrics: StaffMetrics(staffSize: 28)
+            metrics: StaffMetrics(staffSize: 28),
         )
         #expect(runs.count == 2)
         #expect(runs[0].content == "B")
@@ -203,7 +221,7 @@ extension HarmonyTests {
     @Test func doubleSharpIsSubstituted() {
         let runs = HarmonyRendering.runs(
             for: Harmony(name: "F##"),
-            metrics: StaffMetrics(staffSize: 28)
+            metrics: StaffMetrics(staffSize: 28),
         )
         #expect(runs.count == 2)
         #expect(runs[0].content == "F")
@@ -214,7 +232,7 @@ extension HarmonyTests {
     @Test func slashChordHasMultipleAccidentals() {
         let runs = HarmonyRendering.runs(
             for: Harmony(name: "F#m7b5/Ab"),
-            metrics: StaffMetrics(staffSize: 28)
+            metrics: StaffMetrics(staffSize: 28),
         )
         let kinds = runs.map(\.kind)
         #expect(kinds == [
@@ -231,7 +249,7 @@ extension HarmonyTests {
     @Test func romanLeadingFlatIsSubstituted() {
         let runs = HarmonyRendering.runs(
             for: Harmony(name: "bIII", harmonyType: .roman),
-            metrics: StaffMetrics(staffSize: 28)
+            metrics: StaffMetrics(staffSize: 28),
         )
         #expect(runs.count == 2)
         #expect(runs[0].kind == .accidental(.flat))
@@ -242,7 +260,7 @@ extension HarmonyTests {
     @Test func standardLeadingFlatIsNotSubstituted() {
         let runs = HarmonyRendering.runs(
             for: Harmony(name: "bVII", harmonyType: .standard),
-            metrics: StaffMetrics(staffSize: 28)
+            metrics: StaffMetrics(staffSize: 28),
         )
         #expect(runs.count == 1)
         #expect(runs[0].content == "bVII")
@@ -252,7 +270,7 @@ extension HarmonyTests {
     @Test func widthAccumulatesAcrossRuns() {
         let runs = HarmonyRendering.runs(
             for: Harmony(name: "F#"),
-            metrics: StaffMetrics(staffSize: 28)
+            metrics: StaffMetrics(staffSize: 28),
         )
         let width = HarmonyRendering.width(of: runs)
         let summed = runs.reduce(0.0) { $0 + $1.advance }
@@ -273,7 +291,7 @@ extension HarmonyTests {
         // suffix only. Display must be "E" + flat + "m7".
         let runs = HarmonyRendering.runs(
             for: Harmony(name: "m7", rootTpc: 12),
-            metrics: StaffMetrics(staffSize: 28)
+            metrics: StaffMetrics(staffSize: 28),
         )
         let kinds = runs.map(\.kind)
         #expect(kinds == [.text, .accidental(.flat), .text])
@@ -286,7 +304,7 @@ extension HarmonyTests {
         // TPC 17 = D natural — no accidental.
         let runs = HarmonyRendering.runs(
             for: Harmony(name: "aug", rootTpc: 17),
-            metrics: StaffMetrics(staffSize: 28)
+            metrics: StaffMetrics(staffSize: 28),
         )
         // Letter + suffix coalesce into a single text run.
         #expect(runs.count == 1)
@@ -299,9 +317,9 @@ extension HarmonyTests {
         //   = A flat + 7 + / + E flat
         let runs = HarmonyRendering.runs(
             for: Harmony(
-                name: "7", rootTpc: 11, bassTpc: 12
+                name: "7", rootTpc: 11, bassTpc: 12,
             ),
-            metrics: StaffMetrics(staffSize: 28)
+            metrics: StaffMetrics(staffSize: 28),
         )
         let kinds = runs.map(\.kind)
         #expect(kinds == [
@@ -321,7 +339,7 @@ extension HarmonyTests {
         let metrics = StaffMetrics(staffSize: 28)
         let h = Harmony(name: "C")
         #expect(HarmonyRendering.glyphPointSize(
-            for: h, metrics: metrics
+            for: h, metrics: metrics,
         ) < metrics.glyphFontSize)
     }
 
@@ -329,7 +347,7 @@ extension HarmonyTests {
     @Test func nashvilleLeadingSharpIsSubstituted() {
         let runs = HarmonyRendering.runs(
             for: Harmony(name: "#1", harmonyType: .nashville),
-            metrics: StaffMetrics(staffSize: 28)
+            metrics: StaffMetrics(staffSize: 28),
         )
         #expect(runs.count == 2)
         #expect(runs[0].kind == .accidental(.sharp))
@@ -341,17 +359,17 @@ extension HarmonyTests {
         let runs: [HarmonyRun] = [
             HarmonyRun(
                 kind: .text, content: "F",
-                advance: 5.0, x: 0
+                advance: 5.0, x: 0,
             ),
             HarmonyRun(
                 kind: .accidental(.sharp), content: "",
-                advance: 4.0, x: 5.0
+                advance: 4.0, x: 5.0,
             ),
         ]
         let lh = LayoutHarmony(
             harmony: Harmony(name: "F#"),
             anchorX: 100, y: -10,
-            runs: runs, width: 9.0
+            runs: runs, width: 9.0,
         )
         let element: LayoutElement = .harmony(lh)
         guard case let .harmony(unwrapped) = element else {
@@ -368,13 +386,13 @@ extension HarmonyTests {
     @available(macOS 15.0, iOS 16.0, *)
     @Test func layoutEmitsHarmonyAboveStaff() throws {
         let url = try #require(Bundle.module.url(
-            forResource: "harmony-basic", withExtension: "mscx"
+            forResource: "harmony-basic", withExtension: "mscx",
         ))
         let score = try SheetMusic.loadScore(mscxURL: url)
         let document = LayoutEngine.layout(
             score: score,
             options: ScoreViewOptions(staffSize: 28),
-            availableWidth: 800
+            availableWidth: 800,
         )
         var foundHarmony: LayoutHarmony?
         var clefY: CGFloat?
@@ -414,13 +432,13 @@ extension HarmonyTests {
         let part = Part(
             id: "P1",
             instrument: Instrument(id: "voice"),
-            staves: [Staff(measures: [measure])]
+            staves: [Staff(measures: [measure])],
         )
         let score = Score(division: 480, parts: [part])
         let document = LayoutEngine.layout(
             score: score,
             options: ScoreViewOptions(staffSize: 28),
-            availableWidth: 800
+            availableWidth: 800,
         )
         var harmonies: [LayoutHarmony] = []
         for system in document.systems {
@@ -440,9 +458,9 @@ extension HarmonyTests {
 
     @available(macOS 15.0, iOS 16.0, *)
     @Test func wideHarmonyExpandsChordSpacing() {
-        // Measure with two quarters; with a wide chord symbol on the
-        // first chord, the second chord must be pushed further right
-        // than the bare-chord baseline.
+        /// Measure with two quarters; with a wide chord symbol on the
+        /// first chord, the second chord must be pushed further right
+        /// than the bare-chord baseline.
         func chordXs(harmonyName: String?) -> [CGFloat] {
             var elements: [VoiceElement] = [
                 .clef(Clef(concertClefType: "G")),
@@ -453,18 +471,18 @@ extension HarmonyTests {
             }
             elements.append(.chord(Chord(
                 duration: .quarter,
-                notes: [Note(pitch: 60, tpc: 14)]
+                notes: [Note(pitch: 60, tpc: 14)],
             )))
             elements.append(.chord(Chord(
                 duration: .quarter,
-                notes: [Note(pitch: 62, tpc: 16)]
+                notes: [Note(pitch: 62, tpc: 16)],
             )))
             let part = Part(
                 id: "P1",
                 instrument: Instrument(id: "voice"),
                 staves: [Staff(measures: [
                     Measure(voices: [Voice(elements: elements)]),
-                ])]
+                ])],
             )
             let score = Score(division: 480, parts: [part])
             // Use a tiny availableWidth so the layout doesn't add
@@ -473,7 +491,7 @@ extension HarmonyTests {
             let document = LayoutEngine.layout(
                 score: score,
                 options: ScoreViewOptions(staffSize: 28),
-                availableWidth: 100
+                availableWidth: 100,
             )
             var xs: [CGFloat] = []
             for system in document.systems {
@@ -497,27 +515,28 @@ extension HarmonyTests {
     }
 
     @available(macOS 15.0, iOS 16.0, *)
+    // swiftlint:disable:next function_body_length
     @Test func aboveArchingTieLiftsHarmonyClearOfArc() {
-        // A high chord (well above the top staff line) carrying a tie
-        // on its top note: the tie arcs UPWARD past the notehead. The
-        // harmony auto-placer must lift the chord symbol above the
-        // tie's apex, not just above the notehead. We compare the
-        // tied vs. untied case by the GAP between the chord notehead
-        // and the harmony in document-absolute coords. (Absolute
-        // harmony Y alone is not a useful gauge: the per-staff top
-        // padding expands to absorb the autoplace shift, so the
-        // harmony's absolute Y stays roughly constant — but the staff
-        // sinks down and the gap above the notehead grows.)
+        /// A high chord (well above the top staff line) carrying a tie
+        /// on its top note: the tie arcs UPWARD past the notehead. The
+        /// harmony auto-placer must lift the chord symbol above the
+        /// tie's apex, not just above the notehead. We compare the
+        /// tied vs. untied case by the GAP between the chord notehead
+        /// and the harmony in document-absolute coords. (Absolute
+        /// harmony Y alone is not a useful gauge: the per-staff top
+        /// padding expands to absorb the autoplace shift, so the
+        /// harmony's absolute Y stays roughly constant — but the staff
+        /// sinks down and the gap above the notehead grows.)
         func gap(withTie: Bool) -> Double {
             let topNote = Note(
                 pitch: 89, // F6, three ledger lines above treble staff
                 tpc: 13,
-                tieForward: withTie ? 1 : nil
+                tieForward: withTie ? 1 : nil,
             )
             let landingNote = Note(
                 pitch: 89,
                 tpc: 13,
-                tieBack: withTie ? 1 : nil
+                tieBack: withTie ? 1 : nil,
             )
             let m1 = Measure(voices: [Voice(elements: [
                 .clef(Clef(concertClefType: "G")),
@@ -531,13 +550,13 @@ extension HarmonyTests {
             let part = Part(
                 id: "P1",
                 instrument: Instrument(id: "voice"),
-                staves: [Staff(measures: [m1, m2])]
+                staves: [Staff(measures: [m1, m2])],
             )
             let score = Score(division: 480, parts: [part])
             let document = LayoutEngine.layout(
                 score: score,
                 options: ScoreViewOptions(staffSize: 28),
-                availableWidth: 800
+                availableWidth: 800,
             )
             var harmonyY: Double?
             var noteY: Double?
@@ -545,15 +564,19 @@ extension HarmonyTests {
                 for measure in system.measures {
                     for el in measure.elements {
                         if case let .harmony(lh) = el, harmonyY == nil {
-                            harmonyY = lh.y + Double(system.origin.y
-                                + measure.origin.y)
+                            harmonyY = lh.y + Double(
+                                system.origin.y
+                                    + measure.origin.y,
+                            )
                         }
                         if case let .chord(notes, _, _, _, _, _, _, _) = el,
                            noteY == nil,
                            let n = notes.first
                         {
-                            noteY = Double(n.origin.y + system.origin.y
-                                + measure.origin.y)
+                            noteY = Double(
+                                n.origin.y + system.origin.y
+                                    + measure.origin.y,
+                            )
                         }
                     }
                 }
@@ -572,7 +595,7 @@ extension HarmonyTests {
 
     @Test func basicFixtureExposesFiveHarmonies() throws {
         let url = try #require(Bundle.module.url(
-            forResource: "harmony-basic", withExtension: "mscx"
+            forResource: "harmony-basic", withExtension: "mscx",
         ))
         let score = try SheetMusic.loadScore(mscxURL: url)
         let harmonies: [Harmony] = score.parts[0].staves[0].measures
@@ -581,8 +604,10 @@ extension HarmonyTests {
                 if case let .harmony(h) = $0 { return h } else { return nil }
             }
         #expect(harmonies.count == 5)
-        #expect(harmonies.map(\.name)
-            == ["C", "Am7", "F#m7b5/A", "bIII", "C"])
+        #expect(
+            harmonies.map(\.name)
+                == ["C", "Am7", "F#m7b5/A", "bIII", "C"],
+        )
         #expect(harmonies[3].harmonyType == .roman)
         #expect(harmonies[4].leftParen)
         #expect(harmonies[4].rightParen)

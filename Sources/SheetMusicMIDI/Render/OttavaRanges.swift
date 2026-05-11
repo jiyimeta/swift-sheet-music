@@ -31,13 +31,13 @@ enum OttavaRanges {
     static func collect(
         voiceIndex: Int,
         staff: Staff,
-        division: Int
+        division: Int,
     ) -> [OttavaRange] {
         var ranges: [OttavaRange] = []
         var measureBase = 0
         for (measureIdx, measure) in staff.measures.enumerated() {
             let mTicks = MidiRenderer.measureTicks(
-                measure: measure, division: division
+                measure: measure, division: division,
             )
             if voiceIndex < measure.voices.count {
                 walkVoice(
@@ -46,7 +46,7 @@ enum OttavaRanges {
                     measureBase: measureBase,
                     measures: staff.measures,
                     division: division,
-                    out: &ranges
+                    out: &ranges,
                 )
             }
             measureBase += mTicks
@@ -60,7 +60,7 @@ enum OttavaRanges {
         measureBase: Int,
         measures: [Measure],
         division: Int,
-        out: inout [OttavaRange]
+        out: inout [OttavaRange],
     ) {
         var runningTick = measureBase
         for element in voice.elements {
@@ -76,12 +76,12 @@ enum OttavaRanges {
                     startMeasureIndex: measureIdx,
                     spanner: s,
                     measures: measures,
-                    division: division
+                    division: division,
                 )
                 out.append(OttavaRange(
                     startTick: runningTick,
                     endTick: endTick,
-                    semitones: payload.subtype.semitones
+                    semitones: payload.subtype.semitones,
                 ))
             case let .chord(chord):
                 runningTick += chord.duration.ticks(division: division)
@@ -104,7 +104,7 @@ enum OttavaRanges {
         startMeasureIndex: Int,
         spanner: Spanner,
         measures: [Measure],
-        division: Int
+        division: Int,
     ) -> Int {
         var measureSpan = 0
         let measureCount = max(0, spanner.nextMeasuresOffset)
@@ -112,7 +112,7 @@ enum OttavaRanges {
         if startMeasureIndex < endIndex {
             for i in startMeasureIndex ..< endIndex {
                 measureSpan += MidiRenderer.measureTicks(
-                    measure: measures[i], division: division
+                    measure: measures[i], division: division,
                 )
             }
         }

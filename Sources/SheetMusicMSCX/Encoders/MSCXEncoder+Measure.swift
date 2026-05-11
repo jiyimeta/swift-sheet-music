@@ -30,7 +30,7 @@ extension Measure {
         carryInVoiceTieCarries: [Voice.VoiceTieCarry],
         isFirstMeasureOfStaff: Bool = false,
         options: MSCXEncoderOptions = .init(),
-        staffGroup: String = "pitched"
+        staffGroup: String = "pitched",
     ) throws -> (node: XMLTreeNode, carryOutVoiceTieCarries: [Voice.VoiceTieCarry]) {
         var children: [XMLTreeNode] = []
         for marker in markers {
@@ -43,7 +43,7 @@ extension Measure {
             children.append(XMLTreeNode(name: "irregular", text: "1"))
         }
         var carryOut: [Voice.VoiceTieCarry] = Array(
-            repeating: Voice.VoiceTieCarry(), count: voices.count
+            repeating: Voice.VoiceTieCarry(), count: voices.count,
         )
         for (index, voice) in voices.enumerated() {
             let carryIn = index < carryInVoiceTieCarries.count
@@ -54,19 +54,19 @@ extension Measure {
                 isStaffHead: isFirstMeasureOfStaff && index == 0,
                 options: options,
                 staffGroup: staffGroup,
-                voiceIndex: index
+                voiceIndex: index,
             )
             children.append(result.node)
             carryOut[index] = result.carryOut
         }
         if let endRepeatCount {
             children.append(XMLTreeNode(
-                name: "endRepeat", text: String(endRepeatCount)
+                name: "endRepeat", text: String(endRepeatCount),
             ))
         }
         if let measureRepeatCount {
             children.append(XMLTreeNode(
-                name: "measureRepeatCount", text: String(measureRepeatCount)
+                name: "measureRepeatCount", text: String(measureRepeatCount),
             ))
         }
         for jump in jumps {
@@ -75,13 +75,13 @@ extension Measure {
         if lineBreak {
             children.append(XMLTreeNode(
                 name: "LayoutBreak",
-                children: [XMLTreeNode(name: "subtype", text: "line")]
+                children: [XMLTreeNode(name: "subtype", text: "line")],
             ))
         }
         if pageBreak {
             children.append(XMLTreeNode(
                 name: "LayoutBreak",
-                children: [XMLTreeNode(name: "subtype", text: "page")]
+                children: [XMLTreeNode(name: "subtype", text: "page")],
             ))
         }
         var attributes: [String: String] = [:]
@@ -91,9 +91,9 @@ extension Measure {
         }
         return (
             XMLTreeNode(
-                name: "Measure", attributes: attributes, children: children
+                name: "Measure", attributes: attributes, children: children,
             ),
-            carryOut
+            carryOut,
         )
     }
 
@@ -104,7 +104,7 @@ extension Measure {
     /// callers should pass `[Voice.VoiceTieCarry]` directly.
     func encode(
         carryInLastChordDurations: [Fraction?],
-        options: MSCXEncoderOptions = .init()
+        options: MSCXEncoderOptions = .init(),
     ) throws -> (node: XMLTreeNode, carryOutLastChordDurations: [Fraction?]) {
         let carries = carryInLastChordDurations.map {
             Voice.VoiceTieCarry(prevChordDuration: $0, prevVoiceTotal: nil)
@@ -124,7 +124,7 @@ extension Marker {
                 XMLTreeNode(name: "markerType", text: kind.rawValue),
                 XMLTreeNode(name: "label", text: label),
                 XMLTreeNode(name: "text", text: text),
-            ]
+            ],
         )
     }
 }
@@ -140,7 +140,7 @@ extension Jump {
                 XMLTreeNode(name: "playUntil", text: playUntil),
                 XMLTreeNode(name: "continueAt", text: continueAt),
                 XMLTreeNode(name: "text", text: text),
-            ]
+            ],
         )
     }
 }

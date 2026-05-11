@@ -21,7 +21,7 @@ public struct SetNotePitch: EditCommand {
         at location: NoteID,
         pitch: Int,
         tpc: Int,
-        accidental: Accidental? = nil
+        accidental: Accidental? = nil,
     ) {
         self.location = location
         self.pitch = pitch
@@ -29,18 +29,22 @@ public struct SetNotePitch: EditCommand {
         self.accidental = accidental
     }
 
-    public var affectedLocation: VoiceElementID { VoiceElementID(location) }
+    public var affectedLocation: VoiceElementID {
+        VoiceElementID(location)
+    }
 
     @discardableResult
     public func apply(to score: inout Score) throws -> any EditCommand {
         guard let oldNote = score[location] else {
             throw SheetMusicError.invalidEdit(
-                reason: "SetNotePitch: no note at \(location)")
+                reason: "SetNotePitch: no note at \(location)",
+            )
         }
         let veID = VoiceElementID(location)
         guard case var .chord(chord) = score[veID] else {
             throw SheetMusicError.invalidEdit(
-                reason: "SetNotePitch: element at \(veID) is not a chord")
+                reason: "SetNotePitch: element at \(veID) is not a chord",
+            )
         }
         var note = chord.notes[location.noteIndexInChord]
         note.pitch = pitch
@@ -52,7 +56,7 @@ public struct SetNotePitch: EditCommand {
             at: location,
             pitch: oldNote.pitch,
             tpc: oldNote.tpc,
-            accidental: oldNote.accidental
+            accidental: oldNote.accidental,
         )
     }
 }

@@ -30,7 +30,7 @@ public struct BreakIndicatorOverlay: View {
         case document(
             systems: [LayoutSystem],
             documentYOffset: CGFloat,
-            xOffset: CGFloat
+            xOffset: CGFloat,
         )
     }
 
@@ -41,7 +41,7 @@ public struct BreakIndicatorOverlay: View {
     public init(
         mode: Mode,
         metrics: StaffMetrics,
-        policy: LayoutBreakPolicy = .honor
+        policy: LayoutBreakPolicy = .honor,
     ) {
         self.mode = mode
         self.metrics = metrics
@@ -137,7 +137,8 @@ private struct BreakIndicatorBadge: View {
             .frame(width: 16, height: 12)
             .background(
                 RoundedRectangle(cornerRadius: 2.5, style: .continuous)
-                    .fill(badgeColor))
+                    .fill(badgeColor),
+            )
             .accessibilityLabel(accessibilityLabel)
     }
 

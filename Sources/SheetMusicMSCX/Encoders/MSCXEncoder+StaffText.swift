@@ -22,7 +22,7 @@ extension StaffText {
                     "g": String(color.green),
                     "b": String(color.blue),
                     "a": String(color.alpha),
-                ]
+                ],
             ))
         }
         if offsetX != 0 || offsetY != 0 {
@@ -31,7 +31,7 @@ extension StaffText {
                 attributes: [
                     "x": formatDouble(offsetX),
                     "y": formatDouble(offsetY),
-                ]
+                ],
             ))
         }
         if !visible {
@@ -40,7 +40,7 @@ extension StaffText {
         properties.appendXML(to: &children)
         return XMLTreeNode(
             name: isSystemText ? "SystemText" : "StaffText",
-            children: children
+            children: children,
         )
     }
 }

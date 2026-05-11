@@ -3,7 +3,7 @@ import Foundation
 @testable import SheetMusicPDF
 import Testing
 
-@Suite struct PDFImporterSMuFLTests {
+struct PDFImporterSMuFLTests {
     @Test func classifiesNoteheads() {
         #expect(PDFImporter.smuflSemantic(codepoint: 0xE0A4) == .noteheadBlack)
         #expect(PDFImporter.smuflSemantic(codepoint: 0xE0A3) == .noteheadHalf)

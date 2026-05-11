@@ -23,11 +23,11 @@ extension LayoutDocument {
     func measureOrigin(measureIndex: Int) -> CGPoint? {
         for system in systems {
             if let m = system.measures.first(
-                where: { $0.measureIndex == measureIndex }
+                where: { $0.measureIndex == measureIndex },
             ) {
                 return CGPoint(
                     x: system.origin.x + m.origin.x,
-                    y: system.origin.y + m.origin.y
+                    y: system.origin.y + m.origin.y,
                 )
             }
         }
@@ -73,7 +73,7 @@ struct VerticalSystemFramesKey: PreferenceKey {
     static var defaultValue: [Int: CGRect] = [:]
     static func reduce(
         value: inout [Int: CGRect],
-        nextValue: () -> [Int: CGRect]
+        nextValue: () -> [Int: CGRect],
     ) {
         value.merge(nextValue(), uniquingKeysWith: { _, new in new })
     }
@@ -86,7 +86,7 @@ struct HorizontalMeasureFramesKey: PreferenceKey {
     static var defaultValue: [Int: CGRect] = [:]
     static func reduce(
         value: inout [Int: CGRect],
-        nextValue: () -> [Int: CGRect]
+        nextValue: () -> [Int: CGRect],
     ) {
         value.merge(nextValue(), uniquingKeysWith: { _, new in new })
     }
@@ -150,16 +150,17 @@ struct VerticalSystemAnchors: View {
                                 key: VerticalSystemFramesKey.self,
                                 value: [
                                     i: g.frame(in: .named("vScroll")),
-                                ]
+                                ],
                             )
-                        })
+                        },
+                    )
             }
             Spacer(minLength: 0)
         }
         .frame(
             width: document.size.width,
             height: document.size.height,
-            alignment: .topLeading
+            alignment: .topLeading,
         )
         .allowsHitTesting(false)
     }
@@ -197,7 +198,8 @@ struct HorizontalMeasureAnchors: View {
                 Color.clear
                     .frame(width: m.width, height: 1)
                     .id(HorizontalMeasureAnchorID(
-                        measureIndex: m.measureIndex))
+                        measureIndex: m.measureIndex,
+                    ))
                     .background(
                         GeometryReader { g in
                             Color.clear.preference(
@@ -205,16 +207,17 @@ struct HorizontalMeasureAnchors: View {
                                 value: [
                                     m.measureIndex:
                                         g.frame(in: .named("hScroll")),
-                                ]
+                                ],
                             )
-                        })
+                        },
+                    )
             }
             Spacer(minLength: 0)
         }
         .frame(
             width: document.size.width,
             height: document.size.height,
-            alignment: .topLeading
+            alignment: .topLeading,
         )
         .allowsHitTesting(false)
     }
@@ -229,7 +232,7 @@ struct HorizontalMeasureAnchors: View {
                 result.append((
                     measureIndex: m.measureIndex,
                     docX: sys.origin.x + m.origin.x,
-                    width: m.width
+                    width: m.width,
                 ))
             }
         }
@@ -250,7 +253,7 @@ func isAnchorFullyVisible(
     anchorMin: CGFloat,
     anchorMax: CGFloat,
     anchorSize: CGFloat,
-    viewportSize: CGFloat
+    viewportSize: CGFloat,
 ) -> Bool {
     if anchorSize > viewportSize {
         return anchorMax > 0 && anchorMin < viewportSize
@@ -280,7 +283,7 @@ func paddedScrollAnchor(
     anchorSize: CGFloat,
     viewportSize: CGFloat,
     pad: CGFloat,
-    horizontal: Bool
+    horizontal: Bool,
 ) -> UnitPoint {
     let denom = viewportSize - anchorSize
     let frac: CGFloat

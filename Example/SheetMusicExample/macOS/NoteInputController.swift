@@ -27,7 +27,9 @@
         /// internal closure (which can't reach SwiftUI state on its own).
         var onScoreEdited: (@MainActor () -> Void)?
 
-        var score: Score { editor.score }
+        var score: Score {
+            editor.score
+        }
 
         init(score: Score) {
             editor = ScoreEditor(score: score)
@@ -46,7 +48,7 @@
         /// the redo path stays linked.
         func apply(
             _ command: any EditCommand,
-            undoManager manager: UndoManager?
+            undoManager manager: UndoManager?,
         ) throws {
             try editor.apply(command)
             version = UUID()

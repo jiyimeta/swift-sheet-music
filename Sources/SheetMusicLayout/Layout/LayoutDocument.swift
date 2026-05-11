@@ -15,7 +15,7 @@ public struct LayoutDocument: Sendable, Equatable {
         size: CGSize,
         systems: [LayoutSystem],
         metrics: StaffMetrics,
-        titleFrame: LayoutTitleFrame? = nil
+        titleFrame: LayoutTitleFrame? = nil,
     ) {
         self.size = size
         self.systems = systems

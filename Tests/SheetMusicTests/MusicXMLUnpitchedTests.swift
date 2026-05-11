@@ -8,7 +8,7 @@ import Testing
 /// staves (drum kits, etc.). The parser used to reject them with
 /// `SheetMusicError.malformedScore`; this suite locks in support so the same
 /// regression doesn't sneak back.
-@Suite struct MusicXMLUnpitchedTests {
+struct MusicXMLUnpitchedTests {
     @Test func parsesUnpitchedNote() throws {
         // Minimal partwise MusicXML: one part, one measure, one <unpitched>
         // note (display position A5 → MIDI 81). Mirrors the shape MuseScore
@@ -167,7 +167,7 @@ import Testing
             let description = e.localizedDescription
             #expect(
                 description.contains("MusicXML"),
-                "errorDescription should expose the reason, got: \(description)"
+                "errorDescription should expose the reason, got: \(description)",
             )
         }
     }

@@ -9,19 +9,19 @@ enum PitchDecoder {
     static func decode(_ pitchNode: XMLTreeNode) throws -> (midi: Int, tpc: Int) {
         guard let stepText = pitchNode.first("step")?.text, !stepText.isEmpty else {
             throw SheetMusicError.malformedScore(
-                reason: "MusicXML: <pitch> missing <step>"
+                reason: "MusicXML: <pitch> missing <step>",
             )
         }
         let octave = pitchNode.first("octave").flatMap { Int($0.text) } ?? 4
         let alter = pitchNode.first("alter").flatMap { Int(Double($0.text) ?? 0) } ?? 0
         guard let semitoneOffset = stepSemitones[stepText] else {
             throw SheetMusicError.malformedScore(
-                reason: "MusicXML: unknown <step>\(stepText)</step>"
+                reason: "MusicXML: unknown <step>\(stepText)</step>",
             )
         }
         guard let naturalTpc = stepTpc[stepText] else {
             throw SheetMusicError.malformedScore(
-                reason: "MusicXML: unknown <step>\(stepText)</step>"
+                reason: "MusicXML: unknown <step>\(stepText)</step>",
             )
         }
         let midi = (octave + 1) * 12 + semitoneOffset + alter
@@ -41,7 +41,7 @@ enum PitchDecoder {
         let octave = unpitchedNode.first("display-octave").flatMap { Int($0.text) } ?? 4
         guard let semitoneOffset = stepSemitones[stepText] else {
             throw SheetMusicError.malformedScore(
-                reason: "MusicXML: unknown <display-step>\(stepText)</display-step>"
+                reason: "MusicXML: unknown <display-step>\(stepText)</display-step>",
             )
         }
         let tpc = stepTpc[stepText] ?? 14

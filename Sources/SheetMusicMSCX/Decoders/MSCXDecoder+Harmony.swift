@@ -40,7 +40,7 @@ extension Harmony {
             offsetY: offset.1,
             color: color,
             properties: properties,
-            visible: visible
+            visible: visible,
         )
     }
 
@@ -66,7 +66,8 @@ extension Harmony {
     /// arithmetic on -1.
     private static func decodeTpc(_ raw: String?) -> Int? {
         guard let raw = raw?.trimmingCharacters(
-            in: .whitespacesAndNewlines),
+            in: .whitespacesAndNewlines,
+        ),
             let value = Int(raw)
         else { return nil }
         return value == -1 ? nil : value

@@ -31,7 +31,7 @@ enum PDFFixtureBuilder {
     static func build(
         size: CGSize = CGSize(width: 595, height: 842),
         glyphs: [GlyphPlacement] = [],
-        paths: [PathPlacement] = []
+        paths: [PathPlacement] = [],
     ) -> Data {
         let pdfData = NSMutableData()
         var mediaBox = CGRect(origin: .zero, size: size)
@@ -63,7 +63,7 @@ enum PDFFixtureBuilder {
             let font = CTFontCreateWithName(g.fontName as CFString, g.fontSize, nil)
             let attr: [NSAttributedString.Key: Any] = [.font: font]
             let line = CTLineCreateWithAttributedString(
-                NSAttributedString(string: String(g.unicodeScalar), attributes: attr)
+                NSAttributedString(string: String(g.unicodeScalar), attributes: attr),
             )
             ctx.textPosition = g.origin
             CTLineDraw(line, ctx)

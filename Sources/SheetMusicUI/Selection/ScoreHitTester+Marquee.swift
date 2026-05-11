@@ -30,7 +30,7 @@ extension ScoreHitTester {
             // Translate query rect into system-relative coords for
             // bbox tests (which are stored system-relative).
             let localRect = rect.offsetBy(
-                dx: -system.origin.x, dy: -system.origin.y
+                dx: -system.origin.x, dy: -system.origin.y,
             )
             let tol = system.maxBBoxHalfWidth
 
@@ -38,11 +38,11 @@ extension ScoreHitTester {
             // (centerX + tol) is still left of localRect.minX.
             let lo = lowerBoundCenterX(
                 columns: columns,
-                value: localRect.minX - tol
+                value: localRect.minX - tol,
             )
             let hi = upperBoundCenterX(
                 columns: columns,
-                value: localRect.maxX + tol
+                value: localRect.maxX + tol,
             )
             guard lo < hi else { continue }
 
@@ -59,7 +59,7 @@ extension ScoreHitTester {
     /// First index in `columns` whose `centerX >= value`. Returns
     /// `columns.count` if none exists.
     private func lowerBoundCenterX(
-        columns: [EventColumn], value: CGFloat
+        columns: [EventColumn], value: CGFloat,
     ) -> Int {
         var lo = 0
         var hi = columns.count
@@ -77,7 +77,7 @@ extension ScoreHitTester {
     /// First index in `columns` whose `centerX > value`. Returns
     /// `columns.count` if all are `<= value`.
     private func upperBoundCenterX(
-        columns: [EventColumn], value: CGFloat
+        columns: [EventColumn], value: CGFloat,
     ) -> Int {
         var lo = 0
         var hi = columns.count

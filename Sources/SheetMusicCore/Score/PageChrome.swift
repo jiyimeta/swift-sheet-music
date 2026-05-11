@@ -11,7 +11,7 @@ public struct PageChrome: Sendable, Equatable {
     public init(
         header: HeaderFooter,
         footer: HeaderFooter,
-        pageNumber: PageNumberStyle
+        pageNumber: PageNumberStyle,
     ) {
         self.header = header
         self.footer = footer
@@ -21,7 +21,7 @@ public struct PageChrome: Sendable, Equatable {
     public static let museScoreDefaults = PageChrome(
         header: .museScoreDefaultHeader,
         footer: .museScoreDefaultFooter,
-        pageNumber: .museScoreDefaultPageNumber
+        pageNumber: .museScoreDefaultPageNumber,
     )
 }
 
@@ -55,7 +55,7 @@ public struct HeaderFooter: Sendable, Equatable {
         odd: TextRow,
         fontFace: String,
         fontSize: Double,
-        fontStyle: FontStyleSet
+        fontStyle: FontStyleSet,
     ) {
         self.enabled = enabled
         self.showOnFirstPage = showOnFirstPage
@@ -78,7 +78,7 @@ public struct HeaderFooter: Sendable, Equatable {
         odd: TextRow(left: "", center: "", right: "$p"),
         fontFace: "Edwin",
         fontSize: 9,
-        fontStyle: []
+        fontStyle: [],
     )
 
     /// Default footer per `styledef.cpp:625-634`:
@@ -91,7 +91,7 @@ public struct HeaderFooter: Sendable, Equatable {
         odd: TextRow(left: "", center: "$C", right: ""),
         fontFace: "Edwin",
         fontSize: 9,
-        fontStyle: []
+        fontStyle: [],
     )
 }
 
@@ -126,7 +126,7 @@ public struct PageNumberStyle: Sendable, Equatable {
         showOnFirstPage: Bool,
         oddEvenDifferent: Bool,
         fontFace: String,
-        fontSize: Double
+        fontSize: Double,
     ) {
         self.enabled = enabled
         self.showOnFirstPage = showOnFirstPage
@@ -140,7 +140,7 @@ public struct PageNumberStyle: Sendable, Equatable {
         showOnFirstPage: false,
         oddEvenDifferent: true,
         fontFace: "Edwin",
-        fontSize: 11
+        fontSize: 11,
     )
 }
 
@@ -149,7 +149,9 @@ public struct PageNumberStyle: Sendable, Equatable {
 /// rather than mutually exclusive.
 public struct FontStyleSet: OptionSet, Sendable, Hashable {
     public let rawValue: Int
-    public init(rawValue: Int) { self.rawValue = rawValue }
+    public init(rawValue: Int) {
+        self.rawValue = rawValue
+    }
 
     public static let bold = FontStyleSet(rawValue: 1 << 0)
     public static let italic = FontStyleSet(rawValue: 1 << 1)

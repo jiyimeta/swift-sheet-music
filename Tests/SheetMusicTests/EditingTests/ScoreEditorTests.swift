@@ -5,16 +5,17 @@ import Testing
 @Suite("ScoreEditor")
 struct ScoreEditorTests {
     private static let restAt1 = RestID(
-        staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0, voiceIndex: 0, elementIndex: 1
+        staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0, voiceIndex: 0, elementIndex: 1,
     )
 
     @Test("apply mutates the score and enables undo")
     func applyEnablesUndo() throws {
         let editor = ScoreEditor(
-            score: EditingFixtures.fourQuarterRests())
+            score: EditingFixtures.fourQuarterRests(),
+        )
         #expect(editor.canUndo == false)
         try editor.apply(InputNote(
-            at: Self.restAt1, pitch: 60, tpc: 14
+            at: Self.restAt1, pitch: 60, tpc: 14,
         ))
         #expect(editor.canUndo == true)
         #expect(editor.canRedo == false)
@@ -30,7 +31,7 @@ struct ScoreEditorTests {
         let original = EditingFixtures.fourQuarterRests()
         let editor = ScoreEditor(score: original)
         try editor.apply(InputNote(
-            at: Self.restAt1, pitch: 60, tpc: 14
+            at: Self.restAt1, pitch: 60, tpc: 14,
         ))
         try editor.undo()
         #expect(editor.score == original)
@@ -41,9 +42,10 @@ struct ScoreEditorTests {
     @Test("redo replays the undone command")
     func redoReplays() throws {
         let editor = ScoreEditor(
-            score: EditingFixtures.fourQuarterRests())
+            score: EditingFixtures.fourQuarterRests(),
+        )
         try editor.apply(InputNote(
-            at: Self.restAt1, pitch: 60, tpc: 14
+            at: Self.restAt1, pitch: 60, tpc: 14,
         ))
         let postApply = editor.score
         try editor.undo()
@@ -56,14 +58,15 @@ struct ScoreEditorTests {
     @Test("a fresh apply clears the redo stack")
     func freshApplyClearsRedo() throws {
         let editor = ScoreEditor(
-            score: EditingFixtures.fourQuarterRests())
+            score: EditingFixtures.fourQuarterRests(),
+        )
         try editor.apply(InputNote(
-            at: Self.restAt1, pitch: 60, tpc: 14
+            at: Self.restAt1, pitch: 60, tpc: 14,
         ))
         try editor.undo()
         #expect(editor.canRedo == true)
         try editor.apply(InputNote(
-            at: Self.restAt1, pitch: 62, tpc: 16
+            at: Self.restAt1, pitch: 62, tpc: 16,
         ))
         #expect(editor.canRedo == false)
     }
@@ -71,7 +74,8 @@ struct ScoreEditorTests {
     @Test("undo with empty stack throws")
     func undoEmptyThrows() {
         let editor = ScoreEditor(
-            score: EditingFixtures.fourQuarterRests())
+            score: EditingFixtures.fourQuarterRests(),
+        )
         #expect(throws: SheetMusicError.self) {
             try editor.undo()
         }
@@ -80,7 +84,8 @@ struct ScoreEditorTests {
     @Test("redo with empty stack throws")
     func redoEmptyThrows() {
         let editor = ScoreEditor(
-            score: EditingFixtures.fourQuarterRests())
+            score: EditingFixtures.fourQuarterRests(),
+        )
         #expect(throws: SheetMusicError.self) {
             try editor.redo()
         }

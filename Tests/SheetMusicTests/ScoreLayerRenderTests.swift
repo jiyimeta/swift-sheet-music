@@ -25,19 +25,19 @@
 
             let opts = ScoreViewOptions(
                 staffSize: 28, systemGap: 40,
-                wrapToViewWidth: false
+                wrapToViewWidth: false,
             )
             let natW = LayoutEngine.naturalContentWidth(
-                score: score, options: opts
+                score: score, options: opts,
             )
             let doc = LayoutEngine.layout(
                 score: score, options: opts,
-                availableWidth: natW
+                availableWidth: natW,
             )
             let system = try #require(doc.systems.first)
 
             let tree = ScoreLayerBuilder.buildSystem(
-                system, metrics: doc.metrics
+                system, metrics: doc.metrics,
             )
             tree.layoutIfNeeded()
 
@@ -52,7 +52,7 @@
                 bitsPerComponent: 8,
                 bytesPerRow: bytesPerRow,
                 space: space,
-                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue,
             ))
 
             // White background.
@@ -82,7 +82,7 @@
             }
             #expect(
                 nonWhite > 100,
-                "render produced only \(nonWhite) non-white pixels"
+                "render produced only \(nonWhite) non-white pixels",
             )
 
             // Whole-note notehead of middle C sits below the treble staff
@@ -93,14 +93,15 @@
                 system.measures.first?.elements.first { e in
                     if case .chord = e { return true }
                     return false
-                })
+                },
+            )
             guard case let .chord(notes, _, _, _, _, _, _, _) = chord,
                   let n = notes.first
             else { throw InkAbsenceError.noChordElement }
 
             let sysBase = CGPoint(
                 x: system.measures.first?.origin.x ?? 0,
-                y: system.measures.first?.origin.y ?? 0
+                y: system.measures.first?.origin.y ?? 0,
             )
             let cx = Int(sysBase.x + n.origin.x)
             let cy = Int(sysBase.y + n.origin.y)

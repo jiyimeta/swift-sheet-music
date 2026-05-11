@@ -11,7 +11,7 @@ import Testing
 /// `<linkedMain/>`, `<Number>`, …) before the first member, and `<endTuplet/>`
 /// after the last. Membership is positional — chords/rests don't need a
 /// `<Tuplet>N</Tuplet>` back-reference.
-@Suite struct MSCXDecoderTupletTests {
+struct MSCXDecoderTupletTests {
     private static func totalChordRestTicks(_ voice: Voice, division: Int) -> Int {
         voice.elements.reduce(0) { acc, el in
             switch el {

@@ -1,4 +1,5 @@
 --allman false
+--redundanttype inferred
 --disable andOperator
 --disable unusedArguments
 --disable opaqueGenericParameters

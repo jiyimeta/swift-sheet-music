@@ -12,7 +12,7 @@ public struct Dynamic: Sendable, Equatable {
     public init(
         subtype: String,
         velocity: Int,
-        properties: TextProperties = TextProperties()
+        properties: TextProperties = TextProperties(),
     ) {
         self.subtype = subtype
         self.velocity = velocity

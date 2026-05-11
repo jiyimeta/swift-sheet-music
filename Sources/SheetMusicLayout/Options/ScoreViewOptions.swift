@@ -88,7 +88,7 @@ public struct ScoreViewOptions: Sendable, Equatable {
         breakPolicy: LayoutBreakPolicy = .honor,
         showBreakIndicators: Bool = true,
         graceNoteMag: CGFloat = 0.6,
-        multiMeasureRest: MultiMeasureRestPolicy = .disabled
+        multiMeasureRest: MultiMeasureRestPolicy = .disabled,
     ) {
         self.staffSize = staffSize
         self.systemGap = systemGap

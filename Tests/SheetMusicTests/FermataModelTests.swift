@@ -4,7 +4,7 @@ import Foundation
 @testable import SheetMusicXMLTools
 import Testing
 
-@Suite struct FermataModelTests {
+struct FermataModelTests {
     @Test func subtypeDefaultsMatchMuseScore() {
         let cases: [(String, Double)] = [
             ("fermataAbove", 1.5),
@@ -44,7 +44,8 @@ import Testing
         </voice>
         """
         let voice = try Voice.decode(
-            XMLTreeParser.parse(Data(xml.utf8)))
+            XMLTreeParser.parse(Data(xml.utf8)),
+        )
         guard case let .fermata(f) = voice.elements[0] else {
             Issue.record("element 0 is not a fermata"); return
         }
@@ -59,7 +60,8 @@ import Testing
         </voice>
         """
         let voice = try Voice.decode(
-            XMLTreeParser.parse(Data(xml.utf8)))
+            XMLTreeParser.parse(Data(xml.utf8)),
+        )
         guard case let .fermata(f) = voice.elements[0] else {
             Issue.record("element 0 is not a fermata"); return
         }

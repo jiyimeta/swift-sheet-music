@@ -10,7 +10,7 @@ struct MSCXEncoderTests {
     func minimalScoreRoundTrip() throws {
         let original = Score(
             division: 480,
-            metaTags: ["composer": "Bach", "workTitle": "Invention"]
+            metaTags: ["composer": "Bach", "workTitle": "Invention"],
         )
 
         let bytes = try MSCXEncoder.encode(original)
@@ -86,7 +86,7 @@ struct MSCXEncoderTests {
     func chordRoundTrip() throws {
         let chord = Chord(
             duration: .quarter,
-            notes: ChordNotes([Note(pitch: 60, tpc: 14)])
+            notes: ChordNotes([Note(pitch: 60, tpc: 14)]),
         )
         let xml = chord.encodeAsChord()
         let document = XMLTreeNode(name: "root", children: [xml])
@@ -109,7 +109,7 @@ struct MSCXEncoderTests {
     func staticElementsRoundTrip() throws {
         func roundTripParse<T>(_ node: XMLTreeNode, name: String, _ decode: (XMLTreeNode) throws -> T) throws -> T {
             let bytes = XMLTreeSerializer.serialize(
-                XMLTreeNode(name: "root", children: [node])
+                XMLTreeNode(name: "root", children: [node]),
             )
             let reparsed = try XMLTreeParser.parse(bytes)
             return try decode(#require(reparsed.first(name)))
@@ -215,7 +215,7 @@ struct MSCXEncoderTests {
                 InstrumentArticulation(),
                 InstrumentArticulation(name: "staccato", velocity: 100, gateTime: 50),
             ],
-            channels: [InstrumentChannel(program: 52)]
+            channels: [InstrumentChannel(program: 52)],
         )
         let xml = original.encode()
         let bytes = XMLTreeSerializer.serialize(XMLTreeNode(name: "root", children: [xml]))
@@ -235,13 +235,13 @@ struct MSCXEncoderTests {
                 Measure(voices: [Voice(elements: [
                     .chord(Chord(duration: .quarter, notes: ChordNotes([Note(pitch: 60, tpc: 14)]))),
                 ])]),
-            ]
+            ],
         )
         let part = Part(
             id: "1",
             trackName: "Voice",
             instrument: Instrument(id: "voice"),
-            staves: [staff]
+            staves: [staff],
         )
         let original = Score(division: 480, parts: [part])
 
@@ -256,7 +256,7 @@ struct MSCXEncoderTests {
     func dottedQuarterChordRoundTrip() throws {
         let chord = Chord(
             duration: .quarter.dotted(1),
-            notes: ChordNotes([Note(pitch: 60, tpc: 14)])
+            notes: ChordNotes([Note(pitch: 60, tpc: 14)]),
         )
         let xml = chord.encodeAsChord()
         let bytes = XMLTreeSerializer.serialize(XMLTreeNode(name: "root", children: [xml]))
@@ -298,7 +298,7 @@ struct MSCXEncoderTests {
                 Jump(jumpTo: "segno", playUntil: "end", continueAt: "", text: "D.S. al Fine"),
             ],
             lineBreak: true,
-            pageBreak: false
+            pageBreak: false,
         )
 
         let xml = try measure.encode()

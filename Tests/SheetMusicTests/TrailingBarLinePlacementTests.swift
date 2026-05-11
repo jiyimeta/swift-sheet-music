@@ -21,7 +21,7 @@
         func explicitDoubleBarLandsAtMeasureEnd() throws {
             guard #available(macOS 15.0, iOS 16.0, *) else { return }
             let chord = Chord(
-                duration: .whole, notes: [Note(pitch: 60, tpc: 14)]
+                duration: .whole, notes: [Note(pitch: 60, tpc: 14)],
             )
             let measure = Measure(voices: [Voice(elements: [
                 .chord(chord),
@@ -33,11 +33,11 @@
                 parts: [Part(
                     id: "1",
                     instrument: Instrument(id: "x"),
-                    staves: [staff]
-                )]
+                    staves: [staff],
+                )],
             )
             let doc = LayoutEngine.layout(
-                score: score, options: .init(), availableWidth: 800
+                score: score, options: .init(), availableWidth: 800,
             )
             let system = try #require(doc.systems.first)
             let trailing = try #require(system.trailingBarLine)

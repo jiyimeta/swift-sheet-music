@@ -49,7 +49,7 @@ extension Staff {
                 type: bracketType,
                 span: span,
                 column: column,
-                visible: visible
+                visible: visible,
             ))
         }
 
@@ -58,7 +58,7 @@ extension Staff {
             group: group,
             defaultClefType: defaultClef,
             brackets: brackets,
-            measures: []
+            measures: [],
         ))
     }
 }
@@ -74,7 +74,7 @@ extension MSCXTopLevelStaff {
     static func decode(_ node: XMLTreeNode) throws -> MSCXTopLevelStaff {
         guard let id = node.attributes["id"] else {
             throw SheetMusicError.malformedScore(
-                reason: "top-level <Staff> missing id attribute"
+                reason: "top-level <Staff> missing id attribute",
             )
         }
         let measures = try node.all("Measure")
@@ -99,7 +99,7 @@ struct MSCXStaffPairing {
 
 func assembleParts(
     decoded: [MSCXStaffPairing],
-    topLevel: [MSCXTopLevelStaff]
+    topLevel: [MSCXTopLevelStaff],
 ) throws -> [Part] {
     var byID: [String: [Measure]] = [:]
     var orderedIDs: [String] = []
@@ -117,9 +117,10 @@ func assembleParts(
             let measures: [Measure]
             if let id = declared.mscxID {
                 guard let m = byID[id] else {
-                    throw SheetMusicError.malformedScore(reason:
+                    throw SheetMusicError.malformedScore(
+                        reason:
                         "Part '\(dp.partID)' declares <Staff id=\"\(id)\">"
-                            + " but no top-level <Staff> with that id was found"
+                            + " but no top-level <Staff> with that id was found",
                     )
                 }
                 measures = m
@@ -133,9 +134,10 @@ func assembleParts(
                 guard let head = unconsumedQueue.first,
                       let m = byID[head]
                 else {
-                    throw SheetMusicError.malformedScore(reason:
+                    throw SheetMusicError.malformedScore(
+                        reason:
                         "Part '\(dp.partID)' has an id-less <Staff> declaration"
-                            + " but no remaining top-level <Staff> to consume"
+                            + " but no remaining top-level <Staff> to consume",
                     )
                 }
                 measures = m
@@ -150,14 +152,15 @@ func assembleParts(
             id: dp.partID,
             trackName: dp.trackName,
             instrument: dp.instrument,
-            staves: assembled
+            staves: assembled,
         ))
     }
 
     let leftover = orderedIDs.filter { !consumed.contains($0) }
     if !leftover.isEmpty {
-        throw SheetMusicError.malformedScore(reason:
-            "top-level <Staff id=\"\(leftover.joined(separator: ","))\"> not claimed by any Part"
+        throw SheetMusicError.malformedScore(
+            reason:
+            "top-level <Staff id=\"\(leftover.joined(separator: ","))\"> not claimed by any Part",
         )
     }
     return parts

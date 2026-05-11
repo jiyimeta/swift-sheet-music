@@ -9,24 +9,24 @@ enum MarkerRenderer {
         kind: Marker.Kind,
         text: String,
         origin: CGPoint,
-        metrics: StaffMetrics
+        metrics: StaffMetrics,
     ) {
         switch kind {
         case .segno, .varsegno:
             context.drawGlyph(
                 SMuFLGlyph.segno, at: origin,
-                size: metrics.glyphFontSize
+                size: metrics.glyphFontSize,
             )
         case .coda, .varcoda, .codetta, .toCodaSym:
             context.drawGlyph(
                 SMuFLGlyph.coda, at: origin,
-                size: metrics.glyphFontSize
+                size: metrics.glyphFontSize,
             )
         case .fine, .toCoda, .daCapo, .dalSegno, .other:
             let label = text.isEmpty ? fallbackLabel(for: kind) : text
             context.drawExpressionText(
                 label, at: origin,
-                size: metrics.sp * 2.5, italic: false
+                size: metrics.sp * 2.5, italic: false,
             )
         }
     }

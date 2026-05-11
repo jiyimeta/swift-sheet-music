@@ -9,7 +9,7 @@ enum RestRenderer {
         duration: NoteDuration,
         hasLegerLine: Bool = false,
         origin: CGPoint,
-        metrics: StaffMetrics
+        metrics: StaffMetrics,
     ) {
         let glyph: Character
         switch duration {
@@ -29,7 +29,7 @@ enum RestRenderer {
         default: glyph = SMuFLGlyph.restQuarter
         }
         context.drawGlyph(
-            glyph, at: origin, size: metrics.glyphFontSize
+            glyph, at: origin, size: metrics.glyphFontSize,
         )
     }
 }

@@ -31,7 +31,7 @@ public struct EventColumn: Sendable, Equatable {
         voiceIndex: Int,
         centerX: CGFloat,
         centerY: CGFloat,
-        bbox: CGRect
+        bbox: CGRect,
     ) {
         self.id = id
         self.voiceIndex = voiceIndex

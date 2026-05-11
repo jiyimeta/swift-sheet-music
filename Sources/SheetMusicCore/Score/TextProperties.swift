@@ -24,7 +24,7 @@ public struct TextProperties: Sendable, Equatable {
         size: Double? = nil,
         style: FontStyleSet? = nil,
         frameType: TextFrameType? = nil,
-        framePadding: Double? = nil
+        framePadding: Double? = nil,
     ) {
         self.face = face
         self.size = size

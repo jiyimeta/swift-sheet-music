@@ -26,7 +26,7 @@ extension RehearsalMark {
             offsetY: offset.1,
             color: color,
             frame: frame,
-            properties: props
+            properties: props,
         )
     }
 
@@ -44,7 +44,7 @@ extension RehearsalMark {
     }
 
     private static func decodeColor(
-        _ node: XMLTreeNode
+        _ node: XMLTreeNode,
     ) -> ScoreColor? {
         let attrs = node.attributes
         guard let r = attrs["r"].flatMap(Int.init),
@@ -56,7 +56,7 @@ extension RehearsalMark {
     }
 
     private static func decodeOffset(
-        _ node: XMLTreeNode
+        _ node: XMLTreeNode,
     ) -> (Double, Double) {
         let attrs = node.attributes
         let x = attrs["x"].flatMap(Double.init) ?? 0

@@ -7,7 +7,7 @@ enum PartLabelRenderer {
         context: inout GraphicsContext,
         text: String,
         origin: CGPoint,
-        metrics: StaffMetrics
+        metrics: StaffMetrics,
     ) {
         guard !text.isEmpty else { return }
         context.drawExpressionText(
@@ -15,7 +15,7 @@ enum PartLabelRenderer {
             at: origin,
             size: metrics.sp * 2.5,
             italic: false,
-            anchor: .trailing
+            anchor: .trailing,
         )
     }
 }

@@ -5,7 +5,7 @@ import Foundation
 @testable import SheetMusicMSCX
 import Testing
 
-@Suite struct MidiReaderRoundTripTests {
+struct MidiReaderRoundTripTests {
     @Test func readsMidi01Reference() throws {
         let url = try #require(Bundle.module.url(forResource: "midi01-ref", withExtension: "mid"))
         let file = try MidiReader.read(Data(contentsOf: url))

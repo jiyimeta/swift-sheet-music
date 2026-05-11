@@ -19,7 +19,7 @@
             let staff = Staff(measures: [m])
             let score = Score(division: 480, parts: [Part(id: "1", instrument: Instrument(id: "x"), staves: [staff])])
             let doc = LayoutEngine.layout(
-                score: score, options: .init(), availableWidth: 800
+                score: score, options: .init(), availableWidth: 800,
             )
             let ties = LayoutEngine.resolveTies(for: doc, score: score)
             #expect(ties.count == 1)
@@ -37,7 +37,7 @@
             let staff = Staff(measures: [m])
             let score = Score(division: 480, parts: [Part(id: "1", instrument: Instrument(id: "x"), staves: [staff])])
             let doc = LayoutEngine.layout(
-                score: score, options: .init(), availableWidth: 800
+                score: score, options: .init(), availableWidth: 800,
             )
             let ties = LayoutEngine.resolveTies(for: doc, score: score)
             #expect(ties.isEmpty)
@@ -63,7 +63,7 @@
             let score = Score(division: 480, parts: [Part(id: "1", instrument: Instrument(id: "x"), staves: [staff])])
             let opts = ScoreViewOptions(wrapToViewWidth: true)
             let doc = LayoutEngine.layout(
-                score: score, options: opts, availableWidth: 200
+                score: score, options: opts, availableWidth: 200,
             )
             // Sanity: the wrap actually produced two systems.
             #expect(doc.systems.count == 2)
@@ -73,10 +73,10 @@
             // to absolute Y values land in distinct system bands).
             if let pair = ties.first {
                 let fromIdx = LayoutEngine.systemIndex(
-                    for: pair.fromOrigin.y, in: doc.systems
+                    for: pair.fromOrigin.y, in: doc.systems,
                 )
                 let toIdx = LayoutEngine.systemIndex(
-                    for: pair.toOrigin.y, in: doc.systems
+                    for: pair.toOrigin.y, in: doc.systems,
                 )
                 #expect(fromIdx != toIdx)
             }
@@ -97,14 +97,14 @@
             let score = Score(division: 480, parts: [Part(id: "1", instrument: Instrument(id: "x"), staves: [staff])])
             let opts = ScoreViewOptions(wrapToViewWidth: true)
             let doc = LayoutEngine.layout(
-                score: score, options: opts, availableWidth: 200
+                score: score, options: opts, availableWidth: 200,
             )
             #expect(doc.systems.count == 2)
-            // System 0 carries a half-arc from the chord out to its right
-            // edge; system 1 carries the matching half-arc from a point
-            // just before the chord up to the chord. Anchoring the END
-            // segment at x=0 would cross the synthesised clef + key sig,
-            // which is wrong — we anchor it near `firstContentX` instead.
+            /// System 0 carries a half-arc from the chord out to its right
+            /// edge; system 1 carries the matching half-arc from a point
+            /// just before the chord up to the chord. Anchoring the END
+            /// segment at x=0 would cross the synthesised clef + key sig,
+            /// which is wrong — we anchor it near `firstContentX` instead.
             func tieArcs(in system: LayoutSystem) -> [(from: CGPoint, to: CGPoint)] {
                 system.spanners.compactMap { el in
                     if case let .tieArc(f, t, _) = el {

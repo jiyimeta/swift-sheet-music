@@ -7,7 +7,7 @@ extension LayoutEngine {
     /// Shift an element's origin(s) by a vertical offset, for stacking
     /// staves that were placed in staff-0-local coordinates.
     static func translate(
-        element: LayoutElement, dy: CGFloat
+        element: LayoutElement, dy: CGFloat,
     ) -> LayoutElement {
         func shift(_ p: CGPoint) -> CGPoint {
             CGPoint(x: p.x, y: p.y + dy)
@@ -19,7 +19,7 @@ extension LayoutEngine {
             return .keySignature(sharps: s, flats: f, origin: shift(p))
         case let .timeSignature(n, d, p):
             return .timeSignature(
-                numerator: n, denominator: d, origin: shift(p)
+                numerator: n, denominator: d, origin: shift(p),
             )
         case let .barLine(s, p):
             return .barLine(subtype: s, origin: shift(p))
@@ -27,7 +27,7 @@ extension LayoutEngine {
             return .rest(
                 duration: d, origin: shift(p),
                 voiceIndex: vi, restID: rid,
-                hasLegerLine: hll
+                hasLegerLine: hll,
             )
         case let .chord(
             notes,
@@ -37,7 +37,7 @@ extension LayoutEngine {
             arp,
             art,
             beamed,
-            vi
+            vi,
         ):
             let shiftedNotes = notes.map {
                 LayoutChordNote(
@@ -49,7 +49,7 @@ extension LayoutEngine {
                     tieBack: $0.tieBack,
                     hasGlissando: $0.hasGlissando,
                     headType: $0.headType,
-                    mirror: $0.mirror
+                    mirror: $0.mirror,
                 )
             }
             return .chord(
@@ -60,7 +60,7 @@ extension LayoutEngine {
                 hasArpeggio: arp,
                 arpeggioRawType: art,
                 isBeamed: beamed,
-                voiceIndex: vi
+                voiceIndex: vi,
             )
         case let .textMark(k, t, p):
             return .textMark(kind: k, text: t, origin: shift(p))
@@ -70,7 +70,7 @@ extension LayoutEngine {
             return .articulation(
                 kind: kind,
                 origin: shift(p),
-                isAbove: isAbove
+                isAbove: isAbove,
             )
         case let .measureRepeat(c, p):
             return .measureRepeat(count: c, origin: shift(p))
@@ -83,20 +83,20 @@ extension LayoutEngine {
                 fromOrigin: shift(from),
                 toOrigin: shift(to),
                 direction: direction,
-                level: level
+                level: level,
             )
         case let .glissandoLine(from, to, wavy, text):
             return .glissandoLine(
                 fromOrigin: shift(from),
                 toOrigin: shift(to),
                 wavy: wavy,
-                text: text
+                text: text,
             )
         case let .arpeggioWiggle(top, bot, subtype):
             return .arpeggioWiggle(
                 top: shift(top),
                 bottom: shift(bot),
-                subtype: subtype
+                subtype: subtype,
             )
         case let .tupletLabel(
             from,
@@ -104,7 +104,7 @@ extension LayoutEngine {
             text,
             bracket,
             above,
-            tid
+            tid,
         ):
             return .tupletLabel(
                 fromOrigin: shift(from),
@@ -112,17 +112,17 @@ extension LayoutEngine {
                 text: text,
                 hasBracket: bracket,
                 isAbove: above,
-                tupletID: tid
+                tupletID: tid,
             )
         case let .lyricsMelisma(from, to):
             return .lyricsMelisma(
                 fromOrigin: shift(from),
-                toOrigin: shift(to)
+                toOrigin: shift(to),
             )
         case let .lyricHyphen(from, to):
             return .lyricHyphen(
                 fromOrigin: shift(from),
-                toOrigin: shift(to)
+                toOrigin: shift(to),
             )
         case let .staffText(text, p, color, isSystem):
             // Emitted by `placeMeasureElements` in staff-local
@@ -134,14 +134,14 @@ extension LayoutEngine {
                 text: text,
                 origin: shift(p),
                 color: color,
-                isSystemText: isSystem
+                isSystemText: isSystem,
             )
         case let .rehearsalMark(text, p, frame, color):
             // Same staff-local origin convention as `.staffText`;
             // shift onto the system's actual top-staff y.
             return .rehearsalMark(
                 text: text, origin: shift(p),
-                frame: frame, color: color
+                frame: frame, color: color,
             )
         case let .harmony(lh):
             // Apply per-staff dy to the anchor point. The runs are
@@ -152,10 +152,10 @@ extension LayoutEngine {
                 anchorX: lh.anchorX,
                 y: lh.y + Double(dy),
                 runs: lh.runs,
-                width: lh.width
+                width: lh.width,
             ))
         case let .graceChord(
-            notes, dur, stem, so, relX, slash, mag, vi
+            notes, dur, stem, so, relX, slash, mag, vi,
         ):
             let shiftedNotes = notes.map {
                 LayoutChordNote(
@@ -167,7 +167,7 @@ extension LayoutEngine {
                     tieBack: $0.tieBack,
                     hasGlissando: $0.hasGlissando,
                     headType: $0.headType,
-                    mirror: $0.mirror
+                    mirror: $0.mirror,
                 )
             }
             return .graceChord(
@@ -178,7 +178,7 @@ extension LayoutEngine {
                 relativeX: relX,
                 hasSlash: slash,
                 mag: mag,
-                voiceIndex: vi
+                voiceIndex: vi,
             )
         case .note, .marker, .jump, .measureNumber, .staffName,
              .spannerSegment, .tieArc:

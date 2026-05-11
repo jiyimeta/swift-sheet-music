@@ -1,7 +1,7 @@
 @testable import SheetMusicCore
 import Testing
 
-@Suite struct BracketItemTests {
+struct BracketItemTests {
     @Test func defaultColumnIsZero() {
         let item = BracketItem(type: .brace, span: 2)
         #expect(item.column == 0)

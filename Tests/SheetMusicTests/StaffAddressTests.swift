@@ -1,7 +1,7 @@
 @testable import SheetMusicCore
 import Testing
 
-@Suite struct StaffAddressTests {
+struct StaffAddressTests {
     @Test func ordering() {
         let a = StaffAddress(partIndex: 0, staffIndexInPart: 0)
         let b = StaffAddress(partIndex: 0, staffIndexInPart: 1)

@@ -5,7 +5,7 @@ import Foundation
 @testable import SheetMusicMSCX
 import Testing
 
-@Suite struct SheetMusicErrorTests {
+struct SheetMusicErrorTests {
     @Test func unsupportedFeatureCarriesNameAndLocation() {
         let error = SheetMusicError.unsupportedFeature(name: "Tuplet", location: "Voice")
         guard case let .unsupportedFeature(name, location) = error else {

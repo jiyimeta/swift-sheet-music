@@ -5,14 +5,14 @@ import Testing
 struct CreateTupletTests {
     private static let chordVE = VoiceElementID(
         staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
-        voiceIndex: 0, elementIndex: 1
+        voiceIndex: 0, elementIndex: 1,
     )
 
     @Test("triplet on a quarter chord produces 3 eighth-triplet members")
     func tripletOnQuarter() throws {
         var score = EditingFixtures.chordAtIndex1()
         let cmd = CreateTuplet(
-            at: Self.chordVE, actualNotes: 3, normalNotes: 2
+            at: Self.chordVE, actualNotes: 3, normalNotes: 2,
         )
         _ = try cmd.apply(to: &score)
         let voice = score.parts[0].staves[0].measures[0].voices[0]
@@ -45,10 +45,10 @@ struct CreateTupletTests {
         var score = EditingFixtures.fourQuarterRests()
         let restID = VoiceElementID(
             staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
-            voiceIndex: 0, elementIndex: 2
+            voiceIndex: 0, elementIndex: 2,
         )
         let cmd = CreateTuplet(
-            at: restID, actualNotes: 3, normalNotes: 2
+            at: restID, actualNotes: 3, normalNotes: 2,
         )
         _ = try cmd.apply(to: &score)
         let voice = score.parts[0].staves[0].measures[0].voices[0]
@@ -63,7 +63,7 @@ struct CreateTupletTests {
     func quintupletOnQuarter() throws {
         var score = EditingFixtures.chordAtIndex1()
         let cmd = CreateTuplet(
-            at: Self.chordVE, actualNotes: 5, normalNotes: 4
+            at: Self.chordVE, actualNotes: 5, normalNotes: 4,
         )
         _ = try cmd.apply(to: &score)
         let voice = score.parts[0].staves[0].measures[0].voices[0]
@@ -82,7 +82,7 @@ struct CreateTupletTests {
         var score = EditingFixtures.chordAtIndex1()
         let snapshot = score
         let cmd = CreateTuplet(
-            at: Self.chordVE, actualNotes: 3, normalNotes: 2
+            at: Self.chordVE, actualNotes: 3, normalNotes: 2,
         )
         let inverse = try cmd.apply(to: &score)
         _ = try inverse.apply(to: &score)
@@ -94,17 +94,17 @@ struct CreateTupletTests {
         var score = EditingFixtures.chordAtIndex1()
         // First create a triplet.
         let outer = try? CreateTuplet(
-            at: Self.chordVE, actualNotes: 3, normalNotes: 2
+            at: Self.chordVE, actualNotes: 3, normalNotes: 2,
         )
         .apply(to: &score)
         _ = outer
         // Targeting a member of the new triplet should refuse.
         let memberVE = VoiceElementID(
             staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
-            voiceIndex: 0, elementIndex: 2
+            voiceIndex: 0, elementIndex: 2,
         )
         let cmd = CreateTuplet(
-            at: memberVE, actualNotes: 3, normalNotes: 2
+            at: memberVE, actualNotes: 3, normalNotes: 2,
         )
         #expect(throws: SheetMusicError.self) {
             _ = try cmd.apply(to: &score)
@@ -116,7 +116,7 @@ struct CreateTupletTests {
         var score = EditingFixtures.chordAtIndex1()
         // Quarter = 480 ticks; 480 / 7 isn't an integer.
         let cmd = CreateTuplet(
-            at: Self.chordVE, actualNotes: 7, normalNotes: 4
+            at: Self.chordVE, actualNotes: 7, normalNotes: 4,
         )
         #expect(throws: SheetMusicError.self) {
             _ = try cmd.apply(to: &score)
@@ -132,7 +132,7 @@ struct CreateTupletTests {
         // first tuplet's indices should not move.
         var score = EditingFixtures.chordAtIndex1()
         _ = try CreateTuplet(
-            at: Self.chordVE, actualNotes: 3, normalNotes: 2
+            at: Self.chordVE, actualNotes: 3, normalNotes: 2,
         )
         .apply(to: &score)
         // After the first triplet voice is:
@@ -140,10 +140,10 @@ struct CreateTupletTests {
         // Target the rest at idx 4.
         let secondTarget = VoiceElementID(
             staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
-            voiceIndex: 0, elementIndex: 4
+            voiceIndex: 0, elementIndex: 4,
         )
         _ = try CreateTuplet(
-            at: secondTarget, actualNotes: 3, normalNotes: 2
+            at: secondTarget, actualNotes: 3, normalNotes: 2,
         )
         .apply(to: &score)
         let voice = score.parts[0].staves[0].measures[0].voices[0]

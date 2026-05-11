@@ -4,7 +4,7 @@ import Testing
 @Suite("Score.activeKey")
 struct ScoreActiveKeyTests {
     private static func staffWith(
-        keys: [(measureIdx: Int, key: Int)]
+        keys: [(measureIdx: Int, key: Int)],
     ) -> Staff {
         // Build 4 measures. Each gets a key-sig prefix at the listed
         // indexes; the rest of the measure is a single whole rest so
@@ -14,7 +14,8 @@ struct ScoreActiveKeyTests {
             var elements: [VoiceElement] = []
             if let entry = keys.first(where: { $0.measureIdx == i }) {
                 elements.append(.keySignature(
-                    KeySignature(concertKey: entry.key)))
+                    KeySignature(concertKey: entry.key),
+                ))
             }
             elements.append(.rest(duration: .whole))
             measures.append(Measure(voices: [Voice(elements: elements)]))

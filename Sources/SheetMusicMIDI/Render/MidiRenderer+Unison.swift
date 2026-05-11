@@ -22,14 +22,16 @@ extension MidiRenderer {
         var intervals: [Interval] = []
         var passthrough: [TimedMidiEvent] = []
         var pendingOns: [String: [Int]] = [:] // key "ch|pitch" -> [interval indices]
-        func key(_ ch: Int, _ p: Int) -> String { "\(ch)|\(p)" }
+        func key(_ ch: Int, _ p: Int) -> String {
+            "\(ch)|\(p)"
+        }
 
         for ev in events {
             switch ev.event {
             case let .noteOn(ch, pitch, vel) where vel > 0:
                 let interval = Interval(
                     onTick: ev.tick, offTick: ev.tick,
-                    channel: ch, pitch: pitch, velocity: vel
+                    channel: ch, pitch: pitch, velocity: vel,
                 )
                 intervals.append(interval)
                 pendingOns[key(ch, pitch), default: []].append(intervals.count - 1)

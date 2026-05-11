@@ -23,7 +23,7 @@ public struct GraceChord: Sendable, Equatable {
     public init(
         graceType: GraceType,
         duration: NoteDuration,
-        notes: ChordNotes
+        notes: ChordNotes,
     ) {
         self.graceType = graceType
         self.duration = duration

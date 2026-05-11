@@ -41,7 +41,7 @@ public struct Glissando: Sendable, Equatable {
         visualType: VisualType = .straight,
         easeIn: Int = 0,
         easeOut: Int = 0,
-        text: String? = nil
+        text: String? = nil,
     ) {
         self.style = style
         self.visualType = visualType

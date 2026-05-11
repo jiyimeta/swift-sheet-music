@@ -4,7 +4,7 @@ import Foundation
 @testable import SheetMusicPDF
 import Testing
 
-@Suite @MainActor struct PDFImporterVoicingTests {
+@MainActor struct PDFImporterVoicingTests {
     // MARK: - Fixtures
 
     private func element(
@@ -12,7 +12,7 @@ import Testing
         y: CGFloat,
         duration: NoteDuration,
         stem: StemDirection? = .up,
-        midi: Int = 60
+        midi: Int = 60,
     ) -> RhythmElement {
         let note = Note(pitch: midi, tpc: 14)
         return RhythmElement(
@@ -20,19 +20,19 @@ import Testing
             x: x,
             y: y,
             stemDirection: stem,
-            beamGroup: nil
+            beamGroup: nil,
         )
     }
 
     private func rest(
-        x: CGFloat, y: CGFloat, duration: NoteDuration
+        x: CGFloat, y: CGFloat, duration: NoteDuration,
     ) -> RhythmElement {
         RhythmElement(
             chord: Chord(duration: duration, notes: []),
             x: x,
             y: y,
             stemDirection: nil,
-            beamGroup: nil
+            beamGroup: nil,
         )
     }
 
@@ -56,7 +56,7 @@ import Testing
             elements: elements,
             measureXRange: xRange,
             timeSignature: four4,
-            staffMidY: staffMidY
+            staffMidY: staffMidY,
         )
         #expect(voices.count == 1)
         #expect(voices[0].elements.count == 4)
@@ -71,7 +71,7 @@ import Testing
             elements: [half, quarter],
             measureXRange: xRange,
             timeSignature: four4,
-            staffMidY: staffMidY
+            staffMidY: staffMidY,
         )
         #expect(voices.count == 2)
         #expect(voices[0].elements == [.chord(half.chord)])
@@ -89,7 +89,7 @@ import Testing
             elements: [up, down],
             measureXRange: xRange,
             timeSignature: four4,
-            staffMidY: staffMidY
+            staffMidY: staffMidY,
         )
         #expect(voices.count == 2)
         #expect(voices[0].elements == [.chord(up.chord)])
@@ -105,7 +105,7 @@ import Testing
             elements: [half, r],
             measureXRange: xRange,
             timeSignature: four4,
-            staffMidY: staffMidY
+            staffMidY: staffMidY,
         )
         #expect(voices.count == 2)
         // voice 1 has the half (stem-up) AND the high rest
@@ -121,7 +121,7 @@ import Testing
             elements: [half, r],
             measureXRange: xRange,
             timeSignature: four4,
-            staffMidY: staffMidY
+            staffMidY: staffMidY,
         )
         #expect(voices.count == 2)
         #expect(voices[0].elements == [.chord(half.chord)])
@@ -136,7 +136,7 @@ import Testing
             elements: [high, low],
             measureXRange: xRange,
             timeSignature: four4,
-            staffMidY: staffMidY
+            staffMidY: staffMidY,
         )
         #expect(voices.count == 2)
         #expect(voices[0].elements == [.chord(high.chord)])
@@ -157,7 +157,7 @@ import Testing
             timeSignature: four4,
             staffMidY: staffMidY,
             diagnostics: { captured.append($0) },
-            location: "page 1, measure 1"
+            location: "page 1, measure 1",
         )
         #expect(voices.count == 2)
         #expect(captured.contains { $0.severity == .warning })

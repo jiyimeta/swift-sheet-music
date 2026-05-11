@@ -70,7 +70,7 @@ public struct TextStyleDefaults: Sendable, Equatable {
         style: FontStyleSet,
         frameType: TextFrameType = .none,
         framePadding: Double = 0.2,
-        spatiumDependent: Bool = true
+        spatiumDependent: Bool = true,
     ) {
         self.face = face
         self.size = size
@@ -90,72 +90,72 @@ extension TextStyleType {
         case .title:
             return TextStyleDefaults(
                 face: "Edwin", size: 22, style: [],
-                spatiumDependent: false
+                spatiumDependent: false,
             )
         case .subtitle:
             return TextStyleDefaults(
                 face: "Edwin", size: 14, style: [],
-                spatiumDependent: false
+                spatiumDependent: false,
             )
         case .composer, .lyricist:
             return TextStyleDefaults(
                 face: "Edwin", size: 10, style: [],
-                spatiumDependent: false
+                spatiumDependent: false,
             )
         // Lyrics — Sid::lyricsOdd/EvenFontFace etc.
         case .lyricsOdd, .lyricsEven:
             return TextStyleDefaults(
-                face: "Edwin", size: 10, style: []
+                face: "Edwin", size: 10, style: [],
             )
         // Sid::dynamicsFontFace = "Edwin", size 10, italic.
         case .dynamics:
             return TextStyleDefaults(
-                face: "Edwin", size: 10, style: [.italic]
+                face: "Edwin", size: 10, style: [.italic],
             )
         // Sid::tempoFontFace = "Edwin", size 12, bold.
         case .tempo:
             return TextStyleDefaults(
-                face: "Edwin", size: 12, style: [.bold]
+                face: "Edwin", size: 12, style: [.bold],
             )
         // Sid::rehearsalMarkFontFace = "Edwin", size 14, bold,
         // SQUARE frame, framePadding 0.5.
         case .rehearsalMark:
             return TextStyleDefaults(
                 face: "Edwin", size: 14, style: [.bold],
-                frameType: .rectangle, framePadding: 0.5
+                frameType: .rectangle, framePadding: 0.5,
             )
         case .staffText, .systemText:
             return TextStyleDefaults(
-                face: "Edwin", size: 10, style: []
+                face: "Edwin", size: 10, style: [],
             )
         case .pedal:
             return TextStyleDefaults(
-                face: "Edwin", size: 10, style: []
+                face: "Edwin", size: 10, style: [],
             )
         // Standard chord symbol style ("A").
         case .chordSymbolA:
             return TextStyleDefaults(
-                face: "Edwin", size: 10, style: []
+                face: "Edwin", size: 10, style: [],
             )
         // Jazz chord symbol style ("B") — italic.
         case .chordSymbolB:
             return TextStyleDefaults(
-                face: "Edwin", size: 10, style: [.italic]
+                face: "Edwin", size: 10, style: [.italic],
             )
         // Roman-numeral analysis uses Campania (the dedicated RN font).
         case .chordSymbolRomanNumeral:
             return TextStyleDefaults(
-                face: "Campania", size: 12, style: []
+                face: "Campania", size: 12, style: [],
             )
         case .header, .footer:
             return TextStyleDefaults(
                 face: "Edwin", size: 9, style: [],
-                spatiumDependent: false
+                spatiumDependent: false,
             )
         case .pageNumber:
             return TextStyleDefaults(
                 face: "Edwin", size: 11, style: [],
-                spatiumDependent: false
+                spatiumDependent: false,
             )
         }
     }

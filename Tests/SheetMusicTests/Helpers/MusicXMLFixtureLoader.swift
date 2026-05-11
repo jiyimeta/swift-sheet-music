@@ -12,7 +12,7 @@ enum MusicXMLFixtureLoader {
     static func xml(_ name: String) throws -> Data {
         let url = try #require(
             Bundle.module.url(forResource: name, withExtension: "xml"),
-            "fixture xml not bundled: \(name).xml"
+            "fixture xml not bundled: \(name).xml",
         )
         return try Data(contentsOf: url)
     }
@@ -22,7 +22,7 @@ enum MusicXMLFixtureLoader {
     static func referenceMscx(_ name: String) throws -> Data {
         let url = try #require(
             Bundle.module.url(forResource: "\(name)_ref", withExtension: "mscx"),
-            "fixture ref mscx not bundled: \(name)_ref.mscx"
+            "fixture ref mscx not bundled: \(name)_ref.mscx",
         )
         return try Data(contentsOf: url)
     }

@@ -12,11 +12,11 @@ extension Score {
             break
         case "score-timewise":
             throw SheetMusicError.malformedScore(
-                reason: "MusicXML: unsupported <score-timewise> variant"
+                reason: "MusicXML: unsupported <score-timewise> variant",
             )
         default:
             throw SheetMusicError.malformedScore(
-                reason: "MusicXML: <score-partwise> root element not found"
+                reason: "MusicXML: <score-partwise> root element not found",
             )
         }
 
@@ -24,7 +24,7 @@ extension Score {
 
         guard let partList = root.first("part-list") else {
             throw SheetMusicError.malformedScore(
-                reason: "MusicXML: <part-list> is required"
+                reason: "MusicXML: <part-list> is required",
             )
         }
         let parts = try decodeParts(root: root, partList: partList)
@@ -34,7 +34,7 @@ extension Score {
         // own `<divisions>` is part-local and would vary per fixture.
         return Score(
             division: 480, parts: parts, metaTags: metaTags,
-            source: .musicXML
+            source: .musicXML,
         )
     }
 
@@ -100,7 +100,7 @@ extension Score {
     /// staff (so a piano part produces a `Part` with 2 `Staff`s).
     private static func decodeParts(
         root: XMLTreeNode,
-        partList: XMLTreeNode
+        partList: XMLTreeNode,
     ) throws -> [Part] {
         let scoreParts = partList.all("score-part")
         var parts: [Part] = []
@@ -110,7 +110,7 @@ extension Score {
                 ?? (index < scoreParts.count ? scoreParts[index] : nil)
             else {
                 throw SheetMusicError.malformedScore(
-                    reason: "MusicXML: <part id='\(id)'> has no matching <score-part>"
+                    reason: "MusicXML: <part id='\(id)'> has no matching <score-part>",
                 )
             }
             // Build the percussion table from the score-part header BEFORE
@@ -119,25 +119,25 @@ extension Score {
             let prelimDrumTable = MusicXMLDrumTable.build(scorePart: scorePart)
             let walker = try MusicXMLMeasureWalker.decode(
                 partNode: partNode,
-                drumTable: prelimDrumTable
+                drumTable: prelimDrumTable,
             )
             let (partTemplate, _) = try Part.decodeMusicXML(
                 scorePart: scorePart,
                 partId: id,
-                staffCount: walker.staffCount
+                staffCount: walker.staffCount,
             )
             // Replace the placeholder empty-measure staves with real content.
             let populatedStaves: [Staff] = walker.measuresByStaff.map { staffMeasures in
                 Staff(
                     staffType: "stdNormal", group: "pitched",
-                    defaultClefType: nil, measures: staffMeasures
+                    defaultClefType: nil, measures: staffMeasures,
                 )
             }
             let part = Part(
                 id: partTemplate.id,
                 trackName: partTemplate.trackName,
                 instrument: partTemplate.instrument,
-                staves: populatedStaves
+                staves: populatedStaves,
             )
             parts.append(part)
         }

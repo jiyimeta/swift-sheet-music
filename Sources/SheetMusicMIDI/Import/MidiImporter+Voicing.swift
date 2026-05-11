@@ -9,9 +9,9 @@ private struct VoiceNote {
     var offTick: Int
     var pitch: Int
     /// True when the note is a continuation from a prior bar (carryIn).
-    var startsTied: Bool = false
+    var startsTied = false
     /// True when the note continues into the next bar (carryOut).
-    var endsTied: Bool = false
+    var endsTied = false
 }
 
 // MARK: - voice()
@@ -32,7 +32,7 @@ extension MidiImporter {
         division: Int,
         isDrumTrack: Bool = false,
         concertKey: Int = 0,
-        maxDots: Int = 1
+        maxDots: Int = 1,
     ) -> Voice {
         var notes = collectNotes(from: measure)
         mergeCarryIns(into: &notes, measure: measure)
@@ -74,7 +74,7 @@ extension MidiImporter {
                 maxDots: maxDots,
                 persistentAlters: &persistentAlters,
                 elements: &elements,
-                elementTicks: &elementTicks
+                elementTicks: &elementTicks,
             )
             prev = tick
         }
@@ -90,7 +90,7 @@ extension MidiImporter {
                     normalNotes: tuplet.normalNotes,
                     actualNotes: tuplet.actualNotes,
                     startIndex: startIndex,
-                    endIndex: endIndex
+                    endIndex: endIndex,
                 )
             }
 
@@ -133,23 +133,23 @@ extension MidiImporter {
     /// After snapping, drops any zero-length notes (where on == off).
     private static func snapVoiceNotesToGrid(
         _ notes: [VoiceNote],
-        quantized: QuantizedMeasure
+        quantized: QuantizedMeasure,
     ) -> [VoiceNote] {
         notes.map { n in
             VoiceNote(
                 onTick: snapToQuantizedGrid(
                     n.onTick,
                     assignments: quantized.assignments,
-                    fallbackGrid: quantized.binaryGrid
+                    fallbackGrid: quantized.binaryGrid,
                 ),
                 offTick: snapToQuantizedGrid(
                     n.offTick,
                     assignments: quantized.assignments,
-                    fallbackGrid: quantized.binaryGrid
+                    fallbackGrid: quantized.binaryGrid,
                 ),
                 pitch: n.pitch,
                 startsTied: n.startsTied,
-                endsTied: n.endsTied
+                endsTied: n.endsTied,
             )
         }
         .filter { $0.onTick < $0.offTick }
@@ -162,7 +162,7 @@ extension MidiImporter {
                 onTick: measure.startTick,
                 offTick: min(carried.noteOffTick, measure.endTick),
                 pitch: carried.pitch,
-                startsTied: true
+                startsTied: true,
             ))
         }
     }
@@ -180,7 +180,7 @@ extension MidiImporter {
                     onTick: onTick,
                     offTick: measure.endTick,
                     pitch: carried.pitch,
-                    endsTied: true
+                    endsTied: true,
                 ))
             }
         }
@@ -203,18 +203,18 @@ extension MidiImporter {
         maxDots: Int,
         persistentAlters: inout [Int: Int],
         elements: inout [VoiceElement],
-        elementTicks: inout [Int]
+        elementTicks: inout [Int],
     ) {
         var coreNotes = buildChordNotes(
             at: prev, until: tick, notes: notes,
-            isDrumTrack: isDrumTrack, concertKey: concertKey
+            isDrumTrack: isDrumTrack, concertKey: concertKey,
         )
         if !isDrumTrack {
             for i in coreNotes.indices {
                 applyAccidental(
                     &coreNotes[i],
                     concertKey: concertKey,
-                    persistentAlters: &persistentAlters
+                    persistentAlters: &persistentAlters,
                 )
             }
         }
@@ -228,14 +228,14 @@ extension MidiImporter {
                 normalNotes: tuplet.normalNotes,
                 division: division,
                 offsetInTuplet: prev - tupletStart,
-                maxDots: coreNotes.isEmpty ? 0 : maxDots
+                maxDots: coreNotes.isEmpty ? 0 : maxDots,
             )
         } else {
             durations = decomposeIntoStandardDurations(
                 ticks: tick - prev,
                 division: division,
                 offsetInMeasure: prev - measure.startTick,
-                maxDots: coreNotes.isEmpty ? 0 : maxDots
+                maxDots: coreNotes.isEmpty ? 0 : maxDots,
             )
         }
         appendChordParts(
@@ -244,7 +244,7 @@ extension MidiImporter {
             startTick: prev,
             division: division,
             elements: &elements,
-            elementTicks: &elementTicks
+            elementTicks: &elementTicks,
         )
     }
 
@@ -273,7 +273,7 @@ extension MidiImporter {
         normalNotes: Int,
         division: Int,
         offsetInTuplet: Int,
-        maxDots: Int
+        maxDots: Int,
     ) -> [NoteDuration] {
         let notatedTicks = gap * actualNotes / normalNotes
         let notatedOffset = offsetInTuplet * actualNotes / normalNotes
@@ -281,13 +281,13 @@ extension MidiImporter {
             ticks: notatedTicks,
             division: division,
             offsetInMeasure: notatedOffset,
-            maxDots: maxDots
+            maxDots: maxDots,
         )
         return parts.map { notated in
             let f = notated.asFraction
             return .fraction(Fraction(
                 numerator: f.numerator * normalNotes,
-                denominator: f.denominator * actualNotes
+                denominator: f.denominator * actualNotes,
             ))
         }
     }
@@ -304,7 +304,7 @@ extension MidiImporter {
         startTick: Int,
         division: Int,
         elements: inout [VoiceElement],
-        elementTicks: inout [Int]
+        elementTicks: inout [Int],
     ) {
         var partTick = startTick
         for (idx, dur) in durations.enumerated() {
@@ -333,7 +333,7 @@ extension MidiImporter {
         until tick: Int,
         notes: [VoiceNote],
         isDrumTrack: Bool,
-        concertKey: Int
+        concertKey: Int,
     ) -> [SheetMusicCore.Note] {
         let activeNotes = notes.filter { $0.onTick <= prev && $0.offTick > prev }
         let willContinue = notes.filter { $0.onTick <= prev && $0.offTick > tick }.map(\.pitch)
@@ -347,7 +347,7 @@ extension MidiImporter {
                 comesFromPrior: comesFromPrior,
                 willContinue: willContinue,
                 isDrum: isDrumTrack,
-                concertKey: concertKey
+                concertKey: concertKey,
             )
         }
     }
@@ -362,11 +362,11 @@ extension MidiImporter {
         comesFromPrior: [Int],
         willContinue: [Int],
         isDrum: Bool = false,
-        concertKey: Int = 0
+        concertKey: Int = 0,
     ) -> SheetMusicCore.Note {
         var n = SheetMusicCore.Note(
             pitch: pitch,
-            tpc: tpc(forMidiPitch: pitch, concertKey: concertKey)
+            tpc: tpc(forMidiPitch: pitch, concertKey: concertKey),
         )
         if comesFromPrior.contains(pitch) { n.tieBack = 1 }
         if activeNotes.contains(where: { $0.pitch == pitch && $0.startsTied && $0.onTick == prev }) {

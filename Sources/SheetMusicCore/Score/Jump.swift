@@ -16,7 +16,7 @@ public struct Jump: Sendable, Equatable {
         jumpTo: String,
         playUntil: String,
         continueAt: String = "",
-        text: String = ""
+        text: String = "",
     ) {
         self.jumpTo = jumpTo
         self.playUntil = playUntil

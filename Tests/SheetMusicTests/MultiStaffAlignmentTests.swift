@@ -38,7 +38,7 @@
                 .clef(Clef(concertClefType: "F")),
                 .chord(Chord(
                     duration: NoteDuration.eighth.dotted(1),
-                    notes: [c3]
+                    notes: [c3],
                 )),
                 .chord(Chord(duration: .sixteenth, notes: [e3])),
             ])])
@@ -47,16 +47,16 @@
                 id: "P1",
                 trackName: "Piano",
                 instrument: Instrument(
-                    id: "pno", longName: "Piano", shortName: "Pno."
+                    id: "pno", longName: "Piano", shortName: "Pno.",
                 ),
-                staves: [Staff(measures: [rh]), Staff(measures: [lh])]
+                staves: [Staff(measures: [rh]), Staff(measures: [lh])],
             )
             let score = Score(division: 480, parts: [part])
 
             let doc = LayoutEngine.layout(
                 score: score,
                 options: .init(wrapToViewWidth: false),
-                availableWidth: 900
+                availableWidth: 900,
             )
 
             let system = try #require(doc.systems.first)
@@ -72,7 +72,7 @@
             }
             try #require(
                 chords.count == 5,
-                "expected 5 chord emissions across both staves"
+                "expected 5 chord emissions across both staves",
             )
 
             // Split by y: staff 1 sits above staff 2, so the 3 lowest-y
@@ -87,11 +87,11 @@
             let tolerance: CGFloat = 0.5
             #expect(
                 abs(staff1Xs[0] - staff2Xs[0]) < tolerance,
-                "tick 0 x mismatch: staff1=\(staff1Xs[0]) staff2=\(staff2Xs[0])"
+                "tick 0 x mismatch: staff1=\(staff1Xs[0]) staff2=\(staff2Xs[0])",
             )
             #expect(
                 abs(staff1Xs[2] - staff2Xs[1]) < tolerance,
-                "tick 360 x mismatch: staff1=\(staff1Xs[2]) staff2=\(staff2Xs[1])"
+                "tick 360 x mismatch: staff1=\(staff1Xs[2]) staff2=\(staff2Xs[1])",
             )
         }
 
@@ -127,15 +127,15 @@
                 parts: [Part(
                     id: "P1", trackName: nil,
                     instrument: Instrument(
-                        id: "pno", longName: "Treble", shortName: "Tr."
+                        id: "pno", longName: "Treble", shortName: "Tr.",
                     ),
-                    staves: [staff]
-                )]
+                    staves: [staff],
+                )],
             )
             let doc = LayoutEngine.layout(
                 score: score,
                 options: .init(wrapToViewWidth: false),
-                availableWidth: 900
+                availableWidth: 900,
             )
             let measure = try #require(doc.systems.first?.measures.first)
 
@@ -176,11 +176,11 @@
             // is the property the flag-shift used to break).
             #expect(
                 abs(v0Xs[1] - v1RestXs[0]) < tol,
-                "tick 480: v0 chord x=\(v0Xs[1]), v1 rest x=\(v1RestXs[0])"
+                "tick 480: v0 chord x=\(v0Xs[1]), v1 rest x=\(v1RestXs[0])",
             )
             #expect(
                 abs(v0Xs[3] - v1RestXs[1]) < tol,
-                "tick 1440: v0 chord x=\(v0Xs[3]), v1 rest x=\(v1RestXs[1])"
+                "tick 1440: v0 chord x=\(v0Xs[3]), v1 rest x=\(v1RestXs[1])",
             )
         }
 
@@ -207,15 +207,15 @@
                 parts: [Part(
                     id: "P1", trackName: nil,
                     instrument: Instrument(
-                        id: "pno", longName: "Treble", shortName: "Tr."
+                        id: "pno", longName: "Treble", shortName: "Tr.",
                     ),
-                    staves: [staff]
-                )]
+                    staves: [staff],
+                )],
             )
             let doc = LayoutEngine.layout(
                 score: score,
                 options: .init(wrapToViewWidth: false),
-                availableWidth: 900
+                availableWidth: 900,
             )
             let measure = try #require(doc.systems.first?.measures.first)
 
@@ -237,7 +237,7 @@
             try #require(v0Xs.count == 4)
             let wr = try #require(
                 wholeRestX,
-                "whole rest not found in emission list"
+                "whole rest not found in emission list",
             )
 
             // The whole rest must NOT share x with voice 0's first chord
@@ -249,7 +249,7 @@
             // below.
             #expect(
                 abs(wr - v0Xs[0]) > 3,
-                "whole rest x=\(wr) should NOT match v0 tick-0 x=\(v0Xs[0])"
+                "whole rest x=\(wr) should NOT match v0 tick-0 x=\(v0Xs[0])",
             )
             // And it should land somewhere inside the measure's chord
             // span — i.e. between the first and last v0 chord. The
@@ -292,25 +292,25 @@
                 .rest(duration: .eighth),
                 .chord(Chord(
                     duration: NoteDuration.eighth.dotted(1),
-                    notes: [c4]
+                    notes: [c4],
                 )),
                 .rest(duration: .sixteenth),
             ]
             let part = Part(
                 id: "P1", trackName: "Duo",
                 instrument: Instrument(
-                    id: "x", longName: "Duo", shortName: "D."
+                    id: "x", longName: "Duo", shortName: "D.",
                 ),
                 staves: [
                     Staff(measures: [Measure(voices: [Voice(elements: s1)])]),
                     Staff(measures: [Measure(voices: [Voice(elements: s2)])]),
-                ]
+                ],
             )
             let score = Score(division: 480, parts: [part])
             let doc = LayoutEngine.layout(
                 score: score,
                 options: .init(wrapToViewWidth: false),
-                availableWidth: 1200
+                availableWidth: 1200,
             )
             let measure = try #require(doc.systems.first?.measures.first)
 
@@ -342,7 +342,7 @@
                         + "\(v[i - 1].x) → \(v[i].x)"
                     #expect(
                         v[i].x > v[i - 1].x - 0.01,
-                        Comment(rawValue: msg)
+                        Comment(rawValue: msg),
                     )
                 }
             }
@@ -376,15 +376,15 @@
                 parts: [Part(
                     id: "P", trackName: nil,
                     instrument: Instrument(
-                        id: "x", longName: "T", shortName: "T"
+                        id: "x", longName: "T", shortName: "T",
                     ),
-                    staves: [staff]
-                )]
+                    staves: [staff],
+                )],
             )
             let doc = LayoutEngine.layout(
                 score: score,
                 options: .init(wrapToViewWidth: false),
-                availableWidth: 900
+                availableWidth: 900,
             )
             let measure = try #require(doc.systems.first?.measures.first)
 
@@ -408,16 +408,16 @@
             let g3 = quarters[3] - quarters[2]
             #expect(
                 abs(g1 - g2) < 0.5,
-                "gap 0-1 = \(g1), gap 1-2 = \(g2)"
+                "gap 0-1 = \(g1), gap 1-2 = \(g2)",
             )
             #expect(
                 abs(g2 - g3) < 0.5,
-                "gap 1-2 = \(g2), gap 2-3 = \(g3)"
+                "gap 1-2 = \(g2), gap 2-3 = \(g3)",
             )
         }
 
         @Test("tickColumns fraction matches the higher-pressure voice at each tick")
-        func tickColumnsMaxFractionRule() throws {
+        func tickColumnsMaxFractionRule() {
             guard #available(macOS 15.0, *) else { return }
 
             // Single staff, single voice, four 8ths — a simpler shape
@@ -434,7 +434,7 @@
             ])
             let metrics = StaffMetrics(staffSize: 28)
             let schedule = LayoutEngine.HeaderSchedule(
-                clefX: 0, keySigX: 0, timeSigX: 0, contentStartX: 40
+                clefX: 0, keySigX: 0, timeSigX: 0, contentStartX: 40,
             )
             let cols = LayoutEngine.tickColumns(
                 staves: [staff],
@@ -442,7 +442,7 @@
                 metrics: metrics,
                 headerSchedule: schedule,
                 width: 400,
-                division: 480
+                division: 480,
             )
 
             // Each 8th is 240 ticks at division 480, so ticks are

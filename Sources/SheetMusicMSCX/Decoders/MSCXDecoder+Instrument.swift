@@ -45,7 +45,7 @@ extension Instrument {
             articulations: articulations,
             channels: channels,
             useDrumset: useDrumset,
-            drumLineMap: drumLineMap
+            drumLineMap: drumLineMap,
         )
     }
 }

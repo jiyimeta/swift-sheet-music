@@ -17,7 +17,7 @@ extension PDFImporter {
         primary: PathSegment,
         in measureXRange: ClosedRange<CGFloat>,
         paths: [PathSegment],
-        glyphs: [ClassifiedGlyph]
+        glyphs: [ClassifiedGlyph],
     ) -> BarLine {
         _ = measureXRange // reserved: future "barline belongs to which side" disambiguation
         let primaryX = primary.rect.midX
@@ -41,21 +41,21 @@ extension PDFImporter {
     private static func repeatDotsCount(
         near primaryX: CGFloat,
         side: RepeatDotsSide,
-        glyphs: [ClassifiedGlyph]
+        glyphs: [ClassifiedGlyph],
     ) -> Int {
-        glyphs.filter { glyph in
+        glyphs.count(where: { glyph in
             guard glyph.semantic == .repeatBarlineDots else { return false }
             let dx = glyph.raw.origin.x - primaryX
             return switch side {
             case .left: dx < 0 && dx >= -10
             case .right: dx > 0 && dx <= 10
             }
-        }.count
+        })
     }
 
     private static func classifyByVerticals(
         primary: PathSegment,
-        neighbours: [PathSegment]
+        neighbours: [PathSegment],
     ) -> BarLine {
         guard let other = neighbours.first else {
             // Single vertical: a thick line on its own is a final-style
@@ -82,7 +82,7 @@ extension PDFImporter {
         paths: [PathSegment],
         texts: [TextGlyph],
         systemTopY: CGFloat,
-        pageIndex: Int
+        pageIndex: Int,
     ) -> [(measureIndex: Int, spanner: Spanner)] {
         let candidates = paths.filter { p in
             p.pageIndex == pageIndex
@@ -94,7 +94,7 @@ extension PDFImporter {
         var out: [(measureIndex: Int, spanner: Spanner)] = []
         for rect in candidates {
             guard let spanner = voltaSpanner(
-                rect: rect, measures: measures, texts: texts
+                rect: rect, measures: measures, texts: texts,
             ) else { continue }
             out.append(spanner)
         }
@@ -104,7 +104,7 @@ extension PDFImporter {
     private static func voltaSpanner(
         rect: PathSegment,
         measures: [(index: Int, xRange: ClosedRange<CGFloat>)],
-        texts: [TextGlyph]
+        texts: [TextGlyph],
     ) -> (measureIndex: Int, spanner: Spanner)? {
         let covered = measures.filter { m in
             // A measure is "covered" when its xRange centre lies
@@ -119,7 +119,7 @@ extension PDFImporter {
             kind: .volta,
             rawType: "volta",
             nextMeasuresOffset: max(0, last.index - first.index),
-            voltaEndings: endings
+            voltaEndings: endings,
         )
         return (first.index, span)
     }
@@ -150,7 +150,7 @@ extension PDFImporter {
         paths: [PathSegment],
         texts: [TextGlyph],
         systemTopY: CGFloat,
-        pageIndex: Int
+        pageIndex: Int,
     ) -> [(measureIndex: Int, mark: RehearsalMark)] {
         let boxes = paths.filter { p in
             p.pageIndex == pageIndex
@@ -171,7 +171,7 @@ extension PDFImporter {
     private static func rehearsalMark(
         box: PathSegment,
         measures: [(index: Int, xRange: ClosedRange<CGFloat>)],
-        texts: [TextGlyph]
+        texts: [TextGlyph],
     ) -> (measureIndex: Int, mark: RehearsalMark)? {
         let inside = texts.filter { box.rect.intersects($0.bbox) }
         guard inside.count == 1 else { return nil }
@@ -205,10 +205,10 @@ extension PDFImporter {
         texts: [TextGlyph],
         measures: [(index: Int, xRange: ClosedRange<CGFloat>)],
         systemTopY: CGFloat,
-        pageIndex: Int
+        pageIndex: Int,
     ) -> (
         markers: [(measureIndex: Int, marker: Marker)],
-        jumps: [(measureIndex: Int, jump: Jump)]
+        jumps: [(measureIndex: Int, jump: Jump)],
     ) {
         var markers: [(Int, Marker)] = []
         var jumps: [(Int, Jump)] = []
@@ -250,7 +250,7 @@ extension PDFImporter {
         case "D.C. al Coda":
             return Jump(
                 jumpTo: "start", playUntil: "coda",
-                continueAt: "codab", text: "D.C. al Coda"
+                continueAt: "codab", text: "D.C. al Coda",
             )
         case "D.S.":
             return Jump(jumpTo: "segno", playUntil: "end", text: "D.S.")
@@ -259,7 +259,7 @@ extension PDFImporter {
         case "D.S. al Coda":
             return Jump(
                 jumpTo: "segno", playUntil: "coda",
-                continueAt: "codab", text: "D.S. al Coda"
+                continueAt: "codab", text: "D.S. al Coda",
             )
         default: return nil
         }
@@ -267,7 +267,7 @@ extension PDFImporter {
 
     private static func nearestMeasure(
         forRightEdge glyph: TextGlyph,
-        measures: [(index: Int, xRange: ClosedRange<CGFloat>)]
+        measures: [(index: Int, xRange: ClosedRange<CGFloat>)],
     ) -> Int? {
         let x = glyph.bbox.maxX
         // Pick the measure whose right edge is nearest to the text's
@@ -279,7 +279,7 @@ extension PDFImporter {
 
     private static func nearestMeasure(
         forLeftEdge glyph: TextGlyph,
-        measures: [(index: Int, xRange: ClosedRange<CGFloat>)]
+        measures: [(index: Int, xRange: ClosedRange<CGFloat>)],
     ) -> Int? {
         let x = glyph.bbox.minX
         return measures.min(by: {

@@ -6,7 +6,7 @@ import Foundation
 @testable import SheetMusicMSCX
 import Testing
 
-@Suite struct MidiImportRoundTripTests {
+struct MidiImportRoundTripTests {
     // MARK: - Helpers
 
     /// Walk all `VoiceElement` chord pitches across every staff/measure/voice.
@@ -36,7 +36,7 @@ import Testing
         let part = Part(
             id: "P1",
             instrument: Instrument(id: "piano", longName: "Piano"),
-            staves: [staff]
+            staves: [staff],
         )
         let originalScore = Score(division: 480, parts: [part])
 
@@ -66,7 +66,7 @@ import Testing
         let part = Part(
             id: "P1",
             instrument: Instrument(id: "piano", longName: "Piano"),
-            staves: [staff]
+            staves: [staff],
         )
         let score = Score(division: 480, parts: [part])
 
@@ -107,7 +107,7 @@ import Testing
             TimedMidiEvent(tick: 0, event: .meta(.tempo(microsecondsPerQuarter: 500_000))),
             TimedMidiEvent(tick: 0, event: .meta(.keySignature(sharpsFlats: -2, isMinor: false))),
             TimedMidiEvent(tick: 0, event: .meta(.timeSignature(
-                numerator: 4, denominator: 4, clocksPerClick: 24, thirtySecondsPerQuarter: 8
+                numerator: 4, denominator: 4, clocksPerClick: 24, thirtySecondsPerQuarter: 8,
             ))),
             TimedMidiEvent(tick: 1920, event: .endOfTrack),
         ])
@@ -161,11 +161,11 @@ import Testing
             let velocity = beat.isDownbeat ? 100 : 80
             events.append(TimedMidiEvent(
                 tick: beat.tick,
-                event: .noteOn(channel: 9, pitch: pitch, velocity: velocity)
+                event: .noteOn(channel: 9, pitch: pitch, velocity: velocity),
             ))
             events.append(TimedMidiEvent(
                 tick: beat.tick + halfBeat,
-                event: .noteOff(channel: 9, pitch: pitch, velocity: 0)
+                event: .noteOff(channel: 9, pitch: pitch, velocity: 0),
             ))
         }
         let lastTick = events.map(\.tick).max() ?? 0

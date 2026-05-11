@@ -11,7 +11,7 @@
             guard #available(macOS 15.0, *) else { return }
             let note = Note(pitch: 60, tpc: 14)
             let slur = Spanner(
-                kind: .slur, rawType: "Slur", nextMeasuresOffset: 1
+                kind: .slur, rawType: "Slur", nextMeasuresOffset: 1,
             )
             let m1 = Measure(voices: [Voice(elements: [
                 .spanner(slur),
@@ -40,7 +40,7 @@
             let v1 = Spanner(
                 kind: .volta, rawType: "Volta",
                 nextMeasuresOffset: 0,
-                voltaEndings: [1]
+                voltaEndings: [1],
             )
             let m = Measure(voices: [Voice(elements: [
                 .spanner(v1),
@@ -65,17 +65,17 @@
             var elements: [VoiceElement] = []
             for _ in 0 ..< 5 {
                 elements.append(.chord(Chord(
-                    duration: .eighth, notes: [note]
+                    duration: .eighth, notes: [note],
                 )))
             }
             let ottava = Spanner(
                 kind: .ottava, rawType: "Ottava",
                 nextMeasuresOffset: 0,
-                nextFractionsOffset: Fraction(numerator: 3, denominator: 8)
+                nextFractionsOffset: Fraction(numerator: 3, denominator: 8),
             )
             elements.append(.spanner(ottava))
             elements.append(.chord(Chord(
-                duration: .quarter.dotted(1), notes: [note]
+                duration: .quarter.dotted(1), notes: [note],
             )))
             let m = Measure(voices: [Voice(elements: elements)])
             let staff = Staff(measures: [m])
@@ -83,7 +83,7 @@
                 Part(
                     id: "1",
                     instrument: Instrument(id: "x"),
-                    staves: [staff]
+                    staves: [staff],
                 ),
             ])
 
@@ -97,7 +97,7 @@
             #expect(anchor?.endMeasure == 0)
 
             let doc = LayoutEngine.layout(
-                score: score, options: .init(), availableWidth: 800
+                score: score, options: .init(), availableWidth: 800,
             )
             let system = doc.systems.first
             let measure = system?.measures.first
@@ -139,7 +139,7 @@
             let ottava = Spanner(
                 kind: .ottava, rawType: "Ottava",
                 nextMeasuresOffset: 0,
-                nextFractionsOffset: Fraction(numerator: 1, denominator: 4)
+                nextFractionsOffset: Fraction(numerator: 1, denominator: 4),
             )
             let mBot = Measure(voices: [Voice(elements: [
                 .spanner(ottava),
@@ -149,7 +149,7 @@
                 Part(
                     id: id,
                     instrument: Instrument(id: id),
-                    staves: [Staff(measures: [measure])]
+                    staves: [Staff(measures: [measure])],
                 )
             }
             return Score(division: 480, parts: [
@@ -169,7 +169,7 @@
             #expect(anchor?.startStaff == 2)
 
             let doc = LayoutEngine.layout(
-                score: score, options: .init(), availableWidth: 800
+                score: score, options: .init(), availableWidth: 800,
             )
             guard let system = doc.systems.first else {
                 Issue.record("expected at least one system")

@@ -17,7 +17,7 @@ extension Tempo {
             offsetX: offset.0,
             offsetY: offset.1,
             properties: TextProperties.decode(node),
-            visible: visible
+            visible: visible,
         )
     }
 }

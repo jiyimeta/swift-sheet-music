@@ -16,7 +16,7 @@ extension Score {
     /// to a valid item in this score.
     public func items(
         inRangeFrom anchor: ScoreItemID,
-        to target: ScoreItemID
+        to target: ScoreItemID,
     ) -> [ScoreItemID] {
         guard let anchorStart = tickPosition(for: anchor),
               let targetStart = tickPosition(for: target),
@@ -60,7 +60,7 @@ extension Score {
                                         measureIndex: mIdx,
                                         voiceIndex: vIdx,
                                         elementIndex: eIdx,
-                                        noteIndexInChord: nIdx
+                                        noteIndexInChord: nIdx,
                                     )))
                                 }
                             }
@@ -72,7 +72,7 @@ extension Score {
                                     staff: addr,
                                     measureIndex: mIdx,
                                     voiceIndex: vIdx,
-                                    elementIndex: eIdx
+                                    elementIndex: eIdx,
                                 )))
                             }
                             tick += rest.duration.ticks(division: division)
@@ -93,7 +93,7 @@ extension Score {
     /// selection rectangle across every shorter note that sits
     /// inside its tick span.
     private func endTickPosition(
-        for id: ScoreItemID
+        for id: ScoreItemID,
     ) -> TickPosition? {
         guard let start = tickPosition(for: id),
               let s = self[id.staff]
@@ -118,7 +118,7 @@ extension Score {
             dur = 0
         }
         return TickPosition(
-            measure: start.measure, tick: start.tick + dur
+            measure: start.measure, tick: start.tick + dur,
         )
     }
 

@@ -29,7 +29,7 @@ struct BundledSoundfontResolver: SoundfontResolver {
         return bundle.url(
             forResource: name,
             withExtension: "sf2",
-            subdirectory: "Sounds"
+            subdirectory: "Sounds",
         )
     }
 
@@ -37,7 +37,7 @@ struct BundledSoundfontResolver: SoundfontResolver {
         bundle.url(
             forResource: "MuseScore_General",
             withExtension: "sf2",
-            subdirectory: "Sounds"
+            subdirectory: "Sounds",
         )
     }
 }

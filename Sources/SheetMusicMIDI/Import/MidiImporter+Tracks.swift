@@ -31,7 +31,7 @@ extension MidiImporter {
                     trackName: trackName,
                     isDrums: false,
                     programChange: firstProgram,
-                    events: pitchedEvents + nonChannelEvents(track)
+                    events: pitchedEvents + nonChannelEvents(track),
                 ))
             }
 
@@ -44,7 +44,7 @@ extension MidiImporter {
                     trackName: drumName,
                     isDrums: true,
                     programChange: nil,
-                    events: drumEvents
+                    events: drumEvents,
                 ))
             }
         }

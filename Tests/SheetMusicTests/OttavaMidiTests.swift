@@ -4,7 +4,7 @@ import Foundation
 @testable import SheetMusicMIDI
 import Testing
 
-@Suite struct OttavaMidiTests {
+struct OttavaMidiTests {
     /// Build a single-staff score where measure 1 has two quarter
     /// chords and the second is wrapped in an 8va spanner. The first
     /// chord must keep its original pitch; the second must play one
@@ -16,11 +16,11 @@ import Testing
             kind: .ottava, rawType: "Ottava",
             nextMeasuresOffset: 0,
             nextFractionsOffset: Fraction(numerator: 1, denominator: 4),
-            ottava: .init(subtype: .eightVA)
+            ottava: .init(subtype: .eightVA),
         )
         let end = Spanner(
             kind: .ottava, rawType: "Ottava",
-            visible: false
+            visible: false,
         )
         let m = Measure(voices: [Voice(elements: [
             .chord(Chord(duration: .quarter, notes: [cMid])),
@@ -32,7 +32,7 @@ import Testing
             Part(
                 id: "1",
                 instrument: Instrument(id: "x"),
-                staves: [Staff(measures: [m])]
+                staves: [Staff(measures: [m])],
             ),
         ])
 
@@ -61,11 +61,11 @@ import Testing
             kind: .ottava, rawType: "Ottava",
             nextMeasuresOffset: 0,
             nextFractionsOffset: Fraction(numerator: 1, denominator: 4),
-            ottava: .init(subtype: .eightVB)
+            ottava: .init(subtype: .eightVB),
         )
         let end = Spanner(
             kind: .ottava, rawType: "Ottava",
-            visible: false
+            visible: false,
         )
         let m = Measure(voices: [Voice(elements: [
             .chord(Chord(duration: .quarter, notes: [cMid])),
@@ -77,7 +77,7 @@ import Testing
             Part(
                 id: "1",
                 instrument: Instrument(id: "x"),
-                staves: [Staff(measures: [m])]
+                staves: [Staff(measures: [m])],
             ),
         ])
 
@@ -101,11 +101,11 @@ import Testing
             kind: .ottava, rawType: "Ottava",
             nextMeasuresOffset: 0,
             nextFractionsOffset: Fraction(numerator: 1, denominator: 4),
-            ottava: .init(subtype: .eightVA)
+            ottava: .init(subtype: .eightVA),
         )
         let end = Spanner(
             kind: .ottava, rawType: "Ottava",
-            visible: false
+            visible: false,
         )
         let m = Measure(voices: [Voice(elements: [
             .spanner(begin),
@@ -117,7 +117,7 @@ import Testing
             Part(
                 id: "1",
                 instrument: Instrument(id: "x"),
-                staves: [Staff(measures: [m])]
+                staves: [Staff(measures: [m])],
             ),
         ])
         let midi = try MidiRenderer.render(score: score)

@@ -36,7 +36,7 @@ extension Chord {
             lyricsMap[verse] = Lyric(
                 text: text, syllabic: syllabic, ticks: ticks,
                 verse: verse,
-                properties: TextProperties.decode(lyricsNode)
+                properties: TextProperties.decode(lyricsNode),
             )
         }
         let maxVerse = lyricsMap.keys.max() ?? -1
@@ -54,7 +54,7 @@ extension Chord {
         return Chord(
             duration: duration, notes: ChordNotes(notes),
             arpeggio: arpeggio, lyrics: lyrics,
-            articulations: articulations
+            articulations: articulations,
         )
     }
 

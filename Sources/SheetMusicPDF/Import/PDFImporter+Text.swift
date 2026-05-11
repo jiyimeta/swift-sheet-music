@@ -24,7 +24,7 @@ extension PDFImporter {
         texts: [TextGlyph],
         pageSize: CGSize,
         documentAttributes: [String: Any]?,
-        options: PDFImportOptions
+        options: PDFImportOptions,
     ) -> ScoreFrame? {
         let topBand = texts.filter {
             $0.pageIndex == 0
@@ -35,7 +35,7 @@ extension PDFImporter {
         if !topBand.isEmpty {
             collectTitleBlock(
                 from: topBand, pageWidth: pageSize.width,
-                into: &frameTexts
+                into: &frameTexts,
             )
         }
         if options.useMetadataAsFallback, let attrs = documentAttributes {
@@ -49,7 +49,7 @@ extension PDFImporter {
     private static func collectTitleBlock(
         from topBand: [TextGlyph],
         pageWidth: CGFloat,
-        into frameTexts: inout [FrameText]
+        into frameTexts: inout [FrameText],
     ) {
         let sorted = topBand.sorted { $0.fontSize > $1.fontSize }
         if let title = sorted.first {
@@ -60,7 +60,7 @@ extension PDFImporter {
             $0.origin.x > pageWidth * 0.6 && $0.text != titleText
         }) {
             frameTexts.append(
-                FrameText(style: .composer, text: composer.text)
+                FrameText(style: .composer, text: composer.text),
             )
         }
         let used = Set(frameTexts.map(\.text))
@@ -68,14 +68,14 @@ extension PDFImporter {
             !used.contains($0.text)
         }) {
             frameTexts.append(
-                FrameText(style: .subtitle, text: subtitle.text)
+                FrameText(style: .subtitle, text: subtitle.text),
             )
         }
     }
 
     private static func mergeMetadataFallback(
         into frameTexts: inout [FrameText],
-        attrs: [String: Any]
+        attrs: [String: Any],
     ) {
         let hasTitle = frameTexts.contains { $0.style == .title }
         let hasComposer = frameTexts.contains { $0.style == .composer }

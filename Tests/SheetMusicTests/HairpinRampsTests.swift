@@ -2,20 +2,20 @@
 @testable import SheetMusicMIDI
 import Testing
 
-@Suite struct HairpinRampsTests {
+struct HairpinRampsTests {
     private func ramp(
         startTick: Int = 0,
         endTick: Int = 480,
         startVelocity: Int = 60,
         endVelocity: Int = 112,
-        method: Spanner.HairpinPayload.VeloChangeMethod = .normal
+        method: Spanner.HairpinPayload.VeloChangeMethod = .normal,
     ) -> HairpinRamp {
         HairpinRamp(
             startTick: startTick,
             endTick: endTick,
             startVelocity: startVelocity,
             endVelocity: endVelocity,
-            method: method
+            method: method,
         )
     }
 
@@ -46,7 +46,7 @@ import Testing
             let r = ramp(startVelocity: 60, endVelocity: 100, method: method)
             #expect(
                 HairpinRamps.interpolate(ramp: r, atOriginalTick: 240) == 80,
-                "method \(method) should fall through to linear in v1"
+                "method \(method) should fall through to linear in v1",
             )
         }
     }
@@ -60,21 +60,29 @@ import Testing
     }
 }
 
-@Suite struct HairpinRampsCollectTests {
+struct HairpinRampsCollectTests {
     private let division = 480
 
     private func instrument() -> Instrument {
         Instrument(id: "piano", articulations: [])
     }
 
-    private func mp() -> Dynamic { Dynamic(subtype: "mp", velocity: 64) }
-    private func f() -> Dynamic { Dynamic(subtype: "f", velocity: 96) }
-    private func p() -> Dynamic { Dynamic(subtype: "p", velocity: 49) }
+    private func mp() -> Dynamic {
+        Dynamic(subtype: "mp", velocity: 64)
+    }
+
+    private func f() -> Dynamic {
+        Dynamic(subtype: "f", velocity: 96)
+    }
+
+    private func p() -> Dynamic {
+        Dynamic(subtype: "p", velocity: 49)
+    }
 
     private func quarter() -> VoiceElement {
         .chord(Chord(
             duration: .quarter,
-            notes: ChordNotes([Note(pitch: 60, tpc: 14)])
+            notes: ChordNotes([Note(pitch: 60, tpc: 14)]),
         ))
     }
 
@@ -90,7 +98,7 @@ import Testing
         Spanner(
             kind: .hairpin, rawType: "HairPin",
             nextMeasuresOffset: measures,
-            hairpin: .init(subtype: .crescendo, veloChange: veloChange)
+            hairpin: .init(subtype: .crescendo, veloChange: veloChange),
         )
     }
 
@@ -98,7 +106,7 @@ import Testing
         Spanner(
             kind: .hairpin, rawType: "HairPin",
             nextMeasuresOffset: measures,
-            hairpin: .init(subtype: .decrescendo)
+            hairpin: .init(subtype: .decrescendo),
         )
     }
 
@@ -115,7 +123,7 @@ import Testing
         ])
         let ramps = HairpinRamps.collect(
             voiceIndex: 0, staff: s,
-            instrument: instrument(), division: division
+            instrument: instrument(), division: division,
         )
         #expect(ramps.count == 1)
         #expect(ramps.first?.startVelocity == 64)
@@ -132,7 +140,7 @@ import Testing
         ])
         let ramps = HairpinRamps.collect(
             voiceIndex: 0, staff: s,
-            instrument: instrument(), division: division
+            instrument: instrument(), division: division,
         )
         #expect(ramps.first?.endVelocity == 84) // 64 + 20
     }
@@ -147,7 +155,7 @@ import Testing
         ])
         let ramps = HairpinRamps.collect(
             voiceIndex: 0, staff: s,
-            instrument: instrument(), division: division
+            instrument: instrument(), division: division,
         )
         #expect(ramps.first?.endVelocity == 64 + HairpinRamps.defaultDeltaVelocity)
     }
@@ -165,7 +173,7 @@ import Testing
         ])
         let ramps = HairpinRamps.collect(
             voiceIndex: 0, staff: s,
-            instrument: instrument(), division: division
+            instrument: instrument(), division: division,
         )
         #expect(ramps.first?.startVelocity == 96)
         #expect(ramps.first?.endVelocity == 49)
@@ -189,7 +197,7 @@ import Testing
         ])
         let ramps = HairpinRamps.collect(
             voiceIndex: 0, staff: s,
-            instrument: instrument(), division: division
+            instrument: instrument(), division: division,
         )
         #expect(ramps.count == 2)
         #expect(ramps[0].endVelocity == 96)

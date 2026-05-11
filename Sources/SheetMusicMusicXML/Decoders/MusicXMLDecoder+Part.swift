@@ -14,22 +14,22 @@ extension Part {
     static func decodeMusicXML(
         scorePart: XMLTreeNode,
         partId: String,
-        staffCount: Int
+        staffCount: Int,
     ) throws -> (Part, MusicXMLDrumTable) {
         let name = scorePart.first("part-name")?.text
         let abbrev = scorePart.first("part-abbreviation")?.text
         let drumTable = MusicXMLDrumTable.build(scorePart: scorePart)
         let instrument = decodeInstrument(
             scorePart: scorePart, name: name, abbrev: abbrev,
-            useDrumset: drumTable.isDrumset
+            useDrumset: drumTable.isDrumset,
         )
         let count = max(1, staffCount)
         let staves = Array(
             repeating: Staff(
                 staffType: "stdNormal", group: "pitched",
-                defaultClefType: nil, measures: []
+                defaultClefType: nil, measures: [],
             ),
-            count: count
+            count: count,
         )
         let part = Part(
             id: partId,
@@ -37,7 +37,7 @@ extension Part {
             // so leave Part.trackName nil for parity with `*_ref.mscx`.
             trackName: nil,
             instrument: instrument,
-            staves: staves
+            staves: staves,
         )
         return (part, drumTable)
     }
@@ -52,7 +52,7 @@ extension Part {
         scorePart: XMLTreeNode,
         name: String?,
         abbrev: String?,
-        useDrumset: Bool
+        useDrumset: Bool,
     ) -> Instrument {
         let scoreInstr = scorePart.first("score-instrument")
         let instrumentSound = scoreInstr?.first("instrument-sound")?.text
@@ -68,7 +68,7 @@ extension Part {
             shortName: abbrev,
             trackName: trackName,
             channels: [InstrumentChannel()],
-            useDrumset: useDrumset
+            useDrumset: useDrumset,
         )
     }
 }

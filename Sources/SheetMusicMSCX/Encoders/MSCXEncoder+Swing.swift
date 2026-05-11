@@ -21,7 +21,7 @@ extension Swing {
                     "g": String(color.green),
                     "b": String(color.blue),
                     "a": String(color.alpha),
-                ]
+                ],
             ))
         }
         if offsetX != 0 || offsetY != 0 {
@@ -30,7 +30,7 @@ extension Swing {
                 attributes: [
                     "x": formatDouble(offsetX),
                     "y": formatDouble(offsetY),
-                ]
+                ],
             ))
         }
         if !visible {
@@ -46,11 +46,11 @@ extension Swing {
             attributes: [
                 "unit": unit.mscxString,
                 "ratio": String(ratio),
-            ]
+            ],
         ))
         return XMLTreeNode(
             name: isSystemText ? "SystemText" : "StaffText",
-            children: children
+            children: children,
         )
     }
 }

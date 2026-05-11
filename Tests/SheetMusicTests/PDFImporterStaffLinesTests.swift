@@ -3,7 +3,7 @@ import Foundation
 @testable import SheetMusicPDF
 import Testing
 
-@Suite @MainActor struct PDFImporterStaffLinesTests {
+@MainActor struct PDFImporterStaffLinesTests {
     @Test func detectsFiveEvenlySpacedLinesAsStaff() {
         let paths = horizontals(at: [100, 110, 120, 130, 140], xRange: 50 ... 500)
         let staves = PDFImporter.detectStaves(paths: paths, classified: [], pageIndex: 0)
@@ -26,9 +26,9 @@ import Testing
                 fontSize: 24,
                 origin: CGPoint(x: 50, y: 100),
                 advance: 450,
-                pageIndex: 0
+                pageIndex: 0,
             ),
-            semantic: .staff5Lines
+            semantic: .staff5Lines,
         )
         let staves = PDFImporter.detectStaves(paths: [], classified: [glyph], pageIndex: 0)
         #expect(staves.count == 1)
@@ -47,9 +47,9 @@ import Testing
                 fontSize: 24,
                 origin: CGPoint(x: 50, y: 120),
                 advance: 450,
-                pageIndex: 0
+                pageIndex: 0,
             ),
-            semantic: .staff5Lines
+            semantic: .staff5Lines,
         )
         let staves = PDFImporter.detectStaves(paths: paths, classified: [glyph], pageIndex: 0)
         #expect(staves.count == 1)
@@ -61,7 +61,7 @@ import Testing
             kind: .vertical,
             rect: CGRect(x: 200, y: 100, width: 0, height: 40),
             lineWidth: 0.5,
-            pageIndex: 0
+            pageIndex: 0,
         ))
         let staves = PDFImporter.detectStaves(paths: paths, classified: [], pageIndex: 0)
         #expect(staves.first?.barlineCandidates.count == 1)
@@ -76,10 +76,10 @@ private func horizontals(at ys: [CGFloat], xRange: ClosedRange<CGFloat>) -> [Pat
                 x: xRange.lowerBound,
                 y: $0,
                 width: xRange.upperBound - xRange.lowerBound,
-                height: 0
+                height: 0,
             ),
             lineWidth: 0.5,
-            pageIndex: 0
+            pageIndex: 0,
         )
     }
 }

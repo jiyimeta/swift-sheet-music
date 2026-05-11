@@ -3,14 +3,14 @@ import Foundation
 @testable import SheetMusicMIDI
 import Testing
 
-@Suite struct MidiImporterBarTests {
+struct MidiImporterBarTests {
     private func tn(_ name: String) -> TimedMidiEvent {
         TimedMidiEvent(tick: 0, event: .meta(.trackName(name)))
     }
 
     private func ts(_ tick: Int, _ n: Int, _ d: Int) -> TimedMidiEvent {
         TimedMidiEvent(tick: tick, event: .meta(.timeSignature(
-            numerator: n, denominator: d, clocksPerClick: 24, thirtySecondsPerQuarter: 8
+            numerator: n, denominator: d, clocksPerClick: 24, thirtySecondsPerQuarter: 8,
         )))
     }
 
@@ -29,7 +29,7 @@ import Testing
             events: [
                 nOn(0, 60), nOff(1920, 60),
                 TimedMidiEvent(tick: 1920, event: .endOfTrack),
-            ]
+            ],
         )]
         let measures = MidiImporter.segmentBars(imports: imports, division: 480)
         // 1920 ticks at 480 PPQ in 4/4 = 1 measure (1920 = 4*480).
@@ -48,7 +48,7 @@ import Testing
                 ts(1920, 3, 4),
                 nOn(1920, 62), nOff(1920 + 1440, 62),
                 TimedMidiEvent(tick: 1920 + 1440, event: .endOfTrack),
-            ]
+            ],
         )]
         let measures = MidiImporter.segmentBars(imports: imports, division: 480)
         // 1 measure of 4/4 + 1 measure of 3/4 = 2 measures.
@@ -65,7 +65,7 @@ import Testing
                 // the 4/4 bar line at 1920 into measure 1.
                 nOn(0, 60), nOff(2400, 60),
                 TimedMidiEvent(tick: 2400, event: .endOfTrack),
-            ]
+            ],
         )]
         let measures = MidiImporter.segmentBars(imports: imports, division: 480)
         #expect(measures[0].count >= 2)

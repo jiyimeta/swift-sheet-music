@@ -41,7 +41,7 @@ public struct LayoutFrameText: Sendable, Equatable {
         style: FrameText.Style,
         position: CGPoint,
         fontSize: CGFloat,
-        anchor: Anchor
+        anchor: Anchor,
     ) {
         self.text = text
         self.style = style

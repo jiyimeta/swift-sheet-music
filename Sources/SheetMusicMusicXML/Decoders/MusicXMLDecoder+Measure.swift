@@ -20,7 +20,7 @@ enum MusicXMLMeasureWalker {
 
     static func decode(
         partNode: XMLTreeNode,
-        drumTable: MusicXMLDrumTable = MusicXMLDrumTable()
+        drumTable: MusicXMLDrumTable = MusicXMLDrumTable(),
     ) throws -> PartResult {
         let staffCount = detectStaffCount(partNode: partNode)
         var divisions = DivisionsContext(perQuarter: 1)
@@ -34,7 +34,7 @@ enum MusicXMLMeasureWalker {
                 previousAttributes: &previousAttributes,
                 isFirstMeasure: isFirstMeasure,
                 staffCount: staffCount,
-                drumTable: drumTable
+                drumTable: drumTable,
             )
             for (staffIdx, measure) in measures.enumerated() {
                 perStaffMeasures[staffIdx].append(measure)
@@ -80,7 +80,7 @@ enum MusicXMLMeasureWalker {
         previousAttributes: inout MusicXMLAttributesSnapshot,
         isFirstMeasure: Bool,
         staffCount: Int,
-        drumTable: MusicXMLDrumTable
+        drumTable: MusicXMLDrumTable,
     ) throws -> [Measure] {
         var perStaff: [StaffMeasureBuilder] = (0 ..< staffCount).map { _ in
             StaffMeasureBuilder()
@@ -94,7 +94,7 @@ enum MusicXMLMeasureWalker {
                     divisions: &divisions,
                     previous: &previousAttributes,
                     isFirstMeasure: isFirstMeasure,
-                    staffCount: staffCount
+                    staffCount: staffCount,
                 )
                 for emission in emitted {
                     if let idx = emission.staffIndex {
@@ -115,14 +115,14 @@ enum MusicXMLMeasureWalker {
                     node: child,
                     divisions: divisions,
                     existingVoiceElements: existing,
-                    drumTable: drumTable
+                    drumTable: drumTable,
                 )
                 switch decoded {
                 case let .foldIntoLastChord(note, duration):
                     perStaff[staffIdx].foldIntoLastChord(
                         voice: voice,
                         note: note,
-                        duration: duration
+                        duration: duration,
                     )
                 case let .new(elements):
                     for element in elements {

@@ -4,7 +4,7 @@ import Foundation
 @testable import SheetMusicXMLTools
 import Testing
 
-@Suite struct BracketDecodingTests {
+struct BracketDecodingTests {
     @Test func decodeBraceWithSpanAndColumn() throws {
         let xml = """
         <Staff id="1">

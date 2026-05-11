@@ -7,7 +7,7 @@ import Foundation
 @testable import SheetMusicUI
 import Testing
 
-@Suite struct LayoutBreakTests {
+struct LayoutBreakTests {
     /// `<LayoutBreak><subtype>line</subtype>` on a measure parses
     /// into `Measure.lineBreak == true`.
     @Test func parsesLineBreak() throws {
@@ -88,20 +88,20 @@ import Testing
             Staff(measures: [mPlain, mPlain, mPlain]),
         ]
         #expect(LayoutEngine.measureForcesLineBreak(
-            at: 0, staves: staves, policy: .honor
+            at: 0, staves: staves, policy: .honor,
         ) == true)
         #expect(
             LayoutEngine.measureForcesLineBreak(
-                at: 1, staves: staves, policy: .honor
+                at: 1, staves: staves, policy: .honor,
             ) == true,
-            "page break should also force a system break"
+            "page break should also force a system break",
         )
         #expect(LayoutEngine.measureForcesLineBreak(
-            at: 2, staves: staves, policy: .honor
+            at: 2, staves: staves, policy: .honor,
         ) == false)
         // Out-of-range index returns false rather than crashing.
         #expect(LayoutEngine.measureForcesLineBreak(
-            at: 99, staves: staves, policy: .honor
+            at: 99, staves: staves, policy: .honor,
         ) == false)
     }
 
@@ -118,29 +118,29 @@ import Testing
 
         // .honor — line and page both force.
         #expect(LayoutEngine.measureForcesLineBreak(
-            at: 0, staves: staves, policy: .honor
+            at: 0, staves: staves, policy: .honor,
         ) == true)
         #expect(LayoutEngine.measureForcesLineBreak(
-            at: 1, staves: staves, policy: .honor
+            at: 1, staves: staves, policy: .honor,
         ) == true)
         // .ignoreSystemBreaks — line ignored, page still forces.
         #expect(LayoutEngine.measureForcesLineBreak(
-            at: 0, staves: staves, policy: .ignoreSystemBreaks
+            at: 0, staves: staves, policy: .ignoreSystemBreaks,
         ) == false)
         #expect(LayoutEngine.measureForcesLineBreak(
-            at: 1, staves: staves, policy: .ignoreSystemBreaks
+            at: 1, staves: staves, policy: .ignoreSystemBreaks,
         ) == true)
         // .ignoreAll — neither forces.
         #expect(LayoutEngine.measureForcesLineBreak(
-            at: 0, staves: staves, policy: .ignoreAll
+            at: 0, staves: staves, policy: .ignoreAll,
         ) == false)
         #expect(LayoutEngine.measureForcesLineBreak(
-            at: 1, staves: staves, policy: .ignoreAll
+            at: 1, staves: staves, policy: .ignoreAll,
         ) == false)
         // Plain measure: false under every policy.
         for p: LayoutBreakPolicy in [.honor, .ignoreSystemBreaks, .ignoreAll] {
             #expect(LayoutEngine.measureForcesLineBreak(
-                at: 2, staves: staves, policy: p
+                at: 2, staves: staves, policy: p,
             ) == false)
         }
     }
@@ -152,7 +152,7 @@ import Testing
         guard #available(macOS 15.0, iOS 16.0, *) else { return }
         let chord = Chord(
             duration: .quarter,
-            notes: [Note(pitch: 60, tpc: 14)]
+            notes: [Note(pitch: 60, tpc: 14)],
         )
         // Six measures with a forced line break on indices 1 and 3 —
         // identical fixture to `layoutBreakForcesSystemSplit`.
@@ -162,7 +162,7 @@ import Testing
                     .chord(chord), .chord(chord),
                     .chord(chord), .chord(chord),
                 ])],
-                lineBreak: idx == 1 || idx == 3
+                lineBreak: idx == 1 || idx == 3,
             )
         }
         let staff = Staff(measures: measures)
@@ -170,19 +170,19 @@ import Testing
             id: "P1",
             instrument: Instrument(
                 id: "i",
-                articulations: [InstrumentArticulation()]
+                articulations: [InstrumentArticulation()],
             ),
-            staves: [staff]
+            staves: [staff],
         )
         let score = Score(division: 480, parts: [part])
         let opts = ScoreViewOptions(
             staffSize: 16, systemGap: 16,
             wrapToViewWidth: true,
-            breakPolicy: .ignoreAll
+            breakPolicy: .ignoreAll,
         )
         // Wide enough that no width-driven wrap fires either.
         let doc = LayoutEngine.layout(
-            score: score, options: opts, availableWidth: 4000
+            score: score, options: opts, availableWidth: 4000,
         )
         #expect(doc.systems.count == 1)
         #expect(doc.systems.first?.measures.count == 6)
@@ -194,7 +194,7 @@ import Testing
         guard #available(macOS 15.0, iOS 16.0, *) else { return }
         let chord = Chord(
             duration: .quarter,
-            notes: [Note(pitch: 60, tpc: 14)]
+            notes: [Note(pitch: 60, tpc: 14)],
         )
         // Six measures, page break on measure 2 (index 2).
         let measures = (0 ..< 6).map { idx in
@@ -203,7 +203,7 @@ import Testing
                     .chord(chord), .chord(chord),
                     .chord(chord), .chord(chord),
                 ])],
-                pageBreak: idx == 2
+                pageBreak: idx == 2,
             )
         }
         let staff = Staff(measures: measures)
@@ -211,18 +211,18 @@ import Testing
             id: "P1",
             instrument: Instrument(
                 id: "i",
-                articulations: [InstrumentArticulation()]
+                articulations: [InstrumentArticulation()],
             ),
-            staves: [staff]
+            staves: [staff],
         )
         let score = Score(division: 480, parts: [part])
         let opts = ScoreViewOptions(
             staffSize: 16, systemGap: 16,
             wrapToViewWidth: true,
-            breakPolicy: .ignoreSystemBreaks
+            breakPolicy: .ignoreSystemBreaks,
         )
         let doc = LayoutEngine.layout(
-            score: score, options: opts, availableWidth: 4000
+            score: score, options: opts, availableWidth: 4000,
         )
         // Page break on measure 2 → still forces a system break,
         // even under .ignoreSystemBreaks. Two systems: 3 + 3.
@@ -245,7 +245,7 @@ import Testing
         // width is meaningful.
         let chord = Chord(
             duration: .quarter,
-            notes: [Note(pitch: 60, tpc: 14)]
+            notes: [Note(pitch: 60, tpc: 14)],
         )
         let baseMeasure = Measure(voices: [Voice(elements: [
             .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
@@ -262,9 +262,9 @@ import Testing
             id: "P1",
             instrument: Instrument(
                 id: "i",
-                articulations: [InstrumentArticulation()]
+                articulations: [InstrumentArticulation()],
             ),
-            staves: [staff]
+            staves: [staff],
         )
         let score = Score(division: 480, parts: [part])
         // Width chosen so greedy packing would land 5+3 but
@@ -282,10 +282,10 @@ import Testing
         //     so the system packer caps at 4 — collapsing
         //     greedy 5+3 to 4+4.
         let opts = ScoreViewOptions(
-            staffSize: 14, systemGap: 16, wrapToViewWidth: true
+            staffSize: 14, systemGap: 16, wrapToViewWidth: true,
         )
         let doc = LayoutEngine.layout(
-            score: score, options: opts, availableWidth: 400
+            score: score, options: opts, availableWidth: 400,
         )
         // Two systems, 4 measures each — not 5+3 / 6+2 / 7+1.
         #expect(doc.systems.count == 2)
@@ -302,7 +302,7 @@ import Testing
         guard #available(macOS 15.0, iOS 16.0, *) else { return }
         let chord = Chord(
             duration: .quarter,
-            notes: [Note(pitch: 60, tpc: 14)]
+            notes: [Note(pitch: 60, tpc: 14)],
         )
         // Six measures with a forced line break on every odd index.
         let measures = (0 ..< 6).map { idx in
@@ -311,7 +311,7 @@ import Testing
                     .chord(chord), .chord(chord),
                     .chord(chord), .chord(chord),
                 ])],
-                lineBreak: idx % 2 == 1
+                lineBreak: idx % 2 == 1,
             )
         }
         let staff = Staff(measures: measures)
@@ -319,18 +319,18 @@ import Testing
             id: "P1",
             instrument: Instrument(
                 id: "i",
-                articulations: [InstrumentArticulation()]
+                articulations: [InstrumentArticulation()],
             ),
-            staves: [staff]
+            staves: [staff],
         )
         let score = Score(division: 480, parts: [part])
         let doc = LayoutEngine.layout(
             score: score,
             options: ScoreViewOptions(
                 staffSize: 16, systemGap: 16,
-                wrapToViewWidth: false
+                wrapToViewWidth: false,
             ),
-            availableWidth: 4000
+            availableWidth: 4000,
         )
         // wrapToViewWidth=false → one system holds every measure
         // regardless of LayoutBreaks.
@@ -345,7 +345,7 @@ import Testing
         guard #available(macOS 15.0, iOS 16.0, *) else { return }
         let chord = Chord(
             duration: .quarter,
-            notes: [Note(pitch: 60, tpc: 14)]
+            notes: [Note(pitch: 60, tpc: 14)],
         )
         // Six measures, with `lineBreak` on indices 1 and 3 (so
         // breaks land *after* measures 2 and 4).
@@ -355,7 +355,7 @@ import Testing
                     .chord(chord), .chord(chord),
                     .chord(chord), .chord(chord),
                 ])],
-                lineBreak: idx == 1 || idx == 3
+                lineBreak: idx == 1 || idx == 3,
             )
         }
         let staff = Staff(measures: measures)
@@ -363,18 +363,18 @@ import Testing
             id: "P1",
             instrument: Instrument(
                 id: "i",
-                articulations: [InstrumentArticulation()]
+                articulations: [InstrumentArticulation()],
             ),
-            staves: [staff]
+            staves: [staff],
         )
         let score = Score(division: 480, parts: [part])
         let doc = LayoutEngine.layout(
             score: score,
             options: ScoreViewOptions(
                 staffSize: 16, systemGap: 16,
-                wrapToViewWidth: true
+                wrapToViewWidth: true,
             ),
-            availableWidth: 4000
+            availableWidth: 4000,
         ) // wide enough that nothing
         // wraps from horizontal overflow
         // Two explicit breaks → three systems.
@@ -387,16 +387,16 @@ import Testing
     /// Mirrors spec test case 3.
     @Test func paginateHonoursPolicy() {
         guard #available(macOS 15.0, iOS 16.0, *) else { return }
-        // Three lightweight systems, each 100 pt tall. Page height
-        // 1000 pt easily fits them all on one page — only a
-        // pageBreak flag should split them.
+        /// Three lightweight systems, each 100 pt tall. Page height
+        /// 1000 pt easily fits them all on one page — only a
+        /// pageBreak flag should split them.
         func makeSystem(pageBreak: Bool) -> LayoutSystem {
             let m = LayoutMeasure(
                 measureIndex: 0,
                 origin: .zero,
                 width: 100,
                 elements: [],
-                pageBreak: pageBreak
+                pageBreak: pageBreak,
             )
             return LayoutSystem(
                 origin: .zero,
@@ -405,7 +405,7 @@ import Testing
                 staffOrigins: [],
                 partLabels: [],
                 spanners: [],
-                sp: 7
+                sp: 7,
             )
         }
         let systems = [
@@ -415,30 +415,30 @@ import Testing
         ]
 
         let honor = PagedScoreView.paginate(
-            systems: systems, pageHeight: 1000, policy: .honor
+            systems: systems, pageHeight: 1000, policy: .honor,
         )
         #expect(
             honor.count == 2,
-            "page break on system 1 should close page after it"
+            "page break on system 1 should close page after it",
         )
         #expect(honor[0].count == 2)
         #expect(honor[1].count == 1)
 
         let ignoreSysBreaks = PagedScoreView.paginate(
             systems: systems, pageHeight: 1000,
-            policy: .ignoreSystemBreaks
+            policy: .ignoreSystemBreaks,
         )
         #expect(
             ignoreSysBreaks.count == 2,
-            ".ignoreSystemBreaks still closes pages on pageBreak"
+            ".ignoreSystemBreaks still closes pages on pageBreak",
         )
 
         let ignoreAll = PagedScoreView.paginate(
-            systems: systems, pageHeight: 1000, policy: .ignoreAll
+            systems: systems, pageHeight: 1000, policy: .ignoreAll,
         )
         #expect(
             ignoreAll.count == 1,
-            ".ignoreAll lets all systems share one page"
+            ".ignoreAll lets all systems share one page",
         )
         #expect(ignoreAll[0].count == 3)
     }

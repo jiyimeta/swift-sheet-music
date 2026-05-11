@@ -35,7 +35,7 @@ struct SystemLayerView: View {
     init(
         system: LayoutSystem,
         metrics: StaffMetrics,
-        selection: SelectionRenderState = .empty
+        selection: SelectionRenderState = .empty,
     ) {
         self.system = system
         self.metrics = metrics
@@ -44,12 +44,12 @@ struct SystemLayerView: View {
 
     var body: some View {
         _LayerBackedSystem(
-            system: system, metrics: metrics, selection: selection
+            system: system, metrics: metrics, selection: selection,
         )
         .frame(
             width: system.size.width,
             height: system.size.height + 1,
-            alignment: .topLeading
+            alignment: .topLeading,
         )
     }
 }
@@ -66,16 +66,16 @@ struct SystemLayerView: View {
         func makeNSView(context: Context) -> _LayerSystemHostView {
             let view = _LayerSystemHostView()
             view.configure(
-                system: system, metrics: metrics, selection: selection
+                system: system, metrics: metrics, selection: selection,
             )
             return view
         }
 
         func updateNSView(
-            _ nsView: _LayerSystemHostView, context: Context
+            _ nsView: _LayerSystemHostView, context: Context,
         ) {
             nsView.configure(
-                system: system, metrics: metrics, selection: selection
+                system: system, metrics: metrics, selection: selection,
             )
         }
     }
@@ -111,19 +111,21 @@ struct SystemLayerView: View {
         }
 
         @available(*, unavailable)
-        required init?(coder: NSCoder) { fatalError("init(coder:) is unavailable") }
+        required init?(coder: NSCoder) {
+            fatalError("init(coder:) is unavailable")
+        }
 
         func configure(
             system: LayoutSystem,
             metrics: StaffMetrics,
-            selection: SelectionRenderState
+            selection: SelectionRenderState,
         ) {
             guard let hostLayer = layer else { return }
             let systemChanged = lastSystem != system || lastMetrics != metrics
             if systemChanged {
                 hostLayer.sublayers?.forEach { $0.removeFromSuperlayer() }
                 let result = ScoreLayerBuilder.buildSystemWithItems(
-                    system, metrics: metrics
+                    system, metrics: metrics,
                 )
                 hostLayer.addSublayer(result.root)
 
@@ -142,7 +144,7 @@ struct SystemLayerView: View {
                 lastSelection = .empty
                 setFrameSize(NSSize(
                     width: system.size.width,
-                    height: system.size.height + 1
+                    height: system.size.height + 1,
                 ))
             }
             applySelection(system: system, metrics: metrics, selection: selection)
@@ -152,12 +154,12 @@ struct SystemLayerView: View {
         private func applySelection(
             system: LayoutSystem,
             metrics: StaffMetrics,
-            selection: SelectionRenderState
+            selection: SelectionRenderState,
         ) {
             ScoreLayerBuilder.applySelection(
                 items: itemLayers,
                 previousSelection: lastSelection,
-                newSelection: selection
+                newSelection: selection,
             )
             overlayLayer?.sublayers?.forEach { $0.removeFromSuperlayer() }
             guard selection.drawRangeBox, let overlay = overlayLayer else { return }
@@ -166,7 +168,7 @@ struct SystemLayerView: View {
                 selection: selection,
                 metrics: metrics,
                 height: system.size.height + 1,
-                into: overlay
+                into: overlay,
             )
         }
     }
@@ -181,16 +183,16 @@ struct SystemLayerView: View {
         func makeUIView(context: Context) -> _LayerSystemHostView {
             let view = _LayerSystemHostView()
             view.configure(
-                system: system, metrics: metrics, selection: selection
+                system: system, metrics: metrics, selection: selection,
             )
             return view
         }
 
         func updateUIView(
-            _ uiView: _LayerSystemHostView, context: Context
+            _ uiView: _LayerSystemHostView, context: Context,
         ) {
             uiView.configure(
-                system: system, metrics: metrics, selection: selection
+                system: system, metrics: metrics, selection: selection,
             )
         }
     }
@@ -210,18 +212,20 @@ struct SystemLayerView: View {
         }
 
         @available(*, unavailable)
-        required init?(coder: NSCoder) { fatalError("init(coder:) is unavailable") }
+        required init?(coder: NSCoder) {
+            fatalError("init(coder:) is unavailable")
+        }
 
         func configure(
             system: LayoutSystem,
             metrics: StaffMetrics,
-            selection: SelectionRenderState
+            selection: SelectionRenderState,
         ) {
             let systemChanged = lastSystem != system || lastMetrics != metrics
             if systemChanged {
                 layer.sublayers?.forEach { $0.removeFromSuperlayer() }
                 let result = ScoreLayerBuilder.buildSystemWithItems(
-                    system, metrics: metrics
+                    system, metrics: metrics,
                 )
                 layer.addSublayer(result.root)
 
@@ -240,8 +244,8 @@ struct SystemLayerView: View {
                     origin: frame.origin,
                     size: CGSize(
                         width: system.size.width,
-                        height: system.size.height + 1
-                    )
+                        height: system.size.height + 1,
+                    ),
                 )
             }
             applySelection(system: system, metrics: metrics, selection: selection)
@@ -251,12 +255,12 @@ struct SystemLayerView: View {
         private func applySelection(
             system: LayoutSystem,
             metrics: StaffMetrics,
-            selection: SelectionRenderState
+            selection: SelectionRenderState,
         ) {
             ScoreLayerBuilder.applySelection(
                 items: itemLayers,
                 previousSelection: lastSelection,
-                newSelection: selection
+                newSelection: selection,
             )
             overlayLayer?.sublayers?.forEach { $0.removeFromSuperlayer() }
             guard selection.drawRangeBox, let overlay = overlayLayer else { return }
@@ -265,7 +269,7 @@ struct SystemLayerView: View {
                 selection: selection,
                 metrics: metrics,
                 height: system.size.height + 1,
-                into: overlay
+                into: overlay,
             )
         }
     }

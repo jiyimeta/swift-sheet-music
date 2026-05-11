@@ -16,17 +16,20 @@ public struct InputNote: EditCommand {
         self.tpc = tpc
     }
 
-    public var affectedLocation: VoiceElementID { VoiceElementID(location) }
+    public var affectedLocation: VoiceElementID {
+        VoiceElementID(location)
+    }
 
     @discardableResult
     public func apply(to score: inout Score) throws -> any EditCommand {
         guard let rest = score[location] else {
             throw SheetMusicError.invalidEdit(
-                reason: "InputNote: no rest at \(location)")
+                reason: "InputNote: no rest at \(location)",
+            )
         }
         let chord = Chord(
             duration: rest.duration,
-            notes: [Note(pitch: pitch, tpc: tpc)]
+            notes: [Note(pitch: pitch, tpc: tpc)],
         )
         let veID = VoiceElementID(location)
         score[veID] = .chord(chord)

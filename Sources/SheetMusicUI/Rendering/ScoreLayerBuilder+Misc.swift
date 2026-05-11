@@ -17,7 +17,7 @@ extension ScoreLayerBuilder {
     static func drawFermata(
         subtype: String, origin: CGPoint,
         metrics: StaffMetrics, height: CGFloat,
-        into parent: CALayer
+        into parent: CALayer,
     ) {
         let below = subtype.hasPrefix("fermataBelow")
         let glyph = below
@@ -26,7 +26,7 @@ extension ScoreLayerBuilder {
         if let layer = glyphLayer(
             glyph, at: origin,
             size: metrics.glyphFontSize,
-            height: height
+            height: height,
         ) {
             parent.addSublayer(layer)
         }
@@ -39,15 +39,15 @@ extension ScoreLayerBuilder {
         isAbove: Bool,
         origin: CGPoint,
         metrics: StaffMetrics, height: CGFloat,
-        into parent: CALayer
+        into parent: CALayer,
     ) {
         let glyph = ArticulationRenderer.glyph(
-            kind: kind, isAbove: isAbove
+            kind: kind, isAbove: isAbove,
         )
         if let layer = glyphLayer(
             glyph, at: origin,
             size: metrics.glyphFontSize,
-            height: height
+            height: height,
         ) {
             parent.addSublayer(layer)
         }
@@ -58,7 +58,7 @@ extension ScoreLayerBuilder {
     static func drawMeasureRepeat(
         count: Int, origin: CGPoint,
         metrics: StaffMetrics, height: CGFloat,
-        into parent: CALayer
+        into parent: CALayer,
     ) {
         let glyph: Character
         switch count {
@@ -70,7 +70,7 @@ extension ScoreLayerBuilder {
         if let layer = glyphLayer(
             glyph, at: origin,
             size: metrics.glyphFontSize,
-            height: height
+            height: height,
         ) {
             parent.addSublayer(layer)
         }
@@ -87,12 +87,12 @@ extension ScoreLayerBuilder {
     static func drawMultiMeasureRest(
         count: Int, origin: CGPoint,
         metrics: StaffMetrics, height: CGFloat,
-        into parent: CALayer
+        into parent: CALayer,
     ) {
         if let bar = glyphLayer(
             SMuFLGlyph.restHBar, at: origin,
             size: metrics.glyphFontSize,
-            height: height
+            height: height,
         ) {
             parent.addSublayer(bar)
         }
@@ -101,11 +101,11 @@ extension ScoreLayerBuilder {
         // without duplicating the run-length label above each staff.
         guard count > 0 else { return }
         let style = ResolvedTextStyle.resolve(
-            .tempo, metrics: metrics
+            .tempo, metrics: metrics,
         )
         let countOrigin = CGPoint(
             x: origin.x,
-            y: origin.y - metrics.sp * 2.5
+            y: origin.y - metrics.sp * 2.5,
         )
         if let text = textLayer(
             text: String(count),
@@ -114,7 +114,7 @@ extension ScoreLayerBuilder {
             italic: style.isItalic,
             anchor: CGPoint(x: 0.5, y: 0.5),
             font: style.ctFont,
-            height: height
+            height: height,
         ) {
             parent.addSublayer(text)
         }
@@ -125,7 +125,7 @@ extension ScoreLayerBuilder {
     static func drawArpeggio(
         top: CGPoint, bottom: CGPoint, subtype: String?,
         metrics: StaffMetrics, height: CGFloat,
-        into parent: CALayer
+        into parent: CALayer,
     ) {
         // SMuFL wiggle/arrow glyphs are drawn horizontally; vertical
         // arpeggios rotate each segment -90° around its anchor.
@@ -139,7 +139,7 @@ extension ScoreLayerBuilder {
                 at: CGPoint(x: x, y: y),
                 size: metrics.glyphFontSize,
                 rotation: rotation,
-                height: height
+                height: height,
             ) {
                 parent.addSublayer(layer)
             }
@@ -152,7 +152,7 @@ extension ScoreLayerBuilder {
                 at: CGPoint(x: x, y: top.y - metrics.sp),
                 size: metrics.glyphFontSize,
                 rotation: rotation,
-                height: height
+                height: height,
             ) {
                 parent.addSublayer(layer)
             }
@@ -162,7 +162,7 @@ extension ScoreLayerBuilder {
                 at: CGPoint(x: x, y: bottom.y + metrics.sp),
                 size: metrics.glyphFontSize,
                 rotation: rotation,
-                height: height
+                height: height,
             ) {
                 parent.addSublayer(layer)
             }
@@ -179,7 +179,7 @@ extension ScoreLayerBuilder {
         tupletID: TupletID?,
         metrics: StaffMetrics, height: CGFloat,
         context: inout BuildContext,
-        into parent: CALayer
+        into parent: CALayer,
     ) {
         let fontSize = metrics.sp * 2
         let labelX = (from.x + to.x) / 2
@@ -189,7 +189,7 @@ extension ScoreLayerBuilder {
             at: CGPoint(x: labelX, y: labelY),
             size: fontSize, italic: true,
             anchor: CGPoint(x: 0.5, y: 0.5),
-            height: height
+            height: height,
         ) {
             parent.addSublayer(layer)
             if let tid = tupletID {
@@ -207,11 +207,11 @@ extension ScoreLayerBuilder {
             let p = CGMutablePath()
             p.move(to: CGPoint(
                 x: endpoint.x,
-                y: endpoint.y + hookDy
+                y: endpoint.y + hookDy,
             ))
             p.addLine(to: endpoint)
             let layer = strokeLayer(
-                path: p, height: height, lineWidth: lineWidth
+                path: p, height: height, lineWidth: lineWidth,
             )
             parent.addSublayer(layer)
             if let tid = tupletID {
@@ -224,11 +224,11 @@ extension ScoreLayerBuilder {
             x: labelX - labelHalfWidth,
             y: interpY(
                 from: from, to: to,
-                x: labelX - labelHalfWidth
-            )
+                x: labelX - labelHalfWidth,
+            ),
         ))
         let leftLayer = strokeLayer(
-            path: leftSeg, height: height, lineWidth: lineWidth
+            path: leftSeg, height: height, lineWidth: lineWidth,
         )
         parent.addSublayer(leftLayer)
         if let tid = tupletID {
@@ -239,12 +239,12 @@ extension ScoreLayerBuilder {
             x: labelX + labelHalfWidth,
             y: interpY(
                 from: from, to: to,
-                x: labelX + labelHalfWidth
-            )
+                x: labelX + labelHalfWidth,
+            ),
         ))
         rightSeg.addLine(to: to)
         let rightLayer = strokeLayer(
-            path: rightSeg, height: height, lineWidth: lineWidth
+            path: rightSeg, height: height, lineWidth: lineWidth,
         )
         parent.addSublayer(rightLayer)
         if let tid = tupletID {
@@ -253,7 +253,7 @@ extension ScoreLayerBuilder {
     }
 
     private static func interpY(
-        from: CGPoint, to: CGPoint, x: CGFloat
+        from: CGPoint, to: CGPoint, x: CGFloat,
     ) -> CGFloat {
         let span = to.x - from.x
         guard abs(span) > 0.01 else { return from.y }
@@ -266,14 +266,14 @@ extension ScoreLayerBuilder {
     static func drawMarker(
         kind: Marker.Kind, text: String, origin: CGPoint,
         metrics: StaffMetrics, height: CGFloat,
-        into parent: CALayer
+        into parent: CALayer,
     ) {
         switch kind {
         case .segno, .varsegno:
             if let layer = glyphLayer(
                 SMuFLGlyph.segno, at: origin,
                 size: metrics.glyphFontSize,
-                height: height
+                height: height,
             ) {
                 parent.addSublayer(layer)
             }
@@ -281,7 +281,7 @@ extension ScoreLayerBuilder {
             if let layer = glyphLayer(
                 SMuFLGlyph.coda, at: origin,
                 size: metrics.glyphFontSize,
-                height: height
+                height: height,
             ) {
                 parent.addSublayer(layer)
             }
@@ -292,7 +292,7 @@ extension ScoreLayerBuilder {
                 text: label, at: origin,
                 size: metrics.sp * 2.5, italic: false,
                 anchor: CGPoint(x: 0, y: 0.5),
-                height: height
+                height: height,
             ) {
                 parent.addSublayer(layer)
             }
@@ -305,14 +305,14 @@ extension ScoreLayerBuilder {
         text: String, origin: CGPoint,
         frame: TextFrameType, color: CGColor,
         metrics: StaffMetrics, height: CGFloat,
-        into parent: CALayer
+        into parent: CALayer,
     ) {
         guard !text.isEmpty else { return }
         // MuseScore `Sid::rehearsalMarkFontSize` = 14 pt with
         // `FontSpatiumDependent = true`; resolved through
         // `TextStyleType.rehearsalMark` (Edwin 14 pt bold).
         let style = ResolvedTextStyle.resolve(
-            .rehearsalMark, metrics: metrics
+            .rehearsalMark, metrics: metrics,
         )
         let textSize = style.pointSize
         let font = style.ctFont
@@ -322,14 +322,14 @@ extension ScoreLayerBuilder {
         // descender on letters like "g", and CJK glyphs (e.g. "サビ")
         // exceed any single-row ascent/descent estimate.
         let attr = NSAttributedString(
-            string: text, attributes: [.font: font]
+            string: text, attributes: [.font: font],
         )
         let line = CTLineCreateWithAttributedString(attr)
         var ascent: CGFloat = 0
         var descent: CGFloat = 0
         var leading: CGFloat = 0
         let advance = CGFloat(CTLineGetTypographicBounds(
-            line, &ascent, &descent, &leading
+            line, &ascent, &descent, &leading,
         ))
         let textWidth = max(advance, textSize * 0.5)
         let textHeight = ascent + descent
@@ -339,7 +339,7 @@ extension ScoreLayerBuilder {
         // 0.16 sp stroke.
         let pad = metrics.sp * 0.5
         let textOrigin = CGPoint(
-            x: origin.x + pad, y: origin.y - pad
+            x: origin.x + pad, y: origin.y - pad,
         )
 
         if let layer = textLayer(
@@ -348,7 +348,7 @@ extension ScoreLayerBuilder {
             anchor: CGPoint(x: 0, y: 1),
             color: color,
             font: font,
-            height: height
+            height: height,
         ) {
             parent.addSublayer(layer)
         }
@@ -360,7 +360,7 @@ extension ScoreLayerBuilder {
             x: origin.x,
             y: origin.y - 2 * pad - textHeight,
             width: textWidth + 2 * pad,
-            height: textHeight + 2 * pad
+            height: textHeight + 2 * pad,
         )
         let lineWidth = metrics.sp * 0.16
         let framePath: CGPath?
@@ -382,21 +382,21 @@ extension ScoreLayerBuilder {
                     x: cx - diameter / 2,
                     y: cy - diameter / 2,
                     width: diameter,
-                    height: diameter
+                    height: diameter,
                 ),
-                transform: nil
+                transform: nil,
             )
         }
         if let fp = framePath {
             parent.addSublayer(strokeLayer(
                 path: fp, height: height,
-                lineWidth: lineWidth, color: color
+                lineWidth: lineWidth, color: color,
             ))
         }
     }
 
     private static func fallbackMarkerLabel(
-        for kind: Marker.Kind
+        for kind: Marker.Kind,
     ) -> String {
         switch kind {
         case .fine: "Fine"

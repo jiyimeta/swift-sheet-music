@@ -14,12 +14,12 @@
             let ok = BravuraFont.register
             #expect(ok, "BravuraFont.register returned false — the font was not installed")
             let font = CTFontCreateWithName(
-                "Bravura" as CFString, 12, nil
+                "Bravura" as CFString, 12, nil,
             )
             let resolvedFamily = CTFontCopyFamilyName(font) as String
             #expect(
                 resolvedFamily == "Bravura",
-                "CoreText resolved '\(resolvedFamily)' instead of 'Bravura' — glyphs will render as tofu"
+                "CoreText resolved '\(resolvedFamily)' instead of 'Bravura' — glyphs will render as tofu",
             )
         }
     }

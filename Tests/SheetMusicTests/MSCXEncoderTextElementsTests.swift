@@ -55,7 +55,7 @@ struct MSCXEncoderTextElementsTests {
             color: ScoreColor(red: 200, green: 0, blue: 0, alpha: 200),
             isSystemText: false,
             properties: TextProperties(face: "Edwin", size: 10),
-            visible: false
+            visible: false,
         )
         let voice = Voice(elements: [.staffText(staffText)])
         let decoded = try voiceRoundTrip(voice)
@@ -66,7 +66,7 @@ struct MSCXEncoderTextElementsTests {
     func systemTextRoundTrip() throws {
         let systemText = StaffText(
             text: "Allegro",
-            isSystemText: true
+            isSystemText: true,
         )
         let voice = Voice(elements: [.staffText(systemText)])
         let decoded = try voiceRoundTrip(voice)
@@ -81,7 +81,7 @@ struct MSCXEncoderTextElementsTests {
             offsetY: -1.0,
             color: ScoreColor(red: 0, green: 0, blue: 200),
             frame: .circle,
-            properties: TextProperties(face: "Edwin", size: 12, style: [.bold])
+            properties: TextProperties(face: "Edwin", size: 12, style: [.bold]),
         )
         let voice = Voice(elements: [.rehearsalMark(mark)])
         let decoded = try voiceRoundTrip(voice)
@@ -112,7 +112,7 @@ struct MSCXEncoderTextElementsTests {
             offsetY: -0.25,
             color: ScoreColor(red: 100, green: 100, blue: 100),
             properties: TextProperties(face: "Edwin", size: 11),
-            visible: false
+            visible: false,
         )
         let voice = Voice(elements: [.harmony(harmony)])
         let decoded = try voiceRoundTrip(voice)
@@ -134,7 +134,7 @@ struct MSCXEncoderTextElementsTests {
         for num in [1, 2, 4] {
             let mr = MeasureRepeat(
                 numMeasures: num,
-                duration: .fraction(.init(numerator: 4, denominator: 4))
+                duration: .fraction(.init(numerator: 4, denominator: 4)),
             )
             let voice = Voice(elements: [.measureRepeat(mr)])
             let decoded = try voiceRoundTrip(voice)
@@ -157,7 +157,7 @@ struct MSCXEncoderTextElementsTests {
             let voice = Voice(elements: [
                 .chord(Chord(
                     duration: .quarter,
-                    notes: ChordNotes([Note(pitch: 60, tpc: 14)])
+                    notes: ChordNotes([Note(pitch: 60, tpc: 14)]),
                 )),
                 .fermata(Fermata(subtype: subtype, timeStretch: stretch)),
             ])
@@ -190,7 +190,7 @@ struct MSCXEncoderTextElementsTests {
         let dynamic = Dynamic(
             subtype: "ff",
             velocity: 110,
-            properties: TextProperties(face: "Edwin", size: 11, style: [.italic])
+            properties: TextProperties(face: "Edwin", size: 11, style: [.italic]),
         )
         let voice = Voice(elements: [.dynamic(dynamic)])
         let decoded = try voiceRoundTrip(voice)
@@ -208,9 +208,9 @@ struct MSCXEncoderTextElementsTests {
                 size: 14,
                 style: [.bold, .italic],
                 frameType: .circle,
-                framePadding: 0.5
+                framePadding: 0.5,
             ),
-            visible: false
+            visible: false,
         )
         let voice = Voice(elements: [.tempo(tempo)])
         let decoded = try voiceRoundTrip(voice)

@@ -4,7 +4,7 @@ import Foundation
 @testable import SheetMusicXMLTools
 import Testing
 
-@Suite struct ChordArticulationVelocityTests {
+struct ChordArticulationVelocityTests {
     private func parseChord(_ inner: String) throws -> Chord {
         let xml = "<Chord>\(inner)</Chord>"
         let root = try XMLTreeParser.parse(Data(xml.utf8))
@@ -59,7 +59,7 @@ import Testing
         let chord = Chord(
             duration: .quarter,
             notes: ChordNotes([Note(pitch: 60, tpc: 14)]),
-            articulations: articulations
+            articulations: articulations,
         )
         let xml = chord.encodeAsChord()
         return xml.all("Articulation").compactMap { $0.first("subtype")?.text }
@@ -77,13 +77,13 @@ import Testing
                 "articMarcatoBelow",
                 "articAccentStaccatoAbove",
                 "articMarcatoStaccatoBelow",
-            ]
+            ],
         )
     }
 
     @Test func encodesNilAnchorAsAbove() {
         #expect(
-            encodedSubtypes([.init(kind: .accent)]) == ["articAccentAbove"]
+            encodedSubtypes([.init(kind: .accent)]) == ["articAccentAbove"],
         )
     }
 
@@ -96,7 +96,7 @@ import Testing
                 .init(kind: .marcato, anchor: .below),
                 .init(kind: .accentStaccato, anchor: .above),
                 .init(kind: .marcatoStaccato, anchor: .below),
-            ]
+            ],
         )
         let xml = original.encodeAsChord()
         let serialized = XMLTreeSerializer.serialize(xml)

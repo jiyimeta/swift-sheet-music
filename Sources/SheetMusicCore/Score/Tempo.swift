@@ -25,7 +25,7 @@ public struct Tempo: Sendable, Equatable {
         offsetX: Double = 0,
         offsetY: Double = 0,
         properties: TextProperties = TextProperties(),
-        visible: Bool = true
+        visible: Bool = true,
     ) {
         self.beatsPerSecond = beatsPerSecond
         self.offsetX = offsetX

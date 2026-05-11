@@ -20,7 +20,7 @@ public enum MSCZReader {
             archive = try Archive(data: data, accessMode: .read)
         } catch {
             throw SheetMusicError.corruptedContainer(
-                reason: "could not open ZIP: \(error)"
+                reason: "could not open ZIP: \(error)",
             )
         }
         let entry = try resolveMainEntry(in: archive)
@@ -52,7 +52,7 @@ public enum MSCZReader {
             }
         }
         throw SheetMusicError.corruptedContainer(
-            reason: "no main .mscx entry found in archive"
+            reason: "no main .mscx entry found in archive",
         )
     }
 
@@ -64,7 +64,7 @@ public enum MSCZReader {
             }
         } catch {
             throw SheetMusicError.corruptedContainer(
-                reason: "failed to extract \(entry.path): \(error)"
+                reason: "failed to extract \(entry.path): \(error)",
             )
         }
         return buffer

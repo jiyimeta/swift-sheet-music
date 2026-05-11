@@ -26,7 +26,7 @@ extension ScoreLayerBuilder {
         metrics: StaffMetrics,
         height: CGFloat,
         context: inout BuildContext,
-        into parent: CALayer
+        into parent: CALayer,
     ) {
         // Build a scaled `StaffMetrics` so notehead / stem / flag
         // widths follow `mag`. Every dimension on `StaffMetrics`
@@ -40,13 +40,13 @@ extension ScoreLayerBuilder {
             notes: notes, duration: duration, stem: stem,
             stemOrigin: stemOrigin, isBeamed: false,
             base: base, metrics: scaled, height: height,
-            context: &context, into: parent
+            context: &context, into: parent,
         )
         guard hasSlash else { return }
         drawAcciaccaturaSlash(
             notes: notes, stem: stem,
             base: base, scaled: scaled, height: height,
-            into: parent
+            into: parent,
         )
     }
 
@@ -68,7 +68,7 @@ extension ScoreLayerBuilder {
         base: CGPoint,
         scaled: StaffMetrics,
         height: CGFloat,
-        into parent: CALayer
+        into parent: CALayer,
     ) {
         guard let xMin = notes.map(\.origin.x).min(),
               let xMax = notes.map(\.origin.x).max(),
@@ -113,7 +113,7 @@ extension ScoreLayerBuilder {
         // 0.125 sp × mag` aliases below one device pixel.
         parent.addSublayer(strokeLayer(
             path: path, height: height,
-            lineWidth: scaled.stemThickness
+            lineWidth: scaled.stemThickness,
         ))
     }
 }

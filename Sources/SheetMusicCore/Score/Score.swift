@@ -20,7 +20,7 @@ public struct Score: Sendable, Equatable {
         metaTags: [String: String] = [:],
         titleFrame: ScoreFrame? = nil,
         style: ScoreStyle = .museScoreDefaults,
-        source: ScoreSource = .unknown
+        source: ScoreSource = .unknown,
     ) {
         self.division = division
         self.parts = parts

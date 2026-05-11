@@ -22,7 +22,7 @@
             ])])
             return Score(
                 division: 480,
-                parts: [Part(id: "1", instrument: Instrument(id: "x"), staves: [Staff(measures: [m1, m2, m3])])]
+                parts: [Part(id: "1", instrument: Instrument(id: "x"), staves: [Staff(measures: [m1, m2, m3])])],
             )
         }
 
@@ -31,12 +31,12 @@
             guard #available(macOS 15.0, *) else { return }
             let score = Self.sampleScore()
             let baseline = LayoutEngine.layout(
-                score: score, options: .init(), availableWidth: 800
+                score: score, options: .init(), availableWidth: 800,
             )
             let cache = LayoutCache()
             let cached = LayoutEngine.layout(
                 score: score, options: .init(),
-                availableWidth: 800, cache: cache
+                availableWidth: 800, cache: cache,
             )
             #expect(cached.systems == baseline.systems)
             #expect(cached.size == baseline.size)
@@ -49,7 +49,7 @@
             let cache = LayoutCache()
             _ = LayoutEngine.layout(
                 score: score, options: .init(),
-                availableWidth: 800, cache: cache
+                availableWidth: 800, cache: cache,
             )
             #expect(cache.entries.count == 3)
             #expect(cache.widthHits == 0)
@@ -69,11 +69,11 @@
             let cache = LayoutCache()
             let first = LayoutEngine.layout(
                 score: score, options: .init(),
-                availableWidth: 800, cache: cache
+                availableWidth: 800, cache: cache,
             )
             let second = LayoutEngine.layout(
                 score: score, options: .init(),
-                availableWidth: 800, cache: cache
+                availableWidth: 800, cache: cache,
             )
             #expect(first.systems == second.systems)
             #expect(first.size == second.size)
@@ -97,7 +97,7 @@
             let cache = LayoutCache()
             _ = LayoutEngine.layout(
                 score: scoreA, options: .init(),
-                availableWidth: 800, cache: cache
+                availableWidth: 800, cache: cache,
             )
             // Now edit measure 1: replace its content.
             var staff = scoreA.parts[0].staves[0]
@@ -112,11 +112,11 @@
             staff = Staff(measures: measures)
             let scoreB = Score(
                 division: scoreA.division,
-                parts: [Part(id: "1", instrument: Instrument(id: "x"), staves: [staff])]
+                parts: [Part(id: "1", instrument: Instrument(id: "x"), staves: [staff])],
             )
             _ = LayoutEngine.layout(
                 score: scoreB, options: .init(),
-                availableWidth: 800, cache: cache
+                availableWidth: 800, cache: cache,
             )
             // Measures 0 and 2 unchanged → 2 width hits; measure 1 → 1 miss.
             #expect(cache.widthHits == 2)
@@ -146,7 +146,7 @@
             ]
             for name in fixtures {
                 guard let url = Bundle.module.url(
-                    forResource: name, withExtension: "mscx"
+                    forResource: name, withExtension: "mscx",
                 ) else {
                     Issue.record("Missing fixture: \(name).mscx")
                     continue
@@ -154,20 +154,20 @@
                 let data = try Data(contentsOf: url)
                 let score = try MSCXParser.parse(data)
                 let baseline = LayoutEngine.layout(
-                    score: score, options: .init(), availableWidth: 800
+                    score: score, options: .init(), availableWidth: 800,
                 )
                 let cache = LayoutCache()
                 let cached = LayoutEngine.layout(
                     score: score, options: .init(),
-                    availableWidth: 800, cache: cache
+                    availableWidth: 800, cache: cache,
                 )
                 #expect(
                     cached.systems == baseline.systems,
-                    "systems differ for \(name)"
+                    "systems differ for \(name)",
                 )
                 #expect(
                     cached.size == baseline.size,
-                    "size differs for \(name)"
+                    "size differs for \(name)",
                 )
             }
         }
@@ -178,7 +178,7 @@
         func realFixtureWarmHitRate() throws {
             guard #available(macOS 15.0, *) else { return }
             guard let url = Bundle.module.url(
-                forResource: "midi01", withExtension: "mscx"
+                forResource: "midi01", withExtension: "mscx",
             ) else {
                 Issue.record("Missing fixture: midi01.mscx")
                 return
@@ -187,13 +187,13 @@
             let cache = LayoutCache()
             _ = LayoutEngine.layout(
                 score: score, options: .init(),
-                availableWidth: 800, cache: cache
+                availableWidth: 800, cache: cache,
             )
             let widthMissesCold = cache.widthMisses
             let systemMissesCold = cache.systemMisses
             _ = LayoutEngine.layout(
                 score: score, options: .init(),
-                availableWidth: 800, cache: cache
+                availableWidth: 800, cache: cache,
             )
             // Warm call: zero misses, every prior miss is now a hit.
             #expect(cache.widthMisses == 0)
@@ -212,7 +212,7 @@
         func staffSizeChangeInvalidates() throws {
             guard #available(macOS 15.0, *) else { return }
             guard let url = Bundle.module.url(
-                forResource: "midi01", withExtension: "mscx"
+                forResource: "midi01", withExtension: "mscx",
             ) else {
                 Issue.record("Missing fixture: midi01.mscx")
                 return
@@ -221,11 +221,11 @@
             let cache = LayoutCache()
             _ = LayoutEngine.layout(
                 score: score, options: ScoreViewOptions(staffSize: 7),
-                availableWidth: 800, cache: cache
+                availableWidth: 800, cache: cache,
             )
             _ = LayoutEngine.layout(
                 score: score, options: ScoreViewOptions(staffSize: 9),
-                availableWidth: 800, cache: cache
+                availableWidth: 800, cache: cache,
             )
             // sp changed → every measure should miss again.
             #expect(cache.widthHits == 0)

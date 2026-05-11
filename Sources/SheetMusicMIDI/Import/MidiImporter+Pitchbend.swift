@@ -23,7 +23,7 @@ extension MidiImporter {
     /// matching the next noteOn's pitch on the same channel.
     static func detectGlissandos(
         measure: ImportMeasure,
-        division: Int
+        division: Int,
     ) -> [GlissandoAttachment] {
         struct Span {
             var channel: Int
@@ -47,7 +47,7 @@ extension MidiImporter {
                     let n = open.remove(at: i)
                     spans.append(Span(
                         channel: c, pitch: p,
-                        onTick: n.onTick, offTick: ev.tick, bends: n.bends
+                        onTick: n.onTick, offTick: ev.tick, bends: n.bends,
                     ))
                 }
             case let .pitchBend(c, value):
@@ -88,7 +88,7 @@ extension MidiImporter {
                 measureIndex: measure.measureIndex,
                 sourceOnTick: span.onTick,
                 pitch: span.pitch,
-                glissando: Glissando(style: .portamento, visualType: .straight)
+                glissando: Glissando(style: .portamento, visualType: .straight),
             ))
         }
         return attachments

@@ -25,8 +25,8 @@
                 parts: [Part(
                     id: "1",
                     instrument: Instrument(id: "x"),
-                    staves: [Staff(measures: measures)]
-                )]
+                    staves: [Staff(measures: measures)],
+                )],
             )
         }
 
@@ -49,7 +49,7 @@
                 Self.restMeasure(), Self.restMeasure(), Self.restMeasure(),
             ])
             let plan = MultiMeasureRestPlanner.plan(
-                for: s, policy: .collapse(minimumMeasures: 2)
+                for: s, policy: .collapse(minimumMeasures: 2),
             )
             #expect(plan.runs == [0 ..< 3])
         }
@@ -59,7 +59,7 @@
             guard #available(macOS 15.0, iOS 16.0, *) else { return }
             let s = Self.score([Self.restMeasure(), Self.restMeasure()])
             let plan = MultiMeasureRestPlanner.plan(
-                for: s, policy: .collapse(minimumMeasures: 3)
+                for: s, policy: .collapse(minimumMeasures: 3),
             )
             #expect(plan.runs.isEmpty)
         }
@@ -69,7 +69,7 @@
             guard #available(macOS 15.0, iOS 16.0, *) else { return }
             let s = Self.score([Self.restMeasure()])
             let plan = MultiMeasureRestPlanner.plan(
-                for: s, policy: .collapse(minimumMeasures: 1)
+                for: s, policy: .collapse(minimumMeasures: 1),
             )
             // Single rest cannot collapse even when minimum is 1 (clamped to 2).
             #expect(plan.runs.isEmpty)
@@ -84,7 +84,7 @@
                 Self.restMeasure(), Self.restMeasure(),
             ])
             let plan = MultiMeasureRestPlanner.plan(
-                for: s, policy: .collapse(minimumMeasures: 2)
+                for: s, policy: .collapse(minimumMeasures: 2),
             )
             #expect(plan.runs == [0 ..< 2, 3 ..< 5])
         }
@@ -101,7 +101,7 @@
                 Self.restMeasure(), Self.restMeasure(),
             ])
             let plan = MultiMeasureRestPlanner.plan(
-                for: s, policy: .collapse(minimumMeasures: 2)
+                for: s, policy: .collapse(minimumMeasures: 2),
             )
             // The mark-bearing measure is not collapsible; trailing pair collapses.
             #expect(plan.runs == [0 ..< 2, 3 ..< 5])
@@ -120,7 +120,7 @@
                 Self.restMeasure(), Self.restMeasure(),
             ])
             let plan = MultiMeasureRestPlanner.plan(
-                for: s, policy: .collapse(minimumMeasures: 2)
+                for: s, policy: .collapse(minimumMeasures: 2),
             )
             #expect(plan.runs == [0 ..< 2, 3 ..< 5])
         }
@@ -138,7 +138,7 @@
                 Self.restMeasure(), Self.restMeasure(),
             ])
             let plan = MultiMeasureRestPlanner.plan(
-                for: s, policy: .collapse(minimumMeasures: 2)
+                for: s, policy: .collapse(minimumMeasures: 2),
             )
             #expect(plan.runs == [0 ..< 2, 3 ..< 5])
         }
@@ -156,7 +156,7 @@
                 Self.restMeasure(), Self.restMeasure(),
             ])
             let plan = MultiMeasureRestPlanner.plan(
-                for: s, policy: .collapse(minimumMeasures: 2)
+                for: s, policy: .collapse(minimumMeasures: 2),
             )
             #expect(plan.runs == [0 ..< 2, 3 ..< 5])
         }
@@ -171,7 +171,7 @@
                 Self.restMeasure(), Self.restMeasure(),
             ])
             let plan = MultiMeasureRestPlanner.plan(
-                for: s, policy: .collapse(minimumMeasures: 2)
+                for: s, policy: .collapse(minimumMeasures: 2),
             )
             #expect(plan.runs == [0 ..< 2, 3 ..< 5])
         }
@@ -186,7 +186,7 @@
                 Self.restMeasure(), Self.restMeasure(),
             ])
             let plan = MultiMeasureRestPlanner.plan(
-                for: s, policy: .collapse(minimumMeasures: 2)
+                for: s, policy: .collapse(minimumMeasures: 2),
             )
             #expect(plan.runs == [2 ..< 4])
         }
@@ -201,7 +201,7 @@
                 Self.restMeasure(), Self.restMeasure(),
             ])
             let plan = MultiMeasureRestPlanner.plan(
-                for: s, policy: .collapse(minimumMeasures: 2)
+                for: s, policy: .collapse(minimumMeasures: 2),
             )
             #expect(plan.runs == [0 ..< 2, 3 ..< 5])
         }
@@ -222,7 +222,7 @@
                 Self.restMeasure(), Self.restMeasure(),
             ])
             let plan = MultiMeasureRestPlanner.plan(
-                for: s, policy: .collapse(minimumMeasures: 2)
+                for: s, policy: .collapse(minimumMeasures: 2),
             )
             #expect(plan.runs == [0 ..< 2, 3 ..< 5])
         }
@@ -241,7 +241,7 @@
                 Self.restMeasure(), Self.restMeasure(), m,
             ])
             let plan = MultiMeasureRestPlanner.plan(
-                for: s, policy: .collapse(minimumMeasures: 2)
+                for: s, policy: .collapse(minimumMeasures: 2),
             )
             #expect(plan.runs == [0 ..< 3])
         }
@@ -256,7 +256,7 @@
                 Self.restMeasure(), Self.restMeasure(),
             ])
             let plan = MultiMeasureRestPlanner.plan(
-                for: s, policy: .collapse(minimumMeasures: 2)
+                for: s, policy: .collapse(minimumMeasures: 2),
             )
             #expect(plan.runs == [0 ..< 2, 3 ..< 5])
         }
@@ -271,7 +271,7 @@
                 Self.restMeasure(),
             ])
             let plan = MultiMeasureRestPlanner.plan(
-                for: s, policy: .collapse(minimumMeasures: 2)
+                for: s, policy: .collapse(minimumMeasures: 2),
             )
             // m0 has lineBreak → run ends after it. m0 is still collapsible
             // by itself, but a run of 1 doesn't meet the minimum.
@@ -289,7 +289,7 @@
                 Self.restMeasure(), Self.restMeasure(),
             ])
             let plan = MultiMeasureRestPlanner.plan(
-                for: s, policy: .collapse(minimumMeasures: 2)
+                for: s, policy: .collapse(minimumMeasures: 2),
             )
             // m0..m1 form a 2-measure run that ends at m1 (pageBreak closes
             // after m1). m2..m3 form a separate 2-measure run.
@@ -307,7 +307,7 @@
                 Self.restMeasure(), Self.restMeasure(),
             ])
             let plan = MultiMeasureRestPlanner.plan(
-                for: s, policy: .collapse(minimumMeasures: 2)
+                for: s, policy: .collapse(minimumMeasures: 2),
             )
             #expect(plan.runs == [0 ..< 2, 3 ..< 5])
         }
@@ -323,7 +323,7 @@
                 Self.restMeasure(), Self.restMeasure(),
             ])
             let plan = MultiMeasureRestPlanner.plan(
-                for: s, policy: .collapse(minimumMeasures: 2)
+                for: s, policy: .collapse(minimumMeasures: 2),
             )
             #expect(plan.runs == [0 ..< 2, 3 ..< 5])
         }
@@ -339,7 +339,7 @@
                 Self.restMeasure(), Self.restMeasure(),
             ])
             let plan = MultiMeasureRestPlanner.plan(
-                for: s, policy: .collapse(minimumMeasures: 2)
+                for: s, policy: .collapse(minimumMeasures: 2),
             )
             #expect(plan.runs == [0 ..< 2, 3 ..< 5])
         }
@@ -352,7 +352,7 @@
             // is blocked.
             let pedal = Spanner(
                 kind: .pedal, rawType: "Pedal",
-                nextMeasuresOffset: 4
+                nextMeasuresOffset: 4,
             )
             let m0 = Measure(voices: [Voice(elements: [
                 .spanner(pedal),
@@ -365,7 +365,7 @@
                 Self.restMeasure(), Self.restMeasure(),
             ])
             let plan = MultiMeasureRestPlanner.plan(
-                for: s, policy: .collapse(minimumMeasures: 2)
+                for: s, policy: .collapse(minimumMeasures: 2),
             )
             // Pedal runs from m0 across m0..m3 inclusive; closed before m4.
             // m4..m5 collapse normally.
@@ -387,11 +387,11 @@
                         Staff(measures: [r, r, r]),
                         // Staff 1: r, n, r — middle measure has a note
                         Staff(measures: [r, n, r]),
-                    ]
-                )]
+                    ],
+                )],
             )
             let plan = MultiMeasureRestPlanner.plan(
-                for: s, policy: .collapse(minimumMeasures: 2)
+                for: s, policy: .collapse(minimumMeasures: 2),
             )
             // Only m0 and m2 are silent across all staves. They are
             // separated by m1, so neither qualifies as a 2-measure run.
@@ -409,7 +409,7 @@
                 Self.restMeasure(), m, Self.restMeasure(),
             ])
             let plan = MultiMeasureRestPlanner.plan(
-                for: s, policy: .collapse(minimumMeasures: 2)
+                for: s, policy: .collapse(minimumMeasures: 2),
             )
             #expect(plan.runs == [0 ..< 3])
         }

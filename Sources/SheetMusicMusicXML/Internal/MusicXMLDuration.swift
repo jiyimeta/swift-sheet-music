@@ -13,7 +13,7 @@ enum MusicXMLDuration {
     /// callers treat that as a malformed note.
     static func decode(
         note: XMLTreeNode,
-        divisions: DivisionsContext
+        divisions: DivisionsContext,
     ) -> NoteDuration? {
         let durationInt = note.first("duration").flatMap { Int($0.text) }
         let typeText = note.first("type")?.text
@@ -51,7 +51,7 @@ enum MusicXMLDuration {
 
     private static func applyTupletModification(
         to base: NoteDuration,
-        mod: XMLTreeNode
+        mod: XMLTreeNode,
     ) -> NoteDuration {
         guard let actualText = mod.first("actual-notes")?.text,
               let normalText = mod.first("normal-notes")?.text,

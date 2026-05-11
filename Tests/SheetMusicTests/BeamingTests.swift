@@ -10,11 +10,11 @@
         func twoEighths() {
             guard #available(macOS 15.0, *) else { return }
             let c = Chord(
-                duration: .eighth, notes: [Note(pitch: 60, tpc: 14)]
+                duration: .eighth, notes: [Note(pitch: 60, tpc: 14)],
             )
             let voice = Voice(elements: [
                 .timeSignature(TimeSignature(
-                    numerator: 4, denominator: 4
+                    numerator: 4, denominator: 4,
                 )),
                 .chord(c),
                 .chord(c),
@@ -22,9 +22,9 @@
             let groups = LayoutEngine.beamGroups(
                 voice: voice,
                 timeSignature: TimeSignature(
-                    numerator: 4, denominator: 4
+                    numerator: 4, denominator: 4,
                 ),
-                division: 480
+                division: 480,
             )
             #expect(groups.count == 1)
             #expect(groups.first?.level == 1)
@@ -36,17 +36,17 @@
             guard #available(macOS 15.0, *) else { return }
             let c = Chord(
                 duration: .sixteenth,
-                notes: [Note(pitch: 60, tpc: 14)]
+                notes: [Note(pitch: 60, tpc: 14)],
             )
             let voice = Voice(elements: Array(
-                repeating: .chord(c), count: 4
+                repeating: .chord(c), count: 4,
             ))
             let groups = LayoutEngine.beamGroups(
                 voice: voice,
                 timeSignature: TimeSignature(
-                    numerator: 4, denominator: 4
+                    numerator: 4, denominator: 4,
                 ),
-                division: 480
+                division: 480,
             )
             #expect(groups.count == 1)
             #expect(groups.first?.level == 2)
@@ -57,17 +57,17 @@
             guard #available(macOS 15.0, *) else { return }
             let c = Chord(
                 duration: .eighth,
-                notes: [Note(pitch: 60, tpc: 14)]
+                notes: [Note(pitch: 60, tpc: 14)],
             )
             let voice = Voice(elements: Array(
-                repeating: .chord(c), count: 4
+                repeating: .chord(c), count: 4,
             ))
             let groups = LayoutEngine.beamGroups(
                 voice: voice,
                 timeSignature: TimeSignature(
-                    numerator: 4, denominator: 4
+                    numerator: 4, denominator: 4,
                 ),
-                division: 480
+                division: 480,
             )
             // 4/4: beam group = half note (960 ticks). 4 8ths span exactly
             // one half-note — one group, not two.
@@ -80,17 +80,17 @@
             guard #available(macOS 15.0, *) else { return }
             let c = Chord(
                 duration: .eighth,
-                notes: [Note(pitch: 60, tpc: 14)]
+                notes: [Note(pitch: 60, tpc: 14)],
             )
             let voice = Voice(elements: Array(
-                repeating: .chord(c), count: 8
+                repeating: .chord(c), count: 8,
             ))
             let groups = LayoutEngine.beamGroups(
                 voice: voice,
                 timeSignature: TimeSignature(
-                    numerator: 4, denominator: 4
+                    numerator: 4, denominator: 4,
                 ),
-                division: 480
+                division: 480,
             )
             #expect(groups.count == 2)
             #expect(groups[0].memberIndices.count == 4)
@@ -102,7 +102,7 @@
             guard #available(macOS 15.0, *) else { return }
             let eighth = Chord(
                 duration: .eighth,
-                notes: [Note(pitch: 60, tpc: 14)]
+                notes: [Note(pitch: 60, tpc: 14)],
             )
             let voice = Voice(elements: [
                 .chord(eighth),
@@ -112,9 +112,9 @@
             let groups = LayoutEngine.beamGroups(
                 voice: voice,
                 timeSignature: TimeSignature(
-                    numerator: 4, denominator: 4
+                    numerator: 4, denominator: 4,
                 ),
-                division: 480
+                division: 480,
             )
             #expect(groups.isEmpty)
         }
@@ -124,17 +124,17 @@
             guard #available(macOS 15.0, *) else { return }
             let c = Chord(
                 duration: .sixteenth,
-                notes: [Note(pitch: 60, tpc: 14)]
+                notes: [Note(pitch: 60, tpc: 14)],
             )
             let voice = Voice(elements: Array(
-                repeating: .chord(c), count: 8
+                repeating: .chord(c), count: 8,
             ))
             let groups = LayoutEngine.beamGroups(
                 voice: voice,
                 timeSignature: TimeSignature(
-                    numerator: 4, denominator: 4
+                    numerator: 4, denominator: 4,
                 ),
-                division: 480
+                division: 480,
             )
             // Two uniform level-2 beats still flush because secondary
             // beams break at every beat — not a single merged run of 8.
@@ -150,17 +150,17 @@
             guard #available(macOS 15.0, *) else { return }
             let c = Chord(
                 duration: .sixteenth,
-                notes: [Note(pitch: 60, tpc: 14)]
+                notes: [Note(pitch: 60, tpc: 14)],
             )
             let voice = Voice(elements: Array(
-                repeating: .chord(c), count: 16
+                repeating: .chord(c), count: 16,
             ))
             let groups = LayoutEngine.beamGroups(
                 voice: voice,
                 timeSignature: TimeSignature(
-                    numerator: 4, denominator: 4
+                    numerator: 4, denominator: 4,
                 ),
-                division: 480
+                division: 480,
             )
             #expect(groups.count == 4)
             for g in groups {
@@ -178,11 +178,11 @@
             // Only elements 7 and 8 (both inside beat 4) remain a pair.
             let c16 = Chord(
                 duration: .sixteenth,
-                notes: [Note(pitch: 60, tpc: 14)]
+                notes: [Note(pitch: 60, tpc: 14)],
             )
             let e16 = Chord(
                 duration: .sixteenth,
-                notes: [Note(pitch: 64, tpc: 18)]
+                notes: [Note(pitch: 64, tpc: 18)],
             )
             let voice = Voice(elements: [
                 .rest(duration: .half), // 0
@@ -198,9 +198,9 @@
             let groups = LayoutEngine.beamGroups(
                 voice: voice,
                 timeSignature: TimeSignature(
-                    numerator: 4, denominator: 4
+                    numerator: 4, denominator: 4,
                 ),
-                division: 480
+                division: 480,
             )
             #expect(groups.count == 1)
             #expect(groups.first?.memberIndices == [7, 8])

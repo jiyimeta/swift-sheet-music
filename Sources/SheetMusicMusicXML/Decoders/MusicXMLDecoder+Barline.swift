@@ -48,7 +48,7 @@ enum MusicXMLBarlineDecoder {
             placement: placement,
             inline: inline,
             startRepeat: startRepeat,
-            endRepeatCount: endRepeatCount
+            endRepeatCount: endRepeatCount,
         )
     }
 
@@ -59,7 +59,7 @@ enum MusicXMLBarlineDecoder {
     /// Reference: `mu::iex::musicxml::MusicXmlParserPass2::barline`.
     private static func museScoreBarLine(
         for barStyle: String?,
-        placement: Decoded.Placement
+        placement: Decoded.Placement,
     ) -> BarLine? {
         guard let barStyle else { return nil }
         switch barStyle {

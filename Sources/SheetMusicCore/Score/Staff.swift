@@ -32,7 +32,7 @@ public struct Staff: Sendable, Equatable {
         group: String = "pitched",
         defaultClefType: String? = nil,
         brackets: [BracketItem] = [],
-        measures: [Measure] = []
+        measures: [Measure] = [],
     ) {
         self.staffType = staffType
         self.group = group

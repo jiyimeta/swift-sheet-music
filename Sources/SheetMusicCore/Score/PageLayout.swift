@@ -29,7 +29,7 @@ public struct PageLayout: Sendable, Equatable {
         evenTopMargin: Double,
         evenBottomMargin: Double,
         evenLeftMargin: Double,
-        twosided: Bool
+        twosided: Bool,
     ) {
         self.width = width
         self.height = height
@@ -68,6 +68,6 @@ public struct PageLayout: Sendable, Equatable {
         evenTopMargin: 15.0 / 25.4,
         evenBottomMargin: 15.0 / 25.4,
         evenLeftMargin: 15.0 / 25.4,
-        twosided: true
+        twosided: true,
     )
 }

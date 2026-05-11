@@ -21,7 +21,7 @@ extension RehearsalMark {
                     "g": String(color.green),
                     "b": String(color.blue),
                     "a": String(color.alpha),
-                ]
+                ],
             ))
         }
         if offsetX != 0 || offsetY != 0 {
@@ -30,7 +30,7 @@ extension RehearsalMark {
                 attributes: [
                     "x": formatDouble(offsetX),
                     "y": formatDouble(offsetY),
-                ]
+                ],
             ))
         }
         var props = properties

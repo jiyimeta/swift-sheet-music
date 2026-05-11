@@ -6,12 +6,13 @@ struct ScoreNextChordTests {
     private static func chord(_ p: Int = 60) -> VoiceElement {
         .chord(Chord(
             duration: .quarter,
-            notes: [Note(pitch: p, tpc: 14)]
+            notes: [Note(pitch: p, tpc: 14)],
         ))
     }
 
     private static let restQ: VoiceElement = .rest(
-        duration: .quarter)
+        duration: .quarter,
+    )
 
     @Test("returns the next chord in the same measure")
     func sameMeasure() {
@@ -24,7 +25,7 @@ struct ScoreNextChordTests {
         ])])
         let here = VoiceElementID(
             staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
-            voiceIndex: 0, elementIndex: 0
+            voiceIndex: 0, elementIndex: 0,
         )
         let next = score.nextChord(after: here)
         #expect(next?.elementIndex == 1)
@@ -45,7 +46,7 @@ struct ScoreNextChordTests {
         ])])
         let here = VoiceElementID(
             staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
-            voiceIndex: 0, elementIndex: 0
+            voiceIndex: 0, elementIndex: 0,
         )
         let next = score.nextChord(after: here)
         #expect(next?.elementIndex == 3)
@@ -61,7 +62,7 @@ struct ScoreNextChordTests {
         ])])
         let here = VoiceElementID(
             staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
-            voiceIndex: 0, elementIndex: 0
+            voiceIndex: 0, elementIndex: 0,
         )
         let next = score.nextChord(after: here)
         #expect(next?.measureIndex == 1)
@@ -77,7 +78,7 @@ struct ScoreNextChordTests {
         ])])
         let here = VoiceElementID(
             staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
-            voiceIndex: 0, elementIndex: 0
+            voiceIndex: 0, elementIndex: 0,
         )
         #expect(score.nextChord(after: here) == nil)
     }
@@ -94,7 +95,7 @@ struct ScoreNextChordTests {
         ])])
         let here = VoiceElementID(
             staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
-            voiceIndex: 0, elementIndex: 0
+            voiceIndex: 0, elementIndex: 0,
         )
         let next = score.nextChord(after: here)
         // Next chord in voice 0 is at elementIndex 0 only (restQ follows);

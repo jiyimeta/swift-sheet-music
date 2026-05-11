@@ -71,7 +71,7 @@ final class MetronomeController {
                 at: url,
                 program: 0,
                 bankMSB: UInt8(kAUSampler_DefaultPercussionBankMSB),
-                bankLSB: 0
+                bankLSB: 0,
             )
             loadedSoundfontURL = url
         } catch {
@@ -85,7 +85,7 @@ final class MetronomeController {
     /// lands a half-beat later so back-to-back ticks at fast tempi
     /// don't choke each other on samplers that respect note-off.
     func metronomeTrack(
-        beats: [MetronomeBeat], division: Int
+        beats: [MetronomeBeat], division: Int,
     ) -> MidiTrack {
         var events: [TimedMidiEvent] = []
         events.reserveCapacity(beats.count * 2 + 1)
@@ -96,19 +96,19 @@ final class MetronomeController {
             events.append(TimedMidiEvent(
                 tick: beat.tick,
                 event: .noteOn(
-                    channel: 9, pitch: pitch, velocity: velocity
-                )
+                    channel: 9, pitch: pitch, velocity: velocity,
+                ),
             ))
             events.append(TimedMidiEvent(
                 tick: beat.tick + halfBeat,
                 event: .noteOff(
-                    channel: 9, pitch: pitch, velocity: 0
-                )
+                    channel: 9, pitch: pitch, velocity: 0,
+                ),
             ))
         }
         let lastTick = events.map(\.tick).max() ?? 0
         events.append(TimedMidiEvent(
-            tick: lastTick + 1, event: .endOfTrack
+            tick: lastTick + 1, event: .endOfTrack,
         ))
         return MidiTrack(events: events)
     }

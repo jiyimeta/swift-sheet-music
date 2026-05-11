@@ -9,7 +9,7 @@ extension MidiImporter {
         imports: [ImportTrack],
         timeline: BarTimeline,
         options: MidiImportOptions,
-        sourceFilename: String?
+        sourceFilename: String?,
     ) -> Score {
         let perTrackMeasures = imports.map { segment(track: $0, timeline: timeline) }
         let measureKeys = perMeasureKeys(file: file, timeline: timeline)
@@ -24,7 +24,7 @@ extension MidiImporter {
                 if track.isDrums {
                     return drumVoices(
                         measure: m, quantized: q,
-                        division: file.division, maxDots: options.maxDots
+                        division: file.division, maxDots: options.maxDots,
                     )
                 }
                 return [voice(
@@ -33,7 +33,7 @@ extension MidiImporter {
                     division: file.division,
                     isDrumTrack: false,
                     concertKey: key,
-                    maxDots: options.maxDots
+                    maxDots: options.maxDots,
                 )]
             }
             var scoreMeasures = measureVoices.map { Measure(voices: $0) }
@@ -42,7 +42,7 @@ extension MidiImporter {
                     measures: measures,
                     voices: measureVoices.compactMap(\.first),
                     into: &scoreMeasures,
-                    division: file.division
+                    division: file.division,
                 )
             }
             // Build the Staff directly (replaces separate StaffContent + StaffDeclaration).
@@ -61,21 +61,21 @@ extension MidiImporter {
                 staffType: track.isDrums ? "perc5Line" : "stdNormal",
                 group: track.isDrums ? "percussion" : "pitched",
                 defaultClefType: track.isDrums ? "PERC" : nil,
-                measures: scoreMeasures
+                measures: scoreMeasures,
             )
             injectMetaEvents(
                 file: file,
                 timeline: timeline,
                 into: &staff,
                 includeTempo: trackIdx == 0,
-                includeKeySignature: !track.isDrums
+                includeKeySignature: !track.isDrums,
             )
             parts.append(makePart(for: track, staff: staff))
         }
         let meta = resolveTitle(file: file, sourceFilename: sourceFilename)
         return Score(
             division: file.division, parts: parts, metaTags: meta,
-            source: .midi
+            source: .midi,
         )
     }
 
@@ -90,7 +90,7 @@ extension MidiImporter {
         measure: ImportMeasure,
         quantized: QuantizedMeasure,
         division: Int,
-        maxDots: Int
+        maxDots: Int,
     ) -> [Voice] {
         let v0Pitches = pitchesInVoice(0, in: measure)
         let v1Pitches = pitchesInVoice(1, in: measure)
@@ -101,7 +101,7 @@ extension MidiImporter {
             measure: filterMeasure(measure, keepingPitches: v0Pitches),
             division: division,
             isDrumTrack: true,
-            maxDots: maxDots
+            maxDots: maxDots,
         ))
         if !v1Pitches.isEmpty {
             result.append(voice(
@@ -109,14 +109,14 @@ extension MidiImporter {
                 measure: filterMeasure(measure, keepingPitches: v1Pitches),
                 division: division,
                 isDrumTrack: true,
-                maxDots: maxDots
+                maxDots: maxDots,
             ))
         }
         return result
     }
 
     private static func pitchesInVoice(
-        _ voiceIdx: Int, in measure: ImportMeasure
+        _ voiceIdx: Int, in measure: ImportMeasure,
     ) -> Set<Int> {
         var pitches: Set<Int> = []
         for ev in measure.events {
@@ -130,7 +130,7 @@ extension MidiImporter {
     }
 
     private static func filterMeasure(
-        _ measure: ImportMeasure, keepingPitches pitches: Set<Int>
+        _ measure: ImportMeasure, keepingPitches pitches: Set<Int>,
     ) -> ImportMeasure {
         var copy = measure
         copy.events = measure.events.filter { ev in
@@ -152,7 +152,7 @@ extension MidiImporter {
         measures: [ImportMeasure],
         voices: [Voice],
         into scoreMeasures: inout [Measure],
-        division: Int
+        division: Int,
     ) {
         for (i, measure) in measures.enumerated() {
             let attachments = detectGlissandos(measure: measure, division: division)
@@ -201,7 +201,7 @@ extension MidiImporter {
     /// stray `sf=0` on drum tracks because percussion has no key,
     /// which would otherwise compete with the real value at tick 0.
     static func perMeasureKeys(
-        file: MidiFile, timeline: BarTimeline
+        file: MidiFile, timeline: BarTimeline,
     ) -> [Int] {
         struct Change { var tick: Int; var sf: Int }
         var changes: [Change] = []
@@ -236,7 +236,7 @@ extension MidiImporter {
         timeline: BarTimeline,
         into staff: inout Staff,
         includeTempo: Bool,
-        includeKeySignature: Bool
+        includeKeySignature: Bool,
     ) {
         // Format 1 convention: tempo / time-sig / key-sig are all
         // on the conductor (track 0). DAWs frequently duplicate
@@ -306,7 +306,7 @@ extension MidiImporter {
                         normalNotes: $0.normalNotes,
                         actualNotes: $0.actualNotes,
                         startIndex: $0.startIndex + 1,
-                        endIndex: $0.endIndex + 1
+                        endIndex: $0.endIndex + 1,
                     )
                 }
                 staff.measures[measureIdx].voices[0] = voice
@@ -323,19 +323,19 @@ extension MidiImporter {
                 id: "drumset",
                 longName: track.trackName ?? "Drumset",
                 useDrumset: true,
-                drumLineMap: gmDrumLines
+                drumLineMap: gmDrumLines,
             )
         } else {
             instrument = Instrument(
                 id: gmInstrumentID(for: track.programChange),
-                longName: track.trackName ?? "Track"
+                longName: track.trackName ?? "Track",
             )
         }
         return Part(
             id: "P\(track.trackIndex)",
             trackName: track.trackName,
             instrument: instrument,
-            staves: [staff]
+            staves: [staff],
         )
     }
 
@@ -357,7 +357,7 @@ extension MidiImporter {
 
     static func resolveTitle(
         file: MidiFile,
-        sourceFilename: String?
+        sourceFilename: String?,
     ) -> [String: String] {
         var meta: [String: String] = [:]
         let track0 = file.tracks.first

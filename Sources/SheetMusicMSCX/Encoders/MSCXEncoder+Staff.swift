@@ -7,7 +7,7 @@ extension Staff {
     /// bracket information, default clef. Measures are emitted by
     /// `encodeTopLevel(staffID:)` separately.
     func encodeDeclaration(
-        staffID: String, options: MSCXEncoderOptions = .init()
+        staffID: String, options: MSCXEncoderOptions = .init(),
     ) -> XMLTreeNode {
         var children: [XMLTreeNode] = []
         children.append(XMLTreeNode(
@@ -15,11 +15,11 @@ extension Staff {
             attributes: ["group": group],
             children: [
                 XMLTreeNode(name: "name", text: staffType),
-            ]
+            ],
         ))
         if let defaultClefType {
             children.append(XMLTreeNode(
-                name: "defaultClef", text: defaultClefType
+                name: "defaultClef", text: defaultClefType,
             ))
         }
         for bracket in brackets {
@@ -30,13 +30,13 @@ extension Staff {
             ]
             if !bracket.visible { bracketAttrs["visible"] = "0" }
             children.append(XMLTreeNode(
-                name: "bracket", attributes: bracketAttrs
+                name: "bracket", attributes: bracketAttrs,
             ))
         }
         return XMLTreeNode(
             name: "Staff",
             attributes: ["id": staffID],
-            children: children
+            children: children,
         )
     }
 
@@ -48,7 +48,7 @@ extension Staff {
     func encodeTopLevel(
         staffID: String,
         titleFrame: ScoreFrame? = nil,
-        options: MSCXEncoderOptions = .init()
+        options: MSCXEncoderOptions = .init(),
     ) throws -> XMLTreeNode {
         var children: [XMLTreeNode] = []
         if let titleFrame {
@@ -66,7 +66,7 @@ extension Staff {
                 carryInVoiceTieCarries: carry,
                 isFirstMeasureOfStaff: measureIndex == 0,
                 options: options,
-                staffGroup: group
+                staffGroup: group,
             )
             children.append(result.node)
             carry = result.carryOutVoiceTieCarries
@@ -74,7 +74,7 @@ extension Staff {
         return XMLTreeNode(
             name: "Staff",
             attributes: ["id": staffID],
-            children: children
+            children: children,
         )
     }
 }

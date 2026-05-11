@@ -5,7 +5,7 @@ import Foundation
 @testable import SheetMusicMSCX
 import Testing
 
-@Suite struct MSCXParserTests {
+struct MSCXParserTests {
     @Test func parsesMidi01() throws {
         let url = try #require(Bundle.module.url(forResource: "midi01", withExtension: "mscx"))
         let data = try Data(contentsOf: url)

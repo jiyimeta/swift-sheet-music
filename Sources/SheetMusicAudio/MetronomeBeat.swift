@@ -34,7 +34,7 @@ extension PlaybackTimeline {
         var measureLengths = [Int](repeating: 0, count: measureCount)
         var measureTimeSigs = [TimeSignature](
             repeating: TimeSignature(numerator: 4, denominator: 4),
-            count: measureCount
+            count: measureCount,
         )
         var spineTick = 0
         var currentTimeSig = TimeSignature(numerator: 4, denominator: 4)
@@ -90,7 +90,7 @@ extension PlaybackTimeline {
                 if offset >= measureLen { break }
                 beats.append(MetronomeBeat(
                     tick: measureStarts[mi] + offset,
-                    isDownbeat: i == 0 && !isIrregular
+                    isDownbeat: i == 0 && !isIrregular,
                 ))
             }
         }

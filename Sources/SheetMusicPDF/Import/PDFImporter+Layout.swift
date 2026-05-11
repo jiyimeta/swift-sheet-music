@@ -21,7 +21,7 @@ extension PDFImporter {
         staves: [Staff],
         paths: [PathSegment],
         classified: [ClassifiedGlyph],
-        pageIndex: Int
+        pageIndex: Int,
     ) -> [ImportSystem] {
         let pageStaves = staves
             .filter { $0.pageIndex == pageIndex }
@@ -30,7 +30,7 @@ extension PDFImporter {
         let systemGroups = clusterIntoSystems(pageStaves)
         return systemGroups.map { staffGroup -> ImportSystem in
             let parts = couplingByBracket(
-                staves: staffGroup, paths: paths, pageIndex: pageIndex
+                staves: staffGroup, paths: paths, pageIndex: pageIndex,
             )
             let yRange = systemYRange(staffGroup)
             let bare = ImportSystem(pageIndex: pageIndex, yRange: yRange, parts: parts)
@@ -92,7 +92,7 @@ extension PDFImporter {
     /// staves into a single `ImportPart` (grand staff). Otherwise each
     /// staff becomes its own part.
     private static func couplingByBracket(
-        staves: [Staff], paths: [PathSegment], pageIndex: Int
+        staves: [Staff], paths: [PathSegment], pageIndex: Int,
     ) -> [ImportPart] {
         var coupled = Array(repeating: false, count: staves.count)
         var parts: [ImportPart] = []
@@ -107,7 +107,9 @@ extension PDFImporter {
             guard idxs.count >= 2 else { continue }
             let group = idxs.map { ImportStaff(staff: staves[$0], measures: []) }
             parts.append(ImportPart(staves: group))
-            for i in idxs { coupled[i] = true }
+            for i in idxs {
+                coupled[i] = true
+            }
         }
         for (i, s) in staves.enumerated() where !coupled[i] {
             parts.append(ImportPart(staves: [ImportStaff(staff: s, measures: [])]))
@@ -116,7 +118,7 @@ extension PDFImporter {
     }
 
     private static func bracketCoupledIndices(
-        path: PathSegment, staves: [Staff], coupled: [Bool]
+        path: PathSegment, staves: [Staff], coupled: [Bool],
     ) -> [Int] {
         var idxs: [Int] = []
         for (i, s) in staves.enumerated() where !coupled[i] {
@@ -134,7 +136,7 @@ extension PDFImporter {
     /// system-wide union of barline midXs so all staves in the system
     /// produce the same measure count.
     private static func addingMeasures(
-        _ system: ImportSystem, classified: [ClassifiedGlyph]
+        _ system: ImportSystem, classified: [ClassifiedGlyph],
     ) -> ImportSystem {
         let unionMidXs = systemBarlineUnion(system)
         var parts = system.parts
@@ -143,7 +145,7 @@ extension PDFImporter {
                 let staff = parts[p].staves[s].staff
                 let xs = splitPoints(staff: staff, unionMidXs: unionMidXs)
                 parts[p].staves[s].measures = makeMeasures(
-                    staff: staff, splitXs: xs, classified: classified
+                    staff: staff, splitXs: xs, classified: classified,
                 )
             }
         }
@@ -180,7 +182,7 @@ extension PDFImporter {
     }
 
     private static func makeMeasures(
-        staff: Staff, splitXs: [CGFloat], classified: [ClassifiedGlyph]
+        staff: Staff, splitXs: [CGFloat], classified: [ClassifiedGlyph],
     ) -> [ImportMeasure] {
         guard splitXs.count >= 2 else { return [] }
         var measures: [ImportMeasure] = []
@@ -194,14 +196,14 @@ extension PDFImporter {
                 glyphs: cellGlyphs,
                 leadingBarline: i == 0 ? nil : barline(in: staff, near: lo),
                 trailingBarline: i == lastIndex ? nil : barline(in: staff, near: hi),
-                staffYLines: staff.yLines
+                staffYLines: staff.yLines,
             ))
         }
         return measures
     }
 
     private static func filterGlyphs(
-        classified: [ClassifiedGlyph], staff: Staff, lo: CGFloat, hi: CGFloat
+        classified: [ClassifiedGlyph], staff: Staff, lo: CGFloat, hi: CGFloat,
     ) -> [ClassifiedGlyph] {
         let yLo = (staff.yLines.first ?? 0) - 30
         let yHi = (staff.yLines.last ?? 0) + 30

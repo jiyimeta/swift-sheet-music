@@ -38,26 +38,26 @@ extension PDFImporter {
             return Output(glyphs: glyphs, texts: texts, paths: paths)
         }
 
-        // Class because we hold it via Unmanaged for the C info pointer.
+        /// Class because we hold it via Unmanaged for the C info pointer.
         final class PageState {
             let pageIndex: Int
-            // CTM stack. q pushes a copy, Q pops, cm concats into top.
+            /// CTM stack. q pushes a copy, Q pops, cm concats into top.
             var ctmStack: [CGAffineTransform] = [.identity]
             // Text state.
             var textMatrix: CGAffineTransform = .identity
             var lineMatrix: CGAffineTransform = .identity
-            var fontName: String = ""
+            var fontName = ""
             var fontSize: CGFloat = 0
-            // Current subpath: starts at last `m`, accumulates points
-            // from `l`. `currentPoint` follows the latest `m` or `l`.
+            /// Current subpath: starts at last `m`, accumulates points
+            /// from `l`. `currentPoint` follows the latest `m` or `l`.
             var currentPoint: CGPoint?
-            // Recorded straight line segments (start, end) that came from
-            // an `m → l` pair, in user-space coordinates as of the time
-            // the `l` operator ran. CTM is captured per-segment because
-            // `q`/`Q`/`cm` may run between `m` and `l`.
+            /// Recorded straight line segments (start, end) that came from
+            /// an `m → l` pair, in user-space coordinates as of the time
+            /// the `l` operator ran. CTM is captured per-segment because
+            /// `q`/`Q`/`cm` may run between `m` and `l`.
             var pendingLines: [(CGPoint, CGPoint, CGAffineTransform)] = []
-            // Recorded rectangles from `re`, paired with the CTM at
-            // construction time.
+            /// Recorded rectangles from `re`, paired with the CTM at
+            /// construction time.
             var pendingRects: [(CGRect, CGAffineTransform)] = []
             // Outputs.
             var glyphs: [RawGlyph] = []
@@ -65,9 +65,13 @@ extension PDFImporter {
             var paths: [PathSegment] = []
             var lineWidth: CGFloat = 1.0
 
-            init(pageIndex: Int) { self.pageIndex = pageIndex }
+            init(pageIndex: Int) {
+                self.pageIndex = pageIndex
+            }
 
-            var ctm: CGAffineTransform { ctmStack.last ?? .identity }
+            var ctm: CGAffineTransform {
+                ctmStack.last ?? .identity
+            }
 
             func setTopCTM(_ value: CGAffineTransform) {
                 if ctmStack.isEmpty { ctmStack.append(value) } else {
@@ -103,13 +107,13 @@ extension PDFImporter {
                         x: min(p0.x, p1.x),
                         y: min(p0.y, p1.y),
                         width: dx,
-                        height: dy
+                        height: dy,
                     )
                     paths.append(.init(
                         kind: kind,
                         rect: rect,
                         lineWidth: lineWidth,
-                        pageIndex: pageIndex
+                        pageIndex: pageIndex,
                     ))
                 }
                 for (rect, ctm) in pendingRects {
@@ -118,7 +122,7 @@ extension PDFImporter {
                         kind: .rectangle,
                         rect: transformed,
                         lineWidth: lineWidth,
-                        pageIndex: pageIndex
+                        pageIndex: pageIndex,
                     ))
                 }
                 resetPath()
@@ -143,6 +147,8 @@ extension PDFImporter {
     /// codepoint, so identity covers the SMuFL path.
     struct ToUnicodeCMap {
         static let identity = ToUnicodeCMap()
-        func map(cid: UInt32) -> UInt32 { cid }
+        func map(cid: UInt32) -> UInt32 {
+            cid
+        }
     }
 }

@@ -5,7 +5,7 @@ import Foundation
 @testable import SheetMusicMSCX
 import Testing
 
-@Suite struct LayoutPartLabelClefTests {
+struct LayoutPartLabelClefTests {
     @available(macOS 15.0, iOS 16.0, *)
     @Test func measureContextsKeepPerStaffLabels() throws {
         // The sticky-header context keeps one label per staff so each
@@ -13,8 +13,8 @@ import Testing
         let url = try #require(
             Bundle.module.url(
                 forResource: "multiPartMixedStaves",
-                withExtension: "mscx"
-            )
+                withExtension: "mscx",
+            ),
         )
         let score = try MSCXParser.parse(contentsOf: url)
 
@@ -40,14 +40,14 @@ import Testing
         let url = try #require(
             Bundle.module.url(
                 forResource: "multiPartMixedStaves",
-                withExtension: "mscx"
-            )
+                withExtension: "mscx",
+            ),
         )
         let score = try MSCXParser.parse(contentsOf: url)
         let doc = LayoutEngine.layout(
             score: score,
             options: .init(),
-            availableWidth: 800
+            availableWidth: 800,
         )
         let system = try #require(doc.systems.first)
 

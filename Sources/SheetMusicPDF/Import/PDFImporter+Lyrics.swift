@@ -24,7 +24,7 @@ extension PDFImporter {
         elements: [RhythmElement],
         texts: [TextGlyph],
         staffYLines: [CGFloat],
-        pageIndex: Int = 0
+        pageIndex: Int = 0,
     ) -> [RhythmElement] {
         guard let bottomY = staffYLines.first,
               let topY = staffYLines.last,
@@ -38,7 +38,7 @@ extension PDFImporter {
             texts: texts,
             bottomY: bottomY,
             lineSpacing: lineSpacing,
-            pageIndex: pageIndex
+            pageIndex: pageIndex,
         )
         guard !candidates.isEmpty else { return elements }
 
@@ -56,7 +56,7 @@ extension PDFImporter {
         texts: [TextGlyph],
         bottomY: CGFloat,
         lineSpacing: CGFloat,
-        pageIndex: Int
+        pageIndex: Int,
     ) -> [TextGlyph] {
         let lyricWindowLo = bottomY - 4 * lineSpacing
         let lyricWindowHi = bottomY
@@ -71,7 +71,7 @@ extension PDFImporter {
     /// Cluster syllables by y, tolerance = `lineSpacing`. Sorted
     /// top-down (verse 1 = highest y in the band, closest to staff).
     private static func clusterByY(
-        _ texts: [TextGlyph], lineSpacing: CGFloat
+        _ texts: [TextGlyph], lineSpacing: CGFloat,
     ) -> [[TextGlyph]] {
         let sortedByY = texts.sorted { $0.origin.y > $1.origin.y }
         var verses: [[TextGlyph]] = []
@@ -88,7 +88,7 @@ extension PDFImporter {
     }
 
     private static func assignSyllables(
-        verseTexts: [TextGlyph], into elements: inout [RhythmElement]
+        verseTexts: [TextGlyph], into elements: inout [RhythmElement],
     ) {
         var prevSyllabic: Syllabic = .single
         for t in verseTexts {
@@ -102,22 +102,22 @@ extension PDFImporter {
                 : trimmed
             let syllabic = nextSyllabic(
                 previous: prevSyllabic,
-                endsWithHyphen: endsWithHyphen
+                endsWithHyphen: endsWithHyphen,
             )
 
             guard let idx = nearestChordIndex(
-                toX: t.origin.x, in: elements
+                toX: t.origin.x, in: elements,
             ) else { continue }
 
             elements[idx].chord.lyrics.append(
-                Lyric(text: textNoHyphen, syllabic: syllabic)
+                Lyric(text: textNoHyphen, syllabic: syllabic),
             )
             prevSyllabic = syllabic
         }
     }
 
     private static func nextSyllabic(
-        previous: Syllabic, endsWithHyphen: Bool
+        previous: Syllabic, endsWithHyphen: Bool,
     ) -> Syllabic {
         switch (previous, endsWithHyphen) {
         case (.begin, true), (.middle, true): .middle
@@ -128,7 +128,7 @@ extension PDFImporter {
     }
 
     private static func nearestChordIndex(
-        toX x: CGFloat, in elements: [RhythmElement]
+        toX x: CGFloat, in elements: [RhythmElement],
     ) -> Int? {
         var bestIdx: Int?
         var bestDist: CGFloat = .infinity

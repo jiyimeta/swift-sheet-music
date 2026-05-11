@@ -54,7 +54,7 @@ public struct Lyric: Sendable, Equatable {
         syllabic: Syllabic = .single,
         ticks: Int = 0,
         verse: Int = 0,
-        properties: TextProperties = TextProperties()
+        properties: TextProperties = TextProperties(),
     ) {
         self.text = text
         self.syllabic = syllabic

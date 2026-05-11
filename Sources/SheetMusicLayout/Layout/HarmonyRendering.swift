@@ -19,7 +19,7 @@ public enum HarmonyRendering {
     ///      in a text run; consecutive text characters coalesce.
     public static func runs(
         for harmony: Harmony,
-        metrics: StaffMetrics
+        metrics: StaffMetrics,
     ) -> [HarmonyRun] {
         // Force Bravura registration BEFORE measuring. The
         // renderer also calls this in `ScoreView.init`, but layout
@@ -43,21 +43,21 @@ public enum HarmonyRendering {
         defer { ctLock.unlock() }
         let displayName = displayedName(for: harmony)
         let kindedSlices = parseSlices(
-            name: displayName, harmonyType: harmony.harmonyType
+            name: displayName, harmonyType: harmony.harmonyType,
         )
         let textSize = textPointSize(
-            for: harmony, metrics: metrics
+            for: harmony, metrics: metrics,
         )
         let glyphSize = glyphPointSize(
-            for: harmony, metrics: metrics
+            for: harmony, metrics: metrics,
         )
         let textFont = makeFont(
             face: textFace(for: harmony),
-            pointSize: textSize
+            pointSize: textSize,
         )
         let glyphFont = makeFont(
             face: "Bravura",
-            pointSize: glyphSize
+            pointSize: glyphSize,
         )
         // Both renderers (`HarmonyRenderer`/SwiftUI and
         // `ScoreLayerBuilder`/CALayer) place a run by aligning the
@@ -85,16 +85,16 @@ public enum HarmonyRendering {
                 run = HarmonyRun(
                     kind: .text, content: s,
                     advance: bounds.width + textGap,
-                    x: cursor
+                    x: cursor,
                 )
             case let .accidental(a):
                 let bounds = inkBounds(
-                    String(a.codepoint), font: glyphFont
+                    String(a.codepoint), font: glyphFont,
                 )
                 run = HarmonyRun(
                     kind: .accidental(a), content: "",
                     advance: bounds.width + accidentalGap,
-                    x: cursor
+                    x: cursor,
                 )
             }
             runs.append(run)
@@ -125,7 +125,7 @@ public enum HarmonyRendering {
     /// Walks `name` once, emitting Slice values. Consecutive text
     /// characters are merged at append time.
     private static func parseSlices(
-        name: String, harmonyType: HarmonyType
+        name: String, harmonyType: HarmonyType,
     ) -> [Slice] {
         var out: [Slice] = []
         let chars = Array(name)
@@ -148,7 +148,7 @@ public enum HarmonyRendering {
             }()
             if canBeAccidental,
                let (acc, consumed) = matchAccidental(
-                   chars: chars, at: i
+                   chars: chars, at: i,
                )
             {
                 out.append(.accidental(acc))
@@ -170,7 +170,7 @@ public enum HarmonyRendering {
     /// `(accidental, characters consumed)` or `nil` on no match.
     /// Greedy: prefers the 2-char form (`bb`, `##`) over the 1-char.
     private static func matchAccidental(
-        chars: [Character], at i: Int
+        chars: [Character], at i: Int,
     ) -> (HarmonyAccidental, Int)? {
         let c = chars[i]
         let next: Character? = i + 1 < chars.count ? chars[i + 1] : nil
@@ -187,10 +187,10 @@ public enum HarmonyRendering {
     }
 
     private static func textPointSize(
-        for harmony: Harmony, metrics: StaffMetrics
+        for harmony: Harmony, metrics: StaffMetrics,
     ) -> CGFloat {
         let defaults = harmony.properties.resolved(
-            against: harmony.styleType
+            against: harmony.styleType,
         )
         let referenceSp: CGFloat = 5.0
         if defaults.spatiumDependent {
@@ -210,7 +210,7 @@ public enum HarmonyRendering {
     /// width measurement used.
     public static func glyphPointSize(
         for harmony: Harmony,
-        metrics: StaffMetrics
+        metrics: StaffMetrics,
     ) -> CGFloat {
         textPointSize(for: harmony, metrics: metrics)
     }
@@ -275,7 +275,7 @@ public enum HarmonyRendering {
         [String: CTFont] = [:]
 
     private static func makeFont(
-        face: String, pointSize: CGFloat
+        face: String, pointSize: CGFloat,
     ) -> CTFont {
         let key = "\(face)|\(pointSize)"
         if let cached = fontCache[key] { return cached }
@@ -296,27 +296,27 @@ public enum HarmonyRendering {
     /// edge). Renderers use these to trim the font's natural side
     /// bearings on chord-symbol accidentals.
     private static func inkBounds(
-        _ string: String, font: CTFont
+        _ string: String, font: CTFont,
     ) -> (leftBearing: Double, width: Double) {
         let line = ctLine(for: string, font: font)
         let imageBounds = CTLineGetImageBounds(line, nil)
         return (
             leftBearing: Double(imageBounds.origin.x),
-            width: Double(imageBounds.width)
+            width: Double(imageBounds.width),
         )
     }
 
     private static func ctLine(
-        for string: String, font: CTFont
+        for string: String, font: CTFont,
     ) -> CTLine {
         let attr = NSAttributedString(
             string: string,
             attributes: [
                 NSAttributedString.Key(kCTFontAttributeName as String): font,
-            ]
+            ],
         )
         return CTLineCreateWithAttributedString(
-            attr as CFAttributedString
+            attr as CFAttributedString,
         )
     }
 }

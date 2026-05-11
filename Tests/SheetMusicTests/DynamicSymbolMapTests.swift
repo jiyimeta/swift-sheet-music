@@ -1,7 +1,7 @@
 @testable import SheetMusicUI
 import Testing
 
-@Suite struct DynamicSymbolMapTests {
+struct DynamicSymbolMapTests {
     @Test func mapsSingleLetterDynamics() {
         #expect(DynamicSymbolMap.glyphs(for: "p") == ["\u{E520}"])
         #expect(DynamicSymbolMap.glyphs(for: "f") == ["\u{E522}"])

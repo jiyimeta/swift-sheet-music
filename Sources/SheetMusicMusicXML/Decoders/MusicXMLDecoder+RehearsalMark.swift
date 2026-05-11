@@ -17,7 +17,8 @@ enum MusicXMLRehearsalDecoder {
         for child in directionType.children where child.name == "rehearsal" {
             let text = plainText(of: child)
             let frame = frameKind(
-                forEnclosure: child.attributes["enclosure"])
+                forEnclosure: child.attributes["enclosure"],
+            )
             result.append(RehearsalMark(text: text, frame: frame))
         }
         return result
@@ -28,7 +29,7 @@ enum MusicXMLRehearsalDecoder {
     /// attribute defaults to rectangle, mirroring MuseScore's behaviour
     /// when the importer doesn't see an explicit enclosure.
     private static func frameKind(
-        forEnclosure raw: String?
+        forEnclosure raw: String?,
     ) -> RehearsalMark.FrameKind {
         switch raw {
         case "circle": return .circle

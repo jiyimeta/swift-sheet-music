@@ -10,7 +10,7 @@ public struct VoiceElementID: Hashable, Sendable {
         staff: StaffAddress,
         measureIndex: Int,
         voiceIndex: Int,
-        elementIndex: Int
+        elementIndex: Int,
     ) {
         self.staff = staff
         self.measureIndex = measureIndex
@@ -23,7 +23,7 @@ public struct VoiceElementID: Hashable, Sendable {
             staff: id.staff,
             measureIndex: id.measureIndex,
             voiceIndex: id.voiceIndex,
-            elementIndex: id.elementIndex
+            elementIndex: id.elementIndex,
         )
     }
 
@@ -32,7 +32,7 @@ public struct VoiceElementID: Hashable, Sendable {
             staff: id.staff,
             measureIndex: id.measureIndex,
             voiceIndex: id.voiceIndex,
-            elementIndex: id.elementIndex
+            elementIndex: id.elementIndex,
         )
     }
 }

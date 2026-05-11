@@ -18,7 +18,7 @@ extension PDFImporter {
         timeSignature: TimeSignature,
         staffMidY: CGFloat,
         diagnostics: ((PDFImportDiagnostic) -> Void)? = nil,
-        location: String = ""
+        location: String = "",
     ) -> [Voice] {
         guard !elements.isEmpty else { return [] }
         let intervals = elements.map {
@@ -31,7 +31,7 @@ extension PDFImporter {
             elements: elements,
             staffMidY: staffMidY,
             diagnostics: diagnostics,
-            location: location
+            location: location,
         )
     }
 
@@ -39,7 +39,7 @@ extension PDFImporter {
         elements: [RhythmElement],
         staffMidY: CGFloat,
         diagnostics: ((PDFImportDiagnostic) -> Void)?,
-        location: String
+        location: String,
     ) -> [Voice] {
         var v1: [VoiceElement] = []
         var v2: [VoiceElement] = []
@@ -67,12 +67,12 @@ extension PDFImporter {
 
     private static func emitVoice3Warning(
         _ diagnostics: ((PDFImportDiagnostic) -> Void)?,
-        location: String
+        location: String,
     ) {
         diagnostics?(PDFImportDiagnostic(
             severity: .warning,
             location: location,
-            message: "Voice 3+ collapsed into voice 1/2"
+            message: "Voice 3+ collapsed into voice 1/2",
         ))
     }
 }
@@ -83,7 +83,7 @@ extension PDFImporter {
     private static func interval(
         for element: RhythmElement,
         xRange: ClosedRange<CGFloat>,
-        timeSignature: TimeSignature
+        timeSignature: TimeSignature,
     ) -> ClosedRange<CGFloat> {
         let totalQuarters = quartersOfMeasure(timeSignature: timeSignature)
         let pxPerQuarter =
@@ -97,7 +97,7 @@ extension PDFImporter {
     /// have rounding noise, and adjacent quarters often share an x
     /// boundary by a fraction of a point.
     private static func anyOverlap(
-        _ intervals: [ClosedRange<CGFloat>]
+        _ intervals: [ClosedRange<CGFloat>],
     ) -> Bool {
         let grace: CGFloat = 0.5
         for i in 0 ..< intervals.count {
@@ -113,7 +113,7 @@ extension PDFImporter {
     }
 
     private static func voiceFor(
-        _ element: RhythmElement, staffMidY: CGFloat
+        _ element: RhythmElement, staffMidY: CGFloat,
     ) -> Int {
         if element.isRest {
             return element.y > staffMidY ? 1 : 2
@@ -126,7 +126,7 @@ extension PDFImporter {
     }
 
     private static func quartersOfMeasure(
-        timeSignature ts: TimeSignature
+        timeSignature ts: TimeSignature,
     ) -> Double {
         4.0 * Double(ts.numerator) / Double(ts.denominator)
     }
@@ -145,6 +145,8 @@ extension PDFImporter {
     /// collisions.
     fileprivate struct RoundedX: Hashable {
         let value: Int
-        init(_ x: CGFloat) { value = Int((x * 2).rounded()) }
+        init(_ x: CGFloat) {
+            value = Int((x * 2).rounded())
+        }
     }
 }

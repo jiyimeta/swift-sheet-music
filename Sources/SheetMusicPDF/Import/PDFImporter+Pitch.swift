@@ -25,7 +25,7 @@ extension PDFImporter {
     static func decodePitches(
         measure: ImportMeasure,
         activeClef: Clef,
-        activeKey: KeySignature
+        activeKey: KeySignature,
     ) -> [DecodedPitch] {
         guard !measure.staffYLines.isEmpty,
               let anchor = staffAnchor(clef: activeClef, yLines: measure.staffYLines)
@@ -38,14 +38,14 @@ extension PDFImporter {
             let alteration = locals[key]
                 ?? keyAlteration(step: key.diatonicStep, key: activeKey)
             let midi = midiPitch(
-                step: key.diatonicStep, octave: key.octave, alteration: alteration
+                step: key.diatonicStep, octave: key.octave, alteration: alteration,
             )
             out.append(DecodedPitch(
                 midi: midi,
                 tpc: tonalPitchClass(step: key.diatonicStep, alteration: alteration),
                 noteheadX: g.raw.origin.x,
                 noteheadY: g.raw.origin.y,
-                glyph: g
+                glyph: g,
             ))
         }
         return out
@@ -81,21 +81,21 @@ extension PDFImporter {
                 bottomY: bottomY,
                 lineSpacing: lineSpacing,
                 bottomStep: 2,
-                bottomOctave: 4
+                bottomOctave: 4,
             )
         case "F": // bass: bottom line = G2
             return StaffAnchor(
                 bottomY: bottomY,
                 lineSpacing: lineSpacing,
                 bottomStep: 4,
-                bottomOctave: 2
+                bottomOctave: 2,
             )
         case "C": // alto C clef: bottom line = F3
             return StaffAnchor(
                 bottomY: bottomY,
                 lineSpacing: lineSpacing,
                 bottomStep: 3,
-                bottomOctave: 3
+                bottomOctave: 3,
             )
         case "PERCUSSION":
             return nil
@@ -104,7 +104,7 @@ extension PDFImporter {
                 bottomY: bottomY,
                 lineSpacing: lineSpacing,
                 bottomStep: 2,
-                bottomOctave: 4
+                bottomOctave: 4,
             )
         }
     }
@@ -136,7 +136,7 @@ extension PDFImporter {
     /// next notehead at the same y (within ~2pt), and record local
     /// alterations keyed by (diatonicStep, octave).
     static func pairAccidentals(
-        sorted: [ClassifiedGlyph], anchor: StaffAnchor
+        sorted: [ClassifiedGlyph], anchor: StaffAnchor,
     ) -> [PitchKey: Int] {
         var locals: [PitchKey: Int] = [:]
         for (i, g) in sorted.enumerated() {

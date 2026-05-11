@@ -35,13 +35,15 @@ public struct RemoveNoteFromChord: EditCommand {
         guard case var .chord(chord) = score[veID] else {
             throw SheetMusicError.invalidEdit(
                 reason: "RemoveNoteFromChord: element at \(veID) "
-                    + "is not a chord")
+                    + "is not a chord",
+            )
         }
         guard chord.notes.indices.contains(location.noteIndexInChord)
         else {
             throw SheetMusicError.invalidEdit(
                 reason: "RemoveNoteFromChord: chord has no note "
-                    + "at index \(location.noteIndexInChord)")
+                    + "at index \(location.noteIndexInChord)",
+            )
         }
         let original = chord
         chord.notes.remove(at: location.noteIndexInChord)

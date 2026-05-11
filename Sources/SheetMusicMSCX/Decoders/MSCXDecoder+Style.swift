@@ -29,7 +29,7 @@ extension ScoreStyle {
 /// (e.g. `"center,bottom"`). `nil` is preserved for fields the
 /// score did not override, so encoders can elide them.
 private func decodeTitleBlockAlign(
-    _ node: XMLTreeNode, into s: inout ScoreStyle
+    _ node: XMLTreeNode, into s: inout ScoreStyle,
 ) {
     if let raw = node.first("titleAlign")?.text {
         s.titleAlign = TextAlign(mscxString: raw)
@@ -49,7 +49,7 @@ private func decodeTitleBlockAlign(
 /// `<swingRatio>` (int). Mirrors `Staff::swing()` which reads the
 /// same fields off the global style block.
 private func decodeSwing(
-    _ node: XMLTreeNode, into s: inout ScoreStyle
+    _ node: XMLTreeNode, into s: inout ScoreStyle,
 ) {
     if let raw = node.first("swingUnit")?.text,
        let unit = SwingUnit(mscxString: raw)
@@ -62,7 +62,7 @@ private func decodeSwing(
 }
 
 private func decodePageLayout(
-    _ node: XMLTreeNode, into layout: inout PageLayout
+    _ node: XMLTreeNode, into layout: inout PageLayout,
 ) {
     if let v = node.firstDouble("pageWidth") { layout.width = v }
     if let v = node.firstDouble("pageHeight") { layout.height = v }
@@ -77,7 +77,7 @@ private func decodePageLayout(
 }
 
 private func decodeSpatium(
-    _ node: XMLTreeNode, into spatium: inout Double
+    _ node: XMLTreeNode, into spatium: inout Double,
 ) {
     // MuseScore writes capital "Spatium" today (engraving-style XML)
     // but `style.cpp:385-386` accepts both forms; older fixtures use
@@ -87,7 +87,7 @@ private func decodeSpatium(
 }
 
 private func decodeChrome(
-    _ node: XMLTreeNode, into chrome: inout PageChrome
+    _ node: XMLTreeNode, into chrome: inout PageChrome,
 ) {
     decodeHeader(node, into: &chrome.header)
     decodeFooter(node, into: &chrome.footer)
@@ -95,7 +95,7 @@ private func decodeChrome(
 }
 
 private func decodeHeader(
-    _ node: XMLTreeNode, into header: inout HeaderFooter
+    _ node: XMLTreeNode, into header: inout HeaderFooter,
 ) {
     if let v = node.firstBool("showHeader") { header.enabled = v }
     if let v = node.firstBool("headerFirstPage") { header.showOnFirstPage = v }
@@ -114,7 +114,7 @@ private func decodeHeader(
 }
 
 private func decodeFooter(
-    _ node: XMLTreeNode, into footer: inout HeaderFooter
+    _ node: XMLTreeNode, into footer: inout HeaderFooter,
 ) {
     if let v = node.firstBool("showFooter") { footer.enabled = v }
     if let v = node.firstBool("footerFirstPage") { footer.showOnFirstPage = v }
@@ -133,7 +133,7 @@ private func decodeFooter(
 }
 
 private func decodePageNumber(
-    _ node: XMLTreeNode, into pn: inout PageNumberStyle
+    _ node: XMLTreeNode, into pn: inout PageNumberStyle,
 ) {
     if let v = node.firstBool("showPageNumber") { pn.enabled = v }
     if let v = node.firstBool("showPageNumberOne") { pn.showOnFirstPage = v }

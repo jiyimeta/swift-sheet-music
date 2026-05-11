@@ -29,14 +29,15 @@ extension Score {
             switch elements[idx] {
             case let .chord(nextChord) where !nextChord.notes.isEmpty:
                 guard let matchIdx = nextChord.notes.firstIndex(
-                    where: { $0.pitch == source.pitch })
+                    where: { $0.pitch == source.pitch },
+                )
                 else { return nil }
                 return NoteID(
                     staff: noteID.staff,
                     measureIndex: noteID.measureIndex,
                     voiceIndex: noteID.voiceIndex,
                     elementIndex: idx,
-                    noteIndexInChord: matchIdx
+                    noteIndexInChord: matchIdx,
                 )
             case .chord:
                 // Empty chord = rest. A rest between source and a

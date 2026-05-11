@@ -19,7 +19,7 @@ public struct SetStaffDefaultClef: EditCommand {
     public var affectedLocation: VoiceElementID {
         VoiceElementID(
             staff: staff, measureIndex: 0,
-            voiceIndex: 0, elementIndex: 0
+            voiceIndex: 0, elementIndex: 0,
         )
     }
 
@@ -30,7 +30,8 @@ public struct SetStaffDefaultClef: EditCommand {
                   .contains(staff.staffIndexInPart)
         else {
             throw SheetMusicError.invalidEdit(
-                reason: "SetStaffDefaultClef: no staff at \(staff)")
+                reason: "SetStaffDefaultClef: no staff at \(staff)",
+            )
         }
         let p = staff.partIndex
         let s = staff.staffIndexInPart

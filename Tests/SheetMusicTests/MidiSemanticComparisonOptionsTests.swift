@@ -2,7 +2,7 @@ import Foundation
 @testable import SheetMusicMIDI
 import Testing
 
-@Suite struct MidiSemanticComparisonOptionsTests {
+struct MidiSemanticComparisonOptionsTests {
     private func dataWith(events: [TimedMidiEvent]) throws -> Data {
         let lastTick = events.map(\.tick).max() ?? 0
         let track = MidiTrack(events: events + [TimedMidiEvent(tick: lastTick, event: .endOfTrack)])
@@ -24,7 +24,7 @@ import Testing
         try MidiSemanticComparison.assertEquivalent(
             produced: withoutCC,
             reference: withCC,
-            options: .init(ignoreControlChange: true)
+            options: .init(ignoreControlChange: true),
         )
     }
 }

@@ -7,12 +7,12 @@ import Foundation
 @testable import SheetMusicMSCX
 import Testing
 
-@Suite struct AnacrusisTests {
+struct AnacrusisTests {
     @Test func measureCarriesActualLengthAndIrregular() {
         let pickup = Measure(
             voices: [],
             actualLength: Fraction(numerator: 1, denominator: 4),
-            irregular: true
+            irregular: true,
         )
         #expect(pickup.actualLength == Fraction(numerator: 1, denominator: 4))
         #expect(pickup.irregular == true)
@@ -25,7 +25,7 @@ import Testing
         #expect(pickup != Measure(voices: [], irregular: true))
         #expect(pickup != Measure(
             voices: [],
-            actualLength: Fraction(numerator: 1, denominator: 4)
+            actualLength: Fraction(numerator: 1, denominator: 4),
         ))
     }
 
@@ -38,7 +38,7 @@ import Testing
         let part = Part(
             id: "1",
             instrument: Instrument(id: "x", longName: "Piano"),
-            staves: [staff]
+            staves: [staff],
         )
         let score = Score(division: 480, parts: [part])
 
@@ -52,7 +52,7 @@ import Testing
             staves: [Staff(measures: [
                 Measure(voices: [Voice(elements: [])]),
                 Measure(voices: [Voice(elements: [])]),
-            ])]
+            ])],
         )])
         #expect(regular.displayedMeasureNumber(at: 0) == 1)
         #expect(regular.displayedMeasureNumber(at: 1) == 2)
@@ -92,14 +92,14 @@ import Testing
         let pickup = Measure(
             voices: [Voice(elements: [])],
             actualLength: Fraction(numerator: 1, denominator: 4),
-            irregular: true
+            irregular: true,
         )
         let normal = Measure(voices: [Voice(elements: [])])
         let staff = Staff(measures: [pickup, normal])
         let part = Part(
             id: "1",
             instrument: Instrument(id: "x", longName: "Piano"),
-            staves: [staff]
+            staves: [staff],
         )
         let score = Score(division: 480, parts: [part])
 
@@ -113,7 +113,7 @@ import Testing
     }
 
     @available(macOS 15.0, iOS 16.0, *)
-    @Test func layoutSkipsMeasureNumberOnIrregularMeasures() throws {
+    @Test func layoutSkipsMeasureNumberOnIrregularMeasures() {
         // Per-system head labels are only emitted for the first
         // measure of each system. Force a line break after every
         // measure so each becomes a system head and the label test
@@ -121,7 +121,7 @@ import Testing
         let irregular = Measure(
             voices: [Voice(elements: [])],
             lineBreak: true,
-            irregular: true
+            irregular: true,
         )
         let m1 = Measure(voices: [Voice(elements: [])], lineBreak: true)
         let m2 = Measure(voices: [Voice(elements: [])])
@@ -129,7 +129,7 @@ import Testing
         let part = Part(
             id: "1",
             instrument: Instrument(id: "x", longName: "Piano"),
-            staves: [staff]
+            staves: [staff],
         )
         let score = Score(division: 480, parts: [part])
 
@@ -139,7 +139,7 @@ import Testing
         #expect(contexts[2].displayedMeasureNumber == 2)
 
         let document = LayoutEngine.layout(
-            score: score, options: .init(), availableWidth: 800
+            score: score, options: .init(), availableWidth: 800,
         )
         let measures = document.systems.flatMap(\.measures)
         func numberLabel(at index: Int) -> String? {
@@ -167,7 +167,7 @@ import Testing
                 .chord(Chord(duration: .quarter, notes: [note])),
             ])],
             actualLength: Fraction(numerator: 1, denominator: 4),
-            irregular: true
+            irregular: true,
         )
         let bar1 = Measure(voices: [Voice(elements: [
             .chord(Chord(duration: .quarter, notes: [note])),
@@ -179,7 +179,7 @@ import Testing
         let part = Part(
             id: "1",
             instrument: Instrument(id: "x", longName: "Piano"),
-            staves: [staff]
+            staves: [staff],
         )
         let score = Score(division: 480, parts: [part])
 
