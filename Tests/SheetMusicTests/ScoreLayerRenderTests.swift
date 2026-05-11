@@ -1,4 +1,4 @@
-// swiftlint:disable function_body_length file_length
+// swiftlint:disable file_length
 #if os(macOS)
     import AppKit
     import CoreGraphics
@@ -12,7 +12,7 @@
     struct ScoreLayerRenderTests {
         @MainActor
         @Test("Rendered system layer contains non-white pixels where a notehead is expected")
-        func renderedTreeHasInk() throws {
+        func renderedTreeHasInk() throws { // swiftlint:disable:this function_body_length
             guard #available(macOS 15.0, *) else { return }
             _ = BravuraFont.register
 

@@ -1,4 +1,4 @@
-// swiftlint:disable function_body_length file_length
+// swiftlint:disable file_length
 #if os(macOS)
     import Foundation
     import SheetMusicCore
@@ -18,7 +18,7 @@
     ))
     struct LayoutCacheBenchmark {
         @Test("test.mscx: cold vs warm vs single-edit")
-        func benchmark() throws {
+        func benchmark() throws { // swiftlint:disable:this function_body_length
             guard #available(macOS 15.0, *) else { return }
             // Test process cwd is the package root.
             let path = "Example/SheetMusicExample/test.mscx"

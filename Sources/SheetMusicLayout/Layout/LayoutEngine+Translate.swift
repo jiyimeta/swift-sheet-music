@@ -1,4 +1,4 @@
-// swiftlint:disable function_body_length file_length
+// swiftlint:disable file_length
 import CoreGraphics
 import SheetMusicCore
 
@@ -6,7 +6,7 @@ import SheetMusicCore
 extension LayoutEngine {
     /// Shift an element's origin(s) by a vertical offset, for stacking
     /// staves that were placed in staff-0-local coordinates.
-    static func translate(
+    static func translate( // swiftlint:disable:this function_body_length
         element: LayoutElement, dy: CGFloat,
     ) -> LayoutElement {
         func shift(_ p: CGPoint) -> CGPoint {

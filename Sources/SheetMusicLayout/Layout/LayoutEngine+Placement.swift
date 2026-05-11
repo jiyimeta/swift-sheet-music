@@ -1,4 +1,4 @@
-// swiftlint:disable function_body_length file_length
+// swiftlint:disable file_length
 import CoreGraphics
 import CoreText
 import SheetMusicCore
@@ -43,7 +43,7 @@ extension LayoutEngine {
     /// (chords and rests) are then positioned proportionally to their
     /// tick offset within the measure so the content fills the full
     /// stretched measure width.
-    static func placeMeasureElements(
+    static func placeMeasureElements( // swiftlint:disable:this function_body_length
         measure: Measure,
         staffAddress: StaffAddress,
         measureIndex: Int,
@@ -1477,13 +1477,12 @@ extension LayoutEngine {
         }
     }
 
-    // swiftlint:disable function_parameter_count
     /// Build `LayoutChordNote` values for a single `GraceChord`.
     /// Mirrors the inline notehead construction used for main chords
     /// but takes `graceIdx` / `isAfter` so synthesized `NoteID`s
     /// don't collide with the parent chord's notes — important for
     /// hit-testing and the chord-origin lookup.
-    fileprivate static func makeGraceLayoutNotes(
+    fileprivate static func makeGraceLayoutNotes( // swiftlint:disable:this function_parameter_count
         grace: GraceChord,
         atX x: CGFloat,
         staffMidY: CGFloat,
@@ -1534,8 +1533,6 @@ extension LayoutEngine {
             )
         }
     }
-
-    // swiftlint:enable function_parameter_count
 
     /// Verse-0 lyric baseline floor before any chord-driven push. Sits
     /// 2 sp below the staff by default; when a visible below-staff

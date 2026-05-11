@@ -1,4 +1,4 @@
-// swiftlint:disable function_body_length file_length
+// swiftlint:disable file_length
 import CoreGraphics
 import SheetMusicCore
 
@@ -18,7 +18,7 @@ extension LayoutEngine {
     /// measures in order, tracking per-tie-number "open" origins. When a
     /// note with tieBack == n is seen, emit a TiePair using the matching
     /// open origin + the current note's absolute origin.
-    static func resolveTies(
+    static func resolveTies( // swiftlint:disable:this function_body_length
         for document: LayoutDocument,
         score: Score,
     ) -> [TiePair] {
@@ -137,7 +137,7 @@ extension LayoutEngine {
         return pairs
     }
 
-    static func attachTies(
+    static func attachTies( // swiftlint:disable:this function_body_length
         to systems: [LayoutSystem],
         pairs: [TiePair],
         metrics: StaffMetrics,

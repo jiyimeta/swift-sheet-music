@@ -65,7 +65,6 @@ extension MidiRenderer {
         return min(raw, max(0, mainTicks / 2))
     }
 
-    // swiftlint:disable function_parameter_count function_body_length
     /// Render one parent chord and its surrounding grace notes.
     /// Steals time per the helpers above:
     ///
@@ -76,7 +75,7 @@ extension MidiRenderer {
     /// Mirrors `CompatMidiRender::renderGraceNotesBefore` /
     /// `renderGraceNotesAfter` semantics, simplified for this codebase
     /// (no per-grace velocity scaling — see spec Non-goals).
-    static func renderChordWithGraces(
+    static func renderChordWithGraces( // swiftlint:disable:this function_body_length function_parameter_count
         _ originalChord: Chord,
         tick: Int,
         velocity: Int,
@@ -251,8 +250,6 @@ extension MidiRenderer {
             afterCursor += dur
         }
     }
-
-    // swiftlint:enable function_parameter_count function_body_length
 
     /// Return a copy of `chord` with every parent and grace-note pitch
     /// shifted by `semitones` and clamped to MIDI's 0..127 range. Used

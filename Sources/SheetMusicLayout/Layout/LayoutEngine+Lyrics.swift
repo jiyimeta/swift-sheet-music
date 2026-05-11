@@ -1,4 +1,4 @@
-// swiftlint:disable function_body_length file_length
+// swiftlint:disable file_length
 import CoreGraphics
 import CoreText
 import SheetMusicCore
@@ -189,7 +189,7 @@ extension LayoutEngine {
     /// * When `endTick` equals (or exceeds) that measure's total
     ///   voice ticks, the rule is to run through the trailing
     ///   barline — the melisma continues to the NEXT measure.
-    static func computeMelismaContinuations(
+    static func computeMelismaContinuations( // swiftlint:disable:this function_body_length
         score: Score, division: Int,
         effectiveTicks: [MelismaLyricKey: Int],
     ) -> [[[MelismaContinuation]]] {

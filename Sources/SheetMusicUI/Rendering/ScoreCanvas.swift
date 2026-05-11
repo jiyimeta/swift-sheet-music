@@ -1,4 +1,4 @@
-// swiftlint:disable function_body_length file_length
+// swiftlint:disable file_length
 import SheetMusicCore
 import SheetMusicLayout
 import SwiftUI
@@ -81,7 +81,7 @@ struct SystemSliceCanvas: View {
 /// can call them too.
 @available(macOS 15.0, iOS 16.0, *)
 public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
-    public static func drawSystem(
+    public static func drawSystem( // swiftlint:disable:this function_body_length
         _ system: LayoutSystem,
         metrics: StaffMetrics,
         into context: inout GraphicsContext,
@@ -187,7 +187,7 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
         }
     }
 
-    static func drawElement(
+    static func drawElement( // swiftlint:disable:this function_body_length
         _ element: LayoutElement,
         base: CGPoint,
         metrics: StaffMetrics,

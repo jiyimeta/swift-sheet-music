@@ -1,4 +1,4 @@
-// swiftlint:disable function_body_length file_length
+// swiftlint:disable file_length
 import CoreGraphics
 import SheetMusicCore
 
@@ -197,7 +197,7 @@ extension LayoutEngine {
     /// or `SystemCanvas`, so the sticky header inherits all rendering
     /// fidelity (Bravura glyphs, sharps/flats spacing, staff-line
     /// thickness) for free.
-    public static func stickyHeaderSystem(
+    public static func stickyHeaderSystem( // swiftlint:disable:this function_body_length
         for context: LayoutMeasureContext,
         templateSystem: LayoutSystem,
         metrics: StaffMetrics,

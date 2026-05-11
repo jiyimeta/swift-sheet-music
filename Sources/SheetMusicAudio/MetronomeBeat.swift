@@ -1,4 +1,3 @@
-// swiftlint:disable function_body_length
 import Foundation
 import SheetMusicCore
 
@@ -21,7 +20,7 @@ extension PlaybackTimeline {
     /// in MuseScore (`src/engraving/playback/playbackeventsrenderer.cpp`)
     /// for the simple-meter case: one beat per denominator unit, with
     /// the first marked as `BeatType::DOWNBEAT`.
-    public static func metronomeBeats(score: Score) -> [MetronomeBeat] {
+    public static func metronomeBeats(score: Score) -> [MetronomeBeat] { // swiftlint:disable:this function_body_length
         let division = score.division
         let measures = score.parts.first?.staves.first?.measures ?? []
         let measureCount = measures.count

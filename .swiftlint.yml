@@ -1,11 +1,5 @@
 disabled_rules:
   # - attribute_name_spacing
-  # We deliberately blanket-disable function_body_length / file_length
-  # at file scope for engine implementations whose method/file size
-  # reflects domain complexity (LayoutEngine passes, ScoreEditor
-  # commands, etc.). Re-enabling per-function would just spam the
-  # whole codebase.
-  - blanket_disable_command
   # - block_based_kvo
   # - class_delegate_protocol
   # - closing_brace
@@ -270,6 +264,16 @@ identifier_name:
 large_tuple:
   warning: 4
 
+# `file_length` is the only rule whose violation cannot be scoped to a
+# single declaration with `:next`, so blanket-disabling it at the top of
+# an intentionally long file is the only practical option. Every other
+# rule must use `:next` / `:previous` / `:this` (see the
+# `scoped_swiftlint_disable` custom rule below).
+blanket_disable_command:
+  severity: error
+  allowed_rules:
+    - file_length
+
 custom_rules:
   # Forbid `extension Foo where ...` (constrained extension). Place the
   # where-clause on each member instead. Extension-level where is allowed
@@ -279,3 +283,26 @@ custom_rules:
     regex: '(?m)^[ \t]*extension[ \t]+\w+(?:<[^>]*>)?[ \t\r\n]+where\b'
     message: "Move the where-clause onto individual members. Extension-level where is allowed only with protocol conformance."
     severity: warning
+  # Force every swiftlint disable directive to be line-scoped with
+  # :next / :previous / :this. The single exception is
+  # `// swiftlint:disable file_length` alone on a line (file_length has
+  # no meaningful line-scoped form). The matching enable directive is
+  # banned by `no_swiftlint_enable` below.
+  scoped_swiftlint_disable:
+    name: "Scoped SwiftLint Disable"
+    regex: '//\s*swiftlint:disable\s+(?!file_length\s*$)\S'
+    match_kinds:
+      - comment
+    message: "Use // swiftlint:disable:next (or :previous, :this) instead of an unscoped disable. The only blanket form allowed is `// swiftlint:disable file_length`."
+    severity: error
+  # Disable/enable pair blocks are banned project-wide; `:next` /
+  # `:previous` / `:this` are expressive enough for any real case. The
+  # only allowed unscoped disable is `// swiftlint:disable file_length`,
+  # which by definition has no closing enable.
+  no_swiftlint_enable:
+    name: "No SwiftLint Enable"
+    regex: '//\s*swiftlint:enable\b'
+    match_kinds:
+      - comment
+    message: "Disable/enable pair blocks are not allowed; use :next / :previous / :this to scope individual lines."
+    severity: error

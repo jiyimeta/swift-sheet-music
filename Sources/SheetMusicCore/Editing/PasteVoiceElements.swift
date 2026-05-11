@@ -1,4 +1,4 @@
-// swiftlint:disable function_body_length file_length
+// swiftlint:disable file_length
 import Foundation
 
 /// Multi-element paste: replace the single element at `location`
@@ -107,7 +107,7 @@ public struct PasteVoiceElements: EditCommand {
     /// tuplets) pair. Throws on partial-overlap with any tuplet
     /// (the user must clear the tuplet first or paste at a different
     /// location).
-    private static func computeRebalanced(
+    private static func computeRebalanced( // swiftlint:disable:this function_body_length
         voice: Voice,
         atIdx idx: Int,
         payload: [VoiceElement],

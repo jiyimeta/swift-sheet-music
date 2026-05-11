@@ -1,4 +1,4 @@
-// swiftlint:disable function_body_length file_length
+// swiftlint:disable file_length
 import CoreGraphics
 import SheetMusicCore
 
@@ -244,7 +244,7 @@ extension LayoutEngine {
     /// so the placement never has to squeeze). Keeping a single
     /// algorithm avoids the bug where the two diverged and the
     /// minimum width undersized the layout.
-    static func aggregatedTickWeights(
+    static func aggregatedTickWeights( // swiftlint:disable:this function_body_length
         staves: [Staff],
         measureIdx: Int,
         metrics: StaffMetrics,

@@ -1,4 +1,4 @@
-// swiftlint:disable function_body_length file_length
+// swiftlint:disable file_length
 import Foundation
 import SheetMusicCore
 
@@ -7,7 +7,7 @@ extension MidiRenderer {
     /// Honours `<startRepeat>`/`<endRepeat>` repeat markers (via `playbackPlan`)
     /// and `<MeasureRepeat>` group replay (via `resolvedVoice`). Volta-aware
     /// playback filtering is not yet implemented.
-    static func renderVoice(
+    static func renderVoice( // swiftlint:disable:this function_body_length
         voiceIndex: Int,
         staff: Staff,
         part: Part,
@@ -124,7 +124,7 @@ extension MidiRenderer {
     }
 
     // swiftlint:disable:next function_parameter_count
-    private static func renderVoiceElement(
+    private static func renderVoiceElement( // swiftlint:disable:this function_body_length
         _ element: VoiceElement,
         elementIndex: Int,
         voiceElements: [VoiceElement],

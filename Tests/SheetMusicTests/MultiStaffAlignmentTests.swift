@@ -1,4 +1,4 @@
-// swiftlint:disable function_body_length file_length
+// swiftlint:disable file_length
 #if os(macOS)
     import CoreGraphics
     import SheetMusicCore
@@ -96,7 +96,7 @@
         }
 
         @Test("Chord and rest at the same tick in different voices share one x")
-        func chordRestSameTickShareX() throws {
+        func chordRestSameTickShareX() throws { // swiftlint:disable:this function_body_length
             guard #available(macOS 15.0, *) else { return }
             // Voice 0: 4 quarter notes.  Voice 1: quarter + quarter rest +
             // quarter + quarter rest.  At every beat the rest (voice 1)
@@ -261,7 +261,7 @@
         }
 
         @Test("User repro: staves with different rhythms keep x monotonic at every tick")
-        func userReproMonotonic() throws {
+        func userReproMonotonic() throws { // swiftlint:disable:this function_body_length
             guard #available(macOS 15.0, *) else { return }
             let c4 = Note(pitch: 60, tpc: 14)
             // Staff 1 — half + 7×16th (mixed rest/note/rest).

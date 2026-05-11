@@ -69,12 +69,11 @@ enum MusicXMLMeasureWalker {
         return 1
     }
 
-    // Decode a single `<measure>`. Returns `staffCount` `Measure` values —
-    // one per staff. Attributes and barlines broadcast to every staff;
-    // `<note>` elements go to the staff selected by `<staff>N</staff>`
-    // (default 1).
-    // swiftlint:disable function_body_length
-    private static func decodeOne(
+    /// Decode a single `<measure>`. Returns `staffCount` `Measure` values —
+    /// one per staff. Attributes and barlines broadcast to every staff;
+    /// `<note>` elements go to the staff selected by `<staff>N</staff>`
+    /// (default 1).
+    private static func decodeOne( // swiftlint:disable:this function_body_length
         measureNode: XMLTreeNode,
         divisions: inout DivisionsContext,
         previousAttributes: inout MusicXMLAttributesSnapshot,
@@ -171,8 +170,6 @@ enum MusicXMLMeasureWalker {
 
         return perStaff.map { $0.build() }
     }
-
-    // swiftlint:enable function_body_length
 
     /// Read `<note><staff>N</staff>` and convert to a 0-based staff index.
     /// Defaults to 0 when absent or out of range.

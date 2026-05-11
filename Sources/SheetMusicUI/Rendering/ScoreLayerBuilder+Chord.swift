@@ -1,4 +1,4 @@
-// swiftlint:disable function_body_length file_length
+// swiftlint:disable file_length
 import CoreText
 import QuartzCore
 import SheetMusicCore
@@ -14,7 +14,7 @@ import SheetMusicLayout
 extension ScoreLayerBuilder {
     // MARK: - Chord
 
-    static func drawChord(
+    static func drawChord( // swiftlint:disable:this function_body_length
         notes: [LayoutChordNote],
         duration: NoteDuration,
         stem: StemDirection,

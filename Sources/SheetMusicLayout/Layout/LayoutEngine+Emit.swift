@@ -1,4 +1,4 @@
-// swiftlint:disable function_body_length file_length
+// swiftlint:disable file_length
 import CoreGraphics
 import SheetMusicCore
 
@@ -7,7 +7,7 @@ extension LayoutEngine {
     /// Emit a `.tupletLabel` for one `Tuplet` span. Picks bracket vs
     /// number-only based on whether every member sits inside the same
     /// beam group (MuseScore's simplified auto-bracket rule).
-    static func emitTupletLabel(
+    static func emitTupletLabel( // swiftlint:disable:this function_body_length
         tuplet: Tuplet,
         voice: Voice,
         voiceChordOutIndex: [Int: Int],

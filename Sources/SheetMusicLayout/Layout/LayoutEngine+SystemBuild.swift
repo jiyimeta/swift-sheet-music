@@ -1,4 +1,4 @@
-// swiftlint:disable function_body_length file_length
+// swiftlint:disable file_length
 import CoreGraphics
 import SheetMusicCore
 
@@ -6,7 +6,7 @@ import SheetMusicCore
 extension LayoutEngine {
     // MARK: - Per-system layout
 
-    static func buildSystem(
+    static func buildSystem( // swiftlint:disable:this function_body_length
         measureRange: Range<Int>,
         widths: [CGFloat],
         systemOriginY: CGFloat,

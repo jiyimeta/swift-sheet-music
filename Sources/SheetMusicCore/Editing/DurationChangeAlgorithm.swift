@@ -1,4 +1,4 @@
-// swiftlint:disable function_body_length file_length
+// swiftlint:disable file_length
 import Foundation
 
 /// Shared shorten / lengthen algorithm used by `SetChordDuration`
@@ -22,7 +22,7 @@ public enum DurationChangeAlgorithm {
     /// - throws: `SheetMusicError.invalidEdit` when the change would
     ///   cross a measure boundary, consume past a non-timed element,
     ///   or overlap a downstream tuplet.
-    static func compute(
+    static func compute( // swiftlint:disable:this function_body_length
         in voice: Voice,
         atIdx idx: Int,
         mutatedTarget: VoiceElement,

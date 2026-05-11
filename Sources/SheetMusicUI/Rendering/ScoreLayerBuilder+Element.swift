@@ -1,4 +1,4 @@
-// swiftlint:disable function_body_length file_length
+// swiftlint:disable file_length
 import QuartzCore
 import SheetMusicCore
 import SheetMusicLayout
@@ -13,7 +13,7 @@ import SheetMusicLayout
 extension ScoreLayerBuilder {
     // MARK: - Element dispatch
 
-    static func drawElement(
+    static func drawElement( // swiftlint:disable:this function_body_length
         _ element: LayoutElement,
         base: CGPoint,
         metrics: StaffMetrics,

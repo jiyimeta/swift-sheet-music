@@ -1,4 +1,4 @@
-// swiftlint:disable function_body_length file_length
+// swiftlint:disable file_length
 import CoreGraphics
 import SheetMusicCore
 
@@ -116,7 +116,7 @@ extension LayoutEngine {
         return out
     }
 
-    static func attachSpanners(
+    static func attachSpanners( // swiftlint:disable:this function_body_length
         to systems: [LayoutSystem],
         anchors: [SpannerAnchor],
         score: Score,

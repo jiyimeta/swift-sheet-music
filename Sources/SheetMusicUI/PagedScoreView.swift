@@ -1,4 +1,4 @@
-// swiftlint:disable function_body_length file_length
+// swiftlint:disable file_length
 import SheetMusicCore
 import SheetMusicLayout
 import SwiftUI

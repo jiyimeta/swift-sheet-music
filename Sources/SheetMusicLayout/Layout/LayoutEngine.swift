@@ -1,4 +1,4 @@
-// swiftlint:disable function_body_length file_length
+// swiftlint:disable file_length
 import CoreGraphics
 import SheetMusicCore
 
@@ -43,7 +43,7 @@ public enum LayoutEngine {
     ///
     /// The cache is rebuilt in place each call: prior entries are
     /// kept only when their inputs match the current call.
-    public static func layout(
+    public static func layout( // swiftlint:disable:this function_body_length
         score: Score,
         options: ScoreViewOptions,
         availableWidth: CGFloat,

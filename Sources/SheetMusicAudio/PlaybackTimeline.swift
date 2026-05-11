@@ -1,4 +1,4 @@
-// swiftlint:disable function_body_length file_length
+// swiftlint:disable file_length
 import Foundation
 import SheetMusicCore
 
@@ -147,7 +147,7 @@ extension PlaybackTimeline {
     /// into the seconds conversion. Mirrors the per-voice tick
     /// accumulation used by `MidiRenderer.renderTrack` so the
     /// playback time we report matches the `.mid` export's timing.
-    public init(score: Score) {
+    public init(score: Score) { // swiftlint:disable:this function_body_length
         let division = score.division
         struct Pending {
             let tick: Int

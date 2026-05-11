@@ -19,12 +19,8 @@ struct ClefAnchorTests {
     @Test("equal staffDefault anchors hash equal")
     func staffDefaultEquality() {
         let staff = StaffAddress(partIndex: 1, staffIndexInPart: 0)
-        // swiftlint:disable identical_operands
-        #expect(
-            ClefAnchor.staffDefault(staff)
-                == ClefAnchor.staffDefault(staff),
-        )
-        // swiftlint:enable identical_operands
+        // swiftlint:disable:next identical_operands
+        #expect(ClefAnchor.staffDefault(staff) == ClefAnchor.staffDefault(staff))
     }
 }
 

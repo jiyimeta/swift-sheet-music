@@ -1,4 +1,4 @@
-// swiftlint:disable function_body_length file_length closure_body_length
+// swiftlint:disable file_length
 import CoreGraphics
 import SheetMusicCore
 
@@ -14,7 +14,7 @@ extension LayoutEngine {
         sp * 6
     }
 
-    static func packSystems(
+    static func packSystems( // swiftlint:disable:this function_body_length
         context: RenderContext,
     ) -> [LayoutSystem] {
         let allStaves = context.score.allStaves
@@ -60,7 +60,7 @@ extension LayoutEngine {
             }
             return baseline
         }
-        let minWidths: [CGFloat] = (0 ..< measureCount).map { i in
+        let minWidths: [CGFloat] = (0 ..< measureCount).map { i in // swiftlint:disable:this closure_body_length
             let measuresAt = staves.map { staff in
                 i < staff.measures.count ? staff.measures[i] : nil
             }

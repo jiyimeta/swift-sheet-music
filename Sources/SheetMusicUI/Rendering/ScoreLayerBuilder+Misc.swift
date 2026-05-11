@@ -1,4 +1,4 @@
-// swiftlint:disable function_body_length file_length
+// swiftlint:disable file_length
 import CoreText
 import QuartzCore
 import SheetMusicCore
@@ -173,7 +173,7 @@ extension ScoreLayerBuilder {
 
     // MARK: - Tuplet
 
-    static func drawTuplet(
+    static func drawTuplet( // swiftlint:disable:this function_body_length
         from: CGPoint, to: CGPoint, text: String,
         hasBracket: Bool, isAbove: Bool,
         tupletID: TupletID?,
@@ -301,7 +301,7 @@ extension ScoreLayerBuilder {
 
     // MARK: - Rehearsal mark
 
-    static func drawRehearsalMark(
+    static func drawRehearsalMark( // swiftlint:disable:this function_body_length
         text: String, origin: CGPoint,
         frame: TextFrameType, color: CGColor,
         metrics: StaffMetrics, height: CGFloat,

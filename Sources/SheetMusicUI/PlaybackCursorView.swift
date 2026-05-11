@@ -1,4 +1,4 @@
-// swiftlint:disable function_body_length file_length
+// swiftlint:disable file_length
 import SheetMusicCore
 import SheetMusicLayout
 import SwiftUI
@@ -197,7 +197,7 @@ extension LayoutDocument {
     /// Walks the score's voices for the measure to learn each
     /// element's tick, then matches them up against the layout's X
     /// positions.
-    private func beatXInMeasure(
+    private func beatXInMeasure( // swiftlint:disable:this function_body_length
         tickInMeasure target: Int,
         measureIndex: Int,
         layoutMeasure: LayoutMeasure,

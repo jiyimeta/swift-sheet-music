@@ -1,4 +1,4 @@
-// swiftlint:disable function_body_length file_length
+// swiftlint:disable file_length
 import CoreGraphics
 import Foundation
 import SheetMusicCore
@@ -82,7 +82,7 @@ public enum PDFExporter {
     }
 
     /// Render `score` to a PDF document and return its raw bytes.
-    public static func export(
+    public static func export( // swiftlint:disable:this function_body_length
         score: Score,
         options: Options = Options(),
     ) throws -> Data {

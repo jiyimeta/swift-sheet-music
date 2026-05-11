@@ -1,4 +1,4 @@
-// swiftlint:disable function_body_length file_length
+// swiftlint:disable file_length
 import CoreGraphics
 import SheetMusicCore
 
@@ -24,7 +24,7 @@ extension LayoutEngine {
     ///    8ths (both beats have min=1) merge into one group, while
     ///    "dotted-8th + 16th | 8th + 8th" (beat-1 min=2, beat-2
     ///    min=1) still splits at the beat.
-    static func beamGroups(
+    static func beamGroups( // swiftlint:disable:this function_body_length
         voice: Voice,
         timeSignature: TimeSignature?,
         division: Int,
@@ -234,7 +234,7 @@ extension LayoutEngine {
     /// highest for stem-up, the lowest for stem-down). `anchorSteps[i]`
     /// is the corresponding staff step. `stemXs[i]` is the stem x for
     /// that chord.
-    static func computeBeamLine(
+    static func computeBeamLine( // swiftlint:disable:this function_body_length
         anchorSteps: [Int],
         anchorYs: [CGFloat],
         stemXs: [CGFloat],

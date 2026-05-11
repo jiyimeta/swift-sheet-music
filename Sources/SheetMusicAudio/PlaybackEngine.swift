@@ -1,4 +1,4 @@
-// swiftlint:disable function_body_length file_length type_body_length
+// swiftlint:disable file_length
 import AVFoundation
 import Combine
 import Foundation
@@ -42,7 +42,7 @@ public struct LoopRange: Sendable, Equatable {
 
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 @MainActor
-public final class PlaybackEngine: ObservableObject {
+public final class PlaybackEngine: ObservableObject { // swiftlint:disable:this type_body_length
     private let resolver: SoundfontResolver
     private let engine = AVAudioEngine()
     /// `AVAudioUnitSampler` per staff index. Re-built on each call
@@ -190,7 +190,7 @@ public final class PlaybackEngine: ObservableObject {
     /// on iPhone for the full GM SF2). Wrap the call in
     /// `Task.detached(priority: .userInitiated) { … }` if you want
     /// the UI to stay responsive during score load.
-    public func prepare(score: Score) throws {
+    public func prepare(score: Score) throws { // swiftlint:disable:this function_body_length
         // Stop any in-flight playback before tearing down samplers.
         stop()
         // Loop ticks are resolved against the previous timeline; clear

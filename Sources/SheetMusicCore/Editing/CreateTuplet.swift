@@ -1,4 +1,4 @@
-// swiftlint:disable function_body_length file_length
+// swiftlint:disable file_length
 import Foundation
 
 /// Convert a single chord or rest into a tuplet of `actualNotes`
@@ -53,7 +53,7 @@ public struct CreateTuplet: EditCommand {
     }
 
     @discardableResult
-    public func apply(to score: inout Score) throws -> any EditCommand {
+    public func apply(to score: inout Score) throws -> any EditCommand { // swiftlint:disable:this function_body_length
         guard let voice = DurationChangeAlgorithm
             .voice(in: score, at: location),
             voice.elements.indices.contains(location.elementIndex)

@@ -1,4 +1,4 @@
-// swiftlint:disable function_body_length file_length
+// swiftlint:disable file_length
 import Foundation
 import SheetMusicCore
 import SheetMusicXMLTools
@@ -9,7 +9,7 @@ extension Voice {
         let firstElementIndex: Int
     }
 
-    static func decode(_ node: XMLTreeNode) throws -> Voice {
+    static func decode(_ node: XMLTreeNode) throws -> Voice { // swiftlint:disable:this function_body_length
         var elements: [VoiceElement] = []
         elements.reserveCapacity(node.children.count)
         var tuplets: [Tuplet] = []

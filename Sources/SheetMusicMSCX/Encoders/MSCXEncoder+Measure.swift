@@ -1,4 +1,3 @@
-// swiftlint:disable function_body_length
 import Foundation
 import SheetMusicCore
 import SheetMusicXMLTools
@@ -26,7 +25,7 @@ extension Measure {
     /// of this measure as the staff-head voice so the encoder can
     /// drop an implicit C-major KeySig (matching MuseScore Studio's
     /// writer convention).
-    func encode(
+    func encode( // swiftlint:disable:this function_body_length
         carryInVoiceTieCarries: [Voice.VoiceTieCarry],
         isFirstMeasureOfStaff: Bool = false,
         options: MSCXEncoderOptions = .init(),

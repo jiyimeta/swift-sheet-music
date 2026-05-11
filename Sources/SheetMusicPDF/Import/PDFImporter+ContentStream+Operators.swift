@@ -76,13 +76,10 @@ private func op_q(_: CGPDFScannerRef, _ info: UnsafeMutableRawPointer?) {
     s.ctmStack.append(s.ctm)
 }
 
-// swiftlint:disable identifier_name
 private func op_Q(_: CGPDFScannerRef, _ info: UnsafeMutableRawPointer?) {
     guard let s = pageState(info) else { return }
     if s.ctmStack.count > 1 { s.ctmStack.removeLast() }
 }
-
-// swiftlint:enable identifier_name
 
 private func op_cm(_ scanner: CGPDFScannerRef, _ info: UnsafeMutableRawPointer?) {
     guard let s = pageState(info), let m = popMatrix(scanner) else { return }
@@ -94,7 +91,6 @@ private func op_w(_ scanner: CGPDFScannerRef, _ info: UnsafeMutableRawPointer?) 
     s.lineWidth = v
 }
 
-// swiftlint:disable identifier_name
 private func op_BT(_: CGPDFScannerRef, _ info: UnsafeMutableRawPointer?) {
     guard let s = pageState(info) else { return }
     s.textMatrix = .identity
@@ -149,8 +145,6 @@ private func op_TJ(_ scanner: CGPDFScannerRef, _ info: UnsafeMutableRawPointer?)
     }
     if !combined.isEmpty { emitText(combined, state: s) }
 }
-
-// swiftlint:enable identifier_name
 
 private func op_quote(_ scanner: CGPDFScannerRef, _ info: UnsafeMutableRawPointer?) {
     guard let s = pageState(info), let str = popString(scanner) else { return }
