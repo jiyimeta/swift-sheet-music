@@ -1,4 +1,3 @@
-// swiftlint:disable file_length
 #if os(macOS) || os(iOS)
     import SheetMusicCore
     @testable import SheetMusicLayout

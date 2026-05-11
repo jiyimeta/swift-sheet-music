@@ -1,4 +1,3 @@
-// swiftlint:disable file_length
 import Foundation
 @testable import SheetMusic
 @testable import SheetMusicCore

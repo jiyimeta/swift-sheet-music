@@ -1,0 +1,11 @@
+# Nested override for the Tests/ subtree. Inherits everything from the
+# repository-root `.swiftlint.yml` via SwiftLint's nested-configuration
+# merge and disables `file_length` only here.
+#
+# Test files routinely cluster many `@Test` cases plus shared fixture
+# builders into a single file for one engine area; the rule's
+# signal-to-noise ratio is poor in that setting, and the alternative
+# — sprinkling `// swiftlint:disable file_length` at the top of every
+# long test file — was the wart this nested config replaces.
+disabled_rules:
+  - file_length
