@@ -265,15 +265,20 @@ extension LayoutDocument {
             // where all voices carry only a whole-measure rest. Those
             // rests render centered (not at a tick column), so they
             // can't anchor an interpolation. Fall back to spreading
-            // the beat ticks linearly across the measure's full width
-            // so the cursor still advances per beat instead of
-            // disappearing for the whole bar.
+            // the beat ticks linearly across the measure's body so
+            // the cursor still advances per beat instead of
+            // disappearing for the whole bar — but start past any
+            // leading clef / key sig / time sig so the cursor doesn't
+            // sit on top of the header glyphs at the measure's left.
             let measureTicks = measureTickLength(
                 measureIndex: measureIndex, score: score, division: division,
             )
             guard measureTicks > 0 else { return nil }
+            let leading = leadingHeaderRightEdge(in: layoutMeasure)
+            let trailing = metrics.sp
+            let body = max(0, layoutMeasure.width - leading - trailing)
             let frac = max(0, min(1, CGFloat(target) / CGFloat(measureTicks)))
-            return frac * layoutMeasure.width
+            return leading + frac * body
         }
         var rightTick: Int?
         for tick in sorted {
@@ -304,6 +309,38 @@ extension LayoutDocument {
             }
         }
         return leftX
+    }
+
+    /// Approximate right edge of a measure's leading clef / key sig /
+    /// time sig column, in measure-local coords. Mirrors the
+    /// `HeaderSchedule.contentStartX` the layout engine derived when
+    /// placing the measure: `clefX` baseline of `sp * 2` plus each
+    /// header glyph's reserved width. Used by `beatXInMeasure`'s no-
+    /// anchors fallback so the cursor doesn't sit on top of the
+    /// leading glyphs in an all-whole-rest measure.
+    ///
+    /// Mid-measure clef / key changes also land in `elements` and
+    /// would be picked up here, but they only arise after a chord —
+    /// and a measure with any chord wouldn't reach this fallback in
+    /// the first place, so widening the floor with them is a no-op
+    /// for the cases that actually matter.
+    private func leadingHeaderRightEdge(in measure: LayoutMeasure) -> CGFloat {
+        let sp = metrics.sp
+        var rightEdge: CGFloat = sp * 2
+        for el in measure.elements {
+            switch el {
+            case let .clef(_, origin, _):
+                rightEdge = max(rightEdge, origin.x + sp * 2)
+            case let .keySignature(sharps, flats, origin):
+                let glyphs = CGFloat(max(sharps, flats))
+                rightEdge = max(rightEdge, origin.x + sp * (glyphs + 1.5))
+            case let .timeSignature(_, _, origin):
+                rightEdge = max(rightEdge, origin.x + sp * 3.5)
+            default:
+                break
+            }
+        }
+        return rightEdge
     }
 
     private func itemX(
