@@ -57,10 +57,13 @@ extension MidiImporter {
             // MuseScore's loader: it treats the staff as a pitched
             // one and ignores the per-pitch `<Drum>` line positions,
             // collapsing every drum onto the same line visually.
+            let defaultClef: NotatedClef = track.isDrums
+                ? .percussion
+                : inferClef(events: track.events, candidates: options.clefCandidates)
             var staff = Staff(
                 staffType: track.isDrums ? "perc5Line" : "stdNormal",
                 group: track.isDrums ? "percussion" : "pitched",
-                defaultClefType: track.isDrums ? "PERC" : nil,
+                defaultClefType: defaultClef.rawType,
                 measures: scoreMeasures,
             )
             injectMetaEvents(

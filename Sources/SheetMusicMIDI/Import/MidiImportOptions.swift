@@ -36,6 +36,17 @@ public struct MidiImportOptions: Sendable {
     /// setting.
     public var maxDots = 1
 
+    /// Clefs the importer may assign to each pitched staff's
+    /// `defaultClefType`. The track's note-on pitches are scored
+    /// against each candidate's middle-line MIDI pitch (summed
+    /// absolute distance); the minimum-cost candidate wins, with
+    /// ties broken toward earlier entries.
+    ///
+    /// Drum tracks always get `.percussion` regardless of this list.
+    /// Empty list or tracks with no note-ons fall back to the first
+    /// entry (or `.treble` if the list itself is empty).
+    public var clefCandidates: [NotatedClef] = [.treble, .bass]
+
     /// Sync resolver, used by the non-async parse path.
     public var resolveSwing: (@Sendable (SwingDetection) -> SwingResolution)?
 

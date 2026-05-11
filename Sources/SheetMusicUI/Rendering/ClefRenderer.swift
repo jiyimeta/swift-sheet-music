@@ -1,3 +1,4 @@
+import SheetMusicCore
 import SheetMusicLayout
 import SwiftUI
 
