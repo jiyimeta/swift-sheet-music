@@ -48,8 +48,11 @@ extension Score {
         }
 
         let museScoreVersion: String
+        // `.v2` is detection-only; MSCXEncoderOptions normalises it to
+        // `.v3` at init/assignment, but the switch still needs the
+        // case to be exhaustive.
         switch options.targetVersion {
-        case .v3: museScoreVersion = "3.02"
+        case .v2, .v3: museScoreVersion = "3.02"
         case .v4: museScoreVersion = "4.60"
         }
         var rootChildren: [XMLTreeNode] = []
@@ -109,7 +112,7 @@ extension Score {
                     text: metaTags[key] ?? "",
                 )
             }
-        case .v3:
+        case .v2, .v3:
             Self.canonicalMS3MetaTagNames.map { name in
                 XMLTreeNode(
                     name: "metaTag",

@@ -82,7 +82,7 @@ extension Spanner {
             : nil
         var locationChildren: [XMLTreeNode] = []
         switch options.targetVersion {
-        case .v3:
+        case .v2, .v3:
             if let measuresNode { locationChildren.append(measuresNode) }
             if let fractionsNode { locationChildren.append(fractionsNode) }
         case .v4:

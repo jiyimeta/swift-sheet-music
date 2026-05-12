@@ -14,7 +14,7 @@ extension ScoreStyle {
     /// round-trip back to the same value.
     func encode(options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
         switch options.targetVersion {
-        case .v3:
+        case .v2, .v3:
             // MuseScore Studio 3 writes only the engraving unit anchor
             // inside <Style> for round-tripped fixtures (capital-S
             // <Spatium>); see ms3-target spec, Style block.

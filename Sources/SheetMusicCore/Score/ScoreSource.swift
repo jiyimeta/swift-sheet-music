@@ -25,6 +25,7 @@ public enum ScoreSource: Sendable, Hashable {
     public var displayName: String {
         switch self {
         case .midi: "MIDI"
+        case .museScore(.v2): "MuseScore 2"
         case .museScore(.v3): "MuseScore 3"
         case .museScore(.v4): "MuseScore 4"
         case .musicXML: "MusicXML"

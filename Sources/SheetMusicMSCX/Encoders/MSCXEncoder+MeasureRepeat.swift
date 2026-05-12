@@ -19,7 +19,7 @@ extension MeasureRepeat {
         let elementName: String
         var children: [XMLTreeNode] = []
         switch options.targetVersion {
-        case .v3:
+        case .v2, .v3:
             elementName = "RepeatMeasure"
             children.append(XMLTreeNode(name: "linkedMain"))
         case .v4:

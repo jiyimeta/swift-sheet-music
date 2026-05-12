@@ -1,6 +1,12 @@
 import Foundation
+import os
 import SheetMusicCore
 import SheetMusicXMLTools
+
+private let mscxDecoderLogger = Logger(
+    subsystem: "swift-sheet-music.SheetMusicMSCX",
+    category: "MSCXDecoder",
+)
 
 extension Score {
     static func decode(_ root: XMLTreeNode) throws -> Score {
@@ -66,6 +72,11 @@ extension Score {
     /// `<museScore version="…">` attribute. Falls back to `<programVersion>`
     /// (used by 3.x exports) and finally defaults to `.v4` when no
     /// recognisable marker is present.
+    ///
+    /// `version="2.x"` is reported as `.v2` so `ScoreSource` can
+    /// surface a "MuseScore 2" badge. A warning is logged because the
+    /// decoder itself is MS3/MS4-shaped — MS2 files are parsed
+    /// best-effort and the resulting `Score` may be incomplete.
     private static func detectVersion(
         root: XMLTreeNode, scoreNode: XMLTreeNode,
     ) -> MSCXVersion {
@@ -73,12 +84,36 @@ extension Score {
            let major = versionAttr.split(separator: ".").first,
            let majorInt = Int(major)
         {
-            return majorInt <= 3 ? .v3 : .v4
+            if majorInt <= 2 {
+                let programVersion = scoreNode.first("programVersion")?.text ?? "unknown"
+                mscxDecoderLogger.warning(
+                    """
+                    detected MuseScore 2 file \
+                    (museScore version=\"\(versionAttr, privacy: .public)\", \
+                    programVersion=\(programVersion, privacy: .public)); \
+                    parsing through the MS3/MS4-shaped reader — some \
+                    MS2-only fields will be skipped silently.
+                    """,
+                )
+                return .v2
+            }
+            return majorInt == 3 ? .v3 : .v4
         }
-        if let programVersion = scoreNode.first("programVersion")?.text,
-           programVersion.hasPrefix("3.")
-        {
-            return .v3
+        if let programVersion = scoreNode.first("programVersion")?.text {
+            if programVersion.hasPrefix("2.") {
+                mscxDecoderLogger.warning(
+                    """
+                    detected MuseScore 2 file via programVersion \
+                    \(programVersion, privacy: .public); parsing through \
+                    the MS3/MS4-shaped reader — some MS2-only fields will \
+                    be skipped silently.
+                    """,
+                )
+                return .v2
+            }
+            if programVersion.hasPrefix("3.") {
+                return .v3
+            }
         }
         return .v4
     }

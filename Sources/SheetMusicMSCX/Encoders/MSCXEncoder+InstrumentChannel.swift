@@ -14,7 +14,7 @@ extension InstrumentChannel {
     /// same shape.
     func encode(options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
         let children: [XMLTreeNode] = switch options.targetVersion {
-        case .v3: v3Children()
+        case .v2, .v3: v3Children()
         case .v4: v4Children()
         }
         var attrs: [String: String] = [:]
