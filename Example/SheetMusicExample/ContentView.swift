@@ -64,6 +64,8 @@
         @State private var pdfLayout: PDFPreviewLayout?
         /// Mixer sheet visibility — toolbar mixer button toggles it.
         @State private var isMixerPresented = false
+        /// Audio export sheet visibility — toolbar "Export Audio" item toggles it.
+        @State private var isExportAudioPresented = false
         /// When true, vertical-mode drags become marquee selections
         /// instead of falling through to scroll. Toggled from the
         /// toolbar; OFF restores normal tap/scroll behaviour.
@@ -101,6 +103,7 @@
                         isMixerPresented: $isMixerPresented,
                         isImportingFile: $isImportingFile,
                         isMarqueeMode: $isMarqueeMode,
+                        isExportAudioPresented: $isExportAudioPresented,
                         onTogglePlayback: togglePlayback,
                         onExportPDF: exportPDF,
                     )
@@ -130,6 +133,13 @@
                         }
                 }
                 .presentationDetents([.medium, .large])
+            }
+            .sheet(isPresented: $isExportAudioPresented) {
+                if let score {
+                    NavigationStack {
+                        AudioExportSheet(engine: playbackEngine, score: score)
+                    }
+                }
             }
         }
 

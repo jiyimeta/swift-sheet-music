@@ -161,6 +161,7 @@
         /// scroll or click. Toggled from the sidebar.
         @State private var isMarqueeMode = false
         @State private var collapseMultiMeasureRests = false
+        @State private var showExport = false
 
         /// systemGap targets MuseScore's `Sid::minSystemDistance` of
         /// 8.5 sp; with our staff-distance pads contributing ~3.5 sp
@@ -300,6 +301,21 @@
                             + "note reverts to whatever the key signature "
                             + "implies.",
                     )
+                }
+                ToolbarItem {
+                    Button {
+                        showExport = true
+                    } label: {
+                        Label("Export Audio", systemImage: "waveform")
+                    }
+                    .disabled(score == nil)
+                    .help("Export audio")
+                }
+            }
+            .sheet(isPresented: $showExport) {
+                if let score {
+                    AudioExportSheet(engine: playbackEngine, score: score)
+                        .frame(minWidth: 360, minHeight: 320)
                 }
             }
         }
