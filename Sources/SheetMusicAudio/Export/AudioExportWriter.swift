@@ -10,7 +10,7 @@ import Foundation
 /// All writers consume float32, non-interleaved `AVAudioPCMBuffer`s
 /// at the output sample rate. They internally convert / encode as
 /// needed for the destination format.
-protocol AudioExportWriter {
+protocol AudioExportWriter: Sendable {
     func write(_ buffer: AVAudioPCMBuffer) async throws
     func finish() async throws
 }
@@ -26,7 +26,7 @@ protocol AudioExportWriter {
 /// the underlying `AVAudioFile` (which flushes and closes on
 /// deallocation) while the caller still holds a reference to the
 /// writer.
-final class PCMAudioExportWriter: AudioExportWriter {
+final class PCMAudioExportWriter: AudioExportWriter, @unchecked Sendable {
     private var file: AVAudioFile?
 
     init(url: URL, format: AudioFileFormat) throws {
@@ -114,7 +114,7 @@ final class PCMAudioExportWriter: AudioExportWriter {
 /// `PCMAudioExportWriter`: `finish()` needs to release the underlying
 /// `AVAudioFile` so it flushes and closes before callers read the
 /// file back.
-final class CompressedAudioExportWriter: AudioExportWriter {
+final class CompressedAudioExportWriter: AudioExportWriter, @unchecked Sendable {
     private var file: AVAudioFile?
 
     init(url: URL, format: AudioFileFormat) throws {

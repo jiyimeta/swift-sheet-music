@@ -154,3 +154,42 @@ struct MP3AudioExportWriterTests {
         #endif
     }
 }
+
+@Suite("AudioFileExporter writer factory")
+struct AudioFileExporterFactoryTests {
+    @Test("Factory picks PCM writer for .wav")
+    func picksPCMForWav() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("smfactory-\(UUID().uuidString).wav")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let writer = try AudioFileExporter
+            .makeWriter(url: url, format: .wav())
+        #expect(writer is PCMAudioExportWriter)
+    }
+
+    @Test("Factory picks Compressed writer for .m4a")
+    func picksCompressedForM4a() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("smfactory-\(UUID().uuidString).m4a")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let writer = try AudioFileExporter
+            .makeWriter(url: url, format: .m4a())
+        #expect(writer is CompressedAudioExportWriter)
+    }
+
+    @Test("Factory throws .formatUnsupportedOnThisOS for .mp3 on macOS")
+    func mp3UnsupportedOnMacOS() throws {
+        #if os(macOS)
+            let url = FileManager.default.temporaryDirectory
+                .appendingPathComponent("smfactory-\(UUID().uuidString).mp3")
+            defer { try? FileManager.default.removeItem(at: url) }
+            do {
+                _ = try AudioFileExporter
+                    .makeWriter(url: url, format: .mp3())
+                Issue.record("Expected throw on macOS")
+            } catch AudioExportError.formatUnsupportedOnThisOS {
+                // ok
+            }
+        #endif
+    }
+}
