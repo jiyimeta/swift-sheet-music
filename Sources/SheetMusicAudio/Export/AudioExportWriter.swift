@@ -1,3 +1,6 @@
+// swiftlint:disable file_length
+// Three writer classes (PCM, Compressed, MP3) live here by design;
+// splitting would weaken cohesion without reducing per-reader complexity.
 import AVFoundation
 import Foundation
 
@@ -160,5 +163,176 @@ final class CompressedAudioExportWriter: AudioExportWriter {
         // Releasing the AVAudioFile reference triggers deinit, which
         // flushes and closes the file handle.
         file = nil
+    }
+}
+
+/// `AVAssetWriter`-backed MP3 writer. Gated on iOS 17 / macOS 14 /
+/// tvOS 17 / watchOS 10 — earlier OSes have no MP3 *write* path
+/// in `AVAssetWriter`.
+///
+/// Note: although the `@available` gate includes macOS 14, `AVAssetWriter`
+/// does not support the `.mp3` file type on macOS at runtime. On macOS this
+/// init throws `AudioExportError.formatUnsupportedOnThisOS`.
+@available(iOS 17, macOS 14, tvOS 17, watchOS 10, *)
+final class MP3AudioExportWriter: AudioExportWriter, @unchecked Sendable {
+    private let assetWriter: AVAssetWriter
+    private let input: AVAssetWriterInput
+    private var startedSession = false
+    private var presentationFrames: Int64 = 0
+    private let sampleRate: Double
+
+    /// Validates the format and builds the initialized (assetWriter, input, sampleRate)
+    /// triple — or throws before any stored-property initialization is needed.
+    private static func makeComponents(
+        url: URL, format: AudioFileFormat,
+    ) throws -> (AVAssetWriter, AVAssetWriterInput, Double) {
+        let options: CompressedOptions
+        switch format {
+        case let .mp3(o): options = o
+        default:
+            throw AudioExportError.engineSetupFailed(
+                underlying: "MP3AudioExportWriter requires .mp3",
+            )
+        }
+        // AVAssetWriter does not support .mp3 on macOS — only on iOS/tvOS.
+        // Guard here so init can still initialize all stored lets on every
+        // platform (Swift's definitive-initialization rules require it).
+        #if os(macOS)
+            throw AudioExportError.formatUnsupportedOnThisOS(format)
+        #else
+            let writer: AVAssetWriter
+            do {
+                writer = try AVAssetWriter(outputURL: url, fileType: .mp3)
+            } catch {
+                throw AudioExportError.fileWriteFailed(
+                    underlying: (error as NSError).localizedDescription,
+                )
+            }
+            let inputSettings: [String: Any] = [
+                AVFormatIDKey: kAudioFormatMPEGLayer3,
+                AVSampleRateKey: options.sampleRate,
+                AVNumberOfChannelsKey: options.channels.rawValue,
+                AVEncoderBitRateKey: options.bitRate,
+            ]
+            let writerInput = AVAssetWriterInput(
+                mediaType: .audio, outputSettings: inputSettings,
+            )
+            writerInput.expectsMediaDataInRealTime = false
+            writer.add(writerInput)
+
+            guard writer.startWriting() else {
+                throw AudioExportError.fileWriteFailed(
+                    underlying: writer.error?.localizedDescription
+                        ?? "AVAssetWriter.startWriting returned false",
+                )
+            }
+            return (writer, writerInput, options.sampleRate)
+        #endif
+    }
+
+    init(url: URL, format: AudioFileFormat) throws {
+        let (writer, writerInput, rate) = try Self.makeComponents(url: url, format: format)
+        assetWriter = writer
+        input = writerInput
+        sampleRate = rate
+    }
+
+    func write(_ buffer: AVAudioPCMBuffer) async throws {
+        guard let sampleBuffer = try? makeCMSampleBuffer(
+            from: buffer, pts: presentationFrames,
+        ) else {
+            throw AudioExportError.fileWriteFailed(
+                underlying: "Could not wrap PCM buffer as CMSampleBuffer",
+            )
+        }
+        if !startedSession {
+            assetWriter.startSession(
+                atSourceTime: CMTime(value: 0, timescale: CMTimeScale(sampleRate)),
+            )
+            startedSession = true
+        }
+        while !input.isReadyForMoreMediaData {
+            try await Task.sleep(nanoseconds: 1_000_000)
+        }
+        guard input.append(sampleBuffer) else {
+            throw AudioExportError.fileWriteFailed(
+                underlying: assetWriter.error?.localizedDescription
+                    ?? "AVAssetWriterInput.append returned false",
+            )
+        }
+        presentationFrames += Int64(buffer.frameLength)
+    }
+
+    func finish() async throws {
+        input.markAsFinished()
+        await assetWriter.finishWriting()
+        if assetWriter.status == .failed {
+            throw AudioExportError.fileWriteFailed(
+                underlying: assetWriter.error?.localizedDescription
+                    ?? "AVAssetWriter.finishWriting reported failure",
+            )
+        }
+    }
+
+    private func makeCMSampleBuffer(
+        from buffer: AVAudioPCMBuffer, pts: Int64,
+    ) throws -> CMSampleBuffer {
+        var asbd = buffer.format.streamDescription.pointee
+        var formatDesc: CMAudioFormatDescription?
+        var status = CMAudioFormatDescriptionCreate(
+            allocator: kCFAllocatorDefault,
+            asbd: &asbd,
+            layoutSize: 0,
+            layout: nil,
+            magicCookieSize: 0,
+            magicCookie: nil,
+            extensions: nil,
+            formatDescriptionOut: &formatDesc,
+        )
+        guard status == noErr, let fmt = formatDesc else {
+            throw AudioExportError.fileWriteFailed(
+                underlying: "CMAudioFormatDescriptionCreate failed (\(status))",
+            )
+        }
+        var sb: CMSampleBuffer?
+        let ptsTime = CMTime(value: pts, timescale: CMTimeScale(sampleRate))
+        status = CMSampleBufferCreate(
+            allocator: kCFAllocatorDefault,
+            dataBuffer: nil,
+            dataReady: false,
+            makeDataReadyCallback: nil,
+            refcon: nil,
+            formatDescription: fmt,
+            sampleCount: CMItemCount(buffer.frameLength),
+            sampleTimingEntryCount: 1,
+            sampleTimingArray: [
+                CMSampleTimingInfo(
+                    duration: CMTime(value: 1, timescale: CMTimeScale(sampleRate)),
+                    presentationTimeStamp: ptsTime,
+                    decodeTimeStamp: .invalid,
+                ),
+            ],
+            sampleSizeEntryCount: 0,
+            sampleSizeArray: nil,
+            sampleBufferOut: &sb,
+        )
+        guard status == noErr, let sb else {
+            throw AudioExportError.fileWriteFailed(
+                underlying: "CMSampleBufferCreate failed (\(status))",
+            )
+        }
+        status = CMSampleBufferSetDataBufferFromAudioBufferList(
+            sb,
+            blockBufferAllocator: kCFAllocatorDefault,
+            blockBufferMemoryAllocator: kCFAllocatorDefault,
+            flags: 0,
+            bufferList: buffer.audioBufferList,
+        )
+        guard status == noErr else {
+            throw AudioExportError.fileWriteFailed(
+                underlying: "CMSampleBufferSetDataBuffer failed (\(status))",
+            )
+        }
+        return sb
     }
 }
