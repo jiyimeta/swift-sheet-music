@@ -34,11 +34,11 @@ public struct PDFPageView: View {
     /// uses `1.0`; the on-screen preview pinch-zoom drives this
     /// directly.
     let renderScale: CGFloat
-    /// Whether to overlay MuseScore-style break indicator badges.
-    /// On-screen previews pass `true` for authoring affordance;
-    /// `PDFExporter.export` passes `false` so the saved file is
+    /// Which `<LayoutBreak>` indicator badges to overlay over the
+    /// page. On-screen previews pass `.all` for authoring affordance;
+    /// `PDFExporter.export` passes `.none` so the saved file is
     /// indicator-free.
-    let showBreakIndicators: Bool
+    let breakIndicatorVisibility: BreakIndicatorVisibility
     /// Layout-break consumption policy. Forwarded to
     /// `BreakIndicatorOverlay` so badges hide for breaks that the
     /// active policy ignored.
@@ -52,7 +52,7 @@ public struct PDFPageView: View {
         pageSize: CGSize,
         margins: PageMargins,
         renderScale: CGFloat = 1,
-        showBreakIndicators: Bool = false,
+        breakIndicatorVisibility: BreakIndicatorVisibility = .none,
         policy: LayoutBreakPolicy = .honor,
     ) {
         self.systems = systems
@@ -62,7 +62,7 @@ public struct PDFPageView: View {
         self.pageSize = pageSize
         self.margins = margins
         self.renderScale = renderScale
-        self.showBreakIndicators = showBreakIndicators
+        self.breakIndicatorVisibility = breakIndicatorVisibility
         self.policy = policy
     }
 
@@ -103,7 +103,7 @@ public struct PDFPageView: View {
                     )
                 }
             }
-            if showBreakIndicators {
+            if breakIndicatorVisibility != .none {
                 BreakIndicatorOverlay(
                     mode: .document(
                         systems: systems,
@@ -112,6 +112,7 @@ public struct PDFPageView: View {
                     ),
                     metrics: metrics,
                     policy: policy,
+                    visibility: breakIndicatorVisibility,
                 )
                 .scaleEffect(renderScale, anchor: .topLeading)
             }

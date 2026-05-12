@@ -37,15 +37,18 @@ public struct BreakIndicatorOverlay: View {
     public let mode: Mode
     public let metrics: StaffMetrics
     public let policy: LayoutBreakPolicy
+    public let visibility: BreakIndicatorVisibility
 
     public init(
         mode: Mode,
         metrics: StaffMetrics,
         policy: LayoutBreakPolicy = .honor,
+        visibility: BreakIndicatorVisibility = .all,
     ) {
         self.mode = mode
         self.metrics = metrics
         self.policy = policy
+        self.visibility = visibility
     }
 
     public var body: some View {
@@ -91,18 +94,28 @@ public struct BreakIndicatorOverlay: View {
     }
 
     private func breakKind(for m: LayoutMeasure) -> BreakKind? {
+        let policyKind: BreakKind?
         switch policy {
         case .honor:
-            if m.pageBreak { return .page }
-            if m.lineBreak { return .line }
-            return nil
+            if m.pageBreak {
+                policyKind = .page
+            } else if m.lineBreak {
+                policyKind = .line
+            } else {
+                policyKind = nil
+            }
         case .ignoreSystemBreaks:
             // Page indicators only — line breaks are ignored at
             // layout time, so showing their badges would mislead.
-            if m.pageBreak { return .page }
-            return nil
+            policyKind = m.pageBreak ? .page : nil
         case .ignoreAll:
-            return nil
+            policyKind = nil
+        }
+        guard let kind = policyKind else { return nil }
+        switch visibility {
+        case .all: return kind
+        case .pageOnly: return kind == .page ? kind : nil
+        case .none: return nil
         }
     }
 

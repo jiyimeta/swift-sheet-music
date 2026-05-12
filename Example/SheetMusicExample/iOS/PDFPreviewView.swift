@@ -58,7 +58,7 @@
                                 pageSize: pageSize,
                                 margins: page.margins(forPageIndex: idx),
                                 renderScale: pdfScale,
-                                showBreakIndicators: true,
+                                breakIndicatorVisibility: .all,
                             )
                             .background(Color.white)
                             .border(Color.gray.opacity(0.4))

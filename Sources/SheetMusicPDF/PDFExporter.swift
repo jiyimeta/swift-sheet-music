@@ -137,7 +137,7 @@ public enum PDFExporter {
                 margins: margins,
                 // Authoring overlay is for previews only; the
                 // exported file must not show it.
-                showBreakIndicators: false,
+                breakIndicatorVisibility: .none,
                 policy: options.breakPolicy,
             )
             let renderer = ImageRenderer(content: view)

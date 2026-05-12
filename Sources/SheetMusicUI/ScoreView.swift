@@ -59,7 +59,7 @@ public struct ScoreView: View {
     /// to `score` / `options` / container-width changes.
     ///
     /// `options` controls render-time concerns the document doesn't
-    /// already bake in — currently `showBreakIndicators` and
+    /// already bake in — currently `breakIndicatorVisibility` and
     /// `breakPolicy` (used by the indicator overlay). Pass the same
     /// options you used to build `document` so toggles like
     /// "hide break badges" survive the doc handoff.
@@ -156,11 +156,12 @@ public struct ScoreView: View {
                     selection: selection,
                 )
                 .overlay(alignment: .topLeading) {
-                    if options.showBreakIndicators {
+                    if options.breakIndicatorVisibility != .none {
                         BreakIndicatorOverlay(
                             mode: .system(system: sys),
                             metrics: doc.metrics,
                             policy: options.breakPolicy,
+                            visibility: options.breakIndicatorVisibility,
                         )
                     }
                 }
@@ -210,11 +211,12 @@ public struct ScoreView: View {
                         // Horizontal mode honours no breaks at
                         // layout time, but the indicator badges
                         // are still useful as authoring hints.
-                        if options.showBreakIndicators {
+                        if options.breakIndicatorVisibility != .none {
                             BreakIndicatorOverlay(
                                 mode: .system(system: system),
                                 metrics: doc.metrics,
                                 policy: options.breakPolicy,
+                                visibility: options.breakIndicatorVisibility,
                             )
                         }
                     }

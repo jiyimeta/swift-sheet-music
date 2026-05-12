@@ -112,7 +112,7 @@
                             // badges on the on-screen preview only.
                             // The exported PDF skips this overlay
                             // because PDFExporter.export passes
-                            // showBreakIndicators=false to its
+                            // breakIndicatorVisibility=.none to its
                             // own Canvas-based PDFPageView.
                             .overlay(alignment: .topLeading) {
                                 BreakIndicatorOverlay(

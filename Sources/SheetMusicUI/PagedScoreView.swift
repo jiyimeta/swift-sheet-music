@@ -103,7 +103,7 @@ public struct PagedScoreView: View {
         pageSystems: [LayoutSystem],
         metrics: StaffMetrics,
     ) -> some View {
-        if options.showBreakIndicators {
+        if options.breakIndicatorVisibility != .none {
             let pageOrigins = Self.systemPageOrigins(
                 pageSystems: pageSystems,
             )
@@ -115,6 +115,7 @@ public struct PagedScoreView: View {
                     mode: .system(system: sys),
                     metrics: metrics,
                     policy: options.breakPolicy,
+                    visibility: options.breakIndicatorVisibility,
                 )
                 .frame(
                     width: sys.size.width,

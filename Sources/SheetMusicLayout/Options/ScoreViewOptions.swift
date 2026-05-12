@@ -31,6 +31,20 @@ public enum LayoutBreakPolicy: Sendable, Equatable {
     case ignoreAll
 }
 
+/// Visibility for `<LayoutBreak>` indicator badges drawn over the
+/// on-screen score. Independent from `LayoutBreakPolicy` — this enum
+/// only hides badges that would otherwise be drawn; layout behavior
+/// is unchanged.
+@available(macOS 15.0, iOS 16.0, *)
+public enum BreakIndicatorVisibility: Sendable, Equatable {
+    /// Show both line- and page-break badges.
+    case all
+    /// Hide line-break badges; still show page-break badges.
+    case pageOnly
+    /// Hide all break indicator badges.
+    case none
+}
+
 /// Policy for collapsing runs of consecutive rest measures into a
 /// single multi-measure-rest bar (the H-bar + count notation).
 /// Affects layout only — `Score` and MIDI are untouched.
@@ -67,10 +81,11 @@ public struct ScoreViewOptions: Sendable, Equatable {
     /// How to consume authored `<LayoutBreak>` markup. Default
     /// `.honor` reproduces behavior from before this option existed.
     public var breakPolicy: LayoutBreakPolicy
-    /// When true, system / page break badges are drawn over each
-    /// system as authoring hints. Default `true` matches behavior
-    /// from before this option existed.
-    public var showBreakIndicators: Bool
+    /// Which `<LayoutBreak>` indicator badges to draw over each
+    /// system as authoring hints. Default `.all` matches behavior
+    /// from before this option existed. Has no effect on PDF
+    /// export — `PDFExporter` always passes `.none`.
+    public var breakIndicatorVisibility: BreakIndicatorVisibility
     /// Visual scale factor applied to grace-note glyphs (notehead +
     /// stem + flag) relative to a main chord. MuseScore's
     /// `Sid::graceNoteMag` default is 0.7; we use 0.6 to stay
@@ -86,7 +101,7 @@ public struct ScoreViewOptions: Sendable, Equatable {
         wrapToViewWidth: Bool = true,
         includeTitleFrame: Bool = true,
         breakPolicy: LayoutBreakPolicy = .honor,
-        showBreakIndicators: Bool = true,
+        breakIndicatorVisibility: BreakIndicatorVisibility = .all,
         graceNoteMag: CGFloat = 0.6,
         multiMeasureRest: MultiMeasureRestPolicy = .disabled,
     ) {
@@ -95,7 +110,7 @@ public struct ScoreViewOptions: Sendable, Equatable {
         self.wrapToViewWidth = wrapToViewWidth
         self.includeTitleFrame = includeTitleFrame
         self.breakPolicy = breakPolicy
-        self.showBreakIndicators = showBreakIndicators
+        self.breakIndicatorVisibility = breakIndicatorVisibility
         self.graceNoteMag = graceNoteMag
         self.multiMeasureRest = multiMeasureRest
     }
