@@ -75,6 +75,143 @@ struct MSCZReaderTests {
         }
     }
 
+    /// MuseScore 4 stores per-part playback presets in
+    /// `audiosettings.json` inside the `.mscz`. When the user picks a
+    /// non-default SoundFont preset (e.g. "Square Lead" / program 80)
+    /// for a part, only `audiosettings.json` is updated — the mscx
+    /// keeps its template `<Channel><program>` (e.g. 52 = Choir Aahs
+    /// for `voice.soprano`). The reader must apply those preset
+    /// overrides so consumers see the sound MuseScore actually plays.
+    @Test func audioSettingsOverridesChannelProgram() throws {
+        let mscx = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <museScore version="4.60">
+          <Score>
+            <Division>480</Division>
+            <Part id="1">
+              <Instrument id="soprano">
+                <Channel>
+                  <program value="52"/>
+                </Channel>
+              </Instrument>
+              <Staff id="1"/>
+            </Part>
+            <Staff id="1"><Measure></Measure></Staff>
+          </Score>
+        </museScore>
+        """
+        let audio = """
+        {
+          "tracks": [
+            { "partId": "1",
+              "in": { "resourceMeta": { "attributes": {
+                "presetBank": "0",
+                "presetProgram": "80",
+                "presetName": "Square Lead"
+              } } }
+            }
+          ]
+        }
+        """
+        let mscz = try makeMSCZ(mscx: mscx, audioSettings: audio)
+        let score = try MSCZReader.parse(mscz)
+        #expect(score.parts[0].instrument.channels[0].program == 80)
+    }
+
+    /// `audiosettings.json` is optional — older MuseScore 3 files and
+    /// hand-rolled archives don't ship one. The reader must still
+    /// succeed and leave the mscx-declared program intact.
+    @Test func missingAudioSettingsLeavesChannelUnchanged() throws {
+        let mscx = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <museScore version="4.60">
+          <Score>
+            <Division>480</Division>
+            <Part id="1">
+              <Instrument id="x">
+                <Channel><program value="52"/></Channel>
+              </Instrument>
+              <Staff id="1"/>
+            </Part>
+            <Staff id="1"><Measure></Measure></Staff>
+          </Score>
+        </museScore>
+        """
+        let mscz = try makeMSCZ(mscx: mscx, audioSettings: nil)
+        let score = try MSCZReader.parse(mscz)
+        #expect(score.parts[0].instrument.channels[0].program == 52)
+    }
+
+    /// A track entry without `presetProgram` (typical for the drumset
+    /// row in `audiosettings.json` and the auxiliary "999" metronome
+    /// track) must not zero out the existing channel program. Only
+    /// presets that explicitly nominate a program override.
+    @Test func audioSettingsTrackWithoutPresetIgnored() throws {
+        let mscx = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <museScore version="4.60">
+          <Score>
+            <Division>480</Division>
+            <Part id="6">
+              <Instrument id="drumset">
+                <useDrumset>1</useDrumset>
+                <Channel><program value="0"/></Channel>
+              </Instrument>
+              <Staff id="1"/>
+            </Part>
+            <Staff id="1"><Measure></Measure></Staff>
+          </Score>
+        </museScore>
+        """
+        let audio = """
+        {
+          "tracks": [
+            { "partId": "6",
+              "in": { "resourceMeta": { "attributes": {
+                "soundFontName": "MS Basic"
+              } } }
+            }
+          ]
+        }
+        """
+        let mscz = try makeMSCZ(mscx: mscx, audioSettings: audio)
+        let score = try MSCZReader.parse(mscz)
+        #expect(score.parts[0].instrument.channels[0].program == 0)
+        #expect(score.parts[0].instrument.useDrumset)
+    }
+
+    /// Build a minimal `.mscz` archive in-memory with the given main
+    /// `.mscx` content and, optionally, an `audiosettings.json` at the
+    /// archive root.
+    private func makeMSCZ(
+        mscx: String, audioSettings: String?,
+    ) throws -> Data {
+        let archive = try Archive(accessMode: .create)
+        let mscxBytes = Data(mscx.utf8)
+        try archive.addEntry(
+            with: "score.mscx", type: .file,
+            uncompressedSize: Int64(mscxBytes.count),
+            compressionMethod: .deflate,
+        ) { position, size in
+            let start = Int(position)
+            let end = min(start + size, mscxBytes.count)
+            return mscxBytes.subdata(in: start ..< end)
+        }
+        if let audioSettings {
+            let bytes = Data(audioSettings.utf8)
+            try archive.addEntry(
+                with: "audiosettings.json", type: .file,
+                uncompressedSize: Int64(bytes.count),
+                compressionMethod: .deflate,
+            ) { position, size in
+                let start = Int(position)
+                let end = min(start + size, bytes.count)
+                return bytes.subdata(in: start ..< end)
+            }
+        }
+        return try #require(archive.data)
+    }
+
     @Test func fallbackFileNameRenamedMainEntry() throws {
         // Zip only contains "renamed.mscx" at root — the rule-2 fallback
         // in MSCZReader should still locate it.

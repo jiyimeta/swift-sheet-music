@@ -3,9 +3,11 @@ import SheetMusicCore
 import ZIPFoundation
 
 /// Reads `.mscz` (ZIP) containers and returns the `Score` contained
-/// in the main `.mscx` entry. Auxiliary resources inside the archive
-/// (style, thumbnails, pictures, excerpts, audio, …) are ignored in
-/// this release.
+/// in the main `.mscx` entry. When the archive ships an
+/// `audiosettings.json` (MuseScore 4), per-part preset overrides are
+/// merged into the score so consumers see the sounds MuseScore
+/// actually plays. Other auxiliary resources (style, thumbnails,
+/// pictures, excerpts, …) are ignored.
 ///
 /// Mirrors `mu::engraving::MscReader::mainFileName` /
 /// `::readScoreFile`: prefer the exact name `score.mscx`, and fall
@@ -25,7 +27,47 @@ public enum MSCZReader {
         }
         let entry = try resolveMainEntry(in: archive)
         let mscxData = try extract(entry, from: archive)
-        return try MSCXParser.parse(mscxData)
+        let score = try MSCXParser.parse(mscxData)
+        let settings = audioSettings(in: archive)
+        return settings.map { apply($0, to: score) } ?? score
+    }
+
+    /// Look up `audiosettings.json` at the archive root and parse it.
+    /// Returns nil when the entry is absent or the JSON is unreadable
+    /// — both are non-fatal: the score reverts to its mscx-declared
+    /// channel programs.
+    private static func audioSettings(in archive: Archive) -> AudioSettings? {
+        guard let entry = archive["audiosettings.json"],
+              entry.type == .file,
+              let data = try? extract(entry, from: archive),
+              let settings = try? AudioSettings.parse(data)
+        else { return nil }
+        return settings
+    }
+
+    /// Override each part's primary `InstrumentChannel` program /
+    /// bank with the matching preset from `audiosettings.json`.
+    /// Parts without a corresponding entry — or with an entry that
+    /// doesn't nominate a `presetProgram` (e.g. drumset rows) — are
+    /// left untouched.
+    private static func apply(
+        _ settings: AudioSettings, to score: Score,
+    ) -> Score {
+        guard !settings.presets.isEmpty else { return score }
+        var result = score
+        for partIdx in result.parts.indices {
+            guard
+                let preset = settings.presets[result.parts[partIdx].id],
+                !result.parts[partIdx].instrument.channels.isEmpty
+            else { continue }
+            if let program = preset.program {
+                result.parts[partIdx].instrument.channels[0].program = program
+            }
+            if let bank = preset.bank {
+                result.parts[partIdx].instrument.channels[0].bank = bank
+            }
+        }
+        return result
     }
 
     /// Read `.mscz` bytes from a file URL and parse into a `Score`.

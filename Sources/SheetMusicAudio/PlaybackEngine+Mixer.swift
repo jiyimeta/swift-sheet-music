@@ -79,12 +79,16 @@ extension PlaybackEngine {
     }
 
     /// GM program from the part's first channel — what the score's
-    /// `<program value="…"/>` chose. Falls back to 0 (Acoustic
-    /// Grand Piano) when the part is missing or has no channel.
+    /// `<program value="…"/>` chose. Returns nil for drum-kit parts
+    /// (`useDrumset == true`): drums play on MIDI channel 10 where
+    /// the program byte is ignored, so showing a GM-program picker
+    /// for them would advertise a misleading patch name. Also nil
+    /// when the part is missing entirely.
     private func initialStaffProgram(
         at address: StaffAddress, in score: Score,
-    ) -> UInt8 {
-        guard let part = score.part(at: address) else { return 0 }
+    ) -> UInt8? {
+        guard let part = score.part(at: address) else { return nil }
+        if part.instrument.useDrumset { return nil }
         return UInt8(clamping: part.instrument.channel.program)
     }
 
