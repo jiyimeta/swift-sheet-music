@@ -527,12 +527,28 @@ public final class PlaybackEngine: ObservableObject { // swiftlint:disable:this 
     /// sequencer's `currentPositionInSeconds`, which uses the
     /// instantaneous tempo and drifts on tempo-curved scores). Zero
     /// when no sequencer has been built yet.
+    ///
+    /// During A-B loop playback the raw `currentPositionInBeats` keeps
+    /// advancing monotonically — only per-track `loopRange` wraps, not
+    /// the sequencer's beat counter (same caveat that drives
+    /// `tickCursor`'s modulo fold). Mirror that fold here so callers
+    /// observing this property — including the iOS lock-screen
+    /// scrubber via `MPNowPlayingInfoPropertyElapsedPlaybackTime` —
+    /// see the wrapped, audible position rather than a value that
+    /// climbs past the loop end and saturates at score end.
     public var currentTimeSeconds: TimeInterval {
         guard let timeline, let sequencer else { return 0 }
-        let tick = Int(
+        let rawTick = Int(
             (sequencer.currentPositionInBeats * Double(timeline.division))
                 .rounded(),
         )
+        let tick: Int
+        if let loop = loopRange, rawTick >= loop.endTick {
+            let len = loop.endTick - loop.startTick
+            tick = loop.startTick + (rawTick - loop.startTick) % len
+        } else {
+            tick = rawTick
+        }
         return timeline.frame(atTick: tick)?.timeSeconds ?? 0
     }
 
