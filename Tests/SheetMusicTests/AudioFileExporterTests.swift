@@ -75,3 +75,32 @@ struct PCMAudioExportWriterTests {
         #expect(file.length == 512)
     }
 }
+
+@Suite("CompressedAudioExportWriter (M4A)")
+struct CompressedAudioExportWriterTests {
+    @Test("M4A writer produces an AAC file")
+    func m4aRoundTrip() async throws {
+        let url = FileManager.default
+            .temporaryDirectory
+            .appendingPathComponent("smwriter-\(UUID().uuidString).m4a")
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let writer = try CompressedAudioExportWriter(
+            url: url, format: .m4a(CompressedOptions(bitRate: 128_000)),
+        )
+        let inFmt = try #require(AVAudioFormat(
+            commonFormat: .pcmFormatFloat32,
+            sampleRate: 44100,
+            channels: 2,
+            interleaved: false,
+        ))
+        let buf = try #require(AVAudioPCMBuffer(pcmFormat: inFmt, frameCapacity: 4096))
+        buf.frameLength = 4096
+        try await writer.write(buf)
+        try await writer.finish()
+
+        let file = try AVAudioFile(forReading: url)
+        let desc = file.fileFormat.streamDescription.pointee
+        #expect(desc.mFormatID == kAudioFormatMPEG4AAC)
+    }
+}

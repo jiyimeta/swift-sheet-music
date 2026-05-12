@@ -104,3 +104,61 @@ final class PCMAudioExportWriter: AudioExportWriter {
         file = nil
     }
 }
+
+/// `AVAudioFile`-backed writer for AAC (M4A).
+///
+/// Implemented as a `final class` for the same reason as
+/// `PCMAudioExportWriter`: `finish()` needs to release the underlying
+/// `AVAudioFile` so it flushes and closes before callers read the
+/// file back.
+final class CompressedAudioExportWriter: AudioExportWriter {
+    private var file: AVAudioFile?
+
+    init(url: URL, format: AudioFileFormat) throws {
+        let options: CompressedOptions
+        switch format {
+        case let .m4a(o): options = o
+        default:
+            throw AudioExportError.engineSetupFailed(
+                underlying: "CompressedAudioExportWriter requires .m4a",
+            )
+        }
+        let settings: [String: Any] = [
+            AVFormatIDKey: kAudioFormatMPEG4AAC,
+            AVSampleRateKey: options.sampleRate,
+            AVNumberOfChannelsKey: options.channels.rawValue,
+            AVEncoderBitRateKey: options.bitRate,
+        ]
+        do {
+            file = try AVAudioFile(
+                forWriting: url,
+                settings: settings,
+                commonFormat: .pcmFormatFloat32,
+                interleaved: false,
+            )
+        } catch {
+            throw AudioExportError.fileWriteFailed(
+                underlying: (error as NSError).localizedDescription,
+            )
+        }
+    }
+
+    func write(_ buffer: AVAudioPCMBuffer) async throws {
+        guard let file else {
+            throw AudioExportError.fileWriteFailed(underlying: "writer already finished")
+        }
+        do {
+            try file.write(from: buffer)
+        } catch {
+            throw AudioExportError.fileWriteFailed(
+                underlying: (error as NSError).localizedDescription,
+            )
+        }
+    }
+
+    func finish() async throws {
+        // Releasing the AVAudioFile reference triggers deinit, which
+        // flushes and closes the file handle.
+        file = nil
+    }
+}
