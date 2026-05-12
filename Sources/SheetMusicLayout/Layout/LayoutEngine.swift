@@ -175,7 +175,8 @@ public enum LayoutEngine {
         var requiredFromTopAnchors: CGFloat = 0
         for (idx, t) in source.texts.enumerated() {
             let layout = titleBlockLayout(
-                for: t.style, idx: idx, style: style, mmToPt: mmToPt,
+                for: t.style, idx: idx, style: style,
+                override: t.align, mmToPt: mmToPt,
             )
             // Bottom-anchored texts grow downward from the frame
             // bottom — they don't constrain how *tall* the frame
@@ -198,7 +199,8 @@ public enum LayoutEngine {
         var laidOut: [LayoutFrameText] = []
         for (idx, t) in source.texts.enumerated() {
             let layout = titleBlockLayout(
-                for: t.style, idx: idx, style: style, mmToPt: mmToPt,
+                for: t.style, idx: idx, style: style,
+                override: t.align, mmToPt: mmToPt,
             )
             let baseX = baseX(for: layout.align, docWidth: docWidth)
             let baseY: CGFloat = layout.align.vertical == .top
@@ -247,9 +249,15 @@ public enum LayoutEngine {
         for textStyle: FrameText.Style,
         idx: Int,
         style scoreStyle: ScoreStyle,
+        override: TextAlign?,
         mmToPt: CGFloat,
     ) -> TitleBlockLayout {
-        switch textStyle {
+        // Per-element `<align>` overrides both the styledef default
+        // and any `<{role}Align>` style-wide override — MuseScore's
+        // `read460/tread.cpp` writes `<align>` only when the element
+        // diverges from the resolved style, so when present it is the
+        // final word.
+        let base = switch textStyle {
         case .title:
             TitleBlockLayout(
                 align: scoreStyle.titleAlign
@@ -285,6 +293,16 @@ public enum LayoutEngine {
                 fontSize: 10,
             )
         }
+        guard let override else { return base }
+        return TitleBlockLayout(
+            align: override,
+            // Switching a default-bottom role (composer / lyricist)
+            // to a top anchor brings the text up to the frame top
+            // edge — keep the styledef `topOffset` so titles in a
+            // mixed top stack don't all collapse to y=0.
+            topOffset: base.topOffset,
+            fontSize: base.fontSize,
+        )
     }
 
     private static func baseX(

@@ -51,15 +51,23 @@ public struct FrameText: Sendable, Equatable, Hashable {
     /// font size (e.g. a custom-sized Lyricist used as a multi-line
     /// lyric column).
     public var fontSize: Double?
+    /// Per-element `<align>` override (e.g. `<align>left,top</align>`
+    /// on a Lyricist text to reposition it from the role default of
+    /// bottom-left to top-left). `nil` inherits the role default
+    /// resolved via `ScoreStyle`. MuseScore writes this child only
+    /// when the element diverges from the style's alignment.
+    public var align: TextAlign?
 
     public init(
         style: Style, text: String,
         offsetMm: CGPoint? = nil,
         fontSize: Double? = nil,
+        align: TextAlign? = nil,
     ) {
         self.style = style
         self.text = text
         self.offsetMm = offsetMm
         self.fontSize = fontSize
+        self.align = align
     }
 }

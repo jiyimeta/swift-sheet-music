@@ -201,6 +201,111 @@ import Testing
         #expect(composer.position.y == 0)
     }
 
+    /// MuseScore 4 writes `<style>` values in lowercase (e.g.
+    /// `<style>composer</style>`). The decoder must accept both the
+    /// capitalized form (round-trip with our own encoder) and the
+    /// lowercase form (real MS4 files), otherwise `composer` falls
+    /// back to `.other` and the text lands at center-top instead of
+    /// the `.composer` default (right, bottom).
+    @Test("Decoder accepts lowercase MS4 <style> values")
+    func decoderAcceptsLowercaseStyleValues() throws {
+        let mscx = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <museScore version="4.60">
+          <Score>
+            <Division>480</Division>
+            <Part id="1"><Staff id="1"/><Instrument id="x"/></Part>
+            <Staff id="1">
+              <VBox>
+                <height>10</height>
+                <Text><style>title</style><text>T</text></Text>
+                <Text><style>subtitle</style><text>S</text></Text>
+                <Text><style>composer</style><text>C</text></Text>
+                <Text><style>lyricist</style><text>L</text></Text>
+              </VBox>
+              <Measure></Measure>
+            </Staff>
+          </Score>
+        </museScore>
+        """
+        let score = try MSCXParser.parse(Data(mscx.utf8))
+        let styles = score.titleFrame?.texts.map(\.style)
+        #expect(styles == [.title, .subtitle, .composer, .lyricist])
+    }
+
+    /// MuseScore historically uses the `<style>poet</style>` tag for
+    /// the lyricist role (see `engraving/types/types.h`,
+    /// `TextStyleType::POET`). Files exported by MuseScore 4 use this
+    /// tag, so the decoder must alias it to `.lyricist` rather than
+    /// dropping to `.other`.
+    @Test("Decoder maps <style>poet</style> to .lyricist")
+    func decoderMapsPoetToLyricist() throws {
+        let mscx = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <museScore version="4.60">
+          <Score>
+            <Division>480</Division>
+            <Part id="1"><Staff id="1"/><Instrument id="x"/></Part>
+            <Staff id="1">
+              <VBox>
+                <height>10</height>
+                <Text><style>poet</style><text>P</text></Text>
+              </VBox>
+              <Measure></Measure>
+            </Staff>
+          </Score>
+        </museScore>
+        """
+        let score = try MSCXParser.parse(Data(mscx.utf8))
+        #expect(score.titleFrame?.texts.first?.style == .lyricist)
+    }
+
+    /// A `<Text>` inside `<VBox>` can carry an `<align>` element that
+    /// overrides the styledef default for just that element (e.g. a
+    /// "lyricist" text repositioned to top-left via
+    /// `<align>left,top</align>`). The layout engine must honour the
+    /// per-element override; otherwise the text falls back to the
+    /// role default (bottom-left for lyricist) and may overlap with
+    /// other texts in the frame.
+    @Test("LayoutEngine honours per-element <align> override")
+    func layoutHonorsPerElementAlignOverride() throws {
+        guard #available(macOS 15.0, iOS 16.0, *) else { return }
+        let mscx = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <museScore version="4.60">
+          <Score>
+            <Division>480</Division>
+            <Part id="1"><Staff id="1"/><Instrument id="x"/></Part>
+            <Staff id="1">
+              <VBox>
+                <height>10</height>
+                <Text>
+                  <style>lyricist</style>
+                  <align>left,top</align>
+                  <text>Top-left</text>
+                </Text>
+              </VBox>
+              <Measure></Measure>
+            </Staff>
+          </Score>
+        </museScore>
+        """
+        let score = try MSCXParser.parse(Data(mscx.utf8))
+        let lyricist = try #require(score.titleFrame?.texts.first)
+        #expect(
+            lyricist.align == TextAlign(horizontal: .left, vertical: .top),
+        )
+        let doc = LayoutEngine.layout(
+            score: score,
+            options: ScoreViewOptions(includeTitleFrame: true),
+            availableWidth: 600,
+        )
+        let laid = try #require(doc.titleFrame?.texts.first)
+        #expect(laid.anchor == .topLeading)
+        #expect(laid.position.x == 0)
+        #expect(laid.position.y == 0)
+    }
+
     private func makeScore(
         frame: ScoreFrame, style: ScoreStyle,
     ) -> Score {

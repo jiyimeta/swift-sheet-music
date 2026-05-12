@@ -24,7 +24,7 @@ extension FrameText {
         let stripped = stripInlineMarkup(raw)
         guard !stripped.isEmpty else { return nil }
         let style = (node.first("style")?.text)
-            .flatMap(Style.init(rawValue:)) ?? .other
+            .flatMap(decodeStyle(_:)) ?? .other
         var offsetMm: CGPoint?
         if let off = node.first("offset"),
            let xs = off.attributes["x"], let ys = off.attributes["y"],
@@ -36,10 +36,29 @@ extension FrameText {
         if let raw = node.first("size")?.text, let v = Double(raw) {
             fontSize = v
         }
+        let align = (node.first("align")?.text)
+            .flatMap(TextAlign.init(mscxString:))
         return FrameText(
             style: style, text: stripped,
-            offsetMm: offsetMm, fontSize: fontSize,
+            offsetMm: offsetMm, fontSize: fontSize, align: align,
         )
+    }
+}
+
+/// MuseScore writes the `<style>` value with the engraving enum's
+/// canonical name, which is lowercase since MuseScore 4 (`title`,
+/// `subtitle`, `composer`, `poet`). MuseScore 3 used the Pascal-case
+/// form (`Title`, …), and our own encoder still emits Pascal-case for
+/// round-trip compatibility — so the decoder accepts both. The
+/// historical tag `poet` is the engraving-enum name for the role our
+/// public API calls `.lyricist` (see `engraving/types/types.h`).
+private func decodeStyle(_ raw: String) -> FrameText.Style? {
+    switch raw.lowercased() {
+    case "title": return .title
+    case "subtitle": return .subtitle
+    case "composer": return .composer
+    case "lyricist", "poet": return .lyricist
+    default: return nil
     }
 }
 

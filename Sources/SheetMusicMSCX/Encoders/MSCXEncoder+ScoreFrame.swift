@@ -48,6 +48,11 @@ extension FrameText {
                 ],
             ))
         }
+        if let align {
+            children.append(XMLTreeNode(
+                name: "align", text: align.mscxString,
+            ))
+        }
         children.append(XMLTreeNode(name: "text", text: text))
         return XMLTreeNode(name: "Text", children: children)
     }
