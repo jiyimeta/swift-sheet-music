@@ -7,7 +7,7 @@ import Foundation
 /// options struct. Bind a SwiftUI `Picker` to a separate tag enum
 /// (see `SheetMusicAudio` README) since associated-value enums
 /// don't play well with `Picker`.
-public enum AudioFileFormat: Sendable {
+public enum AudioFileFormat: Sendable, Equatable {
     case wav(PCMOptions = .init())
     case aiff(PCMOptions = .init())
     case m4a(CompressedOptions = .init())
@@ -15,12 +15,12 @@ public enum AudioFileFormat: Sendable {
 }
 
 /// Sample resolution for PCM formats (WAV / AIFF).
-public enum PCMBitDepth: Sendable, CaseIterable {
+public enum PCMBitDepth: Sendable, Equatable, CaseIterable {
     case int16, int24, int32, float32
 }
 
 /// 1 = mono, 2 = stereo. Surround is out of scope.
-public enum AudioChannelCount: Int, Sendable, CaseIterable {
+public enum AudioChannelCount: Int, Sendable, Equatable, CaseIterable {
     case mono = 1
     case stereo = 2
 }
