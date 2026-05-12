@@ -5,35 +5,39 @@ Project-specific guidance for Claude when working in this repository.
 ## What this is
 
 `swift-sheet-music` is a Swift Package Manager library suite for working
-with engraved music notation. It parses MuseScore (`.mscx`) files into a
-typed Swift score model and exports the score to Standard MIDI Files. UI
-and audio playback libraries are planned but not yet implemented.
+with engraved music notation. It parses MuseScore (`.mscx`/`.mscz`) and
+MusicXML files into a typed Swift score model, renders notation via SwiftUI,
+exports to Standard MIDI Files, and supports AVFoundation-backed audio
+playback and audio file export.
 
 The package is **unofficial**: not affiliated with MuseScore Limited /
 Muse Group, nor with Apple's `MusicKit` framework.
 
 ## Library layout
 
-Four library products live in this single package. Their dependency graph
-is strictly top-down:
+Public library products under this single package:
 
 ```
-SheetMusic   (umbrella + small façade)
-   │
-   ├─→ SheetMusicCore     (Score data model, SheetMusicError; no I/O)
-   ├─→ SheetMusicMSCX     (mscx parsing — XML + decoders;  → Core, ZIPFoundation)
-   └─→ SheetMusicMIDI     (in-memory MIDI model, score→MIDI render, SMF I/O;  → Core)
+SheetMusic            (umbrella + small façade)
+  ├─→ SheetMusicCore     (Score data model, SheetMusicError; no I/O)
+  ├─→ SheetMusicMSCX     (mscx / mscz parsing + writing; → Core, XMLTools, ZIP)
+  ├─→ SheetMusicMusicXML (MusicXML / MXL import; → Core, XMLTools, ZIP)
+  └─→ SheetMusicMIDI     (in-memory MIDI model, render, SMF I/O; → Core)
+
+SheetMusicLayout      (pure-geometry layout; → Core)
+SheetMusicUI          (SwiftUI views; → Core, Layout)
+SheetMusicAudio       (AVFoundation playback + audio file export; → Core, MIDI)
+SheetMusicPDF         (PDF export; → Core, Layout, UI)
 ```
 
-`SheetMusic` re-exports the three sub-libraries with `@_exported import`
-and adds a convenience façade `enum SheetMusic { static loadScore /
-exportMIDI }`. Most consumers use `import SheetMusic`; advanced users can
-take only `SheetMusicCore` (model only) or single format libraries.
+Internal targets (not products): `SheetMusicXMLTools`.
 
-Future libraries (already namespaced for): `SheetMusicUI` (SwiftUI views),
-`SheetMusicPlayback` (AVAudioEngine), `SheetMusicMusicXML` / `SheetMusicPDF`
-(other formats). When adding one, also re-export from `SheetMusic` and
-update README's library table.
+Dev executable: `RenderPreviews`.
+
+`SheetMusic` re-exports Core + MSCX + MusicXML + MIDI with
+`@_exported import` and adds the convenience façade. `Layout`,
+`UI`, `Audio`, and `PDF` are not re-exported (consumers opt in
+explicitly).
 
 ## File layout (source)
 
@@ -47,6 +51,11 @@ Sources/SheetMusicMSCX/Decoders/MSCXDecoder+<Type>.swift   one decoder extension
 Sources/SheetMusicMIDI/Model/<Type>.swift                  MidiEvent, MetaEvent, MidiFile, …
 Sources/SheetMusicMIDI/Render/MidiRenderer{,+ext}.swift    score → MidiFile (split for length)
 Sources/SheetMusicMIDI/IO/{BinaryEncoder,VariableLengthQuantity,MidiWriter}.swift
+Sources/SheetMusicAudio/Export/
+  AudioFileFormat.swift, AudioExportRange.swift,
+  AudioExportError.swift, AudioExportWriter.swift,
+  AudioFileExporter.swift
+Sources/SheetMusicAudio/PlaybackEngine+Export.swift
 ```
 
 ## Build / test / run
@@ -54,7 +63,7 @@ Sources/SheetMusicMIDI/IO/{BinaryEncoder,VariableLengthQuantity,MidiWriter}.swif
 ```bash
 # Build & test the package
 swift build
-swift test                                      # 48 tests, 12 suites; should be 100% green
+swift test                                      # should be 100% green
 swift test --filter MidiExportTests             # the 12 MuseScore-equivalence cases
 
 # Lint (optional, requires brew install swiftlint)
@@ -94,7 +103,7 @@ settings or sources.
 ## Tests
 
 Swift Testing (`import Testing`) — not XCTest. Test target depends on
-all four library products and uses `@testable import` on each
+all library products and uses `@testable import` on each
 sub-library (re-exports do NOT transitively grant testable access).
 
 ```swift
@@ -102,6 +111,11 @@ sub-library (re-exports do NOT transitively grant testable access).
 @testable import SheetMusicCore
 @testable import SheetMusicMIDI
 @testable import SheetMusicMSCX
+@testable import SheetMusicMusicXML
+@testable import SheetMusicLayout
+@testable import SheetMusicUI
+@testable import SheetMusicAudio
+@testable import SheetMusicPDF
 import Testing
 ```
 
@@ -178,3 +192,11 @@ MuseScore repository root.
 - **Xcode project drift**: `Example/SheetMusicExample.xcodeproj` is
   gitignored. After changing example sources or `project.yml`,
   regenerate with `cd Example && xcodegen`.
+- **Audio file writer back-ends differ by format**: `AVAudioFile`
+  natively writes WAV (URL `.wav`), AIFF (`.aiff` int / `.aifc`
+  float), and M4A (settings dict `kAudioFormatMPEG4AAC`). Only
+  MP3 needs `AVAssetWriter` (and only on iOS 17 / tvOS 17 /
+  watchOS 10 — `AVAssetWriter` rejects `.mp3` on macOS at runtime,
+  even on 14+). Do not reach for `AVAssetWriter` for the others —
+  it is more code for no benefit. See
+  `SheetMusicAudio/Export/AudioExportWriter.swift`.
