@@ -9,11 +9,18 @@ extension PlaybackEngine {
     ///
     /// The exported audio reflects the live engine state: mixer
     /// (volume / mute / solo), per-staff program changes,
-    /// metronome on/off, and the current playback rate. While
-    /// rendering, the engine is in manual rendering mode and
-    /// `state == .exporting`; normal playback is suspended. On
-    /// completion / failure / cancellation the engine is restored
-    /// and `state` returns to `.stopped`.
+    /// metronome on/off, and the current playback rate. The
+    /// implementation builds a *dedicated* `AVAudioEngine` per
+    /// export call rather than reusing the live playback engine —
+    /// `AVAudioEngine.enableManualRenderingMode` is a global
+    /// per-engine flag that doesn't compose with concurrent
+    /// hardware-routed playback. The live samplers' SF2 patches
+    /// are also fragile across manual-mode toggles in practice
+    /// (the samplers sometimes revert to the default sine-wave
+    /// preset), which is the second motivation for the fresh
+    /// engine. Live mutable state (mixer levels, metronome on/off,
+    /// playback rate) is snapshotted at the start of the call and
+    /// reproduced on the export engine.
     ///
     /// `prepare(score:)` must have been called for the same `score`
     /// instance; otherwise throws `.noScorePrepared`.
@@ -21,7 +28,7 @@ extension PlaybackEngine {
     /// On `Task.cancel()` the in-flight render is aborted at the
     /// next buffer boundary; the partial output file at `url` is
     /// deleted.
-    public func exportAudioFile( // swiftlint:disable:this function_body_length
+    public func exportAudioFile(
         to url: URL,
         score: Score,
         format: AudioFileFormat,
@@ -46,87 +53,204 @@ extension PlaybackEngine {
         )
         let writer = try AudioFileExporter.makeWriter(url: url, format: format)
         let exporter = AudioFileExporter()
+        let snapshot = exportEngineSnapshot()
 
         setStateForExport(.exporting)
-        let avEngine = exportEngine()
-        let previouslyRunning = avEngine.isRunning
-        exportSequencer()?.stop()
-        // `enableManualRenderingMode` requires the engine to be stopped
-        // first — it throws `AVAudioEngineManualRenderingErrorInitialized`
-        // (-80801) when called on a running engine. Pause / stop here;
-        // we restore to running on completion if it was running before.
-        if avEngine.isRunning {
-            avEngine.stop()
-        }
-
         do {
-            try avEngine.enableManualRenderingMode(
-                .offline,
-                format: outputFormat,
-                maximumFrameCount: AudioFileExporter.bufferFrames,
+            let pipeline = try Self.buildExportPipeline(
+                score: score,
+                snapshot: snapshot,
+                outputFormat: outputFormat,
             )
-            try avEngine.start()
-
-            try buildSequencerForExport(score: score)
-            guard let sequencer = exportSequencer() else {
-                throw AudioExportError.engineSetupFailed(
-                    underlying: "Sequencer build failed",
-                )
-            }
-            sequencer.currentPositionInBeats =
-                Double(startTick) / Double(timeline.division)
-            sequencer.prepareToPlay()
-            try sequencer.start()
+            // Position the sequencer at `startTick` (in beats) so
+            // partial-range exports start at the right place.
+            let beatsPerTick = 1.0 / Double(timeline.division)
+            pipeline.sequencer.currentPositionInBeats =
+                Double(startTick) * beatsPerTick
+            pipeline.sequencer.prepareToPlay()
+            try pipeline.sequencer.start()
 
             try await exporter.renderLoop(
-                engine: avEngine,
+                engine: pipeline.engine,
                 outputFormat: outputFormat,
                 framesToRender: framesToRender,
                 writer: writer,
                 progress: progress,
             )
-
-            sequencer.stop()
-            avEngine.stop()
-            avEngine.disableManualRenderingMode()
-            if previouslyRunning {
-                try? avEngine.start()
-            }
+            Self.teardown(pipeline: pipeline)
             setStateForExport(.stopped)
         } catch is CancellationError {
-            await teardownAfterExportFailure(
-                avEngine: avEngine, previouslyRunning: previouslyRunning,
-                url: url,
-            )
+            try? FileManager.default.removeItem(at: url)
+            setStateForExport(.stopped)
             throw AudioExportError.cancelled
         } catch let err as AudioExportError {
-            await teardownAfterExportFailure(
-                avEngine: avEngine, previouslyRunning: previouslyRunning,
-                url: url,
-            )
+            try? FileManager.default.removeItem(at: url)
+            setStateForExport(.stopped)
             throw err
         } catch {
-            await teardownAfterExportFailure(
-                avEngine: avEngine, previouslyRunning: previouslyRunning,
-                url: url,
-            )
+            try? FileManager.default.removeItem(at: url)
+            setStateForExport(.stopped)
             throw AudioExportError.engineSetupFailed(
                 underlying: (error as NSError).localizedDescription,
             )
         }
     }
 
-    private func teardownAfterExportFailure(
-        avEngine: AVAudioEngine, previouslyRunning: Bool, url: URL,
-    ) async {
-        exportSequencer()?.stop()
-        avEngine.stop()
-        avEngine.disableManualRenderingMode()
-        if previouslyRunning {
-            try? avEngine.start()
+    /// Build a dedicated `AVAudioEngine` + per-staff samplers + a
+    /// loaded `AVAudioSequencer` ready to drive an offline render
+    /// of `score`.
+    ///
+    /// The engine is left in manual-rendering mode and started so
+    /// the caller can immediately call `renderLoop`. Caller owns
+    /// the returned pipeline and must call `teardown(pipeline:)`
+    /// before releasing.
+    private static func buildExportPipeline( // swiftlint:disable:this function_body_length
+        score: Score,
+        snapshot: ExportEngineSnapshot,
+        outputFormat: AVAudioFormat,
+    ) throws -> ExportPipeline {
+        let engine = AVAudioEngine()
+        let resolver = snapshot.resolver
+
+        // 1. Build per-staff samplers, load the SF2 preset, apply
+        //    snapshot mixer values (volume / mute / solo).
+        let soloedExists = snapshot.mixerChannels.contains { $0.isSoloed }
+        var samplers: [Int: AVAudioUnitSampler] = [:]
+
+        for (idx, entry) in score.allStaves.enumerated() {
+            let part = score.part(at: entry.address)
+            let channel = part?.instrument.channels.first ?? InstrumentChannel()
+            let isDrums = part?.instrument.useDrumset == true
+            let bank = UInt8(clamping: channel.bank)
+            // Mixer can override the program (the live engine's
+            // `loadProgram(forStaff:program:)` path) so prefer the
+            // snapshot value when present.
+            let program: UInt8
+            if let chan = snapshot.mixerChannels.first(
+                where: { $0.id == .staff(idx) },
+            ), let p = chan.program {
+                program = p
+            } else {
+                program = UInt8(clamping: channel.program)
+            }
+            let url = resolver.soundfontURL(
+                forBank: bank, program: program, isDrums: isDrums,
+            )
+                ?? resolver.defaultGMSoundfontURL
+
+            let sampler = AVAudioUnitSampler()
+            engine.attach(sampler)
+            engine.connect(sampler, to: engine.mainMixerNode, format: nil)
+            if let url {
+                let bankMSB: UInt8 = isDrums
+                    ? UInt8(kAUSampler_DefaultPercussionBankMSB)
+                    : UInt8(kAUSampler_DefaultMelodicBankMSB)
+                try? sampler.loadSoundBankInstrument(
+                    at: url, program: program,
+                    bankMSB: bankMSB, bankLSB: bank,
+                )
+            }
+            samplers[idx] = sampler
         }
-        try? FileManager.default.removeItem(at: url)
-        setStateForExport(.stopped)
+
+        applyMixerSnapshot(
+            samplers: samplers, channels: snapshot.mixerChannels,
+            soloedExists: soloedExists,
+        )
+
+        // 2. Optional metronome sampler / track.
+        let metronomeSampler: AVAudioUnitSampler?
+        if snapshot.metronomeEnabled,
+           let metroURL = resolver.soundfontURL(
+               forBank: 0, program: 0, isDrums: true,
+           ) ?? resolver.defaultGMSoundfontURL
+        {
+            let s = AVAudioUnitSampler()
+            engine.attach(s)
+            engine.connect(s, to: engine.mainMixerNode, format: nil)
+            try? s.loadSoundBankInstrument(
+                at: metroURL, program: 0,
+                bankMSB: UInt8(kAUSampler_DefaultPercussionBankMSB), bankLSB: 0,
+            )
+            s.volume = snapshot.metronomeVolume
+            metronomeSampler = s
+        } else {
+            metronomeSampler = nil
+        }
+
+        // 3. Render MIDI bytes (score tracks + optional metronome
+        //    track) and load into a fresh sequencer bound to the
+        //    fresh engine.
+        var midi = try MidiRenderer.render(score: score)
+        if metronomeSampler != nil {
+            // Re-use `MetronomeController.metronomeTrack` so the beat
+            // event shape stays consistent with live playback.
+            let metronome = MetronomeController(engine: engine)
+            midi.tracks.append(metronome.metronomeTrack(
+                beats: snapshot.metronomeBeats, division: midi.division,
+            ))
+        }
+        let bytes = try MidiWriter.write(midi)
+        let sequencer = AVAudioSequencer(audioEngine: engine)
+        try sequencer.load(from: bytes, options: [])
+        // Route staff tracks to their samplers; the metronome track
+        // (appended last) routes to `metronomeSampler` if present.
+        let staffTrackCount = samplers.count
+        for (i, track) in sequencer.tracks.enumerated() {
+            if i < staffTrackCount, let sampler = samplers[i] {
+                track.destinationAudioUnit = sampler
+            } else if i >= staffTrackCount, let s = metronomeSampler {
+                track.destinationAudioUnit = s
+            }
+        }
+        sequencer.rate = snapshot.rate
+
+        // 4. Switch to manual rendering mode and start. Engine is
+        //    fresh so `enableManualRenderingMode` always succeeds.
+        try engine.enableManualRenderingMode(
+            .offline,
+            format: outputFormat,
+            maximumFrameCount: AudioFileExporter.bufferFrames,
+        )
+        try engine.start()
+
+        return ExportPipeline(
+            engine: engine,
+            sequencer: sequencer,
+            samplers: Array(samplers.values),
+            metronomeSampler: metronomeSampler,
+        )
+    }
+
+    private static func applyMixerSnapshot(
+        samplers: [Int: AVAudioUnitSampler],
+        channels: [MixerChannel],
+        soloedExists: Bool,
+    ) {
+        for chan in channels {
+            guard case let .staff(idx) = chan.id,
+                  let sampler = samplers[idx] else { continue }
+            // Effective audibility mirrors the live mixer rules: if
+            // any channel is soloed, only soloed channels are audible;
+            // otherwise muted channels are silenced.
+            let audible = soloedExists ? chan.isSoloed : !chan.isMuted
+            sampler.volume = audible ? chan.volume : 0
+        }
+    }
+
+    private static func teardown(pipeline: ExportPipeline) {
+        pipeline.sequencer.stop()
+        pipeline.engine.stop()
+        pipeline.engine.disableManualRenderingMode()
+        // Releasing the references is enough; AVAudioEngine cleans
+        // up its attached nodes on dealloc.
+    }
+
+    private struct ExportPipeline {
+        let engine: AVAudioEngine
+        let sequencer: AVAudioSequencer
+        let samplers: [AVAudioUnitSampler]
+        let metronomeSampler: AVAudioUnitSampler?
     }
 
     private static func resolveRange(
@@ -143,10 +267,6 @@ extension PlaybackEngine {
             }
             return (0, timeline.totalTicks)
         case let .region(from, to):
-            // `frame(forCursor:)` finds `.beat` cursors by exact match,
-            // but beat-cursor frames are only emitted for ticks that
-            // carry no chord/rest onset. Fall back to `resolveCursorTick`
-            // which computes the tick from the measure/beat position.
             guard let sTick = resolveCursorTick(from, in: timeline),
                   let eTick = resolveCursorTick(to, in: timeline),
                   sTick < eTick
@@ -164,27 +284,16 @@ extension PlaybackEngine {
     /// Resolve a `ScoreCursor` to a timeline tick, with fallback for
     /// `.beat` cursors whose tick is occupied by a chord/rest frame
     /// (and therefore has no dedicated `.beat` frame).
-    ///
-    /// For `.item` cursors, delegates to `PlaybackTimeline.frame(forCursor:)`.
-    /// For `.beat(measureIndex: m, tickInMeasure: t)`, first tries to find
-    /// a dedicated beat frame; falls back to inferring the measure-start
-    /// tick from `itemTicks` (all items in the same measure share the same
-    /// measure-start tick, offset by their rhythmic position within it).
     private static func resolveCursorTick(
         _ cursor: ScoreCursor,
         in timeline: PlaybackTimeline,
     ) -> Int? {
-        // Fast path: the cursor has a dedicated frame.
         if let frame = timeline.frame(forCursor: cursor) {
             return frame.tick
         }
-        // Fallback for .beat cursors: infer measure-start tick from
-        // beat frames first, then from itemTicks if the measure is
-        // fully occupied by chord/rest onsets.
         guard case let .beat(measureIndex: mi, tickInMeasure: tim) = cursor else {
             return nil
         }
-        // Attempt 1: find any .beat frame in the same measure.
         for frame in timeline.frames {
             if case let .beat(measureIndex: fmi, tickInMeasure: ftim) = frame.cursor,
                fmi == mi
@@ -196,19 +305,9 @@ extension PlaybackEngine {
                 }
             }
         }
-        // Attempt 2: the measure is fully occupied (no .beat frames).
-        // Find the minimum onset tick of any item in this measure via
-        // `itemTicks`. Since `tickInMeasure` is relative to the measure
-        // start, the item with the earliest tick in the measure IS the
-        // measure start when `tickInMeasure == 0`; for other values of
-        // `tickInMeasure` we add the offset onto the inferred start.
-        //
-        // `ScoreItemID.measureIndex` exposes the measure index directly.
         var measureStartTick: Int?
         for (id, tick) in timeline.itemTicks {
             guard id.measureIndex == mi else { continue }
-            // The earliest tick among items in this measure is the
-            // measure start (beat 1 tick). All onsets are >= measureStart.
             if let existing = measureStartTick {
                 measureStartTick = min(existing, tick)
             } else {

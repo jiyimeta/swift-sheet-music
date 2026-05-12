@@ -138,32 +138,32 @@ public final class PlaybackEngine: ObservableObject { // swiftlint:disable:this 
         state = newState
     }
 
-    func exportEngine() -> AVAudioEngine {
-        engine
-    }
-
-    func exportSequencer() -> AVAudioSequencer? {
-        sequencer
-    }
-
-    func exportSequencerScore() -> Score? {
-        sequencerScore
-    }
-
     func exportTimeline() -> PlaybackTimeline? {
         timeline
     }
 
-    /// Build a sequencer suitable for offline export. Mirrors the
-    /// private `buildSequencer` used by `play(...)`, but is callable
-    /// from the export path even when `state == .exporting`.
-    ///
-    /// `Score` is value-typed; we use `!=` (Equatable) the same way
-    /// the existing `play(from:in:)` does its rebuild check.
-    func buildSequencerForExport(score: Score) throws {
-        if sequencer != nil, sequencerScore == score { return }
-        try buildSequencer(for: score)
-        sequencerScore = score
+    /// Snapshot of mutable engine state captured at export start, so
+    /// the export pipeline can reproduce live mixer / metronome /
+    /// rate behaviour on its own dedicated `AVAudioEngine` without
+    /// reaching back into the live engine while rendering.
+    struct ExportEngineSnapshot {
+        let resolver: SoundfontResolver
+        let mixerChannels: [MixerChannel]
+        let metronomeEnabled: Bool
+        let metronomeVolume: Float
+        let rate: Float
+        let metronomeBeats: [MetronomeBeat]
+    }
+
+    func exportEngineSnapshot() -> ExportEngineSnapshot {
+        ExportEngineSnapshot(
+            resolver: resolver,
+            mixerChannels: mixerChannels,
+            metronomeEnabled: metronome.isEnabled,
+            metronomeVolume: metronome.volume,
+            rate: pendingRate,
+            metronomeBeats: metronomeBeats,
+        )
     }
 
     // MARK: Internal accessors for `PlaybackEngine+Mixer`
@@ -663,7 +663,7 @@ public final class PlaybackEngine: ObservableObject { // swiftlint:disable:this 
         timeline?.earliest(of: items)
     }
 
-    func buildSequencer(for score: Score) throws {
+    private func buildSequencer(for score: Score) throws {
         let sequencer = AVAudioSequencer(audioEngine: engine)
         // SheetMusicMIDI emits 1 track per staff (see
         // `MidiRenderer.render`). We append a metronome track to

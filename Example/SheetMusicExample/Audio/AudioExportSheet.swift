@@ -30,7 +30,7 @@ struct AudioExportSheet: View {
         Form {
             Section("Format") {
                 Picker("Container", selection: $tag) {
-                    ForEach(FormatTag.allCases) {
+                    ForEach(availableTags) {
                         Text($0.rawValue.uppercased()).tag($0)
                     }
                 }
@@ -85,7 +85,17 @@ struct AudioExportSheet: View {
                 }
             }
             if let errorText {
-                Section { Text(errorText).foregroundStyle(.red) }
+                Section("Error") {
+                    Text(errorText)
+                        .foregroundStyle(.red)
+                        .textSelection(.enabled)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Button {
+                        copyErrorToClipboard(errorText)
+                    } label: {
+                        Label("Copy error", systemImage: "doc.on.doc")
+                    }
+                }
             }
         }
         .navigationTitle("Export audio")
@@ -98,6 +108,18 @@ struct AudioExportSheet: View {
 
     private var isPCM: Bool {
         tag == .wav || tag == .aiff
+    }
+
+    /// MP3 export needs `AVAssetWriter` with `fileType: .mp3`, which
+    /// `AVAssetWriter` refuses on macOS at runtime (even on macOS 14+).
+    /// Hide the option there rather than letting the user discover
+    /// the unsupported error after pressing Export.
+    private var availableTags: [FormatTag] {
+        #if os(macOS)
+            FormatTag.allCases.filter { $0 != .mp3 }
+        #else
+            FormatTag.allCases
+        #endif
     }
 
     private var resolvedFormat: AudioFileFormat {
@@ -132,6 +154,16 @@ struct AudioExportSheet: View {
                 }
             }
         }
+    }
+
+    private func copyErrorToClipboard(_ text: String) {
+        #if os(macOS)
+            let pb = NSPasteboard.general
+            pb.clearContents()
+            pb.setString(text, forType: .string)
+        #else
+            UIPasteboard.general.string = text
+        #endif
     }
 
     /// Platform-specific save dialog. iOS uses the temporary
