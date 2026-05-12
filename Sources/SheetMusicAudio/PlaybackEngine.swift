@@ -138,6 +138,34 @@ public final class PlaybackEngine: ObservableObject { // swiftlint:disable:this 
         state = newState
     }
 
+    func exportEngine() -> AVAudioEngine {
+        engine
+    }
+
+    func exportSequencer() -> AVAudioSequencer? {
+        sequencer
+    }
+
+    func exportSequencerScore() -> Score? {
+        sequencerScore
+    }
+
+    func exportTimeline() -> PlaybackTimeline? {
+        timeline
+    }
+
+    /// Build a sequencer suitable for offline export. Mirrors the
+    /// private `buildSequencer` used by `play(...)`, but is callable
+    /// from the export path even when `state == .exporting`.
+    ///
+    /// `Score` is value-typed; we use `!=` (Equatable) the same way
+    /// the existing `play(from:in:)` does its rebuild check.
+    func buildSequencerForExport(score: Score) throws {
+        if sequencer != nil, sequencerScore == score { return }
+        try buildSequencer(for: score)
+        sequencerScore = score
+    }
+
     // MARK: Internal accessors for `PlaybackEngine+Mixer`
 
     func staffSampler(at idx: Int) -> AVAudioUnitSampler? {
@@ -635,7 +663,7 @@ public final class PlaybackEngine: ObservableObject { // swiftlint:disable:this 
         timeline?.earliest(of: items)
     }
 
-    private func buildSequencer(for score: Score) throws {
+    func buildSequencer(for score: Score) throws {
         let sequencer = AVAudioSequencer(audioEngine: engine)
         // SheetMusicMIDI emits 1 track per staff (see
         // `MidiRenderer.render`). We append a metronome track to
