@@ -171,6 +171,40 @@ extension LayoutEngine {
         }
     }
 
+    /// Shift every `.textMark(.tempo, …)` in `out` upward as needed
+    /// so that its visible bottom clears the topmost chord/beam in
+    /// the measure. Mirrors `autoPlaceStaffText` but accounts for the
+    /// `.center` anchor used by `TextMarkRenderer.drawTempo`: the
+    /// glyph half-height is added when computing how far above the
+    /// chord top the origin must sit. Author's `<offset y>` is
+    /// already baked into the element's `origin.y` at emission time;
+    /// only the BASE position changes.
+    ///
+    /// Default tempo origin is `staffMidY - sp * 4`; the autoplaced
+    /// origin is `chordTop - sp * 2` (matching MuseScore's TempoText
+    /// `min-distance` of 0.5 sp from the skyline plus the glyph's
+    /// 1.5 sp half-height).
+    static func autoPlaceTempo(
+        in out: inout [LayoutElement],
+        staffMidY: CGFloat,
+        metrics: StaffMetrics,
+    ) {
+        let chordTop = chordTopExtent(in: out, metrics: metrics)
+        guard chordTop.isFinite else { return }
+        let defaultBase = staffMidY - metrics.sp * 4
+        let autoBase = chordTop - metrics.sp * 2
+        guard autoBase < defaultBase else { return }
+        let shift = autoBase - defaultBase
+        for i in 0 ..< out.count {
+            if case let .textMark(.tempo, text, p) = out[i] {
+                out[i] = .textMark(
+                    kind: .tempo, text: text,
+                    origin: CGPoint(x: p.x, y: p.y + shift),
+                )
+            }
+        }
+    }
+
     /// Per-element approximate vertical height (in sp) used when
     /// stacking above-staff text marks. Errs on the generous side
     /// so the gap stays visually clear without pixel-precise font

@@ -1419,6 +1419,14 @@ extension LayoutEngine {
         autoPlaceHarmony(
             in: &out, staffMidY: staffMidY, metrics: metrics,
         )
+        // Same chord-clearance pass for tempo text. MuseScore lifts
+        // TempoText above the segment skyline so its metronome glyph
+        // never overlaps a high chord — common in vocal parts that
+        // sit a ledger line or more above the staff (e.g. G8vb clef
+        // soprano parts).
+        autoPlaceTempo(
+            in: &out, staffMidY: staffMidY, metrics: metrics,
+        )
         // After per-element auto-place, resolve same-tick collisions
         // among above-staff text marks (tempo / staff text / system
         // text / rehearsal mark) by stacking them upward.
