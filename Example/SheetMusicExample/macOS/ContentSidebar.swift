@@ -187,6 +187,7 @@
             case .stopped: "stopped"
             case .playing: "playing"
             case .paused: "paused"
+            case .exporting: "exporting"
             }
         }
     }

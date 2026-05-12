@@ -53,6 +53,8 @@ extension PlaybackEngine {
             let from: ScoreCursor? = currentCursor
                 ?? selection.playFrom(engine: self).map { .item($0) }
             play(from: from, in: score)
+        case .exporting:
+            break // Do not interrupt an in-progress audio export.
         }
     }
 }

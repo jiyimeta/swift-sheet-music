@@ -22,6 +22,7 @@
         @Binding var isMixerPresented: Bool
         @Binding var isImportingFile: Bool
         @Binding var isMarqueeMode: Bool
+        @Binding var isExportAudioPresented: Bool
 
         let onTogglePlayback: () -> Void
         let onExportPDF: () -> Void
@@ -80,6 +81,13 @@
                             "Export PDF",
                             systemImage: "square.and.arrow.up",
                         )
+                    }
+                    .disabled(score == nil)
+
+                    Button {
+                        isExportAudioPresented = true
+                    } label: {
+                        Label("Export Audio", systemImage: "waveform")
                     }
                     .disabled(score == nil)
 

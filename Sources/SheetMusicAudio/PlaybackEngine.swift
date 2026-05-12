@@ -21,7 +21,7 @@ import SheetMusicMIDI
 /// State machine for full-score playback. Drives any UI that
 /// needs to switch between play / pause icons.
 public enum PlaybackState: Sendable, Equatable {
-    case stopped, playing, paused
+    case stopped, playing, paused, exporting
 }
 
 /// Half-open tick range `[startTick, endTick)` the engine should
@@ -127,8 +127,43 @@ public final class PlaybackEngine: ObservableObject { // swiftlint:disable:this 
     /// musically reasonable bounds. The new value persists across
     /// sequencer rebuilds (e.g. `play(from:in:)` on a fresh score).
     public func setRate(_ rate: Float) {
+        guard state != .exporting else { return }
         pendingRate = rate
         sequencer?.rate = rate
+    }
+
+    // MARK: Internal accessors for `PlaybackEngine+Export`
+
+    func setStateForExport(_ newState: PlaybackState) {
+        state = newState
+    }
+
+    func exportTimeline() -> PlaybackTimeline? {
+        timeline
+    }
+
+    /// Snapshot of mutable engine state captured at export start, so
+    /// the export pipeline can reproduce live mixer / metronome /
+    /// rate behaviour on its own dedicated `AVAudioEngine` without
+    /// reaching back into the live engine while rendering.
+    struct ExportEngineSnapshot {
+        let resolver: SoundfontResolver
+        let mixerChannels: [MixerChannel]
+        let metronomeEnabled: Bool
+        let metronomeVolume: Float
+        let rate: Float
+        let metronomeBeats: [MetronomeBeat]
+    }
+
+    func exportEngineSnapshot() -> ExportEngineSnapshot {
+        ExportEngineSnapshot(
+            resolver: resolver,
+            mixerChannels: mixerChannels,
+            metronomeEnabled: metronome.isEnabled,
+            metronomeVolume: metronome.volume,
+            rate: pendingRate,
+            metronomeBeats: metronomeBeats,
+        )
     }
 
     // MARK: Internal accessors for `PlaybackEngine+Mixer`
@@ -191,6 +226,13 @@ public final class PlaybackEngine: ObservableObject { // swiftlint:disable:this 
     /// `Task.detached(priority: .userInitiated) { … }` if you want
     /// the UI to stay responsive during score load.
     public func prepare(score: Score) throws { // swiftlint:disable:this function_body_length
+        // If an export is in flight the caller is expected to cancel its
+        // `Task` before calling `prepare(score:)` on a different score.
+        // We don't cancel for them — but we do refuse to tear down the
+        // samplers under the exporter's feet.
+        if state == .exporting {
+            return
+        }
         // Stop any in-flight playback before tearing down samplers.
         stop()
         // Loop ticks are resolved against the previous timeline; clear
@@ -295,6 +337,7 @@ public final class PlaybackEngine: ObservableObject { // swiftlint:disable:this 
         duration: TimeInterval = 0.3,
         velocity: UInt8 = 96,
     ) {
+        guard state != .exporting else { return }
         guard let pitch = pitch(for: noteID, in: score) else { return }
         let flatIdx = score.allStaves.firstIndex(where: {
             $0.address == noteID.staff
@@ -343,6 +386,7 @@ public final class PlaybackEngine: ObservableObject { // swiftlint:disable:this 
     /// re-position the existing sequencer, which keeps re-press of
     /// Space / the play button cheap.
     public func play(from cursor: ScoreCursor? = nil, in score: Score) {
+        guard state != .exporting else { return }
         guard let timeline else { return }
         do {
             if sequencer == nil || sequencerScore != score {
@@ -404,6 +448,7 @@ public final class PlaybackEngine: ObservableObject { // swiftlint:disable:this 
     /// No-op when there is no sequencer yet (call `prepare(score:)`
     /// first) or when `cursor` doesn't resolve into the timeline.
     public func seek(to cursor: ScoreCursor) {
+        guard state != .exporting else { return }
         guard let timeline, let sequencer,
               let frame = timeline.frame(forCursor: cursor)
         else {
@@ -427,6 +472,7 @@ public final class PlaybackEngine: ObservableObject { // swiftlint:disable:this 
     /// No-op when `start`/`end` don't resolve in the current timeline,
     /// when `start >= end`, or when no sequencer has been built yet.
     public func setLoop(from start: ScoreCursor, to end: ScoreCursor) {
+        guard state != .exporting else { return }
         guard let timeline,
               let s = timeline.frame(forCursor: start),
               let e = timeline.frame(forCursor: end),
@@ -447,6 +493,7 @@ public final class PlaybackEngine: ObservableObject { // swiftlint:disable:this 
     public func setLoop(
         from start: ScoreCursor, throughEndOf last: ScoreItemID,
     ) {
+        guard state != .exporting else { return }
         guard let timeline,
               let s = timeline.frame(forCursor: start),
               let endTick = timeline.itemEndTicks[last],
@@ -459,6 +506,7 @@ public final class PlaybackEngine: ObservableObject { // swiftlint:disable:this 
     /// playback past the previous loop end is audible again. Pauses
     /// first if currently playing — same rationale as `setLoop`.
     public func clearLoop() {
+        guard state != .exporting else { return }
         if state == .playing {
             pause()
         }
@@ -541,6 +589,7 @@ public final class PlaybackEngine: ObservableObject { // swiftlint:disable:this 
     /// keeps flowing; when paused, just moves the cursor and the next
     /// `play()` resumes from there. No-op when no sequencer is built.
     public func skip(by seconds: TimeInterval) {
+        guard state != .exporting else { return }
         guard let timeline, let sequencer else { return }
         let now = currentTimeSeconds
         let target = max(0, min(timeline.totalSeconds, now + seconds))
@@ -568,6 +617,7 @@ public final class PlaybackEngine: ObservableObject { // swiftlint:disable:this 
     /// symptom is the CC pause button briefly flipping to play and
     /// then snapping back to pause after a single tap.
     public func pause() {
+        guard state != .exporting else { return }
         sequencer?.stop()
         stopCursorTimer()
         if engine.isRunning {
@@ -580,6 +630,7 @@ public final class PlaybackEngine: ObservableObject { // swiftlint:disable:this 
     /// `pause()` — the next `play` starts from the beginning (or
     /// from the supplied item).
     public func stop() {
+        guard state != .exporting else { return }
         sequencer?.stop()
         sequencer?.currentPositionInBeats = 0
         stopCursorTimer()
@@ -598,6 +649,7 @@ public final class PlaybackEngine: ObservableObject { // swiftlint:disable:this 
     /// the source of truth then, and clearing under it would race
     /// the next tick.
     public func clearCursor() {
+        guard state != .exporting else { return }
         guard state != .playing else { return }
         currentCursor = nil
     }
