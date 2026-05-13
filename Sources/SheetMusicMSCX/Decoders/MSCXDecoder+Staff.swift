@@ -68,6 +68,11 @@ extension Staff {
 struct MSCXTopLevelStaff {
     let mscxID: String
     let measures: [Measure]
+    /// One entry per measure (positionally aligned with `measures`):
+    /// the system-level elements lifted out of that measure's
+    /// voices during decoding. `originalStaff` is left nil here and
+    /// gets stamped during part assembly.
+    let systemElementsByMeasure: [[PositionedSystemElement]]
 }
 
 extension MSCXTopLevelStaff {
@@ -77,10 +82,20 @@ extension MSCXTopLevelStaff {
                 reason: "top-level <Staff> missing id attribute",
             )
         }
-        let measures = try node.all("Measure")
+        let measureNodes = node.all("Measure")
             .filter { !Measure.isMultiMeasureRestContainer($0) }
-            .map { try Measure.decode($0) }
-        return MSCXTopLevelStaff(mscxID: id, measures: measures)
+        var measures: [Measure] = []
+        var systemElementsByMeasure: [[PositionedSystemElement]] = []
+        for measureNode in measureNodes {
+            let result = try Measure.decode(measureNode)
+            measures.append(result.measure)
+            systemElementsByMeasure.append(result.systemElements)
+        }
+        return MSCXTopLevelStaff(
+            mscxID: id,
+            measures: measures,
+            systemElementsByMeasure: systemElementsByMeasure,
+        )
     }
 }
 
@@ -97,33 +112,46 @@ struct MSCXStaffPairing {
     var declared: [(mscxID: String?, staff: Staff)]
 }
 
-func assembleParts(
+/// Result of part assembly: the wired-up `[Part]` plus the
+/// score-level `[SystemMeasure]` aggregating system elements from
+/// every staff into a single array indexed by measure number.
+struct MSCXAssembledParts {
+    var parts: [Part]
+    var systemMeasures: [SystemMeasure]
+}
+
+func assembleParts( // swiftlint:disable:this function_body_length
     decoded: [MSCXStaffPairing],
     topLevel: [MSCXTopLevelStaff],
-) throws -> [Part] {
-    var byID: [String: [Measure]] = [:]
+) throws -> MSCXAssembledParts {
+    var byID: [String: MSCXTopLevelStaff] = [:]
     var orderedIDs: [String] = []
     for tl in topLevel {
-        byID[tl.mscxID] = tl.measures
+        byID[tl.mscxID] = tl
         orderedIDs.append(tl.mscxID)
     }
     var consumed: Set<String> = []
     var unconsumedQueue = orderedIDs
 
+    // Per-staff per-measure system elements, paired with the
+    // resolved StaffAddress, so we can merge across staves into
+    // score.systemMeasures after part assembly is complete.
+    var perStaffSystemElements: [(address: StaffAddress, perMeasure: [[PositionedSystemElement]])] = []
+
     var parts: [Part] = []
     for dp in decoded {
         var assembled: [Staff] = []
-        for declared in dp.declared {
-            let measures: [Measure]
+        for (staffIndexInPart, declared) in dp.declared.enumerated() {
+            let topLevelStaff: MSCXTopLevelStaff
             if let id = declared.mscxID {
-                guard let m = byID[id] else {
+                guard let tl = byID[id] else {
                     throw SheetMusicError.malformedScore(
                         reason:
                         "Part '\(dp.partID)' declares <Staff id=\"\(id)\">"
                             + " but no top-level <Staff> with that id was found",
                     )
                 }
-                measures = m
+                topLevelStaff = tl
                 consumed.insert(id)
                 unconsumedQueue.removeAll { $0 == id }
             } else {
@@ -132,7 +160,7 @@ func assembleParts(
                     unconsumedQueue.removeFirst()
                 }
                 guard let head = unconsumedQueue.first,
-                      let m = byID[head]
+                      let tl = byID[head]
                 else {
                     throw SheetMusicError.malformedScore(
                         reason:
@@ -140,13 +168,20 @@ func assembleParts(
                             + " but no remaining top-level <Staff> to consume",
                     )
                 }
-                measures = m
+                topLevelStaff = tl
                 consumed.insert(head)
                 unconsumedQueue.removeFirst()
             }
             var s = declared.staff
-            s.measures = measures
+            s.measures = topLevelStaff.measures
             assembled.append(s)
+            let address = StaffAddress(
+                partIndex: parts.count,
+                staffIndexInPart: staffIndexInPart,
+            )
+            perStaffSystemElements.append(
+                (address, topLevelStaff.systemElementsByMeasure),
+            )
         }
         parts.append(Part(
             id: dp.partID,
@@ -163,5 +198,32 @@ func assembleParts(
             "top-level <Staff id=\"\(leftover.joined(separator: ","))\"> not claimed by any Part",
         )
     }
-    return parts
+
+    let measureCount = perStaffSystemElements
+        .map { $0.perMeasure.count }
+        .max() ?? 0
+    var systemMeasures = Array(
+        repeating: SystemMeasure(),
+        count: measureCount,
+    )
+    for entry in perStaffSystemElements {
+        for (measureIndex, elements) in entry.perMeasure.enumerated() {
+            guard measureIndex < systemMeasures.count else { continue }
+            for var element in elements {
+                element.originalStaff = entry.address
+                systemMeasures[measureIndex].elements.append(element)
+            }
+        }
+    }
+    // Stable sort each measure's elements by `MeasurePosition` so
+    // downstream consumers can walk them in time order without
+    // needing to re-sort. Elements from different staves at the
+    // same position keep their relative insertion order
+    // (top-down staff iteration above).
+    for index in systemMeasures.indices {
+        systemMeasures[index].elements.sort {
+            $0.position < $1.position
+        }
+    }
+    return MSCXAssembledParts(parts: parts, systemMeasures: systemMeasures)
 }

@@ -3,6 +3,16 @@ import SheetMusicCore
 import SheetMusicXMLTools
 
 extension Measure {
+    /// Decoded `Measure` plus any system-level elements lifted out
+    /// of its voices during decoding. The caller stamps each
+    /// `PositionedSystemElement.originalStaff` with the appropriate
+    /// `StaffAddress` once the part/staff index is known (see
+    /// `assembleParts(decoded:topLevel:)`).
+    struct DecodeResult {
+        let measure: Measure
+        let systemElements: [PositionedSystemElement]
+    }
+
     /// True when a raw `<Measure>` XML node is MuseScore's mmRest
     /// "annotation container" (`<Measure len="K×ts"><multiMeasureRest>K>`)
     /// rather than a real bar.
@@ -23,20 +33,22 @@ extension Measure {
         node.children.contains(where: { $0.name == "multiMeasureRest" })
     }
 
-    static func decode(_ node: XMLTreeNode) throws -> Measure {
+    static func decode(_ node: XMLTreeNode) throws -> DecodeResult {
         let startRepeat = node.children.contains(where: { $0.name == "startRepeat" })
         let endRepeatCount = node.first("endRepeat").flatMap { Int($0.text) }
         let measureRepeatCount = node.first("measureRepeatCount").flatMap { Int($0.text) }
 
         let voiceNodes = node.all("voice")
-        let voices: [Voice]
+        let voiceResults: [Voice.DecodeResult]
         if !voiceNodes.isEmpty {
-            voices = try voiceNodes.map { try Voice.decode($0) }
+            voiceResults = try voiceNodes.map { try Voice.decode($0) }
         } else {
             // Older / simpler mscx form: musical elements are direct children of
             // <Measure> (no <voice> wrapper). Treat them as a single implicit voice.
-            voices = try [Voice.decode(node)]
+            voiceResults = try [Voice.decode(node)]
         }
+        let voices = voiceResults.map(\.voice)
+        let systemElements = voiceResults.flatMap(\.systemElements)
         let markers = node.all("Marker").map(decodeMarker)
         let jumps = node.all("Jump").map(decodeJump)
         // `<LayoutBreak>` declares an explicit system / page break
@@ -62,7 +74,7 @@ extension Measure {
         // running displayed measure number (typical on anacrusis).
         let irregular = node.first("irregular")?.text == "1"
 
-        return Measure(
+        let measure = Measure(
             voices: voices,
             startRepeat: startRepeat,
             endRepeatCount: endRepeatCount,
@@ -74,6 +86,7 @@ extension Measure {
             actualLength: actualLength,
             irregular: irregular,
         )
+        return DecodeResult(measure: measure, systemElements: systemElements)
     }
 
     private static func decodeMarker(_ node: XMLTreeNode) -> Marker {

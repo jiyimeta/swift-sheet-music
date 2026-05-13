@@ -27,13 +27,16 @@ extension Score {
                 reason: "MusicXML: <part-list> is required",
             )
         }
-        let parts = try decodeParts(root: root, partList: partList)
+        let (parts, systemMeasures) = try decodeParts(root: root, partList: partList)
 
         // Hard-code division = 480 ticks per quarter, matching MuseScore's default
         // and the `*_ref.mscx` fixtures we semantic-compare against. MusicXML's
         // own `<divisions>` is part-local and would vary per fixture.
         return Score(
-            division: 480, parts: parts, metaTags: metaTags,
+            division: 480,
+            parts: parts,
+            systemMeasures: systemMeasures,
+            metaTags: metaTags,
             source: .musicXML,
         )
     }
@@ -101,9 +104,14 @@ extension Score {
     private static func decodeParts(
         root: XMLTreeNode,
         partList: XMLTreeNode,
-    ) throws -> [Part] {
+    ) throws -> (parts: [Part], systemMeasures: [SystemMeasure]) {
         let scoreParts = partList.all("score-part")
         var parts: [Part] = []
+        // Per-staff per-measure system elements paired with the
+        // resolved StaffAddress, merged into score.systemMeasures at
+        // the end so every staff's contribution lands at the right
+        // measure index with originalStaff stamped.
+        var perStaffSystemElements: [(address: StaffAddress, perMeasure: [[PositionedSystemElement]])] = []
         for (index, partNode) in root.all("part").enumerated() {
             let id = partNode.attributes["id"] ?? ""
             guard let scorePart = scoreParts.first(where: { $0.attributes["id"] == id })
@@ -139,8 +147,37 @@ extension Score {
                 instrument: partTemplate.instrument,
                 staves: populatedStaves,
             )
+            let partIndex = parts.count
             parts.append(part)
+            for (staffIndex, perMeasure) in walker.systemElementsByStaffMeasure.enumerated() {
+                let address = StaffAddress(
+                    partIndex: partIndex,
+                    staffIndexInPart: staffIndex,
+                )
+                perStaffSystemElements.append((address, perMeasure))
+            }
         }
-        return parts
+        let measureCount = perStaffSystemElements
+            .map { $0.perMeasure.count }
+            .max() ?? 0
+        var systemMeasures = Array(
+            repeating: SystemMeasure(),
+            count: measureCount,
+        )
+        for entry in perStaffSystemElements {
+            for (measureIndex, elements) in entry.perMeasure.enumerated() {
+                guard measureIndex < systemMeasures.count else { continue }
+                for var element in elements {
+                    element.originalStaff = entry.address
+                    systemMeasures[measureIndex].elements.append(element)
+                }
+            }
+        }
+        for index in systemMeasures.indices {
+            systemMeasures[index].elements.sort {
+                $0.position < $1.position
+            }
+        }
+        return (parts: parts, systemMeasures: systemMeasures)
     }
 }

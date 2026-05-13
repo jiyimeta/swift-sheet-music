@@ -31,9 +31,11 @@ extension Score {
         let topLevelStaves = try scoreNode.all("Staff").map {
             try MSCXTopLevelStaff.decode($0)
         }
-        let parts = try assembleParts(
+        let assembled = try assembleParts(
             decoded: partPairings, topLevel: topLevelStaves,
         )
+        let parts = assembled.parts
+        let systemMeasures = assembled.systemMeasures
 
         var metaTags: [String: String] = [:]
         for tag in scoreNode.all("metaTag") {
@@ -62,8 +64,12 @@ extension Score {
         }
         let version = detectVersion(root: root, scoreNode: scoreNode)
         return Score(
-            division: division, parts: parts,
-            metaTags: metaTags, titleFrame: titleFrame, style: style,
+            division: division,
+            parts: parts,
+            systemMeasures: systemMeasures,
+            metaTags: metaTags,
+            titleFrame: titleFrame,
+            style: style,
             source: .museScore(version),
         )
     }

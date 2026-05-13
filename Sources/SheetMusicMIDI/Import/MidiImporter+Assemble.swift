@@ -14,6 +14,10 @@ extension MidiImporter {
         let perTrackMeasures = imports.map { segment(track: $0, timeline: timeline) }
         let measureKeys = perMeasureKeys(file: file, timeline: timeline)
         var parts: [Part] = []
+        var systemMeasures: [SystemMeasure] = Array(
+            repeating: SystemMeasure(),
+            count: timeline.bars.count,
+        )
         for (trackIdx, measures) in perTrackMeasures.enumerated() {
             let track = imports[trackIdx]
             let measureVoices: [[Voice]] = measures.map { m in
@@ -66,10 +70,16 @@ extension MidiImporter {
                 defaultClefType: defaultClef.rawType,
                 measures: scoreMeasures,
             )
+            let staffAddress = StaffAddress(
+                partIndex: parts.count,
+                staffIndexInPart: 0,
+            )
             injectMetaEvents(
                 file: file,
                 timeline: timeline,
                 into: &staff,
+                systemMeasures: &systemMeasures,
+                staffAddress: staffAddress,
                 includeTempo: trackIdx == 0,
                 includeKeySignature: !track.isDrums,
             )
@@ -77,7 +87,10 @@ extension MidiImporter {
         }
         let meta = resolveTitle(file: file, sourceFilename: sourceFilename)
         return Score(
-            division: file.division, parts: parts, metaTags: meta,
+            division: file.division,
+            parts: parts,
+            systemMeasures: systemMeasures,
+            metaTags: meta,
             source: .midi,
         )
     }
@@ -238,6 +251,8 @@ extension MidiImporter {
         file: MidiFile,
         timeline: BarTimeline,
         into staff: inout Staff,
+        systemMeasures: inout [SystemMeasure],
+        staffAddress: StaffAddress,
         includeTempo: Bool,
         includeKeySignature: Bool,
     ) {
@@ -287,7 +302,23 @@ extension MidiImporter {
             case let .meta(.tempo(micros)):
                 guard includeTempo else { continue }
                 let bps = 1_000_000.0 / Double(micros)
-                element = .tempo(Tempo(beatsPerSecond: bps))
+                // Tempo now lives on the score-level `SystemMeasure`
+                // rather than voice elements. Imported MIDI tempo
+                // changes attach at measure start — MIDI files don't
+                // routinely carry sub-measure positioning needed for
+                // anything finer, and the previous "insert at index 0
+                // of voice 0" approach landed at the same effective
+                // position (cursor 0 of the measure).
+                if measureIdx < systemMeasures.count {
+                    systemMeasures[measureIdx].elements.append(
+                        PositionedSystemElement(
+                            position: .start,
+                            element: .tempo(Tempo(beatsPerSecond: bps)),
+                            originalStaff: staffAddress,
+                        ),
+                    )
+                }
+                continue
             case let .meta(.timeSignature(n, d, _, _)):
                 element = .timeSignature(TimeSignature(numerator: n, denominator: d))
             case let .meta(.keySignature(sf, _)):

@@ -17,6 +17,21 @@ struct StaffMeasureBuilder {
     private var trailingBarline: BarLine?
     private var markers: [Marker] = []
     private var jumps: [Jump] = []
+    /// System-level elements lifted out during decode (currently
+    /// just rehearsal marks; tempo / staff text / swing imports
+    /// would feed into this once added). The caller pulls these
+    /// out via `build()` and merges them into `Score.systemMeasures`.
+    /// `originalStaff` is left nil here and stamped by the caller
+    /// once the staff address is known.
+    private var systemElements: [PositionedSystemElement] = []
+
+    /// Result of `build()`: the decoded `Measure` and the system
+    /// elements that should be merged into the score-level
+    /// `SystemMeasure` for this measure index.
+    struct Built {
+        let measure: Measure
+        let systemElements: [PositionedSystemElement]
+    }
 
     mutating func addMarkers(_ newMarkers: [Marker]) {
         markers.append(contentsOf: newMarkers)
@@ -26,13 +41,15 @@ struct StaffMeasureBuilder {
         jumps.append(contentsOf: newJumps)
     }
 
-    /// Append a rehearsal mark to the staff's first voice. MusicXML
-    /// rehearsal marks are part-level, but our model puts them in
-    /// `VoiceElement.rehearsalMark` — we attach to voice 0 to match
-    /// MuseScore's MSCX shape (rehearsal marks always read from the
-    /// first `<voice>` block).
+    /// Record a rehearsal mark at the start of this measure.
+    /// MusicXML's `<direction-type><rehearsal>` doesn't carry a
+    /// fractional offset so the position defaults to
+    /// `MeasurePosition.start`.
     mutating func addRehearsalMark(_ mark: RehearsalMark) {
-        appendAttribute(.rehearsalMark(mark))
+        systemElements.append(PositionedSystemElement(
+            position: .start,
+            element: .rehearsalMark(mark),
+        ))
     }
 
     /// Append to the first voice index (MSCX attributes convention). Lazily
@@ -87,7 +104,7 @@ struct StaffMeasureBuilder {
         }
     }
 
-    func build() -> Measure {
+    func build() -> Built {
         var final = voices
         if let trailing = trailingBarline {
             if final.isEmpty {
@@ -104,13 +121,14 @@ struct StaffMeasureBuilder {
         let builtVoices = final.isEmpty
             ? [Voice(elements: [])]
             : final.map { Voice(elements: $0) }
-        return Measure(
+        let measure = Measure(
             voices: builtVoices,
             startRepeat: startRepeat,
             endRepeatCount: endRepeatCount,
             markers: markers,
             jumps: jumps,
         )
+        return Built(measure: measure, systemElements: systemElements)
     }
 
     // MARK: - private helpers

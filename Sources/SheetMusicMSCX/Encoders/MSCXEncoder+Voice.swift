@@ -59,12 +59,19 @@ extension Voice {
     /// </concertKey></KeySig>` causes Studio to display a redundant
     /// "natural" sign at the start of the system on file open. We
     /// mirror that omission here.
+    ///
+    /// `systemElements` (typically only non-empty for voice 0) are
+    /// injected at the head of the voice with `<location>` shifts
+    /// matching their `MeasurePosition`. Each shift is consumed by
+    /// the immediately-following system element only — chords later
+    /// in the voice remain at their natural cursor.
     func encode(
         carryIn: VoiceTieCarry,
         isStaffHead: Bool = false,
         options: MSCXEncoderOptions = .init(),
         staffGroup: String = "pitched",
         voiceIndex: Int = 0,
+        systemElements: [PositionedSystemElement] = [],
     ) throws -> (node: XMLTreeNode, carryOut: VoiceTieCarry) {
         try Self.validateProperlyNested(tuplets)
         // At a given startIndex, push outer tuplets (longer range)
@@ -100,6 +107,25 @@ extension Voice {
         let dropInitialZeroKeySig = shouldDropInitialZeroKeySig(isStaffHead: isStaffHead)
 
         var state = EncodeState(carryIn: carryIn)
+        // Inject lifted system elements at the head of the voice
+        // with `<location>` shifts matching their position. Sorted
+        // by position so multi-element measures emit in time order.
+        let sortedSystemElements = systemElements.sorted {
+            $0.position < $1.position
+        }
+        for sysElement in sortedSystemElements {
+            let offset = sysElement.position.offset
+            if offset.numerator != 0 {
+                state.children.append(XMLTreeNode(
+                    name: "location",
+                    children: [XMLTreeNode(
+                        name: "fractions",
+                        text: "\(offset.numerator)/\(offset.denominator)",
+                    )],
+                ))
+            }
+            state.children.append(Self.encodeSystem(sysElement.element))
+        }
         for (index, element) in elements.enumerated() {
             for opening in startsByIndex[index] ?? [] {
                 let activeWithOpening = state.stack + [opening]
@@ -197,6 +223,18 @@ extension Voice {
         }
     }
 
+    /// Encode a lifted `SystemElement` to its MSCX node. Mirrors the
+    /// dispatch in `encode(element:…)` for what used to be voice
+    /// element cases — the actual per-type encoders are unchanged.
+    private static func encodeSystem(_ element: SystemElement) -> XMLTreeNode {
+        switch element {
+        case let .tempo(tempo): return tempo.encode()
+        case let .rehearsalMark(rehearsalMark): return rehearsalMark.encode()
+        case let .staffText(staffText): return staffText.encode()
+        case let .swing(swing): return swing.encode()
+        }
+    }
+
     private static func validateProperlyNested(_ tuplets: [Tuplet]) throws {
         // A laminar family: every pair is disjoint or fully nested.
         for (i, current) in tuplets.enumerated() {
@@ -252,18 +290,10 @@ extension Voice {
             return time.encode()
         case let .clef(clef):
             return clef.encode()
-        case let .tempo(tempo):
-            return tempo.encode()
         case let .dynamic(dynamic):
             return dynamic.encode()
         case let .barLine(barLine):
             return barLine.encode()
-        case let .staffText(staffText):
-            return staffText.encode()
-        case let .swing(swing):
-            return swing.encode()
-        case let .rehearsalMark(rehearsalMark):
-            return rehearsalMark.encode()
         case let .harmony(harmony):
             return harmony.encode()
         case let .measureRepeat(measureRepeat):

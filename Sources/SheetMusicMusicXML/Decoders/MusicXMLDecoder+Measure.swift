@@ -16,6 +16,12 @@ enum MusicXMLMeasureWalker {
         /// `staffCount` entries; inner array holds one `Measure` per
         /// `<measure>` block.
         let measuresByStaff: [[Measure]]
+        /// `systemElementsByStaffMeasure[staffIndex][measureIndex]` —
+        /// the system-level elements (currently just rehearsal marks)
+        /// that were lifted out during decode, ready to be merged into
+        /// the score-level `[SystemMeasure]` once the staff address is
+        /// known.
+        let systemElementsByStaffMeasure: [[[PositionedSystemElement]]]
     }
 
     static func decode(
@@ -26,9 +32,13 @@ enum MusicXMLMeasureWalker {
         var divisions = DivisionsContext(perQuarter: 1)
         var previousAttributes = MusicXMLAttributesSnapshot()
         var perStaffMeasures: [[Measure]] = Array(repeating: [], count: staffCount)
+        var perStaffSystemElements: [[[PositionedSystemElement]]] = Array(
+            repeating: [],
+            count: staffCount,
+        )
         for (index, measureNode) in partNode.all("measure").enumerated() {
             let isFirstMeasure = (index == 0)
-            let measures = try decodeOne(
+            let built = try decodeOne(
                 measureNode: measureNode,
                 divisions: &divisions,
                 previousAttributes: &previousAttributes,
@@ -36,12 +46,17 @@ enum MusicXMLMeasureWalker {
                 staffCount: staffCount,
                 drumTable: drumTable,
             )
-            for (staffIdx, measure) in measures.enumerated() {
-                perStaffMeasures[staffIdx].append(measure)
+            for (staffIdx, item) in built.enumerated() {
+                perStaffMeasures[staffIdx].append(item.measure)
+                perStaffSystemElements[staffIdx].append(item.systemElements)
             }
         }
         let dropped = dropUnmatchedTies(perStaffMeasures)
-        return PartResult(staffCount: staffCount, measuresByStaff: dropped)
+        return PartResult(
+            staffCount: staffCount,
+            measuresByStaff: dropped,
+            systemElementsByStaffMeasure: perStaffSystemElements,
+        )
     }
 
     /// Remove ties that don't connect to the **immediately following** chord
@@ -80,7 +95,7 @@ enum MusicXMLMeasureWalker {
         isFirstMeasure: Bool,
         staffCount: Int,
         drumTable: MusicXMLDrumTable,
-    ) throws -> [Measure] {
+    ) throws -> [StaffMeasureBuilder.Built] {
         var perStaff: [StaffMeasureBuilder] = (0 ..< staffCount).map { _ in
             StaffMeasureBuilder()
         }

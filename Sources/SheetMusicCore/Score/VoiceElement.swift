@@ -21,25 +21,23 @@ public enum VoiceElement: Sendable, Equatable {
     case timeSignature(TimeSignature)
     case clef(Clef)
     case barLine(BarLine)
-    case tempo(Tempo)
     case dynamic(Dynamic)
     case spanner(Spanner)
     case measureRepeat(MeasureRepeat)
     case fermata(Fermata)
-    case staffText(StaffText)
-    /// Swing-rhythm directive (a swing-flagged staff/system text).
-    /// Switches the active swing setting at this tick; affects
-    /// MIDI render only — visually it lays out as a system text.
-    case swing(Swing)
     case harmony(Harmony)
-    case rehearsalMark(RehearsalMark)
     /// MuseScore `<location><fractions>N/D</fractions></location>`
     /// at voice level — a cursor move that places the next attached
-    /// non-temporal element (system / staff text, dynamic, tempo,
-    /// rehearsal mark) at a tick offset from the natural cursor.
-    /// The delta is fraction-of-a-whole-note (resolved against the
-    /// score's PPQ at consumption time); negative values jog
-    /// backwards. C++: `mu::engraving::Location` for a segment.
+    /// non-temporal element (dynamic, …) at a tick offset from the
+    /// natural cursor. The delta is fraction-of-a-whole-note
+    /// (resolved against the score's PPQ at consumption time);
+    /// negative values jog backwards. C++:
+    /// `mu::engraving::Location` for a segment.
+    ///
+    /// System-level elements (tempo, rehearsal mark, system text,
+    /// swing) used to ride on this cursor too; they now live on
+    /// `Score.systemMeasures[i].elements` with explicit
+    /// `MeasurePosition`s and are routed there by the decoder.
     case locationShift(delta: Fraction)
 }
 

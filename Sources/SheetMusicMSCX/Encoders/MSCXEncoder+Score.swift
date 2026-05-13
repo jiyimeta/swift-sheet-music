@@ -37,12 +37,24 @@ extension Score {
             )
         }
         var titleFrameSlot = titleFrame
-        for (part, _, ids) in allStaffIDs {
-            for (staff, id) in zip(part.staves, ids) {
+        for (partIndex, entry) in allStaffIDs.enumerated() {
+            for (staffIndexInPart, pair) in zip(entry.part.staves, entry.ids).enumerated() {
+                let staff = pair.0
+                let id = pair.1
                 let frame = titleFrameSlot
                 titleFrameSlot = nil
+                let address = StaffAddress(
+                    partIndex: partIndex,
+                    staffIndexInPart: staffIndexInPart,
+                )
+                let perMeasure = perMeasureSystemElements(for: address)
                 try scoreChildren.append(
-                    staff.encodeTopLevel(staffID: id, titleFrame: frame, options: options),
+                    staff.encodeTopLevel(
+                        staffID: id,
+                        titleFrame: frame,
+                        systemElementsByMeasure: perMeasure,
+                        options: options,
+                    ),
                 )
             }
         }
@@ -70,6 +82,24 @@ extension Score {
             attributes: ["version": museScoreVersion],
             children: rootChildren,
         )
+    }
+
+    /// Per-measure system elements destined for a given staff,
+    /// computed by filtering `systemMeasures` for entries whose
+    /// `originalStaff` matches the address (with `nil` routed to
+    /// the canonical staff 0, voice 0 per MuseScore convention).
+    /// Returned shape: outer array has one entry per measure index;
+    /// inner array is the elements for that measure of this staff.
+    private func perMeasureSystemElements(
+        for address: StaffAddress,
+    ) -> [[PositionedSystemElement]] {
+        let canonical = StaffAddress(partIndex: 0, staffIndexInPart: 0)
+        return systemMeasures.map { systemMeasure in
+            systemMeasure.elements.filter { element in
+                let original = element.originalStaff ?? canonical
+                return original == address
+            }
+        }
     }
 
     /// Leading `<LayerTag>` / `<currentLayer>` pair MuseScore 3 expects

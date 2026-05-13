@@ -45,9 +45,17 @@ extension Staff {
     /// MuseScore stores the title block inside the first top-level
     /// staff body, so callers should set it only on staff index 0 of
     /// part index 0.
+    ///
+    /// `systemElementsByMeasure[i]` (when supplied) is the set of
+    /// system elements destined for this staff at measure index `i`.
+    /// They're injected into voice 0 of that measure as voice
+    /// elements with `<location>` shifts to match their
+    /// `MeasurePosition`. Empty or out-of-range entries skip the
+    /// injection.
     func encodeTopLevel(
         staffID: String,
         titleFrame: ScoreFrame? = nil,
+        systemElementsByMeasure: [[PositionedSystemElement]] = [],
         options: MSCXEncoderOptions = .init(),
     ) throws -> XMLTreeNode {
         var children: [XMLTreeNode] = []
@@ -62,11 +70,16 @@ extension Staff {
         // MuseScore match the wrong destination chord).
         var carry: [Voice.VoiceTieCarry] = []
         for (measureIndex, measure) in measures.enumerated() {
+            let injection: [PositionedSystemElement] =
+                measureIndex < systemElementsByMeasure.count
+                    ? systemElementsByMeasure[measureIndex]
+                    : []
             let result = try measure.encode(
                 carryInVoiceTieCarries: carry,
                 isFirstMeasureOfStaff: measureIndex == 0,
                 options: options,
                 staffGroup: group,
+                voice0SystemElements: injection,
             )
             children.append(result.node)
             carry = result.carryOutVoiceTieCarries

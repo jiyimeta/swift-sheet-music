@@ -4,15 +4,26 @@ import SheetMusicCore
 import SheetMusicXMLTools
 
 extension Voice {
+    /// Decoded voice plus any system-level elements (tempo,
+    /// rehearsal mark, system/staff text, swing) that were lifted
+    /// out of the voice during decoding. Each lifted element carries
+    /// its measure-relative `MeasurePosition` so the caller can
+    /// merge it into the owning `SystemMeasure`.
+    struct DecodeResult {
+        let voice: Voice
+        let systemElements: [PositionedSystemElement]
+    }
+
     private struct OpenTuplet {
         let ratio: Fraction
         let firstElementIndex: Int
     }
 
-    static func decode(_ node: XMLTreeNode) throws -> Voice { // swiftlint:disable:this function_body_length
+    static func decode(_ node: XMLTreeNode) throws -> DecodeResult { // swiftlint:disable:this function_body_length cyclomatic_complexity
         var elements: [VoiceElement] = []
         elements.reserveCapacity(node.children.count)
         var tuplets: [Tuplet] = []
+        var systemElements: [PositionedSystemElement] = []
         // Stack of open tuplet ratios (normal/actual). Each <Tuplet>
         // pushes, each <endTuplet/> pops. Chord/Rest durations are
         // scaled by the product of every ratio on the stack — mirrors
@@ -27,8 +38,38 @@ extension Voice {
         // entries (left over at end-of-voice) are dropped — MuseScore
         // doesn't play them either.
         var pendingGracesBefore: [GraceChord] = []
+        // Measure-relative position of the next chord/rest, in
+        // fractions-of-whole-note. Advances by each chord/rest's
+        // tuplet-scaled duration. Used to compute `MeasurePosition`
+        // for lifted system elements.
+        var cursor = Fraction(numerator: 0, denominator: 1)
+        // Accumulated `<location>` deltas that haven't yet attached
+        // to an element. Each location shifts the next non-temporal
+        // element by `delta` from the natural cursor. When the next
+        // element is a system-level one (tempo / rehearsal / staff /
+        // system text / swing) the shift is consumed by its
+        // `MeasurePosition` and dropped from the voice stream;
+        // otherwise the shift is emitted as a `.locationShift`
+        // immediately before the next voice element so downstream
+        // consumers (dynamic placement, …) keep seeing it.
+        var pendingShift = Fraction(numerator: 0, denominator: 1)
         func tupletFractions() -> [Fraction] {
             tupletStack.map(\.ratio)
+        }
+        func appendVoiceElement(_ element: VoiceElement) {
+            if pendingShift.numerator != 0 {
+                elements.append(.locationShift(delta: pendingShift))
+                pendingShift = Fraction(numerator: 0, denominator: 1)
+            }
+            elements.append(element)
+        }
+        func lifted(_ element: SystemElement) {
+            let position = MeasurePosition(offset: cursor + pendingShift)
+            systemElements.append(PositionedSystemElement(
+                position: position,
+                element: element,
+            ))
+            pendingShift = Fraction(numerator: 0, denominator: 1)
         }
         for child in node.children {
             switch child.name {
@@ -45,9 +86,9 @@ extension Voice {
                     )
                     if graceType.isAfter {
                         // Attach to the most recently emitted chord.
-                        // Walk backwards because tempo / dynamic /
-                        // location elements may sit between the
-                        // grace and its parent chord.
+                        // Walk backwards because dynamic / location
+                        // elements may sit between the grace and its
+                        // parent chord.
                         for i in stride(from: elements.count - 1, through: 0, by: -1) {
                             if case var .chord(parent) = elements[i] {
                                 parent.graceNotesAfter.append(g)
@@ -69,13 +110,15 @@ extension Voice {
                     chord.graceNotesBefore = pendingGracesBefore
                     pendingGracesBefore.removeAll(keepingCapacity: true)
                 }
-                elements.append(.chord(chord))
+                appendVoiceElement(.chord(chord))
+                cursor = cursor + chord.duration.asFraction
             case "Rest":
                 var rest = try MSCXRestDecoder.decode(child)
                 rest.duration = scaled(
                     rest.duration, by: tupletFractions(),
                 )
-                elements.append(.chord(rest))
+                appendVoiceElement(.chord(rest))
+                cursor = cursor + rest.duration.asFraction
             case "Tuplet":
                 if let ratio = tupletRatio(from: child) {
                     tupletStack.append(OpenTuplet(
@@ -96,66 +139,65 @@ extension Voice {
                     }
                 }
             case "KeySig":
-                try elements.append(.keySignature(KeySignature.decode(child)))
+                try appendVoiceElement(.keySignature(KeySignature.decode(child)))
             case "TimeSig":
-                try elements.append(.timeSignature(TimeSignature.decode(child)))
+                try appendVoiceElement(.timeSignature(TimeSignature.decode(child)))
             case "Clef":
-                try elements.append(.clef(Clef.decode(child)))
+                try appendVoiceElement(.clef(Clef.decode(child)))
             case "BarLine":
-                try elements.append(.barLine(BarLine.decode(child)))
+                try appendVoiceElement(.barLine(BarLine.decode(child)))
             case "Tempo":
-                try elements.append(.tempo(Tempo.decode(child)))
+                try lifted(.tempo(Tempo.decode(child)))
             case "Dynamic":
-                try elements.append(.dynamic(Dynamic.decode(child)))
+                try appendVoiceElement(.dynamic(Dynamic.decode(child)))
             case "Spanner":
-                try elements.append(.spanner(Spanner.decode(child)))
+                try appendVoiceElement(.spanner(Spanner.decode(child)))
             case "MeasureRepeat", "RepeatMeasure":
                 // <RepeatMeasure> is the MuseScore 3.x spelling of the same
                 // element (see MeasureRead::readVoice in measureread.cpp:336).
-                try elements.append(.measureRepeat(MeasureRepeat.decode(child)))
+                try appendVoiceElement(.measureRepeat(MeasureRepeat.decode(child)))
             case "Fermata":
                 let subtype = child.first("subtype")?.text ?? ""
                 let stretch: Double? = child.first("timeStretch").flatMap { Double($0.text) }
-                elements.append(.fermata(Fermata(subtype: subtype, timeStretch: stretch)))
+                appendVoiceElement(.fermata(Fermata(subtype: subtype, timeStretch: stretch)))
             case "StaffText":
                 if Swing.isSwingMarker(child) {
-                    elements.append(.swing(
+                    lifted(.swing(
                         Swing.decode(child, isSystemText: false),
                     ))
                 } else {
-                    try elements.append(.staffText(
+                    try lifted(.staffText(
                         StaffText.decode(child, isSystemText: false),
                     ))
                 }
             case "SystemText":
                 if Swing.isSwingMarker(child) {
-                    elements.append(.swing(
+                    lifted(.swing(
                         Swing.decode(child, isSystemText: true),
                     ))
                 } else {
-                    try elements.append(.staffText(
+                    try lifted(.staffText(
                         StaffText.decode(child, isSystemText: true),
                     ))
                 }
             case "Harmony":
-                try elements.append(.harmony(Harmony.decode(child)))
+                try appendVoiceElement(.harmony(Harmony.decode(child)))
             case "RehearsalMark":
-                try elements.append(.rehearsalMark(
+                try lifted(.rehearsalMark(
                     RehearsalMark.decode(child),
                 ))
             case "location":
                 // Voice-level cursor shift. MuseScore uses
                 // `<location><fractions>N/D</fractions></location>`
-                // to attach the next non-temporal element (system /
-                // staff text, dynamic, tempo, rehearsal mark) at a
-                // tick that doesn't fall on a chord boundary. The
-                // shift is relative to the current cursor; negative
-                // values jog backwards. `<measures>` only appears in
+                // to attach the next non-temporal element at a tick
+                // that doesn't fall on a chord boundary. The shift
+                // is relative to the current cursor; negative values
+                // jog backwards. `<measures>` only appears in
                 // spanner contexts and is ignored here.
                 if let fracText = child.first("fractions")?.text,
                    let frac = Fraction(mscxString: fracText)
                 {
-                    elements.append(.locationShift(delta: frac))
+                    pendingShift = pendingShift + frac
                 }
             default:
                 // Unknown elements are silently ignored. Decoder is permissive on purpose
@@ -166,7 +208,12 @@ extension Voice {
         }
         // Stranded `pendingGracesBefore` (no following chord in this
         // voice) intentionally dropped — see comment on the buffer.
-        return Voice(elements: elements, tuplets: tuplets)
+        // A trailing `pendingShift` with no following element has no
+        // semantic effect and is discarded.
+        return DecodeResult(
+            voice: Voice(elements: elements, tuplets: tuplets),
+            systemElements: systemElements,
+        )
     }
 
     /// Parse a `<Tuplet>` element's ratio (normalNotes/actualNotes). A triplet's
