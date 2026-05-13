@@ -23,10 +23,15 @@ struct TempoLayoutTests {
         let voice = Voice(elements: [
             .clef(Clef(concertClefType: "G")),
             .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
-            .tempo(Tempo(beatsPerSecond: 3.1)),
             .chord(chord),
         ])
         let measure = Measure(voices: [voice])
+        let systemMeasure = SystemMeasure(elements: [
+            PositionedSystemElement(
+                position: .start,
+                element: .tempo(Tempo(beatsPerSecond: 3.1)),
+            ),
+        ])
         let score = Score(
             division: 480,
             parts: [Part(
@@ -34,6 +39,7 @@ struct TempoLayoutTests {
                 instrument: Instrument(id: "voice"),
                 staves: [Staff(measures: [measure])],
             )],
+            systemMeasures: [systemMeasure],
         )
         let document = LayoutEngine.layout(
             score: score,

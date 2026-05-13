@@ -14,9 +14,7 @@ struct MidiSwingPropagationTests {
     ) -> Score {
         var style = ScoreStyle.museScoreDefaults
         style.swingUnit = .off
-        // Staff 0 carries the swing marker at tick 0.
         let voice0 = Voice(elements: [
-            .swing(firstSwing),
             .chord(Chord(
                 duration: .eighth,
                 notes: ChordNotes([Note(pitch: 60, tpc: 14)]),
@@ -30,7 +28,6 @@ struct MidiSwingPropagationTests {
             staffType: "stdNormal", group: "pitched", defaultClefType: nil,
             measures: [Measure(voices: [voice0])],
         )
-        // Staff 1 has no swing element of its own.
         let voice1 = Voice(elements: [
             .chord(Chord(
                 duration: .eighth,
@@ -50,7 +47,24 @@ struct MidiSwingPropagationTests {
             instrument: Instrument(id: "voice"),
             staves: [staff0, staff1],
         )
-        return Score(division: 480, parts: [part], style: style)
+        // Swing originates on staff (0, 0). isSystemText controls
+        // whether collectSwingMaps fans it out to every staff or
+        // keeps it on the originating staff only — matches the
+        // MuseScore semantics the propagation logic exists for.
+        let systemMeasure = SystemMeasure(elements: [
+            PositionedSystemElement(
+                position: .start,
+                element: .swing(firstSwing),
+                originalStaff: StaffAddress(
+                    partIndex: 0, staffIndexInPart: 0,
+                ),
+            ),
+        ])
+        return Score(
+            division: 480, parts: [part],
+            systemMeasures: [systemMeasure],
+            style: style,
+        )
     }
 
     private func noteOnTicks(_ track: MidiTrack) -> [Int] {

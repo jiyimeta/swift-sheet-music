@@ -87,7 +87,7 @@ extension MSCXTopLevelStaff {
         var measures: [Measure] = []
         var systemElementsByMeasure: [[PositionedSystemElement]] = []
         for measureNode in measureNodes {
-            let result = try Measure.decode(measureNode)
+            let result = try Measure.decodeWithSystemElements(measureNode)
             measures.append(result.measure)
             systemElementsByMeasure.append(result.systemElements)
         }

@@ -33,7 +33,15 @@ extension Measure {
         node.children.contains(where: { $0.name == "multiMeasureRest" })
     }
 
-    static func decode(_ node: XMLTreeNode) throws -> DecodeResult {
+    /// Convenience that drops lifted system elements. Most callers
+    /// only need the measure shape; full `DecodeResult` is for code
+    /// that wires `originalStaff`-stamped system elements into
+    /// `Score.systemMeasures`.
+    static func decode(_ node: XMLTreeNode) throws -> Measure {
+        try decodeWithSystemElements(node).measure
+    }
+
+    static func decodeWithSystemElements(_ node: XMLTreeNode) throws -> DecodeResult {
         let startRepeat = node.children.contains(where: { $0.name == "startRepeat" })
         let endRepeatCount = node.first("endRepeat").flatMap { Int($0.text) }
         let measureRepeatCount = node.first("measureRepeatCount").flatMap { Int($0.text) }
@@ -41,11 +49,11 @@ extension Measure {
         let voiceNodes = node.all("voice")
         let voiceResults: [Voice.DecodeResult]
         if !voiceNodes.isEmpty {
-            voiceResults = try voiceNodes.map { try Voice.decode($0) }
+            voiceResults = try voiceNodes.map { try Voice.decodeWithSystemElements($0) }
         } else {
             // Older / simpler mscx form: musical elements are direct children of
             // <Measure> (no <voice> wrapper). Treat them as a single implicit voice.
-            voiceResults = try [Voice.decode(node)]
+            voiceResults = try [Voice.decodeWithSystemElements(node)]
         }
         let voices = voiceResults.map(\.voice)
         let systemElements = voiceResults.flatMap(\.systemElements)

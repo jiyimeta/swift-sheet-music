@@ -28,7 +28,10 @@ struct FermataMidiTests {
         .fermata(Fermata(subtype: subtype, timeStretch: stretch))
     }
 
-    private func makeScore(voices: [[VoiceElement]]) -> Score {
+    private func makeScore(
+        voices: [[VoiceElement]],
+        systemMeasures: [SystemMeasure] = [SystemMeasure()],
+    ) -> Score {
         let measure = Measure(voices: voices.map { Voice(elements: $0) })
         let staff = Staff(measures: [measure])
         let part = Part(
@@ -39,7 +42,11 @@ struct FermataMidiTests {
             ),
             staves: [staff],
         )
-        return Score(division: 480, parts: [part])
+        return Score(
+            division: 480,
+            parts: [part],
+            systemMeasures: systemMeasures,
+        )
     }
 
     private func tempoEvents(_ file: MidiFile) -> [(Int, Int)] {
@@ -213,16 +220,25 @@ struct FermataMidiTests {
 
     /// 7. End-boundary co-location: .tempo lands at fermata's endTick.
     @Test func endBoundaryTempoChangeWins() throws {
-        // Fermata covers [0, 480). At tick 480 a .tempo(3.0 bps = 180 BPM)
-        // lands. Close emits 180 BPM (timeline lookup post-.tempo); .tempo
+        // Fermata covers [0, 480). At tick 480 a tempo(3.0 bps = 180 BPM)
+        // lands. Close emits 180 BPM (timeline lookup post-tempo); tempo
         // also emits 180 BPM. Both at tick 480. Header tempo (120) and
-        // fermata open (80) co-locate at tick 0.
-        let score = makeScore(voices: [[
-            fermata("fermataAbove"),
-            chord(60),
-            .tempo(Tempo(beatsPerSecond: 3.0)),
-            chord(62),
-        ]])
+        // fermata open (80) co-locate at tick 0. With the system-level
+        // refactor the tempo lives on `systemMeasures` at the 1/4
+        // measure position (= tick 480 at division=480).
+        let score = makeScore(
+            voices: [[
+                fermata("fermataAbove"),
+                chord(60),
+                chord(62),
+            ]],
+            systemMeasures: [SystemMeasure(elements: [
+                PositionedSystemElement(
+                    position: MeasurePosition(numerator: 1, denominator: 4),
+                    element: .tempo(Tempo(beatsPerSecond: 3.0)),
+                ),
+            ])],
+        )
         let file = try MidiRenderer.render(score: score)
         let tempos = tempoEvents(file)
         #expect(tempos == [

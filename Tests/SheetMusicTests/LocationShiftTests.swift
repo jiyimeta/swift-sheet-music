@@ -13,7 +13,7 @@
         /// end of a 4-quarter voice should land at the X column of
         /// the third chord (tick = 2 quarters), not at the trailing
         /// end of the bar.
-        @Test("Voice locationShift snaps SystemText to shifted tick")
+        @Test("SystemText at MeasurePosition 1/2 snaps to chord 3")
         func locationShiftPlacesTextAtChord3() {
             guard #available(macOS 15.0, *) else { return }
             let c5 = Note(pitch: 72, tpc: 14)
@@ -24,19 +24,30 @@
                 .chord(Chord(duration: .quarter, notes: [c5])),
                 .chord(Chord(duration: .quarter, notes: [c5])),
                 .chord(Chord(duration: .quarter, notes: [c5])),
-                .locationShift(
-                    delta: Fraction(numerator: -1, denominator: 2),
-                ),
-                .staffText(StaffText(
-                    text: "tag", isSystemText: true,
-                )),
             ])])
             let part = Part(
                 id: "P1",
                 instrument: Instrument(id: "x"),
                 staves: [Staff(measures: [m1])],
             )
-            let score = Score(division: 480, parts: [part])
+            // The text sits at half-bar (after two quarters) in
+            // `systemMeasures` — the position previously emerged
+            // from a `<location>` shift in voice followed by the
+            // staff text; with the refactor it's stored explicitly.
+            let systemMeasures: [SystemMeasure] = [
+                SystemMeasure(elements: [
+                    PositionedSystemElement(
+                        position: MeasurePosition(numerator: 1, denominator: 2),
+                        element: .staffText(StaffText(
+                            text: "tag", isSystemText: true,
+                        )),
+                    ),
+                ]),
+            ]
+            let score = Score(
+                division: 480, parts: [part],
+                systemMeasures: systemMeasures,
+            )
             let opts = ScoreViewOptions(
                 staffSize: 28, systemGap: 40, wrapToViewWidth: false,
             )
@@ -73,7 +84,7 @@
             #expect(distToChord3 < distToChord4)
         }
 
-        @Test("MSCXDecoder turns <location><fractions> into shift")
+        @Test("MSCXDecoder lifts <location>-shifted text to systemElements")
         func decodeLocationFraction() throws {
             let xml = """
             <Voice>
@@ -86,24 +97,26 @@
             </Voice>
             """
             let node = try XMLTreeParser.parse(Data(xml.utf8))
-            let voice = try Voice.decode(node)
-            guard voice.elements.count == 2 else {
+            let result = try Voice.decodeWithSystemElements(node)
+            // StaffText was lifted out of the voice; the
+            // location shift was consumed by its MeasurePosition
+            // rather than emitted as a `.locationShift` voice element.
+            #expect(result.voice.elements.isEmpty)
+            guard result.systemElements.count == 1 else {
                 Issue.record(Comment(
                     rawValue:
-                    "expected 2 elements, got "
-                        + "\(voice.elements.count)",
+                    "expected 1 lifted element, got "
+                        + "\(result.systemElements.count)",
                 ))
                 return
             }
-            if case let .locationShift(delta) = voice.elements[0] {
-                #expect(delta.numerator == -1)
-                #expect(delta.denominator == 2)
+            let positioned = result.systemElements[0]
+            #expect(positioned.position.offset.numerator == -1)
+            #expect(positioned.position.offset.denominator == 2)
+            if case let .staffText(st) = positioned.element {
+                #expect(st.text == "tag")
             } else {
-                Issue.record(Comment(
-                    rawValue:
-                    "first element should be locationShift, got "
-                        + "\(voice.elements[0])",
-                ))
+                Issue.record("expected staffText, got \(positioned.element)")
             }
         }
     }

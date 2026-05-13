@@ -234,12 +234,12 @@ struct PlaybackTimelineTests {
         // 4/4 measure: half | locShift(+1/8) | tempo→60bpm | locShift(-1/8) | half.
         // With division=480, +1/8 = +240 ticks. Without the fix, the
         // tempo lands at tick 480 (chord-walk position) instead of 720.
+        // Tempo lives on the score-level SystemMeasure at position
+        // 5/8 (half + eighth = 720 ticks at division=480). The voice
+        // stream itself only carries the two half-notes.
         let voice = Voice(elements: [
             .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
             .chord(half),
-            .locationShift(delta: Fraction(numerator: 1, denominator: 8)),
-            .tempo(Tempo(beatsPerSecond: 1.0)),
-            .locationShift(delta: Fraction(numerator: -1, denominator: 8)),
             .chord(half),
         ])
         let staff = Staff(measures: [Measure(voices: [voice])])
@@ -251,7 +251,16 @@ struct PlaybackTimelineTests {
             ),
             staves: [staff],
         )
-        let score = Score(division: 480, parts: [part])
+        let systemMeasure = SystemMeasure(elements: [
+            PositionedSystemElement(
+                position: MeasurePosition(numerator: 5, denominator: 8),
+                element: .tempo(Tempo(beatsPerSecond: 1.0)),
+            ),
+        ])
+        let score = Score(
+            division: 480, parts: [part],
+            systemMeasures: [systemMeasure],
+        )
         let timeline = PlaybackTimeline(score: score)
 
         // Frame at the second half-note onset (tick 960). With the

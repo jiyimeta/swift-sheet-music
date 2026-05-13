@@ -20,12 +20,21 @@ extension Voice {
         var tuplets: [Tuplet] { voice.tuplets }
     }
 
+    /// Convenience that drops the lifted system elements, returning
+    /// just the voice. Callers that don't track score-level system
+    /// content (most tests, ad-hoc inspections) use this; the full
+    /// `DecodeResult` is reserved for paths that wire system
+    /// elements into `Score.systemMeasures`.
+    static func decode(_ node: XMLTreeNode) throws -> Voice {
+        try decodeWithSystemElements(node).voice
+    }
+
     private struct OpenTuplet {
         let ratio: Fraction
         let firstElementIndex: Int
     }
 
-    static func decode(_ node: XMLTreeNode) throws -> DecodeResult { // swiftlint:disable:this function_body_length cyclomatic_complexity
+    static func decodeWithSystemElements(_ node: XMLTreeNode) throws -> DecodeResult { // swiftlint:disable:this function_body_length cyclomatic_complexity
         var elements: [VoiceElement] = []
         elements.reserveCapacity(node.children.count)
         var tuplets: [Tuplet] = []

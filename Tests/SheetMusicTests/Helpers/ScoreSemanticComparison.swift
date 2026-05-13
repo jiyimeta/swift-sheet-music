@@ -166,16 +166,11 @@ enum ScoreSemanticComparison {
         case let .timeSignature(t): return "time(\(t.numerator)/\(t.denominator))"
         case let .clef(c): return "clef(\(c.concertClefType))"
         case let .barLine(b): return "barline(\(b.subtype ?? ""))"
-        case let .tempo(t): return "tempo(\(t))"
         case let .dynamic(d): return "dynamic(\(d))"
         case let .spanner(s): return "spanner(\(s.kind))"
         case .measureRepeat: return "measureRepeat"
         case let .fermata(f): return "fermata(\(f.subtype))"
-        case let .staffText(st): return "staffText(\"\(st.text)\")"
-        case let .swing(s):
-            return "swing(\"\(s.text)\", \(s.unit), \(s.ratio))"
         case let .harmony(h): return "harmony(\"\(h.name)\")"
-        case let .rehearsalMark(rm): return "rehearsalMark(\"\(rm.text)\")"
         case let .locationShift(delta):
             return "locationShift(\(delta.numerator)/\(delta.denominator))"
         }
@@ -242,16 +237,6 @@ enum ScoreSemanticComparison {
                     m.pageBreak = false
                     m.voices = m.voices.map { voice in
                         Voice(elements: voice.elements
-                            // Strip staff/system text — only the MSCX
-                            // decoder picks them up today, so keeping
-                            // them would break cross-format equivalence
-                            // of fixtures that round-trip through both.
-                            .filter { element in
-                                if case .staffText = element {
-                                    return false
-                                }
-                                return true
-                            }
                             .map(canonicalizeDurations))
                     }
                     return m
@@ -259,6 +244,20 @@ enum ScoreSemanticComparison {
                 return st
             }
             return pt
+        }
+        // Strip staff/system text entries from systemMeasures — only
+        // the MSCX decoder picks them up today, so keeping them
+        // would break cross-format equivalence of fixtures that
+        // round-trip through both. (Tempo / rehearsal mark / swing
+        // are kept; only `.staffText` mirrors the old voice-level
+        // strip semantics.)
+        s.systemMeasures = s.systemMeasures.map { measure in
+            var copy = measure
+            copy.elements = copy.elements.filter { element in
+                if case .staffText = element.element { return false }
+                return true
+            }
+            return copy
         }
         return s
     }

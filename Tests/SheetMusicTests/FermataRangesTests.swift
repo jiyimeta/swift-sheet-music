@@ -137,18 +137,35 @@ struct FermataRangesTests {
 
     @Test func tempoTimelineDefaultIsTwoBps() {
         let s = staff([[chord(60)]])
-        let timeline = TempoTimeline.build(from: s, division: 480)
+        let timeline = TempoTimeline.build(
+            measures: s.measures, systemMeasures: [], division: 480,
+        )
         #expect(timeline.bps(at: 0) == 2.0)
         #expect(timeline.bps(at: 1000) == 2.0)
     }
 
-    @Test func tempoTimelinePicksUpFromVoiceZero() {
-        let s = staff([[
-            chord(60), // 0..480
-            .tempo(Tempo(beatsPerSecond: 3.0)), // change at tick 480
-            chord(62), // 480..960
-        ]])
-        let timeline = TempoTimeline.build(from: s, division: 480)
+    @Test func tempoTimelinePicksUpFromSystemMeasures() {
+        // Two measures of a single chord each. A tempo change at
+        // the start of the second measure should take effect at
+        // tick 480 (one quarter into the score).
+        let s = Staff(measures: [
+            Measure(voices: [Voice(elements: [chord(60)])]),
+            Measure(voices: [Voice(elements: [chord(62)])]),
+        ])
+        let systemMeasures: [SystemMeasure] = [
+            SystemMeasure(),
+            SystemMeasure(elements: [
+                PositionedSystemElement(
+                    position: .start,
+                    element: .tempo(Tempo(beatsPerSecond: 3.0)),
+                ),
+            ]),
+        ]
+        let timeline = TempoTimeline.build(
+            measures: s.measures,
+            systemMeasures: systemMeasures,
+            division: 480,
+        )
         #expect(timeline.bps(at: 0) == 2.0)
         #expect(timeline.bps(at: 479) == 2.0)
         #expect(timeline.bps(at: 480) == 3.0)
