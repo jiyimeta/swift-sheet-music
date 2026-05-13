@@ -338,18 +338,39 @@ extension LayoutEngine {
     ) {
         let entries = collectAboveStaffEntries(in: out, metrics: metrics)
         guard !entries.isEmpty else { return }
-        // Bucket by integer X — `timedX` returns the same value for
-        // elements at the same tick, so an exact comparison is
-        // sufficient and we don't need a wider tolerance for items
-        // at distinct ticks.
-        let groups = Dictionary(grouping: entries) { entry in
-            Int(entry.originX.rounded())
-        }
+        // Cluster by HORIZONTAL OVERLAP rather than exact-X. Two
+        // marks whose extents overlap — e.g. a system tempo placed
+        // at the first chord's X and a chord-symbol harmony emitted
+        // while still in the measure's header zone (anchored at
+        // `contentStartX`, a couple sp to the left) — should stack
+        // vertically so neither is partially hidden. Exact-X
+        // grouping (the old behaviour) missed pairs like this
+        // because their anchor X differs by 1–2 sp.
+        let sorted = entries.sorted { $0.xMin < $1.xMin }
         let minDistance = metrics.sp * 0.5
-        for (_, group) in groups where group.count > 1 {
-            stackCluster(
-                group, in: &out, minDistance: minDistance,
-            )
+        // Items whose extents are within `tolerance` count as
+        // overlapping. A small positive value bridges the tiny gap
+        // between two text marks that nominally don't touch but
+        // still read as adjacent at typical body sizes.
+        let tolerance = metrics.sp * 0.25
+        var cluster: [AboveStaffEntry] = []
+        var clusterRight: CGFloat = -.infinity
+        for entry in sorted {
+            if !cluster.isEmpty, entry.xMin <= clusterRight + tolerance {
+                cluster.append(entry)
+                clusterRight = max(clusterRight, entry.xMax)
+            } else {
+                if cluster.count > 1 {
+                    stackCluster(
+                        cluster, in: &out, minDistance: minDistance,
+                    )
+                }
+                cluster = [entry]
+                clusterRight = entry.xMax
+            }
+        }
+        if cluster.count > 1 {
+            stackCluster(cluster, in: &out, minDistance: minDistance)
         }
     }
 
@@ -361,6 +382,12 @@ extension LayoutEngine {
         let height: CGFloat
         let anchor: AboveStaffAnchor
         let priority: Int
+        /// Horizontal extent (leading…trailing) used to detect
+        /// visual overlap with neighbouring marks. Two marks whose
+        /// extents touch — even at slightly different anchor X —
+        /// must stack vertically so neither is partially hidden.
+        let xMin: CGFloat
+        let xMax: CGFloat
     }
 
     private static func collectAboveStaffEntries(
@@ -380,6 +407,9 @@ extension LayoutEngine {
             default:
                 continue
             }
+            let (xMin, xMax) = aboveStaffXRange(
+                el, originX: p.x, metrics: metrics,
+            )
             entries.append(AboveStaffEntry(
                 index: i,
                 originX: p.x,
@@ -387,9 +417,66 @@ extension LayoutEngine {
                 height: aboveStaffHeight(el, metrics: metrics),
                 anchor: aboveStaffAnchor(el),
                 priority: priority,
+                xMin: xMin,
+                xMax: xMax,
             ))
         }
         return entries
+    }
+
+    /// Approximate horizontal extent (leading…trailing X) for an
+    /// above-staff text mark. Conservative on the wide side so
+    /// items at *slightly* different anchor X — e.g. a tempo at
+    /// `tickColumns[0]` and a harmony placed at the same beat but
+    /// emitted while `inHeader` was still true (anchor =
+    /// `contentStartX`) — get clustered together and stack
+    /// vertically instead of overlapping visually.
+    private static func aboveStaffXRange(
+        _ element: LayoutElement,
+        originX: CGFloat,
+        metrics: StaffMetrics,
+    ) -> (CGFloat, CGFloat) {
+        let width = aboveStaffWidth(element, metrics: metrics)
+        switch aboveStaffAnchor(element) {
+        case .center:
+            return (originX - width / 2, originX + width / 2)
+        case .bottom:
+            // Anchors like `.bottomLeading` / `.bottom` align the
+            // origin at the visible glyph's lower-LEFT edge, so the
+            // text extends to the right of `originX`.
+            return (originX, originX + width)
+        }
+    }
+
+    /// Approximate horizontal width (in pt) for an above-staff
+    /// mark. Coarse pen-and-paper estimate keyed off character
+    /// count — exact font metrics would require running the same
+    /// shaper the renderer does, which is too heavy for a layout
+    /// pre-pass. Errs slightly large so the cluster grouping
+    /// captures visual overlaps that pixel-precise widths would
+    /// just barely miss.
+    private static func aboveStaffWidth(
+        _ element: LayoutElement, metrics: StaffMetrics,
+    ) -> CGFloat {
+        switch element {
+        case let .textMark(.tempo, text, _):
+            // Tempo strings start with "♩ = N" (4-6 visible chars).
+            // 1.1 sp per char is roomy for a 12 pt body face.
+            let chars = CGFloat(max(text.count, 4))
+            return chars * metrics.sp * 1.1
+        case let .staffText(text, _, _, _):
+            // 10 pt Edwin, ~0.9 sp per char.
+            let chars = CGFloat(max(text.count, 1))
+            return chars * metrics.sp * 0.9
+        case let .rehearsalMark(text, _, _, _):
+            // 14 pt + boxed frame; frame padding ~1 sp on each side.
+            let chars = CGFloat(max(text.count, 1))
+            return chars * metrics.sp * 1.1 + metrics.sp * 1.5
+        case let .harmony(lh):
+            return CGFloat(lh.width)
+        default:
+            return metrics.sp * 2.0
+        }
     }
 
     /// Stack one X-aligned cluster from closest-to-staff outward,
