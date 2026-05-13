@@ -67,15 +67,13 @@ extension MidiRenderer {
     }
 
     /// Build a `SwingMap` per staff in `score.allStaves` order.
-    /// Walks every voice once, accumulating natural ticks via
-    /// `measureTicks` so the result keys match the natural-tick
-    /// lookups in `renderVoiceElement`.
-    ///
-    /// `Swing` directives flagged `isSystemText == true` are inserted
-    /// into every staff's map (system flag = system-wide), matching
-    /// the `if (st->systemFlag())` branch of `Score::updateSwing`
-    /// (score.cpp:6106). Staff-flagged directives go only into the
-    /// owning staff's map.
+    /// Reads `Score.systemMeasures` and assigns each swing directive
+    /// to staff maps based on `Swing.isSystemText`: system swing
+    /// fans out to every staff (matches the
+    /// `if (st->systemFlag())` branch of `Score::updateSwing`,
+    /// score.cpp:6106); staff swing goes only to its
+    /// `originalStaff` (which falls back to the canonical staff
+    /// (0,0) when `nil`).
     static func collectSwingMaps(
         score: Score, division: Int,
     ) -> [SwingMap] {
@@ -86,44 +84,44 @@ extension MidiRenderer {
         var perStaff: [[SwingMap.Entry]] = Array(
             repeating: [], count: staffCount,
         )
-        for (staffIdx, entry) in allStaves.enumerated() {
-            let staff = entry.staff
-            var measureBase = 0
-            for measure in staff.measures {
-                let mTicks = measureTicks(
-                    measure: measure, division: division,
+        // Reference measure tick budgets — staves share the same
+        // time signature so any non-empty part/staff serves as the
+        // tick-base provider.
+        let referenceMeasures = allStaves.first?.staff.measures ?? []
+        var measureBases: [Int] = []
+        do {
+            var acc = 0
+            for m in referenceMeasures {
+                measureBases.append(acc)
+                acc += measureTicks(measure: m, division: division)
+            }
+        }
+        var addressToStaffIdx: [StaffAddress: Int] = [:]
+        for (i, entry) in allStaves.enumerated() {
+            addressToStaffIdx[entry.address] = i
+        }
+        let canonical = StaffAddress(partIndex: 0, staffIndexInPart: 0)
+        for (measureIndex, systemMeasure) in score.systemMeasures.enumerated() {
+            guard measureIndex < measureBases.count else { continue }
+            let measureBase = measureBases[measureIndex]
+            for positioned in systemMeasure.elements {
+                guard case let .swing(s) = positioned.element else { continue }
+                let tick = measureBase + positioned.position.ticks(division: division)
+                let state = SwingState(
+                    unitTicks: s.swingUnitTicks(division: division),
+                    ratio: s.ratio,
                 )
-                for voice in measure.voices {
-                    var tick = measureBase
-                    for el in voice.elements {
-                        switch el {
-                        case let .chord(c):
-                            tick += c.duration.ticks(division: division)
-                        case let .swing(s):
-                            let state = SwingState(
-                                unitTicks: s.swingUnitTicks(
-                                    division: division,
-                                ),
-                                ratio: s.ratio,
-                            )
-                            let mapEntry = SwingMap.Entry(
-                                tick: tick, state: state,
-                            )
-                            if s.isSystemText {
-                                for i in 0 ..< staffCount {
-                                    perStaff[i].append(mapEntry)
-                                }
-                            } else {
-                                perStaff[staffIdx].append(mapEntry)
-                            }
-                        case let .locationShift(delta):
-                            tick += delta.ticks(division: division)
-                        default:
-                            break
-                        }
+                let mapEntry = SwingMap.Entry(tick: tick, state: state)
+                if s.isSystemText {
+                    for i in 0 ..< staffCount {
+                        perStaff[i].append(mapEntry)
+                    }
+                } else {
+                    let address = positioned.originalStaff ?? canonical
+                    if let idx = addressToStaffIdx[address] {
+                        perStaff[idx].append(mapEntry)
                     }
                 }
-                measureBase += mTicks
             }
         }
         return perStaff.map { entries in

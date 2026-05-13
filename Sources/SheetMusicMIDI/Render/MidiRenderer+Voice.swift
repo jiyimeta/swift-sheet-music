@@ -7,13 +7,14 @@ extension MidiRenderer {
     /// Honours `<startRepeat>`/`<endRepeat>` repeat markers (via `playbackPlan`)
     /// and `<MeasureRepeat>` group replay (via `resolvedVoice`). Volta-aware
     /// playback filtering is not yet implemented.
-    static func renderVoice( // swiftlint:disable:this function_body_length
+    static func renderVoice( // swiftlint:disable:this function_body_length cyclomatic_complexity
         voiceIndex: Int,
         staff: Staff,
         part: Part,
         channel: Int,
         division: Int,
         swingMap: SwingMap = .empty,
+        systemElementsByMeasure: [[PositionedSystemElement]] = [],
     ) -> (events: [TimedMidiEvent], endTick: Int) {
         let plan = playbackPlan(for: staff.measures, division: division)
         var events: [TimedMidiEvent] = []
@@ -88,6 +89,41 @@ extension MidiRenderer {
             var localTick = entry.tickOffset
             var currentKey = firstKeySignature(in: staff)?.concertKey ?? 0
             let originalTickDelta = originalMeasureBase[entry.measureIndex] - entry.tickOffset
+            // Inject lifted system elements at their measure-relative
+            // positions before walking voice elements. Only voice 0
+            // emits the meta events; non-zero voices skip the
+            // injection so the same tempo / rehearsal doesn't fan out
+            // across voices of the same staff (mirrors the previous
+            // `voiceIndex == 0` guard).
+            if voiceIndex == 0,
+               entry.measureIndex < systemElementsByMeasure.count
+            {
+                for positioned in systemElementsByMeasure[entry.measureIndex] {
+                    let tickAt = entry.tickOffset
+                        + positioned.position.ticks(division: division)
+                    switch positioned.element {
+                    case let .tempo(tempo):
+                        currentTempoBps = tempo.beatsPerSecond
+                        events.append(TimedMidiEvent(
+                            tick: tickAt,
+                            event: .meta(.tempo(
+                                microsecondsPerQuarter: tempo.microsecondsPerQuarter,
+                            )),
+                        ))
+                    case let .rehearsalMark(rm):
+                        if !rm.text.isEmpty {
+                            events.append(TimedMidiEvent(
+                                tick: tickAt,
+                                event: .meta(.marker(rm.text)),
+                            ))
+                        }
+                    case .staffText, .swing:
+                        // Staff text doesn't render to MIDI; swing
+                        // state is pre-collected into `swingMap`.
+                        break
+                    }
+                }
+            }
             for (elementIndex, element) in effectiveVoice.elements.enumerated() {
                 if case let .keySignature(k) = element { currentKey = k.concertKey }
                 renderVoiceElement(
@@ -162,40 +198,14 @@ extension MidiRenderer {
                 )
                 events.append(TimedMidiEvent(tick: localTick, event: .meta(meta)))
             }
-        case .clef, .barLine, .spanner, .measureRepeat, .staffText, .harmony:
-            return
-        case .swing:
-            // Pre-collected into the staff's `SwingMap`; per-element
-            // state mutation is no longer needed. Chord rendering
-            // looks up the active state by natural tick (mirrors
-            // `Staff::swing(tick)`, staff.cpp:1022).
+        case .clef, .barLine, .spanner, .measureRepeat, .harmony:
             return
         case let .locationShift(delta):
             // Voice cursor shift: applies the location's fractional
-            // delta to the running tick so subsequent tempo /
-            // dynamic / marker events land at the correct beat.
-            // Mirrors `LayoutEngine`'s placement-side handling.
+            // delta to the running tick so subsequent dynamic /
+            // marker events land at the correct beat. Mirrors
+            // `LayoutEngine`'s placement-side handling.
             localTick += delta.ticks(division: division)
-        case let .rehearsalMark(rm):
-            // Emit SMF Marker meta-event (0xFF 06). Mirrors how `.tempo` is
-            // forwarded only on `voiceIndex == 0`: the same marker would
-            // otherwise be duplicated across voice 0/1 of the same staff
-            // bucket. Cross-staff duplication (each staff's track gets the
-            // mark) is intentional and matches the existing tempo-handling
-            // convention here.
-            if voiceIndex == 0 && !rm.text.isEmpty {
-                events.append(TimedMidiEvent(
-                    tick: localTick,
-                    event: .meta(.marker(rm.text)),
-                ))
-            }
-        case let .tempo(tempo):
-            currentTempoBps = tempo.beatsPerSecond
-            if voiceIndex == 0 {
-                events.append(TimedMidiEvent(tick: localTick, event: .meta(.tempo(
-                    microsecondsPerQuarter: tempo.microsecondsPerQuarter,
-                ))))
-            }
         case let .dynamic(dynamic):
             velocity = effectiveVelocity(forDynamic: dynamic, instrument: instrument)
         case let .chord(chord) where chord.notes.isEmpty:

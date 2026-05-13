@@ -63,6 +63,7 @@ extension LayoutEngine {
         incomingMelismas: [MelismaContinuation] = [],
         effectiveMelismaTicks: [MelismaLyricKey: Int] = [:],
         coversBelowStaffSpanner: Bool = false,
+        systemElements: [PositionedSystemElement] = [],
     ) -> (elements: [LayoutElement], clef: NotatedClef, key: Int) {
         let staffMidY = metrics.staffHeight / 2 + metrics.sp * 2
         var out: [LayoutElement] = []
@@ -842,73 +843,6 @@ extension LayoutEngine {
                             y: dynY,
                         ),
                     ))
-                case let .staffText(st):
-                    // Hidden text contributes neither glyphs nor
-                    // vertical extent — drop before any layout
-                    // measurement so collision avoidance ignores it.
-                    if !st.visible { break }
-                    // Place at the current tick column (or header
-                    // start if we haven't reached any timed element
-                    // yet). Default Y is `sp * 3` above the top
-                    // staff line (matches MuseScore's
-                    // `staffTextPlacement` default of "above" with
-                    // an offset just clear of the staff). The
-                    // author's `<offset>` (in spatium units) shifts
-                    // both axes from there.
-                    let stX = inHeader
-                        ? headerSchedule.contentStartX
-                        : timedX(atTick: tickCursor)
-                    out.append(.staffText(
-                        text: st.text,
-                        origin: CGPoint(
-                            x: stX + CGFloat(st.offsetX) * metrics.sp,
-                            y: staffMidY - metrics.sp * 3
-                                + CGFloat(st.offsetY) * metrics.sp,
-                        ),
-                        color: st.color,
-                        isSystemText: st.isSystemText,
-                    ))
-                case let .swing(s):
-                    // Swing directives display as ordinary system /
-                    // staff text — MuseScore renders them with the
-                    // same `StaffText` glyph stack and only the
-                    // `<swing>` marker child changes playback.
-                    if !s.visible { break }
-                    let stX = inHeader
-                        ? headerSchedule.contentStartX
-                        : timedX(atTick: tickCursor)
-                    out.append(.staffText(
-                        text: s.text,
-                        origin: CGPoint(
-                            x: stX + CGFloat(s.offsetX) * metrics.sp,
-                            y: staffMidY - metrics.sp * 3
-                                + CGFloat(s.offsetY) * metrics.sp,
-                        ),
-                        color: s.color,
-                        isSystemText: s.isSystemText,
-                    ))
-                case let .tempo(t):
-                    // Hidden tempo still drives playback (see MIDI
-                    // renderer) but contributes no glyph or
-                    // vertical extent here.
-                    if !t.visible { break }
-                    let bpm = Int((t.beatsPerSecond * 60.0).rounded())
-                    // "♩" is Unicode U+2669, rendered in the system text font,
-                    // not a SMuFL/Bravura glyph — do not migrate to a SMuFL
-                    // codepoint without also switching the renderer's font.
-                    let tempoX = inHeader
-                        ? headerSchedule.contentStartX
-                        : timedX(atTick: tickCursor)
-                    out.append(.textMark(
-                        kind: .tempo,
-                        text: "♩ = \(bpm)",
-                        origin: CGPoint(
-                            x: tempoX
-                                + CGFloat(t.offsetX) * metrics.sp,
-                            y: staffMidY - metrics.sp * 4
-                                + CGFloat(t.offsetY) * metrics.sp,
-                        ),
-                    ))
                 case let .fermata(f):
                     // Anchor to the chord/rest the fermata applies to.
                     // Forward search first (canonical MusicXML order:
@@ -1003,33 +937,6 @@ extension LayoutEngine {
                 case .spanner:
                     // Resolved at system level in the spanner-attach pass.
                     break
-                case let .rehearsalMark(rm):
-                    // System-flagged: drawn once above the top staff at
-                    // measure-left. Only emit on staff 0 / voice 0 to
-                    // avoid duplicates from linked-main mirrors and from
-                    // other staves in a multi-staff piece. Y mirrors
-                    // marker placement (`staffTopY - sp * 1.5` post-
-                    // translation), which in staff-local coords is
-                    // `staffMidY - sp * 3.5` (staffTopLocal = sp*2;
-                    // staffMidY = staffTopLocal + staffHeight/2 = sp*4
-                    // for 5-line staves; sp*4 - sp*3.5 ≈ sp*0.5 above
-                    // the top line — matches MuseScore's default).
-                    if staffAddress == StaffAddress(partIndex: 0, staffIndexInPart: 0) && voiceIdx == 0 {
-                        let originX = inHeader
-                            ? headerSchedule.contentStartX
-                            : metrics.sp * 0.5
-                        out.append(.rehearsalMark(
-                            text: rm.text,
-                            origin: CGPoint(
-                                x: originX
-                                    + CGFloat(rm.offsetX) * metrics.sp,
-                                y: staffMidY - metrics.sp * 3.5
-                                    + CGFloat(rm.offsetY) * metrics.sp,
-                            ),
-                            frame: rm.frame,
-                            color: rm.color,
-                        ))
-                    }
                 case let .locationShift(delta):
                     // Voice-level cursor shift. Adds the location's
                     // fractional delta to `tickCursor` so the next
@@ -1411,6 +1318,72 @@ extension LayoutEngine {
         autoPlaceStaffText(
             in: &out, staffMidY: staffMidY, metrics: metrics,
         )
+        // Inject system-level elements (tempo / rehearsal mark /
+        // system or staff text / swing) lifted to score level. Each
+        // element renders at the X column matching its
+        // MeasurePosition tick, with the same Y conventions the
+        // previous voice-element-based path used. RehearsalMark is
+        // anchored at measure-left (matches MuseScore's default
+        // placement at the start of the bar).
+        for positioned in systemElements {
+            let tick = positioned.position.ticks(division: division)
+            let xAtTick = tickColumns[tick]
+                ?? headerSchedule.contentStartX
+            switch positioned.element {
+            case let .tempo(t):
+                if !t.visible { break }
+                let bpm = Int((t.beatsPerSecond * 60.0).rounded())
+                out.append(.textMark(
+                    kind: .tempo,
+                    text: "♩ = \(bpm)",
+                    origin: CGPoint(
+                        x: xAtTick
+                            + CGFloat(t.offsetX) * metrics.sp,
+                        y: staffMidY - metrics.sp * 4
+                            + CGFloat(t.offsetY) * metrics.sp,
+                    ),
+                ))
+            case let .staffText(st):
+                if !st.visible { break }
+                out.append(.staffText(
+                    text: st.text,
+                    origin: CGPoint(
+                        x: xAtTick
+                            + CGFloat(st.offsetX) * metrics.sp,
+                        y: staffMidY - metrics.sp * 3
+                            + CGFloat(st.offsetY) * metrics.sp,
+                    ),
+                    color: st.color,
+                    isSystemText: st.isSystemText,
+                ))
+            case let .swing(s):
+                if !s.visible { break }
+                out.append(.staffText(
+                    text: s.text,
+                    origin: CGPoint(
+                        x: xAtTick
+                            + CGFloat(s.offsetX) * metrics.sp,
+                        y: staffMidY - metrics.sp * 3
+                            + CGFloat(s.offsetY) * metrics.sp,
+                    ),
+                    color: s.color,
+                    isSystemText: s.isSystemText,
+                ))
+            case let .rehearsalMark(rm):
+                let originX = metrics.sp * 0.5
+                out.append(.rehearsalMark(
+                    text: rm.text,
+                    origin: CGPoint(
+                        x: originX
+                            + CGFloat(rm.offsetX) * metrics.sp,
+                        y: staffMidY - metrics.sp * 3.5
+                            + CGFloat(rm.offsetY) * metrics.sp,
+                    ),
+                    frame: rm.frame,
+                    color: rm.color,
+                ))
+            }
+        }
         // Same chord-clearance pass for chord symbols. Without this,
         // a chord whose noteheads or beam reach above the harmony's
         // default Y (`staffTop - 2.5 sp`) collides with the symbol —

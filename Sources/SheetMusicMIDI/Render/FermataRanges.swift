@@ -157,33 +157,38 @@ struct TempoTimeline: Equatable {
         return entries[pick].bps
     }
 
-    /// Build a tempo timeline from voice 0 of every measure. Mirrors
-    /// the existing convention that `.tempo` events are sourced from
-    /// voice 0 only.
-    static func build(from staff: Staff, division: Int) -> TempoTimeline {
+    /// Build a tempo timeline from a staff's measure tick budgets
+    /// combined with the score-level tempo entries on
+    /// `systemMeasures`. Tempo events are filtered to ones that
+    /// would render against this staff: system-level (originalStaff
+    /// = nil) maps to the canonical staff 0; staff-bound tempo
+    /// markers map to their originating staff. Currently the
+    /// fermata renderer is invoked once per staff, so the filter is
+    /// done at the call site by passing the matching staff address.
+    static func build(
+        measures: [Measure],
+        systemMeasures: [SystemMeasure],
+        division: Int,
+    ) -> TempoTimeline {
         var entries: [(tick: Int, bps: Double)] = [(0, 2.0)]
-        var measureBase = 0
-        for measure in staff.measures {
-            let mTicks = MidiRenderer.measureTicks(
-                measure: measure, division: division,
-            )
-            if let voice = measure.voices.first {
-                var localTick = measureBase
-                for element in voice.elements {
-                    switch element {
-                    case let .tempo(t):
-                        entries.append((tick: localTick, bps: t.beatsPerSecond))
-                    case let .chord(chord):
-                        localTick += chord.duration.ticks(division: division)
-                    case let .locationShift(delta):
-                        localTick += delta.ticks(division: division)
-                    default:
-                        break
-                    }
-                }
+        var measureBases: [Int] = []
+        do {
+            var acc = 0
+            for m in measures {
+                measureBases.append(acc)
+                acc += MidiRenderer.measureTicks(measure: m, division: division)
             }
-            measureBase += mTicks
         }
+        for (measureIndex, systemMeasure) in systemMeasures.enumerated() {
+            guard measureIndex < measureBases.count else { continue }
+            let measureBase = measureBases[measureIndex]
+            for positioned in systemMeasure.elements {
+                guard case let .tempo(tempo) = positioned.element else { continue }
+                let tick = measureBase + positioned.position.ticks(division: division)
+                entries.append((tick: tick, bps: tempo.beatsPerSecond))
+            }
+        }
+        entries.sort { $0.tick < $1.tick }
         return TempoTimeline(entries: entries)
     }
 }

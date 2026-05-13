@@ -29,6 +29,13 @@ public enum MidiRenderer {
             let primaryChannel = channels.first?.channel ?? partIndex
             let port = part.instrument.channel.midiPort ?? 0
             for (s, staff) in part.staves.enumerated() {
+                let address = StaffAddress(
+                    partIndex: partIndex,
+                    staffIndexInPart: s,
+                )
+                let systemElementsForStaff = filterSystemElements(
+                    score: score, forStaff: address,
+                )
                 let track = renderTrack(
                     staff: staff,
                     part: part,
@@ -41,12 +48,28 @@ public enum MidiRenderer {
                     swingMap: trackIndex < swingMaps.count
                         ? swingMaps[trackIndex]
                         : .empty,
+                    systemElementsByMeasure: systemElementsForStaff,
                 )
                 tracks.append(track)
                 trackIndex += 1
             }
         }
         return MidiFile(division: score.division, format: 1, tracks: tracks)
+    }
+
+    /// System elements destined for a given staff: those whose
+    /// `originalStaff` matches `address`, plus those with `nil`
+    /// `originalStaff` routed to the canonical staff (0,0).
+    /// Returned shape: outer array indexed by measure number.
+    static func filterSystemElements(
+        score: Score, forStaff address: StaffAddress,
+    ) -> [[PositionedSystemElement]] {
+        let canonical = StaffAddress(partIndex: 0, staffIndexInPart: 0)
+        return score.systemMeasures.map { measure in
+            measure.elements.filter { element in
+                (element.originalStaff ?? canonical) == address
+            }
+        }
     }
 
     /// One MIDI channel allocated to a particular `<Channel>` flavour of a part.
@@ -65,6 +88,7 @@ public enum MidiRenderer {
         isTopOfPart: Bool,
         division: Int,
         swingMap: SwingMap,
+        systemElementsByMeasure: [[PositionedSystemElement]],
     ) -> MidiTrack {
         var events: [TimedMidiEvent] = headerEvents(
             staff: staff,
@@ -88,7 +112,14 @@ public enum MidiRenderer {
         // fermata inside `<startRepeat>...<endRepeat>` would hold
         // only on the first take.
         let fermataRanges = FermataRanges.collect(from: staff, division: division)
-        let timeline = TempoTimeline.build(from: staff, division: division)
+        let staffSystemMeasures = systemElementsByMeasure.map {
+            SystemMeasure(elements: $0)
+        }
+        let timeline = TempoTimeline.build(
+            measures: staff.measures,
+            systemMeasures: staffSystemMeasures,
+            division: division,
+        )
         let bookends = FermataRanges.tempoEvents(
             ranges: fermataRanges, timeline: timeline,
         )
@@ -125,6 +156,7 @@ public enum MidiRenderer {
                 channel: primaryChannel,
                 division: division,
                 swingMap: swingMap,
+                systemElementsByMeasure: systemElementsByMeasure,
             )
             voiceEventBuckets.append(voiceEvents)
         }

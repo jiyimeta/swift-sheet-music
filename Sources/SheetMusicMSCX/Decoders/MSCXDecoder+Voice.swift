@@ -12,6 +12,12 @@ extension Voice {
     struct DecodeResult {
         let voice: Voice
         let systemElements: [PositionedSystemElement]
+
+        /// Passthrough to the underlying `Voice.elements` so tests
+        /// and other consumers that only care about voice-bound
+        /// content don't have to thread `.voice` through.
+        var elements: [VoiceElement] { voice.elements }
+        var tuplets: [Tuplet] { voice.tuplets }
     }
 
     private struct OpenTuplet {

@@ -156,6 +156,17 @@ extension LayoutEngine {
                 let coversBelowStaffSpanner = context
                     .belowStaffSpannerCoverage[staffIdx]?
                     .contains(measureIdx) ?? false
+                let canonicalStaff = StaffAddress(
+                    partIndex: 0, staffIndexInPart: 0,
+                )
+                let address = allStaves[staffIdx].address
+                let systemElementsForStaff: [PositionedSystemElement] =
+                    measureIdx < context.score.systemMeasures.count
+                        ? context.score.systemMeasures[measureIdx].elements
+                            .filter {
+                                ($0.originalStaff ?? canonicalStaff) == address
+                            }
+                        : []
                 let placementInputs = LayoutCache.PlacementInputs(
                     measure: m,
                     width: w,
@@ -174,6 +185,7 @@ extension LayoutEngine {
                     effectiveMelismaTicks: context.effectiveMelismaTicks,
                     graceNoteMag: context.options.graceNoteMag,
                     coversBelowStaffSpanner: coversBelowStaffSpanner,
+                    systemElements: systemElementsForStaff,
                 )
                 let els: [LayoutElement]
                 let newClef: NotatedClef
@@ -207,6 +219,7 @@ extension LayoutEngine {
                         incomingMelismas: incomingMelismas,
                         effectiveMelismaTicks: context.effectiveMelismaTicks,
                         coversBelowStaffSpanner: coversBelowStaffSpanner,
+                        systemElements: systemElementsForStaff,
                     )
                     els = result.elements
                     newClef = result.clef

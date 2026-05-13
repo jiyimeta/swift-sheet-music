@@ -488,9 +488,9 @@ extension LayoutEngine {
                 case let .chord(r):
                     // Empty chord = rest.
                     w += durationWidth(r.duration, metrics: metrics)
-                case .dynamic, .tempo, .fermata,
-                     .measureRepeat, .spanner, .staffText, .swing,
-                     .rehearsalMark, .locationShift, .harmony:
+                case .dynamic, .fermata,
+                     .measureRepeat, .spanner,
+                     .locationShift, .harmony:
                     break
                 }
             }

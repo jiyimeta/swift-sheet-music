@@ -133,5 +133,11 @@ public final class LayoutCache: @unchecked Sendable {
         /// Whether a visible below-staff spanner (hairpin/pedal) covers
         /// this measure for this staff. Affects lyric Y placement.
         let coversBelowStaffSpanner: Bool
+        /// System-level elements (tempo / rehearsal / system or staff
+        /// text / swing) routed to this staff for this measure. The
+        /// caller pre-filters `Score.systemMeasures` by staff address;
+        /// changes here invalidate the placement cache so reflows
+        /// pick up edited or relocated system markings.
+        let systemElements: [PositionedSystemElement]
     }
 }

@@ -777,16 +777,22 @@
             let m = Measure(voices: [Voice(elements: [
                 .clef(Clef(concertClefType: "G")),
                 .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
-                .tempo(Tempo(beatsPerSecond: 2.0)), // 120 BPM
                 .dynamic(Dynamic(subtype: "mf", velocity: 80)),
                 .chord(Chord(duration: .quarter, notes: [c4])),
                 .chord(Chord(duration: .quarter, notes: [c4])),
                 .dynamic(Dynamic(subtype: "f", velocity: 100)),
                 .chord(Chord(duration: .half, notes: [c4])),
             ])])
+            let systemMeasure = SystemMeasure(elements: [
+                PositionedSystemElement(
+                    position: .start,
+                    element: .tempo(Tempo(beatsPerSecond: 2.0)), // 120 BPM
+                ),
+            ])
             return Score(
                 division: 480,
                 parts: [treblePart(measures: [m])],
+                systemMeasures: [systemMeasure],
             )
         }
 
@@ -808,15 +814,23 @@
                 .chord(Chord(duration: .quarter, notes: [c5])),
                 .chord(Chord(duration: .quarter, notes: [c5])),
                 .chord(Chord(duration: .quarter, notes: [c5])),
-                // After 4 quarters the natural cursor sits at the
-                // measure's end. Shift back by half a whole-note so
-                // the SystemText attaches to the third quarter.
-                .locationShift(delta: Fraction(numerator: -1, denominator: 2)),
-                .staffText(StaffText(text: "@1/2", isSystemText: true)),
             ])])
+            // SystemText anchors at half-bar (cursor 1/2 within a
+            // 4/4 measure → third quarter). Stored on the score-
+            // level SystemMeasure with an explicit position rather
+            // than rebuilt from a `<location>` shift.
+            let systemMeasure = SystemMeasure(elements: [
+                PositionedSystemElement(
+                    position: MeasurePosition(numerator: 1, denominator: 2),
+                    element: .staffText(StaffText(
+                        text: "@1/2", isSystemText: true,
+                    )),
+                ),
+            ])
             return Score(
                 division: 480,
                 parts: [treblePart(measures: [m1])],
+                systemMeasures: [systemMeasure],
             )
         }
 
@@ -832,19 +846,49 @@
             let m1 = Measure(voices: [Voice(elements: [
                 .clef(Clef(concertClefType: "G")),
                 .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
-                .rehearsalMark(RehearsalMark(text: "A")),
-                .tempo(Tempo(beatsPerSecond: 2.0)),
-                .staffText(StaffText(text: "Allegro", isSystemText: false)),
-                .staffText(StaffText(text: "C\u{266F}m7", isSystemText: false)),
                 .chord(Chord(duration: .quarter, notes: [c5])),
                 .chord(Chord(duration: .quarter, notes: [c5])),
-                .staffText(StaffText(text: "rit.", isSystemText: false)),
-                .tempo(Tempo(beatsPerSecond: 1.5)), // 90 BPM
                 .chord(Chord(duration: .half, notes: [c5])),
             ])])
+            // Several system markings stacked at measure start (tick
+            // 0) plus a tempo + staff text at the half-bar mark.
+            let half = MeasurePosition(numerator: 1, denominator: 2)
+            let systemMeasure = SystemMeasure(elements: [
+                PositionedSystemElement(
+                    position: .start,
+                    element: .rehearsalMark(RehearsalMark(text: "A")),
+                ),
+                PositionedSystemElement(
+                    position: .start,
+                    element: .tempo(Tempo(beatsPerSecond: 2.0)),
+                ),
+                PositionedSystemElement(
+                    position: .start,
+                    element: .staffText(StaffText(
+                        text: "Allegro", isSystemText: false,
+                    )),
+                ),
+                PositionedSystemElement(
+                    position: .start,
+                    element: .staffText(StaffText(
+                        text: "C\u{266F}m7", isSystemText: false,
+                    )),
+                ),
+                PositionedSystemElement(
+                    position: half,
+                    element: .staffText(StaffText(
+                        text: "rit.", isSystemText: false,
+                    )),
+                ),
+                PositionedSystemElement(
+                    position: half,
+                    element: .tempo(Tempo(beatsPerSecond: 1.5)), // 90 BPM
+                ),
+            ])
             return Score(
                 division: 480,
                 parts: [treblePart(measures: [m1])],
+                systemMeasures: [systemMeasure],
             )
         }
 

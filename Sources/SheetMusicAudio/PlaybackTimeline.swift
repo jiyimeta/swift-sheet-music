@@ -305,10 +305,6 @@ extension PlaybackTimeline {
                                 ))
                             }
                             tick += restTicks
-                        case let .tempo(t):
-                            tempoEvents.append(
-                                (tick, t.microsecondsPerQuarter),
-                            )
                         default:
                             break
                         }
@@ -358,6 +354,21 @@ extension PlaybackTimeline {
                 return $0.sortKey.0 < $1.sortKey.0
             }
             return $0.sortKey.1 < $1.sortKey.1
+        }
+        // Pull tempo events from the score-level `systemMeasures`.
+        // Each entry's `MeasurePosition` is relative to its measure
+        // start, so we add `measureStarts[measureIdx]` to land at
+        // the absolute spine tick.
+        for (measureIdx, systemMeasure) in score.systemMeasures.enumerated() {
+            guard measureIdx < measureStarts.count else { continue }
+            let measureStart = measureStarts[measureIdx]
+            for positioned in systemMeasure.elements {
+                guard case let .tempo(t) = positioned.element else { continue }
+                let tick = measureStart + positioned.position.ticks(
+                    division: division,
+                )
+                tempoEvents.append((tick, t.microsecondsPerQuarter))
+            }
         }
         tempoEvents.sort { $0.tick < $1.tick }
 
