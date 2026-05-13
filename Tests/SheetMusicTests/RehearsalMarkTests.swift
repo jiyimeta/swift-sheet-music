@@ -17,17 +17,21 @@ struct RehearsalMarkTests {
             <Note><pitch>60</pitch><tpc>14</tpc></Note></Chord>
         </voice>
         """
-        let voice = try Voice.decode(
+        let result = try Voice.decodeWithSystemElements(
             XMLTreeParser.parse(Data(xml.utf8)),
         )
-        #expect(voice.elements.count == 2)
-        guard case let .rehearsalMark(rm) = voice.elements[0] else {
-            Issue.record("element 0 is not a rehearsal mark")
+        // RehearsalMark is lifted to systemElements; the voice
+        // keeps just the chord.
+        #expect(result.voice.elements.count == 1)
+        guard result.systemElements.count == 1,
+              case let .rehearsalMark(rm) = result.systemElements[0].element
+        else {
+            Issue.record("expected one lifted RehearsalMark")
             return
         }
         #expect(rm.text == "A")
         // No <frameType> ⇒ default rectangle.
-        #expect(rm.frame == .rectangle)
+        #expect(rm.frame == TextFrameType.rectangle)
         #expect(rm.color == nil)
     }
 
@@ -42,15 +46,17 @@ struct RehearsalMarkTests {
           </RehearsalMark>
         </voice>
         """
-        let voice = try Voice.decode(
+        let result = try Voice.decodeWithSystemElements(
             XMLTreeParser.parse(Data(xml.utf8)),
         )
-        guard case let .rehearsalMark(rm) = voice.elements[0] else {
-            Issue.record("element 0 is not a rehearsal mark")
+        guard result.systemElements.count == 1,
+              case let .rehearsalMark(rm) = result.systemElements[0].element
+        else {
+            Issue.record("expected one lifted RehearsalMark")
             return
         }
         #expect(rm.text == "1サビ")
-        #expect(rm.frame == .circle)
+        #expect(rm.frame == TextFrameType.circle)
         #expect(rm.offsetX == 0.5)
         #expect(rm.offsetY == -1.2)
         #expect(rm.color?.red == 200)
@@ -61,18 +67,16 @@ struct RehearsalMarkTests {
     // MARK: - MIDI export
 
     @Test func midiRenderEmitsMarkerMetaForRehearsalMark() throws {
-        // Minimal score: one measure with a rehearsal mark "A" before a
-        // quarter note. Must surface as a MetaEvent.marker in track 0
-        // at tick 0 (the rehearsal mark sits at the start of voice 0).
+        // Minimal score: one measure with a rehearsal mark "A" at
+        // tick 0 of the score-level SystemMeasure, plus a quarter
+        // note in the staff's voice. Must surface as a
+        // MetaEvent.marker on track 0 at tick 0.
         let mark = RehearsalMark(text: "A")
         let chord = Chord(
             duration: .quarter,
             notes: [Note(pitch: 60, tpc: 14)],
         )
-        let measure = Measure(voices: [Voice(elements: [
-            .rehearsalMark(mark),
-            .chord(chord),
-        ])])
+        let measure = Measure(voices: [Voice(elements: [.chord(chord)])])
         let staff = Staff(measures: [measure])
         let part = Part(
             id: "P1",
@@ -83,7 +87,14 @@ struct RehearsalMarkTests {
             staves: [staff],
         )
         let score = Score(
-            division: 480, parts: [part],
+            division: 480,
+            parts: [part],
+            systemMeasures: [SystemMeasure(elements: [
+                PositionedSystemElement(
+                    position: .start,
+                    element: .rehearsalMark(mark),
+                ),
+            ])],
         )
 
         let file = try MidiRenderer.render(score: score)
@@ -128,10 +139,7 @@ struct RehearsalMarkTests {
             duration: .quarter,
             notes: [Note(pitch: 60, tpc: 14)],
         )
-        let measure = Measure(voices: [Voice(elements: [
-            .rehearsalMark(mark),
-            .chord(chord),
-        ])])
+        let measure = Measure(voices: [Voice(elements: [.chord(chord)])])
         let staff = Staff(measures: [measure])
         let part = Part(
             id: "P1",
@@ -142,7 +150,14 @@ struct RehearsalMarkTests {
             staves: [staff],
         )
         let score = Score(
-            division: 480, parts: [part],
+            division: 480,
+            parts: [part],
+            systemMeasures: [SystemMeasure(elements: [
+                PositionedSystemElement(
+                    position: .start,
+                    element: .rehearsalMark(mark),
+                ),
+            ])],
         )
         let file = try MidiRenderer.render(score: score)
         for evt in file.tracks[0].events {
@@ -185,14 +200,16 @@ struct RehearsalMarkTests {
         </score-partwise>
         """.utf8)
         let score = try MusicXMLParser.parse(xml)
-        let elements = score.parts[0].staves[0].measures[0].voices[0].elements
-        let marks = elements.compactMap { el -> RehearsalMark? in
-            if case let .rehearsalMark(rm) = el { return rm }
-            return nil
-        }
+        let marks = score.systemMeasures.first?.elements
+            .compactMap { positioned -> RehearsalMark? in
+                if case let .rehearsalMark(rm) = positioned.element {
+                    return rm
+                }
+                return nil
+            } ?? []
         #expect(marks.count == 1)
         #expect(marks.first?.text == "A")
-        #expect(marks.first?.frame == .circle)
+        #expect(marks.first?.frame == TextFrameType.circle)
     }
 
     @Test func musicXMLDefaultsEnclosureToRectangle() throws {
@@ -226,11 +243,13 @@ struct RehearsalMarkTests {
         </score-partwise>
         """.utf8)
         let score = try MusicXMLParser.parse(xml)
-        let marks = score.parts[0].staves[0].measures[0].voices[0].elements
-            .compactMap { el -> RehearsalMark? in
-                if case let .rehearsalMark(rm) = el { return rm }
+        let marks = score.systemMeasures.first?.elements
+            .compactMap { positioned -> RehearsalMark? in
+                if case let .rehearsalMark(rm) = positioned.element {
+                    return rm
+                }
                 return nil
-            }
-        #expect(marks.first?.frame == .rectangle)
+            } ?? []
+        #expect(marks.first?.frame == TextFrameType.rectangle)
     }
 }

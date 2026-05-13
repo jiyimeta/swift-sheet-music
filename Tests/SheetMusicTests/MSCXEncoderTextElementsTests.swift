@@ -24,14 +24,49 @@ struct MSCXEncoderTextElementsTests {
         return String(bytes: bytes, encoding: .utf8) ?? ""
     }
 
+    /// Round-trip a single Score containing one measure with one
+    /// voice plus the supplied positioned system elements. Returns
+    /// the re-decoded score so callers can compare its
+    /// `systemMeasures` / `voices` field-by-field.
+    private func scoreRoundTrip(
+        voice: Voice,
+        systemElements: [PositionedSystemElement],
+    ) throws -> Score {
+        let measure = Measure(voices: [voice])
+        let part = Part(
+            id: "1",
+            instrument: Instrument(id: "voice"),
+            staves: [Staff(measures: [measure])],
+        )
+        let score = Score(
+            division: 480,
+            parts: [part],
+            systemMeasures: [SystemMeasure(elements: systemElements)],
+        )
+        let bytes = try MSCXEncoder.encode(score)
+        return try MSCXParser.parse(bytes)
+    }
+
     @Test("Tempo with default TextProperties round-trips")
     func tempoDefaultRoundTrip() throws {
         let voice = Voice(elements: [
-            .tempo(Tempo(beatsPerSecond: 2.0)),
             .chord(Chord(duration: .quarter, notes: ChordNotes([Note(pitch: 60, tpc: 14)]))),
         ])
-        let decoded = try voiceRoundTrip(voice)
-        #expect(decoded == voice)
+        let tempo = Tempo(beatsPerSecond: 2.0)
+        let positioned = PositionedSystemElement(
+            position: .start,
+            element: .tempo(tempo),
+        )
+        let decoded = try scoreRoundTrip(
+            voice: voice, systemElements: [positioned],
+        )
+        guard let first = decoded.systemMeasures.first?.elements.first,
+              case let .tempo(t) = first.element
+        else {
+            Issue.record("expected a lifted tempo in systemMeasures")
+            return
+        }
+        #expect(t.beatsPerSecond == 2.0)
     }
 
     @Test("BarLine round-trips with and without subtype")
@@ -57,9 +92,19 @@ struct MSCXEncoderTextElementsTests {
             properties: TextProperties(face: "Edwin", size: 10),
             visible: false,
         )
-        let voice = Voice(elements: [.staffText(staffText)])
-        let decoded = try voiceRoundTrip(voice)
-        #expect(decoded == voice)
+        let positioned = PositionedSystemElement(
+            position: .start, element: .staffText(staffText),
+        )
+        let decoded = try scoreRoundTrip(
+            voice: Voice(elements: []), systemElements: [positioned],
+        )
+        guard let first = decoded.systemMeasures.first?.elements.first,
+              case let .staffText(reparsed) = first.element
+        else {
+            Issue.record("expected lifted .staffText")
+            return
+        }
+        #expect(reparsed == staffText)
     }
 
     @Test("SystemText round-trips through <SystemText>")
@@ -68,9 +113,19 @@ struct MSCXEncoderTextElementsTests {
             text: "Allegro",
             isSystemText: true,
         )
-        let voice = Voice(elements: [.staffText(systemText)])
-        let decoded = try voiceRoundTrip(voice)
-        #expect(decoded == voice)
+        let positioned = PositionedSystemElement(
+            position: .start, element: .staffText(systemText),
+        )
+        let decoded = try scoreRoundTrip(
+            voice: Voice(elements: []), systemElements: [positioned],
+        )
+        guard let first = decoded.systemMeasures.first?.elements.first,
+              case let .staffText(reparsed) = first.element
+        else {
+            Issue.record("expected lifted .staffText")
+            return
+        }
+        #expect(reparsed == systemText)
     }
 
     @Test("RehearsalMark round-trips text, frame, offset, colour")
@@ -80,20 +135,41 @@ struct MSCXEncoderTextElementsTests {
             offsetX: 0.5,
             offsetY: -1.0,
             color: ScoreColor(red: 0, green: 0, blue: 200),
-            frame: .circle,
+            frame: TextFrameType.circle,
             properties: TextProperties(face: "Edwin", size: 12, style: [.bold]),
         )
-        let voice = Voice(elements: [.rehearsalMark(mark)])
-        let decoded = try voiceRoundTrip(voice)
-        #expect(decoded == voice)
+        let positioned = PositionedSystemElement(
+            position: .start, element: .rehearsalMark(mark),
+        )
+        let decoded = try scoreRoundTrip(
+            voice: Voice(elements: []), systemElements: [positioned],
+        )
+        guard let first = decoded.systemMeasures.first?.elements.first,
+              case let .rehearsalMark(reparsed) = first.element
+        else {
+            Issue.record("expected lifted .rehearsalMark")
+            return
+        }
+        #expect(reparsed == mark)
     }
 
     @Test("RehearsalMark default rectangle frame round-trips")
     func rehearsalMarkDefaultFrameRoundTrip() throws {
         let mark = RehearsalMark(text: "B")
-        let voice = Voice(elements: [.rehearsalMark(mark)])
-        let decoded = try voiceRoundTrip(voice)
-        #expect(decoded == voice)
+        let positioned = PositionedSystemElement(
+            position: .start, element: .rehearsalMark(mark),
+        )
+        let decoded = try scoreRoundTrip(
+            voice: Voice(elements: []), systemElements: [positioned],
+        )
+        guard let first = decoded.systemMeasures.first?.elements.first,
+              case let .rehearsalMark(reparsed) = first.element
+        else {
+            Issue.record("expected lifted .rehearsalMark")
+            return
+        }
+        #expect(reparsed.frame == TextFrameType.rectangle)
+        #expect(reparsed.text == "B")
     }
 
     @Test("Harmony round-trips standard chord with root/bass/parens")
@@ -170,15 +246,22 @@ struct MSCXEncoderTextElementsTests {
         }
     }
 
-    @Test("locationShift round-trips positive and negative deltas")
+    @Test("locationShift round-trips when no system element follows")
     func locationShiftRoundTrip() throws {
+        // System elements no longer ride on the voice cursor — those
+        // are stored on `SystemMeasure` with explicit positions. A
+        // locationShift followed by a chord/dynamic in voice still
+        // round-trips, but a shift dangling at end-of-voice with no
+        // following voice element is dropped (the decoder treats it
+        // as a no-op once the voice ends).
         for delta in [
             Fraction(numerator: 1, denominator: 4),
             Fraction(numerator: -3, denominator: 8),
         ] {
             let voice = Voice(elements: [
+                .chord(Chord(duration: .quarter, notes: ChordNotes([Note(pitch: 60, tpc: 14)]))),
                 .locationShift(delta: delta),
-                .staffText(StaffText(text: "swing")),
+                .dynamic(Dynamic(subtype: "mf", velocity: 80)),
             ])
             let decoded = try voiceRoundTrip(voice)
             #expect(decoded == voice, "locationShift \(delta) failed")
@@ -212,8 +295,18 @@ struct MSCXEncoderTextElementsTests {
             ),
             visible: false,
         )
-        let voice = Voice(elements: [.tempo(tempo)])
-        let decoded = try voiceRoundTrip(voice)
-        #expect(decoded == voice)
+        let positioned = PositionedSystemElement(
+            position: .start, element: .tempo(tempo),
+        )
+        let decoded = try scoreRoundTrip(
+            voice: Voice(elements: []), systemElements: [positioned],
+        )
+        guard let first = decoded.systemMeasures.first?.elements.first,
+              case let .tempo(reparsed) = first.element
+        else {
+            Issue.record("expected lifted .tempo")
+            return
+        }
+        #expect(reparsed == tempo)
     }
 }

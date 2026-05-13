@@ -145,10 +145,24 @@ struct MidiImporterPipelineTests {
             }
             return nil
         }
-        func hasTempo(in staff: Staff) -> Bool {
-            staff.measures.flatMap(\.voices).flatMap(\.elements).contains { el in
-                if case .tempo = el { true } else { false }
+        // With the system-element refactor, tempo events live on
+        // `Score.systemMeasures` and carry the originating staff as
+        // `originalStaff` (set to the conductor track's staff
+        // address — part 0, staff 0 in this fixture). Aggregate
+        // which parts contribute tempo entries by walking the
+        // score-level system measures.
+        func partsWithTempo(in score: Score) -> [Int] {
+            var indices: Set<Int> = []
+            for systemMeasure in score.systemMeasures {
+                for positioned in systemMeasure.elements {
+                    if case .tempo = positioned.element,
+                       let staff = positioned.originalStaff
+                    {
+                        indices.insert(staff.partIndex)
+                    }
+                }
             }
+            return indices.sorted()
         }
 
         let pianoIdx = score.parts.firstIndex(where: { $0.trackName == "Piano" })
@@ -161,8 +175,7 @@ struct MidiImporterPipelineTests {
         #expect(keySigSharpsFlats(in: score.parts[pi].staves[0]) == 3)
         #expect(keySigSharpsFlats(in: score.parts[bi].staves[0]) == 3)
         #expect(keySigSharpsFlats(in: score.parts[di].staves[0]) == nil)
-        let withTempo = score.parts.indices.filter { hasTempo(in: score.parts[$0].staves[0]) }
-        #expect(withTempo == [0])
+        #expect(partsWithTempo(in: score) == [0])
     }
 
     @Test func tupletInFirstMeasureKeepsBracketAfterMetaInjection() throws {

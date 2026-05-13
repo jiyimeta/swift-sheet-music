@@ -18,7 +18,10 @@
             ])])
         }
 
-        private static func score(_ measures: [Measure]) -> Score {
+        private static func score(
+            _ measures: [Measure],
+            systemMeasures: [SystemMeasure]? = nil,
+        ) -> Score {
             Score(
                 division: 480,
                 parts: [Part(
@@ -26,6 +29,8 @@
                     instrument: Instrument(id: "x"),
                     staves: [Staff(measures: measures)],
                 )],
+                systemMeasures: systemMeasures
+                    ?? Array(repeating: SystemMeasure(), count: measures.count),
             )
         }
 
@@ -108,14 +113,28 @@
         func rehearsalMarkSplitsRun() {
             guard #available(macOS 15.0, iOS 16.0, *) else { return }
             let mark = Measure(voices: [Voice(elements: [
-                .rehearsalMark(RehearsalMark(text: "A")),
                 .rest(duration: .whole),
             ])])
-            let s = Self.score([
-                Self.restMeasure(), Self.restMeasure(),
-                mark,
-                Self.restMeasure(), Self.restMeasure(),
+            // Rehearsal mark on measure index 2 splits the
+            // surrounding 4-rest run into two 2-rest runs.
+            let markSystem = SystemMeasure(elements: [
+                PositionedSystemElement(
+                    position: .start,
+                    element: .rehearsalMark(RehearsalMark(text: "A")),
+                ),
             ])
+            let s = Self.score(
+                [
+                    Self.restMeasure(), Self.restMeasure(),
+                    mark,
+                    Self.restMeasure(), Self.restMeasure(),
+                ],
+                systemMeasures: [
+                    SystemMeasure(), SystemMeasure(),
+                    markSystem,
+                    SystemMeasure(), SystemMeasure(),
+                ],
+            )
             let opts = ScoreViewOptions(
                 multiMeasureRest: .collapse(minimumMeasures: 2),
             )

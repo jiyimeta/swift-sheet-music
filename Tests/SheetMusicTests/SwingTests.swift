@@ -35,11 +35,11 @@ struct MSCXSwingTests {
         #expect(!xml.contains("swingRatio"))
     }
 
-    @Test("Swing voice element round-trips through MSCX as a SystemText with <swing>")
+    @Test("Swing system element round-trips through MSCX as a SystemText with <swing>")
     func swingElementRoundTrip() throws {
         let swing = Swing(
             text: "Swing",
-            unit: .eighth,
+            unit: SwingUnit.eighth,
             ratio: 60,
             isSystemText: true,
         )
@@ -48,7 +48,6 @@ struct MSCXSwingTests {
             group: "pitched",
             defaultClefType: nil,
             measures: [Measure(voices: [Voice(elements: [
-                .swing(swing),
                 .chord(Chord(
                     duration: .quarter,
                     notes: ChordNotes([Note(pitch: 60, tpc: 14)]),
@@ -61,7 +60,16 @@ struct MSCXSwingTests {
             instrument: Instrument(id: "voice"),
             staves: [staff],
         )
-        let original = Score(division: 480, parts: [part])
+        let original = Score(
+            division: 480,
+            parts: [part],
+            systemMeasures: [SystemMeasure(elements: [
+                PositionedSystemElement(
+                    position: .start,
+                    element: .swing(swing),
+                ),
+            ])],
+        )
 
         let bytes = try MSCXEncoder.encode(original)
         let xmlString = String(bytes: bytes, encoding: .utf8) ?? ""
@@ -72,9 +80,10 @@ struct MSCXSwingTests {
         #expect(xmlString.contains("ratio=\"60\""))
 
         let reparsed = try MSCXParser.parse(bytes)
-        let firstVoice = reparsed.parts[0].staves[0].measures[0].voices[0]
-        guard case let .swing(decoded) = firstVoice.elements.first else {
-            Issue.record("Expected first element to be .swing")
+        guard let positioned = reparsed.systemMeasures.first?.elements.first,
+              case let .swing(decoded) = positioned.element
+        else {
+            Issue.record("Expected a lifted .swing element in systemMeasures")
             return
         }
         #expect(decoded.unit == .eighth)
@@ -99,7 +108,6 @@ struct MSCXSwingTests {
             group: "pitched",
             defaultClefType: nil,
             measures: [Measure(voices: [Voice(elements: [
-                .staffText(StaffText(text: "rit.", isSystemText: true)),
                 .chord(Chord(
                     duration: .quarter,
                     notes: ChordNotes([Note(pitch: 60, tpc: 14)]),
@@ -112,14 +120,25 @@ struct MSCXSwingTests {
             instrument: Instrument(id: "voice"),
             staves: [staff],
         )
-        let original = Score(division: 480, parts: [part])
+        let original = Score(
+            division: 480,
+            parts: [part],
+            systemMeasures: [SystemMeasure(elements: [
+                PositionedSystemElement(
+                    position: .start,
+                    element: .staffText(StaffText(
+                        text: "rit.", isSystemText: true,
+                    )),
+                ),
+            ])],
+        )
 
         let bytes = try MSCXEncoder.encode(original)
         let reparsed = try MSCXParser.parse(bytes)
-        let firstVoice = reparsed.parts[0].staves[0].measures[0].voices[0]
-
-        guard case let .staffText(decoded) = firstVoice.elements.first else {
-            Issue.record("Expected .staffText for non-swing SystemText")
+        guard let positioned = reparsed.systemMeasures.first?.elements.first,
+              case let .staffText(decoded) = positioned.element
+        else {
+            Issue.record("Expected lifted .staffText in systemMeasures")
             return
         }
         #expect(decoded.text == "rit.")
@@ -200,21 +219,27 @@ struct MidiSwingRenderTests {
     func midPieceSwingDirective() throws {
         var style = ScoreStyle.museScoreDefaults
         style.swingUnit = .off
-        let voice = Voice(elements: [
-            // Two straight 8ths.
+        // Two 4-eighth measures so we can land a Swing directive at
+        // tick 480 (= start of measure 2) on the score-level
+        // SystemMeasure. Splitting matters: the lifted directive's
+        // MeasurePosition is measure-relative.
+        let measure1 = Measure(voices: [Voice(elements: [
             .chord(Chord(duration: .eighth, notes: ChordNotes([Note(pitch: 60, tpc: 14)]))),
             .chord(Chord(duration: .eighth, notes: ChordNotes([Note(pitch: 60, tpc: 14)]))),
-            // Switch to soft swing for the rest.
-            .swing(Swing(unit: .eighth, ratio: 60)),
-            // Two more 8ths under swing.
             .chord(Chord(duration: .eighth, notes: ChordNotes([Note(pitch: 60, tpc: 14)]))),
             .chord(Chord(duration: .eighth, notes: ChordNotes([Note(pitch: 60, tpc: 14)]))),
-        ])
+        ])])
+        let measure2 = Measure(voices: [Voice(elements: [
+            .chord(Chord(duration: .eighth, notes: ChordNotes([Note(pitch: 60, tpc: 14)]))),
+            .chord(Chord(duration: .eighth, notes: ChordNotes([Note(pitch: 60, tpc: 14)]))),
+            .chord(Chord(duration: .eighth, notes: ChordNotes([Note(pitch: 60, tpc: 14)]))),
+            .chord(Chord(duration: .eighth, notes: ChordNotes([Note(pitch: 60, tpc: 14)]))),
+        ])])
         let staff = Staff(
             staffType: "stdNormal",
             group: "pitched",
             defaultClefType: nil,
-            measures: [Measure(voices: [voice])],
+            measures: [measure1, measure2],
         )
         let part = Part(
             id: "1",
@@ -222,11 +247,35 @@ struct MidiSwingRenderTests {
             instrument: Instrument(id: "voice"),
             staves: [staff],
         )
-        let score = Score(division: 480, parts: [part], style: style)
+        let score = Score(
+            division: 480, parts: [part],
+            systemMeasures: [
+                SystemMeasure(),
+                SystemMeasure(elements: [
+                    PositionedSystemElement(
+                        position: .start,
+                        element: .swing(Swing(
+                            unit: SwingUnit.eighth, ratio: 60,
+                        )),
+                    ),
+                ]),
+            ],
+            style: style,
+        )
         let midi = try MidiRenderer.render(score: score)
-        // Straight section: 0, 240. Swung section: down-beat at 480
-        // stays, up-beat at 720 shifts +48 = 768.
-        #expect(noteOnTicks(midi) == [0, 240, 480, 768])
+        // Straight measure 1: 0, 240, 480 wouldn't be in measure 1
+        // (4×eighth = 1920? actually 8 ticks of eighth = 480 per
+        // pair, so 4 eighths = 4×240 = 960 → measure boundary at
+        // tick 960). Hmm let me recompute: division=480 means
+        // quarter=480 ticks, eighth=240. 4 eighths per measure =
+        // 960 ticks per measure. Note-ons: 0, 240, 480, 720 (m1);
+        // 960, plus swung 1200+48 = 1248, 1440, 1440+240+48 = 1728?
+        // Actually onsets only shift on up-beats. swingBeat=480,
+        // swingTickAdjust=48. Up-beat: tick%480 == 240 → shifts +48.
+        // m2 onsets: 960 (down), 1200 (up→1248), 1440 (down),
+        // 1680 (up→1728). Final sequence: 0, 240, 480, 720, 960,
+        // 1248, 1440, 1728.
+        #expect(noteOnTicks(midi) == [0, 240, 480, 720, 960, 1248, 1440, 1728])
     }
 
     @Test("Tuplet members are not swung (matches MuseScore's !chord->tuplet())")

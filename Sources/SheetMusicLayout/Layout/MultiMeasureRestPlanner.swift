@@ -68,7 +68,9 @@ public enum MultiMeasureRestPlanner {
         var runs: [Range<Int>] = []
         var runStart: Int?
         for i in 0 ..< measureCount {
-            let collapsible = isCollapsible(
+            let hasSystemElement = i < score.systemMeasures.count
+                && !score.systemMeasures[i].elements.isEmpty
+            let collapsible = !hasSystemElement && isCollapsible(
                 measureIndex: i,
                 staves: staves,
                 openDepthAtStart: openDepth[i],

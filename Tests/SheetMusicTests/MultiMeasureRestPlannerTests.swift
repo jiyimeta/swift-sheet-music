@@ -18,7 +18,10 @@
             ])])
         }
 
-        private static func score(_ measures: [Measure]) -> Score {
+        private static func score(
+            _ measures: [Measure],
+            systemMeasures: [SystemMeasure]? = nil,
+        ) -> Score {
             Score(
                 division: 480,
                 parts: [Part(
@@ -26,6 +29,8 @@
                     instrument: Instrument(id: "x"),
                     staves: [Staff(measures: measures)],
                 )],
+                systemMeasures: systemMeasures
+                    ?? Array(repeating: SystemMeasure(), count: measures.count),
             )
         }
 
@@ -88,17 +93,26 @@
             #expect(plan.runs == [0 ..< 2, 3 ..< 5])
         }
 
-        @Test("rehearsal mark in voice breaks run")
+        @Test("rehearsal mark on system measure breaks run")
         func rehearsalMarkBreaksRun() {
             guard #available(macOS 15.0, iOS 16.0, *) else { return }
-            let mark = Measure(voices: [Voice(elements: [
-                .rehearsalMark(RehearsalMark(text: "A")),
-                .rest(duration: .whole),
-            ])])
-            let s = Self.score([
-                Self.restMeasure(), Self.restMeasure(), mark,
-                Self.restMeasure(), Self.restMeasure(),
+            let mark = Self.restMeasure()
+            let markSystem = SystemMeasure(elements: [
+                PositionedSystemElement(
+                    position: .start,
+                    element: .rehearsalMark(RehearsalMark(text: "A")),
+                ),
             ])
+            let s = Self.score(
+                [
+                    Self.restMeasure(), Self.restMeasure(), mark,
+                    Self.restMeasure(), Self.restMeasure(),
+                ],
+                systemMeasures: [
+                    SystemMeasure(), SystemMeasure(), markSystem,
+                    SystemMeasure(), SystemMeasure(),
+                ],
+            )
             let plan = MultiMeasureRestPlanner.plan(
                 for: s, policy: .collapse(minimumMeasures: 2),
             )
@@ -145,15 +159,24 @@
         @Test("tempo change breaks run")
         func tempoChangeBreaksRun() {
             guard #available(macOS 15.0, iOS 16.0, *) else { return }
-            let tempoMeasure = Measure(voices: [Voice(elements: [
-                .tempo(Tempo(beatsPerSecond: 2.0)),
-                .rest(duration: .whole),
-            ])])
-            let s = Self.score([
-                Self.restMeasure(), Self.restMeasure(),
-                tempoMeasure,
-                Self.restMeasure(), Self.restMeasure(),
+            let tempoMeasure = Self.restMeasure()
+            let tempoSystem = SystemMeasure(elements: [
+                PositionedSystemElement(
+                    position: .start,
+                    element: .tempo(Tempo(beatsPerSecond: 2.0)),
+                ),
             ])
+            let s = Self.score(
+                [
+                    Self.restMeasure(), Self.restMeasure(),
+                    tempoMeasure,
+                    Self.restMeasure(), Self.restMeasure(),
+                ],
+                systemMeasures: [
+                    SystemMeasure(), SystemMeasure(), tempoSystem,
+                    SystemMeasure(), SystemMeasure(),
+                ],
+            )
             let plan = MultiMeasureRestPlanner.plan(
                 for: s, policy: .collapse(minimumMeasures: 2),
             )
