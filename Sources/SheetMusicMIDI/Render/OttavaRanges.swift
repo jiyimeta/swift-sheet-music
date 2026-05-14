@@ -35,15 +35,23 @@ enum OttavaRanges {
     ) -> [OttavaRange] {
         var ranges: [OttavaRange] = []
         var measureBase = 0
+        let measureDurations = MidiRenderer.effectiveMeasureDurations(
+            for: staff.measures,
+        )
         for (measureIdx, measure) in staff.measures.enumerated() {
+            let measureDuration = measureIdx < measureDurations.count
+                ? measureDurations[measureIdx]
+                : Fraction(numerator: 4, denominator: 4)
             let mTicks = MidiRenderer.measureTicks(
                 measure: measure, division: division,
+                measureDuration: measureDuration,
             )
             if voiceIndex < measure.voices.count {
                 walkVoice(
                     measure.voices[voiceIndex],
                     measureIdx: measureIdx,
                     measureBase: measureBase,
+                    measureDuration: measureDuration,
                     measures: staff.measures,
                     division: division,
                     out: &ranges,
@@ -58,6 +66,7 @@ enum OttavaRanges {
         _ voice: Voice,
         measureIdx: Int,
         measureBase: Int,
+        measureDuration: Fraction,
         measures: [Measure],
         division: Int,
         out: inout [OttavaRange],
@@ -84,7 +93,9 @@ enum OttavaRanges {
                     semitones: payload.subtype.semitones,
                 ))
             case let .chord(chord):
-                runningTick += chord.duration.ticks(division: division)
+                runningTick += chord.duration
+                    .resolved(in: measureDuration)
+                    .ticks(division: division)
             case let .locationShift(delta):
                 runningTick += delta.ticks(division: division)
             default:

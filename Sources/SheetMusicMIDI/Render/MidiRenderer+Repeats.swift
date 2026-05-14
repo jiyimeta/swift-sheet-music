@@ -101,12 +101,27 @@ extension MidiRenderer {
 
     /// Reference duration of a measure in ticks. Uses voice 0; falls back to 4/4
     /// if the measure has no time-bearing elements at all.
-    static func measureTicks(measure: Measure, division: Int) -> Int {
+    ///
+    /// `measureDuration` is the effective duration of this measure (from
+    /// `effectiveMeasureDurations`); it is forwarded to
+    /// `NoteDuration.resolved(in:)` so that any `.measure` rest is converted
+    /// to the correct concrete fraction before the tick count is taken.
+    /// Callers that already hold the effective-duration array should pass the
+    /// appropriate element; callers without that context may accept the 4/4
+    /// default (safe until Task 5 lands the `.measure`-producing parsers).
+    static func measureTicks(
+        measure: Measure,
+        division: Int,
+        measureDuration: Fraction = Fraction(numerator: 4, denominator: 4),
+    ) -> Int {
         guard let voice = measure.voices.first else { return 4 * division }
         var ticks = 0
         for element in voice.elements {
             switch element {
-            case let .chord(chord): ticks += chord.duration.ticks(division: division)
+            case let .chord(chord):
+                ticks += chord.duration
+                    .resolved(in: measureDuration)
+                    .ticks(division: division)
             case let .measureRepeat(rep): ticks += rep.duration.ticks(division: division)
             default: continue
             }

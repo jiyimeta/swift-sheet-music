@@ -62,10 +62,17 @@ enum HairpinRamps {
             forDynamic: nil, instrument: instrument,
         )
         var measureBase = 0
+        let measureDurations = MidiRenderer.effectiveMeasureDurations(
+            for: staff.measures,
+        )
 
         for (measureIdx, measure) in staff.measures.enumerated() {
+            let measureDuration = measureIdx < measureDurations.count
+                ? measureDurations[measureIdx]
+                : Fraction(numerator: 4, denominator: 4)
             let mTicks = MidiRenderer.measureTicks(
                 measure: measure, division: division,
+                measureDuration: measureDuration,
             )
             // Read the literal voice — hairpins inside a
             // measure-repeat source apply each time the group plays
@@ -76,6 +83,7 @@ enum HairpinRamps {
                     measure.voices[voiceIndex],
                     measureIdx: measureIdx,
                     measureBase: measureBase,
+                    measureDuration: measureDuration,
                     instrument: instrument,
                     measures: staff.measures,
                     division: division,
@@ -103,6 +111,7 @@ enum HairpinRamps {
         _ voice: Voice,
         measureIdx: Int,
         measureBase: Int,
+        measureDuration: Fraction,
         instrument: Instrument,
         measures: [Measure],
         division: Int,
@@ -140,7 +149,9 @@ enum HairpinRamps {
                     payload: payload,
                 ))
             case let .chord(chord):
-                runningTick += chord.duration.ticks(division: division)
+                runningTick += chord.duration
+                    .resolved(in: measureDuration)
+                    .ticks(division: division)
             case let .locationShift(delta):
                 runningTick += delta.ticks(division: division)
             default:
