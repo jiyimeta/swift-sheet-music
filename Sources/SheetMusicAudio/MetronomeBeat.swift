@@ -35,6 +35,7 @@ extension PlaybackTimeline {
             repeating: TimeSignature(numerator: 4, denominator: 4),
             count: measureCount,
         )
+        let measureDurations = PlaybackTimeline.effectiveMeasureDurations(for: measures)
         var spineTick = 0
         var currentTimeSig = TimeSignature(numerator: 4, denominator: 4)
         for mi in 0 ..< measureCount {
@@ -55,12 +56,17 @@ extension PlaybackTimeline {
                 }
             }
             measureTimeSigs[mi] = currentTimeSig
+            let measureFrac = mi < measureDurations.count
+                ? measureDurations[mi]
+                : Fraction(numerator: 4, denominator: 4)
             var measureLen = 0
             if let voice0 = measures[mi].voices.first {
                 for el in voice0.elements {
                     switch el {
                     case let .chord(c):
-                        measureLen += c.duration.ticks(division: division)
+                        measureLen += c.duration
+                            .resolved(in: measureFrac)
+                            .ticks(division: division)
                     default:
                         break
                     }

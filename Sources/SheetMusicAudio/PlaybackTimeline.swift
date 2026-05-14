@@ -174,6 +174,8 @@ extension PlaybackTimeline {
             repeating: TimeSignature(numerator: 4, denominator: 4),
             count: measureCount,
         )
+        let allMeasures = score.parts.first?.staves.first?.measures ?? []
+        let measureDurations = PlaybackTimeline.effectiveMeasureDurations(for: allMeasures)
         var spineTick = 0
         var currentTimeSig = TimeSignature(numerator: 4, denominator: 4)
         for mi in 0 ..< measureCount {
@@ -201,6 +203,9 @@ extension PlaybackTimeline {
                 }
             }
             measureTimeSigs[mi] = currentTimeSig
+            let measureFrac = mi < measureDurations.count
+                ? measureDurations[mi]
+                : Fraction(numerator: 4, denominator: 4)
             // Advance the spine by voice 0 / staff 0's chord+rest
             // durations. Other voices in the same measure share
             // this start tick by construction.
@@ -208,7 +213,9 @@ extension PlaybackTimeline {
                 for el in voice0.elements {
                     switch el {
                     case let .chord(c):
-                        spineTick += c.duration.ticks(division: division)
+                        spineTick += c.duration
+                            .resolved(in: measureFrac)
+                            .ticks(division: division)
                     default:
                         break
                     }
@@ -222,6 +229,9 @@ extension PlaybackTimeline {
                 let measureStartTick = measureIdx < measureCount
                     ? measureStarts[measureIdx]
                     : 0
+                let measureFrac = measureIdx < measureDurations.count
+                    ? measureDurations[measureIdx]
+                    : Fraction(numerator: 4, denominator: 4)
                 for (voiceIdx, voice) in measure.voices.enumerated() {
                     var tick = measureStartTick
                     for (elemIdx, el) in voice.elements.enumerated() {
@@ -239,9 +249,9 @@ extension PlaybackTimeline {
                             // playback cursor jump ahead of the audio.
                             tick += delta.ticks(division: division)
                         case let .chord(chord) where !chord.notes.isEmpty:
-                            let chordDur = chord.duration.ticks(
-                                division: division,
-                            )
+                            let chordDur = chord.duration
+                                .resolved(in: measureFrac)
+                                .ticks(division: division)
                             for noteIdx in chord.notes.indices {
                                 let nid = NoteID(
                                     staff: entry.address,
@@ -276,7 +286,9 @@ extension PlaybackTimeline {
                             )
                             itemTicks[.rest(id)] = tick
                             itemEndTicks[.rest(id)] = tick
-                                + rest.duration.ticks(division: division)
+                                + rest.duration
+                                .resolved(in: measureFrac)
+                                .ticks(division: division)
                             // Whole-note rests render *centered* in the
                             // measure, not at the rhythmic onset
                             // column (`LayoutEngine+Placement.swift`'s
@@ -292,9 +304,9 @@ extension PlaybackTimeline {
                             // onset on another staff (or a `.beat`
                             // entry for that tick), both of which sit
                             // on the correct rhythmic column.
-                            let restTicks = rest.duration.ticks(
-                                division: division,
-                            )
+                            let restTicks = rest.duration
+                                .resolved(in: measureFrac)
+                                .ticks(division: division)
                             let isWholeNoteRest =
                                 restTicks >= 4 * division
                             if !isWholeNoteRest {
@@ -424,6 +436,32 @@ extension PlaybackTimeline {
         self.division = division
         self.itemTicks = itemTicks
         self.itemEndTicks = itemEndTicks
+    }
+}
+
+extension PlaybackTimeline {
+    /// Effective duration of each measure derived from its measures array.
+    /// Mirrors `Score.effectiveMeasureDurations()` but operates on a bare
+    /// `[Measure]` so audio helpers that don't hold a `Score` reference can
+    /// build the array without re-threading the full model. Same algorithm
+    /// as `MidiRenderer.effectiveMeasureDurations(for:)`.
+    static func effectiveMeasureDurations(for measures: [Measure]) -> [Fraction] {
+        var prevailing = Fraction(numerator: 4, denominator: 4)
+        var result: [Fraction] = []
+        result.reserveCapacity(measures.count)
+        for measure in measures {
+            for el in measure.voices.flatMap(\.elements) {
+                if case let .timeSignature(ts) = el {
+                    prevailing = Fraction(
+                        numerator: ts.numerator,
+                        denominator: ts.denominator,
+                    )
+                    break
+                }
+            }
+            result.append(measure.actualLength ?? prevailing)
+        }
+        return result
     }
 }
 
