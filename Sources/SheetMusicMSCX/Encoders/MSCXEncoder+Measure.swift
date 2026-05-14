@@ -25,12 +25,20 @@ extension Measure {
     /// of this measure as the staff-head voice so the encoder can
     /// drop an implicit C-major KeySig (matching MuseScore Studio's
     /// writer convention).
+    /// `effectiveDuration` is the measure's effective duration
+    /// (TimeSignature × actualLength), forwarded to each voice so
+    /// `.measure` rests can be resolved against it. The 4/4 default
+    /// is a source-compatibility shim — non-`.measure` voices ignore
+    /// the value entirely; callers writing `.measure` rests must
+    /// pass the real per-measure value (built from
+    /// `[Measure].effectiveMeasureDurations()`).
     func encode( // swiftlint:disable:this function_body_length
         carryInVoiceTieCarries: [Voice.VoiceTieCarry],
         isFirstMeasureOfStaff: Bool = false,
         options: MSCXEncoderOptions = .init(),
         staffGroup: String = "pitched",
         voice0SystemElements: [PositionedSystemElement] = [],
+        effectiveDuration: Fraction = Fraction(numerator: 4, denominator: 4),
     ) throws -> (node: XMLTreeNode, carryOutVoiceTieCarries: [Voice.VoiceTieCarry]) {
         var children: [XMLTreeNode] = []
         for marker in markers {
@@ -58,6 +66,7 @@ extension Measure {
                 staffGroup: staffGroup,
                 voiceIndex: index,
                 systemElements: injection,
+                effectiveDuration: effectiveDuration,
             )
             children.append(result.node)
             carryOut[index] = result.carryOut

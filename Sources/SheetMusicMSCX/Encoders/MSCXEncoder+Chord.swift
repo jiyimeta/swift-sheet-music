@@ -62,10 +62,27 @@ extension Chord {
         return XMLTreeNode(name: "Chord", children: children)
     }
 
-    /// Encode as a `<Rest>` (notes-empty representation).
+    /// Encode as a `<Rest>` (notes-empty representation). Traps via
+    /// `appendDurationXML`'s precondition if `duration == .measure`;
+    /// callers that may carry `.measure` rests must use the
+    /// `encodeAsRest(options:in:)` overload that supplies the
+    /// effective measure duration.
     func encodeAsRest(options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
         var children: [XMLTreeNode] = []
         duration.appendDurationXML(to: &children)
+        return XMLTreeNode(name: "Rest", children: children)
+    }
+
+    /// Encode as a `<Rest>` (notes-empty representation), resolving
+    /// `.measure` against the supplied effective measure duration.
+    /// Non-`.measure` durations behave identically to the
+    /// single-argument overload.
+    func encodeAsRest(
+        options: MSCXEncoderOptions = .init(),
+        in measureDuration: Fraction,
+    ) -> XMLTreeNode {
+        var children: [XMLTreeNode] = []
+        duration.appendDurationXML(to: &children, in: measureDuration)
         return XMLTreeNode(name: "Rest", children: children)
     }
 }

@@ -56,6 +56,18 @@ extension VoiceElement {
         return false
     }
 
+    /// True when this element is a measure-filling rest — an empty
+    /// chord whose duration is `.measure`. Used by the MSCX encoder
+    /// to decide whether the voice's bar length must be supplied
+    /// from the containing measure's effective duration rather than
+    /// summed from the voice's own elements.
+    public var isMeasureRest: Bool {
+        if case let .chord(c) = self,
+           c.notes.isEmpty,
+           case .measure = c.duration { return true }
+        return false
+    }
+
     /// Duration in ticks for chord/rest elements. nil for non-timed
     /// elements (clef, key sig, time sig, dynamics, …).
     public func tickCount(division: Int) -> Int? {

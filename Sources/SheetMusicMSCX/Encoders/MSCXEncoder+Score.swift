@@ -36,28 +36,11 @@ extension Score {
                 part.encodeDeclaration(partID: partID, staffIDs: ids, options: options),
             )
         }
-        var titleFrameSlot = titleFrame
-        for (partIndex, entry) in allStaffIDs.enumerated() {
-            for (staffIndexInPart, pair) in zip(entry.part.staves, entry.ids).enumerated() {
-                let staff = pair.0
-                let id = pair.1
-                let frame = titleFrameSlot
-                titleFrameSlot = nil
-                let address = StaffAddress(
-                    partIndex: partIndex,
-                    staffIndexInPart: staffIndexInPart,
-                )
-                let perMeasure = perMeasureSystemElements(for: address)
-                try scoreChildren.append(
-                    staff.encodeTopLevel(
-                        staffID: id,
-                        titleFrame: frame,
-                        systemElementsByMeasure: perMeasure,
-                        options: options,
-                    ),
-                )
-            }
-        }
+        try appendStaffBodies(
+            allStaffIDs: allStaffIDs,
+            into: &scoreChildren,
+            options: options,
+        )
 
         let museScoreVersion: String
         // `.v2` is detection-only; MSCXEncoderOptions normalises it to
@@ -113,6 +96,41 @@ extension Score {
             ),
             XMLTreeNode(name: "currentLayer", text: "0"),
         ]
+    }
+
+    /// Emit per-staff `<Staff id="N">` measure bodies. The first
+    /// staff of the first part also receives the title `<VBox>`. Each
+    /// staff also receives its per-measure effective durations so
+    /// `.measure` rests can resolve against the prevailing
+    /// TimeSignature × actualLength for that bar.
+    private func appendStaffBodies(
+        allStaffIDs: [(part: Part, partID: String, ids: [String])],
+        into scoreChildren: inout [XMLTreeNode],
+        options: MSCXEncoderOptions,
+    ) throws {
+        var titleFrameSlot = titleFrame
+        for (partIndex, entry) in allStaffIDs.enumerated() {
+            for (staffIndexInPart, pair) in zip(entry.part.staves, entry.ids).enumerated() {
+                let staff = pair.0
+                let id = pair.1
+                let frame = titleFrameSlot
+                titleFrameSlot = nil
+                let address = StaffAddress(
+                    partIndex: partIndex,
+                    staffIndexInPart: staffIndexInPart,
+                )
+                let perMeasure = perMeasureSystemElements(for: address)
+                try scoreChildren.append(
+                    staff.encodeTopLevel(
+                        staffID: id,
+                        titleFrame: frame,
+                        systemElementsByMeasure: perMeasure,
+                        effectiveMeasureDurations: staff.measures.effectiveMeasureDurations(),
+                        options: options,
+                    ),
+                )
+            }
+        }
     }
 
     /// `<show*>` visibility flags MuseScore 3 emits after `<Style>`.

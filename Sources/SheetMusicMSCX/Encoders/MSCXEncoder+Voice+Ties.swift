@@ -17,7 +17,11 @@ extension Voice {
     ) -> TieLocation? {
         guard chord.notes.contains(where: { $0.tieForward != nil })
         else { return nil }
-        let dur = chord.duration.asFraction
+        // A `.measure` rest never carries a tie, so this resolution
+        // is unreachable for measure-rests in practice. We still
+        // resolve here so the call is uniformly trap-safe regardless
+        // of upstream invariants.
+        let dur = chord.duration.resolved(in: voiceBarLength).asFraction
         return isLastChordOfVoice
             ? .crossMeasure(measures: 1, fractions: dur - voiceBarLength)
             : .sameMeasure(fractions: dur)
