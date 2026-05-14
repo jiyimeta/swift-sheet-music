@@ -40,8 +40,10 @@ extension Score {
         var result: [ScoreItemID] = []
         for (addr, staff) in allStaves where (lo ... hi).contains(addr) {
             let measures = staff.measures
+            let measureDurations = measures.effectiveMeasureDurations()
             for mIdx in posLo.measure ... posHi.measure {
                 guard measures.indices.contains(mIdx) else { continue }
+                let measureDuration = measureDurations[mIdx]
                 for (vIdx, voice) in measures[mIdx].voices.enumerated() {
                     var tick = 0
                     for (eIdx, el) in voice.elements.enumerated() {
@@ -64,7 +66,8 @@ extension Score {
                                     )))
                                 }
                             }
-                            tick += chord.duration.ticks(division: division)
+                            tick += chord.duration.resolved(in: measureDuration)
+                                .ticks(division: division)
                         case let .chord(rest):
                             // Empty chord — selectable as a rest.
                             if inRange {
@@ -75,7 +78,8 @@ extension Score {
                                     elementIndex: eIdx,
                                 )))
                             }
-                            tick += rest.duration.ticks(division: division)
+                            tick += rest.duration.resolved(in: measureDuration)
+                                .ticks(division: division)
                         default:
                             break
                         }
@@ -110,10 +114,12 @@ extension Score {
         guard elements.indices.contains(id.elementIndex) else {
             return nil
         }
+        let measureDurations = measures.effectiveMeasureDurations()
+        let measureDuration = measureDurations[id.measureIndex]
         let dur: Int
         switch elements[id.elementIndex] {
         case let .chord(c):
-            dur = c.duration.ticks(division: division)
+            dur = c.duration.resolved(in: measureDuration).ticks(division: division)
         default:
             dur = 0
         }
@@ -133,11 +139,13 @@ extension Score {
         let elements = voices[id.voiceIndex].elements
         guard elements.indices.contains(id.elementIndex) else { return nil }
 
+        let measureDurations = measures.effectiveMeasureDurations()
+        let measureDuration = measureDurations[id.measureIndex]
         var tick = 0
         for i in 0 ..< id.elementIndex {
             switch elements[i] {
             case let .chord(c):
-                tick += c.duration.ticks(division: division)
+                tick += c.duration.resolved(in: measureDuration).ticks(division: division)
             default:
                 break
             }

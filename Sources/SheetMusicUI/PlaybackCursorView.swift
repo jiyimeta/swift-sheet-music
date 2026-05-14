@@ -207,6 +207,8 @@ extension LayoutDocument {
         let division = score.division
         for (address, staff) in score.allStaves {
             guard measureIndex < staff.measures.count else { continue }
+            let measureDurations = staff.measures.effectiveMeasureDurations()
+            let measureDuration = measureDurations[measureIndex]
             let measure = staff.measures[measureIndex]
             for (voiceIdx, voice) in measure.voices.enumerated() {
                 var t = 0
@@ -225,7 +227,8 @@ extension LayoutDocument {
                         {
                             ticksToX[t] = x
                         }
-                        t += chord.duration.ticks(division: division)
+                        t += chord.duration.resolved(in: measureDuration)
+                            .ticks(division: division)
                     case let .chord(rest):
                         // Empty chord = rest.
                         let rid = RestID(
@@ -241,7 +244,8 @@ extension LayoutDocument {
                         // anchor the cursor mid-bar instead of at
                         // tick 0. Mirrors the same skip done in
                         // `PlaybackTimeline`'s pending build.
-                        let restTicks = rest.duration.ticks(division: division)
+                        let restTicks = rest.duration.resolved(in: measureDuration)
+                            .ticks(division: division)
                         let isWholeNoteRest = restTicks >= 4 * division
                         if !isWholeNoteRest, ticksToX[t] == nil,
                            let x = itemX(.rest(rid), in: layoutMeasure)
@@ -378,13 +382,17 @@ extension LayoutDocument {
 private func measureTickLength(
     measureIndex: Int, score: Score, division: Int,
 ) -> Int {
-    guard let voice0 = score.allStaves.first?.staff
-        .measures[safe: measureIndex]?.voices.first
+    guard let firstStaff = score.allStaves.first?.staff,
+          let measure = firstStaff.measures[safe: measureIndex],
+          let voice0 = measure.voices.first
     else { return 0 }
+    let measureDurations = firstStaff.measures.effectiveMeasureDurations()
+    let measureDuration = measureDurations[measureIndex]
     var t = 0
     for el in voice0.elements {
         switch el {
-        case let .chord(c): t += c.duration.ticks(division: division)
+        case let .chord(c):
+            t += c.duration.resolved(in: measureDuration).ticks(division: division)
         default: break
         }
     }
