@@ -28,13 +28,19 @@ extension MeasureRepeat {
                 name: "subtype", text: String(numMeasures),
             ))
         }
-        if case let .fraction(f) = duration {
+        switch duration {
+        case .measure:
+            preconditionFailure(
+                "MeasureRepeat.encode: `.measure` duration must be "
+                    + "resolved before encode() is called",
+            )
+        case let .fraction(f):
             children.append(XMLTreeNode(name: "durationType", text: "measure"))
             children.append(XMLTreeNode(
                 name: "duration",
                 text: "\(f.numerator)/\(f.denominator)",
             ))
-        } else {
+        default:
             duration.appendDurationXML(to: &children)
         }
         return XMLTreeNode(name: elementName, children: children)

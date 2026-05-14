@@ -65,3 +65,20 @@ extension VoiceElement {
         return nil
     }
 }
+
+extension VoiceElement {
+    /// Like `tickCount(division:)`, but resolves a `.measure` rest
+    /// against the supplied measure duration first. Use this when
+    /// walking voice elements per-measure where rest-shaped chords
+    /// may carry `.measure`.
+    public func tickCount(
+        division: Int, in measureDuration: Fraction,
+    ) -> Int? {
+        if case let .chord(c) = self {
+            return c.duration
+                .resolved(in: measureDuration)
+                .ticks(division: division)
+        }
+        return nil
+    }
+}

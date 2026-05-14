@@ -281,6 +281,7 @@ enum ScoreSemanticComparison {
         case .oneTwentyEighth: return .fraction(Fraction(numerator: 1, denominator: 128))
         case .twoFiftySixth: return .fraction(Fraction(numerator: 1, denominator: 256))
         case .fraction: return d
+        case .measure: return d
         }
     }
 }
