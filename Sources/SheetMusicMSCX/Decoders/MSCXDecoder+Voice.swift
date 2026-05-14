@@ -16,8 +16,13 @@ extension Voice {
         /// Passthrough to the underlying `Voice.elements` so tests
         /// and other consumers that only care about voice-bound
         /// content don't have to thread `.voice` through.
-        var elements: [VoiceElement] { voice.elements }
-        var tuplets: [Tuplet] { voice.tuplets }
+        var elements: [VoiceElement] {
+            voice.elements
+        }
+
+        var tuplets: [Tuplet] {
+            voice.tuplets
+        }
     }
 
     /// Convenience that drops the lifted system elements, returning
@@ -34,9 +39,11 @@ extension Voice {
         let firstElementIndex: Int
     }
 
-    static func decodeWithSystemElements(_ node: XMLTreeNode) throws -> DecodeResult { // swiftlint:disable:this function_body_length cyclomatic_complexity
+    // swiftlint:disable:next function_body_length cyclomatic_complexity
+    static func decodeWithSystemElements(_ node: XMLTreeNode) throws -> DecodeResult {
+        let voiceChildren = injectMS2EndTuplets(node.children)
         var elements: [VoiceElement] = []
-        elements.reserveCapacity(node.children.count)
+        elements.reserveCapacity(voiceChildren.count)
         var tuplets: [Tuplet] = []
         var systemElements: [PositionedSystemElement] = []
         // Stack of open tuplet ratios (normal/actual). Each <Tuplet>
@@ -86,7 +93,7 @@ extension Voice {
             ))
             pendingShift = Fraction(numerator: 0, denominator: 1)
         }
-        for child in node.children {
+        for child in voiceChildren {
             switch child.name {
             case "Chord":
                 if let graceType = Chord.graceType(in: child) {
@@ -126,14 +133,14 @@ extension Voice {
                     pendingGracesBefore.removeAll(keepingCapacity: true)
                 }
                 appendVoiceElement(.chord(chord))
-                cursor = cursor + chord.duration.asFraction
+                cursor += chord.duration.asFraction
             case "Rest":
                 var rest = try MSCXRestDecoder.decode(child)
                 rest.duration = scaled(
                     rest.duration, by: tupletFractions(),
                 )
                 appendVoiceElement(.chord(rest))
-                cursor = cursor + rest.duration.asFraction
+                cursor += rest.duration.asFraction
             case "Tuplet":
                 if let ratio = tupletRatio(from: child) {
                     tupletStack.append(OpenTuplet(
@@ -212,7 +219,7 @@ extension Voice {
                 if let fracText = child.first("fractions")?.text,
                    let frac = Fraction(mscxString: fracText)
                 {
-                    pendingShift = pendingShift + frac
+                    pendingShift += frac
                 }
             default:
                 // Unknown elements are silently ignored. Decoder is permissive on purpose
@@ -229,6 +236,75 @@ extension Voice {
             voice: Voice(elements: elements, tuplets: tuplets),
             systemElements: systemElements,
         )
+    }
+
+    /// Pre-process voice children so MS2 tuplet bookkeeping looks like
+    /// MS3+ to the main decoder loop. MS2 marks each tuplet member
+    /// chord with `<Tuplet>N</Tuplet>` referring to a preceding
+    /// `<Tuplet id="N">` declaration, and writes no `<endTuplet/>`
+    /// — the tuplet ends implicitly when a chord stops carrying the
+    /// id. The MS3+ stack-based path in `decodeWithSystemElements`
+    /// keeps each declared `<Tuplet>` open until it sees
+    /// `<endTuplet/>`, so an MS2 voice with one triplet followed by
+    /// straight quarters would scale every later chord by 2/3 and
+    /// shrink the rest of the bar.
+    ///
+    /// Inject a synthetic `<endTuplet/>` immediately before the first
+    /// chord that doesn't carry the open tuplet's id (and at end of
+    /// voice for any tuplets still open). MS3+ inputs are untouched
+    /// because their `<Tuplet>` declarations carry no `id` attribute
+    /// and their chords carry no `<Tuplet>` child, so `openIds`
+    /// remains empty throughout.
+    ///
+    /// Mirrors MuseScore 2 `libmscore/measure.cpp` `Measure::readVoice`
+    /// where each chord's `tuplet()` pointer is looked up by the
+    /// referenced id.
+    private static func injectMS2EndTuplets(_ children: [XMLTreeNode]) -> [XMLTreeNode] {
+        var openIds: [Int] = []
+        var result: [XMLTreeNode] = []
+        result.reserveCapacity(children.count + 4)
+        for child in children {
+            switch child.name {
+            case "Tuplet":
+                if let idStr = child.attributes["id"], let id = Int(idStr) {
+                    // MS2 emits no <endTuplet/>: a new sibling
+                    // `<Tuplet id="…">` is itself the implicit close
+                    // of any previous still-open MS2 tuplet. The
+                    // optional `<parent>X</parent>` child (used for
+                    // genuinely-nested tuplets) names the ancestor
+                    // that should stay open; everything between it
+                    // and the top is closed. C++: MuseScore 2
+                    // `libmscore/tuplet.cpp` `Tuplet::read`.
+                    let parent: Int? = {
+                        guard let raw = child.first("parent")?.text else { return nil }
+                        return Int(raw)
+                    }()
+                    while let top = openIds.last, top != parent {
+                        result.append(XMLTreeNode(name: "endTuplet"))
+                        openIds.removeLast()
+                    }
+                    openIds.append(id)
+                }
+                result.append(child)
+            case "Chord", "Rest":
+                let referenced: Int? = {
+                    guard let raw = child.first("Tuplet")?.text else { return nil }
+                    return Int(raw)
+                }()
+                while let top = openIds.last, referenced != top {
+                    result.append(XMLTreeNode(name: "endTuplet"))
+                    openIds.removeLast()
+                }
+                result.append(child)
+            default:
+                result.append(child)
+            }
+        }
+        while !openIds.isEmpty {
+            result.append(XMLTreeNode(name: "endTuplet"))
+            openIds.removeLast()
+        }
+        return result
     }
 
     /// Parse a `<Tuplet>` element's ratio (normalNotes/actualNotes). A triplet's

@@ -63,15 +63,50 @@ extension Score {
             style = .museScoreDefaults
         }
         let version = detectVersion(root: root, scoreNode: scoreNode)
+        let resolvedSystemMeasures = version == .v2
+            ? promoteMS2StaffTextSwingToSystem(systemMeasures)
+            : systemMeasures
         return Score(
             division: division,
             parts: parts,
-            systemMeasures: systemMeasures,
+            systemMeasures: resolvedSystemMeasures,
             metaTags: metaTags,
             titleFrame: titleFrame,
             style: style,
             source: .museScore(version),
         )
+    }
+
+    /// MuseScore 2 wrote swing markers inside `<StaffText>` even when
+    /// the user intended a score-wide directive — MuseScore 2's UI had
+    /// no separate SystemText path for swing, and the playback engine
+    /// fanned every swing tag out across all staves. MuseScore 3's
+    /// MS2 import path mirrors that intent by promoting the tag to
+    /// `<SystemText>` on save (visible by re-saving an MS2 `.mscz` in
+    /// 3.6.2). Replicate the promotion so the renderer's per-staff
+    /// swing routing (`MidiRenderer+Swing`) doesn't restrict the
+    /// effect to the originating staff and silently drop swing on
+    /// drums / bass / etc.
+    private static func promoteMS2StaffTextSwingToSystem(
+        _ measures: [SystemMeasure],
+    ) -> [SystemMeasure] {
+        measures.map { measure in
+            let elements = measure.elements.map { positioned -> PositionedSystemElement in
+                guard case let .swing(swing) = positioned.element,
+                      !swing.isSystemText
+                else {
+                    return positioned
+                }
+                var promoted = swing
+                promoted.isSystemText = true
+                return PositionedSystemElement(
+                    position: positioned.position,
+                    element: .swing(promoted),
+                    originalStaff: positioned.originalStaff,
+                )
+            }
+            return SystemMeasure(elements: elements)
+        }
     }
 
     /// Detect MuseScore wire-format major version from the

@@ -22,10 +22,28 @@ enum MSCXRestDecoder {
         forDurationType type: String, node: XMLTreeNode,
     ) throws -> NoteDuration {
         if type == "measure" {
-            // Full-measure rest: <duration>N/D</duration> gives the actual time.
-            let text = node.first("duration")?.text ?? "4/4"
-            let frac = Fraction(mscxString: text)
-                ?? Fraction(numerator: 4, denominator: 4)
+            // Full-measure rest: the `<duration>` element gives the
+            // actual time. MS3+ writes `<duration>N/D</duration>`
+            // (text); MS2 writes `<duration z="N" n="D"/>` (attrs,
+            // C++: `Fraction::write` in MuseScore 2 `libmscore/xml.cpp`).
+            // Falling back to 4/4 on absence silently collapses
+            // irregular-meter measures (e.g. 5/4 → 4/4); accept both
+            // forms.
+            let frac: Fraction = {
+                guard let dur = node.first("duration") else {
+                    return Fraction(numerator: 4, denominator: 4)
+                }
+                if let zText = dur.attributes["z"],
+                   let nText = dur.attributes["n"],
+                   let z = Int(zText),
+                   let n = Int(nText),
+                   n > 0
+                {
+                    return Fraction(numerator: z, denominator: n)
+                }
+                return Fraction(mscxString: dur.text)
+                    ?? Fraction(numerator: 4, denominator: 4)
+            }()
             return .fraction(frac)
         }
         guard let base = NoteDuration(mscxName: type) else {

@@ -50,6 +50,13 @@ extension Measure {
         let voiceResults: [Voice.DecodeResult]
         if !voiceNodes.isEmpty {
             voiceResults = try voiceNodes.map { try Voice.decodeWithSystemElements($0) }
+        } else if hasMS2NonZeroVoiceContent(node) {
+            // MS2 flat form: <Measure> interleaves all voices, with
+            // `<track>N</track>` on each Chord/Rest and `<tick>X</tick>`
+            // resetting the absolute-tick cursor between voice groups.
+            // Demux by (track mod 4) so non-default voices land in
+            // their own `Voice` and don't get appended to voice 0.
+            voiceResults = try decodeMS2FlatVoices(measure: node)
         } else {
             // Older / simpler mscx form: musical elements are direct children of
             // <Measure> (no <voice> wrapper). Treat them as a single implicit voice.
@@ -95,6 +102,63 @@ extension Measure {
             irregular: irregular,
         )
         return DecodeResult(measure: measure, systemElements: systemElements)
+    }
+
+    /// True when this measure carries MS2-style multi-voice content —
+    /// at least one Chord / Rest has a `<track>` child whose voice
+    /// component (`track mod 4`) is non-zero.
+    private static func hasMS2NonZeroVoiceContent(_ node: XMLTreeNode) -> Bool {
+        for child in node.children where child.name == "Chord" || child.name == "Rest" {
+            if let trackText = child.first("track")?.text,
+               let track = Int(trackText),
+               track % 4 != 0
+            {
+                return true
+            }
+        }
+        return false
+    }
+
+    /// Bucket the children of an MS2 flat-form `<Measure>` by voice
+    /// index (`<track>N</track> mod 4`, defaulting to 0), then decode
+    /// each bucket as its own voice. Measure-level metadata
+    /// (`<tick>`, `<LayoutBreak>`, `<Marker>`, `<Jump>`, repeat
+    /// markers, …) is excluded from the buckets — it's read off the
+    /// measure node directly by the caller. `<tick>X</tick>` resets
+    /// MuseScore's score-wide cursor between voice groups; for our
+    /// per-voice decode it would be a no-op, so we drop it.
+    private static func decodeMS2FlatVoices(
+        measure node: XMLTreeNode,
+    ) throws -> [Voice.DecodeResult] {
+        var buckets: [Int: [XMLTreeNode]] = [:]
+        for child in node.children {
+            switch child.name {
+            case "tick", "voice", "LayoutBreak", "Marker", "Jump",
+                 "startRepeat", "endRepeat", "irregular",
+                 "multiMeasureRest", "measureRepeatCount",
+                 "stretch", "noOffset":
+                continue
+            default:
+                break
+            }
+            let voiceIndex: Int = {
+                if let trackText = child.first("track")?.text,
+                   let track = Int(trackText)
+                {
+                    return track % 4
+                }
+                return 0
+            }()
+            buckets[voiceIndex, default: []].append(child)
+        }
+        let sortedIndices = buckets.keys.sorted()
+        return try sortedIndices.map { idx in
+            let synthetic = XMLTreeNode(
+                name: "voice",
+                children: buckets[idx] ?? [],
+            )
+            return try Voice.decodeWithSystemElements(synthetic)
+        }
     }
 
     private static func decodeMarker(_ node: XMLTreeNode) -> Marker {

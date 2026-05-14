@@ -37,7 +37,15 @@ extension Note {
                 continue
             }
         }
-        let headType = node.first("head")?.text
+        // MS2 / MS3 legacy tie encoding: `<Tie id="N">` directly on
+        // the start note, `<endSpanner id="N"/>` on the end note.
+        // C++: MuseScore 2 `libmscore/note.cpp` `Note::read`. Only
+        // ties attach to notes at this level in MS2 (slurs sit on
+        // chords / segments, glissandi use their own `<Glissando>`
+        // element), so any note-level `<endSpanner>` is a tie end.
+        if node.children.contains(where: { $0.name == "Tie" }) { tieForward = 1 }
+        if node.children.contains(where: { $0.name == "endSpanner" }) { tieBack = 1 }
+        let headType = decodeHeadType(node.first("head")?.text)
         return Note(
             pitch: pitch,
             tpc: tpc,
@@ -47,6 +55,35 @@ extension Note {
             glissando: glissando,
             headType: headType,
         )
+    }
+
+    /// Normalise `<head>` to the MS3+ string form. MS2 writes an integer
+    /// (`NoteHead::Group` enum, C++: MuseScore 2 `libmscore/note.h`); the
+    /// renderer (`NoteheadRenderer`) keys off the string names. Returning
+    /// the raw integer would silently fall back to "normal", so the
+    /// drum staff loses cross / diamond / triangle heads.
+    private static func decodeHeadType(_ raw: String?) -> String? {
+        guard let raw, !raw.isEmpty else { return nil }
+        if let n = Int(raw) {
+            switch n {
+            case 0: return "normal"
+            case 1: return "cross"
+            case 2: return "diamond"
+            case 3: return "triangle-up"
+            case 4: return "mi"
+            case 5: return "slash"
+            case 6: return "xcircle"
+            case 7: return "do"
+            case 8: return "re"
+            case 9: return "fa"
+            case 10: return "la"
+            case 11: return "ti"
+            case 12: return "sol"
+            case 13: return "alt-brevis"
+            default: return nil
+            }
+        }
+        return raw
     }
 
     /// Decode a `<Glissando>` block (the child of `<Spanner type="Glissando">`).

@@ -41,6 +41,14 @@ public struct Fraction: Hashable, Sendable {
         return Fraction(numerator: n, denominator: d)
     }
 
+    public static func += (lhs: inout Fraction, rhs: Fraction) {
+        lhs = lhs + rhs
+    }
+
+    public static func -= (lhs: inout Fraction, rhs: Fraction) {
+        lhs = lhs - rhs
+    }
+
     private static func gcd(_ a: Int, _ b: Int) -> Int {
         var (a, b) = (a, b)
         while b != 0 {
