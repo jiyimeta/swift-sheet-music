@@ -64,10 +64,19 @@ public struct PasteVoiceElements: EditCommand {
             )
         }
         let division = score.division
+        let measureDuration = score
+            .effectiveMeasureDurations(
+                partIndex: location.staff.partIndex,
+                staffIndex: location.staff.staffIndexInPart,
+            )[location.measureIndex]
         let target = voice.elements[location.elementIndex]
-        let targetTicks = Self.ticks(of: target, division: division) ?? 0
+        let targetTicks = Self.ticks(
+            of: target, division: division, measureDuration: measureDuration,
+        ) ?? 0
         let payloadTicks = elements.reduce(0) {
-            $0 + (Self.ticks(of: $1, division: division) ?? 0)
+            $0 + (Self.ticks(
+                of: $1, division: division, measureDuration: measureDuration,
+            ) ?? 0)
         }
         let targetRtick = DurationChangeAlgorithm.tickOffset(
             in: voice,
@@ -82,6 +91,7 @@ public struct PasteVoiceElements: EditCommand {
             targetTicks: targetTicks,
             targetRtick: targetRtick,
             division: division,
+            measureDuration: measureDuration,
         )
         let replace = ReplaceVoiceElements(
             staff: location.staff,
@@ -94,10 +104,15 @@ public struct PasteVoiceElements: EditCommand {
     }
 
     private static func ticks(
-        of element: VoiceElement, division: Int,
+        of element: VoiceElement,
+        division: Int,
+        measureDuration: Fraction,
     ) -> Int? {
         switch element {
-        case let .chord(c): return c.duration.ticks(division: division)
+        case let .chord(c):
+            return c.duration
+                .resolved(in: measureDuration)
+                .ticks(division: division)
         default: return nil
         }
     }
@@ -115,6 +130,7 @@ public struct PasteVoiceElements: EditCommand {
         targetTicks: Int,
         targetRtick: Int,
         division: Int,
+        measureDuration: Fraction,
     ) throws -> (elements: [VoiceElement], tuplets: [Tuplet]) {
         var newElements = voice.elements
         newElements.replaceSubrange(idx ... idx, with: payload)
@@ -146,7 +162,9 @@ public struct PasteVoiceElements: EditCommand {
                 let elTicks: Int
                 switch newElements[i] {
                 case let .chord(c):
-                    elTicks = c.duration.ticks(division: division)
+                    elTicks = c.duration
+                        .resolved(in: measureDuration)
+                        .ticks(division: division)
                 default:
                     throw SheetMusicError.invalidEdit(
                         reason: "PasteVoiceElements: lengthening "
