@@ -16,7 +16,7 @@ extension MidiRenderer {
         swingMap: SwingMap = .empty,
         systemElementsByMeasure: [[PositionedSystemElement]] = [],
     ) -> (events: [TimedMidiEvent], endTick: Int) {
-        let measureDurations = Self.effectiveMeasureDurations(for: staff.measures)
+        let measureDurations = staff.measures.effectiveMeasureDurations()
         let plan = playbackPlan(for: staff.measures, division: division)
         var events: [TimedMidiEvent] = []
         var velocity = effectiveVelocity(forDynamic: nil, instrument: part.instrument)
@@ -334,29 +334,6 @@ extension MidiRenderer {
 
     static func defaultArticulationGateTime(for instrument: Instrument) -> Int {
         instrument.articulations.first(where: { $0.name == nil })?.gateTime ?? 100
-    }
-
-    /// Effective duration of each measure derived from its measures array.
-    /// Mirrors `Score.effectiveMeasureDurations()` but operates on a bare
-    /// `[Measure]` so MIDI-render helpers that don't hold a `Score` reference
-    /// can build the array without re-threading the full model.
-    static func effectiveMeasureDurations(for measures: [Measure]) -> [Fraction] {
-        var prevailing = Fraction(numerator: 4, denominator: 4)
-        var result: [Fraction] = []
-        result.reserveCapacity(measures.count)
-        for measure in measures {
-            for el in measure.voices.flatMap(\.elements) {
-                if case let .timeSignature(ts) = el {
-                    prevailing = Fraction(
-                        numerator: ts.numerator,
-                        denominator: ts.denominator,
-                    )
-                    break
-                }
-            }
-            result.append(measure.actualLength ?? prevailing)
-        }
-        return result
     }
 
     /// Per-chord gateTime lookup. Filters `chord.articulations` to the

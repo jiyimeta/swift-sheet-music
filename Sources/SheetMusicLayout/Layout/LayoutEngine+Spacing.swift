@@ -260,6 +260,19 @@ extension LayoutEngine {
             let endTick: Int
             let weight: CGFloat
         }
+        // Effective measure duration — used to resolve any `.measure`
+        // rest via `NoteDuration.resolved(in:)`. Defensive: no decoder
+        // produces `.measure` yet. Derive from the first staff that
+        // covers this measure index; time signatures are score-wide.
+        let measureDuration: Fraction = {
+            guard let staff = staves.first(where: { measureIdx < $0.measures.count }) else {
+                return Fraction(numerator: 4, denominator: 4)
+            }
+            let durations = staff.measures.effectiveMeasureDurations()
+            return measureIdx < durations.count
+                ? durations[measureIdx]
+                : Fraction(numerator: 4, denominator: 4)
+        }()
         var voiceElements: [[TimedElement]] = []
         var allTicks: Set<Int> = []
         var measureEnd = 0
@@ -304,7 +317,7 @@ extension LayoutEngine {
                         )
                         let w = max(baseWeight, pendingHarmonyWidth)
                         pendingHarmonyWidth = 0
-                        let end = tick + c.duration.ticks(division: division)
+                        let end = tick + c.duration.resolved(in: measureDuration).ticks(division: division)
                         elements.append(TimedElement(
                             startTick: tick, endTick: end, weight: w,
                         ))
@@ -317,7 +330,7 @@ extension LayoutEngine {
                         )
                         let w = max(baseWeight, pendingHarmonyWidth)
                         pendingHarmonyWidth = 0
-                        let end = tick + r.duration.ticks(division: division)
+                        let end = tick + r.duration.resolved(in: measureDuration).ticks(division: division)
                         elements.append(TimedElement(
                             startTick: tick, endTick: end, weight: w,
                         ))

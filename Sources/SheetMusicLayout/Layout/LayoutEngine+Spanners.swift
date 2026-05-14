@@ -64,7 +64,11 @@ extension LayoutEngine {
         var out: [SpannerAnchor] = []
         for (staffIdx, entry) in score.allStaves.enumerated() {
             let staff = entry.staff
+            let measureDurations = staff.measures.effectiveMeasureDurations()
             for (measureIdx, measure) in staff.measures.enumerated() {
+                let measureDuration = measureIdx < measureDurations.count
+                    ? measureDurations[measureIdx]
+                    : Fraction(numerator: 4, denominator: 4)
                 for voice in measure.voices {
                     var tick = 0
                     for el in voice.elements {
@@ -104,9 +108,9 @@ extension LayoutEngine {
                         }
                         switch el {
                         case let .chord(c):
-                            tick += c.duration.ticks(
-                                division: score.division,
-                            )
+                            tick += c.duration
+                                .resolved(in: measureDuration)
+                                .ticks(division: score.division)
                         default: break
                         }
                     }
@@ -317,14 +321,18 @@ extension LayoutEngine {
     /// system, which placed an 8va belonging to staff N onto the top
     /// staff of a multi-staff score.
     /// Walk voice 0 of `measure` summing chord durations to recover the
-    /// measure's tick width. Mirrors what `LayoutEngine+Lyrics` does
-    /// for melisma extents — there is no shared score-level helper.
-    private static func measureTickCount(_ m: Measure, division: Int) -> Int {
+    /// measure's tick width. `measureDuration` is used to resolve any
+    /// `.measure` rest — pass the effective duration for this measure.
+    private static func measureTickCount(
+        _ m: Measure,
+        division: Int,
+        measureDuration: Fraction,
+    ) -> Int {
         guard let v0 = m.voices.first else { return 0 }
         var total = 0
         for el in v0.elements {
             if case let .chord(c) = el {
-                total += c.duration.ticks(division: division)
+                total += c.duration.resolved(in: measureDuration).ticks(division: division)
             }
         }
         return total
@@ -348,6 +356,7 @@ extension LayoutEngine {
     ) -> (endMeasure: Int, endTick: Int) {
         let nMeas = max(0, nextMeasuresOffset)
         let fracTicks = nextFractionsOffset?.ticks(division: division) ?? 0
+        let measureDurations = measures.effectiveMeasureDurations()
 
         if fracTicks == 0 {
             if nMeas > 0 {
@@ -365,8 +374,12 @@ extension LayoutEngine {
         var rawTick = startTickInMeasure + fracTicks
         if rawTick >= 0 {
             while measureIdx < measures.count {
+                let mDuration = measureIdx < measureDurations.count
+                    ? measureDurations[measureIdx]
+                    : Fraction(numerator: 4, denominator: 4)
                 let mTicks = measureTickCount(
                     measures[measureIdx], division: division,
+                    measureDuration: mDuration,
                 )
                 if rawTick <= mTicks { break }
                 rawTick -= mTicks
@@ -382,8 +395,12 @@ extension LayoutEngine {
             // the start of (start+1)") resolves to the start measure
             // with the right-edge sentinel.
             if measureIdx < measures.count {
+                let mDuration = measureIdx < measureDurations.count
+                    ? measureDurations[measureIdx]
+                    : Fraction(numerator: 4, denominator: 4)
                 let mTicks = measureTickCount(
                     measures[measureIdx], division: division,
+                    measureDuration: mDuration,
                 )
                 if rawTick == mTicks { return (measureIdx, 0) }
                 if rawTick == 0, measureIdx > startMeasureIdx {
@@ -396,8 +413,12 @@ extension LayoutEngine {
         // Negative remainder: roll back into earlier measures.
         while measureIdx > 0, rawTick < 0 {
             measureIdx -= 1
+            let mDuration = measureIdx < measureDurations.count
+                ? measureDurations[measureIdx]
+                : Fraction(numerator: 4, denominator: 4)
             rawTick += measureTickCount(
                 measures[measureIdx], division: division,
+                measureDuration: mDuration,
             )
         }
         if rawTick == 0, measureIdx > startMeasureIdx {

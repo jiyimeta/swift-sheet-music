@@ -35,9 +35,7 @@ enum OttavaRanges {
     ) -> [OttavaRange] {
         var ranges: [OttavaRange] = []
         var measureBase = 0
-        let measureDurations = MidiRenderer.effectiveMeasureDurations(
-            for: staff.measures,
-        )
+        let measureDurations = staff.measures.effectiveMeasureDurations()
         for (measureIdx, measure) in staff.measures.enumerated() {
             let measureDuration = measureIdx < measureDurations.count
                 ? measureDurations[measureIdx]

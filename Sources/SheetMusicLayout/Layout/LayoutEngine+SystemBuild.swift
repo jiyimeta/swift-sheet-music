@@ -81,6 +81,14 @@ extension LayoutEngine {
             /// the source-measure count covered by the run.
             let multiMeasureRestCount: Int?
         }
+        // Pre-compute effective measure durations once per staff so
+        // `placeMeasureElements` receives the prevailing time signature
+        // (carried forward across measures that contain no explicit
+        // `<TimeSignature>` element) rather than deriving a local-scan-
+        // only fallback. Indexed as `staffMeasureDurations[staffIdx]`.
+        let staffMeasureDurations: [[Fraction]] = staves.map {
+            $0.measures.effectiveMeasureDurations()
+        }
         var untranslated: [UntranslatedMeasure] = []
         var clefs = activeClefs
         var keys = activeKeys
@@ -163,10 +171,16 @@ extension LayoutEngine {
                 let systemElementsForStaff: [PositionedSystemElement] =
                     measureIdx < context.score.systemMeasures.count
                         ? context.score.systemMeasures[measureIdx].elements
-                            .filter {
-                                ($0.originalStaff ?? canonicalStaff) == address
-                            }
+                        .filter {
+                            ($0.originalStaff ?? canonicalStaff) == address
+                        }
                         : []
+                let measDuration: Fraction = {
+                    let durations = staffMeasureDurations[staffIdx]
+                    return measureIdx < durations.count
+                        ? durations[measureIdx]
+                        : Fraction(numerator: 4, denominator: 4)
+                }()
                 let placementInputs = LayoutCache.PlacementInputs(
                     measure: m,
                     width: w,
@@ -186,6 +200,7 @@ extension LayoutEngine {
                     graceNoteMag: context.options.graceNoteMag,
                     coversBelowStaffSpanner: coversBelowStaffSpanner,
                     systemElements: systemElementsForStaff,
+                    measureDuration: measDuration,
                 )
                 let els: [LayoutElement]
                 let newClef: NotatedClef
@@ -213,6 +228,7 @@ extension LayoutEngine {
                         headerSchedule: schedule,
                         tickColumns: tickCols,
                         division: context.score.division,
+                        measureDuration: measDuration,
                         drumLineMap: drumMap,
                         isLastMeasure: lastMeasure,
                         isFirstSystem: isFirstSystem,
