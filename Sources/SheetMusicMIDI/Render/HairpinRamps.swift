@@ -191,10 +191,17 @@ enum HairpinRamps {
         // Sum measure-ticks from the start measure forward by
         // `nextMeasuresOffset` measures. The end tick is therefore the
         // base of measure (start + offset).
+        let measureDurations = measures.effectiveMeasureDurations()
+        func mDuration(_ i: Int) -> Fraction {
+            i < measureDurations.count
+                ? measureDurations[i]
+                : Fraction(numerator: 4, denominator: 4)
+        }
         var endMeasureBase = 0
         for i in 0 ..< startMeasureIndex {
             endMeasureBase += MidiRenderer.measureTicks(
                 measure: measures[i], division: division,
+                measureDuration: mDuration(i),
             )
         }
         let lastIndex = min(
@@ -204,6 +211,7 @@ enum HairpinRamps {
         for i in startMeasureIndex ..< lastIndex {
             endMeasureBase += MidiRenderer.measureTicks(
                 measure: measures[i], division: division,
+                measureDuration: mDuration(i),
             )
         }
         let fractionDelta = spanner.nextFractionsOffset?.ticks(division: division) ?? 0

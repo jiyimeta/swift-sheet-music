@@ -119,9 +119,14 @@ enum OttavaRanges {
         let measureCount = max(0, spanner.nextMeasuresOffset)
         let endIndex = min(measures.count, startMeasureIndex + measureCount)
         if startMeasureIndex < endIndex {
+            let measureDurations = measures.effectiveMeasureDurations()
             for i in startMeasureIndex ..< endIndex {
+                let mDur = i < measureDurations.count
+                    ? measureDurations[i]
+                    : Fraction(numerator: 4, denominator: 4)
                 measureSpan += MidiRenderer.measureTicks(
                     measure: measures[i], division: division,
+                    measureDuration: mDur,
                 )
             }
         }

@@ -185,11 +185,18 @@ struct TempoTimeline: Equatable {
     ) -> TempoTimeline {
         var entries: [(tick: Int, bps: Double)] = [(0, 2.0)]
         var measureBases: [Int] = []
+        let measureDurations = measures.effectiveMeasureDurations()
         do {
             var acc = 0
-            for m in measures {
+            for (i, m) in measures.enumerated() {
                 measureBases.append(acc)
-                acc += MidiRenderer.measureTicks(measure: m, division: division)
+                let mDur = i < measureDurations.count
+                    ? measureDurations[i]
+                    : Fraction(numerator: 4, denominator: 4)
+                acc += MidiRenderer.measureTicks(
+                    measure: m, division: division,
+                    measureDuration: mDur,
+                )
             }
         }
         for (measureIndex, systemMeasure) in systemMeasures.enumerated() {

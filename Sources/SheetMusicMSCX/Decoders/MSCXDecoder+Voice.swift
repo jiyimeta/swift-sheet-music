@@ -16,8 +16,13 @@ extension Voice {
         /// Passthrough to the underlying `Voice.elements` so tests
         /// and other consumers that only care about voice-bound
         /// content don't have to thread `.voice` through.
-        var elements: [VoiceElement] { voice.elements }
-        var tuplets: [Tuplet] { voice.tuplets }
+        var elements: [VoiceElement] {
+            voice.elements
+        }
+
+        var tuplets: [Tuplet] {
+            voice.tuplets
+        }
     }
 
     /// Convenience that drops the lifted system elements, returning
@@ -34,7 +39,10 @@ extension Voice {
         let firstElementIndex: Int
     }
 
-    static func decodeWithSystemElements(_ node: XMLTreeNode) throws -> DecodeResult { // swiftlint:disable:this function_body_length cyclomatic_complexity
+    // swiftlint:disable:next function_body_length cyclomatic_complexity
+    static func decodeWithSystemElements(
+        _ node: XMLTreeNode,
+    ) throws -> DecodeResult {
         var elements: [VoiceElement] = []
         elements.reserveCapacity(node.children.count)
         var tuplets: [Tuplet] = []
@@ -126,14 +134,26 @@ extension Voice {
                     pendingGracesBefore.removeAll(keepingCapacity: true)
                 }
                 appendVoiceElement(.chord(chord))
-                cursor = cursor + chord.duration.asFraction
+                // `.measure` chords carry no intrinsic duration; the
+                // measure-rest fills the bar by definition, so any
+                // following element would be malformed. Skip the
+                // cursor advance instead of trapping in `asFraction`.
+                if case .measure = chord.duration {
+                    // no-op; cursor stays put
+                } else {
+                    cursor += chord.duration.asFraction
+                }
             case "Rest":
                 var rest = try MSCXRestDecoder.decode(child)
                 rest.duration = scaled(
                     rest.duration, by: tupletFractions(),
                 )
                 appendVoiceElement(.chord(rest))
-                cursor = cursor + rest.duration.asFraction
+                if case .measure = rest.duration {
+                    // Same reasoning as the .Chord arm above.
+                } else {
+                    cursor += rest.duration.asFraction
+                }
             case "Tuplet":
                 if let ratio = tupletRatio(from: child) {
                     tupletStack.append(OpenTuplet(
@@ -212,7 +232,7 @@ extension Voice {
                 if let fracText = child.first("fractions")?.text,
                    let frac = Fraction(mscxString: fracText)
                 {
-                    pendingShift = pendingShift + frac
+                    pendingShift += frac
                 }
             default:
                 // Unknown elements are silently ignored. Decoder is permissive on purpose
@@ -247,6 +267,10 @@ extension Voice {
 
     private static func scaled(_ duration: NoteDuration, by tupletStack: [Fraction]) -> NoteDuration {
         guard !tupletStack.isEmpty else { return duration }
+        // `.measure` rests cannot be inside a tuplet (they fill a
+        // whole bar); defensively pass through unchanged so we don't
+        // trap in `asFraction`.
+        if case .measure = duration { return duration }
         var frac = duration.asFraction
         for ratio in tupletStack {
             frac = Fraction(

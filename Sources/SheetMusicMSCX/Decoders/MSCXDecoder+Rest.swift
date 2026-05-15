@@ -22,11 +22,13 @@ enum MSCXRestDecoder {
         forDurationType type: String, node: XMLTreeNode,
     ) throws -> NoteDuration {
         if type == "measure" {
-            // Full-measure rest: <duration>N/D</duration> gives the actual time.
-            let text = node.first("duration")?.text ?? "4/4"
-            let frac = Fraction(mscxString: text)
-                ?? Fraction(numerator: 4, denominator: 4)
-            return .fraction(frac)
+            // The `<duration>` child is informational under the
+            // `.measure` marker model — encoders re-derive it from
+            // the containing measure's effective duration. We accept
+            // both the MS3+ slash form (`<duration>N/D</duration>`)
+            // and the MS2 attribute form (`<duration z="N" n="D"/>`)
+            // by reading-and-discarding either.
+            return .measure
         }
         guard let base = NoteDuration(mscxName: type) else {
             throw SheetMusicError.malformedScore(

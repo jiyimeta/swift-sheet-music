@@ -26,6 +26,7 @@ extension MidiRenderer {
     ///     `<startRepeat>` (or measure 0 if none).
     static func playbackPlan(for measures: [Measure], division: Int) -> [PlaybackEntry] {
         let measureVoltas = computeMeasureVoltas(measures)
+        let measureDurations = measures.effectiveMeasureDurations()
         var plan: [PlaybackEntry] = []
         var tick = 0
         var segmentStart = 0
@@ -58,7 +59,13 @@ extension MidiRenderer {
                     tickOffset: tick,
                     isIterationStart: nextIsIterationStart,
                 ))
-                tick += measureTicks(measure: measure, division: division)
+                let mDuration = index < measureDurations.count
+                    ? measureDurations[index]
+                    : Fraction(numerator: 4, denominator: 4)
+                tick += measureTicks(
+                    measure: measure, division: division,
+                    measureDuration: mDuration,
+                )
                 nextIsIterationStart = false
             }
 

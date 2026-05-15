@@ -225,8 +225,11 @@ enum ScoreSemanticComparison {
         // Canonicalise all note durations to their Fraction-of-whole form so
         // `.whole` and `.fraction(1/1)` compare equal. MSCX emits
         // `<durationType>measure</durationType>` for whole-measure rests
-        // (decoded as `.fraction`), while MusicXML's `<type>whole</type>`
-        // lands on `.whole`. Both describe the same music.
+        // (decoded as `.measure`), while MusicXML's `<type>whole</type>`
+        // lands on `.whole`. Both describe the same music; we normalise
+        // `.measure` to `.fraction(1/1)` for cross-format comparison
+        // (the actual bar duration is unknowable from a NoteDuration in
+        // isolation — measure-resolution happens in renderers / encoders).
         s.parts = s.parts.map { part in
             var pt = part
             pt.staves = pt.staves.map { staff in
@@ -281,7 +284,7 @@ enum ScoreSemanticComparison {
         case .oneTwentyEighth: return .fraction(Fraction(numerator: 1, denominator: 128))
         case .twoFiftySixth: return .fraction(Fraction(numerator: 1, denominator: 256))
         case .fraction: return d
-        case .measure: return d
+        case .measure: return .fraction(Fraction(numerator: 1, denominator: 1))
         }
     }
 }

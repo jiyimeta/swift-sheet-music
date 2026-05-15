@@ -89,11 +89,18 @@ extension MidiRenderer {
         // tick-base provider.
         let referenceMeasures = allStaves.first?.staff.measures ?? []
         var measureBases: [Int] = []
+        let measureDurations = referenceMeasures.effectiveMeasureDurations()
         do {
             var acc = 0
-            for m in referenceMeasures {
+            for (i, m) in referenceMeasures.enumerated() {
                 measureBases.append(acc)
-                acc += measureTicks(measure: m, division: division)
+                let mDur = i < measureDurations.count
+                    ? measureDurations[i]
+                    : Fraction(numerator: 4, denominator: 4)
+                acc += measureTicks(
+                    measure: m, division: division,
+                    measureDuration: mDur,
+                )
             }
         }
         var addressToStaffIdx: [StaffAddress: Int] = [:]

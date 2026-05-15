@@ -40,9 +40,15 @@ extension MidiRenderer {
         var originalMeasureBase: [Int] = []
         do {
             var acc = 0
-            for m in staff.measures {
+            for (idx, m) in staff.measures.enumerated() {
                 originalMeasureBase.append(acc)
-                acc += measureTicks(measure: m, division: division)
+                let mDuration = idx < measureDurations.count
+                    ? measureDurations[idx]
+                    : Fraction(numerator: 4, denominator: 4)
+                acc += measureTicks(
+                    measure: m, division: division,
+                    measureDuration: mDuration,
+                )
             }
         }
 
@@ -157,7 +163,14 @@ extension MidiRenderer {
 
         let endTick: Int
         if let last = plan.last {
-            endTick = last.tickOffset + measureTicks(measure: staff.measures[last.measureIndex], division: division)
+            let lastDuration = last.measureIndex < measureDurations.count
+                ? measureDurations[last.measureIndex]
+                : Fraction(numerator: 4, denominator: 4)
+            endTick = last.tickOffset + measureTicks(
+                measure: staff.measures[last.measureIndex],
+                division: division,
+                measureDuration: lastDuration,
+            )
         } else {
             endTick = 0
         }
