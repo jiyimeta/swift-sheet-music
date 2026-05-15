@@ -208,10 +208,9 @@ struct MSCXEncoderTextElementsTests {
     @Test("MeasureRepeat round-trips numMeasures and duration")
     func measureRepeatRoundTrip() throws {
         for num in [1, 2, 4] {
-            let mr = MeasureRepeat(
-                numMeasures: num,
-                duration: .fraction(.init(numerator: 4, denominator: 4)),
-            )
+            // Decoder now emits `.measure` for all measure-typed repeats;
+            // use `.measure` here so the decoded value matches the input.
+            let mr = MeasureRepeat(numMeasures: num, duration: .measure)
             let voice = Voice(elements: [.measureRepeat(mr)])
             let decoded = try voiceRoundTrip(voice)
             #expect(decoded == voice, "numMeasures=\(num) failed")

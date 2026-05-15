@@ -19,9 +19,13 @@ import Testing
 struct MS2CompatibilityTests {
     @Test func measureRestReadsAttributeFormDuration() throws {
         // C++: MuseScore 2 `Fraction::write` emits `z` / `n` attrs on
-        // `<duration>`. Without this path, a 5/4 measure rest collapses
-        // to the 4/4 fallback and the staff drifts a quarter ahead of
-        // the rest of the score over each empty bar.
+        // `<duration>`. Under the `.measure` marker model the inner
+        // `<duration>` is informational — encoders re-derive it from
+        // the containing measure's effective duration — so the
+        // decoder reads-and-discards either form. The regression this
+        // test pins is that the parser doesn't choke on the MS2
+        // attribute spelling. Resolution against a 5/4 bar still
+        // recovers the right effective fraction.
         let xml = """
         <voice>
           <Rest>
@@ -36,7 +40,12 @@ struct MS2CompatibilityTests {
             Issue.record("expected one rest element, got \(voice.elements)")
             return
         }
-        #expect(rest.duration.asFraction == Fraction(numerator: 5, denominator: 4))
+        #expect(rest.duration == .measure)
+        #expect(
+            rest.duration
+                .resolved(in: Fraction(numerator: 5, denominator: 4))
+                .asFraction == Fraction(numerator: 5, denominator: 4),
+        )
     }
 
     @Test func measureRestStillAcceptsSlashFormDuration() throws {
@@ -54,7 +63,12 @@ struct MS2CompatibilityTests {
             Issue.record("expected one rest element, got \(voice.elements)")
             return
         }
-        #expect(rest.duration.asFraction == Fraction(numerator: 5, denominator: 4))
+        #expect(rest.duration == .measure)
+        #expect(
+            rest.duration
+                .resolved(in: Fraction(numerator: 5, denominator: 4))
+                .asFraction == Fraction(numerator: 5, denominator: 4),
+        )
     }
 
     @Test func numericNoteHeadMapsToStringName() throws {

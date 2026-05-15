@@ -29,7 +29,7 @@ struct RepeatMeasureAliasTests {
             return
         }
         #expect(rep.numMeasures == 1)
-        #expect(rep.duration == .fraction(Fraction(numerator: 4, denominator: 4)))
+        #expect(rep.duration == .measure)
     }
 
     /// MuseScore replays ALL voices of the source measure when ANY voice

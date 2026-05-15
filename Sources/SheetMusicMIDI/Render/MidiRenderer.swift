@@ -124,17 +124,9 @@ public enum MidiRenderer {
             ranges: fermataRanges, timeline: timeline,
         )
         let plan = playbackPlan(for: staff.measures, division: division)
-        var measureBases: [Int] = []
-        var measureSpans: [Int] = []
-        do {
-            var acc = 0
-            for m in staff.measures {
-                measureBases.append(acc)
-                let span = measureTicks(measure: m, division: division)
-                measureSpans.append(span)
-                acc += span
-            }
-        }
+        let (measureBases, measureSpans) = measureBaseLayout(
+            measures: staff.measures, division: division,
+        )
         let projectedClose = projectBookends(
             bookends.closeEvents, plan: plan,
             measureBases: measureBases, measureSpans: measureSpans,
@@ -214,6 +206,31 @@ public enum MidiRenderer {
             }
         }
         return out
+    }
+
+    /// Per-measure (base, span) tick budgets for the staff. Resolves
+    /// each measure's effective duration so `.measure` rests get the
+    /// correct concrete fraction before tick computation.
+    private static func measureBaseLayout(
+        measures: [Measure], division: Int,
+    ) -> (bases: [Int], spans: [Int]) {
+        var bases: [Int] = []
+        var spans: [Int] = []
+        let measureDurations = measures.effectiveMeasureDurations()
+        var acc = 0
+        for (i, m) in measures.enumerated() {
+            bases.append(acc)
+            let mDur = i < measureDurations.count
+                ? measureDurations[i]
+                : Fraction(numerator: 4, denominator: 4)
+            let span = measureTicks(
+                measure: m, division: division,
+                measureDuration: mDur,
+            )
+            spans.append(span)
+            acc += span
+        }
+        return (bases, spans)
     }
 
     /// Half-open lookup `[base, base + span)` with one tweak: a tick

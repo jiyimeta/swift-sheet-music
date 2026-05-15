@@ -89,11 +89,18 @@ extension MidiRenderer {
         // tick-base provider.
         let referenceMeasures = allStaves.first?.staff.measures ?? []
         var measureBases: [Int] = []
+        let measureDurations = referenceMeasures.effectiveMeasureDurations()
         do {
             var acc = 0
-            for m in referenceMeasures {
+            for (i, m) in referenceMeasures.enumerated() {
                 measureBases.append(acc)
-                acc += measureTicks(measure: m, division: division)
+                let mDur = i < measureDurations.count
+                    ? measureDurations[i]
+                    : Fraction(numerator: 4, denominator: 4)
+                acc += measureTicks(
+                    measure: m, division: division,
+                    measureDuration: mDur,
+                )
             }
         }
         var addressToStaffIdx: [StaffAddress: Int] = [:]
@@ -204,15 +211,22 @@ extension MidiRenderer {
     /// `index` in `elements`. Walks backwards skipping non-chord
     /// VoiceElements (clefs, tempo, etc.). Returns nil when no chord
     /// precedes — the score's leading downbeat case.
+    ///
+    /// `measureDuration` is forwarded to `resolved(in:)` so any
+    /// `.measure` rest in the adjacent element converts to the correct
+    /// concrete fraction before the tick count is taken.
     static func previousChordTicks(
         in elements: [VoiceElement],
         before index: Int,
+        measureDuration: Fraction,
         division: Int,
     ) -> Int? {
         guard index > 0 else { return nil }
         for i in stride(from: index - 1, through: 0, by: -1) {
             if case let .chord(chord) = elements[i] {
-                return chord.duration.ticks(division: division)
+                return chord.duration
+                    .resolved(in: measureDuration)
+                    .ticks(division: division)
             }
         }
         return nil
@@ -221,15 +235,22 @@ extension MidiRenderer {
     /// Find the played tick count of the chord immediately after
     /// `index`. Mirror of `previousChordTicks`. Used by the down-beat
     /// extension branch.
+    ///
+    /// `measureDuration` is forwarded to `resolved(in:)` so any
+    /// `.measure` rest in the adjacent element converts to the correct
+    /// concrete fraction before the tick count is taken.
     static func nextChordTicks(
         in elements: [VoiceElement],
         after index: Int,
+        measureDuration: Fraction,
         division: Int,
     ) -> Int? {
         guard index + 1 < elements.count else { return nil }
         for i in (index + 1) ..< elements.count {
             if case let .chord(chord) = elements[i] {
-                return chord.duration.ticks(division: division)
+                return chord.duration
+                    .resolved(in: measureDuration)
+                    .ticks(division: division)
             }
         }
         return nil

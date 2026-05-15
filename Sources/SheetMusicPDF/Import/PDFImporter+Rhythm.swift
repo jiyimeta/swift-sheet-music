@@ -216,6 +216,7 @@ extension PDFImporter {
         case .sixtyFourth: .oneTwentyEighth
         case .oneTwentyEighth: .twoFiftySixth
         case .twoFiftySixth: .twoFiftySixth
+        case .measure: .measure
         case let .fraction(f):
             .fraction(Fraction(
                 numerator: f.numerator,

@@ -22,29 +22,14 @@ enum MSCXRestDecoder {
         forDurationType type: String, node: XMLTreeNode,
     ) throws -> NoteDuration {
         if type == "measure" {
-            // Full-measure rest: the `<duration>` element gives the
-            // actual time. MS3+ writes `<duration>N/D</duration>`
-            // (text); MS2 writes `<duration z="N" n="D"/>` (attrs,
-            // C++: `Fraction::write` in MuseScore 2 `libmscore/xml.cpp`).
-            // Falling back to 4/4 on absence silently collapses
-            // irregular-meter measures (e.g. 5/4 → 4/4); accept both
-            // forms.
-            let frac: Fraction = {
-                guard let dur = node.first("duration") else {
-                    return Fraction(numerator: 4, denominator: 4)
-                }
-                if let zText = dur.attributes["z"],
-                   let nText = dur.attributes["n"],
-                   let z = Int(zText),
-                   let n = Int(nText),
-                   n > 0
-                {
-                    return Fraction(numerator: z, denominator: n)
-                }
-                return Fraction(mscxString: dur.text)
-                    ?? Fraction(numerator: 4, denominator: 4)
-            }()
-            return .fraction(frac)
+            // The `<duration>` child is informational under the
+            // `.measure` marker model — encoders re-derive it from
+            // the containing measure's effective duration. We accept
+            // both the MS3+ slash form (`<duration>N/D</duration>`)
+            // and the MS2 attribute form (`<duration z="N" n="D"/>`,
+            // C++: `Fraction::write` in MuseScore 2 `libmscore/xml.cpp`)
+            // by reading-and-discarding either.
+            return .measure
         }
         guard let base = NoteDuration(mscxName: type) else {
             throw SheetMusicError.malformedScore(

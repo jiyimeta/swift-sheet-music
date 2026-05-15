@@ -27,6 +27,7 @@ extension LayoutEngine {
     static func beamGroups( // swiftlint:disable:this function_body_length
         voice: Voice,
         timeSignature: TimeSignature?,
+        measureDuration: Fraction = Fraction(numerator: 4, denominator: 4),
         division: Int,
     ) -> [BeamGroup] {
         let beatLen = oneBeatTicks(
@@ -53,7 +54,7 @@ extension LayoutEngine {
                     let beat = scanTick / beatLen
                     beatLevelSets[beat, default: Set()].insert(level)
                 }
-                scanTick += c.duration.ticks(division: division)
+                scanTick += c.duration.resolved(in: measureDuration).ticks(division: division)
             // Empty chord = rest, picked up by the .chord case above
             // since c.notes.isEmpty contributes 0 elements to beam
             // groups but still advances scanTick.
@@ -81,12 +82,12 @@ extension LayoutEngine {
             case let .chord(c) where c.notes.isEmpty:
                 // Rest: breaks any in-progress beam group.
                 flush()
-                tick += c.duration.ticks(division: division)
+                tick += c.duration.resolved(in: measureDuration).ticks(division: division)
             case let .chord(c):
                 let level = beamLevel(c.duration)
                 if level == 0 {
                     flush()
-                    tick += c.duration.ticks(division: division)
+                    tick += c.duration.resolved(in: measureDuration).ticks(division: division)
                     continue
                 }
                 if tick > 0 {
@@ -132,7 +133,7 @@ extension LayoutEngine {
                 }
                 currentIndices.append(i)
                 currentLevel = max(currentLevel, level)
-                tick += c.duration.ticks(division: division)
+                tick += c.duration.resolved(in: measureDuration).ticks(division: division)
             default:
                 if case .barLine = el { flush() }
             }

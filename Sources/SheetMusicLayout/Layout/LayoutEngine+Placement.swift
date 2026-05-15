@@ -57,6 +57,7 @@ extension LayoutEngine {
         headerSchedule: HeaderSchedule,
         tickColumns: [Int: CGFloat],
         division: Int,
+        measureDuration: Fraction,
         drumLineMap: [Int: Int]? = nil,
         isLastMeasure: Bool = false,
         isFirstSystem: Bool = false,
@@ -70,7 +71,13 @@ extension LayoutEngine {
         var currentClef = activeClef
         var currentKey = activeKey
 
-        // --- Scan: time signature and total ticks in the widest voice ---
+        // --- Scan: time signature in this measure (for beam grouping) ---
+        //
+        // `beamGroups` needs the raw `TimeSignature` element (if present)
+        // to compute beat boundaries and beam-group lengths. This scan is
+        // separate from `measureDuration`: the latter is passed in from
+        // the caller so the prevailing TS carries forward across measures
+        // that lack an explicit `<TimeSignature>` element.
         var measureTimeSig: TimeSignature?
         for voice in measure.voices {
             for el in voice.elements {
@@ -81,6 +88,11 @@ extension LayoutEngine {
             }
             if measureTimeSig != nil { break }
         }
+        // `measureDuration` is passed in from the caller, which derives
+        // it via `[Measure].effectiveMeasureDurations()` so the
+        // prevailing time signature carries forward across measures that
+        // lack an explicit `<TimeSignature>` element. Used to resolve any
+        // `.measure` rest via `NoteDuration.resolved(in:)`.
         // --- Should we synthesize a leading clef? ---
         //
         // MuseScore omits explicit `<Clef>` in the first measure when the
@@ -198,7 +210,7 @@ extension LayoutEngine {
             let voiceTotalTicks: Int = voice.elements.reduce(0) { acc, el in
                 switch el {
                 case let .chord(c):
-                    return acc + c.duration.ticks(division: division)
+                    return acc + c.duration.resolved(in: measureDuration).ticks(division: division)
                 default:
                     return acc
                 }
@@ -243,7 +255,7 @@ extension LayoutEngine {
                 var t = 0
                 for el in voice.elements {
                     guard case let .chord(chord) = el else { continue }
-                    let ticks = chord.duration.ticks(division: division)
+                    let ticks = chord.duration.resolved(in: measureDuration).ticks(division: division)
                     defer { t += ticks }
                     guard !chord.notes.isEmpty else { continue }
                     let steps: [Int] = chord.notes.map { note in
@@ -291,7 +303,7 @@ extension LayoutEngine {
                 var t = 0
                 for el in voice.elements {
                     guard case let .chord(chord) = el else { continue }
-                    let ticks = chord.duration.ticks(division: division)
+                    let ticks = chord.duration.resolved(in: measureDuration).ticks(division: division)
                     defer { t += ticks }
                     guard !chord.notes.isEmpty else { continue }
                     let steps: [Int] = chord.notes.map { note in
@@ -474,20 +486,21 @@ extension LayoutEngine {
                     default:
                         restY = staffMidY + restVoiceOffset
                     }
-                    // Whole-measure rest: ALWAYS centered horizontally
-                    // in the measure body, even when other voices
-                    // carry content — that's how MuseScore engraves
-                    // it (`Rest::layout` falls into the
-                    // `centerInMeasure` branch whenever the rest's
-                    // duration spans the full measure, irrespective
-                    // of voice multiplicity). The vertical offset
-                    // assigned by `restVoiceOffset` keeps voice 2 /
-                    // 3 / 4 rests off voice 1's melody line, so
-                    // centering doesn't introduce any actual
-                    // collision.
-                    let isWholeRest = restBase == .whole
+                    // Centre only true measure-fill markers
+                    // (`NoteDuration.measure`). Typed `.whole`
+                    // rests carry an explicit duration and sit on
+                    // their start beat — MuseScore's data model:
+                    // a "centred" rest in any voice is authored as
+                    // `<durationType>measure</…>`, not
+                    // `<durationType>whole</…>`. With
+                    // `NoteDuration.measure` present in the model,
+                    // this distinction is honoured.
+                    let isMeasureRest: Bool = {
+                        if case .measure = r.duration { return true }
+                        return false
+                    }()
                     let restX: CGFloat
-                    if isWholeRest {
+                    if isMeasureRest {
                         // Centre the rest in the measure's chord
                         // area: midpoint of [contentStart,
                         // width − trailingPadding]. Must track
@@ -534,7 +547,7 @@ extension LayoutEngine {
                         restID: restID,
                         hasLegerLine: needsLeger,
                     ))
-                    tickCursor += r.duration.ticks(division: division)
+                    tickCursor += r.duration.resolved(in: measureDuration).ticks(division: division)
                 case let .chord(chord):
                     inHeader = false
                     // Every element at a shared tick lives at the same
@@ -712,9 +725,9 @@ extension LayoutEngine {
                     // Lyrics: emit the syllable text + (if the lyric
                     // extends beyond this chord) a melisma rule that
                     // stretches to the end of the last note it covers.
-                    let chordTicks = chord.duration.ticks(
-                        division: division,
-                    )
+                    let chordTicks = chord.duration
+                        .resolved(in: measureDuration)
+                        .ticks(division: division)
                     // Use the voice's pre-computed max south-driven
                     // Y so every chord in the measure shares the
                     // same lyric centre (within-measure horizontal
@@ -1038,6 +1051,7 @@ extension LayoutEngine {
             let groups = beamGroups(
                 voice: voice,
                 timeSignature: measureTimeSig,
+                measureDuration: measureDuration,
                 division: division,
             )
             for group in groups {
@@ -1268,6 +1282,7 @@ extension LayoutEngine {
                     beamGroups: beamGroups(
                         voice: voice,
                         timeSignature: measureTimeSig,
+                        measureDuration: measureDuration,
                         division: division,
                     ),
                     staffMidY: staffMidY,

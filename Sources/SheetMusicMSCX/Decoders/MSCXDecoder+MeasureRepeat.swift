@@ -8,11 +8,12 @@ extension MeasureRepeat {
         let durationText = node.first("durationType")?.text ?? "measure"
         let duration: NoteDuration
         if durationText == "measure" {
-            let fracText = node.first("duration")?.text ?? "4/4"
-            let frac = Fraction(mscxString: fracText) ?? Fraction(numerator: 4, denominator: 4)
-            duration = .fraction(frac)
+            // `<duration>` is informational; the encoder re-derives
+            // it from the measure's effective duration.
+            duration = .measure
         } else {
-            duration = NoteDuration(mscxName: durationText) ?? .fraction(Fraction(numerator: 4, denominator: 4))
+            duration = NoteDuration(mscxName: durationText)
+                ?? .measure
         }
         return MeasureRepeat(numMeasures: num, duration: duration)
     }

@@ -46,8 +46,17 @@ public struct PasteVoiceElement: EditCommand {
         }
         let original = voice.elements[location.elementIndex]
         let division = score.division
-        let srcTicks = Self.ticks(of: element, division: division)
-        let dstTicks = Self.ticks(of: original, division: division)
+        let measureDuration = score
+            .effectiveMeasureDurations(
+                partIndex: location.staff.partIndex,
+                staffIndex: location.staff.staffIndexInPart,
+            )[location.measureIndex]
+        let srcTicks = Self.ticks(
+            of: element, division: division, measureDuration: measureDuration,
+        )
+        let dstTicks = Self.ticks(
+            of: original, division: division, measureDuration: measureDuration,
+        )
 
         // Non-timed source or target: degenerate to a verbatim swap
         // — there's no tick obligation to balance and no following
@@ -99,11 +108,18 @@ public struct PasteVoiceElement: EditCommand {
 
     /// Tick count of a chord / rest; nil for non-timed elements
     /// so the duration check is skipped for those.
+    /// `measureDuration` is used to resolve `.measure` rests before
+    /// calling `ticks(division:)`.
     private static func ticks(
-        of element: VoiceElement, division: Int,
+        of element: VoiceElement,
+        division: Int,
+        measureDuration: Fraction,
     ) -> Int? {
         switch element {
-        case let .chord(c): return c.duration.ticks(division: division)
+        case let .chord(c):
+            return c.duration
+                .resolved(in: measureDuration)
+                .ticks(division: division)
         default: return nil
         }
     }

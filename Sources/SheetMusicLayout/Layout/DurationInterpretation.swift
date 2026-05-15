@@ -27,6 +27,15 @@ public enum DurationInterpretation {
              .thirtySecond, .sixtyFourth,
              .oneTwentyEighth, .twoFiftySixth:
             return (dur, 0)
+        case .measure:
+            // A `.measure` rest renders as a single whole-rest glyph
+            // hanging from staff line 4, with no augmentation dot,
+            // regardless of meter (SMuFL `restWhole` U+E4E3 — the
+            // universal full-measure-rest glyph). Short-circuiting
+            // here also fixes the legacy 6/4 / 3/4 / 6/8 / 12/8
+            // dotted-rest miscategorisation that came from passing
+            // these through the dotted-pattern heuristic below.
+            return (.whole, 0)
         case let .fraction(f):
             if let direct = baseAndDots(
                 numerator: f.numerator,

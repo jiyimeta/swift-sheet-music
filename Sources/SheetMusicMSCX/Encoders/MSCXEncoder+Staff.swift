@@ -52,10 +52,18 @@ extension Staff {
     /// elements with `<location>` shifts to match their
     /// `MeasurePosition`. Empty or out-of-range entries skip the
     /// injection.
+    /// `effectiveMeasureDurations[i]` is the effective duration of
+    /// measure `i` (from `[Measure].effectiveMeasureDurations()`),
+    /// forwarded to each measure's encoder so `.measure` rests can
+    /// resolve against the prevailing TimeSignature × actualLength.
+    /// An empty array (the default) keeps the historical 4/4
+    /// fallback for source-compat — safe until decoders start
+    /// emitting `.measure` rests.
     func encodeTopLevel(
         staffID: String,
         titleFrame: ScoreFrame? = nil,
         systemElementsByMeasure: [[PositionedSystemElement]] = [],
+        effectiveMeasureDurations: [Fraction] = [],
         options: MSCXEncoderOptions = .init(),
     ) throws -> XMLTreeNode {
         var children: [XMLTreeNode] = []
@@ -74,12 +82,16 @@ extension Staff {
                 measureIndex < systemElementsByMeasure.count
                     ? systemElementsByMeasure[measureIndex]
                     : []
+            let measureDuration = measureIndex < effectiveMeasureDurations.count
+                ? effectiveMeasureDurations[measureIndex]
+                : Fraction(numerator: 4, denominator: 4)
             let result = try measure.encode(
                 carryInVoiceTieCarries: carry,
                 isFirstMeasureOfStaff: measureIndex == 0,
                 options: options,
                 staffGroup: group,
                 voice0SystemElements: injection,
+                effectiveDuration: measureDuration,
             )
             children.append(result.node)
             carry = result.carryOutVoiceTieCarries

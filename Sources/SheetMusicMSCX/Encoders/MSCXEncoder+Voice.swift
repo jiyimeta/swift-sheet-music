@@ -65,6 +65,14 @@ extension Voice {
     /// matching their `MeasurePosition`. Each shift is consumed by
     /// the immediately-following system element only — chords later
     /// in the voice remain at their natural cursor.
+    /// `effectiveDuration` is the containing measure's effective
+    /// duration (TimeSignature × actualLength). Used to resolve
+    /// `.measure` rests and to drive cross-measure tie offsets when
+    /// a voice contains a measure-filling rest. The 4/4 default is
+    /// a source-compatibility shim for callers that do not yet
+    /// supply it; non-`.measure` voices behave identically with or
+    /// without the real value, so the default is safe until decoders
+    /// start emitting `.measure` rests.
     func encode(
         carryIn: VoiceTieCarry,
         isStaffHead: Bool = false,
@@ -72,6 +80,7 @@ extension Voice {
         staffGroup: String = "pitched",
         voiceIndex: Int = 0,
         systemElements: [PositionedSystemElement] = [],
+        effectiveDuration: Fraction = Fraction(numerator: 4, denominator: 4),
     ) throws -> (node: XMLTreeNode, carryOut: VoiceTieCarry) {
         try Self.validateProperlyNested(tuplets)
         // At a given startIndex, push outer tuplets (longer range)
@@ -98,7 +107,7 @@ extension Voice {
             if case .chord = el { lastChordIndex = i }
         }
 
-        let voiceBarLength = computedBarLength()
+        let voiceBarLength = resolvedBarLength(effectiveDuration: effectiveDuration)
         // Staff-head suppression of an implicit C-major KeySig: drop
         // the very first VoiceElement when this voice sits at the
         // staff head and that element is `keySignature` with
@@ -107,25 +116,7 @@ extension Voice {
         let dropInitialZeroKeySig = shouldDropInitialZeroKeySig(isStaffHead: isStaffHead)
 
         var state = EncodeState(carryIn: carryIn)
-        // Inject lifted system elements at the head of the voice
-        // with `<location>` shifts matching their position. Sorted
-        // by position so multi-element measures emit in time order.
-        let sortedSystemElements = systemElements.sorted {
-            $0.position < $1.position
-        }
-        for sysElement in sortedSystemElements {
-            let offset = sysElement.position.offset
-            if offset.numerator != 0 {
-                state.children.append(XMLTreeNode(
-                    name: "location",
-                    children: [XMLTreeNode(
-                        name: "fractions",
-                        text: "\(offset.numerator)/\(offset.denominator)",
-                    )],
-                ))
-            }
-            state.children.append(Self.encodeSystem(sysElement.element))
-        }
+        injectSystemElements(systemElements, into: &state)
         for (index, element) in elements.enumerated() {
             for opening in startsByIndex[index] ?? [] {
                 let activeWithOpening = state.stack + [opening]
@@ -142,6 +133,7 @@ extension Voice {
                     index: index,
                     lastChordIndex: lastChordIndex,
                     voiceBarLength: voiceBarLength,
+                    effectiveDuration: effectiveDuration,
                     carryIn: carryIn,
                     state: &state,
                     options: options,
@@ -166,7 +158,7 @@ extension Voice {
     /// Per-iteration state of the voice-encoding loop. Bundled so
     /// the loop body can stay below the function-body-length limit
     /// after factoring out `emitElement`.
-    private struct EncodeState {
+    struct EncodeState {
         var children: [XMLTreeNode] = []
         var stack: [Tuplet] = []
         var previousChordDuration: Fraction?
@@ -191,6 +183,7 @@ extension Voice {
         index: Int,
         lastChordIndex: Int?,
         voiceBarLength: Fraction,
+        effectiveDuration: Fraction,
         carryIn: VoiceTieCarry,
         state: inout EncodeState,
         options: MSCXEncoderOptions,
@@ -209,24 +202,31 @@ extension Voice {
             isLastChordOfVoice: isLastChord,
             prevVoiceTotal: carryIn.prevVoiceTotal,
             voiceBarLength: voiceBarLength,
+            effectiveDuration: effectiveDuration,
             options: options,
             staffGroup: staffGroup,
             voiceIndex: voiceIndex,
         ))
         if case let .chord(chord) = element {
-            state.previousChordDuration = chord.duration.asFraction
+            // Resolve `.measure` so `asFraction` cannot trap when
+            // accumulating the voice total / previous-chord duration
+            // for cross-measure tie offsets.
+            let chordFrac = chord.duration
+                .resolved(in: effectiveDuration)
+                .asFraction
+            state.previousChordDuration = chordFrac
             state.seenChordInVoice = true
             // Fraction defines `+` but no `+=`; rewriting as
             // shorthand would not compile.
             // swiftlint:disable:next shorthand_operator
-            state.voiceTotal = state.voiceTotal + chord.duration.asFraction
+            state.voiceTotal = state.voiceTotal + chordFrac
         }
     }
 
     /// Encode a lifted `SystemElement` to its MSCX node. Mirrors the
     /// dispatch in `encode(element:…)` for what used to be voice
     /// element cases — the actual per-type encoders are unchanged.
-    private static func encodeSystem(_ element: SystemElement) -> XMLTreeNode {
+    static func encodeSystem(_ element: SystemElement) -> XMLTreeNode {
         switch element {
         case let .tempo(tempo): return tempo.encode()
         case let .rehearsalMark(rehearsalMark): return rehearsalMark.encode()
@@ -266,6 +266,7 @@ extension Voice {
         isLastChordOfVoice: Bool,
         prevVoiceTotal: Fraction?,
         voiceBarLength: Fraction,
+        effectiveDuration: Fraction,
         options: MSCXEncoderOptions = .init(),
         staffGroup: String = "pitched",
         voiceIndex: Int = 0,
@@ -280,6 +281,7 @@ extension Voice {
                 isLastChordOfVoice: isLastChordOfVoice,
                 prevVoiceTotal: prevVoiceTotal,
                 voiceBarLength: voiceBarLength,
+                effectiveDuration: effectiveDuration,
                 options: options,
                 staffGroup: staffGroup,
                 voiceIndex: voiceIndex,
@@ -297,7 +299,7 @@ extension Voice {
         case let .harmony(harmony):
             return harmony.encode()
         case let .measureRepeat(measureRepeat):
-            return measureRepeat.encode(options: options)
+            return measureRepeat.encode(options: options, in: effectiveDuration)
         case let .fermata(fermata):
             return fermata.encode()
         case let .locationShift(delta):
@@ -331,6 +333,7 @@ extension Voice {
         isLastChordOfVoice: Bool,
         prevVoiceTotal: Fraction?,
         voiceBarLength: Fraction,
+        effectiveDuration: Fraction,
         options: MSCXEncoderOptions,
         staffGroup: String,
         voiceIndex: Int,
@@ -354,7 +357,9 @@ extension Voice {
             prevVoiceTotal: prevVoiceTotal,
         )
         return unscaledChord.notes.isEmpty
-            ? unscaledChord.encodeAsRest(options: options)
+            ? unscaledChord.encodeAsRest(
+                options: options, in: effectiveDuration,
+            )
             : unscaledChord.encodeAsChord(
                 tieForwardLocation: tieForward,
                 tieBackLocation: tieBack,
@@ -362,67 +367,5 @@ extension Voice {
                 staffGroup: staffGroup,
                 voiceIndex: voiceIndex,
             )
-    }
-
-    /// Sum of all played durations in the voice. The cross-measure
-    /// forward tie uses this as `barLength` to compute
-    /// `<fractions>(source.duration - barLength)</fractions>`,
-    /// matching MuseScore's `(measures, fractions)` encoding where
-    /// the pair sums to the actual played-tick delta.
-    private func computedBarLength() -> Fraction {
-        elements.reduce(Fraction(numerator: 0, denominator: 1)) { acc, element in
-            if case let .chord(chord) = element {
-                return acc + chord.duration.asFraction
-            }
-            return acc
-        }
-    }
-
-    /// Resolve the "written" duration of the tuplet's first member
-    /// for emission as `<baseNote>{name}</baseNote>`. Returns nil for
-    /// degenerate tuplets (empty range or non-chord/rest member) and
-    /// for durations that cannot be expressed as a named base.
-    private func tupletBaseDuration(
-        opening: Tuplet,
-        activeTuplets: [Tuplet],
-    ) -> NoteDuration? {
-        guard opening.startIndex < elements.count else { return nil }
-        guard case let .chord(chord) = elements[opening.startIndex] else {
-            return nil
-        }
-        return try? unscaledDuration(chord.duration, in: activeTuplets)
-    }
-
-    /// Divide the stored (already-scaled) duration by the product
-    /// of every containing tuplet's `actualNotes/normalNotes` ratio
-    /// so the decoder's positional scaling reproduces the original
-    /// fraction.
-    private func unscaledDuration(
-        _ duration: NoteDuration, in tuplets: [Tuplet],
-    ) throws -> NoteDuration {
-        guard !tuplets.isEmpty else { return duration }
-        let scaled = duration.asFraction
-        // Decoder scales by ∏ normalNotes/actualNotes. To invert:
-        // multiply by ∏ actualNotes/normalNotes.
-        var unscaled = scaled
-        for tuplet in tuplets {
-            unscaled = Fraction(
-                numerator: unscaled.numerator * tuplet.actualNotes,
-                denominator: unscaled.denominator * tuplet.normalNotes,
-            )
-        }
-        let candidate = NoteDuration.fraction(unscaled)
-        guard candidate.decomposed() != nil else {
-            let ratios = tuplets
-                .map { "\($0.actualNotes)/\($0.normalNotes)" }
-                .joined(separator: " × ")
-            throw SheetMusicError.malformedScore(
-                reason: "Tuplet member duration \(scaled) does not "
-                    + "decompose to a named base + dots after "
-                    + "un-scaling by \(ratios); MSCXEncoder supports "
-                    + "only durations representable as base + dots.",
-            )
-        }
-        return candidate
     }
 }

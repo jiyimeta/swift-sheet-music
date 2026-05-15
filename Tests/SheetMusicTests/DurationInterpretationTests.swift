@@ -89,4 +89,15 @@ struct DurationInterpretationTests {
             )
         }
     }
+
+    // MARK: - .measure short-circuit (6/4 dotted-rest bug fix)
+
+    @available(macOS 15.0, iOS 16.0, *)
+    @Test func measureRendersAsPlainWholeRest() {
+        // Spec Goal #3: regardless of meter, a `.measure` rest
+        // renders with the whole-rest glyph and no augmentation dot.
+        let split = DurationInterpretation.split(.measure)
+        #expect(split.base == .whole)
+        #expect(split.dots == 0)
+    }
 }

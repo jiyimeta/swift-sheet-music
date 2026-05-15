@@ -200,16 +200,20 @@ extension LayoutEngine {
             let staff = entry.staff
             let voiceCount = staff.measures
                 .map(\.voices.count).max() ?? 0
+            let staffMeasureDurations = staff.measures.effectiveMeasureDurations()
             for voiceIdx in 0 ..< voiceCount {
                 // Pre-compute total voice ticks per measure so the
                 // inner loop doesn't rescan them repeatedly.
-                let tickCounts: [Int] = staff.measures.map { m in
+                let tickCounts: [Int] = staff.measures.enumerated().map { mIdx, m in
+                    let measureDuration = mIdx < staffMeasureDurations.count
+                        ? staffMeasureDurations[mIdx]
+                        : Fraction(numerator: 4, denominator: 4)
                     guard voiceIdx < m.voices.count else { return 0 }
                     var total = 0
                     for el in m.voices[voiceIdx].elements {
                         switch el {
                         case let .chord(c):
-                            total += c.duration.ticks(division: division)
+                            total += c.duration.resolved(in: measureDuration).ticks(division: division)
                         default:
                             break
                         }
@@ -217,6 +221,9 @@ extension LayoutEngine {
                     return total
                 }
                 for (mIdx, measure) in staff.measures.enumerated() {
+                    let measureDuration = mIdx < staffMeasureDurations.count
+                        ? staffMeasureDurations[mIdx]
+                        : Fraction(numerator: 4, denominator: 4)
                     guard voiceIdx < measure.voices.count else { continue }
                     var tickInMeasure = 0
                     for (eIdx, el)
@@ -225,6 +232,7 @@ extension LayoutEngine {
                         switch el {
                         case let .chord(c):
                             let chordTicks = c.duration
+                                .resolved(in: measureDuration)
                                 .ticks(division: division)
                             for (verseIdx, lyric)
                                 in c.lyrics.enumerated()

@@ -16,6 +16,7 @@ extension MidiRenderer {
         swingMap: SwingMap = .empty,
         systemElementsByMeasure: [[PositionedSystemElement]] = [],
     ) -> (events: [TimedMidiEvent], endTick: Int) {
+        let measureDurations = staff.measures.effectiveMeasureDurations()
         let plan = playbackPlan(for: staff.measures, division: division)
         var events: [TimedMidiEvent] = []
         var velocity = effectiveVelocity(forDynamic: nil, instrument: part.instrument)
@@ -39,9 +40,15 @@ extension MidiRenderer {
         var originalMeasureBase: [Int] = []
         do {
             var acc = 0
-            for m in staff.measures {
+            for (idx, m) in staff.measures.enumerated() {
                 originalMeasureBase.append(acc)
-                acc += measureTicks(measure: m, division: division)
+                let mDuration = idx < measureDurations.count
+                    ? measureDurations[idx]
+                    : Fraction(numerator: 4, denominator: 4)
+                acc += measureTicks(
+                    measure: m, division: division,
+                    measureDuration: mDuration,
+                )
             }
         }
 
@@ -124,6 +131,9 @@ extension MidiRenderer {
                     }
                 }
             }
+            let measureDuration = entry.measureIndex < measureDurations.count
+                ? measureDurations[entry.measureIndex]
+                : Fraction(numerator: 4, denominator: 4)
             for (elementIndex, element) in effectiveVoice.elements.enumerated() {
                 if case let .keySignature(k) = element { currentKey = k.concertKey }
                 renderVoiceElement(
@@ -133,6 +143,7 @@ extension MidiRenderer {
                     voiceTuplets: effectiveVoice.tuplets,
                     measures: staff.measures,
                     measureIndex: entry.measureIndex,
+                    measureDuration: measureDuration,
                     currentKey: currentKey,
                     localTick: &localTick,
                     velocity: &velocity,
@@ -152,7 +163,14 @@ extension MidiRenderer {
 
         let endTick: Int
         if let last = plan.last {
-            endTick = last.tickOffset + measureTicks(measure: staff.measures[last.measureIndex], division: division)
+            let lastDuration = last.measureIndex < measureDurations.count
+                ? measureDurations[last.measureIndex]
+                : Fraction(numerator: 4, denominator: 4)
+            endTick = last.tickOffset + measureTicks(
+                measure: staff.measures[last.measureIndex],
+                division: division,
+                measureDuration: lastDuration,
+            )
         } else {
             endTick = 0
         }
@@ -167,6 +185,7 @@ extension MidiRenderer {
         voiceTuplets: [Tuplet],
         measures: [Measure],
         measureIndex: Int,
+        measureDuration: Fraction,
         currentKey: Int,
         localTick: inout Int,
         velocity: inout Int,
@@ -210,7 +229,9 @@ extension MidiRenderer {
             velocity = effectiveVelocity(forDynamic: dynamic, instrument: instrument)
         case let .chord(chord) where chord.notes.isEmpty:
             // Rest: advance the tick cursor, emit no note events.
-            localTick += chord.duration.ticks(division: division)
+            localTick += chord.duration
+                .resolved(in: measureDuration)
+                .ticks(division: division)
         case let .chord(chord):
             let glissandoEndPitch = chord.notes.contains(where: { $0.glissando != nil })
                 ? MidiRenderer.glissandoEndPitch(
@@ -225,18 +246,22 @@ extension MidiRenderer {
             // duration per the active swing state. `localTick` itself
             // continues to advance by the chord's nominal duration so
             // the swing grid stays aligned to the bar.
-            let chordTicks = chord.duration.ticks(division: division)
+            let chordTicks = chord.duration
+                .resolved(in: measureDuration)
+                .ticks(division: division)
             let adjust = swingAdjustment(
                 startTick: localTick,
                 chordTicks: chordTicks,
                 prevChordTicks: previousChordTicks(
                     in: voiceElements,
                     before: elementIndex,
+                    measureDuration: measureDuration,
                     division: division,
                 ),
                 nextChordTicks: nextChordTicks(
                     in: voiceElements,
                     after: elementIndex,
+                    measureDuration: measureDuration,
                     division: division,
                 ),
                 isInTuplet: isChordInTuplet(

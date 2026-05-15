@@ -139,5 +139,10 @@ public final class LayoutCache: @unchecked Sendable {
         /// changes here invalidate the placement cache so reflows
         /// pick up edited or relocated system markings.
         let systemElements: [PositionedSystemElement]
+        /// Prevailing time-signature duration for this measure, derived
+        /// from the full staff measure list via
+        /// `[Measure].effectiveMeasureDurations()`. Used to resolve any
+        /// `.measure` rest duration via `NoteDuration.resolved(in:)`.
+        let measureDuration: Fraction
     }
 }

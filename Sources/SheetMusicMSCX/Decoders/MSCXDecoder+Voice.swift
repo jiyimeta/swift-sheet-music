@@ -40,7 +40,9 @@ extension Voice {
     }
 
     // swiftlint:disable:next function_body_length cyclomatic_complexity
-    static func decodeWithSystemElements(_ node: XMLTreeNode) throws -> DecodeResult {
+    static func decodeWithSystemElements(
+        _ node: XMLTreeNode,
+    ) throws -> DecodeResult {
         let voiceChildren = injectMS2EndTuplets(node.children)
         var elements: [VoiceElement] = []
         elements.reserveCapacity(voiceChildren.count)
@@ -133,14 +135,26 @@ extension Voice {
                     pendingGracesBefore.removeAll(keepingCapacity: true)
                 }
                 appendVoiceElement(.chord(chord))
-                cursor += chord.duration.asFraction
+                // `.measure` chords carry no intrinsic duration; the
+                // measure-rest fills the bar by definition, so any
+                // following element would be malformed. Skip the
+                // cursor advance instead of trapping in `asFraction`.
+                if case .measure = chord.duration {
+                    // no-op; cursor stays put
+                } else {
+                    cursor += chord.duration.asFraction
+                }
             case "Rest":
                 var rest = try MSCXRestDecoder.decode(child)
                 rest.duration = scaled(
                     rest.duration, by: tupletFractions(),
                 )
                 appendVoiceElement(.chord(rest))
-                cursor += rest.duration.asFraction
+                if case .measure = rest.duration {
+                    // Same reasoning as the .Chord arm above.
+                } else {
+                    cursor += rest.duration.asFraction
+                }
             case "Tuplet":
                 if let ratio = tupletRatio(from: child) {
                     tupletStack.append(OpenTuplet(
@@ -323,6 +337,10 @@ extension Voice {
 
     private static func scaled(_ duration: NoteDuration, by tupletStack: [Fraction]) -> NoteDuration {
         guard !tupletStack.isEmpty else { return duration }
+        // `.measure` rests cannot be inside a tuplet (they fill a
+        // whole bar); defensively pass through unchanged so we don't
+        // trap in `asFraction`.
+        if case .measure = duration { return duration }
         var frac = duration.asFraction
         for ratio in tupletStack {
             frac = Fraction(

@@ -16,13 +16,21 @@ enum FermataRanges {
     static func collect(from staff: Staff, division: Int) -> [FermataRange] {
         var ranges: [FermataRange] = []
         var measureBase = 0
-        for measure in staff.measures {
+        let measureDurations = staff.measures.effectiveMeasureDurations()
+        for (measureIdx, measure) in staff.measures.enumerated() {
+            let measureDuration = measureIdx < measureDurations.count
+                ? measureDurations[measureIdx]
+                : Fraction(numerator: 4, denominator: 4)
             let mTicks = MidiRenderer.measureTicks(
                 measure: measure, division: division,
+                measureDuration: measureDuration,
             )
             for voice in measure.voices {
                 ranges.append(contentsOf: collectInVoice(
-                    voice, measureBase: measureBase, division: division,
+                    voice,
+                    measureBase: measureBase,
+                    measureDuration: measureDuration,
+                    division: division,
                 ))
             }
             measureBase += mTicks
@@ -37,6 +45,7 @@ enum FermataRanges {
     private static func collectInVoice(
         _ voice: Voice,
         measureBase: Int,
+        measureDuration: Fraction,
         division: Int,
     ) -> [FermataRange] {
         // Pre-compute each chord's start tick within the voice so both
@@ -49,7 +58,9 @@ enum FermataRanges {
             switch element {
             case let .chord(chord):
                 chordStartTicks[i] = runningTick
-                runningTick += chord.duration.ticks(division: division)
+                runningTick += chord.duration
+                    .resolved(in: measureDuration)
+                    .ticks(division: division)
             case let .locationShift(delta):
                 runningTick += delta.ticks(division: division)
             default:
@@ -62,7 +73,9 @@ enum FermataRanges {
             guard case let .fermata(f) = element else { continue }
             let anchor = anchorForFermata(at: i, in: voice, chordStartTicks: chordStartTicks)
             guard let anchor else { continue }
-            let chordTicks = anchor.chord.duration.ticks(division: division)
+            let chordTicks = anchor.chord.duration
+                .resolved(in: measureDuration)
+                .ticks(division: division)
             ranges.append(FermataRange(
                 startTick: anchor.startTick,
                 endTick: anchor.startTick + chordTicks,
@@ -172,11 +185,18 @@ struct TempoTimeline: Equatable {
     ) -> TempoTimeline {
         var entries: [(tick: Int, bps: Double)] = [(0, 2.0)]
         var measureBases: [Int] = []
+        let measureDurations = measures.effectiveMeasureDurations()
         do {
             var acc = 0
-            for m in measures {
+            for (i, m) in measures.enumerated() {
                 measureBases.append(acc)
-                acc += MidiRenderer.measureTicks(measure: m, division: division)
+                let mDur = i < measureDurations.count
+                    ? measureDurations[i]
+                    : Fraction(numerator: 4, denominator: 4)
+                acc += MidiRenderer.measureTicks(
+                    measure: m, division: division,
+                    measureDuration: mDur,
+                )
             }
         }
         for (measureIndex, systemMeasure) in systemMeasures.enumerated() {

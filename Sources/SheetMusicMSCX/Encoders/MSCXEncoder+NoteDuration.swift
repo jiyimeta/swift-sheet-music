@@ -19,6 +19,7 @@ extension NoteDuration {
         case .oneTwentyEighth: "128th"
         case .twoFiftySixth: "256th"
         case .fraction: nil
+        case .measure: nil
         }
     }
 
@@ -57,6 +58,13 @@ extension NoteDuration {
     /// but plays back as a plain half, with the missing 1/4 padded
     /// out as an extra rest.
     func appendDurationXML(to children: inout [XMLTreeNode]) {
+        if case .measure = self {
+            preconditionFailure(
+                "appendDurationXML: .measure must be written via "
+                    + "the appendDurationXML(to:in:) overload that "
+                    + "carries the effective measure duration",
+            )
+        }
         if let parts = decomposed() {
             if parts.dots > 0 {
                 children.append(XMLTreeNode(name: "dots", text: String(parts.dots)))

@@ -28,6 +28,7 @@ public struct SetRestDuration: EditCommand {
     }
 
     @discardableResult
+    // swiftlint:disable:next function_body_length
     public func apply(to score: inout Score) throws -> any EditCommand {
         guard let voice = DurationChangeAlgorithm
             .voice(in: score, at: location),
@@ -52,8 +53,17 @@ public struct SetRestDuration: EditCommand {
             label: "SetRestDuration",
         )
         let division = score.division
-        let srcTicks = rest.duration.ticks(division: division)
-        let dstTicks = duration.ticks(division: division)
+        let measureDuration = score
+            .effectiveMeasureDurations(
+                partIndex: location.staff.partIndex,
+                staffIndex: location.staff.staffIndexInPart,
+            )[location.measureIndex]
+        let srcTicks = rest.duration
+            .resolved(in: measureDuration)
+            .ticks(division: division)
+        let dstTicks = duration
+            .resolved(in: measureDuration)
+            .ticks(division: division)
         if srcTicks == dstTicks {
             return SetRestDuration(at: location, duration: duration)
         }
