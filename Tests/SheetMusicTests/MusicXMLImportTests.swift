@@ -197,4 +197,37 @@ struct MusicXMLImportTests {
             _ = try MusicXMLParser.parse(mxlData: mxl)
         }
     }
+
+    /// `<rest measure="yes"/>` must be imported as `.rest(duration: .measure)`,
+    /// not as a regular rest with a computed duration.
+    @Test func restMeasureAttributeProducesMeasureMarker() throws {
+        let xml = Data("""
+        <?xml version="1.0"?>
+        <score-partwise version="4.0">
+          <part-list>
+            <score-part id="P1"><part-name>Test</part-name></score-part>
+          </part-list>
+          <part id="P1">
+            <measure number="1">
+              <attributes>
+                <divisions>4</divisions>
+                <time><beats>3</beats><beat-type>4</beat-type></time>
+              </attributes>
+              <note>
+                <rest measure="yes"/>
+                <duration>12</duration>
+              </note>
+            </measure>
+          </part>
+        </score-partwise>
+        """.utf8)
+        let score = try MusicXMLParser.parse(xml)
+        let measure = score.parts[0].staves[0].measures[0]
+        let rest = measure.voices.flatMap(\.elements).compactMap { el -> Chord? in
+            if case let .chord(c) = el, c.notes.isEmpty { return c }
+            return nil
+        }.first
+        try #require(rest != nil)
+        #expect(rest?.duration == .measure)
+    }
 }

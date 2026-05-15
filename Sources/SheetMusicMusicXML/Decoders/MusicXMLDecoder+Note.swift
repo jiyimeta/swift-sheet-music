@@ -34,6 +34,14 @@ enum MusicXMLNoteDecoder {
         let prefix: [VoiceElement] = fermata.map { [.fermata($0)] } ?? []
 
         if isRest {
+            let restNode = node.children.first(where: { $0.name == "rest" })
+            let isMeasureRest = restNode?.attributes["measure"] == "yes"
+            if isMeasureRest {
+                // `<duration>` (which `MusicXMLDuration.decode` already
+                // consumed for divisions-cursor correctness) is
+                // informational under the `.measure` marker model.
+                return .new(prefix + [.rest(duration: .measure)])
+            }
             return .new(prefix + [.rest(duration: duration)])
         }
 
