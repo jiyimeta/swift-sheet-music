@@ -299,7 +299,7 @@ extension Voice {
         case let .harmony(harmony):
             return harmony.encode()
         case let .measureRepeat(measureRepeat):
-            return measureRepeat.encode(options: options)
+            return measureRepeat.encode(options: options, in: effectiveDuration)
         case let .fermata(fermata):
             return fermata.encode()
         case let .locationShift(delta):

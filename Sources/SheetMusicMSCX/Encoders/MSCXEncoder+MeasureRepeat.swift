@@ -15,7 +15,10 @@ extension MeasureRepeat {
     /// MuseScore's canonical measure-repeat form
     /// (`<durationType>measure</durationType>` + `<duration>N/D
     /// </duration>`) on both branches.
-    func encode(options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
+    func encode(
+        options: MSCXEncoderOptions = .init(),
+        in measureDuration: Fraction = Fraction(numerator: 4, denominator: 4),
+    ) -> XMLTreeNode {
         let elementName: String
         var children: [XMLTreeNode] = []
         switch options.targetVersion {
@@ -28,20 +31,15 @@ extension MeasureRepeat {
                 name: "subtype", text: String(numMeasures),
             ))
         }
-        switch duration {
-        case .measure:
-            preconditionFailure(
-                "MeasureRepeat.encode: `.measure` duration must be "
-                    + "resolved before encode() is called",
-            )
-        case let .fraction(f):
+        let resolved = duration.resolved(in: measureDuration)
+        if case let .fraction(f) = resolved {
             children.append(XMLTreeNode(name: "durationType", text: "measure"))
             children.append(XMLTreeNode(
                 name: "duration",
                 text: "\(f.numerator)/\(f.denominator)",
             ))
-        default:
-            duration.appendDurationXML(to: &children)
+        } else {
+            resolved.appendDurationXML(to: &children)
         }
         return XMLTreeNode(name: elementName, children: children)
     }

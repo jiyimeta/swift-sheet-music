@@ -129,7 +129,9 @@ extension MidiRenderer {
                 ticks += chord.duration
                     .resolved(in: measureDuration)
                     .ticks(division: division)
-            case let .measureRepeat(rep): ticks += rep.duration.ticks(division: division)
+            case let .measureRepeat(rep): ticks += rep.duration
+                .resolved(in: measureDuration)
+                .ticks(division: division)
             default: continue
             }
         }
