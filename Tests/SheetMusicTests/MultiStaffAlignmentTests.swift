@@ -197,7 +197,16 @@
                     .chord(Chord(duration: .quarter, notes: [c4])),
                 ]),
                 Voice(elements: [
-                    .rest(duration: .whole),
+                    // `.measure` (not `.whole`) is the
+                    // MuseScore-canonical spelling for a
+                    // measure-filling rest in voice 1 alongside
+                    // voice 0's melody. With `NoteDuration.measure`
+                    // present in the model, the layout engine
+                    // centres only `.measure`; typed `.whole`
+                    // rests sit on their start beat. This
+                    // fixture's intent is the centring case, so
+                    // it should use `.measure`.
+                    .rest(duration: .measure),
                 ]),
             ])
             let staff = Staff(measures: [m])
@@ -219,14 +228,14 @@
             let measure = try #require(doc.systems.first?.measures.first)
 
             var v0Xs: [CGFloat] = []
-            var wholeRestX: CGFloat?
+            var measureRestX: CGFloat?
             for el in measure.elements {
                 switch el {
                 case let .chord(_, _, _, so, _, _, _, _):
                     v0Xs.append(so.x)
                 case let .rest(dur, origin, _, _, _):
-                    if case .whole = dur {
-                        wholeRestX = origin.x
+                    if case .measure = dur {
+                        measureRestX = origin.x
                     }
                 default:
                     break
@@ -235,11 +244,11 @@
 
             try #require(v0Xs.count == 4)
             let wr = try #require(
-                wholeRestX,
-                "whole rest not found in emission list",
+                measureRestX,
+                "measure rest not found in emission list",
             )
 
-            // The whole rest must NOT share x with voice 0's first chord
+            // The measure rest must NOT share x with voice 0's first chord
             // — it's centered in the measure body (MuseScore behaviour),
             // distinct from tick 0 even when other voices carry content.
             // 3 pt is enough headroom to be unambiguous after we tightened
@@ -248,7 +257,7 @@
             // below.
             #expect(
                 abs(wr - v0Xs[0]) > 3,
-                "whole rest x=\(wr) should NOT match v0 tick-0 x=\(v0Xs[0])",
+                "measure rest x=\(wr) should NOT match v0 tick-0 x=\(v0Xs[0])",
             )
             // And it should land somewhere inside the measure's chord
             // span — i.e. between the first and last v0 chord. The

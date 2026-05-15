@@ -486,20 +486,21 @@ extension LayoutEngine {
                     default:
                         restY = staffMidY + restVoiceOffset
                     }
-                    // Whole-measure rest: ALWAYS centered horizontally
-                    // in the measure body, even when other voices
-                    // carry content — that's how MuseScore engraves
-                    // it (`Rest::layout` falls into the
-                    // `centerInMeasure` branch whenever the rest's
-                    // duration spans the full measure, irrespective
-                    // of voice multiplicity). The vertical offset
-                    // assigned by `restVoiceOffset` keeps voice 2 /
-                    // 3 / 4 rests off voice 1's melody line, so
-                    // centering doesn't introduce any actual
-                    // collision.
-                    let isWholeRest = restBase == .whole
+                    // Centre only true measure-fill markers
+                    // (`NoteDuration.measure`). Typed `.whole`
+                    // rests carry an explicit duration and sit on
+                    // their start beat — MuseScore's data model:
+                    // a "centred" rest in any voice is authored as
+                    // `<durationType>measure</…>`, not
+                    // `<durationType>whole</…>`. With
+                    // `NoteDuration.measure` present in the model,
+                    // this distinction is honoured.
+                    let isMeasureRest: Bool = {
+                        if case .measure = r.duration { return true }
+                        return false
+                    }()
                     let restX: CGFloat
-                    if isWholeRest {
+                    if isMeasureRest {
                         // Centre the rest in the measure's chord
                         // area: midpoint of [contentStart,
                         // width − trailingPadding]. Must track
