@@ -149,7 +149,13 @@ public enum MultiMeasureRestPlanner {
                 guard voice.tuplets.isEmpty else { return false }
                 for el in voice.elements {
                     switch el {
-                    case let .chord(c) where c.notes.isEmpty:
+                    case let .chord(c)
+                        where c.notes.isEmpty && c.duration == .measure:
+                        // MuseScore-aligned: only `.measure` rests
+                        // count toward collapse. A measure padded out
+                        // with several typed rests is rendered
+                        // individually — even if its rests sum to the
+                        // full bar.
                         continue
                     case .locationShift:
                         continue

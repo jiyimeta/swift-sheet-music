@@ -8,7 +8,7 @@
         // MARK: - Helpers
 
         private static func restMeasure() -> Measure {
-            Measure(voices: [Voice(elements: [.rest(duration: .whole)])])
+            Measure(voices: [Voice(elements: [.rest(duration: .measure)])])
         }
 
         private static func soundingMeasure() -> Measure {
@@ -236,7 +236,7 @@
             // In that path `m.endRepeatCount == nil` but the barline
             // is structurally a repeat — collapse must still break.
             let m = Measure(voices: [Voice(elements: [
-                .rest(duration: .whole),
+                .rest(duration: .measure),
                 .barLine(BarLine(subtype: "end-repeat")),
             ])])
             let s = Self.score([
@@ -256,7 +256,7 @@
             // visual-only marker — it should NOT break the run; the
             // collapsed bar's right edge will adopt its subtype.
             let m = Measure(voices: [Voice(elements: [
-                .rest(duration: .whole),
+                .rest(duration: .measure),
                 .barLine(BarLine(subtype: "end")),
             ])])
             let s = Self.score([
@@ -378,7 +378,7 @@
             )
             let m0 = Measure(voices: [Voice(elements: [
                 .spanner(pedal),
-                .rest(duration: .whole),
+                .rest(duration: .measure),
             ])])
             let s = Self.score([
                 m0,
@@ -425,7 +425,7 @@
             guard #available(macOS 15.0, iOS 16.0, *) else { return }
             let m = Measure(voices: [Voice(elements: [
                 .locationShift(delta: Fraction(numerator: 1, denominator: 8)),
-                .rest(duration: .whole),
+                .rest(duration: .measure),
             ])])
             let s = Self.score([
                 Self.restMeasure(), m, Self.restMeasure(),
@@ -434,6 +434,28 @@
                 for: s, policy: .collapse(minimumMeasures: 2),
             )
             #expect(plan.runs == [0 ..< 3])
+        }
+
+        @Test("measure with quarter + dotted-half rest is NOT collapsed")
+        func splitRestMeasureNotCollapsible() {
+            guard #available(macOS 15.0, iOS 16.0, *) else { return }
+            // 4/4 bar authored as `quarter rest + dotted-half rest`
+            // (two empty chords summing to a full measure). MuseScore
+            // collapses only true `durationType="measure"` rests; the
+            // tightened predicate must reject this composite.
+            let split = Measure(voices: [Voice(elements: [
+                .rest(duration: .quarter),
+                .rest(duration: .fraction(Fraction(numerator: 3, denominator: 4))),
+            ])])
+            let s = Self.score([
+                Self.restMeasure(), Self.restMeasure(),
+                split,
+                Self.restMeasure(), Self.restMeasure(),
+            ])
+            let plan = MultiMeasureRestPlanner.plan(
+                for: s, policy: .collapse(minimumMeasures: 2),
+            )
+            #expect(plan.runs == [0 ..< 2, 3 ..< 5])
         }
     }
 #endif

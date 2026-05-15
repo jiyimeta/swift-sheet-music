@@ -8,7 +8,7 @@
         // MARK: - Helpers
 
         private static func restMeasure() -> Measure {
-            Measure(voices: [Voice(elements: [.rest(duration: .whole)])])
+            Measure(voices: [Voice(elements: [.rest(duration: .measure)])])
         }
 
         private static func soundingMeasure() -> Measure {
@@ -113,7 +113,7 @@
         func rehearsalMarkSplitsRun() {
             guard #available(macOS 15.0, iOS 16.0, *) else { return }
             let mark = Measure(voices: [Voice(elements: [
-                .rest(duration: .whole),
+                .rest(duration: .measure),
             ])])
             // Rehearsal mark on measure index 2 splits the
             // surrounding 4-rest run into two 2-rest runs.
