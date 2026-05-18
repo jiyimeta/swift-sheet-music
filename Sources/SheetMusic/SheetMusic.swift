@@ -16,50 +16,76 @@ public enum SheetMusic {
         try MSCXParser.parse(mscxData)
     }
 
-    /// Parse `.mscz` container bytes into a `Score` (main `.mscx` only).
-    public static func loadScore(msczData: Data) throws -> Score {
-        try MSCZReader.parse(msczData)
-    }
+    #if !os(Android)
+        /// Parse `.mscz` container bytes into a `Score` (main `.mscx` only).
+        ///
+        /// Unavailable on Android in Phase 1 — see `CLAUDE.md` (Android build
+        /// → Format support matrix).
+        public static func loadScore(msczData: Data) throws -> Score {
+            try MSCZReader.parse(msczData)
+        }
+    #endif
 
     /// Parse uncompressed MusicXML bytes (`<score-partwise>` root) into a `Score`.
     public static func loadScore(musicXMLData: Data) throws -> Score {
         try MusicXMLParser.parse(musicXMLData)
     }
 
-    /// Parse `.mxl` (zipped MusicXML) archive bytes into a `Score`.
-    public static func loadScore(mxlData: Data) throws -> Score {
-        try MusicXMLParser.parse(mxlData: mxlData)
-    }
+    #if !os(Android)
+        /// Parse `.mxl` (zipped MusicXML) archive bytes into a `Score`.
+        ///
+        /// Unavailable on Android in Phase 1 — see `CLAUDE.md` (Android build
+        /// → Format support matrix).
+        public static func loadScore(mxlData: Data) throws -> Score {
+            try MusicXMLParser.parse(mxlData: mxlData)
+        }
+    #endif
 
     /// Read an `.mscx` file and parse into a `Score`.
     public static func loadScore(mscxURL: URL) throws -> Score {
         try MSCXParser.parse(contentsOf: mscxURL)
     }
 
-    /// Read an `.mscz` file and parse its main `.mscx` into a `Score`.
-    public static func loadScore(msczURL: URL) throws -> Score {
-        try MSCZReader.parse(contentsOf: msczURL)
-    }
+    #if !os(Android)
+        /// Read an `.mscz` file and parse its main `.mscx` into a `Score`.
+        ///
+        /// Unavailable on Android in Phase 1 — see `CLAUDE.md` (Android build
+        /// → Format support matrix).
+        public static func loadScore(msczURL: URL) throws -> Score {
+            try MSCZReader.parse(contentsOf: msczURL)
+        }
 
-    /// Package caller-supplied `.mscx` XML bytes into `.mscz` bytes.
-    public static func saveMSCZ(mscxData: Data) throws -> Data {
-        try MSCZWriter.write(mscxData: mscxData)
-    }
+        /// Package caller-supplied `.mscx` XML bytes into `.mscz` bytes.
+        ///
+        /// Unavailable on Android in Phase 1 — see `CLAUDE.md` (Android build
+        /// → Format support matrix).
+        public static func saveMSCZ(mscxData: Data) throws -> Data {
+            try MSCZWriter.write(mscxData: mscxData)
+        }
 
-    /// Package `.mscx` bytes and write the resulting `.mscz` to a file URL.
-    public static func saveMSCZ(mscxData: Data, to url: URL) throws {
-        try MSCZWriter.write(mscxData: mscxData, to: url)
-    }
+        /// Package `.mscx` bytes and write the resulting `.mscz` to a file URL.
+        ///
+        /// Unavailable on Android in Phase 1 — see `CLAUDE.md` (Android build
+        /// → Format support matrix).
+        public static func saveMSCZ(mscxData: Data, to url: URL) throws {
+            try MSCZWriter.write(mscxData: mscxData, to: url)
+        }
+    #endif
 
     /// Serialize a `Score` to `.mscx` and write the result to a file URL.
     public static func exportMSCX(_ score: Score, to url: URL) throws {
         try MSCXEncoder.encode(score, to: url)
     }
 
-    /// Serialize a `Score` to `.mscz` and write the result to a file URL.
-    public static func exportMSCZ(_ score: Score, to url: URL) throws {
-        try MSCZWriter.write(score: score, to: url)
-    }
+    #if !os(Android)
+        /// Serialize a `Score` to `.mscz` and write the result to a file URL.
+        ///
+        /// Unavailable on Android in Phase 1 — see `CLAUDE.md` (Android build
+        /// → Format support matrix).
+        public static func exportMSCZ(_ score: Score, to url: URL) throws {
+            try MSCZWriter.write(score: score, to: url)
+        }
+    #endif
 
     /// Serialize a `Score` to `.mscx` with the given options and
     /// write the result to a file URL.
@@ -69,13 +95,18 @@ public enum SheetMusic {
         try MSCXEncoder.encode(score, options: options, to: url)
     }
 
-    /// Serialize a `Score` to `.mscz` with the given options and
-    /// write the result to a file URL.
-    public static func exportMSCZ(
-        _ score: Score, options: MSCXEncoderOptions, to url: URL,
-    ) throws {
-        try MSCZWriter.write(score: score, options: options, to: url)
-    }
+    #if !os(Android)
+        /// Serialize a `Score` to `.mscz` with the given options and
+        /// write the result to a file URL.
+        ///
+        /// Unavailable on Android in Phase 1 — see `CLAUDE.md` (Android build
+        /// → Format support matrix).
+        public static func exportMSCZ(
+            _ score: Score, options: MSCXEncoderOptions, to url: URL,
+        ) throws {
+            try MSCZWriter.write(score: score, options: options, to: url)
+        }
+    #endif
 
     /// Render a `Score` to SMF (Standard MIDI File) bytes.
     public static func exportMIDI(score: Score) throws -> Data {

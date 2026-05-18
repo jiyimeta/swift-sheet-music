@@ -17,10 +17,15 @@ public enum MusicXMLContainer {
         }
     }
 
-    /// Returns rootfile entries declared in the archive's `META-INF/container.xml`,
-    /// in document order. `MusicXMLParser.parse(mxlData:)` picks the first entry
-    /// whose `mediaType` matches MusicXML (or the first rootfile if none match).
-    public static func rootFiles(mxlData: Data) throws -> [RootFile] {
-        try MXLReader.rootFiles(mxlData: mxlData)
-    }
+    #if !os(Android)
+        /// Returns rootfile entries declared in the archive's `META-INF/container.xml`,
+        /// in document order. `MusicXMLParser.parse(mxlData:)` picks the first entry
+        /// whose `mediaType` matches MusicXML (or the first rootfile if none match).
+        ///
+        /// Unavailable on Android in Phase 1 — see `CLAUDE.md` (Android build
+        /// → Format support matrix).
+        public static func rootFiles(mxlData: Data) throws -> [RootFile] {
+            try MXLReader.rootFiles(mxlData: mxlData)
+        }
+    #endif
 }
