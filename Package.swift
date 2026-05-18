@@ -1,78 +1,95 @@
 // swift-tools-version: 6.2
 
+import Foundation
 import PackageDescription
 
-let package = Package(
-    name: "swift-sheet-music",
-    platforms: [
-        .iOS(.v17),
-        .macOS(.v14),
-        .tvOS(.v17),
-        .watchOS(.v10),
-    ],
-    products: [
-        // Umbrella library: re-exports Core + MSCX + MIDI and adds a small
-        // convenience façade. Most consumers want this one.
-        .library(name: "SheetMusic", targets: ["SheetMusic"]),
-        // Score model + shared error type. No format I/O — minimal dependency
-        // surface for consumers that just want the data structures.
-        .library(name: "SheetMusicCore", targets: ["SheetMusicCore"]),
-        // mscx file format I/O (parsing today; writing later).
-        .library(name: "SheetMusicMSCX", targets: ["SheetMusicMSCX"]),
-        // MusicXML + MXL file format I/O (import only for now).
-        .library(name: "SheetMusicMusicXML", targets: ["SheetMusicMusicXML"]),
-        // MIDI: in-memory model, score → MIDI rendering, SMF read/write.
-        .library(name: "SheetMusicMIDI", targets: ["SheetMusicMIDI"]),
-        // Pure-geometry layout layer: turns a Score into a `LayoutDocument`
-        // (systems / measures / glyph positions). UI-framework free —
-        // CoreGraphics + CoreText only — so it can back SwiftUI today and
-        // alternative renderers (PDF, AppKit, non-Apple) tomorrow.
+/// When SWIFT_SHEET_MUSIC_ANDROID=1 is exported, the manifest assembles a
+/// reduced targets/products array that excludes Apple-only sub-libraries
+/// (Layout / UI / PDF / Audio / RenderPreviews). See
+/// docs/superpowers/specs/2026-05-18-android-toolchain-design.md.
+let isAndroid = ProcessInfo.processInfo.environment["SWIFT_SHEET_MUSIC_ANDROID"] == "1"
+
+var products: [Product] = [
+    .library(name: "SheetMusic", targets: ["SheetMusic"]),
+    .library(name: "SheetMusicCore", targets: ["SheetMusicCore"]),
+    .library(name: "SheetMusicMSCX", targets: ["SheetMusicMSCX"]),
+    .library(name: "SheetMusicMusicXML", targets: ["SheetMusicMusicXML"]),
+    .library(name: "SheetMusicMIDI", targets: ["SheetMusicMIDI"]),
+]
+
+var targets: [Target] = [
+    .target(name: "SheetMusicCore"),
+    .target(
+        name: "SheetMusicXMLTools",
+        dependencies: ["SheetMusicCore"],
+    ),
+    .target(
+        name: "SheetMusicMSCX",
+        dependencies: [
+            "SheetMusicCore",
+            "SheetMusicXMLTools",
+            "ZIPFoundation",
+        ],
+    ),
+    .target(
+        name: "SheetMusicMusicXML",
+        dependencies: [
+            "SheetMusicCore",
+            "SheetMusicXMLTools",
+            "ZIPFoundation",
+        ],
+    ),
+    .target(
+        name: "SheetMusicMIDI",
+        dependencies: ["SheetMusicCore"],
+    ),
+    .target(
+        name: "SheetMusic",
+        dependencies: [
+            "SheetMusicCore",
+            "SheetMusicMSCX",
+            "SheetMusicMusicXML",
+            "SheetMusicMIDI",
+        ],
+    ),
+    .testTarget(
+        name: "SheetMusicTests",
+        dependencies: isAndroid ? [
+            "SheetMusic",
+            "SheetMusicCore",
+            "SheetMusicMIDI",
+            "SheetMusicMSCX",
+            "SheetMusicMusicXML",
+            "SheetMusicXMLTools",
+            "ZIPFoundation",
+        ] : [
+            "SheetMusic",
+            "SheetMusicCore",
+            "SheetMusicMIDI",
+            "SheetMusicMSCX",
+            "SheetMusicMusicXML",
+            "SheetMusicLayout",
+            "SheetMusicUI",
+            "SheetMusicAudio",
+            "SheetMusicPDF",
+            "SheetMusicXMLTools",
+            "ZIPFoundation",
+        ],
+        resources: [
+            .process("Resources"),
+        ],
+    ),
+]
+
+if !isAndroid {
+    products += [
         .library(name: "SheetMusicLayout", targets: ["SheetMusicLayout"]),
-        // SwiftUI views for rendering a Score. macOS 15+ only.
         .library(name: "SheetMusicUI", targets: ["SheetMusicUI"]),
-        // AVFoundation-backed playback: per-staff `AVAudioUnitSampler`s,
-        // SoundFont resolution, single-note preview, and (soon) timeline-
-        // driven full playback.
         .library(name: "SheetMusicAudio", targets: ["SheetMusicAudio"]),
-        // PDF export. Reuses SheetMusicUI's layout + drawing pipeline
-        // behind an `ImageRenderer` → `CGPDFContext` bridge. macOS 15+
-        // / iOS 17+ (same as SheetMusicUI).
         .library(name: "SheetMusicPDF", targets: ["SheetMusicPDF"]),
-        // Dev tool (not a consumer-facing product): renders sample
-        // Scores to PNG for visual inspection of ScoreView.
         .executable(name: "render-previews", targets: ["RenderPreviews"]),
-    ],
-    dependencies: [
-        .package(url: "https://github.com/weichsel/ZIPFoundation.git", exact: "0.9.20"),
-    ],
-    targets: [
-        .target(name: "SheetMusicCore"),
-        // Internal target (no library product): XML tree parsing + node
-        // type shared by format targets (mscx today, musicxml soon).
-        .target(
-            name: "SheetMusicXMLTools",
-            dependencies: ["SheetMusicCore"],
-        ),
-        .target(
-            name: "SheetMusicMSCX",
-            dependencies: [
-                "SheetMusicCore",
-                "SheetMusicXMLTools",
-                "ZIPFoundation", // future .mscz (zipped) support
-            ],
-        ),
-        .target(
-            name: "SheetMusicMusicXML",
-            dependencies: [
-                "SheetMusicCore",
-                "SheetMusicXMLTools",
-                "ZIPFoundation", // .mxl (zipped MusicXML)
-            ],
-        ),
-        .target(
-            name: "SheetMusicMIDI",
-            dependencies: ["SheetMusicCore"],
-        ),
+    ]
+    targets += [
         .target(
             name: "SheetMusicLayout",
             dependencies: ["SheetMusicCore"],
@@ -84,10 +101,7 @@ let package = Package(
         ),
         .target(
             name: "SheetMusicAudio",
-            dependencies: [
-                "SheetMusicCore",
-                "SheetMusicMIDI",
-            ],
+            dependencies: ["SheetMusicCore", "SheetMusicMIDI"],
         ),
         .target(
             name: "SheetMusicPDF",
@@ -97,42 +111,24 @@ let package = Package(
                 "SheetMusicUI",
             ],
         ),
-        .target(
-            name: "SheetMusic",
-            dependencies: [
-                "SheetMusicCore",
-                "SheetMusicMSCX",
-                "SheetMusicMusicXML",
-                "SheetMusicMIDI",
-                // SheetMusicPDF intentionally NOT a dep — PDF import is
-                // held internal while it's being reworked. See
-                // `docs/superpowers/plans/2026-05-03-pdf-import-paused.md`.
-            ],
-        ),
-        // Dev tool: renders a set of sample Scores to PNG for visual
-        // inspection. Not a published product — only for contributor use.
         .executableTarget(
             name: "RenderPreviews",
             dependencies: ["SheetMusic", "SheetMusicLayout", "SheetMusicUI"],
         ),
-        .testTarget(
-            name: "SheetMusicTests",
-            dependencies: [
-                "SheetMusic",
-                "SheetMusicCore",
-                "SheetMusicMIDI",
-                "SheetMusicMSCX",
-                "SheetMusicMusicXML",
-                "SheetMusicLayout",
-                "SheetMusicUI",
-                "SheetMusicAudio",
-                "SheetMusicPDF",
-                "SheetMusicXMLTools",
-                "ZIPFoundation", // MXLTestBuilder builds .mxl archives at test time
-            ],
-            resources: [
-                .process("Resources"),
-            ],
-        ),
+    ]
+}
+
+let package = Package(
+    name: "swift-sheet-music",
+    platforms: [
+        .iOS(.v17),
+        .macOS(.v14),
+        .tvOS(.v17),
+        .watchOS(.v10),
     ],
+    products: products,
+    dependencies: [
+        .package(url: "https://github.com/weichsel/ZIPFoundation.git", exact: "0.9.20"),
+    ],
+    targets: targets,
 )
