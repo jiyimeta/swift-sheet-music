@@ -89,18 +89,21 @@ Audio remain Apple-only until Phases 2-3 introduce DI abstractions.
 
 ### Prerequisites
 
-- **Open-source swift.org Swift 6.3.2 toolchain on the host** (not
-  Apple's Xcode-shipped Swift). The Android SDK's pre-built Foundation
+- **Open-source swift.org Swift 6.3.2-RELEASE toolchain on the host**
+  (not Apple's Xcode-shipped Swift). Install the `.pkg` from
+  <https://www.swift.org/install/macos/> (lands at
+  `/Library/Developer/Toolchains/swift-6.3.2-RELEASE.xctoolchain`,
+  bundle id `org.swift.632202605101a`). Export `TOOLCHAINS=org.swift.632202605101a`
+  before any Android `swift build` (or rely on `Scripts/android-test.sh`
+  which exports it for you). The Android SDK's pre-built Foundation
   swiftmodule is tagged `Swift version 6.3.2 (swift-6.3.2-RELEASE)` and
-  Apple's `swiftlang-6.3.2.*` fork rejects it with "compiled module
-  was created by an older version of the compiler". Install from
-  <https://www.swift.org/install/macos/> (the Swift 6.3 release page
-  has the toolchain `.pkg` for macOS) and select it for the current
-  shell, e.g.
+  Apple's Xcode-shipped `swiftlang-6.3.2.*` fork rejects it with
+  214 "compiled module was created by an older version of the compiler"
+  errors.
 
   ```bash
-  export TOOLCHAINS=org.swift.632202410211a  # or whichever bundle ID
-  swift --version  # should report "Swift version 6.3.2 (swift-6.3.2-RELEASE)"
+  export TOOLCHAINS=org.swift.632202605101a
+  swift --version  # banner should contain "swift-6.3.2-RELEASE"
   ```
 
 - Swift Android SDK installed. `swift sdk list` should report:
