@@ -40,7 +40,17 @@ fi
 SERIAL_ARG=""
 if [[ "${2:-}" != "" && "${2:-}" != "--" ]]; then
     SERIAL_ARG="-s $2"
+    shift 2
+else
+    shift 1
 fi
+
+# Drop the optional `--` separator before xctest args.
+if [[ "${1:-}" == "--" ]]; then
+    shift 1
+fi
+
+# Anything left in $@ is forwarded verbatim to the xctest binary on-device.
 
 REMOTE_DIR=/data/local/tmp/swift-sheet-music-test
 
@@ -64,6 +74,26 @@ adb $SERIAL_ARG push "$XCTEST_BIN" "$REMOTE_DIR/" >/dev/null
 find "$BUILD_DIR" -maxdepth 2 -name '*.so' -type f -print0 \
     | xargs -0 -I{} adb $SERIAL_ARG push {} "$REMOTE_DIR/" >/dev/null
 
+# Push the Swift Android SDK runtime shared libraries (libFoundation.so,
+# libswiftSwiftOnoneSupport.so, etc.) that live in the artifact bundle and
+# are not copied into the build directory.
+SWIFT_RT_DIR="$SDK_BUNDLE/swift-android/swift-resources/usr/lib/swift-$TARGET_SHORT/android"
+if [[ -d "$SWIFT_RT_DIR" ]]; then
+    find "$SWIFT_RT_DIR" -maxdepth 1 -name '*.so' -type f -print0 \
+        | xargs -0 -I{} adb $SERIAL_ARG push {} "$REMOTE_DIR/" >/dev/null
+fi
+
+# The Swift Android runtime depends on the NDK's libc++_shared.so. Push it
+# from the staged NDK sysroot alongside the Swift libs.
+case "$TARGET_SHORT" in
+    aarch64) NDK_TRIPLE="aarch64-linux-android" ;;
+    x86_64)  NDK_TRIPLE="x86_64-linux-android" ;;
+esac
+NDK_CXX_SO="$SDK_BUNDLE/swift-android/ndk-sysroot/usr/lib/$NDK_TRIPLE/libc++_shared.so"
+if [[ -e "$NDK_CXX_SO" ]]; then
+    adb $SERIAL_ARG push "$NDK_CXX_SO" "$REMOTE_DIR/" >/dev/null
+fi
+
 # Push the test resource bundle (MSCX fixtures, reference MIDIs).
 RESOURCE_BUNDLE=$(find "$BUILD_DIR" -maxdepth 2 -name '*_SheetMusicTests.resources' -type d | head -n 1)
 if [[ -n "$RESOURCE_BUNDLE" ]]; then
@@ -71,10 +101,22 @@ if [[ -n "$RESOURCE_BUNDLE" ]]; then
 fi
 
 XCTEST_NAME=$(basename "$XCTEST_BIN")
+XCTEST_ARGS="$*"
 
+# Notes for the device invocation:
+#  * Swift Foundation on Android resolves zlib symbols lazily from a
+#    `libz.so` in the runtime linker namespace. Apps started from
+#    `/data/local/tmp` do not pick up the system libz automatically, so
+#    we LD_PRELOAD `/system/lib64/libz.so` to satisfy `deflateInit2_` etc.
+#  * The package uses Swift Testing (`import Testing`), not XCTest. The
+#    test bundle's default entrypoint is the XCTest harness, which finds
+#    zero tests in our suite. We pass `--testing-library swift-testing`
+#    so Swift Testing's runner takes over.
 echo "==> Running tests on device"
 adb $SERIAL_ARG shell "
     cd $REMOTE_DIR &&
     chmod +x ./$XCTEST_NAME &&
-    LD_LIBRARY_PATH=$REMOTE_DIR ./$XCTEST_NAME ${@:3}
+    LD_LIBRARY_PATH=$REMOTE_DIR \
+    LD_PRELOAD=/system/lib64/libz.so \
+    ./$XCTEST_NAME --testing-library swift-testing $XCTEST_ARGS
 "
