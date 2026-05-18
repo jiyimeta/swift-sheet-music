@@ -6,13 +6,16 @@ import SheetMusicCore
 public enum StemDirection: Sendable, Equatable { case up, down }
 
 /// Anchor describing where a `.tremoloBars` element draws its bars.
-/// Stem coordinates are pre-computed by the placement pass so the
-/// renderer does not need to look up the source chord.
+/// Geometry is pre-computed by the placement / beam passes so the
+/// renderer just strokes parallel bars around `center`.
 @available(macOS 15.0, *)
 public enum TremoloAnchor: Sendable, Equatable {
-    /// Bars cross a single stem at its midpoint, centred along the
-    /// segment from `stemTop` to `stemBottom`.
-    case single(stemTop: CGPoint, stemBottom: CGPoint)
+    /// Bars cross a single stem. `center` is the bar block centre
+    /// (mid of the topmost and bottommost bar). For BEAMED chords the
+    /// layout biases this toward the beam so bars sit just under the
+    /// beam, matching MuseScore engraving; for UNBEAMED chords it
+    /// sits at the midpoint of the (possibly extended) stem.
+    case single(center: CGPoint)
     /// Bars span between two stems (two-chord tremolo). Coordinates
     /// describe the *midpoint* of each chord's stem.
     case between(leftStemMid: CGPoint, rightStemMid: CGPoint)

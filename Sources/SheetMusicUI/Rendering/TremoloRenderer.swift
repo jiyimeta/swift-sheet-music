@@ -36,11 +36,8 @@ enum TremoloRenderer {
         let center: CGPoint
         let halfWidth: CGFloat
         switch anchor {
-        case let .single(top, bottom):
-            center = CGPoint(
-                x: top.x,
-                y: (top.y + bottom.y) / 2,
-            )
+        case let .single(c):
+            center = c
             // Bars span the notehead width — Bravura's noteheadBlack
             // is 1.18 sp wide, so halfWidth = 0.59 sp matches.
             halfWidth = metrics.sp * 0.59

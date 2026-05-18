@@ -452,10 +452,8 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
         case let .tremoloBars(anchor, barCount):
             let shiftedAnchor: TremoloAnchor
             switch anchor {
-            case let .single(top, bot):
-                shiftedAnchor = .single(
-                    stemTop: shift(top), stemBottom: shift(bot),
-                )
+            case let .single(c):
+                shiftedAnchor = .single(center: shift(c))
             case let .between(left, right):
                 shiftedAnchor = .between(
                     leftStemMid: shift(left),

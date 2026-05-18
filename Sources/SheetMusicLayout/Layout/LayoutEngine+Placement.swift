@@ -1138,36 +1138,11 @@ extension LayoutEngine {
                     direction: groupDirection,
                     metrics: metrics,
                 )
-                // Shift the beam line away from the noteheads by the
-                // tallest tremolo bar block among the group, so every
-                // member chord has clearance between the noteheads
-                // and the beam for its tremolo bars. Shared shift
-                // keeps the beam straight (or slanted as designed) —
-                // not stepping per chord.
-                var groupTremoloExt: CGFloat = 0
-                for memberIdx in group.memberIndices {
-                    guard case let .chord(c) =
-                        voice.elements[memberIdx] else { continue }
-                    groupTremoloExt = max(
-                        groupTremoloExt,
-                        LayoutEngine.tremoloStemExtension(
-                            for: c, metrics: metrics,
-                        ),
-                    )
-                }
-                let beamShift: CGFloat =
-                    (groupDirection == .up ? -1 : 1) * groupTremoloExt
                 let beamSpan = beamEndX - beamStartX
                 func beamYAt(_ x: CGFloat) -> CGFloat {
-                    let base: CGFloat
-                    if beamSpan > 0 {
-                        let t = (x - beamStartX) / beamSpan
-                        base = line.startY
-                            + (line.endY - line.startY) * t
-                    } else {
-                        base = line.startY
-                    }
-                    return base + beamShift
+                    guard beamSpan > 0 else { return line.startY }
+                    let t = (x - beamStartX) / beamSpan
+                    return line.startY + (line.endY - line.startY) * t
                 }
                 let memberStemYs = memberStemXs.map(beamYAt)
 
@@ -1203,15 +1178,16 @@ extension LayoutEngine {
                         stemExtension: 0,
                     )
                     // Re-anchor any .tremoloBars element belonging to
-                    // this chord so its anchor spans (beam Y → far
-                    // notehead Y) rather than the standalone-stem
-                    // estimate emitted before the beam pass ran.
+                    // this chord so its bar block sits just below
+                    // (or above, for stem-down) the actual beam Y,
+                    // replacing the standalone-midstem estimate
+                    // emitted before the beam pass ran.
                     reanchorBeamedTremoloBars(
                         in: &out,
                         afterChordAt: outIdx,
                         beamY: memberStemYs[i],
-                        chordNotes: n,
                         stem: groupDirection,
+                        metrics: metrics,
                     )
                 }
 

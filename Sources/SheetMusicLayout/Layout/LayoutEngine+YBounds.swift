@@ -76,7 +76,7 @@ extension LayoutEngine {
             return [top.y, bot.y]
         case let .tremoloBars(anchor, _):
             switch anchor {
-            case let .single(top, bot): return [top.y, bot.y]
+            case let .single(c): return [c.y]
             case let .between(left, right): return [left.y, right.y]
             }
         case let .tupletLabel(from, to, _, _, _, _):

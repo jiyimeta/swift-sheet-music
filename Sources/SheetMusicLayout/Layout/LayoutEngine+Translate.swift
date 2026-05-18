@@ -103,8 +103,8 @@ extension LayoutEngine {
         case let .tremoloBars(anchor, barCount):
             let shifted: TremoloAnchor
             switch anchor {
-            case let .single(top, bot):
-                shifted = .single(stemTop: shift(top), stemBottom: shift(bot))
+            case let .single(c):
+                shifted = .single(center: shift(c))
             case let .between(left, right):
                 shifted = .between(
                     leftStemMid: shift(left),

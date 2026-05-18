@@ -38,11 +38,22 @@ extension LayoutEngine {
         return CGFloat(bars - 1) * spacing + thickness
     }
 
+    /// Vertical extent of a `barCount`-bar tremolo block at the
+    /// project's bar thickness / spacing (matches `beamThickness` /
+    /// `beamSpacing`).
+    static func barBlockHeight(
+        barCount: Int, metrics: StaffMetrics,
+    ) -> CGFloat {
+        let thickness = metrics.sp * 0.5 // matches beam thickness
+        let spacing = metrics.sp * 0.8 // thickness + 0.3 sp gap
+        return CGFloat(barCount - 1) * spacing + thickness
+    }
+
     /// Re-anchor the `.tremoloBars` element that follows the chord at
-    /// `outIdx` so its anchor reflects the beam-shifted stem geometry,
-    /// not the pre-beam standalone-stem estimate emitted by
-    /// `makeTremoloBarsElement`. Called from the beam pass once each
-    /// member chord's actual `beamY` is known.
+    /// `outIdx` so its bar block sits just past the beam (with a
+    /// `barBeamGap` of `sp * 0.5`), matching MuseScore engraving.
+    /// Called from the beam pass once each member's actual `beamY` is
+    /// known.
     ///
     /// Search range: the element immediately after the chord up to the
     /// next non-decoration element (we stop at the next `.chord` /
@@ -53,39 +64,24 @@ extension LayoutEngine {
         in out: inout [LayoutElement],
         afterChordAt outIdx: Int,
         beamY: CGFloat,
-        chordNotes: [LayoutChordNote],
         stem: StemDirection,
+        metrics: StaffMetrics,
     ) {
         guard outIdx + 1 < out.count else { return }
         for j in (outIdx + 1) ..< out.count {
             switch out[j] {
             case .chord, .note, .rest:
                 return // belongs to a different chord
-            case let .tremoloBars(.single(prevTop, _), barCount):
-                let stemX = prevTop.x
-                let ys = chordNotes.map(\.origin.y)
-                let beamPoint = CGPoint(x: stemX, y: beamY)
-                // stemTop carries the higher-on-screen (smaller y)
-                // end of the stem; stemBottom the lower-on-screen end.
-                // For stem-up the beam is the high end, the lowest
-                // notehead the low end; for stem-down it's reversed.
-                let stemTop: CGPoint
-                let stemBottom: CGPoint
-                switch stem {
-                case .up:
-                    stemTop = beamPoint
-                    stemBottom = CGPoint(
-                        x: stemX, y: ys.max() ?? beamY,
-                    )
-                case .down:
-                    stemTop = CGPoint(
-                        x: stemX, y: ys.min() ?? beamY,
-                    )
-                    stemBottom = beamPoint
-                }
+            case let .tremoloBars(.single(prevCenter), barCount):
+                let blockH = barBlockHeight(
+                    barCount: barCount, metrics: metrics,
+                )
+                let gap = metrics.sp * 0.5
+                let dy = gap + blockH / 2
+                let centerY = stem == .up ? beamY + dy : beamY - dy
                 out[j] = .tremoloBars(
                     anchor: .single(
-                        stemTop: stemTop, stemBottom: stemBottom,
+                        center: CGPoint(x: prevCenter.x, y: centerY),
                     ),
                     barCount: barCount,
                 )
@@ -131,8 +127,15 @@ extension LayoutEngine {
         let barCount = Int(tremolo.subtype.rawValue)
         switch tremolo.span {
         case .single:
+            // Pre-beam estimate: bar block at midpoint of the stem.
+            // If the chord later gets beamed, the beam pass re-anchors
+            // this via `reanchorBeamedTremoloBars` to sit near the
+            // shifted beam instead.
+            let center = CGPoint(
+                x: top.x, y: (top.y + bottom.y) / 2,
+            )
             return .tremoloBars(
-                anchor: .single(stemTop: top, stemBottom: bottom),
+                anchor: .single(center: center),
                 barCount: barCount,
             )
         case .between:
