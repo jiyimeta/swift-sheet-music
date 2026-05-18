@@ -599,6 +599,9 @@ extension LayoutEngine {
                     let chordNotes = applyChordMirroring(
                         preliminaryNotes, stem: stem,
                     )
+                    let stemExtension = tremoloStemExtension(
+                        for: chord, metrics: metrics,
+                    )
                     let mainElement: LayoutElement = .chord(
                         notes: chordNotes,
                         duration: chord.duration,
@@ -608,6 +611,7 @@ extension LayoutEngine {
                         arpeggioRawType: chord.arpeggio.flatMap(arpeggioSubtype),
                         isBeamed: false,
                         voiceIndex: voiceIdx,
+                        stemExtension: stemExtension,
                     )
                     let graceW = LayoutEngine.graceWidth(sp: metrics.sp)
                     let mag = options.graceNoteMag
@@ -721,6 +725,27 @@ extension LayoutEngine {
                             bottom: CGPoint(x: chordX, y: bot),
                             subtype: arpeggioSubtype(arp),
                         ))
+                    }
+                    if let trem = chord.tremolo {
+                        if let bars = makeTremoloBarsElement(
+                            tremolo: trem,
+                            duration: chord.duration,
+                            chordX: chordX,
+                            chordNotes: chordNotes,
+                            stem: stem,
+                            stemExtension: stemExtension,
+                            staffMidY: staffMidY,
+                            metrics: metrics,
+                            currentClef: currentClef,
+                            currentVoiceElements: voice.elements,
+                            currentVoiceElemIdx: voiceElemIdx,
+                            currentTick: tickCursor,
+                            measureDuration: measureDuration,
+                            division: division,
+                            timedX: timedX,
+                        ) {
+                            out.append(bars)
+                        }
                     }
                     // Lyrics: emit the syllable text + (if the lyric
                     // extends beyond this chord) a melisma rule that
@@ -1017,9 +1042,9 @@ extension LayoutEngine {
                 guard let fromOutIdx = voiceChordOutIndex[voiceIdx],
                       let toOutIdx = voiceChordOutIndex[nextVoiceIdx]
                 else { continue }
-                guard case let .chord(fromNotes, _, _, _, _, _, _, _) =
+                guard case let .chord(fromNotes, _, _, _, _, _, _, _, _) =
                     out[fromOutIdx],
-                    case let .chord(toNotes, _, _, _, _, _, _, _) =
+                    case let .chord(toNotes, _, _, _, _, _, _, _, _) =
                     out[toOutIdx]
                 else { continue }
                 guard let fromFallback = fromNotes.last,
@@ -1059,7 +1084,7 @@ extension LayoutEngine {
                 var groupSteps: [Int] = []
                 for memberIdx in group.memberIndices {
                     guard let outIdx = voiceChordOutIndex[memberIdx],
-                          case let .chord(n, _, _, _, _, _, _, _)
+                          case let .chord(n, _, _, _, _, _, _, _, _)
                           = out[outIdx]
                     else { continue }
                     groupSteps.append(contentsOf: n.map(\.step))
@@ -1077,7 +1102,7 @@ extension LayoutEngine {
                 var memberLevels: [Int] = []
                 for memberIdx in group.memberIndices {
                     guard let outIdx = voiceChordOutIndex[memberIdx],
-                          case let .chord(n, _, _, so, _, _, _, _)
+                          case let .chord(n, _, _, so, _, _, _, _, _)
                           = out[outIdx]
                     else {
                         memberLevels.append(0)
@@ -1114,11 +1139,55 @@ extension LayoutEngine {
                     direction: groupDirection,
                     metrics: metrics,
                 )
+                // Shift the beam line away from the noteheads enough
+                // to fit each member's beam stack + tremolo bar block
+                // + clearances. Using the group max keeps the beam
+                // straight (or slanted as designed) rather than
+                // stepping per chord.
+                var groupTremoloShift: CGFloat = 0
+                for (mIdx, memberIdx) in group.memberIndices.enumerated() {
+                    guard case let .chord(c) =
+                        voice.elements[memberIdx],
+                        let trem = c.tremolo
+                    else { continue }
+                    let beamH = LayoutEngine.beamStackHeight(
+                        beamLevel: memberLevels[mIdx],
+                        metrics: metrics,
+                    )
+                    let barH = LayoutEngine.barBlockHeight(
+                        barCount: Int(trem.subtype.rawValue),
+                        metrics: metrics,
+                    )
+                    // beamY → beamStack (beamH) → gap (0.5 sp) →
+                    // barBlock (barH) → notehead gap (2 sp from
+                    // notehead origin). MuseScore engraves a similar
+                    // ~1-1.5 sp visual clearance between the bottom
+                    // bar and the notehead glyph; accounting for
+                    // Bravura's X / diamond head bboxes (extend
+                    // ~0.66 sp above the origin) and the bar's own
+                    // slant, 2 sp from the origin is what reproduces
+                    // MuseScore's stem length on cymbal tremolos.
+                    let required = beamH + metrics.sp * 0.5
+                        + barH + metrics.sp * 2.0
+                    let ext = max(
+                        0, required - metrics.defaultStemLength,
+                    )
+                    groupTremoloShift = max(groupTremoloShift, ext)
+                }
+                let beamShift: CGFloat =
+                    (groupDirection == .up ? -1 : 1)
+                    * groupTremoloShift
                 let beamSpan = beamEndX - beamStartX
                 func beamYAt(_ x: CGFloat) -> CGFloat {
-                    guard beamSpan > 0 else { return line.startY }
-                    let t = (x - beamStartX) / beamSpan
-                    return line.startY + (line.endY - line.startY) * t
+                    let base: CGFloat
+                    if beamSpan > 0 {
+                        let t = (x - beamStartX) / beamSpan
+                        base = line.startY
+                            + (line.endY - line.startY) * t
+                    } else {
+                        base = line.startY
+                    }
+                    return base + beamShift
                 }
                 let memberStemYs = memberStemXs.map(beamYAt)
 
@@ -1134,8 +1203,12 @@ extension LayoutEngine {
                               art,
                               _,
                               vi,
+                              _,
                           ) = out[outIdx]
                     else { continue }
+                    // Beamed chords don't need stem-extension threading
+                    // — the renderer reads beamY (= stemOrigin.y) and
+                    // ignores stemExtension when isBeamed.
                     out[outIdx] = .chord(
                         notes: n,
                         duration: d,
@@ -1147,6 +1220,21 @@ extension LayoutEngine {
                         arpeggioRawType: art,
                         isBeamed: true,
                         voiceIndex: vi,
+                        stemExtension: 0,
+                    )
+                    // Re-anchor any .tremoloBars element belonging to
+                    // this chord so its bar block sits past the full
+                    // beam stack (primary + secondary beams) for
+                    // THIS chord's beam level, replacing the
+                    // standalone-midstem estimate emitted before
+                    // the beam pass ran.
+                    reanchorBeamedTremoloBars(
+                        in: &out,
+                        afterChordAt: outIdx,
+                        beamY: memberStemYs[i],
+                        stem: groupDirection,
+                        beamLevel: memberLevels[i],
+                        metrics: metrics,
                     )
                 }
 
@@ -1208,7 +1296,7 @@ extension LayoutEngine {
             if !fermataPostProcessAnchors.isEmpty {
                 var actualStemTipByTick: [Int: CGFloat] = [:]
                 for (outIdx, outEl) in out.enumerated() {
-                    guard case let .chord(_, _, stemDir, stemOrigin, _, _, _, _) = outEl,
+                    guard case let .chord(_, _, stemDir, stemOrigin, _, _, _, _, _) = outEl,
                           let tick = chordTickByOutIndex[outIdx]
                     else { continue }
                     // Per `LayoutEngine+Extents.swift`, the beam pass

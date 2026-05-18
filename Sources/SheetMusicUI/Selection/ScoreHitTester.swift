@@ -197,7 +197,7 @@ public struct ScoreHitTester: Sendable {
         let radius = sp * 1.2
         let radiusSquared = radius * radius
         for el in measure.elements {
-            guard case let .chord(notes, _, stem, _, _, _, _, _) = el
+            guard case let .chord(notes, _, stem, _, _, _, _, _, _) = el
             else { continue }
             for n in notes {
                 let mirrorDx = n.mirrorDx(stem: stem, sp: sp)
@@ -299,7 +299,7 @@ public struct ScoreHitTester: Sendable {
         var result: [NoteID] = []
         for el in measure.elements {
             guard case let .chord(
-                notes, _, _, stemOrigin, _, _, isBeamed, _,
+                notes, _, _, stemOrigin, _, _, isBeamed, _, _,
             ) = el,
                 isBeamed,
                 stemOrigin.x >= loX - xTolerance,
@@ -327,7 +327,7 @@ public struct ScoreHitTester: Sendable {
     ) -> ScoreHitTarget? {
         for el in measure.elements {
             guard case let .chord(
-                notes, dur, stem, _, _, _, isBeamed, _,
+                notes, dur, stem, _, _, _, isBeamed, _, _,
             ) = el,
                 !isBeamed,
                 Self.hasFlag(dur),
@@ -377,7 +377,7 @@ public struct ScoreHitTester: Sendable {
         let stemXOffset = sp * 0.59
         for el in measure.elements {
             guard case let .chord(
-                notes, _, stem, stemOrigin, _, _, isBeamed, _,
+                notes, _, stem, stemOrigin, _, _, isBeamed, _, _,
             ) = el,
                 let noteX = notes.first?.origin.x
             else { continue }

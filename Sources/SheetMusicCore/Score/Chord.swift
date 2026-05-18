@@ -25,6 +25,11 @@ public struct Chord: Sendable, Equatable {
     /// Chord-level articulations (staccato / staccatissimo / tenuto and
     /// round-trip-preserved unknowns). C++: `Chord::_articulations`.
     public var articulations: [ChordArticulation]
+    /// Tremolo notation attached to this chord. For two-note tremolo
+    /// (`.between`), this value is held by the *start* chord of the
+    /// pair; the follower is identified by adjacency in the voice's
+    /// element list.
+    public var tremolo: Tremolo?
 
     public init(
         duration: NoteDuration,
@@ -34,6 +39,7 @@ public struct Chord: Sendable, Equatable {
         graceNotesBefore: [GraceChord] = [],
         graceNotesAfter: [GraceChord] = [],
         articulations: [ChordArticulation] = [],
+        tremolo: Tremolo? = nil,
     ) {
         self.duration = duration
         self.notes = notes
@@ -42,5 +48,6 @@ public struct Chord: Sendable, Equatable {
         self.graceNotesBefore = graceNotesBefore
         self.graceNotesAfter = graceNotesAfter
         self.articulations = articulations
+        self.tremolo = tremolo
     }
 }

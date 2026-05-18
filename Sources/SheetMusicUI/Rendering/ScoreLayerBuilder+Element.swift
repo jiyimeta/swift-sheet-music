@@ -65,10 +65,12 @@ extension ScoreLayerBuilder {
             _,
             beamed,
             _,
+            stemExt,
         ):
             drawChord(
                 notes: notes, duration: dur, stem: stem,
                 stemOrigin: so, isBeamed: beamed,
+                tremoloStemExtension: stemExt,
                 base: base,
                 metrics: metrics, height: height,
                 context: &context, into: parent,
@@ -344,6 +346,21 @@ extension ScoreLayerBuilder {
         case let .multiMeasureRest(c, p):
             drawMultiMeasureRest(
                 count: c, origin: shift(p),
+                metrics: metrics, height: height, into: parent,
+            )
+        case let .tremoloBars(anchor, barCount):
+            let shiftedAnchor: TremoloAnchor
+            switch anchor {
+            case let .single(c):
+                shiftedAnchor = .single(center: shift(c))
+            case let .between(left, right):
+                shiftedAnchor = .between(
+                    leftStemMid: shift(left),
+                    rightStemMid: shift(right),
+                )
+            }
+            drawTremoloBars(
+                anchor: shiftedAnchor, barCount: barCount,
                 metrics: metrics, height: height, into: parent,
             )
         case .note:

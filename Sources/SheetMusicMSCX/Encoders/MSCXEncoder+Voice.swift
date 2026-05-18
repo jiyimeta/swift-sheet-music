@@ -164,6 +164,12 @@ extension Voice {
         var previousChordDuration: Fraction?
         var seenChordInVoice = false
         var voiceTotal = Fraction(numerator: 0, denominator: 1)
+        /// Two-chord tremolo (`span == .between`) lives only on the
+        /// start chord; emitting it stashes the tremolo here so the
+        /// next chord-bearing element can carry its own matching
+        /// `<Tremolo>` block (MuseScore's serialized form repeats the
+        /// `c8/c16/c32` element on both chords). Cleared on consume.
+        var pendingFollowerTremolo: Tremolo?
 
         init(carryIn: VoiceTieCarry) {
             previousChordDuration = carryIn.prevChordDuration
@@ -194,6 +200,18 @@ extension Voice {
             if case .chord = element { return index == lastChordIndex }
             return false
         }()
+        // Consume any pending follower tremolo from the previous start
+        // chord — only chord-bearing elements claim it; rests pass
+        // through. If the current chord is itself a `.between` start,
+        // stash its tremolo for the next chord-bearing element.
+        var injectedTremolo: Tremolo?
+        if case let .chord(chord) = element, !chord.notes.isEmpty {
+            injectedTremolo = state.pendingFollowerTremolo
+            state.pendingFollowerTremolo = nil
+            if let trem = chord.tremolo, trem.span == .between {
+                state.pendingFollowerTremolo = trem
+            }
+        }
         try state.children.append(encode(
             element: element,
             activeTuplets: state.stack,
@@ -203,6 +221,7 @@ extension Voice {
             prevVoiceTotal: carryIn.prevVoiceTotal,
             voiceBarLength: voiceBarLength,
             effectiveDuration: effectiveDuration,
+            injectedTremolo: injectedTremolo,
             options: options,
             staffGroup: staffGroup,
             voiceIndex: voiceIndex,
@@ -267,6 +286,7 @@ extension Voice {
         prevVoiceTotal: Fraction?,
         voiceBarLength: Fraction,
         effectiveDuration: Fraction,
+        injectedTremolo: Tremolo? = nil,
         options: MSCXEncoderOptions = .init(),
         staffGroup: String = "pitched",
         voiceIndex: Int = 0,
@@ -282,6 +302,7 @@ extension Voice {
                 prevVoiceTotal: prevVoiceTotal,
                 voiceBarLength: voiceBarLength,
                 effectiveDuration: effectiveDuration,
+                injectedTremolo: injectedTremolo,
                 options: options,
                 staffGroup: staffGroup,
                 voiceIndex: voiceIndex,
@@ -334,16 +355,22 @@ extension Voice {
         prevVoiceTotal: Fraction?,
         voiceBarLength: Fraction,
         effectiveDuration: Fraction,
+        injectedTremolo: Tremolo?,
         options: MSCXEncoderOptions,
         staffGroup: String,
         voiceIndex: Int,
     ) throws -> XMLTreeNode {
         let unscaled = try unscaledDuration(chord.duration, in: activeTuplets)
+        // Rebuild must forward every chord-attached field — new fields
+        // added to `Chord.init` must be propagated here too, otherwise
+        // un-scaling silently drops them from the encoded XML.
         let unscaledChord = Chord(
             duration: unscaled,
             notes: chord.notes,
             arpeggio: chord.arpeggio,
             lyrics: chord.lyrics,
+            articulations: chord.articulations,
+            tremolo: chord.tremolo,
         )
         let tieForward = forwardTieLocation(
             chord: chord,
@@ -366,6 +393,7 @@ extension Voice {
                 options: options,
                 staffGroup: staffGroup,
                 voiceIndex: voiceIndex,
+                injectedTremolo: injectedTremolo,
             )
     }
 }

@@ -18,6 +18,7 @@ extension Chord {
         options: MSCXEncoderOptions = .init(),
         staffGroup: String = "pitched",
         voiceIndex: Int = 0,
+        injectedTremolo: Tremolo? = nil,
     ) -> XMLTreeNode {
         var children: [XMLTreeNode] = []
         let isPercussionV3 =
@@ -41,6 +42,15 @@ extension Chord {
         //   Lyrics → Note.
         for art in articulations {
             children.append(art.encode(options: options))
+        }
+        // Tremolo sits with the ChordLine / Articulation cluster — after
+        // articulations and before Lyrics / Note. For two-chord tremolo
+        // (`span == .between`) the follower carries `tremolo == nil`
+        // on the model; the voice-level encoder threads the start's
+        // tremolo through `injectedTremolo` so MuseScore can round-trip
+        // read both `<Tremolo>` blocks back to a pair.
+        if let trem = tremolo ?? injectedTremolo {
+            children.append(trem.encodeXML())
         }
         // Lyrics sit between durationType and the first <Note>: this
         // matches MuseScore's serializer (Chord::write) and is what

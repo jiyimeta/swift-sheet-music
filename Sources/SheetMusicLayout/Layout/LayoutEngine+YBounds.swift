@@ -54,7 +54,7 @@ extension LayoutEngine {
             return [p.y]
         case let .note(_, _, _, _, p, _, _, _):
             return [p.y]
-        case let .chord(notes, _, _, so, _, _, _, _):
+        case let .chord(notes, _, _, so, _, _, _, _, _):
             var ys = notes.map(\.origin.y)
             ys.append(so.y)
             return ys
@@ -74,6 +74,11 @@ extension LayoutEngine {
             return [from.y, to.y]
         case let .arpeggioWiggle(top, bot, _):
             return [top.y, bot.y]
+        case let .tremoloBars(anchor, _):
+            switch anchor {
+            case let .single(c): return [c.y]
+            case let .between(left, right): return [left.y, right.y]
+            }
         case let .tupletLabel(from, to, _, _, _, _):
             return [from.y, to.y]
         case let .lyricsMelisma(from, to),

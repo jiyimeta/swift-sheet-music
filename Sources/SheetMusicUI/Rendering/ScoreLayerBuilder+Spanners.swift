@@ -337,4 +337,39 @@ extension ScoreLayerBuilder {
             }
         }
     }
+
+    // MARK: - Tremolo bars
+
+    /// CALayer companion to `TremoloRenderer.draw`. Same geometry,
+    /// rendered as stroked `CAShapeLayer`s instead of GraphicsContext
+    /// paths.
+    static func drawTremoloBars(
+        anchor: TremoloAnchor, barCount: Int,
+        metrics: StaffMetrics, height: CGFloat,
+        into parent: CALayer,
+    ) {
+        guard barCount > 0 else { return }
+        let (center, halfWidth, slantDy) = TremoloRenderer.geometry(
+            anchor: anchor, metrics: metrics,
+        )
+        let thickness = TremoloRenderer.barThickness(metrics: metrics)
+        let spacing = TremoloRenderer.barSpacing(metrics: metrics)
+        let firstOffset = -CGFloat(barCount - 1) / 2 * spacing
+        for i in 0 ..< barCount {
+            let offsetY = firstOffset + CGFloat(i) * spacing
+            let path = CGMutablePath()
+            // Slant left-low → right-high — see TremoloRenderer.draw.
+            path.move(to: CGPoint(
+                x: center.x - halfWidth,
+                y: center.y + offsetY + slantDy,
+            ))
+            path.addLine(to: CGPoint(
+                x: center.x + halfWidth,
+                y: center.y + offsetY - slantDy,
+            ))
+            parent.addSublayer(strokeLayer(
+                path: path, height: height, lineWidth: thickness,
+            ))
+        }
+    }
 }

@@ -246,10 +246,51 @@ extension Voice {
         // voice) intentionally dropped — see comment on the buffer.
         // A trailing `pendingShift` with no following element has no
         // semantic effect and is discarded.
+        try resolveTremoloPairs(in: &elements)
         return DecodeResult(
             voice: Voice(elements: elements, tuplets: tuplets),
             systemElements: systemElements,
         )
+    }
+
+    /// Second pass over the decoded `elements`: every chord whose
+    /// first-pass tremolo carries `.between` is the *start* of a
+    /// two-chord (`c8` / `c16` / `c32`) tremolo. MuseScore writes the
+    /// same `<Tremolo>` element on both members of the pair, so the
+    /// follower's redundant copy must be cleared here — otherwise the
+    /// follower would render its own beams and the MIDI / playback
+    /// passes would double-count the tremolo.
+    ///
+    /// The follower is the next `.chord` in voice order. Non-chord
+    /// elements (dynamics, location shifts, …) are skipped defensively;
+    /// MuseScore never interposes rests between paired chords, but the
+    /// loop is written to tolerate it. A start with no follower is a
+    /// malformed score and throws.
+    private static func resolveTremoloPairs(
+        in elements: inout [VoiceElement],
+    ) throws {
+        for i in elements.indices {
+            guard case let .chord(start) = elements[i],
+                  let trem = start.tremolo,
+                  trem.span == .between
+            else { continue }
+            var followerIndex: Int?
+            for j in (i + 1) ..< elements.count {
+                if case .chord = elements[j] {
+                    followerIndex = j
+                    break
+                }
+            }
+            guard let fIdx = followerIndex,
+                  case var .chord(follower) = elements[fIdx]
+            else {
+                throw SheetMusicError.malformedScore(
+                    reason: "Two-note tremolo at element \(i) has no follower chord",
+                )
+            }
+            follower.tremolo = nil
+            elements[fIdx] = .chord(follower)
+        }
     }
 
     /// Pre-process voice children so MS2 tuplet bookkeeping looks like

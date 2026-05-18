@@ -38,6 +38,7 @@ extension LayoutEngine {
             art,
             beamed,
             vi,
+            stemExt,
         ):
             let shiftedNotes = notes.map {
                 LayoutChordNote(
@@ -61,6 +62,7 @@ extension LayoutEngine {
                 arpeggioRawType: art,
                 isBeamed: beamed,
                 voiceIndex: vi,
+                stemExtension: stemExt,
             )
         case let .textMark(k, t, p):
             return .textMark(kind: k, text: t, origin: shift(p))
@@ -98,6 +100,18 @@ extension LayoutEngine {
                 bottom: shift(bot),
                 subtype: subtype,
             )
+        case let .tremoloBars(anchor, barCount):
+            let shifted: TremoloAnchor
+            switch anchor {
+            case let .single(c):
+                shifted = .single(center: shift(c))
+            case let .between(left, right):
+                shifted = .between(
+                    leftStemMid: shift(left),
+                    rightStemMid: shift(right),
+                )
+            }
+            return .tremoloBars(anchor: shifted, barCount: barCount)
         case let .tupletLabel(
             from,
             to,

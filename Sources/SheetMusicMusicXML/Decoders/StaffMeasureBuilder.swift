@@ -75,6 +75,15 @@ struct StaffMeasureBuilder {
         return voices[idx]
     }
 
+    /// Positional voice index in the eventual built measure for the
+    /// given MusicXML voice id. Returns `nil` before any append has
+    /// claimed a slot for `voiceId`. Note that voice 0 may still be
+    /// reassigned to the first real voice id (see `internVoice`); call
+    /// this only after the relevant `append(_:toVoice:)`.
+    func voicePositionIndex(forVoice voiceId: String) -> Int? {
+        voiceIndex[voiceId]
+    }
+
     mutating func foldIntoLastChord(voice voiceId: String, note: Note, duration: NoteDuration) {
         let idx = internVoice(voiceId)
         var elements = voices[idx]

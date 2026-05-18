@@ -157,7 +157,7 @@ struct GraceSpacingTests {
 @available(macOS 15.0, iOS 16.0, *)
 extension LayoutElement {
     var stemX: CGFloat {
-        if case let .chord(_, _, _, so, _, _, _, _) = self { return so.x }
+        if case let .chord(_, _, _, so, _, _, _, _, _) = self { return so.x }
         return 0
     }
 }

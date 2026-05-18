@@ -26,7 +26,7 @@ extension ScoreLayerBuilder {
         for measure in system.measures {
             for el in measure.elements {
                 switch el {
-                case let .chord(notes, _, _, _, _, _, _, _):
+                case let .chord(notes, _, _, _, _, _, _, _, _):
                     for n in notes
                         where selection.selectedIDs.contains(.note(n.noteID))
                     {

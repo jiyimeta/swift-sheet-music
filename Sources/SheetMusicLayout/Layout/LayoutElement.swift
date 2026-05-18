@@ -5,6 +5,22 @@ import SheetMusicCore
 @available(macOS 15.0, *)
 public enum StemDirection: Sendable, Equatable { case up, down }
 
+/// Anchor describing where a `.tremoloBars` element draws its bars.
+/// Geometry is pre-computed by the placement / beam passes so the
+/// renderer just strokes parallel bars around `center`.
+@available(macOS 15.0, *)
+public enum TremoloAnchor: Sendable, Equatable {
+    /// Bars cross a single stem. `center` is the bar block centre
+    /// (mid of the topmost and bottommost bar). For BEAMED chords the
+    /// layout biases this toward the beam so bars sit just under the
+    /// beam, matching MuseScore engraving; for UNBEAMED chords it
+    /// sits at the midpoint of the (possibly extended) stem.
+    case single(center: CGPoint)
+    /// Bars span between two stems (two-chord tremolo). Coordinates
+    /// describe the *midpoint* of each chord's stem.
+    case between(leftStemMid: CGPoint, rightStemMid: CGPoint)
+}
+
 /// A single placed element in a measure's local coordinate space.
 ///
 /// `origin` is measured from the measure's top-left corner where
@@ -35,6 +51,12 @@ public enum LayoutElement: Sendable, Equatable {
         arpeggioRawType: String?,
         isBeamed: Bool,
         voiceIndex: Int,
+        // Extra stem length past `metrics.defaultStemLength` requested
+        // by attached decorations (currently: tremolo bars on flagged
+        // notes). The stem renderer adds this to the natural stem
+        // length; tremolo placement uses the same value so the bars
+        // stay centred on the extended stem.
+        stemExtension: CGFloat,
     )
     /// A grace note (or grace chord) drawn at reduced size next to
     /// its parent main chord. Carries a `relativeX` offset from the
@@ -183,6 +205,12 @@ public enum LayoutElement: Sendable, Equatable {
         bottom: CGPoint,
         subtype: String?,
     )
+    /// Beamed-stem tremolo bars. Bar count comes from
+    /// `Tremolo.Subtype.rawValue` (1, 2, or 3). Slant is fixed at +12°
+    /// for v1 (a flat slant matches the MuseScore default sufficiently
+    /// for visual review). Drawn as slanted rectangles using
+    /// `metrics.beamThickness` and `metrics.beamSpacing`.
+    case tremoloBars(anchor: TremoloAnchor, barCount: Int)
     /// Tuplet marking — bracket (when `hasBracket` is true) with a
     /// number in the middle, or number alone (when beamed). `fromOrigin`
     /// and `toOrigin` define the horizontal span of the first and last

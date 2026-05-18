@@ -36,6 +36,13 @@ enum MusicXMLMeasureWalker {
             repeating: [],
             count: staffCount,
         )
+        // Glissando / slide events span notes (and possibly measures)
+        // within a part; the tracker accumulates pending starts and
+        // resolved attachments across the full per-part walk, then
+        // attachments are applied after measures are built. Scope is
+        // strictly per-part — no cross-part state leaks because the
+        // tracker is a fresh local here.
+        var glideTracker = MusicXMLGlideTracker()
         for (index, measureNode) in partNode.all("measure").enumerated() {
             let isFirstMeasure = (index == 0)
             let built = try decodeOne(
@@ -45,18 +52,53 @@ enum MusicXMLMeasureWalker {
                 isFirstMeasure: isFirstMeasure,
                 staffCount: staffCount,
                 drumTable: drumTable,
+                measureIndex: index,
+                glideTracker: &glideTracker,
             )
             for (staffIdx, item) in built.enumerated() {
                 perStaffMeasures[staffIdx].append(item.measure)
                 perStaffSystemElements[staffIdx].append(item.systemElements)
             }
         }
-        let dropped = dropUnmatchedTies(perStaffMeasures)
+        let withGlides = applyGlides(
+            attachments: glideTracker.attachments,
+            measures: perStaffMeasures,
+        )
+        let dropped = dropUnmatchedTies(withGlides)
         return PartResult(
             staffCount: staffCount,
             measuresByStaff: dropped,
             systemElementsByStaffMeasure: perStaffSystemElements,
         )
+    }
+
+    /// Mutate the start chord's first note for each resolved glissando /
+    /// slide attachment. Unmatched stops never produce an attachment, so
+    /// the loop here only sees fully-paired events. Indices are validated
+    /// defensively — out-of-range entries (impossible under well-formed
+    /// input, but cheap insurance) silently drop.
+    private static func applyGlides(
+        attachments: [MusicXMLGlideTracker.StartLocation],
+        measures: [[Measure]],
+    ) -> [[Measure]] {
+        var result = measures
+        for attach in attachments {
+            guard attach.staffIndex < result.count else { continue }
+            guard attach.measureIndex < result[attach.staffIndex].count else { continue }
+            var measure = result[attach.staffIndex][attach.measureIndex]
+            guard attach.voiceIndex < measure.voices.count else { continue }
+            var voice = measure.voices[attach.voiceIndex]
+            guard attach.elementIndex < voice.elements.count else { continue }
+            guard case var .chord(chord) = voice.elements[attach.elementIndex] else {
+                continue
+            }
+            guard !chord.notes.isEmpty else { continue }
+            chord.notes[0].glissando = attach.glissando
+            voice.elements[attach.elementIndex] = .chord(chord)
+            measure.voices[attach.voiceIndex] = voice
+            result[attach.staffIndex][attach.measureIndex] = measure
+        }
+        return result
     }
 
     /// Remove ties that don't connect to the **immediately following** chord
@@ -95,6 +137,8 @@ enum MusicXMLMeasureWalker {
         isFirstMeasure: Bool,
         staffCount: Int,
         drumTable: MusicXMLDrumTable,
+        measureIndex: Int,
+        glideTracker: inout MusicXMLGlideTracker,
     ) throws -> [StaffMeasureBuilder.Built] {
         var perStaff: [StaffMeasureBuilder] = (0 ..< staffCount).map { _ in
             StaffMeasureBuilder()
@@ -141,6 +185,24 @@ enum MusicXMLMeasureWalker {
                 case let .new(elements):
                     for element in elements {
                         perStaff[staffIdx].append(element, toVoice: voice)
+                    }
+                }
+                // Glissando / slide events on this note: record the
+                // chord's voice + index now (after append) so the
+                // post-walk pass can mutate the start chord in place.
+                // For fold-into-chord notes, the chord index didn't
+                // change — `count - 1` still points at the same chord.
+                if let voiceIdx = perStaff[staffIdx].voicePositionIndex(forVoice: voice) {
+                    let elements = perStaff[staffIdx].elements(forVoice: voice)
+                    let chordIdx = elements.count - 1
+                    if chordIdx >= 0 {
+                        glideTracker.consume(
+                            noteNode: child,
+                            staffIndex: staffIdx,
+                            measureIndex: measureIndex,
+                            voiceIndex: voiceIdx,
+                            chordElementIndex: chordIdx,
+                        )
                     }
                 }
 

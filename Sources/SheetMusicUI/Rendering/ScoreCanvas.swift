@@ -240,6 +240,7 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
             _,
             isBeamed,
             _,
+            stemExt,
         ):
             let (baseDur, dots) = DurationInterpretation.split(dur)
             let shiftedNotes = notes.map {
@@ -289,7 +290,8 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
             StemRenderer.draw(
                 context: &context, notes: shiftedNotes,
                 direction: stem, duration: baseDur,
-                isBeamed: isBeamed, beamY: beamY, metrics: metrics,
+                isBeamed: isBeamed, beamY: beamY,
+                stemExtension: stemExt, metrics: metrics,
             )
         case let .textMark(.dynamic, text, p):
             TextMarkRenderer.drawDynamic(
@@ -447,6 +449,21 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
             // Drawn by MultiMeasureRestRenderer in Task 10/11. Stub for
             // exhaustive switch; Task 11 replaces this with the real call.
             break
+        case let .tremoloBars(anchor, barCount):
+            let shiftedAnchor: TremoloAnchor
+            switch anchor {
+            case let .single(c):
+                shiftedAnchor = .single(center: shift(c))
+            case let .between(left, right):
+                shiftedAnchor = .between(
+                    leftStemMid: shift(left),
+                    rightStemMid: shift(right),
+                )
+            }
+            TremoloRenderer.draw(
+                context: &context, anchor: shiftedAnchor,
+                barCount: barCount, metrics: metrics,
+            )
         case .note, .graceChord:
             break
         }

@@ -15,7 +15,7 @@ extension MidiRenderer {
         division: Int,
         swingMap: SwingMap = .empty,
         systemElementsByMeasure: [[PositionedSystemElement]] = [],
-    ) -> (events: [TimedMidiEvent], endTick: Int) {
+    ) throws -> (events: [TimedMidiEvent], endTick: Int) {
         let measureDurations = staff.measures.effectiveMeasureDurations()
         let plan = playbackPlan(for: staff.measures, division: division)
         var events: [TimedMidiEvent] = []
@@ -134,8 +134,46 @@ extension MidiRenderer {
             let measureDuration = entry.measureIndex < measureDurations.count
                 ? measureDurations[entry.measureIndex]
                 : Fraction(numerator: 4, denominator: 4)
+            // Indices of `.chord` elements consumed by a preceding
+            // two-note tremolo. The voice walker still advances
+            // `localTick` past them so subsequent elements land
+            // correctly, but emits no note events for the consumed
+            // follower.
+            var consumedByTremolo: Set<Int> = []
             for (elementIndex, element) in effectiveVoice.elements.enumerated() {
                 if case let .keySignature(k) = element { currentKey = k.concertKey }
+                if consumedByTremolo.contains(elementIndex) {
+                    consumedByTremolo.remove(elementIndex)
+                    if case let .chord(c) = element {
+                        localTick += c.duration
+                            .resolved(in: measureDuration)
+                            .ticks(division: division)
+                    }
+                    continue
+                }
+                // Tremolo branch: when a chord carries a `Tremolo`,
+                // expand to per-stroke note events via the
+                // `tremoloSegments` helper instead of the standard
+                // chord-render path. For `.between` span, the
+                // follower chord is also consumed.
+                if case let .chord(chord) = element, chord.tremolo != nil {
+                    try renderTremoloChord(
+                        chord,
+                        elementIndex: elementIndex,
+                        voiceElements: effectiveVoice.elements,
+                        measureDuration: measureDuration,
+                        localTick: &localTick,
+                        velocity: velocity,
+                        consumedByTremolo: &consumedByTremolo,
+                        channel: channel,
+                        division: division,
+                        events: &events,
+                        hairpinRamps: hairpinRamps,
+                        ottavaRanges: ottavaRanges,
+                        originalTickDelta: originalTickDelta,
+                    )
+                    continue
+                }
                 renderVoiceElement(
                     element,
                     elementIndex: elementIndex,
