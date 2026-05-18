@@ -89,23 +89,63 @@ Audio remain Apple-only until Phases 2-3 introduce DI abstractions.
 
 ### Prerequisites
 
-- Swift 6.3+ toolchain on the host (`swift --version`)
-- `aarch64-unknown-linux-android24` Swift SDK installed (`swift sdk list`).
-  If absent, install from <https://www.swift.org/install/> — the Swift
-  6.3 release page lists the official Android SDK URL and checksum.
-  Pin the exact URL into this section once verified.
-- `adb` on `$PATH` and an Android device or emulator (API ≥ 24)
+- **Open-source swift.org Swift 6.3.2 toolchain on the host** (not
+  Apple's Xcode-shipped Swift). The Android SDK's pre-built Foundation
+  swiftmodule is tagged `Swift version 6.3.2 (swift-6.3.2-RELEASE)` and
+  Apple's `swiftlang-6.3.2.*` fork rejects it with "compiled module
+  was created by an older version of the compiler". Install from
+  <https://www.swift.org/install/macos/> (the Swift 6.3 release page
+  has the toolchain `.pkg` for macOS) and select it for the current
+  shell, e.g.
+
+  ```bash
+  export TOOLCHAINS=org.swift.632202410211a  # or whichever bundle ID
+  swift --version  # should report "Swift version 6.3.2 (swift-6.3.2-RELEASE)"
+  ```
+
+- Swift Android SDK installed. `swift sdk list` should report:
+
+  ```
+  swift-6.3.2-RELEASE_android
+  ```
+
+  This bundle exposes triples `{aarch64,x86_64,armv7}-unknown-linux-android{28..36}`.
+  It does **not** include `android24`. The lowest API level supported
+  is `android28`. Install via:
+
+  ```bash
+  swift sdk install \
+      https://download.swift.org/swift-6.3.2-release/swift-6.3.2-RELEASE_android-0.1.artifactbundle.tar.gz \
+      --checksum <SHA256-from-swift.org-release-page>
+  ```
+
+  Re-derive the exact URL and checksum from
+  <https://www.swift.org/install/> → Swift 6.3 → Android if either
+  changes.
+
+- `adb` on `$PATH` and an Android device or emulator (API ≥ 28)
+
+### `--swift-sdk` argument form
+
+Both forms work; we use the triple form for explicit API-level / arch
+selection:
+
+- **Triple form (preferred):** `aarch64-unknown-linux-android28` or
+  `x86_64-unknown-linux-android28`. Used by `Scripts/android-test.sh`.
+- **Bundle form:** `swift-6.3.2-RELEASE_android`. SwiftPM picks the
+  triple (observed default: `aarch64-unknown-linux-android29`). Handy
+  for ad-hoc commands when you don't care which API level is picked.
 
 ### Building
 
 ```bash
 # Library targets only — fast
 SWIFT_SHEET_MUSIC_ANDROID=1 swift build \
-    --swift-sdk aarch64-unknown-linux-android24
+    --swift-sdk aarch64-unknown-linux-android28
 
 # With tests
 SWIFT_SHEET_MUSIC_ANDROID=1 swift build \
-    --swift-sdk aarch64-unknown-linux-android24 \
+    --swift-sdk aarch64-unknown-linux-android28 \
     --build-tests
 ```
 
@@ -114,6 +154,10 @@ SWIFT_SHEET_MUSIC_ANDROID=1 swift build \
 ```bash
 Scripts/android-test.sh aarch64 [device-serial]
 ```
+
+The script defaults to API level 28 (lowest available in the
+SDK bundle). Pass a custom triple via env if you need a different
+API level.
 
 ### Adding new tests
 
