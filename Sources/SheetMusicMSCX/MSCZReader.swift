@@ -50,6 +50,17 @@ public enum MSCZReader {
     /// Parts without a corresponding entry — or with an entry that
     /// doesn't nominate a `presetProgram` (e.g. drumset rows) — are
     /// left untouched.
+    ///
+    /// Drumset parts (`useDrumset == true`) are also skipped even when
+    /// the entry carries a `presetProgram`: MuseScore 4's MS Basic
+    /// addresses drum kits via `presetBank=128, presetProgram=N` where
+    /// N selects a kit variant ("Standard", "Standard 4", …). That
+    /// addressing is MS-Basic-specific and doesn't translate to a
+    /// useful preset in third-party SoundFonts (e.g. MuseScore_General
+    /// has no preset at SF2 bank LSB 128). The mscx-declared channel
+    /// (typically `<program value="0"/>` = GM Standard Drum Kit) is
+    /// the right fallback when the playback host can't honour MS
+    /// Basic's kit variants.
     private static func apply(
         _ settings: AudioSettings, to score: Score,
     ) -> Score {
@@ -58,7 +69,8 @@ public enum MSCZReader {
         for partIdx in result.parts.indices {
             guard
                 let preset = settings.presets[result.parts[partIdx].id],
-                !result.parts[partIdx].instrument.channels.isEmpty
+                !result.parts[partIdx].instrument.channels.isEmpty,
+                !result.parts[partIdx].instrument.useDrumset
             else { continue }
             if let program = preset.program {
                 result.parts[partIdx].instrument.channels[0].program = program

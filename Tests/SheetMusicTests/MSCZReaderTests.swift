@@ -142,6 +142,55 @@ struct MSCZReaderTests {
         #expect(score.parts[0].instrument.channels[0].program == 52)
     }
 
+    /// MuseScore 4's MS Basic addresses drum kits via
+    /// `presetBank=128, presetProgram=N` where N selects a kit variant
+    /// ("Standard", "Standard 4", …). That addressing is MS-Basic-
+    /// specific: third-party SoundFonts (e.g. `MuseScore_General.sf2`)
+    /// don't have a matching preset at SF2 bank LSB 128 / program 4,
+    /// so `AVAudioUnitSampler.loadSoundBankInstrument` would silently
+    /// fail and the drum staff would be muted. The reader must keep
+    /// the mscx-declared channel (typically `<program value="0"/>` =
+    /// GM Standard Drum Kit) for drumset parts even when the audio
+    /// settings entry has a `presetProgram`.
+    @Test func audioSettingsDrumsetOverrideIgnored() throws {
+        let mscx = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <museScore version="4.60">
+          <Score>
+            <Division>480</Division>
+            <Part id="6">
+              <Instrument id="drumset">
+                <useDrumset>1</useDrumset>
+                <Channel><program value="0"/></Channel>
+              </Instrument>
+              <Staff id="1"/>
+            </Part>
+            <Staff id="1"><Measure></Measure></Staff>
+          </Score>
+        </museScore>
+        """
+        let audio = """
+        {
+          "tracks": [
+            { "partId": "6",
+              "in": { "resourceMeta": { "attributes": {
+                "presetBank": "128",
+                "presetProgram": "4",
+                "presetName": "Standard 4",
+                "soundFontName": "MS Basic"
+              } } }
+            }
+          ]
+        }
+        """
+        let mscz = try makeMSCZ(mscx: mscx, audioSettings: audio)
+        let score = try MSCZReader.parse(mscz)
+        let channel = score.parts[0].instrument.channels[0]
+        #expect(score.parts[0].instrument.useDrumset)
+        #expect(channel.program == 0)
+        #expect(channel.bank == 0)
+    }
+
     /// A track entry without `presetProgram` (typical for the drumset
     /// row in `audiosettings.json` and the auxiliary "999" metronome
     /// track) must not zero out the existing channel program. Only
