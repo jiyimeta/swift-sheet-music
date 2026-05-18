@@ -91,3 +91,69 @@ struct TremoloMSCXDecodeFirstPassTests {
         }
     }
 }
+
+struct TremoloMSCXDecodeSecondPassTests {
+    private func parseVoice(_ xml: String) throws -> Voice {
+        let node = try XMLTreeParser.parse(Data(xml.utf8))
+        return try Voice.decode(node)
+    }
+
+    @Test func c8_pair_clears_follower_tremolo() throws {
+        // Two half-notes both marked c8 — the start keeps .between,
+        // the follower has its redundant tremolo cleared.
+        let xml = """
+        <voice>
+            <Chord>
+                <durationType>half</durationType>
+                <Tremolo><subtype>c8</subtype></Tremolo>
+                <Note><pitch>60</pitch><tpc>14</tpc></Note>
+            </Chord>
+            <Chord>
+                <durationType>half</durationType>
+                <Tremolo><subtype>c8</subtype></Tremolo>
+                <Note><pitch>64</pitch><tpc>18</tpc></Note>
+            </Chord>
+        </voice>
+        """
+        let voice = try parseVoice(xml)
+        guard case let .chord(c0) = voice.elements[0],
+              case let .chord(c1) = voice.elements[1]
+        else { Issue.record("expected two chords"); return }
+        #expect(c0.tremolo?.span == .between)
+        #expect(c0.tremolo?.subtype == .r8)
+        #expect(c1.tremolo == nil)
+    }
+
+    @Test func c8_with_no_follower_throws() throws {
+        let xml = """
+        <voice>
+            <Chord>
+                <durationType>half</durationType>
+                <Tremolo><subtype>c16</subtype></Tremolo>
+                <Note><pitch>60</pitch><tpc>14</tpc></Note>
+            </Chord>
+        </voice>
+        """
+        #expect(throws: SheetMusicError.self) {
+            _ = try parseVoice(xml)
+        }
+    }
+
+    @Test func r16_unaffected_by_pairing_pass() throws {
+        let xml = """
+        <voice>
+            <Chord>
+                <durationType>quarter</durationType>
+                <Tremolo><subtype>r16</subtype></Tremolo>
+                <Note><pitch>60</pitch><tpc>14</tpc></Note>
+            </Chord>
+        </voice>
+        """
+        let voice = try parseVoice(xml)
+        guard case let .chord(c) = voice.elements[0] else {
+            Issue.record("expected chord"); return
+        }
+        #expect(c.tremolo?.span == .single)
+        #expect(c.tremolo?.subtype == .r16)
+    }
+}
