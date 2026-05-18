@@ -25,10 +25,7 @@ var targets: [Target] = [
     ),
     .target(
         name: "SheetMusicMSCX",
-        dependencies: isAndroid ? [
-            "SheetMusicCore",
-            "SheetMusicXMLTools",
-        ] : [
+        dependencies: [
             "SheetMusicCore",
             "SheetMusicXMLTools",
             "ZIPFoundation",
@@ -36,10 +33,7 @@ var targets: [Target] = [
     ),
     .target(
         name: "SheetMusicMusicXML",
-        dependencies: isAndroid ? [
-            "SheetMusicCore",
-            "SheetMusicXMLTools",
-        ] : [
+        dependencies: [
             "SheetMusicCore",
             "SheetMusicXMLTools",
             "ZIPFoundation",
@@ -67,6 +61,7 @@ var targets: [Target] = [
             "SheetMusicMSCX",
             "SheetMusicMusicXML",
             "SheetMusicXMLTools",
+            "ZIPFoundation",
         ] : [
             "SheetMusic",
             "SheetMusicCore",
@@ -132,8 +127,11 @@ let package = Package(
         .watchOS(.v10),
     ],
     products: products,
-    dependencies: isAndroid ? [] : [
-        .package(url: "https://github.com/weichsel/ZIPFoundation.git", exact: "0.9.20"),
+    dependencies: [
+        .package(
+            url: "https://github.com/jiyimeta/ZIPFoundation.git",
+            revision: "3219223139477f8009b7dcf460aa2a4bb8cd4c24",
+        ),
     ],
     targets: targets,
 )
