@@ -104,7 +104,7 @@ public struct LayoutSystem: Sendable, Equatable {
             let my = measure.origin.y
             for el in measure.elements {
                 switch el {
-                case let .chord(notes, _, _, _, _, _, _, voiceIndex):
+                case let .chord(notes, _, _, _, _, _, _, voiceIndex, _):
                     guard !notes.isEmpty else { continue }
                     let xs = notes.map { mx + $0.origin.x }
                     let ys = notes.map { my + $0.origin.y }

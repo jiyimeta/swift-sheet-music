@@ -100,7 +100,7 @@ struct TremoloLayoutTests {
         var noteX: CGFloat?
         var anchorX: CGFloat?
         for el in elements {
-            if case let .chord(notes, _, _, _, _, _, _, _) = el {
+            if case let .chord(notes, _, _, _, _, _, _, _, _) = el {
                 noteX = notes.first?.origin.x
             }
             if case let .tremoloBars(anchor, _) = el,

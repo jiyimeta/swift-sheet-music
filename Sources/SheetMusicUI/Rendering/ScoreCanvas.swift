@@ -240,6 +240,7 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
             _,
             isBeamed,
             _,
+            stemExt,
         ):
             let (baseDur, dots) = DurationInterpretation.split(dur)
             let shiftedNotes = notes.map {
@@ -289,7 +290,8 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
             StemRenderer.draw(
                 context: &context, notes: shiftedNotes,
                 direction: stem, duration: baseDur,
-                isBeamed: isBeamed, beamY: beamY, metrics: metrics,
+                isBeamed: isBeamed, beamY: beamY,
+                stemExtension: stemExt, metrics: metrics,
             )
         case let .textMark(.dynamic, text, p):
             TextMarkRenderer.drawDynamic(

@@ -3,6 +3,36 @@ import SheetMusicCore
 
 @available(macOS 15.0, *)
 extension LayoutEngine {
+    /// Extra stem length needed to fit a chord's tremolo bars between
+    /// the notehead and the flag/beam without overlap. Returns 0 when
+    /// no extension is needed:
+    ///  * no tremolo → 0.
+    ///  * beamed chord → 0 (the beam is fixed by the beam pass; bars
+    ///    sit between notehead and beam without moving either).
+    ///  * non-flagged duration (whole/half/quarter) → 0 (the natural
+    ///    stem is long enough to clear bars at midstem).
+    /// Otherwise returns `(barCount - 1) * spacing + thickness`, the
+    /// vertical extent of the bar stack — pushing the stem tip past
+    /// where the flag would collide with the topmost bar.
+    static func tremoloStemExtension(
+        for chord: Chord,
+        isBeamed: Bool,
+        metrics: StaffMetrics,
+    ) -> CGFloat {
+        guard let trem = chord.tremolo, !isBeamed else { return 0 }
+        switch chord.duration {
+        case .eighth, .sixteenth, .thirtySecond,
+             .sixtyFourth, .oneTwentyEighth, .twoFiftySixth:
+            break
+        default:
+            return 0
+        }
+        let bars = Int(trem.subtype.rawValue) // 1, 2, or 3
+        let thickness = metrics.sp * 0.5 // matches beam thickness
+        let spacing = metrics.sp * 0.8 // thickness + 0.3 sp gap
+        return CGFloat(bars - 1) * spacing + thickness
+    }
+
     /// Build a `.tremoloBars` element for a chord carrying `tremolo`.
     /// Returns `nil` when a `.between` tremolo has no follower chord
     /// in the voice (e.g. the start chord is the voice's last element
@@ -19,6 +49,7 @@ extension LayoutEngine {
         chordX: CGFloat,
         chordNotes: [LayoutChordNote],
         stem: StemDirection,
+        stemExtension: CGFloat,
         staffMidY: CGFloat,
         metrics: StaffMetrics,
         currentClef: NotatedClef,
@@ -31,7 +62,8 @@ extension LayoutEngine {
     ) -> LayoutElement? {
         let (top, bottom) = stemEndpoints(
             chordX: chordX, chordNotes: chordNotes,
-            stem: stem, staffMidY: staffMidY, metrics: metrics,
+            stem: stem, stemExtension: stemExtension,
+            staffMidY: staffMidY, metrics: metrics,
         )
         let barCount = Int(tremolo.subtype.rawValue)
         switch tremolo.span {
@@ -58,10 +90,16 @@ extension LayoutEngine {
             )
             let followerStem = StemDirectionRule
                 .direction(for: followerNotes.map(\.step))
+            // For .between tremolo placement we mirror the start
+            // chord's extension on the follower so the bar geometry
+            // bridges two stems of equal length. The follower's own
+            // chord.tremolo was cleared by the decoder's second pass,
+            // so we can't ask `tremoloStemExtension` for it.
             let (fTop, fBot) = stemEndpoints(
                 chordX: followerCtx.x,
                 chordNotes: followerNotes,
                 stem: followerStem,
+                stemExtension: stemExtension,
                 staffMidY: staffMidY,
                 metrics: metrics,
             )
@@ -91,10 +129,11 @@ extension LayoutEngine {
     /// X must match `StemRenderer`'s `stemAttachDx = sp * 0.59`
     /// (Bravura `noteheadBlack` `stemUpSE.x` / `stemDownNW.x` anchor),
     /// so the bars centre on the stem rather than the notehead.
-    private static func stemEndpoints(
+    private static func stemEndpoints( // swiftlint:disable:this function_parameter_count
         chordX: CGFloat,
         chordNotes: [LayoutChordNote],
         stem: StemDirection,
+        stemExtension: CGFloat,
         staffMidY: CGFloat,
         metrics: StaffMetrics,
     ) -> (top: CGPoint, bottom: CGPoint) {
@@ -107,6 +146,7 @@ extension LayoutEngine {
         case .up:
             let stemX = (xs.max() ?? chordX) + stemAttachDx
             let stemTipY = botNoteY - metrics.defaultStemLength
+                - stemExtension
             return (
                 CGPoint(x: stemX, y: stemTipY),
                 CGPoint(x: stemX, y: botNoteY),
@@ -114,6 +154,7 @@ extension LayoutEngine {
         case .down:
             let stemX = (xs.min() ?? chordX) - stemAttachDx
             let stemTipY = topNoteY + metrics.defaultStemLength
+                + stemExtension
             return (
                 CGPoint(x: stemX, y: topNoteY),
                 CGPoint(x: stemX, y: stemTipY),

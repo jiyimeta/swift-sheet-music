@@ -74,7 +74,7 @@ struct LayoutArticulationTests {
         let (art, chord) = try #require(Self.soleArtAndChord(doc))
         guard case let .articulation(kind, origin, isAbove) = art
         else { Issue.record("not articulation"); return }
-        guard case let .chord(notes, _, _, _, _, _, _, _) = chord
+        guard case let .chord(notes, _, _, _, _, _, _, _, _) = chord
         else { Issue.record("not chord"); return }
         #expect(kind == .staccato)
         #expect(isAbove == true)
@@ -91,7 +91,7 @@ struct LayoutArticulationTests {
         let (art, chord) = try #require(Self.soleArtAndChord(doc))
         guard case let .articulation(_, origin, isAbove) = art
         else { Issue.record("not articulation"); return }
-        guard case let .chord(notes, _, _, _, _, _, _, _) = chord
+        guard case let .chord(notes, _, _, _, _, _, _, _, _) = chord
         else { Issue.record("not chord"); return }
         #expect(isAbove == false)
         let noteY = try #require(notes.first?.origin.y)

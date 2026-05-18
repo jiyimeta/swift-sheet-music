@@ -67,7 +67,7 @@
                 return
             }
             guard case let .textMark(_, _, lyricOrigin) = lyricEl,
-                  case let .chord(notes, _, stem, _, _, _, _, _) = chordEl
+                  case let .chord(notes, _, stem, _, _, _, _, _, _) = chordEl
             else {
                 Issue.record("Unexpected LayoutElement shape")
                 return
@@ -140,7 +140,7 @@
                 return
             }
             guard case let .textMark(_, _, lyricOrigin) = lyricEl,
-                  case let .chord(notes, _, stem, _, _, _, _, _) = chordEl
+                  case let .chord(notes, _, stem, _, _, _, _, _, _) = chordEl
             else {
                 Issue.record("Unexpected LayoutElement shape")
                 return

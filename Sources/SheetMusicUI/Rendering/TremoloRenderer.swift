@@ -41,7 +41,9 @@ enum TremoloRenderer {
                 x: top.x,
                 y: (top.y + bottom.y) / 2,
             )
-            halfWidth = metrics.sp * 0.9
+            // Bars span the notehead width — Bravura's noteheadBlack
+            // is 1.18 sp wide, so halfWidth = 0.59 sp matches.
+            halfWidth = metrics.sp * 0.59
         case let .between(left, right):
             center = CGPoint(
                 x: (left.x + right.x) / 2,

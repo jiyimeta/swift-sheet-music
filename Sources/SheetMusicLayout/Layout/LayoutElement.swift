@@ -48,6 +48,12 @@ public enum LayoutElement: Sendable, Equatable {
         arpeggioRawType: String?,
         isBeamed: Bool,
         voiceIndex: Int,
+        // Extra stem length past `metrics.defaultStemLength` requested
+        // by attached decorations (currently: tremolo bars on flagged
+        // notes). The stem renderer adds this to the natural stem
+        // length; tremolo placement uses the same value so the bars
+        // stay centred on the extended stem.
+        stemExtension: CGFloat,
     )
     /// A grace note (or grace chord) drawn at reduced size next to
     /// its parent main chord. Carries a `relativeX` offset from the

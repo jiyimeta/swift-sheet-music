@@ -14,12 +14,13 @@ import SheetMusicLayout
 extension ScoreLayerBuilder {
     // MARK: - Chord
 
-    static func drawChord( // swiftlint:disable:this function_body_length
+    static func drawChord( // swiftlint:disable:this function_body_length function_parameter_count
         notes: [LayoutChordNote],
         duration: NoteDuration,
         stem: StemDirection,
         stemOrigin: CGPoint,
         isBeamed: Bool,
+        tremoloStemExtension: CGFloat = 0,
         base: CGPoint,
         metrics: StaffMetrics,
         height: CGFloat,
@@ -99,13 +100,13 @@ extension ScoreLayerBuilder {
             && dots > 0
             && hasFlag
             && ((shifted.map(\.step).max() ?? 0).isMultiple(of: 2))
-        let stemExtension: CGFloat = stemUpTopOnLine
+        let dotOnLineExtension: CGFloat = stemUpTopOnLine
             ? metrics.sp * 0.5
             : 0
         drawStem(
             notes: shifted, direction: stem, duration: baseDur,
             isBeamed: isBeamed, beamY: beamY,
-            stemExtension: stemExtension,
+            stemExtension: dotOnLineExtension + tremoloStemExtension,
             metrics: metrics, height: height, into: parent,
         )
     }

@@ -599,6 +599,9 @@ extension LayoutEngine {
                     let chordNotes = applyChordMirroring(
                         preliminaryNotes, stem: stem,
                     )
+                    let stemExtension = tremoloStemExtension(
+                        for: chord, isBeamed: false, metrics: metrics,
+                    )
                     let mainElement: LayoutElement = .chord(
                         notes: chordNotes,
                         duration: chord.duration,
@@ -608,6 +611,7 @@ extension LayoutEngine {
                         arpeggioRawType: chord.arpeggio.flatMap(arpeggioSubtype),
                         isBeamed: false,
                         voiceIndex: voiceIdx,
+                        stemExtension: stemExtension,
                     )
                     let graceW = LayoutEngine.graceWidth(sp: metrics.sp)
                     let mag = options.graceNoteMag
@@ -728,6 +732,7 @@ extension LayoutEngine {
                             chordX: chordX,
                             chordNotes: chordNotes,
                             stem: stem,
+                            stemExtension: stemExtension,
                             staffMidY: staffMidY,
                             metrics: metrics,
                             currentClef: currentClef,
@@ -1036,9 +1041,9 @@ extension LayoutEngine {
                 guard let fromOutIdx = voiceChordOutIndex[voiceIdx],
                       let toOutIdx = voiceChordOutIndex[nextVoiceIdx]
                 else { continue }
-                guard case let .chord(fromNotes, _, _, _, _, _, _, _) =
+                guard case let .chord(fromNotes, _, _, _, _, _, _, _, _) =
                     out[fromOutIdx],
-                    case let .chord(toNotes, _, _, _, _, _, _, _) =
+                    case let .chord(toNotes, _, _, _, _, _, _, _, _) =
                     out[toOutIdx]
                 else { continue }
                 guard let fromFallback = fromNotes.last,
@@ -1078,7 +1083,7 @@ extension LayoutEngine {
                 var groupSteps: [Int] = []
                 for memberIdx in group.memberIndices {
                     guard let outIdx = voiceChordOutIndex[memberIdx],
-                          case let .chord(n, _, _, _, _, _, _, _)
+                          case let .chord(n, _, _, _, _, _, _, _, _)
                           = out[outIdx]
                     else { continue }
                     groupSteps.append(contentsOf: n.map(\.step))
@@ -1096,7 +1101,7 @@ extension LayoutEngine {
                 var memberLevels: [Int] = []
                 for memberIdx in group.memberIndices {
                     guard let outIdx = voiceChordOutIndex[memberIdx],
-                          case let .chord(n, _, _, so, _, _, _, _)
+                          case let .chord(n, _, _, so, _, _, _, _, _)
                           = out[outIdx]
                     else {
                         memberLevels.append(0)
@@ -1153,8 +1158,12 @@ extension LayoutEngine {
                               art,
                               _,
                               vi,
+                              _,
                           ) = out[outIdx]
                     else { continue }
+                    // Beamed chords don't need tremolo stem extension:
+                    // tremolo bars sit between notehead and the
+                    // already-placed beam, no stem-tip clearance issue.
                     out[outIdx] = .chord(
                         notes: n,
                         duration: d,
@@ -1166,6 +1175,7 @@ extension LayoutEngine {
                         arpeggioRawType: art,
                         isBeamed: true,
                         voiceIndex: vi,
+                        stemExtension: 0,
                     )
                 }
 
@@ -1227,7 +1237,7 @@ extension LayoutEngine {
             if !fermataPostProcessAnchors.isEmpty {
                 var actualStemTipByTick: [Int: CGFloat] = [:]
                 for (outIdx, outEl) in out.enumerated() {
-                    guard case let .chord(_, _, stemDir, stemOrigin, _, _, _, _) = outEl,
+                    guard case let .chord(_, _, stemDir, stemOrigin, _, _, _, _, _) = outEl,
                           let tick = chordTickByOutIndex[outIdx]
                     else { continue }
                     // Per `LayoutEngine+Extents.swift`, the beam pass

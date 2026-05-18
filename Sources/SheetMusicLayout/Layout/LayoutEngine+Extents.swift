@@ -31,6 +31,7 @@ extension LayoutEngine {
                 _,
                 _,
                 _,
+                _,
             ):
                 let topNote = notes.map(\.origin.y).min()
                     ?? stemOrigin.y

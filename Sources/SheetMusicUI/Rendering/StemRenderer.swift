@@ -5,13 +5,14 @@ import SwiftUI
 
 @available(macOS 15.0, *)
 enum StemRenderer {
-    static func draw(
+    static func draw( // swiftlint:disable:this function_parameter_count
         context: inout GraphicsContext,
         notes: [LayoutChordNote],
         direction: StemDirection,
         duration: NoteDuration,
         isBeamed: Bool,
         beamY: CGFloat?,
+        stemExtension: CGFloat = 0,
         metrics: StaffMetrics,
     ) {
         guard !notes.isEmpty else { return }
@@ -39,12 +40,14 @@ enum StemRenderer {
             // For beamed chords, stems reach the shared beam y instead of
             // each chord's own natural stem-top — otherwise stems would
             // be truncated below the beam bar.
-            startY = beamY ?? (yTop - metrics.defaultStemLength)
+            startY = beamY
+                ?? (yTop - metrics.defaultStemLength - stemExtension)
             endY = yBot
         case .down:
             xStem = xMin - stemAttachDx
             startY = yTop
-            endY = beamY ?? (yBot + metrics.defaultStemLength)
+            endY = beamY
+                ?? (yBot + metrics.defaultStemLength + stemExtension)
         }
         var path = Path()
         path.move(to: CGPoint(x: xStem, y: startY))
