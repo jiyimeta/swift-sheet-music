@@ -132,7 +132,7 @@ let package = Package(
         .watchOS(.v10),
     ],
     products: products,
-    dependencies: [
+    dependencies: isAndroid ? [] : [
         .package(url: "https://github.com/weichsel/ZIPFoundation.git", exact: "0.9.20"),
     ],
     targets: targets,
