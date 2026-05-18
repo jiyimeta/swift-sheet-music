@@ -9,6 +9,13 @@ extension MidiRenderer {
     /// (index 0) is held for the first ~67% of the start chord; subsequent
     /// elements are the intermediate sweep. The end pitch itself plays as the
     /// NEXT chord in the voice, not as part of this sequence.
+    ///
+    /// `.diatonic` walks the 7-tone PC set implied by the active key
+    /// signature via `KeySignature.diatonicPitchClasses`. This is a
+    /// pitch-class approximation of MuseScore's line-based diatonic
+    /// logic (`engraving/dom/glissando.cpp:222`): we don't track
+    /// staff lines, so Tab clef and unusual non-five-line staves
+    /// can diverge. Acceptable for v1.
     static func glissandoPitchOffsets(
         style: Glissando.Style,
         startPitch: Int,
@@ -39,7 +46,7 @@ extension MidiRenderer {
                 startPitch: startPitch,
                 endPitch: endPitch,
                 direction: direction,
-                pcs: majorScalePCs(forKeySignature: keySignature),
+                pcs: KeySignature(concertKey: keySignature).diatonicPitchClasses,
             )
         case .portamento:
             return [] // Portamento uses pitch-bend, not discrete pitches.
@@ -60,16 +67,6 @@ extension MidiRenderer {
             pitch += direction
         }
         return offsets
-    }
-
-    /// Pitch classes of the major scale for the given concert key signature
-    /// (sharps positive, flats negative, range -7…+7). For `0` (C major) this
-    /// returns `{0,2,4,5,7,9,11}`. This is an approximation of MuseScore's
-    /// line-based diatonic logic (`glissando.cpp:222`): we don't track staff
-    /// lines, so we use the current key's major scale as the scale set.
-    static func majorScalePCs(forKeySignature keySig: Int) -> Set<Int> {
-        let tonic = ((7 * keySig) % 12 + 12) % 12
-        return Set([0, 2, 4, 5, 7, 9, 11].map { (tonic + $0) % 12 })
     }
 
     // MARK: - Ease-in / ease-out timing (cubic Bezier)
