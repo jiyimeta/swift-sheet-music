@@ -4,38 +4,35 @@ import SheetMusicCore
 @available(macOS 15.0, *)
 extension LayoutEngine {
     /// Extra stem length needed to fit a chord's tremolo bars between
-    /// the notehead and the flag/beam without overlap.
-    ///
-    /// Returns 0 when no extension is needed:
+    /// the notehead and the flag without overlap, for UNBEAMED flagged
+    /// chords. Returns 0 when no extension is needed:
     ///  * no tremolo → 0.
     ///  * non-flagged duration (whole/half/quarter) → 0 (the natural
-    ///    stem is long enough to clear bars at midstem).
-    /// Otherwise returns `(barCount - 1) * spacing + thickness`, the
-    /// vertical extent of the bar stack — pushing the stem tip past
-    /// where the flag/beam would collide with the topmost bar.
+    ///    stem is long enough; bars sit at midstem).
+    /// Otherwise returns `barBlockHeight - 0.5 sp`, derived from the
+    /// constraint that the bar block (placed flush against the flag
+    /// with a small gap) must clear the notehead by ~0.5 sp:
     ///
-    /// For UNBEAMED chords the caller threads this into
-    /// `LayoutElement.chord.stemExtension` and the stem renderer
-    /// lengthens the stem directly. For BEAMED chords the beam pass
-    /// (`LayoutEngine+Placement` Phase 4) instead shifts the beam line
-    /// by the max group extension — so all members of a beam group
-    /// share a consistently lifted beam.
+    ///     stem ≥ flagHeight + barBeamGap + barBlock + noteheadGap
+    ///          ≈ 2 + 0.5 + barBlock + 0.5
+    ///          = 3 + barBlock
+    ///   defaultStemLen ≈ 3.5 sp ⇒ extra = max(0, barBlock - 0.5)
+    ///
+    /// BEAMED chords don't use this — the beam pass (`Placement`
+    /// Phase 4) leaves the beam at its natural Y and the tremolo
+    /// reanchor pass slots bars below the beam stack instead.
     static func tremoloStemExtension(
         for chord: Chord,
         metrics: StaffMetrics,
     ) -> CGFloat {
-        guard let trem = chord.tremolo else { return 0 }
-        switch chord.duration {
-        case .eighth, .sixteenth, .thirtySecond,
-             .sixtyFourth, .oneTwentyEighth, .twoFiftySixth:
-            break
-        default:
-            return 0
-        }
-        let bars = Int(trem.subtype.rawValue) // 1, 2, or 3
-        let thickness = metrics.sp * 0.5 // matches beam thickness
-        let spacing = metrics.sp * 0.8 // thickness + 0.3 sp gap
-        return CGFloat(bars - 1) * spacing + thickness
+        guard let trem = chord.tremolo,
+              isFlaggedDuration(chord.duration)
+        else { return 0 }
+        let blockH = barBlockHeight(
+            barCount: Int(trem.subtype.rawValue),
+            metrics: metrics,
+        )
+        return max(0, blockH - metrics.sp * 0.5)
     }
 
     /// Vertical extent of a `barCount`-bar tremolo block at the
@@ -49,22 +46,82 @@ extension LayoutEngine {
         return CGFloat(barCount - 1) * spacing + thickness
     }
 
+    /// Bar block centre for a `.single` tremolo on an UNBEAMED chord.
+    /// FLAGGED durations bias toward the stem tip (with `flagHeight +
+    /// barBeamGap` clearance); UNFLAGGED durations (quarter / half)
+    /// centre at midstem. Beamed chords are re-anchored later by
+    /// `reanchorBeamedTremoloBars`.
+    private static func singleTremoloCenter( // swiftlint:disable:this function_parameter_count
+        stemTopY: CGFloat,
+        stemBottomY: CGFloat,
+        stemX: CGFloat,
+        stem: StemDirection,
+        duration: NoteDuration,
+        barCount: Int,
+        metrics: StaffMetrics,
+    ) -> CGPoint {
+        let stemTipY = (stem == .up) ? stemTopY : stemBottomY
+        let noteSideY = (stem == .up) ? stemBottomY : stemTopY
+        let centerY: CGFloat
+        if isFlaggedDuration(duration) {
+            let blockH = barBlockHeight(
+                barCount: barCount, metrics: metrics,
+            )
+            // flagHeight ≈ 2 sp covers flag8thUp / flag16thUp / …
+            // (Bravura). Bar block sits flush past the flag with a
+            // `barBeamGap` of `sp * 0.5`.
+            let flagHeight: CGFloat = metrics.sp * 2.0
+            let gap: CGFloat = metrics.sp * 0.5
+            let dy = flagHeight + gap + blockH / 2
+            centerY = stemTipY + (stem == .up ? 1 : -1) * dy
+        } else {
+            centerY = (stemTipY + noteSideY) / 2
+        }
+        return CGPoint(x: stemX, y: centerY)
+    }
+
+    /// True when `dur` would be drawn with a flag (8th or shorter).
+    static func isFlaggedDuration(_ dur: NoteDuration) -> Bool {
+        switch dur {
+        case .eighth, .sixteenth, .thirtySecond,
+             .sixtyFourth, .oneTwentyEighth, .twoFiftySixth:
+            true
+        default:
+            false
+        }
+    }
+
+    /// Vertical extent of the BEAM stack at a beamLevel-`level` chord
+    /// — every primary + secondary beam visible at that chord's stem
+    /// position. Matches `BeamRenderer.draw`'s `beamThickness +
+    /// beamGap` stacking convention.
+    static func beamStackHeight(
+        beamLevel: Int, metrics: StaffMetrics,
+    ) -> CGFloat {
+        guard beamLevel > 0 else { return 0 }
+        let thickness = metrics.sp * 0.5
+        let gap = metrics.sp * 0.3
+        return CGFloat(beamLevel) * thickness
+            + CGFloat(beamLevel - 1) * gap
+    }
+
     /// Re-anchor the `.tremoloBars` element that follows the chord at
-    /// `outIdx` so its bar block sits just past the beam (with a
-    /// `barBeamGap` of `sp * 0.5`), matching MuseScore engraving.
-    /// Called from the beam pass once each member's actual `beamY` is
-    /// known.
+    /// `outIdx` so its bar block sits past the BEAM STACK
+    /// (`beamStackHeight(level) + barBeamGap` from `beamY`), matching
+    /// MuseScore engraving. Called from the beam pass once each
+    /// member's actual `beamY` and beam level are known.
     ///
     /// Search range: the element immediately after the chord up to the
     /// next non-decoration element (we stop at the next `.chord` /
     /// `.note` / `.rest` to avoid leaking into the next member's
     /// decorations). `.between` anchors are left alone — they bridge
     /// two stems and a tweak here would misalign with the partner.
-    static func reanchorBeamedTremoloBars(
+    static func reanchorBeamedTremoloBars( // swiftlint:disable:this function_parameter_count
         in out: inout [LayoutElement],
         afterChordAt outIdx: Int,
         beamY: CGFloat,
         stem: StemDirection,
+        beamLevel: Int,
         metrics: StaffMetrics,
     ) {
         guard outIdx + 1 < out.count else { return }
@@ -73,11 +130,14 @@ extension LayoutEngine {
             case .chord, .note, .rest:
                 return // belongs to a different chord
             case let .tremoloBars(.single(prevCenter), barCount):
+                let beamH = beamStackHeight(
+                    beamLevel: beamLevel, metrics: metrics,
+                )
                 let blockH = barBlockHeight(
                     barCount: barCount, metrics: metrics,
                 )
                 let gap = metrics.sp * 0.5
-                let dy = gap + blockH / 2
+                let dy = beamH + gap + blockH / 2
                 let centerY = stem == .up ? beamY + dy : beamY - dy
                 out[j] = .tremoloBars(
                     anchor: .single(
@@ -105,6 +165,7 @@ extension LayoutEngine {
     /// in v1 — the renderer (Task 1.8) is responsible for the slant.
     static func makeTremoloBarsElement( // swiftlint:disable:this function_parameter_count
         tremolo: Tremolo,
+        duration: NoteDuration,
         chordX: CGFloat,
         chordNotes: [LayoutChordNote],
         stem: StemDirection,
@@ -127,12 +188,11 @@ extension LayoutEngine {
         let barCount = Int(tremolo.subtype.rawValue)
         switch tremolo.span {
         case .single:
-            // Pre-beam estimate: bar block at midpoint of the stem.
-            // If the chord later gets beamed, the beam pass re-anchors
-            // this via `reanchorBeamedTremoloBars` to sit near the
-            // shifted beam instead.
-            let center = CGPoint(
-                x: top.x, y: (top.y + bottom.y) / 2,
+            let center = singleTremoloCenter(
+                stemTopY: top.y, stemBottomY: bottom.y,
+                stemX: top.x, stem: stem,
+                duration: duration, barCount: barCount,
+                metrics: metrics,
             )
             return .tremoloBars(
                 anchor: .single(center: center),

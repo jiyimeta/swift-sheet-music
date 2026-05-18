@@ -729,6 +729,7 @@ extension LayoutEngine {
                     if let trem = chord.tremolo {
                         if let bars = makeTremoloBarsElement(
                             tremolo: trem,
+                            duration: chord.duration,
                             chordX: chordX,
                             chordNotes: chordNotes,
                             stem: stem,
@@ -1178,15 +1179,17 @@ extension LayoutEngine {
                         stemExtension: 0,
                     )
                     // Re-anchor any .tremoloBars element belonging to
-                    // this chord so its bar block sits just below
-                    // (or above, for stem-down) the actual beam Y,
-                    // replacing the standalone-midstem estimate
-                    // emitted before the beam pass ran.
+                    // this chord so its bar block sits past the full
+                    // beam stack (primary + secondary beams) for
+                    // THIS chord's beam level, replacing the
+                    // standalone-midstem estimate emitted before
+                    // the beam pass ran.
                     reanchorBeamedTremoloBars(
                         in: &out,
                         afterChordAt: outIdx,
                         beamY: memberStemYs[i],
                         stem: groupDirection,
+                        beamLevel: memberLevels[i],
                         metrics: metrics,
                     )
                 }
