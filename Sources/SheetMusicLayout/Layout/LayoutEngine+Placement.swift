@@ -1159,13 +1159,16 @@ extension LayoutEngine {
                         metrics: metrics,
                     )
                     // beamY → beamStack (beamH) → gap (0.5 sp) →
-                    // barBlock (barH) → notehead gap (1.5 sp from
-                    // notehead origin). Larger notehead gap than the
-                    // 1 sp default leaves visual clearance for X /
-                    // diamond / cluster heads whose Bravura glyphs
-                    // extend ~0.66 sp above the origin, not 0.5 sp.
+                    // barBlock (barH) → notehead gap (2 sp from
+                    // notehead origin). MuseScore engraves a similar
+                    // ~1-1.5 sp visual clearance between the bottom
+                    // bar and the notehead glyph; accounting for
+                    // Bravura's X / diamond head bboxes (extend
+                    // ~0.66 sp above the origin) and the bar's own
+                    // slant, 2 sp from the origin is what reproduces
+                    // MuseScore's stem length on cymbal tremolos.
                     let required = beamH + metrics.sp * 0.5
-                        + barH + metrics.sp * 1.5
+                        + barH + metrics.sp * 2.0
                     let ext = max(
                         0, required - metrics.defaultStemLength,
                     )
