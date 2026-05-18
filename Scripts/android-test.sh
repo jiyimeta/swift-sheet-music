@@ -3,16 +3,22 @@
 # device via adb. Exits with the device-side test exit code.
 #
 # Usage: Scripts/android-test.sh <target> [serial] [-- <swift-test-args>]
-#   target: aarch64 | x86_64 (mapped to *-unknown-linux-android24)
+#   target: aarch64 | x86_64 (mapped to *-unknown-linux-android28)
 #   serial: optional adb device serial (use when multiple devices attached)
+#
+# The triple's API-level component (android28) is the lowest level provided
+# by the Swift 6.3.2 official Android SDK (`swift-6.3.2-RELEASE_android`).
+# The bundle name `swift-6.3.2-RELEASE_android` also works as a `--swift-sdk`
+# value but lets SwiftPM pick the API level, so we use the triple form for
+# explicitness and to match aarch64/x86_64 selection.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
 TARGET_SHORT="${1:?usage: android-test.sh <aarch64|x86_64> [serial]}"
 case "$TARGET_SHORT" in
-    aarch64) TRIPLE="aarch64-unknown-linux-android24" ;;
-    x86_64)  TRIPLE="x86_64-unknown-linux-android24" ;;
+    aarch64) TRIPLE="aarch64-unknown-linux-android28" ;;
+    x86_64)  TRIPLE="x86_64-unknown-linux-android28" ;;
     *) echo "unknown target: $TARGET_SHORT" >&2; exit 2 ;;
 esac
 
