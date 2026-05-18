@@ -8,7 +8,7 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-PATTERN='import SwiftUI|import AVFoundation|import CoreText|import AppKit|import UIKit|import PDFKit|import CoreGraphics|import ZIPFoundation|@testable import SheetMusicAudio|@testable import SheetMusicUI|@testable import SheetMusicLayout|@testable import SheetMusicPDF'
+PATTERN='import SwiftUI|import AVFoundation|import CoreText|import AppKit|import UIKit|import PDFKit|import CoreGraphics|@testable import SheetMusicAudio|@testable import SheetMusicUI|@testable import SheetMusicLayout|@testable import SheetMusicPDF'
 
 FILES=()
 while IFS= read -r line; do
