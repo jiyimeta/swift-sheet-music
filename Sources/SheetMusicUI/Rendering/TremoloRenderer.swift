@@ -72,13 +72,16 @@ enum TremoloRenderer {
         for i in 0 ..< barCount {
             let offsetY = firstOffset + CGFloat(i) * spacing
             var path = Path()
+            // Slant left-low → right-high (visually rising), matching
+            // MuseScore's tremolo bar convention regardless of stem
+            // direction. Screen y grows downward, so left = +slantDy.
             path.move(to: CGPoint(
                 x: center.x - halfWidth,
-                y: center.y + offsetY - slantDy,
+                y: center.y + offsetY + slantDy,
             ))
             path.addLine(to: CGPoint(
                 x: center.x + halfWidth,
-                y: center.y + offsetY + slantDy,
+                y: center.y + offsetY - slantDy,
             ))
             context.stroke(
                 path, with: .color(.primary), lineWidth: thickness,

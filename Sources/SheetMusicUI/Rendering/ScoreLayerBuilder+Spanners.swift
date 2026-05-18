@@ -358,13 +358,14 @@ extension ScoreLayerBuilder {
         for i in 0 ..< barCount {
             let offsetY = firstOffset + CGFloat(i) * spacing
             let path = CGMutablePath()
+            // Slant left-low → right-high — see TremoloRenderer.draw.
             path.move(to: CGPoint(
                 x: center.x - halfWidth,
-                y: center.y + offsetY - slantDy,
+                y: center.y + offsetY + slantDy,
             ))
             path.addLine(to: CGPoint(
                 x: center.x + halfWidth,
-                y: center.y + offsetY + slantDy,
+                y: center.y + offsetY - slantDy,
             ))
             parent.addSublayer(strokeLayer(
                 path: path, height: height, lineWidth: thickness,

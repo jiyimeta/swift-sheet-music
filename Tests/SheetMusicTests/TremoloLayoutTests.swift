@@ -81,4 +81,36 @@ struct TremoloLayoutTests {
         }
         #expect(bars == [1])
     }
+
+    /// `.single` tremolo's `.single(stemTop:stemBottom:)` anchor must
+    /// place the stem-x offset from the notehead anchor (matching
+    /// `StemRenderer`'s `sp * 0.59`) so bars centre on the stem. A
+    /// stem-up middle-C below the middle line is the natural test:
+    /// stemX should land RIGHT of the notehead origin.
+    @Test("Single tremolo anchor x is stem-x (notehead + sp*0.59) for stem-up")
+    func single_anchor_x_is_stem_x_for_stem_up() {
+        guard #available(macOS 15.0, iOS 16.0, *) else { return }
+        let chord = Chord(
+            duration: .quarter,
+            notes: ChordNotes([Note(pitch: 60, tpc: 14)]),
+            tremolo: Tremolo(subtype: .r16),
+        )
+        let doc = Self.laidOut(Self.score([.chord(chord)]))
+        let elements = Self.measureElements(doc)
+        var noteX: CGFloat?
+        var anchorX: CGFloat?
+        for el in elements {
+            if case let .chord(notes, _, _, _, _, _, _, _) = el {
+                noteX = notes.first?.origin.x
+            }
+            if case let .tremoloBars(anchor, _) = el,
+               case let .single(top, _) = anchor
+            {
+                anchorX = top.x
+            }
+        }
+        let sp = doc.metrics.sp
+        // Stem-up: stemX = noteheadX + sp * 0.59. Allow 0.01 sp slack.
+        #expect(abs((anchorX ?? 0) - ((noteX ?? 0) + sp * 0.59)) < 0.01 * sp)
+    }
 }

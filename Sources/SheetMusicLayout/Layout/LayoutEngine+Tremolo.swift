@@ -87,6 +87,10 @@ extension LayoutEngine {
     /// the beam-side endpoint, but tremolo geometry is computed
     /// pre-beam (matching the pre-beam emission order in
     /// `placeMeasureElements`).
+    ///
+    /// X must match `StemRenderer`'s `stemAttachDx = sp * 0.59`
+    /// (Bravura `noteheadBlack` `stemUpSE.x` / `stemDownNW.x` anchor),
+    /// so the bars centre on the stem rather than the notehead.
     private static func stemEndpoints(
         chordX: CGFloat,
         chordNotes: [LayoutChordNote],
@@ -94,21 +98,25 @@ extension LayoutEngine {
         staffMidY: CGFloat,
         metrics: StaffMetrics,
     ) -> (top: CGPoint, bottom: CGPoint) {
+        let xs = chordNotes.map(\.origin.x)
         let ys = chordNotes.map(\.origin.y)
         let topNoteY = ys.min() ?? staffMidY
         let botNoteY = ys.max() ?? staffMidY
+        let stemAttachDx = metrics.sp * 0.59
         switch stem {
         case .up:
+            let stemX = (xs.max() ?? chordX) + stemAttachDx
             let stemTipY = botNoteY - metrics.defaultStemLength
             return (
-                CGPoint(x: chordX, y: stemTipY),
-                CGPoint(x: chordX, y: botNoteY),
+                CGPoint(x: stemX, y: stemTipY),
+                CGPoint(x: stemX, y: botNoteY),
             )
         case .down:
+            let stemX = (xs.min() ?? chordX) - stemAttachDx
             let stemTipY = topNoteY + metrics.defaultStemLength
             return (
-                CGPoint(x: chordX, y: topNoteY),
-                CGPoint(x: chordX, y: stemTipY),
+                CGPoint(x: stemX, y: topNoteY),
+                CGPoint(x: stemX, y: stemTipY),
             )
         }
     }
