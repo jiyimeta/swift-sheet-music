@@ -29,6 +29,8 @@
         let onExportMSCX: () -> Void
         let onExportMSCXv3: () -> Void
         let onExportMSCZv3: () -> Void
+        let onExportMIDI: () -> Void
+        let onExportAudio: () -> Void
 
         var body: some View {
             List {
@@ -82,6 +84,10 @@
                     Button("Save as MSCX (MS3)…", action: onExportMSCXv3)
                         .disabled(score == nil)
                     Button("Save as MSCZ (MS3)…", action: onExportMSCZv3)
+                        .disabled(score == nil)
+                    Button("Save as MIDI…", action: onExportMIDI)
+                        .disabled(score == nil)
+                    Button("Export Audio…", action: onExportAudio)
                         .disabled(score == nil)
                 }
                 if !playbackEngine.mixerChannels.isEmpty {

@@ -207,6 +207,8 @@
                     onExportMSCX: exportMSCX,
                     onExportMSCXv3: exportMSCXv3,
                     onExportMSCZv3: exportMSCZv3,
+                    onExportMIDI: exportMIDI,
+                    onExportAudio: { showExport = true },
                 )
             } detail: {
                 if let score {
@@ -302,15 +304,6 @@
                             + "implies.",
                     )
                 }
-                ToolbarItem {
-                    Button {
-                        showExport = true
-                    } label: {
-                        Label("Export Audio", systemImage: "waveform")
-                    }
-                    .disabled(score == nil)
-                    .help("Export audio")
-                }
             }
             .sheet(isPresented: $showExport) {
                 if let score {
@@ -384,6 +377,26 @@
                 NSWorkspace.shared.activateFileViewerSelecting([url])
             } catch {
                 errorMessage = "MSCX export failed: \(error.localizedDescription)"
+            }
+        }
+
+        private func exportMIDI() {
+            guard let score else { return }
+            let panel = NSSavePanel()
+            if let mid = UTType(filenameExtension: "mid") {
+                panel.allowedContentTypes = [mid]
+            }
+            panel.nameFieldStringValue = (sourceName as NSString)
+                .deletingPathExtension + ".mid"
+            panel.canCreateDirectories = true
+            panel.title = "Save Score as MIDI"
+            guard panel.runModal() == .OK, let url = panel.url else { return }
+            do {
+                let data = try SheetMusic.exportMIDI(score: score)
+                try data.write(to: url)
+                NSWorkspace.shared.activateFileViewerSelecting([url])
+            } catch {
+                errorMessage = "MIDI export failed: \(error.localizedDescription)"
             }
         }
 
