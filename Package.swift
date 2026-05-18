@@ -25,7 +25,10 @@ var targets: [Target] = [
     ),
     .target(
         name: "SheetMusicMSCX",
-        dependencies: [
+        dependencies: isAndroid ? [
+            "SheetMusicCore",
+            "SheetMusicXMLTools",
+        ] : [
             "SheetMusicCore",
             "SheetMusicXMLTools",
             "ZIPFoundation",
@@ -33,7 +36,10 @@ var targets: [Target] = [
     ),
     .target(
         name: "SheetMusicMusicXML",
-        dependencies: [
+        dependencies: isAndroid ? [
+            "SheetMusicCore",
+            "SheetMusicXMLTools",
+        ] : [
             "SheetMusicCore",
             "SheetMusicXMLTools",
             "ZIPFoundation",
@@ -61,7 +67,6 @@ var targets: [Target] = [
             "SheetMusicMSCX",
             "SheetMusicMusicXML",
             "SheetMusicXMLTools",
-            "ZIPFoundation",
         ] : [
             "SheetMusic",
             "SheetMusicCore",
