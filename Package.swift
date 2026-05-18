@@ -126,10 +126,7 @@ if !isAndroid {
 var packageDependencies: [Package.Dependency] = []
 if !isAndroid {
     packageDependencies += [
-        .package(
-            url: "https://github.com/jiyimeta/ZIPFoundation.git",
-            revision: "3219223139477f8009b7dcf460aa2a4bb8cd4c24",
-        ),
+        .package(url: "https://github.com/weichsel/ZIPFoundation.git", exact: "0.9.20"),
     ]
 }
 
