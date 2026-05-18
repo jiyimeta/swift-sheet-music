@@ -13,6 +13,10 @@
 # explicitness and to match aarch64/x86_64 selection.
 set -euo pipefail
 
+# Use the open-source swift.org toolchain (the one paired with the Android
+# SDK). Apple's Xcode-shipped swiftc produces incompatible swiftmodules.
+export TOOLCHAINS="${TOOLCHAINS:-org.swift.632202605101a}"
+
 cd "$(dirname "$0")/.."
 
 TARGET_SHORT="${1:?usage: android-test.sh <aarch64|x86_64> [serial]}"
