@@ -26,6 +26,17 @@ case "$TARGET_SHORT" in
     *) echo "unknown target: $TARGET_SHORT" >&2; exit 2 ;;
 esac
 
+SDK_BUNDLE="$HOME/Library/org.swift.swiftpm/swift-sdks/swift-6.3.2-RELEASE_android.artifactbundle"
+if [[ ! -e "$SDK_BUNDLE/swift-android/ndk-sysroot" ]]; then
+    cat >&2 <<EOF
+error: NDK sysroot is not staged.
+  Run the one-time setup:
+    ANDROID_NDK_HOME=~/Library/Android/sdk/ndk/<version> \\
+        $SDK_BUNDLE/swift-android/scripts/setup-android-sdk.sh
+EOF
+    exit 4
+fi
+
 SERIAL_ARG=""
 if [[ "${2:-}" != "" && "${2:-}" != "--" ]]; then
     SERIAL_ARG="-s $2"
