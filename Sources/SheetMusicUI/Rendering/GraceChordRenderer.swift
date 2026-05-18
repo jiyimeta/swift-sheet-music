@@ -9,7 +9,7 @@ import SheetMusicLayout
     import UIKit
 #endif
 
-@available(macOS 15.0, iOS 16.0, *)
+@available(macOS 15.0, *)
 extension ScoreLayerBuilder {
     // swiftlint:disable:next function_parameter_count
     /// Draw a `LayoutElement.graceChord` by recursively reusing the

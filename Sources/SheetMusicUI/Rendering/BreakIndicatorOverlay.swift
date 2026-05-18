@@ -17,7 +17,7 @@ import SwiftUI
 /// * `.document(systems:)` — drops indicators for many systems in
 ///   document-Y coords. Used by the on-screen paginated PDF
 ///   preview where systems share a single page coordinate space.
-@available(macOS 15.0, iOS 16.0, *)
+@available(macOS 15.0, *)
 public struct BreakIndicatorOverlay: View {
     public enum Mode {
         /// Single system, indicator placed in the system's local
@@ -139,7 +139,7 @@ public struct BreakIndicatorOverlay: View {
 
 /// One small badge — a rounded rectangle with an SF Symbol
 /// approximating MuseScore's break-indicator iconography.
-@available(macOS 15.0, iOS 16.0, *)
+@available(macOS 15.0, *)
 private struct BreakIndicatorBadge: View {
     let kind: BreakIndicatorOverlay.BreakKind
 

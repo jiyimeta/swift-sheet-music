@@ -7,7 +7,7 @@ import SheetMusicCore
 /// list and report the resulting typeset width. Used at layout
 /// time so wrap / spacing decisions can consult the width before
 /// any rendering happens.
-@available(macOS 15.0, iOS 16.0, *)
+@available(macOS 15.0, *)
 public enum HarmonyRendering {
     /// Build the run list for `harmony` at the given staff metrics.
     /// Substitution rules (left-to-right scan):

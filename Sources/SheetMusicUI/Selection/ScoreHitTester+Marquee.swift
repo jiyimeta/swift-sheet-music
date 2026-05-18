@@ -2,7 +2,7 @@ import CoreGraphics
 import SheetMusicCore
 import SheetMusicLayout
 
-@available(macOS 15.0, iOS 16.0, *)
+@available(macOS 15.0, *)
 extension ScoreHitTester {
     /// All chord/rest ids whose layout bbox intersects `rect`
     /// (in `LayoutDocument` coords, same space as `hitTest(at:)`).

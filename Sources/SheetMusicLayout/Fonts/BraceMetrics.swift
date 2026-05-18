@@ -10,7 +10,7 @@ import Foundation
 /// layer so the part-label gutter can reserve enough horizontal space
 /// for tall braces (where the rendered glyph extends much further left
 /// than `bracketColumnCount × sp`).
-@available(macOS 15.0, iOS 16.0, *)
+@available(macOS 15.0, *)
 public enum BraceMetrics {
     // SMuFL brace glyph variants — Bravura's PUA range. Same set as
     // `SMuFLGlyph.braceVariant` in SheetMusicUI; duplicated here so the

@@ -5,7 +5,7 @@ import SwiftUI
 /// Draws a `LayoutHarmony` into a SwiftUI `GraphicsContext`. Walks
 /// the pre-laid-out `runs` list, switching font between the text
 /// face (Edwin / Campania) and Bravura per run.
-@available(macOS 15.0, iOS 16.0, *)
+@available(macOS 15.0, *)
 enum HarmonyRenderer {
     static func draw(
         context: inout GraphicsContext,

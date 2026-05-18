@@ -10,7 +10,7 @@ import SwiftUI
 /// the bracket / leading barline and grow rightward as the number
 /// widens, never leftward into the gutter where they'd be clipped
 /// by the system or sticky frame.
-@available(macOS 15.0, iOS 16.0, *)
+@available(macOS 15.0, *)
 enum MeasureNumberRenderer {
     static func draw(
         context: inout GraphicsContext,

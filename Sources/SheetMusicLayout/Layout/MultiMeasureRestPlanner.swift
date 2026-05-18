@@ -3,7 +3,7 @@ import SheetMusicCore
 /// Plan describing how consecutive rest measures collapse into single
 /// H-bar bars at layout time. Pure data; no references to layout
 /// primitives.
-@available(macOS 15.0, iOS 16.0, *)
+@available(macOS 15.0, *)
 public struct MultiMeasureRestPlan: Sendable, Equatable {
     /// Sorted, non-overlapping ranges of measure indices to collapse.
     /// `runs[i].lowerBound` is the bar that draws the H-bar; the
@@ -44,7 +44,7 @@ public struct MultiMeasureRestPlan: Sendable, Equatable {
 /// allowed under `policy`. See spec §"Run-break rules" for the
 /// predicate. The planner does not mutate `score` and is safe to
 /// call repeatedly with the same arguments (idempotent).
-@available(macOS 15.0, iOS 16.0, *)
+@available(macOS 15.0, *)
 public enum MultiMeasureRestPlanner {
     public static func plan(
         for score: Score,

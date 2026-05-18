@@ -1,7 +1,7 @@
 import SheetMusicLayout
 import SwiftUI
 
-@available(macOS 15.0, iOS 16.0, *)
+@available(macOS 15.0, *)
 enum MeasureRepeatRenderer {
     /// Draw the standard SMuFL measure-repeat symbol (1, 2, or 4 bars).
     /// Unknown counts fall back to the 1-bar symbol.

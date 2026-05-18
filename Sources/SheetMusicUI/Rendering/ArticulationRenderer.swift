@@ -1,7 +1,7 @@
 import SheetMusicLayout
 import SwiftUI
 
-@available(macOS 15.0, iOS 16.0, *)
+@available(macOS 15.0, *)
 enum ArticulationRenderer {
     /// SMuFL codepoint for the given articulation kind on the given
     /// side. Above/below pairs render the same shape mirrored across

@@ -10,7 +10,7 @@
     /// so the host body is just a `NavigationSplitView` skeleton.
     @available(macOS 15.0, *)
     struct ContentSidebar: View {
-        @ObservedObject var playbackEngine: PlaybackEngine
+        let playbackEngine: PlaybackEngine
         let sourceName: String
         let score: Score?
         let errorMessage: String?

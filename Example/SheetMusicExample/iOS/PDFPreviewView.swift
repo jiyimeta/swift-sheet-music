@@ -8,7 +8,6 @@
     /// page deck the share-button export produces — same geometry,
     /// same break-indicator overlays — so the preview is a truthful
     /// proxy for the exported PDF.
-    @available(iOS 16.0, *)
     struct PDFPreviewView: View {
         let doc: LayoutDocument
         let pages: [PDFExporter.PageBatch]

@@ -117,10 +117,10 @@
         /// mode did not change.
         @State private var scoreVersion = UUID()
         /// Audio engine for single-note preview + full-score playback.
-        /// Held as `@StateObject` so SwiftUI re-evaluates the play / pause
+        /// Held as `@State` so SwiftUI re-evaluates the play / pause
         /// button label and the playback cursor whenever the engine's
-        /// `@Published` `state` / `currentCursor` change.
-        @StateObject private var playbackEngine = PlaybackEngine(
+        /// observable `state` / `currentCursor` change.
+        @State private var playbackEngine = PlaybackEngine(
             soundfontResolver: BundledSoundfontResolver(),
         )
         /// Edit-mode controller. Lives across score reloads —

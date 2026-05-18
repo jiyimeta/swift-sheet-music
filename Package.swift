@@ -5,10 +5,10 @@ import PackageDescription
 let package = Package(
     name: "swift-sheet-music",
     platforms: [
-        .iOS(.v16),
-        .macOS(.v13),
-        .tvOS(.v16),
-        .watchOS(.v9),
+        .iOS(.v17),
+        .macOS(.v14),
+        .tvOS(.v17),
+        .watchOS(.v10),
     ],
     products: [
         // Umbrella library: re-exports Core + MSCX + MIDI and adds a small
@@ -36,7 +36,7 @@ let package = Package(
         .library(name: "SheetMusicAudio", targets: ["SheetMusicAudio"]),
         // PDF export. Reuses SheetMusicUI's layout + drawing pipeline
         // behind an `ImageRenderer` → `CGPDFContext` bridge. macOS 15+
-        // / iOS 16+ (same as SheetMusicUI).
+        // / iOS 17+ (same as SheetMusicUI).
         .library(name: "SheetMusicPDF", targets: ["SheetMusicPDF"]),
         // Dev tool (not a consumer-facing product): renders sample
         // Scores to PNG for visual inspection of ScoreView.
@@ -51,7 +51,7 @@ let package = Package(
         // type shared by format targets (mscx today, musicxml soon).
         .target(
             name: "SheetMusicXMLTools",
-            dependencies: ["SheetMusicCore"]
+            dependencies: ["SheetMusicCore"],
         ),
         .target(
             name: "SheetMusicMSCX",
@@ -59,7 +59,7 @@ let package = Package(
                 "SheetMusicCore",
                 "SheetMusicXMLTools",
                 "ZIPFoundation", // future .mscz (zipped) support
-            ]
+            ],
         ),
         .target(
             name: "SheetMusicMusicXML",
@@ -67,27 +67,27 @@ let package = Package(
                 "SheetMusicCore",
                 "SheetMusicXMLTools",
                 "ZIPFoundation", // .mxl (zipped MusicXML)
-            ]
+            ],
         ),
         .target(
             name: "SheetMusicMIDI",
-            dependencies: ["SheetMusicCore"]
+            dependencies: ["SheetMusicCore"],
         ),
         .target(
             name: "SheetMusicLayout",
             dependencies: ["SheetMusicCore"],
-            resources: [.process("Fonts/Resources")]
+            resources: [.process("Fonts/Resources")],
         ),
         .target(
             name: "SheetMusicUI",
-            dependencies: ["SheetMusicCore", "SheetMusicLayout"]
+            dependencies: ["SheetMusicCore", "SheetMusicLayout"],
         ),
         .target(
             name: "SheetMusicAudio",
             dependencies: [
                 "SheetMusicCore",
                 "SheetMusicMIDI",
-            ]
+            ],
         ),
         .target(
             name: "SheetMusicPDF",
@@ -95,7 +95,7 @@ let package = Package(
                 "SheetMusicCore",
                 "SheetMusicLayout",
                 "SheetMusicUI",
-            ]
+            ],
         ),
         .target(
             name: "SheetMusic",
@@ -107,13 +107,13 @@ let package = Package(
                 // SheetMusicPDF intentionally NOT a dep — PDF import is
                 // held internal while it's being reworked. See
                 // `docs/superpowers/plans/2026-05-03-pdf-import-paused.md`.
-            ]
+            ],
         ),
         // Dev tool: renders a set of sample Scores to PNG for visual
         // inspection. Not a published product — only for contributor use.
         .executableTarget(
             name: "RenderPreviews",
-            dependencies: ["SheetMusic", "SheetMusicLayout", "SheetMusicUI"]
+            dependencies: ["SheetMusic", "SheetMusicLayout", "SheetMusicUI"],
         ),
         .testTarget(
             name: "SheetMusicTests",
@@ -132,7 +132,7 @@ let package = Package(
             ],
             resources: [
                 .process("Resources"),
-            ]
+            ],
         ),
-    ]
+    ],
 )

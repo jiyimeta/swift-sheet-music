@@ -6,7 +6,7 @@ import SwiftUI
 /// A single system rendered in its own Canvas. Used by `ScoreView`
 /// inside a `LazyVStack` so only visible systems are drawn — the
 /// biggest performance win for long scores during scrolling.
-@available(macOS 15.0, iOS 16.0, *)
+@available(macOS 15.0, *)
 struct SystemCanvas: View {
     let system: LayoutSystem
     let metrics: StaffMetrics
@@ -43,7 +43,7 @@ struct SystemCanvas: View {
 /// A horizontal slice of a single system. Used by `ScoreView` in
 /// horizontal-scroll mode inside a `LazyHStack` so only visible
 /// portions of a long system are rasterised.
-@available(macOS 15.0, iOS 16.0, *)
+@available(macOS 15.0, *)
 struct SystemSliceCanvas: View {
     let system: LayoutSystem
     let metrics: StaffMetrics
@@ -79,7 +79,7 @@ struct SystemSliceCanvas: View {
 /// Static drawing routines shared between single-system and full-
 /// document canvases. Factored out of `ScoreCanvas` so `SystemCanvas`
 /// can call them too.
-@available(macOS 15.0, iOS 16.0, *)
+@available(macOS 15.0, *)
 public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
     public static func drawSystem( // swiftlint:disable:this function_body_length
         _ system: LayoutSystem,

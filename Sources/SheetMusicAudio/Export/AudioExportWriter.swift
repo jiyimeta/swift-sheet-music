@@ -166,14 +166,14 @@ final class CompressedAudioExportWriter: AudioExportWriter, @unchecked Sendable 
     }
 }
 
-/// `AVAssetWriter`-backed MP3 writer. Gated on iOS 17 / macOS 14 /
-/// tvOS 17 / watchOS 10 — earlier OSes have no MP3 *write* path
-/// in `AVAssetWriter`.
+/// `AVAssetWriter`-backed MP3 writer. The package's minimum platforms
+/// (iOS 17 / macOS 14 / tvOS 17 / watchOS 10) are the earliest OSes
+/// with an MP3 *write* path in `AVAssetWriter`, so no extra gate
+/// is needed here.
 ///
-/// Note: although the `@available` gate includes macOS 14, `AVAssetWriter`
+/// Note: although the package floor includes macOS 14, `AVAssetWriter`
 /// does not support the `.mp3` file type on macOS at runtime. On macOS this
 /// init throws `AudioExportError.formatUnsupportedOnThisOS`.
-@available(iOS 17, macOS 14, tvOS 17, watchOS 10, *)
 final class MP3AudioExportWriter: AudioExportWriter, @unchecked Sendable {
     private let assetWriter: AVAssetWriter
     private let input: AVAssetWriterInput

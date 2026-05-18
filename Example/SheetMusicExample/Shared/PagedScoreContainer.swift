@@ -5,7 +5,7 @@ import SwiftUI
 /// Page-flip score viewer: tap the left half for the previous
 /// page, the right half for the next, and a small page-counter
 /// chip floats at the bottom. Used by both iOS and macOS hosts.
-@available(macOS 15.0, iOS 16.0, *)
+@available(macOS 15.0, *)
 struct PagedScoreContainer: View {
     let score: Score
     let options: ScoreViewOptions

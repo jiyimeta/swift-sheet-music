@@ -1,6 +1,5 @@
 // swiftlint:disable file_length
 import AVFoundation
-import Combine
 import Foundation
 import SheetMusicCore
 import SheetMusicMIDI
@@ -40,9 +39,9 @@ public struct LoopRange: Sendable, Equatable {
     }
 }
 
-@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 @MainActor
-public final class PlaybackEngine: ObservableObject { // swiftlint:disable:this type_body_length
+@Observable
+public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     private let resolver: SoundfontResolver
     private let engine = AVAudioEngine()
     /// `AVAudioUnitSampler` per staff index. Re-built on each call
@@ -93,8 +92,8 @@ public final class PlaybackEngine: ObservableObject { // swiftlint:disable:this 
     /// re-handed to the metronome whenever the sequencer is rebuilt.
     private var metronomeBeats: [MetronomeBeat] = []
 
-    @Published public private(set) var state: PlaybackState = .stopped
-    @Published public private(set) var currentCursor: ScoreCursor?
+    public private(set) var state: PlaybackState = .stopped
+    public private(set) var currentCursor: ScoreCursor?
     /// When non-nil, `tickCursor` snaps the sequencer back to
     /// `startTick` whenever the polled raw position reaches `endTick`,
     /// re-seating *all* tracks — including the SMF's master tempo
@@ -111,12 +110,12 @@ public final class PlaybackEngine: ObservableObject { // swiftlint:disable:this 
     /// detection at ~30 Hz), so a chord ringing into the wrap point
     /// gets cut off. `play(...)` and `seek(...)` still snap into the
     /// region when called outside it.
-    @Published public private(set) var loopRange: LoopRange?
+    public private(set) var loopRange: LoopRange?
     /// One strip per staff plus a metronome strip. Rebuilt on each
     /// `prepare(score:)` call; mutated through `setVolume / setMuted
     /// / setSoloed`. Hosts bind a SwiftUI mixer view directly to
     /// this array and re-render on change.
-    @Published public private(set) var mixerChannels: [MixerChannel] = []
+    public private(set) var mixerChannels: [MixerChannel] = []
 
     public init(soundfontResolver: SoundfontResolver) {
         resolver = soundfontResolver

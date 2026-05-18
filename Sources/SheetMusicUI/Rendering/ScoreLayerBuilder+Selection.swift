@@ -3,7 +3,7 @@ import QuartzCore
 import SheetMusicCore
 import SheetMusicLayout
 
-@available(macOS 15.0, iOS 16.0, *)
+@available(macOS 15.0, *)
 extension ScoreLayerBuilder {
     /// Draws a rectangular outline around every staff × time region
     /// that contains a selected item (note or rest) on this system.

@@ -3,7 +3,7 @@ import SheetMusicCore
 
 /// One horizontal line of music. Contains one or more staves stacked
 /// vertically and one or more parts.
-@available(macOS 15.0, iOS 16.0, *)
+@available(macOS 15.0, *)
 public struct LayoutSystem: Sendable, Equatable {
     public let origin: CGPoint // in document coordinates
     public let size: CGSize
@@ -158,7 +158,7 @@ public struct LayoutSystem: Sendable, Equatable {
     }
 }
 
-@available(macOS 15.0, iOS 16.0, *)
+@available(macOS 15.0, *)
 public struct LayoutPartLabel: Sendable, Equatable {
     public let text: String
     public let origin: CGPoint
@@ -169,7 +169,7 @@ public struct LayoutPartLabel: Sendable, Equatable {
     }
 }
 
-@available(macOS 15.0, iOS 16.0, *)
+@available(macOS 15.0, *)
 public struct LayoutBracket: Sendable, Equatable {
     public let type: BracketType
     /// Top edge of the topmost spanned staff (system coords).

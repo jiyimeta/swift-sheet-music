@@ -17,7 +17,6 @@ import SheetMusicMIDI
 /// loaded from the same SF2 the host already supplies via
 /// `SoundfontResolver.defaultGMSoundfontURL` — there is no separate
 /// metronome SoundFont in MuseScore either.
-@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 @MainActor
 final class MetronomeController {
     private let engine: AVAudioEngine

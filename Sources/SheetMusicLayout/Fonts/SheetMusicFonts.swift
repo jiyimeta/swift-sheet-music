@@ -23,7 +23,7 @@ import os
 /// CoreText silently falls back to the platform system font, so
 /// rendering keeps working — just without the MuseScore-matching
 /// look.
-@available(macOS 15.0, iOS 16.0, *)
+@available(macOS 15.0, *)
 public enum SheetMusicFonts {
     private static let logger = Logger(
         subsystem: "swift-sheet-music.SheetMusicLayout",

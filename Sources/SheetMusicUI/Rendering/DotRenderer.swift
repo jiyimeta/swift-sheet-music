@@ -4,7 +4,7 @@ import SwiftUI
 /// Augmentation dots drawn to the right of a notehead or rest glyph.
 /// Small filled circle; offset by ~1 sp right of the anchor, further
 /// dots spaced ~0.5 sp apart.
-@available(macOS 15.0, iOS 16.0, *)
+@available(macOS 15.0, *)
 enum DotRenderer {
     /// Draw `count` dots after `origin`. `onLineY` is true when the
     /// anchor sits on a staff line (even staff step) — the first dot

@@ -12,7 +12,7 @@ import SwiftUI
 /// Internal rendering state computed from a public `ScoreSelection`
 /// plus caller-supplied voice colours. Passed to the layer builder so
 /// it can tint selected items and draw a range-box overlay.
-@available(macOS 15.0, iOS 16.0, *)
+@available(macOS 15.0, *)
 struct SelectionRenderState {
     let selectedIDs: Set<ScoreItemID>
     let voiceColors: [Int: CGColor]

@@ -16,7 +16,7 @@ import SwiftUI
 /// sizes itself to fit its contents; the host should clip beyond the
 /// returned width when overlaying so the underlying score scrolls
 /// independently of the sticky region.
-@available(macOS 15.0, iOS 16.0, *)
+@available(macOS 15.0, *)
 public struct StickyHeaderView: View {
     private let document: LayoutDocument
     private let documentScrollX: CGFloat

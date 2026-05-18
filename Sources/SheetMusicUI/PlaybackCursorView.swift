@@ -24,7 +24,7 @@ import SwiftUI
 /// when the column can't be resolved (e.g. mid-render layout swap),
 /// so it's safe to render unconditionally inside `ScoreView`'s
 /// overlay.
-@available(macOS 15.0, iOS 16.0, *)
+@available(macOS 15.0, *)
 public struct PlaybackCursorView: View {
     private let cursor: ScoreCursor?
     private let document: LayoutDocument
@@ -56,7 +56,7 @@ public struct PlaybackCursorView: View {
     }
 }
 
-@available(macOS 15.0, iOS 16.0, *)
+@available(macOS 15.0, *)
 extension LayoutDocument {
     /// Bounding rectangle (document coords) for the playback cursor
     /// when it's parked on `cursor`. Y span covers every staff in

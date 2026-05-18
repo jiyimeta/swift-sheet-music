@@ -13,7 +13,7 @@ import SheetMusicCore
 /// segregates events by their visual row. Callers who need the
 /// staff for an existing id can derive it via `id.staffIndex`
 /// (`ScoreItemID.staffIndex` is a computed property).
-@available(macOS 15.0, iOS 16.0, *)
+@available(macOS 15.0, *)
 public struct EventColumn: Sendable, Equatable {
     public let id: ScoreItemID
     public let voiceIndex: Int

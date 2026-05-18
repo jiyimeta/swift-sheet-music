@@ -7,7 +7,7 @@ import SwiftUI
 /// at the document's top-leading corner so the title block sits
 /// above the first system in the same coordinate space the layout
 /// engine produced.
-@available(macOS 15.0, iOS 16.0, *)
+@available(macOS 15.0, *)
 struct TitleFrameView: View {
     let frame: LayoutTitleFrame
     let width: CGFloat

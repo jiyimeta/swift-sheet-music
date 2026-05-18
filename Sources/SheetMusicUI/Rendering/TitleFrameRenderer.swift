@@ -6,7 +6,7 @@ import SwiftUI
 /// font sizes) into a `GraphicsContext`. Used by both the on-screen
 /// `ScoreView` and the PDF exporter so the title block matches
 /// across surfaces.
-@available(macOS 15.0, iOS 16.0, *)
+@available(macOS 15.0, *)
 public enum TitleFrameRenderer {
     public static func draw(
         _ frame: LayoutTitleFrame,
@@ -86,7 +86,7 @@ public enum TitleFrameRenderer {
     }
 }
 
-@available(macOS 15.0, iOS 16.0, *)
+@available(macOS 15.0, *)
 extension LayoutFrameText.Anchor {
     fileprivate var isBottom: Bool {
         switch self {

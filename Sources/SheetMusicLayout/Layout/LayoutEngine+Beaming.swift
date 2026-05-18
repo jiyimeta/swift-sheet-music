@@ -2,7 +2,7 @@
 import CoreGraphics
 import SheetMusicCore
 
-@available(macOS 15.0, iOS 16.0, *)
+@available(macOS 15.0, *)
 extension LayoutEngine {
     struct BeamGroup: Equatable {
         /// Voice-element indices (into `voice.elements`) of the chords in

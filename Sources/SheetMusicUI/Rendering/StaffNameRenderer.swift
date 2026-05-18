@@ -11,7 +11,7 @@ import SwiftUI
 /// `styledef.cpp`), spatium-dependent. At MuseScore's reference
 /// 5 pt spatium that lands at 2 spatia, so we render at `sp * 2.0`
 /// with a bottom-leading anchor.
-@available(macOS 15.0, iOS 16.0, *)
+@available(macOS 15.0, *)
 enum StaffNameRenderer {
     static func draw(
         context: inout GraphicsContext,

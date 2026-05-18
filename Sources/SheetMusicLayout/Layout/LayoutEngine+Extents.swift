@@ -2,7 +2,7 @@
 import CoreGraphics
 import SheetMusicCore
 
-@available(macOS 15.0, iOS 16.0, *)
+@available(macOS 15.0, *)
 extension LayoutEngine {
     /// Maximum upward extent (smallest Y) of any chord stem-tip,
     /// notehead, beam, or above-arcing tie in `elements`. Used by

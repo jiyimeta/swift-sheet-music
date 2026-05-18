@@ -5,7 +5,7 @@ import SwiftUI
 /// Draws free-form `<StaffText>` / `<SystemText>` from `.mscx`,
 /// honouring the author's colour. Position offsets are baked into
 /// `origin` by `LayoutEngine+Placement` before this is called.
-@available(macOS 15.0, iOS 16.0, *)
+@available(macOS 15.0, *)
 enum StaffTextRenderer {
     static func draw(
         context: inout GraphicsContext,

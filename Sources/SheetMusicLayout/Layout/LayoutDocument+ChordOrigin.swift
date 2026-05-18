@@ -1,7 +1,7 @@
 import CoreGraphics
 import SheetMusicCore
 
-@available(macOS 15.0, iOS 16.0, *)
+@available(macOS 15.0, *)
 extension LayoutDocument {
     /// Absolute document-coord stem origin for the chord at
     /// `voiceElementID`. Searches every system / measure / element

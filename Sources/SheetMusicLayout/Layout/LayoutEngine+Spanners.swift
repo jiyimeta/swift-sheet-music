@@ -2,7 +2,7 @@
 import CoreGraphics
 import SheetMusicCore
 
-@available(macOS 15.0, iOS 16.0, *)
+@available(macOS 15.0, *)
 extension LayoutEngine {
     /// Anchor describing a Spanner's position before it has been resolved
     /// to absolute system-level coordinates.

@@ -13,7 +13,6 @@ enum FormatTag: String, CaseIterable, Identifiable {
     }
 }
 
-@available(macOS 13.0, iOS 16.0, *)
 struct AudioExportSheet: View {
     let engine: PlaybackEngine
     let score: Score

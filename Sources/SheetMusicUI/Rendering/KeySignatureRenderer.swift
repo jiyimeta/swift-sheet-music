@@ -1,7 +1,7 @@
 import SheetMusicLayout
 import SwiftUI
 
-@available(macOS 15.0, iOS 16.0, *)
+@available(macOS 15.0, *)
 enum KeySignatureRenderer {
     // Steps for each accidental in standard engraving order.
     // Sharp order: F♯ C♯ G♯ D♯ A♯ E♯ B♯.

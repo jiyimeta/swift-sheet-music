@@ -15,7 +15,7 @@ import SwiftUI
 /// on the page is then drawn in document coords; the single
 /// translation handles both the inset margin and the per-page Y
 /// offset.
-@available(macOS 15.0, iOS 16.0, *)
+@available(macOS 15.0, *)
 public struct PDFPageView: View {
     let systems: [LayoutSystem]
     let pageStartY: CGFloat

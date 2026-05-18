@@ -1,7 +1,7 @@
 import SheetMusicLayout
 import SwiftUI
 
-@available(macOS 15.0, iOS 16.0, *)
+@available(macOS 15.0, *)
 enum ArpeggioRenderer {
     /// Draw a vertical stack of arpeggio "wiggle" segments from `top` to
     /// `bottom`, to the left of the chord. `subtype` selects the optional

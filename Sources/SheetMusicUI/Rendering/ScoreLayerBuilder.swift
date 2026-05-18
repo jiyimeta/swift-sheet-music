@@ -24,7 +24,7 @@ import SheetMusicLayout
 /// flip every path's Y at construction time via a helper
 /// (`flipForPlatform`).  On iOS, `UIView.layer` is already Y-down and
 /// no flip is applied.
-@available(macOS 15.0, iOS 16.0, *)
+@available(macOS 15.0, *)
 public enum ScoreLayerBuilder {
     /// Ink colour for all strokes / fills.  Matches the prior
     /// `.environment(\.colorScheme, .light)` + `.color(.primary)`

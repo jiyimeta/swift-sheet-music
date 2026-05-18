@@ -26,7 +26,7 @@ import SwiftUI
 /// overlay layer that is cleared and rebuilt on each selection
 /// change. This keeps click-to-recolour work O(|previous ∪ new|)
 /// instead of O(score size).
-@available(macOS 15.0, iOS 16.0, *)
+@available(macOS 15.0, *)
 struct SystemLayerView: View {
     let system: LayoutSystem
     let metrics: StaffMetrics
@@ -174,7 +174,6 @@ struct SystemLayerView: View {
     }
 
 #else
-    @available(iOS 16.0, *)
     private struct _LayerBackedSystem: UIViewRepresentable {
         let system: LayoutSystem
         let metrics: StaffMetrics
@@ -197,7 +196,6 @@ struct SystemLayerView: View {
         }
     }
 
-    @available(iOS 16.0, *)
     private final class _LayerSystemHostView: UIView {
         private var lastSystem: LayoutSystem?
         private var lastMetrics: StaffMetrics?

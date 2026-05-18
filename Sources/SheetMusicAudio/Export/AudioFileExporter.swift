@@ -9,7 +9,6 @@ import Foundation
 /// stays in `PlaybackEngine+Export` so the lifecycle invariants
 /// (manual mode toggle, sequencer rebuild, audio session) all live
 /// next to the existing `prepare(score:)` code.
-@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 actor AudioFileExporter {
     /// Buffer size for each `engine.renderOffline(...)` pull. Apple
     /// docs recommend powers of two; 4096 is a sweet spot between

@@ -29,7 +29,7 @@ public enum PDFExportError: Error, Sendable {
 ///
 /// All public methods are `@MainActor` because `ImageRenderer` is.
 /// Wrap calls in a detached task if you don't want to block the UI.
-@available(macOS 15.0, iOS 16.0, *)
+@available(macOS 15.0, *)
 @MainActor
 public enum PDFExporter {
     /// Knobs for page geometry, staff scaling, layout gap, and PDF

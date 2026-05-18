@@ -6,9 +6,8 @@ import SwiftUI
 /// Bound directly to `PlaybackEngine.mixerChannels` so changes
 /// from any other UI (toolbar, scripts, …) reflect here and vice
 /// versa.
-@available(macOS 13.0, iOS 16.0, *)
 struct MixerView: View {
-    @ObservedObject var engine: PlaybackEngine
+    let engine: PlaybackEngine
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -19,10 +18,9 @@ struct MixerView: View {
     }
 }
 
-@available(macOS 13.0, iOS 16.0, *)
 private struct MixerStrip: View {
     let channel: MixerChannel
-    @ObservedObject var engine: PlaybackEngine
+    let engine: PlaybackEngine
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -86,11 +84,10 @@ private struct MixerStrip: View {
 /// than a flat scroll. Selection is committed via
 /// `PlaybackEngine.setProgram(...)` which both reloads the
 /// sampler and updates the mixer state.
-@available(macOS 13.0, iOS 16.0, *)
 private struct ProgramMenu: View {
     let channelID: MixerChannel.Kind
     let program: UInt8
-    @ObservedObject var engine: PlaybackEngine
+    let engine: PlaybackEngine
     /// Borderless `Menu` on macOS bakes its own chrome colors into
     /// the label, ignoring `.foregroundStyle(.primary)` — SF
     /// Symbols come out black even in dark mode. Read the

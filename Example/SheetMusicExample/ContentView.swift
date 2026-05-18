@@ -38,11 +38,11 @@
         @State private var horizontalMeasureFrames: [Int: CGRect] = [:]
         /// Audio engine for single-note preview + full-score playback.
         /// Stays silent until the user drops a SoundFont into `Sounds/`
-        /// (see `BundledSoundfontResolver`). Held as a `@StateObject` so
+        /// (see `BundledSoundfontResolver`). Held as `@State` so
         /// SwiftUI re-renders the play/pause button label and the
-        /// playback cursor whenever the engine's `@Published` `state` /
+        /// playback cursor whenever the engine's observable `state` /
         /// `currentCursor` changes.
-        @StateObject private var playbackEngine = PlaybackEngine(
+        @State private var playbackEngine = PlaybackEngine(
             soundfontResolver: BundledSoundfontResolver(),
         )
         /// Set when the user taps the share button. Drives the
@@ -437,7 +437,7 @@
         }
 
         /// Re-evaluate visibility on every cursor change — `onChange`
-        /// of an `@Published` cursor fires per chord / rest step the
+        /// of the observable cursor fires per chord / rest step the
         /// playback engine takes. When the cursor's row (system in
         /// vertical mode, measure in horizontal mode) has no overlap
         /// with the visible viewport, scroll its nearest edge to the

@@ -162,7 +162,7 @@
 
     // MARK: - Title text glyph paths
 
-    @available(macOS 15.0, iOS 16.0, *)
+    @available(macOS 15.0, *)
     private func makeTitleTextLayer(
         entry: LayoutFrameText,
         pageSize: CGSize,
@@ -230,7 +230,7 @@
         return layer
     }
 
-    @available(macOS 15.0, iOS 16.0, *)
+    @available(macOS 15.0, *)
     private func textPath(_ text: String, font: CTFont) -> CGPath? {
         let attr = NSAttributedString(
             string: text, attributes: [.font: font],
@@ -275,7 +275,7 @@
         return composite.isEmpty ? nil : composite
     }
 
-    @available(macOS 15.0, iOS 16.0, *)
+    @available(macOS 15.0, *)
     private func systemTextFont(
         size: CGFloat, italic: Bool, bold: Bool,
     ) -> CTFont {

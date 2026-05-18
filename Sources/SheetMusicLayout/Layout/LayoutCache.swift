@@ -18,7 +18,7 @@ import SheetMusicCore
 /// `LayoutEngine.layout` is synchronous and assumed to run on a
 /// single thread per call. The cache must not be shared across
 /// concurrent layout calls.
-@available(macOS 15.0, iOS 16.0, *)
+@available(macOS 15.0, *)
 public final class LayoutCache: @unchecked Sendable {
     public init() {}
 

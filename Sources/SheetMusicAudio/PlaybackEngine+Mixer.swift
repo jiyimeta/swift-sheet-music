@@ -2,7 +2,6 @@ import AVFoundation
 import Foundation
 import SheetMusicCore
 
-@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 extension PlaybackEngine {
     /// Set a channel's slider value. Linear gain in `0.0...1.0`.
     public func setVolume(forChannel id: MixerChannel.Kind, to value: Float) {

@@ -2,7 +2,7 @@ import SheetMusicCore
 import SheetMusicLayout
 import SwiftUI
 
-@available(macOS 15.0, iOS 16.0, *)
+@available(macOS 15.0, *)
 enum TextMarkRenderer {
     /// Dynamic marking (pp, p, mf, f, ff, …). MuseScore renders
     /// standard dynamics as SMuFL glyphs from the music font, NOT

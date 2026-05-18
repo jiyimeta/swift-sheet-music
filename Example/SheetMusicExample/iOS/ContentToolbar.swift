@@ -13,9 +13,8 @@
     /// when its candidate items mix `.disabled()` states; the indicator
     /// appears but tapping it does nothing. Authoring an explicit
     /// `Menu` sidesteps that path entirely.
-    @available(iOS 16.0, *)
     struct ContentToolbar: ToolbarContent {
-        @ObservedObject var playbackEngine: PlaybackEngine
+        let playbackEngine: PlaybackEngine
         let score: Score?
         @Binding var layoutMode: IOSLayoutMode
         @Binding var staffSize: CGFloat

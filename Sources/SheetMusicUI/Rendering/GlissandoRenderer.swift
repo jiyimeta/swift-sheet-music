@@ -5,7 +5,7 @@ import SwiftUI
 /// with an optional text label ("gliss.", etc.) that follows the
 /// slope of the line — matching MuseScore's rotated-painter approach
 /// (`tdraw.cpp::draw(GlissandoSegment)`).
-@available(macOS 15.0, iOS 16.0, *)
+@available(macOS 15.0, *)
 enum GlissandoRenderer {
     static func draw(
         context: inout GraphicsContext,

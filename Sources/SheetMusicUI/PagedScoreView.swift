@@ -9,7 +9,7 @@ import SwiftUI
 /// mode) then grouped into pages by available height. The caller
 /// controls navigation via the `pageIndex` binding; `totalPages`
 /// is written back when layout completes.
-@available(macOS 15.0, iOS 16.0, *)
+@available(macOS 15.0, *)
 public struct PagedScoreView: View {
     private let score: Score
     private let options: ScoreViewOptions

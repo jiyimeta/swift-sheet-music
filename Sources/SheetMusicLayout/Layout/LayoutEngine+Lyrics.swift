@@ -3,7 +3,7 @@ import CoreGraphics
 import CoreText
 import SheetMusicCore
 
-@available(macOS 15.0, iOS 16.0, *)
+@available(macOS 15.0, *)
 extension LayoutEngine {
     /// True when consecutive same-verse syllables should be linked
     /// with a hyphen line. MuseScore draws dashes between any

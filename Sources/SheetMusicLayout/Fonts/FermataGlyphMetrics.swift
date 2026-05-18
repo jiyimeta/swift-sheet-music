@@ -10,7 +10,7 @@ import Foundation
 ///
 /// All values are at `fontSize = 4` (i.e. 1 sp = 1 unit), so callers
 /// scale by their own `metrics.sp`.
-@available(macOS 15.0, iOS 16.0, *)
+@available(macOS 15.0, *)
 public struct FermataGlyphOffsets: Sendable {
     /// Screen-Y of the visible glyph's BOTTOM minus `origin.y`,
     /// measured in sp-units. Positive = glyph bottom is below origin.
@@ -33,7 +33,7 @@ public struct FermataGlyphOffsets: Sendable {
 /// Mirrors `BraceMetrics`'s runtime CTFont measurement pattern so the
 /// layout target stays self-contained (no dependency on the renderer
 /// module).
-@available(macOS 15.0, iOS 16.0, *)
+@available(macOS 15.0, *)
 public enum FermataGlyphMetrics {
     /// fermataAbove (U+E4C0).
     public static var above: FermataGlyphOffsets {

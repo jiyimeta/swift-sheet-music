@@ -17,7 +17,7 @@ import os
 /// When CoreText resolves "Bravura" to the fallback system font (because
 /// registration silently failed), SwiftUI displays tofu boxes in place of
 /// SMuFL glyphs. The diagnostics below help pinpoint where that happened.
-@available(macOS 15.0, iOS 16.0, *)
+@available(macOS 15.0, *)
 public enum BravuraFont {
     public static let familyName = "Bravura"
 
@@ -109,5 +109,5 @@ public enum BravuraFont {
 /// Private anchor used by `Bundle(for:)` to locate the binary that
 /// contains the SheetMusicUI code (and, by convention, its resource
 /// bundle). Not exposed — existence is an implementation detail.
-@available(macOS 15.0, iOS 16.0, *)
+@available(macOS 15.0, *)
 private final class BundleAnchor {}

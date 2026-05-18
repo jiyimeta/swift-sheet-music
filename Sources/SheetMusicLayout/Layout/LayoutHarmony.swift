@@ -5,7 +5,7 @@ import SheetMusicCore
 /// array is built once at layout time so the renderer just walks
 /// them; wrap / page-break decisions can read `width` without
 /// re-measuring text.
-@available(macOS 15.0, iOS 16.0, *)
+@available(macOS 15.0, *)
 public struct LayoutHarmony: Sendable, Equatable {
     public var harmony: Harmony
     /// Anchor x in system-relative coords (before `harmony.offsetX`
@@ -36,7 +36,7 @@ public struct LayoutHarmony: Sendable, Equatable {
 /// One typesetting run inside a `LayoutHarmony`. Either a string
 /// drawn in the harmony's text font, or a single SMuFL accidental
 /// glyph drawn in Bravura.
-@available(macOS 15.0, iOS 16.0, *)
+@available(macOS 15.0, *)
 public struct HarmonyRun: Sendable, Equatable {
     public enum Kind: Sendable, Equatable {
         case text

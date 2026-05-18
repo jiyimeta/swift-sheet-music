@@ -19,7 +19,7 @@ import SwiftUI
 /// via the `availableWidth` parameter (read it with a `GeometryReader`
 /// **outside** the scroll view). When omitted, the view falls back to
 /// an internal `GeometryReader` which works outside scroll views.
-@available(macOS 15.0, iOS 16.0, *)
+@available(macOS 15.0, *)
 public struct ScoreView: View {
     private let score: Score
     private let options: ScoreViewOptions

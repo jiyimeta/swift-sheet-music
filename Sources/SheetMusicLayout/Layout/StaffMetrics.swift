@@ -4,7 +4,7 @@ import CoreGraphics
 ///
 /// MuseScore / engraving convention: one "staff space" (sp) = one line
 /// distance of a five-line staff. A staff is 4 sp tall.
-@available(macOS 15.0, iOS 16.0, *)
+@available(macOS 15.0, *)
 public struct StaffMetrics: Sendable, Equatable {
     /// Total height of the five-line staff, in points. Equals 4 × sp.
     public let staffHeight: CGFloat

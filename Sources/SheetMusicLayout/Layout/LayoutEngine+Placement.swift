@@ -7,7 +7,7 @@ import SheetMusicCore
 /// The anchor measure (where the `<Lyrics>` element lives) is
 /// handled inside `emitMelismaLine`; instances of this type describe
 /// the left-hand continuation rule drawn on the following measures.
-@available(macOS 15.0, iOS 16.0, *)
+@available(macOS 15.0, *)
 struct MelismaContinuation: Equatable {
     let voiceIndex: Int
     let verseIndex: Int
@@ -24,7 +24,7 @@ struct MelismaContinuation: Equatable {
 /// Identifies one lyric syllable across the score — used as the key
 /// for pre-computed per-lyric data (e.g. effective melisma ticks
 /// after following ties forward).
-@available(macOS 15.0, iOS 16.0, *)
+@available(macOS 15.0, *)
 struct MelismaLyricKey: Hashable {
     let staffIndex: Int
     let measureIndex: Int
@@ -33,7 +33,7 @@ struct MelismaLyricKey: Hashable {
     let verseIndex: Int
 }
 
-@available(macOS 15.0, iOS 16.0, *)
+@available(macOS 15.0, *)
 extension LayoutEngine {
     /// Place elements of a measure in local measure coordinates.
     /// Returns the placed elements + the updated clef context.

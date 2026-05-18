@@ -15,7 +15,7 @@ extension ScoreCursor {
     }
 }
 
-@available(macOS 15.0, iOS 16.0, *)
+@available(macOS 15.0, *)
 extension LayoutDocument {
     /// Document-space top-left of the first occurrence of the
     /// measure with `measureIndex`. `nil` if the index isn't found
@@ -123,7 +123,7 @@ struct HorizontalMeasureFramesKey: PreferenceKey {
 /// frame at the parent origin (so `scrollTo` always targets 0, 0).
 /// A real VStack with spacers is the only path that gives every
 /// anchor an honest frame the standard layout system reports.
-@available(macOS 15.0, iOS 16.0, *)
+@available(macOS 15.0, *)
 struct VerticalSystemAnchors: View {
     let document: LayoutDocument
 
@@ -180,7 +180,7 @@ struct VerticalSystemAnchors: View {
 /// horizontal counterpart of `VerticalSystemAnchors`. Each anchor
 /// is sized to the measure's full width so its preference-reported
 /// frame in `.named("hScroll")` *is* the measure's live rect.
-@available(macOS 15.0, iOS 16.0, *)
+@available(macOS 15.0, *)
 struct HorizontalMeasureAnchors: View {
     let document: LayoutDocument
 
