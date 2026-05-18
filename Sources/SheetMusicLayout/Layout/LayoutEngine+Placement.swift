@@ -1159,9 +1159,13 @@ extension LayoutEngine {
                         metrics: metrics,
                     )
                     // beamY → beamStack (beamH) → gap (0.5 sp) →
-                    // barBlock (barH) → gap to notehead (1 sp)
+                    // barBlock (barH) → notehead gap (1.5 sp from
+                    // notehead origin). Larger notehead gap than the
+                    // 1 sp default leaves visual clearance for X /
+                    // diamond / cluster heads whose Bravura glyphs
+                    // extend ~0.66 sp above the origin, not 0.5 sp.
                     let required = beamH + metrics.sp * 0.5
-                        + barH + metrics.sp * 1.0
+                        + barH + metrics.sp * 1.5
                     let ext = max(
                         0, required - metrics.defaultStemLength,
                     )
