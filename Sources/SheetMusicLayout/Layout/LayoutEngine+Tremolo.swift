@@ -4,22 +4,27 @@ import SheetMusicCore
 @available(macOS 15.0, *)
 extension LayoutEngine {
     /// Extra stem length needed to fit a chord's tremolo bars between
-    /// the notehead and the flag/beam without overlap. Returns 0 when
-    /// no extension is needed:
+    /// the notehead and the flag/beam without overlap.
+    ///
+    /// Returns 0 when no extension is needed:
     ///  * no tremolo → 0.
-    ///  * beamed chord → 0 (the beam is fixed by the beam pass; bars
-    ///    sit between notehead and beam without moving either).
     ///  * non-flagged duration (whole/half/quarter) → 0 (the natural
     ///    stem is long enough to clear bars at midstem).
     /// Otherwise returns `(barCount - 1) * spacing + thickness`, the
     /// vertical extent of the bar stack — pushing the stem tip past
-    /// where the flag would collide with the topmost bar.
+    /// where the flag/beam would collide with the topmost bar.
+    ///
+    /// For UNBEAMED chords the caller threads this into
+    /// `LayoutElement.chord.stemExtension` and the stem renderer
+    /// lengthens the stem directly. For BEAMED chords the beam pass
+    /// (`LayoutEngine+Placement` Phase 4) instead shifts the beam line
+    /// by the max group extension — so all members of a beam group
+    /// share a consistently lifted beam.
     static func tremoloStemExtension(
         for chord: Chord,
-        isBeamed: Bool,
         metrics: StaffMetrics,
     ) -> CGFloat {
-        guard let trem = chord.tremolo, !isBeamed else { return 0 }
+        guard let trem = chord.tremolo else { return 0 }
         switch chord.duration {
         case .eighth, .sixteenth, .thirtySecond,
              .sixtyFourth, .oneTwentyEighth, .twoFiftySixth:
@@ -31,6 +36,64 @@ extension LayoutEngine {
         let thickness = metrics.sp * 0.5 // matches beam thickness
         let spacing = metrics.sp * 0.8 // thickness + 0.3 sp gap
         return CGFloat(bars - 1) * spacing + thickness
+    }
+
+    /// Re-anchor the `.tremoloBars` element that follows the chord at
+    /// `outIdx` so its anchor reflects the beam-shifted stem geometry,
+    /// not the pre-beam standalone-stem estimate emitted by
+    /// `makeTremoloBarsElement`. Called from the beam pass once each
+    /// member chord's actual `beamY` is known.
+    ///
+    /// Search range: the element immediately after the chord up to the
+    /// next non-decoration element (we stop at the next `.chord` /
+    /// `.note` / `.rest` to avoid leaking into the next member's
+    /// decorations). `.between` anchors are left alone — they bridge
+    /// two stems and a tweak here would misalign with the partner.
+    static func reanchorBeamedTremoloBars(
+        in out: inout [LayoutElement],
+        afterChordAt outIdx: Int,
+        beamY: CGFloat,
+        chordNotes: [LayoutChordNote],
+        stem: StemDirection,
+    ) {
+        guard outIdx + 1 < out.count else { return }
+        for j in (outIdx + 1) ..< out.count {
+            switch out[j] {
+            case .chord, .note, .rest:
+                return // belongs to a different chord
+            case let .tremoloBars(.single(prevTop, _), barCount):
+                let stemX = prevTop.x
+                let ys = chordNotes.map(\.origin.y)
+                let beamPoint = CGPoint(x: stemX, y: beamY)
+                // stemTop carries the higher-on-screen (smaller y)
+                // end of the stem; stemBottom the lower-on-screen end.
+                // For stem-up the beam is the high end, the lowest
+                // notehead the low end; for stem-down it's reversed.
+                let stemTop: CGPoint
+                let stemBottom: CGPoint
+                switch stem {
+                case .up:
+                    stemTop = beamPoint
+                    stemBottom = CGPoint(
+                        x: stemX, y: ys.max() ?? beamY,
+                    )
+                case .down:
+                    stemTop = CGPoint(
+                        x: stemX, y: ys.min() ?? beamY,
+                    )
+                    stemBottom = beamPoint
+                }
+                out[j] = .tremoloBars(
+                    anchor: .single(
+                        stemTop: stemTop, stemBottom: stemBottom,
+                    ),
+                    barCount: barCount,
+                )
+                return
+            default:
+                continue
+            }
+        }
     }
 
     /// Build a `.tremoloBars` element for a chord carrying `tremolo`.
