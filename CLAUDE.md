@@ -80,6 +80,50 @@ The example app's `.xcodeproj` is **gitignored**; regenerate from
 `Example/project.yml` with `xcodegen` whenever you change project
 settings or sources.
 
+## Android build (Phase 1 — Foundation-only targets)
+
+`swift-sheet-music` cross-compiles to Android via the Swift 6.3 official
+Android SDK. Only Foundation-dependent targets are supported in this
+phase (Core / MIDI / MSCX / MusicXML / XMLTools); Layout / UI / PDF /
+Audio remain Apple-only until Phases 2-3 introduce DI abstractions.
+
+### Prerequisites
+
+- Swift 6.3+ toolchain on the host (`swift --version`)
+- `aarch64-unknown-linux-android24` Swift SDK installed (`swift sdk list`).
+  If absent, install from <https://www.swift.org/install/> — the Swift
+  6.3 release page lists the official Android SDK URL and checksum.
+  Pin the exact URL into this section once verified.
+- `adb` on `$PATH` and an Android device or emulator (API ≥ 24)
+
+### Building
+
+```bash
+# Library targets only — fast
+SWIFT_SHEET_MUSIC_ANDROID=1 swift build \
+    --swift-sdk aarch64-unknown-linux-android24
+
+# With tests
+SWIFT_SHEET_MUSIC_ANDROID=1 swift build \
+    --swift-sdk aarch64-unknown-linux-android24 \
+    --build-tests
+```
+
+### Running tests on a device
+
+```bash
+Scripts/android-test.sh aarch64 [device-serial]
+```
+
+### Adding new tests
+
+Tests that import any Apple framework (`SwiftUI`, `AVFoundation`,
+`CoreText`, `CoreGraphics`, `AppKit`, `UIKit`, `PDFKit`) or that
+`@testable import` an Apple-only sub-library (`SheetMusicLayout`,
+`SheetMusicUI`, `SheetMusicAudio`, `SheetMusicPDF`) must be wrapped in
+`#if !os(Android)` ... `#endif`. Run `Scripts/gate-android-tests.sh`
+after creating new test files to apply this guard automatically.
+
 ## Conventions
 
 - **Idiomatic Swift naming.** Don't transliterate C++ names. When the
@@ -200,3 +244,7 @@ MuseScore repository root.
   even on 14+). Do not reach for `AVAssetWriter` for the others —
   it is more code for no benefit. See
   `SheetMusicAudio/Export/AudioExportWriter.swift`.
+- **Android cross-compile and Package.swift**: the manifest reads
+  `SWIFT_SHEET_MUSIC_ANDROID` at evaluation time. After editing
+  `Package.swift`, re-run `swift package describe` both with and
+  without the env var set to confirm both shapes still resolve.
