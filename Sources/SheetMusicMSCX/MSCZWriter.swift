@@ -1,6 +1,8 @@
 import Foundation
 import SheetMusicCore
-import ZIPFoundation
+#if !os(Android)
+    import ZIPFoundation
+#endif
 
 /// Packages already-serialized `.mscx` XML bytes into a minimal
 /// `.mscz` (ZIP) container.
@@ -13,43 +15,54 @@ import ZIPFoundation
 /// `MscReader::readScoreFile` resolves the main score by entry name,
 /// so the minimal archive round-trips through both this library and
 /// MuseScore Studio.
+///
+/// On Android (Phase 1), `.mscz` is not yet supported. Use `.mscx`
+/// (unzipped) output instead. A future phase will lift this restriction
+/// when ZIPFoundation gains Android support.
 public enum MSCZWriter {
     /// Package `.mscx` XML bytes into `.mscz` bytes.
     public static func write(
         mscxData: Data,
         mainFileName: String = "score.mscx",
     ) throws -> Data {
-        try validate(mainFileName: mainFileName)
-        let archive: Archive
-        do {
-            archive = try Archive(accessMode: .create)
-        } catch {
-            throw SheetMusicError.corruptedContainer(
-                reason: "could not create archive: \(error)",
+        #if os(Android)
+            throw SheetMusicError.unsupportedFeature(
+                name: "MSCZ (zipped)",
+                location: "MSCZWriter: ZIP containers are not supported on Android in Phase 1",
             )
-        }
-        do {
-            try archive.addEntry(
-                with: mainFileName,
-                type: .file,
-                uncompressedSize: Int64(mscxData.count),
-                compressionMethod: .deflate,
-            ) { position, size in
-                let start = Int(position)
-                let end = min(start + size, mscxData.count)
-                return mscxData.subdata(in: start ..< end)
+        #else
+            try validate(mainFileName: mainFileName)
+            let archive: Archive
+            do {
+                archive = try Archive(accessMode: .create)
+            } catch {
+                throw SheetMusicError.corruptedContainer(
+                    reason: "could not create archive: \(error)",
+                )
             }
-        } catch {
-            throw SheetMusicError.corruptedContainer(
-                reason: "failed to add entry \(mainFileName): \(error)",
-            )
-        }
-        guard let bytes = archive.data else {
-            throw SheetMusicError.corruptedContainer(
-                reason: "archive produced no bytes",
-            )
-        }
-        return bytes
+            do {
+                try archive.addEntry(
+                    with: mainFileName,
+                    type: .file,
+                    uncompressedSize: Int64(mscxData.count),
+                    compressionMethod: .deflate,
+                ) { position, size in
+                    let start = Int(position)
+                    let end = min(start + size, mscxData.count)
+                    return mscxData.subdata(in: start ..< end)
+                }
+            } catch {
+                throw SheetMusicError.corruptedContainer(
+                    reason: "failed to add entry \(mainFileName): \(error)",
+                )
+            }
+            guard let bytes = archive.data else {
+                throw SheetMusicError.corruptedContainer(
+                    reason: "archive produced no bytes",
+                )
+            }
+            return bytes
+        #endif
     }
 
     /// Package `.mscx` XML bytes and write the resulting `.mscz` to a file URL.
@@ -113,16 +126,18 @@ public enum MSCZWriter {
         }
     }
 
-    private static func validate(mainFileName: String) throws {
-        guard !mainFileName.isEmpty else {
-            throw SheetMusicError.corruptedContainer(
-                reason: "mainFileName must not be empty",
-            )
+    #if !os(Android)
+        private static func validate(mainFileName: String) throws {
+            guard !mainFileName.isEmpty else {
+                throw SheetMusicError.corruptedContainer(
+                    reason: "mainFileName must not be empty",
+                )
+            }
+            guard !mainFileName.contains("/") else {
+                throw SheetMusicError.corruptedContainer(
+                    reason: "mainFileName must not contain '/': \(mainFileName)",
+                )
+            }
         }
-        guard !mainFileName.contains("/") else {
-            throw SheetMusicError.corruptedContainer(
-                reason: "mainFileName must not contain '/': \(mainFileName)",
-            )
-        }
-    }
+    #endif
 }

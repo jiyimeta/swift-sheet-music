@@ -25,18 +25,24 @@ var targets: [Target] = [
     ),
     .target(
         name: "SheetMusicMSCX",
-        dependencies: [
+        dependencies: isAndroid ? [
             "SheetMusicCore",
             "SheetMusicXMLTools",
-            "ZIPFoundation",
+        ] : [
+            "SheetMusicCore",
+            "SheetMusicXMLTools",
+            .product(name: "ZIPFoundation", package: "ZIPFoundation"),
         ],
     ),
     .target(
         name: "SheetMusicMusicXML",
-        dependencies: [
+        dependencies: isAndroid ? [
             "SheetMusicCore",
             "SheetMusicXMLTools",
-            "ZIPFoundation",
+        ] : [
+            "SheetMusicCore",
+            "SheetMusicXMLTools",
+            .product(name: "ZIPFoundation", package: "ZIPFoundation"),
         ],
     ),
     .target(
@@ -61,7 +67,6 @@ var targets: [Target] = [
             "SheetMusicMSCX",
             "SheetMusicMusicXML",
             "SheetMusicXMLTools",
-            "ZIPFoundation",
         ] : [
             "SheetMusic",
             "SheetMusicCore",
@@ -73,7 +78,7 @@ var targets: [Target] = [
             "SheetMusicAudio",
             "SheetMusicPDF",
             "SheetMusicXMLTools",
-            "ZIPFoundation",
+            .product(name: "ZIPFoundation", package: "ZIPFoundation"),
         ],
         resources: [
             .process("Resources"),
@@ -118,6 +123,16 @@ if !isAndroid {
     ]
 }
 
+var packageDependencies: [Package.Dependency] = []
+if !isAndroid {
+    packageDependencies += [
+        .package(
+            url: "https://github.com/jiyimeta/ZIPFoundation.git",
+            revision: "3219223139477f8009b7dcf460aa2a4bb8cd4c24",
+        ),
+    ]
+}
+
 let package = Package(
     name: "swift-sheet-music",
     platforms: [
@@ -127,11 +142,6 @@ let package = Package(
         .watchOS(.v10),
     ],
     products: products,
-    dependencies: [
-        .package(
-            url: "https://github.com/jiyimeta/ZIPFoundation.git",
-            revision: "3219223139477f8009b7dcf460aa2a4bb8cd4c24",
-        ),
-    ],
+    dependencies: packageDependencies,
     targets: targets,
 )
