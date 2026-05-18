@@ -27,14 +27,14 @@ struct HairpinRendererIntegrationTests {
         ])
     }
 
-    @Test func noteVelocitiesRampLinearly() {
+    @Test func noteVelocitiesRampLinearly() throws {
         let staff = makeStaffWithCresc()
         let part = Part(
             id: "P1",
             instrument: Instrument(id: "piano", articulations: []),
             staves: [staff],
         )
-        let (events, _) = MidiRenderer.renderVoice(
+        let (events, _) = try MidiRenderer.renderVoice(
             voiceIndex: 0, staff: staff, part: part,
             channel: 0, division: 480,
         )

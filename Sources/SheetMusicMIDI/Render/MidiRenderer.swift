@@ -36,7 +36,7 @@ public enum MidiRenderer {
                 let systemElementsForStaff = filterSystemElements(
                     score: score, forStaff: address,
                 )
-                let track = renderTrack(
+                let track = try renderTrack(
                     staff: staff,
                     part: part,
                     primaryChannel: primaryChannel,
@@ -89,7 +89,7 @@ public enum MidiRenderer {
         division: Int,
         swingMap: SwingMap,
         systemElementsByMeasure: [[PositionedSystemElement]],
-    ) -> MidiTrack {
+    ) throws -> MidiTrack {
         var events: [TimedMidiEvent] = headerEvents(
             staff: staff,
             part: part,
@@ -141,7 +141,7 @@ public enum MidiRenderer {
         var voiceEventBuckets: [[TimedMidiEvent]] = []
         let voiceCount = staff.measures.map(\.voices.count).max() ?? 0
         for voiceIndex in 0 ..< voiceCount {
-            let (voiceEvents, _) = renderVoice(
+            let (voiceEvents, _) = try renderVoice(
                 voiceIndex: voiceIndex,
                 staff: staff,
                 part: part,

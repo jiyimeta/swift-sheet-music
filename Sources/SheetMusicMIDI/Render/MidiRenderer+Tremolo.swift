@@ -63,4 +63,83 @@ extension MidiRenderer {
             }
         }
     }
+
+    /// Emit MIDI events for a chord carrying `Chord.tremolo` by
+    /// expanding into `tremoloSegments` and laying down a noteOn/Off
+    /// pair per segment. For `.between` span, walks forward to find
+    /// the next `.chord` in the voice's element list and records its
+    /// index in `consumedByTremolo` so the voice walker emits no
+    /// independent events for it. The caller advances the running
+    /// tick by the start-chord's own duration; the follower's tick
+    /// advance is performed by the consumed-skip branch when the loop
+    /// reaches the follower index.
+    static func renderTremoloChord( // swiftlint:disable:this function_parameter_count
+        _ chord: Chord,
+        elementIndex: Int,
+        voiceElements: [VoiceElement],
+        measureDuration: Fraction,
+        localTick: inout Int,
+        velocity: Int,
+        consumedByTremolo: inout Set<Int>,
+        channel: Int,
+        division: Int,
+        events: inout [TimedMidiEvent],
+        hairpinRamps: [HairpinRamp],
+        ottavaRanges: [OttavaRange],
+        originalTickDelta: Int,
+    ) throws {
+        let chordTicks = chord.duration
+            .resolved(in: measureDuration)
+            .ticks(division: division)
+        var followerChord: Chord?
+        if chord.tremolo?.span == .between {
+            for j in (elementIndex + 1) ..< voiceElements.count {
+                if case let .chord(f) = voiceElements[j] {
+                    followerChord = f
+                    consumedByTremolo.insert(j)
+                    break
+                }
+            }
+        }
+        let segments = try MidiRenderer.tremoloSegments(
+            for: chord,
+            nominalDuration: chordTicks,
+            followerChord: followerChord,
+        )
+        var cursor = localTick
+        let pitchShift = OttavaRanges.semitones(
+            in: ottavaRanges,
+            at: localTick + originalTickDelta,
+        )
+        let segVelocity = HairpinRamps.active(
+            in: hairpinRamps,
+            at: localTick + originalTickDelta,
+        ).map {
+            HairpinRamps.interpolate(
+                ramp: $0,
+                atOriginalTick: localTick + originalTickDelta,
+            )
+        } ?? velocity
+        for seg in segments {
+            for pitch in seg.pitches {
+                let shifted = min(127, max(0, pitch + pitchShift))
+                events.append(TimedMidiEvent(
+                    tick: cursor,
+                    event: .noteOn(
+                        channel: channel, pitch: shifted, velocity: segVelocity,
+                    ),
+                ))
+                events.append(TimedMidiEvent(
+                    tick: cursor + seg.ticks - 1,
+                    event: .noteOff(
+                        channel: channel, pitch: shifted, velocity: 0,
+                    ),
+                ))
+            }
+            cursor += seg.ticks
+        }
+        // Advance localTick by the start-chord's own duration only.
+        // The follower's advance happens via consumedByTremolo skip.
+        localTick += chordTicks
+    }
 }

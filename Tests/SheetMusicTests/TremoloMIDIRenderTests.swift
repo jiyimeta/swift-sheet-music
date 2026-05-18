@@ -61,3 +61,65 @@ struct TremoloSegmentsTests {
         ])
     }
 }
+
+struct TremoloVoiceRenderTests {
+    private static func makePart(staff: Staff) -> Part {
+        Part(
+            id: "P1",
+            instrument: Instrument(id: "piano", articulations: []),
+            staves: [staff],
+        )
+    }
+
+    @Test func single_r16_on_quarter_emits_four_noteOns() throws {
+        let chord = Chord(
+            duration: .quarter,
+            notes: [Note(pitch: 60, tpc: 14)],
+            tremolo: Tremolo(subtype: .r16),
+        )
+        let measure = Measure(voices: [Voice(elements: [.chord(chord)])])
+        let staff = Staff(measures: [measure])
+        let (events, _) = try MidiRenderer.renderVoice(
+            voiceIndex: 0,
+            staff: staff,
+            part: Self.makePart(staff: staff),
+            channel: 0,
+            division: 480,
+        )
+        let noteOns = events.filter {
+            if case .noteOn = $0.event { return true }
+            return false
+        }
+        #expect(noteOns.count == 4)
+        let onTicks = noteOns.map(\.tick)
+        #expect(onTicks == [0, 120, 240, 360])
+    }
+
+    @Test func between_c8_renders_alternating_pitch_quartet() throws {
+        let start = Chord(
+            duration: .half,
+            notes: [Note(pitch: 60, tpc: 14)],
+            tremolo: Tremolo(subtype: .r8, span: .between),
+        )
+        let follower = Chord(
+            duration: .half,
+            notes: [Note(pitch: 64, tpc: 18)],
+        )
+        let measure = Measure(voices: [Voice(elements: [
+            .chord(start), .chord(follower),
+        ])])
+        let staff = Staff(measures: [measure])
+        let (events, _) = try MidiRenderer.renderVoice(
+            voiceIndex: 0,
+            staff: staff,
+            part: Self.makePart(staff: staff),
+            channel: 0,
+            division: 480,
+        )
+        let pitchOns = events.compactMap { e -> Int? in
+            if case let .noteOn(_, p, _) = e.event { return p }
+            return nil
+        }
+        #expect(pitchOns == [60, 64, 60, 64])
+    }
+}
