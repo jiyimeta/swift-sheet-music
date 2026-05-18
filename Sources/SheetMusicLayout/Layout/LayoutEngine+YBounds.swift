@@ -74,6 +74,11 @@ extension LayoutEngine {
             return [from.y, to.y]
         case let .arpeggioWiggle(top, bot, _):
             return [top.y, bot.y]
+        case let .tremoloBars(anchor, _):
+            switch anchor {
+            case let .single(top, bot): return [top.y, bot.y]
+            case let .between(left, right): return [left.y, right.y]
+            }
         case let .tupletLabel(from, to, _, _, _, _):
             return [from.y, to.y]
         case let .lyricsMelisma(from, to),

@@ -346,6 +346,12 @@ extension ScoreLayerBuilder {
                 count: c, origin: shift(p),
                 metrics: metrics, height: height, into: parent,
             )
+        case .tremoloBars:
+            // TODO(Task 1.8): renderer dispatch for tremolo bars.
+            // The placement pass already supplies stem-anchored
+            // coordinates; the SwiftUI / CALayer drawing of the slanted
+            // bars lands in the next task.
+            break
         case .note:
             break
         }

@@ -98,6 +98,18 @@ extension LayoutEngine {
                 bottom: shift(bot),
                 subtype: subtype,
             )
+        case let .tremoloBars(anchor, barCount):
+            let shifted: TremoloAnchor
+            switch anchor {
+            case let .single(top, bot):
+                shifted = .single(stemTop: shift(top), stemBottom: shift(bot))
+            case let .between(left, right):
+                shifted = .between(
+                    leftStemMid: shift(left),
+                    rightStemMid: shift(right),
+                )
+            }
+            return .tremoloBars(anchor: shifted, barCount: barCount)
         case let .tupletLabel(
             from,
             to,

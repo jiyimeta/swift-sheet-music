@@ -722,6 +722,25 @@ extension LayoutEngine {
                             subtype: arpeggioSubtype(arp),
                         ))
                     }
+                    if let trem = chord.tremolo {
+                        if let bars = makeTremoloBarsElement(
+                            tremolo: trem,
+                            chordX: chordX,
+                            chordNotes: chordNotes,
+                            stem: stem,
+                            staffMidY: staffMidY,
+                            metrics: metrics,
+                            currentClef: currentClef,
+                            currentVoiceElements: voice.elements,
+                            currentVoiceElemIdx: voiceElemIdx,
+                            currentTick: tickCursor,
+                            measureDuration: measureDuration,
+                            division: division,
+                            timedX: timedX,
+                        ) {
+                            out.append(bars)
+                        }
+                    }
                     // Lyrics: emit the syllable text + (if the lyric
                     // extends beyond this chord) a melisma rule that
                     // stretches to the end of the last note it covers.

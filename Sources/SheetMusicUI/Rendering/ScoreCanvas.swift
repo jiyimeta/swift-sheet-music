@@ -447,6 +447,12 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
             // Drawn by MultiMeasureRestRenderer in Task 10/11. Stub for
             // exhaustive switch; Task 11 replaces this with the real call.
             break
+        case .tremoloBars:
+            // TODO(Task 1.8): GraphicsContext-path drawing for the
+            // tremolo bars. Placement provides the stem anchor; the
+            // renderer for the slanted rectangles lands in the next
+            // task.
+            break
         case .note, .graceChord:
             break
         }

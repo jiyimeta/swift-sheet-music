@@ -5,6 +5,19 @@ import SheetMusicCore
 @available(macOS 15.0, *)
 public enum StemDirection: Sendable, Equatable { case up, down }
 
+/// Anchor describing where a `.tremoloBars` element draws its bars.
+/// Stem coordinates are pre-computed by the placement pass so the
+/// renderer does not need to look up the source chord.
+@available(macOS 15.0, *)
+public enum TremoloAnchor: Sendable, Equatable {
+    /// Bars cross a single stem at its midpoint, centred along the
+    /// segment from `stemTop` to `stemBottom`.
+    case single(stemTop: CGPoint, stemBottom: CGPoint)
+    /// Bars span between two stems (two-chord tremolo). Coordinates
+    /// describe the *midpoint* of each chord's stem.
+    case between(leftStemMid: CGPoint, rightStemMid: CGPoint)
+}
+
 /// A single placed element in a measure's local coordinate space.
 ///
 /// `origin` is measured from the measure's top-left corner where
@@ -183,6 +196,12 @@ public enum LayoutElement: Sendable, Equatable {
         bottom: CGPoint,
         subtype: String?,
     )
+    /// Beamed-stem tremolo bars. Bar count comes from
+    /// `Tremolo.Subtype.rawValue` (1, 2, or 3). Slant is fixed at +12°
+    /// for v1 (a flat slant matches the MuseScore default sufficiently
+    /// for visual review). Drawn as slanted rectangles using
+    /// `metrics.beamThickness` and `metrics.beamSpacing`.
+    case tremoloBars(anchor: TremoloAnchor, barCount: Int)
     /// Tuplet marking — bracket (when `hasBracket` is true) with a
     /// number in the middle, or number alone (when beamed). `fromOrigin`
     /// and `toOrigin` define the horizontal span of the first and last
