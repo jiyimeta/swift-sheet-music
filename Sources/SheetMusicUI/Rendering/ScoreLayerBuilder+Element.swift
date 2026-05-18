@@ -346,12 +346,23 @@ extension ScoreLayerBuilder {
                 count: c, origin: shift(p),
                 metrics: metrics, height: height, into: parent,
             )
-        case .tremoloBars:
-            // TODO(Task 1.8): renderer dispatch for tremolo bars.
-            // The placement pass already supplies stem-anchored
-            // coordinates; the SwiftUI / CALayer drawing of the slanted
-            // bars lands in the next task.
-            break
+        case let .tremoloBars(anchor, barCount):
+            let shiftedAnchor: TremoloAnchor
+            switch anchor {
+            case let .single(top, bot):
+                shiftedAnchor = .single(
+                    stemTop: shift(top), stemBottom: shift(bot),
+                )
+            case let .between(left, right):
+                shiftedAnchor = .between(
+                    leftStemMid: shift(left),
+                    rightStemMid: shift(right),
+                )
+            }
+            drawTremoloBars(
+                anchor: shiftedAnchor, barCount: barCount,
+                metrics: metrics, height: height, into: parent,
+            )
         case .note:
             break
         }

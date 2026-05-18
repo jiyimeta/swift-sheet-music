@@ -447,12 +447,23 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
             // Drawn by MultiMeasureRestRenderer in Task 10/11. Stub for
             // exhaustive switch; Task 11 replaces this with the real call.
             break
-        case .tremoloBars:
-            // TODO(Task 1.8): GraphicsContext-path drawing for the
-            // tremolo bars. Placement provides the stem anchor; the
-            // renderer for the slanted rectangles lands in the next
-            // task.
-            break
+        case let .tremoloBars(anchor, barCount):
+            let shiftedAnchor: TremoloAnchor
+            switch anchor {
+            case let .single(top, bot):
+                shiftedAnchor = .single(
+                    stemTop: shift(top), stemBottom: shift(bot),
+                )
+            case let .between(left, right):
+                shiftedAnchor = .between(
+                    leftStemMid: shift(left),
+                    rightStemMid: shift(right),
+                )
+            }
+            TremoloRenderer.draw(
+                context: &context, anchor: shiftedAnchor,
+                barCount: barCount, metrics: metrics,
+            )
         case .note, .graceChord:
             break
         }
