@@ -1,12 +1,16 @@
 import Foundation
-import os
+#if canImport(os)
+    import os
+#endif
 import SheetMusicCore
 import SheetMusicXMLTools
 
-private let mscxDecoderLogger = Logger(
-    subsystem: "swift-sheet-music.SheetMusicMSCX",
-    category: "MSCXDecoder",
-)
+#if canImport(os)
+    private let mscxDecoderLogger = Logger(
+        subsystem: "swift-sheet-music.SheetMusicMSCX",
+        category: "MSCXDecoder",
+    )
+#endif
 
 extension Score {
     static func decode(_ root: XMLTreeNode) throws -> Score {
@@ -126,30 +130,34 @@ extension Score {
            let majorInt = Int(major)
         {
             if majorInt <= 2 {
-                let programVersion = scoreNode.first("programVersion")?.text ?? "unknown"
-                mscxDecoderLogger.warning(
-                    """
-                    detected MuseScore 2 file \
-                    (museScore version=\"\(versionAttr, privacy: .public)\", \
-                    programVersion=\(programVersion, privacy: .public)); \
-                    parsing through the MS3/MS4-shaped reader — some \
-                    MS2-only fields will be skipped silently.
-                    """,
-                )
+                #if canImport(os)
+                    let programVersion = scoreNode.first("programVersion")?.text ?? "unknown"
+                    mscxDecoderLogger.warning(
+                        """
+                        detected MuseScore 2 file \
+                        (museScore version=\"\(versionAttr, privacy: .public)\", \
+                        programVersion=\(programVersion, privacy: .public)); \
+                        parsing through the MS3/MS4-shaped reader — some \
+                        MS2-only fields will be skipped silently.
+                        """,
+                    )
+                #endif
                 return .v2
             }
             return majorInt == 3 ? .v3 : .v4
         }
         if let programVersion = scoreNode.first("programVersion")?.text {
             if programVersion.hasPrefix("2.") {
-                mscxDecoderLogger.warning(
-                    """
-                    detected MuseScore 2 file via programVersion \
-                    \(programVersion, privacy: .public); parsing through \
-                    the MS3/MS4-shaped reader — some MS2-only fields will \
-                    be skipped silently.
-                    """,
-                )
+                #if canImport(os)
+                    mscxDecoderLogger.warning(
+                        """
+                        detected MuseScore 2 file via programVersion \
+                        \(programVersion, privacy: .public); parsing through \
+                        the MS3/MS4-shaped reader — some MS2-only fields will \
+                        be skipped silently.
+                        """,
+                    )
+                #endif
                 return .v2
             }
             if programVersion.hasPrefix("3.") {
