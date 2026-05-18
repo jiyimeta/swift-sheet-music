@@ -1139,11 +1139,48 @@ extension LayoutEngine {
                     direction: groupDirection,
                     metrics: metrics,
                 )
+                // Shift the beam line away from the noteheads enough
+                // to fit each member's beam stack + tremolo bar block
+                // + clearances. Using the group max keeps the beam
+                // straight (or slanted as designed) rather than
+                // stepping per chord.
+                var groupTremoloShift: CGFloat = 0
+                for (mIdx, memberIdx) in group.memberIndices.enumerated() {
+                    guard case let .chord(c) =
+                        voice.elements[memberIdx],
+                        let trem = c.tremolo
+                    else { continue }
+                    let beamH = LayoutEngine.beamStackHeight(
+                        beamLevel: memberLevels[mIdx],
+                        metrics: metrics,
+                    )
+                    let barH = LayoutEngine.barBlockHeight(
+                        barCount: Int(trem.subtype.rawValue),
+                        metrics: metrics,
+                    )
+                    // beamY → beamStack (beamH) → gap (0.5 sp) →
+                    // barBlock (barH) → gap to notehead (1 sp)
+                    let required = beamH + metrics.sp * 0.5
+                        + barH + metrics.sp * 1.0
+                    let ext = max(
+                        0, required - metrics.defaultStemLength,
+                    )
+                    groupTremoloShift = max(groupTremoloShift, ext)
+                }
+                let beamShift: CGFloat =
+                    (groupDirection == .up ? -1 : 1)
+                    * groupTremoloShift
                 let beamSpan = beamEndX - beamStartX
                 func beamYAt(_ x: CGFloat) -> CGFloat {
-                    guard beamSpan > 0 else { return line.startY }
-                    let t = (x - beamStartX) / beamSpan
-                    return line.startY + (line.endY - line.startY) * t
+                    let base: CGFloat
+                    if beamSpan > 0 {
+                        let t = (x - beamStartX) / beamSpan
+                        base = line.startY
+                            + (line.endY - line.startY) * t
+                    } else {
+                        base = line.startY
+                    }
+                    return base + beamShift
                 }
                 let memberStemYs = memberStemXs.map(beamYAt)
 
