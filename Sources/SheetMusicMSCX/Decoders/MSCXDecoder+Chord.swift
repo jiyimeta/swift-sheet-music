@@ -51,10 +51,13 @@ extension Chord {
             return ChordArticulation.fromSubtypeXML(subtype)
         }
 
+        let tremolo = try node.first("Tremolo").map(Tremolo.decode)
+
         return Chord(
             duration: duration, notes: ChordNotes(notes),
             arpeggio: arpeggio, lyrics: lyrics,
             articulations: articulations,
+            tremolo: tremolo,
         )
     }
 
