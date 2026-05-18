@@ -164,6 +164,14 @@ extension Voice {
         var previousChordDuration: Fraction?
         var seenChordInVoice = false
         var voiceTotal = Fraction(numerator: 0, denominator: 1)
+        /// Two-chord tremolo (`span == .between`) is stored only on
+        /// the start chord; the follower's `tremolo` is nil on the
+        /// model side. When we emit a start chord we stash its
+        /// tremolo here so the very next chord-bearing element can
+        /// inject it into its own `<Tremolo>` block (matching
+        /// MuseScore's serialized form where both chords carry the
+        /// same `c8/c16/c32` element). Cleared after one consumption.
+        var pendingFollowerTremolo: Tremolo?
 
         init(carryIn: VoiceTieCarry) {
             previousChordDuration = carryIn.prevChordDuration
@@ -194,6 +202,20 @@ extension Voice {
             if case .chord = element { return index == lastChordIndex }
             return false
         }()
+        // Consume any pending follower tremolo from the previous
+        // start chord. Only chord-bearing elements (notes-non-empty)
+        // claim it; rests and non-chord elements pass through with no
+        // effect. After consumption, if the current chord is itself a
+        // two-chord tremolo start, stash its tremolo for the next
+        // chord-bearing element to pick up.
+        var injectedTremolo: Tremolo?
+        if case let .chord(chord) = element, !chord.notes.isEmpty {
+            injectedTremolo = state.pendingFollowerTremolo
+            state.pendingFollowerTremolo = nil
+            if let trem = chord.tremolo, trem.span == .between {
+                state.pendingFollowerTremolo = trem
+            }
+        }
         try state.children.append(encode(
             element: element,
             activeTuplets: state.stack,
@@ -203,6 +225,7 @@ extension Voice {
             prevVoiceTotal: carryIn.prevVoiceTotal,
             voiceBarLength: voiceBarLength,
             effectiveDuration: effectiveDuration,
+            injectedTremolo: injectedTremolo,
             options: options,
             staffGroup: staffGroup,
             voiceIndex: voiceIndex,
@@ -267,6 +290,7 @@ extension Voice {
         prevVoiceTotal: Fraction?,
         voiceBarLength: Fraction,
         effectiveDuration: Fraction,
+        injectedTremolo: Tremolo? = nil,
         options: MSCXEncoderOptions = .init(),
         staffGroup: String = "pitched",
         voiceIndex: Int = 0,
@@ -282,6 +306,7 @@ extension Voice {
                 prevVoiceTotal: prevVoiceTotal,
                 voiceBarLength: voiceBarLength,
                 effectiveDuration: effectiveDuration,
+                injectedTremolo: injectedTremolo,
                 options: options,
                 staffGroup: staffGroup,
                 voiceIndex: voiceIndex,
@@ -334,6 +359,7 @@ extension Voice {
         prevVoiceTotal: Fraction?,
         voiceBarLength: Fraction,
         effectiveDuration: Fraction,
+        injectedTremolo: Tremolo?,
         options: MSCXEncoderOptions,
         staffGroup: String,
         voiceIndex: Int,
@@ -344,6 +370,8 @@ extension Voice {
             notes: chord.notes,
             arpeggio: chord.arpeggio,
             lyrics: chord.lyrics,
+            articulations: chord.articulations,
+            tremolo: chord.tremolo,
         )
         let tieForward = forwardTieLocation(
             chord: chord,
@@ -366,6 +394,7 @@ extension Voice {
                 options: options,
                 staffGroup: staffGroup,
                 voiceIndex: voiceIndex,
+                injectedTremolo: injectedTremolo,
             )
     }
 }

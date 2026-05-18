@@ -18,6 +18,7 @@ extension Chord {
         options: MSCXEncoderOptions = .init(),
         staffGroup: String = "pitched",
         voiceIndex: Int = 0,
+        injectedTremolo: Tremolo? = nil,
     ) -> XMLTreeNode {
         var children: [XMLTreeNode] = []
         let isPercussionV3 =
@@ -41,6 +42,15 @@ extension Chord {
         //   Lyrics → Note.
         for art in articulations {
             children.append(art.encode(options: options))
+        }
+        // Tremolo sits with the ChordLine / Articulation cluster — after
+        // articulations and before Lyrics / Note. For two-chord tremolo
+        // (`span == .between`) the follower carries `tremolo == nil`
+        // on the model; the voice-level encoder threads the start's
+        // tremolo through `injectedTremolo` so MuseScore can round-trip
+        // read both `<Tremolo>` blocks back to a pair.
+        if let trem = tremolo ?? injectedTremolo {
+            children.append(trem.encodeXML())
         }
         // Lyrics sit between durationType and the first <Note>: this
         // matches MuseScore's serializer (Chord::write) and is what
@@ -84,5 +94,35 @@ extension Chord {
         var children: [XMLTreeNode] = []
         duration.appendDurationXML(to: &children, in: measureDuration)
         return XMLTreeNode(name: "Rest", children: children)
+    }
+}
+
+extension Tremolo {
+    /// Build the `<Tremolo>` MSCX element. `subtype + span` map to
+    /// MuseScore's six-token alphabet (`r8/r16/r32` single, `c8/c16/c32`
+    /// between); `strokeStyle` round-trips the `<strokeStyle>` integer
+    /// when non-default. Inverse of `MSCXDecoder+Tremolo.decode`.
+    /// C++: `mu::engraving::TremoloDispatcher::write`.
+    func encodeXML() -> XMLTreeNode {
+        let token: String
+        switch (span, subtype) {
+        case (.single, .r8): token = "r8"
+        case (.single, .r16): token = "r16"
+        case (.single, .r32): token = "r32"
+        case (.between, .r8): token = "c8"
+        case (.between, .r16): token = "c16"
+        case (.between, .r32): token = "c32"
+        }
+        var children: [XMLTreeNode] = [
+            XMLTreeNode(name: "subtype", text: token),
+        ]
+        switch strokeStyle {
+        case .default: break
+        case .traditional:
+            children.append(XMLTreeNode(name: "strokeStyle", text: "1"))
+        case .z:
+            children.append(XMLTreeNode(name: "strokeStyle", text: "2"))
+        }
+        return XMLTreeNode(name: "Tremolo", children: children)
     }
 }
