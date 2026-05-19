@@ -1,6 +1,7 @@
 #if os(macOS)
     import SheetMusicCore
     import SheetMusicLayout
+    import SheetMusicLayoutApple
     import SwiftUI
 
     /// User-facing clef choices in the macOS example. Mirrors the set

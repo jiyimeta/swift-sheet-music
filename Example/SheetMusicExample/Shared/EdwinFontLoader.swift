@@ -1,5 +1,6 @@
 import Foundation
 import SheetMusicLayout
+import SheetMusicLayoutApple
 
 /// Bundles + registers the Edwin OFL font family on app launch.
 /// MuseScore's `Sid::*FontFace` defaults all reference "Edwin", and
