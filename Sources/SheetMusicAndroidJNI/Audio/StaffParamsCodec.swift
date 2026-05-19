@@ -12,7 +12,7 @@ import SheetMusicCore
 /// ```
 /// This is sufficient for the v0 scope (≤ 1000 staves per part, which
 /// covers all practical scores).
-public struct StaffParams: Equatable {
+public struct StaffParams: Equatable, Sendable {
     public let staffIndex: Int
     public let bankLSB: UInt8
     public let program: UInt8
