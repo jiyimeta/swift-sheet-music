@@ -16,7 +16,7 @@ public enum DrawProgram {
         case text = 0x06
     }
 
-    public enum FontID: UInt8 {
+    public enum FontID: UInt8, Sendable {
         case textRoman = 0x00 // body text (Edwin / system serif)
         case smufl = 0x01 // music glyphs (Bravura / Edwin SMuFL)
     }
