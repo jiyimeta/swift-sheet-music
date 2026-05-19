@@ -1,4 +1,6 @@
-import CoreGraphics
+#if canImport(CoreGraphics)
+    import CoreGraphics
+#endif
 
 /// Per-staff sizing derived from `ScoreViewOptions.staffSize`.
 ///

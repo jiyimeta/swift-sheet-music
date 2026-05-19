@@ -1,4 +1,6 @@
-import CoreGraphics
+#if canImport(CoreGraphics)
+    import CoreGraphics
+#endif
 import Foundation
 
 /// Brace SMuFL glyph metrics needed at layout time.

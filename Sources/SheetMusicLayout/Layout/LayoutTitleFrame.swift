@@ -1,4 +1,6 @@
-import CoreGraphics
+#if canImport(CoreGraphics)
+    import CoreGraphics
+#endif
 import SheetMusicCore
 
 /// Resolved title block for a `LayoutDocument` — height in points

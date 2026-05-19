@@ -1,4 +1,6 @@
-import CoreGraphics
+#if canImport(CoreGraphics)
+    import CoreGraphics
+#endif
 
 /// Policy for honoring authored `<LayoutBreak>` markup at display time.
 ///

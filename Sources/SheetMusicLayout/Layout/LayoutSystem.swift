@@ -1,4 +1,6 @@
-import CoreGraphics
+#if canImport(CoreGraphics)
+    import CoreGraphics
+#endif
 import SheetMusicCore
 
 /// One horizontal line of music. Contains one or more staves stacked

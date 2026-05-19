@@ -1,4 +1,6 @@
-import CoreGraphics
+#if canImport(CoreGraphics)
+    import CoreGraphics
+#endif
 import SheetMusicCore
 
 /// Per-measure cache for incremental layout. Threaded through

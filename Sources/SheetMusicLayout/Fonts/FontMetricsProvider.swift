@@ -1,4 +1,6 @@
-import CoreGraphics
+#if canImport(CoreGraphics)
+    import CoreGraphics
+#endif
 import Foundation
 
 /// Font descriptor used by `FontMetricsProvider`. Identifies the face

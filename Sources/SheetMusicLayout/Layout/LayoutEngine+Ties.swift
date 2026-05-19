@@ -1,5 +1,7 @@
 // swiftlint:disable file_length
-import CoreGraphics
+#if canImport(CoreGraphics)
+    import CoreGraphics
+#endif
 import SheetMusicCore
 
 @available(macOS 15.0, *)

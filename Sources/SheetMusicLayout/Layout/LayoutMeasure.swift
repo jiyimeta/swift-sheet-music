@@ -1,4 +1,6 @@
-import CoreGraphics
+#if canImport(CoreGraphics)
+    import CoreGraphics
+#endif
 
 @available(macOS 15.0, *)
 public struct LayoutMeasure: Sendable, Equatable {
