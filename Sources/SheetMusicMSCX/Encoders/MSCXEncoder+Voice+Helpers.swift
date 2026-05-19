@@ -3,30 +3,71 @@ import SheetMusicCore
 import SheetMusicXMLTools
 
 extension Voice {
-    /// Append lifted system elements at the head of the voice with
-    /// `<location>` shifts matching their `MeasurePosition`. Sorted
-    /// by position so multi-element measures emit in time order.
-    /// Each shift is consumed by the immediately-following system
-    /// element only — chords later in the voice remain at their
-    /// natural cursor.
-    func injectSystemElements(
+    /// Sort lifted system elements by position. Encoder uses the
+    /// sorted array as a queue, draining elements as the voice
+    /// cursor catches up to each position.
+    static func sortedSystemElements(
         _ systemElements: [PositionedSystemElement],
-        into state: inout EncodeState,
-    ) {
-        let sorted = systemElements.sorted { $0.position < $1.position }
-        for sysElement in sorted {
-            let offset = sysElement.position.offset
-            if offset.numerator != 0 {
-                state.children.append(XMLTreeNode(
-                    name: "location",
-                    children: [XMLTreeNode(
-                        name: "fractions",
-                        text: "\(offset.numerator)/\(offset.denominator)",
-                    )],
-                ))
-            }
-            state.children.append(Self.encodeSystem(sysElement.element))
+    ) -> [PositionedSystemElement] {
+        systemElements.sorted { $0.position < $1.position }
+    }
+
+    /// Emit any sorted system elements whose position equals the
+    /// current cursor. Returns the index of the first element not
+    /// yet emitted. The voice encoder calls this before the loop
+    /// (to flush position-0 elements) and after each chord/rest
+    /// emission (to flush elements landing on each chord boundary).
+    /// MuseScore emits system elements inline at their natural
+    /// document position — no `<location>` shift is needed when the
+    /// cursor is already there.
+    static func emitSystemElementsAtCursor(
+        _ sorted: [PositionedSystemElement],
+        from start: Int,
+        cursor: Fraction,
+        into children: inout [XMLTreeNode],
+    ) -> Int {
+        var i = start
+        while i < sorted.count, sorted[i].position.offset == cursor {
+            children.append(Self.encodeSystem(sorted[i].element))
+            i += 1
         }
+        return i
+    }
+
+    /// Emit any remaining system elements past the final cursor
+    /// (positions strictly greater than every chord/rest boundary
+    /// in the voice, or off-boundary positions the per-iteration
+    /// emit missed). Forward `<location>` shifts walk the cursor
+    /// to each target. No compensating back-shift is needed — no
+    /// voice content follows.
+    static func flushRemainingSystemElements(
+        _ sorted: [PositionedSystemElement],
+        from start: Int,
+        cursor: inout Fraction,
+        into children: inout [XMLTreeNode],
+    ) -> Int {
+        var i = start
+        while i < sorted.count {
+            let target = sorted[i].position.offset
+            let delta = target - cursor
+            if delta.numerator != 0 {
+                children.append(locationNode(delta))
+            }
+            children.append(Self.encodeSystem(sorted[i].element))
+            cursor = target
+            i += 1
+        }
+        return i
+    }
+
+    static func locationNode(_ delta: Fraction) -> XMLTreeNode {
+        XMLTreeNode(
+            name: "location",
+            children: [XMLTreeNode(
+                name: "fractions",
+                text: "\(delta.numerator)/\(delta.denominator)",
+            )],
+        )
     }
 
     /// Bar length to use for cross-measure tie offsets. A voice

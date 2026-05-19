@@ -1,45 +1,82 @@
 import Foundation
 import SheetMusicCore
-import ZIPFoundation
+import SheetMusicZip
 
-/// Reads `.mscz` (ZIP) containers and returns the `Score` contained
-/// in the main `.mscx` entry. When the archive ships an
+/// Reads `.mscz` (ZIP) containers and returns the `Score` contained in
+/// the main `.mscx` entry. When the archive ships an
 /// `audiosettings.json` (MuseScore 4), per-part preset overrides are
-/// merged into the score so consumers see the sounds MuseScore
-/// actually plays. Other auxiliary resources (style, thumbnails,
-/// pictures, excerpts, …) are ignored.
+/// merged into the score so consumers see the sounds MuseScore actually
+/// plays. Other auxiliary resources (style, thumbnails, pictures,
+/// excerpts, …) are ignored.
 ///
 /// Mirrors `mu::engraving::MscReader::mainFileName` /
-/// `::readScoreFile`: prefer the exact name `score.mscx`, and fall
-/// back to the first `.mscx` entry at archive root. Filename-based
-/// main-name matching (using the archive's own file name) is skipped
-/// because the `Data` overload has no filename context.
+/// `::readScoreFile`: prefer the exact name `score.mscx`, and fall back
+/// to the first `.mscx` entry at archive root. Filename-based main-name
+/// matching (using the archive's own file name) is skipped because the
+/// `Data` overload has no filename context.
 public enum MSCZReader {
     /// Parse `.mscz` bytes into a `Score`.
     public static func parse(_ data: Data) throws -> Score {
-        let archive: Archive
+        let reader = try openReader(data)
+        let mainPath = try resolveMainPath(in: reader)
+        let mscxData: Data
         do {
-            archive = try Archive(data: data, accessMode: .read)
+            mscxData = try reader.read(path: mainPath)
+        } catch let error as ZipError {
+            throw SheetMusicError.corruptedContainer(
+                reason: "failed to extract \(mainPath): \(error)",
+            )
+        }
+        let score = try MSCXParser.parse(mscxData)
+        let settings = audioSettings(in: reader)
+        return settings.map { apply($0, to: score) } ?? score
+    }
+
+    /// Read `.mscz` bytes from a file URL and parse into a `Score`.
+    /// I/O failures are wrapped in `SheetMusicError.ioError`.
+    public static func parse(contentsOf url: URL) throws -> Score {
+        let data: Data
+        do {
+            data = try Data(contentsOf: url)
         } catch {
+            throw SheetMusicError.ioError(url: url, underlying: error)
+        }
+        return try parse(data)
+    }
+
+    private static func openReader(_ data: Data) throws -> ZipReader {
+        do {
+            return try ZipReader(data: data)
+        } catch let error as ZipError {
             throw SheetMusicError.corruptedContainer(
                 reason: "could not open ZIP: \(error)",
             )
         }
-        let entry = try resolveMainEntry(in: archive)
-        let mscxData = try extract(entry, from: archive)
-        let score = try MSCXParser.parse(mscxData)
-        let settings = audioSettings(in: archive)
-        return settings.map { apply($0, to: score) } ?? score
+    }
+
+    private static func resolveMainPath(in reader: ZipReader) throws -> String {
+        if reader.contains(path: "score.mscx") {
+            return "score.mscx"
+        }
+        // Sorted for determinism.
+        let candidates = reader.entries.keys
+            .filter { !$0.contains("/") && $0.lowercased().hasSuffix(".mscx") }
+            .sorted()
+        guard let first = candidates.first else {
+            throw SheetMusicError.corruptedContainer(
+                reason: "no main .mscx entry found in archive",
+            )
+        }
+        return first
     }
 
     /// Look up `audiosettings.json` at the archive root and parse it.
     /// Returns nil when the entry is absent or the JSON is unreadable
     /// — both are non-fatal: the score reverts to its mscx-declared
     /// channel programs.
-    private static func audioSettings(in archive: Archive) -> AudioSettings? {
-        guard let entry = archive["audiosettings.json"],
-              entry.type == .file,
-              let data = try? extract(entry, from: archive),
+    private static func audioSettings(in reader: ZipReader) -> AudioSettings? {
+        guard reader.contains(path: "audiosettings.json"),
+              let data = try? reader.read(path: "audiosettings.json"),
               let settings = try? AudioSettings.parse(data)
         else { return nil }
         return settings
@@ -80,47 +117,5 @@ public enum MSCZReader {
             }
         }
         return result
-    }
-
-    /// Read `.mscz` bytes from a file URL and parse into a `Score`.
-    /// I/O failures are wrapped in `SheetMusicError.ioError`.
-    public static func parse(contentsOf url: URL) throws -> Score {
-        let data: Data
-        do {
-            data = try Data(contentsOf: url)
-        } catch {
-            throw SheetMusicError.ioError(url: url, underlying: error)
-        }
-        return try parse(data)
-    }
-
-    private static func resolveMainEntry(in archive: Archive) throws -> Entry {
-        if let exact = archive["score.mscx"], exact.type == .file {
-            return exact
-        }
-        for entry in archive where entry.type == .file {
-            let path = entry.path
-            guard !path.contains("/") else { continue }
-            if path.lowercased().hasSuffix(".mscx") {
-                return entry
-            }
-        }
-        throw SheetMusicError.corruptedContainer(
-            reason: "no main .mscx entry found in archive",
-        )
-    }
-
-    private static func extract(_ entry: Entry, from archive: Archive) throws -> Data {
-        var buffer = Data()
-        do {
-            _ = try archive.extract(entry) { chunk in
-                buffer.append(chunk)
-            }
-        } catch {
-            throw SheetMusicError.corruptedContainer(
-                reason: "failed to extract \(entry.path): \(error)",
-            )
-        }
-        return buffer
     }
 }

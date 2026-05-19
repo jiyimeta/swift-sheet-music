@@ -1,374 +1,376 @@
-@testable import SheetMusicAudio
-import SheetMusicCore
-import Testing
+#if !os(Android)
+    @testable import SheetMusicAudio
+    import SheetMusicCore
+    import Testing
 
-@Suite("PlaybackTimeline")
-struct PlaybackTimelineTests {
-    /// Regression: `frame(forCursor:)` used to do an exact-ID match
-    /// against `frames`, which only carry one representative item
-    /// per unique tick (lowest staff / voice wins the dedup). A
-    /// selection on any other staff returned `nil`, and pressing
-    /// space silently failed to update the sequencer position.
-    /// Two-part score where each part has one staff with two chords.
-    private func twoPartTwoChordScore() -> Score {
-        let chord = Chord(duration: .quarter, notes: [Note(pitch: 60, tpc: 14)])
-        let voice = Voice(elements: [.chord(chord), .chord(chord)])
-        let staff = Staff(measures: [Measure(voices: [voice])])
-        let instrument = Instrument(id: "i", articulations: [InstrumentArticulation()])
-        return Score(
-            division: 480,
-            parts: [
-                Part(id: "P1", instrument: instrument, staves: [staff]),
-                Part(id: "P2", instrument: instrument, staves: [staff]),
-            ],
-        )
-    }
-
-    @Test("frame(forCursor:) resolves notes on non-representative staves")
-    func nonRepresentativeStaffLookup() {
-        let score = twoPartTwoChordScore()
-        let timeline = PlaybackTimeline(score: score)
-
-        // Two staves × two unique chord ticks → 2 frames after dedup.
-        // Beat-only frames at ticks 0 and 480 already exist as
-        // chord onsets, so no extra beat frames are added in this
-        // densely-packed measure.
-        let chordTicks = timeline.frames
-            .filter {
-                if case .item = $0.cursor { return true }
-                return false
-            }
-            .map(\.tick)
-        #expect(chordTicks == [0, 480])
-
-        // Every chord-onset frame's representative belongs to staff 0
-        // (lowest index wins).
-        for frame in timeline.frames {
-            if case let .item(.note(id)) = frame.cursor {
-                #expect(id.staff.partIndex == 0)
-            }
+    @Suite("PlaybackTimeline")
+    struct PlaybackTimelineTests {
+        /// Regression: `frame(forCursor:)` used to do an exact-ID match
+        /// against `frames`, which only carry one representative item
+        /// per unique tick (lowest staff / voice wins the dedup). A
+        /// selection on any other staff returned `nil`, and pressing
+        /// space silently failed to update the sequencer position.
+        /// Two-part score where each part has one staff with two chords.
+        private func twoPartTwoChordScore() -> Score {
+            let chord = Chord(duration: .quarter, notes: [Note(pitch: 60, tpc: 14)])
+            let voice = Voice(elements: [.chord(chord), .chord(chord)])
+            let staff = Staff(measures: [Measure(voices: [voice])])
+            let instrument = Instrument(id: "i", articulations: [InstrumentArticulation()])
+            return Score(
+                division: 480,
+                parts: [
+                    Part(id: "P1", instrument: instrument, staves: [staff]),
+                    Part(id: "P2", instrument: instrument, staves: [staff]),
+                ],
+            )
         }
 
-        // Staff 0 lookup hits the exact-match path.
-        let s0n0 = NoteID(
-            staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
-            voiceIndex: 0, elementIndex: 0,
-            noteIndexInChord: 0,
-        )
-        #expect(timeline.frame(forCursor: .item(.note(s0n0)))?.tick == 0)
+        @Test("frame(forCursor:) resolves notes on non-representative staves")
+        func nonRepresentativeStaffLookup() {
+            let score = twoPartTwoChordScore()
+            let timeline = PlaybackTimeline(score: score)
 
-        // Staff 1 lookups must hit the tick-fallback path. Without
-        // the fix these returned nil.
-        let s1n0 = NoteID(
-            staff: StaffAddress(partIndex: 1, staffIndexInPart: 0), measureIndex: 0,
-            voiceIndex: 0, elementIndex: 0,
-            noteIndexInChord: 0,
-        )
-        let s1n1 = NoteID(
-            staff: StaffAddress(partIndex: 1, staffIndexInPart: 0), measureIndex: 0,
-            voiceIndex: 0, elementIndex: 1,
-            noteIndexInChord: 0,
-        )
-        #expect(timeline.frame(forCursor: .item(.note(s1n0)))?.tick == 0)
-        #expect(timeline.frame(forCursor: .item(.note(s1n1)))?.tick == 480)
-    }
+            // Two staves × two unique chord ticks → 2 frames after dedup.
+            // Beat-only frames at ticks 0 and 480 already exist as
+            // chord onsets, so no extra beat frames are added in this
+            // densely-packed measure.
+            let chordTicks = timeline.frames
+                .filter {
+                    if case .item = $0.cursor { return true }
+                    return false
+                }
+                .map(\.tick)
+            #expect(chordTicks == [0, 480])
 
-    @Test("earliest(of:) picks the smaller-tick item regardless of input order")
-    func earliestPicksSmallestTick() {
-        let chord = Chord(
-            duration: .quarter,
-            notes: [Note(pitch: 60, tpc: 14)],
-        )
-        let voice = Voice(elements: [
-            .chord(chord), .chord(chord), .chord(chord),
-        ])
-        let staff = Staff(
-            measures: [Measure(voices: [voice])],
-        )
-        let part = Part(
-            id: "P1",
-            instrument: Instrument(
-                id: "i",
-                articulations: [InstrumentArticulation()],
-            ),
-            staves: [staff],
-        )
-        let score = Score(
-            division: 480, parts: [part],
-        )
+            // Every chord-onset frame's representative belongs to staff 0
+            // (lowest index wins).
+            for frame in timeline.frames {
+                if case let .item(.note(id)) = frame.cursor {
+                    #expect(id.staff.partIndex == 0)
+                }
+            }
 
-        let timeline = PlaybackTimeline(score: score)
-
-        let n0 = NoteID(
-            staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
-            voiceIndex: 0, elementIndex: 0,
-            noteIndexInChord: 0,
-        )
-        let n2 = NoteID(
-            staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
-            voiceIndex: 0, elementIndex: 2,
-            noteIndexInChord: 0,
-        )
-
-        // Anchor-then-target order: target is later → earliest is anchor.
-        #expect(timeline.earliest(of: [.note(n0), .note(n2)]) == .note(n0))
-        // Reverse order (user shift-clicked an earlier note last) →
-        // earliest must still be the chronologically earlier note.
-        #expect(timeline.earliest(of: [.note(n2), .note(n0)]) == .note(n0))
-        // Empty / unknown items → nil (host falls back to anchor).
-        #expect(timeline.earliest(of: []) == nil)
-    }
-
-    @Test("itemTicks covers every note in a chord, not just the first")
-    func chordMembersAllMapped() {
-        let chord = Chord(
-            duration: .quarter,
-            notes: [
-                Note(pitch: 60, tpc: 14),
-                Note(pitch: 64, tpc: 18),
-                Note(pitch: 67, tpc: 15),
-            ],
-        )
-        let voice = Voice(elements: [.chord(chord)])
-        let staff = Staff(
-            measures: [Measure(voices: [voice])],
-        )
-        let part = Part(
-            id: "P1",
-            instrument: Instrument(
-                id: "i",
-                articulations: [InstrumentArticulation()],
-            ),
-            staves: [staff],
-        )
-        let score = Score(
-            division: 480, parts: [part],
-        )
-
-        let timeline = PlaybackTimeline(score: score)
-
-        // Every chord-member NoteID maps to tick 0 — the user can
-        // click any note in a chord and seek to that column.
-        for noteIdx in 0 ..< 3 {
-            let id = NoteID(
+            // Staff 0 lookup hits the exact-match path.
+            let s0n0 = NoteID(
                 staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
                 voiceIndex: 0, elementIndex: 0,
-                noteIndexInChord: noteIdx,
+                noteIndexInChord: 0,
             )
-            #expect(timeline.frame(forCursor: .item(.note(id)))?.tick == 0)
+            #expect(timeline.frame(forCursor: .item(.note(s0n0)))?.tick == 0)
+
+            // Staff 1 lookups must hit the tick-fallback path. Without
+            // the fix these returned nil.
+            let s1n0 = NoteID(
+                staff: StaffAddress(partIndex: 1, staffIndexInPart: 0), measureIndex: 0,
+                voiceIndex: 0, elementIndex: 0,
+                noteIndexInChord: 0,
+            )
+            let s1n1 = NoteID(
+                staff: StaffAddress(partIndex: 1, staffIndexInPart: 0), measureIndex: 0,
+                voiceIndex: 0, elementIndex: 1,
+                noteIndexInChord: 0,
+            )
+            #expect(timeline.frame(forCursor: .item(.note(s1n0)))?.tick == 0)
+            #expect(timeline.frame(forCursor: .item(.note(s1n1)))?.tick == 480)
         }
-    }
 
-    /// In a measure of 4/4 holding "half + 8th + 8th + quarter",
-    /// chord/rest onsets are at ticks {0, 960, 1200, 1440}. The
-    /// metric-beat grid is at {0, 480, 960, 1440}. The cursor
-    /// timeline must contain the union: {0, 480, 960, 1200, 1440}.
-    /// The beat-only tick (480) lands as a `.beat` cursor; the
-    /// others as `.item`.
-    @Test("Beat ticks fill in between chord onsets per time-sig denominator")
-    func beatTicksAddedBetweenOnsets() {
-        let half = Chord(
-            duration: .half, notes: [Note(pitch: 60, tpc: 14)],
-        )
-        let eighth = Chord(
-            duration: .eighth, notes: [Note(pitch: 60, tpc: 14)],
-        )
-        let quarter = Chord(
-            duration: .quarter, notes: [Note(pitch: 60, tpc: 14)],
-        )
-        let voice = Voice(elements: [
-            .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
-            .chord(half),
-            .chord(eighth),
-            .chord(eighth),
-            .chord(quarter),
-        ])
-        let staff = Staff(
-            measures: [Measure(voices: [voice])],
-        )
-        let part = Part(
-            id: "P1",
-            instrument: Instrument(
-                id: "i",
-                articulations: [InstrumentArticulation()],
-            ),
-            staves: [staff],
-        )
-        let score = Score(
-            division: 480, parts: [part],
-        )
+        @Test("earliest(of:) picks the smaller-tick item regardless of input order")
+        func earliestPicksSmallestTick() {
+            let chord = Chord(
+                duration: .quarter,
+                notes: [Note(pitch: 60, tpc: 14)],
+            )
+            let voice = Voice(elements: [
+                .chord(chord), .chord(chord), .chord(chord),
+            ])
+            let staff = Staff(
+                measures: [Measure(voices: [voice])],
+            )
+            let part = Part(
+                id: "P1",
+                instrument: Instrument(
+                    id: "i",
+                    articulations: [InstrumentArticulation()],
+                ),
+                staves: [staff],
+            )
+            let score = Score(
+                division: 480, parts: [part],
+            )
 
-        let timeline = PlaybackTimeline(score: score)
-        let ticks = timeline.frames.map(\.tick)
-        #expect(ticks == [0, 480, 960, 1200, 1440])
+            let timeline = PlaybackTimeline(score: score)
 
-        // The 480 tick must be a `.beat` cursor. The 0 / 960 / 1200 /
-        // 1440 ticks must be `.item` cursors (chord onsets win the
-        // dedup since their sortKey beats the beat sentinel).
-        for frame in timeline.frames {
-            switch frame.tick {
-            case 480:
-                #expect(frame.cursor == .beat(
-                    measureIndex: 0, tickInMeasure: 480,
-                ))
-            default:
-                if case .item = frame.cursor { } else {
-                    Issue.record("Expected .item at tick \(frame.tick), got \(frame.cursor)")
+            let n0 = NoteID(
+                staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
+                voiceIndex: 0, elementIndex: 0,
+                noteIndexInChord: 0,
+            )
+            let n2 = NoteID(
+                staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
+                voiceIndex: 0, elementIndex: 2,
+                noteIndexInChord: 0,
+            )
+
+            // Anchor-then-target order: target is later → earliest is anchor.
+            #expect(timeline.earliest(of: [.note(n0), .note(n2)]) == .note(n0))
+            // Reverse order (user shift-clicked an earlier note last) →
+            // earliest must still be the chronologically earlier note.
+            #expect(timeline.earliest(of: [.note(n2), .note(n0)]) == .note(n0))
+            // Empty / unknown items → nil (host falls back to anchor).
+            #expect(timeline.earliest(of: []) == nil)
+        }
+
+        @Test("itemTicks covers every note in a chord, not just the first")
+        func chordMembersAllMapped() {
+            let chord = Chord(
+                duration: .quarter,
+                notes: [
+                    Note(pitch: 60, tpc: 14),
+                    Note(pitch: 64, tpc: 18),
+                    Note(pitch: 67, tpc: 15),
+                ],
+            )
+            let voice = Voice(elements: [.chord(chord)])
+            let staff = Staff(
+                measures: [Measure(voices: [voice])],
+            )
+            let part = Part(
+                id: "P1",
+                instrument: Instrument(
+                    id: "i",
+                    articulations: [InstrumentArticulation()],
+                ),
+                staves: [staff],
+            )
+            let score = Score(
+                division: 480, parts: [part],
+            )
+
+            let timeline = PlaybackTimeline(score: score)
+
+            // Every chord-member NoteID maps to tick 0 — the user can
+            // click any note in a chord and seek to that column.
+            for noteIdx in 0 ..< 3 {
+                let id = NoteID(
+                    staff: StaffAddress(partIndex: 0, staffIndexInPart: 0), measureIndex: 0,
+                    voiceIndex: 0, elementIndex: 0,
+                    noteIndexInChord: noteIdx,
+                )
+                #expect(timeline.frame(forCursor: .item(.note(id)))?.tick == 0)
+            }
+        }
+
+        /// In a measure of 4/4 holding "half + 8th + 8th + quarter",
+        /// chord/rest onsets are at ticks {0, 960, 1200, 1440}. The
+        /// metric-beat grid is at {0, 480, 960, 1440}. The cursor
+        /// timeline must contain the union: {0, 480, 960, 1200, 1440}.
+        /// The beat-only tick (480) lands as a `.beat` cursor; the
+        /// others as `.item`.
+        @Test("Beat ticks fill in between chord onsets per time-sig denominator")
+        func beatTicksAddedBetweenOnsets() {
+            let half = Chord(
+                duration: .half, notes: [Note(pitch: 60, tpc: 14)],
+            )
+            let eighth = Chord(
+                duration: .eighth, notes: [Note(pitch: 60, tpc: 14)],
+            )
+            let quarter = Chord(
+                duration: .quarter, notes: [Note(pitch: 60, tpc: 14)],
+            )
+            let voice = Voice(elements: [
+                .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+                .chord(half),
+                .chord(eighth),
+                .chord(eighth),
+                .chord(quarter),
+            ])
+            let staff = Staff(
+                measures: [Measure(voices: [voice])],
+            )
+            let part = Part(
+                id: "P1",
+                instrument: Instrument(
+                    id: "i",
+                    articulations: [InstrumentArticulation()],
+                ),
+                staves: [staff],
+            )
+            let score = Score(
+                division: 480, parts: [part],
+            )
+
+            let timeline = PlaybackTimeline(score: score)
+            let ticks = timeline.frames.map(\.tick)
+            #expect(ticks == [0, 480, 960, 1200, 1440])
+
+            // The 480 tick must be a `.beat` cursor. The 0 / 960 / 1200 /
+            // 1440 ticks must be `.item` cursors (chord onsets win the
+            // dedup since their sortKey beats the beat sentinel).
+            for frame in timeline.frames {
+                switch frame.tick {
+                case 480:
+                    #expect(frame.cursor == .beat(
+                        measureIndex: 0, tickInMeasure: 480,
+                    ))
+                default:
+                    if case .item = frame.cursor { } else {
+                        Issue.record("Expected .item at tick \(frame.tick), got \(frame.cursor)")
+                    }
                 }
             }
         }
-    }
 
-    /// Regression for the idea8.mscx playback-cursor drift: a `<Tempo>`
-    /// preceded by `<location>` shifts (e.g. `rit. … a tempo` clusters)
-    /// must land at the shifted tick, not the chord-walk tick. The
-    /// MIDI sequencer respects the location shift, so if the timeline
-    /// records the tempo at the wrong tick its `timeSeconds` drifts
-    /// away from `currentPositionInSeconds` and the cursor jumps
-    /// ahead of the audio at later beats.
-    @Test("locationShift before a Tempo offsets the tempo's tick")
-    func locationShiftMovesTempoTick() {
-        let half = Chord(
-            duration: .half, notes: [Note(pitch: 60, tpc: 14)],
-        )
-        // 4/4 measure: half | locShift(+1/8) | tempo→60bpm | locShift(-1/8) | half.
-        // With division=480, +1/8 = +240 ticks. Without the fix, the
-        // tempo lands at tick 480 (chord-walk position) instead of 720.
-        // Tempo lives on the score-level SystemMeasure at position
-        // 5/8 (half + eighth = 720 ticks at division=480). The voice
-        // stream itself only carries the two half-notes.
-        let voice = Voice(elements: [
-            .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
-            .chord(half),
-            .chord(half),
-        ])
-        let staff = Staff(measures: [Measure(voices: [voice])])
-        let part = Part(
-            id: "P1",
-            instrument: Instrument(
-                id: "i",
-                articulations: [InstrumentArticulation()],
-            ),
-            staves: [staff],
-        )
-        let systemMeasure = SystemMeasure(elements: [
-            PositionedSystemElement(
-                position: MeasurePosition(numerator: 5, denominator: 8),
-                element: .tempo(Tempo(beatsPerSecond: 1.0)),
-            ),
-        ])
-        let score = Score(
-            division: 480, parts: [part],
-            systemMeasures: [systemMeasure],
-        )
-        let timeline = PlaybackTimeline(score: score)
-
-        // Frame at the second half-note onset (tick 960). With the
-        // tempo correctly placed at tick 720:
-        //   0..720  @ 120 bpm (default) = 720 / (2 * 480) = 0.75 s
-        //   720..960 @ 60 bpm           = 240 / (1 * 480) = 0.50 s
-        // total = 1.25 s. With the bug (tempo at tick 480) it'd be
-        // 0.5 + 1.0 = 1.5 s.
-        // A frame at the second chord onset (tick 960) is reached
-        // before the tempo fires in either branch — what matters is
-        // the *total* runtime past the bracketed tempo. With the fix,
-        // tempo lands at tick 1200; the final 720 ticks play at 60 bpm,
-        // giving total = 1.25 + 1.5 = 2.75 s. Without the fix the
-        // tempo lands at tick 960 and the final 960 ticks play at
-        // 60 bpm, giving 1.0 + 2.0 = 3.0 s.
-        #expect(abs(timeline.totalSeconds - 2.75) < 1e-9)
-    }
-
-    /// Regression for the idea8.mscx playback-cursor "lead" symptom:
-    /// when the lowest staff carries a whole-measure rest, the
-    /// engraver renders that rest *centred* in the bar (not at the
-    /// rhythmic onset column), so a `.item(.rest)` cursor on it
-    /// would park visually around beat 2.5 while audio is still on
-    /// beat 1. The timeline must skip whole-note rests so a chord
-    /// onset on another staff wins the cursor-frame slot at tick 0.
-    @Test("Whole-measure rest on staff 0 does not win the cursor at its tick")
-    func wholeRestSkippedInPending() {
-        let restWhole = Chord(
-            duration: .fraction(Fraction(numerator: 4, denominator: 4)),
-            notes: [],
-        )
-        let quarter = Chord(
-            duration: .quarter,
-            notes: [Note(pitch: 60, tpc: 14)],
-        )
-        // Staff 0: whole-measure rest only. Staff 1: 4 quarter notes.
-        let staff0 = Staff(
-            measures: [Measure(voices: [Voice(elements: [.chord(restWhole)])])],
-        )
-        let staff1 = Staff(measures: [Measure(voices: [Voice(elements: [
-            .chord(quarter), .chord(quarter), .chord(quarter), .chord(quarter),
-        ])])])
-        let instrument = Instrument(
-            id: "i", articulations: [InstrumentArticulation()],
-        )
-        let score = Score(
-            division: 480,
-            parts: [
-                Part(id: "P0", instrument: instrument, staves: [staff0]),
-                Part(id: "P1", instrument: instrument, staves: [staff1]),
-            ],
-        )
-        let timeline = PlaybackTimeline(score: score)
-
-        // Tick 0 must resolve to the staff 1 chord, not the staff 0
-        // whole-rest. Without the skip, dedup would prefer staff 0's
-        // rest (sortKey (0, 0) wins over staff 1's (1, 0)) and the
-        // cursor would render at the centred rest glyph.
-        let frame0 = timeline.frame(atTick: 0)
-        if case let .item(.note(id)) = frame0?.cursor {
-            #expect(id.staff.partIndex == 1)
-        } else {
-            Issue.record(
-                "Expected .item(.note) on staff 1 at tick 0, got \(String(describing: frame0?.cursor))",
+        /// Regression for the idea8.mscx playback-cursor drift: a `<Tempo>`
+        /// preceded by `<location>` shifts (e.g. `rit. … a tempo` clusters)
+        /// must land at the shifted tick, not the chord-walk tick. The
+        /// MIDI sequencer respects the location shift, so if the timeline
+        /// records the tempo at the wrong tick its `timeSeconds` drifts
+        /// away from `currentPositionInSeconds` and the cursor jumps
+        /// ahead of the audio at later beats.
+        @Test("locationShift before a Tempo offsets the tempo's tick")
+        func locationShiftMovesTempoTick() {
+            let half = Chord(
+                duration: .half, notes: [Note(pitch: 60, tpc: 14)],
             )
+            // 4/4 measure: half | locShift(+1/8) | tempo→60bpm | locShift(-1/8) | half.
+            // With division=480, +1/8 = +240 ticks. Without the fix, the
+            // tempo lands at tick 480 (chord-walk position) instead of 720.
+            // Tempo lives on the score-level SystemMeasure at position
+            // 5/8 (half + eighth = 720 ticks at division=480). The voice
+            // stream itself only carries the two half-notes.
+            let voice = Voice(elements: [
+                .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+                .chord(half),
+                .chord(half),
+            ])
+            let staff = Staff(measures: [Measure(voices: [voice])])
+            let part = Part(
+                id: "P1",
+                instrument: Instrument(
+                    id: "i",
+                    articulations: [InstrumentArticulation()],
+                ),
+                staves: [staff],
+            )
+            let systemMeasure = SystemMeasure(elements: [
+                PositionedSystemElement(
+                    position: MeasurePosition(numerator: 5, denominator: 8),
+                    element: .tempo(Tempo(beatsPerSecond: 1.0)),
+                ),
+            ])
+            let score = Score(
+                division: 480, parts: [part],
+                systemMeasures: [systemMeasure],
+            )
+            let timeline = PlaybackTimeline(score: score)
+
+            // Frame at the second half-note onset (tick 960). With the
+            // tempo correctly placed at tick 720:
+            //   0..720  @ 120 bpm (default) = 720 / (2 * 480) = 0.75 s
+            //   720..960 @ 60 bpm           = 240 / (1 * 480) = 0.50 s
+            // total = 1.25 s. With the bug (tempo at tick 480) it'd be
+            // 0.5 + 1.0 = 1.5 s.
+            // A frame at the second chord onset (tick 960) is reached
+            // before the tempo fires in either branch — what matters is
+            // the *total* runtime past the bracketed tempo. With the fix,
+            // tempo lands at tick 1200; the final 720 ticks play at 60 bpm,
+            // giving total = 1.25 + 1.5 = 2.75 s. Without the fix the
+            // tempo lands at tick 960 and the final 960 ticks play at
+            // 60 bpm, giving 1.0 + 2.0 = 3.0 s.
+            #expect(abs(timeline.totalSeconds - 2.75) < 1e-9)
         }
 
-        // The whole-measure rest is still seekable via
-        // `frame(forCursor:)` — `itemTicks` keeps mapping it so
-        // play-from-selection on the rest still works.
-        let restID = RestID(
-            staff: StaffAddress(partIndex: 0, staffIndexInPart: 0),
-            measureIndex: 0,
-            voiceIndex: 0,
-            elementIndex: 0,
-        )
-        #expect(timeline.frame(forCursor: .item(.rest(restID)))?.tick == 0)
-    }
+        /// Regression for the idea8.mscx playback-cursor "lead" symptom:
+        /// when the lowest staff carries a whole-measure rest, the
+        /// engraver renders that rest *centred* in the bar (not at the
+        /// rhythmic onset column), so a `.item(.rest)` cursor on it
+        /// would park visually around beat 2.5 while audio is still on
+        /// beat 1. The timeline must skip whole-note rests so a chord
+        /// onset on another staff wins the cursor-frame slot at tick 0.
+        @Test("Whole-measure rest on staff 0 does not win the cursor at its tick")
+        func wholeRestSkippedInPending() {
+            let restWhole = Chord(
+                duration: .fraction(Fraction(numerator: 4, denominator: 4)),
+                notes: [],
+            )
+            let quarter = Chord(
+                duration: .quarter,
+                notes: [Note(pitch: 60, tpc: 14)],
+            )
+            // Staff 0: whole-measure rest only. Staff 1: 4 quarter notes.
+            let staff0 = Staff(
+                measures: [Measure(voices: [Voice(elements: [.chord(restWhole)])])],
+            )
+            let staff1 = Staff(measures: [Measure(voices: [Voice(elements: [
+                .chord(quarter), .chord(quarter), .chord(quarter), .chord(quarter),
+            ])])])
+            let instrument = Instrument(
+                id: "i", articulations: [InstrumentArticulation()],
+            )
+            let score = Score(
+                division: 480,
+                parts: [
+                    Part(id: "P0", instrument: instrument, staves: [staff0]),
+                    Part(id: "P1", instrument: instrument, staves: [staff1]),
+                ],
+            )
+            let timeline = PlaybackTimeline(score: score)
 
-    /// 6/8 → step = division / 2 (eighth ticks), 6 beats per measure.
-    @Test("6/8 emits beats at the eighth-note interval, six per measure")
-    func compoundTimeSigBeatStep() {
-        let qDot = Chord(
-            duration: .quarter, notes: [Note(pitch: 60, tpc: 14)],
-        )
-        // Fill a 6/8 measure with three quarter notes — chord onsets
-        // at ticks 0, 480, 960; missing beat ticks at 240, 720, 1200.
-        let voice = Voice(elements: [
-            .timeSignature(TimeSignature(numerator: 6, denominator: 8)),
-            .chord(qDot), .chord(qDot), .chord(qDot),
-        ])
-        let staff = Staff(
-            measures: [Measure(voices: [voice])],
-        )
-        let part = Part(
-            id: "P1",
-            instrument: Instrument(
-                id: "i",
-                articulations: [InstrumentArticulation()],
-            ),
-            staves: [staff],
-        )
-        let score = Score(
-            division: 480, parts: [part],
-        )
+            // Tick 0 must resolve to the staff 1 chord, not the staff 0
+            // whole-rest. Without the skip, dedup would prefer staff 0's
+            // rest (sortKey (0, 0) wins over staff 1's (1, 0)) and the
+            // cursor would render at the centred rest glyph.
+            let frame0 = timeline.frame(atTick: 0)
+            if case let .item(.note(id)) = frame0?.cursor {
+                #expect(id.staff.partIndex == 1)
+            } else {
+                Issue.record(
+                    "Expected .item(.note) on staff 1 at tick 0, got \(String(describing: frame0?.cursor))",
+                )
+            }
 
-        let timeline = PlaybackTimeline(score: score)
-        let ticks = timeline.frames.map(\.tick)
-        #expect(ticks == [0, 240, 480, 720, 960, 1200])
+            // The whole-measure rest is still seekable via
+            // `frame(forCursor:)` — `itemTicks` keeps mapping it so
+            // play-from-selection on the rest still works.
+            let restID = RestID(
+                staff: StaffAddress(partIndex: 0, staffIndexInPart: 0),
+                measureIndex: 0,
+                voiceIndex: 0,
+                elementIndex: 0,
+            )
+            #expect(timeline.frame(forCursor: .item(.rest(restID)))?.tick == 0)
+        }
+
+        /// 6/8 → step = division / 2 (eighth ticks), 6 beats per measure.
+        @Test("6/8 emits beats at the eighth-note interval, six per measure")
+        func compoundTimeSigBeatStep() {
+            let qDot = Chord(
+                duration: .quarter, notes: [Note(pitch: 60, tpc: 14)],
+            )
+            // Fill a 6/8 measure with three quarter notes — chord onsets
+            // at ticks 0, 480, 960; missing beat ticks at 240, 720, 1200.
+            let voice = Voice(elements: [
+                .timeSignature(TimeSignature(numerator: 6, denominator: 8)),
+                .chord(qDot), .chord(qDot), .chord(qDot),
+            ])
+            let staff = Staff(
+                measures: [Measure(voices: [voice])],
+            )
+            let part = Part(
+                id: "P1",
+                instrument: Instrument(
+                    id: "i",
+                    articulations: [InstrumentArticulation()],
+                ),
+                staves: [staff],
+            )
+            let score = Score(
+                division: 480, parts: [part],
+            )
+
+            let timeline = PlaybackTimeline(score: score)
+            let ticks = timeline.frames.map(\.tick)
+            #expect(ticks == [0, 240, 480, 720, 960, 1200])
+        }
     }
-}
+#endif

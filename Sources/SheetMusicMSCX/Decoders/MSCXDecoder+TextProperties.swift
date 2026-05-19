@@ -59,12 +59,12 @@ extension TextProperties {
 
 /// Resolve `<frameType>0|1|2</frameType>` to `TextFrameType`.
 /// Mirrors MuseScore's `FrameType` enum order
-/// (`engraving/types/types.h`):  SQUARE=0, CIRCLE=1, NO_FRAME=2.
+/// (`engraving/dom/textbase.h`): `NO_FRAME=0, SQUARE=1, CIRCLE=2`.
 func decodeFrame(_ raw: Int) -> TextFrameType {
     switch raw {
-    case 0: .rectangle
-    case 1: .circle
-    case 2: .none
+    case 0: .none
+    case 1: .rectangle
+    case 2: .circle
     default: .none
     }
 }

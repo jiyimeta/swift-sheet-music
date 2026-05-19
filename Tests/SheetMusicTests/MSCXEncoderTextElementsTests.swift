@@ -172,6 +172,66 @@ struct MSCXEncoderTextElementsTests {
         #expect(reparsed.text == "B")
     }
 
+    @Test("RehearsalMark omits <frameType> for the default rectangle frame")
+    func rehearsalMarkOmitsDefaultFrameType() throws {
+        // Regression: we used to force-write `props.frameType = frame`
+        // and emit `<frameType>0</frameType>` for every RehearsalMark.
+        // Combined with a stale enum mapping (0/1/2 vs MuseScore's
+        // NO_FRAME=0, SQUARE=1, CIRCLE=2), that produced
+        // `<frameType>0</frameType>` for rectangle marks — which
+        // MuseScore reads as NO_FRAME, dropping the visible border.
+        // MuseScore Studio omits `<frameType>` entirely when the
+        // value matches the style default; do the same so output
+        // matches the original file byte-pattern.
+        let mark = RehearsalMark(text: "A")
+        let positioned = PositionedSystemElement(
+            position: .start, element: .rehearsalMark(mark),
+        )
+        let measure = Measure(voices: [Voice(elements: [])])
+        let part = Part(
+            id: "1",
+            instrument: Instrument(id: "voice"),
+            staves: [Staff(measures: [measure])],
+        )
+        let score = Score(
+            division: 480,
+            parts: [part],
+            systemMeasures: [SystemMeasure(elements: [positioned])],
+        )
+        let bytes = try MSCXEncoder.encode(score)
+        let text = try #require(String(bytes: bytes, encoding: .utf8))
+        #expect(!text.contains("<frameType>"))
+    }
+
+    @Test("RehearsalMark with non-default frame uses MuseScore integer mapping")
+    func rehearsalMarkExplicitFrameUsesMuseScoreInteger() throws {
+        // Verify the encoded integer matches MuseScore upstream
+        // (engraving/dom/textbase.h: NO_FRAME=0, SQUARE=1, CIRCLE=2).
+        for (frame, expected) in [
+            (TextFrameType.circle, "<frameType>2</frameType>"),
+            (TextFrameType.none, "<frameType>0</frameType>"),
+        ] {
+            let mark = RehearsalMark(text: "M", frame: frame)
+            let positioned = PositionedSystemElement(
+                position: .start, element: .rehearsalMark(mark),
+            )
+            let measure = Measure(voices: [Voice(elements: [])])
+            let part = Part(
+                id: "1",
+                instrument: Instrument(id: "voice"),
+                staves: [Staff(measures: [measure])],
+            )
+            let score = Score(
+                division: 480,
+                parts: [part],
+                systemMeasures: [SystemMeasure(elements: [positioned])],
+            )
+            let bytes = try MSCXEncoder.encode(score)
+            let text = try #require(String(bytes: bytes, encoding: .utf8))
+            #expect(text.contains(expected), "expected \(expected) for \(frame)")
+        }
+    }
+
     @Test("Harmony round-trips standard chord with root/bass/parens")
     func harmonyStandardRoundTrip() throws {
         let harmony = Harmony(
@@ -243,6 +303,70 @@ struct MSCXEncoderTextElementsTests {
             let decoded = try voiceRoundTrip(voice)
             #expect(decoded == voice, "\(tag) failed round-trip")
         }
+    }
+
+    @Test("mid-measure system element interleaves at chord boundary without <location>")
+    func midMeasureSystemElementInterleaves() throws {
+        // Regression: a mid-measure lifted StaffText (e.g. position
+        // 3/4 inside a 4/4 measure) used to be dumped at the voice
+        // head with a forward `<location>3/4</location>` and no
+        // matching back-shift. MuseScore reads `<location>` as a
+        // cumulative cursor move, so every chord after the head was
+        // offset and the bar failed length validation (MS3:
+        // "予想: 4/4; 判定: 7/4"). The encoder now interleaves
+        // system elements at their natural cursor — no shift needed
+        // when the position lands on a chord boundary.
+        let voice = Voice(elements: [
+            .chord(Chord(duration: .quarter, notes: ChordNotes([Note(pitch: 60, tpc: 14)]))),
+            .chord(Chord(duration: .quarter, notes: ChordNotes([Note(pitch: 62, tpc: 16)]))),
+            .chord(Chord(duration: .quarter, notes: ChordNotes([Note(pitch: 64, tpc: 18)]))),
+            .chord(Chord(duration: .quarter, notes: ChordNotes([Note(pitch: 65, tpc: 13)]))),
+        ])
+        let staffText = StaffText(text: "cresc.")
+        let positioned = PositionedSystemElement(
+            position: MeasurePosition(numerator: 3, denominator: 4),
+            element: .staffText(staffText),
+        )
+
+        let measure = Measure(voices: [voice])
+        let part = Part(
+            id: "1",
+            instrument: Instrument(id: "voice"),
+            staves: [Staff(measures: [measure])],
+        )
+        let score = Score(
+            division: 480,
+            parts: [part],
+            systemMeasures: [SystemMeasure(elements: [positioned])],
+        )
+        let bytes = try MSCXEncoder.encode(score)
+        let encodedText = try #require(String(bytes: bytes, encoding: .utf8))
+
+        // No free-standing <location> — StaffText sits inline at the
+        // boundary, document order matches MuseScore Studio output.
+        #expect(!encodedText.contains("<location>"))
+        // The StaffText appears between the 3rd Chord (which ends at
+        // 3/4) and the 4th Chord (which starts at 3/4).
+        let staffTextRange = try #require(encodedText.range(of: "<StaffText>"))
+        let chordRanges = encodedText.ranges(of: "<Chord>")
+        #expect(chordRanges.count == 4, "expected 4 chord opens, got \(chordRanges.count)")
+        if chordRanges.count >= 4 {
+            #expect(chordRanges[2].upperBound < staffTextRange.lowerBound)
+            #expect(staffTextRange.upperBound < chordRanges[3].lowerBound)
+        }
+
+        // Decoded round-trip preserves the voice exactly (no extra
+        // .locationShift elements introduced).
+        let reparsed = try MSCXParser.parse(bytes)
+        let reVoice = try #require(
+            reparsed.parts.first?.staves.first?.measures.first?.voices.first,
+        )
+        #expect(reVoice == voice)
+        let reSysElements = try #require(
+            reparsed.systemMeasures.first?.elements,
+        )
+        #expect(reSysElements.count == 1)
+        #expect(reSysElements.first?.position == positioned.position)
     }
 
     @Test("locationShift round-trips when no system element follows")

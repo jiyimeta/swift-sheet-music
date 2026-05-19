@@ -1,4 +1,10 @@
-import CoreGraphics
+#if canImport(CoreGraphics)
+    import CoreGraphics
+#else
+    // On non-Apple platforms (Android, Linux), swift-corelibs-foundation
+    // provides CGFloat / CGPoint via Foundation.
+    import Foundation
+#endif
 
 /// A page-level frame that holds free-form text — typically the
 /// title block at the top of the score (`<VBox>` in MuseScore's

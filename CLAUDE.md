@@ -80,6 +80,117 @@ The example app's `.xcodeproj` is **gitignored**; regenerate from
 `Example/project.yml` with `xcodegen` whenever you change project
 settings or sources.
 
+## Android build (Phase 1 — Foundation-only targets)
+
+`swift-sheet-music` cross-compiles to Android via the Swift 6.3 official
+Android SDK. Only Foundation-dependent targets are supported in this
+phase (Core / MIDI / MSCX / MusicXML / XMLTools); Layout / UI / PDF /
+Audio remain Apple-only until Phases 2-3 introduce DI abstractions.
+
+### Prerequisites
+
+- **Open-source swift.org Swift 6.3.2-RELEASE toolchain on the host**
+  (not Apple's Xcode-shipped Swift). Install the `.pkg` from
+  <https://www.swift.org/install/macos/> (lands at
+  `/Library/Developer/Toolchains/swift-6.3.2-RELEASE.xctoolchain`,
+  bundle id `org.swift.632202605101a`). Export `TOOLCHAINS=org.swift.632202605101a`
+  before any Android `swift build` (or rely on `Scripts/android-test.sh`
+  which exports it for you). The Android SDK's pre-built Foundation
+  swiftmodule is tagged `Swift version 6.3.2 (swift-6.3.2-RELEASE)` and
+  Apple's Xcode-shipped `swiftlang-6.3.2.*` fork rejects it with
+  214 "compiled module was created by an older version of the compiler"
+  errors.
+
+  ```bash
+  export TOOLCHAINS=org.swift.632202605101a
+  swift --version  # banner should contain "swift-6.3.2-RELEASE"
+  ```
+
+- Swift Android SDK installed. `swift sdk list` should report:
+
+  ```
+  swift-6.3.2-RELEASE_android
+  ```
+
+  This bundle exposes triples `{aarch64,x86_64,armv7}-unknown-linux-android{28..36}`.
+  It does **not** include `android24`. The lowest API level supported
+  is `android28`. Install via:
+
+  ```bash
+  swift sdk install \
+      https://download.swift.org/swift-6.3.2-release/swift-6.3.2-RELEASE_android-0.1.artifactbundle.tar.gz \
+      --checksum <SHA256-from-swift.org-release-page>
+  ```
+
+  Re-derive the exact URL and checksum from
+  <https://www.swift.org/install/> → Swift 6.3 → Android if either
+  changes.
+
+- `adb` on `$PATH` and an Android device or emulator (API ≥ 28)
+
+### One-time NDK sysroot setup
+
+The Swift Android SDK ships a setup script that stages NDK sysroot
+symlinks. Run it once after installing the SDK:
+
+```bash
+ANDROID_NDK_HOME=~/Library/Android/sdk/ndk/<version> \
+    ~/Library/org.swift.swiftpm/swift-sdks/swift-6.3.2-RELEASE_android.artifactbundle/swift-android/scripts/setup-android-sdk.sh
+```
+
+If the `ndk-sysroot` symlink under the artifact bundle is missing, the
+cross-compile fails with `'semaphore.h' file not found` /
+`could not build C module 'SwiftOverlayShims'`.
+
+### Format support on Android
+
+`.mscz` and `.mxl` are fully supported on Android via the in-house
+`SheetMusicZip` target (raw DEFLATE through system `libz`). No
+additional setup is required beyond the Phase 1 toolchain.
+
+### `--swift-sdk` argument form
+
+Both forms work; we use the triple form for explicit API-level / arch
+selection:
+
+- **Triple form (preferred):** `aarch64-unknown-linux-android28` or
+  `x86_64-unknown-linux-android28`. Used by `Scripts/android-test.sh`.
+- **Bundle form:** `swift-6.3.2-RELEASE_android`. SwiftPM picks the
+  triple (observed default: `aarch64-unknown-linux-android29`). Handy
+  for ad-hoc commands when you don't care which API level is picked.
+
+### Building
+
+```bash
+# Library targets only — fast
+SWIFT_SHEET_MUSIC_ANDROID=1 swift build \
+    --swift-sdk aarch64-unknown-linux-android28
+
+# With tests
+SWIFT_SHEET_MUSIC_ANDROID=1 swift build \
+    --swift-sdk aarch64-unknown-linux-android28 \
+    --build-tests
+```
+
+### Running tests on a device
+
+```bash
+Scripts/android-test.sh aarch64 [device-serial]
+```
+
+The script defaults to API level 28 (lowest available in the
+SDK bundle). Pass a custom triple via env if you need a different
+API level.
+
+### Adding new tests
+
+Tests that import any Apple framework (`SwiftUI`, `AVFoundation`,
+`CoreText`, `CoreGraphics`, `AppKit`, `UIKit`, `PDFKit`) or that
+`@testable import` an Apple-only sub-library (`SheetMusicLayout`,
+`SheetMusicUI`, `SheetMusicAudio`, `SheetMusicPDF`) must be wrapped in
+`#if !os(Android)` ... `#endif`. Run `Scripts/gate-android-tests.sh`
+after creating new test files to apply this guard automatically.
+
 ## Conventions
 
 - **Idiomatic Swift naming.** Don't transliterate C++ names. When the
@@ -200,3 +311,7 @@ MuseScore repository root.
   even on 14+). Do not reach for `AVAssetWriter` for the others —
   it is more code for no benefit. See
   `SheetMusicAudio/Export/AudioExportWriter.swift`.
+- **Android cross-compile and Package.swift**: the manifest reads
+  `SWIFT_SHEET_MUSIC_ANDROID` at evaluation time. After editing
+  `Package.swift`, re-run `swift package describe` both with and
+  without the env var set to confirm both shapes still resolve.

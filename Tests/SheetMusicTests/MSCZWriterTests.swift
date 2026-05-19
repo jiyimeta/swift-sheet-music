@@ -1,6 +1,7 @@
 import Foundation
 @testable import SheetMusicCore
 @testable import SheetMusicMSCX
+@testable import SheetMusicZip
 import Testing
 
 struct MSCZWriterTests {
@@ -73,6 +74,26 @@ struct MSCZWriterTests {
         let score = try MSCZReader.parse(contentsOf: tmp)
         let direct = try MSCXParser.parse(mscxData)
         #expect(score == direct)
+    }
+
+    @Test func outputContainsContainerXMLPointingAtMainEntry() throws {
+        let mscx = try #require(
+            Bundle.module.url(forResource: "midi01", withExtension: "mscx"),
+        )
+        let mscxData = try Data(contentsOf: mscx)
+        let msczData = try MSCZWriter.write(
+            mscxData: mscxData,
+            mainFileName: "renamed.mscx",
+        )
+        let reader = try ZipReader(data: msczData)
+
+        let containerData = try reader.read(path: "META-INF/container.xml")
+        let containerText = try #require(String(data: containerData, encoding: .utf8))
+        // Format check: declares the rootfile pointing at the main entry.
+        #expect(containerText.contains(#"<rootfile full-path="renamed.mscx"/>"#))
+
+        // And the main entry itself exists at the declared path.
+        #expect(reader.contains(path: "renamed.mscx"))
     }
 
     @Test func writeToBadURLThrowsIOError() {

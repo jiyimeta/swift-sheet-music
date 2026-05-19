@@ -61,10 +61,12 @@ extension Voice {
     /// mirror that omission here.
     ///
     /// `systemElements` (typically only non-empty for voice 0) are
-    /// injected at the head of the voice with `<location>` shifts
-    /// matching their `MeasurePosition`. Each shift is consumed by
-    /// the immediately-following system element only — chords later
-    /// in the voice remain at their natural cursor.
+    /// interleaved into the chord/rest stream at their natural cursor
+    /// positions, matching the document order MuseScore Studio writes.
+    /// Elements whose position falls on a chord boundary need no
+    /// `<location>` shift — the cursor is already there. Elements whose
+    /// position falls past the final chord boundary are emitted with a
+    /// trailing forward shift.
     /// `effectiveDuration` is the containing measure's effective
     /// duration (TimeSignature × actualLength). Used to resolve
     /// `.measure` rests and to drive cross-measure tie offsets when
@@ -116,36 +118,39 @@ extension Voice {
         let dropInitialZeroKeySig = shouldDropInitialZeroKeySig(isStaffHead: isStaffHead)
 
         var state = EncodeState(carryIn: carryIn)
-        injectSystemElements(systemElements, into: &state)
+        let sortedSys = Self.sortedSystemElements(systemElements)
+        var sysIdx = Self.emitSystemElementsAtCursor(
+            sortedSys, from: 0,
+            cursor: state.voiceTotal, into: &state.children,
+        )
+        let plan = IterationPlan(
+            startsByIndex: startsByIndex,
+            endCountByIndex: endCountByIndex,
+            lastChordIndex: lastChordIndex,
+            voiceBarLength: voiceBarLength,
+            effectiveDuration: effectiveDuration,
+            dropInitialZeroKeySig: dropInitialZeroKeySig,
+        )
         for (index, element) in elements.enumerated() {
-            for opening in startsByIndex[index] ?? [] {
-                let activeWithOpening = state.stack + [opening]
-                let base = tupletBaseDuration(
-                    opening: opening,
-                    activeTuplets: activeWithOpening,
-                )
-                state.children.append(opening.encode(baseDuration: base))
-                state.stack.append(opening)
-            }
-            if !(dropInitialZeroKeySig && index == 0) {
-                try emitElement(
-                    element: element,
-                    index: index,
-                    lastChordIndex: lastChordIndex,
-                    voiceBarLength: voiceBarLength,
-                    effectiveDuration: effectiveDuration,
-                    carryIn: carryIn,
-                    state: &state,
-                    options: options,
-                    staffGroup: staffGroup,
-                    voiceIndex: voiceIndex,
-                )
-            }
-            for _ in 0 ..< (endCountByIndex[index] ?? 0) {
-                state.stack.removeLast()
-                state.children.append(XMLTreeNode(name: "endTuplet"))
-            }
+            try iterate(
+                element: element,
+                index: index,
+                plan: plan,
+                carryIn: carryIn,
+                state: &state,
+                options: options,
+                staffGroup: staffGroup,
+                voiceIndex: voiceIndex,
+            )
+            sysIdx = Self.emitSystemElementsAtCursor(
+                sortedSys, from: sysIdx,
+                cursor: state.voiceTotal, into: &state.children,
+            )
         }
+        sysIdx = Self.flushRemainingSystemElements(
+            sortedSys, from: sysIdx,
+            cursor: &state.voiceTotal, into: &state.children,
+        )
         return (
             XMLTreeNode(name: "voice", children: state.children),
             VoiceTieCarry(
@@ -184,7 +189,7 @@ extension Voice {
         return false
     }
 
-    private func emitElement(
+    func emitElement(
         element: VoiceElement,
         index: Int,
         lastChordIndex: Int?,
@@ -339,61 +344,5 @@ extension Voice {
         case let .spanner(spanner):
             return spanner.encode(options: options)
         }
-    }
-
-    /// Build the `<Chord>` / `<Rest>` element for one chord case of the
-    /// element switch. Factored out of `encode(element:…)` so that
-    /// dispatch fits within the function-body-length budget; carries
-    /// the same `staffGroup` / `voiceIndex` threading needed for
-    /// percussion-v3 stem direction and default note head emission.
-    private func encodeChord(
-        chord: Chord,
-        activeTuplets: [Tuplet],
-        previousChordDuration: Fraction?,
-        isFirstChordOfVoice: Bool,
-        isLastChordOfVoice: Bool,
-        prevVoiceTotal: Fraction?,
-        voiceBarLength: Fraction,
-        effectiveDuration: Fraction,
-        injectedTremolo: Tremolo?,
-        options: MSCXEncoderOptions,
-        staffGroup: String,
-        voiceIndex: Int,
-    ) throws -> XMLTreeNode {
-        let unscaled = try unscaledDuration(chord.duration, in: activeTuplets)
-        // Rebuild must forward every chord-attached field — new fields
-        // added to `Chord.init` must be propagated here too, otherwise
-        // un-scaling silently drops them from the encoded XML.
-        let unscaledChord = Chord(
-            duration: unscaled,
-            notes: chord.notes,
-            arpeggio: chord.arpeggio,
-            lyrics: chord.lyrics,
-            articulations: chord.articulations,
-            tremolo: chord.tremolo,
-        )
-        let tieForward = forwardTieLocation(
-            chord: chord,
-            isLastChordOfVoice: isLastChordOfVoice,
-            voiceBarLength: voiceBarLength,
-        )
-        let tieBack = backwardTieLocation(
-            chord: chord,
-            isFirstChordOfVoice: isFirstChordOfVoice,
-            previousChordDuration: previousChordDuration,
-            prevVoiceTotal: prevVoiceTotal,
-        )
-        return unscaledChord.notes.isEmpty
-            ? unscaledChord.encodeAsRest(
-                options: options, in: effectiveDuration,
-            )
-            : unscaledChord.encodeAsChord(
-                tieForwardLocation: tieForward,
-                tieBackLocation: tieBack,
-                options: options,
-                staffGroup: staffGroup,
-                voiceIndex: voiceIndex,
-                injectedTremolo: injectedTremolo,
-            )
     }
 }

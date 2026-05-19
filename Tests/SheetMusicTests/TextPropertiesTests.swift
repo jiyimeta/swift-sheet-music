@@ -113,10 +113,12 @@ struct TextPropertiesTests {
     }
 
     @Test func rehearsalMarkLiftsFrameTypeOutOfProperties() throws {
+        // `<frameType>2</frameType>` → `.circle`
+        // (MuseScore: NO_FRAME=0, SQUARE=1, CIRCLE=2).
         let xml = """
         <RehearsalMark>
           <text>B</text>
-          <frameType>1</frameType>
+          <frameType>2</frameType>
           <bold>1</bold>
         </RehearsalMark>
         """

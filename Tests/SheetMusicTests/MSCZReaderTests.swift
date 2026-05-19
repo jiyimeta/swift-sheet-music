@@ -1,8 +1,8 @@
 import Foundation
 @testable import SheetMusicCore
 @testable import SheetMusicMSCX
+@testable import SheetMusicZip
 import Testing
-import ZIPFoundation
 
 struct MSCZReaderTests {
     @Test func parseMatchesDirectMSCX() throws {
@@ -34,8 +34,7 @@ struct MSCZReaderTests {
 
     @Test func emptyZipThrowsCorruptedContainer() throws {
         // Build an archive that has no entries at all.
-        let archive = try Archive(accessMode: .create)
-        let empty = try #require(archive.data)
+        let empty = try buildArchiveData(entries: [])
         do {
             _ = try MSCZReader.parse(empty)
             Issue.record("expected throw")
@@ -235,30 +234,14 @@ struct MSCZReaderTests {
     private func makeMSCZ(
         mscx: String, audioSettings: String?,
     ) throws -> Data {
-        let archive = try Archive(accessMode: .create)
         let mscxBytes = Data(mscx.utf8)
-        try archive.addEntry(
-            with: "score.mscx", type: .file,
-            uncompressedSize: Int64(mscxBytes.count),
-            compressionMethod: .deflate,
-        ) { position, size in
-            let start = Int(position)
-            let end = min(start + size, mscxBytes.count)
-            return mscxBytes.subdata(in: start ..< end)
-        }
+        var entries: [(path: String, data: Data)] = [
+            ("score.mscx", mscxBytes),
+        ]
         if let audioSettings {
-            let bytes = Data(audioSettings.utf8)
-            try archive.addEntry(
-                with: "audiosettings.json", type: .file,
-                uncompressedSize: Int64(bytes.count),
-                compressionMethod: .deflate,
-            ) { position, size in
-                let start = Int(position)
-                let end = min(start + size, bytes.count)
-                return bytes.subdata(in: start ..< end)
-            }
+            entries.append(("audiosettings.json", Data(audioSettings.utf8)))
         }
-        return try #require(archive.data)
+        return try buildArchiveData(entries: entries)
     }
 
     @Test func fallbackFileNameRenamedMainEntry() throws {
@@ -268,19 +251,18 @@ struct MSCZReaderTests {
             Bundle.module.url(forResource: "midi01", withExtension: "mscx"),
         )
         let mscxBytes = try Data(contentsOf: mscx)
-        let archive = try Archive(accessMode: .create)
-        try archive.addEntry(
-            with: "renamed.mscx",
-            type: .file,
-            uncompressedSize: Int64(mscxBytes.count),
-            compressionMethod: .deflate,
-        ) { position, size in
-            let start = Int(position)
-            let end = min(start + size, mscxBytes.count)
-            return mscxBytes.subdata(in: start ..< end)
-        }
-        let msczBytes = try #require(archive.data)
+        let msczBytes = try buildArchiveData(entries: [("renamed.mscx", mscxBytes)])
         let score = try MSCZReader.parse(msczBytes)
         #expect(score.division == 480)
+    }
+
+    private func buildArchiveData(
+        entries: [(path: String, data: Data)],
+    ) throws -> Data {
+        var writer = ZipWriter()
+        for entry in entries {
+            try writer.add(path: entry.path, data: entry.data, method: .deflate)
+        }
+        return writer.finish()
     }
 }

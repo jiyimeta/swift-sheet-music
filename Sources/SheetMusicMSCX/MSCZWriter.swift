@@ -1,58 +1,45 @@
 import Foundation
 import SheetMusicCore
-import ZIPFoundation
+import SheetMusicZip
 
-/// Packages already-serialized `.mscx` XML bytes into a minimal
-/// `.mscz` (ZIP) container.
+/// Packages already-serialized `.mscx` XML bytes into a minimal `.mscz`
+/// (ZIP) container.
 ///
 /// This is the low-level writer — it does NOT serialize a `Score`.
-/// A high-level `write(score:)` overload is out of scope until a
-/// `Score → mscx XML` encoder exists. The produced archive contains
-/// only the provided XML bytes at the given `mainFileName`; no
-/// `META-INF/container.xml`, no auxiliary resources. MuseScore's own
-/// `MscReader::readScoreFile` resolves the main score by entry name,
-/// so the minimal archive round-trips through both this library and
-/// MuseScore Studio.
+/// The high-level overloads delegate to `MSCXEncoder` to produce the
+/// XML bytes, then wrap them. The produced archive contains two
+/// entries: `META-INF/container.xml` pointing at the main score, and
+/// the score itself at the given `mainFileName`. No thumbnails or
+/// other auxiliary resources are written.
+///
+/// `META-INF/container.xml` is required for MuseScore 3 to locate the
+/// score (its reader looks up the rootfile via container.xml only).
+/// MuseScore 4 reads container.xml too, so the archive round-trips
+/// through both versions.
 public enum MSCZWriter {
-    /// Package `.mscx` XML bytes into `.mscz` bytes.
+    private static let containerPath = "META-INF/container.xml"
+
     public static func write(
         mscxData: Data,
         mainFileName: String = "score.mscx",
     ) throws -> Data {
         try validate(mainFileName: mainFileName)
-        let archive: Archive
+        var writer = ZipWriter()
         do {
-            archive = try Archive(accessMode: .create)
-        } catch {
+            try writer.add(
+                path: containerPath,
+                data: containerXML(forMainFileName: mainFileName),
+                method: .deflate,
+            )
+            try writer.add(path: mainFileName, data: mscxData, method: .deflate)
+        } catch let error as ZipError {
             throw SheetMusicError.corruptedContainer(
-                reason: "could not create archive: \(error)",
+                reason: "failed to add entry: \(error)",
             )
         }
-        do {
-            try archive.addEntry(
-                with: mainFileName,
-                type: .file,
-                uncompressedSize: Int64(mscxData.count),
-                compressionMethod: .deflate,
-            ) { position, size in
-                let start = Int(position)
-                let end = min(start + size, mscxData.count)
-                return mscxData.subdata(in: start ..< end)
-            }
-        } catch {
-            throw SheetMusicError.corruptedContainer(
-                reason: "failed to add entry \(mainFileName): \(error)",
-            )
-        }
-        guard let bytes = archive.data else {
-            throw SheetMusicError.corruptedContainer(
-                reason: "archive produced no bytes",
-            )
-        }
-        return bytes
+        return writer.finish()
     }
 
-    /// Package `.mscx` XML bytes and write the resulting `.mscz` to a file URL.
     public static func write(
         mscxData: Data,
         to url: URL,
@@ -66,8 +53,6 @@ public enum MSCZWriter {
         }
     }
 
-    /// Serialize a `Score` to `.mscx` and package the result as
-    /// `.mscz` bytes.
     public static func write(
         score: Score, mainFileName: String = "score.mscx",
     ) throws -> Data {
@@ -75,8 +60,6 @@ public enum MSCZWriter {
         return try write(mscxData: mscxData, mainFileName: mainFileName)
     }
 
-    /// Serialize a `Score` to `.mscx` and write the resulting
-    /// `.mscz` to a file URL.
     public static func write(
         score: Score, to url: URL, mainFileName: String = "score.mscx",
     ) throws {
@@ -88,7 +71,6 @@ public enum MSCZWriter {
         }
     }
 
-    /// Serialize a `Score` with options and package as `.mscz` bytes.
     public static func write(
         score: Score, options: MSCXEncoderOptions,
         mainFileName: String = "score.mscx",
@@ -97,8 +79,6 @@ public enum MSCZWriter {
         return try write(mscxData: mscxData, mainFileName: mainFileName)
     }
 
-    /// Serialize a `Score` with options and write the resulting
-    /// `.mscz` to a file URL.
     public static func write(
         score: Score, options: MSCXEncoderOptions, to url: URL,
         mainFileName: String = "score.mscx",
@@ -124,5 +104,29 @@ public enum MSCZWriter {
                 reason: "mainFileName must not contain '/': \(mainFileName)",
             )
         }
+    }
+
+    /// Emit the OPF-style `META-INF/container.xml` that points at the main
+    /// score entry. Mirrors the format MuseScore Studio writes:
+    /// a single `<rootfile>` with a `full-path` attribute, no media-type.
+    private static func containerXML(forMainFileName mainFileName: String) -> Data {
+        let escaped = xmlAttributeEscape(mainFileName)
+        return Data("""
+        <?xml version="1.0" encoding="UTF-8"?>
+        <container>
+          <rootfiles>
+            <rootfile full-path="\(escaped)"/>
+          </rootfiles>
+        </container>
+        """.utf8)
+    }
+
+    private static func xmlAttributeEscape(_ value: String) -> String {
+        value
+            .replacingOccurrences(of: "&", with: "&amp;")
+            .replacingOccurrences(of: "<", with: "&lt;")
+            .replacingOccurrences(of: ">", with: "&gt;")
+            .replacingOccurrences(of: "\"", with: "&quot;")
+            .replacingOccurrences(of: "'", with: "&apos;")
     }
 }

@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(FoundationXML)
+    import FoundationXML
+#endif
 import SheetMusicCore
 
 /// Parses XML bytes into an in-memory `XMLTreeNode` tree.

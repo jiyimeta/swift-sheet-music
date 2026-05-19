@@ -1,4 +1,9 @@
-import CoreGraphics
+#if canImport(CoreGraphics)
+    import CoreGraphics
+#else
+    // On non-Apple platforms (Android, Linux), swift-corelibs-foundation
+    // provides CGFloat / CGPoint via Foundation.
+#endif
 import Foundation
 import SheetMusicCore
 import SheetMusicXMLTools
