@@ -14,6 +14,136 @@
 
 ---
 
+## Post-vetting corrections (2026-05-19)
+
+Two corrections that supersede the original plan text. Implementers must
+apply these regardless of what later per-task code blocks show.
+
+### 1. Maven artifact (from Task 1 vetting)
+
+The chosen FluidSynth artifact is **`net.volcanomobile.fluidsynth-android:fluidsynth-android:2.4.6`**
+(NOT `dev.atsushieno:fluidsynth-android`, which does not exist on Maven
+Central). See `docs/superpowers/notes/2026-05-19-fluidsynth-android-vetting.md`
+for the full vetting record.
+
+The VolcanoMobile `.aar` is **native-only** — it bundles
+`libfluidsynth.so` but ships no Kotlin/Java wrapper classes. Therefore
+the Kotlin module must declare its own `external fun` JNI bindings for
+every FluidSynth call site:
+
+```kotlin
+// Android/SheetMusicAudioAndroid/src/main/kotlin/.../native/FluidSynthNative.kt
+internal object FluidSynthNative {
+    init { System.loadLibrary("sheetmusicaudio") }
+
+    external fun newSynth(/* settings args */): Long       // returns native handle
+    external fun deleteSynth(handle: Long)
+    external fun sfload(handle: Long, path: String, resetPresets: Boolean): Int
+    external fun programSelect(handle: Long, channel: Int, sfid: Int,
+                                bank: Int, program: Int)
+    external fun noteOn(handle: Long, channel: Int, pitch: Int, velocity: Int)
+    external fun noteOff(handle: Long, channel: Int, pitch: Int)
+    external fun allNotesOff(handle: Long, channel: Int)
+    external fun setGain(handle: Long, value: Float)
+    external fun cc(handle: Long, channel: Int, controller: Int, value: Int)
+    external fun handleMidiEvent(handle: Long, rawEvent: Long): Int
+    external fun writeFloat(handle: Long, frameCount: Int,
+                            left: FloatArray, leftOffset: Int, leftStride: Int,
+                            right: FloatArray, rightOffset: Int, rightStride: Int): Int
+
+    external fun newPlayer(synthHandle: Long): Long
+    external fun deletePlayer(handle: Long)
+    external fun playerAddMem(handle: Long, bytes: ByteArray): Int
+    external fun playerPlay(handle: Long): Int
+    external fun playerStop(handle: Long): Int
+    external fun playerJoin(handle: Long): Int
+    external fun playerSeek(handle: Long, tick: Long): Int
+    external fun playerGetCurrentTick(handle: Long): Long
+}
+```
+
+The corresponding C shim that bridges Kotlin to the FluidSynth C API
+lives in `Android/SheetMusicAudioAndroid/src/main/cpp/sheetmusicaudio_jni.cpp`
+(introduce this when Phase 9 starts). The Gradle module's
+`externalNativeBuild` (CMake) compiles the shim and links against
+`fluidsynth` from the VolcanoMobile `.aar`.
+
+The VolcanoMobile `.aar` exposes the FluidSynth headers via Prefab
+(`prefab/modules/fluidsynth/`), so the CMakeLists.txt is small:
+
+```cmake
+# Android/SheetMusicAudioAndroid/src/main/cpp/CMakeLists.txt
+cmake_minimum_required(VERSION 3.22)
+project(sheetmusicaudio)
+find_package(fluidsynth REQUIRED CONFIG)
+add_library(sheetmusicaudio SHARED sheetmusicaudio_jni.cpp)
+target_link_libraries(sheetmusicaudio fluidsynth::fluidsynth log)
+```
+
+And the module `build.gradle.kts` must enable Prefab + NDK build:
+
+```kotlin
+android {
+    buildFeatures { prefab = true }
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = "3.22.1"
+        }
+    }
+}
+```
+
+`libfluidsynth.so` itself is dropped into the consumer app's jniLibs
+by AGP automatically when the dependency is `api(...)`-declared.
+
+### 2. Binary codec types (from spec self-review post-mortem)
+
+The original plan's Tasks 6–10 wrote codecs against types that do not
+exist in `Sources/SheetMusicCore/`. The actual types are:
+
+| Type | Shape |
+|---|---|
+| `StaffAddress` | `struct (partIndex: Int, staffIndexInPart: Int)` — NOT an enum |
+| `VoiceElementID` | `struct (staff, measureIndex, voiceIndex, elementIndex)` |
+| `NoteID` | `struct (staff, measureIndex, voiceIndex, elementIndex, noteIndexInChord)` |
+| `RestID` | `struct (staff, measureIndex, voiceIndex, elementIndex)` — same shape as VoiceElementID |
+| `TupletID` | `struct (staff, measureIndex, voiceIndex, startElementIndex)` |
+| `ClefAnchor` | `enum { case explicit(VoiceElementID); case staffDefault(StaffAddress) }` |
+| `ScoreItemID` | `enum { case note(NoteID); case rest(RestID); case tuplet(TupletID); case clef(ClefAnchor) }` |
+| `ScoreCursor` | `enum { case item(ScoreItemID); case beat(measureIndex: Int, tickInMeasure: Int) }` |
+
+The corrected codec format is documented in the spec's "Serialization
+format" section (look for the "Spec correction (2026-05-19,
+post-implementation discovery)" banner). Implementers writing codecs
+in Phase 3 / Phase 8 must follow the spec's corrected layout, not the
+template code in this plan's later Task 6 / Task 7 blocks.
+
+Practically this restructures Phase 3 into more granular codec tasks:
+
+- **T5:** `BinaryWriter` / `BinaryReader` helpers (unchanged)
+- **T6:** `StaffAddress` codec — 8-byte fixed (no version)
+- **T7:** `VoiceElementID` + `NoteID` + `RestID` + `TupletID` payload codecs (one Swift file `PathIDCodecs.swift`, sharing the StaffAddress prefix)
+- **T8:** `ClefAnchor` codec — 1-byte discriminator + payload
+- **T9:** `ScoreItemID` codec — 1-byte discriminator + payload
+- **T10:** `ScoreCursor` codec — 1-byte discriminator + payload (uses ScoreItemID)
+- **T11:** `Frame` codec — inlines `ScoreCursorPayload`
+- **T12:** `MetronomeBeat` array codec
+- **T13:** `StaffParams` array codec
+
+The subsequent Phase 4 (`@_cdecl` functions), Phase 5 (Golden binaries),
+and later phases retain their semantic content but their task numbers
+shift accordingly. Reference the plan's section headings rather than
+absolute task numbers when navigating Phases 4 onward.
+
+The Kotlin model + decoder phases (Phase 7 model types, Phase 8
+decoders) mirror these payload shapes. The Kotlin `ScoreCursor` is a
+sealed class with two subclasses (`Item(item: ScoreItemID)`,
+`Beat(measureIndex: Int, tickInMeasure: Int)`). Similarly for
+`ScoreItemID` (sealed class, 4 subclasses).
+
+---
+
 ## Phase 0: Worktree + prerequisite check
 
 ### Task 0: Confirm prerequisites and create worktree

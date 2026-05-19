@@ -301,39 +301,99 @@ little-endian fixed-width integers, `Int64` for tick / time-micros,
 generic encoder framework (hand-rolled per struct so failures are
 loud at the version-byte mismatch).
 
+**Spec correction (2026-05-19, post-implementation discovery):** The
+original draft assumed `ScoreCursor` was a flat struct with fields
+`(staff, measureIndex, voiceIndex, elementIndex, noteIndexInChord?)`.
+The actual `Sources/SheetMusicCore/` types are richer — `ScoreCursor`
+is a 2-case enum, `ScoreItemID` is a 4-case enum, `StaffAddress` is a
+struct (not enum), and `ClefAnchor` carries either a `VoiceElementID`
+or a bare `StaffAddress`. The codec format below reflects the actual
+types; it is what implementers should write against, not the original
+draft text in earlier sections.
+
+Building blocks (no version byte — used inside other codecs):
+
 ```
+StaffAddress                           8 bytes (fixed)
+  i32 partIndex
+  i32 staffIndexInPart
+
+VoiceElementID                         20 bytes (fixed)
+  StaffAddress (8)
+  i32 measureIndex
+  i32 voiceIndex
+  i32 elementIndex
+
+NoteIDPayload                          24 bytes (fixed)
+  StaffAddress (8)
+  i32 measureIndex
+  i32 voiceIndex
+  i32 elementIndex
+  i32 noteIndexInChord
+
+RestIDPayload                          20 bytes (fixed)
+  StaffAddress (8)
+  i32 measureIndex
+  i32 voiceIndex
+  i32 elementIndex
+
+TupletIDPayload                        20 bytes (fixed)
+  StaffAddress (8)
+  i32 measureIndex
+  i32 voiceIndex
+  i32 startElementIndex
+
+ClefAnchorPayload                      variable (1 byte + 8 or 20)
+  u8 kind                       // 0=explicit, 1=staffDefault
+  if kind == 0: VoiceElementID
+  if kind == 1: StaffAddress
+
+ScoreItemIDPayload                     variable (1 byte + 20 or 24)
+  u8 kind                       // 0=note, 1=rest, 2=tuplet, 3=clef
+  if kind == 0: NoteIDPayload
+  if kind == 1: RestIDPayload
+  if kind == 2: TupletIDPayload
+  if kind == 3: ClefAnchorPayload
+
+ScoreCursorPayload                     variable
+  u8 kind                       // 0=item, 1=beat
+  if kind == 0: ScoreItemIDPayload
+  if kind == 1: i32 measureIndex
+                i32 tickInMeasure
+```
+
+Top-level blobs (each starts with a `u16 version` byte):
+
+```
+NoteID                                 26 bytes
+  u16 version (= 1)
+  NoteIDPayload (24)
+
+ScoreItemID                            variable
+  u16 version (= 1)
+  ScoreItemIDPayload
+
+ScoreCursor                            variable
+  u16 version (= 1)
+  ScoreCursorPayload
+
 Frame                                  variable
   u16 version (= 1)
   i64 tick
   i64 timeSecondsMicros        // timeSeconds × 1e6, fits piece > 200 hours
-  ScoreCursor
+  ScoreCursorPayload           // inline, no inner version byte
 
-ScoreCursor                            variable
-  u16 version (= 1)
-  i32 staffAddressKind          // enum discriminator
-  i64 staffAddressPayloadA      // up to 2 i64 payloads
-  i64 staffAddressPayloadB
-  i32 measureIndex
-  i32 voiceIndex
-  i32 elementIndex
-  i32 noteIndexInChord          // -1 for non-chord items
-
-NoteID                                 same as ScoreCursor with noteIndexInChord ≥ 0
-
-ScoreItemID                            same as ScoreCursor (with i32 noteIndexInChord = -1
-                                                            for non-chord items)
-
-MetronomeBeat                          16 bytes (fixed)
+MetronomeBeat (one entry inside an array, 16 bytes)
   i64 tick
   i32 kind                      // 0 downbeat, 1 upbeat, 2 subdivision
   i32 _reserved
 
-StaffParams (one entry, 16 bytes)
+StaffParams (one entry inside an array, 16 bytes)
   i32 staffIndex
   u8  bankLSB
   u8  program
   u8  isDrums                   // 0/1
-  u8  _reserved                 // (4-byte prefix, then 8-byte hash)
+  u8  _reserved
   i64 partAddressHash           // stable identifier across reloads
 
 Array<T>                               length-prefixed
@@ -341,6 +401,17 @@ Array<T>                               length-prefixed
   i32 count
   T  ... count times
 ```
+
+Notes on the layout choices:
+- Per-payload structs (`NoteIDPayload`, `ScoreItemIDPayload`, etc.) carry
+  no version byte — they are always nested inside a versioned top-level
+  blob. The version covers the whole nested tree, so a single bump
+  invalidates downstream golden binaries cleanly.
+- `Frame` inlines `ScoreCursorPayload` rather than a fully versioned
+  `ScoreCursor` so the byte sequence is contiguous and the version
+  story is single-source.
+- `u8 kind` for enums (not `i32`) — saves bytes; only ≤ 4 cases per
+  enum, no future expansion past 256 cases is plausible.
 
 Each codec lives twice (Swift encoder/decoder in
 `Sources/SheetMusicAndroidJNI/Audio*Codec.swift`, Kotlin decoder in
