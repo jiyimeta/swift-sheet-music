@@ -1,136 +1,127 @@
 import CoreGraphics
+import SheetMusicLayout
 
-/// Bravura / SMuFL Private Use Area codepoints for the glyphs we draw.
-/// Values are the SMuFL standard: https://www.smufl.org/
+/// `Character`-typed wrapper around `SheetMusicLayout.SMuFLCodepoint`.
+///
+/// SwiftUI's `GraphicsContext.drawGlyph` takes a `Character`, so the
+/// Apple renderers need the codepoints in that form. The numeric values
+/// live in `SheetMusicLayout` (cross-platform); this file is a thin
+/// platform shim, not a second source of truth.
 enum SMuFLGlyph {
-    // Clefs
-    static let gClef: Character = "\u{E050}"
-    static let gClef15mb: Character = "\u{E051}"
-    static let gClef8vb: Character = "\u{E052}"
-    static let gClef8va: Character = "\u{E053}"
-    static let gClef15ma: Character = "\u{E054}"
-    static let fClef: Character = "\u{E062}"
-    static let fClef15mb: Character = "\u{E063}"
-    static let fClef8vb: Character = "\u{E064}"
-    static let fClef8va: Character = "\u{E065}"
-    static let cClef: Character = "\u{E05C}"
-    static let percussionClef: Character = "\u{E069}"
-    static let percussionClef2: Character = "\u{E06A}"
+    // MARK: - Clefs
 
-    // Noteheads — standard
-    static let noteheadWhole: Character = "\u{E0A2}"
-    static let noteheadHalf: Character = "\u{E0A3}"
-    static let noteheadBlack: Character = "\u{E0A4}"
-    // Noteheads — cross (x). Per the SMuFL Noteheads range
-    // (U+E0A0..U+E0FF), the X family lives at U+E0A6..U+E0A9; the
-    // earlier `U+E0AA`/`U+E0AB` codepoints were actually the
-    // `noteheadPlusDoubleWhole` / `noteheadPlusWhole` glyphs (the
-    // plus-in-a-circle shapes), which is why whole-note crosses
-    // were rendering as "double sharp + 丸".
-    static let noteheadXDoubleWhole: Character = "\u{E0A6}"
-    static let noteheadXWhole: Character = "\u{E0A7}"
-    static let noteheadXHalf: Character = "\u{E0A8}"
-    static let noteheadXBlack: Character = "\u{E0A9}"
-    // Noteheads — diamond
-    static let noteheadDiamondWhole: Character = "\u{E0D8}"
-    static let noteheadDiamondHalf: Character = "\u{E0D9}"
-    static let noteheadDiamondBlack: Character = "\u{E0DB}"
-    // Noteheads — triangle
-    static let noteheadTriangleUpBlack: Character = "\u{E0BE}"
-    static let noteheadTriangleDownBlack: Character = "\u{E0C7}"
+    static let gClef: Character = scalar(SMuFLCodepoint.gClef)
+    static let gClef15mb: Character = scalar(SMuFLCodepoint.gClef15mb)
+    static let gClef8vb: Character = scalar(SMuFLCodepoint.gClef8vb)
+    static let gClef8va: Character = scalar(SMuFLCodepoint.gClef8va)
+    static let gClef15ma: Character = scalar(SMuFLCodepoint.gClef15ma)
+    static let fClef: Character = scalar(SMuFLCodepoint.fClef)
+    static let fClef15mb: Character = scalar(SMuFLCodepoint.fClef15mb)
+    static let fClef8vb: Character = scalar(SMuFLCodepoint.fClef8vb)
+    static let fClef8va: Character = scalar(SMuFLCodepoint.fClef8va)
+    static let cClef: Character = scalar(SMuFLCodepoint.cClef)
+    static let percussionClef: Character = scalar(SMuFLCodepoint.percussionClef)
+    static let percussionClef2: Character = scalar(SMuFLCodepoint.percussionClef2)
 
-    // Flags
-    static let flag8thUp: Character = "\u{E240}"
-    static let flag8thDown: Character = "\u{E241}"
-    static let flag16thUp: Character = "\u{E242}"
-    static let flag16thDown: Character = "\u{E243}"
-    static let flag32ndUp: Character = "\u{E244}"
-    static let flag32ndDown: Character = "\u{E245}"
-    static let flag64thUp: Character = "\u{E246}"
-    static let flag64thDown: Character = "\u{E247}"
+    // MARK: - Noteheads — standard
 
-    // Rests
-    static let restWhole: Character = "\u{E4E3}"
-    static let restHalf: Character = "\u{E4E4}"
-    // Whole / half rest variants with a baked-in leger line —
-    // used when the rest is hung above or below the staff (e.g.
-    // voice-2 whole rests in a multi-voice measure). MuseScore
-    // swaps to these via `Rest::getSymbol` when `line` is outside
-    // the staff range (`rest.cpp:260-262`). Codepoints from
-    // SMuFL's `glyphnames.json`: `restWholeLegerLine` is U+E4F4
-    // and `restHalfLegerLine` is U+E4F5 (the earlier U+E4F3 was
-    // `restHBar`, the multi-measure I-beam, hence the wrong glyph).
-    static let restWholeLegerLine: Character = "\u{E4F4}"
-    static let restHalfLegerLine: Character = "\u{E4F5}"
-    /// Multi-measure rest H-bar (the thick horizontal beam used in
-    /// part scores to compress long stretches of silence).
-    /// SMuFL `restHBar` (U+E4EE).
-    static let restHBar: Character = "\u{E4EE}"
-    /// Left-side cap glyph for `restHBar`. Bravura ships
-    /// `restHBarLeft` at U+E4EF.
-    static let restHBarLeft: Character = "\u{E4EF}"
-    /// Right-side cap glyph for `restHBar`. Bravura ships
-    /// `restHBarRight` at U+E4F0.
-    static let restHBarRight: Character = "\u{E4F0}"
-    static let restQuarter: Character = "\u{E4E5}"
-    static let rest8th: Character = "\u{E4E6}"
-    static let rest16th: Character = "\u{E4E7}"
-    static let rest32nd: Character = "\u{E4E8}"
-    static let rest64th: Character = "\u{E4E9}"
+    static let noteheadWhole: Character = scalar(SMuFLCodepoint.noteheadWhole)
+    static let noteheadHalf: Character = scalar(SMuFLCodepoint.noteheadHalf)
+    static let noteheadBlack: Character = scalar(SMuFLCodepoint.noteheadBlack)
 
-    // Accidentals
-    static let accidentalSharp: Character = "\u{E262}"
-    static let accidentalFlat: Character = "\u{E260}"
-    static let accidentalNatural: Character = "\u{E261}"
-    static let accidentalDoubleSharp: Character = "\u{E263}"
-    static let accidentalDoubleFlat: Character = "\u{E264}"
+    // MARK: - Noteheads — cross (x)
 
-    /// Time signature digits (0..9)
+    static let noteheadXDoubleWhole: Character = scalar(SMuFLCodepoint.noteheadXDoubleWhole)
+    static let noteheadXWhole: Character = scalar(SMuFLCodepoint.noteheadXWhole)
+    static let noteheadXHalf: Character = scalar(SMuFLCodepoint.noteheadXHalf)
+    static let noteheadXBlack: Character = scalar(SMuFLCodepoint.noteheadXBlack)
+
+    // MARK: - Noteheads — diamond
+
+    static let noteheadDiamondWhole: Character = scalar(SMuFLCodepoint.noteheadDiamondWhole)
+    static let noteheadDiamondHalf: Character = scalar(SMuFLCodepoint.noteheadDiamondHalf)
+    static let noteheadDiamondBlack: Character = scalar(SMuFLCodepoint.noteheadDiamondBlack)
+
+    // MARK: - Noteheads — triangle
+
+    static let noteheadTriangleUpBlack: Character = scalar(SMuFLCodepoint.noteheadTriangleUpBlack)
+    static let noteheadTriangleDownBlack: Character = scalar(SMuFLCodepoint.noteheadTriangleDownBlack)
+
+    // MARK: - Flags
+
+    static let flag8thUp: Character = scalar(SMuFLCodepoint.flag8thUp)
+    static let flag8thDown: Character = scalar(SMuFLCodepoint.flag8thDown)
+    static let flag16thUp: Character = scalar(SMuFLCodepoint.flag16thUp)
+    static let flag16thDown: Character = scalar(SMuFLCodepoint.flag16thDown)
+    static let flag32ndUp: Character = scalar(SMuFLCodepoint.flag32ndUp)
+    static let flag32ndDown: Character = scalar(SMuFLCodepoint.flag32ndDown)
+    static let flag64thUp: Character = scalar(SMuFLCodepoint.flag64thUp)
+    static let flag64thDown: Character = scalar(SMuFLCodepoint.flag64thDown)
+
+    // MARK: - Rests
+
+    static let restWhole: Character = scalar(SMuFLCodepoint.restWhole)
+    static let restHalf: Character = scalar(SMuFLCodepoint.restHalf)
+    static let restWholeLegerLine: Character = scalar(SMuFLCodepoint.restWholeLegerLine)
+    static let restHalfLegerLine: Character = scalar(SMuFLCodepoint.restHalfLegerLine)
+    static let restHBar: Character = scalar(SMuFLCodepoint.restHBar)
+    static let restHBarLeft: Character = scalar(SMuFLCodepoint.restHBarLeft)
+    static let restHBarRight: Character = scalar(SMuFLCodepoint.restHBarRight)
+    static let restQuarter: Character = scalar(SMuFLCodepoint.restQuarter)
+    static let rest8th: Character = scalar(SMuFLCodepoint.rest8th)
+    static let rest16th: Character = scalar(SMuFLCodepoint.rest16th)
+    static let rest32nd: Character = scalar(SMuFLCodepoint.rest32nd)
+    static let rest64th: Character = scalar(SMuFLCodepoint.rest64th)
+
+    // MARK: - Accidentals
+
+    static let accidentalSharp: Character = scalar(SMuFLCodepoint.accidentalSharp)
+    static let accidentalFlat: Character = scalar(SMuFLCodepoint.accidentalFlat)
+    static let accidentalNatural: Character = scalar(SMuFLCodepoint.accidentalNatural)
+    static let accidentalDoubleSharp: Character = scalar(SMuFLCodepoint.accidentalDoubleSharp)
+    static let accidentalDoubleFlat: Character = scalar(SMuFLCodepoint.accidentalDoubleFlat)
+
+    // MARK: - Time signatures
+
     static func timeSigDigit(_ d: Int) -> Character {
-        // 0xE080..0xE089 are private-use SMuFL digits — always valid scalars.
-        // swiftlint:disable:next force_unwrapping
-        Character(UnicodeScalar(0xE080 + max(0, min(9, d)))!)
+        scalar(SMuFLCodepoint.timeSigDigit(d))
     }
 
-    static let timeSigCommon: Character = "\u{E08A}"
-    static let timeSigCutCommon: Character = "\u{E08B}"
+    static let timeSigCommon: Character = scalar(SMuFLCodepoint.timeSigCommon)
+    static let timeSigCutCommon: Character = scalar(SMuFLCodepoint.timeSigCutCommon)
 
-    // Segno / Coda / Fermata (used later stages)
-    static let segno: Character = "\u{E047}"
-    static let coda: Character = "\u{E048}"
-    static let fermataAbove: Character = "\u{E4C0}"
-    static let fermataBelow: Character = "\u{E4C1}"
+    // MARK: - Navigation marks
 
-    // Articulations — SMuFL Articulation range (U+E4A0..U+E4BF).
-    // Above/below pairs render the same shape mirrored across the
-    // baseline; MuseScore picks the variant from the articulation's
-    // resolved anchor side. Codepoints from SMuFL `glyphnames.json`.
-    static let articStaccatoAbove: Character = "\u{E4A2}"
-    static let articStaccatoBelow: Character = "\u{E4A3}"
-    static let articTenutoAbove: Character = "\u{E4A4}"
-    static let articTenutoBelow: Character = "\u{E4A5}"
-    static let articStaccatissimoAbove: Character = "\u{E4A6}"
-    static let articStaccatissimoBelow: Character = "\u{E4A7}"
-    static let articAccentAbove: Character = "\u{E4A0}"
-    static let articAccentBelow: Character = "\u{E4A1}"
-    static let articMarcatoAbove: Character = "\u{E4AC}"
-    static let articMarcatoBelow: Character = "\u{E4AD}"
-    static let articAccentStaccatoAbove: Character = "\u{E4B0}"
-    static let articAccentStaccatoBelow: Character = "\u{E4B1}"
-    static let articMarcatoStaccatoAbove: Character = "\u{E4AE}"
-    static let articMarcatoStaccatoBelow: Character = "\u{E4AF}"
+    static let segno: Character = scalar(SMuFLCodepoint.segno)
+    static let coda: Character = scalar(SMuFLCodepoint.coda)
+    static let fermataAbove: Character = scalar(SMuFLCodepoint.fermataAbove)
+    static let fermataBelow: Character = scalar(SMuFLCodepoint.fermataBelow)
 
-    // Bracket caps + brace variants. The brace family lives in
-    // Bravura's PUA optionalGlyphs range — MuseScore picks one of
-    // four per number of spanned staves (`engraving/dom/bracket.cpp::
-    // computeMagx`):
-    //   v=1 → braceSmall, v=2 → brace, v=3 → braceLarge, v≥4 → braceLarger.
-    static let brace: Character = "\u{E000}"
-    static let braceSmall: Character = "\u{F400}"
-    static let braceLarge: Character = "\u{F401}"
-    static let braceLarger: Character = "\u{F402}"
-    static let bracketTop: Character = "\u{E003}"
-    static let bracketBottom: Character = "\u{E004}"
+    // MARK: - Articulations
+
+    static let articStaccatoAbove: Character = scalar(SMuFLCodepoint.articStaccatoAbove)
+    static let articStaccatoBelow: Character = scalar(SMuFLCodepoint.articStaccatoBelow)
+    static let articTenutoAbove: Character = scalar(SMuFLCodepoint.articTenutoAbove)
+    static let articTenutoBelow: Character = scalar(SMuFLCodepoint.articTenutoBelow)
+    static let articStaccatissimoAbove: Character = scalar(SMuFLCodepoint.articStaccatissimoAbove)
+    static let articStaccatissimoBelow: Character = scalar(SMuFLCodepoint.articStaccatissimoBelow)
+    static let articAccentAbove: Character = scalar(SMuFLCodepoint.articAccentAbove)
+    static let articAccentBelow: Character = scalar(SMuFLCodepoint.articAccentBelow)
+    static let articMarcatoAbove: Character = scalar(SMuFLCodepoint.articMarcatoAbove)
+    static let articMarcatoBelow: Character = scalar(SMuFLCodepoint.articMarcatoBelow)
+    static let articAccentStaccatoAbove: Character = scalar(SMuFLCodepoint.articAccentStaccatoAbove)
+    static let articAccentStaccatoBelow: Character = scalar(SMuFLCodepoint.articAccentStaccatoBelow)
+    static let articMarcatoStaccatoAbove: Character = scalar(SMuFLCodepoint.articMarcatoStaccatoAbove)
+    static let articMarcatoStaccatoBelow: Character = scalar(SMuFLCodepoint.articMarcatoStaccatoBelow)
+
+    // MARK: - Brackets + braces
+
+    static let brace: Character = scalar(SMuFLCodepoint.brace)
+    static let braceSmall: Character = scalar(SMuFLCodepoint.braceSmall)
+    static let braceLarge: Character = scalar(SMuFLCodepoint.braceLarge)
+    static let braceLarger: Character = scalar(SMuFLCodepoint.braceLarger)
+    static let bracketTop: Character = scalar(SMuFLCodepoint.bracketTop)
+    static let bracketBottom: Character = scalar(SMuFLCodepoint.bracketBottom)
 
     /// Pick the brace SMuFL codepoint and the X-magnification factor
     /// for a given staff span, matching MuseScore's
@@ -141,39 +132,40 @@ enum SMuFLGlyph {
             ? 1
             : CGFloat(v) + CGFloat(v - 1) * 1.625
         switch v {
-        case 1: return (0xF400, magx) // braceSmall
-        case 2: return (0xE000, magx) // brace
-        case 3: return (0xF401, magx) // braceLarge
-        default: return (0xF402, magx) // braceLarger (v ≥ 4)
+        case 1: return (UInt16(SMuFLCodepoint.braceSmall), magx)
+        case 2: return (UInt16(SMuFLCodepoint.brace), magx)
+        case 3: return (UInt16(SMuFLCodepoint.braceLarge), magx)
+        default: return (UInt16(SMuFLCodepoint.braceLarger), magx)
         }
     }
 
-    // Keyboard pedal — SMuFL Keyboard Techniques range
-    // (U+E650..U+E67F). MuseScore renders pedal lines using these
-    // glyphs from the music font, not text. The "Ped." mark and
-    // the closing "*" both carry the bold serif weight that makes
-    // them visually distinct from prose text.
-    static let keyboardPedalPed: Character = "\u{E650}"
-    static let keyboardPedalUp: Character = "\u{E655}"
+    // MARK: - Keyboard pedal
 
-    // Dynamics — atomic letter glyphs from SMuFL Dynamics range
-    // (U+E520..U+E526). MuseScore composes multi-letter dynamics
-    // (mp, mf, ff, fff, …) from these per `dynamic.cpp` DYN_LIST.
-    // The bold serif weight is part of the *music font* (Bravura);
-    // hence dynamics look much heavier than Edwin italic text.
-    static let dynamicPiano: Character = "\u{E520}"
-    static let dynamicMezzo: Character = "\u{E521}"
-    static let dynamicForte: Character = "\u{E522}"
-    static let dynamicRinforzando: Character = "\u{E523}"
-    static let dynamicSforzando: Character = "\u{E524}"
-    static let dynamicZ: Character = "\u{E525}"
-    static let dynamicNiente: Character = "\u{E526}"
+    static let keyboardPedalPed: Character = scalar(SMuFLCodepoint.keyboardPedalPed)
+    static let keyboardPedalUp: Character = scalar(SMuFLCodepoint.keyboardPedalUp)
 
-    // Arpeggio / measure repeat (used later stages)
-    static let arpeggioWiggle: Character = "\u{EAA9}"
-    static let arpeggioUpArrow: Character = "\u{EAAD}"
-    static let arpeggioDownArrow: Character = "\u{EAAE}"
-    static let repeat1Bar: Character = "\u{E500}"
-    static let repeat2Bars: Character = "\u{E501}"
-    static let repeat4Bars: Character = "\u{E502}"
+    // MARK: - Dynamics
+
+    static let dynamicPiano: Character = scalar(SMuFLCodepoint.dynamicPiano)
+    static let dynamicMezzo: Character = scalar(SMuFLCodepoint.dynamicMezzo)
+    static let dynamicForte: Character = scalar(SMuFLCodepoint.dynamicForte)
+    static let dynamicRinforzando: Character = scalar(SMuFLCodepoint.dynamicRinforzando)
+    static let dynamicSforzando: Character = scalar(SMuFLCodepoint.dynamicSforzando)
+    static let dynamicZ: Character = scalar(SMuFLCodepoint.dynamicZ)
+    static let dynamicNiente: Character = scalar(SMuFLCodepoint.dynamicNiente)
+
+    // MARK: - Arpeggio / measure repeat
+
+    static let arpeggioWiggle: Character = scalar(SMuFLCodepoint.arpeggioWiggle)
+    static let arpeggioUpArrow: Character = scalar(SMuFLCodepoint.arpeggioUpArrow)
+    static let arpeggioDownArrow: Character = scalar(SMuFLCodepoint.arpeggioDownArrow)
+    static let repeat1Bar: Character = scalar(SMuFLCodepoint.repeat1Bar)
+    static let repeat2Bars: Character = scalar(SMuFLCodepoint.repeat2Bars)
+    static let repeat4Bars: Character = scalar(SMuFLCodepoint.repeat4Bars)
+
+    /// SMuFL codepoints are guaranteed valid Unicode scalars (PUA).
+    private static func scalar(_ cp: UInt32) -> Character {
+        // swiftlint:disable:next force_unwrapping
+        Character(UnicodeScalar(cp)!)
+    }
 }
