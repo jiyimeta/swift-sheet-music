@@ -35,15 +35,13 @@
             #expect(ink.width == 1 * 12 * 0.5)
         }
 
-        @Test func defaultProviderIsStub() {
-            // Sanity check that `FontMetrics.provider` is assignable to
-            // a Stub and reads back as a Stub. The default at process
-            // launch is a Stub (see `FontMetricsProvider.swift`); other
-            // test suites may have installed `AppleFontMetricsProvider`
-            // before this point, so reset explicitly rather than rely
-            // on test ordering.
-            FontMetrics.provider = StubFontMetricsProvider()
-            #expect(FontMetrics.provider is StubFontMetricsProvider)
+        @Test func stubIsAFontMetricsProvider() {
+            // Type-level sanity — Stub conforms to the protocol it
+            // backs. We deliberately do NOT read `FontMetrics.provider`
+            // here: other suites may have installed Apple, and mutating
+            // the global mid-test would race with parallel layout tests.
+            let provider: any FontMetricsProvider = StubFontMetricsProvider()
+            #expect(provider is StubFontMetricsProvider)
         }
     }
 #endif

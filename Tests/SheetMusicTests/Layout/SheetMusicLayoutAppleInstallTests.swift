@@ -4,25 +4,27 @@
     @testable import SheetMusicLayoutApple
     import Testing
 
-    @Suite("SheetMusicLayoutApple.install", .serialized)
+    @Suite("SheetMusicLayoutApple.install")
     struct SheetMusicLayoutAppleInstallTests {
+        // NOTE: do NOT reassign `FontMetrics.provider` from these tests.
+        // Swift Testing runs suites in parallel; mutating the global
+        // mid-test races with layout-running suites that read it
+        // (LayoutCacheTests, LayoutBracketTests, etc.) and causes
+        // intermittent measurement-drift failures.
+
         @available(macOS 15.0, iOS 18.0, tvOS 18.0, watchOS 11.0, *)
         @Test func installSwapsProviderToApple() {
-            // Reset state so the test is meaningful regardless of order.
-            FontMetrics.provider = StubFontMetricsProvider()
+            // Touching install is idempotent — first touch (anywhere in
+            // the process) sets provider to Apple; subsequent touches
+            // hit the cached `true`. Either way the post-state is Apple.
             _ = SheetMusicLayoutApple.install
             #expect(FontMetrics.provider is AppleFontMetricsProvider)
         }
 
         @available(macOS 15.0, iOS 18.0, tvOS 18.0, watchOS 11.0, *)
         @Test func installIsIdempotent() {
-            FontMetrics.provider = StubFontMetricsProvider()
             _ = SheetMusicLayoutApple.install
             let first = type(of: FontMetrics.provider)
-            // Second touch: the static let returns its cached value, no
-            // additional swap happens. If someone reassigned provider in
-            // the meantime, install does NOT clobber it (that is by
-            // design — second touch is a no-op).
             _ = SheetMusicLayoutApple.install
             let second = type(of: FontMetrics.provider)
             #expect(String(describing: first) == String(describing: second))
