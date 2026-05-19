@@ -1005,6 +1005,14 @@ after Phase 4 non-audio merges. Decision deferred to the plan.
   traffic can cause recomposition churn. Plan's manual smoke
   includes a stress run (10 seeks/sec) to confirm Compose doesn't
   drop frames.
+- **AudioTrack vs Oboe latency.** v0 uses
+  `android.media.AudioTrack` (MODE_STREAM) for PCM output instead of
+  Oboe, to avoid a second C++ shim. Round-trip latency is typically
+  20–40 ms on modern devices vs Oboe's ~10 ms. Graduate to Oboe via an
+  `OboeNative.kt` + `oboe_stream.cpp` shim if field measurements show
+  tap-to-preview or scrub feedback feels sluggish. Surface area in
+  `OboeStream.kt` (kept name for that future) is independent of the
+  backend choice.
 
 ## Alternative architectures considered (post-brainstorming refinement)
 
