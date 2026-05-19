@@ -49,31 +49,36 @@ enum GlissandoRenderer {
         )
 
         // --- Text label (centred along the line) ---
-        // Mirrors `tdraw.cpp:1580` (`if (r.width() < l)`): when the
-        // rendered text would be at least as wide as the available
-        // line span, MuseScore silently drops it instead of letting
-        // it crash through the start/end noteheads. Measuring via
-        // SwiftUI's resolved Text guarantees we compare against the
-        // exact glyph metrics the renderer will draw — CTFont with
-        // trait descriptors under-reports italic-semibold width and
-        // leaves the gate too loose.
+        // Font defaults via `TextStyleType.glissando` (Edwin 8 pt
+        // italic, spatium-dependent). Width gating mirrors
+        // `tdraw.cpp:1580` (`if (r.width() < l)`): when the rendered
+        // label is at least as wide as the available line span,
+        // MuseScore drops it instead of letting it crash through the
+        // surrounding noteheads.
         if let text, !text.isEmpty {
-            let fontSize = metrics.sp * 1.8
-            let label = Text(text).font(
-                .system(size: fontSize, weight: .semibold).italic(),
+            let style = ResolvedTextStyle.resolve(
+                .glissando, metrics: metrics,
             )
+            let label = Text(text)
+                .foregroundColor(.primary)
+                .font(style.font)
             let resolved = local.resolve(label)
             let textWidth = resolved.measure(in: CGSize(
                 width: CGFloat.greatestFiniteMagnitude,
                 height: CGFloat.greatestFiniteMagnitude,
             )).width
             if textWidth < length {
-                let yOffset = -(metrics.sp * 0.5)
+                // Place the text's descender bottom just above the
+                // line — `tdraw.cpp:1584` raises the baseline by
+                // 0.1 sp (straight) or 0.4 sp (wavy) above the
+                // descender depth, which means the ink bottom ends
+                // at exactly that clearance above the line.
+                let clearance = metrics.sp * (wavy ? 0.4 : 0.1)
                 let textX = length / 2
                 local.draw(
                     resolved,
-                    at: CGPoint(x: textX, y: yOffset),
-                    anchor: .center,
+                    at: CGPoint(x: textX, y: -clearance),
+                    anchor: UnitPoint(x: 0.5, y: 1.0),
                 )
             }
         }

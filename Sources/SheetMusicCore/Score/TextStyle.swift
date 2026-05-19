@@ -29,6 +29,7 @@ public enum TextStyleType: String, Sendable, CaseIterable {
     case header
     case footer
     case pageNumber
+    case glissando
 }
 
 /// Frame around a text element. Mirrors MuseScore's `FrameType`
@@ -156,6 +157,12 @@ extension TextStyleType {
             return TextStyleDefaults(
                 face: "Edwin", size: 11, style: [],
                 spatiumDependent: false,
+            )
+        // Sid::glissandoFontFace = "Edwin", size 8, italic
+        // (styledef.cpp:1484-1488).
+        case .glissando:
+            return TextStyleDefaults(
+                face: "Edwin", size: 8, style: [.italic],
             )
         }
     }

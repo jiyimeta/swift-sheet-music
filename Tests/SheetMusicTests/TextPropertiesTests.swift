@@ -46,6 +46,14 @@ struct TextPropertiesTests {
         #expect(TextStyleType.chordSymbolB.museScoreDefault.style == .italic)
     }
 
+    @Test func glissandoDefaultIsEdwinItalic8pt() {
+        let d = TextStyleType.glissando.museScoreDefault
+        #expect(d.face == "Edwin")
+        #expect(d.size == 8)
+        #expect(d.style == .italic)
+        #expect(d.spatiumDependent)
+    }
+
     @Test func romanNumeralUsesCampania() {
         let d = TextStyleType.chordSymbolRomanNumeral.museScoreDefault
         #expect(d.face == "Campania")
