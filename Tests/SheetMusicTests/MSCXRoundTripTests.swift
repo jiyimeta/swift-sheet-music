@@ -17,18 +17,16 @@ struct MSCXRoundTripTests {
         #expect(roundTripped.withSource(.unknown) == original.withSource(.unknown))
     }
 
-    #if !os(Android)
-        @Test("midi01 round-trips through MSCZWriter.write(score:) → MSCZReader")
-        func midi01MSCZRoundTrip() throws {
-            let originalData = try MSCXFixtureLoader.mscxData("midi01")
-            let original = try MSCXParser.parse(originalData)
+    @Test("midi01 round-trips through MSCZWriter.write(score:) → MSCZReader")
+    func midi01MSCZRoundTrip() throws {
+        let originalData = try MSCXFixtureLoader.mscxData("midi01")
+        let original = try MSCXParser.parse(originalData)
 
-            let mscz = try MSCZWriter.write(score: original)
-            let roundTripped = try MSCZReader.parse(mscz)
+        let mscz = try MSCZWriter.write(score: original)
+        let roundTripped = try MSCZReader.parse(mscz)
 
-            #expect(roundTripped.withSource(.unknown) == original.withSource(.unknown))
-        }
-    #endif
+        #expect(roundTripped.withSource(.unknown) == original.withSource(.unknown))
+    }
 
     @Test("SheetMusic.exportMSCX writes a parseable file")
     func facadeExportMSCX() throws {
@@ -44,21 +42,19 @@ struct MSCXRoundTripTests {
         #expect(roundTripped.withSource(.unknown) == original.withSource(.unknown))
     }
 
-    #if !os(Android)
-        @Test("SheetMusic.exportMSCZ writes a parseable archive")
-        func facadeExportMSCZ() throws {
-            let originalData = try MSCXFixtureLoader.mscxData("midi01")
-            let original = try MSCXParser.parse(originalData)
+    @Test("SheetMusic.exportMSCZ writes a parseable archive")
+    func facadeExportMSCZ() throws {
+        let originalData = try MSCXFixtureLoader.mscxData("midi01")
+        let original = try MSCXParser.parse(originalData)
 
-            let tmp = FileManager.default.temporaryDirectory
-                .appendingPathComponent(UUID().uuidString + ".mscz")
-            try SheetMusic.exportMSCZ(original, to: tmp)
-            defer { try? FileManager.default.removeItem(at: tmp) }
+        let tmp = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString + ".mscz")
+        try SheetMusic.exportMSCZ(original, to: tmp)
+        defer { try? FileManager.default.removeItem(at: tmp) }
 
-            let roundTripped = try SheetMusic.loadScore(msczURL: tmp)
-            #expect(roundTripped.withSource(.unknown) == original.withSource(.unknown))
-        }
-    #endif
+        let roundTripped = try SheetMusic.loadScore(msczURL: tmp)
+        #expect(roundTripped.withSource(.unknown) == original.withSource(.unknown))
+    }
 
     @Test("testRepeatsWithKeySigs.mscx round-trips through MSCXEncoder")
     func repeatsWithKeySigsRoundTrip() throws {

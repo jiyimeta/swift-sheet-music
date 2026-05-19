@@ -142,19 +142,11 @@ If the `ndk-sysroot` symlink under the artifact bundle is missing, the
 cross-compile fails with `'semaphore.h' file not found` /
 `could not build C module 'SwiftOverlayShims'`.
 
-### Format support matrix on Android (Phase 1)
+### Format support on Android
 
-ZIPFoundation 0.9.20's manifest declares its `CZLib` system-library
-target inside `#if !canImport(Compression)` — evaluated on the **host**.
-On macOS the Compression framework exists so the manifest contains no
-`CZLib` target, but the sources `import CZlib` when compiling for
-Android, breaking the cross-build. As a Phase 1 pragmatic fix, the
-zip-dependent readers/writers (`MSCZReader`, `MSCZWriter`, `MXLReader`)
-are gated with `#if !os(Android)` and ZIPFoundation is dropped from the
-Android-side target deps in `Package.swift`. Plain `.mscx` and
-`.musicxml` files are fully supported on Android; `.mscz` and `.mxl`
-zipped containers are not in Phase 1. A future phase can vendor `CZLib`
-or upstream a manifest fix to lift this restriction.
+`.mscz` and `.mxl` are fully supported on Android via the in-house
+`SheetMusicZip` target (raw DEFLATE through system `libz`). No
+additional setup is required beyond the Phase 1 toolchain.
 
 ### `--swift-sdk` argument form
 

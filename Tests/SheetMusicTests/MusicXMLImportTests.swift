@@ -172,33 +172,31 @@ struct MusicXMLImportTests {
         }
     }
 
-    #if !os(Android)
-        @Test func mxlRoundTripMatchesUncompressed() throws {
-            let xml = try MusicXMLFixtureLoader.xml("testCopyrightScale")
-            let mxl = try MXLTestBuilder.wrap(xml: xml)
+    @Test func mxlRoundTripMatchesUncompressed() throws {
+        let xml = try MusicXMLFixtureLoader.xml("testCopyrightScale")
+        let mxl = try MXLTestBuilder.wrap(xml: xml)
 
-            let fromXml = try MusicXMLParser.parse(xml)
-            let fromMxl = try MusicXMLParser.parse(mxlData: mxl)
+        let fromXml = try MusicXMLParser.parse(xml)
+        let fromMxl = try MusicXMLParser.parse(mxlData: mxl)
 
-            #expect(fromXml == fromMxl)
+        #expect(fromXml == fromMxl)
+    }
+
+    @Test func mxlRejectsMissingContainer() throws {
+        let xml = try MusicXMLFixtureLoader.xml("testCopyrightScale")
+        let mxl = try MXLTestBuilder.wrapWithoutContainer(xml: xml)
+        #expect(throws: SheetMusicError.self) {
+            _ = try MusicXMLParser.parse(mxlData: mxl)
         }
+    }
 
-        @Test func mxlRejectsMissingContainer() throws {
-            let xml = try MusicXMLFixtureLoader.xml("testCopyrightScale")
-            let mxl = try MXLTestBuilder.wrapWithoutContainer(xml: xml)
-            #expect(throws: SheetMusicError.self) {
-                _ = try MusicXMLParser.parse(mxlData: mxl)
-            }
+    @Test func mxlRejectsDanglingRootfilePath() throws {
+        let xml = try MusicXMLFixtureLoader.xml("testCopyrightScale")
+        let mxl = try MXLTestBuilder.wrapWithDanglingRootfile(xml: xml)
+        #expect(throws: SheetMusicError.self) {
+            _ = try MusicXMLParser.parse(mxlData: mxl)
         }
-
-        @Test func mxlRejectsDanglingRootfilePath() throws {
-            let xml = try MusicXMLFixtureLoader.xml("testCopyrightScale")
-            let mxl = try MXLTestBuilder.wrapWithDanglingRootfile(xml: xml)
-            #expect(throws: SheetMusicError.self) {
-                _ = try MusicXMLParser.parse(mxlData: mxl)
-            }
-        }
-    #endif
+    }
 
     /// `<rest measure="yes"/>` must be imported as `.rest(duration: .measure)`,
     /// not as a regular rest with a computed duration.
