@@ -16,6 +16,7 @@ var products: [Product] = [
     .library(name: "SheetMusicMusicXML", targets: ["SheetMusicMusicXML"]),
     .library(name: "SheetMusicMIDI", targets: ["SheetMusicMIDI"]),
     .library(name: "SheetMusicLayout", targets: ["SheetMusicLayout"]),
+    .library(name: "SheetMusicAudioCore", targets: ["SheetMusicAudioCore"]),
 ]
 
 var targets: [Target] = [
@@ -51,6 +52,10 @@ var targets: [Target] = [
         dependencies: ["SheetMusicCore"],
     ),
     .target(
+        name: "SheetMusicAudioCore",
+        dependencies: ["SheetMusicCore", "SheetMusicMIDI"],
+    ),
+    .target(
         name: "SheetMusic",
         dependencies: [
             "SheetMusicCore",
@@ -82,6 +87,7 @@ var targets: [Target] = [
             "SheetMusicMusicXML",
             "SheetMusicLayout",
             "SheetMusicAndroidJNI",
+            "SheetMusicAudioCore",
             "SheetMusicXMLTools",
             "SheetMusicZip",
         ] : [
@@ -110,6 +116,7 @@ if !isAndroid {
         .library(name: "SheetMusicLayoutApple", targets: ["SheetMusicLayoutApple"]),
         .library(name: "SheetMusicUI", targets: ["SheetMusicUI"]),
         .library(name: "SheetMusicAudio", targets: ["SheetMusicAudio"]),
+        .library(name: "SheetMusicAudioApple", targets: ["SheetMusicAudioApple"]),
         .library(name: "SheetMusicPDF", targets: ["SheetMusicPDF"]),
         .executable(name: "render-previews", targets: ["RenderPreviews"]),
     ]
@@ -128,8 +135,19 @@ if !isAndroid {
             ],
         ),
         .target(
+            name: "SheetMusicAudioApple",
+            dependencies: [
+                "SheetMusicCore",
+                "SheetMusicMIDI",
+                "SheetMusicAudioCore",
+            ],
+        ),
+        .target(
             name: "SheetMusicAudio",
-            dependencies: ["SheetMusicCore", "SheetMusicMIDI"],
+            dependencies: [
+                "SheetMusicAudioCore",
+                "SheetMusicAudioApple",
+            ],
         ),
         .target(
             name: "SheetMusicPDF",

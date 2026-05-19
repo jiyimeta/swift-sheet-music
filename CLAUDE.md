@@ -29,8 +29,13 @@ SheetMusicLayout      (pure-geometry layout, Foundation-only,
 SheetMusicLayoutApple (CoreText font metrics provider for Layout;
                        Apple-only; → Core, Layout)
 SheetMusicUI          (SwiftUI views; → Core, Layout, LayoutApple)
-SheetMusicAudio       (AVFoundation playback + audio file export;
-                       → Core, MIDI)
+SheetMusicAudio            (umbrella; → Core, Apple)
+  ├─→ SheetMusicAudioCore     (Foundation-only types: PlaybackTimeline,
+  │                            MetronomeBeat, GMInstrument, MixerChannel,
+  │                            LoopRange, PlaybackState, AudioFileFormat …;
+  │                            → Core, MIDI)
+  └─→ SheetMusicAudioApple    (AVFoundation playback + audio file export;
+                               Apple-only; → Core, MIDI, AudioCore)
 SheetMusicPDF         (PDF export; → Core, Layout, LayoutApple, UI)
 ```
 
@@ -84,7 +89,7 @@ The example app's `.xcodeproj` is **gitignored**; regenerate from
 `Example/project.yml` with `xcodegen` whenever you change project
 settings or sources.
 
-## Android build (Phase 1–2)
+## Android build (Phase 1–3)
 
 `swift-sheet-music` cross-compiles to Android via the Swift 6.3 official
 Android SDK. Foundation-only targets supported: Core / MIDI / MSCX /
@@ -92,8 +97,10 @@ MusicXML / XMLTools (Phase 1) + Layout (Phase 2, via the
 `FontMetricsProvider` DI seam — Apple hosts auto-install
 `SheetMusicLayoutApple`'s CoreText backend through UI / PDF; Android
 falls back to a `StubFontMetricsProvider` with rectangle
-approximations). UI / PDF / Audio remain Apple-only pending Phase 3
-audio DI.
+approximations). SheetMusicAudioCore is also Android-compatible
+(Foundation-only audio value types like PlaybackTimeline /
+MetronomeBeat / AudioFileFormat). UI / PDF remain Apple-only pending
+Phase 4 (Android backend).
 
 ### Prerequisites
 
