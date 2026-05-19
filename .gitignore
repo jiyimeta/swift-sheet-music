@@ -22,6 +22,7 @@ Example/SheetMusicExample/Sounds/
 Android/.gradle/
 Android/build/
 Android/*/build/
+Android/*/.cxx/
 Android/local.properties
 
 # Synced from Tests/SheetMusicTests/Resources/Golden/Audio at build time
