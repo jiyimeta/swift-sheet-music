@@ -209,4 +209,46 @@
             #expect(data.isEmpty)
         }
     }
+
+    // MARK: - T17: metronomeBeats + staffParams
+
+    struct AudioMidiBridgeMetronomeStaffTests {
+        @Test func metronomeBeatsRoundTrips() throws {
+            let score = try loadFixtureScore()
+            let data = AudioMidiBridge.metronomeBeats(score: score)
+            #expect(!data.isEmpty)
+            let decoded = try MetronomeBeatCodec.decodeArray(data)
+            let direct = PlaybackTimeline.metronomeBeats(score: score)
+            #expect(decoded.count == direct.count)
+            for (d, b) in zip(decoded, direct) {
+                #expect(d.tick == b.tick)
+                #expect(d.isDownbeat == b.isDownbeat)
+            }
+        }
+
+        @Test func staffParamsCountMatchesStaves() throws {
+            let score = try loadFixtureScore()
+            let data = AudioMidiBridge.staffParams(score: score)
+            #expect(!data.isEmpty)
+            let decoded = try StaffParamsCodec.decodeArray(data)
+            #expect(decoded.count == score.totalStaffCount)
+        }
+
+        @Test func staffParamsFieldsMatchSource() throws {
+            let score = try loadFixtureScore()
+            let data = AudioMidiBridge.staffParams(score: score)
+            let decoded = try StaffParamsCodec.decodeArray(data)
+            for (idx, entry) in score.allStaves.enumerated() {
+                let part = score.part(at: entry.address)
+                let channel = part?.instrument.channels.first
+                let expectedProgram = UInt8(clamping: channel?.program ?? 0)
+                let expectedBank = UInt8(clamping: channel?.bank ?? 0)
+                let expectedDrums = part?.instrument.useDrumset == true
+                #expect(decoded[idx].staffIndex == idx)
+                #expect(decoded[idx].program == expectedProgram)
+                #expect(decoded[idx].bankLSB == expectedBank)
+                #expect(decoded[idx].isDrums == expectedDrums)
+            }
+        }
+    }
 #endif

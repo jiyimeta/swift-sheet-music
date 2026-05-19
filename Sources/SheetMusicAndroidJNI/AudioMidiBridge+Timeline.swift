@@ -21,6 +21,31 @@ extension AudioMidiBridge {
     }
 }
 
+// MARK: - T17: Metronome beats + staff params
+
+extension AudioMidiBridge {
+    static func metronomeBeats(score: Score) -> Data {
+        let beats = PlaybackTimeline.metronomeBeats(score: score)
+        return MetronomeBeatCodec.encodeArray(beats)
+    }
+
+    static func staffParams(score: Score) -> Data {
+        let entries = score.allStaves.enumerated().map { idx, entry -> StaffParams in
+            let part = score.part(at: entry.address)
+            let channel = part?.instrument.channels.first ?? InstrumentChannel()
+            return StaffParams(
+                staffIndex: idx,
+                bankLSB: UInt8(clamping: channel.bank),
+                program: UInt8(clamping: channel.program),
+                isDrums: part?.instrument.useDrumset == true,
+                partAddressHash: Int64(entry.address.partIndex) * 1000
+                    + Int64(entry.address.staffIndexInPart),
+            )
+        }
+        return StaffParamsCodec.encodeArray(entries)
+    }
+}
+
 // MARK: - T16: Frame lookup
 
 extension AudioMidiBridge {
@@ -100,6 +125,36 @@ extension AudioMidiBridge {
         else { return env.pointee.NewByteArray(envPtr, 0) }
         let data = AudioMidiBridge.frameForCursor(score: score, cursor: cursor)
         guard !data.isEmpty else { return env.pointee.NewByteArray(envPtr, 0) }
+        return makeJByteArray(env: envPtr, bytes: data)
+    }
+
+    @_cdecl("Java_io_github_kiichiio_sheetmusic_audio_jni_SheetMusicAudioJNI_nativeMetronomeBeats")
+    // swiftlint:disable:next identifier_name
+    public func Java_io_github_kiichiio_sheetmusic_audio_jni_SheetMusicAudioJNI_nativeMetronomeBeats(
+        _ envPtr: UnsafeMutablePointer<JNIEnv?>,
+        _ clazz: jclass,
+        _ scoreHandle: jlong,
+    ) -> jbyteArray? {
+        guard let env = envPtr.pointee else { return nil }
+        guard let score = scoreTable.value(for: scoreHandle) else {
+            return env.pointee.NewByteArray(envPtr, 0)
+        }
+        let data = AudioMidiBridge.metronomeBeats(score: score)
+        return makeJByteArray(env: envPtr, bytes: data)
+    }
+
+    @_cdecl("Java_io_github_kiichiio_sheetmusic_audio_jni_SheetMusicAudioJNI_nativeStaffParams")
+    // swiftlint:disable:next identifier_name
+    public func Java_io_github_kiichiio_sheetmusic_audio_jni_SheetMusicAudioJNI_nativeStaffParams(
+        _ envPtr: UnsafeMutablePointer<JNIEnv?>,
+        _ clazz: jclass,
+        _ scoreHandle: jlong,
+    ) -> jbyteArray? {
+        guard let env = envPtr.pointee else { return nil }
+        guard let score = scoreTable.value(for: scoreHandle) else {
+            return env.pointee.NewByteArray(envPtr, 0)
+        }
+        let data = AudioMidiBridge.staffParams(score: score)
         return makeJByteArray(env: envPtr, bytes: data)
     }
 #endif
