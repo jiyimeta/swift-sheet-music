@@ -25,6 +25,12 @@ public struct PlaybackTimeline: Sendable, Equatable {
         public let tick: Int
         public let timeSeconds: TimeInterval
         public let cursor: ScoreCursor
+
+        public init(tick: Int, timeSeconds: TimeInterval, cursor: ScoreCursor) {
+            self.tick = tick
+            self.timeSeconds = timeSeconds
+            self.cursor = cursor
+        }
     }
 
     public let frames: [Frame]
