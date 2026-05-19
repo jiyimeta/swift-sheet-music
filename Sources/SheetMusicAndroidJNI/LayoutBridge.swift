@@ -156,13 +156,13 @@ public enum LayoutBridge {
             let (codepoint, yOffsetSp) = ClefGlyph.glyph(
                 for: NotatedClef(rawType: rawType),
             )
-            out.append(.glyph(
+            emitCenterAnchoredGlyph(
                 codepoint: codepoint,
-                x: (mox + Double(origin.x)) * ptToMM,
-                y: (moy + Double(origin.y) + Double(yOffsetSp) * sp) * ptToMM,
-                size: glyphSize * ptToMM,
-                fontId: .smufl,
-            ))
+                cxPt: mox + Double(origin.x),
+                cyPt: moy + Double(origin.y) + Double(yOffsetSp) * sp,
+                sizePt: glyphSize,
+                into: &out,
+            )
 
         case let .timeSignature(numerator, denominator, origin):
             encodeTimeSignature(
@@ -207,14 +207,13 @@ public enum LayoutBridge {
             )
 
         case let .rest(duration, origin, _, _, _):
-            let cp = restCodepoint(duration: duration)
-            out.append(.glyph(
-                codepoint: cp,
-                x: (mox + Double(origin.x)) * ptToMM,
-                y: (moy + Double(origin.y)) * ptToMM,
-                size: glyphSize * ptToMM,
-                fontId: .smufl,
-            ))
+            emitCenterAnchoredGlyph(
+                codepoint: restCodepoint(duration: duration),
+                cxPt: mox + Double(origin.x),
+                cyPt: moy + Double(origin.y),
+                sizePt: glyphSize,
+                into: &out,
+            )
 
         case let .barLine(_, origin):
             // Vertical stroke spanning the staff height (4 sp).

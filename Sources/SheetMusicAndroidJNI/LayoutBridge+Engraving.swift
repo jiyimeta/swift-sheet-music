@@ -17,6 +17,34 @@ extension LayoutBridge {
     /// constant's visibility just for this split.
     static let ptToMMScale = 25.4 / 72.0
 
+    /// Emit a SMuFL glyph whose position was computed assuming Apple's
+    /// `.center` anchor (visual ink centre at `(cxPt, cyPt)`).
+    /// `Canvas.drawText` on Android anchors at the baseline-leading
+    /// corner; the offset comes from the glyph's y-up bbox half-extent
+    /// via `GlyphAnchor.centerToBaselineLeading`.
+    static func emitCenterAnchoredGlyph(
+        codepoint: UInt32,
+        cxPt: Double,
+        cyPt: Double,
+        sizePt: Double,
+        into out: inout [DrawCommand],
+    ) {
+        let bbox = FontMetrics.provider.glyphPathBoundingBox(
+            font: LayoutFont(
+                face: SMuFLFamily.bravura, pointSize: CGFloat(sizePt),
+            ),
+            codepoint: UInt16(codepoint),
+        )
+        let (dx, dy) = GlyphAnchor.centerToBaselineLeading(bbox: bbox)
+        out.append(.glyph(
+            codepoint: codepoint,
+            x: (cxPt + Double(dx)) * ptToMMScale,
+            y: (cyPt + Double(dy)) * ptToMMScale,
+            size: sizePt * ptToMMScale,
+            fontId: .smufl,
+        ))
+    }
+
     // swiftlint:disable:next function_parameter_count
     static func encodeTimeSignature(
         numerator: Int,
@@ -65,13 +93,13 @@ extension LayoutBridge {
     ) {
         for (i, ch) in String(value).enumerated() {
             let digit = Int(String(ch)) ?? 0
-            out.append(.glyph(
+            emitCenterAnchoredGlyph(
                 codepoint: SMuFLCodepoint.timeSigDigit(digit),
-                x: (rowOriginX + Double(i) * advance) * ptToMMScale,
-                y: rowY * ptToMMScale,
-                size: glyphSize * ptToMMScale,
-                fontId: .smufl,
-            ))
+                cxPt: rowOriginX + Double(i) * advance,
+                cyPt: rowY,
+                sizePt: glyphSize,
+                into: &out,
+            )
         }
     }
 
@@ -94,13 +122,13 @@ extension LayoutBridge {
         // ── Noteheads ────────────────────────────────────────────────
         let headCp = noteheadCodepoint(duration: duration)
         for note in notes {
-            out.append(.glyph(
+            emitCenterAnchoredGlyph(
                 codepoint: headCp,
-                x: (mox + Double(note.origin.x)) * ptToMMScale,
-                y: (moy + Double(note.origin.y)) * ptToMMScale,
-                size: glyphSize * ptToMMScale,
-                fontId: .smufl,
-            ))
+                cxPt: mox + Double(note.origin.x),
+                cyPt: moy + Double(note.origin.y),
+                sizePt: glyphSize,
+                into: &out,
+            )
         }
         // Whole notes (and lower-resolution rests) are stemless.
         if case .whole = duration { return }
@@ -129,6 +157,10 @@ extension LayoutBridge {
               let flagCp = FlagGlyph.codepoint(duration: duration, stem: stem)
         else { return }
         let tipY = stem == .up ? startY : endY
+        // Apple's StemRenderer draws the flag with `.topLeading` so the
+        // glyph's baseline anchor sits on the stem tip. On Android the
+        // wire format anchors at baseline-leading natively — emit at
+        // (xStem, tipY) directly, without the center-anchor offset.
         out.append(.glyph(
             codepoint: flagCp,
             x: xStem * ptToMMScale,
@@ -172,13 +204,13 @@ extension LayoutBridge {
             let stepDy = Double(KeySignatureSteps.stepDy(
                 step: steps[i], sp: CGFloat(sp),
             ))
-            out.append(.glyph(
+            emitCenterAnchoredGlyph(
                 codepoint: codepoint,
-                x: (originX + Double(i) * advance) * ptToMMScale,
-                y: (originY + stepDy) * ptToMMScale,
-                size: glyphSize * ptToMMScale,
-                fontId: .smufl,
-            ))
+                cxPt: originX + Double(i) * advance,
+                cyPt: originY + stepDy,
+                sizePt: glyphSize,
+                into: &out,
+            )
         }
     }
 }
