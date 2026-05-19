@@ -7,7 +7,7 @@
     /// Singleton tables — one per Swift type. Lifetimes are explicit; Kotlin
     /// must release every handle it gets, or the score will leak until process
     /// exit.
-    private let scoreTable = HandleTable<Score>()
+    let scoreTable = HandleTable<Score>()
 
     // MARK: - Score lifecycle
 
