@@ -108,15 +108,19 @@ if !isAndroid {
         .target(
             name: "SheetMusicLayout",
             dependencies: ["SheetMusicCore"],
-            resources: [.process("Fonts/Resources")],
         ),
         .target(
             name: "SheetMusicLayoutApple",
             dependencies: ["SheetMusicCore", "SheetMusicLayout"],
+            resources: [.process("Fonts/Resources")],
         ),
         .target(
             name: "SheetMusicUI",
-            dependencies: ["SheetMusicCore", "SheetMusicLayout"],
+            dependencies: [
+                "SheetMusicCore",
+                "SheetMusicLayout",
+                "SheetMusicLayoutApple",
+            ],
         ),
         .target(
             name: "SheetMusicAudio",
@@ -127,12 +131,18 @@ if !isAndroid {
             dependencies: [
                 "SheetMusicCore",
                 "SheetMusicLayout",
+                "SheetMusicLayoutApple",
                 "SheetMusicUI",
             ],
         ),
         .executableTarget(
             name: "RenderPreviews",
-            dependencies: ["SheetMusic", "SheetMusicLayout", "SheetMusicUI"],
+            dependencies: [
+                "SheetMusic",
+                "SheetMusicLayout",
+                "SheetMusicLayoutApple",
+                "SheetMusicUI",
+            ],
         ),
     ]
 }

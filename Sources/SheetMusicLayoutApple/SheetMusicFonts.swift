@@ -26,7 +26,7 @@ import os
 @available(macOS 15.0, *)
 public enum SheetMusicFonts {
     private static let logger = Logger(
-        subsystem: "swift-sheet-music.SheetMusicLayout",
+        subsystem: "swift-sheet-music.SheetMusicLayoutApple",
         category: "Fonts",
     )
 
