@@ -38,24 +38,6 @@ public enum LayoutBridge {
     /// Points to millimetres: 1 pt = 25.4 / 72 mm.
     private static let ptToMM = 25.4 / 72.0
 
-    // MARK: - SMuFL codepoints (subset)
-
-    private enum SMuFL {
-        static let gClef: UInt32 = 0xE050
-        static let cClef: UInt32 = 0xE05C
-        static let fClef: UInt32 = 0xE062
-        static let noteheadBlack: UInt32 = 0xE0A4
-        static let noteheadHalf: UInt32 = 0xE0A3
-        static let noteheadWhole: UInt32 = 0xE0A2
-        static let restWhole: UInt32 = 0xE4E3
-        static let restHalf: UInt32 = 0xE4E4
-        static let restQuarter: UInt32 = 0xE4E5
-        static let restEighth: UInt32 = 0xE4E6
-        static let timeSig0: UInt32 = 0xE080
-        static let keyFlat: UInt32 = 0xE260
-        static let keySharp: UInt32 = 0xE262
-    }
-
     // MARK: - Public API
 
     /// Lay out `score` and encode the result as a draw-program payload.
@@ -159,54 +141,38 @@ public enum LayoutBridge {
     ) {
         switch element {
         case let .clef(rawType, origin, _):
-            let cp = clefCodepoint(rawType: rawType)
+            let (codepoint, yOffsetSp) = ClefGlyph.glyph(
+                for: NotatedClef(rawType: rawType),
+            )
             out.append(.glyph(
-                codepoint: cp,
+                codepoint: codepoint,
                 x: (mox + Double(origin.x)) * ptToMM,
-                y: (moy + Double(origin.y)) * ptToMM,
+                y: (moy + Double(origin.y) + Double(yOffsetSp) * sp) * ptToMM,
                 size: glyphSize * ptToMM,
                 fontId: .smufl,
             ))
 
         case let .timeSignature(numerator, denominator, origin):
-            let ox = mox + Double(origin.x)
-            let oy = moy + Double(origin.y)
-            // Numerator above, denominator below — each offset by sp.
-            for (idx, digit) in [numerator, denominator].enumerated() {
-                let cp = SMuFL.timeSig0 + UInt32(digit)
-                out.append(.glyph(
-                    codepoint: cp,
-                    x: ox * ptToMM,
-                    y: (oy + Double(idx) * sp * 2) * ptToMM,
-                    size: glyphSize * ptToMM,
-                    fontId: .smufl,
-                ))
-            }
+            encodeTimeSignature(
+                numerator: numerator,
+                denominator: denominator,
+                originX: mox + Double(origin.x),
+                originY: moy + Double(origin.y),
+                sp: sp,
+                glyphSize: glyphSize,
+                into: &out,
+            )
 
         case let .keySignature(sharps, flats, origin):
-            let ox = mox + Double(origin.x)
-            let oy = moy + Double(origin.y)
-            if sharps > 0 {
-                for i in 0 ..< sharps {
-                    out.append(.glyph(
-                        codepoint: SMuFL.keySharp,
-                        x: (ox + Double(i) * sp * 0.7) * ptToMM,
-                        y: oy * ptToMM,
-                        size: glyphSize * ptToMM,
-                        fontId: .smufl,
-                    ))
-                }
-            } else if flats > 0 {
-                for i in 0 ..< flats {
-                    out.append(.glyph(
-                        codepoint: SMuFL.keyFlat,
-                        x: (ox + Double(i) * sp * 0.7) * ptToMM,
-                        y: oy * ptToMM,
-                        size: glyphSize * ptToMM,
-                        fontId: .smufl,
-                    ))
-                }
-            }
+            encodeKeySignature(
+                sharps: sharps,
+                flats: flats,
+                originX: mox + Double(origin.x),
+                originY: moy + Double(origin.y),
+                sp: sp,
+                glyphSize: glyphSize,
+                into: &out,
+            )
 
         case let .chord(notes, duration, _, _, _, _, _, _, _):
             let cp = noteheadCodepoint(duration: duration)
@@ -327,30 +293,22 @@ public enum LayoutBridge {
         ))
     }
 
-    // MARK: - Codepoint helpers
-
-    private static func clefCodepoint(rawType: String) -> UInt32 {
-        switch rawType {
-        case "G", "G2", "GClef": return SMuFL.gClef
-        case "F", "F3", "F4", "FClef": return SMuFL.fClef
-        default: return SMuFL.cClef
-        }
-    }
+    // MARK: - Notehead / rest codepoints
 
     private static func noteheadCodepoint(duration: NoteDuration) -> UInt32 {
         switch duration {
-        case .whole: return SMuFL.noteheadWhole
-        case .half: return SMuFL.noteheadHalf
-        default: return SMuFL.noteheadBlack
+        case .whole: return SMuFLCodepoint.noteheadWhole
+        case .half: return SMuFLCodepoint.noteheadHalf
+        default: return SMuFLCodepoint.noteheadBlack
         }
     }
 
     private static func restCodepoint(duration: NoteDuration) -> UInt32 {
         switch duration {
-        case .whole: return SMuFL.restWhole
-        case .half: return SMuFL.restHalf
-        case .quarter: return SMuFL.restQuarter
-        default: return SMuFL.restEighth
+        case .whole: return SMuFLCodepoint.restWhole
+        case .half: return SMuFLCodepoint.restHalf
+        case .quarter: return SMuFLCodepoint.restQuarter
+        default: return SMuFLCodepoint.rest8th
         }
     }
 }
