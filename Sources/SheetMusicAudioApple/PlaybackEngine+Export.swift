@@ -1,5 +1,6 @@
 @preconcurrency import AVFoundation
 import Foundation
+import SheetMusicAudioCore
 import SheetMusicCore
 import SheetMusicMIDI
 

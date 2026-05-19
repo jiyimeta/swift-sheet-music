@@ -12,6 +12,12 @@ import SheetMusicLayoutApple
 enum EdwinFontLoader {
     /// Idempotent — safe to call from multiple lifecycle hooks.
     static func registerOnce() {
+        // Force-touch the static-let install so `FontMetrics.provider`
+        // becomes `AppleFontMetricsProvider` before any direct
+        // `LayoutEngine.layout` call (e.g. `adoptLoadedScore`).
+        // `ScoreView`'s own init touches it too, but the score-load
+        // path can run before any `ScoreView` is constructed.
+        _ = SheetMusicLayoutApple.install
         guard Bundle.main.url(
             forResource: "Edwin-Roman",
             withExtension: "otf",

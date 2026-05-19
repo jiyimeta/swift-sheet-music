@@ -1,5 +1,6 @@
 #if !os(Android)
     @testable import SheetMusicAudio
+    @testable import SheetMusicAudioCore
     import Testing
 
     @Suite("AudioExportError")

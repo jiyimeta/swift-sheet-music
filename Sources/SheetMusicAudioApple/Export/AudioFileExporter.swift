@@ -1,5 +1,6 @@
 import AVFoundation
 import Foundation
+import SheetMusicAudioCore
 
 /// Drives `AVAudioEngine` in offline manual rendering mode and
 /// pumps each rendered buffer into an `AudioExportWriter`.

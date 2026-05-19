@@ -4,9 +4,9 @@ import Foundation
 ///
 /// Each case carries its codec-specific options. Bare construction
 /// — `.wav()`, `.aiff()`, `.m4a()`, `.mp3()` — uses the default
-/// options struct. Bind a SwiftUI `Picker` to a separate tag enum
-/// (see `SheetMusicAudio` README) since associated-value enums
-/// don't play well with `Picker`.
+/// options struct. To drive a SwiftUI `Picker`, map this enum to a
+/// separate tag enum without associated values; associated-value
+/// enums don't play well with `Picker.tag`.
 public enum AudioFileFormat: Sendable, Equatable {
     case wav(PCMOptions = .init())
     case aiff(PCMOptions = .init())
