@@ -36,7 +36,13 @@
         }
 
         @Test func defaultProviderIsStub() {
-            // No install called → default should be Stub. Sanity check.
+            // Sanity check that `FontMetrics.provider` is assignable to
+            // a Stub and reads back as a Stub. The default at process
+            // launch is a Stub (see `FontMetricsProvider.swift`); other
+            // test suites may have installed `AppleFontMetricsProvider`
+            // before this point, so reset explicitly rather than rely
+            // on test ordering.
+            FontMetrics.provider = StubFontMetricsProvider()
             #expect(FontMetrics.provider is StubFontMetricsProvider)
         }
     }
