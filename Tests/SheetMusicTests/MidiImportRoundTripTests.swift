@@ -2,6 +2,7 @@
     import Foundation
     @testable import SheetMusic
     @testable import SheetMusicAudio
+    @testable import SheetMusicAudioCore
     @testable import SheetMusicCore
     @testable import SheetMusicMIDI
     @testable import SheetMusicMSCX

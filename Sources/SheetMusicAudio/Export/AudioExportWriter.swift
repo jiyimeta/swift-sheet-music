@@ -3,6 +3,7 @@
 // splitting would weaken cohesion without reducing per-reader complexity.
 import AVFoundation
 import Foundation
+import SheetMusicAudioCore
 
 /// Internal protocol. Hides the AVAudioFile / AVAssetWriter choice
 /// from `AudioFileExporter`'s render loop.

@@ -1,6 +1,7 @@
 #if !os(Android)
     import Foundation
     @testable import SheetMusicAudio
+    @testable import SheetMusicAudioCore
     @testable import SheetMusicCore
     import Testing
 

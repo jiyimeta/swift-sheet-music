@@ -1,6 +1,7 @@
 // swiftlint:disable file_length
 @preconcurrency import AVFoundation
 import Foundation
+import SheetMusicAudioCore
 import SheetMusicCore
 import SheetMusicMIDI
 

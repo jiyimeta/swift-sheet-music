@@ -16,6 +16,7 @@ var products: [Product] = [
     .library(name: "SheetMusicMusicXML", targets: ["SheetMusicMusicXML"]),
     .library(name: "SheetMusicMIDI", targets: ["SheetMusicMIDI"]),
     .library(name: "SheetMusicLayout", targets: ["SheetMusicLayout"]),
+    .library(name: "SheetMusicAudioCore", targets: ["SheetMusicAudioCore"]),
 ]
 
 var targets: [Target] = [
@@ -51,6 +52,10 @@ var targets: [Target] = [
         dependencies: ["SheetMusicCore"],
     ),
     .target(
+        name: "SheetMusicAudioCore",
+        dependencies: ["SheetMusicCore", "SheetMusicMIDI"],
+    ),
+    .target(
         name: "SheetMusic",
         dependencies: [
             "SheetMusicCore",
@@ -72,6 +77,7 @@ var targets: [Target] = [
             "SheetMusicMSCX",
             "SheetMusicMusicXML",
             "SheetMusicLayout",
+            "SheetMusicAudioCore",
             "SheetMusicXMLTools",
             "SheetMusicZip",
         ] : [
@@ -118,7 +124,11 @@ if !isAndroid {
         ),
         .target(
             name: "SheetMusicAudio",
-            dependencies: ["SheetMusicCore", "SheetMusicMIDI"],
+            dependencies: [
+                "SheetMusicCore",
+                "SheetMusicMIDI",
+                "SheetMusicAudioCore",
+            ],
         ),
         .target(
             name: "SheetMusicPDF",
