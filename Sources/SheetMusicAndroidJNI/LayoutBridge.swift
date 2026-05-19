@@ -301,34 +301,34 @@ public enum LayoutBridge {
 
         // Fallback for unhandled point-origin cases: tiny placeholder rect.
         case let .note(_, _, _, _, origin, _, _, _):
-            placeholderRect(at: origin, mox: mox, moy: moy, sp: sp, into: &out)
+            placeholderRect(atX: Double(origin.x), atY: Double(origin.y), mox: mox, moy: moy, sp: sp, into: &out)
 
         case let .fermata(_, origin):
-            placeholderRect(at: origin, mox: mox, moy: moy, sp: sp, into: &out)
+            placeholderRect(atX: Double(origin.x), atY: Double(origin.y), mox: mox, moy: moy, sp: sp, into: &out)
 
         case let .marker(_, _, origin):
-            placeholderRect(at: origin, mox: mox, moy: moy, sp: sp, into: &out)
+            placeholderRect(atX: Double(origin.x), atY: Double(origin.y), mox: mox, moy: moy, sp: sp, into: &out)
 
         case let .rehearsalMark(_, origin, _, _):
-            placeholderRect(at: origin, mox: mox, moy: moy, sp: sp, into: &out)
+            placeholderRect(atX: Double(origin.x), atY: Double(origin.y), mox: mox, moy: moy, sp: sp, into: &out)
 
         case let .jump(_, origin):
-            placeholderRect(at: origin, mox: mox, moy: moy, sp: sp, into: &out)
+            placeholderRect(atX: Double(origin.x), atY: Double(origin.y), mox: mox, moy: moy, sp: sp, into: &out)
 
         case let .measureRepeat(_, origin):
-            placeholderRect(at: origin, mox: mox, moy: moy, sp: sp, into: &out)
+            placeholderRect(atX: Double(origin.x), atY: Double(origin.y), mox: mox, moy: moy, sp: sp, into: &out)
 
         case let .multiMeasureRest(_, origin):
-            placeholderRect(at: origin, mox: mox, moy: moy, sp: sp, into: &out)
+            placeholderRect(atX: Double(origin.x), atY: Double(origin.y), mox: mox, moy: moy, sp: sp, into: &out)
 
         case let .measureNumber(_, origin):
-            placeholderRect(at: origin, mox: mox, moy: moy, sp: sp, into: &out)
+            placeholderRect(atX: Double(origin.x), atY: Double(origin.y), mox: mox, moy: moy, sp: sp, into: &out)
 
         case let .staffName(_, origin):
-            placeholderRect(at: origin, mox: mox, moy: moy, sp: sp, into: &out)
+            placeholderRect(atX: Double(origin.x), atY: Double(origin.y), mox: mox, moy: moy, sp: sp, into: &out)
 
         case let .articulation(_, origin, _):
-            placeholderRect(at: origin, mox: mox, moy: moy, sp: sp, into: &out)
+            placeholderRect(atX: Double(origin.x), atY: Double(origin.y), mox: mox, moy: moy, sp: sp, into: &out)
 
         case let .tieArc(fromOrigin, toOrigin, above):
             encodeTieArc(

@@ -17,17 +17,20 @@ extension LayoutBridge {
     /// constant's visibility just for this split.
     static let ptToMMScale = 25.4 / 72.0
 
-    /// Placeholder filled rect for layout elements the bridge can't
-    /// fully render yet (fermata, marker, jump, …). Helps spot
-    /// missing elements visually.
+    // Placeholder filled rect for layout elements the bridge can't
+    // fully render yet (fermata, marker, jump, …). Helps spot
+    // missing elements visually. Coords are passed as Doubles so the
+    // signature stays public-internal-friendly even when
+    // `SheetMusicLayout.CGPoint` is the platform stub (Android).
+    // swiftlint:disable:next function_parameter_count
     static func placeholderRect(
-        at origin: CGPoint,
+        atX: Double, atY: Double,
         mox: Double, moy: Double, sp: Double,
         into out: inout [DrawCommand],
     ) {
         out.append(.fillRect(
-            x: (mox + Double(origin.x)) * ptToMMScale,
-            y: (moy + Double(origin.y)) * ptToMMScale,
+            x: (mox + atX) * ptToMMScale,
+            y: (moy + atY) * ptToMMScale,
             w: sp * ptToMMScale,
             h: sp * ptToMMScale,
         ))
