@@ -2,6 +2,13 @@ import Foundation
 import SheetMusicCore
 import SheetMusicLayout
 
+#if !canImport(CoreGraphics)
+    /// On Android, Foundation's CoreGraphics shims also export `CGPoint`,
+    /// clashing with SheetMusicLayout's stub. Anchor to the Layout definition
+    /// so that `LayoutElement` associated values match the parameter type.
+    private typealias CGPoint = SheetMusicLayout.CGPoint
+#endif
+
 /// Converts a `Score` into a binary draw-program payload for the Android
 /// Compose renderer.
 ///
