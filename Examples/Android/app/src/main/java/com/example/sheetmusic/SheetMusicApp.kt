@@ -8,6 +8,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -15,10 +16,21 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.sheetmusic.audio.AudioViewModel
 
 @Composable
-fun SheetMusicApp(viewModel: ScoreViewModel = viewModel()) {
-    val state by viewModel.state.collectAsState()
+fun SheetMusicApp(
+    scoreVm: ScoreViewModel = viewModel(),
+    audioVm: AudioViewModel = viewModel(),
+) {
+    val state by scoreVm.state.collectAsState()
+    val scoreHandle by scoreVm.scoreHandle.collectAsState()
+
+    // Once ScoreViewModel produces a handle, wire it into the audio engine.
+    LaunchedEffect(scoreHandle) {
+        scoreHandle?.let { audioVm.preparePlayback(it) }
+    }
+
     MaterialTheme {
         Surface(modifier = Modifier.fillMaxSize(), color = Color.White) {
             when (val s = state) {
@@ -27,7 +39,8 @@ fun SheetMusicApp(viewModel: ScoreViewModel = viewModel()) {
                 is ScoreState.ParseError -> CenteredMessage("Error: ${s.message}")
                 is ScoreState.Ready -> ScoreView(
                     state = s,
-                    onPageChange = viewModel::goToPage
+                    onPageChange = scoreVm::goToPage,
+                    audioVm = audioVm,
                 )
             }
         }

@@ -24,6 +24,10 @@ class ScoreViewModel(app: Application) : AndroidViewModel(app) {
     private val _state = MutableStateFlow<ScoreState>(ScoreState.Loading)
     val state: StateFlow<ScoreState> = _state.asStateFlow()
 
+    /** Emits the raw score handle once parsing succeeds, or null beforehand. */
+    private val _scoreHandle = MutableStateFlow<Long?>(null)
+    val scoreHandle: StateFlow<Long?> = _scoreHandle.asStateFlow()
+
     private var handle: ScoreHandle? = null
 
     init { load() }
@@ -60,6 +64,7 @@ class ScoreViewModel(app: Application) : AndroidViewModel(app) {
                 return@launch
             }
             handle = h
+            _scoreHandle.value = h.raw
 
             val programBytes = withContext(Dispatchers.Default) {
                 SheetMusicBridge.nativeComputeLayout(h.raw,
