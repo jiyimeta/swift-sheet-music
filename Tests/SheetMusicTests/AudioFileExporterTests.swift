@@ -1,6 +1,7 @@
 #if !os(Android)
     import AVFoundation
     @testable import SheetMusicAudio
+    @testable import SheetMusicAudioApple
     @testable import SheetMusicAudioCore
     import SheetMusicCore
     import SheetMusicMSCX
