@@ -15,6 +15,7 @@ var products: [Product] = [
     .library(name: "SheetMusicMSCX", targets: ["SheetMusicMSCX"]),
     .library(name: "SheetMusicMusicXML", targets: ["SheetMusicMusicXML"]),
     .library(name: "SheetMusicMIDI", targets: ["SheetMusicMIDI"]),
+    .library(name: "SheetMusicLayout", targets: ["SheetMusicLayout"]),
 ]
 
 var targets: [Target] = [
@@ -64,6 +65,10 @@ var targets: [Target] = [
             "SheetMusicMIDI",
         ],
     ),
+    .target(
+        name: "SheetMusicLayout",
+        dependencies: ["SheetMusicCore"],
+    ),
     .testTarget(
         name: "SheetMusicTests",
         dependencies: isAndroid ? [
@@ -72,6 +77,7 @@ var targets: [Target] = [
             "SheetMusicMIDI",
             "SheetMusicMSCX",
             "SheetMusicMusicXML",
+            "SheetMusicLayout",
             "SheetMusicXMLTools",
             "SheetMusicZip",
         ] : [
@@ -97,7 +103,6 @@ var targets: [Target] = [
 
 if !isAndroid {
     products += [
-        .library(name: "SheetMusicLayout", targets: ["SheetMusicLayout"]),
         .library(name: "SheetMusicLayoutApple", targets: ["SheetMusicLayoutApple"]),
         .library(name: "SheetMusicUI", targets: ["SheetMusicUI"]),
         .library(name: "SheetMusicAudio", targets: ["SheetMusicAudio"]),
@@ -105,10 +110,6 @@ if !isAndroid {
         .executable(name: "render-previews", targets: ["RenderPreviews"]),
     ]
     targets += [
-        .target(
-            name: "SheetMusicLayout",
-            dependencies: ["SheetMusicCore"],
-        ),
         .target(
             name: "SheetMusicLayoutApple",
             dependencies: ["SheetMusicCore", "SheetMusicLayout"],
