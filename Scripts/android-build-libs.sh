@@ -17,20 +17,38 @@ SDK_BUNDLE="$HOME/Library/org.swift.swiftpm/swift-sdks/swift-6.3.2-RELEASE_andro
 # does not exist in this release; use swift-resources instead.
 RUNTIME_BASE="$SDK_BUNDLE/swift-android/swift-resources/usr/lib"
 
+# Locate the NDK so we can also stage libc++_shared.so per ABI. The Swift
+# runtime depends on it but it's an NDK artifact, not part of the Swift
+# Android SDK. Honour ANDROID_NDK_HOME if set, else auto-discover under
+# $ANDROID_HOME/ndk/<version>/ (pick the newest version present).
+if [[ -z "${ANDROID_NDK_HOME:-}" ]]; then
+    sdk_root="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
+    if [[ -d "$sdk_root/ndk" ]]; then
+        ANDROID_NDK_HOME="$(ls -d "$sdk_root"/ndk/*/ 2>/dev/null | sort -V | tail -1 | sed 's:/$::')"
+    fi
+fi
+if [[ -z "${ANDROID_NDK_HOME:-}" || ! -d "$ANDROID_NDK_HOME" ]]; then
+    echo "error: could not locate Android NDK; set ANDROID_NDK_HOME" >&2
+    exit 1
+fi
+NDK_LIB_BASE="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/darwin-x86_64/sysroot/usr/lib"
+
 mkdir -p "$JNI_DIR"
 
-# Each entry: "<triple>:<abi>:<swift-arch-dir>"
+# Each entry: "<triple>:<abi>:<swift-arch-dir>:<ndk-triple>"
 # Bash 3.2 (macOS default) doesn't support declare -A; use a plain array of colon-delimited tuples.
 TARGETS=(
-    "aarch64-unknown-linux-android28:arm64-v8a:swift-aarch64"
-    "x86_64-unknown-linux-android28:x86_64:swift-x86_64"
+    "aarch64-unknown-linux-android28:arm64-v8a:swift-aarch64:aarch64-linux-android"
+    "x86_64-unknown-linux-android28:x86_64:swift-x86_64:x86_64-linux-android"
 )
 
 for entry in "${TARGETS[@]}"; do
     triple="${entry%%:*}"
     rest="${entry#*:}"
     abi="${rest%%:*}"
-    arch="${rest#*:}"
+    rest="${rest#*:}"
+    arch="${rest%%:*}"
+    ndk_triple="${rest#*:}"
 
     echo
     echo "==> Building libSheetMusicJNI.so for $abi ($triple)"
@@ -51,14 +69,29 @@ for entry in "${TARGETS[@]}"; do
         echo "      Re-derive the path from your installed Swift Android SDK." >&2
         exit 1
     fi
-    for so in libswiftCore.so libswift_Concurrency.so libswiftAndroid.so \
-              libFoundation.so libFoundationEssentials.so \
-              libFoundationInternationalization.so libdispatch.so \
-              libBlocksRuntime.so; do
-        if [[ -f "$runtime_src/$so" ]]; then
-            cp -L "$runtime_src/$so" "$dst_dir/"
-        fi
+    # Copy every runtime .so produced by the SDK *except* the
+    # test/XCTest-only ones. libSheetMusicJNI.so transitively pulls
+    # libswift_StringProcessing.so, lib_FoundationICU.so, etc. — listing
+    # them by hand is fragile. Excluding the test libs keeps the APK lean.
+    for so in "$runtime_src"/*.so; do
+        name="$(basename "$so")"
+        case "$name" in
+            libTesting.so|libXCTest.so|lib_Testing_Foundation.so|lib_TestingInterop.so)
+                continue
+                ;;
+        esac
+        cp -L "$so" "$dst_dir/"
     done
+
+    # libswiftCore.so links against libc++_shared.so (NDK C++ runtime),
+    # which is NOT staged by the Swift Android SDK. Pull it from the NDK.
+    ndk_libcxx="$NDK_LIB_BASE/$ndk_triple/libc++_shared.so"
+    if [[ -f "$ndk_libcxx" ]]; then
+        cp -L "$ndk_libcxx" "$dst_dir/"
+    else
+        echo "error: libc++_shared.so not found at $ndk_libcxx" >&2
+        exit 1
+    fi
 done
 
 echo
