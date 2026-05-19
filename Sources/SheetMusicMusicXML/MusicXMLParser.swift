@@ -10,17 +10,12 @@ public enum MusicXMLParser {
         return try Score.decodeMusicXML(root)
     }
 
-    #if !os(Android)
-        /// Parse a `.mxl` (zipped MusicXML) archive. Resolves the rootfile from
-        /// `META-INF/container.xml` and delegates to `parse(_:)`.
-        ///
-        /// Unavailable on Android in Phase 1 — see `CLAUDE.md` (Android build
-        /// → Format support matrix).
-        public static func parse(mxlData: Data) throws -> Score {
-            let xmlBytes = try MXLReader.extractRootScore(mxlData: mxlData)
-            return try parse(xmlBytes)
-        }
-    #endif
+    /// Parse a `.mxl` (zipped MusicXML) archive. Resolves the rootfile from
+    /// `META-INF/container.xml` and delegates to `parse(_:)`.
+    public static func parse(mxlData: Data) throws -> Score {
+        let xmlBytes = try MXLReader.extractRootScore(mxlData: mxlData)
+        return try parse(xmlBytes)
+    }
 
     // NOTE: `parse(contentsOf: URL)` is out of scope for this library release;
     // it will be added alongside the other URL-based API overloads in a later spec.
