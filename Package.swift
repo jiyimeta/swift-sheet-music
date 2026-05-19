@@ -24,6 +24,12 @@ var targets: [Target] = [
         dependencies: ["SheetMusicCore"],
     ),
     .target(
+        name: "SheetMusicZip",
+        linkerSettings: [
+            .linkedLibrary("z", .when(platforms: [.linux, .android])),
+        ],
+    ),
+    .target(
         name: "SheetMusicMSCX",
         dependencies: isAndroid ? [
             "SheetMusicCore",
