@@ -49,6 +49,15 @@ public enum LayoutEngine {
         availableWidth: CGFloat,
         cache: LayoutCache?,
     ) -> LayoutDocument {
+        #if DEBUG && canImport(CoreText)
+            assert(
+                !(FontMetrics.provider is StubFontMetricsProvider),
+                "FontMetrics.provider is still StubFontMetricsProvider on a "
+                    + "CoreText-capable platform. Call "
+                    + "`_ = SheetMusicLayoutApple.install` at app launch, or "
+                    + "import SheetMusicUI / SheetMusicPDF (they auto-install).",
+            )
+        #endif
         let metrics = StaffMetrics(staffSize: options.staffSize)
         let effectiveMelismaTicks = computeEffectiveMelismaTicks(
             score: score, division: score.division,
