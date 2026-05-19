@@ -195,7 +195,7 @@ public enum LayoutBridge {
         ):
             encodeChord(
                 notes: notes, duration: duration, stem: stem,
-                stemOrigin: stemOrigin,
+                stemOriginY: Double(stemOrigin.y),
                 isBeamed: isBeamed, stemExtension: Double(stemExtension),
                 mag: 1,
                 measureOriginX: mox, measureOriginY: moy,
@@ -205,7 +205,7 @@ public enum LayoutBridge {
         case let .graceChord(notes, duration, stem, stemOrigin, _, _, mag, _):
             encodeChord(
                 notes: notes, duration: duration, stem: stem,
-                stemOrigin: stemOrigin,
+                stemOriginY: Double(stemOrigin.y),
                 isBeamed: false, stemExtension: 0,
                 mag: Double(mag),
                 measureOriginX: mox, measureOriginY: moy,

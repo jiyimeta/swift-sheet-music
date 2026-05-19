@@ -143,7 +143,11 @@ extension LayoutBridge {
         notes: [LayoutChordNote],
         duration: NoteDuration,
         stem: StemDirection,
-        stemOrigin: CGPoint,
+        // `stemOriginY` is the beam-side stem terminus Y in measure-
+        // local coordinates. Passed as a bare Double instead of CGPoint
+        // so the signature stays public-internal-friendly even when
+        // SheetMusicLayout.CGPoint is the platform stub (Android).
+        stemOriginY: Double,
         isBeamed: Bool,
         stemExtension: Double,
         mag: Double,
@@ -173,11 +177,9 @@ extension LayoutBridge {
         )
         }
         // For beamed chords the stem extends to the shared beam Y instead
-        // of each chord's own natural stem-top. `stemOrigin` carries the
-        // beam-side terminus in measure-local coordinates; world Y =
-        // moy + stemOrigin.y.
+        // of each chord's own natural stem-top. World Y = moy + stemOriginY.
         let beamY: CGFloat? = isBeamed
-            ? CGFloat(moy + Double(stemOrigin.y))
+            ? CGFloat(moy + stemOriginY)
             : nil
         guard let geometry = StemGeometry.compute(
             noteOrigins: noteOrigins,
