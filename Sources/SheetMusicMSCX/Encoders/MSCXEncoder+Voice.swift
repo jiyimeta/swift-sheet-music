@@ -61,10 +61,12 @@ extension Voice {
     /// mirror that omission here.
     ///
     /// `systemElements` (typically only non-empty for voice 0) are
-    /// injected at the head of the voice with `<location>` shifts
-    /// matching their `MeasurePosition`. Each shift is consumed by
-    /// the immediately-following system element only — chords later
-    /// in the voice remain at their natural cursor.
+    /// interleaved into the chord/rest stream at their natural cursor
+    /// positions, matching the document order MuseScore Studio writes.
+    /// Elements whose position falls on a chord boundary need no
+    /// `<location>` shift — the cursor is already there. Elements whose
+    /// position falls past the final chord boundary are emitted with a
+    /// trailing forward shift.
     /// `effectiveDuration` is the containing measure's effective
     /// duration (TimeSignature × actualLength). Used to resolve
     /// `.measure` rests and to drive cross-measure tie offsets when
@@ -116,36 +118,39 @@ extension Voice {
         let dropInitialZeroKeySig = shouldDropInitialZeroKeySig(isStaffHead: isStaffHead)
 
         var state = EncodeState(carryIn: carryIn)
-        injectSystemElements(systemElements, into: &state)
+        let sortedSys = Self.sortedSystemElements(systemElements)
+        var sysIdx = Self.emitSystemElementsAtCursor(
+            sortedSys, from: 0,
+            cursor: state.voiceTotal, into: &state.children,
+        )
+        let plan = IterationPlan(
+            startsByIndex: startsByIndex,
+            endCountByIndex: endCountByIndex,
+            lastChordIndex: lastChordIndex,
+            voiceBarLength: voiceBarLength,
+            effectiveDuration: effectiveDuration,
+            dropInitialZeroKeySig: dropInitialZeroKeySig,
+        )
         for (index, element) in elements.enumerated() {
-            for opening in startsByIndex[index] ?? [] {
-                let activeWithOpening = state.stack + [opening]
-                let base = tupletBaseDuration(
-                    opening: opening,
-                    activeTuplets: activeWithOpening,
-                )
-                state.children.append(opening.encode(baseDuration: base))
-                state.stack.append(opening)
-            }
-            if !(dropInitialZeroKeySig && index == 0) {
-                try emitElement(
-                    element: element,
-                    index: index,
-                    lastChordIndex: lastChordIndex,
-                    voiceBarLength: voiceBarLength,
-                    effectiveDuration: effectiveDuration,
-                    carryIn: carryIn,
-                    state: &state,
-                    options: options,
-                    staffGroup: staffGroup,
-                    voiceIndex: voiceIndex,
-                )
-            }
-            for _ in 0 ..< (endCountByIndex[index] ?? 0) {
-                state.stack.removeLast()
-                state.children.append(XMLTreeNode(name: "endTuplet"))
-            }
+            try iterate(
+                element: element,
+                index: index,
+                plan: plan,
+                carryIn: carryIn,
+                state: &state,
+                options: options,
+                staffGroup: staffGroup,
+                voiceIndex: voiceIndex,
+            )
+            sysIdx = Self.emitSystemElementsAtCursor(
+                sortedSys, from: sysIdx,
+                cursor: state.voiceTotal, into: &state.children,
+            )
         }
+        sysIdx = Self.flushRemainingSystemElements(
+            sortedSys, from: sysIdx,
+            cursor: &state.voiceTotal, into: &state.children,
+        )
         return (
             XMLTreeNode(name: "voice", children: state.children),
             VoiceTieCarry(
@@ -178,7 +183,7 @@ extension Voice {
         return false
     }
 
-    private func emitElement(
+    func emitElement(
         element: VoiceElement,
         index: Int,
         lastChordIndex: Int?,
