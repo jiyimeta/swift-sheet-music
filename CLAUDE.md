@@ -178,9 +178,16 @@ Quickstart (from repo root):
 
     # 2. Copy a MuseScore file you own into the app's assets
     cp /path/to/your.mscz ~/Desktop/test.mscz
+
+    # 3. (Optional) Copy a General MIDI SoundFont to enable audio playback.
+    #    Download e.g. GeneralUserGS (https://schristiancollins.com/generaluser.php)
+    #    and save as ~/Desktop/gm.sf2. The Play button stays disabled without it.
+    cp /path/to/GeneralUserGS.sf2 ~/Desktop/gm.sf2
+
+    # 4. Stage assets into app/src/main/assets/ (copies both test.mscz + gm.sf2)
     Scripts/android-bundle-test-score.sh
 
-    # 3. Open Examples/Android/ in Android Studio and Run
+    # 5. Open Examples/Android/ in Android Studio and Run
 
 Supported ABIs: `arm64-v8a`, `x86_64`. Lowest API level: 28.
 Glyph rendering uses `StubFontMetricsProvider` rectangle approximations
