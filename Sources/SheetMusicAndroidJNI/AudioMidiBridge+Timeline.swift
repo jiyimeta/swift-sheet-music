@@ -21,6 +21,22 @@ extension AudioMidiBridge {
     }
 }
 
+// MARK: - T16: Frame lookup
+
+extension AudioMidiBridge {
+    static func frameAtTick(score: Score, tick: Int64) -> Data {
+        let timeline = PlaybackTimeline(score: score)
+        guard let frame = timeline.frame(atTick: Int(tick)) else { return Data() }
+        return FrameCodec.encode(frame)
+    }
+
+    static func frameForCursor(score: Score, cursor: ScoreCursor) -> Data {
+        let timeline = PlaybackTimeline(score: score)
+        guard let frame = timeline.frame(forCursor: cursor) else { return Data() }
+        return FrameCodec.encode(frame)
+    }
+}
+
 #if os(Android)
     import CJNI
 
@@ -47,5 +63,43 @@ extension AudioMidiBridge {
             env.pointee.SetLongArrayRegion(envPtr, array, 0, 3, base)
         }
         return array
+    }
+
+    @_cdecl("Java_io_github_kiichiio_sheetmusic_audio_jni_SheetMusicAudioJNI_nativeFrameAtTick")
+    // swiftlint:disable:next identifier_name
+    public func Java_io_github_kiichiio_sheetmusic_audio_jni_SheetMusicAudioJNI_nativeFrameAtTick(
+        _ envPtr: UnsafeMutablePointer<JNIEnv?>,
+        _ clazz: jclass,
+        _ scoreHandle: jlong,
+        _ tick: jlong,
+    ) -> jbyteArray? {
+        guard let env = envPtr.pointee else { return nil }
+        guard let score = scoreTable.value(for: scoreHandle) else {
+            return env.pointee.NewByteArray(envPtr, 0)
+        }
+        let data = AudioMidiBridge.frameAtTick(score: score, tick: tick)
+        guard !data.isEmpty else { return env.pointee.NewByteArray(envPtr, 0) }
+        return makeJByteArray(env: envPtr, bytes: data)
+    }
+
+    @_cdecl("Java_io_github_kiichiio_sheetmusic_audio_jni_SheetMusicAudioJNI_nativeFrameForCursor")
+    // swiftlint:disable:next identifier_name
+    public func Java_io_github_kiichiio_sheetmusic_audio_jni_SheetMusicAudioJNI_nativeFrameForCursor(
+        _ envPtr: UnsafeMutablePointer<JNIEnv?>,
+        _ clazz: jclass,
+        _ scoreHandle: jlong,
+        _ cursorBytes: jbyteArray,
+    ) -> jbyteArray? {
+        guard let env = envPtr.pointee else { return nil }
+        guard let score = scoreTable.value(for: scoreHandle) else {
+            return env.pointee.NewByteArray(envPtr, 0)
+        }
+        let cursorData = readJByteArray(env: envPtr, array: cursorBytes)
+        guard !cursorData.isEmpty,
+              let cursor = try? ScoreCursorCodec.decode(cursorData)
+        else { return env.pointee.NewByteArray(envPtr, 0) }
+        let data = AudioMidiBridge.frameForCursor(score: score, cursor: cursor)
+        guard !data.isEmpty else { return env.pointee.NewByteArray(envPtr, 0) }
+        return makeJByteArray(env: envPtr, bytes: data)
     }
 #endif

@@ -152,4 +152,61 @@
             #expect(summary.division > 0)
         }
     }
+
+    // MARK: - T16: frameAtTick + frameForCursor
+
+    struct AudioMidiBridgeFrameTests {
+        @Test func frameAtTickFirstFrameRoundTrips() throws {
+            let score = try loadFixtureScore()
+            let timeline = PlaybackTimeline(score: score)
+            guard let firstFrame = timeline.frames.first else {
+                Issue.record("Expected at least one frame")
+                return
+            }
+            let data = AudioMidiBridge.frameAtTick(
+                score: score, tick: Int64(firstFrame.tick),
+            )
+            #expect(!data.isEmpty)
+            let decoded = try FrameCodec.decode(data)
+            #expect(decoded.tick == firstFrame.tick)
+            #expect(decoded.cursor == firstFrame.cursor)
+        }
+
+        @Test func frameAtTickOutOfRangeReturnsEmpty() throws {
+            let score = try loadFixtureScore()
+            let data = AudioMidiBridge.frameAtTick(score: score, tick: -1)
+            #expect(data.isEmpty)
+        }
+
+        @Test func frameForCursorFirstFrameRoundTrips() throws {
+            let score = try loadFixtureScore()
+            let timeline = PlaybackTimeline(score: score)
+            guard let firstFrame = timeline.frames.first else {
+                Issue.record("Expected at least one frame")
+                return
+            }
+            let data = AudioMidiBridge.frameForCursor(
+                score: score, cursor: firstFrame.cursor,
+            )
+            #expect(!data.isEmpty)
+            let decoded = try FrameCodec.decode(data)
+            #expect(decoded.tick == firstFrame.tick)
+        }
+
+        @Test func frameForCursorUnknownItemReturnsEmpty() throws {
+            let score = try loadFixtureScore()
+            let bogusAddr = StaffAddress(partIndex: 999, staffIndexInPart: 999)
+            let bogusID = NoteID(
+                staff: bogusAddr,
+                measureIndex: 999,
+                voiceIndex: 999,
+                elementIndex: 999,
+                noteIndexInChord: 999,
+            )
+            let data = AudioMidiBridge.frameForCursor(
+                score: score, cursor: .item(.note(bogusID)),
+            )
+            #expect(data.isEmpty)
+        }
+    }
 #endif
