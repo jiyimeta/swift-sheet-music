@@ -2,21 +2,29 @@ package com.example.sheetmusic.jni
 
 import android.content.res.AssetManager
 import android.graphics.Paint
-import android.graphics.Rect
+import android.graphics.Path
+import android.graphics.RectF
 import android.graphics.Typeface
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
 /**
- * Computes a SMuFL glyph-metrics table by measuring every codepoint in
- * Bravura's BMP private-use area with Android `Paint.getTextBounds` and
- * `Paint.measureText`, then packs the result into the byte format
- * defined at Sources/SheetMusicAndroidJNI/SMuFLMetricsTable.swift.
+ * Computes a SMuFL glyph-metrics table by walking every codepoint in
+ * Bravura's BMP private-use area, then packs the result into the byte
+ * format defined at Sources/SheetMusicAndroidJNI/SMuFLMetricsTable.swift.
  *
- * Y convention conversion: Android Paint returns ink bounds where Y
- * increases downward and the baseline is at Y=0. The Swift side expects
- * CG-style (Y increases upward), matching `CGPath.boundingBox` from
- * CoreText. We flip Y by negating bottom/top.
+ * Uses `Paint.getTextPath` + `Path.computeBounds(exact=true)` rather than
+ * `Paint.getTextBounds`. The TextBounds API returns the **rasterized**
+ * pixel-aligned ink rectangle, which on a 1000 pt reference size rounds
+ * to integer pixels and can disagree with the geometric path bbox by up
+ * to 1 sp at typical staff sizes. The geometric bounds match Apple's
+ * `CTFontCreatePathForGlyph().boundingBox`, so the `GlyphAnchor`
+ * center→baseline-leading conversion in the bridge produces identical
+ * positioning on both platforms.
+ *
+ * Y convention conversion: Android paths are y-down with baseline at
+ * Y=0; the Swift side expects CG-style y-up (matching CGPath). Flip Y
+ * by negating bottom/top.
  */
 object BravuraMetricsBuilder {
 
@@ -35,8 +43,9 @@ object BravuraMetricsBuilder {
             textSize = REFERENCE_SIZE.toFloat()
             isAntiAlias = true
         }
-        val rect = Rect()
         val widths = FloatArray(2)
+        val path = Path()
+        val rectF = RectF()
 
         // Pre-walk to find defined codepoints.
         data class Entry(
@@ -48,12 +57,18 @@ object BravuraMetricsBuilder {
             val s = String(intArrayOf(cp), 0, 1)
             val n = paint.getTextWidths(s, widths)
             if (n < 1 || widths[0] <= 0f) continue
-            paint.getTextBounds(s, 0, s.length, rect)
-            // CG-style bbox: x grows right, y grows up.
-            val bx = rect.left.toFloat()
-            val by = (-rect.bottom).toFloat()
-            val bw = (rect.right - rect.left).toFloat()
-            val bh = (rect.bottom - rect.top).toFloat()
+            path.reset()
+            paint.getTextPath(s, 0, s.length, 0f, 0f, path)
+            // exact=true: traverse the actual control polygon, not the
+            // conservative fast bounds.
+            path.computeBounds(rectF, true)
+            if (rectF.isEmpty) continue
+            // CG-style bbox: x grows right, y grows up. Path coords are
+            // y-down with baseline at y=0, so y-up.minY = -rectF.bottom.
+            val bx = rectF.left
+            val by = -rectF.bottom
+            val bw = rectF.width()
+            val bh = rectF.height()
             entries.add(Entry(cp, widths[0], bx, by, bw, bh))
         }
 

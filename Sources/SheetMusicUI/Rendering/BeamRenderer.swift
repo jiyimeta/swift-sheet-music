@@ -20,10 +20,11 @@ enum BeamRenderer {
         metrics: StaffMetrics,
     ) {
         guard level >= 1 else { return }
-        let beamThickness = metrics.sp * 0.5
-        let beamGap = metrics.sp * 0.3
+        let beamThickness = BeamGeometry.beamThicknessSp * metrics.sp
         let stackSign: CGFloat = direction == .up ? 1 : -1
-        let dy = CGFloat(level - 1) * (beamThickness + beamGap) * stackSign
+        let dy = BeamGeometry.levelOffsetDy(
+            level: level, stemDirection: direction, sp: metrics.sp,
+        )
         let barInner = dy
         let barOuter = dy + beamThickness * stackSign
         var path = Path()

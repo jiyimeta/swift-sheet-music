@@ -12,14 +12,6 @@ import Foundation
 /// for tall braces (where the rendered glyph extends much further left
 /// than `bracketColumnCount × sp`).
 public enum BraceMetrics {
-    // SMuFL brace glyph variants — Bravura's PUA range. Same set as
-    // `SMuFLGlyph.braceVariant` in SheetMusicUI; duplicated here so the
-    // layout target doesn't depend on the renderer module.
-    private static let braceSmall: UInt16 = 0xF400
-    private static let brace: UInt16 = 0xE000
-    private static let braceLarge: UInt16 = 0xF401
-    private static let braceLarger: UInt16 = 0xF402
-
     /// `(codepoint, magx)` for the given staff span, matching MuseScore's
     /// `Bracket::computeMagx`:
     ///   v=1 → braceSmall, v=2 → brace, v=3 → braceLarge, v≥4 → braceLarger.
@@ -31,14 +23,14 @@ public enum BraceMetrics {
         let magx: CGFloat = v == 1
             ? 1
             : CGFloat(v) + CGFloat(v - 1) * 1.625
-        let codepoint: UInt16
+        let codepoint: UInt32
         switch v {
-        case 1: codepoint = braceSmall
-        case 2: codepoint = brace
-        case 3: codepoint = braceLarge
-        default: codepoint = braceLarger
+        case 1: codepoint = SMuFLCodepoint.braceSmall
+        case 2: codepoint = SMuFLCodepoint.brace
+        case 3: codepoint = SMuFLCodepoint.braceLarge
+        default: codepoint = SMuFLCodepoint.braceLarger
         }
-        return (codepoint, magx)
+        return (UInt16(codepoint), magx)
     }
 
     /// Horizontal extent of the rendered brace glyph for a span of

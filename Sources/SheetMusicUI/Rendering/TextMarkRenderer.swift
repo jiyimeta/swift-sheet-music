@@ -88,7 +88,9 @@ enum TextMarkRenderer {
         context.draw(resolved, at: origin, anchor: .center)
     }
 
-    /// Tempo indication ("♩ = 120"). MuseScore default: Edwin 12 pt bold.
+    /// Tempo indication ("♩ = 120"). MuseScore default: Edwin 12 pt
+    /// bold for the text portion + Bravura for the leading music
+    /// symbol; runs come from `MusicTextRuns.runs`.
     static func drawTempo(
         context: inout GraphicsContext,
         text: String,
@@ -99,11 +101,42 @@ enum TextMarkRenderer {
         let style = ResolvedTextStyle.resolve(
             .tempo, overrides: properties, metrics: metrics,
         )
-        let resolved = context.resolve(
-            Text(text)
-                .foregroundColor(.primary)
-                .font(style.font),
-        )
-        context.draw(resolved, at: origin, anchor: .leading)
+        // Inline Bravura symbol at the same point size as the
+        // surrounding Edwin text — MuseScore renders metronome glyphs
+        // proportional to the text, not at full SMuFL 1-em staff size.
+        let glyphSize = style.pointSize
+        var cursorX = origin.x
+        for run in MusicTextRuns.runs(in: text) {
+            let resolved: GraphicsContext.ResolvedText
+            let font: LayoutFont
+            switch run.kind {
+            case .musicSymbol:
+                resolved = context.resolve(
+                    Text(run.text)
+                        .foregroundColor(.primary)
+                        .font(.custom(BravuraFont.familyName, size: glyphSize)),
+                )
+                font = LayoutFont(
+                    face: BravuraFont.familyName, pointSize: glyphSize,
+                )
+            case .text:
+                resolved = context.resolve(
+                    Text(run.text)
+                        .foregroundColor(.primary)
+                        .font(style.font),
+                )
+                font = LayoutFont(
+                    face: style.face, pointSize: style.pointSize,
+                )
+            }
+            context.draw(
+                resolved,
+                at: CGPoint(x: cursorX, y: origin.y),
+                anchor: .leading,
+            )
+            cursorX += FontMetrics.provider.typographicWidth(
+                text: run.text, font: font,
+            )
+        }
     }
 }

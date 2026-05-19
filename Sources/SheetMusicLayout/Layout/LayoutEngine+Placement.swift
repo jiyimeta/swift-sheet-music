@@ -1434,9 +1434,12 @@ extension LayoutEngine {
             case let .tempo(t):
                 if !t.visible { break }
                 let bpm = Int((t.beatsPerSecond * 60.0).rounded())
+                // U+E1D5 = SMuFL `metNoteQuarterUp` (Bravura music
+                // font). Renderers split the string into Bravura-glyph
+                // and Edwin-text runs via `MusicTextRuns.runs`.
                 out.append(.textMark(
                     kind: .tempo,
-                    text: "♩ = \(bpm)",
+                    text: "\u{E1D5} = \(bpm)",
                     origin: CGPoint(
                         x: xAtTick
                             + CGFloat(t.offsetX) * metrics.sp,
