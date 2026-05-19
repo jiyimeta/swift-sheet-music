@@ -46,7 +46,7 @@ import java.util.concurrent.atomic.AtomicReference
  * `stop()` / `close()` are safe to call multiple times. `close()` calls
  * `stop()` internally.
  */
-internal class OboeStream(
+internal open class OboeStream(
     private val sampleRate: Int = 48_000,
     private val framesPerBuffer: Int = 480,  // ~10 ms at 48 kHz
 ) : AutoCloseable {
@@ -84,7 +84,7 @@ internal class OboeStream(
      * Creates and configures the underlying [AudioTrack].
      * Must be called before [play].
      */
-    fun open() {
+    open fun open() {
         val minBuf = AudioTrack.getMinBufferSize(
             sampleRate,
             AudioFormat.CHANNEL_OUT_STEREO,
@@ -113,7 +113,7 @@ internal class OboeStream(
      * Starts AudioTrack playback and launches the writer coroutine.
      * No-op if already playing.
      */
-    fun play() {
+    open fun play() {
         val t = track ?: return
         if (running) return
         t.play()
@@ -126,7 +126,7 @@ internal class OboeStream(
      * Stops the writer coroutine and pauses / flushes the AudioTrack.
      * Idempotent.
      */
-    fun stop() {
+    open fun stop() {
         running = false
         writerScope?.cancel()
         writerScope = null
@@ -135,7 +135,7 @@ internal class OboeStream(
     }
 
     /** Stops playback and releases the AudioTrack. Idempotent. */
-    override fun close() {
+    open override fun close() {
         stop()
         track?.release()
         track = null

@@ -52,6 +52,10 @@ android {
 
     testOptions {
         unitTests.isReturnDefaultValues = true
+        unitTests.all {
+            // Default 512m is tight with coroutines-test; bump to 1g.
+            it.jvmArgs("-Xmx1g")
+        }
     }
 }
 
