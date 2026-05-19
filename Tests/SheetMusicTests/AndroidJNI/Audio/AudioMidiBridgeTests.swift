@@ -121,4 +121,35 @@
             }
         }
     }
+
+    // MARK: - T15: timelineSummary
+
+    struct AudioMidiBridgeTimelineSummaryTests {
+        @Test func timelineSummaryMatchesDirectTimeline() throws {
+            let score = try loadFixtureScore()
+            let summary = AudioMidiBridge.timelineSummary(score: score)
+            let timeline = PlaybackTimeline(score: score)
+            #expect(summary.totalTicks == Int64(timeline.totalTicks))
+            #expect(
+                summary.totalSecondsMicros
+                    == Int64((timeline.totalSeconds * 1_000_000).rounded()),
+            )
+            #expect(summary.division == Int64(timeline.division))
+        }
+
+        @Test func timelineSummaryEquatable() throws {
+            let score = try loadFixtureScore()
+            let a = AudioMidiBridge.timelineSummary(score: score)
+            let b = AudioMidiBridge.timelineSummary(score: score)
+            #expect(a == b)
+        }
+
+        @Test func timelineSummaryPositiveValues() throws {
+            let score = try loadFixtureScore()
+            let summary = AudioMidiBridge.timelineSummary(score: score)
+            #expect(summary.totalTicks > 0)
+            #expect(summary.totalSecondsMicros > 0)
+            #expect(summary.division > 0)
+        }
+    }
 #endif
