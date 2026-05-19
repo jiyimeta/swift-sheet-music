@@ -73,6 +73,7 @@ var targets: [Target] = [
             "SheetMusicMSCX",
             "SheetMusicMusicXML",
             "SheetMusicXMLTools",
+            "SheetMusicZip",
         ] : [
             "SheetMusic",
             "SheetMusicCore",
@@ -84,6 +85,7 @@ var targets: [Target] = [
             "SheetMusicAudio",
             "SheetMusicPDF",
             "SheetMusicXMLTools",
+            "SheetMusicZip",
             .product(name: "ZIPFoundation", package: "ZIPFoundation"),
         ],
         resources: [
