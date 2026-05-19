@@ -1,7 +1,6 @@
 import CoreGraphics
 import SheetMusicCore
 
-@available(macOS 15.0, *)
 extension LayoutEngine {
     /// Extra stem length needed to fit a chord's tremolo bars between
     /// the notehead and the flag without overlap, for UNBEAMED flagged

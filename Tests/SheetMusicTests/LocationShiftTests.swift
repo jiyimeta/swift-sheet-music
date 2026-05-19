@@ -9,6 +9,8 @@
 
     @Suite("LocationShift")
     struct LocationShiftTests {
+        private let _installApple = TestSupport.installApple
+
         /// A SystemText placed AFTER a `locationShift(-1/2)` at the
         /// end of a 4-quarter voice should land at the X column of
         /// the third chord (tick = 2 quarters), not at the trailing

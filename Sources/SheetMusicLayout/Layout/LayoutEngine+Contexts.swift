@@ -1,5 +1,7 @@
 // swiftlint:disable file_length
-import CoreGraphics
+#if canImport(CoreGraphics)
+    import CoreGraphics
+#endif
 import SheetMusicCore
 
 /// Active engraving state at the start of a measure: which clef, key
@@ -11,7 +13,6 @@ import SheetMusicCore
 /// regardless of scroll position — mirroring MuseScore's continuous
 /// view, where the leftmost column always shows the active clef,
 /// key, time, instrument name and current measure number.
-@available(macOS 15.0, *)
 public struct LayoutMeasureContext: Sendable, Equatable {
     public let measureIndex: Int
     public let clefRawTypes: [String]
@@ -50,7 +51,6 @@ public struct LayoutMeasureContext: Sendable, Equatable {
     }
 }
 
-@available(macOS 15.0, *)
 extension LayoutEngine {
     /// One `LayoutMeasureContext` per measure of `score`. State is
     /// captured AFTER processing each measure's leading elements, so
@@ -123,7 +123,6 @@ extension LayoutEngine {
     }
 }
 
-@available(macOS 15.0, *)
 extension LayoutDocument {
     /// Index of the `LayoutMeasure` intersecting `documentX` in the
     /// FIRST system. Returns nil if `documentX` falls outside any
@@ -185,7 +184,6 @@ extension LayoutDocument {
     }
 }
 
-@available(macOS 15.0, *)
 extension LayoutEngine {
     /// Build a synthetic single-measure `LayoutSystem` containing only
     /// the elements a sticky header needs: per-staff clef + key sig +

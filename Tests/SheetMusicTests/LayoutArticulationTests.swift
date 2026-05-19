@@ -6,6 +6,8 @@
 
     @Suite("LayoutEngine articulation emission")
     struct LayoutArticulationTests {
+        private let _installApple = TestSupport.installApple
+
         /// Build a one-measure score whose single chord has `articulations`.
         /// `pitch` controls staff position (60 = middle C, treble; 71 = B
         /// just above the middle line).

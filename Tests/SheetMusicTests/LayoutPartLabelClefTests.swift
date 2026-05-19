@@ -7,6 +7,8 @@
     import Testing
 
     struct LayoutPartLabelClefTests {
+        private let _installApple = TestSupport.installApple
+
         @available(macOS 15.0, iOS 16.0, *)
         @Test func measureContextsKeepPerStaffLabels() throws {
             // The sticky-header context keeps one label per staff so each

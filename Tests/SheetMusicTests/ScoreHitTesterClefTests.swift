@@ -9,6 +9,8 @@
 
     @Suite("ScoreHitTester — clef")
     struct ScoreHitTesterClefTests {
+        private let _installApple = TestSupport.installApple
+
         @available(macOS 15.0, *)
         private func loadDoc(width: CGFloat = 2000) throws
             -> (LayoutDocument, Score)

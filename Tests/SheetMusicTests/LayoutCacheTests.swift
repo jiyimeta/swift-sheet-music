@@ -7,6 +7,8 @@
 
     @Suite("LayoutCache")
     struct LayoutCacheTests {
+        private let _installApple = TestSupport.installApple
+
         /// Builds a tiny multi-measure score for cache exercises.
         private static func sampleScore() -> Score {
             let note = Note(pitch: 60, tpc: 14)

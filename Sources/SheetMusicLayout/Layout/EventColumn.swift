@@ -1,4 +1,6 @@
-import CoreGraphics
+#if canImport(CoreGraphics)
+    import CoreGraphics
+#endif
 import SheetMusicCore
 
 /// One chord/rest anchor in a `LayoutSystem`, precomputed for
@@ -13,7 +15,6 @@ import SheetMusicCore
 /// segregates events by their visual row. Callers who need the
 /// staff for an existing id can derive it via `id.staffIndex`
 /// (`ScoreItemID.staffIndex` is a computed property).
-@available(macOS 15.0, *)
 public struct EventColumn: Sendable, Equatable {
     public let id: ScoreItemID
     public let voiceIndex: Int

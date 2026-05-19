@@ -11,6 +11,8 @@
     /// `LayoutEngine.tickColumns` for the algorithm.
     @Suite("Cross-staff alignment")
     struct MultiStaffAlignmentTests {
+        private let _installApple = TestSupport.installApple
+
         @Test("Different-rhythm staves align on shared ticks (8+16+16 vs dotted8+16)")
         func alignsAcrossStavesWithDifferentRhythms() throws {
             guard #available(macOS 15.0, *) else { return }

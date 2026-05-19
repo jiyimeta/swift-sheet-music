@@ -6,6 +6,8 @@
 
     @Suite("Spanner segmentation")
     struct SpannerSegmentationTests {
+        private let _installApple = TestSupport.installApple
+
         @Test("Slur spanning two measures produces one anchor")
         func slurAnchor() {
             guard #available(macOS 15.0, *) else { return }

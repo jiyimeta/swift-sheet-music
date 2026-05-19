@@ -27,7 +27,7 @@ public enum BravuraFont {
     /// will render as tofu until the caller supplies the font another way.
     public static let register: Bool = {
         let logger = Logger(
-            subsystem: "swift-sheet-music.SheetMusicUI",
+            subsystem: "swift-sheet-music.SheetMusicLayoutApple",
             category: "BravuraFont",
         )
 
@@ -77,7 +77,7 @@ public enum BravuraFont {
             // Host apps may also embed the SheetMusicUI resource bundle
             // as a sibling .bundle; open it explicitly and search inside.
             if let nestedURL = bundle.url(
-                forResource: "swift-sheet-music_SheetMusicUI",
+                forResource: "swift-sheet-music_SheetMusicLayoutApple",
                 withExtension: "bundle",
             ),
                 let nested = Bundle(url: nestedURL),

@@ -6,6 +6,8 @@
 
     @Suite("LayoutEngine")
     struct LayoutEngineTests {
+        private let _installApple = TestSupport.installApple
+
         @Test("Empty score produces zero systems")
         func emptyScore() {
             guard #available(macOS 15.0, *) else { return }

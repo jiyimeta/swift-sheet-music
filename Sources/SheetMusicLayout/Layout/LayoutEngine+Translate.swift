@@ -1,8 +1,9 @@
 // swiftlint:disable file_length
-import CoreGraphics
+#if canImport(CoreGraphics)
+    import CoreGraphics
+#endif
 import SheetMusicCore
 
-@available(macOS 15.0, *)
 extension LayoutEngine {
     /// Shift an element's origin(s) by a vertical offset, for stacking
     /// staves that were placed in staff-0-local coordinates.

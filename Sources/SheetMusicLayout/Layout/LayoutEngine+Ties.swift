@@ -1,8 +1,9 @@
 // swiftlint:disable file_length
-import CoreGraphics
+#if canImport(CoreGraphics)
+    import CoreGraphics
+#endif
 import SheetMusicCore
 
-@available(macOS 15.0, *)
 extension LayoutEngine {
     /// Resolved tie arc: an absolute-coords pair ready to attach to a
     /// layout system (coordinates are system-absolute; the attach pass

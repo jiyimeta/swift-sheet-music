@@ -1,9 +1,10 @@
 // swiftlint:disable file_length
-import CoreGraphics
-import CoreText
+#if canImport(CoreGraphics)
+    import CoreGraphics
+#endif
+import Foundation
 import SheetMusicCore
 
-@available(macOS 15.0, *)
 extension LayoutEngine {
     /// True when consecutive same-verse syllables should be linked
     /// with a hyphen line. MuseScore draws dashes between any
@@ -360,29 +361,12 @@ extension LayoutEngine {
         _ text: String, sp: CGFloat,
     ) -> CGFloat {
         guard !text.isEmpty else { return 0 }
-        let fontSize = sp * 2.2
-        // `kCTFontWeightTrait` is in [-1, 1]. UIFont.Weight.semibold
-        // maps to 0.3 — match it so CoreText returns the same glyph
-        // advances SwiftUI uses.
-        let traits: CFDictionary = [
-            kCTFontWeightTrait: 0.3,
-        ] as CFDictionary
-        let attributes: CFDictionary = [
-            kCTFontTraitsAttribute: traits,
-            kCTFontSizeAttribute: fontSize,
-        ] as CFDictionary
-        let descriptor = CTFontDescriptorCreateWithAttributes(attributes)
-        let font = CTFontCreateWithFontDescriptor(descriptor, fontSize, nil)
-        let attrs: CFDictionary = [
-            kCTFontAttributeName: font,
-        ] as CFDictionary
-        guard let attrString = CFAttributedStringCreate(
-            nil, text as CFString, attrs,
-        )
-        else { return 0 }
-        let line = CTLineCreateWithAttributedString(attrString)
-        return CGFloat(
-            CTLineGetTypographicBounds(line, nil, nil, nil),
+        // Lyrics render at .semibold to match
+        // GraphicsContext+Glyph.drawExpressionText. Provider resolves
+        // the system font + weight trait internally.
+        return FontMetrics.provider.typographicWidth(
+            text: text,
+            font: LayoutFont(face: "", pointSize: sp * 2.2, weight: .semibold),
         )
     }
 

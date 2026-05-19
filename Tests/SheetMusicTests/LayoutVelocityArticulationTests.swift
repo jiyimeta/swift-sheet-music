@@ -7,6 +7,8 @@
 
     @Suite("LayoutEngine velocity-shaping articulation emission")
     struct LayoutVelocityArticulationTests {
+        private let _installApple = TestSupport.installApple
+
         private static func score(
             articulations: [ChordArticulation],
         ) -> Score {

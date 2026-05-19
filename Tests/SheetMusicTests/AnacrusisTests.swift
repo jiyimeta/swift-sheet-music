@@ -9,6 +9,8 @@
     import Testing
 
     struct AnacrusisTests {
+        private let _installApple = TestSupport.installApple
+
         @Test func measureCarriesActualLengthAndIrregular() {
             let pickup = Measure(
                 voices: [],

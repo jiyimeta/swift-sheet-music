@@ -7,6 +7,8 @@
 
     @Suite("Tie pairing")
     struct TiePairingTests {
+        private let _installApple = TestSupport.installApple
+
         @Test("Two quarter notes tied with number 1 produce one TiePair")
         func twoQuartersTied() {
             guard #available(macOS 15.0, *) else { return }

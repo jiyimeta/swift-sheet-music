@@ -1,6 +1,7 @@
 // swiftlint:disable file_length
 import SheetMusicCore
 import SheetMusicLayout
+import SheetMusicLayoutApple
 import SwiftUI
 
 /// Paginated score view that displays one page of systems at a time.
@@ -22,7 +23,7 @@ public struct PagedScoreView: View {
         pageIndex: Binding<Int>,
         totalPages: Binding<Int>,
     ) {
-        _ = BravuraFont.register
+        _ = SheetMusicLayoutApple.install
         self.score = score
         self.options = options
         _pageIndex = pageIndex

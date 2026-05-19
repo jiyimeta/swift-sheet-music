@@ -51,6 +51,10 @@ targets:
       - package: swift-sheet-music
         product: SheetMusic
       - package: swift-sheet-music
+        product: SheetMusicLayout
+      - package: swift-sheet-music
+        product: SheetMusicLayoutApple
+      - package: swift-sheet-music
         product: SheetMusicUI
       - package: swift-sheet-music
         product: SheetMusicAudio
@@ -83,6 +87,10 @@ targets:
     dependencies:
       - package: swift-sheet-music
         product: SheetMusic
+      - package: swift-sheet-music
+        product: SheetMusicLayout
+      - package: swift-sheet-music
+        product: SheetMusicLayoutApple
       - package: swift-sheet-music
         product: SheetMusicUI
       - package: swift-sheet-music

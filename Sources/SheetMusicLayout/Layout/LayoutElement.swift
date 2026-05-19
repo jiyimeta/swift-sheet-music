@@ -1,14 +1,14 @@
-import CoreGraphics
+#if canImport(CoreGraphics)
+    import CoreGraphics
+#endif
 import SheetMusicCore
 
 /// Stem direction for notes / beams.
-@available(macOS 15.0, *)
 public enum StemDirection: Sendable, Equatable { case up, down }
 
 /// Anchor describing where a `.tremoloBars` element draws its bars.
 /// Geometry is pre-computed by the placement / beam passes so the
 /// renderer just strokes parallel bars around `center`.
-@available(macOS 15.0, *)
 public enum TremoloAnchor: Sendable, Equatable {
     /// Bars cross a single stem. `center` is the bar block centre
     /// (mid of the topmost and bottommost bar). For BEAMED chords the
@@ -26,7 +26,6 @@ public enum TremoloAnchor: Sendable, Equatable {
 /// `origin` is measured from the measure's top-left corner where
 /// y increases downward (screen convention). Staff step 0 (middle
 /// line) corresponds to a y equal to `staffHeight / 2` within the measure.
-@available(macOS 15.0, *)
 public enum LayoutElement: Sendable, Equatable {
     case clef(rawType: String, origin: CGPoint, anchor: ClefAnchor?)
     case keySignature(sharps: Int, flats: Int, origin: CGPoint)
@@ -257,7 +256,6 @@ public enum LayoutElement: Sendable, Equatable {
     }
 }
 
-@available(macOS 15.0, *)
 public struct LayoutChordNote: Sendable, Equatable {
     public let noteID: NoteID
     public let step: Int
@@ -310,7 +308,6 @@ public struct LayoutChordNote: Sendable, Equatable {
     }
 }
 
-@available(macOS 15.0, *)
 public enum StemDirectionRule {
     /// Median heuristic: if the chord median step is at or below 0
     /// (the middle line), stems go up. Otherwise down.

@@ -3,6 +3,7 @@ import CoreGraphics
 import Foundation
 import SheetMusicCore
 import SheetMusicLayout
+import SheetMusicLayoutApple
 import SheetMusicUI
 import SwiftUI
 
@@ -91,7 +92,7 @@ public enum PDFExporter {
         // `PDFExporter` is the first contact with `ImageRenderer` in
         // many host-app paths and would otherwise render music
         // glyphs as tofu boxes.
-        _ = BravuraFont.register
+        _ = SheetMusicLayoutApple.install
         let resolved = resolve(options: options, score: score)
         let layoutOptions = ScoreViewOptions(
             staffSize: resolved.staffSize,

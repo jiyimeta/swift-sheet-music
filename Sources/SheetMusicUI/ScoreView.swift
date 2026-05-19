@@ -1,5 +1,6 @@
 import SheetMusicCore
 import SheetMusicLayout
+import SheetMusicLayoutApple
 import SwiftUI
 
 /// Read-only SwiftUI view that renders a `Score`.
@@ -39,7 +40,7 @@ public struct ScoreView: View {
         playbackCursorColor: Color = Color.blue.opacity(0.15),
         availableWidth: CGFloat? = nil,
     ) {
-        _ = BravuraFont.register
+        _ = SheetMusicLayoutApple.install
         self.score = score
         self.options = options
         explicitWidth = availableWidth
@@ -72,7 +73,7 @@ public struct ScoreView: View {
         playbackCursor: ScoreCursor? = nil,
         playbackCursorColor: Color = Color.blue.opacity(0.15),
     ) {
-        _ = BravuraFont.register
+        _ = SheetMusicLayoutApple.install
         self.score = score
         self.options = options
         explicitWidth = nil

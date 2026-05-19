@@ -6,6 +6,8 @@
 
     @Suite("LayoutEngine tempo auto-placement")
     struct TempoLayoutTests {
+        private let _installApple = TestSupport.installApple
+
         /// Build a one-measure score with a tempo + chord at beat 1.
         /// Returns the absolute Y of the tempo glyph and of the first
         /// notehead so callers can compute the clearance between them.

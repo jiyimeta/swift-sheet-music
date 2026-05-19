@@ -7,6 +7,8 @@
     import Testing
 
     struct LayoutElementClefAnchorTests {
+        private let _installApple = TestSupport.installApple
+
         @available(macOS 15.0, iOS 16.0, *)
         @Test func staffDefaultAnchor() throws {
             let url = try #require(

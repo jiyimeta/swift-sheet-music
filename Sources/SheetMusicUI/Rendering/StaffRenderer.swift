@@ -1,5 +1,6 @@
 import SheetMusicCore
 import SheetMusicLayout
+import SheetMusicLayoutApple
 import SwiftUI
 
 @available(macOS 15.0, *)
@@ -227,7 +228,7 @@ enum StaffRenderer {
         originX: CGFloat,
         originY: CGFloat,
     ) -> CGPath? {
-        _ = BravuraFont.register
+        _ = SheetMusicLayoutApple.install
         let font = CTFontCreateWithName(
             BravuraFont.familyName as CFString, fontSize, nil,
         )
@@ -255,7 +256,7 @@ enum StaffRenderer {
         bottomY: CGFloat,
         xScale: CGFloat = 1,
     ) -> CGPath? {
-        _ = BravuraFont.register
+        _ = SheetMusicLayoutApple.install
         let font = CTFontCreateWithName(
             BravuraFont.familyName as CFString, fontSize, nil,
         )
