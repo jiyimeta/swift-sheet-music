@@ -1,6 +1,5 @@
 // swiftlint:disable file_length
 import CoreGraphics
-import CoreText
 import SheetMusicCore
 
 /// A melisma that extends INTO a measure from an earlier measure.
