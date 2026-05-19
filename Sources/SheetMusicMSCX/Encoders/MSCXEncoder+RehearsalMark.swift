@@ -34,7 +34,14 @@ extension RehearsalMark {
             ))
         }
         var props = properties
-        props.frameType = frame
+        // RehearsalMark defaults to a rectangle frame (MuseScore's
+        // `Sid::rehearsalMarkFrameType`). MuseScore Studio omits
+        // `<frameType>` when the value matches that default; emitting
+        // `<frameType>1</frameType>` would also work but produces
+        // larger files than the originals.
+        if frame != .rectangle {
+            props.frameType = frame
+        }
         props.appendXML(to: &children)
         return XMLTreeNode(name: "RehearsalMark", children: children)
     }

@@ -36,13 +36,13 @@ public enum TextStyleType: String, Sendable, CaseIterable {
 /// `TextStyleDefaults` table; the per-element kind on
 /// `RehearsalMark` is an alias of this type.
 public enum TextFrameType: String, Sendable, Equatable {
-    /// MuseScore `FrameType::SQUARE` (mscx `frameType=0`) /
+    /// MuseScore `FrameType::SQUARE` (mscx `frameType=1`) /
     /// MusicXML `enclosure="square"`.
     case rectangle
-    /// MuseScore `FrameType::CIRCLE` (mscx `frameType=1`) /
+    /// MuseScore `FrameType::CIRCLE` (mscx `frameType=2`) /
     /// MusicXML `enclosure="circle"`.
     case circle
-    /// MuseScore `FrameType::NO_FRAME` (mscx `frameType=2`).
+    /// MuseScore `FrameType::NO_FRAME` (mscx `frameType=0`).
     case none
 }
 

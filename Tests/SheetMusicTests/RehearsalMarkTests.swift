@@ -36,11 +36,13 @@ struct RehearsalMarkTests {
     }
 
     @Test func mscxDecodesFrameTypeAndOffset() throws {
+        // `<frameType>2</frameType>` corresponds to `FrameType::CIRCLE`
+        // per MuseScore's enum (NO_FRAME=0, SQUARE=1, CIRCLE=2).
         let xml = """
         <voice>
           <RehearsalMark>
             <text>1サビ</text>
-            <frameType>1</frameType>
+            <frameType>2</frameType>
             <offset x="0.5" y="-1.2"/>
             <color r="200" g="80" b="40" a="255"/>
           </RehearsalMark>

@@ -172,6 +172,66 @@ struct MSCXEncoderTextElementsTests {
         #expect(reparsed.text == "B")
     }
 
+    @Test("RehearsalMark omits <frameType> for the default rectangle frame")
+    func rehearsalMarkOmitsDefaultFrameType() throws {
+        // Regression: we used to force-write `props.frameType = frame`
+        // and emit `<frameType>0</frameType>` for every RehearsalMark.
+        // Combined with a stale enum mapping (0/1/2 vs MuseScore's
+        // NO_FRAME=0, SQUARE=1, CIRCLE=2), that produced
+        // `<frameType>0</frameType>` for rectangle marks — which
+        // MuseScore reads as NO_FRAME, dropping the visible border.
+        // MuseScore Studio omits `<frameType>` entirely when the
+        // value matches the style default; do the same so output
+        // matches the original file byte-pattern.
+        let mark = RehearsalMark(text: "A")
+        let positioned = PositionedSystemElement(
+            position: .start, element: .rehearsalMark(mark),
+        )
+        let measure = Measure(voices: [Voice(elements: [])])
+        let part = Part(
+            id: "1",
+            instrument: Instrument(id: "voice"),
+            staves: [Staff(measures: [measure])],
+        )
+        let score = Score(
+            division: 480,
+            parts: [part],
+            systemMeasures: [SystemMeasure(elements: [positioned])],
+        )
+        let bytes = try MSCXEncoder.encode(score)
+        let text = try #require(String(bytes: bytes, encoding: .utf8))
+        #expect(!text.contains("<frameType>"))
+    }
+
+    @Test("RehearsalMark with non-default frame uses MuseScore integer mapping")
+    func rehearsalMarkExplicitFrameUsesMuseScoreInteger() throws {
+        // Verify the encoded integer matches MuseScore upstream
+        // (engraving/dom/textbase.h: NO_FRAME=0, SQUARE=1, CIRCLE=2).
+        for (frame, expected) in [
+            (TextFrameType.circle, "<frameType>2</frameType>"),
+            (TextFrameType.none, "<frameType>0</frameType>"),
+        ] {
+            let mark = RehearsalMark(text: "M", frame: frame)
+            let positioned = PositionedSystemElement(
+                position: .start, element: .rehearsalMark(mark),
+            )
+            let measure = Measure(voices: [Voice(elements: [])])
+            let part = Part(
+                id: "1",
+                instrument: Instrument(id: "voice"),
+                staves: [Staff(measures: [measure])],
+            )
+            let score = Score(
+                division: 480,
+                parts: [part],
+                systemMeasures: [SystemMeasure(elements: [positioned])],
+            )
+            let bytes = try MSCXEncoder.encode(score)
+            let text = try #require(String(bytes: bytes, encoding: .utf8))
+            #expect(text.contains(expected), "expected \(expected) for \(frame)")
+        }
+    }
+
     @Test("Harmony round-trips standard chord with root/bass/parens")
     func harmonyStandardRoundTrip() throws {
         let harmony = Harmony(

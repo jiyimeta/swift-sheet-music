@@ -51,11 +51,13 @@ extension TextProperties {
 }
 
 /// Inverse of `decodeFrame(_:)` — `TextFrameType` → mscx `<frameType>` int.
+/// Mirrors MuseScore's `FrameType` enum (`engraving/dom/textbase.h`):
+/// `NO_FRAME=0, SQUARE=1, CIRCLE=2`.
 private func encodeFrame(_ frame: TextFrameType) -> Int {
     switch frame {
-    case .rectangle: 0
-    case .circle: 1
-    case .none: 2
+    case .none: 0
+    case .rectangle: 1
+    case .circle: 2
     }
 }
 
