@@ -99,8 +99,7 @@ MusicXML / XMLTools (Phase 1) + Layout (Phase 2, via the
 falls back to a `StubFontMetricsProvider` with rectangle
 approximations). SheetMusicAudioCore is also Android-compatible
 (Foundation-only audio value types like PlaybackTimeline /
-MetronomeBeat / AudioFileFormat). UI / PDF remain Apple-only pending
-Phase 4 (Android backend).
+MetronomeBeat / AudioFileFormat). UI / PDF remain Apple-only.
 
 ### Prerequisites
 
@@ -162,6 +161,31 @@ cross-compile fails with `'semaphore.h' file not found` /
 `.mscz` and `.mxl` are fully supported on Android via the in-house
 `SheetMusicZip` target (raw DEFLATE through system `libz`). No
 additional setup is required beyond the Phase 1 toolchain.
+
+### Android example app
+
+An end-to-end Kotlin Compose demo lives in `Examples/Android/`. It
+parses an `.mscz` from the app's `assets/`, computes layout via the
+JNI bridge (`Sources/SheetMusicAndroidJNI`), and renders pages to a
+Compose `Canvas`. Audio is intentionally not wired (the Play button
+is disabled) — wiring `SheetMusicAudioCore` into the JNI bridge is a
+Phase 4 follow-up.
+
+Quickstart (from repo root):
+
+    # 1. Build native libs into Examples/Android/app/src/main/jniLibs/
+    Scripts/android-build-libs.sh
+
+    # 2. Copy a MuseScore file you own into the app's assets
+    cp /path/to/your.mscz ~/Desktop/test.mscz
+    Scripts/android-bundle-test-score.sh
+
+    # 3. Open Examples/Android/ in Android Studio and Run
+
+Supported ABIs: `arm64-v8a`, `x86_64`. Lowest API level: 28.
+Glyph rendering uses `StubFontMetricsProvider` rectangle approximations
+on Android — replacing with a SMuFL-aware Android provider is a future
+phase.
 
 ### `--swift-sdk` argument form
 
@@ -303,6 +327,10 @@ MuseScore repository root.
   proliferate beyond ~5.
 - Don't update `docs/superpowers/{plans,specs}/` to the new naming —
   those are point-in-time design records and should remain as-is.
+- Don't commit `Examples/Android/app/src/main/assets/test.mscz` — the
+  file is for local testing only and not redistributable. The bundle
+  script (`Scripts/android-bundle-test-score.sh`) copies it from
+  `~/Desktop` and the destination is gitignored.
 
 ## Recurring pitfalls
 

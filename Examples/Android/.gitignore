@@ -1,0 +1,9 @@
+.gradle/
+build/
+app/build/
+app/src/main/jniLibs/
+app/src/main/assets/test.mscz
+local.properties
+.idea/
+*.iml
+captures/
