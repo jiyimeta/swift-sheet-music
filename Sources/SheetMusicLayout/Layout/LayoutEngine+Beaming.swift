@@ -4,7 +4,6 @@
 #endif
 import SheetMusicCore
 
-@available(macOS 15.0, *)
 extension LayoutEngine {
     struct BeamGroup: Equatable {
         /// Voice-element indices (into `voice.elements`) of the chords in

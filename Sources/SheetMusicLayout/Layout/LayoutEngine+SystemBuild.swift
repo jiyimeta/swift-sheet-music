@@ -4,7 +4,6 @@
 #endif
 import SheetMusicCore
 
-@available(macOS 15.0, *)
 extension LayoutEngine {
     // MARK: - Per-system layout
 

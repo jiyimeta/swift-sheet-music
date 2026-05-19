@@ -7,7 +7,6 @@ import SheetMusicCore
 /// and absolute text positions ready for the renderer to consume.
 /// Built by `LayoutEngine` from `Score.titleFrame`; nil when the
 /// score has no leading `<VBox>`.
-@available(macOS 15.0, *)
 public struct LayoutTitleFrame: Sendable, Equatable {
     public let height: CGFloat
     public let texts: [LayoutFrameText]
@@ -18,7 +17,6 @@ public struct LayoutTitleFrame: Sendable, Equatable {
     }
 }
 
-@available(macOS 15.0, *)
 public struct LayoutFrameText: Sendable, Equatable {
     public enum Anchor: Sendable, Equatable {
         case topLeading

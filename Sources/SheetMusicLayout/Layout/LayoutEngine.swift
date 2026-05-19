@@ -21,7 +21,6 @@ import SheetMusicCore
 /// - `LayoutEngine+SystemBuild.swift` — per-system `buildSystem` pass.
 /// - `LayoutEngine+YBounds.swift`     — element-Y skyline helpers.
 /// - `LayoutEngine+Translate.swift`   — element-tree vertical translate.
-@available(macOS 15.0, *)
 public enum LayoutEngine {
     /// Lay out `score` into a `LayoutDocument`. Equivalent to the
     /// cache-aware overload with `cache: nil` — every per-measure

@@ -3,7 +3,6 @@
 #endif
 import SheetMusicCore
 
-@available(macOS 15.0, *)
 extension LayoutEngine {
     /// Compute the y extent (min/max) of every placed element across all
     /// measures of a system. Used to size the system so notes on far

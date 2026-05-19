@@ -2,7 +2,6 @@
     import CoreGraphics
 #endif
 
-@available(macOS 15.0, *)
 public struct LayoutDocument: Sendable, Equatable {
     public let size: CGSize
     public let systems: [LayoutSystem]

@@ -4,7 +4,6 @@ import SheetMusicCore
 ///
 /// `step` values of 0 = middle line. +1 = space above middle line.
 /// +2 = fourth line (from bottom). …etc. Each step = 0.5 sp vertically.
-@available(macOS 15.0, *)
 public struct StaffStep: Sendable, Equatable {
     public let step: Int
     public init(_ step: Int) {
@@ -17,7 +16,6 @@ public struct StaffStep: Sendable, Equatable {
 /// TPC ("tonal pitch class", -1..33 in MuseScore convention) selects the
 /// diatonic spelling. Pitch alone is ambiguous (C♯ vs D♭). With TPC we can
 /// place the notehead on the correct diatonic line/space.
-@available(macOS 15.0, *)
 public enum PitchStaffPosition {
     /// Tonal pitch class → diatonic step count from C (0=C, 1=D, …, 6=B).
     /// MuseScore TPC: -1 = F♭♭, 0 = C♭♭, 1 = G♭♭, …

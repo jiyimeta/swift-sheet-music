@@ -24,10 +24,14 @@ SheetMusic            (umbrella + small façade)
   ├─→ SheetMusicMusicXML (MusicXML / MXL import; → Core, XMLTools, ZIP)
   └─→ SheetMusicMIDI     (in-memory MIDI model, render, SMF I/O; → Core)
 
-SheetMusicLayout      (pure-geometry layout; → Core)
-SheetMusicUI          (SwiftUI views; → Core, Layout)
-SheetMusicAudio       (AVFoundation playback + audio file export; → Core, MIDI)
-SheetMusicPDF         (PDF export; → Core, Layout, UI)
+SheetMusicLayout      (pure-geometry layout, Foundation-only,
+                       Android-compatible; → Core)
+SheetMusicLayoutApple (CoreText font metrics provider for Layout;
+                       Apple-only; → Core, Layout)
+SheetMusicUI          (SwiftUI views; → Core, Layout, LayoutApple)
+SheetMusicAudio       (AVFoundation playback + audio file export;
+                       → Core, MIDI)
+SheetMusicPDF         (PDF export; → Core, Layout, LayoutApple, UI)
 ```
 
 Internal targets (not products): `SheetMusicXMLTools`.
@@ -80,12 +84,16 @@ The example app's `.xcodeproj` is **gitignored**; regenerate from
 `Example/project.yml` with `xcodegen` whenever you change project
 settings or sources.
 
-## Android build (Phase 1 — Foundation-only targets)
+## Android build (Phase 1–2)
 
 `swift-sheet-music` cross-compiles to Android via the Swift 6.3 official
-Android SDK. Only Foundation-dependent targets are supported in this
-phase (Core / MIDI / MSCX / MusicXML / XMLTools); Layout / UI / PDF /
-Audio remain Apple-only until Phases 2-3 introduce DI abstractions.
+Android SDK. Foundation-only targets supported: Core / MIDI / MSCX /
+MusicXML / XMLTools (Phase 1) + Layout (Phase 2, via the
+`FontMetricsProvider` DI seam — Apple hosts auto-install
+`SheetMusicLayoutApple`'s CoreText backend through UI / PDF; Android
+falls back to a `StubFontMetricsProvider` with rectangle
+approximations). UI / PDF / Audio remain Apple-only pending Phase 3
+audio DI.
 
 ### Prerequisites
 

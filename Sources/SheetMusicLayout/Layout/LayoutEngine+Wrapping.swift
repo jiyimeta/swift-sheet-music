@@ -3,7 +3,6 @@
 #endif
 import SheetMusicCore
 
-@available(macOS 15.0, *)
 extension LayoutEngine {
     /// True when the measure at `idx` should force the next measure
     /// onto a new system, given `policy`. Looks only at staff 0 — line

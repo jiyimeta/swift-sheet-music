@@ -2,7 +2,6 @@
     import CoreGraphics
 #endif
 
-@available(macOS 15.0, *)
 public struct LayoutMeasure: Sendable, Equatable {
     /// 0-based score-wide measure index. Identifies which measure of
     /// `score.allStaves[*].staff.measures` this layout entry corresponds to,

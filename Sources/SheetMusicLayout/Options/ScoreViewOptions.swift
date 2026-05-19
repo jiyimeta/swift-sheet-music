@@ -14,7 +14,6 @@
 /// | `.honor`              | yes         | yes         | yes             |
 /// | `.ignoreSystemBreaks` | no          | yes         | yes             |
 /// | `.ignoreAll`          | no          | no          | no              |
-@available(macOS 15.0, *)
 public enum LayoutBreakPolicy: Sendable, Equatable {
     /// Default — `<LayoutBreak>line` and `<LayoutBreak>page` both
     /// force a new system; `<LayoutBreak>page` additionally closes
@@ -37,7 +36,6 @@ public enum LayoutBreakPolicy: Sendable, Equatable {
 /// on-screen score. Independent from `LayoutBreakPolicy` — this enum
 /// only hides badges that would otherwise be drawn; layout behavior
 /// is unchanged.
-@available(macOS 15.0, *)
 public enum BreakIndicatorVisibility: Sendable, Equatable {
     /// Show both line- and page-break badges.
     case all
@@ -50,7 +48,6 @@ public enum BreakIndicatorVisibility: Sendable, Equatable {
 /// Policy for collapsing runs of consecutive rest measures into a
 /// single multi-measure-rest bar (the H-bar + count notation).
 /// Affects layout only — `Score` and MIDI are untouched.
-@available(macOS 15.0, *)
 public enum MultiMeasureRestPolicy: Sendable, Equatable {
     /// Default — every rest measure renders individually.
     case disabled
@@ -63,7 +60,6 @@ public enum MultiMeasureRestPolicy: Sendable, Equatable {
 
 /// Tunable knobs for `ScoreView`. v1 intentionally keeps this small —
 /// layout is driven by the view's available width and these values.
-@available(macOS 15.0, *)
 public struct ScoreViewOptions: Sendable, Equatable {
     /// Height of one five-line staff in points. Defaults to 28 pt
     /// (roughly rastral 3).

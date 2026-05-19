@@ -4,7 +4,6 @@
 #endif
 import SheetMusicCore
 
-@available(macOS 15.0, *)
 extension LayoutEngine {
     /// Per-measure shared header layout. All staves in a multi-staff
     /// system use the same x-positions for clef / key sig / time sig
