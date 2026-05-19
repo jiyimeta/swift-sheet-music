@@ -109,16 +109,9 @@ enum StemRenderer {
     private static func flagGlyph(
         for dur: NoteDuration, direction: StemDirection,
     ) -> Character? {
-        switch (dur, direction) {
-        case (.eighth, .up): return SMuFLGlyph.flag8thUp
-        case (.eighth, .down): return SMuFLGlyph.flag8thDown
-        case (.sixteenth, .up): return SMuFLGlyph.flag16thUp
-        case (.sixteenth, .down): return SMuFLGlyph.flag16thDown
-        case (.thirtySecond, .up): return SMuFLGlyph.flag32ndUp
-        case (.thirtySecond, .down): return SMuFLGlyph.flag32ndDown
-        case (.sixtyFourth, .up): return SMuFLGlyph.flag64thUp
-        case (.sixtyFourth, .down): return SMuFLGlyph.flag64thDown
-        default: return nil
-        }
+        guard let cp = FlagGlyph.codepoint(duration: dur, stem: direction)
+        else { return nil }
+        // swiftlint:disable:next force_unwrapping
+        return Character(UnicodeScalar(cp)!)
     }
 }
