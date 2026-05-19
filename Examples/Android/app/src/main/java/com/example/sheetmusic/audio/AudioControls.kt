@@ -6,15 +6,12 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.FastForward
-import androidx.compose.material.icons.filled.FastRewind
-import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -33,6 +30,11 @@ import kotlin.math.floor
  * handler once tap → cursor mapping is implemented in a follow-up phase.
  * The hook is intentionally separate from this composable so it stays
  * decoupled from the canvas layer.
+ *
+ * Note: material-icons-extended is intentionally not added as a dependency.
+ * Transport actions use text labels (⏮ ⏸ ⏹ ⏩) and the core PlayArrow icon.
+ * Add "androidx.compose.material:material-icons-extended" to app/build.gradle
+ * if you want proper icon shapes.
  */
 @Composable
 fun AudioControls(
@@ -54,26 +56,22 @@ fun AudioControls(
             horizontalArrangement = Arrangement.Center
         ) {
             // Rewind 5 s
-            IconButton(
+            TextButton(
                 onClick = { viewModel.engine.skip(-5.0) },
                 enabled = isPrepared
-            ) {
-                Icon(Icons.Default.FastRewind, contentDescription = "-5 s")
-            }
+            ) { Text("-5s") }
 
             // Stop
-            IconButton(
+            TextButton(
                 onClick = { viewModel.engine.stop() },
                 enabled = isPrepared && state != PlaybackState.PREPARED
-            ) {
-                Icon(Icons.Default.Stop, contentDescription = "Stop")
-            }
+            ) { Text("Stop") }
 
             // Play / Pause / Resume
             when (state) {
                 PlaybackState.PLAYING -> {
-                    IconButton(onClick = { viewModel.engine.pause() }) {
-                        Icon(Icons.Default.Pause, contentDescription = "Pause")
+                    TextButton(onClick = { viewModel.engine.pause() }) {
+                        Text("Pause")
                     }
                 }
                 PlaybackState.PAUSED -> {
@@ -93,12 +91,10 @@ fun AudioControls(
             }
 
             // Forward 5 s
-            IconButton(
+            TextButton(
                 onClick = { viewModel.engine.skip(5.0) },
                 enabled = isPrepared
-            ) {
-                Icon(Icons.Default.FastForward, contentDescription = "+5 s")
-            }
+            ) { Text("+5s") }
         }
 
         // Time readout
