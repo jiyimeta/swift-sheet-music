@@ -101,7 +101,10 @@ enum TextMarkRenderer {
         let style = ResolvedTextStyle.resolve(
             .tempo, overrides: properties, metrics: metrics,
         )
-        let glyphSize = metrics.sp * 4
+        // Inline Bravura symbol at the same point size as the
+        // surrounding Edwin text — MuseScore renders metronome glyphs
+        // proportional to the text, not at full SMuFL 1-em staff size.
+        let glyphSize = style.pointSize
         var cursorX = origin.x
         for run in MusicTextRuns.runs(in: text) {
             let resolved: GraphicsContext.ResolvedText

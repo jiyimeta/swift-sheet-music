@@ -31,7 +31,11 @@ extension LayoutBridge {
         into out: inout [DrawCommand],
     ) {
         let textPt = TextRoleStyle.fontSize(for: style, sp: CGFloat(sp))
-        let glyphPt = CGFloat(sp) * 4 // SMuFL: 1 em = 4 sp
+        // Inline music symbols (e.g. metNoteQuarterUp in a tempo) render
+        // at the surrounding text's point size, NOT at the SMuFL 1-em
+        // staff size — MuseScore styles them as inline glyphs so they
+        // sit proportionate to the text characters.
+        let glyphPt = textPt
         let runs = MusicTextRuns.runs(in: text)
         // Total advance across runs so the anchor offset is correct.
         var totalWidth: CGFloat = 0
@@ -85,10 +89,10 @@ extension LayoutBridge {
     }
 
     /// Emit a SMuFL glyph whose position was computed assuming Apple's
-    /// `.center` anchor (visual ink centre at `(cxPt, cyPt)`).
+    /// `.center` anchor (typographic frame centre at `(cxPt, cyPt)`).
     /// `Canvas.drawText` on Android anchors at the baseline-leading
-    /// corner; the offset comes from the glyph's y-up bbox half-extent
-    /// via `GlyphAnchor.centerToBaselineLeading`.
+    /// corner; the offset comes from the glyph's typographic metrics
+    /// (advance, ascent, descent) via `GlyphAnchor.centerToBaselineLeading`.
     static func emitCenterAnchoredGlyph(
         codepoint: UInt32,
         cxPt: Double,
@@ -96,13 +100,22 @@ extension LayoutBridge {
         sizePt: Double,
         into out: inout [DrawCommand],
     ) {
-        let bbox = FontMetrics.provider.glyphPathBoundingBox(
-            font: LayoutFont(
-                face: SMuFLFamily.bravura, pointSize: CGFloat(sizePt),
-            ),
-            codepoint: UInt16(codepoint),
+        let font = LayoutFont(
+            face: SMuFLFamily.bravura, pointSize: CGFloat(sizePt),
         )
-        let (dx, dy) = GlyphAnchor.centerToBaselineLeading(bbox: bbox)
+        // Single-character advance from the typographic width API.
+        // SMuFL codepoints in the Private Use Area always produce
+        // valid Unicode scalars (the bridge filters non-glyph values
+        // upstream).
+        guard let scalar = UnicodeScalar(codepoint) else { return }
+        let advance = FontMetrics.provider.typographicWidth(
+            text: String(scalar), font: font,
+        )
+        let ascent = FontMetrics.provider.ascent(font: font)
+        let descent = FontMetrics.provider.descent(font: font)
+        let (dx, dy) = GlyphAnchor.centerToBaselineLeading(
+            advance: advance, ascent: ascent, descent: descent,
+        )
         out.append(.glyph(
             codepoint: codepoint,
             x: (cxPt + Double(dx)) * ptToMMScale,

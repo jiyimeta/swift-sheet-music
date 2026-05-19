@@ -3,31 +3,35 @@
 #endif
 import Foundation
 
-/// Offset that converts a glyph emitted with `.center` anchor (visual
-/// ink centre at `(x, y)`) into a baseline-leading anchor (typographic
-/// origin at `(x, y)`).
+/// Offset that converts a glyph emitted with SwiftUI's `.center`
+/// anchor into a baseline-leading anchor (the position
+/// `Canvas.drawText` on Android takes).
 ///
-/// `LayoutEngine` emits glyph origins in the Apple SwiftUI convention:
-/// the visual ink centre coincides with the placed `(x, y)`. The
-/// Android `Canvas.drawText` API anchors at the baseline-leading
-/// position instead, so the bridge applies this conversion before
-/// writing the wire-format glyph command.
+/// `LayoutEngine` emits glyph origins assuming Apple's
+/// `context.draw(resolved, at:, anchor: .center)` semantics. SwiftUI
+/// resolves a single-character `Text` to its **typographic frame**
+/// (advance × line-height), not the ink-path bbox; `.center` centres
+/// that frame on `(x, y)`. The conversion is therefore based on
+/// `advance` (horizontal) and the asymmetry of `ascent`/`descent`
+/// (vertical), NOT on the path bbox:
 ///
-/// Both Apple's `CTFontCreatePathForGlyph().boundingBox` and the
-/// precomputed `SMuFLMetricsTable` return the glyph bounding box in
-/// y-up font coordinates — `bbox.midY > 0` means the visual centre
-/// sits above the baseline. The conversion is therefore:
+///     leading.x  = center.x - advance / 2
+///     baseline.y = center.y + (ascent - descent) / 2   // y-down screen
 ///
-///     leading.x   = center.x - bbox.midX
-///     baseline.y  = center.y + bbox.midY   // y-down screen coords
+/// The bbox-based variant used in an earlier version of this helper
+/// was off by ~1 sp for tall glyphs like the treble clef because the
+/// ink extends much higher above the baseline than the typographic
+/// frame admits.
 public enum GlyphAnchor {
-    /// `(dx, dy)` to add to a center-anchor `(x, y)` to obtain the
-    /// baseline-leading position, given the glyph's y-up font bbox.
-    /// Returns `(0, 0)` when the bbox is unavailable.
+    /// `(dx, dy)` to add to a `.center`-anchor `(x, y)` to obtain the
+    /// baseline-leading position. Uses the glyph's typographic metrics
+    /// (advance, ascent, descent) — these come from the same
+    /// FontMetricsProvider that the bridge already consults.
     public static func centerToBaselineLeading(
-        bbox: CGRect?,
+        advance: CGFloat,
+        ascent: CGFloat,
+        descent: CGFloat,
     ) -> (dx: CGFloat, dy: CGFloat) {
-        guard let bbox else { return (0, 0) }
-        return (dx: -bbox.midX, dy: bbox.midY)
+        (dx: -advance / 2, dy: (ascent - descent) / 2)
     }
 }
