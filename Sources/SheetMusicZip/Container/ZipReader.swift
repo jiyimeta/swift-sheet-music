@@ -22,6 +22,36 @@ struct ZipReader {
         entries[path] != nil
     }
 
+    func read(path: String) throws -> Data {
+        guard let entry = entries[path] else {
+            throw ZipError.entryNotFound(path)
+        }
+        return try read(entry)
+    }
+
+    func read(_ entry: ZipEntry) throws -> Data {
+        guard let range = entry.payloadRange else {
+            throw ZipError.corrupted("entry has no payload range")
+        }
+        let payload = data.subdata(in: range)
+        let result: Data
+        switch entry.method {
+        case .stored:
+            guard payload.count == Int(entry.uncompressedSize) else {
+                throw ZipError.corrupted(
+                    "stored size mismatch (got \(payload.count), expected \(entry.uncompressedSize))",
+                )
+            }
+            result = payload
+        case .deflate:
+            result = try Deflate.decompress(payload, expectedSize: Int(entry.uncompressedSize))
+        }
+        guard CRC32.compute(result) == entry.crc32 else {
+            throw ZipError.corrupted("CRC32 mismatch on entry \(entry.path)")
+        }
+        return result
+    }
+
     private static let eocdSignature: UInt32 = 0x0605_4B50
     private static let centralSignature: UInt32 = 0x0201_4B50
     private static let localSignature: UInt32 = 0x0403_4B50

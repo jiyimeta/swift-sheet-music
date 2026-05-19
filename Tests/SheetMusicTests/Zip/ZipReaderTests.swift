@@ -102,4 +102,19 @@ struct ZipReaderTests {
             _ = try ZipReader(data: Data("not a zip".utf8))
         }
     }
+
+    @Test
+    func readStoredPayload() throws {
+        let reader = try ZipReader(data: Self.minimalStoredArchive)
+        let bytes = try reader.read(path: "hi.txt")
+        #expect(bytes == Data("hello\n".utf8))
+    }
+
+    @Test
+    func missingEntryThrows() throws {
+        let reader = try ZipReader(data: Self.minimalStoredArchive)
+        #expect(throws: ZipError.self) {
+            _ = try reader.read(path: "missing.txt")
+        }
+    }
 }
