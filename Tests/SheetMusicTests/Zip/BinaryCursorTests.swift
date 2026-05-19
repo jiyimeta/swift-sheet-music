@@ -37,4 +37,18 @@ struct BinaryCursorTests {
         #expect(try r.readUInt16LE() == 0x0403)
         #expect(r.cursor == 4)
     }
+
+    @Test
+    func readsFromNonZeroStartIndexSlice() throws {
+        // Reproduce the ZipReader pattern: construct a slice of a larger
+        // Data and feed it to BinaryReader. Without normalization, the
+        // underlying Data.subdata(in:) call traps because slice indices
+        // are absolute, not 0-based.
+        let full = Data([0x99, 0x99, 0x34, 0x12, 0xEF, 0xBE, 0xAD, 0xDE, 0x99])
+        let slice = full[2 ..< 8] // startIndex == 2
+        var r = BinaryReader(data: slice)
+        #expect(try r.readUInt16LE() == 0x1234)
+        #expect(try r.readUInt32LE() == 0xDEAD_BEEF)
+        #expect(r.isAtEnd)
+    }
 }

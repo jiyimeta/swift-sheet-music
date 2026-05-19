@@ -7,7 +7,13 @@ struct BinaryReader {
     private(set) var cursor: Int
 
     init(data: Data, cursor: Int = 0) {
-        self.data = data
+        // Force `startIndex == 0`. `Data.subdata(in:)` (used by readBytes)
+        // interprets its range as absolute indices into the underlying
+        // buffer, not 0-based offsets, so a slice with non-zero
+        // startIndex (as produced by `fullArchive[localHeaderOffset...]`
+        // in ZipReader) would trap. Copying here is acceptable: ZIP
+        // archives we read are at most a few MB.
+        self.data = Data(data)
         self.cursor = cursor
     }
 
