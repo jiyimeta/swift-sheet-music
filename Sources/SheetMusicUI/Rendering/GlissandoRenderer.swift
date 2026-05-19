@@ -49,18 +49,33 @@ enum GlissandoRenderer {
         )
 
         // --- Text label (centred along the line) ---
+        // Mirrors `tdraw.cpp:1580` (`if (r.width() < l)`): when the
+        // rendered text would be at least as wide as the available
+        // line span, MuseScore silently drops it instead of letting
+        // it crash through the start/end noteheads. Measuring via
+        // SwiftUI's resolved Text guarantees we compare against the
+        // exact glyph metrics the renderer will draw — CTFont with
+        // trait descriptors under-reports italic-semibold width and
+        // leaves the gate too loose.
         if let text, !text.isEmpty {
             let fontSize = metrics.sp * 1.8
-            // MuseScore raises the text slightly above the line.
-            let yOffset = -(metrics.sp * 0.5)
-            let textX = length / 2
-            local.drawExpressionText(
-                text,
-                at: CGPoint(x: textX, y: yOffset),
-                size: fontSize,
-                italic: true,
-                anchor: .center,
+            let label = Text(text).font(
+                .system(size: fontSize, weight: .semibold).italic(),
             )
+            let resolved = local.resolve(label)
+            let textWidth = resolved.measure(in: CGSize(
+                width: CGFloat.greatestFiniteMagnitude,
+                height: CGFloat.greatestFiniteMagnitude,
+            )).width
+            if textWidth < length {
+                let yOffset = -(metrics.sp * 0.5)
+                let textX = length / 2
+                local.draw(
+                    resolved,
+                    at: CGPoint(x: textX, y: yOffset),
+                    anchor: .center,
+                )
+            }
         }
     }
 }

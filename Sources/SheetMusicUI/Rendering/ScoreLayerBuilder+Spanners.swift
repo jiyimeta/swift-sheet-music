@@ -318,6 +318,20 @@ extension ScoreLayerBuilder {
         }
 
         if let text, !text.isEmpty {
+            // Mirrors `tdraw.cpp:1580`: drop the label when its
+            // rendered width matches or exceeds the available line
+            // span between the two noteheads.
+            let fontSize = metrics.sp * 1.8
+            let font = systemFont(size: fontSize, italic: true)
+            let attrs: [NSAttributedString.Key: Any] = [.font: font]
+            let attributed = NSAttributedString(
+                string: text, attributes: attrs,
+            )
+            let line = CTLineCreateWithAttributedString(attributed)
+            let textWidth = CGFloat(
+                CTLineGetTypographicBounds(line, nil, nil, nil),
+            )
+            guard textWidth < length else { return }
             let localX = length / 2
             let localY = -(metrics.sp * 0.5)
             let worldX = cos(angle) * localX
@@ -327,7 +341,7 @@ extension ScoreLayerBuilder {
             if let layer = textLayer(
                 text: text,
                 at: CGPoint(x: worldX, y: worldY),
-                size: metrics.sp * 1.8,
+                size: fontSize,
                 italic: true,
                 anchor: CGPoint(x: 0.5, y: 0.5),
                 rotation: angle,
