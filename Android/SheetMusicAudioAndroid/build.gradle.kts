@@ -48,11 +48,10 @@ val syncGoldenBinaries by tasks.registering(Copy::class) {
     include("*.bin")
 }
 
-// Wire syncGoldenBinaries into the debug unit-test compile graph.
-// processDebugUnitTestJavaRes is the AGP task that stages test resources
-// for the debug unit-test variant; testDebugUnitTest depends on it.
+// Wire syncGoldenBinaries before the AGP task that stages test resources
+// for the debug unit-test variant so the .bin files are on the classpath.
 afterEvaluate {
-    tasks.matching { it.name == "testDebugUnitTest" }.configureEach {
+    tasks.matching { it.name == "processDebugUnitTestJavaRes" }.configureEach {
         dependsOn(syncGoldenBinaries)
     }
 }
