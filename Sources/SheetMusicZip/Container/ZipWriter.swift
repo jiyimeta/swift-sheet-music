@@ -3,7 +3,7 @@ import Foundation
 /// Builds a ZIP archive in memory. Scope mirrors ZipReader's accepted
 /// feature set: STORED or DEFLATE entries, UTF-8 names (gp bit 11 set),
 /// no data descriptor, no ZIP64.
-struct ZipWriter {
+public struct ZipWriter {
     private var buffer = BinaryWriter()
     private var records: [Record] = []
 
@@ -18,9 +18,9 @@ struct ZipWriter {
         let localHeaderOffset: UInt32
     }
 
-    init() {}
+    public init() {}
 
-    mutating func add(
+    public mutating func add(
         path: String,
         data: Data,
         method: ZipCompressionMethod = .deflate,
@@ -69,7 +69,7 @@ struct ZipWriter {
         ))
     }
 
-    consuming func finish() -> Data {
+    public consuming func finish() -> Data {
         let centralDirOffset = UInt32(buffer.offset)
         for r in records {
             let nameBytes = Data(r.path.utf8)
