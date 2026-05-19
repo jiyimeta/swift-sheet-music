@@ -233,12 +233,29 @@ public enum LayoutBridge {
             out.append(.lineTo(x: tx, y: ty))
             out.append(.stroke(width: sp * 0.5 * ptToMM))
 
-        case let .textMark(_, text, origin):
+        case let .textMark(kind, text, origin):
+            let pointSize = Double(TextRoleStyle.fontSize(
+                for: TextRoleStyle.style(for: kind),
+                sp: CGFloat(sp),
+            ))
             out.append(.text(
                 text,
                 x: (mox + Double(origin.x)) * ptToMM,
                 y: (moy + Double(origin.y)) * ptToMM,
-                size: sp * 4 * ptToMM,
+                size: pointSize * ptToMM,
+                fontId: .textRoman,
+            ))
+
+        case let .staffText(text, origin, _, isSystemText):
+            let role: TextStyleType = isSystemText ? .systemText : .staffText
+            let pointSize = Double(TextRoleStyle.fontSize(
+                for: role, sp: CGFloat(sp),
+            ))
+            out.append(.text(
+                text,
+                x: (mox + Double(origin.x)) * ptToMM,
+                y: (moy + Double(origin.y)) * ptToMM,
+                size: pointSize * ptToMM,
                 fontId: .textRoman,
             ))
 
@@ -271,9 +288,6 @@ public enum LayoutBridge {
             placeholderRect(at: origin, mox: mox, moy: moy, sp: sp, into: &out)
 
         case let .articulation(_, origin, _):
-            placeholderRect(at: origin, mox: mox, moy: moy, sp: sp, into: &out)
-
-        case let .staffText(_, origin, _, _):
             placeholderRect(at: origin, mox: mox, moy: moy, sp: sp, into: &out)
 
         // Decorations deferred to a future task — require richer geometry.
