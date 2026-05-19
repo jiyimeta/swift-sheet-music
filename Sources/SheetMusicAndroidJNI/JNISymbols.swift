@@ -47,6 +47,34 @@
         scoreTable.release(handle)
     }
 
+    // MARK: - SMuFL font metrics
+
+    @_cdecl("Java_com_example_sheetmusic_jni_SheetMusicBridge_nativeInstallSMuFLMetrics")
+    // swiftlint:disable:next identifier_name
+    public func Java_com_example_sheetmusic_jni_SheetMusicBridge_nativeInstallSMuFLMetrics(
+        _ envPtr: UnsafeMutablePointer<JNIEnv?>,
+        _ clazz: jclass,
+        _ byteArray: jbyteArray,
+    ) -> jboolean {
+        guard let env = envPtr.pointee else { return 0 }
+        let len = env.pointee.GetArrayLength(envPtr, byteArray)
+        guard len > 0 else { return 0 }
+        var bytes = [UInt8](repeating: 0, count: Int(len))
+        bytes.withUnsafeMutableBufferPointer { buf in
+            guard let base = buf.baseAddress else { return }
+            base.withMemoryRebound(to: jbyte.self, capacity: Int(len)) { jbytes in
+                env.pointee.GetByteArrayRegion(envPtr, byteArray, 0, len, jbytes)
+            }
+        }
+        do {
+            let table = try SMuFLMetricsTable.decode(Data(bytes))
+            FontMetrics.provider = SMuFLMetricsTableProvider(table: table)
+            return 1
+        } catch {
+            return 0
+        }
+    }
+
     // MARK: - Layout
 
     @_cdecl("Java_com_example_sheetmusic_jni_SheetMusicBridge_nativeComputeLayout")

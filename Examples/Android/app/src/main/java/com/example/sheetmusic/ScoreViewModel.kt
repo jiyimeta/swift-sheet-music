@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.sheetmusic.draw.DrawProgramDecoder
+import com.example.sheetmusic.jni.BravuraMetricsBuilder
 import com.example.sheetmusic.jni.ScoreHandle
 import com.example.sheetmusic.jni.SheetMusicBridge
 import kotlinx.coroutines.Dispatchers
@@ -37,6 +38,12 @@ class ScoreViewModel(app: Application) : AndroidViewModel(app) {
     private fun load() {
         viewModelScope.launch {
             val app = getApplication<Application>()
+
+            withContext(Dispatchers.Default) {
+                val table = BravuraMetricsBuilder.buildTable(app.assets)
+                SheetMusicBridge.nativeInstallSMuFLMetrics(table)
+            }
+
             val bytes = try {
                 withContext(Dispatchers.IO) {
                     app.assets.open(ASSET_NAME).use { it.readBytes() }

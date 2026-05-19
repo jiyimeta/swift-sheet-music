@@ -21,4 +21,11 @@ object SheetMusicBridge {
         pageWidthMM: Double,
         pageHeightMM: Double,
     ): ByteArray
+
+    /**
+     * Install a SMuFL glyph-metrics table on the Swift side. Returns
+     * `true` on success, `false` if the byte format is invalid. Wire
+     * format spec is on `Sources/SheetMusicAndroidJNI/SMuFLMetricsTable.swift`.
+     */
+    @JvmStatic external fun nativeInstallSMuFLMetrics(bytes: ByteArray): Boolean
 }
