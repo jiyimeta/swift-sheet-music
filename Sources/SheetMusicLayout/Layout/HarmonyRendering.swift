@@ -1,5 +1,4 @@
 import CoreGraphics
-import CoreText
 import Foundation
 import SheetMusicCore
 
@@ -21,26 +20,11 @@ public enum HarmonyRendering {
         for harmony: Harmony,
         metrics: StaffMetrics,
     ) -> [HarmonyRun] {
-        // Force Bravura registration BEFORE measuring. The
-        // renderer also calls this in `ScoreView.init`, but layout
-        // can run earlier (e.g. when a host computes a
-        // `LayoutDocument` ahead of the view, or when a unit test
-        // exercises layout without instantiating a view). When
-        // Bravura isn't registered, CTLineGetImageBounds for the
-        // SMuFL codepoints falls back to the system font, which
-        // returns a ~12 pt missing-glyph "tofu" box per character.
-        // The renderer later draws the (small) real Bravura glyph
-        // at the layout-reserved (large) tofu-sized slot, leaving
-        // ~10 pt of conspicuous whitespace after every accidental.
-        _ = BravuraFont.register
-        // Serialise the entire CT-using path. CoreText's
-        // `CTFontCreateWithName` and `CTLineCreateWithAttributedString`
-        // hit a global lock for unregistered family names and
-        // deadlock under concurrent access (Swift Testing runs test
-        // functions in parallel). One mutex around the whole pipeline
-        // is simpler and faster than diagnosing CT's lock topology.
-        ctLock.lock()
-        defer { ctLock.unlock() }
+        // Bravura registration (Apple) and CoreText serialisation are
+        // handled by the `FontMetrics.provider` implementation: the
+        // Apple provider's `init` triggers `BravuraFont.register` and
+        // serialises CT calls internally. The Stub provider on
+        // non-Apple hosts needs neither.
         let displayName = displayedName(for: harmony)
         let kindedSlices = parseSlices(
             name: displayName, harmonyType: harmony.harmonyType,
@@ -51,12 +35,12 @@ public enum HarmonyRendering {
         let glyphSize = glyphPointSize(
             for: harmony, metrics: metrics,
         )
-        let textFont = makeFont(
+        let textFont = LayoutFont(
             face: textFace(for: harmony),
             pointSize: textSize,
         )
-        let glyphFont = makeFont(
-            face: "Bravura",
+        let glyphFont = LayoutFont(
+            face: SMuFLFamily.bravura,
             pointSize: glyphSize,
         )
         // Both renderers (`HarmonyRenderer`/SwiftUI and
@@ -81,19 +65,23 @@ public enum HarmonyRendering {
             let run: HarmonyRun
             switch slice {
             case let .text(s):
-                let bounds = inkBounds(s, font: textFont)
+                let bounds = FontMetrics.provider.inkBounds(
+                    text: s, font: textFont,
+                )
+                let width = Double(bounds.width)
                 run = HarmonyRun(
                     kind: .text, content: s,
-                    advance: bounds.width + textGap,
+                    advance: width + Double(textGap),
                     x: cursor,
                 )
             case let .accidental(a):
-                let bounds = inkBounds(
-                    String(a.codepoint), font: glyphFont,
+                let bounds = FontMetrics.provider.inkBounds(
+                    text: String(a.codepoint), font: glyphFont,
                 )
+                let width = Double(bounds.width)
                 run = HarmonyRun(
                     kind: .accidental(a), content: "",
-                    advance: bounds.width + accidentalGap,
+                    advance: width + Double(accidentalGap),
                     x: cursor,
                 )
             }
@@ -102,9 +90,6 @@ public enum HarmonyRendering {
         }
         return runs
     }
-
-    /// Single mutex guarding all CoreText calls in this enum.
-    private nonisolated(unsafe) static let ctLock = NSLock()
 
     /// Sum of the `advance` values. Equivalent to the rightmost
     /// run's `x + advance`. Provided as a separate helper because
@@ -268,55 +253,5 @@ public enum HarmonyRendering {
     private static func textFace(for harmony: Harmony) -> String {
         harmony.properties.face
             ?? harmony.styleType.museScoreDefault.face
-    }
-
-    /// Per-(face, size) CTFont cache. Caller already holds `ctLock`.
-    private nonisolated(unsafe) static var fontCache:
-        [String: CTFont] = [:]
-
-    private static func makeFont(
-        face: String, pointSize: CGFloat,
-    ) -> CTFont {
-        let key = "\(face)|\(pointSize)"
-        if let cached = fontCache[key] { return cached }
-        let font = CTFontCreateWithName(face as CFString, pointSize, nil)
-        fontCache[key] = font
-        return font
-    }
-
-    /// CoreText typesetting advance for a string in `font`. Falls
-    /// back to the platform system font if `face` is unregistered
-    /// (CTFont's cascade list handles this automatically), so the
-    /// reported width stays sensible even when Edwin / Campania /
-    /// Bravura are missing at test-time.
-    /// Visual ink metrics for one glyph. `leftBearing` is the offset
-    /// from the typographic origin to the leftmost inked pixel
-    /// (positive when the glyph is inset from the origin); `width`
-    /// is the visible inked width (ink right edge minus ink left
-    /// edge). Renderers use these to trim the font's natural side
-    /// bearings on chord-symbol accidentals.
-    private static func inkBounds(
-        _ string: String, font: CTFont,
-    ) -> (leftBearing: Double, width: Double) {
-        let line = ctLine(for: string, font: font)
-        let imageBounds = CTLineGetImageBounds(line, nil)
-        return (
-            leftBearing: Double(imageBounds.origin.x),
-            width: Double(imageBounds.width),
-        )
-    }
-
-    private static func ctLine(
-        for string: String, font: CTFont,
-    ) -> CTLine {
-        let attr = NSAttributedString(
-            string: string,
-            attributes: [
-                NSAttributedString.Key(kCTFontAttributeName as String): font,
-            ],
-        )
-        return CTLineCreateWithAttributedString(
-            attr as CFAttributedString,
-        )
     }
 }
