@@ -18,9 +18,10 @@ extension LayoutBridge {
     static let ptToMMScale = 25.4 / 72.0
 
     /// Emit a text element honoring the role's MuseScore anchor.
-    /// `Canvas.drawText` on Android anchors at the baseline-leading
-    /// corner — for `.center` roles (lyrics) we shift X by half the
-    /// typographic width so the visual centre lands on `originX`.
+    /// Splits the string into Bravura-glyph runs (SMuFL PUA codepoints)
+    /// and Edwin-text runs via `MusicTextRuns.runs`, advancing X across
+    /// each run. The first run anchors at `originX` (adjusted by anchor
+    /// offset using the total width).
     static func emitText(
         text: String,
         style: TextStyleType,
@@ -29,25 +30,58 @@ extension LayoutBridge {
         sp: Double,
         into out: inout [DrawCommand],
     ) {
-        let pointSize = TextRoleStyle.fontSize(for: style, sp: CGFloat(sp))
-        let anchor = TextRoleStyle.horizontalAnchor(for: style)
-        let dx: Double
-        switch anchor {
-        case .leading: dx = 0
-        case .center, .trailing:
+        let textPt = TextRoleStyle.fontSize(for: style, sp: CGFloat(sp))
+        let glyphPt = CGFloat(sp) * 4 // SMuFL: 1 em = 4 sp
+        let runs = MusicTextRuns.runs(in: text)
+        // Total advance across runs so the anchor offset is correct.
+        var totalWidth: CGFloat = 0
+        let measured: [(run: MusicTextRuns.Run, width: CGFloat)] = runs.map { run in
             let width = FontMetrics.provider.typographicWidth(
-                text: text,
-                font: LayoutFont(face: "Edwin", pointSize: pointSize),
+                text: run.text,
+                font: fontFor(run: run, textPt: textPt, glyphPt: glyphPt),
             )
-            dx = anchor == .center ? -Double(width) / 2 : -Double(width)
+            totalWidth += width
+            return (run, width)
         }
-        out.append(.text(
-            text,
-            x: (originX + dx) * ptToMMScale,
-            y: originY * ptToMMScale,
-            size: Double(pointSize) * ptToMMScale,
-            fontId: .textRoman,
-        ))
+        let anchor = TextRoleStyle.horizontalAnchor(for: style)
+        let anchorDx: Double = switch anchor {
+        case .leading: 0
+        case .center: -Double(totalWidth) / 2
+        case .trailing: -Double(totalWidth)
+        }
+        var cursorX = originX + anchorDx
+        for (run, width) in measured {
+            switch run.kind {
+            case .musicSymbol:
+                out.append(.text(
+                    run.text,
+                    x: cursorX * ptToMMScale,
+                    y: originY * ptToMMScale,
+                    size: Double(glyphPt) * ptToMMScale,
+                    fontId: .smufl,
+                ))
+            case .text:
+                out.append(.text(
+                    run.text,
+                    x: cursorX * ptToMMScale,
+                    y: originY * ptToMMScale,
+                    size: Double(textPt) * ptToMMScale,
+                    fontId: .textRoman,
+                ))
+            }
+            cursorX += Double(width)
+        }
+    }
+
+    private static func fontFor(
+        run: MusicTextRuns.Run, textPt: CGFloat, glyphPt: CGFloat,
+    ) -> LayoutFont {
+        switch run.kind {
+        case .musicSymbol:
+            return LayoutFont(face: "Bravura", pointSize: glyphPt)
+        case .text:
+            return LayoutFont(face: "Edwin", pointSize: textPt)
+        }
     }
 
     /// Emit a SMuFL glyph whose position was computed assuming Apple's
