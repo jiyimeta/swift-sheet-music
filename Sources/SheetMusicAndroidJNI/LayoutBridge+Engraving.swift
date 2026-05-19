@@ -103,19 +103,11 @@ extension LayoutBridge {
         let font = LayoutFont(
             face: SMuFLFamily.bravura, pointSize: CGFloat(sizePt),
         )
-        // Single-character advance from the typographic width API.
-        // SMuFL codepoints in the Private Use Area always produce
-        // valid Unicode scalars (the bridge filters non-glyph values
-        // upstream).
         guard let scalar = UnicodeScalar(codepoint) else { return }
         let advance = FontMetrics.provider.typographicWidth(
             text: String(scalar), font: font,
         )
-        let ascent = FontMetrics.provider.ascent(font: font)
-        let descent = FontMetrics.provider.descent(font: font)
-        let (dx, dy) = GlyphAnchor.centerToBaselineLeading(
-            advance: advance, ascent: ascent, descent: descent,
-        )
+        let (dx, dy) = GlyphAnchor.centerToBaselineLeading(advance: advance)
         out.append(.glyph(
             codepoint: codepoint,
             x: (cxPt + Double(dx)) * ptToMMScale,
