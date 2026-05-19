@@ -24,28 +24,6 @@ import SheetMusicMIDI
 /// Phase 1 only exposes `playPreview(...)` (a brief noteOn/Off pair
 /// triggered when a single note is selected). Timeline-driven
 /// playback for the entire score lands in a later phase.
-/// State machine for full-score playback. Drives any UI that
-/// needs to switch between play / pause icons.
-public enum PlaybackState: Sendable, Equatable {
-    case stopped, playing, paused, exporting
-}
-
-/// Half-open tick range `[startTick, endTick)` the engine should
-/// loop while playing. Tick-based rather than cursor-based because
-/// `setLoop(from:throughEndOf:)` wraps at an item's offset, which
-/// rarely coincides with a `ScoreCursor` column. Hosts that want a
-/// cursor for the boundaries can resolve via
-/// `PlaybackTimeline.frame(atTick:)`.
-public struct LoopRange: Sendable, Equatable {
-    public let startTick: Int
-    public let endTick: Int
-
-    public init(startTick: Int, endTick: Int) {
-        self.startTick = startTick
-        self.endTick = endTick
-    }
-}
-
 @MainActor
 @Observable
 public final class PlaybackEngine { // swiftlint:disable:this type_body_length
