@@ -7,14 +7,34 @@ android {
     namespace = "io.github.kiichiio.sheetmusic.audio"
     compileSdk = 35
 
+    buildFeatures {
+        buildConfig = false
+        prefab = true   // surfaces fluidsynth headers from the .aar via Prefab
+    }
+
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = "3.22.1"
+        }
+    }
+
     defaultConfig {
         minSdk = 28
         consumerProguardFiles("proguard-consumer.pro")
-    }
 
-    buildFeatures {
-        buildConfig = false
-        prefab = true   // For finding fluidsynth headers from the .aar
+        externalNativeBuild {
+            cmake {
+                cppFlags += listOf("-std=c++17")
+                arguments += listOf(
+                    "-DANDROID_STL=c++_shared",
+                )
+            }
+        }
+        ndk {
+            // Match Phase 4 non-audio's ABI set
+            abiFilters += listOf("arm64-v8a", "x86_64")
+        }
     }
 
     compileOptions {
@@ -23,10 +43,6 @@ android {
     }
 
     kotlinOptions { jvmTarget = "17" }
-
-    // TODO Phase 9: enable externalNativeBuild + CMakeLists.txt so
-    // libsheetmusicaudio.so wraps libfluidsynth.so via the Prefab
-    // package above. Until then, this module ships pure-Kotlin code.
 
     publishing {
         singleVariant("release") {
