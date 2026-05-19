@@ -3,9 +3,8 @@ import Foundation
 import SheetMusicCore
 import SheetMusicMIDI
 
-/// Owns the metronome's `AVAudioUnitSampler` and the index of the
-/// sequencer track scheduling its events. Mirrors MuseScore's
-/// metronome track:
+/// Owns the metronome's AUMIDISynth and the index of the sequencer
+/// track scheduling its events. Mirrors MuseScore's metronome track:
 ///
 ///   * Strong (downbeat) → MIDI note 76 (Hi Wood Block)
 ///   * Other beat → MIDI note 77 (Low Wood Block)
@@ -20,7 +19,7 @@ import SheetMusicMIDI
 @MainActor
 final class MetronomeController {
     private let engine: AVAudioEngine
-    private var sampler: AVAudioUnitSampler?
+    private var sampler: AVAudioUnitMIDIInstrument?
     /// The sequencer track scheduling our note-ons. We hold a weak
     /// reference so the next `buildSequencer` rebuild doesn't keep
     /// the old sequencer alive; we track its index in `tracks` to
@@ -46,14 +45,14 @@ final class MetronomeController {
         self.engine = engine
     }
 
-    /// Idempotent: attaches a sampler to the audio engine the first
+    /// Idempotent: attaches a synth to the audio engine the first
     /// time, then reloads its preset from `soundfontURL` whenever
     /// that URL changes between scores. Failure to load the GM bank
-    /// is non-fatal — we leave the sampler attached so the audio
+    /// is non-fatal — we leave the synth attached so the audio
     /// graph stays intact and just click silently.
     func prepare(soundfontURL: URL?) {
-        let sampler = sampler ?? {
-            let s = AVAudioUnitSampler()
+        let instrument = sampler ?? {
+            let s = MIDISynthBuilder.make()
             engine.attach(s)
             engine.connect(s, to: engine.mainMixerNode, format: nil)
             s.volume = volume
@@ -66,11 +65,17 @@ final class MetronomeController {
         }
         if loadedSoundfontURL == url { return }
         do {
-            try sampler.loadSoundBankInstrument(
-                at: url,
-                program: 0,
-                bankMSB: UInt8(kAUSampler_DefaultPercussionBankMSB),
+            // Metronome plays on MIDI channel 9 (GM percussion). With
+            // MIDISynth, channel 9 events automatically select the
+            // drum kit from the loaded SF2; preload bank-0 program-0
+            // is enough to make the patches resident.
+            try MIDISynthBuilder.loadSoundFont(
+                into: instrument,
+                url: url,
+                bankMSB: 0,
                 bankLSB: 0,
+                program: 0,
+                channel: 9,
             )
             loadedSoundfontURL = url
         } catch {

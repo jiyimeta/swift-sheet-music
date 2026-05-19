@@ -1,0 +1,164 @@
+import AudioToolbox
+import AVFoundation
+import Foundation
+
+/// Factory for `AVAudioUnitMIDIInstrument`s backed by Apple's
+/// `kAudioUnitSubType_MIDISynth` ("AUMIDISynth"). Used in place of
+/// `AVAudioUnitSampler` because AUSampler ignores RPN 0,0 (Pitch
+/// Bend Sensitivity) — its bend range is hard-coded to ±2 semitones,
+/// which truncates portamento glissandi that we render at ±12. The
+/// MIDISynth AU honours the RPN that the renderer emits in each
+/// track header.
+///
+/// API surface mirrors `AVAudioUnitSampler.loadSoundBankInstrument`
+/// closely enough that call sites swap with minimal churn. Patch
+/// selection differs in spirit though: AUSampler "pins" a single
+/// (bank, program) and ignores subsequent program-change events;
+/// MIDISynth responds to bank-select / program-change MIDI events at
+/// runtime. Both behave the same in our pipeline because the rendered
+/// SMF either matches the pinned program or doesn't emit a fresh
+/// program change.
+enum MIDISynthBuilder {
+    /// Instantiate a fresh AUMIDISynth. The returned instrument has
+    /// no SoundFont loaded yet — call `loadSoundFont(...)` before
+    /// the audio engine starts (or accept the first-note load
+    /// latency).
+    static func make() -> AVAudioUnitMIDIInstrument {
+        let description = AudioComponentDescription(
+            componentType: kAudioUnitType_MusicDevice,
+            componentSubType: kAudioUnitSubType_MIDISynth,
+            componentManufacturer: kAudioUnitManufacturer_Apple,
+            componentFlags: 0,
+            componentFlagsMask: 0,
+        )
+        return AVAudioUnitMIDIInstrument(
+            audioComponentDescription: description,
+        )
+    }
+
+    /// Load a SoundFont (SF2 / DLS) into the instrument and pre-bind
+    /// the given (bank, program) patch on `channel` so the first
+    /// note isn't delayed by an on-thread patch load.
+    ///
+    /// `bankMSB` / `bankLSB` follow standard MIDI bank-select
+    /// semantics (CC 0 / CC 32). Callers migrating from
+    /// `AVAudioUnitSampler.loadSoundBankInstrument` must NOT pass
+    /// AUSampler's `kAUSampler_DefaultMelodicBankMSB` (0x79) /
+    /// `kAUSampler_DefaultPercussionBankMSB` (0x78): those are
+    /// AUSampler magic values telling the sampler which side of a
+    /// dual-purpose SF2 to use, not real MIDI bank numbers.
+    /// MIDISynth resolves percussion via MIDI channel 9 (zero-indexed)
+    /// at play time, not via the bank-MSB byte.
+    static func loadSoundFont(
+        into instrument: AVAudioUnitMIDIInstrument,
+        url: URL,
+        bankMSB: UInt8,
+        bankLSB: UInt8,
+        program: UInt8,
+        channel: UInt8 = 0,
+    ) throws {
+        // `kMusicDeviceProperty_SoundBankURL` expects a CFURLRef-sized
+        // buffer (= pointer to the CFURL). Going through
+        // `Unmanaged.toOpaque()` keeps `&` off the managed CFURL itself,
+        // which the compiler otherwise flags as "forming UnsafeRawPointer
+        // to a variable containing an object reference". The CFURL value
+        // stays alive via `cfURL` for the duration of the call; the AU
+        // retains it internally on success.
+        let cfURL = url as CFURL
+        var opaque: UnsafeMutableRawPointer = Unmanaged
+            .passUnretained(cfURL).toOpaque()
+        let setURLStatus = AudioUnitSetProperty(
+            instrument.audioUnit,
+            AudioUnitPropertyID(kMusicDeviceProperty_SoundBankURL),
+            AudioUnitScope(kAudioUnitScope_Global),
+            0,
+            &opaque,
+            UInt32(MemoryLayout<UnsafeMutableRawPointer>.size),
+        )
+        guard setURLStatus == noErr else {
+            throw NSError(
+                domain: NSOSStatusErrorDomain,
+                code: Int(setURLStatus),
+                userInfo: [
+                    NSLocalizedDescriptionKey:
+                        "kMusicDeviceProperty_SoundBankURL failed (\(setURLStatus))",
+                ],
+            )
+        }
+
+        // Pre-load the patch so the first sounded note doesn't trigger
+        // a synchronous SF2 patch load on the audio render thread.
+        var enable: UInt32 = 1
+        _ = AudioUnitSetProperty(
+            instrument.audioUnit,
+            AudioUnitPropertyID(kAUMIDISynthProperty_EnablePreload),
+            AudioUnitScope(kAudioUnitScope_Global),
+            0,
+            &enable,
+            UInt32(MemoryLayout<UInt32>.size),
+        )
+        instrument.sendController(0, withValue: bankMSB, onChannel: channel)
+        instrument.sendController(32, withValue: bankLSB, onChannel: channel)
+        instrument.sendProgramChange(program, onChannel: channel)
+        enable = 0
+        _ = AudioUnitSetProperty(
+            instrument.audioUnit,
+            AudioUnitPropertyID(kAUMIDISynthProperty_EnablePreload),
+            AudioUnitScope(kAudioUnitScope_Global),
+            0,
+            &enable,
+            UInt32(MemoryLayout<UInt32>.size),
+        )
+    }
+
+    /// Pre-configure the AUMIDISynth's pitch-bend sensitivity on
+    /// `channel` to `semitones` half-steps. Use this at engine setup
+    /// time so the synth's channel state is correct BEFORE the
+    /// sequencer starts emitting MIDI: a fresh AUMIDISynth defaults
+    /// to GM's ±2 semitones, and the RPN-setup events the renderer
+    /// places at tick 0 of each SMF track don't reliably get
+    /// processed before pitch-bend events at later ticks on the
+    /// very first play (subsequent plays inherit the previous
+    /// channel state and work). Sending the RPN dance directly to
+    /// the AU here sidesteps that race.
+    ///
+    /// MIDI spec: Pitch Bend Sensitivity = RPN 0,0. Sequence is
+    /// CC 101=0, CC 100=0 (select RPN), CC 6=semitones (data entry
+    /// MSB), CC 101=127, CC 100=127 (RPN null — deselect, so a
+    /// later spurious data-entry doesn't clobber the value).
+    ///
+    /// Goes through `MusicDeviceMIDIEvent` rather than
+    /// `AVAudioUnitMIDIInstrument.sendController`: the high-level
+    /// `send*` calls appear to queue events for delivery during the
+    /// next render cycle, which loses a race with the SMF's tick-0
+    /// events on the very first play after engine.start(). The C
+    /// API delivers immediately on the calling thread, so the
+    /// channel state is settled before the sequencer fires.
+    static func setPitchBendSensitivity(
+        into instrument: AVAudioUnitMIDIInstrument,
+        semitones: UInt8,
+        onChannel channel: UInt8,
+    ) {
+        let audioUnit = instrument.audioUnit
+        let ccStatus = UInt32(0xB0) | UInt32(channel & 0x0F)
+        func send(_ controller: UInt8, _ value: UInt8) {
+            _ = MusicDeviceMIDIEvent(
+                audioUnit,
+                ccStatus,
+                UInt32(controller),
+                UInt32(value),
+                0,
+            )
+        }
+        send(101, 0) // RPN MSB
+        send(100, 0) // RPN LSB → RPN (0,0) = Pitch Bend Sensitivity
+        send(6, semitones) // Data Entry MSB (semitones)
+        send(38, 0) // Data Entry LSB (cents). AUMIDISynth ignores
+        // the RPN update until BOTH data-entry bytes arrive — the
+        // 14-bit value is `MSB << 7 | LSB`. Without this LSB,
+        // sensitivity stays at the AU's ±2-semitone GM default,
+        // which is exactly the symptom we were seeing on first play.
+        send(101, 127) // RPN null (deselect, lock the value in)
+        send(100, 127)
+    }
+}

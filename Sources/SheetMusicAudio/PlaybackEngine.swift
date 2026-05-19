@@ -1,18 +1,25 @@
 // swiftlint:disable file_length
-import AVFoundation
+@preconcurrency import AVFoundation
 import Foundation
 import SheetMusicCore
 import SheetMusicMIDI
 
 /// Audio playback for `Score`s, backed by `AVAudioEngine` +
-/// per-staff `AVAudioUnitSampler`s.
+/// per-staff `AVAudioUnitMIDIInstrument`s (AUMIDISynth).
 ///
-/// Each staff in `prepare(score:)` gets its own sampler, with the
-/// matching SoundFont preset loaded via the supplied
-/// `SoundfontResolver`. Routing one sampler per staff (rather than
+/// Each staff in `prepare(score:)` gets its own MIDISynth instance,
+/// with the matching SoundFont preset loaded via the supplied
+/// `SoundfontResolver`. Routing one synth per staff (rather than
 /// one per unique `(bank, program)` pair) gives the host control
 /// over per-staff volume / pan / mute knobs in a future revision —
 /// the routing graph already has the granularity baked in.
+///
+/// AUMIDISynth (`kAudioUnitSubType_MIDISynth`) is used in preference
+/// to `AVAudioUnitSampler` because AUSampler ignores RPN 0,0 (Pitch
+/// Bend Sensitivity) — its bend range is hard-coded to ±2 semitones,
+/// which audibly truncates portamento glissandi we render at ±12.
+/// See `MIDISynthBuilder` for the wrapper that builds and configures
+/// each instrument.
 ///
 /// Phase 1 only exposes `playPreview(...)` (a brief noteOn/Off pair
 /// triggered when a single note is selected). Timeline-driven
@@ -44,9 +51,9 @@ public struct LoopRange: Sendable, Equatable {
 public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     private let resolver: SoundfontResolver
     private let engine = AVAudioEngine()
-    /// `AVAudioUnitSampler` per staff index. Re-built on each call
-    /// to `prepare(score:)`.
-    private var staffSamplers: [Int: AVAudioUnitSampler] = [:]
+    /// AUMIDISynth per staff index. Re-built on each call to
+    /// `prepare(score:)`.
+    private var staffSamplers: [Int: AVAudioUnitMIDIInstrument] = [:]
     /// SoundFont-load parameters cached per staff so the mixer's
     /// program picker can swap the GM patch on a sampler without
     /// having to consult the `Score` again.
@@ -169,7 +176,7 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
 
     // MARK: Internal accessors for `PlaybackEngine+Mixer`
 
-    func staffSampler(at idx: Int) -> AVAudioUnitSampler? {
+    func staffSampler(at idx: Int) -> AVAudioUnitMIDIInstrument? {
         staffSamplers[idx]
     }
 
@@ -191,28 +198,29 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         change(&mixerChannels[idx])
     }
 
-    /// Reload the staff `idx` sampler with a new GM `program`,
+    /// Reload the staff `idx` synth with a new GM `program`,
     /// keeping the staff's existing bank / drumset choice. Does
-    /// nothing if the sampler isn't built yet (engine never
+    /// nothing if the synth isn't built yet (engine never
     /// prepared) or the resolver returns no SoundFont URL — the
     /// existing patch keeps playing in that case.
     func loadProgram(forStaff idx: Int, program: UInt8) {
         guard
-            let sampler = staffSamplers[idx],
+            let instrument = staffSamplers[idx],
             let params = staffLoadParams[idx],
             let url = resolver.soundfontURL(
                 forBank: params.bankLSB, program: program, isDrums: params.isDrums,
             )
             ?? resolver.defaultGMSoundfontURL
         else { return }
-        let bankMSB: UInt8 = params.isDrums
-            ? UInt8(kAUSampler_DefaultPercussionBankMSB)
-            : UInt8(kAUSampler_DefaultMelodicBankMSB)
-        try? sampler.loadSoundBankInstrument(
-            at: url,
-            program: program,
-            bankMSB: bankMSB,
+        // MIDISynth uses standard MIDI bank-select semantics. Drum
+        // selection is resolved via MIDI channel 9 at play time, not
+        // via a magic bank-MSB byte (unlike AUSampler).
+        try? MIDISynthBuilder.loadSoundFont(
+            into: instrument,
+            url: url,
+            bankMSB: 0,
             bankLSB: params.bankLSB,
+            program: program,
         )
     }
 
@@ -221,10 +229,10 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// different score replaces the samplers.
     ///
     /// Synchronous and potentially slow on first call:
-    /// `AVAudioUnitSampler.loadSoundBankInstrument` blocks while
-    /// the SF2 file is parsed (tens of ms per file is typical, more
-    /// on iPhone for the full GM SF2). Wrap the call in
-    /// `Task.detached(priority: .userInitiated) { … }` if you want
+    /// `kMusicDeviceProperty_SoundBankURL` + the preload program-change
+    /// dance blocks while the SF2 file is parsed (tens of ms per file
+    /// is typical, more on iPhone for the full GM SF2). Wrap the call
+    /// in `Task.detached(priority: .userInitiated) { … }` if you want
     /// the UI to stay responsive during score load.
     public func prepare(score: Score) throws { // swiftlint:disable:this function_body_length
         // If an export is in flight the caller is expected to cancel its
@@ -281,39 +289,39 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
             )
                 ?? resolver.defaultGMSoundfontURL
 
-            let sampler = AVAudioUnitSampler()
-            engine.attach(sampler)
+            let instrument = MIDISynthBuilder.make()
+            engine.attach(instrument)
             engine.connect(
-                sampler,
+                instrument,
                 to: engine.mainMixerNode,
                 format: nil,
             )
             if let url {
-                // `AVAudioUnitSampler` resolves a preset via
-                // (bank MSB, bank LSB, program). For SF2 files, the
-                // melodic / percussion split is encoded in the bank
-                // MSB (0x79 / 0x78); the LSB carries the SF2 file's
-                // bank number, which our `Channel.bank` field maps
-                // to.
-                let bankMSB: UInt8 = isDrums
-                    ? UInt8(kAUSampler_DefaultPercussionBankMSB)
-                    : UInt8(kAUSampler_DefaultMelodicBankMSB)
-                let bankLSB: UInt8 = bank
-                do {
-                    try sampler.loadSoundBankInstrument(
-                        at: url,
-                        program: program,
-                        bankMSB: bankMSB,
-                        bankLSB: bankLSB,
-                    )
-                } catch {
-                    // Don't fail the whole `prepare` if one staff's
-                    // soundfont is missing or malformed; leave the
-                    // sampler attached so the routing graph stays
-                    // intact and that staff is just silent.
-                }
+                // Don't fail the whole `prepare` if one staff's
+                // soundfont is missing or malformed; leave the
+                // synth attached so the routing graph stays
+                // intact and that staff is just silent.
+                try? MIDISynthBuilder.loadSoundFont(
+                    into: instrument,
+                    url: url,
+                    bankMSB: 0,
+                    bankLSB: bank,
+                    program: program,
+                )
             }
-            staffSamplers[idx] = sampler
+            // The renderer emits pitch-bend ramps assuming RPN 0,0
+            // (Pitch Bend Sensitivity) = 12 semitones (see
+            // `MidiRenderer+Header`'s RPN block). Pre-configure every
+            // melodic channel here so the very first portamento
+            // glissando on a fresh score plays at the intended bend
+            // width — the SMF's tick-0 RPN setup loses a race against
+            // pitch-bend events at later ticks on first play.
+            for ch: UInt8 in 0 ..< 16 where ch != 9 {
+                MIDISynthBuilder.setPitchBendSensitivity(
+                    into: instrument, semitones: 12, onChannel: ch,
+                )
+            }
+            staffSamplers[idx] = instrument
             staffLoadParams[idx] = StaffLoadParams(
                 bankLSB: bank, isDrums: isDrums,
             )
@@ -343,15 +351,15 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         let flatIdx = score.allStaves.firstIndex(where: {
             $0.address == noteID.staff
         }) ?? -1
-        guard let sampler = staffSamplers[flatIdx]
+        guard let instrument = staffSamplers[flatIdx]
         else { return }
-        sampler.startNote(
+        instrument.startNote(
             pitch, withVelocity: velocity, onChannel: 0,
         )
         previewQueue.asyncAfter(
             deadline: .now() + duration,
-        ) { [weak sampler] in
-            sampler?.stopNote(pitch, onChannel: 0)
+        ) { [weak instrument] in
+            instrument?.stopNote(pitch, onChannel: 0)
         }
     }
 
@@ -432,6 +440,22 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
                 sequencer.currentPositionInBeats =
                     Double(t) / Double(timeline.division)
                 currentCursor = timeline.frame(atTick: t)?.cursor
+            }
+            // Re-assert pitch-bend sensitivity NOW that the engine is
+            // running, the sequencer is loaded, and tracks are routed
+            // to each staff's MIDISynth — but BEFORE the sequencer
+            // fires its tick-0 events. Without this the SMF's own
+            // RPN setup loses a race with the first portamento on
+            // the very first play after `prepare(score:)`, leaving
+            // the bend clamped at the AU's ±2-semitone default.
+            // See `MIDISynthBuilder.setPitchBendSensitivity` for
+            // why the C-API path matters here.
+            for instrument in staffSamplers.values {
+                for ch: UInt8 in 0 ..< 16 where ch != 9 {
+                    MIDISynthBuilder.setPitchBendSensitivity(
+                        into: instrument, semitones: 12, onChannel: ch,
+                    )
+                }
             }
             try sequencer.start()
             state = .playing
@@ -638,6 +662,49 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         timeline?.earliest(of: items)
     }
 
+    /// Rewrite the rendered SMF so it survives AUMIDISynth's quirks:
+    ///
+    /// 1. Strip `CC 121` (Reset All Controllers). MIDI 1.0 spec says
+    ///    RAC must NOT reset RPN values (so Pitch Bend Sensitivity
+    ///    is supposed to survive), but AUMIDISynth's implementation
+    ///    appears to reset sensitivity to the GM ±2-semitone default
+    ///    anyway. Combined with point 2 below, this means the SMF's
+    ///    own RPN setup that follows the RAC can't get sensitivity
+    ///    committed in time to be latched by the first noteOn voice.
+    /// 2. Insert `CC 38 = 0` (Data Entry LSB) right after every
+    ///    `CC 6` (Data Entry MSB). Data Entry is a 14-bit value
+    ///    (`MSB << 7 | LSB`) and AUMIDISynth defers committing the
+    ///    RPN update until both halves arrive.
+    ///
+    /// The renderer itself is left alone so SMF export keeps its
+    /// MuseScore-equivalent byte stream — these compensations only
+    /// apply to the bytes handed to `AVAudioSequencer`.
+    static func postProcessForMIDISynth(midi: inout MidiFile) {
+        for trackIdx in midi.tracks.indices {
+            var out: [TimedMidiEvent] = []
+            out.reserveCapacity(midi.tracks[trackIdx].events.count + 8)
+            for event in midi.tracks[trackIdx].events {
+                if case let .controlChange(_, controller, _) = event.event,
+                   controller == 121
+                {
+                    continue
+                }
+                out.append(event)
+                if case let .controlChange(channel, controller, _)
+                    = event.event, controller == 6
+                {
+                    out.append(TimedMidiEvent(
+                        tick: event.tick,
+                        event: .controlChange(
+                            channel: channel, controller: 38, value: 0,
+                        ),
+                    ))
+                }
+            }
+            midi.tracks[trackIdx] = MidiTrack(events: out)
+        }
+    }
+
     private func buildSequencer(for score: Score) throws {
         let sequencer = AVAudioSequencer(audioEngine: engine)
         // SheetMusicMIDI emits 1 track per staff (see
@@ -650,19 +717,32 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         midi.tracks.append(metronome.metronomeTrack(
             beats: metronomeBeats, division: midi.division,
         ))
+        Self.postProcessForMIDISynth(midi: &midi)
         let bytes = try MidiWriter.write(midi)
         try sequencer.load(from: bytes, options: [])
         // Route each track to its matching staff sampler. The
         // metronome track is appended last and is picked up by
         // `metronome.attach(to:)` below.
         for (i, track) in sequencer.tracks.enumerated() {
-            if let sampler = staffSamplers[i] {
-                track.destinationAudioUnit = sampler
+            if let instrument = staffSamplers[i] {
+                track.destinationAudioUnit = instrument
             }
         }
         metronome.attach(to: sequencer)
         sequencer.rate = pendingRate
         sequencer.prepareToPlay()
+        // Assert pitch-bend sensitivity once the sequencer knows its
+        // destination AUs but before any play. This pairs with the
+        // matching call in `play(...)` — the redundancy is defensive,
+        // since which side wins the race against tick-0 SMF events
+        // varies between fresh-build vs. cached-sequencer paths.
+        for instrument in staffSamplers.values {
+            for ch: UInt8 in 0 ..< 16 where ch != 9 {
+                MIDISynthBuilder.setPitchBendSensitivity(
+                    into: instrument, semitones: 12, onChannel: ch,
+                )
+            }
+        }
         self.sequencer = sequencer
     }
 
