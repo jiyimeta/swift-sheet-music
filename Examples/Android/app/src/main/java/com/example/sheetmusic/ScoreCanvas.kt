@@ -1,5 +1,7 @@
 package com.example.sheetmusic
 
+import android.graphics.Paint
+import android.graphics.Typeface
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.fillMaxSize
@@ -16,18 +18,31 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import com.example.sheetmusic.draw.DrawCommand
 import com.example.sheetmusic.draw.DrawPage
 
+private const val FONT_ID_TEXT_ROMAN = 0
+private const val FONT_ID_SMUFL = 1
+
 @Composable
-fun ScoreCanvas(state: ScoreState.Ready) {
+fun ScoreCanvas(state: ScoreState.Ready, modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    val bravura = remember(context) {
+        Typeface.createFromAsset(context.assets, "fonts/Bravura.otf")
+    }
+    val edwin = remember(context) {
+        Typeface.createFromAsset(context.assets, "fonts/Edwin-Roman.otf")
+    }
     var scale by remember { mutableFloatStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
     val page = state.program.pages[state.currentPage]
     Canvas(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxSize()
             .pointerInput(Unit) {
                 detectTransformGestures { _, pan, zoom, _ ->
@@ -41,7 +56,7 @@ fun ScoreCanvas(state: ScoreState.Ready) {
             translate(offset.x, offset.y)
             scale(scale, scale, pivot = Offset.Zero)
         }) {
-            drawPage(page, pxPerMM)
+            drawPage(page, pxPerMM, bravura, edwin)
         }
     }
 }
@@ -49,23 +64,30 @@ fun ScoreCanvas(state: ScoreState.Ready) {
 private fun DrawScope.pxPerMM(canvasSizeMM: Double): Float =
     (size.width / canvasSizeMM).toFloat()
 
-private fun DrawScope.drawPage(page: DrawPage, pxPerMM: Float) {
-    var current = Offset.Zero
+private fun DrawScope.drawPage(
+    page: DrawPage,
+    pxPerMM: Float,
+    bravura: Typeface,
+    edwin: Typeface
+) {
     val path = Path()
     var strokeStarted = false
+    val glyphPaint = Paint().apply {
+        isAntiAlias = true
+        color = android.graphics.Color.BLACK
+    }
     for (cmd in page.commands) {
         when (cmd) {
             is DrawCommand.MoveTo -> {
-                current = Offset(cmd.x.toFloat() * pxPerMM,
-                                 cmd.y.toFloat() * pxPerMM)
-                if (strokeStarted) { /* discard prior subpath */ path.reset() }
-                path.moveTo(current.x, current.y)
+                val x = cmd.x.toFloat() * pxPerMM
+                val y = cmd.y.toFloat() * pxPerMM
+                if (strokeStarted) path.reset()
+                path.moveTo(x, y)
                 strokeStarted = true
             }
             is DrawCommand.LineTo -> {
-                current = Offset(cmd.x.toFloat() * pxPerMM,
-                                 cmd.y.toFloat() * pxPerMM)
-                path.lineTo(current.x, current.y)
+                path.lineTo(cmd.x.toFloat() * pxPerMM,
+                            cmd.y.toFloat() * pxPerMM)
             }
             is DrawCommand.Stroke -> {
                 drawPath(
@@ -87,23 +109,35 @@ private fun DrawScope.drawPage(page: DrawPage, pxPerMM: Float) {
                 )
             }
             is DrawCommand.Glyph -> {
-                // Phase 4 simplification: render glyphs as small filled
-                // squares at the requested position. SMuFL font support is
-                // an open question deferred to a follow-up task.
-                val s = (cmd.size.toFloat() * pxPerMM) * 0.5f
-                drawRect(
-                    color = Color.Black,
-                    topLeft = Offset(cmd.x.toFloat() * pxPerMM - s / 2,
-                                     cmd.y.toFloat() * pxPerMM - s / 2),
-                    size = Size(s, s)
-                )
+                glyphPaint.typeface =
+                    if (cmd.fontId == FONT_ID_SMUFL) bravura else edwin
+                glyphPaint.textSize = cmd.size.toFloat() * pxPerMM
+                val s = codepointToString(cmd.codepoint.toInt())
+                drawIntoCanvas { canvas ->
+                    canvas.nativeCanvas.drawText(
+                        s,
+                        cmd.x.toFloat() * pxPerMM,
+                        cmd.y.toFloat() * pxPerMM,
+                        glyphPaint
+                    )
+                }
             }
             is DrawCommand.Text -> {
-                // Same simplification — text rendering deferred. The
-                // StubFontMetricsProvider already produces rectangle
-                // approximations, so omitting text rendering here is
-                // consistent with Phase 2's fidelity statement.
+                glyphPaint.typeface =
+                    if (cmd.fontId == FONT_ID_SMUFL) bravura else edwin
+                glyphPaint.textSize = cmd.size.toFloat() * pxPerMM
+                drawIntoCanvas { canvas ->
+                    canvas.nativeCanvas.drawText(
+                        cmd.text,
+                        cmd.x.toFloat() * pxPerMM,
+                        cmd.y.toFloat() * pxPerMM,
+                        glyphPaint
+                    )
+                }
             }
         }
     }
 }
+
+private fun codepointToString(cp: Int): String =
+    String(intArrayOf(cp), 0, 1)
