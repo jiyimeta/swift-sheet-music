@@ -7,6 +7,8 @@
 
     @Suite("ScoreHitTester")
     struct ScoreHitTesterTests {
+        private let _installApple = TestSupport.installApple
+
         private func sample() -> Score {
             let chord = { (p: Int) -> VoiceElement in
                 .chord(Chord(

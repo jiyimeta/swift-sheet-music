@@ -16,6 +16,8 @@
         ] == "1",
     ))
     struct LayoutCacheBenchmark {
+        private let _installApple = TestSupport.installApple
+
         @Test("test.mscx: cold vs warm vs single-edit")
         func benchmark() throws { // swiftlint:disable:this function_body_length
             guard #available(macOS 15.0, *) else { return }

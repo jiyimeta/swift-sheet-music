@@ -30,6 +30,8 @@
 
     @Suite("Grace placement")
     struct GracePlacementTests {
+        private let _installApple = TestSupport.installApple
+
         /// Build a score with a single chord that carries graces and
         /// run it through the layout engine. Returns the placed
         /// elements of measure 0.
@@ -103,6 +105,8 @@
 
     @Suite("Grace spacing")
     struct GraceSpacingTests {
+        private let _installApple = TestSupport.installApple
+
         @Test("Three before-graces push the main chord X to the right vs. zero graces")
         func extraSpacing() {
             guard #available(macOS 15.0, iOS 16.0, *) else { return }

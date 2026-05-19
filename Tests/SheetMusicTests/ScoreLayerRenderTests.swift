@@ -10,6 +10,8 @@
 
     @Suite("ScoreLayerBuilder bitmap rasterization")
     struct ScoreLayerRenderTests {
+        private let _installApple = TestSupport.installApple
+
         @MainActor
         @Test("Rendered system layer contains non-white pixels where a notehead is expected")
         func renderedTreeHasInk() throws { // swiftlint:disable:this function_body_length

@@ -11,6 +11,8 @@
     /// rendered Lyricist text along the page's left edge instead of
     /// MuseScore's centred three-column lyric layout.
     @Suite("Title-block align overrides") struct TitleBlockAlignTests {
+        private let _installApple = TestSupport.installApple
+
         @Test("TextAlign parses MSCX 'h,v' form")
         func parsesMscxString() {
             #expect(

@@ -7,6 +7,8 @@
 
     @Suite("ScoreView rendering smoke")
     struct ScoreViewRenderTests {
+        private let _installApple = TestSupport.installApple
+
         @MainActor
         @Test("ScoreView renders a minimal score to a non-empty CGImage")
         func rendersMinimalScore() throws {

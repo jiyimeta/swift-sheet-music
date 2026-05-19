@@ -8,6 +8,8 @@
     import Testing
 
     struct LayoutBracketTests {
+        private let _installApple = TestSupport.installApple
+
         /// Hand-built score with brackets — avoids round-tripping through
         /// MSCX, so geometry logic can be verified independently.
         private static func makeScore() -> Score {
@@ -257,14 +259,12 @@
 
         @available(macOS 15.0, iOS 16.0, *)
         @Test func labelRightEdgeShiftsLeftWithBrackets() {
-            // Need the real CoreText backend so `BraceMetrics
+            // Needs the real CoreText backend so `BraceMetrics
             // .glyphHorizontalExtent` returns Bravura-measured values
             // rather than the Stub provider's rectangle estimates,
             // which would overshoot the column-only gutter that this
-            // test asserts against.
-            if #available(macOS 15.0, iOS 18.0, tvOS 18.0, watchOS 11.0, *) {
-                _ = SheetMusicLayoutApple.install
-            }
+            // test asserts against — installed eagerly via
+            // `_installApple` at suite construction.
             let doc = LayoutEngine.layout(
                 score: Self.makeScore(),
                 options: .init(),
@@ -307,10 +307,8 @@
         @available(macOS 15.0, iOS 16.0, *)
         @Test func tallBraceWidensLabelGutter() {
             // Real CoreText backend so brace bbox/magx are Bravura's
-            // values rather than the Stub provider's rectangle estimate.
-            if #available(macOS 15.0, iOS 18.0, tvOS 18.0, watchOS 11.0, *) {
-                _ = SheetMusicLayoutApple.install
-            }
+            // values rather than the Stub provider's rectangle estimate —
+            // installed eagerly via `_installApple` at suite construction.
             let measure = Measure(voices: [
                 Voice(elements: [
                     .rest(duration: .fraction(Fraction(numerator: 1, denominator: 1))),

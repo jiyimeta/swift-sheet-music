@@ -5,6 +5,8 @@
 
     @Suite("MultiMeasureRest layout integration")
     struct MultiMeasureRestLayoutTests {
+        private let _installApple = TestSupport.installApple
+
         // MARK: - Helpers
 
         private static func restMeasure() -> Measure {

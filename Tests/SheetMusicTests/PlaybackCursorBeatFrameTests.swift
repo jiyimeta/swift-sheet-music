@@ -13,6 +13,8 @@
     /// of any leading clef / key signature / time signature.
     @Suite("PlaybackCursorView beat fallback respects leading header")
     struct PlaybackCursorBeatFrameTests {
+        private let _installApple = TestSupport.installApple
+
         /// Single-measure score whose only voice element is a whole rest.
         /// The first system auto-synthesizes a leading clef, so the
         /// resulting layout measure has a header glyph at its left edge

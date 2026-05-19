@@ -13,6 +13,8 @@
     /// MuseScore's `LyricsLayout::computeVerticalOffset` consults.
     @Suite("LayoutEngine — lyric vs stem/flag")
     struct LyricStemAvoidanceTests {
+        private let _installApple = TestSupport.installApple
+
         /// Stem-down chord whose stem+flag extends well past the
         /// staff bottom: lyric must sit below stem-end + flag with a
         /// small clearance, not over them.

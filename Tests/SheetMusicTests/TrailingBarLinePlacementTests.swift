@@ -7,6 +7,8 @@
 
     @Suite("Trailing barline placement")
     struct TrailingBarLinePlacementTests {
+        private let _installApple = TestSupport.installApple
+
         /// Regression: an explicit `<BarLine subtype="double">` at the end
         /// of a voice was being placed near the start of the measure
         /// because `tickCursor` sits at the measure's end tick — a tick

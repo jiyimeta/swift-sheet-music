@@ -8,6 +8,8 @@
     import Testing
 
     struct LayoutBreakTests {
+        private let _installApple = TestSupport.installApple
+
         /// `<LayoutBreak><subtype>line</subtype>` on a measure parses
         /// into `Measure.lineBreak == true`.
         @Test func parsesLineBreak() throws {

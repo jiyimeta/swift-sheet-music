@@ -6,6 +6,8 @@
 
     @Suite("TypedRestPositioning")
     struct TypedRestPositioningTests {
+        private let _installApple = TestSupport.installApple
+
         private static func makeScore(elements: [VoiceElement]) -> Score {
             let m = Measure(voices: [Voice(elements: elements)])
             return Score(

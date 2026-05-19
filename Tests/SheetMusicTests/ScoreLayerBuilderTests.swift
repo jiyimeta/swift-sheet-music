@@ -9,6 +9,8 @@
 
     @Suite("ScoreLayerBuilder notehead glyph pipeline")
     struct ScoreLayerBuilderTests {
+        private let _installApple = TestSupport.installApple
+
         @Test("Bravura supplies a non-empty path for noteheadBlack")
         func noteheadBlackPathIsNonEmpty() throws {
             guard #available(macOS 15.0, *) else { return }

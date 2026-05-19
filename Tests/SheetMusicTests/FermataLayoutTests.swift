@@ -6,6 +6,8 @@
 
     @Suite("LayoutEngine fermata anchor placement")
     struct FermataLayoutTests {
+        private let _installApple = TestSupport.installApple
+
         /// Build a one-measure score whose voice contains
         /// `[chord(C4), fermata, chord(D4)]` — the canonical MusicXML
         /// ordering where the fermata appears BEFORE its target chord.

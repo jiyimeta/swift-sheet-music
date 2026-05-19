@@ -8,6 +8,8 @@
     import Testing
 
     struct HarmonyTests {
+        private let _installApple = TestSupport.installApple
+
         @Test func defaultsAreInert() {
             let h = Harmony(name: "C")
             #expect(h.name == "C")
