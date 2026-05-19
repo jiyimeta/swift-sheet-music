@@ -34,9 +34,11 @@ var targets: [Target] = [
         dependencies: isAndroid ? [
             "SheetMusicCore",
             "SheetMusicXMLTools",
+            "SheetMusicZip",
         ] : [
             "SheetMusicCore",
             "SheetMusicXMLTools",
+            "SheetMusicZip",
             .product(name: "ZIPFoundation", package: "ZIPFoundation"),
         ],
     ),

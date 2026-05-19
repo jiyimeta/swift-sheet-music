@@ -4,11 +4,11 @@ import Foundation
 /// other standard ZIP writers. Scope: STORED + DEFLATE, single-disk,
 /// ≤ 65534 entries, no encryption, no ZIP64. See the spec for the full
 /// supported-feature matrix.
-struct ZipReader {
-    let entries: [String: ZipEntry]
+public struct ZipReader {
+    public let entries: [String: ZipEntry]
     private let data: Data
 
-    init(data: Data) throws {
+    public init(data: Data) throws {
         // Normalize to a `startIndex == 0` buffer so direct integer
         // subscripts in `findEOCD` and absolute-offset reads in
         // BinaryReader behave consistently regardless of whether the
@@ -18,18 +18,18 @@ struct ZipReader {
         entries = try Self.parseCentralDirectory(normalized)
     }
 
-    func contains(path: String) -> Bool {
+    public func contains(path: String) -> Bool {
         entries[path] != nil
     }
 
-    func read(path: String) throws -> Data {
+    public func read(path: String) throws -> Data {
         guard let entry = entries[path] else {
             throw ZipError.entryNotFound(path)
         }
         return try read(entry)
     }
 
-    func read(_ entry: ZipEntry) throws -> Data {
+    public func read(_ entry: ZipEntry) throws -> Data {
         guard let range = entry.payloadRange else {
             throw ZipError.corrupted("entry has no payload range")
         }

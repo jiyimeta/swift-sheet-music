@@ -3,7 +3,7 @@
 /// 0 = STORED (no compression), 8 = DEFLATE (RFC 1951). All other
 /// method codes are rejected by ZipReader with
 /// `ZipError.unsupportedFeature`.
-enum ZipCompressionMethod: UInt16 {
+public enum ZipCompressionMethod: UInt16 {
     case stored = 0
     case deflate = 8
 }
