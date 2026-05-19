@@ -11,7 +11,9 @@ import java.nio.ByteOrder
 object DrawProgramDecoder {
 
     private const val MAGIC = 0x53_4D_44_50   // "SMDP"
-    private const val VERSION = 1
+    // v2 adds the setColor opcode (0x07). Keep in lockstep with
+    // Sources/SheetMusicAndroidJNI/DrawProgram.swift.
+    private const val VERSION = 2
 
     class BadMagicException(actual: Int) :
         RuntimeException("bad draw-program magic: 0x${actual.toString(16)}")
@@ -64,6 +66,7 @@ object DrawProgramDecoder {
                     size = buf.double,
                     fontId = buf.get().toInt() and 0xFF)
             }
+            0x07 -> DrawCommand.SetColor(argb = buf.int.toUInt())
             else -> throw UnknownOpcodeException(op)
         }
 }
@@ -82,4 +85,6 @@ sealed interface DrawCommand {
                      val size: Double, val fontId: Int) : DrawCommand
     data class Text(val text: String, val x: Double, val y: Double,
                     val size: Double, val fontId: Int) : DrawCommand
+    /** Active paint colour as packed ARGB (0xAARRGGBB). */
+    data class SetColor(val argb: UInt) : DrawCommand
 }

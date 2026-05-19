@@ -35,6 +35,10 @@ public enum DrawCommand: Sendable, Equatable {
         size: Double,
         fontId: DrawProgram.FontID,
     )
+    /// Set the active paint colour as a packed ARGB value
+    /// (0xAARRGGBB). Affects every subsequent stroke / fill /
+    /// glyph / text until the next `.setColor`.
+    case setColor(argb: UInt32)
 }
 
 public enum DrawProgramEncoder {
@@ -109,6 +113,9 @@ public enum DrawProgramEncoder {
             w.append(y)
             w.append(size)
             w.append(fontId.rawValue)
+        case let .setColor(argb):
+            w.append(DrawProgram.Opcode.setColor.rawValue)
+            w.append(argb)
         }
     }
 }

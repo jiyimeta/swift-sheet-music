@@ -134,6 +134,19 @@ public enum LayoutBridge {
         return out
     }
 
+    /// Pack a `ScoreColor` as ARGB (0xAARRGGBB) for the wire-format
+    /// `setColor` opcode. Returns `nil` for fully opaque black — the
+    /// wire format's default — so we don't emit a redundant
+    /// `setColor` for the common "no override" case.
+    static func argb(from color: ScoreColor) -> UInt32? {
+        let a = UInt32(max(0, min(255, color.alpha)))
+        let r = UInt32(max(0, min(255, color.red)))
+        let g = UInt32(max(0, min(255, color.green)))
+        let b = UInt32(max(0, min(255, color.blue)))
+        let packed = (a << 24) | (r << 16) | (g << 8) | b
+        return packed == 0xFF00_0000 ? nil : packed
+    }
+
     /// Scalar metrics passed down to per-element encoders so they don't
     /// each re-derive sp / glyph size / stem geometry from `StaffMetrics`.
     struct MetricsContext {
@@ -237,14 +250,26 @@ public enum LayoutBridge {
                 width: Double(BarLineGeometry.thinThicknessSp) * sp * ptToMM,
             ))
 
-        case let .beam(fromOrigin, toOrigin, _, _):
+        case let .beam(fromOrigin, toOrigin, direction, level):
+            // Each beam emit at a given level: shift Y by the level
+            // offset so secondaries stack inward from the primary,
+            // matching Apple BeamRenderer's geometry.
+            let dy = Double(BeamGeometry.levelOffsetDy(
+                level: level, stemDirection: direction, sp: CGFloat(sp),
+            ))
+            // Draw the centre of the beam stroke at `dy + beamThickness/2`
+            // so the stroke's outer edge aligns with the chord's stem
+            // tip (matching Apple's filled-rectangle geometry).
+            let thickness = Double(BeamGeometry.beamThicknessSp) * sp
+            let stackSign: Double = direction == .up ? 1 : -1
+            let centerDy = dy + (thickness / 2) * stackSign
             let fx = (mox + Double(fromOrigin.x)) * ptToMM
-            let fy = (moy + Double(fromOrigin.y)) * ptToMM
+            let fy = (moy + Double(fromOrigin.y) + centerDy) * ptToMM
             let tx = (mox + Double(toOrigin.x)) * ptToMM
-            let ty = (moy + Double(toOrigin.y)) * ptToMM
+            let ty = (moy + Double(toOrigin.y) + centerDy) * ptToMM
             out.append(.moveTo(x: fx, y: fy))
             out.append(.lineTo(x: tx, y: ty))
-            out.append(.stroke(width: sp * 0.5 * ptToMM))
+            out.append(.stroke(width: thickness * ptToMM))
 
         case let .textMark(kind, text, origin):
             emitText(
@@ -256,7 +281,9 @@ public enum LayoutBridge {
                 into: &out,
             )
 
-        case let .staffText(text, origin, _, isSystemText):
+        case let .staffText(text, origin, color, isSystemText):
+            let argb = color.flatMap(LayoutBridge.argb(from:))
+            if let argb { out.append(.setColor(argb: argb)) }
             emitText(
                 text: text,
                 style: isSystemText ? .systemText : .staffText,
@@ -265,6 +292,9 @@ public enum LayoutBridge {
                 sp: sp,
                 into: &out,
             )
+            if argb != nil {
+                out.append(.setColor(argb: 0xFF00_0000))
+            }
 
         // Fallback for unhandled point-origin cases: tiny placeholder rect.
         case let .note(_, _, _, _, origin, _, _, _):
@@ -297,6 +327,40 @@ public enum LayoutBridge {
         case let .articulation(_, origin, _):
             placeholderRect(at: origin, mox: mox, moy: moy, sp: sp, into: &out)
 
+        case let .tieArc(fromOrigin, toOrigin, above):
+            encodeTieArc(
+                fromX: mox + Double(fromOrigin.x),
+                fromY: moy + Double(fromOrigin.y),
+                toX: mox + Double(toOrigin.x),
+                toY: moy + Double(toOrigin.y),
+                above: above,
+                sp: sp,
+                into: &out,
+            )
+
+        case let .lyricsMelisma(fromOrigin, toOrigin):
+            // Thin horizontal underscore-style rule from the syllable's
+            // tail to the end of the last covered note. Apple uses
+            // `staffLineThickness` here.
+            let fx = (mox + Double(fromOrigin.x)) * ptToMM
+            let fy = (moy + Double(fromOrigin.y)) * ptToMM
+            let tx = (mox + Double(toOrigin.x)) * ptToMM
+            let ty = (moy + Double(toOrigin.y)) * ptToMM
+            out.append(.moveTo(x: fx, y: fy))
+            out.append(.lineTo(x: tx, y: ty))
+            out.append(.stroke(width: sp * 0.13 * ptToMM))
+
+        case let .lyricHyphen(fromOrigin, toOrigin):
+            // Short hyphen between two adjacent syllables. Same
+            // thickness as the melisma.
+            let fx = (mox + Double(fromOrigin.x)) * ptToMM
+            let fy = (moy + Double(fromOrigin.y)) * ptToMM
+            let tx = (mox + Double(toOrigin.x)) * ptToMM
+            let ty = (moy + Double(toOrigin.y)) * ptToMM
+            out.append(.moveTo(x: fx, y: fy))
+            out.append(.lineTo(x: tx, y: ty))
+            out.append(.stroke(width: sp * 0.13 * ptToMM))
+
         case let .tupletLabel(fromOrigin, toOrigin, text, hasBracket, isAbove, _):
             encodeTupletBracket(
                 fromX: mox + Double(fromOrigin.x),
@@ -311,8 +375,7 @@ public enum LayoutBridge {
             )
 
         // Decorations deferred to a future task — require richer geometry.
-        case .harmony, .spannerSegment, .tieArc,
-             .lyricsMelisma, .lyricHyphen, .glissandoLine,
+        case .harmony, .spannerSegment, .glissandoLine,
              .arpeggioWiggle, .tremoloBars:
             break
         }

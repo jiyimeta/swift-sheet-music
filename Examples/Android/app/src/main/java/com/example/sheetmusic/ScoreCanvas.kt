@@ -72,9 +72,10 @@ private fun DrawScope.drawPage(
 ) {
     val path = Path()
     var strokeStarted = false
+    var currentArgb: Int = android.graphics.Color.BLACK
     val glyphPaint = Paint().apply {
         isAntiAlias = true
-        color = android.graphics.Color.BLACK
+        color = currentArgb
     }
     for (cmd in page.commands) {
         when (cmd) {
@@ -90,18 +91,11 @@ private fun DrawScope.drawPage(
                             cmd.y.toFloat() * pxPerMM)
             }
             is DrawCommand.Stroke -> {
-                // Stroke widths come from engraving (e.g. 0.12 sp ≈ 0.3
-                // mm). On a low-density canvas these convert to sub-pixel
-                // widths that Compose anti-aliases to near-invisibility.
-                // Floor the rendered width at 1.5 px to keep every stroke
-                // visible without overpowering the page; pre-floored
-                // widths still scale linearly so engraving differences
-                // (staff line vs beam) remain proportional.
                 val widthPx = (cmd.width.toFloat() * pxPerMM)
                     .coerceAtLeast(1.5f)
                 drawPath(
                     path = path,
-                    color = Color.Black,
+                    color = Color(currentArgb),
                     style = Stroke(width = widthPx)
                 )
                 path.reset()
@@ -109,7 +103,7 @@ private fun DrawScope.drawPage(
             }
             is DrawCommand.FillRect -> {
                 drawRect(
-                    color = Color.Black,
+                    color = Color(currentArgb),
                     topLeft = Offset(cmd.x.toFloat() * pxPerMM,
                                      cmd.y.toFloat() * pxPerMM),
                     size = Size(cmd.w.toFloat() * pxPerMM,
@@ -120,6 +114,7 @@ private fun DrawScope.drawPage(
                 glyphPaint.typeface =
                     if (cmd.fontId == FONT_ID_SMUFL) bravura else edwin
                 glyphPaint.textSize = cmd.size.toFloat() * pxPerMM
+                glyphPaint.color = currentArgb
                 val s = codepointToString(cmd.codepoint.toInt())
                 drawIntoCanvas { canvas ->
                     canvas.nativeCanvas.drawText(
@@ -134,6 +129,7 @@ private fun DrawScope.drawPage(
                 glyphPaint.typeface =
                     if (cmd.fontId == FONT_ID_SMUFL) bravura else edwin
                 glyphPaint.textSize = cmd.size.toFloat() * pxPerMM
+                glyphPaint.color = currentArgb
                 drawIntoCanvas { canvas ->
                     canvas.nativeCanvas.drawText(
                         cmd.text,
@@ -142,6 +138,9 @@ private fun DrawScope.drawPage(
                         glyphPaint
                     )
                 }
+            }
+            is DrawCommand.SetColor -> {
+                currentArgb = cmd.argb.toInt()
             }
         }
     }

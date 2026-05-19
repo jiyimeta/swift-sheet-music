@@ -74,6 +74,8 @@ public enum DrawProgramDecoder {
             let size = r.readDouble()
             let fontId = DrawProgram.FontID(rawValue: r.read(UInt8.self)) ?? .textRoman
             return .text(s, x: x, y: y, size: size, fontId: fontId)
+        case .setColor:
+            return .setColor(argb: r.read(UInt32.self))
         }
     }
 }

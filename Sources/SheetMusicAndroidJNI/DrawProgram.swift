@@ -5,7 +5,9 @@ import Foundation
 /// decoder must agree on the magic + version; mismatches are fail-fast.
 public enum DrawProgram {
     public static let magic: UInt32 = 0x534D_4450 // "SMDP"
-    public static let version: UInt32 = 1
+    /// v2 adds the `setColor` opcode (0x07). v1 decoders must reject
+    /// v2 payloads up-front rather than skipping the unknown byte.
+    public static let version: UInt32 = 2
 
     public enum Opcode: UInt8 {
         case moveTo = 0x01
@@ -14,6 +16,10 @@ public enum DrawProgram {
         case fillRect = 0x04
         case glyph = 0x05
         case text = 0x06
+        /// Sets the active paint colour (ARGB, 0xAARRGGBB). All draw
+        /// commands until the next `setColor` use this colour; the
+        /// initial colour is opaque black (0xFF000000).
+        case setColor = 0x07
     }
 
     public enum FontID: UInt8, Sendable {

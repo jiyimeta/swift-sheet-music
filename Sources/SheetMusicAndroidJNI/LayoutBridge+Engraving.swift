@@ -175,89 +175,60 @@ extension LayoutBridge {
         }
     }
 
-    // MARK: - Chord (noteheads + stem + flag)
+    // MARK: - Tie arc (tessellated)
 
+    // Approximate a tie's cubic Bezier with a 16-segment polyline so
+    // the Compose wire format (which has no curve opcode) can render
+    // it. Geometry shared with Apple via `TieArcGeometry`.
     // swiftlint:disable:next function_parameter_count
-    static func encodeChord(
-        notes: [LayoutChordNote],
-        duration: NoteDuration,
-        stem: StemDirection,
-        // `stemOriginY` is the beam-side stem terminus Y in measure-
-        // local coordinates. Passed as a bare Double instead of CGPoint
-        // so the signature stays public-internal-friendly even when
-        // SheetMusicLayout.CGPoint is the platform stub (Android).
-        stemOriginY: Double,
-        isBeamed: Bool,
-        stemExtension: Double,
-        mag: Double,
-        measureOriginX mox: Double,
-        measureOriginY moy: Double,
-        metrics ctx: MetricsContext,
+    static func encodeTieArc(
+        fromX: Double, fromY: Double,
+        toX: Double, toY: Double,
+        above: Bool,
+        sp: Double,
         into out: inout [DrawCommand],
     ) {
-        let glyphSize = ctx.glyphSize * mag
-        // ── Noteheads ────────────────────────────────────────────────
-        let headCp = noteheadCodepoint(duration: duration)
-        for note in notes {
-            emitCenterAnchoredGlyph(
-                codepoint: headCp,
-                cxPt: mox + Double(note.origin.x),
-                cyPt: moy + Double(note.origin.y),
-                sizePt: glyphSize,
-                into: &out,
-            )
-        }
-        // Whole notes (and lower-resolution rests) are stemless.
-        if case .whole = duration { return }
-        // ── Stem ─────────────────────────────────────────────────────
-        let noteOrigins = notes.map { CGPoint(
-            x: CGFloat(mox + Double($0.origin.x)),
-            y: CGFloat(moy + Double($0.origin.y)),
+        // Apple's TieRenderer scales the shoulder with sqrt(tieLength)
+        // up to ~2 sp; for the cross-platform helper we use a fixed
+        // 1 sp shoulder. Good enough for v1 — refinement is a
+        // follow-up.
+        let pts = TieArcGeometry.controlPoints(
+            from: CGPoint(x: CGFloat(fromX), y: CGFloat(fromY)),
+            to: CGPoint(x: CGFloat(toX), y: CGFloat(toY)),
+            above: above,
+            heightSp: 1,
+            sp: CGFloat(sp),
         )
+        let steps = 16
+        var prevX = Double(pts.p0.x)
+        var prevY = Double(pts.p0.y)
+        out.append(.moveTo(x: prevX * ptToMMScale, y: prevY * ptToMMScale))
+        for i in 1 ... steps {
+            let t = Double(i) / Double(steps)
+            let pt = bezierPoint(
+                t: t,
+                p0: pts.p0, p1: pts.p1, p2: pts.p2, p3: pts.p3,
+            )
+            prevX = Double(pt.x)
+            prevY = Double(pt.y)
+            out.append(.lineTo(x: prevX * ptToMMScale, y: prevY * ptToMMScale))
         }
-        // For beamed chords the stem extends to the shared beam Y instead
-        // of each chord's own natural stem-top. World Y = moy + stemOriginY.
-        let beamY: CGFloat? = isBeamed
-            ? CGFloat(moy + stemOriginY)
-            : nil
-        guard let geometry = StemGeometry.compute(
-            noteOrigins: noteOrigins,
-            direction: stem,
-            beamY: beamY,
-            defaultStemLength: CGFloat(ctx.defaultStemLength * mag),
-            stemExtension: CGFloat(stemExtension),
-            sp: CGFloat(ctx.sp),
-        ) else { return }
-        let xStem = Double(geometry.xStem)
-        let startY = Double(geometry.startY)
-        let endY = Double(geometry.endY)
-        out.append(.moveTo(x: xStem * ptToMMScale, y: startY * ptToMMScale))
-        out.append(.lineTo(x: xStem * ptToMMScale, y: endY * ptToMMScale))
-        out.append(.stroke(width: ctx.stemThickness * mag * ptToMMScale))
-        // ── Flag (unbeamed only) ─────────────────────────────────────
-        guard !isBeamed,
-              let flagCp = FlagGlyph.codepoint(duration: duration, stem: stem)
-        else { return }
-        let tipY = stem == .up ? startY : endY
-        // Apple's StemRenderer draws the flag with `.topLeading` so the
-        // glyph's baseline anchor sits on the stem tip. On Android the
-        // wire format anchors at baseline-leading natively — emit at
-        // (xStem, tipY) directly, without the center-anchor offset.
-        out.append(.glyph(
-            codepoint: flagCp,
-            x: xStem * ptToMMScale,
-            y: tipY * ptToMMScale,
-            size: glyphSize * ptToMMScale,
-            fontId: .smufl,
-        ))
+        out.append(.stroke(width: sp * 0.13 * ptToMMScale))
     }
 
-    static func noteheadCodepoint(duration: NoteDuration) -> UInt32 {
-        switch duration {
-        case .whole: return SMuFLCodepoint.noteheadWhole
-        case .half: return SMuFLCodepoint.noteheadHalf
-        default: return SMuFLCodepoint.noteheadBlack
-        }
+    private static func bezierPoint(
+        t: Double, p0: CGPoint, p1: CGPoint, p2: CGPoint, p3: CGPoint,
+    ) -> CGPoint {
+        let u = 1 - t
+        let coef0 = u * u * u
+        let coef1 = 3 * u * u * t
+        let coef2 = 3 * u * t * t
+        let coef3 = t * t * t
+        let x = coef0 * Double(p0.x) + coef1 * Double(p1.x)
+            + coef2 * Double(p2.x) + coef3 * Double(p3.x)
+        let y = coef0 * Double(p0.y) + coef1 * Double(p1.y)
+            + coef2 * Double(p2.y) + coef3 * Double(p3.y)
+        return CGPoint(x: CGFloat(x), y: CGFloat(y))
     }
 
     // MARK: - Tuplet bracket
@@ -283,14 +254,23 @@ extension LayoutBridge {
         // format has no italic bit yet; falls back to the default
         // text style, matching Apple's "looks slightly off but
         // recognisable" behaviour for tuplet digits.
+        let labelFont = LayoutFont(
+            face: "Edwin", pointSize: CGFloat(fontSize),
+        )
         let labelWidth = Double(FontMetrics.provider.typographicWidth(
-            text: text,
-            font: LayoutFont(face: "Edwin", pointSize: CGFloat(fontSize)),
+            text: text, font: labelFont,
         ))
+        let ascent = Double(FontMetrics.provider.ascent(font: labelFont))
+        let descent = Double(FontMetrics.provider.descent(font: labelFont))
+        // Canvas.drawText anchors at the baseline. The bracket geometry
+        // hands back the label's visual centre Y, so shift baseline
+        // down by half of (ascent − descent) to vertically centre the
+        // digit on `labelCenter.y`.
+        let baselineY = Double(segments.labelCenter.y) + (ascent - descent) / 2
         out.append(.text(
             text,
             x: (Double(segments.labelCenter.x) - labelWidth / 2) * ptToMMScale,
-            y: Double(segments.labelCenter.y) * ptToMMScale,
+            y: baselineY * ptToMMScale,
             size: fontSize * ptToMMScale,
             fontId: .textRoman,
         ))
