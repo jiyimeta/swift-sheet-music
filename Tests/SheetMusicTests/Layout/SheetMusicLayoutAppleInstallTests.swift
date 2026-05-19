@@ -12,7 +12,7 @@
         // (LayoutCacheTests, LayoutBracketTests, etc.) and causes
         // intermittent measurement-drift failures.
 
-        @available(macOS 15.0, iOS 18.0, tvOS 18.0, watchOS 11.0, *)
+        @available(macOS 15.0, *)
         @Test func installSwapsProviderToApple() {
             // Touching install is idempotent — first touch (anywhere in
             // the process) sets provider to Apple; subsequent touches
@@ -21,7 +21,7 @@
             #expect(FontMetrics.provider is AppleFontMetricsProvider)
         }
 
-        @available(macOS 15.0, iOS 18.0, tvOS 18.0, watchOS 11.0, *)
+        @available(macOS 15.0, *)
         @Test func installIsIdempotent() {
             _ = SheetMusicLayoutApple.install
             let first = type(of: FontMetrics.provider)

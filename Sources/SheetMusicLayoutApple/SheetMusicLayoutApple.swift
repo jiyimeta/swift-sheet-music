@@ -15,7 +15,7 @@ import SheetMusicLayout
 /// points so Apple host apps don't need to invoke it explicitly.
 /// Headless Layout consumers (`RenderPreviews`, isolated Layout
 /// tests) call it themselves.
-@available(macOS 15.0, iOS 18.0, tvOS 18.0, watchOS 11.0, *)
+@available(macOS 15.0, *)
 public enum SheetMusicLayoutApple {
     public static let install: Bool = {
         FontMetrics.provider = AppleFontMetricsProvider()

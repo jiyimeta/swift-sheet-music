@@ -10,7 +10,7 @@
     /// idempotent.
     enum TestSupport {
         static let installApple: Bool = {
-            if #available(macOS 15.0, iOS 18.0, tvOS 18.0, watchOS 11.0, *) {
+            if #available(macOS 15.0, *) {
                 _ = SheetMusicLayoutApple.install
             }
             return true

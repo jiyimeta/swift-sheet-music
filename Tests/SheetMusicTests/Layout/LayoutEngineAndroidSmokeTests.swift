@@ -10,7 +10,7 @@ struct LayoutEngineAndroidSmokeTests {
         private let _installApple = TestSupport.installApple
     #endif
 
-    @available(macOS 15.0, iOS 18.0, tvOS 18.0, watchOS 11.0, *)
+    @available(macOS 15.0, *)
     @Test func midi01ScoreProducesNonEmptyLayoutDocument() throws {
         let url = try #require(
             Bundle.module.url(forResource: "midi01", withExtension: "mscx"),

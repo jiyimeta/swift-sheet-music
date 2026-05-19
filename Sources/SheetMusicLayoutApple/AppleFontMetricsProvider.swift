@@ -11,7 +11,7 @@ import SheetMusicLayout
 /// (`BraceMetrics.bboxCache`, `FermataGlyphMetrics.cache`,
 /// `HarmonyRendering.fontCache`) that the Layout-side rewrites
 /// remove.
-@available(macOS 15.0, iOS 18.0, tvOS 18.0, watchOS 11.0, *)
+@available(macOS 15.0, *)
 public struct AppleFontMetricsProvider: FontMetricsProvider {
     public init() {
         // Touch BravuraFont.register so SMuFL family resolves
@@ -117,7 +117,7 @@ public struct AppleFontMetricsProvider: FontMetricsProvider {
     }
 }
 
-@available(macOS 15.0, iOS 18.0, tvOS 18.0, watchOS 11.0, *)
+@available(macOS 15.0, *)
 private final class Lock: @unchecked Sendable {
     static let shared = Lock()
     private let mutex = NSLock()
@@ -128,7 +128,7 @@ private final class Lock: @unchecked Sendable {
     }
 }
 
-@available(macOS 15.0, iOS 18.0, tvOS 18.0, watchOS 11.0, *)
+@available(macOS 15.0, *)
 private final class Cache: @unchecked Sendable {
     static let shared = Cache()
     var ctFonts: [LayoutFont: CTFont] = [:]
