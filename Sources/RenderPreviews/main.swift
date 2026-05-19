@@ -6,6 +6,7 @@
     import SheetMusic
     import SheetMusicCore
     import SheetMusicLayout
+    import SheetMusicLayoutApple
     import SheetMusicMSCX
     import SheetMusicUI
 
@@ -37,7 +38,7 @@
             at: outputDir, withIntermediateDirectories: true,
         )
 
-        _ = BravuraFont.register
+        _ = SheetMusicLayoutApple.install
 
         let samples: [(name: String, score: Score)] = [
             ("01-empty", Samples.empty),
