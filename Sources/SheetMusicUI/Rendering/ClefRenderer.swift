@@ -11,55 +11,12 @@ enum ClefRenderer {
         metrics: StaffMetrics,
     ) {
         let clef = NotatedClef(rawType: rawType)
-        let glyph: Character
-        let yOffset: CGFloat
-        switch clef {
-        case .treble:
-            glyph = SMuFLGlyph.gClef
-            yOffset = metrics.sp
-        case .treble8va:
-            glyph = SMuFLGlyph.gClef8va
-            yOffset = metrics.sp
-        case .treble8vb:
-            glyph = SMuFLGlyph.gClef8vb
-            yOffset = metrics.sp
-        case .treble15ma:
-            glyph = SMuFLGlyph.gClef15ma
-            yOffset = metrics.sp
-        case .treble15mb:
-            glyph = SMuFLGlyph.gClef15mb
-            yOffset = metrics.sp
-        case .bass:
-            glyph = SMuFLGlyph.fClef
-            yOffset = -metrics.sp
-        case .bass8va:
-            glyph = SMuFLGlyph.fClef8va
-            yOffset = -metrics.sp
-        case .bass8vb:
-            glyph = SMuFLGlyph.fClef8vb
-            yOffset = -metrics.sp
-        case .soprano:
-            glyph = SMuFLGlyph.cClef
-            yOffset = 2 * metrics.sp
-        case .alto:
-            glyph = SMuFLGlyph.cClef
-            yOffset = 0
-        case .tenor:
-            glyph = SMuFLGlyph.cClef
-            yOffset = -metrics.sp
-        case .baritone:
-            glyph = SMuFLGlyph.cClef
-            yOffset = -2 * metrics.sp
-        case .percussion:
-            glyph = SMuFLGlyph.percussionClef
-            yOffset = 0
-        case .percussion2:
-            glyph = SMuFLGlyph.percussionClef2
-            yOffset = 0
-        }
+        let (codepoint, yOffsetSp) = ClefGlyph.glyph(for: clef)
+        // swiftlint:disable:next force_unwrapping
+        let glyph = Character(UnicodeScalar(codepoint)!)
         context.drawGlyph(
             glyph,
-            at: CGPoint(x: origin.x, y: origin.y + yOffset),
+            at: CGPoint(x: origin.x, y: origin.y + yOffsetSp * metrics.sp),
             size: metrics.glyphFontSize,
         )
     }
