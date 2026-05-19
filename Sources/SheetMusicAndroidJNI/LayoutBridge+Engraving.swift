@@ -17,6 +17,35 @@ extension LayoutBridge {
     /// constant's visibility just for this split.
     static let ptToMMScale = 25.4 / 72.0
 
+    /// Placeholder filled rect for layout elements the bridge can't
+    /// fully render yet (fermata, marker, jump, …). Helps spot
+    /// missing elements visually.
+    static func placeholderRect(
+        at origin: CGPoint,
+        mox: Double, moy: Double, sp: Double,
+        into out: inout [DrawCommand],
+    ) {
+        out.append(.fillRect(
+            x: (mox + Double(origin.x)) * ptToMMScale,
+            y: (moy + Double(origin.y)) * ptToMMScale,
+            w: sp * ptToMMScale,
+            h: sp * ptToMMScale,
+        ))
+    }
+
+    /// Pack a `ScoreColor` as ARGB (0xAARRGGBB) for the wire-format
+    /// `setColor` opcode. Returns `nil` for fully opaque black — the
+    /// wire format's default — so we don't emit a redundant
+    /// `setColor` for the common "no override" case.
+    static func argb(from color: ScoreColor) -> UInt32? {
+        let a = UInt32(max(0, min(255, color.alpha)))
+        let r = UInt32(max(0, min(255, color.red)))
+        let g = UInt32(max(0, min(255, color.green)))
+        let b = UInt32(max(0, min(255, color.blue)))
+        let packed = (a << 24) | (r << 16) | (g << 8) | b
+        return packed == 0xFF00_0000 ? nil : packed
+    }
+
     /// Emit a text element honoring the role's MuseScore anchor.
     /// Splits the string into Bravura-glyph runs (SMuFL PUA codepoints)
     /// and Edwin-text runs via `MusicTextRuns.runs`, advancing X across
@@ -177,9 +206,11 @@ extension LayoutBridge {
 
     // MARK: - Tie arc (tessellated)
 
-    // Approximate a tie's cubic Bezier with a 16-segment polyline so
-    // the Compose wire format (which has no curve opcode) can render
-    // it. Geometry shared with Apple via `TieArcGeometry`.
+    // Emit a tie's cubic Bezier directly via the wire format
+    // `.cubicTo` opcode. Compose's native Path.cubicTo renders the
+    // curve with proper anti-aliasing — a polyline tessellation of
+    // the same curve washes out at the staff-line stroke thickness.
+    // Geometry shared with Apple via `TieArcGeometry`.
     // swiftlint:disable:next function_parameter_count
     static func encodeTieArc(
         fromX: Double, fromY: Double,
@@ -190,8 +221,7 @@ extension LayoutBridge {
     ) {
         // Apple's TieRenderer scales the shoulder with sqrt(tieLength)
         // up to ~2 sp; for the cross-platform helper we use a fixed
-        // 1 sp shoulder. Good enough for v1 — refinement is a
-        // follow-up.
+        // 1 sp shoulder. Refinement is a follow-up.
         let pts = TieArcGeometry.controlPoints(
             from: CGPoint(x: CGFloat(fromX), y: CGFloat(fromY)),
             to: CGPoint(x: CGFloat(toX), y: CGFloat(toY)),
@@ -199,36 +229,19 @@ extension LayoutBridge {
             heightSp: 1,
             sp: CGFloat(sp),
         )
-        let steps = 16
-        var prevX = Double(pts.p0.x)
-        var prevY = Double(pts.p0.y)
-        out.append(.moveTo(x: prevX * ptToMMScale, y: prevY * ptToMMScale))
-        for i in 1 ... steps {
-            let t = Double(i) / Double(steps)
-            let pt = bezierPoint(
-                t: t,
-                p0: pts.p0, p1: pts.p1, p2: pts.p2, p3: pts.p3,
-            )
-            prevX = Double(pt.x)
-            prevY = Double(pt.y)
-            out.append(.lineTo(x: prevX * ptToMMScale, y: prevY * ptToMMScale))
-        }
+        out.append(.moveTo(
+            x: Double(pts.p0.x) * ptToMMScale,
+            y: Double(pts.p0.y) * ptToMMScale,
+        ))
+        out.append(.cubicTo(
+            cx1: Double(pts.p1.x) * ptToMMScale,
+            cy1: Double(pts.p1.y) * ptToMMScale,
+            cx2: Double(pts.p2.x) * ptToMMScale,
+            cy2: Double(pts.p2.y) * ptToMMScale,
+            x: Double(pts.p3.x) * ptToMMScale,
+            y: Double(pts.p3.y) * ptToMMScale,
+        ))
         out.append(.stroke(width: sp * 0.13 * ptToMMScale))
-    }
-
-    private static func bezierPoint(
-        t: Double, p0: CGPoint, p1: CGPoint, p2: CGPoint, p3: CGPoint,
-    ) -> CGPoint {
-        let u = 1 - t
-        let coef0 = u * u * u
-        let coef1 = 3 * u * u * t
-        let coef2 = 3 * u * t * t
-        let coef3 = t * t * t
-        let x = coef0 * Double(p0.x) + coef1 * Double(p1.x)
-            + coef2 * Double(p2.x) + coef3 * Double(p3.x)
-        let y = coef0 * Double(p0.y) + coef1 * Double(p1.y)
-            + coef2 * Double(p2.y) + coef3 * Double(p3.y)
-        return CGPoint(x: CGFloat(x), y: CGFloat(y))
     }
 
     // MARK: - Tuplet bracket

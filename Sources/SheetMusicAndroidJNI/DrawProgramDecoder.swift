@@ -76,6 +76,15 @@ public enum DrawProgramDecoder {
             return .text(s, x: x, y: y, size: size, fontId: fontId)
         case .setColor:
             return .setColor(argb: r.read(UInt32.self))
+        case .cubicTo:
+            return .cubicTo(
+                cx1: r.readDouble(),
+                cy1: r.readDouble(),
+                cx2: r.readDouble(),
+                cy2: r.readDouble(),
+                x: r.readDouble(),
+                y: r.readDouble(),
+            )
         }
     }
 }

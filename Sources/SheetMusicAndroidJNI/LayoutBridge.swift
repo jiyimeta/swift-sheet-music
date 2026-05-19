@@ -130,21 +130,24 @@ public enum LayoutBridge {
                     )
                 }
             }
+
+            // ── 3. System spanners ──────────────────────────────────────────
+            // Tie arcs, slurs, hairpins, etc. that attachTies/spanners
+            // hang off the system after the per-measure walk. Their
+            // origins are in system-local coords, so pass sysOriginX/Y
+            // as the "measure" origin and zero-relative element offsets
+            // will resolve correctly.
+            for element in system.spanners {
+                encodeElement(
+                    element,
+                    measureOriginX: sysOriginX,
+                    measureOriginY: sysOriginY,
+                    metrics: context,
+                    into: &out,
+                )
+            }
         }
         return out
-    }
-
-    /// Pack a `ScoreColor` as ARGB (0xAARRGGBB) for the wire-format
-    /// `setColor` opcode. Returns `nil` for fully opaque black — the
-    /// wire format's default — so we don't emit a redundant
-    /// `setColor` for the common "no override" case.
-    static func argb(from color: ScoreColor) -> UInt32? {
-        let a = UInt32(max(0, min(255, color.alpha)))
-        let r = UInt32(max(0, min(255, color.red)))
-        let g = UInt32(max(0, min(255, color.green)))
-        let b = UInt32(max(0, min(255, color.blue)))
-        let packed = (a << 24) | (r << 16) | (g << 8) | b
-        return packed == 0xFF00_0000 ? nil : packed
     }
 
     /// Scalar metrics passed down to per-element encoders so they don't
@@ -379,22 +382,5 @@ public enum LayoutBridge {
              .arpeggioWiggle, .tremoloBars:
             break
         }
-    }
-
-    // MARK: - Geometry helpers
-
-    private static func placeholderRect(
-        at origin: CGPoint,
-        mox: Double,
-        moy: Double,
-        sp: Double,
-        into out: inout [DrawCommand],
-    ) {
-        out.append(.fillRect(
-            x: (mox + Double(origin.x)) * ptToMM,
-            y: (moy + Double(origin.y)) * ptToMM,
-            w: sp * ptToMM,
-            h: sp * ptToMM,
-        ))
     }
 }

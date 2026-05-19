@@ -11,9 +11,9 @@ import java.nio.ByteOrder
 object DrawProgramDecoder {
 
     private const val MAGIC = 0x53_4D_44_50   // "SMDP"
-    // v2 adds the setColor opcode (0x07). Keep in lockstep with
-    // Sources/SheetMusicAndroidJNI/DrawProgram.swift.
-    private const val VERSION = 2
+    // v3 adds cubicTo (0x08); v2 added setColor (0x07). Keep in lockstep
+    // with Sources/SheetMusicAndroidJNI/DrawProgram.swift.
+    private const val VERSION = 3
 
     class BadMagicException(actual: Int) :
         RuntimeException("bad draw-program magic: 0x${actual.toString(16)}")
@@ -67,6 +67,11 @@ object DrawProgramDecoder {
                     fontId = buf.get().toInt() and 0xFF)
             }
             0x07 -> DrawCommand.SetColor(argb = buf.int.toUInt())
+            0x08 -> DrawCommand.CubicTo(
+                cx1 = buf.double, cy1 = buf.double,
+                cx2 = buf.double, cy2 = buf.double,
+                x = buf.double, y = buf.double,
+            )
             else -> throw UnknownOpcodeException(op)
         }
 }
@@ -87,4 +92,8 @@ sealed interface DrawCommand {
                     val size: Double, val fontId: Int) : DrawCommand
     /** Active paint colour as packed ARGB (0xAARRGGBB). */
     data class SetColor(val argb: UInt) : DrawCommand
+    /** Cubic Bezier curve from current path point to (x, y). */
+    data class CubicTo(val cx1: Double, val cy1: Double,
+                       val cx2: Double, val cy2: Double,
+                       val x: Double, val y: Double) : DrawCommand
 }

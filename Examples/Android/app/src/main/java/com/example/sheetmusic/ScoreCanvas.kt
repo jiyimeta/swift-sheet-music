@@ -90,6 +90,16 @@ private fun DrawScope.drawPage(
                 path.lineTo(cmd.x.toFloat() * pxPerMM,
                             cmd.y.toFloat() * pxPerMM)
             }
+            is DrawCommand.CubicTo -> {
+                path.cubicTo(
+                    cmd.cx1.toFloat() * pxPerMM,
+                    cmd.cy1.toFloat() * pxPerMM,
+                    cmd.cx2.toFloat() * pxPerMM,
+                    cmd.cy2.toFloat() * pxPerMM,
+                    cmd.x.toFloat() * pxPerMM,
+                    cmd.y.toFloat() * pxPerMM,
+                )
+            }
             is DrawCommand.Stroke -> {
                 val widthPx = (cmd.width.toFloat() * pxPerMM)
                     .coerceAtLeast(1.5f)
