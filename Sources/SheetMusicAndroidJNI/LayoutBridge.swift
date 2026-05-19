@@ -297,10 +297,23 @@ public enum LayoutBridge {
         case let .articulation(_, origin, _):
             placeholderRect(at: origin, mox: mox, moy: moy, sp: sp, into: &out)
 
+        case let .tupletLabel(fromOrigin, toOrigin, text, hasBracket, isAbove, _):
+            encodeTupletBracket(
+                fromX: mox + Double(fromOrigin.x),
+                fromY: moy + Double(fromOrigin.y),
+                toX: mox + Double(toOrigin.x),
+                toY: moy + Double(toOrigin.y),
+                text: text,
+                hasBracket: hasBracket,
+                isAbove: isAbove,
+                sp: sp,
+                into: &out,
+            )
+
         // Decorations deferred to a future task — require richer geometry.
         case .harmony, .spannerSegment, .tieArc,
              .lyricsMelisma, .lyricHyphen, .glissandoLine,
-             .arpeggioWiggle, .tremoloBars, .tupletLabel:
+             .arpeggioWiggle, .tremoloBars:
             break
         }
     }

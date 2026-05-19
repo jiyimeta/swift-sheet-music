@@ -260,6 +260,83 @@ extension LayoutBridge {
         }
     }
 
+    // MARK: - Tuplet bracket
+
+    // swiftlint:disable:next function_parameter_count
+    static func encodeTupletBracket(
+        fromX: Double, fromY: Double,
+        toX: Double, toY: Double,
+        text: String,
+        hasBracket: Bool,
+        isAbove: Bool,
+        sp: Double,
+        into out: inout [DrawCommand],
+    ) {
+        let segments = TupletBracketGeometry.segments(
+            from: CGPoint(x: CGFloat(fromX), y: CGFloat(fromY)),
+            to: CGPoint(x: CGFloat(toX), y: CGFloat(toY)),
+            isAbove: isAbove,
+            sp: CGFloat(sp),
+        )
+        let fontSize = Double(TupletBracketGeometry.labelFontSizeSp) * sp
+        // Label — emit as centred Edwin italic. The bridge's wire
+        // format has no italic bit yet; falls back to the default
+        // text style, matching Apple's "looks slightly off but
+        // recognisable" behaviour for tuplet digits.
+        let labelWidth = Double(FontMetrics.provider.typographicWidth(
+            text: text,
+            font: LayoutFont(face: "Edwin", pointSize: CGFloat(fontSize)),
+        ))
+        out.append(.text(
+            text,
+            x: (Double(segments.labelCenter.x) - labelWidth / 2) * ptToMMScale,
+            y: Double(segments.labelCenter.y) * ptToMMScale,
+            size: fontSize * ptToMMScale,
+            fontId: .textRoman,
+        ))
+        guard hasBracket else { return }
+        let lineWidth = Double(TupletBracketGeometry.lineThicknessSp) * sp
+        emitSegment(
+            segments.leftHookFrom,
+            segments.leftHookTo,
+            width: lineWidth,
+            into: &out,
+        )
+        emitSegment(
+            segments.rightHookFrom,
+            segments.rightHookTo,
+            width: lineWidth,
+            into: &out,
+        )
+        emitSegment(
+            segments.leftSegFrom,
+            segments.leftSegTo,
+            width: lineWidth,
+            into: &out,
+        )
+        emitSegment(
+            segments.rightSegFrom,
+            segments.rightSegTo,
+            width: lineWidth,
+            into: &out,
+        )
+    }
+
+    private static func emitSegment(
+        _ from: CGPoint, _ to: CGPoint, width: Double,
+        into out: inout [DrawCommand],
+    ) {
+        out.append(.moveTo(
+            x: Double(from.x) * ptToMMScale,
+            y: Double(from.y) * ptToMMScale,
+        ))
+        out.append(.lineTo(
+            x: Double(to.x) * ptToMMScale,
+            y: Double(to.y) * ptToMMScale,
+        ))
+        out.append(.stroke(width: width * ptToMMScale))
+    }
+
     // MARK: - Key signature
 
     // swiftlint:disable:next function_parameter_count

@@ -24,68 +24,48 @@ enum TupletRenderer {
         metrics: StaffMetrics,
         color: Color = .primary,
     ) {
-        let fontSize = metrics.sp * 2
-        let labelX = (from.x + to.x) / 2
-        let labelY = (from.y + to.y) / 2
+        let segments = TupletBracketGeometry.segments(
+            from: from, to: to, isAbove: isAbove, sp: metrics.sp,
+        )
+        let fontSize = TupletBracketGeometry.labelFontSizeSp * metrics.sp
         // Draw the number first so we can cut a gap in the bracket
         // around it.
         context.drawExpressionText(
             text,
-            at: CGPoint(x: labelX, y: labelY),
+            at: segments.labelCenter,
             size: fontSize,
             italic: true,
             color: color,
             anchor: .center,
         )
         guard hasBracket else { return }
-        // Approximate label width for the gap; errs on the side of
-        // being slightly wide so the bracket never touches the glyphs.
-        let labelHalfWidth = fontSize * 0.4
-        let hook: CGFloat = metrics.sp * 0.8
-        let hookSign: CGFloat = isAbove ? 1 : -1
-        let hookDy = hook * hookSign
-        let lineWidth: CGFloat = metrics.sp * 0.12
-        // Left hook
-        var leftHook = Path()
-        leftHook.move(to: CGPoint(x: from.x, y: from.y + hookDy))
-        leftHook.addLine(to: from)
-        context.stroke(
-            leftHook, with: .color(color), lineWidth: lineWidth,
+        let lineWidth = TupletBracketGeometry.lineThicknessSp * metrics.sp
+        stroke(
+            from: segments.leftHookFrom, to: segments.leftHookTo,
+            width: lineWidth, color: color, into: &context,
         )
-        // Right hook
-        var rightHook = Path()
-        rightHook.move(to: CGPoint(x: to.x, y: to.y + hookDy))
-        rightHook.addLine(to: to)
-        context.stroke(
-            rightHook, with: .color(color), lineWidth: lineWidth,
+        stroke(
+            from: segments.rightHookFrom, to: segments.rightHookTo,
+            width: lineWidth, color: color, into: &context,
         )
-        // Horizontal — two segments, interrupted by the label.
-        var leftSeg = Path()
-        leftSeg.move(to: from)
-        leftSeg.addLine(to: CGPoint(
-            x: labelX - labelHalfWidth,
-            y: interpY(from: from, to: to, x: labelX - labelHalfWidth),
-        ))
-        context.stroke(
-            leftSeg, with: .color(color), lineWidth: lineWidth,
+        stroke(
+            from: segments.leftSegFrom, to: segments.leftSegTo,
+            width: lineWidth, color: color, into: &context,
         )
-        var rightSeg = Path()
-        rightSeg.move(to: CGPoint(
-            x: labelX + labelHalfWidth,
-            y: interpY(from: from, to: to, x: labelX + labelHalfWidth),
-        ))
-        rightSeg.addLine(to: to)
-        context.stroke(
-            rightSeg, with: .color(color), lineWidth: lineWidth,
+        stroke(
+            from: segments.rightSegFrom, to: segments.rightSegTo,
+            width: lineWidth, color: color, into: &context,
         )
     }
 
-    private static func interpY(
-        from: CGPoint, to: CGPoint, x: CGFloat,
-    ) -> CGFloat {
-        let span = to.x - from.x
-        guard abs(span) > 0.01 else { return from.y }
-        let t = (x - from.x) / span
-        return from.y + (to.y - from.y) * t
+    private static func stroke(
+        from: CGPoint, to: CGPoint,
+        width: CGFloat, color: Color,
+        into context: inout GraphicsContext,
+    ) {
+        var path = Path()
+        path.move(to: from)
+        path.addLine(to: to)
+        context.stroke(path, with: .color(color), lineWidth: width)
     }
 }
