@@ -105,6 +105,7 @@ if !isAndroid {
         .library(name: "SheetMusicLayoutApple", targets: ["SheetMusicLayoutApple"]),
         .library(name: "SheetMusicUI", targets: ["SheetMusicUI"]),
         .library(name: "SheetMusicAudio", targets: ["SheetMusicAudio"]),
+        .library(name: "SheetMusicAudioApple", targets: ["SheetMusicAudioApple"]),
         .library(name: "SheetMusicPDF", targets: ["SheetMusicPDF"]),
         .executable(name: "render-previews", targets: ["RenderPreviews"]),
     ]
@@ -123,11 +124,18 @@ if !isAndroid {
             ],
         ),
         .target(
-            name: "SheetMusicAudio",
+            name: "SheetMusicAudioApple",
             dependencies: [
                 "SheetMusicCore",
                 "SheetMusicMIDI",
                 "SheetMusicAudioCore",
+            ],
+        ),
+        .target(
+            name: "SheetMusicAudio",
+            dependencies: [
+                "SheetMusicAudioCore",
+                "SheetMusicAudioApple",
             ],
         ),
         .target(
