@@ -8,17 +8,16 @@ import SheetMusicMusicXML
 /// or throws SheetMusicError.
 public enum ScoreBridge {
     public enum SniffedFormat {
-        case mscx, mscz, musicXML, mxl, unknown
+        case mscx, mscz, musicXML, unknown
     }
 
     /// Inspect the leading bytes of `data` to determine what score format it
-    /// contains. ZIP magic bytes (PK\x03\x04) indicate `.mscz` or `.mxl`;
-    /// XML content is distinguished by the root element name found in the
-    /// first 256 bytes.
+    /// contains. ZIP magic bytes (PK\x03\x04) indicate a compressed container
+    /// (`.mscz` or `.mxl`); XML content is distinguished by the root element
+    /// name found in the first 256 bytes. The mscz/mxl distinction is
+    /// deferred to `loadScore`, which tries MSCZReader first and falls back
+    /// to the MXL path on failure.
     public static func sniff(_ bytes: Data) -> SniffedFormat {
-        // ZIP (PK\x03\x04) — mscz or mxl.
-        // The container distinction is left to the respective decoders;
-        // we return .mscz for the common Android use-case.
         if bytes.count >= 4,
            bytes[0] == 0x50, bytes[1] == 0x4B,
            bytes[2] == 0x03, bytes[3] == 0x04
@@ -49,11 +48,9 @@ public enum ScoreBridge {
         case .mscx:
             return try MSCXParser.parse(bytes)
         case .mscz:
-            // .mscz is a ZIP container with an inner .mscx.
-            // MSCZReader handles the ZIP unwrapping; MSCXParser only
-            // accepts uncompressed XML. If MSCZReader rejects the bytes
-            // (e.g. it's actually an .mxl archive), fall back to the
-            // MusicXML MXL path.
+            // ZIP container — could be .mscz or .mxl. Try MSCZReader
+            // first (the common Android case); on failure try the MXL
+            // path before giving up.
             do {
                 return try MSCZReader.parse(bytes)
             } catch {
@@ -61,8 +58,6 @@ public enum ScoreBridge {
             }
         case .musicXML:
             return try MusicXMLParser.parse(bytes)
-        case .mxl:
-            return try MusicXMLParser.parse(mxlData: bytes)
         case .unknown:
             throw SheetMusicError.malformedScore(
                 reason: "unrecognized score format (not mscx/mscz/musicxml/mxl)",
