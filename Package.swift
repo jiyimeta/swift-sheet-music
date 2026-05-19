@@ -31,28 +31,18 @@ var targets: [Target] = [
     ),
     .target(
         name: "SheetMusicMSCX",
-        dependencies: isAndroid ? [
+        dependencies: [
             "SheetMusicCore",
             "SheetMusicXMLTools",
             "SheetMusicZip",
-        ] : [
-            "SheetMusicCore",
-            "SheetMusicXMLTools",
-            "SheetMusicZip",
-            .product(name: "ZIPFoundation", package: "ZIPFoundation"),
         ],
     ),
     .target(
         name: "SheetMusicMusicXML",
-        dependencies: isAndroid ? [
+        dependencies: [
             "SheetMusicCore",
             "SheetMusicXMLTools",
             "SheetMusicZip",
-        ] : [
-            "SheetMusicCore",
-            "SheetMusicXMLTools",
-            "SheetMusicZip",
-            .product(name: "ZIPFoundation", package: "ZIPFoundation"),
         ],
     ),
     .target(
@@ -90,7 +80,6 @@ var targets: [Target] = [
             "SheetMusicPDF",
             "SheetMusicXMLTools",
             "SheetMusicZip",
-            .product(name: "ZIPFoundation", package: "ZIPFoundation"),
         ],
         resources: [
             .process("Resources"),
@@ -135,12 +124,7 @@ if !isAndroid {
     ]
 }
 
-var packageDependencies: [Package.Dependency] = []
-if !isAndroid {
-    packageDependencies += [
-        .package(url: "https://github.com/weichsel/ZIPFoundation.git", exact: "0.9.20"),
-    ]
-}
+let packageDependencies: [Package.Dependency] = []
 
 let package = Package(
     name: "swift-sheet-music",
