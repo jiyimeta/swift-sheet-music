@@ -63,6 +63,15 @@ var targets: [Target] = [
         name: "SheetMusicLayout",
         dependencies: ["SheetMusicCore"],
     ),
+    .target(
+        name: "SheetMusicAndroidJNI",
+        dependencies: [
+            "SheetMusicCore",
+            "SheetMusicMSCX",
+            "SheetMusicMusicXML",
+            "SheetMusicLayout",
+        ] + (isAndroid ? ["CJNI"] : []),
+    ),
     .testTarget(
         name: "SheetMusicTests",
         dependencies: isAndroid ? [
@@ -72,6 +81,7 @@ var targets: [Target] = [
             "SheetMusicMSCX",
             "SheetMusicMusicXML",
             "SheetMusicLayout",
+            "SheetMusicAndroidJNI",
             "SheetMusicXMLTools",
             "SheetMusicZip",
         ] : [
@@ -81,6 +91,7 @@ var targets: [Target] = [
             "SheetMusicMSCX",
             "SheetMusicMusicXML",
             "SheetMusicLayout",
+            "SheetMusicAndroidJNI",
             "SheetMusicLayoutApple",
             "SheetMusicUI",
             "SheetMusicAudio",
@@ -137,6 +148,23 @@ if !isAndroid {
                 "SheetMusicLayoutApple",
                 "SheetMusicUI",
             ],
+        ),
+    ]
+}
+
+if isAndroid {
+    products += [
+        .library(
+            name: "SheetMusicJNI",
+            type: .dynamic,
+            targets: ["SheetMusicAndroidJNI"],
+        ),
+    ]
+    targets += [
+        .target(
+            name: "CJNI",
+            path: "Sources/CJNI",
+            publicHeadersPath: ".",
         ),
     ]
 }
