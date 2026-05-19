@@ -91,12 +91,16 @@ public enum LayoutBridge {
         for system in layout.systems {
             let sysOriginX = Double(system.origin.x)
             let sysOriginY = Double(system.origin.y)
-            let sysWidth = Double(system.size.width)
+            // Stop the staff lines at the rightmost stroke of the system
+            // terminal barline so the staff doesn't trail past it through
+            // the per-measure gutter.
+            let endX = Double(BarLineGeometry.staffLineEndX(for: system))
 
             // ── 1. Staff lines ──────────────────────────────────────────────
             for staffOrigin in system.staffOrigins {
                 let ox = Double(staffOrigin.x) + sysOriginX
                 let oy = Double(staffOrigin.y) + sysOriginY
+                let rightX = endX + sysOriginX
                 for line in 0 ..< 5 {
                     let y = oy + Double(line) * context.sp
                     out.append(.moveTo(
@@ -104,7 +108,7 @@ public enum LayoutBridge {
                         y: y * ptToMM,
                     ))
                     out.append(.lineTo(
-                        x: (ox + sysWidth) * ptToMM,
+                        x: rightX * ptToMM,
                         y: y * ptToMM,
                     ))
                     out.append(.stroke(width: staffLineThickness * ptToMM))
@@ -187,28 +191,32 @@ public enum LayoutBridge {
             )
 
         case let .chord(
-            notes, duration, stem, _, _, _, isBeamed, _, stemExtension,
+            notes, duration, stem, stemOrigin, _, _, isBeamed, _, stemExtension,
         ):
             encodeChord(
                 notes: notes, duration: duration, stem: stem,
+                stemOrigin: stemOrigin,
                 isBeamed: isBeamed, stemExtension: Double(stemExtension),
                 mag: 1,
                 measureOriginX: mox, measureOriginY: moy,
                 metrics: ctx, into: &out,
             )
 
-        case let .graceChord(notes, duration, stem, _, _, _, mag, _):
+        case let .graceChord(notes, duration, stem, stemOrigin, _, _, mag, _):
             encodeChord(
                 notes: notes, duration: duration, stem: stem,
+                stemOrigin: stemOrigin,
                 isBeamed: false, stemExtension: 0,
                 mag: Double(mag),
                 measureOriginX: mox, measureOriginY: moy,
                 metrics: ctx, into: &out,
             )
 
-        case let .rest(duration, origin, _, _, _):
+        case let .rest(duration, origin, _, _, hasLegerLine):
             emitCenterAnchoredGlyph(
-                codepoint: restCodepoint(duration: duration),
+                codepoint: RestGlyph.codepoint(
+                    duration: duration, hasLegerLine: hasLegerLine,
+                ),
                 cxPt: mox + Double(origin.x),
                 cyPt: moy + Double(origin.y),
                 sizePt: glyphSize,
@@ -216,12 +224,18 @@ public enum LayoutBridge {
             )
 
         case let .barLine(_, origin):
-            // Vertical stroke spanning the staff height (4 sp).
+            // Barline origin sits at the staff middle; strokes extend
+            // ±2 sp from that point. Width = 0.15 sp (the thin-stroke
+            // engraving default). Subtype-specific extras (double,
+            // end, repeat dots) are a follow-up.
+            let halfHeight = Double(BarLineGeometry.halfHeightSp) * sp
             let bx = (mox + Double(origin.x)) * ptToMM
-            let by = (moy + Double(origin.y)) * ptToMM
-            out.append(.moveTo(x: bx, y: by))
-            out.append(.lineTo(x: bx, y: by + sp * 4 * ptToMM))
-            out.append(.stroke(width: 0.5 * ptToMM))
+            let byMid = (moy + Double(origin.y)) * ptToMM
+            out.append(.moveTo(x: bx, y: byMid - halfHeight * ptToMM))
+            out.append(.lineTo(x: bx, y: byMid + halfHeight * ptToMM))
+            out.append(.stroke(
+                width: Double(BarLineGeometry.thinThicknessSp) * sp * ptToMM,
+            ))
 
         case let .beam(fromOrigin, toOrigin, _, _):
             let fx = (mox + Double(fromOrigin.x)) * ptToMM
@@ -233,30 +247,24 @@ public enum LayoutBridge {
             out.append(.stroke(width: sp * 0.5 * ptToMM))
 
         case let .textMark(kind, text, origin):
-            let pointSize = Double(TextRoleStyle.fontSize(
-                for: TextRoleStyle.style(for: kind),
-                sp: CGFloat(sp),
-            ))
-            out.append(.text(
-                text,
-                x: (mox + Double(origin.x)) * ptToMM,
-                y: (moy + Double(origin.y)) * ptToMM,
-                size: pointSize * ptToMM,
-                fontId: .textRoman,
-            ))
+            emitText(
+                text: text,
+                style: TextRoleStyle.style(for: kind),
+                originX: mox + Double(origin.x),
+                originY: moy + Double(origin.y),
+                sp: sp,
+                into: &out,
+            )
 
         case let .staffText(text, origin, _, isSystemText):
-            let role: TextStyleType = isSystemText ? .systemText : .staffText
-            let pointSize = Double(TextRoleStyle.fontSize(
-                for: role, sp: CGFloat(sp),
-            ))
-            out.append(.text(
-                text,
-                x: (mox + Double(origin.x)) * ptToMM,
-                y: (moy + Double(origin.y)) * ptToMM,
-                size: pointSize * ptToMM,
-                fontId: .textRoman,
-            ))
+            emitText(
+                text: text,
+                style: isSystemText ? .systemText : .staffText,
+                originX: mox + Double(origin.x),
+                originY: moy + Double(origin.y),
+                sp: sp,
+                into: &out,
+            )
 
         // Fallback for unhandled point-origin cases: tiny placeholder rect.
         case let .note(_, _, _, _, origin, _, _, _):
@@ -312,16 +320,5 @@ public enum LayoutBridge {
             w: sp * ptToMM,
             h: sp * ptToMM,
         ))
-    }
-
-    // MARK: - Rest codepoints
-
-    private static func restCodepoint(duration: NoteDuration) -> UInt32 {
-        switch duration {
-        case .whole: return SMuFLCodepoint.restWhole
-        case .half: return SMuFLCodepoint.restHalf
-        case .quarter: return SMuFLCodepoint.restQuarter
-        default: return SMuFLCodepoint.rest8th
-        }
     }
 }

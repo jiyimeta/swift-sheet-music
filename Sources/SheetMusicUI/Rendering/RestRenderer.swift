@@ -11,23 +11,11 @@ enum RestRenderer {
         origin: CGPoint,
         metrics: StaffMetrics,
     ) {
-        let glyph: Character
-        switch duration {
-        case .whole:
-            glyph = hasLegerLine
-                ? SMuFLGlyph.restWholeLegerLine
-                : SMuFLGlyph.restWhole
-        case .half:
-            glyph = hasLegerLine
-                ? SMuFLGlyph.restHalfLegerLine
-                : SMuFLGlyph.restHalf
-        case .quarter: glyph = SMuFLGlyph.restQuarter
-        case .eighth: glyph = SMuFLGlyph.rest8th
-        case .sixteenth: glyph = SMuFLGlyph.rest16th
-        case .thirtySecond: glyph = SMuFLGlyph.rest32nd
-        case .sixtyFourth: glyph = SMuFLGlyph.rest64th
-        default: glyph = SMuFLGlyph.restQuarter
-        }
+        let codepoint = RestGlyph.codepoint(
+            duration: duration, hasLegerLine: hasLegerLine,
+        )
+        // swiftlint:disable:next force_unwrapping
+        let glyph = Character(UnicodeScalar(codepoint)!)
         context.drawGlyph(
             glyph, at: origin, size: metrics.glyphFontSize,
         )

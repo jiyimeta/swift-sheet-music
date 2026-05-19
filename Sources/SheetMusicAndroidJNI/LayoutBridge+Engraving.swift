@@ -17,6 +17,39 @@ extension LayoutBridge {
     /// constant's visibility just for this split.
     static let ptToMMScale = 25.4 / 72.0
 
+    /// Emit a text element honoring the role's MuseScore anchor.
+    /// `Canvas.drawText` on Android anchors at the baseline-leading
+    /// corner — for `.center` roles (lyrics) we shift X by half the
+    /// typographic width so the visual centre lands on `originX`.
+    static func emitText(
+        text: String,
+        style: TextStyleType,
+        originX: Double,
+        originY: Double,
+        sp: Double,
+        into out: inout [DrawCommand],
+    ) {
+        let pointSize = TextRoleStyle.fontSize(for: style, sp: CGFloat(sp))
+        let anchor = TextRoleStyle.horizontalAnchor(for: style)
+        let dx: Double
+        switch anchor {
+        case .leading: dx = 0
+        case .center, .trailing:
+            let width = FontMetrics.provider.typographicWidth(
+                text: text,
+                font: LayoutFont(face: "Edwin", pointSize: pointSize),
+            )
+            dx = anchor == .center ? -Double(width) / 2 : -Double(width)
+        }
+        out.append(.text(
+            text,
+            x: (originX + dx) * ptToMMScale,
+            y: originY * ptToMMScale,
+            size: Double(pointSize) * ptToMMScale,
+            fontId: .textRoman,
+        ))
+    }
+
     /// Emit a SMuFL glyph whose position was computed assuming Apple's
     /// `.center` anchor (visual ink centre at `(cxPt, cyPt)`).
     /// `Canvas.drawText` on Android anchors at the baseline-leading
@@ -110,6 +143,7 @@ extension LayoutBridge {
         notes: [LayoutChordNote],
         duration: NoteDuration,
         stem: StemDirection,
+        stemOrigin: CGPoint,
         isBeamed: Bool,
         stemExtension: Double,
         mag: Double,
@@ -138,10 +172,17 @@ extension LayoutBridge {
             y: CGFloat(moy + Double($0.origin.y)),
         )
         }
+        // For beamed chords the stem extends to the shared beam Y instead
+        // of each chord's own natural stem-top. `stemOrigin` carries the
+        // beam-side terminus in measure-local coordinates; world Y =
+        // moy + stemOrigin.y.
+        let beamY: CGFloat? = isBeamed
+            ? CGFloat(moy + Double(stemOrigin.y))
+            : nil
         guard let geometry = StemGeometry.compute(
             noteOrigins: noteOrigins,
             direction: stem,
-            beamY: nil,
+            beamY: beamY,
             defaultStemLength: CGFloat(ctx.defaultStemLength * mag),
             stemExtension: CGFloat(stemExtension),
             sp: CGFloat(ctx.sp),

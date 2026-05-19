@@ -9,8 +9,9 @@ enum BarLineRenderer {
         origin: CGPoint,
         metrics: StaffMetrics,
     ) {
-        let top = CGPoint(x: origin.x, y: origin.y - metrics.sp * 2)
-        let bot = CGPoint(x: origin.x, y: origin.y + metrics.sp * 2)
+        let halfHeight = BarLineGeometry.halfHeightSp * metrics.sp
+        let top = CGPoint(x: origin.x, y: origin.y - halfHeight)
+        let bot = CGPoint(x: origin.x, y: origin.y + halfHeight)
         func line(dx: CGFloat, width: CGFloat) {
             var p = Path()
             p.move(to: CGPoint(x: top.x + dx, y: top.y))
@@ -48,32 +49,11 @@ enum BarLineRenderer {
     }
 
     /// Distance from the barline `origin.x` to the right edge of the
-    /// rightmost stroke this subtype paints. Used by the staff
-    /// renderer to clip the five-line staff so it terminates flush
-    /// with the system-end barline glyph (the staff should pass
-    /// through every component of the barline pair, not stop at the
-    /// thin half of an end / double / end-repeat). Mirrors the
-    /// `dx + width / 2` extents inside `draw` above — keep both in
-    /// sync.
+    /// rightmost stroke this subtype paints. Forwards to the shared
+    /// engraving helper so both the staff renderer and the Android
+    /// bridge consult the same numbers.
     static func rightExtent(subtype: String?, sp: CGFloat) -> CGFloat {
-        switch subtype {
-        case "end", "final":
-            // Thick stroke at dx = +0.4 sp, width 0.4 sp → right edge.
-            return sp * 0.6
-        case "end-repeat":
-            // Thick stroke at dx = +0.3 sp, width 0.4 sp → right edge.
-            return sp * 0.5
-        case "double":
-            // Right thin stroke at dx = +0.3 sp, width 0.15 sp.
-            return sp * 0.375
-        case "start-repeat":
-            // Thin stroke at dx = +0.3 sp, width 0.15 sp. Repeat dots
-            // sit further right but are not part of the staff line.
-            return sp * 0.375
-        default:
-            // Single thin stroke at dx = 0, width 0.15 sp.
-            return sp * 0.075
-        }
+        BarLineGeometry.rightExtent(subtype: subtype, sp: sp)
     }
 
     private static func drawRepeatDots(

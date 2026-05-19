@@ -55,4 +55,26 @@ public enum TextRoleStyle {
         case .lyrics: .lyricsOdd
         }
     }
+
+    /// Horizontal anchor at which a text element is positioned. The
+    /// concrete renderer maps these to its native API (SwiftUI's
+    /// `UnitPoint` on Apple, manual X offset for `Canvas.drawText` on
+    /// Android).
+    public enum HorizontalAnchor: Sendable, Equatable {
+        case leading
+        case center
+        case trailing
+    }
+
+    /// Horizontal anchor MuseScore uses to position the given role.
+    /// Lyrics centre on the chord stem; everything else is leading-
+    /// anchored by default.
+    public static func horizontalAnchor(
+        for style: TextStyleType,
+    ) -> HorizontalAnchor {
+        switch style {
+        case .lyricsOdd, .lyricsEven: .center
+        default: .leading
+        }
+    }
 }
