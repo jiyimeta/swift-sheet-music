@@ -90,11 +90,19 @@ private fun DrawScope.drawPage(
                             cmd.y.toFloat() * pxPerMM)
             }
             is DrawCommand.Stroke -> {
+                // Stroke widths come from engraving (e.g. 0.12 sp ≈ 0.3
+                // mm). On a low-density canvas these convert to sub-pixel
+                // widths that Compose anti-aliases to near-invisibility.
+                // Floor the rendered width at 1.5 px to keep every stroke
+                // visible without overpowering the page; pre-floored
+                // widths still scale linearly so engraving differences
+                // (staff line vs beam) remain proportional.
+                val widthPx = (cmd.width.toFloat() * pxPerMM)
+                    .coerceAtLeast(1.5f)
                 drawPath(
                     path = path,
                     color = Color.Black,
-                    style = Stroke(width = (cmd.width.toFloat() * pxPerMM)
-                                         .coerceAtLeast(1f))
+                    style = Stroke(width = widthPx)
                 )
                 path.reset()
                 strokeStarted = false

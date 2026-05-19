@@ -80,10 +80,13 @@ public enum LayoutBridge {
     private static func buildCommands(layout: LayoutDocument) -> [DrawCommand] {
         var out: [DrawCommand] = []
         let metrics = layout.metrics
-        // Staff line spacing in pt.
-        let sp = Double(metrics.sp)
+        let context = MetricsContext(
+            sp: Double(metrics.sp),
+            glyphSize: Double(metrics.glyphFontSize),
+            defaultStemLength: Double(metrics.defaultStemLength),
+            stemThickness: Double(metrics.stemThickness),
+        )
         let staffLineThickness = Double(metrics.staffLineThickness)
-        let glyphSize = Double(metrics.glyphFontSize)
 
         for system in layout.systems {
             let sysOriginX = Double(system.origin.x)
@@ -95,7 +98,7 @@ public enum LayoutBridge {
                 let ox = Double(staffOrigin.x) + sysOriginX
                 let oy = Double(staffOrigin.y) + sysOriginY
                 for line in 0 ..< 5 {
-                    let y = oy + Double(line) * sp
+                    let y = oy + Double(line) * context.sp
                     out.append(.moveTo(
                         x: ox * ptToMM,
                         y: y * ptToMM,
@@ -118,14 +121,22 @@ public enum LayoutBridge {
                         element,
                         measureOriginX: mox,
                         measureOriginY: moy,
-                        sp: sp,
-                        glyphSize: glyphSize,
+                        metrics: context,
                         into: &out,
                     )
                 }
             }
         }
         return out
+    }
+
+    /// Scalar metrics passed down to per-element encoders so they don't
+    /// each re-derive sp / glyph size / stem geometry from `StaffMetrics`.
+    struct MetricsContext {
+        let sp: Double
+        let glyphSize: Double
+        let defaultStemLength: Double
+        let stemThickness: Double
     }
 
     // MARK: - Per-element encoder
@@ -135,10 +146,11 @@ public enum LayoutBridge {
         _ element: LayoutElement,
         measureOriginX mox: Double,
         measureOriginY moy: Double,
-        sp: Double,
-        glyphSize: Double,
+        metrics ctx: MetricsContext,
         into out: inout [DrawCommand],
     ) {
+        let sp = ctx.sp
+        let glyphSize = ctx.glyphSize
         switch element {
         case let .clef(rawType, origin, _):
             let (codepoint, yOffsetSp) = ClefGlyph.glyph(
@@ -174,29 +186,25 @@ public enum LayoutBridge {
                 into: &out,
             )
 
-        case let .chord(notes, duration, _, _, _, _, _, _, _):
-            let cp = noteheadCodepoint(duration: duration)
-            for note in notes {
-                out.append(.glyph(
-                    codepoint: cp,
-                    x: (mox + Double(note.origin.x)) * ptToMM,
-                    y: (moy + Double(note.origin.y)) * ptToMM,
-                    size: glyphSize * ptToMM,
-                    fontId: .smufl,
-                ))
-            }
+        case let .chord(
+            notes, duration, stem, _, _, _, isBeamed, _, stemExtension,
+        ):
+            encodeChord(
+                notes: notes, duration: duration, stem: stem,
+                isBeamed: isBeamed, stemExtension: Double(stemExtension),
+                mag: 1,
+                measureOriginX: mox, measureOriginY: moy,
+                metrics: ctx, into: &out,
+            )
 
-        case let .graceChord(notes, duration, _, _, _, _, mag, _):
-            let cp = noteheadCodepoint(duration: duration)
-            for note in notes {
-                out.append(.glyph(
-                    codepoint: cp,
-                    x: (mox + Double(note.origin.x)) * ptToMM,
-                    y: (moy + Double(note.origin.y)) * ptToMM,
-                    size: glyphSize * Double(mag) * ptToMM,
-                    fontId: .smufl,
-                ))
-            }
+        case let .graceChord(notes, duration, stem, _, _, _, mag, _):
+            encodeChord(
+                notes: notes, duration: duration, stem: stem,
+                isBeamed: false, stemExtension: 0,
+                mag: Double(mag),
+                measureOriginX: mox, measureOriginY: moy,
+                metrics: ctx, into: &out,
+            )
 
         case let .rest(duration, origin, _, _, _):
             let cp = restCodepoint(duration: duration)
@@ -293,15 +301,7 @@ public enum LayoutBridge {
         ))
     }
 
-    // MARK: - Notehead / rest codepoints
-
-    private static func noteheadCodepoint(duration: NoteDuration) -> UInt32 {
-        switch duration {
-        case .whole: return SMuFLCodepoint.noteheadWhole
-        case .half: return SMuFLCodepoint.noteheadHalf
-        default: return SMuFLCodepoint.noteheadBlack
-        }
-    }
+    // MARK: - Rest codepoints
 
     private static func restCodepoint(duration: NoteDuration) -> UInt32 {
         switch duration {

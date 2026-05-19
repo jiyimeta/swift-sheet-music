@@ -1,8 +1,10 @@
 import Foundation
+import SheetMusicCore
 import SheetMusicLayout
 
 #if !canImport(CoreGraphics)
     private typealias CGFloat = SheetMusicLayout.CGFloat
+    private typealias CGPoint = SheetMusicLayout.CGPoint
 #endif
 
 /// Per-element encoders for the time-signature and key-signature
@@ -72,6 +74,79 @@ extension LayoutBridge {
             ))
         }
     }
+
+    // MARK: - Chord (noteheads + stem + flag)
+
+    // swiftlint:disable:next function_parameter_count
+    static func encodeChord(
+        notes: [LayoutChordNote],
+        duration: NoteDuration,
+        stem: StemDirection,
+        isBeamed: Bool,
+        stemExtension: Double,
+        mag: Double,
+        measureOriginX mox: Double,
+        measureOriginY moy: Double,
+        metrics ctx: MetricsContext,
+        into out: inout [DrawCommand],
+    ) {
+        let glyphSize = ctx.glyphSize * mag
+        // ── Noteheads ────────────────────────────────────────────────
+        let headCp = noteheadCodepoint(duration: duration)
+        for note in notes {
+            out.append(.glyph(
+                codepoint: headCp,
+                x: (mox + Double(note.origin.x)) * ptToMMScale,
+                y: (moy + Double(note.origin.y)) * ptToMMScale,
+                size: glyphSize * ptToMMScale,
+                fontId: .smufl,
+            ))
+        }
+        // Whole notes (and lower-resolution rests) are stemless.
+        if case .whole = duration { return }
+        // ── Stem ─────────────────────────────────────────────────────
+        let noteOrigins = notes.map { CGPoint(
+            x: CGFloat(mox + Double($0.origin.x)),
+            y: CGFloat(moy + Double($0.origin.y)),
+        )
+        }
+        guard let geometry = StemGeometry.compute(
+            noteOrigins: noteOrigins,
+            direction: stem,
+            beamY: nil,
+            defaultStemLength: CGFloat(ctx.defaultStemLength * mag),
+            stemExtension: CGFloat(stemExtension),
+            sp: CGFloat(ctx.sp),
+        ) else { return }
+        let xStem = Double(geometry.xStem)
+        let startY = Double(geometry.startY)
+        let endY = Double(geometry.endY)
+        out.append(.moveTo(x: xStem * ptToMMScale, y: startY * ptToMMScale))
+        out.append(.lineTo(x: xStem * ptToMMScale, y: endY * ptToMMScale))
+        out.append(.stroke(width: ctx.stemThickness * mag * ptToMMScale))
+        // ── Flag (unbeamed only) ─────────────────────────────────────
+        guard !isBeamed,
+              let flagCp = FlagGlyph.codepoint(duration: duration, stem: stem)
+        else { return }
+        let tipY = stem == .up ? startY : endY
+        out.append(.glyph(
+            codepoint: flagCp,
+            x: xStem * ptToMMScale,
+            y: tipY * ptToMMScale,
+            size: glyphSize * ptToMMScale,
+            fontId: .smufl,
+        ))
+    }
+
+    static func noteheadCodepoint(duration: NoteDuration) -> UInt32 {
+        switch duration {
+        case .whole: return SMuFLCodepoint.noteheadWhole
+        case .half: return SMuFLCodepoint.noteheadHalf
+        default: return SMuFLCodepoint.noteheadBlack
+        }
+    }
+
+    // MARK: - Key signature
 
     // swiftlint:disable:next function_parameter_count
     static func encodeKeySignature(
