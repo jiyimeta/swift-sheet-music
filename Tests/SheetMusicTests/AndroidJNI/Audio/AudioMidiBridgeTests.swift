@@ -251,4 +251,90 @@
             }
         }
     }
+
+    // MARK: - T18: pitchAndStaffOfNote + earliestOf
+
+    struct AudioMidiBridgePitchEarliestTests {
+        @Test func pitchAndStaffOfNoteValidNote() throws {
+            let score = try loadFixtureScore()
+            // midi01.mscx voice 0 has: KeySig(0), TimeSig(1), Chord-60(2), Chord-61(3), ...
+            // Use PlaybackTimeline.itemTicks to find the actual elementIndex
+            let timeline = PlaybackTimeline(score: score)
+            let noteIDsWithTicks: [(NoteID, Int)] = timeline.itemTicks.compactMap { id, tick in
+                if case let .note(nid) = id { return (nid, tick) }
+                return nil
+            }
+            guard let firstNote = noteIDsWithTicks.min(by: { $0.1 < $1.1 })?.0 else {
+                Issue.record("No notes found in fixture timeline")
+                return
+            }
+            let packed = AudioMidiBridge.pitchAndStaffOfNote(
+                score: score, noteId: firstNote,
+            )
+            let pitch = Int((UInt64(bitPattern: packed) >> 32) & 0xFFFF_FFFF)
+            let staffIdx = Int(UInt64(bitPattern: packed) & 0xFFFF_FFFF)
+            // pitch 60 is the first note in midi01.mscx
+            #expect(pitch == 60)
+            #expect(staffIdx == 0)
+        }
+
+        @Test func pitchAndStaffOfNoteSentinelForInvalidNote() throws {
+            let score = try loadFixtureScore()
+            let bogusAddr = StaffAddress(partIndex: 999, staffIndexInPart: 0)
+            let bogusId = NoteID(
+                staff: bogusAddr,
+                measureIndex: 0,
+                voiceIndex: 0,
+                elementIndex: 0,
+                noteIndexInChord: 0,
+            )
+            let packed = AudioMidiBridge.pitchAndStaffOfNote(score: score, noteId: bogusId)
+            #expect(packed == Int64(bitPattern: 0xFFFF_FFFF_FFFF_FFFF))
+        }
+
+        @Test func earliestOfPicksLowerTick() throws {
+            let score = try loadFixtureScore()
+            let timeline = PlaybackTimeline(score: score)
+            // Collect first two note IDs from itemTicks
+            let noteItems = timeline.itemTicks.keys.filter {
+                if case .note = $0 { return true }
+                return false
+            }
+            guard noteItems.count >= 2 else {
+                Issue.record("Need at least 2 note IDs for test")
+                return
+            }
+            let sortedPairs = noteItems.compactMap { id -> (ScoreItemID, Int)? in
+                guard let tick = timeline.itemTicks[id] else { return nil }
+                return (id, tick)
+            }.sorted { $0.1 < $1.1 }
+            let ids = [sortedPairs[0].0, sortedPairs[1].0]
+            let data = AudioMidiBridge.earliestOf(score: score, ids: ids)
+            #expect(!data.isEmpty)
+            let decoded = try ScoreItemIDCodec.decode(data)
+            // earliest should be the one with the lowest tick
+            let expectedEarliest = timeline.earliest(of: ids)
+            #expect(decoded == expectedEarliest)
+        }
+
+        @Test func earliestOfEmptyListReturnsEmpty() throws {
+            let score = try loadFixtureScore()
+            let data = AudioMidiBridge.earliestOf(score: score, ids: [])
+            #expect(data.isEmpty)
+        }
+
+        @Test func earliestOfUnresolvableIdsReturnsEmpty() throws {
+            let score = try loadFixtureScore()
+            let bogusAddr = StaffAddress(partIndex: 999, staffIndexInPart: 0)
+            let bogusId = ScoreItemID.note(NoteID(
+                staff: bogusAddr,
+                measureIndex: 0,
+                voiceIndex: 0,
+                elementIndex: 0,
+                noteIndexInChord: 0,
+            ))
+            let data = AudioMidiBridge.earliestOf(score: score, ids: [bogusId])
+            #expect(data.isEmpty)
+        }
+    }
 #endif
