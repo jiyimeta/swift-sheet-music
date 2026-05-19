@@ -39,6 +39,10 @@ SheetMusicAudio            (umbrella; → Core, Apple)
 SheetMusicPDF         (PDF export; → Core, Layout, LayoutApple, UI)
 ```
 
+(Android audio lives at `Android/SheetMusicAudioAndroid/` — a Kotlin
+Gradle module producing an .aar artifact, not a SwiftPM target.
+See its README for usage.)
+
 Internal targets (not products): `SheetMusicXMLTools`.
 
 Dev executable: `RenderPreviews`.
@@ -99,7 +103,10 @@ MusicXML / XMLTools (Phase 1) + Layout (Phase 2, via the
 falls back to a `StubFontMetricsProvider` with rectangle
 approximations). SheetMusicAudioCore is also Android-compatible
 (Foundation-only audio value types like PlaybackTimeline /
-MetronomeBeat / AudioFileFormat). UI / PDF remain Apple-only.
+MetronomeBeat / AudioFileFormat). Audio playback on Android is
+delivered as a Kotlin Gradle module at `Android/SheetMusicAudioAndroid/`
+(FluidSynth via VolcanoMobile's `.aar` + `AudioTrack` for v0).
+UI / PDF remain Apple-only.
 
 ### Prerequisites
 
