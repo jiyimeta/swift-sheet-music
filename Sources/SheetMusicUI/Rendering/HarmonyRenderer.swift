@@ -1,5 +1,6 @@
 import SheetMusicCore
 import SheetMusicLayout
+import SheetMusicLayoutApple
 import SwiftUI
 
 /// Draws a `LayoutHarmony` into a SwiftUI `GraphicsContext`. Walks

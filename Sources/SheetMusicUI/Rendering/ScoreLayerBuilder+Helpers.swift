@@ -3,6 +3,7 @@ import CoreText
 import QuartzCore
 import SheetMusicCore
 import SheetMusicLayout
+import SheetMusicLayoutApple
 
 #if os(macOS)
     import AppKit
@@ -80,7 +81,7 @@ extension ScoreLayerBuilder {
         if let font = cachedBravura, cachedBravuraSize == size {
             return font
         }
-        _ = BravuraFont.register
+        _ = SheetMusicLayoutApple.install
         let font = CTFontCreateWithName(
             BravuraFont.familyName as CFString, size, nil,
         )

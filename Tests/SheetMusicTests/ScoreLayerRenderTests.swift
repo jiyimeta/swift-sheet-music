@@ -4,6 +4,7 @@
     import QuartzCore
     import SheetMusicCore
     @testable import SheetMusicLayout
+    @testable import SheetMusicLayoutApple
     @testable import SheetMusicUI
     import Testing
 

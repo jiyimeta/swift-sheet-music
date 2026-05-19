@@ -2,6 +2,7 @@
 import QuartzCore
 import SheetMusicCore
 import SheetMusicLayout
+import SheetMusicLayoutApple
 
 #if os(macOS)
     import AppKit

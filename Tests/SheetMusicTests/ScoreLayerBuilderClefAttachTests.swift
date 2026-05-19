@@ -3,6 +3,7 @@
     import QuartzCore
     @testable import SheetMusicCore
     @testable import SheetMusicLayout
+    @testable import SheetMusicLayoutApple
     @testable import SheetMusicMSCX
     @testable import SheetMusicUI
     import Testing

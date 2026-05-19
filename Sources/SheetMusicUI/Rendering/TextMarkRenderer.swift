@@ -1,5 +1,6 @@
 import SheetMusicCore
 import SheetMusicLayout
+import SheetMusicLayoutApple
 import SwiftUI
 
 @available(macOS 15.0, *)
