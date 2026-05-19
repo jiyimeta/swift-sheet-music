@@ -81,6 +81,7 @@ var targets: [Target] = [
             "SheetMusicMSCX",
             "SheetMusicMusicXML",
             "SheetMusicLayout",
+            "SheetMusicLayoutApple",
             "SheetMusicUI",
             "SheetMusicAudio",
             "SheetMusicPDF",
@@ -97,6 +98,7 @@ var targets: [Target] = [
 if !isAndroid {
     products += [
         .library(name: "SheetMusicLayout", targets: ["SheetMusicLayout"]),
+        .library(name: "SheetMusicLayoutApple", targets: ["SheetMusicLayoutApple"]),
         .library(name: "SheetMusicUI", targets: ["SheetMusicUI"]),
         .library(name: "SheetMusicAudio", targets: ["SheetMusicAudio"]),
         .library(name: "SheetMusicPDF", targets: ["SheetMusicPDF"]),
@@ -107,6 +109,10 @@ if !isAndroid {
             name: "SheetMusicLayout",
             dependencies: ["SheetMusicCore"],
             resources: [.process("Fonts/Resources")],
+        ),
+        .target(
+            name: "SheetMusicLayoutApple",
+            dependencies: ["SheetMusicCore", "SheetMusicLayout"],
         ),
         .target(
             name: "SheetMusicUI",
