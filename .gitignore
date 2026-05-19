@@ -23,3 +23,6 @@ Android/.gradle/
 Android/build/
 Android/*/build/
 Android/local.properties
+
+# Synced from Tests/SheetMusicTests/Resources/Golden/Audio at build time
+Android/SheetMusicAudioAndroid/src/test/resources/golden/

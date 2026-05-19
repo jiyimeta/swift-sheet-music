@@ -42,6 +42,21 @@ android {
 group = "io.github.kiichiio"
 version = "0.0.0-SNAPSHOT"
 
+val syncGoldenBinaries by tasks.registering(Copy::class) {
+    from(rootProject.file("../Tests/SheetMusicTests/Resources/Golden/Audio"))
+    into(file("src/test/resources/golden"))
+    include("*.bin")
+}
+
+// Wire syncGoldenBinaries into the debug unit-test compile graph.
+// processDebugUnitTestJavaRes is the AGP task that stages test resources
+// for the debug unit-test variant; testDebugUnitTest depends on it.
+afterEvaluate {
+    tasks.matching { it.name == "testDebugUnitTest" }.configureEach {
+        dependsOn(syncGoldenBinaries)
+    }
+}
+
 dependencies {
     // FluidSynth (LGPL-2.1 dynamic-link). Vetted in Task 1; see
     // docs/superpowers/notes/2026-05-19-fluidsynth-android-vetting.md
