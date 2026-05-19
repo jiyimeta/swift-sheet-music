@@ -1,5 +1,4 @@
 import CoreGraphics
-import CoreText
 import Foundation
 
 /// Brace SMuFL glyph metrics needed at layout time.
@@ -10,7 +9,6 @@ import Foundation
 /// layer so the part-label gutter can reserve enough horizontal space
 /// for tall braces (where the rendered glyph extends much further left
 /// than `bracketColumnCount × sp`).
-@available(macOS 15.0, *)
 public enum BraceMetrics {
     // SMuFL brace glyph variants — Bravura's PUA range. Same set as
     // `SMuFLGlyph.braceVariant` in SheetMusicUI; duplicated here so the
@@ -46,10 +44,6 @@ public enum BraceMetrics {
     /// `bbox.width × magx` where `bbox.width` is the variant glyph's
     /// natural bounding-box width measured at `fontSize = sp × 4`
     /// (Bravura's 1 em = 4 sp).
-    ///
-    /// Used by `LayoutEngine.labelWidth` to widen the part-label gutter
-    /// when a brace's leftward extent would otherwise overrun the staff
-    /// name area — visible from `staffCount ≥ 3` (`braceLarge` and up).
     public static func glyphHorizontalExtent(
         staffCount: Int, sp: CGFloat,
     ) -> CGFloat {
@@ -60,34 +54,13 @@ public enum BraceMetrics {
 
     /// Natural bbox.width measured at `fontSize = 4` (i.e. sp = 1) so
     /// the cached value is in sp-units; callers scale by their own sp.
+    /// Provider owns its own per-(face,size) cache, so we just ask
+    /// each time — no local cache needed.
     private static func naturalBBoxWidth(codepoint: UInt16) -> CGFloat {
-        bboxLock.lock()
-        defer { bboxLock.unlock() }
-        if let cached = bboxCache[codepoint] { return cached }
-        let measured = measureNaturalBBoxWidth(codepoint: codepoint)
-        bboxCache[codepoint] = measured
-        return measured
-    }
-
-    private static let bboxLock = NSLock()
-    private nonisolated(unsafe) static var bboxCache: [UInt16: CGFloat] = [:]
-
-    private static func measureNaturalBBoxWidth(
-        codepoint: UInt16,
-    ) -> CGFloat {
-        _ = BravuraFont.register
-        // sp = 1 → fontSize = 4. bbox.width is then expressed in
-        // sp-units directly (Bravura's 1 em = 4 sp).
-        let font = CTFontCreateWithName(
-            BravuraFont.familyName as CFString, 4, nil,
+        let bbox = FontMetrics.provider.glyphPathBoundingBox(
+            font: LayoutFont(face: SMuFLFamily.bravura, pointSize: 4),
+            codepoint: codepoint,
         )
-        var unichars: [UniChar] = [codepoint]
-        var glyphs: [CGGlyph] = [0]
-        guard CTFontGetGlyphsForCharacters(
-            font, &unichars, &glyphs, 1,
-        ), glyphs[0] != 0,
-        let path = CTFontCreatePathForGlyph(font, glyphs[0], nil)
-        else { return 0 }
-        return path.boundingBox.width
+        return bbox?.width ?? 0
     }
 }

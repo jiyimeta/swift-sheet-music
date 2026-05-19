@@ -3,6 +3,7 @@
     import Foundation
     @testable import SheetMusicCore
     @testable import SheetMusicLayout
+    @testable import SheetMusicLayoutApple
     @testable import SheetMusicMSCX
     import Testing
 
@@ -256,6 +257,14 @@
 
         @available(macOS 15.0, iOS 16.0, *)
         @Test func labelRightEdgeShiftsLeftWithBrackets() {
+            // Need the real CoreText backend so `BraceMetrics
+            // .glyphHorizontalExtent` returns Bravura-measured values
+            // rather than the Stub provider's rectangle estimates,
+            // which would overshoot the column-only gutter that this
+            // test asserts against.
+            if #available(macOS 15.0, iOS 18.0, tvOS 18.0, watchOS 11.0, *) {
+                _ = SheetMusicLayoutApple.install
+            }
             let doc = LayoutEngine.layout(
                 score: Self.makeScore(),
                 options: .init(),
@@ -297,6 +306,11 @@
         /// brace glyph extent.
         @available(macOS 15.0, iOS 16.0, *)
         @Test func tallBraceWidensLabelGutter() {
+            // Real CoreText backend so brace bbox/magx are Bravura's
+            // values rather than the Stub provider's rectangle estimate.
+            if #available(macOS 15.0, iOS 18.0, tvOS 18.0, watchOS 11.0, *) {
+                _ = SheetMusicLayoutApple.install
+            }
             let measure = Measure(voices: [
                 Voice(elements: [
                     .rest(duration: .fraction(Fraction(numerator: 1, denominator: 1))),
