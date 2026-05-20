@@ -209,16 +209,29 @@ creation for API ≥ 26 (one-line `NotificationManagerCompat`
 
 ### 2.4 AudioViewModel rewiring
 
-`AudioViewModel` currently owns the engine directly. It changes to:
+`AudioViewModel` currently constructs the engine in its constructor.
+It changes to:
 
-- Bind to `PlaybackService` via the Media3 `MediaController`
-  pattern (`MediaController.Builder(context, sessionToken).buildAsync()`).
-  This is the recommended client-side API and supersedes raw
-  `ServiceConnection`.
-- Forward UI actions through the `MediaController` (which
-  round-trips through MediaSession and reaches `EnginePlayer`).
-- Continue to expose StateFlows to the Composables; back them with
-  `MediaController` callbacks rather than direct engine collection.
+- Bind to `PlaybackService` via `Intent` + `ServiceConnection` at
+  `init`-time; the service exposes its singleton engine via a
+  `Binder.getEngine()` accessor.
+- `engine` becomes a `StateFlow<AndroidPlaybackEngine?>` (null until
+  service-connected, non-null thereafter for the ViewModel's lifetime).
+- StateFlows (`state`, `currentCursor`, etc.) flatten through
+  `engine.flatMapLatest { it?.state ?: emptyFlow() }`.
+- UI call sites (`viewModel.engine.play()`, etc.) become
+  `viewModel.engine.value?.play()` — null-safe one-line edit. UI
+  files (`AudioControls`, `MixerPanel`, `LoopSelectionOverlay`)
+  update accordingly.
+
+Why this shape rather than a `MediaController` round-trip: it keeps
+the in-app UI on the direct engine path (zero latency, full API
+surface) while still letting `MediaSession` drive system-level
+controls (notification, lock screen, headset) through the same
+engine instance. The two paths converge on one engine; both observe
+the same StateFlows. Less invasive than `MediaController.sendCommand`
+routing, and matches the Apple-side posture (app code talks to the
+engine directly; system integration is a thin layer beside it).
 
 This is purely an example-app refactor; library API unchanged.
 
@@ -291,12 +304,12 @@ state, rate}`. Rejected because:
   position / metadata subset and inherit `ForwardingPlayer`
   defaults (or `SimpleBasePlayer` if simpler) for the rest. This is
   example-app-only code, so its size doesn't bloat the library.
-- **`MediaController` round-trip latency.** UI updates pass through
-  the MediaSession process boundary. Within a single app this is
-  fast (in-process IBinder), but if perceived sluggish in the
-  example, the in-app UI can collect engine flows directly while
-  still feeding MediaSession from the service. Phase 5.1 decision
-  if it matters.
+- **Single-engine sharing across two control paths.** In-app UI
+  drives the engine directly through the ViewModel; system controls
+  drive it through `MediaSession` → `EnginePlayer`. Both observe the
+  same StateFlows for state updates, so the MediaSession's
+  `PlaybackStateCompat` view stays consistent regardless of which
+  path triggered an action.
 - **Foreground service quota on API ≥ 34.** Android 14+ enforces
   `FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK` permission and audio
   start restrictions. Manifest entries (§2.1) and the requirement
