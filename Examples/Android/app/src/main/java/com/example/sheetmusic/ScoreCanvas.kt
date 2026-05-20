@@ -29,8 +29,23 @@ import com.example.sheetmusic.draw.DrawPage
 private const val FONT_ID_TEXT_ROMAN = 0
 private const val FONT_ID_SMUFL = 1
 
+/**
+ * Holds the pan/zoom transform state for the score canvas.
+ * Lifted out of ScoreCanvas so PlaybackCursorOverlay can read the same values.
+ */
+data class ScoreTransform(
+    val scale: Float = 1f,
+    val panOffset: Offset = Offset.Zero,
+)
+
 @Composable
-fun ScoreCanvas(state: ScoreState.Ready, modifier: Modifier = Modifier) {
+fun ScoreCanvas(
+    state: ScoreState.Ready,
+    transform: ScoreTransform,
+    onTransformChange: (ScoreTransform) -> Unit,
+    onPxPerMMChange: (Float) -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val context = LocalContext.current
     val bravura = remember(context) {
         Typeface.createFromAsset(context.assets, "fonts/Bravura.otf")
@@ -38,23 +53,26 @@ fun ScoreCanvas(state: ScoreState.Ready, modifier: Modifier = Modifier) {
     val edwin = remember(context) {
         Typeface.createFromAsset(context.assets, "fonts/Edwin-Roman.otf")
     }
-    var scale by remember { mutableFloatStateOf(1f) }
-    var offset by remember { mutableStateOf(Offset.Zero) }
     val page = state.program.pages[state.currentPage]
     Canvas(
         modifier = modifier
             .fillMaxSize()
             .pointerInput(Unit) {
                 detectTransformGestures { _, pan, zoom, _ ->
-                    scale = (scale * zoom).coerceIn(0.25f, 8f)
-                    offset += pan
+                    onTransformChange(
+                        transform.copy(
+                            scale = (transform.scale * zoom).coerceIn(0.25f, 8f),
+                            panOffset = transform.panOffset + pan,
+                        )
+                    )
                 }
             }
     ) {
         val pxPerMM = pxPerMM(canvasSizeMM = page.widthMM)
+        onPxPerMMChange(pxPerMM)
         withTransform({
-            translate(offset.x, offset.y)
-            scale(scale, scale, pivot = Offset.Zero)
+            translate(transform.panOffset.x, transform.panOffset.y)
+            scale(transform.scale, transform.scale, pivot = Offset.Zero)
         }) {
             drawPage(page, pxPerMM, bravura, edwin)
         }
