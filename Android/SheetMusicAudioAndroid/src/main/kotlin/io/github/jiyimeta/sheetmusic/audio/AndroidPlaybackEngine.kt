@@ -387,6 +387,22 @@ class AndroidPlaybackEngine internal constructor(
         _currentTimeSeconds.value = frame.timeSeconds
     }
 
+    /**
+     * Seek to an absolute time in seconds, clamped to
+     * `[0, totalTimeSeconds]`. Preserves play / pause state.
+     *
+     * Provided alongside [skip] for natural integration with
+     * `MediaSession.Callback.onSeekTo(positionMs)`, whose handler
+     * receives an absolute target time. Internally reuses [skip]'s
+     * clamp + state-preserve machinery — no new code path through
+     * the player.
+     *
+     * No-op when [state] is [PlaybackState.EXPORTING].
+     */
+    fun seek(toTimeSeconds: Double) {
+        skip(toTimeSeconds - _currentTimeSeconds.value)
+    }
+
     // ── Loop ─────────────────────────────────────────────────────────
 
     /**
