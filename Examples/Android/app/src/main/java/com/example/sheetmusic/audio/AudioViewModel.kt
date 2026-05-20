@@ -8,6 +8,7 @@ import android.content.ServiceConnection
 import android.os.IBinder
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import io.github.jiyimeta.sheetmusic.ScoreMetadata
 import io.github.jiyimeta.sheetmusic.audio.AndroidPlaybackEngine
 import io.github.jiyimeta.sheetmusic.audio.model.LoopRange
 import io.github.jiyimeta.sheetmusic.audio.model.MixerChannel
@@ -42,12 +43,18 @@ class AudioViewModel(application: Application) : AndroidViewModel(application) {
     private val _engine = MutableStateFlow<AndroidPlaybackEngine?>(null)
     val engine: StateFlow<AndroidPlaybackEngine?> = _engine.asStateFlow()
 
+    @Volatile
+    private var serviceBinder: PlaybackService.LocalBinder? = null
+
     private val connection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName, binder: IBinder) {
-            _engine.value = (binder as PlaybackService.LocalBinder).engine
+            val local = binder as PlaybackService.LocalBinder
+            serviceBinder = local
+            _engine.value = local.engine
         }
 
         override fun onServiceDisconnected(name: ComponentName) {
+            serviceBinder = null
             _engine.value = null
         }
     }
@@ -106,6 +113,13 @@ class AudioViewModel(application: Application) : AndroidViewModel(application) {
     fun preparePlayback(scoreHandle: Long) {
         viewModelScope.launch {
             val e = engine.filterNotNull().first()
+            // Push score metadata into MediaSession on every preparePlayback,
+            // including the engine-already-prepared path — the user may have
+            // swapped scores via a fresh ScoreViewModel even if the engine
+            // kept its previous SMF.
+            ScoreMetadata.fetch(scoreHandle)?.let { meta ->
+                serviceBinder?.updateMetadata(title = meta.title, composer = meta.composer)
+            }
             if (e.state.value != PlaybackState.STOPPED) return@launch
             try {
                 e.prepare(scoreHandle)

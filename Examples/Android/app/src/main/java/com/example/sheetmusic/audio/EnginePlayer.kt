@@ -12,6 +12,7 @@ import com.google.common.util.concurrent.ListenableFuture
 import io.github.jiyimeta.sheetmusic.audio.AndroidPlaybackEngine
 import io.github.jiyimeta.sheetmusic.audio.model.PlaybackState
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 
@@ -28,7 +29,7 @@ import kotlinx.coroutines.launch
 class EnginePlayer(
     private val engine: AndroidPlaybackEngine,
     serviceScope: CoroutineScope,
-    private val mediaItem: MediaItem,
+    private val mediaItemFlow: StateFlow<MediaItem>,
 ) : SimpleBasePlayer(Looper.getMainLooper()) {
 
     private val audioAttributes = AudioAttributes.Builder()
@@ -58,7 +59,8 @@ class EnginePlayer(
                 engine.state,
                 engine.currentTimeSeconds,
                 engine.currentRate,
-            ) { s, t, r -> Triple(s, t, r) }.collect {
+                mediaItemFlow,
+            ) { _, _, _, _ -> Unit }.collect {
                 invalidateState()
             }
         }
@@ -72,14 +74,15 @@ class EnginePlayer(
             PlaybackState.PREPARED, PlaybackState.PAUSED, PlaybackState.PLAYING -> Player.STATE_READY
             PlaybackState.EXPORTING -> Player.STATE_IDLE
         }
+        val item = mediaItemFlow.value
         return State.Builder()
             .setAvailableCommands(availableCommands)
             .setPlaybackState(media3State)
             .setPlayWhenReady(isPlaying, Player.PLAY_WHEN_READY_CHANGE_REASON_USER_REQUEST)
             .setPlaylist(
                 listOf(
-                    MediaItemData.Builder(mediaItem.mediaId)
-                        .setMediaItem(mediaItem)
+                    MediaItemData.Builder(item.mediaId)
+                        .setMediaItem(item)
                         .setDurationUs((engine.totalTimeSeconds.value * 1_000_000).toLong())
                         .setIsSeekable(true)
                         .build()

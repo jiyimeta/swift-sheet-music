@@ -123,6 +123,12 @@
         @State private var playbackEngine = PlaybackEngine(
             soundfontResolver: BundledSoundfontResolver(),
         )
+        /// Bridges the engine to `MPNowPlayingInfoCenter` /
+        /// `MPRemoteCommandCenter` so macOS Now Playing widget
+        /// (Control Center, menu bar, Touch Bar) drives playback.
+        /// Lazy-init on first onAppear so we can reference the
+        /// engine.
+        @State private var nowPlaying: NowPlayingController?
         /// Edit-mode controller. Lives across score reloads —
         /// `reset(score:)` is called from `adoptLoadedScore`.
         @State private var inputController: NoteInputController?
@@ -232,6 +238,20 @@
             }
             .onAppear(perform: loadBundled)
             .onAppear(perform: installKeyMonitor)
+            .onAppear {
+                if nowPlaying == nil {
+                    nowPlaying = NowPlayingController(engine: playbackEngine)
+                }
+            }
+            .onChange(of: score) { _, newScore in
+                nowPlaying?.update(score: newScore)
+            }
+            .onChange(of: playbackEngine.state) { _, _ in
+                nowPlaying?.refreshNowPlayingInfo()
+            }
+            .onChange(of: playbackEngine.totalTimeSeconds) { _, _ in
+                nowPlaying?.refreshNowPlayingInfo()
+            }
             .onDisappear(perform: removeKeyMonitor)
             .onChange(of: collapseMultiMeasureRests) { _, _ in
                 rebuildLayoutsForOptionsChange()

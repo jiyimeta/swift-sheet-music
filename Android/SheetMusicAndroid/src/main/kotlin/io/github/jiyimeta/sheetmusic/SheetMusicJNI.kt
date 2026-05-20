@@ -22,6 +22,15 @@ object SheetMusicJNI {
 
     @JvmStatic external fun nativeReleaseScore(handle: Long)
 
+    /**
+     * Length-prefixed UTF-8 blob holding `(workTitle, composer)` from the
+     * score's metaTags. Wire format:
+     * `[titleLen:I32 LE][titleBytes][composerLen:I32 LE][composerBytes]`.
+     * Missing tags come back as zero-length strings; an unknown handle
+     * returns an empty array. Decode via [ScoreMetadata.decode].
+     */
+    @JvmStatic external fun nativeScoreMetadata(handle: Long): ByteArray
+
     /** Returns an empty array on failure (e.g. invalid handle). */
     @JvmStatic external fun nativeComputeLayout(
         scoreHandle: Long,
