@@ -45,6 +45,7 @@
         _ handle: jlong,
     ) {
         scoreTable.release(handle)
+        LayoutDocumentCache.release(handle)
     }
 
     // MARK: - SMuFL font metrics
@@ -90,11 +91,13 @@
         guard let score = scoreTable.value(for: scoreHandle) else {
             return env.pointee.NewByteArray(envPtr, 0)
         }
-        let encoded = LayoutBridge.compute(
+        let result = LayoutBridge.computeWithDocument(
             score: score,
             pageWidthMM: pageWidthMM,
             pageHeightMM: pageHeightMM,
         )
+        LayoutDocumentCache.store(handle: scoreHandle, document: result.document)
+        let encoded = result.encoded
         let array = env.pointee.NewByteArray(envPtr, jsize(encoded.count))
         encoded.withUnsafeBytes { rawBuf in
             let typed = rawBuf.bindMemory(to: jbyte.self)
