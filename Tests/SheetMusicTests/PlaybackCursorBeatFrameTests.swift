@@ -2,7 +2,6 @@
     import CoreGraphics
     import SheetMusicCore
     @testable import SheetMusicLayout
-    @testable import SheetMusicUI
     import Testing
 
     /// Regression coverage for `LayoutDocument.cursorFrame` on `.beat`
