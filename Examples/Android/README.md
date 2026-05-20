@@ -41,7 +41,7 @@ navigation.
 
 ## What this does NOT do
 
-- Play audio — the icon is disabled until Phase 3 lands.
+- Play audio — the icon is disabled until Phase 4 lands.
 - Edit the score.
 - Export to PDF.
 - Use a real SMuFL music font. Phase 2's `StubFontMetricsProvider`
@@ -85,8 +85,7 @@ Examples/Android/
 │           ├── ScoreView           # ScoreCanvas + PageControls
 │           ├── ScoreCanvas         # Compose Canvas + pan/zoom
 │           ├── PageControls        # prev / next / disabled play
-│           ├── draw/DrawProgramDecoder    # parses the binary stream
-│           └── jni/SheetMusicBridge       # external fun + System.loadLibrary
+│           └── draw/DrawProgramDecoder    # parses the binary stream
 
 Android/SheetMusicAndroid/src/main/
 └── jniLibs/<abi>/*.so              (built by Scripts/android-build-libs.sh)

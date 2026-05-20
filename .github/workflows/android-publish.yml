@@ -51,6 +51,11 @@ jobs:
           sudo installer -pkg swift-6.3.2-RELEASE-osx.pkg -target /
           xcode-select -p
 
+      - uses: android-actions/setup-android@v3
+
+      - name: Install required NDK
+        run: sdkmanager "ndk;26.1.10909125"
+
       - name: Install Swift Android SDK
         env:
           # Re-derive the checksum from https://www.swift.org/install/macos/
