@@ -26,7 +26,18 @@ internal object FluidSynthNative {
     external fun noteOff(handle: Long, channel: Int, pitch: Int): Int
     external fun allNotesOff(handle: Long, channel: Int): Int
     external fun cc(handle: Long, channel: Int, controller: Int, value: Int): Int
+    /**
+     * Reads the current value of MIDI CC [controller] on [channel].
+     * Returns the CC value (0–127), or -1 on failure.
+     */
+    external fun getCC(handle: Long, channel: Int, controller: Int): Int
     external fun setGain(handle: Long, value: Float)
+    /**
+     * Sets the channel type for [channel].
+     * [type]: 0 = CHANNEL_TYPE_MELODIC, 1 = CHANNEL_TYPE_DRUM.
+     * Locks the channel into drum or melodic semantics regardless of channel number.
+     */
+    external fun setChannelType(handle: Long, channel: Int, type: Int): Int
 
     // ── Rendering ────────────────────────────────────────────────────
     /**

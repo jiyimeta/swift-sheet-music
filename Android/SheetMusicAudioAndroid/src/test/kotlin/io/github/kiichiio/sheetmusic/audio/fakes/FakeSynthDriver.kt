@@ -9,6 +9,12 @@ internal class FakeSynthDriver(val id: Int = 0) : SynthDriver {
     val calls = mutableListOf<String>()
     var sfidToReturn: Int = 0
 
+    /** Per-channel CC values. Tests can pre-seed these; cc() updates them. */
+    private val ccValues = IntArray(16) { 100 }
+
+    /** Per-channel type: false = melodic, true = drum. */
+    val channelTypes = BooleanArray(16) { false }
+
     override val nativeHandle: Long = 0L
 
     override fun loadSoundFont(uri: Uri?, context: Context?): Int {
@@ -24,6 +30,22 @@ internal class FakeSynthDriver(val id: Int = 0) : SynthDriver {
 
     override fun cc(channel: Int, controller: Int, value: Int) {
         calls += "cc($channel,$controller,$value)"
+        if (channel in 0 until 16) ccValues[channel] = value
+    }
+
+    override fun getCC(channel: Int, controller: Int): Int {
+        calls += "getCC($channel,$controller)"
+        return if (channel in 0 until 16) ccValues[channel] else -1
+    }
+
+    override fun setChannelType(channel: Int, isDrum: Boolean) {
+        calls += "setChannelType($channel,${if (isDrum) "drum" else "melodic"})"
+        if (channel in 0 until 16) channelTypes[channel] = isDrum
+    }
+
+    /** Seeds a CC value on a channel (used by tests to simulate prior SMF-emitted state). */
+    fun seedCC(channel: Int, controller: Int, value: Int) {
+        if (channel in 0 until 16) ccValues[channel] = value
     }
 
     override fun noteOn(channel: Int, pitch: Int, velocity: Int) {

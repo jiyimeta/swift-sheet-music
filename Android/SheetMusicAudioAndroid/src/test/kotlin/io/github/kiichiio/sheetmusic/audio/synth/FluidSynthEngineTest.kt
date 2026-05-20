@@ -20,6 +20,9 @@ private class FakeSynth : SynthDriver {
     // Backing buffers filled with a fixed value so tests can verify rendering.
     var fillValue: Float = 0f
 
+    /** Per-channel CC values — tests can seed and read these back. */
+    private val ccValues = IntArray(16) { 100 }
+
     override val nativeHandle: Long = 42L
 
     override fun loadSoundFont(uri: Uri?, context: Context?): Int {
@@ -35,7 +38,20 @@ private class FakeSynth : SynthDriver {
 
     override fun cc(channel: Int, controller: Int, value: Int) {
         calls += "cc($channel,$controller,$value)"
+        if (channel in 0 until 16) ccValues[channel] = value
     }
+
+    override fun getCC(channel: Int, controller: Int): Int {
+        calls += "getCC($channel,$controller)"
+        return if (channel in 0 until 16) ccValues[channel] else -1
+    }
+
+    override fun setChannelType(channel: Int, isDrum: Boolean) {
+        calls += "setChannelType($channel,${if (isDrum) "drum" else "melodic"})"
+    }
+
+    /** Seeds a CC value on a channel (used by tests to simulate prior SMF-emitted state). */
+    fun seedCC(channel: Int, value: Int) { if (channel in 0 until 16) ccValues[channel] = value }
 
     override fun noteOn(channel: Int, pitch: Int, velocity: Int) {
         calls += "noteOn($channel,$pitch,$velocity)"
@@ -56,11 +72,11 @@ private class FakeSynth : SynthDriver {
     override fun close() { calls += "close" }
 }
 
-private fun fakeStaffParams(index: Int) = StaffParams(
+private fun fakeStaffParams(index: Int, isDrums: Boolean = false) = StaffParams(
     staffIndex = index,
     bankLSB = 0,
     program = 0,
-    isDrums = false,
+    isDrums = isDrums,
     partAddressHash = index.toLong(),
 )
 
@@ -274,5 +290,143 @@ class FluidSynthEngineTest {
         setupStaves(engine, 2)
         assertTrue("first synth should be closed on re-setup", firstSynth.calls.contains("close"))
         assertEquals(2, engine.staffCount)
+    }
+
+    // ── Bug 1: drum channel routing ─────────────────────────────────────────
+
+    @Test fun setupStaves_drumStaff_callsSetChannelTypeDrum() {
+        val engine = FluidSynthEngine(synthFactory = { _ ->
+            FakeSynth().also { capturedSynth = it }
+        })
+        engine.setupStaves(
+            params = listOf(
+                fakeStaffParams(0, isDrums = false),
+                fakeStaffParams(1, isDrums = true),
+            ),
+            resolver = FakeResolver(),
+            context = null,
+        )
+        val synth = capturedSynth!!
+        assertTrue(
+            "drum staff should call setChannelType drum on its channel",
+            synth.calls.contains("setChannelType(1,drum)"),
+        )
+    }
+
+    @Test fun setupStaves_drumStaff_selectsBank128() {
+        val engine = FluidSynthEngine(synthFactory = { _ ->
+            FakeSynth().also { capturedSynth = it }
+        })
+        engine.setupStaves(
+            params = listOf(
+                fakeStaffParams(0, isDrums = false),
+                fakeStaffParams(1, isDrums = true),
+            ),
+            resolver = FakeResolver(),
+            context = null,
+        )
+        val synth = capturedSynth!!
+        // The drum staff (channel 1) should programSelect with bank=128.
+        assertTrue(
+            "drum staff programSelect should use bank=128",
+            synth.calls.any { it.startsWith("programSelect(") && it.contains(",1,128,") },
+        )
+    }
+
+    @Test fun setupStaves_melodicStaff_doesNotCallSetChannelTypeDrum() {
+        val engine = buildEngine()
+        setupStaves(engine, 2) // all melodic (isDrums = false)
+        val synth = capturedSynth!!
+        assertTrue(
+            "melodic staves should not call setChannelType drum",
+            synth.calls.none { it.contains("setChannelType") && it.contains("drum") },
+        )
+    }
+
+    // ── Bug 2: CC7 round-trip on mute/unmute ────────────────────────────────
+
+    @Test fun muteUnmute_withoutSlider_restoresPreviousCC7() {
+        val engine = buildEngine()
+        setupStaves(engine, 2)
+        val synth = capturedSynth!!
+        // Simulate the channel having CC7 = 100 (SMF-emitted default, already set in FakeSynth).
+        synth.seedCC(channel = 0, value = 100)
+        synth.calls.clear()
+
+        // Mute: captures CC7=100, writes CC7=0.
+        engine.muteChannel(0)
+        assertTrue("muteChannel should send CC7=0", synth.calls.contains("cc(0,7,0)"))
+
+        synth.calls.clear()
+
+        // Unmute: should restore CC7=100, NOT 127.
+        engine.unmuteChannel(0)
+        assertTrue(
+            "unmuteChannel should restore CC7=100 (not 127)",
+            synth.calls.contains("cc(0,7,100)"),
+        )
+        assertFalse(
+            "unmuteChannel should NOT write CC7=127",
+            synth.calls.contains("cc(0,7,127)"),
+        )
+    }
+
+    @Test fun muteUnmute_afterSliderChange_restoresSliderValue() {
+        val engine = buildEngine()
+        setupStaves(engine, 2)
+        val synth = capturedSynth!!
+        synth.calls.clear()
+
+        // User moves slider to 0.6 → CC7 = 76
+        engine.setChannelVolume(0, 0.6f)
+        assertTrue(synth.calls.contains("cc(0,7,76)"))
+        synth.calls.clear()
+
+        // Mute then unmute.
+        engine.muteChannel(0)
+        synth.calls.clear()
+        engine.unmuteChannel(0)
+
+        // Should restore the slider-set value (76), not the initial default (100).
+        assertTrue(
+            "unmuteChannel should restore user-set CC7=76",
+            synth.calls.contains("cc(0,7,76)"),
+        )
+    }
+
+    @Test fun setChannelVolume_whileMuted_doesNotWriteToSynth() {
+        val engine = buildEngine()
+        setupStaves(engine, 1)
+        val synth = capturedSynth!!
+
+        engine.muteChannel(0)
+        synth.calls.clear()
+
+        // Slider change while muted: should NOT write CC7 (channel is silent).
+        engine.setChannelVolume(0, 0.8f)
+        assertFalse(
+            "setChannelVolume while muted should not write CC7 to the synth",
+            synth.calls.any { it.startsWith("cc(0,7,") },
+        )
+    }
+
+    @Test fun doubleMute_doesNotOverwriteRememberedCC7() {
+        val engine = buildEngine()
+        setupStaves(engine, 1)
+        val synth = capturedSynth!!
+        synth.seedCC(channel = 0, value = 90)
+        synth.calls.clear()
+
+        engine.muteChannel(0) // remembers 90
+        // Seed a different value to simulate a SMF CC7 that arrived while muted.
+        synth.seedCC(channel = 0, value = 50)
+        engine.muteChannel(0) // already muted — must not overwrite remembered value
+        synth.calls.clear()
+
+        engine.unmuteChannel(0)
+        assertTrue(
+            "double-mute should restore first-captured CC7=90",
+            synth.calls.contains("cc(0,7,90)"),
+        )
     }
 }

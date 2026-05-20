@@ -415,11 +415,15 @@ class AndroidPlaybackEngine internal constructor(
 
     /**
      * Sets the volume for staff [staffIndex] (range 0..1).
-     * Propagates to the synth via MIDI CC7.
+     * Propagates to the synth via MIDI CC7. If the channel is currently muted,
+     * the new volume is recorded for restoration on unmute but not written to
+     * the synth now (mute must keep CC7 = 0).
      */
     fun setStaffVolume(staffIndex: Int, volume: Float) {
         updateChannel(staffIndex) { it.copy(volume = volume) }
-        reapplyChannelAudibility(staffIndex)
+        // Use setChannelVolume (not reapplyChannelAudibility) so the new CC7 is
+        // recorded in rememberedCC7 and applied only when the channel is unmuted.
+        fluidSynthEngine?.setChannelVolume(staffIndex, volume)
     }
 
     // ── Metronome ────────────────────────────────────────────────────
@@ -514,8 +518,14 @@ class AndroidPlaybackEngine internal constructor(
     }
 
     /**
-     * Reads the current [MixerChannel.effectiveMute] and [MixerChannel.volume]
-     * for [staffIndex] and propagates them to the synth via MIDI CC7.
+     * Reads the current [MixerChannel.effectiveMute] for [staffIndex] and
+     * propagates the mute/unmute transition to the synth via MIDI CC7.
+     *
+     * On unmute, calls [FluidSynthEngine.unmuteChannel] which restores the
+     * last-captured CC7 value (SMF-emitted or user-set) rather than writing
+     * the mixer slider value (which would snap volume to 127). Volume-slider
+     * changes call [FluidSynthEngine.setChannelVolume] directly via
+     * [setStaffVolume].
      *
      * Must be called *after* [updateChannel] so the [_mixerChannels] state
      * already reflects the latest [MixerChannel.effectiveMute] value.
@@ -525,7 +535,7 @@ class AndroidPlaybackEngine internal constructor(
         if (ch.effectiveMute) {
             fluidSynthEngine?.muteChannel(staffIndex)
         } else {
-            fluidSynthEngine?.setChannelVolume(staffIndex, ch.volume)
+            fluidSynthEngine?.unmuteChannel(staffIndex)
         }
     }
 

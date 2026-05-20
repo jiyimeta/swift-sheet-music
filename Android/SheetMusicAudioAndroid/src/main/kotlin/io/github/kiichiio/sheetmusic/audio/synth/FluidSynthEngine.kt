@@ -29,6 +29,27 @@ internal class FluidSynthEngine(
     /** Native fluid_synth_t handle, or 0L if no synth is loaded. */
     val synthHandle: Long get() = synth?.nativeHandle ?: 0L
 
+    // ── CC7 round-trip state (Bug 2) ─────────────────────────────────
+
+    /**
+     * Per-channel remembered CC7 value. Updated when:
+     * - setupStaves runs (initialized to GM default 100)
+     * - muteChannel captures the live CC7 from the driver before silencing
+     * - setChannelVolume records the user's explicit slider value
+     *
+     * On unmute, this value is restored so the channel returns to whatever
+     * volume was last active (SMF-emitted or user-set), not the mixer
+     * slider default of 127.
+     */
+    private val rememberedCC7 = IntArray(16) { 100 }
+
+    /**
+     * Whether the channel is currently muted (CC7 = 0). Used to suppress
+     * the setChannelVolume write during active mute so SMF-emitted CC7
+     * changes while muted are still remembered via the next muteChannel call.
+     */
+    private val channelMuted = BooleanArray(16) { false }
+
     /**
      * Creates ONE [SynthDriver] for all staves. Each staff is assigned to
      * MIDI channel [StaffParams.staffIndex]. The GM SoundFont is loaded
@@ -60,32 +81,88 @@ internal class FluidSynthEngine(
 
         if (sfid >= 0) {
             for (p in params) {
-                driver.programSelect(
-                    sfid = sfid,
-                    channel = p.staffIndex,
-                    bank = p.bankLSB,
-                    program = p.program,
-                )
+                if (p.isDrums) {
+                    // Bug 1 fix: lock the channel into drum semantics so FluidSynth
+                    // treats it as a percussion channel regardless of the channel number.
+                    // Then select from bank 128 (GM drum bank).
+                    driver.setChannelType(p.staffIndex, isDrum = true)
+                    driver.programSelect(
+                        sfid = sfid,
+                        channel = p.staffIndex,
+                        bank = 128,
+                        program = p.program.coerceIn(0, 127),
+                    )
+                } else {
+                    driver.programSelect(
+                        sfid = sfid,
+                        channel = p.staffIndex,
+                        bank = p.bankLSB,
+                        program = p.program,
+                    )
+                }
             }
         }
         // Staff is silent (sfid < 0 or uri was null) but the channel routing is
         // still correct — fluid_player replays events on the relabeled channels.
+
+        // Reset CC7 round-trip state for all channels (Bug 2).
+        for (i in 0 until 16) {
+            rememberedCC7[i] = 100  // GM default channel volume
+            channelMuted[i] = false
+        }
+
         synth = driver
         staffCountValue = params.size
     }
 
-    /** Sets MIDI CC7 (channel volume) on the channel for [staffIndex] (range 0..1). */
+    /**
+     * Sets MIDI CC7 (channel volume) on the channel for [staffIndex] (range 0..1).
+     * Records the value in [rememberedCC7] so it can be restored after unmute.
+     * If the channel is currently muted, the CC7 write is deferred — the value
+     * is still stored and will be applied by [unmuteChannel].
+     */
     fun setChannelVolume(staffIndex: Int, volume: Float) {
         if (staffIndex !in 0 until staffCountValue) return
         val cc = (volume.coerceIn(0f, 1f) * 127).toInt()
-        synth?.cc(channel = staffIndex, controller = 7, value = cc)
+        rememberedCC7[staffIndex] = cc
+        if (!channelMuted[staffIndex]) {
+            synth?.cc(channel = staffIndex, controller = 7, value = cc)
+        }
     }
 
-    /** Silences channel [staffIndex] via CC7=0 + allNotesOff. */
+    /**
+     * Silences channel [staffIndex] via CC7=0 + allNotesOff.
+     *
+     * Captures the channel's live CC7 from the driver before silencing it, so
+     * SMF-emitted volume changes are round-tripped correctly on unmute. If
+     * already muted, the live CC7 snapshot is skipped to avoid overwriting the
+     * value captured at the first mute.
+     */
     fun muteChannel(staffIndex: Int) {
         if (staffIndex !in 0 until staffCountValue) return
+        // Capture the current live CC7 (may have been updated by SMF events or
+        // user slider) before we zero it.
+        if (!channelMuted[staffIndex]) {
+            val liveCC7 = synth?.getCC(staffIndex, 7) ?: -1
+            if (liveCC7 >= 0) rememberedCC7[staffIndex] = liveCC7
+        }
+        channelMuted[staffIndex] = true
         synth?.cc(channel = staffIndex, controller = 7, value = 0)
         synth?.allNotesOff(staffIndex)
+    }
+
+    /**
+     * Restores channel [staffIndex] to its last-known CC7 value.
+     *
+     * The restored value is whatever CC7 was captured at the time of mute —
+     * either the SMF-emitted volume or the user's slider value. This prevents
+     * unmute from snapping the volume to 127 (the mixer slider default) when
+     * the SMF had previously written a different CC7.
+     */
+    fun unmuteChannel(staffIndex: Int) {
+        if (staffIndex !in 0 until staffCountValue) return
+        channelMuted[staffIndex] = false
+        synth?.cc(channel = staffIndex, controller = 7, value = rememberedCC7[staffIndex])
     }
 
     /** Fires noteOn on [staffIndex]'s channel. */
@@ -121,5 +198,9 @@ internal class FluidSynthEngine(
         synth?.close()
         synth = null
         staffCountValue = 0
+        for (i in 0 until 16) {
+            rememberedCC7[i] = 100
+            channelMuted[i] = false
+        }
     }
 }

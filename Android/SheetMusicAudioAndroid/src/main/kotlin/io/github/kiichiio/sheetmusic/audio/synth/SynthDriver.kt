@@ -23,6 +23,17 @@ internal interface SynthDriver {
     fun programSelect(sfid: Int, channel: Int, bank: Int, program: Int)
     fun setGain(value: Float)
     fun cc(channel: Int, controller: Int, value: Int)
+    /**
+     * Reads MIDI CC [controller] value from [channel].
+     * Returns the CC value (0–127), or -1 on failure / unsupported.
+     */
+    fun getCC(channel: Int, controller: Int): Int
+    /**
+     * Sets the channel type: [isDrum]=true locks the channel into drum-channel
+     * semantics (CHANNEL_TYPE_DRUM), allowing any channel number to act as
+     * channel 9 for GM percussion.
+     */
+    fun setChannelType(channel: Int, isDrum: Boolean)
     fun noteOn(channel: Int, pitch: Int, velocity: Int)
     fun noteOff(channel: Int, pitch: Int)
     fun allNotesOff(channel: Int)

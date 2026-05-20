@@ -135,6 +135,29 @@ Java_io_github_kiichiio_sheetmusic_audio_native_FluidSynthNative_setGain(
     fluid_synth_set_gain(synth, value);
 }
 
+extern "C" JNIEXPORT jint JNICALL
+Java_io_github_kiichiio_sheetmusic_audio_native_FluidSynthNative_setChannelType(
+    JNIEnv *, jobject, jlong handle, jint channel, jint type
+) {
+    fluid_synth_t *synth = synth_from(handle);
+    if (synth == nullptr) return -1;
+    // type: 0 = CHANNEL_TYPE_MELODIC, 1 = CHANNEL_TYPE_DRUM
+    int rc = fluid_synth_set_channel_type(synth, channel, type);
+    LOGI("setChannelType: channel=%d type=%d rc=%d", channel, type, rc);
+    return rc;
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_io_github_kiichiio_sheetmusic_audio_native_FluidSynthNative_getCC(
+    JNIEnv *, jobject, jlong handle, jint channel, jint controller
+) {
+    fluid_synth_t *synth = synth_from(handle);
+    if (synth == nullptr) return -1;
+    int value = 0;
+    int rc = fluid_synth_get_cc(synth, channel, controller, &value);
+    return (rc == FLUID_OK) ? value : -1;
+}
+
 // ─────────────────────────────────────────────────────────────────────
 // Rendering
 // ─────────────────────────────────────────────────────────────────────

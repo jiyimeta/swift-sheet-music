@@ -44,6 +44,13 @@ internal class FluidSynthDriver private constructor(
         FluidSynthNative.cc(handle, channel, controller, value)
     }
 
+    override fun getCC(channel: Int, controller: Int): Int =
+        FluidSynthNative.getCC(handle, channel, controller)
+
+    override fun setChannelType(channel: Int, isDrum: Boolean) {
+        FluidSynthNative.setChannelType(handle, channel, if (isDrum) 1 else 0)
+    }
+
     override fun noteOn(channel: Int, pitch: Int, velocity: Int) {
         FluidSynthNative.noteOn(handle, channel, pitch, velocity)
     }

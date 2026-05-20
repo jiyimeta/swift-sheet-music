@@ -33,6 +33,8 @@ class MetronomeMixerTest {
         override fun programSelect(sfid: Int, channel: Int, bank: Int, program: Int) {}
         override fun setGain(value: Float) { gainValues += value }
         override fun cc(channel: Int, controller: Int, value: Int) {}
+        override fun getCC(channel: Int, controller: Int): Int = 100
+        override fun setChannelType(channel: Int, isDrum: Boolean) {}
         override fun noteOn(channel: Int, pitch: Int, velocity: Int) {
             noteOns += NoteOnCall(channel, pitch, velocity)
         }

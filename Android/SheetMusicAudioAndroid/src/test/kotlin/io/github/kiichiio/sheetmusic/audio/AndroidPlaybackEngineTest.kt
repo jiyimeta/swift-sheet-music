@@ -30,6 +30,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -476,6 +477,74 @@ class AndroidPlaybackEngineTest {
         val engine = preparedEngine(staffCount = 2)
         engine.setStaffVolume(1, 0.3f)
         assertEquals(0.3f, engine.mixerChannels.value[1].volume, 0.001f)
+    }
+
+    // T41b — mute/unmute CC7 round-trip (Bug 2)
+
+    @Test
+    fun `mute then unmute without slider change does not write CC7=127`() = runTest {
+        val synths = mutableListOf<FakeSynthDriver>()
+        val engine = preparedEngine(staffCount = 1, fakeSynthDrivers = synths)
+        val staffSynth = synths.first()
+        staffSynth.calls.clear()
+
+        // Mute then unmute staff 0.
+        engine.setStaffMuted(0, true)
+        staffSynth.calls.clear()
+        engine.setStaffMuted(0, false)
+
+        // Unmute should NOT write CC7=127 (the slider default).
+        assertFalse(
+            "unmute should not snap CC7 to 127",
+            staffSynth.calls.contains("cc(0,7,127)"),
+        )
+    }
+
+    @Test
+    fun `slider change then mute then unmute restores slider CC7`() = runTest {
+        val synths = mutableListOf<FakeSynthDriver>()
+        val engine = preparedEngine(staffCount = 1, fakeSynthDrivers = synths)
+        val staffSynth = synths.first()
+
+        // User moves slider to 0.5 → CC7 = 63
+        engine.setStaffVolume(0, 0.5f)
+        staffSynth.calls.clear()
+
+        engine.setStaffMuted(0, true)
+        staffSynth.calls.clear()
+        engine.setStaffMuted(0, false)
+
+        assertTrue(
+            "unmute after slider set to 0.5 should restore CC7=63",
+            staffSynth.calls.contains("cc(0,7,63)"),
+        )
+    }
+
+    @Test
+    fun `solo on other staff does not change this staff CC7 when not muted`() = runTest {
+        val synths = mutableListOf<FakeSynthDriver>()
+        val engine = preparedEngine(staffCount = 2, fakeSynthDrivers = synths)
+        // synths[0] = staff 0, synths[1] = metronome
+        val staffSynth = synths.first()
+        staffSynth.calls.clear()
+
+        // Solo staff 1 — staff 0 becomes effectively muted, then un-solo — staff 0 unmuted.
+        engine.setStaffSoloed(1, true)
+        val ccAfterSolo = staffSynth.calls.filter { it.startsWith("cc(0,7,") }
+        staffSynth.calls.clear()
+        engine.setStaffSoloed(1, false)
+        val ccAfterUnSolo = staffSynth.calls.filter { it.startsWith("cc(0,7,") }
+
+        // Staff 0 must not receive CC7=127 when un-soloing staff 1.
+        assertFalse(
+            "un-solo of another staff must not set CC7=127 on this staff",
+            ccAfterUnSolo.contains("cc(0,7,127)"),
+        )
+        // The restore should use CC7=100 (initial remembered value).
+        assertTrue(
+            "un-solo of another staff should restore CC7=100 on this staff",
+            ccAfterUnSolo.isNotEmpty() && ccAfterUnSolo.last() == "cc(0,7,100)",
+        )
     }
 
     // T42 — metronome
