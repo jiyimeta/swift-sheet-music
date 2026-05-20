@@ -145,10 +145,6 @@ internal class FluidSynthEngine(
         if (!channelMuted[staffIndex]) {
             val liveCC7 = synth?.getCC(staffIndex, 7) ?: -1
             if (liveCC7 >= 0) rememberedCC7[staffIndex] = liveCC7
-            android.util.Log.i(
-                "FluidSynthEngine",
-                "muteChannel ch=$staffIndex capturedCC7=$liveCC7",
-            )
         }
         channelMuted[staffIndex] = true
         synth?.cc(channel = staffIndex, controller = 7, value = 0)
@@ -166,12 +162,7 @@ internal class FluidSynthEngine(
     fun unmuteChannel(staffIndex: Int) {
         if (staffIndex !in 0 until staffCountValue) return
         channelMuted[staffIndex] = false
-        val restored = rememberedCC7[staffIndex]
-        synth?.cc(channel = staffIndex, controller = 7, value = restored)
-        android.util.Log.i(
-            "FluidSynthEngine",
-            "unmuteChannel ch=$staffIndex restoredCC7=$restored",
-        )
+        synth?.cc(channel = staffIndex, controller = 7, value = rememberedCC7[staffIndex])
     }
 
     /** Fires noteOn on [staffIndex]'s channel. */
