@@ -703,6 +703,77 @@ class AndroidPlaybackEngineTest {
         engine.teardown()
     }
 
+    // T5C — setStaffProgram + MixerChannel.program init
+
+    @Test
+    fun `prepare sets initial program from StaffParams`() = runTest(testDispatcher) {
+        val payload = StaffParamsCodec.encodeArray(
+            listOf(StaffParams(0, 0, 24, false, 1L)),  // acoustic guitar nylon
+        )
+        val bridge = FakeJniBridge(
+            staffParamsResult = payload,
+            renderMidiResult = minimalSmf,
+            metronomeBeatsResult = downbeatOnlyBeats(),
+        )
+        val engine = newEngineForTests(bridge = bridge)
+        engine.prepare(scoreHandle = 1L)
+
+        assertEquals(24, engine.mixerChannels.value[0].program)
+        engine.teardown()
+    }
+
+    @Test
+    fun `prepare sets null program for drum staff`() = runTest(testDispatcher) {
+        val payload = StaffParamsCodec.encodeArray(
+            listOf(StaffParams(0, 0, 0, isDrums = true, partAddressHash = 1L)),
+        )
+        val bridge = FakeJniBridge(
+            staffParamsResult = payload,
+            renderMidiResult = minimalSmf,
+            metronomeBeatsResult = downbeatOnlyBeats(),
+        )
+        val engine = newEngineForTests(bridge = bridge)
+        engine.prepare(scoreHandle = 1L)
+
+        assertNull(engine.mixerChannels.value[0].program)
+        engine.teardown()
+    }
+
+    @Test
+    fun `setStaffProgram updates mixer and synth`() = runTest(testDispatcher) {
+        val payload = StaffParamsCodec.encodeArray(
+            listOf(StaffParams(0, 0, 0, false, 1L)),
+        )
+        val bridge = FakeJniBridge(
+            staffParamsResult = payload,
+            renderMidiResult = minimalSmf,
+            metronomeBeatsResult = downbeatOnlyBeats(),
+        )
+        val synthDrivers = mutableListOf<FakeSynthDriver>()
+        val engine = newEngineForTests(bridge = bridge, fakeSynthDrivers = synthDrivers)
+        engine.prepare(scoreHandle = 1L)
+
+        // The staff synth is the first one captured (the metronome synth is
+        // created later in prepare and is a separate driver — confirm by
+        // checking either index 0 or by selecting the one with handleValue
+        // matching the staff sample rate). For this test the staff synth is
+        // the first one captured.
+        val staffSynth = synthDrivers.first()
+        staffSynth.calls.clear()
+
+        engine.setStaffProgram(0, 40)  // violin
+
+        assertEquals(40, engine.mixerChannels.value[0].program)
+        // The setStaffProgram path calls programSelect on the synth.
+        // FakeSynthDriver records as "programSelect(sfid,channel,bank,program)".
+        // sfid is what FakeSynthDriver returned from loadSoundFont — default 0.
+        assertTrue(
+            "expected programSelect with program=40 in synth.calls; got ${staffSynth.calls}",
+            staffSynth.calls.any { it.startsWith("programSelect(") && it.endsWith(",40)") },
+        )
+        engine.teardown()
+    }
+
     // ── Helpers ────────────────────────────────────────────────────────────
 
     /**

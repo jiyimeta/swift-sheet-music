@@ -266,8 +266,12 @@ class AndroidPlaybackEngine internal constructor(
             oboeStream = oboe
 
             this@AndroidPlaybackEngine.scoreHandle = scoreHandle
-            _mixerChannels.value = staves.mapIndexed { i, _ ->
-                MixerChannel(staffIndex = i, displayName = "Staff ${i + 1}")
+            _mixerChannels.value = staves.mapIndexed { i, p ->
+                MixerChannel(
+                    staffIndex = i,
+                    displayName = "Staff ${i + 1}",
+                    program = if (p.isDrums) null else p.program,
+                )
             }
             _totalTimeSeconds.value = totalSecs
             _currentTimeSeconds.value = 0.0
@@ -455,6 +459,21 @@ class AndroidPlaybackEngine internal constructor(
         // Use setChannelVolume (not reapplyChannelAudibility) so the new CC7 is
         // recorded in rememberedCC7 and applied only when the channel is unmuted.
         fluidSynthEngine?.setChannelVolume(staffIndex, volume)
+    }
+
+    /**
+     * Swaps the GM program (sound) for staff [staffIndex].
+     * The change is applied immediately to the synth and to the
+     * mixer state. No-op when [state] is [PlaybackState.EXPORTING].
+     * Drum staves have `MixerChannel.program == null` and the program-picker
+     * UI hides those rows, so users don't reach this branch with a drum staff;
+     * programmatic callers behave like [FluidSynthEngine.setStaffProgram]
+     * which selects a drum-kit variation within bank 128.
+     */
+    fun setStaffProgram(staffIndex: Int, program: Int) {
+        if (_state.value == PlaybackState.EXPORTING) return
+        fluidSynthEngine?.setStaffProgram(staffIndex, program)
+        updateChannel(staffIndex) { it.copy(program = program) }
     }
 
     // ── Metronome ────────────────────────────────────────────────────
