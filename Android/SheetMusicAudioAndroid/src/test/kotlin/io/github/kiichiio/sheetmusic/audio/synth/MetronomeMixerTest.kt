@@ -27,9 +27,12 @@ class MetronomeMixerTest {
         val noteOffs = mutableListOf<NoteOffCall>()
         val gainValues = mutableListOf<Float>()
 
+        override val nativeHandle: Long = 0L
+
         override fun loadSoundFont(uri: Uri?, context: Context?): Int = 0
         override fun programSelect(sfid: Int, channel: Int, bank: Int, program: Int) {}
         override fun setGain(value: Float) { gainValues += value }
+        override fun cc(channel: Int, controller: Int, value: Int) {}
         override fun noteOn(channel: Int, pitch: Int, velocity: Int) {
             noteOns += NoteOnCall(channel, pitch, velocity)
         }

@@ -14,6 +14,8 @@ import io.github.kiichiio.sheetmusic.audio.native.FluidSynthNative
 internal class FluidSynthDriver private constructor(
     private val handle: Long,
 ) : SynthDriver {
+
+    override val nativeHandle: Long get() = handle
     private var closed = false
 
     companion object {
@@ -37,6 +39,10 @@ internal class FluidSynthDriver private constructor(
     }
 
     override fun setGain(value: Float) = FluidSynthNative.setGain(handle, value)
+
+    override fun cc(channel: Int, controller: Int, value: Int) {
+        FluidSynthNative.cc(handle, channel, controller, value)
+    }
 
     override fun noteOn(channel: Int, pitch: Int, velocity: Int) {
         FluidSynthNative.noteOn(handle, channel, pitch, velocity)

@@ -9,6 +9,8 @@ internal class FakeSynthDriver(val id: Int = 0) : SynthDriver {
     val calls = mutableListOf<String>()
     var sfidToReturn: Int = 0
 
+    override val nativeHandle: Long = 0L
+
     override fun loadSoundFont(uri: Uri?, context: Context?): Int {
         calls += "loadSoundFont"
         return sfidToReturn
@@ -19,6 +21,10 @@ internal class FakeSynthDriver(val id: Int = 0) : SynthDriver {
     }
 
     override fun setGain(value: Float) { calls += "setGain($value)" }
+
+    override fun cc(channel: Int, controller: Int, value: Int) {
+        calls += "cc($channel,$controller,$value)"
+    }
 
     override fun noteOn(channel: Int, pitch: Int, velocity: Int) {
         calls += "noteOn($channel,$pitch,$velocity)"

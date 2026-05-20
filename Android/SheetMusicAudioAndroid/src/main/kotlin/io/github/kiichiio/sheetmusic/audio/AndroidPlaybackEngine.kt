@@ -208,7 +208,7 @@ class AndroidPlaybackEngine internal constructor(
             // Tear down any prior prepared state before recreating.
             teardownInternalNoCancelScopes()
 
-            // Per-staff FluidSynth instances.
+            // Single fluid_synth_t — channels 0..N-1 map to staves 0..N-1.
             val engine = FluidSynthEngine(synthFactory)
             engine.setupStaves(staves, soundfontResolver, context)
             this@AndroidPlaybackEngine.fluidSynthEngine = engine
@@ -220,14 +220,35 @@ class AndroidPlaybackEngine internal constructor(
             metronomeUri?.let { uri -> metronomeSynth.loadSoundFont(uri, context) }
             metronomeMixer = MetronomeMixer(metronomeSynth, beats)
 
-            // PlayerDriver attached to synthHandle 0 for v0.
-            // A follow-up phase will expose SynthDriver.nativeHandle and
-            // route the player callback to per-staff synths.
-            val player = playerFactory(0L)
+            // PlayerDriver wired to the real fluid_synth_t handle.
+            // fluid_player's default routing uses event.channel directly —
+            // the Swift bridge already relabels SMF channels to track indices
+            // (AudioMidiBridge.relabelChannelsToTrackIndex), so per-staff
+            // routing works without a playback-callback shim.
+            val player = playerFactory(engine.synthHandle)
             player.load(smfBytes)
             this@AndroidPlaybackEngine.playerDriver = player
 
+            // Wire the OboeStream producer: mix the staff synth + metronome.
             val oboe = oboeFactory().also { it.open() }
+            oboe.setProducer { frameCount, left, right ->
+                val eng = this@AndroidPlaybackEngine.fluidSynthEngine
+                if (eng == null) {
+                    for (i in 0 until frameCount) { left[i] = 0f; right[i] = 0f }
+                    return@setProducer
+                }
+                eng.writeFloat(frameCount, left, right)
+                val mm = this@AndroidPlaybackEngine.metronomeMixer
+                if (mm != null && mm.isEnabled) {
+                    val mLeft = FloatArray(frameCount)
+                    val mRight = FloatArray(frameCount)
+                    mm.synth.writeFloat(frameCount, mLeft, mRight)
+                    for (i in 0 until frameCount) {
+                        left[i] += mLeft[i]
+                        right[i] += mRight[i]
+                    }
+                }
+            }
             oboeStream = oboe
 
             this@AndroidPlaybackEngine.scoreHandle = scoreHandle
@@ -251,6 +272,7 @@ class AndroidPlaybackEngine internal constructor(
         if (_state.value == PlaybackState.EXPORTING) return
         val player = playerDriver ?: return
         if (from != null) seek(from)
+        oboeStream?.play()
         player.play()
         _state.value = PlaybackState.PLAYING
         startPollJob()
@@ -263,6 +285,7 @@ class AndroidPlaybackEngine internal constructor(
     fun pause() {
         if (_state.value == PlaybackState.EXPORTING) return
         playerDriver?.stop()
+        oboeStream?.stop()
         stopPollJob()
         _state.value = PlaybackState.PAUSED
     }
@@ -276,6 +299,7 @@ class AndroidPlaybackEngine internal constructor(
         playerDriver?.stop()
         playerDriver?.seekTick(0L)
         fluidSynthEngine?.allNotesOff()
+        oboeStream?.stop()
         stopPollJob()
         _state.value = PlaybackState.STOPPED
         _currentCursor.value = null
@@ -335,11 +359,10 @@ class AndroidPlaybackEngine internal constructor(
         if (packed == -1L || packed.toULong() == 0xFFFF_FFFF_FFFF_FFFFuL) return
         val pitch = ((packed.toULong() shr 32) and 0xFFFF_FFFFu).toInt()
         val staffIndex = (packed.toULong() and 0xFFFF_FFFFu).toInt()
-        val driver = engine.staff(staffIndex) ?: return
-        driver.noteOn(channel = 0, pitch = pitch, velocity = velocity)
+        engine.previewNoteOn(staffIndex, pitch, velocity)
         previewScope.launch {
             delay(durationMillis)
-            driver.noteOff(channel = 0, pitch = pitch)
+            engine.previewNoteOff(staffIndex, pitch)
         }
     }
 
@@ -369,28 +392,34 @@ class AndroidPlaybackEngine internal constructor(
 
     /**
      * Mutes or un-mutes staff [staffIndex].
-     * Recomputes [MixerChannel.effectiveMute] for all channels.
+     * Recomputes [MixerChannel.effectiveMute] for all channels and
+     * propagates audibility changes to the synth via MIDI CC7.
      */
     fun setStaffMuted(staffIndex: Int, muted: Boolean) {
         updateChannel(staffIndex) { it.copy(isMuted = muted) }
+        reapplyChannelAudibility(staffIndex)
+        // Solo precedence may have changed effectiveMute on other staves too.
+        for (i in _mixerChannels.value.indices) if (i != staffIndex) reapplyChannelAudibility(i)
     }
 
     /**
      * Solos or un-solos staff [staffIndex].
      * When any staff is soloed, un-soloed staves are effectively muted.
-     * Recomputes [MixerChannel.effectiveMute] for all channels.
+     * Recomputes [MixerChannel.effectiveMute] for all channels and
+     * propagates audibility changes to the synth via MIDI CC7.
      */
     fun setStaffSoloed(staffIndex: Int, soloed: Boolean) {
         updateChannel(staffIndex) { it.copy(isSoloed = soloed) }
+        for (i in _mixerChannels.value.indices) reapplyChannelAudibility(i)
     }
 
     /**
      * Sets the volume for staff [staffIndex] (range 0..1).
-     * Propagates to the staff's [SynthDriver.setGain].
+     * Propagates to the synth via MIDI CC7.
      */
     fun setStaffVolume(staffIndex: Int, volume: Float) {
-        fluidSynthEngine?.setStaffGain(staffIndex, volume)
         updateChannel(staffIndex) { it.copy(volume = volume) }
+        reapplyChannelAudibility(staffIndex)
     }
 
     // ── Metronome ────────────────────────────────────────────────────
@@ -481,6 +510,22 @@ class AndroidPlaybackEngine internal constructor(
         return channels.map { c ->
             val effMute = c.isMuted || (anySoloed && !c.isSoloed)
             c.copy(effectiveMute = effMute)
+        }
+    }
+
+    /**
+     * Reads the current [MixerChannel.effectiveMute] and [MixerChannel.volume]
+     * for [staffIndex] and propagates them to the synth via MIDI CC7.
+     *
+     * Must be called *after* [updateChannel] so the [_mixerChannels] state
+     * already reflects the latest [MixerChannel.effectiveMute] value.
+     */
+    private fun reapplyChannelAudibility(staffIndex: Int) {
+        val ch = _mixerChannels.value.getOrNull(staffIndex) ?: return
+        if (ch.effectiveMute) {
+            fluidSynthEngine?.muteChannel(staffIndex)
+        } else {
+            fluidSynthEngine?.setChannelVolume(staffIndex, ch.volume)
         }
     }
 

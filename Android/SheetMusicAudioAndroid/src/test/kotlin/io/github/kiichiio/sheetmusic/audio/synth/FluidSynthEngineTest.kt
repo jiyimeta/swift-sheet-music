@@ -17,8 +17,10 @@ import org.junit.Test
 private class FakeSynth : SynthDriver {
     val calls = mutableListOf<String>()
 
-    // Backing buffers filled with a fixed value so tests can verify mixing.
+    // Backing buffers filled with a fixed value so tests can verify rendering.
     var fillValue: Float = 0f
+
+    override val nativeHandle: Long = 42L
 
     override fun loadSoundFont(uri: Uri?, context: Context?): Int {
         calls += "loadSoundFont"
@@ -30,6 +32,10 @@ private class FakeSynth : SynthDriver {
     }
 
     override fun setGain(value: Float) { calls += "setGain($value)" }
+
+    override fun cc(channel: Int, controller: Int, value: Int) {
+        calls += "cc($channel,$controller,$value)"
+    }
 
     override fun noteOn(channel: Int, pitch: Int, velocity: Int) {
         calls += "noteOn($channel,$pitch,$velocity)"
@@ -63,18 +69,11 @@ private fun fakeStaffParams(index: Int) = StaffParams(
  * [FakeSynth.loadSoundFont] is called with a null uri. The engine treats
  * a null uri as "no SoundFont loaded, staff is silent" — staff still
  * appears in the routing graph (staffCount is correct), just mute.
- *
- * [android.net.Uri] is an Android SDK class whose constructors and factory
- * methods are unavailable in the JVM unit-test stub environment, so we
- * cannot construct a real Uri here.
  */
 private class FakeResolver : SoundfontResolver {
     override fun soundfontUriFor(bank: Int, program: Int, isDrums: Boolean): Uri? = null
     override val defaultGmSoundfontUri: Uri? = null
 }
-
-/** Stub [Context] accepted by [FakeSynth.loadSoundFont] but never dereferenced. */
-private fun fakeContext(): Context = TODO("unreachable — FakeSynth.loadSoundFont ignores context")
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -82,10 +81,12 @@ private fun fakeContext(): Context = TODO("unreachable — FakeSynth.loadSoundFo
 
 class FluidSynthEngineTest {
 
-    private fun buildEngine(fakes: MutableList<FakeSynth>): FluidSynthEngine {
+    private var capturedSynth: FakeSynth? = null
+
+    private fun buildEngine(): FluidSynthEngine {
         return FluidSynthEngine(
             synthFactory = { _ ->
-                FakeSynth().also { fakes += it }
+                FakeSynth().also { capturedSynth = it }
             },
         )
     }
@@ -103,108 +104,175 @@ class FluidSynthEngineTest {
         )
     }
 
-    @Test fun setupStaves_createsOneDriverPerStaff() {
-        val fakes = mutableListOf<FakeSynth>()
-        val engine = buildEngine(fakes)
+    @Test fun setupStaves_createsOneDriverForAllStaves() {
+        var createCount = 0
+        val engine = FluidSynthEngine(synthFactory = { _ ->
+            createCount++
+            FakeSynth().also { capturedSynth = it }
+        })
 
         setupStaves(engine, 3)
 
         assertEquals(3, engine.staffCount)
-        assertEquals(3, fakes.size)
+        // Single synth — factory called exactly once.
+        assertEquals(1, createCount)
     }
 
-    @Test fun setupStaves_loadsSoundFontOnEachDriver() {
-        val fakes = mutableListOf<FakeSynth>()
-        val engine = buildEngine(fakes)
+    @Test fun setupStaves_loadsSoundFontOnDriver() {
+        val engine = buildEngine()
 
         setupStaves(engine, 3)
 
-        fakes.forEach { fake ->
-            assertTrue("loadSoundFont should be called", fake.calls.contains("loadSoundFont"))
-        }
+        val synth = capturedSynth!!
+        assertTrue("loadSoundFont should be called once", synth.calls.contains("loadSoundFont"))
     }
 
-    @Test fun setStaffGain_callsSetGainOnCorrectDriver() {
-        val fakes = mutableListOf<FakeSynth>()
-        val engine = buildEngine(fakes)
+    @Test fun setupStaves_programSelectCalledPerStaff() {
+        val engine = buildEngine()
 
         setupStaves(engine, 3)
-        // Reset call lists so prior setup calls don't interfere.
-        fakes.forEach { it.calls.clear() }
 
-        engine.setStaffGain(0, 0.5f)
-
-        assertTrue("staff 0 should receive setGain(0.5)", fakes[0].calls.contains("setGain(0.5)"))
-        assertTrue("staff 1 should not receive setGain", fakes[1].calls.none { it.startsWith("setGain") })
-        assertTrue("staff 2 should not receive setGain", fakes[2].calls.none { it.startsWith("setGain") })
+        val synth = capturedSynth!!
+        // programSelect(sfid=0, channel=0, bank=0, program=0) through (channel=2)
+        assertTrue(synth.calls.contains("programSelect(0,0,0,0)"))
+        assertTrue(synth.calls.contains("programSelect(0,1,0,0)"))
+        assertTrue(synth.calls.contains("programSelect(0,2,0,0)"))
     }
 
-    @Test fun allNotesOff_callsAllNotesOffOnEveryStaff() {
-        val fakes = mutableListOf<FakeSynth>()
-        val engine = buildEngine(fakes)
+    @Test fun synthHandle_exposesNativeHandle() {
+        val engine = buildEngine()
+        // Before setup: 0L
+        assertEquals(0L, engine.synthHandle)
 
+        setupStaves(engine, 1)
+
+        // After setup: matches FakeSynth.nativeHandle = 42L
+        assertEquals(42L, engine.synthHandle)
+    }
+
+    @Test fun setChannelVolume_sendsCC7() {
+        val engine = buildEngine()
         setupStaves(engine, 2)
-        fakes.forEach { it.calls.clear() }
+        val synth = capturedSynth!!
+        synth.calls.clear()
+
+        engine.setChannelVolume(1, 0.5f)
+
+        // CC7 = channel volume; 0.5 * 127 = 63 (int)
+        assertTrue(
+            "setChannelVolume should send CC7 on the staff's channel",
+            synth.calls.contains("cc(1,7,63)"),
+        )
+    }
+
+    @Test fun muteChannel_sendsCC7ZeroAndAllNotesOff() {
+        val engine = buildEngine()
+        setupStaves(engine, 2)
+        val synth = capturedSynth!!
+        synth.calls.clear()
+
+        engine.muteChannel(0)
+
+        assertTrue("muteChannel should send CC7=0", synth.calls.contains("cc(0,7,0)"))
+        assertTrue("muteChannel should send allNotesOff", synth.calls.contains("allNotesOff(0)"))
+    }
+
+    @Test fun allNotesOff_callsAllNotesOffForEveryChannel() {
+        val engine = buildEngine()
+        setupStaves(engine, 3)
+        val synth = capturedSynth!!
+        synth.calls.clear()
 
         engine.allNotesOff()
 
-        fakes.forEach { fake ->
-            assertTrue(
-                "every staff should receive allNotesOff(-1)",
-                fake.calls.contains("allNotesOff(-1)"),
-            )
-        }
+        assertTrue(synth.calls.contains("allNotesOff(0)"))
+        assertTrue(synth.calls.contains("allNotesOff(1)"))
+        assertTrue(synth.calls.contains("allNotesOff(2)"))
     }
 
-    @Test fun writeMixedFloat_skipsMutedStaff_andSumsAudibleStaves() {
-        val fakes = mutableListOf<FakeSynth>()
-        val engine = buildEngine(fakes)
-
-        setupStaves(engine, 3)
-
-        // Staff 0 contributes 0.4, staff 1 is muted, staff 2 contributes 0.6.
-        fakes[0].fillValue = 0.4f
-        fakes[1].fillValue = 99f  // Should never be added.
-        fakes[2].fillValue = 0.6f
-        fakes.forEach { it.calls.clear() }
-
-        val frameCount = 4
-        val left = FloatArray(frameCount)
-        val right = FloatArray(frameCount)
-        engine.writeMixedFloat(
-            frameCount, left, right,
-            effectiveMutes = booleanArrayOf(false, true, false),
-        )
-
-        // Staff 1 must NOT have been asked to write.
-        assertFalse(
-            "muted staff should not call writeFloat",
-            fakes[1].calls.any { it.startsWith("writeFloat") },
-        )
-
-        // Staves 0 and 2 must have been asked to write.
-        assertTrue(fakes[0].calls.any { it.startsWith("writeFloat") })
-        assertTrue(fakes[2].calls.any { it.startsWith("writeFloat") })
-
-        // Mixed output = 0.4 + 0.6 = 1.0 for every frame.
-        for (i in 0 until frameCount) {
-            assertEquals("left[$i] should be 1.0", 1.0f, left[i], 0.001f)
-            assertEquals("right[$i] should be 1.0", 1.0f, right[i], 0.001f)
-        }
-    }
-
-    @Test fun teardown_closesAllDrivers() {
-        val fakes = mutableListOf<FakeSynth>()
-        val engine = buildEngine(fakes)
-
+    @Test fun previewNoteOn_firesNoteOnWithCorrectChannel() {
+        val engine = buildEngine()
         setupStaves(engine, 2)
-        fakes.forEach { it.calls.clear() }
+        val synth = capturedSynth!!
+        synth.calls.clear()
+
+        engine.previewNoteOn(staffIndex = 1, pitch = 60, velocity = 96)
+
+        assertTrue(synth.calls.contains("noteOn(1,60,96)"))
+    }
+
+    @Test fun previewNoteOff_firesNoteOff() {
+        val engine = buildEngine()
+        setupStaves(engine, 2)
+        val synth = capturedSynth!!
+        synth.calls.clear()
+
+        engine.previewNoteOff(staffIndex = 0, pitch = 60)
+
+        assertTrue(synth.calls.contains("noteOff(0,60)"))
+    }
+
+    @Test fun writeFloat_delegatesToSynth() {
+        val engine = buildEngine()
+        setupStaves(engine, 2)
+        val synth = capturedSynth!!
+        synth.fillValue = 0.5f
+        synth.calls.clear()
+
+        val left = FloatArray(4)
+        val right = FloatArray(4)
+        engine.writeFloat(4, left, right)
+
+        assertTrue(synth.calls.any { it.startsWith("writeFloat") })
+        // Output should contain the synth's fill value
+        for (i in 0 until 4) {
+            assertEquals(0.5f, left[i], 0.001f)
+            assertEquals(0.5f, right[i], 0.001f)
+        }
+    }
+
+    @Test fun writeFloat_zerosBuffersWhenNoSynth() {
+        val engine = buildEngine()
+        // No setupStaves called — synth is null.
+
+        val left = FloatArray(4) { 99f }
+        val right = FloatArray(4) { 99f }
+        engine.writeFloat(4, left, right)
+
+        for (i in 0 until 4) {
+            assertEquals(0f, left[i], 0.001f)
+            assertEquals(0f, right[i], 0.001f)
+        }
+    }
+
+    @Test fun teardown_closesDriver_andResetsState() {
+        val engine = buildEngine()
+        setupStaves(engine, 2)
+        val synth = capturedSynth!!
+        synth.calls.clear()
 
         engine.teardown()
 
         assertEquals(0, engine.staffCount)
-        fakes.forEach { fake ->
-            assertTrue("each driver should be closed", fake.calls.contains("close"))
-        }
+        assertEquals(0L, engine.synthHandle)
+        assertTrue("driver should be closed", synth.calls.contains("close"))
+    }
+
+    @Test fun setupStaves_teardownOldSynthFirst() {
+        var createCount = 0
+        val synths = mutableListOf<FakeSynth>()
+        val engine = FluidSynthEngine(synthFactory = { _ ->
+            createCount++
+            FakeSynth().also { synths += it }
+        })
+
+        setupStaves(engine, 1)
+        val firstSynth = synths[0]
+        assertFalse("first synth not yet closed", firstSynth.calls.contains("close"))
+
+        // Second setup should close the first synth.
+        setupStaves(engine, 2)
+        assertTrue("first synth should be closed on re-setup", firstSynth.calls.contains("close"))
+        assertEquals(2, engine.staffCount)
     }
 }
