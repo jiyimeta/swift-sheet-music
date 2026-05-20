@@ -1,18 +1,8 @@
 package io.github.jiyimeta.sheetmusic.audio.export
 
-/**
- * Common contract for audio-file encoders (WAV / AIFF / M4A / MP3).
- *
- * Encoders accept stereo float32 PCM frames via [appendPcmFloat]. Mono
- * encoders consume only the [left] channel and ignore [right]. After all
- * frames have been appended, callers MUST invoke [finish] to flush any
- * trailing buffers and back-fill headers / finalize muxers. [close]
- * releases the underlying file descriptor.
- *
- * A factory `companion object create(...)` that dispatches on
- * [io.github.jiyimeta.sheetmusic.audio.model.AudioFileFormat] will be
- * added once all four concrete encoders exist.
- */
+import android.os.ParcelFileDescriptor
+import io.github.jiyimeta.sheetmusic.audio.model.AudioFileFormat
+
 internal interface AudioFileEncoder : AutoCloseable {
     /**
      * Append [frames] frames of stereo float32 audio to the encoder.
@@ -22,4 +12,25 @@ internal interface AudioFileEncoder : AutoCloseable {
 
     /** Finalize headers / muxer. MUST be called before [close] on the happy path. */
     fun finish()
+
+    companion object {
+        /**
+         * Dispatch on [format] to construct a concrete encoder bound to [fd].
+         * WAV / AIFF take the raw [java.io.FileDescriptor] (extracted from [fd])
+         * because they back-fill header sizes via [java.nio.channels.FileChannel].
+         * M4A / MP3 take the [ParcelFileDescriptor] directly — MediaMuxer and
+         * MediaCodec consume the [android.os.ParcelFileDescriptor] / its underlying
+         * file descriptor differently.
+         */
+        fun create(
+            format: AudioFileFormat,
+            sampleRate: Int,
+            fd: ParcelFileDescriptor,
+        ): AudioFileEncoder = when (format) {
+            is AudioFileFormat.Wav -> WavPcmEncoder(format.options, sampleRate, fd.fileDescriptor)
+            is AudioFileFormat.Aiff -> AiffPcmEncoder(format.options, sampleRate, fd.fileDescriptor)
+            is AudioFileFormat.M4a -> AacM4aEncoder(format.options, sampleRate, fd)
+            is AudioFileFormat.Mp3 -> Mp3MediaCodecEncoder(format.options, sampleRate, fd)
+        }
+    }
 }
