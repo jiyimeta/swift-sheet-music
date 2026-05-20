@@ -674,6 +674,16 @@ class AndroidPlaybackEngine internal constructor(
         val smfBytes = jniBridge.renderMidi(scoreHandle)
         val staffParams = StaffParamsDecoder.decodeArray(jniBridge.staffParams(scoreHandle))
 
+        // Synth and encoder MUST share the same sample rate; otherwise the file
+        // header advertises one rate while the samples were produced at another,
+        // and players reinterpret duration / pitch by the header's rate.
+        val sampleRate = when (format) {
+            is AudioFileFormat.Wav -> format.options.sampleRate
+            is AudioFileFormat.Aiff -> format.options.sampleRate
+            is AudioFileFormat.M4a -> format.options.sampleRate
+            is AudioFileFormat.Mp3 -> format.options.sampleRate
+        }
+
         _state.value = PlaybackState.EXPORTING
         try {
             exporterFactory().run(
@@ -685,7 +695,7 @@ class AndroidPlaybackEngine internal constructor(
                 endTick = endTick,
                 ticksPerBeat = ticksPerBeat,
                 format = format,
-                sampleRate = 48_000,
+                sampleRate = sampleRate,
                 progress = progress,
             )
         } finally {
