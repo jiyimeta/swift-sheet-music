@@ -9,7 +9,7 @@ import io.github.kiichiio.sheetmusic.audio.AndroidPlaybackEngine
  * they care about. All defaults return safe empty / no-op values so tests
  * only set what they need.
  */
-internal class FakeJniBridge(
+internal open class FakeJniBridge(
     var renderMidiResult: ByteArray = byteArrayOf(),
     var timelineSummaryResult: LongArray = longArrayOf(960L, 2_000_000L, 480L),
     var frameAtTickResult: ByteArray = byteArrayOf(),
@@ -18,6 +18,7 @@ internal class FakeJniBridge(
     var staffParamsResult: ByteArray = byteArrayOf(),
     var pitchAndStaffOfNoteResult: Long = -1L,
     var earliestOfResult: ByteArray = byteArrayOf(),
+    var itemEndTickResult: Long = -1L,
 ) : AndroidPlaybackEngine.JniBridge {
 
     val frameAtTickCalls = mutableListOf<Long>()
@@ -31,7 +32,7 @@ internal class FakeJniBridge(
         frameAtTickCalls += tick
         return frameAtTickResult
     }
-    override fun frameForCursor(scoreHandle: Long, cursorBytes: ByteArray): ByteArray {
+    open override fun frameForCursor(scoreHandle: Long, cursorBytes: ByteArray): ByteArray {
         frameForCursorCalls += cursorBytes
         return frameForCursorResult
     }
@@ -44,5 +45,11 @@ internal class FakeJniBridge(
     override fun earliestOf(scoreHandle: Long, idsBytes: ByteArray): ByteArray {
         earliestOfCalls += idsBytes
         return earliestOfResult
+    }
+
+    val itemEndTickCalls = mutableListOf<ByteArray>()
+    override fun itemEndTick(scoreHandle: Long, idBytes: ByteArray): Long {
+        itemEndTickCalls += idBytes
+        return itemEndTickResult
     }
 }

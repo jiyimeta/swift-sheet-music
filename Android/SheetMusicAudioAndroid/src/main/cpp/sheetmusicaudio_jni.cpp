@@ -259,3 +259,18 @@ Java_io_github_kiichiio_sheetmusic_audio_native_FluidSynthNative_playerGetCurren
     if (player == nullptr) return 0;
     return static_cast<jlong>(fluid_player_get_current_tick(player));
 }
+
+extern "C" JNIEXPORT jint JNICALL
+Java_io_github_kiichiio_sheetmusic_audio_native_FluidSynthNative_playerSetTempo(
+    JNIEnv *, jobject, jlong handle, jint type, jdouble value
+) {
+    fluid_player_t *player = player_from(handle);
+    if (player == nullptr) return -1;
+    // type maps to fluid_player_set_tempo_type:
+    //   0 = FLUID_PLAYER_TEMPO_INTERNAL (relative scale of internal tempo)
+    //   1 = FLUID_PLAYER_TEMPO_EXTERNAL_BPM (absolute BPM)
+    //   2 = FLUID_PLAYER_TEMPO_EXTERNAL_MIDI (absolute as MIDI us/quarter)
+    // PlayerDriver.setTempo hardcodes 0 (INTERNAL).
+    return fluid_player_set_tempo(player, static_cast<int>(type),
+                                  static_cast<double>(value));
+}

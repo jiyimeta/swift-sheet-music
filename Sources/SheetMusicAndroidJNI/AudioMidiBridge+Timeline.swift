@@ -157,4 +157,20 @@ extension AudioMidiBridge {
         let data = AudioMidiBridge.staffParams(score: score)
         return makeJByteArray(env: envPtr, bytes: data)
     }
+
+    @_cdecl("Java_io_github_kiichiio_sheetmusic_audio_jni_SheetMusicAudioJNI_nativeItemEndTick")
+    // swiftlint:disable:next identifier_name
+    public func Java_io_github_kiichiio_sheetmusic_audio_jni_SheetMusicAudioJNI_nativeItemEndTick(
+        _ envPtr: UnsafeMutablePointer<JNIEnv?>,
+        _ clazz: jclass,
+        _ scoreHandle: jlong,
+        _ idBytes: jbyteArray,
+    ) -> jlong {
+        guard let score = scoreTable.value(for: scoreHandle) else { return -1 }
+        let data = readJByteArray(env: envPtr, array: idBytes)
+        guard !data.isEmpty,
+              let id = try? ScoreItemIDCodec.decode(data)
+        else { return -1 }
+        return AudioMidiBridge.itemEndTick(score: score, id: id)
+    }
 #endif

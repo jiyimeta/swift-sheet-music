@@ -58,4 +58,5 @@ internal object FluidSynthNative {
     external fun playerJoin(handle: Long): Int
     external fun playerSeek(handle: Long, tick: Long): Int
     external fun playerGetCurrentTick(handle: Long): Long
+    external fun playerSetTempo(handle: Long, type: Int, value: Double): Int
 }

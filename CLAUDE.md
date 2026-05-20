@@ -169,6 +169,20 @@ cross-compile fails with `'semaphore.h' file not found` /
 `SheetMusicZip` target (raw DEFLATE through system `libz`). No
 additional setup is required beyond the Phase 1 toolchain.
 
+### Engine extensions (Phase 5, sub-project A)
+
+`AndroidPlaybackEngine` exposes `setLoop(from:to:)`,
+`setLoop(from:throughEndOf:)`, `clearLoop()`, `setRate(_:)`, and
+`setStaffProgram(staffIndex:program:)` — parity with
+`SheetMusicAudioApple.PlaybackEngine`. The Compose demo at
+`Examples/Android/` exposes a rate slider and program picker; the loop
+UI is wired as a status row + clear-only toggle for v0 (full
+tap-to-set-A/B selection is a Phase 5.1 follow-up). Loop wrap is host-
+driven inside the engine's poll loop (FluidSynth's `fluid_player_set_loop`
+loops the entire SMF only). Rate uses `fluid_player_set_tempo` in
+`FLUID_PLAYER_TEMPO_INTERNAL` mode. Program change reuses the existing
+sfid via `programSelect`.
+
 ### Android example app
 
 An end-to-end Kotlin Compose demo lives in `Examples/Android/`. It

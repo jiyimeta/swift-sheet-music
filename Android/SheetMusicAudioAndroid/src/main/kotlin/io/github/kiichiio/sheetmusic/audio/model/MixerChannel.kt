@@ -8,4 +8,10 @@ data class MixerChannel(
     val isMuted: Boolean = false,
     val isSoloed: Boolean = false,
     val effectiveMute: Boolean = false,
+    /**
+     * GM program (0..127) driving this staff's sampler, or `null` for
+     * drum staves and for staves whose program is not selectable from
+     * UI. Mirrors Apple `MixerChannel.program: UInt8?`.
+     */
+    val program: Int? = null,
 )

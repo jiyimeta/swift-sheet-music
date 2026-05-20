@@ -27,6 +27,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import io.github.kiichiio.sheetmusic.audio.model.GMInstrument
 import io.github.kiichiio.sheetmusic.audio.model.MixerChannel
 
 private val mutedOverlayColor = Color(0x33FF0000) // translucent red
@@ -96,6 +97,7 @@ fun MixerPanel(viewModel: AudioViewModel, modifier: Modifier = Modifier) {
                             onVolumeChange = { v -> viewModel.engine.setStaffVolume(index, v) },
                             onMuteToggle = { viewModel.engine.setStaffMuted(index, !channel.isMuted) },
                             onSoloToggle = { viewModel.engine.setStaffSoloed(index, !channel.isSoloed) },
+                            onProgramChange = { p -> viewModel.engine.setStaffProgram(index, p) },
                         )
                     }
                 }
@@ -166,7 +168,9 @@ private fun StaffRow(
     onVolumeChange: (Float) -> Unit,
     onMuteToggle: () -> Unit,
     onSoloToggle: () -> Unit,
+    onProgramChange: (Int) -> Unit,
 ) {
+    var showPicker by remember { mutableStateOf(false) }
     Box {
         Row(
             modifier = Modifier
@@ -178,7 +182,7 @@ private fun StaffRow(
             Text(
                 text = channel.displayName,
                 style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.width(72.dp)
+                modifier = Modifier.width(56.dp)
             )
             Slider(
                 value = channel.volume,
@@ -200,6 +204,28 @@ private fun StaffRow(
                 Text(if (channel.isSoloed) "S" else "s",
                      style = MaterialTheme.typography.labelSmall)
             }
+            // Program label: tappable for melodic staves, static for drums.
+            val program = channel.program
+            if (program != null) {
+                TextButton(
+                    onClick = { showPicker = true },
+                    modifier = Modifier.width(72.dp),
+                ) {
+                    Text(
+                        text = GMInstrument.forProgram(program)?.displayName ?: "P$program",
+                        style = MaterialTheme.typography.labelSmall,
+                        maxLines = 1,
+                    )
+                }
+            } else {
+                Text(
+                    text = "Drums",
+                    style = MaterialTheme.typography.labelSmall,
+                    modifier = Modifier
+                        .width(72.dp)
+                        .padding(horizontal = 4.dp),
+                )
+            }
         }
 
         // Red overlay when the channel is effectively muted (solo or explicit mute).
@@ -210,5 +236,16 @@ private fun StaffRow(
                     .background(mutedOverlayColor)
             )
         }
+    }
+    if (showPicker) {
+        val program = channel.program ?: 0
+        ProgramPicker(
+            current = program,
+            onSelect = {
+                onProgramChange(it)
+                showPicker = false
+            },
+            onDismiss = { showPicker = false },
+        )
     }
 }

@@ -35,6 +35,7 @@ internal class PlayerDriver(
         fun playerJoin(handle: Long): Int
         fun playerSeek(handle: Long, tick: Long): Int
         fun playerGetCurrentTick(handle: Long): Long
+        fun playerSetTempo(handle: Long, type: Int, value: Double): Int
     }
 
     /** Production implementation — delegates directly to [FluidSynthNative]. */
@@ -50,6 +51,8 @@ internal class PlayerDriver(
             FluidSynthNative.playerSeek(handle, tick)
         override fun playerGetCurrentTick(handle: Long) =
             FluidSynthNative.playerGetCurrentTick(handle)
+        override fun playerSetTempo(handle: Long, type: Int, value: Double) =
+            FluidSynthNative.playerSetTempo(handle, type, value)
     }
 
     private var handle: Long = 0
@@ -82,6 +85,18 @@ internal class PlayerDriver(
     /** Returns the player's current MIDI tick position, or 0 if not loaded. */
     val currentTick: Long
         get() = if (handle != 0L) nativeBindings.playerGetCurrentTick(handle) else 0
+
+    /**
+     * Sets a relative tempo scale on the player.
+     * 1.0 = native tempo, 2.0 = double speed, 0.5 = half speed.
+     * Returns FluidSynth status code (0 on success).
+     *
+     * Uses `FLUID_PLAYER_TEMPO_INTERNAL` (type=0) which scales the SMF's
+     * tempo events. `FLUID_PLAYER_TEMPO_EXTERNAL_BPM/MIDI` would override
+     * tempo absolutely — not what we want here.
+     */
+    fun setTempo(scale: Double): Int =
+        if (handle != 0L) nativeBindings.playerSetTempo(handle, 0, scale) else -1
 
     /**
      * Stops playback, waits for the player thread, and releases the native

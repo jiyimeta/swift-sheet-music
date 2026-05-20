@@ -14,6 +14,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.example.sheetmusic.audio.AudioControls
 import com.example.sheetmusic.audio.AudioViewModel
+import com.example.sheetmusic.audio.LoopSelectionOverlay
 import com.example.sheetmusic.audio.MixerPanel
 import com.example.sheetmusic.cursor.PlaybackCursorOverlay
 
@@ -56,6 +57,7 @@ fun ScoreView(
             }
         }
         AudioControls(audioVm)
+        LoopSelectionOverlay(viewModel = audioVm)
         MixerPanel(audioVm)
     }
 }

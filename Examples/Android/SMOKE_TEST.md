@@ -54,11 +54,36 @@ cd Examples/Android && ./gradlew :app:installDebug
 - [ ] Large score (≥ 30 staves) → prepare under 3s; memory under 250MB
 - [ ] Tap Stop, then close + relaunch app → fresh start, no leaked process
 
+## Phase 5 sub-project A — engine extensions
+
+### Rate slider
+- [ ] Open the app and wait for "Ready" state
+- [ ] Tap Play
+- [ ] Drag the Speed slider to 0.5x → audible slow-down + cursor still tracks
+- [ ] Drag to 2.0x → audible speed-up + cursor still tracks
+- [ ] Drag back to 1.0x
+- [ ] Speed label updates to match the slider value (e.g., "Speed: 1.25x")
+
+### Program picker
+- [ ] Tap Play, then Pause
+- [ ] In the mixer panel ("Show"), tap a non-drum staff's program label
+  (defaults to "Acoustic Grand Piano" or whatever the score specifies)
+- [ ] Picker dialog opens, scrolled to the current patch
+- [ ] Pick "Violin" (program 40)
+- [ ] Tap Play → that staff sounds as a violin; other staves unaffected
+- [ ] Drum staves show "Drums" non-clickable (verify if your score has drums)
+
+### Loop toggle (v0)
+- [ ] Loop status row reads "Loop: off" by default
+- [ ] Switch is disabled when no loop is set
+- [ ] After `setLoop()` is called programmatically (Phase 5.1 will add the
+  tap-to-set-A/B UI), the status reads "Loop: <startTick>..<endTick>" and
+  the switch becomes enabled
+- [ ] Toggling the switch OFF calls `clearLoop()` — status returns to "Loop: off"
+
 ### Known v0 deferred
 The following are intentionally NOT supported in v0:
-- Loop region (`setLoop`)
-- Variable playback rate (`setRate`)
-- Per-staff program change (`loadProgram`)
+- Tap-to-set-A/B UI for `setLoop` (engine API ready; UI gesture deferred to Phase 5.1)
 - Audio file export (WAV/AIFF/M4A/MP3)
 - MediaSession / lock-screen controls
 - > 16 staves (throws `AudioBackendException.TooManyStaves`)

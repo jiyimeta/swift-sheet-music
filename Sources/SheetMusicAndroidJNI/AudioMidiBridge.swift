@@ -46,6 +46,18 @@ extension AudioMidiBridge {
     }
 }
 
+extension AudioMidiBridge {
+    /// Looks up `id`'s end tick in the timeline. Returns -1 when the
+    /// id has no entry in `itemEndTicks` (only `.note` and `.rest`
+    /// items are tracked) or when the score could not be resolved by
+    /// the caller side.
+    static func itemEndTick(score: Score, id: ScoreItemID) -> Int64 {
+        let timeline = PlaybackTimeline(score: score)
+        guard let endTick = timeline.itemEndTicks[id] else { return -1 }
+        return Int64(endTick)
+    }
+}
+
 // MARK: - @_cdecl JNI helpers + T18 entry points (Android only)
 
 #if os(Android)
