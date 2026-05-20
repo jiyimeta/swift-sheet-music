@@ -20,4 +20,9 @@ public struct AudioBinaryWriter {
     public mutating func append(_ value: Bool) {
         append(UInt8(value ? 1 : 0))
     }
+
+    /// Append raw bytes (no endianness reinterpretation).
+    public mutating func append<S: Sequence>(bytes: S) where S.Element == UInt8 {
+        data.append(contentsOf: bytes)
+    }
 }
