@@ -94,10 +94,10 @@ fun MixerPanel(viewModel: AudioViewModel, modifier: Modifier = Modifier) {
                     itemsIndexed(channels) { index, channel ->
                         StaffRow(
                             channel = channel,
-                            onVolumeChange = { v -> viewModel.engine.setStaffVolume(index, v) },
-                            onMuteToggle = { viewModel.engine.setStaffMuted(index, !channel.isMuted) },
-                            onSoloToggle = { viewModel.engine.setStaffSoloed(index, !channel.isSoloed) },
-                            onProgramChange = { p -> viewModel.engine.setStaffProgram(index, p) },
+                            onVolumeChange = { v -> viewModel.engine.value?.setStaffVolume(index, v) },
+                            onMuteToggle = { viewModel.engine.value?.setStaffMuted(index, !channel.isMuted) },
+                            onSoloToggle = { viewModel.engine.value?.setStaffSoloed(index, !channel.isSoloed) },
+                            onProgramChange = { p -> viewModel.engine.value?.setStaffProgram(index, p) },
                         )
                     }
                 }
@@ -121,7 +121,7 @@ fun MixerPanel(viewModel: AudioViewModel, modifier: Modifier = Modifier) {
                     value = masterVolume,
                     onValueChange = { v ->
                         masterVolume = v
-                        viewModel.engine.setMasterVolume(v)
+                        viewModel.engine.value?.setMasterVolume(v)
                     },
                     valueRange = 0f..1f,
                     modifier = Modifier.weight(1f)
@@ -144,14 +144,14 @@ fun MixerPanel(viewModel: AudioViewModel, modifier: Modifier = Modifier) {
                     checked = metronomeEnabled,
                     onCheckedChange = { on ->
                         metronomeEnabled = on
-                        viewModel.engine.setMetronomeEnabled(on)
+                        viewModel.engine.value?.setMetronomeEnabled(on)
                     }
                 )
                 Slider(
                     value = metronomeVolume,
                     onValueChange = { v ->
                         metronomeVolume = v
-                        viewModel.engine.setMetronomeVolume(v)
+                        viewModel.engine.value?.setMetronomeVolume(v)
                     },
                     valueRange = 0f..1f,
                     enabled = metronomeEnabled,

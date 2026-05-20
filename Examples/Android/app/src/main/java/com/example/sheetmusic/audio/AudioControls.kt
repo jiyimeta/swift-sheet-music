@@ -59,32 +59,32 @@ fun AudioControls(
         ) {
             // Rewind 5 s
             TextButton(
-                onClick = { viewModel.engine.skip(-5.0) },
+                onClick = { viewModel.engine.value?.skip(-5.0) },
                 enabled = isPrepared
             ) { Text("-5s") }
 
             // Stop
             TextButton(
-                onClick = { viewModel.engine.stop() },
+                onClick = { viewModel.engine.value?.stop() },
                 enabled = isPrepared && state != PlaybackState.PREPARED
             ) { Text("Stop") }
 
             // Play / Pause / Resume
             when (state) {
                 PlaybackState.PLAYING -> {
-                    TextButton(onClick = { viewModel.engine.pause() }) {
+                    TextButton(onClick = { viewModel.engine.value?.pause() }) {
                         Text("Pause")
                     }
                 }
                 PlaybackState.PAUSED -> {
-                    IconButton(onClick = { viewModel.engine.play() }) {
+                    IconButton(onClick = { viewModel.engine.value?.play() }) {
                         Icon(Icons.Default.PlayArrow, contentDescription = "Resume")
                     }
                 }
                 else -> {
                     // STOPPED, PREPARED, EXPORTING
                     IconButton(
-                        onClick = { viewModel.engine.play() },
+                        onClick = { viewModel.engine.value?.play() },
                         enabled = state == PlaybackState.PREPARED
                     ) {
                         Icon(Icons.Default.PlayArrow, contentDescription = "Play")
@@ -94,7 +94,7 @@ fun AudioControls(
 
             // Forward 5 s
             TextButton(
-                onClick = { viewModel.engine.skip(5.0) },
+                onClick = { viewModel.engine.value?.skip(5.0) },
                 enabled = isPrepared
             ) { Text("+5s") }
         }
@@ -120,7 +120,7 @@ fun AudioControls(
                 )
                 Slider(
                     value = rate,
-                    onValueChange = { viewModel.engine.setRate(it) },
+                    onValueChange = { viewModel.engine.value?.setRate(it) },
                     valueRange = 0.5f..2.0f,
                     steps = 29,
                 )
