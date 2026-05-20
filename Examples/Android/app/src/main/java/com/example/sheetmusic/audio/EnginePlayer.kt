@@ -44,6 +44,7 @@ class EnginePlayer(
             Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM,
             Player.COMMAND_GET_CURRENT_MEDIA_ITEM,
             Player.COMMAND_GET_METADATA,
+            Player.COMMAND_GET_TIMELINE,
             Player.COMMAND_SET_SPEED_AND_PITCH,
         )
         .build()

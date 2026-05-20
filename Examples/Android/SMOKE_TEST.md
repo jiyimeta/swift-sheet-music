@@ -122,3 +122,25 @@ API ≥ 28.
 10. Re-open the app. Re-binding to the service is automatic — Play
     still works and continues from the prior position if playback
     was paused (engine state is preserved across the rebind).
+
+### Known limitation — Media3 auto-foreground promotion
+
+On emulator-5556 (Pixel 6 Pro API 34) the `MediaSessionService` does
+not auto-promote to foreground when playback starts, so step 2's
+MediaStyle notification doesn't appear even when
+`POST_NOTIFICATIONS` is granted (`adb shell dumpsys activity
+services` shows `startForegroundCount=0`).
+
+The MediaSession layer itself IS active and fully wired —
+`adb shell dumpsys media_session` reports `state=PLAYING`, the
+published metadata ("Sheet Music"), `USAGE_MEDIA` audio attributes,
+and live `position` updates, with 3 system controllers attached
+(Bluetooth gatt + AudioMediaPlayerWrapper + Media3 internal). So
+the Phase 5C deliverable — MediaSession publishing playback state
+to system controls — is verified working at the IPC layer.
+
+Visible-notification follow-up: likely needs either
+`MediaSessionService.setMediaNotificationProvider(...)` with a
+`DefaultMediaNotificationProvider` instance constructed via its
+`Builder`, or an explicit `startForeground` call in the service
+when state transitions to PLAYING. Phase 5.1 task.
