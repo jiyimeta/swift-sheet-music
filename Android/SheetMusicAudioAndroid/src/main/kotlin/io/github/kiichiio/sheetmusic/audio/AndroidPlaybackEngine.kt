@@ -114,6 +114,9 @@ class AndroidPlaybackEngine internal constructor(
          * [idsBytes], or an empty byte array if [idsBytes] is empty.
          */
         fun earliestOf(scoreHandle: Long, idsBytes: ByteArray): ByteArray
+
+        /** Returns the item's end tick in ticks, or -1 if the id is not in the timeline. */
+        fun itemEndTick(scoreHandle: Long, idBytes: ByteArray): Long
     }
 
     companion object {
@@ -129,6 +132,8 @@ class AndroidPlaybackEngine internal constructor(
             override fun pitchAndStaffOfNote(h: Long, n: ByteArray) =
                 SheetMusicAudioJNI.nativePitchAndStaffOfNote(h, n)
             override fun earliestOf(h: Long, i: ByteArray) = SheetMusicAudioJNI.nativeEarliestOf(h, i)
+            override fun itemEndTick(h: Long, i: ByteArray) =
+                SheetMusicAudioJNI.nativeItemEndTick(h, i)
         }
     }
 

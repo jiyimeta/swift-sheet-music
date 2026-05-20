@@ -17,4 +17,5 @@ internal object SheetMusicAudioJNI {
     external fun nativeStaffParams(scoreHandle: Long): ByteArray
     external fun nativePitchAndStaffOfNote(scoreHandle: Long, noteIdBytes: ByteArray): Long
     external fun nativeEarliestOf(scoreHandle: Long, idsBytes: ByteArray): ByteArray
+    external fun nativeItemEndTick(scoreHandle: Long, idBytes: ByteArray): Long
 }
