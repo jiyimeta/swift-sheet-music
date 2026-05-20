@@ -52,8 +52,8 @@ navigation.
 
 - `UnsatisfiedLinkError: libSheetMusicJNI.so` — run
   `Scripts/android-build-libs.sh`. Confirm both
-  `Examples/Android/app/src/main/jniLibs/arm64-v8a/libSheetMusicJNI.so`
-  and `Examples/Android/app/src/main/jniLibs/x86_64/libSheetMusicJNI.so`
+  `Android/SheetMusicAndroid/src/main/jniLibs/arm64-v8a/libSheetMusicJNI.so`
+  and `Android/SheetMusicAndroid/src/main/jniLibs/x86_64/libSheetMusicJNI.so`
   exist.
 - App starts but shows "test.mscz is not bundled." — run
   `Scripts/android-bundle-test-score.sh` after putting a MuseScore file
@@ -77,7 +77,6 @@ Examples/Android/
 │   └── src/main/
 │       ├── AndroidManifest.xml
 │       ├── assets/test.mscz        (gitignored; supplied by you)
-│       ├── jniLibs/<abi>/*.so      (built by Scripts/android-build-libs.sh)
 │       └── java/com/example/sheetmusic/
 │           ├── MainActivity        # entry point
 │           ├── SheetMusicApp       # state routing
@@ -88,4 +87,7 @@ Examples/Android/
 │           ├── PageControls        # prev / next / disabled play
 │           ├── draw/DrawProgramDecoder    # parses the binary stream
 │           └── jni/SheetMusicBridge       # external fun + System.loadLibrary
+
+Android/SheetMusicAndroid/src/main/
+└── jniLibs/<abi>/*.so              (built by Scripts/android-build-libs.sh)
 ```

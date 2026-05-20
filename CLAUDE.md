@@ -180,7 +180,7 @@ Phase 4 follow-up.
 
 Quickstart (from repo root):
 
-    # 1. Build native libs into Examples/Android/app/src/main/jniLibs/
+    # 1. Build native libs into Android/SheetMusicAndroid/src/main/jniLibs/
     Scripts/android-build-libs.sh
 
     # 2. Copy a MuseScore file you own into the app's assets
