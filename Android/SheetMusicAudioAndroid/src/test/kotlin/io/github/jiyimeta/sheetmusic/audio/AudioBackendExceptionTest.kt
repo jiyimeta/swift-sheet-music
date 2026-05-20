@@ -1,6 +1,9 @@
 package io.github.jiyimeta.sheetmusic.audio
 
+import io.github.jiyimeta.sheetmusic.audio.model.AudioFileFormat
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -35,5 +38,35 @@ class AudioBackendExceptionTest {
     @Test fun fluidSynthInitMessage() {
         val ex = AudioBackendException.FluidSynthInit("out of memory")
         assertEquals("FluidSynth initialization failed: out of memory", ex.message)
+    }
+
+    @Test fun noScorePreparedHasReadableMessage() {
+        val e = AudioBackendException.NoScorePrepared()
+        assertNotNull(e.message)
+        assertTrue(e.message!!.contains("No score") || e.message!!.contains("prepared"))
+    }
+
+    @Test fun rangeNotInTimelineHasReadableMessage() {
+        val e = AudioBackendException.RangeNotInTimeline()
+        assertNotNull(e.message)
+        assertTrue(e.message!!.contains("range") || e.message!!.contains("timeline"))
+    }
+
+    @Test fun formatUnsupportedCarriesFormat() {
+        val fmt = AudioFileFormat.Mp3()
+        val e = AudioBackendException.FormatUnsupportedOnThisOS(fmt)
+        assertEquals(fmt, e.format)
+    }
+
+    @Test fun fileWriteFailedHasCause() {
+        val cause = RuntimeException("disk full")
+        val e = AudioBackendException.FileWriteFailed(cause)
+        assertSame(cause, e.cause)
+    }
+
+    @Test fun cancelledIsAudioBackendException() {
+        val e = AudioBackendException.Cancelled()
+        assertTrue(e is AudioBackendException)
+        assertNotNull(e.message)
     }
 }
