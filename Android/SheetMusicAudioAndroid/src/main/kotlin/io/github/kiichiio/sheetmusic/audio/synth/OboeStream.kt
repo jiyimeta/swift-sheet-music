@@ -145,6 +145,11 @@ internal open class OboeStream(
     open fun play() {
         val t = track ?: return
         if (running) return
+        // Force AudioTrack software volume to max — some Android versions
+        // initialize tracks at a lower default. The OS stream volume is
+        // controlled separately by the volume slider, so this only ensures
+        // we don't lose a multiplier silently.
+        t.setVolume(AudioTrack.getMaxVolume())
         t.play()
         running = true
         writerScope = CoroutineScope(SupervisorJob() + writerDispatcher)

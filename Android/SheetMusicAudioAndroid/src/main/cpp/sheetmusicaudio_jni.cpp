@@ -38,11 +38,13 @@ Java_io_github_kiichiio_sheetmusic_audio_native_FluidSynthNative_newSynth(
         LOGE("newSynth: new_fluid_synth failed at %d Hz", sampleRate);
         return 0;
     }
-    // Default FluidSynth gain is 0.2 (very quiet). Raise to 1.0 — well within
-    // FluidSynth's internal soft-limiter headroom. Lower (e.g. 0.5) if
-    // clipping observed on devices with poor scheduler latency.
-    fluid_synth_set_gain(synth, 1.0f);
-    LOGI("newSynth: synth created at %d Hz, gain=1.0", sampleRate);
+    // Default FluidSynth gain is 0.2 (very quiet). FluidSynth accepts
+    // 0.0–10.0; values up to ~2.5 are typically fine for SF2 content with
+    // moderate dynamics — the internal soft-limiter handles transient peaks.
+    // Comparable perceived loudness to AVFoundation's AUMIDISynth (Apple
+    // path) is reached around gain=2.0–2.5.
+    fluid_synth_set_gain(synth, 2.0f);
+    LOGI("newSynth: synth created at %d Hz, gain=2.0", sampleRate);
     return reinterpret_cast<jlong>(synth);
 }
 
