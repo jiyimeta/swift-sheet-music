@@ -53,32 +53,16 @@ public enum LayoutBridge {
         pageWidthMM: Double,
         pageHeightMM: Double,
     ) -> Data {
-        // Convert mm → pt for the layout engine's availableWidth.
-        let mmToPt = 72.0 / 25.4
-        let availableWidthPt = Double(pageWidthMM) * mmToPt
-
-        let options = ScoreViewOptions(
-            wrapToViewWidth: true,
-            includeTitleFrame: false,
-        )
-        let layout = LayoutEngine.layout(
+        computeWithDocument(
             score: score,
-            options: options,
-            availableWidth: availableWidthPt,
-        )
-
-        let commands = buildCommands(layout: layout)
-        let page = EncodablePage(
-            widthMM: pageWidthMM,
-            heightMM: pageHeightMM,
-            commands: commands,
-        )
-        return DrawProgramEncoder.encode(pages: [page])
+            pageWidthMM: pageWidthMM,
+            pageHeightMM: pageHeightMM,
+        ).encoded
     }
 
     // MARK: - Command builder
 
-    private static func buildCommands(layout: LayoutDocument) -> [DrawCommand] {
+    static func buildCommands(layout: LayoutDocument) -> [DrawCommand] {
         var out: [DrawCommand] = []
         let metrics = layout.metrics
         let context = MetricsContext(

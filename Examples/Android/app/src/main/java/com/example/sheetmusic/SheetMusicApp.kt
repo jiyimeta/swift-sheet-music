@@ -41,6 +41,7 @@ fun SheetMusicApp(
                     state = s,
                     onPageChange = scoreVm::goToPage,
                     audioVm = audioVm,
+                    scoreVm = scoreVm,
                 )
             }
         }
