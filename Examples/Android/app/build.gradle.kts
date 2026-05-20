@@ -48,7 +48,8 @@ dependencies {
     debugImplementation("androidx.compose.ui:ui-tooling")
     testImplementation("junit:junit:4.13.2")
 
-    // Audio backend — resolved from the Android/ composite build.
-    // Version must match Android/SheetMusicAudioAndroid/build.gradle.kts.
+    // JNI bridge + audio backend — resolved from the Android/ composite build.
+    // Versions must match the corresponding build.gradle.kts files in Android/.
+    implementation("io.github.jiyimeta:sheet-music-android:0.0.0-SNAPSHOT")
     implementation("io.github.jiyimeta:sheet-music-audio-android:0.0.0-SNAPSHOT")
 }

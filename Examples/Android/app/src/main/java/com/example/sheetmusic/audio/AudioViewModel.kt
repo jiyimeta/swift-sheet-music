@@ -35,7 +35,7 @@ class AudioViewModel(application: Application) : AndroidViewModel(application) {
      * Safe to call multiple times (e.g. after navigation back to the screen);
      * the engine tears down any prior state before re-preparing.
      *
-     * @param scoreHandle opaque `Long` from [com.example.sheetmusic.jni.ScoreHandle.raw].
+     * @param scoreHandle opaque `Long` from [io.github.jiyimeta.sheetmusic.ScoreHandle.raw].
      */
     fun preparePlayback(scoreHandle: Long) {
         viewModelScope.launch {
