@@ -60,8 +60,25 @@ internal class FakeSynthDriver(val id: Int = 0) : SynthDriver {
 
     override fun handleMidiEvent(rawEvent: Long) { calls += "handleMidiEvent($rawEvent)" }
 
+    /**
+     * Render-loop test affordance. When a test wires this hook, [writeFloat]
+     * invokes it after recording the call — typically to advance a linked
+     * player's `tickToReturn` so the export render loop terminates on a
+     * configurable schedule. Left `null` for tests that don't drive a loop.
+     */
+    var onWriteFloat: ((frameCount: Int) -> Unit)? = null
+
+    /**
+     * Convenience knob for render-loop tests. The hook installed by
+     * [linkRenderLoopTo] reads this and advances the linked player by this
+     * many ticks per [writeFloat] call. Treated as 0 (no advance) when no
+     * hook is installed.
+     */
+    var tickAdvancePerWriteFloat: Int = 0
+
     override fun writeFloat(frameCount: Int, left: FloatArray, right: FloatArray): Int {
         calls += "writeFloat($frameCount)"
+        onWriteFloat?.invoke(frameCount)
         return 0
     }
 

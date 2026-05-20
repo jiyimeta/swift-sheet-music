@@ -14,6 +14,8 @@ sealed class AudioBackendException(message: String) : Exception(message) {
         AudioBackendException("Score has $staffCount staves; v0 supports up to 16")
     class FluidSynthInit(cause: String) :
         AudioBackendException("FluidSynth initialization failed: $cause")
+    class EngineSetupFailed(cause: String) :
+        AudioBackendException("Engine setup failed: $cause")
     class NoScorePrepared :
         AudioBackendException("No score prepared for export")
     class RangeNotInTimeline :
