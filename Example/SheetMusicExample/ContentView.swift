@@ -45,6 +45,12 @@
         @State private var playbackEngine = PlaybackEngine(
             soundfontResolver: BundledSoundfontResolver(),
         )
+        /// Bridges the engine to `MPNowPlayingInfoCenter` /
+        /// `MPRemoteCommandCenter` so Control Center, the lock-screen
+        /// scrubber, headset transport keys, AirPlay, and CarPlay all
+        /// drive playback. Lazy-init on first onAppear so we can
+        /// reference the engine.
+        @State private var nowPlaying: NowPlayingController?
         /// Set when the user taps the share button. Drives the
         /// `.sheet` modifier that presents `UIActivityViewController`
         /// for the freshly-exported PDF.
@@ -109,7 +115,21 @@
                     )
                 }
             }
-            .onAppear(perform: loadBundled)
+            .onAppear {
+                if nowPlaying == nil {
+                    nowPlaying = NowPlayingController(engine: playbackEngine)
+                }
+                loadBundled()
+            }
+            .onChange(of: score) { _, newScore in
+                nowPlaying?.update(score: newScore)
+            }
+            .onChange(of: playbackEngine.state) { _, _ in
+                nowPlaying?.refreshNowPlayingInfo()
+            }
+            .onChange(of: playbackEngine.totalTimeSeconds) { _, _ in
+                nowPlaying?.refreshNowPlayingInfo()
+            }
             .fileImporter(
                 isPresented: $isImportingFile,
                 allowedContentTypes: ScoreFileType.allUTTypes,
