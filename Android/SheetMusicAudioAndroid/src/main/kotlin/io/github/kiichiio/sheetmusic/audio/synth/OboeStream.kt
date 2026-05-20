@@ -181,6 +181,11 @@ internal open class OboeStream(
         val right = FloatArray(framesPerBuffer)
         val interleaved = FloatArray(framesPerBuffer * 2)
         var iteration = 0
+        // Per-window peak / sum-of-squares accumulators reset every ~1 s of audio.
+        var windowPeak = 0f
+        var windowSumSquares = 0.0
+        var windowFrames = 0L
+        val framesPerSecond = framesPerBuffer.toLong() * (48_000 / framesPerBuffer)
         while (running && currentCoroutineContext().isActive) {
             val p = producer.get()
             if (p == null) {
@@ -190,14 +195,40 @@ internal open class OboeStream(
             p.produce(framesPerBuffer, left, right)
             val mv = masterVolume
             for (i in 0 until framesPerBuffer) {
-                interleaved[i * 2] = left[i] * mv
-                interleaved[i * 2 + 1] = right[i] * mv
+                val ls = left[i] * mv
+                val rs = right[i] * mv
+                interleaved[i * 2] = ls
+                interleaved[i * 2 + 1] = rs
+                val a = kotlin.math.max(kotlin.math.abs(ls), kotlin.math.abs(rs))
+                if (a > windowPeak) windowPeak = a
+                windowSumSquares += (ls.toDouble() * ls + rs.toDouble() * rs)
             }
+            windowFrames += framesPerBuffer
             track?.write(interleaved, 0, interleaved.size, AudioTrack.WRITE_BLOCKING)
             // Diagnostic: log underrun count every ~10 s of audio. API 24+.
             if (++iteration % UNDERRUN_LOG_INTERVAL == 0) {
                 val underruns = track?.underrunCount ?: -1
                 Log.i(TAG, "underrunCount=$underruns iter=$iteration thread=${Thread.currentThread().name}")
+            }
+            // Peak / RMS meter, once per second.
+            if (windowFrames >= framesPerSecond) {
+                val rmsLinear = kotlin.math.sqrt(
+                    windowSumSquares / (windowFrames * 2.0).coerceAtLeast(1.0)
+                ).toFloat()
+                val peakDb = if (windowPeak > 0f)
+                    20f * kotlin.math.log10(windowPeak.toDouble()).toFloat()
+                else Float.NEGATIVE_INFINITY
+                val rmsDb = if (rmsLinear > 0f)
+                    20f * kotlin.math.log10(rmsLinear.toDouble()).toFloat()
+                else Float.NEGATIVE_INFINITY
+                Log.i(
+                    TAG,
+                    "meter peak=%.3f (%.1f dBFS) rms=%.3f (%.1f dBFS)"
+                        .format(windowPeak, peakDb, rmsLinear, rmsDb),
+                )
+                windowPeak = 0f
+                windowSumSquares = 0.0
+                windowFrames = 0
             }
         }
     }
