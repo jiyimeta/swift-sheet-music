@@ -7,6 +7,11 @@ public struct MetronomeBeat: Sendable, Equatable {
     /// Absolute tick on the score's `division`-per-quarter timeline.
     public let tick: Int
     public let isDownbeat: Bool
+
+    public init(tick: Int, isDownbeat: Bool) {
+        self.tick = tick
+        self.isDownbeat = isDownbeat
+    }
 }
 
 extension PlaybackTimeline {

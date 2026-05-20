@@ -17,3 +17,13 @@ Example/build/
 # SoundFont samples for the example app — distributed via GitHub
 # Releases (too large for git). See README §"SoundFonts".
 Example/SheetMusicExample/Sounds/
+
+# Android Gradle module
+Android/.gradle/
+Android/build/
+Android/*/build/
+Android/*/.cxx/
+Android/local.properties
+
+# Synced from Tests/SheetMusicTests/Resources/Golden/Audio at build time
+Android/SheetMusicAudioAndroid/src/test/resources/golden/

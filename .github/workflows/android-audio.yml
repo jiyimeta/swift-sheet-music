@@ -1,0 +1,64 @@
+name: Android audio module
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'Android/**'
+      - 'Sources/SheetMusicAndroidJNI/**'
+      - 'Tests/SheetMusicTests/AndroidJNI/**'
+      - 'Tests/SheetMusicTests/Resources/Golden/Audio/**'
+      - '.github/workflows/android-audio.yml'
+  pull_request:
+    paths:
+      - 'Android/**'
+      - 'Sources/SheetMusicAndroidJNI/**'
+      - 'Tests/SheetMusicTests/AndroidJNI/**'
+      - 'Tests/SheetMusicTests/Resources/Golden/Audio/**'
+      - '.github/workflows/android-audio.yml'
+
+jobs:
+  kotlin-unit-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v3
+      - name: Run Kotlin unit tests
+        working-directory: Android
+        run: ./gradlew :SheetMusicAudioAndroid:testDebugUnitTest --info
+      - name: Upload test reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kotlin-test-reports
+          path: |
+            Android/SheetMusicAudioAndroid/build/reports/tests/
+
+  android-assemble:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: android-actions/setup-android@v3
+      - name: Install required NDK
+        run: |
+          sdkmanager "ndk;26.1.10909125"
+      - uses: gradle/actions/setup-gradle@v3
+      - name: Assemble release AAR
+        working-directory: Android
+        run: ./gradlew :SheetMusicAudioAndroid:assembleRelease
+      - name: Upload AAR artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SheetMusicAudioAndroid-aar
+          path: Android/SheetMusicAudioAndroid/build/outputs/aar/*.aar
+          retention-days: 30

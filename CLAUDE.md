@@ -39,6 +39,10 @@ SheetMusicAudio            (umbrella; → Core, Apple)
 SheetMusicPDF         (PDF export; → Core, Layout, LayoutApple, UI)
 ```
 
+(Android audio lives at `Android/SheetMusicAudioAndroid/` — a Kotlin
+Gradle module producing an .aar artifact, not a SwiftPM target.
+See its README for usage.)
+
 Internal targets (not products): `SheetMusicXMLTools`.
 
 Dev executable: `RenderPreviews`.
@@ -99,7 +103,10 @@ MusicXML / XMLTools (Phase 1) + Layout (Phase 2, via the
 falls back to a `StubFontMetricsProvider` with rectangle
 approximations). SheetMusicAudioCore is also Android-compatible
 (Foundation-only audio value types like PlaybackTimeline /
-MetronomeBeat / AudioFileFormat). UI / PDF remain Apple-only.
+MetronomeBeat / AudioFileFormat). Audio playback on Android is
+delivered as a Kotlin Gradle module at `Android/SheetMusicAudioAndroid/`
+(FluidSynth via VolcanoMobile's `.aar` + `AudioTrack` for v0).
+UI / PDF remain Apple-only.
 
 ### Prerequisites
 
@@ -178,9 +185,16 @@ Quickstart (from repo root):
 
     # 2. Copy a MuseScore file you own into the app's assets
     cp /path/to/your.mscz ~/Desktop/test.mscz
+
+    # 3. (Optional) Copy a General MIDI SoundFont to enable audio playback.
+    #    Download e.g. GeneralUserGS (https://schristiancollins.com/generaluser.php)
+    #    and save as ~/Desktop/gm.sf2. The Play button stays disabled without it.
+    cp /path/to/GeneralUserGS.sf2 ~/Desktop/gm.sf2
+
+    # 4. Stage assets into app/src/main/assets/ (copies both test.mscz + gm.sf2)
     Scripts/android-bundle-test-score.sh
 
-    # 3. Open Examples/Android/ in Android Studio and Run
+    # 5. Open Examples/Android/ in Android Studio and Run
 
 Supported ABIs: `arm64-v8a`, `x86_64`. Lowest API level: 28.
 Glyph rendering uses `StubFontMetricsProvider` rectangle approximations

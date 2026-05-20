@@ -75,6 +75,8 @@ var targets: [Target] = [
             "SheetMusicMSCX",
             "SheetMusicMusicXML",
             "SheetMusicLayout",
+            "SheetMusicMIDI",
+            "SheetMusicAudioCore",
         ] + (isAndroid ? ["CJNI"] : []),
     ),
     .testTarget(
