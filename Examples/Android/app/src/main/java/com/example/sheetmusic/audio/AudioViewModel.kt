@@ -3,11 +3,11 @@ package com.example.sheetmusic.audio
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import io.github.kiichiio.sheetmusic.audio.AndroidPlaybackEngine
-import io.github.kiichiio.sheetmusic.audio.model.LoopRange
-import io.github.kiichiio.sheetmusic.audio.model.MixerChannel
-import io.github.kiichiio.sheetmusic.audio.model.PlaybackState
-import io.github.kiichiio.sheetmusic.audio.model.ScoreCursor
+import io.github.jiyimeta.sheetmusic.audio.AndroidPlaybackEngine
+import io.github.jiyimeta.sheetmusic.audio.model.LoopRange
+import io.github.jiyimeta.sheetmusic.audio.model.MixerChannel
+import io.github.jiyimeta.sheetmusic.audio.model.PlaybackState
+import io.github.jiyimeta.sheetmusic.audio.model.ScoreCursor
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
@@ -38,7 +38,7 @@ class AudioViewModel(application: Application) : AndroidViewModel(application) {
      * Safe to call multiple times (e.g. after navigation back to the screen);
      * the engine tears down any prior state before re-preparing.
      *
-     * @param scoreHandle opaque `Long` from [com.example.sheetmusic.jni.ScoreHandle.raw].
+     * @param scoreHandle opaque `Long` from [io.github.jiyimeta.sheetmusic.ScoreHandle.raw].
      */
     fun preparePlayback(scoreHandle: Long) {
         viewModelScope.launch {

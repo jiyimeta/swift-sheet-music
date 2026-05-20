@@ -1,10 +1,11 @@
 plugins {
     id("com.android.library")
     id("org.jetbrains.kotlin.android")
+    `maven-publish`
 }
 
 android {
-    namespace = "io.github.kiichiio.sheetmusic.audio"
+    namespace = "io.github.jiyimeta.sheetmusic.audio"
     compileSdk = 35
 
     buildFeatures {
@@ -59,8 +60,10 @@ android {
     }
 }
 
-group = "io.github.kiichiio"
-version = "0.0.0-SNAPSHOT"
+group = "io.github.jiyimeta"
+version = (project.findProperty("version") as String?)
+    ?.takeIf { it != "unspecified" }
+    ?: "0.0.0-SNAPSHOT"
 
 val syncGoldenBinaries by tasks.registering(Copy::class) {
     from(rootProject.file("../Tests/SheetMusicTests/Resources/Golden/Audio"))
@@ -77,6 +80,8 @@ afterEvaluate {
 }
 
 dependencies {
+    api(project(":SheetMusicAndroid"))
+
     // FluidSynth (LGPL-2.1 dynamic-link). Vetted in Task 1; see
     // docs/superpowers/notes/2026-05-19-fluidsynth-android-vetting.md
     api("net.volcanomobile.fluidsynth-android:fluidsynth-android:2.4.6")
@@ -88,4 +93,41 @@ dependencies {
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1")
+}
+
+afterEvaluate {
+    publishing {
+        publications {
+            register<MavenPublication>("release") {
+                from(components["release"])
+                groupId = "io.github.jiyimeta"
+                artifactId = "sheet-music-audio-android"
+                pom {
+                    name.set("SheetMusic Audio Android")
+                    description.set(
+                        "FluidSynth-backed audio playback for swift-sheet-music on Android."
+                    )
+                    url.set("https://github.com/jiyimeta/swift-sheet-music")
+                    licenses {
+                        license {
+                            name.set("MIT")
+                            url.set("https://opensource.org/licenses/MIT")
+                        }
+                    }
+                }
+            }
+        }
+        repositories {
+            maven {
+                name = "GithubPackages"
+                url = uri("https://maven.pkg.github.com/jiyimeta/swift-sheet-music")
+                credentials {
+                    username = System.getenv("GITHUB_ACTOR")
+                        ?: project.findProperty("gpr.user") as String?
+                    password = System.getenv("GITHUB_TOKEN")
+                        ?: project.findProperty("gpr.token") as String?
+                }
+            }
+        }
+    }
 }

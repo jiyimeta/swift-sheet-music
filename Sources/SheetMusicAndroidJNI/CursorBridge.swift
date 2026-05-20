@@ -10,9 +10,9 @@ import SheetMusicCore
     import CJNI
     import SheetMusicLayout
 
-    @_cdecl("Java_com_example_sheetmusic_jni_SheetMusicBridge_nativeCursorFrame")
+    @_cdecl("Java_io_github_jiyimeta_sheetmusic_SheetMusicJNI_nativeCursorFrame")
     // swiftlint:disable:next identifier_name
-    public func Java_com_example_sheetmusic_jni_SheetMusicBridge_nativeCursorFrame(
+    public func Java_io_github_jiyimeta_sheetmusic_SheetMusicJNI_nativeCursorFrame(
         _ envPtr: UnsafeMutablePointer<JNIEnv?>,
         _ clazz: jclass,
         _ scoreHandle: jlong,

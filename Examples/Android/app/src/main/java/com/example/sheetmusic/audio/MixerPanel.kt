@@ -27,8 +27,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import io.github.kiichiio.sheetmusic.audio.model.GMInstrument
-import io.github.kiichiio.sheetmusic.audio.model.MixerChannel
+import io.github.jiyimeta.sheetmusic.audio.model.GMInstrument
+import io.github.jiyimeta.sheetmusic.audio.model.MixerChannel
 
 private val mutedOverlayColor = Color(0x33FF0000) // translucent red
 

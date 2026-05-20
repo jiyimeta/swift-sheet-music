@@ -65,9 +65,9 @@ extension AudioMidiBridge {
 #if os(Android)
     import CJNI
 
-    @_cdecl("Java_io_github_kiichiio_sheetmusic_audio_jni_SheetMusicAudioJNI_nativeTimelineSummary")
+    @_cdecl("Java_io_github_jiyimeta_sheetmusic_audio_jni_SheetMusicAudioJNI_nativeTimelineSummary")
     // swiftlint:disable:next identifier_name
-    public func Java_io_github_kiichiio_sheetmusic_audio_jni_SheetMusicAudioJNI_nativeTimelineSummary(
+    public func Java_io_github_jiyimeta_sheetmusic_audio_jni_SheetMusicAudioJNI_nativeTimelineSummary(
         _ envPtr: UnsafeMutablePointer<JNIEnv?>,
         _ clazz: jclass,
         _ scoreHandle: jlong,
@@ -90,9 +90,9 @@ extension AudioMidiBridge {
         return array
     }
 
-    @_cdecl("Java_io_github_kiichiio_sheetmusic_audio_jni_SheetMusicAudioJNI_nativeFrameAtTick")
+    @_cdecl("Java_io_github_jiyimeta_sheetmusic_audio_jni_SheetMusicAudioJNI_nativeFrameAtTick")
     // swiftlint:disable:next identifier_name
-    public func Java_io_github_kiichiio_sheetmusic_audio_jni_SheetMusicAudioJNI_nativeFrameAtTick(
+    public func Java_io_github_jiyimeta_sheetmusic_audio_jni_SheetMusicAudioJNI_nativeFrameAtTick(
         _ envPtr: UnsafeMutablePointer<JNIEnv?>,
         _ clazz: jclass,
         _ scoreHandle: jlong,
@@ -107,9 +107,9 @@ extension AudioMidiBridge {
         return makeJByteArray(env: envPtr, bytes: data)
     }
 
-    @_cdecl("Java_io_github_kiichiio_sheetmusic_audio_jni_SheetMusicAudioJNI_nativeFrameForCursor")
+    @_cdecl("Java_io_github_jiyimeta_sheetmusic_audio_jni_SheetMusicAudioJNI_nativeFrameForCursor")
     // swiftlint:disable:next identifier_name
-    public func Java_io_github_kiichiio_sheetmusic_audio_jni_SheetMusicAudioJNI_nativeFrameForCursor(
+    public func Java_io_github_jiyimeta_sheetmusic_audio_jni_SheetMusicAudioJNI_nativeFrameForCursor(
         _ envPtr: UnsafeMutablePointer<JNIEnv?>,
         _ clazz: jclass,
         _ scoreHandle: jlong,
@@ -128,9 +128,9 @@ extension AudioMidiBridge {
         return makeJByteArray(env: envPtr, bytes: data)
     }
 
-    @_cdecl("Java_io_github_kiichiio_sheetmusic_audio_jni_SheetMusicAudioJNI_nativeMetronomeBeats")
+    @_cdecl("Java_io_github_jiyimeta_sheetmusic_audio_jni_SheetMusicAudioJNI_nativeMetronomeBeats")
     // swiftlint:disable:next identifier_name
-    public func Java_io_github_kiichiio_sheetmusic_audio_jni_SheetMusicAudioJNI_nativeMetronomeBeats(
+    public func Java_io_github_jiyimeta_sheetmusic_audio_jni_SheetMusicAudioJNI_nativeMetronomeBeats(
         _ envPtr: UnsafeMutablePointer<JNIEnv?>,
         _ clazz: jclass,
         _ scoreHandle: jlong,
@@ -143,9 +143,9 @@ extension AudioMidiBridge {
         return makeJByteArray(env: envPtr, bytes: data)
     }
 
-    @_cdecl("Java_io_github_kiichiio_sheetmusic_audio_jni_SheetMusicAudioJNI_nativeStaffParams")
+    @_cdecl("Java_io_github_jiyimeta_sheetmusic_audio_jni_SheetMusicAudioJNI_nativeStaffParams")
     // swiftlint:disable:next identifier_name
-    public func Java_io_github_kiichiio_sheetmusic_audio_jni_SheetMusicAudioJNI_nativeStaffParams(
+    public func Java_io_github_jiyimeta_sheetmusic_audio_jni_SheetMusicAudioJNI_nativeStaffParams(
         _ envPtr: UnsafeMutablePointer<JNIEnv?>,
         _ clazz: jclass,
         _ scoreHandle: jlong,

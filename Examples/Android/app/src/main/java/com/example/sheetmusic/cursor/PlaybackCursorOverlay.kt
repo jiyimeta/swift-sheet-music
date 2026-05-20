@@ -12,9 +12,9 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.withTransform
-import com.example.sheetmusic.jni.SheetMusicBridge
-import io.github.kiichiio.sheetmusic.audio.model.ScoreCursor
-import io.github.kiichiio.sheetmusic.audio.serialization.ScoreCursorCodec
+import io.github.jiyimeta.sheetmusic.SheetMusicJNI
+import io.github.jiyimeta.sheetmusic.audio.model.ScoreCursor
+import io.github.jiyimeta.sheetmusic.audio.serialization.ScoreCursorCodec
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
 
@@ -57,7 +57,7 @@ fun PlaybackCursorOverlay(
             frame = if (cursor == null) {
                 null
             } else {
-                val bytes = SheetMusicBridge.nativeCursorFrame(
+                val bytes = SheetMusicJNI.nativeCursorFrame(
                     scoreHandle,
                     ScoreCursorCodec.encode(cursor),
                 )

@@ -27,3 +27,7 @@ Android/local.properties
 
 # Synced from Tests/SheetMusicTests/Resources/Golden/Audio at build time
 Android/SheetMusicAudioAndroid/src/test/resources/golden/
+
+# Cross-compiled native libs staged by Scripts/android-build-libs.sh.
+# Generated artifacts, not checked in.
+Android/SheetMusicAndroid/src/main/jniLibs/

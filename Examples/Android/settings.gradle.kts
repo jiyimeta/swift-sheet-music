@@ -15,11 +15,13 @@ dependencyResolutionManagement {
 rootProject.name = "SheetMusicAndroidExample"
 include(":app")
 
-// Composite build: resolves SheetMusicAudioAndroid from the sibling
-// Android/ Gradle project instead of Maven Central.
+// Composite build: resolves SheetMusicAndroid and SheetMusicAudioAndroid from
+// the sibling Android/ Gradle project instead of Maven Central.
 includeBuild("../../Android") {
     dependencySubstitution {
-        substitute(module("io.github.kiichiio:sheet-music-audio-android"))
+        substitute(module("io.github.jiyimeta:sheet-music-audio-android"))
             .using(project(":SheetMusicAudioAndroid"))
+        substitute(module("io.github.jiyimeta:sheet-music-android"))
+            .using(project(":SheetMusicAndroid"))
     }
 }

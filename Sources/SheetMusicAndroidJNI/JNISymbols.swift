@@ -11,9 +11,9 @@
 
     // MARK: - Score lifecycle
 
-    @_cdecl("Java_com_example_sheetmusic_jni_SheetMusicBridge_nativeLoadScore")
+    @_cdecl("Java_io_github_jiyimeta_sheetmusic_SheetMusicJNI_nativeLoadScore")
     // swiftlint:disable:next identifier_name
-    public func Java_com_example_sheetmusic_jni_SheetMusicBridge_nativeLoadScore(
+    public func Java_io_github_jiyimeta_sheetmusic_SheetMusicJNI_nativeLoadScore(
         _ envPtr: UnsafeMutablePointer<JNIEnv?>,
         _ clazz: jclass,
         _ byteArray: jbyteArray,
@@ -37,9 +37,9 @@
         }
     }
 
-    @_cdecl("Java_com_example_sheetmusic_jni_SheetMusicBridge_nativeReleaseScore")
+    @_cdecl("Java_io_github_jiyimeta_sheetmusic_SheetMusicJNI_nativeReleaseScore")
     // swiftlint:disable:next identifier_name
-    public func Java_com_example_sheetmusic_jni_SheetMusicBridge_nativeReleaseScore(
+    public func Java_io_github_jiyimeta_sheetmusic_SheetMusicJNI_nativeReleaseScore(
         _ envPtr: UnsafeMutablePointer<JNIEnv?>,
         _ clazz: jclass,
         _ handle: jlong,
@@ -50,9 +50,9 @@
 
     // MARK: - SMuFL font metrics
 
-    @_cdecl("Java_com_example_sheetmusic_jni_SheetMusicBridge_nativeInstallSMuFLMetrics")
+    @_cdecl("Java_io_github_jiyimeta_sheetmusic_SheetMusicJNI_nativeInstallSMuFLMetrics")
     // swiftlint:disable:next identifier_name
-    public func Java_com_example_sheetmusic_jni_SheetMusicBridge_nativeInstallSMuFLMetrics(
+    public func Java_io_github_jiyimeta_sheetmusic_SheetMusicJNI_nativeInstallSMuFLMetrics(
         _ envPtr: UnsafeMutablePointer<JNIEnv?>,
         _ clazz: jclass,
         _ byteArray: jbyteArray,
@@ -78,9 +78,9 @@
 
     // MARK: - Layout
 
-    @_cdecl("Java_com_example_sheetmusic_jni_SheetMusicBridge_nativeComputeLayout")
+    @_cdecl("Java_io_github_jiyimeta_sheetmusic_SheetMusicJNI_nativeComputeLayout")
     // swiftlint:disable:next identifier_name
-    public func Java_com_example_sheetmusic_jni_SheetMusicBridge_nativeComputeLayout(
+    public func Java_io_github_jiyimeta_sheetmusic_SheetMusicJNI_nativeComputeLayout(
         _ envPtr: UnsafeMutablePointer<JNIEnv?>,
         _ clazz: jclass,
         _ scoreHandle: jlong,

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Build SheetMusicJNI for each enabled Android ABI and stage .so files
-# (plus Swift runtime stubs) into Examples/Android/app/src/main/jniLibs/.
+# (plus Swift runtime stubs) into Android/SheetMusicAndroid/src/main/jniLibs/.
 set -euo pipefail
 
 : "${TOOLCHAINS:=org.swift.632202605101a}"
@@ -8,7 +8,7 @@ export TOOLCHAINS
 export SWIFT_SHEET_MUSIC_ANDROID=1
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd -P)"
-JNI_DIR="$ROOT/Examples/Android/app/src/main/jniLibs"
+JNI_DIR="$ROOT/Android/SheetMusicAndroid/src/main/jniLibs"
 SDK_BUNDLE="$HOME/Library/org.swift.swiftpm/swift-sdks/swift-6.3.2-RELEASE_android.artifactbundle"
 
 # Actual layout (Swift 6.3.2 Android SDK, verified 2026-05-19):

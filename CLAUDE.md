@@ -163,6 +163,30 @@ If the `ndk-sysroot` symlink under the artifact bundle is missing, the
 cross-compile fails with `'semaphore.h' file not found` /
 `could not build C module 'SwiftOverlayShims'`.
 
+### Distribution
+
+The Android libraries are published to GitHub Packages on `v*` tag
+push via `.github/workflows/android-publish.yml`. Two artifacts:
+
+- `io.github.jiyimeta:sheet-music-android:<v>` — JNI bridge + bundled
+  `libSheetMusicJNI.so` (the new home for what used to be the
+  example-app's `com.example.sheetmusic.jni` package).
+- `io.github.jiyimeta:sheet-music-audio-android:<v>` — FluidSynth +
+  Oboe audio playback. Has `api` dep on `sheet-music-android`.
+
+Consumers need a GitHub PAT with `read:packages`. See
+`Android/SheetMusicAndroid/README.md` for the consumer-side
+`settings.gradle.kts` recipe.
+
+To cut a release locally without CI:
+
+    Scripts/android-build-libs.sh
+    GITHUB_ACTOR=<user> GITHUB_TOKEN=<pat> ./Android/gradlew \
+        -Pversion=0.1.0 \
+        -p Android \
+        :SheetMusicAndroid:publishReleasePublicationToGithubPackagesRepository \
+        :SheetMusicAudioAndroid:publishReleasePublicationToGithubPackagesRepository
+
 ### Format support on Android
 
 `.mscz` and `.mxl` are fully supported on Android via the in-house
@@ -194,7 +218,7 @@ Phase 4 follow-up.
 
 Quickstart (from repo root):
 
-    # 1. Build native libs into Examples/Android/app/src/main/jniLibs/
+    # 1. Build native libs into Android/SheetMusicAndroid/src/main/jniLibs/
     Scripts/android-build-libs.sh
 
     # 2. Copy a MuseScore file you own into the app's assets
