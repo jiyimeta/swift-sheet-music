@@ -52,6 +52,11 @@ class PlayerDriverTest {
             calls += "playerGetCurrentTick($handle)"
             return 999L
         }
+
+        override fun playerSetTempo(handle: Long, type: Int, value: Double): Int {
+            calls += "playerSetTempo($handle,$type,$value)"
+            return 0
+        }
     }
 
     private val synthHandle = 1L
@@ -181,5 +186,33 @@ class PlayerDriverTest {
         assertEquals(-1, driver.seekTick(0L))
         assertEquals(-1, driver.join())
         assertEquals(0L, driver.currentTick)
+    }
+
+    @Test
+    fun setTempoForwardsScaleToNativeBindings() {
+        val setTempoCalls = mutableListOf<Triple<Long, Int, Double>>()
+        val bindings = object : PlayerDriver.NativeBindings {
+            override fun newPlayer(synthHandle: Long): Long = 7L
+            override fun deletePlayer(handle: Long) {}
+            override fun playerAddMem(handle: Long, bytes: ByteArray): Int = 0
+            override fun playerPlay(handle: Long): Int = 0
+            override fun playerStop(handle: Long): Int = 0
+            override fun playerJoin(handle: Long): Int = 0
+            override fun playerSeek(handle: Long, tick: Long): Int = 0
+            override fun playerGetCurrentTick(handle: Long): Long = 0
+            override fun playerSetTempo(handle: Long, type: Int, value: Double): Int {
+                setTempoCalls += Triple(handle, type, value)
+                return 0
+            }
+        }
+        val driver = PlayerDriver(attachedSynthHandle = 0L, nativeBindings = bindings)
+        driver.load(byteArrayOf())
+        val rc = driver.setTempo(1.5)
+        assertEquals(0, rc)
+        assertEquals(1, setTempoCalls.size)
+        val (handle, type, value) = setTempoCalls.first()
+        assertEquals(7L, handle)
+        assertEquals(0, type)            // FLUID_PLAYER_TEMPO_INTERNAL
+        assertEquals(1.5, value, 0.0001)
     }
 }

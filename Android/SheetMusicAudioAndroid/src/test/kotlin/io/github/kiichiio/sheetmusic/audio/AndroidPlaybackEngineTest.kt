@@ -100,6 +100,7 @@ private class RecordingBindings : PlayerDriver.NativeBindings {
     override fun playerJoin(handle: Long): Int { joinCalls += Unit; return 0 }
     override fun playerSeek(handle: Long, tick: Long): Int { seekTicks += tick; tickToReturn = tick; return 0 }
     override fun playerGetCurrentTick(handle: Long): Long = tickToReturn
+    override fun playerSetTempo(handle: Long, type: Int, value: Double): Int = 0
 }
 
 // ── Engine factory (top-level, no auto-registration) ────────────────────────

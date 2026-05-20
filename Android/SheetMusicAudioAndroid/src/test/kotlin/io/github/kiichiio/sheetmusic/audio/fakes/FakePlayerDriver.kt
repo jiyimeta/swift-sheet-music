@@ -33,6 +33,11 @@ internal object FakePlayerDriver {
             seekTicks += tick; tickToReturn = tick; return 0
         }
         override fun playerGetCurrentTick(handle: Long): Long = tickToReturn
+        val setTempoCalls = mutableListOf<Pair<Int, Double>>()
+        override fun playerSetTempo(handle: Long, type: Int, value: Double): Int {
+            setTempoCalls += type to value
+            return 0
+        }
     }
 
     internal fun create(): Pair<PlayerDriver, RecordingBindings> {
