@@ -5,43 +5,39 @@ import SheetMusicAudioCore
 import SheetMusicCore
 import SheetMusicMIDI
 
-/// Audio playback for `Score`s, backed by `AVAudioEngine` +
-/// per-staff `AVAudioUnitMIDIInstrument`s (AUMIDISynth).
+/// Audio playback for `Score`s, backed by `AVAudioEngine` and a
+/// single multi-timbral `AVAudioUnitMIDIInstrument` (AUMIDISynth).
 ///
-/// Each staff in `prepare(score:)` gets its own MIDISynth instance,
-/// with the matching SoundFont preset loaded via the supplied
-/// `SoundfontResolver`. Routing one synth per staff (rather than
-/// one per unique `(bank, program)` pair) gives the host control
-/// over per-staff volume / pan / mute knobs in a future revision —
-/// the routing graph already has the granularity baked in.
+/// Every staff in `prepare(score:)` is addressed by the MIDI channel
+/// the renderer assigns it (`MidiRenderer.staffChannels(score:)`).
+/// The full General MIDI SoundFont returned by `SoundfontResolver`
+/// is loaded once into the shared synth, and every (channel, program)
+/// combination is pre-loaded into the AU's preset cache so runtime
+/// program changes from the mixer hit the cache instead of triggering
+/// an unreliable on-demand SF2 read.
 ///
 /// AUMIDISynth (`kAudioUnitSubType_MIDISynth`) is used in preference
 /// to `AVAudioUnitSampler` because AUSampler ignores RPN 0,0 (Pitch
 /// Bend Sensitivity) — its bend range is hard-coded to ±2 semitones,
 /// which audibly truncates portamento glissandi we render at ±12.
 /// See `MIDISynthBuilder` for the wrapper that builds and configures
-/// each instrument.
-///
-/// Phase 1 only exposes `playPreview(...)` (a brief noteOn/Off pair
-/// triggered when a single note is selected). Timeline-driven
-/// playback for the entire score lands in a later phase.
+/// the instrument.
 @MainActor
 @Observable
 public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     private let resolver: SoundfontResolver
     private let engine = AVAudioEngine()
-    /// AUMIDISynth per staff index. Re-built on each call to
-    /// `prepare(score:)`.
-    private var staffSamplers: [Int: AVAudioUnitMIDIInstrument] = [:]
-    /// SoundFont-load parameters cached per staff so the mixer's
-    /// program picker can swap the GM patch on a sampler without
-    /// having to consult the `Score` again.
-    private var staffLoadParams: [Int: StaffLoadParams] = [:]
-
-    struct StaffLoadParams {
-        var bankLSB: UInt8
-        var isDrums: Bool
-    }
+    /// The shared multi-timbral AUMIDISynth. Rebuilt on every
+    /// `prepare(score:)`. `internal` so the mixer / export extensions
+    /// in sibling files can read it directly.
+    var synth: AVAudioUnitMIDIInstrument?
+    /// Renderer-assigned MIDI channel per flat staff index. Used to
+    /// address each staff's notes / mixer state on the shared synth.
+    private var staffMIDIChannels: [Int: UInt8] = [:]
+    /// Drum-staff flag per flat staff index, cached so the mixer can
+    /// decide whether to expose a GM-program picker (drum-kit parts
+    /// hide it because the program slot is ignored on MIDI channel 9).
+    private var staffIsDrum: [Int: Bool] = [:]
 
     /// Used to silence pending preview note-offs when the engine is
     /// torn down or a new score is prepared.
@@ -155,8 +151,41 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
 
     // MARK: Internal accessors for `PlaybackEngine+Mixer`
 
-    func staffSampler(at idx: Int) -> AVAudioUnitMIDIInstrument? {
-        staffSamplers[idx]
+    func midiChannel(forStaff idx: Int) -> UInt8? {
+        staffMIDIChannels[idx]
+    }
+
+    func isDrumStaff(_ idx: Int) -> Bool {
+        staffIsDrum[idx] ?? false
+    }
+
+    /// Re-send program-change on each staff's primary channel using
+    /// the program the mixer currently advertises. Called right after
+    /// `sequencer.start()` so the SMF's tick-0 programChange events
+    /// have already fired and our re-apply wins the race; also called
+    /// after the user changes a program from the picker while the
+    /// engine was paused, since the queued event from that picker
+    /// click can lose to the SMF on resume.
+    func reapplyMixerPrograms() {
+        guard let synth else { return }
+        for channel in mixerChannels {
+            guard case let .staff(idx) = channel.id,
+                  let program = channel.program,
+                  let midiCh = staffMIDIChannels[idx],
+                  midiCh != 9
+            else { continue }
+            // Same dance as `loadProgram`: preload to populate the
+            // channel's preset slot, then plain PC to select it.
+            MIDISynthBuilder.preloadPreset(
+                into: synth,
+                bankMSB: 0, bankLSB: 0, program: program,
+                onChannel: midiCh,
+            )
+            let pcStatus = UInt32(0xC0) | UInt32(midiCh & 0x0F)
+            _ = MusicDeviceMIDIEvent(
+                synth.audioUnit, pcStatus, UInt32(program), 0, 0,
+            )
+        }
     }
 
     func setMetronomeEnabled(_ enabled: Bool) {
@@ -177,29 +206,31 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         change(&mixerChannels[idx])
     }
 
-    /// Reload the staff `idx` synth with a new GM `program`,
-    /// keeping the staff's existing bank / drumset choice. Does
-    /// nothing if the synth isn't built yet (engine never
-    /// prepared) or the resolver returns no SoundFont URL — the
-    /// existing patch keeps playing in that case.
+    /// Swap the GM program on `idx`'s output. AUMIDISynth's preset
+    /// cache holds only one slot per channel, so a plain runtime
+    /// program-change to a patch the channel has never seen forces an
+    /// unreliable on-demand SF2 read — some patches end up silent.
+    /// And a `preloadPreset` (EnablePreload ON → CC/PC → OFF) alone
+    /// loads the preset into the slot but doesn't actually *select* it
+    /// as the channel's current program. We need both steps:
+    ///   1. `preloadPreset` to populate the channel's preset slot
+    ///   2. a plain `MusicDeviceMIDIEvent` programChange (outside the
+    ///      preload window) to select the now-cached preset
+    /// No-op if the engine isn't prepared, or for drum staves (the
+    /// program byte is ignored on MIDI channel 9).
     func loadProgram(forStaff idx: Int, program: UInt8) {
-        guard
-            let instrument = staffSamplers[idx],
-            let params = staffLoadParams[idx],
-            let url = resolver.soundfontURL(
-                forBank: params.bankLSB, program: program, isDrums: params.isDrums,
-            )
-            ?? resolver.defaultGMSoundfontURL
+        guard let synth,
+              let midiCh = staffMIDIChannels[idx],
+              midiCh != 9
         else { return }
-        // MIDISynth uses standard MIDI bank-select semantics. Drum
-        // selection is resolved via MIDI channel 9 at play time, not
-        // via a magic bank-MSB byte (unlike AUSampler).
-        try? MIDISynthBuilder.loadSoundFont(
-            into: instrument,
-            url: url,
-            bankMSB: 0,
-            bankLSB: params.bankLSB,
-            program: program,
+        MIDISynthBuilder.preloadPreset(
+            into: synth,
+            bankMSB: 0, bankLSB: 0, program: program,
+            onChannel: midiCh,
+        )
+        let pcStatus = UInt32(0xC0) | UInt32(midiCh & 0x0F)
+        _ = MusicDeviceMIDIEvent(
+            synth.audioUnit, pcStatus, UInt32(program), 0, 0,
         )
     }
 
@@ -241,13 +272,14 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
             resolver.soundfontURL(forBank: 0, program: 0, isDrums: true)
             ?? resolver.defaultGMSoundfontURL
         metronome.prepare(soundfontURL: metronomeURL)
-        // Tear down any samplers from a previous score.
-        for sampler in staffSamplers.values {
-            engine.disconnectNodeOutput(sampler)
-            engine.detach(sampler)
+        // Tear down the synth from a previous score, if any.
+        if let oldSynth = synth {
+            engine.disconnectNodeOutput(oldSynth)
+            engine.detach(oldSynth)
+            synth = nil
         }
-        staffSamplers.removeAll()
-        staffLoadParams.removeAll()
+        staffMIDIChannels.removeAll()
+        staffIsDrum.removeAll()
 
         #if os(iOS) || os(tvOS) || os(watchOS)
             let session = AVAudioSession.sharedInstance()
@@ -255,56 +287,7 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
             try session.setActive(true, options: [])
         #endif
 
-        for (idx, entry) in score.allStaves.enumerated() {
-            let part = score.part(at: entry.address)
-            let channel = part?.instrument.channels.first
-                ?? InstrumentChannel()
-            let isDrums = part?.instrument.useDrumset == true
-            let bank = UInt8(clamping: channel.bank)
-            let program = UInt8(clamping: channel.program)
-
-            let url = resolver.soundfontURL(
-                forBank: bank, program: program, isDrums: isDrums,
-            )
-                ?? resolver.defaultGMSoundfontURL
-
-            let instrument = MIDISynthBuilder.make()
-            engine.attach(instrument)
-            engine.connect(
-                instrument,
-                to: engine.mainMixerNode,
-                format: nil,
-            )
-            if let url {
-                // Don't fail the whole `prepare` if one staff's
-                // soundfont is missing or malformed; leave the
-                // synth attached so the routing graph stays
-                // intact and that staff is just silent.
-                try? MIDISynthBuilder.loadSoundFont(
-                    into: instrument,
-                    url: url,
-                    bankMSB: 0,
-                    bankLSB: bank,
-                    program: program,
-                )
-            }
-            // The renderer emits pitch-bend ramps assuming RPN 0,0
-            // (Pitch Bend Sensitivity) = 12 semitones (see
-            // `MidiRenderer+Header`'s RPN block). Pre-configure every
-            // melodic channel here so the very first portamento
-            // glissando on a fresh score plays at the intended bend
-            // width — the SMF's tick-0 RPN setup loses a race against
-            // pitch-bend events at later ticks on first play.
-            for ch: UInt8 in 0 ..< 16 where ch != 9 {
-                MIDISynthBuilder.setPitchBendSensitivity(
-                    into: instrument, semitones: 12, onChannel: ch,
-                )
-            }
-            staffSamplers[idx] = instrument
-            staffLoadParams[idx] = StaffLoadParams(
-                bankLSB: bank, isDrums: isDrums,
-            )
-        }
+        try prepareSynth(score: score)
 
         rebuildMixerChannels(for: score)
         applyMixerState()
@@ -314,11 +297,56 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         }
     }
 
-    /// Briefly play the note identified by `noteID` on its staff's
-    /// sampler. Used by the host when the user clicks / taps a single
-    /// note — mirrors MuseScore's "preview on selection" behavior.
-    /// Calls are non-blocking; the matching note-off is scheduled on
-    /// a high-QoS background queue.
+    /// Build the shared multi-timbral AUMIDISynth, load the full GM
+    /// SoundFont once, pre-cache every (channel, program) preset, and
+    /// configure per-channel pitch-bend sensitivity to match the
+    /// renderer's ±12-semitone portamento output.
+    private func prepareSynth(score: Score) throws {
+        let url = resolver.defaultGMSoundfontURL
+        let channels = MidiRenderer.staffChannels(score: score)
+
+        let instrument = MIDISynthBuilder.make()
+        engine.attach(instrument)
+        engine.connect(
+            instrument, to: engine.mainMixerNode, format: nil,
+        )
+        if let url {
+            // Load the SF2 with (0, 0) as the seed preset so the file
+            // is parsed and resident in the AU. Per-channel presets
+            // load on-demand at sequencer start (via the SMF's tick-0
+            // programChange events, which go through the render thread
+            // and trigger AUMIDISynth's load machinery reliably) and
+            // again whenever the user picks a new program (via
+            // `loadProgram` → `preloadPreset`).
+            try? MIDISynthBuilder.loadSoundFont(
+                into: instrument, url: url,
+                bankMSB: 0, bankLSB: 0, program: 0,
+            )
+        }
+        for ch: UInt8 in 0 ..< 16 where ch != 9 {
+            MIDISynthBuilder.setPitchBendSensitivity(
+                into: instrument, semitones: 12, onChannel: ch,
+            )
+        }
+        synth = instrument
+
+        for (idx, entry) in score.allStaves.enumerated() {
+            let part = score.part(at: entry.address)
+            let isDrums = part?.instrument.useDrumset == true
+            let midiCh = UInt8(
+                clamping: idx < channels.count
+                    ? channels[idx] : 0,
+            )
+            staffMIDIChannels[idx] = midiCh
+            staffIsDrum[idx] = isDrums
+        }
+    }
+
+    /// Briefly play the note identified by `noteID` on the shared
+    /// synth using the staff's assigned MIDI channel. Used by the host
+    /// when the user clicks / taps a single note — mirrors MuseScore's
+    /// "preview on selection" behavior. Calls are non-blocking; the
+    /// matching note-off is scheduled on a high-QoS background queue.
     public func playPreview(
         noteID: NoteID,
         in score: Score,
@@ -330,15 +358,16 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         let flatIdx = score.allStaves.firstIndex(where: {
             $0.address == noteID.staff
         }) ?? -1
-        guard let instrument = staffSamplers[flatIdx]
+        guard let instrument = synth,
+              let midiChannel = staffMIDIChannels[flatIdx]
         else { return }
         instrument.startNote(
-            pitch, withVelocity: velocity, onChannel: 0,
+            pitch, withVelocity: velocity, onChannel: midiChannel,
         )
         previewQueue.asyncAfter(
             deadline: .now() + duration,
         ) { [weak instrument] in
-            instrument?.stopNote(pitch, onChannel: 0)
+            instrument?.stopNote(pitch, onChannel: midiChannel)
         }
     }
 
@@ -422,21 +451,29 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
             }
             // Re-assert pitch-bend sensitivity NOW that the engine is
             // running, the sequencer is loaded, and tracks are routed
-            // to each staff's MIDISynth — but BEFORE the sequencer
-            // fires its tick-0 events. Without this the SMF's own
-            // RPN setup loses a race with the first portamento on
-            // the very first play after `prepare(score:)`, leaving
-            // the bend clamped at the AU's ±2-semitone default.
-            // See `MIDISynthBuilder.setPitchBendSensitivity` for
-            // why the C-API path matters here.
-            for instrument in staffSamplers.values {
+            // to the shared synth — but BEFORE the sequencer fires its
+            // tick-0 events. Without this the SMF's own RPN setup loses
+            // a race with the first portamento on the very first play
+            // after `prepare(score:)`, leaving the bend clamped at the
+            // AU's ±2-semitone default. See
+            // `MIDISynthBuilder.setPitchBendSensitivity` for why the
+            // C-API path matters.
+            if let synth {
                 for ch: UInt8 in 0 ..< 16 where ch != 9 {
                     MIDISynthBuilder.setPitchBendSensitivity(
-                        into: instrument, semitones: 12, onChannel: ch,
+                        into: synth, semitones: 12, onChannel: ch,
                     )
                 }
             }
             try sequencer.start()
+            // The SMF's tick-0 events fire on every start / seek-to-0
+            // and override anything the mixer set previously. Re-apply
+            // program selection + volume / mute / solo here so user
+            // mixer choices survive replays and also pause→change→play
+            // sequences (where the picker fires while the render thread
+            // isn't running).
+            reapplyMixerPrograms()
+            applyMixerState()
             state = .playing
             startCursorTimer()
         } catch {
@@ -658,6 +695,15 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// The renderer itself is left alone so SMF export keeps its
     /// MuseScore-equivalent byte stream — these compensations only
     /// apply to the bytes handed to `AVAudioSequencer`.
+    ///
+    /// `programChange` is intentionally *kept* in the SMF. Empirically
+    /// that's the only reliable way to program AUMIDISynth's
+    /// per-channel state for the alternate channel flavours the
+    /// renderer assigns (e.g. strings' arco / pizz). Tradeoff: the
+    /// SMF re-fires those tick-0 program changes on every play /
+    /// seek-to-start, clobbering mixer-driven program overrides —
+    /// `play()` re-applies the mixer state after `sequencer.start()`
+    /// to win the race deterministically.
     static func postProcessForMIDISynth(midi: inout MidiFile) {
         for trackIdx in midi.tracks.indices {
             var out: [TimedMidiEvent] = []
@@ -699,26 +745,27 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         Self.postProcessForMIDISynth(midi: &midi)
         let bytes = try MidiWriter.write(midi)
         try sequencer.load(from: bytes, options: [])
-        // Route each track to its matching staff sampler. The
-        // metronome track is appended last and is picked up by
+        // Every staff track routes to the shared multi-timbral synth;
+        // the renderer's per-track channel byte does the dispatch. The
+        // metronome track (appended last) is picked up by
         // `metronome.attach(to:)` below.
-        for (i, track) in sequencer.tracks.enumerated() {
-            if let instrument = staffSamplers[i] {
-                track.destinationAudioUnit = instrument
+        for track in sequencer.tracks {
+            if let synth {
+                track.destinationAudioUnit = synth
             }
         }
         metronome.attach(to: sequencer)
         sequencer.rate = pendingRate
         sequencer.prepareToPlay()
         // Assert pitch-bend sensitivity once the sequencer knows its
-        // destination AUs but before any play. This pairs with the
+        // destination AU but before any play. This pairs with the
         // matching call in `play(...)` — the redundancy is defensive,
         // since which side wins the race against tick-0 SMF events
         // varies between fresh-build vs. cached-sequencer paths.
-        for instrument in staffSamplers.values {
+        if let synth {
             for ch: UInt8 in 0 ..< 16 where ch != 9 {
                 MIDISynthBuilder.setPitchBendSensitivity(
-                    into: instrument, semitones: 12, onChannel: ch,
+                    into: synth, semitones: 12, onChannel: ch,
                 )
             }
         }
@@ -807,11 +854,13 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         clearLoop()
         sequencer = nil
         sequencerScore = nil
-        for sampler in staffSamplers.values {
-            engine.disconnectNodeOutput(sampler)
-            engine.detach(sampler)
+        if let synth {
+            engine.disconnectNodeOutput(synth)
+            engine.detach(synth)
+            self.synth = nil
         }
-        staffSamplers.removeAll()
+        staffMIDIChannels.removeAll()
+        staffIsDrum.removeAll()
         metronome.teardown()
         if engine.isRunning {
             engine.stop()
