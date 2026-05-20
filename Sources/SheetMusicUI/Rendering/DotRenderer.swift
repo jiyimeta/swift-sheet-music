@@ -19,16 +19,15 @@ enum DotRenderer {
         metrics: StaffMetrics,
     ) {
         guard count > 0 else { return }
-        let radius = metrics.sp * 0.22
-        // First dot sits about 1 sp right of the notehead's center.
-        let firstOffset = metrics.sp * 1.15
-        let spacing = metrics.sp * 0.6
-        let y = onStaffLine ? origin.y - metrics.sp / 2 : origin.y
-        for i in 0 ..< count {
-            let x = origin.x + firstOffset + CGFloat(i) * spacing
+        let radius = DotGeometry.radiusSp * metrics.sp
+        let centers = DotGeometry.centers(
+            after: origin, count: count,
+            onStaffLine: onStaffLine, sp: metrics.sp,
+        )
+        for center in centers {
             let rect = CGRect(
-                x: x - radius,
-                y: y - radius,
+                x: center.x - radius,
+                y: center.y - radius,
                 width: radius * 2,
                 height: radius * 2,
             )

@@ -35,6 +35,17 @@ public enum DrawCommand: Sendable, Equatable {
         size: Double,
         fontId: DrawProgram.FontID,
     )
+    /// Set the active paint colour as a packed ARGB value
+    /// (0xAARRGGBB). Affects every subsequent stroke / fill /
+    /// glyph / text until the next `.setColor`.
+    case setColor(argb: UInt32)
+    /// Cubic Bezier curve from the current path point to (x, y) with
+    /// control points (cx1, cy1) and (cx2, cy2).
+    case cubicTo(
+        cx1: Double, cy1: Double,
+        cx2: Double, cy2: Double,
+        x: Double, y: Double,
+    )
 }
 
 public enum DrawProgramEncoder {
@@ -109,6 +120,17 @@ public enum DrawProgramEncoder {
             w.append(y)
             w.append(size)
             w.append(fontId.rawValue)
+        case let .setColor(argb):
+            w.append(DrawProgram.Opcode.setColor.rawValue)
+            w.append(argb)
+        case let .cubicTo(cx1, cy1, cx2, cy2, x, y):
+            w.append(DrawProgram.Opcode.cubicTo.rawValue)
+            w.append(cx1)
+            w.append(cy1)
+            w.append(cx2)
+            w.append(cy2)
+            w.append(x)
+            w.append(y)
         }
     }
 }

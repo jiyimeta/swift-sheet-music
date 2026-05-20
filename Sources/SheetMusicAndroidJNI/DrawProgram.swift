@@ -5,7 +5,9 @@ import Foundation
 /// decoder must agree on the magic + version; mismatches are fail-fast.
 public enum DrawProgram {
     public static let magic: UInt32 = 0x534D_4450 // "SMDP"
-    public static let version: UInt32 = 1
+    /// v3 adds the `cubicTo` opcode (0x08). v2 added `setColor` (0x07).
+    /// Older decoders must reject newer payloads.
+    public static let version: UInt32 = 3
 
     public enum Opcode: UInt8 {
         case moveTo = 0x01
@@ -14,6 +16,15 @@ public enum DrawProgram {
         case fillRect = 0x04
         case glyph = 0x05
         case text = 0x06
+        /// Sets the active paint colour (ARGB, 0xAARRGGBB). All draw
+        /// commands until the next `setColor` use this colour; the
+        /// initial colour is opaque black (0xFF000000).
+        case setColor = 0x07
+        /// Cubic Bezier curve from the current point to (x, y) with
+        /// control points (cx1, cy1) and (cx2, cy2). Used for tie /
+        /// slur arcs so Compose can render a true cubic with native
+        /// anti-aliasing instead of a many-segment polyline.
+        case cubicTo = 0x08
     }
 
     public enum FontID: UInt8, Sendable {

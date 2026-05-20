@@ -13,10 +13,6 @@ import SwiftUI
 /// their literal pt size.
 @available(macOS 15.0, *)
 enum ResolvedTextStyle {
-    /// Reference spatium in points used by `engraving/style/styledef.cpp`
-    /// for its `Sid::*FontSize` defaults.
-    static let referenceSpatiumInPoints: CGFloat = 5.0
-
     /// Resolve `style + overrides` to a renderable description.
     static func resolve(
         _ style: TextStyleType,
@@ -24,11 +20,9 @@ enum ResolvedTextStyle {
         metrics: StaffMetrics,
     ) -> Resolution {
         let defaults = overrides.resolved(against: style)
-        let pointSize = if defaults.spatiumDependent {
-            CGFloat(defaults.size) * metrics.sp / referenceSpatiumInPoints
-        } else {
-            CGFloat(defaults.size)
-        }
+        let pointSize = TextRoleStyle.fontSize(
+            defaults: defaults, sp: metrics.sp,
+        )
         return Resolution(
             face: defaults.face,
             pointSize: pointSize,

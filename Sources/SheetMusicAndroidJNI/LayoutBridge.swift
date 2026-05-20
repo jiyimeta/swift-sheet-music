@@ -38,24 +38,6 @@ public enum LayoutBridge {
     /// Points to millimetres: 1 pt = 25.4 / 72 mm.
     private static let ptToMM = 25.4 / 72.0
 
-    // MARK: - SMuFL codepoints (subset)
-
-    private enum SMuFL {
-        static let gClef: UInt32 = 0xE050
-        static let cClef: UInt32 = 0xE05C
-        static let fClef: UInt32 = 0xE062
-        static let noteheadBlack: UInt32 = 0xE0A4
-        static let noteheadHalf: UInt32 = 0xE0A3
-        static let noteheadWhole: UInt32 = 0xE0A2
-        static let restWhole: UInt32 = 0xE4E3
-        static let restHalf: UInt32 = 0xE4E4
-        static let restQuarter: UInt32 = 0xE4E5
-        static let restEighth: UInt32 = 0xE4E6
-        static let timeSig0: UInt32 = 0xE080
-        static let keyFlat: UInt32 = 0xE260
-        static let keySharp: UInt32 = 0xE262
-    }
-
     // MARK: - Public API
 
     /// Lay out `score` and encode the result as a draw-program payload.
@@ -98,28 +80,35 @@ public enum LayoutBridge {
     private static func buildCommands(layout: LayoutDocument) -> [DrawCommand] {
         var out: [DrawCommand] = []
         let metrics = layout.metrics
-        // Staff line spacing in pt.
-        let sp = Double(metrics.sp)
+        let context = MetricsContext(
+            sp: Double(metrics.sp),
+            glyphSize: Double(metrics.glyphFontSize),
+            defaultStemLength: Double(metrics.defaultStemLength),
+            stemThickness: Double(metrics.stemThickness),
+        )
         let staffLineThickness = Double(metrics.staffLineThickness)
-        let glyphSize = Double(metrics.glyphFontSize)
 
         for system in layout.systems {
             let sysOriginX = Double(system.origin.x)
             let sysOriginY = Double(system.origin.y)
-            let sysWidth = Double(system.size.width)
+            // Stop the staff lines at the rightmost stroke of the system
+            // terminal barline so the staff doesn't trail past it through
+            // the per-measure gutter.
+            let endX = Double(BarLineGeometry.staffLineEndX(for: system))
 
             // ── 1. Staff lines ──────────────────────────────────────────────
             for staffOrigin in system.staffOrigins {
                 let ox = Double(staffOrigin.x) + sysOriginX
                 let oy = Double(staffOrigin.y) + sysOriginY
+                let rightX = endX + sysOriginX
                 for line in 0 ..< 5 {
-                    let y = oy + Double(line) * sp
+                    let y = oy + Double(line) * context.sp
                     out.append(.moveTo(
                         x: ox * ptToMM,
                         y: y * ptToMM,
                     ))
                     out.append(.lineTo(
-                        x: (ox + sysWidth) * ptToMM,
+                        x: rightX * ptToMM,
                         y: y * ptToMM,
                     ))
                     out.append(.stroke(width: staffLineThickness * ptToMM))
@@ -136,14 +125,38 @@ public enum LayoutBridge {
                         element,
                         measureOriginX: mox,
                         measureOriginY: moy,
-                        sp: sp,
-                        glyphSize: glyphSize,
+                        metrics: context,
                         into: &out,
                     )
                 }
             }
+
+            // ── 3. System spanners ──────────────────────────────────────────
+            // Tie arcs, slurs, hairpins, etc. that attachTies/spanners
+            // hang off the system after the per-measure walk. Their
+            // origins are in system-local coords, so pass sysOriginX/Y
+            // as the "measure" origin and zero-relative element offsets
+            // will resolve correctly.
+            for element in system.spanners {
+                encodeElement(
+                    element,
+                    measureOriginX: sysOriginX,
+                    measureOriginY: sysOriginY,
+                    metrics: context,
+                    into: &out,
+                )
+            }
         }
         return out
+    }
+
+    /// Scalar metrics passed down to per-element encoders so they don't
+    /// each re-derive sp / glyph size / stem geometry from `StaffMetrics`.
+    struct MetricsContext {
+        let sp: Double
+        let glyphSize: Double
+        let defaultStemLength: Double
+        let stemThickness: Double
     }
 
     // MARK: - Per-element encoder
@@ -153,204 +166,221 @@ public enum LayoutBridge {
         _ element: LayoutElement,
         measureOriginX mox: Double,
         measureOriginY moy: Double,
-        sp: Double,
-        glyphSize: Double,
+        metrics ctx: MetricsContext,
         into out: inout [DrawCommand],
     ) {
+        let sp = ctx.sp
+        let glyphSize = ctx.glyphSize
         switch element {
         case let .clef(rawType, origin, _):
-            let cp = clefCodepoint(rawType: rawType)
-            out.append(.glyph(
-                codepoint: cp,
-                x: (mox + Double(origin.x)) * ptToMM,
-                y: (moy + Double(origin.y)) * ptToMM,
-                size: glyphSize * ptToMM,
-                fontId: .smufl,
-            ))
+            let (codepoint, yOffsetSp) = ClefGlyph.glyph(
+                for: NotatedClef(rawType: rawType),
+            )
+            emitCenterAnchoredGlyph(
+                codepoint: codepoint,
+                cxPt: mox + Double(origin.x),
+                cyPt: moy + Double(origin.y) + Double(yOffsetSp) * sp,
+                sizePt: glyphSize,
+                into: &out,
+            )
 
         case let .timeSignature(numerator, denominator, origin):
-            let ox = mox + Double(origin.x)
-            let oy = moy + Double(origin.y)
-            // Numerator above, denominator below — each offset by sp.
-            for (idx, digit) in [numerator, denominator].enumerated() {
-                let cp = SMuFL.timeSig0 + UInt32(digit)
-                out.append(.glyph(
-                    codepoint: cp,
-                    x: ox * ptToMM,
-                    y: (oy + Double(idx) * sp * 2) * ptToMM,
-                    size: glyphSize * ptToMM,
-                    fontId: .smufl,
-                ))
-            }
+            encodeTimeSignature(
+                numerator: numerator,
+                denominator: denominator,
+                originX: mox + Double(origin.x),
+                originY: moy + Double(origin.y),
+                sp: sp,
+                glyphSize: glyphSize,
+                into: &out,
+            )
 
         case let .keySignature(sharps, flats, origin):
-            let ox = mox + Double(origin.x)
-            let oy = moy + Double(origin.y)
-            if sharps > 0 {
-                for i in 0 ..< sharps {
-                    out.append(.glyph(
-                        codepoint: SMuFL.keySharp,
-                        x: (ox + Double(i) * sp * 0.7) * ptToMM,
-                        y: oy * ptToMM,
-                        size: glyphSize * ptToMM,
-                        fontId: .smufl,
-                    ))
-                }
-            } else if flats > 0 {
-                for i in 0 ..< flats {
-                    out.append(.glyph(
-                        codepoint: SMuFL.keyFlat,
-                        x: (ox + Double(i) * sp * 0.7) * ptToMM,
-                        y: oy * ptToMM,
-                        size: glyphSize * ptToMM,
-                        fontId: .smufl,
-                    ))
-                }
-            }
+            encodeKeySignature(
+                sharps: sharps,
+                flats: flats,
+                originX: mox + Double(origin.x),
+                originY: moy + Double(origin.y),
+                sp: sp,
+                glyphSize: glyphSize,
+                into: &out,
+            )
 
-        case let .chord(notes, duration, _, _, _, _, _, _, _):
-            let cp = noteheadCodepoint(duration: duration)
-            for note in notes {
-                out.append(.glyph(
-                    codepoint: cp,
-                    x: (mox + Double(note.origin.x)) * ptToMM,
-                    y: (moy + Double(note.origin.y)) * ptToMM,
-                    size: glyphSize * ptToMM,
-                    fontId: .smufl,
-                ))
-            }
+        case let .chord(
+            notes, duration, stem, stemOrigin, _, _, isBeamed, _, stemExtension,
+        ):
+            encodeChord(
+                notes: notes, duration: duration, stem: stem,
+                stemOriginY: Double(stemOrigin.y),
+                isBeamed: isBeamed, stemExtension: Double(stemExtension),
+                mag: 1,
+                measureOriginX: mox, measureOriginY: moy,
+                metrics: ctx, into: &out,
+            )
 
-        case let .graceChord(notes, duration, _, _, _, _, mag, _):
-            let cp = noteheadCodepoint(duration: duration)
-            for note in notes {
-                out.append(.glyph(
-                    codepoint: cp,
-                    x: (mox + Double(note.origin.x)) * ptToMM,
-                    y: (moy + Double(note.origin.y)) * ptToMM,
-                    size: glyphSize * Double(mag) * ptToMM,
-                    fontId: .smufl,
-                ))
-            }
+        case let .graceChord(notes, duration, stem, stemOrigin, _, _, mag, _):
+            encodeChord(
+                notes: notes, duration: duration, stem: stem,
+                stemOriginY: Double(stemOrigin.y),
+                isBeamed: false, stemExtension: 0,
+                mag: Double(mag),
+                measureOriginX: mox, measureOriginY: moy,
+                metrics: ctx, into: &out,
+            )
 
-        case let .rest(duration, origin, _, _, _):
-            let cp = restCodepoint(duration: duration)
-            out.append(.glyph(
-                codepoint: cp,
-                x: (mox + Double(origin.x)) * ptToMM,
-                y: (moy + Double(origin.y)) * ptToMM,
-                size: glyphSize * ptToMM,
-                fontId: .smufl,
-            ))
+        case let .rest(duration, origin, _, _, hasLegerLine):
+            emitCenterAnchoredGlyph(
+                codepoint: RestGlyph.codepoint(
+                    duration: duration, hasLegerLine: hasLegerLine,
+                ),
+                cxPt: mox + Double(origin.x),
+                cyPt: moy + Double(origin.y),
+                sizePt: glyphSize,
+                into: &out,
+            )
 
         case let .barLine(_, origin):
-            // Vertical stroke spanning the staff height (4 sp).
+            // Barline origin sits at the staff middle; strokes extend
+            // ±2 sp from that point. Width = 0.15 sp (the thin-stroke
+            // engraving default). Subtype-specific extras (double,
+            // end, repeat dots) are a follow-up.
+            let halfHeight = Double(BarLineGeometry.halfHeightSp) * sp
             let bx = (mox + Double(origin.x)) * ptToMM
-            let by = (moy + Double(origin.y)) * ptToMM
-            out.append(.moveTo(x: bx, y: by))
-            out.append(.lineTo(x: bx, y: by + sp * 4 * ptToMM))
-            out.append(.stroke(width: 0.5 * ptToMM))
+            let byMid = (moy + Double(origin.y)) * ptToMM
+            out.append(.moveTo(x: bx, y: byMid - halfHeight * ptToMM))
+            out.append(.lineTo(x: bx, y: byMid + halfHeight * ptToMM))
+            out.append(.stroke(
+                width: Double(BarLineGeometry.thinThicknessSp) * sp * ptToMM,
+            ))
 
-        case let .beam(fromOrigin, toOrigin, _, _):
+        case let .beam(fromOrigin, toOrigin, direction, level):
+            // Each beam emit at a given level: shift Y by the level
+            // offset so secondaries stack inward from the primary,
+            // matching Apple BeamRenderer's geometry.
+            let dy = Double(BeamGeometry.levelOffsetDy(
+                level: level, stemDirection: direction, sp: CGFloat(sp),
+            ))
+            // Draw the centre of the beam stroke at `dy + beamThickness/2`
+            // so the stroke's outer edge aligns with the chord's stem
+            // tip (matching Apple's filled-rectangle geometry).
+            let thickness = Double(BeamGeometry.beamThicknessSp) * sp
+            let stackSign: Double = direction == .up ? 1 : -1
+            let centerDy = dy + (thickness / 2) * stackSign
+            let fx = (mox + Double(fromOrigin.x)) * ptToMM
+            let fy = (moy + Double(fromOrigin.y) + centerDy) * ptToMM
+            let tx = (mox + Double(toOrigin.x)) * ptToMM
+            let ty = (moy + Double(toOrigin.y) + centerDy) * ptToMM
+            out.append(.moveTo(x: fx, y: fy))
+            out.append(.lineTo(x: tx, y: ty))
+            out.append(.stroke(width: thickness * ptToMM))
+
+        case let .textMark(kind, text, origin):
+            emitText(
+                text: text,
+                style: TextRoleStyle.style(for: kind),
+                originX: mox + Double(origin.x),
+                originY: moy + Double(origin.y),
+                sp: sp,
+                into: &out,
+            )
+
+        case let .staffText(text, origin, color, isSystemText):
+            let argb = color.flatMap(LayoutBridge.argb(from:))
+            if let argb { out.append(.setColor(argb: argb)) }
+            emitText(
+                text: text,
+                style: isSystemText ? .systemText : .staffText,
+                originX: mox + Double(origin.x),
+                originY: moy + Double(origin.y),
+                sp: sp,
+                into: &out,
+            )
+            if argb != nil {
+                out.append(.setColor(argb: 0xFF00_0000))
+            }
+
+        // Fallback for unhandled point-origin cases: tiny placeholder rect.
+        case let .note(_, _, _, _, origin, _, _, _):
+            placeholderRect(atX: Double(origin.x), atY: Double(origin.y), mox: mox, moy: moy, sp: sp, into: &out)
+
+        case let .fermata(_, origin):
+            placeholderRect(atX: Double(origin.x), atY: Double(origin.y), mox: mox, moy: moy, sp: sp, into: &out)
+
+        case let .marker(_, _, origin):
+            placeholderRect(atX: Double(origin.x), atY: Double(origin.y), mox: mox, moy: moy, sp: sp, into: &out)
+
+        case let .rehearsalMark(_, origin, _, _):
+            placeholderRect(atX: Double(origin.x), atY: Double(origin.y), mox: mox, moy: moy, sp: sp, into: &out)
+
+        case let .jump(_, origin):
+            placeholderRect(atX: Double(origin.x), atY: Double(origin.y), mox: mox, moy: moy, sp: sp, into: &out)
+
+        case let .measureRepeat(_, origin):
+            placeholderRect(atX: Double(origin.x), atY: Double(origin.y), mox: mox, moy: moy, sp: sp, into: &out)
+
+        case let .multiMeasureRest(_, origin):
+            placeholderRect(atX: Double(origin.x), atY: Double(origin.y), mox: mox, moy: moy, sp: sp, into: &out)
+
+        case let .measureNumber(_, origin):
+            placeholderRect(atX: Double(origin.x), atY: Double(origin.y), mox: mox, moy: moy, sp: sp, into: &out)
+
+        case let .staffName(_, origin):
+            placeholderRect(atX: Double(origin.x), atY: Double(origin.y), mox: mox, moy: moy, sp: sp, into: &out)
+
+        case let .articulation(_, origin, _):
+            placeholderRect(atX: Double(origin.x), atY: Double(origin.y), mox: mox, moy: moy, sp: sp, into: &out)
+
+        case let .tieArc(fromOrigin, toOrigin, above):
+            encodeTieArc(
+                fromX: mox + Double(fromOrigin.x),
+                fromY: moy + Double(fromOrigin.y),
+                toX: mox + Double(toOrigin.x),
+                toY: moy + Double(toOrigin.y),
+                above: above,
+                sp: sp,
+                into: &out,
+            )
+
+        case let .lyricsMelisma(fromOrigin, toOrigin):
+            // Thin horizontal underscore-style rule from the syllable's
+            // tail to the end of the last covered note. Apple uses
+            // `staffLineThickness` here.
             let fx = (mox + Double(fromOrigin.x)) * ptToMM
             let fy = (moy + Double(fromOrigin.y)) * ptToMM
             let tx = (mox + Double(toOrigin.x)) * ptToMM
             let ty = (moy + Double(toOrigin.y)) * ptToMM
             out.append(.moveTo(x: fx, y: fy))
             out.append(.lineTo(x: tx, y: ty))
-            out.append(.stroke(width: sp * 0.5 * ptToMM))
+            out.append(.stroke(width: sp * 0.13 * ptToMM))
 
-        case let .textMark(_, text, origin):
-            out.append(.text(
-                text,
-                x: (mox + Double(origin.x)) * ptToMM,
-                y: (moy + Double(origin.y)) * ptToMM,
-                size: sp * 4 * ptToMM,
-                fontId: .textRoman,
-            ))
+        case let .lyricHyphen(fromOrigin, toOrigin):
+            // Short hyphen between two adjacent syllables. Same
+            // thickness as the melisma.
+            let fx = (mox + Double(fromOrigin.x)) * ptToMM
+            let fy = (moy + Double(fromOrigin.y)) * ptToMM
+            let tx = (mox + Double(toOrigin.x)) * ptToMM
+            let ty = (moy + Double(toOrigin.y)) * ptToMM
+            out.append(.moveTo(x: fx, y: fy))
+            out.append(.lineTo(x: tx, y: ty))
+            out.append(.stroke(width: sp * 0.13 * ptToMM))
 
-        // Fallback for unhandled point-origin cases: tiny placeholder rect.
-        case let .note(_, _, _, _, origin, _, _, _):
-            placeholderRect(at: origin, mox: mox, moy: moy, sp: sp, into: &out)
-
-        case let .fermata(_, origin):
-            placeholderRect(at: origin, mox: mox, moy: moy, sp: sp, into: &out)
-
-        case let .marker(_, _, origin):
-            placeholderRect(at: origin, mox: mox, moy: moy, sp: sp, into: &out)
-
-        case let .rehearsalMark(_, origin, _, _):
-            placeholderRect(at: origin, mox: mox, moy: moy, sp: sp, into: &out)
-
-        case let .jump(_, origin):
-            placeholderRect(at: origin, mox: mox, moy: moy, sp: sp, into: &out)
-
-        case let .measureRepeat(_, origin):
-            placeholderRect(at: origin, mox: mox, moy: moy, sp: sp, into: &out)
-
-        case let .multiMeasureRest(_, origin):
-            placeholderRect(at: origin, mox: mox, moy: moy, sp: sp, into: &out)
-
-        case let .measureNumber(_, origin):
-            placeholderRect(at: origin, mox: mox, moy: moy, sp: sp, into: &out)
-
-        case let .staffName(_, origin):
-            placeholderRect(at: origin, mox: mox, moy: moy, sp: sp, into: &out)
-
-        case let .articulation(_, origin, _):
-            placeholderRect(at: origin, mox: mox, moy: moy, sp: sp, into: &out)
-
-        case let .staffText(_, origin, _, _):
-            placeholderRect(at: origin, mox: mox, moy: moy, sp: sp, into: &out)
+        case let .tupletLabel(fromOrigin, toOrigin, text, hasBracket, isAbove, _):
+            encodeTupletBracket(
+                fromX: mox + Double(fromOrigin.x),
+                fromY: moy + Double(fromOrigin.y),
+                toX: mox + Double(toOrigin.x),
+                toY: moy + Double(toOrigin.y),
+                text: text,
+                hasBracket: hasBracket,
+                isAbove: isAbove,
+                sp: sp,
+                into: &out,
+            )
 
         // Decorations deferred to a future task — require richer geometry.
-        case .harmony, .spannerSegment, .tieArc,
-             .lyricsMelisma, .lyricHyphen, .glissandoLine,
-             .arpeggioWiggle, .tremoloBars, .tupletLabel:
+        case .harmony, .spannerSegment, .glissandoLine,
+             .arpeggioWiggle, .tremoloBars:
             break
-        }
-    }
-
-    // MARK: - Geometry helpers
-
-    private static func placeholderRect(
-        at origin: CGPoint,
-        mox: Double,
-        moy: Double,
-        sp: Double,
-        into out: inout [DrawCommand],
-    ) {
-        out.append(.fillRect(
-            x: (mox + Double(origin.x)) * ptToMM,
-            y: (moy + Double(origin.y)) * ptToMM,
-            w: sp * ptToMM,
-            h: sp * ptToMM,
-        ))
-    }
-
-    // MARK: - Codepoint helpers
-
-    private static func clefCodepoint(rawType: String) -> UInt32 {
-        switch rawType {
-        case "G", "G2", "GClef": return SMuFL.gClef
-        case "F", "F3", "F4", "FClef": return SMuFL.fClef
-        default: return SMuFL.cClef
-        }
-    }
-
-    private static func noteheadCodepoint(duration: NoteDuration) -> UInt32 {
-        switch duration {
-        case .whole: return SMuFL.noteheadWhole
-        case .half: return SMuFL.noteheadHalf
-        default: return SMuFL.noteheadBlack
-        }
-    }
-
-    private static func restCodepoint(duration: NoteDuration) -> UInt32 {
-        switch duration {
-        case .whole: return SMuFL.restWhole
-        case .half: return SMuFL.restHalf
-        case .quarter: return SMuFL.restQuarter
-        default: return SMuFL.restEighth
         }
     }
 }

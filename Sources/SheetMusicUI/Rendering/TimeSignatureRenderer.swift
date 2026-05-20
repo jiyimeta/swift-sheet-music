@@ -10,41 +10,44 @@ enum TimeSignatureRenderer {
         origin: CGPoint,
         metrics: StaffMetrics,
     ) {
-        let numStr = String(numerator)
-        let denStr = String(denominator)
-        // Bravura time-sig digits are ~1.3 sp wide at glyphFontSize.
-        // Advance by 1.4 sp per digit so multi-digit numbers (12, 15)
-        // don't overlap.
-        let digitAdvance = metrics.sp * 1.4
-        let numWidth = CGFloat(numStr.count) * digitAdvance
-        let denWidth = CGFloat(denStr.count) * digitAdvance
-        let maxWidth = max(numWidth, denWidth)
+        let advance = TimeSignatureLayout.digitAdvance(sp: metrics.sp)
+        let (numOffsetX, denOffsetX, _) = TimeSignatureLayout.rowOffsets(
+            numerator: numerator,
+            denominator: denominator,
+            sp: metrics.sp,
+        )
+        drawRow(
+            context: &context,
+            value: numerator,
+            rowY: origin.y + TimeSignatureLayout.numeratorDy(sp: metrics.sp),
+            rowOriginX: origin.x + numOffsetX,
+            advance: advance,
+            glyphFontSize: metrics.glyphFontSize,
+        )
+        drawRow(
+            context: &context,
+            value: denominator,
+            rowY: origin.y + TimeSignatureLayout.denominatorDy(sp: metrics.sp),
+            rowOriginX: origin.x + denOffsetX,
+            advance: advance,
+            glyphFontSize: metrics.glyphFontSize,
+        )
+    }
 
-        // Centre each row horizontally so "12" and "8" are both
-        // centred on the same vertical axis.
-        let numOffsetX = (maxWidth - numWidth) / 2
-        let denOffsetX = (maxWidth - denWidth) / 2
-
-        for (i, ch) in numStr.enumerated() {
+    private static func drawRow(
+        context: inout GraphicsContext,
+        value: Int,
+        rowY: CGFloat,
+        rowOriginX: CGFloat,
+        advance: CGFloat,
+        glyphFontSize: CGFloat,
+    ) {
+        for (i, ch) in String(value).enumerated() {
             let digit = Int(String(ch)) ?? 0
             context.drawGlyph(
                 SMuFLGlyph.timeSigDigit(digit),
-                at: CGPoint(
-                    x: origin.x + numOffsetX + CGFloat(i) * digitAdvance,
-                    y: origin.y - metrics.sp,
-                ),
-                size: metrics.glyphFontSize,
-            )
-        }
-        for (i, ch) in denStr.enumerated() {
-            let digit = Int(String(ch)) ?? 0
-            context.drawGlyph(
-                SMuFLGlyph.timeSigDigit(digit),
-                at: CGPoint(
-                    x: origin.x + denOffsetX + CGFloat(i) * digitAdvance,
-                    y: origin.y + metrics.sp,
-                ),
-                size: metrics.glyphFontSize,
+                at: CGPoint(x: rowOriginX + CGFloat(i) * advance, y: rowY),
+                size: glyphFontSize,
             )
         }
     }
