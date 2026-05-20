@@ -2,6 +2,7 @@ package io.github.kiichiio.sheetmusic.audio
 
 import android.content.Context
 import io.github.kiichiio.sheetmusic.audio.jni.SheetMusicAudioJNI
+import io.github.kiichiio.sheetmusic.audio.model.LoopRange
 import io.github.kiichiio.sheetmusic.audio.model.MixerChannel
 import io.github.kiichiio.sheetmusic.audio.model.NoteID
 import io.github.kiichiio.sheetmusic.audio.model.PlaybackState
@@ -168,6 +169,9 @@ class AndroidPlaybackEngine internal constructor(
     private val _currentRate = MutableStateFlow(1.0f)
     val currentRate: StateFlow<Float> = _currentRate.asStateFlow()
 
+    private val _loopRange = MutableStateFlow<LoopRange?>(null)
+    val loopRange: StateFlow<LoopRange?> = _loopRange.asStateFlow()
+
     // ── Internal mutable state (assembled by prepare) ────────────────
 
     private val prepareMutex = Mutex()
@@ -198,6 +202,7 @@ class AndroidPlaybackEngine internal constructor(
      */
     suspend fun prepare(scoreHandle: Long) = prepareMutex.withLock {
         withContext(Dispatchers.IO) {
+            _loopRange.value = null
             val summary = jniBridge.timelineSummary(scoreHandle)
             if (summary.size < 3) throw AudioBackendException.InvalidScoreHandle()
             totalTicks = summary[0]
@@ -353,8 +358,9 @@ class AndroidPlaybackEngine internal constructor(
         val cursorBytes = ScoreCursorCodec.encode(to)
         val frameBytes = jniBridge.frameForCursor(scoreHandle, cursorBytes)
         val frame = FrameDecoder.decode(frameBytes) ?: return
+        val snapped = snapTickToLoop(frame.tick)
         fluidSynthEngine?.allNotesOff()
-        player.seekTick(frame.tick)
+        player.seekTick(snapped)
         _currentCursor.value = to
         _currentTimeSeconds.value = frame.timeSeconds
     }
@@ -374,10 +380,68 @@ class AndroidPlaybackEngine internal constructor(
         } else 0L
         val frameBytes = jniBridge.frameAtTick(scoreHandle, targetTickEstimate)
         val frame = FrameDecoder.decode(frameBytes) ?: return
+        val snapped = snapTickToLoop(frame.tick)
         fluidSynthEngine?.allNotesOff()
-        player.seekTick(frame.tick)
+        player.seekTick(snapped)
         _currentCursor.value = frame.cursor
         _currentTimeSeconds.value = frame.timeSeconds
+    }
+
+    // ── Loop ─────────────────────────────────────────────────────────
+
+    /**
+     * Loop the half-open region [from, to) — playback wraps at the onset
+     * tick of `to` (the item under `to` is NOT sounded). Use the
+     * `setLoop(from:throughEndOf:)` overload to include the last item's
+     * full ringing duration.
+     *
+     * No-op when [state] is [PlaybackState.EXPORTING], when either cursor
+     * doesn't resolve, when start.tick >= end.tick, or when no player is
+     * prepared yet.
+     */
+    fun setLoop(from: ScoreCursor, to: ScoreCursor) {
+        if (_state.value == PlaybackState.EXPORTING) return
+        if (playerDriver == null) return
+        val fromBytes = jniBridge.frameForCursor(scoreHandle, ScoreCursorCodec.encode(from))
+        val toBytes = jniBridge.frameForCursor(scoreHandle, ScoreCursorCodec.encode(to))
+        val fromFrame = FrameDecoder.decode(fromBytes) ?: return
+        val toFrame = FrameDecoder.decode(toBytes) ?: return
+        if (fromFrame.tick >= toFrame.tick) return
+        _loopRange.value = LoopRange(startTick = fromFrame.tick, endTick = toFrame.tick)
+    }
+
+    /**
+     * Loop from `from` through the end of `throughEndOf`'s notated duration.
+     * Mirrors Apple `setLoop(from:throughEndOf:)`.
+     *
+     * No-op when [state] is [PlaybackState.EXPORTING], when `from` doesn't
+     * resolve, when the item's end tick is not in the timeline (`itemEndTick`
+     * returns -1), or when no player is prepared.
+     */
+    fun setLoop(from: ScoreCursor, throughEndOf: ScoreItemID) {
+        if (_state.value == PlaybackState.EXPORTING) return
+        if (playerDriver == null) return
+        val fromBytes = jniBridge.frameForCursor(scoreHandle, ScoreCursorCodec.encode(from))
+        val fromFrame = FrameDecoder.decode(fromBytes) ?: return
+        val endTick = jniBridge.itemEndTick(scoreHandle, ScoreItemIDCodec.encode(throughEndOf))
+        if (endTick < 0) return
+        if (fromFrame.tick >= endTick) return
+        _loopRange.value = LoopRange(startTick = fromFrame.tick, endTick = endTick)
+    }
+
+    /**
+     * Disable looping. The next poll cycle stops snapping the playhead back
+     * to startTick, so playback continues past the previous loop end.
+     */
+    fun clearLoop() {
+        if (_state.value == PlaybackState.EXPORTING) return
+        _loopRange.value = null
+    }
+
+    /** Clamp [tick] into the active loop, or return it unchanged. */
+    private fun snapTickToLoop(tick: Long): Long {
+        val loop = _loopRange.value ?: return tick
+        return if (tick < loop.startTick || tick >= loop.endTick) loop.startTick else tick
     }
 
     // ── Preview / cursor ─────────────────────────────────────────────
@@ -522,7 +586,14 @@ class AndroidPlaybackEngine internal constructor(
         pollJob = pollScope.launch {
             while (isActive && _state.value == PlaybackState.PLAYING) {
                 val player = playerDriver ?: break
-                val tick = player.currentTick
+                var tick = player.currentTick
+                // Loop wrap: if we've advanced past loop.endTick, snap back.
+                val loop = _loopRange.value
+                if (loop != null && tick >= loop.endTick) {
+                    fluidSynthEngine?.allNotesOff()
+                    player.seekTick(loop.startTick)
+                    tick = loop.startTick
+                }
                 metronomeMixer?.updateCurrentTick(tick)
 
                 val frameBytes = jniBridge.frameAtTick(scoreHandle, tick)
@@ -534,7 +605,8 @@ class AndroidPlaybackEngine internal constructor(
                     _currentCursor.value = frame.cursor
                     _currentTimeSeconds.value = frame.timeSeconds
                 }
-                if (tick >= totalTicks && totalTicks > 0) {
+                // End of score: only stop when no loop is active.
+                if (loop == null && tick >= totalTicks && totalTicks > 0) {
                     stop()
                     break
                 }

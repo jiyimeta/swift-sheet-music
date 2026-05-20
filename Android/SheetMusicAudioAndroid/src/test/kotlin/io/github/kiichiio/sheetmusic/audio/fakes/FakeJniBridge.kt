@@ -9,7 +9,7 @@ import io.github.kiichiio.sheetmusic.audio.AndroidPlaybackEngine
  * they care about. All defaults return safe empty / no-op values so tests
  * only set what they need.
  */
-internal class FakeJniBridge(
+internal open class FakeJniBridge(
     var renderMidiResult: ByteArray = byteArrayOf(),
     var timelineSummaryResult: LongArray = longArrayOf(960L, 2_000_000L, 480L),
     var frameAtTickResult: ByteArray = byteArrayOf(),
@@ -32,7 +32,7 @@ internal class FakeJniBridge(
         frameAtTickCalls += tick
         return frameAtTickResult
     }
-    override fun frameForCursor(scoreHandle: Long, cursorBytes: ByteArray): ByteArray {
+    open override fun frameForCursor(scoreHandle: Long, cursorBytes: ByteArray): ByteArray {
         frameForCursorCalls += cursorBytes
         return frameForCursorResult
     }

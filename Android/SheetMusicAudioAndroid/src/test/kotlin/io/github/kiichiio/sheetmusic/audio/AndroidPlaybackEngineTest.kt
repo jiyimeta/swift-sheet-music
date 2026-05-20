@@ -774,6 +774,152 @@ class AndroidPlaybackEngineTest {
         engine.teardown()
     }
 
+    // T5D — setLoop / clearLoop
+
+    private fun cursorAt(elementIndex: Int) = ScoreCursor.Beat(
+        measureIndex = elementIndex,
+        tickInMeasure = 0,
+    )
+
+    private fun frameAt(tick: Long, elementIndex: Int): ByteArray =
+        encodeFrameBytes(tick = tick, timeMicros = tick * 1000L, cursor = cursorAt(elementIndex))
+
+    @Test
+    fun `setLoop fromTo stores LoopRange when frames resolve`() = runTest(testDispatcher) {
+        val frame100 = frameAt(100L, 0)
+        val frame200 = frameAt(200L, 1)
+        val frames = listOf(frame100, frame200)
+        var nextIdx = 0
+        val bridge = object : FakeJniBridge(
+            staffParamsResult = oneStaffPayload(),
+            renderMidiResult = minimalSmf,
+            metronomeBeatsResult = downbeatOnlyBeats(),
+        ) {
+            override fun frameForCursor(scoreHandle: Long, cursorBytes: ByteArray): ByteArray {
+                val out = frames[nextIdx % frames.size]; nextIdx++
+                return out
+            }
+        }
+        val engine = newEngineForTests(bridge = bridge)
+        engine.prepare(scoreHandle = 1L)
+        engine.setLoop(from = cursorAt(0), to = cursorAt(1))
+        val lr = engine.loopRange.value
+        assertNotNull(lr)
+        assertEquals(100L, lr!!.startTick)
+        assertEquals(200L, lr.endTick)
+        engine.teardown()
+    }
+
+    @Test
+    fun `setLoop fromTo invalid range is no-op`() = runTest(testDispatcher) {
+        // Same frame for both cursors → 100 >= 100, no-op.
+        val frame100 = frameAt(100L, 0)
+        val bridge = FakeJniBridge(
+            staffParamsResult = oneStaffPayload(),
+            renderMidiResult = minimalSmf,
+            metronomeBeatsResult = downbeatOnlyBeats(),
+            frameForCursorResult = frame100,
+        )
+        val engine = newEngineForTests(bridge = bridge)
+        engine.prepare(scoreHandle = 1L)
+        engine.setLoop(from = cursorAt(0), to = cursorAt(0))
+        assertNull(engine.loopRange.value)
+        engine.teardown()
+    }
+
+    @Test
+    fun `clearLoop resets range`() = runTest(testDispatcher) {
+        val frame100 = frameAt(100L, 0)
+        val frame200 = frameAt(200L, 1)
+        val frames = listOf(frame100, frame200)
+        var nextIdx = 0
+        val bridge = object : FakeJniBridge(
+            staffParamsResult = oneStaffPayload(),
+            renderMidiResult = minimalSmf,
+            metronomeBeatsResult = downbeatOnlyBeats(),
+        ) {
+            override fun frameForCursor(scoreHandle: Long, cursorBytes: ByteArray): ByteArray {
+                val out = frames[nextIdx % frames.size]; nextIdx++
+                return out
+            }
+        }
+        val engine = newEngineForTests(bridge = bridge)
+        engine.prepare(scoreHandle = 1L)
+        engine.setLoop(from = cursorAt(0), to = cursorAt(1))
+        assertNotNull(engine.loopRange.value)
+        engine.clearLoop()
+        assertNull(engine.loopRange.value)
+        engine.teardown()
+    }
+
+    @Test
+    fun `setLoop throughEndOf uses itemEndTick`() = runTest(testDispatcher) {
+        val frame100 = frameAt(100L, 0)
+        val bridge = FakeJniBridge(
+            staffParamsResult = oneStaffPayload(),
+            renderMidiResult = minimalSmf,
+            metronomeBeatsResult = downbeatOnlyBeats(),
+            frameForCursorResult = frame100,
+            itemEndTickResult = 300L,
+        )
+        val engine = newEngineForTests(bridge = bridge)
+        engine.prepare(scoreHandle = 1L)
+        val rid = io.github.kiichiio.sheetmusic.audio.model.RestID(
+            staff = StaffAddress(0, 0),
+            measureIndex = 0, voiceIndex = 0, elementIndex = 1,
+        )
+        engine.setLoop(from = cursorAt(0), throughEndOf = ScoreItemID.Rest(rid))
+        val lr = engine.loopRange.value
+        assertNotNull(lr)
+        assertEquals(100L, lr!!.startTick)
+        assertEquals(300L, lr.endTick)
+        engine.teardown()
+    }
+
+    @Test
+    fun `setLoop throughEndOf is no-op when item unknown`() = runTest(testDispatcher) {
+        val frame100 = frameAt(100L, 0)
+        val bridge = FakeJniBridge(
+            staffParamsResult = oneStaffPayload(),
+            renderMidiResult = minimalSmf,
+            metronomeBeatsResult = downbeatOnlyBeats(),
+            frameForCursorResult = frame100,
+            itemEndTickResult = -1L,
+        )
+        val engine = newEngineForTests(bridge = bridge)
+        engine.prepare(scoreHandle = 1L)
+        val rid = io.github.kiichiio.sheetmusic.audio.model.RestID(
+            staff = StaffAddress(0, 0),
+            measureIndex = 0, voiceIndex = 0, elementIndex = 1,
+        )
+        engine.setLoop(from = cursorAt(0), throughEndOf = ScoreItemID.Rest(rid))
+        assertNull(engine.loopRange.value)
+        engine.teardown()
+    }
+
+    @Test
+    fun `prepare clears loop range`() = runTest(testDispatcher) {
+        val frame100 = frameAt(100L, 0)
+        val bridge = FakeJniBridge(
+            staffParamsResult = oneStaffPayload(),
+            renderMidiResult = minimalSmf,
+            metronomeBeatsResult = downbeatOnlyBeats(),
+            frameForCursorResult = frame100,
+            itemEndTickResult = 300L,
+        )
+        val engine = newEngineForTests(bridge = bridge)
+        engine.prepare(scoreHandle = 1L)
+        val rid = io.github.kiichiio.sheetmusic.audio.model.RestID(
+            staff = StaffAddress(0, 0),
+            measureIndex = 0, voiceIndex = 0, elementIndex = 1,
+        )
+        engine.setLoop(from = cursorAt(0), throughEndOf = ScoreItemID.Rest(rid))
+        assertNotNull(engine.loopRange.value)
+        engine.prepare(scoreHandle = 2L)
+        assertNull(engine.loopRange.value)
+        engine.teardown()
+    }
+
     // ── Helpers ────────────────────────────────────────────────────────────
 
     /**
