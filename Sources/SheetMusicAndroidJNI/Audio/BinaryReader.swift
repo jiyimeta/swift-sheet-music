@@ -75,6 +75,15 @@ public struct AudioBinaryReader {
         return byte != 0
     }
 
+    /// Read `count` raw bytes (no endianness reinterpretation).
+    public mutating func readBytes(_ count: Int) throws -> [UInt8] {
+        try requireBytes(count)
+        let start = data.startIndex + offset
+        let slice = data[start ..< start + count]
+        offset += count
+        return Array(slice)
+    }
+
     // MARK: - Version assertion
 
     /// Read a `u16` version field and throw `.versionMismatch` if it

@@ -55,6 +55,12 @@ public struct PlaybackTimeline: Sendable, Equatable {
     /// include the last note's full ringing duration.
     public let itemEndTicks: [ScoreItemID: Int]
 
+    /// Onset tick of each measure (index = measure index, 0-based).
+    /// Lets `frame(forCursor:)` resolve `.beat` cursors that didn't
+    /// survive timeline dedup because an item already occupied that
+    /// tick column.
+    public let measureStartTicks: [Int]
+
     /// Latest frame whose `timeSeconds` is at or before `t`. Used by
     /// the cursor poller — returns `nil` for `t` before the first
     /// event so the cursor can stay hidden until playback actually
@@ -108,9 +114,13 @@ public struct PlaybackTimeline: Sendable, Equatable {
     /// seek to. For `.item` cursors, tries the exact representative
     /// first, then falls back to "any frame at the same tick", so a
     /// selection on a staff that lost the dedup still maps to the
-    /// right point in time. For `.beat` cursors, looks up by tick
-    /// directly. O(N) — only called at the start of a play-from-
-    /// selection action.
+    /// right point in time. For `.beat` cursors, tries the exact
+    /// representative first, then falls back to "any frame at the
+    /// computed tick" — beat frames are dropped during timeline init
+    /// when an item already occupies that tick column, and callers
+    /// shouldn't have to know which side of the dedup the beat fell
+    /// on. O(N) — only called at the start of a play-from-selection
+    /// action.
     public func frame(forCursor cursor: ScoreCursor) -> Frame? {
         switch cursor {
         case let .item(id):
@@ -119,8 +129,13 @@ public struct PlaybackTimeline: Sendable, Equatable {
             }
             guard let tick = itemTicks[id] else { return nil }
             return frames.first { $0.tick == tick }
-        case .beat:
-            return frames.first { $0.cursor == cursor }
+        case let .beat(measureIndex, tickInMeasure):
+            if let exact = frames.first(where: { $0.cursor == cursor }) {
+                return exact
+            }
+            guard measureIndex < measureStartTicks.count else { return nil }
+            let tick = measureStartTicks[measureIndex] + tickInMeasure
+            return frames.first { $0.tick == tick }
         }
     }
 
@@ -442,6 +457,7 @@ extension PlaybackTimeline {
         self.division = division
         self.itemTicks = itemTicks
         self.itemEndTicks = itemEndTicks
+        measureStartTicks = measureStarts
     }
 }
 

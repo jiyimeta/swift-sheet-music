@@ -158,9 +158,9 @@ extension AudioMidiBridge {
         return makeJByteArray(env: envPtr, bytes: data)
     }
 
-    @_cdecl("Java_io_github_kiichiio_sheetmusic_audio_jni_SheetMusicAudioJNI_nativeItemEndTick")
+    @_cdecl("Java_io_github_jiyimeta_sheetmusic_audio_jni_SheetMusicAudioJNI_nativeItemEndTick")
     // swiftlint:disable:next identifier_name
-    public func Java_io_github_kiichiio_sheetmusic_audio_jni_SheetMusicAudioJNI_nativeItemEndTick(
+    public func Java_io_github_jiyimeta_sheetmusic_audio_jni_SheetMusicAudioJNI_nativeItemEndTick(
         _ envPtr: UnsafeMutablePointer<JNIEnv?>,
         _ clazz: jclass,
         _ scoreHandle: jlong,
@@ -172,5 +172,17 @@ extension AudioMidiBridge {
               let id = try? ScoreItemIDCodec.decode(data)
         else { return -1 }
         return AudioMidiBridge.itemEndTick(score: score, id: id)
+    }
+
+    @_cdecl("Java_io_github_jiyimeta_sheetmusic_audio_jni_SheetMusicAudioJNI_nativeGMInstrumentList")
+    // swiftlint:disable:next identifier_name
+    public func Java_io_github_jiyimeta_sheetmusic_audio_jni_SheetMusicAudioJNI_nativeGMInstrumentList(
+        _ envPtr: UnsafeMutablePointer<JNIEnv?>,
+        _ clazz: jclass,
+    ) -> jbyteArray? {
+        guard let env = envPtr.pointee else { return nil }
+        let data = GMInstrumentCodec.encodeAll()
+        guard !data.isEmpty else { return env.pointee.NewByteArray(envPtr, 0) }
+        return makeJByteArray(env: envPtr, bytes: data)
     }
 #endif

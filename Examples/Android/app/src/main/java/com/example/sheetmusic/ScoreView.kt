@@ -16,6 +16,7 @@ import com.example.sheetmusic.audio.AudioControls
 import com.example.sheetmusic.audio.AudioViewModel
 import com.example.sheetmusic.audio.LoopSelectionOverlay
 import com.example.sheetmusic.audio.MixerPanel
+import com.example.sheetmusic.cursor.LoopHighlightOverlay
 import com.example.sheetmusic.cursor.PlaybackCursorOverlay
 
 @Composable
@@ -46,6 +47,16 @@ fun ScoreView(
             )
             val handle = scoreHandle
             if (handle != null) {
+                // Loop highlight renders *under* the cursor (drawn first),
+                // so the cursor blue stays on top of the amber loop fill.
+                LoopHighlightOverlay(
+                    scoreHandle = handle,
+                    loopRangeFlow = audioVm.loopRange,
+                    pxPerMM = pxPerMM,
+                    scale = transform.scale,
+                    panOffset = transform.panOffset,
+                    modifier = Modifier.fillMaxSize(),
+                )
                 PlaybackCursorOverlay(
                     scoreHandle = handle,
                     cursorFlow = audioVm.currentCursor,

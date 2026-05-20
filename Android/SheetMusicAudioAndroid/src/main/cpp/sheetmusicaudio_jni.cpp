@@ -261,7 +261,7 @@ Java_io_github_jiyimeta_sheetmusic_audio_native_FluidSynthNative_playerGetCurren
 }
 
 extern "C" JNIEXPORT jint JNICALL
-Java_io_github_kiichiio_sheetmusic_audio_native_FluidSynthNative_playerSetTempo(
+Java_io_github_jiyimeta_sheetmusic_audio_native_FluidSynthNative_playerSetTempo(
     JNIEnv *, jobject, jlong handle, jint type, jdouble value
 ) {
     fluid_player_t *player = player_from(handle);
