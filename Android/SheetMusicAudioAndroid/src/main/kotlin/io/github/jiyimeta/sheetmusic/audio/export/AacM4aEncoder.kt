@@ -50,6 +50,10 @@ internal class AacM4aEncoder(
         PcmSampleConversion.floatToInt16Interleaved(left, right, frames, mono, tmp)
         val bytes = ByteArray(tmp.size * 2)
         ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer().put(tmp)
+        // Drain first: free up input buffers that the previous call queued
+        // but the codec hasn't released yet. Without this, dequeueInputBuffer
+        // returns -1 forever once the codec is saturated.
+        drainEncoder(false)
         feedEncoder(bytes, accumulatedFrames * 1_000_000L / sampleRate, false)
         accumulatedFrames += frames
         drainEncoder(false)
@@ -58,7 +62,11 @@ internal class AacM4aEncoder(
     private fun feedEncoder(payload: ByteArray, ptsUs: Long, endOfStream: Boolean) {
         while (true) {
             val inputIndex = codec.dequeueInputBuffer(10_000)
-            if (inputIndex < 0) continue
+            if (inputIndex < 0) {
+                // Codec has no free input buffers: drain outputs to release them.
+                drainEncoder(endOfStream)
+                continue
+            }
             val inputBuffer = codec.getInputBuffer(inputIndex) ?: return
             inputBuffer.clear()
             inputBuffer.put(payload)

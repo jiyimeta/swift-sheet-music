@@ -42,6 +42,10 @@ internal class Mp3MediaCodecEncoder(
         PcmSampleConversion.floatToInt16Interleaved(left, right, frames, mono, tmp)
         val bytes = ByteArray(tmp.size * 2)
         ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer().put(tmp)
+        // Drain first so the codec can release input buffers from the prior
+        // call — otherwise dequeueInputBuffer eventually returns -1 forever
+        // once all input slots are queued and outputs are pending.
+        drainEncoder(false)
         feedEncoder(bytes, accumulatedFrames * 1_000_000L / sampleRate, false)
         accumulatedFrames += frames
         drainEncoder(false)
@@ -50,7 +54,11 @@ internal class Mp3MediaCodecEncoder(
     private fun feedEncoder(payload: ByteArray, ptsUs: Long, endOfStream: Boolean) {
         while (true) {
             val inIdx = codec.dequeueInputBuffer(10_000)
-            if (inIdx < 0) continue
+            if (inIdx < 0) {
+                // No input buffer — drain outputs to free one up.
+                drainEncoder(endOfStream)
+                continue
+            }
             val buf = codec.getInputBuffer(inIdx) ?: return
             buf.clear(); buf.put(payload)
             codec.queueInputBuffer(
