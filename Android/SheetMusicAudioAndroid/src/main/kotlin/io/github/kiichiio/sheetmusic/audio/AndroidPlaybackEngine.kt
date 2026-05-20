@@ -165,6 +165,9 @@ class AndroidPlaybackEngine internal constructor(
     private val _mixerChannels = MutableStateFlow<List<MixerChannel>>(emptyList())
     val mixerChannels: StateFlow<List<MixerChannel>> = _mixerChannels.asStateFlow()
 
+    private val _currentRate = MutableStateFlow(1.0f)
+    val currentRate: StateFlow<Float> = _currentRate.asStateFlow()
+
     // ── Internal mutable state (assembled by prepare) ────────────────
 
     private val prepareMutex = Mutex()
@@ -180,6 +183,7 @@ class AndroidPlaybackEngine internal constructor(
     private val previewScope by lazy { CoroutineScope(SupervisorJob() + pollDispatcher) }
 
     @Volatile private var masterVolume: Float = 1.0f
+    @Volatile private var pendingRate: Float = 1.0f
 
     // ── prepare ──────────────────────────────────────────────────────
 
@@ -232,6 +236,11 @@ class AndroidPlaybackEngine internal constructor(
             // routing works without a playback-callback shim.
             val player = playerFactory(engine.synthHandle)
             player.load(smfBytes)
+            // Carry the pending rate into the newly built player so a rate set
+            // before prepare (or across a re-prepare) survives.
+            if (pendingRate != 1.0f) {
+                player.setTempo(pendingRate.toDouble())
+            }
             this@AndroidPlaybackEngine.playerDriver = player
 
             // Wire the OboeStream producer: mix the staff synth + metronome.
@@ -263,6 +272,7 @@ class AndroidPlaybackEngine internal constructor(
             _totalTimeSeconds.value = totalSecs
             _currentTimeSeconds.value = 0.0
             _currentCursor.value = null
+            _currentRate.value = pendingRate
             _state.value = PlaybackState.PREPARED
         }
     }
@@ -309,6 +319,22 @@ class AndroidPlaybackEngine internal constructor(
         _state.value = PlaybackState.STOPPED
         _currentCursor.value = null
         _currentTimeSeconds.value = 0.0
+    }
+
+    // ── Rate ─────────────────────────────────────────────────────────
+
+    /**
+     * Scales playback speed. `1.0` is the score's native tempo; the host's
+     * typical slider range is 0.5..2.0 but no clamping is applied here.
+     * Persists across [prepare] calls — the rate is re-applied to a freshly
+     * built [PlayerDriver].
+     * No-op when [state] is [PlaybackState.EXPORTING].
+     */
+    fun setRate(rate: Float) {
+        if (_state.value == PlaybackState.EXPORTING) return
+        pendingRate = rate
+        playerDriver?.setTempo(rate.toDouble())
+        _currentRate.value = rate
     }
 
     // ── Seek / skip ──────────────────────────────────────────────────

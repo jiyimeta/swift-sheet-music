@@ -100,7 +100,11 @@ private class RecordingBindings : PlayerDriver.NativeBindings {
     override fun playerJoin(handle: Long): Int { joinCalls += Unit; return 0 }
     override fun playerSeek(handle: Long, tick: Long): Int { seekTicks += tick; tickToReturn = tick; return 0 }
     override fun playerGetCurrentTick(handle: Long): Long = tickToReturn
-    override fun playerSetTempo(handle: Long, type: Int, value: Double): Int = 0
+    val setTempoCalls = mutableListOf<Pair<Int, Double>>()
+    override fun playerSetTempo(handle: Long, type: Int, value: Double): Int {
+        setTempoCalls += type to value
+        return 0
+    }
 }
 
 // ── Engine factory (top-level, no auto-registration) ────────────────────────
@@ -636,6 +640,67 @@ class AndroidPlaybackEngineTest {
         } finally {
             engine.teardown()
         }
+    }
+
+    // T44 — setRate / currentRate
+
+    @Test
+    fun `setRate forwards to player`() = runTest(testDispatcher) {
+        val bindings = RecordingBindings()
+        val bridge = FakeJniBridge(
+            staffParamsResult = oneStaffPayload(),
+            renderMidiResult = minimalSmf,
+            metronomeBeatsResult = downbeatOnlyBeats(),
+        )
+        val engine = newEngineForTests(bridge = bridge, playerBindings = bindings)
+        engine.prepare(scoreHandle = 1L)
+        bindings.setTempoCalls.clear()
+
+        engine.setRate(1.5f)
+
+        assertEquals(1, bindings.setTempoCalls.size)
+        assertEquals(1.5, bindings.setTempoCalls.first().second, 0.0001)
+        assertEquals(1.5f, engine.currentRate.value, 0.0001f)
+        engine.teardown()
+    }
+
+    @Test
+    fun `setRate before prepare is recorded and reapplied at prepare`() = runTest(testDispatcher) {
+        val bindings = RecordingBindings()
+        val bridge = FakeJniBridge(
+            staffParamsResult = oneStaffPayload(),
+            renderMidiResult = minimalSmf,
+            metronomeBeatsResult = downbeatOnlyBeats(),
+        )
+        val engine = newEngineForTests(bridge = bridge, playerBindings = bindings)
+
+        engine.setRate(0.5f)
+        // No player yet — no call recorded.
+        assertEquals(0, bindings.setTempoCalls.size)
+
+        engine.prepare(scoreHandle = 1L)
+
+        // After prepare the pending rate must be re-applied to the new player.
+        assertEquals(1, bindings.setTempoCalls.size)
+        assertEquals(0.5, bindings.setTempoCalls.first().second, 0.0001)
+        engine.teardown()
+    }
+
+    @Test
+    fun `currentRate stateflow updates`() = runTest(testDispatcher) {
+        val bindings = RecordingBindings()
+        val bridge = FakeJniBridge(
+            staffParamsResult = oneStaffPayload(),
+            renderMidiResult = minimalSmf,
+            metronomeBeatsResult = downbeatOnlyBeats(),
+        )
+        val engine = newEngineForTests(bridge = bridge, playerBindings = bindings)
+        engine.prepare(scoreHandle = 1L)
+        assertEquals(1.0f, engine.currentRate.value, 0.0001f)
+
+        engine.setRate(2.0f)
+        assertEquals(2.0f, engine.currentRate.value, 0.0001f)
+        engine.teardown()
     }
 
     // ── Helpers ────────────────────────────────────────────────────────────
