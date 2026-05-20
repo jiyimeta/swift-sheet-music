@@ -34,8 +34,6 @@ android {
             )
         }
     }
-
-    sourceSets["main"].jniLibs.srcDirs("src/main/jniLibs")
 }
 
 dependencies {
