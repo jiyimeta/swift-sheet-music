@@ -123,24 +123,23 @@ API ≥ 28.
     still works and continues from the prior position if playback
     was paused (engine state is preserved across the rebind).
 
-### Known limitation — Media3 auto-foreground promotion
+### Notification handling
 
-On emulator-5556 (Pixel 6 Pro API 34) the `MediaSessionService` does
-not auto-promote to foreground when playback starts, so step 2's
-MediaStyle notification doesn't appear even when
-`POST_NOTIFICATIONS` is granted (`adb shell dumpsys activity
-services` shows `startForegroundCount=0`).
+`PlaybackService` drives its own foreground notification directly off
+`engine.state` rather than relying on Media3's
+`MediaNotificationManager` auto-promotion (which didn't fire for our
+`SimpleBasePlayer`-based player on Media3 1.5.0 —
+`startForegroundCount` stayed at 0 with the default provider). On
+`PlaybackState.PLAYING` or `PAUSED` the service posts a
+`MediaStyle` notification linked to the session via
+`androidx.media.app.NotificationCompat.MediaStyle`; on
+`STOPPED` / `PREPARED` / `EXPORTING` the service calls
+`stopForeground(STOP_FOREGROUND_REMOVE)`.
 
-The MediaSession layer itself IS active and fully wired —
-`adb shell dumpsys media_session` reports `state=PLAYING`, the
-published metadata ("Sheet Music"), `USAGE_MEDIA` audio attributes,
-and live `position` updates, with 3 system controllers attached
-(Bluetooth gatt + AudioMediaPlayerWrapper + Media3 internal). So
-the Phase 5C deliverable — MediaSession publishing playback state
-to system controls — is verified working at the IPC layer.
-
-Visible-notification follow-up: likely needs either
-`MediaSessionService.setMediaNotificationProvider(...)` with a
-`DefaultMediaNotificationProvider` instance constructed via its
-`Builder`, or an explicit `startForeground` call in the service
-when state transitions to PLAYING. Phase 5.1 task.
+The Pause / Play buttons in the notification are rendered by the
+system from the session's `PlaybackState.actions`, and pressing them
+flows through `MediaSession.Callback` → `EnginePlayer.handleSet*` →
+the engine. Verified on emulator-5556 (Pixel 6 Pro API 34): the
+"Sheet Music" media chip appears at the top of the Quick Settings
+panel after Play; tapping its Pause button transitions the engine
+to PAUSED.
