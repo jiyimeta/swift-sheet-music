@@ -20,4 +20,5 @@ internal object SheetMusicAudioJNI {
     external fun nativeEarliestOf(scoreHandle: Long, idsBytes: ByteArray): ByteArray
     external fun nativeItemEndTick(scoreHandle: Long, idBytes: ByteArray): Long
     external fun nativeGMInstrumentList(): ByteArray
+    external fun nativeResolveExportTickRange(scoreHandle: Long, rangeBytes: ByteArray): LongArray
 }
