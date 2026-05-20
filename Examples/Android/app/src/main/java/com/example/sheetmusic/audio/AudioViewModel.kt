@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import io.github.kiichiio.sheetmusic.audio.AndroidPlaybackEngine
+import io.github.kiichiio.sheetmusic.audio.model.LoopRange
 import io.github.kiichiio.sheetmusic.audio.model.MixerChannel
 import io.github.kiichiio.sheetmusic.audio.model.PlaybackState
 import io.github.kiichiio.sheetmusic.audio.model.ScoreCursor
@@ -27,6 +28,8 @@ class AudioViewModel(application: Application) : AndroidViewModel(application) {
     val currentTimeSeconds: StateFlow<Double> get() = engine.currentTimeSeconds
     val totalTimeSeconds: StateFlow<Double> get() = engine.totalTimeSeconds
     val mixerChannels: StateFlow<List<MixerChannel>> get() = engine.mixerChannels
+    val currentRate: StateFlow<Float> get() = engine.currentRate
+    val loopRange: StateFlow<LoopRange?> get() = engine.loopRange
 
     /**
      * Suspends until the engine has decoded the score, built FluidSynth

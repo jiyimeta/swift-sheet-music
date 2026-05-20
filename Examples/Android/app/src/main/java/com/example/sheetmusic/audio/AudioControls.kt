@@ -10,6 +10,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -44,6 +45,7 @@ fun AudioControls(
     val state by viewModel.state.collectAsState()
     val currentSecs by viewModel.currentTimeSeconds.collectAsState()
     val totalSecs by viewModel.totalTimeSeconds.collectAsState()
+    val rate by viewModel.currentRate.collectAsState()
 
     val isPrepared = state != PlaybackState.STOPPED && state != PlaybackState.EXPORTING
 
@@ -106,6 +108,23 @@ fun AudioControls(
                     .align(Alignment.CenterHorizontally)
                     .padding(bottom = 4.dp)
             )
+            // Rate slider
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp)
+            ) {
+                Text(
+                    text = "Speed: %.2fx".format(rate),
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                Slider(
+                    value = rate,
+                    onValueChange = { viewModel.engine.setRate(it) },
+                    valueRange = 0.5f..2.0f,
+                    steps = 29,
+                )
+            }
         }
     }
 }
