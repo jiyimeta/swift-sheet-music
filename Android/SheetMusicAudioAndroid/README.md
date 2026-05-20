@@ -35,7 +35,8 @@ Not yet supported (planned for v1+):
 ```kotlin
 // In your Gradle build:
 dependencies {
-    implementation("io.github.jiyimeta:sheet-music-audio-android:0.0.0-SNAPSHOT")
+    implementation("io.github.jiyimeta:sheet-music-audio-android:<version>")
+    // sheet-music-android is pulled in transitively.
 }
 
 // In your ViewModel:
@@ -74,11 +75,12 @@ Same semantics, idiomatic naming per language. Apple uses `URL` /
 
 ## Architecture (1-line summary)
 
-`SheetMusicAudioJNI` Kotlin object loads `libSheetMusicJNI.so` (Swift
-bridge) and `libsheetmusicaudio.so` (C JNI shim over FluidSynth via
-`libfluidsynth.so`). MIDI rendering + timeline lookups happen Swift-side;
-synthesis + Oboe-style output (currently `AudioTrack` for v0) happen
-Kotlin-side.
+`io.github.jiyimeta.sheetmusic.SheetMusicJNI` (in the `sheet-music-android`
+module) is the canonical loader of `libSheetMusicJNI.so` (Swift bridge).
+This module ships `libsheetmusicaudio.so` — a C JNI shim over FluidSynth
+via `libfluidsynth.so` — and triggers `SheetMusicJNI`'s class init early
+so its `external fun` declarations resolve. MIDI rendering + timeline
+lookups happen Swift-side; synthesis + Oboe output happen Kotlin-side.
 
 Full design in `docs/superpowers/specs/2026-05-19-android-audio-backend-design.md`.
 
