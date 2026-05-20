@@ -237,11 +237,15 @@ This is purely an example-app refactor; library API unchanged.
 
 ### 2.5 Score metadata
 
-`PlaybackService` builds a `MediaMetadata` from the loaded `Score`:
-title from `Score.title ?? "Untitled"`, composer from
-`Score.composer ?? ""`. The example app has the loaded score in
-hand because it's the same process that drove `prepare()`. No new
-library API.
+Phase 5C ships with a hardcoded placeholder `MediaMetadata` (title
+"Sheet Music", empty composer). Reading title / composer from the
+loaded `Score` is deferred — the Kotlin side currently holds only a
+`Long` handle, so live metadata would require a new JNI accessor
+(`nativeScoreTitle(handle): String?` etc). That JNI expansion is its
+own small task and is queued as a Phase 5.1 follow-up so 5C ships on
+its actual deliverable (system controls). The hardcoded title is
+visible in the notification and lock-screen surface — adequate for
+the demo and replaceable later without re-architecting.
 
 ## Section 3 — Shared code scope
 
@@ -318,6 +322,10 @@ state, rate}`. Rejected because:
 - **Apple-side example NowPlaying wiring** remains a Phase 5.1
   candidate. Library is already arranged for it; only the example
   app's `SceneDelegate` / `AppDelegate` adoption is missing.
+- **Android score metadata via JNI** — Phase 5.1 follow-up to add
+  `nativeScoreTitle` / `nativeScoreComposer` accessors and have
+  `PlaybackService` populate `MediaMetadata` from them after
+  `prepare()`.
 
 ## Non-goals (re-stated for clarity)
 
