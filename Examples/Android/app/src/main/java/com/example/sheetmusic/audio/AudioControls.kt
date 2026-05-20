@@ -19,6 +19,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.example.sheetmusic.audio.export.ExportButton
 import io.github.jiyimeta.sheetmusic.audio.model.PlaybackState
 import kotlin.math.floor
 
@@ -40,6 +41,7 @@ import kotlin.math.floor
 @Composable
 fun AudioControls(
     viewModel: AudioViewModel,
+    scoreHandle: Long?,
     modifier: Modifier = Modifier,
 ) {
     val state by viewModel.state.collectAsState()
@@ -97,6 +99,14 @@ fun AudioControls(
                 onClick = { viewModel.engine.skip(5.0) },
                 enabled = isPrepared
             ) { Text("+5s") }
+
+            // Export to audio file (only enabled once a score handle exists)
+            if (scoreHandle != null) {
+                ExportButton(
+                    playbackEngine = viewModel.engine,
+                    scoreHandle = scoreHandle,
+                )
+            }
         }
 
         // Time readout
