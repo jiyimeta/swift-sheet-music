@@ -32,14 +32,19 @@ import SheetMusicCore
         guard let rect = document.cursorFrame(for: cursor, in: score) else {
             return env.pointee.NewByteArray(envPtr, 0)
         }
+        // SheetMusicLayout works in typographic points (pt); LayoutBridge
+        // converts DrawCommands to mm before encoding. Apply the same
+        // conversion here so the cursor frame is in mm — the unit the
+        // Kotlin overlay multiplies by pxPerMM to reach screen pixels.
         // On Android SheetMusicLayout.CGRect is a stub type distinct from
         // any Foundation.CGRect shim. Pass component doubles directly so
         // CursorFrameCodec.encode receives its expected type.
+        let ptToMM = 25.4 / 72.0
         let encoded = CursorFrameCodec.encodeComponents(
-            x: Double(rect.origin.x),
-            y: Double(rect.origin.y),
-            width: Double(rect.size.width),
-            height: Double(rect.size.height),
+            x: Double(rect.origin.x) * ptToMM,
+            y: Double(rect.origin.y) * ptToMM,
+            width: Double(rect.size.width) * ptToMM,
+            height: Double(rect.size.height) * ptToMM,
         )
         return makeJByteArray(env: envPtr, bytes: encoded)
     }
