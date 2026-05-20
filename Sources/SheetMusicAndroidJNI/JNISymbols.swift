@@ -48,6 +48,46 @@
         LayoutDocumentCache.release(handle)
     }
 
+    /// Reads `workTitle` + `composer` from the score's `metaTags`
+    /// dictionary and returns them as a length-prefixed UTF-8 blob:
+    /// `[titleByteLen:I32 LE][titleBytes][composerByteLen:I32 LE][composerBytes]`.
+    /// Missing tags return as zero-length strings; an unknown handle
+    /// returns an empty byte array.
+    @_cdecl("Java_io_github_jiyimeta_sheetmusic_SheetMusicJNI_nativeScoreMetadata")
+    // swiftlint:disable:next identifier_name
+    public func Java_io_github_jiyimeta_sheetmusic_SheetMusicJNI_nativeScoreMetadata(
+        _ envPtr: UnsafeMutablePointer<JNIEnv?>,
+        _ clazz: jclass,
+        _ scoreHandle: jlong,
+    ) -> jbyteArray? {
+        guard let env = envPtr.pointee else { return nil }
+        guard let score = scoreTable.value(for: scoreHandle) else {
+            return env.pointee.NewByteArray(envPtr, 0)
+        }
+        let title = score.metaTags["workTitle"] ?? ""
+        let composer = score.metaTags["composer"] ?? ""
+        var writer = AudioBinaryWriter()
+        let titleBytes = Array(title.utf8)
+        let composerBytes = Array(composer.utf8)
+        writer.append(Int32(titleBytes.count))
+        writer.append(bytes: titleBytes)
+        writer.append(Int32(composerBytes.count))
+        writer.append(bytes: composerBytes)
+        let encoded = writer.data
+        let array = env.pointee.NewByteArray(envPtr, jsize(encoded.count))
+        encoded.withUnsafeBytes { rawBuf in
+            let typed = rawBuf.bindMemory(to: jbyte.self)
+            env.pointee.SetByteArrayRegion(
+                envPtr,
+                array,
+                0,
+                jsize(encoded.count),
+                typed.baseAddress,
+            )
+        }
+        return array
+    }
+
     // MARK: - SMuFL font metrics
 
     @_cdecl("Java_io_github_jiyimeta_sheetmusic_SheetMusicJNI_nativeInstallSMuFLMetrics")

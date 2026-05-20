@@ -23,6 +23,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 
 private const val NOTIFICATION_ID = 1001
@@ -45,11 +47,35 @@ class PlaybackService : MediaSessionService() {
     private lateinit var engine: AndroidPlaybackEngine
     private var session: MediaSession? = null
     private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
+    private val mediaItemFlow = MutableStateFlow(buildMediaItem(title = "Sheet Music", artist = ""))
+
+    private fun buildMediaItem(title: String, artist: String): MediaItem =
+        MediaItem.Builder()
+            .setMediaId("score")
+            .setMediaMetadata(
+                MediaMetadata.Builder()
+                    .setTitle(title)
+                    .setArtist(artist)
+                    .build(),
+            )
+            .build()
 
     // ── Local-binding surface (in-app UI) ────────────────────────────
 
     inner class LocalBinder : Binder() {
         val engine: AndroidPlaybackEngine get() = this@PlaybackService.engine
+
+        /**
+         * Replace the current `MediaItem`'s metadata. Title falls back
+         * to "Sheet Music" when blank so the notification chip is
+         * never empty.
+         */
+        fun updateMetadata(title: String, composer: String) {
+            mediaItemFlow.value = buildMediaItem(
+                title = title.ifBlank { "Sheet Music" },
+                artist = composer,
+            )
+        }
     }
 
     private val localBinder = LocalBinder()
@@ -71,16 +97,7 @@ class PlaybackService : MediaSessionService() {
             context = applicationContext,
             soundfontResolver = AssetSoundfontResolver(applicationContext),
         )
-        val mediaItem = MediaItem.Builder()
-            .setMediaId("score")
-            .setMediaMetadata(
-                MediaMetadata.Builder()
-                    .setTitle("Sheet Music")
-                    .setArtist("")
-                    .build()
-            )
-            .build()
-        val player = EnginePlayer(engine, serviceScope, mediaItem)
+        val player = EnginePlayer(engine, serviceScope, mediaItemFlow)
         val sessionActivity = PendingIntent.getActivity(
             this,
             0,
@@ -115,21 +132,24 @@ class PlaybackService : MediaSessionService() {
 
     private fun observeEngineForForegroundNotification() {
         serviceScope.launch {
-            engine.state.collect { state ->
-                when (state) {
-                    PlaybackState.PLAYING, PlaybackState.PAUSED -> postOrUpdateNotification()
-                    PlaybackState.STOPPED, PlaybackState.PREPARED, PlaybackState.EXPORTING ->
-                        stopForeground(STOP_FOREGROUND_REMOVE)
+            combine(engine.state, mediaItemFlow) { state, _ -> state }
+                .collect { state ->
+                    when (state) {
+                        PlaybackState.PLAYING, PlaybackState.PAUSED -> postOrUpdateNotification()
+                        PlaybackState.STOPPED, PlaybackState.PREPARED, PlaybackState.EXPORTING ->
+                            stopForeground(STOP_FOREGROUND_REMOVE)
+                    }
                 }
-            }
         }
     }
 
     private fun postOrUpdateNotification() {
         val s = session ?: return
+        val meta = mediaItemFlow.value.mediaMetadata
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_play_arrow)
-            .setContentTitle("Sheet Music")
+            .setContentTitle(meta.title ?: "Sheet Music")
+            .setContentText(meta.artist ?: "")
             .setStyle(MediaStyle().setMediaSession(s.sessionCompatToken))
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setOngoing(true)
