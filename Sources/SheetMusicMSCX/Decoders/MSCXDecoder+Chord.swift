@@ -51,7 +51,13 @@ extension Chord {
             return ChordArticulation.fromSubtypeXML(subtype)
         }
 
-        let tremolo = try node.first("Tremolo").map(Tremolo.decode)
+        // MS3 emits `<Tremolo>`; MS4 split it into `<TremoloSingleChord>`
+        // and `<TremoloTwoChord>`. Accept any of the three — MuseScore
+        // only ever writes one per chord, so first-match wins.
+        let tremoloNode = node.first("Tremolo")
+            ?? node.first("TremoloSingleChord")
+            ?? node.first("TremoloTwoChord")
+        let tremolo = try tremoloNode.map(Tremolo.decode)
 
         return Chord(
             duration: duration, notes: ChordNotes(notes),

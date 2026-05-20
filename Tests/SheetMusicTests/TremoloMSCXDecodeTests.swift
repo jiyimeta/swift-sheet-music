@@ -90,6 +90,42 @@ struct TremoloMSCXDecodeFirstPassTests {
             _ = try parseChord(xml)
         }
     }
+
+    @Test func decodes_ms4_TremoloSingleChord() throws {
+        // MS4 splits the MS3 `<Tremolo>` element into two distinct
+        // tags; the `<subtype>` text keeps the same r-prefix tokens.
+        let xml = """
+        <Chord>
+            <durationType>quarter</durationType>
+            <TremoloSingleChord>
+                <subtype>r16</subtype>
+                <eid>Qiqea8EoARG_TAW57YqR/CD</eid>
+            </TremoloSingleChord>
+            <Note><pitch>60</pitch><tpc>14</tpc></Note>
+        </Chord>
+        """
+        let chord = try parseChord(xml)
+        #expect(chord.tremolo?.subtype == .r16)
+        #expect(chord.tremolo?.span == .single)
+    }
+
+    @Test func decodes_ms4_TremoloTwoChord() throws {
+        // MS4 two-chord tremolo. The new tag pins the span; the
+        // pairing-validation second pass in MSCXDecoder+Voice still
+        // expects `.between` to mark the start chord.
+        let xml = """
+        <Chord>
+            <durationType>half</durationType>
+            <TremoloTwoChord>
+                <subtype>c16</subtype>
+            </TremoloTwoChord>
+            <Note><pitch>60</pitch><tpc>14</tpc></Note>
+        </Chord>
+        """
+        let chord = try parseChord(xml)
+        #expect(chord.tremolo?.subtype == .r16)
+        #expect(chord.tremolo?.span == .between)
+    }
 }
 
 struct TremoloMSCXDecodeSecondPassTests {
