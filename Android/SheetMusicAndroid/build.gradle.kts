@@ -1,6 +1,7 @@
 plugins {
     id("com.android.library")
     id("org.jetbrains.kotlin.android")
+    `maven-publish`
 }
 
 android {
@@ -40,4 +41,43 @@ version = "0.0.0-SNAPSHOT"
 dependencies {
     // No third-party deps. Pure JNI bindings + a Kotlin façade.
     // AndroidX / Compose live in consumer apps, not here.
+}
+
+afterEvaluate {
+    publishing {
+        publications {
+            register<MavenPublication>("release") {
+                from(components["release"])
+                groupId = "io.github.jiyimeta"
+                artifactId = "sheet-music-android"
+                // Version comes from the top-level `version = …` declaration.
+                pom {
+                    name.set("SheetMusic Android")
+                    description.set(
+                        "Kotlin/JNI bindings for swift-sheet-music: " +
+                            "score parsing, engraving layout, cursor resolution."
+                    )
+                    url.set("https://github.com/jiyimeta/swift-sheet-music")
+                    licenses {
+                        license {
+                            name.set("MIT")
+                            url.set("https://opensource.org/licenses/MIT")
+                        }
+                    }
+                }
+            }
+        }
+        repositories {
+            maven {
+                name = "GithubPackages"
+                url = uri("https://maven.pkg.github.com/jiyimeta/swift-sheet-music")
+                credentials {
+                    username = System.getenv("GITHUB_ACTOR")
+                        ?: project.findProperty("gpr.user") as String?
+                    password = System.getenv("GITHUB_TOKEN")
+                        ?: project.findProperty("gpr.token") as String?
+                }
+            }
+        }
+    }
 }

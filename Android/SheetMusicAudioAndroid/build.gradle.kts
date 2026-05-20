@@ -1,6 +1,7 @@
 plugins {
     id("com.android.library")
     id("org.jetbrains.kotlin.android")
+    `maven-publish`
 }
 
 android {
@@ -90,4 +91,41 @@ dependencies {
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1")
+}
+
+afterEvaluate {
+    publishing {
+        publications {
+            register<MavenPublication>("release") {
+                from(components["release"])
+                groupId = "io.github.jiyimeta"
+                artifactId = "sheet-music-audio-android"
+                pom {
+                    name.set("SheetMusic Audio Android")
+                    description.set(
+                        "FluidSynth-backed audio playback for swift-sheet-music on Android."
+                    )
+                    url.set("https://github.com/jiyimeta/swift-sheet-music")
+                    licenses {
+                        license {
+                            name.set("MIT")
+                            url.set("https://opensource.org/licenses/MIT")
+                        }
+                    }
+                }
+            }
+        }
+        repositories {
+            maven {
+                name = "GithubPackages"
+                url = uri("https://maven.pkg.github.com/jiyimeta/swift-sheet-music")
+                credentials {
+                    username = System.getenv("GITHUB_ACTOR")
+                        ?: project.findProperty("gpr.user") as String?
+                    password = System.getenv("GITHUB_TOKEN")
+                        ?: project.findProperty("gpr.token") as String?
+                }
+            }
+        }
+    }
 }
