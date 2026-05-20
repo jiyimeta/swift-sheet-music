@@ -4,15 +4,17 @@ import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioTrack
+import android.util.Log
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicReference
+import kotlinx.coroutines.asCoroutineDispatcher
 
 /**
  * PCM output stream for the Android audio backend.
@@ -50,6 +52,31 @@ internal open class OboeStream(
     private val sampleRate: Int = 48_000,
     private val framesPerBuffer: Int = 480,  // ~10 ms at 48 kHz
 ) : AutoCloseable {
+
+    companion object {
+        private const val TAG = "OboeStream"
+        // Log underrun diagnostics once every ~10 s of audio (480 frames/buf * 2048 iters ≈ 10 s)
+        private const val UNDERRUN_LOG_INTERVAL = 2048
+    }
+
+    /**
+     * Dedicated single-thread executor for the audio writer coroutine.
+     *
+     * Using [Dispatchers.Default] (a shared work-stealing pool) risks
+     * preemption from unrelated coroutines, draining the AudioTrack ring
+     * buffer and producing underrun crackling. A max-priority daemon thread
+     * gives the writer the best-effort real-time scheduling available on the
+     * JVM without requiring root or `RECORD_AUDIO`.
+     *
+     * The executor is kept alive across play/pause cycles to avoid
+     * re-initialization overhead. It is shut down only in [close].
+     */
+    private val writerDispatcher = Executors.newSingleThreadExecutor { r ->
+        Thread(r, "OboeStream-writer").apply {
+            priority = Thread.MAX_PRIORITY
+            isDaemon = true
+        }
+    }.asCoroutineDispatcher()
 
     /**
      * Callback interface for the audio producer. Called on the writer
@@ -90,7 +117,9 @@ internal open class OboeStream(
             AudioFormat.CHANNEL_OUT_STEREO,
             AudioFormat.ENCODING_PCM_FLOAT,
         )
-        val bufferSize = minBuf.coerceAtLeast(framesPerBuffer * 2 * Float.SIZE_BYTES)
+        // Hold at least 4 writer buffers to absorb scheduling jitter without
+        // underrunning. One buffer = framesPerBuffer * 2 ch * 4 bytes/float.
+        val bufferSize = minBuf.coerceAtLeast(framesPerBuffer * 2 * Float.SIZE_BYTES * 4)
 
         val attrs = AudioAttributes.Builder()
             .setUsage(AudioAttributes.USAGE_MEDIA)
@@ -118,7 +147,7 @@ internal open class OboeStream(
         if (running) return
         t.play()
         running = true
-        writerScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        writerScope = CoroutineScope(SupervisorJob() + writerDispatcher)
         writerScope!!.launch { runWriter() }
     }
 
@@ -134,17 +163,19 @@ internal open class OboeStream(
         track?.flush()
     }
 
-    /** Stops playback and releases the AudioTrack. Idempotent. */
+    /** Stops playback, releases the AudioTrack, and shuts down the writer dispatcher. */
     open override fun close() {
         stop()
         track?.release()
         track = null
+        writerDispatcher.close()
     }
 
     private suspend fun runWriter() {
         val left = FloatArray(framesPerBuffer)
         val right = FloatArray(framesPerBuffer)
         val interleaved = FloatArray(framesPerBuffer * 2)
+        var iteration = 0
         while (running && currentCoroutineContext().isActive) {
             val p = producer.get()
             if (p == null) {
@@ -158,6 +189,11 @@ internal open class OboeStream(
                 interleaved[i * 2 + 1] = right[i] * mv
             }
             track?.write(interleaved, 0, interleaved.size, AudioTrack.WRITE_BLOCKING)
+            // Diagnostic: log underrun count every ~10 s of audio. API 24+.
+            if (++iteration % UNDERRUN_LOG_INTERVAL == 0) {
+                val underruns = track?.underrunCount ?: -1
+                Log.i(TAG, "underrunCount=$underruns iter=$iteration thread=${Thread.currentThread().name}")
+            }
         }
     }
 }

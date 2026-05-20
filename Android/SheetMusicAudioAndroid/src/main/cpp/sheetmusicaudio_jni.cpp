@@ -4,6 +4,7 @@
 #include <android/log.h>
 
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, "smfa-jni", __VA_ARGS__)
+#define LOGI(...) __android_log_print(ANDROID_LOG_INFO,  "smfa-jni", __VA_ARGS__)
 
 // ─────────────────────────────────────────────────────────────────────
 // Helpers
@@ -34,8 +35,13 @@ Java_io_github_kiichiio_sheetmusic_audio_native_FluidSynthNative_newSynth(
     // fluid_synth_get_settings.
     if (synth == nullptr) {
         delete_fluid_settings(settings);
+        LOGE("newSynth: new_fluid_synth failed at %d Hz", sampleRate);
         return 0;
     }
+    // Clamp global gain to 0.5 to prevent multi-channel clipping.
+    // FluidSynth's default (0.2) is quiet; 0.5 is loud but safe.
+    fluid_synth_set_gain(synth, 0.5f);
+    LOGI("newSynth: synth created at %d Hz, gain=0.5", sampleRate);
     return reinterpret_cast<jlong>(synth);
 }
 
@@ -58,6 +64,11 @@ Java_io_github_kiichiio_sheetmusic_audio_native_FluidSynthNative_sfload(
     if (synth == nullptr) return -1;
     const char *cpath = env->GetStringUTFChars(path, nullptr);
     int result = fluid_synth_sfload(synth, cpath, resetPresets ? 1 : 0);
+    if (result < 0) {
+        LOGE("sfload: failed to load '%s' (result=%d)", cpath, result);
+    } else {
+        LOGI("sfload: loaded '%s' -> sfid=%d", cpath, result);
+    }
     env->ReleaseStringUTFChars(path, cpath);
     return result;
 }
