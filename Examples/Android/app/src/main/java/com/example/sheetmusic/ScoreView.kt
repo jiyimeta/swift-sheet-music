@@ -67,7 +67,7 @@ fun ScoreView(
                 )
             }
         }
-        AudioControls(audioVm)
+        AudioControls(viewModel = audioVm, scoreHandle = scoreHandle)
         LoopSelectionOverlay(viewModel = audioVm)
         MixerPanel(audioVm)
     }

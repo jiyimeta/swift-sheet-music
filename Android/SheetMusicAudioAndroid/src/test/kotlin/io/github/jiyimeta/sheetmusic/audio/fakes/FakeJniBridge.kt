@@ -19,6 +19,7 @@ internal open class FakeJniBridge(
     var pitchAndStaffOfNoteResult: Long = -1L,
     var earliestOfResult: ByteArray = byteArrayOf(),
     var itemEndTickResult: Long = -1L,
+    var resolveExportTickRangeResult: LongArray = longArrayOf(0L, 1920L),
 ) : AndroidPlaybackEngine.JniBridge {
 
     val frameAtTickCalls = mutableListOf<Long>()
@@ -51,5 +52,11 @@ internal open class FakeJniBridge(
     override fun itemEndTick(scoreHandle: Long, idBytes: ByteArray): Long {
         itemEndTickCalls += idBytes
         return itemEndTickResult
+    }
+
+    val resolveExportTickRangeCalls = mutableListOf<ByteArray>()
+    override fun resolveExportTickRange(scoreHandle: Long, rangeBytes: ByteArray): LongArray {
+        resolveExportTickRangeCalls += rangeBytes
+        return resolveExportTickRangeResult
     }
 }
