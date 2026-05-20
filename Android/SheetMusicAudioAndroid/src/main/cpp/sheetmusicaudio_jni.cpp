@@ -38,10 +38,11 @@ Java_io_github_kiichiio_sheetmusic_audio_native_FluidSynthNative_newSynth(
         LOGE("newSynth: new_fluid_synth failed at %d Hz", sampleRate);
         return 0;
     }
-    // Clamp global gain to 0.5 to prevent multi-channel clipping.
-    // FluidSynth's default (0.2) is quiet; 0.5 is loud but safe.
-    fluid_synth_set_gain(synth, 0.5f);
-    LOGI("newSynth: synth created at %d Hz, gain=0.5", sampleRate);
+    // Default FluidSynth gain is 0.2 (very quiet). Raise to 1.0 — well within
+    // FluidSynth's internal soft-limiter headroom. Lower (e.g. 0.5) if
+    // clipping observed on devices with poor scheduler latency.
+    fluid_synth_set_gain(synth, 1.0f);
+    LOGI("newSynth: synth created at %d Hz, gain=1.0", sampleRate);
     return reinterpret_cast<jlong>(synth);
 }
 
