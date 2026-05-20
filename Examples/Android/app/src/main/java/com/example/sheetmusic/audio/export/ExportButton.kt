@@ -1,6 +1,7 @@
 package com.example.sheetmusic.audio.export
 
 import android.net.Uri
+import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Column
@@ -18,9 +19,14 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.jiyimeta.sheetmusic.audio.AndroidPlaybackEngine
+
+private fun Uri.queryDisplayName(context: android.content.Context): String? =
+    context.contentResolver.query(this, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
+        ?.use { cursor -> if (cursor.moveToFirst()) cursor.getString(0) else null }
 
 /**
  * Self-contained Export entry point: a TextButton that opens a format
@@ -39,6 +45,7 @@ fun ExportButton(
     modifier: Modifier = Modifier,
 ) {
     val vm: ExportViewModel = viewModel()
+    val context = LocalContext.current
     var showFormatPicker by remember { mutableStateOf(false) }
     var pendingFormat by remember { mutableStateOf<ExportFormatOption?>(null) }
     val state by vm.state.collectAsState()
@@ -101,10 +108,11 @@ fun ExportButton(
             )
         }
         is ExportState.Done -> {
+            val displayName = remember(s.uri) { s.uri.queryDisplayName(context) ?: s.uri.toString() }
             AlertDialog(
                 onDismissRequest = { vm.acknowledge() },
                 title = { Text("Export complete") },
-                text = { Text("Saved to ${s.uri.lastPathSegment ?: s.uri}") },
+                text = { Text("Saved as $displayName") },
                 confirmButton = {
                     TextButton(onClick = { vm.acknowledge() }) { Text("OK") }
                 },
