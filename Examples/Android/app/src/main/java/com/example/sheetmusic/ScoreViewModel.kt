@@ -93,7 +93,15 @@ class ScoreViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     override fun onCleared() {
-        handle?.close()
+        // Intentionally do NOT close `handle`. The same raw Long is
+        // referenced by PlaybackService.engine, which outlives this
+        // ViewModel via the bound service. Closing here would release
+        // the underlying C++ score object and make subsequent
+        // engine.seek / skip / setLoop calls return invalid frames.
+        // The handle is reclaimed on process death; a fresh
+        // ScoreViewModel on Activity recreation creates a new handle
+        // for its own layout work, but the engine keeps using the
+        // pre-existing one (see AudioViewModel.preparePlayback).
         super.onCleared()
     }
 }

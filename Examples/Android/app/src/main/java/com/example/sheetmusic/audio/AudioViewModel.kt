@@ -93,10 +93,20 @@ class AudioViewModel(application: Application) : AndroidViewModel(application) {
      * [AndroidPlaybackEngine.prepare]. Safe to call before the
      * service connects — the coroutine suspends on the engine flow
      * and resumes on the first non-null value.
+     *
+     * If the engine is already prepared (state != STOPPED) when this
+     * is called, the prepare step is skipped. This happens when the
+     * Activity was destroyed in the background and recreated — the
+     * Service stayed alive with its engine prepared, and re-preparing
+     * here would reset the playback position to 0 and discard the
+     * loaded SMF state. The new score handle from the recreated
+     * ScoreViewModel is intentionally ignored; the engine continues
+     * using the prior handle.
      */
     fun preparePlayback(scoreHandle: Long) {
         viewModelScope.launch {
             val e = engine.filterNotNull().first()
+            if (e.state.value != PlaybackState.STOPPED) return@launch
             try {
                 e.prepare(scoreHandle)
             } catch (ex: Exception) {
