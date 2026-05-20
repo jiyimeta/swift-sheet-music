@@ -95,3 +95,52 @@ If a checkbox fails:
 - Capture logcat: `adb logcat *:S AudioVM:V FluidSynth:V`
 - Check the spec's "Errors / edge cases" section for the matching scenario
 - File a follow-up issue
+
+## Phase 5C — Media Session controls
+
+Prerequisites: same as the Phase 5A smoke tests (test.mscz + gm.sf2
+bundled, native libs built and staged). Device or emulator with
+API ≥ 28.
+
+1. Install + launch the app, parse `test.mscz`, hit Play.
+2. Background the app (press Home). A notification appears with the
+   title "Sheet Music", a Pause button, and Media-style controls.
+3. Tap Pause in the notification — playback pauses within ~33 ms and
+   the in-app cursor freezes.
+4. Tap Play in the notification — playback resumes.
+5. Lock the device. Lock-screen controls show. The scrubber updates
+   in step with playback.
+6. Drag the lock-screen scrubber to a new position. Unlock — the
+   in-app cursor jumps to the new position.
+7. Connect headphones and press the play/pause button. Transport
+   responds (Media3 default headset key handling).
+8. Open another media app (e.g. Spotify) and start playback. Our
+   service pauses within ~200 ms (Media3 default audio-focus loss
+   reaction).
+9. Swipe the app from recents. Notification disappears within ~1 s
+   (service self-stops via `onTaskRemoved` when not playing).
+10. Re-open the app. Re-binding to the service is automatic — Play
+    still works and continues from the prior position if playback
+    was paused (engine state is preserved across the rebind).
+
+### Known limitation — Media3 auto-foreground promotion
+
+On emulator-5556 (Pixel 6 Pro API 34) the `MediaSessionService` does
+not auto-promote to foreground when playback starts, so step 2's
+MediaStyle notification doesn't appear even when
+`POST_NOTIFICATIONS` is granted (`adb shell dumpsys activity
+services` shows `startForegroundCount=0`).
+
+The MediaSession layer itself IS active and fully wired —
+`adb shell dumpsys media_session` reports `state=PLAYING`, the
+published metadata ("Sheet Music"), `USAGE_MEDIA` audio attributes,
+and live `position` updates, with 3 system controllers attached
+(Bluetooth gatt + AudioMediaPlayerWrapper + Media3 internal). So
+the Phase 5C deliverable — MediaSession publishing playback state
+to system controls — is verified working at the IPC layer.
+
+Visible-notification follow-up: likely needs either
+`MediaSessionService.setMediaNotificationProvider(...)` with a
+`DefaultMediaNotificationProvider` instance constructed via its
+`Builder`, or an explicit `startForeground` call in the service
+when state transitions to PLAYING. Phase 5.1 task.

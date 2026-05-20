@@ -151,12 +151,47 @@ class AndroidPlaybackEngine internal constructor(
 
     // ── Observable state ─────────────────────────────────────────────
 
+    /**
+     * Lifecycle state of the engine. Driven internally by [play] /
+     * [pause] / [stop] / [prepare] / [exportToWavFile] (when that
+     * path is wired) and by the poll loop's end-of-score detection.
+     *
+     * MediaSession integrators: map to
+     * `androidx.media3.common.Player.STATE_*` (or
+     * `PlaybackStateCompat.STATE_*` for the legacy MediaSession
+     * API):
+     *
+     * | engine state | Media3 Player.State    | PlaybackStateCompat |
+     * |--------------|------------------------|---------------------|
+     * | STOPPED      | STATE_IDLE / STATE_ENDED | STATE_STOPPED     |
+     * | PREPARED     | STATE_READY            | STATE_PAUSED        |
+     * | PLAYING      | STATE_READY (+ playing)| STATE_PLAYING       |
+     * | PAUSED       | STATE_READY (+ paused) | STATE_PAUSED        |
+     * | EXPORTING    | (transport unavailable) | STATE_STOPPED      |
+     *
+     * The EXPORTING row reflects the engine's no-op guard on all
+     * transport methods during export — apps should hide or disable
+     * transport UI in that state.
+     */
     private val _state = MutableStateFlow(PlaybackState.STOPPED)
     val state: StateFlow<PlaybackState> = _state.asStateFlow()
 
     private val _currentCursor = MutableStateFlow<ScoreCursor?>(null)
     val currentCursor: StateFlow<ScoreCursor?> = _currentCursor.asStateFlow()
 
+    /**
+     * Current playback position in seconds, updated at the poll loop
+     * cadence (~33 ms) during playback and on every [seek] / [skip] /
+     * [stop] / [prepare].
+     *
+     * During A-B loop playback, the poll loop snaps tick into
+     * `[loop.startTick, loop.endTick)` before reading the frame
+     * time, so observers see the wrapped (audible) position rather
+     * than a value that climbs past `loop.endTick`. This is the
+     * behaviour MediaSession scrubbers and `getCurrentPosition()`
+     * implementations expect — without the fold, the lock-screen
+     * scrubber would keep advancing and saturate at score end.
+     */
     private val _currentTimeSeconds = MutableStateFlow(0.0)
     val currentTimeSeconds: StateFlow<Double> = _currentTimeSeconds.asStateFlow()
 
@@ -303,7 +338,17 @@ class AndroidPlaybackEngine internal constructor(
     }
 
     /**
-     * Pauses playback. Idempotent.
+     * Pauses playback at the current position. [play] resumes from
+     * there. Idempotent.
+     *
+     * Also stops the underlying Oboe output stream. Stopping just
+     * the FluidSynth player leaves the audio stream emitting silent
+     * frames, which Android's audio focus framework reads as
+     * "audio still active" and which MediaSession's
+     * `PlaybackStateCompat` aggregation may use to override an
+     * explicit `STATE_PAUSED`. Mirrors the equivalent
+     * `AVAudioEngine.pause()` discipline on Apple side.
+     *
      * No-op when [state] is [PlaybackState.EXPORTING].
      */
     fun pause() {
@@ -385,6 +430,22 @@ class AndroidPlaybackEngine internal constructor(
         player.seekTick(snapped)
         _currentCursor.value = frame.cursor
         _currentTimeSeconds.value = frame.timeSeconds
+    }
+
+    /**
+     * Seek to an absolute time in seconds, clamped to
+     * `[0, totalTimeSeconds]`. Preserves play / pause state.
+     *
+     * Provided alongside [skip] for natural integration with
+     * `MediaSession.Callback.onSeekTo(positionMs)`, whose handler
+     * receives an absolute target time. Internally reuses [skip]'s
+     * clamp + state-preserve machinery — no new code path through
+     * the player.
+     *
+     * No-op when [state] is [PlaybackState.EXPORTING].
+     */
+    fun seek(toTimeSeconds: Double) {
+        skip(toTimeSeconds - _currentTimeSeconds.value)
     }
 
     // ── Loop ─────────────────────────────────────────────────────────

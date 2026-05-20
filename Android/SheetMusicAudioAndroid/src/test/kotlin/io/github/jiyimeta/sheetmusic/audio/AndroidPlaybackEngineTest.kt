@@ -376,6 +376,62 @@ class AndroidPlaybackEngineTest {
         assertEquals(cursor, engine.currentCursor.value)
     }
 
+    @Test
+    fun `seekToTimeSeconds updates position to absolute time`() = runTest {
+        // Set up a frameAtTickResult corresponding to target=2.0s (out of total=2.0s).
+        // skip()'s tick estimate at target=2.0 / total=2.0 * totalTicks=960 = 960L.
+        val cursor = ScoreCursor.Beat(measureIndex = 3, tickInMeasure = 0)
+        val frameBytes = encodeFrameBytes(tick = 960L, timeMicros = 2_000_000L, cursor = cursor)
+        val bridge = FakeJniBridge(
+            timelineSummaryResult = longArrayOf(960L, 2_000_000L, 480L),
+            staffParamsResult = oneStaffPayload(),
+            metronomeBeatsResult = downbeatOnlyBeats(),
+            renderMidiResult = minimalSmf,
+            frameAtTickResult = frameBytes,
+        )
+        val engine = newEngineForTests(bridge = bridge)
+        engine.prepare(1L)
+        engine.seek(toTimeSeconds = 2.0)
+        assertEquals(2.0, engine.currentTimeSeconds.value, 0.001)
+        assertEquals(cursor, engine.currentCursor.value)
+    }
+
+    @Test
+    fun `seekToTimeSeconds clamps to totalTimeSeconds`() = runTest {
+        // Target way beyond end: should clamp to total (2.0s) and call skip
+        // with delta = (2.0 - 0.0).
+        val cursor = ScoreCursor.Beat(measureIndex = 3, tickInMeasure = 0)
+        val frameBytes = encodeFrameBytes(tick = 960L, timeMicros = 2_000_000L, cursor = cursor)
+        val bridge = FakeJniBridge(
+            timelineSummaryResult = longArrayOf(960L, 2_000_000L, 480L),
+            staffParamsResult = oneStaffPayload(),
+            metronomeBeatsResult = downbeatOnlyBeats(),
+            renderMidiResult = minimalSmf,
+            frameAtTickResult = frameBytes,
+        )
+        val engine = newEngineForTests(bridge = bridge)
+        engine.prepare(1L)
+        engine.seek(toTimeSeconds = 999.0)
+        assertEquals(2.0, engine.currentTimeSeconds.value, 0.001)
+    }
+
+    @Test
+    fun `seekToTimeSeconds clamps to zero on negative target`() = runTest {
+        val cursor = ScoreCursor.Beat(measureIndex = 0, tickInMeasure = 0)
+        val frameBytes = encodeFrameBytes(tick = 0L, timeMicros = 0L, cursor = cursor)
+        val bridge = FakeJniBridge(
+            timelineSummaryResult = longArrayOf(960L, 2_000_000L, 480L),
+            staffParamsResult = oneStaffPayload(),
+            metronomeBeatsResult = downbeatOnlyBeats(),
+            renderMidiResult = minimalSmf,
+            frameAtTickResult = frameBytes,
+        )
+        val engine = newEngineForTests(bridge = bridge)
+        engine.prepare(1L)
+        engine.seek(toTimeSeconds = -10.0)
+        assertEquals(0.0, engine.currentTimeSeconds.value, 0.001)
+    }
+
     // T40 — playPreview + earliest
 
     @Test

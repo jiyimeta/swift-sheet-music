@@ -50,9 +50,9 @@ fun LoopSelectionOverlay(
             checked = lr != null,
             onCheckedChange = { on ->
                 if (on) {
-                    viewModel.engine.setLoop(from = DEMO_LOOP_START, to = DEMO_LOOP_END)
+                    viewModel.engine.value?.setLoop(from = DEMO_LOOP_START, to = DEMO_LOOP_END)
                 } else {
-                    viewModel.engine.clearLoop()
+                    viewModel.engine.value?.clearLoop()
                 }
             },
         )
