@@ -63,13 +63,76 @@ struct MSCXEncoderSpannersTests {
 
     @Test("Note round-trips a chromatic straight glissando")
     func glissandoChromaticStraightRoundTrip() throws {
+        // MuseScore's default text for STRAIGHT glissandi is "gliss."
+        // (C++: Glissando::propertyDefault(Pid::GLISS_TEXT)). The
+        // decoder fills that default when <text> is absent, so the
+        // round-trip value is "gliss." even though the encoder omitted
+        // the element.
         let gliss = Glissando(
             style: .chromatic, visualType: .straight,
             easeIn: 0, easeOut: 0, text: nil,
         )
         let note = Note(pitch: 60, tpc: 14, glissando: gliss)
         let decoded = try noteRoundTrip(note)
-        #expect(decoded.glissando == gliss)
+        #expect(decoded.glissando?.style == .chromatic)
+        #expect(decoded.glissando?.visualType == .straight)
+        #expect(decoded.glissando?.text == "gliss.")
+    }
+
+    @Test("MS4-style straight glissando without <text> decodes to 'gliss.'")
+    func glissandoStraightWithoutTextFillsDefault() throws {
+        // MuseScore 4's writer omits <text> when it equals the
+        // per-type default. The decoder must synthesize "gliss." for
+        // STRAIGHT glissandi so the line label still renders.
+        // Regression for: MS4-saved files showed no glissando label.
+        let xml = """
+        <root>
+          <Note>
+            <pitch>60</pitch>
+            <tpc>14</tpc>
+            <Spanner type="Glissando">
+              <Glissando>
+                <glissandoStyle>portamento</glissandoStyle>
+                <diagonal>1</diagonal>
+              </Glissando>
+              <next>
+                <location><fractions>1/2</fractions></location>
+              </next>
+            </Spanner>
+          </Note>
+        </root>
+        """
+        let parsed = try XMLTreeParser.parse(Data(xml.utf8))
+        let decoded = try Note.decode(#require(parsed.first("Note")))
+        #expect(decoded.glissando?.text == "gliss.")
+        #expect(decoded.glissando?.style == .portamento)
+        #expect(decoded.glissando?.visualType == .straight)
+    }
+
+    @Test("Empty <text></text> on a straight glissando stays nil (user-cleared)")
+    func glissandoStraightEmptyTextStaysCleared() throws {
+        // When the user explicitly clears the label in MuseScore, the
+        // writer emits <text></text> because the empty value differs
+        // from the default. Preserve that as nil so the renderer can
+        // distinguish "user cleared" from "use default".
+        let xml = """
+        <root>
+          <Note>
+            <pitch>60</pitch>
+            <tpc>14</tpc>
+            <Spanner type="Glissando">
+              <Glissando>
+                <glissandoStyle>CHROMATIC</glissandoStyle>
+                <text></text>
+              </Glissando>
+              <next/>
+            </Spanner>
+          </Note>
+        </root>
+        """
+        let parsed = try XMLTreeParser.parse(Data(xml.utf8))
+        let decoded = try Note.decode(#require(parsed.first("Note")))
+        #expect(decoded.glissando?.text == nil)
     }
 
     @Test("Note round-trips a wavy diatonic glissando with eases and label")

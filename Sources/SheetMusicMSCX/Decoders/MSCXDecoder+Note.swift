@@ -105,14 +105,30 @@ extension Note {
         default:
             visualType = .straight
         }
-        let text = node.first("text")?.text
         return Glissando(
             style: style,
             visualType: visualType,
             easeIn: Int(easeIn) ?? 0,
             easeOut: Int(easeOut) ?? 0,
-            text: text?.isEmpty == false ? text : nil,
+            text: decodeGlissandoText(node, visualType: visualType),
         )
+    }
+
+    /// Recover the glissando label, applying MuseScore's per-type default
+    /// when `<text>` is absent. MuseScore 4's writer omits the element
+    /// when the value matches `Glissando::propertyDefault(Pid::GLISS_TEXT)`
+    /// (STRAIGHT → "gliss.", WAVY → ""), so an absent `<text>` means
+    /// "use default" — not "no label". An empty `<text></text>` is a
+    /// user-cleared label and stays nil.
+    private static func decodeGlissandoText(
+        _ node: XMLTreeNode,
+        visualType: Glissando.VisualType,
+    ) -> String? {
+        guard let textNode = node.first("text") else {
+            return visualType == .straight ? "gliss." : nil
+        }
+        let raw = textNode.text ?? ""
+        return raw.isEmpty ? nil : raw
     }
 
     private static func parseGlissandoStyle(_ text: String) -> Glissando.Style? {
