@@ -126,30 +126,11 @@ extension ScoreLayerBuilder {
     private static func noteheadGlyph(
         for duration: NoteDuration, headType: String?,
     ) -> Character {
-        switch headType {
-        case "cross":
-            switch duration {
-            case .whole: return SMuFLGlyph.noteheadXWhole
-            case .half: return SMuFLGlyph.noteheadXHalf
-            default: return SMuFLGlyph.noteheadXBlack
-            }
-        case "diamond":
-            switch duration {
-            case .whole: return SMuFLGlyph.noteheadDiamondWhole
-            case .half: return SMuFLGlyph.noteheadDiamondHalf
-            default: return SMuFLGlyph.noteheadDiamondBlack
-            }
-        case "triangle-up":
-            return SMuFLGlyph.noteheadTriangleUpBlack
-        case "triangle-down":
-            return SMuFLGlyph.noteheadTriangleDownBlack
-        default:
-            switch duration {
-            case .whole: return SMuFLGlyph.noteheadWhole
-            case .half: return SMuFLGlyph.noteheadHalf
-            default: return SMuFLGlyph.noteheadBlack
-            }
-        }
+        let cp = NoteheadGlyph.codepoint(
+            duration: duration, headType: headType,
+        )
+        // swiftlint:disable:next force_unwrapping
+        return Character(UnicodeScalar(cp)!)
     }
 
     // MARK: - Accidental

@@ -13,8 +13,10 @@ enum PartLabelRenderer {
         context.drawExpressionText(
             text,
             at: origin,
-            size: metrics.sp * 2.5,
-            italic: false,
+            size: NotationTextStyle.fontSize(
+                for: .partLabel, sp: metrics.sp,
+            ),
+            italic: NotationTextStyle.isItalic(for: .partLabel),
             anchor: .trailing,
         )
     }

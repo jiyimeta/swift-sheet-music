@@ -22,8 +22,10 @@ enum StaffNameRenderer {
         guard !text.isEmpty else { return }
         context.drawExpressionText(
             text, at: origin,
-            size: metrics.sp * 2.0,
-            italic: false,
+            size: NotationTextStyle.fontSize(
+                for: .staffName, sp: metrics.sp,
+            ),
+            italic: NotationTextStyle.isItalic(for: .staffName),
             anchor: .bottomLeading,
         )
     }
