@@ -1,13 +1,19 @@
 package io.github.jiyimeta.sheetmusic.audio
 
 import android.content.Context
+import android.os.ParcelFileDescriptor
+import io.github.jiyimeta.sheetmusic.audio.export.AudioExporter
+import io.github.jiyimeta.sheetmusic.audio.export.ExportEngineSnapshot
 import io.github.jiyimeta.sheetmusic.audio.jni.SheetMusicAudioJNI
+import io.github.jiyimeta.sheetmusic.audio.model.AudioExportRange
+import io.github.jiyimeta.sheetmusic.audio.model.AudioFileFormat
 import io.github.jiyimeta.sheetmusic.audio.model.LoopRange
 import io.github.jiyimeta.sheetmusic.audio.model.MixerChannel
 import io.github.jiyimeta.sheetmusic.audio.model.NoteID
 import io.github.jiyimeta.sheetmusic.audio.model.PlaybackState
 import io.github.jiyimeta.sheetmusic.audio.model.ScoreCursor
 import io.github.jiyimeta.sheetmusic.audio.model.ScoreItemID
+import io.github.jiyimeta.sheetmusic.audio.serialization.AudioExportRangeEncoder
 import io.github.jiyimeta.sheetmusic.audio.serialization.FrameDecoder
 import io.github.jiyimeta.sheetmusic.audio.serialization.MetronomeBeatDecoder
 import io.github.jiyimeta.sheetmusic.audio.serialization.NoteIDCodec
@@ -118,6 +124,12 @@ class AndroidPlaybackEngine internal constructor(
 
         /** Returns the item's end tick in ticks, or -1 if the id is not in the timeline. */
         fun itemEndTick(scoreHandle: Long, idBytes: ByteArray): Long
+
+        /**
+         * Resolve an [AudioExportRange] (encoded by [AudioExportRangeEncoder])
+         * to `[startTick, endTick]`. Returns `[-1, -1]` on failure.
+         */
+        fun resolveExportTickRange(scoreHandle: Long, rangeBytes: ByteArray): LongArray
     }
 
     companion object {
@@ -135,6 +147,8 @@ class AndroidPlaybackEngine internal constructor(
             override fun earliestOf(h: Long, i: ByteArray) = SheetMusicAudioJNI.nativeEarliestOf(h, i)
             override fun itemEndTick(h: Long, i: ByteArray) =
                 SheetMusicAudioJNI.nativeItemEndTick(h, i)
+            override fun resolveExportTickRange(h: Long, bytes: ByteArray) =
+                SheetMusicAudioJNI.nativeResolveExportTickRange(h, bytes)
         }
     }
 
@@ -175,8 +189,11 @@ class AndroidPlaybackEngine internal constructor(
     // ── Internal mutable state (assembled by prepare) ────────────────
 
     private val prepareMutex = Mutex()
+    private val exportMutex = Mutex()
     private var scoreHandle: Long = 0
     private var totalTicks: Long = 0
+    /** Ticks-per-beat from the prepared score's timeline; required by export. */
+    private var ticksPerBeat: Int = 480
     private var fluidSynthEngine: FluidSynthEngine? = null
     private var playerDriver: PlayerDriver? = null
     private var oboeStream: OboeStream? = null
@@ -207,6 +224,7 @@ class AndroidPlaybackEngine internal constructor(
             if (summary.size < 3) throw AudioBackendException.InvalidScoreHandle()
             totalTicks = summary[0]
             val totalSecs = summary[1] / 1_000_000.0
+            ticksPerBeat = summary[2].toInt()
 
             val staffBytes = jniBridge.staffParams(scoreHandle)
             val staves = StaffParamsDecoder.decodeArray(staffBytes)
@@ -550,6 +568,129 @@ class AndroidPlaybackEngine internal constructor(
     /** Sets metronome click volume (range 0..1). */
     fun setMetronomeVolume(volume: Float) {
         metronomeMixer?.volume = volume
+    }
+
+    // ── Audio file export ────────────────────────────────────────────
+
+    /**
+     * Offline-render the prepared score to an audio file at [outputFd].
+     *
+     * Mirrors Apple's `PlaybackEngine.exportAudioFile`: builds a dedicated
+     * FluidSynth + [PlayerDriver] per call, applies a snapshot of live
+     * engine state, pumps PCM through the encoder, and transitions
+     * `state` to [PlaybackState.EXPORTING] for the duration of the
+     * render. Live playback mutators (`play` / `pause` / `seek` / …)
+     * already no-op while `state == EXPORTING`.
+     *
+     * Cancelling the calling coroutine aborts the render and throws
+     * [AudioBackendException.Cancelled]. The partial file at [outputFd]
+     * is left intact for the caller to clean up — the engine does not
+     * own the file descriptor.
+     *
+     * Concurrent calls are serialized through an internal mutex.
+     *
+     * @throws AudioBackendException.NoScorePrepared if [scoreHandle]
+     *   doesn't match the most recent [prepare] call.
+     * @throws AudioBackendException.RangeNotInTimeline if a `.Region`
+     *   or `.RegionThroughEnd` range fails to resolve.
+     * @throws AudioBackendException.FormatUnsupportedOnThisOS if the
+     *   device has no encoder for the requested format.
+     * @throws AudioBackendException.EngineSetupFailed on synth / player
+     *   construction failure.
+     * @throws AudioBackendException.FileWriteFailed on encoder write
+     *   failure.
+     * @throws AudioBackendException.Cancelled on coroutine cancellation.
+     */
+    suspend fun exportAudioFile(
+        outputFd: ParcelFileDescriptor,
+        scoreHandle: Long,
+        format: AudioFileFormat,
+        range: AudioExportRange = AudioExportRange.Full,
+        progress: ((Float) -> Unit)? = null,
+    ) = exportAudioFileWith(
+        outputFd = outputFd,
+        scoreHandle = scoreHandle,
+        format = format,
+        range = range,
+        progress = progress,
+    ) {
+        AudioExporter(
+            resolver = soundfontResolver,
+            context = context,
+            synthFactory = synthFactory,
+            playerFactory = playerFactory,
+        )
+    }
+
+    /**
+     * Test-only seam exposing the [exporterFactory] hook and accepting a
+     * nullable [outputFd] so JVM unit tests (where
+     * `ParcelFileDescriptor.createPipe` is unavailable) can drive the
+     * export pipeline with a [AudioExporter] backed by fake drivers.
+     */
+    internal suspend fun exportAudioFileWith(
+        outputFd: ParcelFileDescriptor?,
+        scoreHandle: Long,
+        format: AudioFileFormat,
+        range: AudioExportRange,
+        progress: ((Float) -> Unit)?,
+        exporterFactory: () -> AudioExporter,
+    ) = exportMutex.withLock {
+        if (this.scoreHandle == 0L || this.scoreHandle != scoreHandle) {
+            throw AudioBackendException.NoScorePrepared()
+        }
+
+        // Resolve tick range. `CurrentLoop` is resolved on the Kotlin side
+        // from the live [_loopRange]; the other variants need a Swift-side
+        // timeline lookup via the JNI seam.
+        val (startTick, endTick) = when (range) {
+            is AudioExportRange.CurrentLoop -> {
+                val loop = _loopRange.value
+                if (loop != null) Pair(loop.startTick, loop.endTick) else Pair(0L, totalTicks)
+            }
+            else -> {
+                val rangeBytes = AudioExportRangeEncoder.encode(range)
+                val resolved = jniBridge.resolveExportTickRange(scoreHandle, rangeBytes)
+                if (resolved.size < 2 || resolved[0] < 0 || resolved[1] < 0) {
+                    throw AudioBackendException.RangeNotInTimeline()
+                }
+                Pair(resolved[0], resolved[1])
+            }
+        }
+
+        // Capture a snapshot of live engine state before flipping the
+        // state machine — these reads must not race with the EXPORTING
+        // transition (live mutators already no-op once we set EXPORTING).
+        val beatBytes = jniBridge.metronomeBeats(scoreHandle)
+        val beats = MetronomeBeatDecoder.decodeArray(beatBytes)
+        val snapshot = ExportEngineSnapshot(
+            mixerChannels = _mixerChannels.value,
+            metronomeEnabled = metronomeMixer?.isEnabled ?: false,
+            metronomeVolume = metronomeMixer?.volume ?: 1f,
+            metronomeBeats = beats,
+            rate = _currentRate.value,
+        )
+
+        val smfBytes = jniBridge.renderMidi(scoreHandle)
+        val staffParams = StaffParamsDecoder.decodeArray(jniBridge.staffParams(scoreHandle))
+
+        _state.value = PlaybackState.EXPORTING
+        try {
+            exporterFactory().run(
+                outputFd = outputFd,
+                smfBytes = smfBytes,
+                staffParams = staffParams,
+                snapshot = snapshot,
+                startTick = startTick,
+                endTick = endTick,
+                ticksPerBeat = ticksPerBeat,
+                format = format,
+                sampleRate = 48_000,
+                progress = progress,
+            )
+        } finally {
+            _state.value = PlaybackState.STOPPED
+        }
     }
 
     // ── Teardown ─────────────────────────────────────────────────────

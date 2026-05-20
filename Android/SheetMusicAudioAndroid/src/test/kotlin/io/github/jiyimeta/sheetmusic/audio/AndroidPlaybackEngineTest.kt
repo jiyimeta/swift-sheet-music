@@ -1,10 +1,14 @@
 package io.github.jiyimeta.sheetmusic.audio
 
 import android.net.Uri
+import io.github.jiyimeta.sheetmusic.audio.export.AudioExporter
+import io.github.jiyimeta.sheetmusic.audio.export.fakes.FakeAudioFileEncoder
 import io.github.jiyimeta.sheetmusic.audio.fakes.FakeJniBridge
 import io.github.jiyimeta.sheetmusic.audio.fakes.FakeOboeStream
 import io.github.jiyimeta.sheetmusic.audio.fakes.FakePlayerDriver
 import io.github.jiyimeta.sheetmusic.audio.fakes.FakeSynthDriver
+import io.github.jiyimeta.sheetmusic.audio.model.AudioExportRange
+import io.github.jiyimeta.sheetmusic.audio.model.AudioFileFormat
 import io.github.jiyimeta.sheetmusic.audio.model.MetronomeBeat
 import io.github.jiyimeta.sheetmusic.audio.model.NoteID
 import io.github.jiyimeta.sheetmusic.audio.model.PlaybackState
@@ -918,6 +922,89 @@ class AndroidPlaybackEngineTest {
         engine.prepare(scoreHandle = 2L)
         assertNull(engine.loopRange.value)
         engine.teardown()
+    }
+
+    // T14 — exportAudioFile
+
+    @Test(expected = AudioBackendException.NoScorePrepared::class)
+    fun `exportAudioFile throws NoScorePrepared when handle does not match`() = runTest {
+        // No prepare() called — scoreHandle = 0.
+        val engine = tracked()
+        engine.exportAudioFileWith(
+            outputFd = null,
+            scoreHandle = 999L,
+            format = AudioFileFormat.Wav(),
+            range = AudioExportRange.Full,
+            progress = null,
+            exporterFactory = { error("must not be invoked") },
+        )
+    }
+
+    @Test
+    fun `exportAudioFile flips state to EXPORTING then back to STOPPED`() = runTest {
+        // endTick = 0 so the while (currentTick < endTick) loop never enters
+        // and the run completes synchronously without needing tick advance.
+        val bridge = FakeJniBridge(
+            timelineSummaryResult = longArrayOf(960L, 2_000_000L, 480L),
+            staffParamsResult = oneStaffPayload(),
+            metronomeBeatsResult = downbeatOnlyBeats(),
+            renderMidiResult = minimalSmf,
+            resolveExportTickRangeResult = longArrayOf(0L, 0L),
+        )
+        val engine = tracked(bridge = bridge)
+        engine.prepare(1L)
+
+        // Capture the state observed inside the export pipeline so the test
+        // doesn't need to race a collector against the mutex.
+        var stateDuringRun: PlaybackState? = null
+        val encoder = FakeAudioFileEncoder()
+        val (player, _) = FakePlayerDriver.create()
+        val synth = FakeSynthDriver()
+
+        val exporter = AudioExporter(
+            resolver = StubSoundfontResolver(),
+            context = null,
+            synthFactory = { _ ->
+                stateDuringRun = engine.state.value
+                synth
+            },
+            playerFactory = { _ -> player },
+            encoderFactory = { _, _, _ -> encoder },
+        )
+
+        engine.exportAudioFileWith(
+            outputFd = null,
+            scoreHandle = 1L,
+            format = AudioFileFormat.Wav(),
+            range = AudioExportRange.Full,
+            progress = null,
+            exporterFactory = { exporter },
+        )
+
+        assertEquals(PlaybackState.EXPORTING, stateDuringRun)
+        assertEquals(PlaybackState.STOPPED, engine.state.value)
+        assertTrue("encoder.finish() should have been called", encoder.finished)
+    }
+
+    @Test(expected = AudioBackendException.RangeNotInTimeline::class)
+    fun `exportAudioFile throws RangeNotInTimeline when JNI returns -1`() = runTest {
+        val bridge = FakeJniBridge(
+            timelineSummaryResult = longArrayOf(960L, 2_000_000L, 480L),
+            staffParamsResult = oneStaffPayload(),
+            metronomeBeatsResult = downbeatOnlyBeats(),
+            renderMidiResult = minimalSmf,
+            resolveExportTickRangeResult = longArrayOf(-1L, -1L),
+        )
+        val engine = tracked(bridge = bridge)
+        engine.prepare(1L)
+        engine.exportAudioFileWith(
+            outputFd = null,
+            scoreHandle = 1L,
+            format = AudioFileFormat.Wav(),
+            range = AudioExportRange.Full,
+            progress = null,
+            exporterFactory = { error("must not be invoked") },
+        )
     }
 
     // ── Helpers ────────────────────────────────────────────────────────────
