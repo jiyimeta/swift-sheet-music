@@ -106,15 +106,17 @@ extension PlaybackEngine {
         }
     }
 
-    /// Build a dedicated `AVAudioEngine` + per-staff samplers + a
-    /// loaded `AVAudioSequencer` ready to drive an offline render
-    /// of `score`.
+    /// Build a dedicated `AVAudioEngine` + a multi-timbral AUMIDISynth
+    /// + a loaded `AVAudioSequencer` ready to drive an offline render
+    /// of `score`. Mirrors the live engine: full GM SoundFont loaded
+    /// once into one synth, every staff addressed by its
+    /// renderer-assigned MIDI channel.
     ///
-    /// The engine is left in manual-rendering mode and started so
-    /// the caller can immediately call `renderLoop`. Caller owns
-    /// the returned pipeline and must call `teardown(pipeline:)`
-    /// before releasing.
-    private static func buildExportPipeline( // swiftlint:disable:this function_body_length
+    /// The engine is left in manual-rendering mode and started so the
+    /// caller can immediately call `renderLoop`. Caller owns the
+    /// returned pipeline and must call `teardown(pipeline:)` before
+    /// releasing.
+    private static func buildExportPipeline(
         score: Score,
         snapshot: ExportEngineSnapshot,
         outputFormat: AVAudioFormat,
@@ -122,96 +124,29 @@ extension PlaybackEngine {
         let engine = AVAudioEngine()
         let resolver = snapshot.resolver
 
-        // 1. Build per-staff synths, load the SF2 preset, apply
-        //    snapshot mixer values (volume / mute / solo).
+        // 1. Build the score synth.
+        let exportSynth = buildScoreSynth(
+            score: score, snapshot: snapshot, resolver: resolver,
+            engine: engine,
+        )
         let soloedExists = snapshot.mixerChannels.contains { $0.isSoloed }
-        var samplers: [Int: AVAudioUnitMIDIInstrument] = [:]
-
-        for (idx, entry) in score.allStaves.enumerated() {
-            let part = score.part(at: entry.address)
-            let channel = part?.instrument.channels.first ?? InstrumentChannel()
-            let isDrums = part?.instrument.useDrumset == true
-            let bank = UInt8(clamping: channel.bank)
-            // Mixer can override the program (the live engine's
-            // `loadProgram(forStaff:program:)` path) so prefer the
-            // snapshot value when present.
-            let program: UInt8
-            if let chan = snapshot.mixerChannels.first(
-                where: { $0.id == .staff(idx) },
-            ), let p = chan.program {
-                program = p
-            } else {
-                program = UInt8(clamping: channel.program)
-            }
-            let url = resolver.soundfontURL(
-                forBank: bank, program: program, isDrums: isDrums,
-            )
-                ?? resolver.defaultGMSoundfontURL
-
-            let instrument = MIDISynthBuilder.make()
-            engine.attach(instrument)
-            engine.connect(instrument, to: engine.mainMixerNode, format: nil)
-            if let url {
-                // MIDISynth resolves percussion via MIDI channel 9 at
-                // play time — `isDrums` is therefore not encoded in the
-                // bank MSB byte (which is reserved for SF2-internal
-                // bank selection here).
-                _ = isDrums
-                try? MIDISynthBuilder.loadSoundFont(
-                    into: instrument, url: url,
-                    bankMSB: 0, bankLSB: bank, program: program,
-                )
-            }
-            // Pre-configure pitch-bend sensitivity on every melodic
-            // channel — see the matching block in `PlaybackEngine.prepare`
-            // for the race-condition rationale (offline export hits the
-            // same race because the rendered AVAudioSequencer behaves the
-            // same way).
-            for ch: UInt8 in 0 ..< 16 where ch != 9 {
-                MIDISynthBuilder.setPitchBendSensitivity(
-                    into: instrument, semitones: 12, onChannel: ch,
-                )
-            }
-            samplers[idx] = instrument
-        }
-
         applyMixerSnapshot(
-            samplers: samplers, channels: snapshot.mixerChannels,
+            synth: exportSynth.synth,
+            channels: snapshot.mixerChannels,
+            staffChannels: exportSynth.staffChannels,
             soloedExists: soloedExists,
         )
 
         // 2. Optional metronome synth / track.
-        let metronomeSampler: AVAudioUnitMIDIInstrument?
-        if snapshot.metronomeEnabled,
-           let metroURL = resolver.soundfontURL(
-               forBank: 0, program: 0, isDrums: true,
-           ) ?? resolver.defaultGMSoundfontURL
-        {
-            let s = MIDISynthBuilder.make()
-            engine.attach(s)
-            engine.connect(s, to: engine.mainMixerNode, format: nil)
-            // Metronome plays on MIDI channel 9 (GM percussion). With
-            // MIDISynth the drum kit is selected automatically when
-            // the synth receives channel-9 events; a single bank-0
-            // program-0 preload is enough to make the SF2 patches
-            // resident.
-            try? MIDISynthBuilder.loadSoundFont(
-                into: s, url: metroURL,
-                bankMSB: 0, bankLSB: 0, program: 0, channel: 9,
-            )
-            s.volume = snapshot.metronomeVolume
-            metronomeSampler = s
-        } else {
-            metronomeSampler = nil
-        }
+        let metronomeSampler = buildMetronomeSampler(
+            snapshot: snapshot, resolver: resolver, engine: engine,
+        )
 
         // 3. Render MIDI bytes (score tracks + optional metronome
         //    track) and load into a fresh sequencer bound to the
         //    fresh engine.
         var midi = try MidiRenderer.render(score: score)
         if metronomeSampler != nil {
-            // Re-use `MetronomeController.metronomeTrack` so the beat
-            // event shape stays consistent with live playback.
             let metronome = MetronomeController(engine: engine)
             midi.tracks.append(metronome.metronomeTrack(
                 beats: snapshot.metronomeBeats, division: midi.division,
@@ -223,13 +158,11 @@ extension PlaybackEngine {
         let bytes = try MidiWriter.write(midi)
         let sequencer = AVAudioSequencer(audioEngine: engine)
         try sequencer.load(from: bytes, options: [])
-        // Route staff tracks to their synths; the metronome track
-        // (appended last) routes to `metronomeSampler` if present.
-        let staffTrackCount = samplers.count
+        let staffTrackCount = score.allStaves.count
         for (i, track) in sequencer.tracks.enumerated() {
-            if i < staffTrackCount, let instrument = samplers[i] {
-                track.destinationAudioUnit = instrument
-            } else if i >= staffTrackCount, let s = metronomeSampler {
+            if i < staffTrackCount {
+                track.destinationAudioUnit = exportSynth.synth
+            } else if let s = metronomeSampler {
                 track.destinationAudioUnit = s
             }
         }
@@ -247,24 +180,114 @@ extension PlaybackEngine {
         return ExportPipeline(
             engine: engine,
             sequencer: sequencer,
-            samplers: Array(samplers.values),
+            samplers: [exportSynth.synth],
             metronomeSampler: metronomeSampler,
         )
     }
 
+    private struct ScoreSynth {
+        let synth: AVAudioUnitMIDIInstrument
+        let staffChannels: [Int: UInt8]
+    }
+
+    private static func buildScoreSynth(
+        score: Score,
+        snapshot: ExportEngineSnapshot,
+        resolver: SoundfontResolver,
+        engine: AVAudioEngine,
+    ) -> ScoreSynth {
+        let instrument = MIDISynthBuilder.make()
+        engine.attach(instrument)
+        engine.connect(
+            instrument, to: engine.mainMixerNode, format: nil,
+        )
+        if let url = resolver.defaultGMSoundfontURL {
+            try? MIDISynthBuilder.loadSoundFont(
+                into: instrument, url: url,
+                bankMSB: 0, bankLSB: 0, program: 0,
+            )
+        }
+        for ch: UInt8 in 0 ..< 16 where ch != 9 {
+            MIDISynthBuilder.setPitchBendSensitivity(
+                into: instrument, semitones: 12, onChannel: ch,
+            )
+        }
+        // The SMF's tick-0 programChange events on each track set up
+        // every channel's preset; pre-engine sendProgramChange is only
+        // needed for mixer overrides that should win on the primary
+        // channel of each staff.
+        let perStaffChan = MidiRenderer.staffChannels(score: score)
+        var staffChannels: [Int: UInt8] = [:]
+        for idx in score.allStaves.indices {
+            let midiCh = UInt8(
+                clamping: idx < perStaffChan.count
+                    ? perStaffChan[idx] : 0,
+            )
+            staffChannels[idx] = midiCh
+            if midiCh != 9,
+               let chan = snapshot.mixerChannels.first(
+                   where: { $0.id == .staff(idx) },
+               ), let p = chan.program
+            {
+                // See PlaybackEngine.loadProgram — preload to load
+                // the preset, then plain PC to select.
+                MIDISynthBuilder.preloadPreset(
+                    into: instrument,
+                    bankMSB: 0, bankLSB: 0, program: p,
+                    onChannel: midiCh,
+                )
+                let pcStatus = UInt32(0xC0) | UInt32(midiCh & 0x0F)
+                _ = MusicDeviceMIDIEvent(
+                    instrument.audioUnit, pcStatus, UInt32(p), 0, 0,
+                )
+            }
+        }
+        return ScoreSynth(
+            synth: instrument, staffChannels: staffChannels,
+        )
+    }
+
+    private static func buildMetronomeSampler(
+        snapshot: ExportEngineSnapshot,
+        resolver: SoundfontResolver,
+        engine: AVAudioEngine,
+    ) -> AVAudioUnitMIDIInstrument? {
+        guard snapshot.metronomeEnabled,
+              let metroURL = resolver.soundfontURL(
+                  forBank: 0, program: 0, isDrums: true,
+              ) ?? resolver.defaultGMSoundfontURL
+        else { return nil }
+        let s = MIDISynthBuilder.make()
+        engine.attach(s)
+        engine.connect(s, to: engine.mainMixerNode, format: nil)
+        try? MIDISynthBuilder.loadSoundFont(
+            into: s, url: metroURL,
+            bankMSB: 0, bankLSB: 0, program: 0, channel: 9,
+        )
+        s.volume = snapshot.metronomeVolume
+        return s
+    }
+
+    /// Push the mixer snapshot's volume / mute / solo onto the export
+    /// synth's per-channel CC 7 state. Effective audibility mirrors
+    /// the live mixer rules: if any channel is soloed, only soloed
+    /// channels are audible; otherwise muted channels are silenced.
     private static func applyMixerSnapshot(
-        samplers: [Int: AVAudioUnitMIDIInstrument],
+        synth: AVAudioUnitMIDIInstrument,
         channels: [MixerChannel],
+        staffChannels: [Int: UInt8],
         soloedExists: Bool,
     ) {
         for chan in channels {
             guard case let .staff(idx) = chan.id,
-                  let instrument = samplers[idx] else { continue }
-            // Effective audibility mirrors the live mixer rules: if
-            // any channel is soloed, only soloed channels are audible;
-            // otherwise muted channels are silenced.
+                  let midiCh = staffChannels[idx]
+            else { continue }
             let audible = soloedExists ? chan.isSoloed : !chan.isMuted
-            instrument.volume = audible ? chan.volume : 0
+            let gain = audible ? chan.volume : 0
+            let cc7 = UInt8(clamping: Int((gain * 127).rounded()))
+            MIDISynthBuilder.sendControlChange(
+                into: synth, controller: 7, value: cc7, onChannel: midiCh,
+            )
         }
     }
 

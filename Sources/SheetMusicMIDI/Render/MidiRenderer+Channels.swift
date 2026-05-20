@@ -40,4 +40,25 @@ extension MidiRenderer {
         }
         return perPart
     }
+
+    /// Per-flat-staff MIDI channel, in the same enumeration order as
+    /// `Score.allStaves`. Matches the channel each staff's track will
+    /// route to in the rendered SMF (see `renderTrack`'s `primaryChannel`).
+    /// Multi-staff parts (e.g. piano grand staff) share the same channel
+    /// across staves — that's a per-part property, not per-staff.
+    ///
+    /// Hosts that route every staff onto a single multi-timbral synth
+    /// use this to address each staff's notes (program / volume / preview)
+    /// on its assigned MIDI channel.
+    public static func staffChannels(score: Score) -> [Int] {
+        let perPart = assignChannels(score: score)
+        var result: [Int] = []
+        for (partIndex, part) in score.parts.enumerated() {
+            let primary = perPart[partIndex].first?.channel ?? partIndex
+            for _ in 0 ..< part.staves.count {
+                result.append(primary)
+            }
+        }
+        return result
+    }
 }

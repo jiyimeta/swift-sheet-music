@@ -92,10 +92,16 @@ extension PlaybackEngine {
         return UInt8(clamping: part.instrument.channel.program)
     }
 
-    /// Push the current mixer state into the live audio graph:
-    /// per-staff sampler volumes and the metronome
-    /// enable/volume. Solo overrides everything else — when any
-    /// channel is soloed, non-soloed channels go silent.
+    /// Push the current mixer state into the live audio graph. Mute /
+    /// volume are sent as CC 7 (Channel Volume) on each staff's
+    /// renderer-assigned MIDI channel of the shared synth. The SMF
+    /// re-fires its tick-0 CC 7 on rewind, so `applyMixerState()` must
+    /// also be called after every seek that crosses tick 0 to win the
+    /// race — `play(from:in:)` already does this after
+    /// `sequencer.start()`.
+    ///
+    /// Solo overrides everything else — when any channel is soloed,
+    /// non-soloed channels go silent.
     func applyMixerState() {
         let anySoloed = mixerChannels.contains(where: \.isSoloed)
         for channel in mixerChannels {
@@ -104,12 +110,22 @@ extension PlaybackEngine {
             let gain: Float = effectivelyMuted ? 0 : channel.volume
             switch channel.id {
             case let .staff(i):
-                staffSampler(at: i)?.volume = gain
+                applyStaffGain(at: i, gain: gain)
             case .metronome:
                 setMetronomeEnabled(!effectivelyMuted)
                 setMetronomeVolume(channel.volume)
             }
         }
+    }
+
+    private func applyStaffGain(at staffIdx: Int, gain: Float) {
+        guard let synth,
+              let midiCh = midiChannel(forStaff: staffIdx)
+        else { return }
+        let cc7 = UInt8(clamping: Int((gain * 127).rounded()))
+        MIDISynthBuilder.sendControlChange(
+            into: synth, controller: 7, value: cc7, onChannel: midiCh,
+        )
     }
 
     /// Best-effort staff label: prefers the part's track name, then

@@ -86,8 +86,42 @@ enum MIDISynthBuilder {
             )
         }
 
-        // Pre-load the patch so the first sounded note doesn't trigger
-        // a synchronous SF2 patch load on the audio render thread.
+        preloadPreset(
+            into: instrument,
+            bankMSB: bankMSB, bankLSB: bankLSB, program: program,
+            onChannel: channel,
+        )
+    }
+
+    /// Toggle `kAUMIDISynthProperty_EnablePreload` ON, send bank-select
+    /// + program-change on `channel` via `MusicDeviceMIDIEvent`, then
+    /// toggle preload OFF. Causes the AU to synchronously load the
+    /// requested preset into its voice pool so the next noteOn on that
+    /// channel doesn't trigger an async SF2 read on the render thread
+    /// (which empirically silences the channel).
+    ///
+    /// Use this for *runtime* program switches on an AU whose SF2 is
+    /// already loaded — it does NOT touch `kMusicDeviceProperty_SoundBankURL`.
+    /// Re-setting that property would re-parse the SF2 and reset every
+    /// channel's program back to the AU's default (GM piano on all
+    /// channels), which is exactly the bug we hit in `.singleShared`
+    /// when `loadSoundFont` was called per picker change.
+    ///
+    /// Critical: uses `MusicDeviceMIDIEvent` (C API, synchronous
+    /// delivery) — NOT the high-level `sendController` /
+    /// `sendProgramChange`, which queue events for the next render
+    /// cycle and race against the `EnablePreload = 0` write. When the
+    /// queued events finally fire, preload is already disabled, the AU
+    /// silently skips the preset load, and the channel ends up silent
+    /// on a full multi-preset SoundFont. Apple's TN2331 sample uses
+    /// MusicDeviceMIDIEvent for this reason.
+    static func preloadPreset(
+        into instrument: AVAudioUnitMIDIInstrument,
+        bankMSB: UInt8,
+        bankLSB: UInt8,
+        program: UInt8,
+        onChannel channel: UInt8,
+    ) {
         var enable: UInt32 = 1
         _ = AudioUnitSetProperty(
             instrument.audioUnit,
@@ -97,9 +131,17 @@ enum MIDISynthBuilder {
             &enable,
             UInt32(MemoryLayout<UInt32>.size),
         )
-        instrument.sendController(0, withValue: bankMSB, onChannel: channel)
-        instrument.sendController(32, withValue: bankLSB, onChannel: channel)
-        instrument.sendProgramChange(program, onChannel: channel)
+        let ccStatus = UInt32(0xB0) | UInt32(channel & 0x0F)
+        let pcStatus = UInt32(0xC0) | UInt32(channel & 0x0F)
+        _ = MusicDeviceMIDIEvent(
+            instrument.audioUnit, ccStatus, 0, UInt32(bankMSB), 0,
+        )
+        _ = MusicDeviceMIDIEvent(
+            instrument.audioUnit, ccStatus, 32, UInt32(bankLSB), 0,
+        )
+        _ = MusicDeviceMIDIEvent(
+            instrument.audioUnit, pcStatus, UInt32(program), 0, 0,
+        )
         enable = 0
         _ = AudioUnitSetProperty(
             instrument.audioUnit,
@@ -160,5 +202,28 @@ enum MIDISynthBuilder {
         // which is exactly the symptom we were seeing on first play.
         send(101, 127) // RPN null (deselect, lock the value in)
         send(100, 127)
+    }
+
+    /// Send a MIDI Control Change to the AU directly via
+    /// `MusicDeviceMIDIEvent`. Used by the shared-synth topology to apply
+    /// mixer state (CC 7 / CC 10) on a specific channel of the shared
+    /// instrument without going through the higher-level
+    /// `sendController(...)` API — which queues for the next render
+    /// cycle and is therefore racy against AVAudioSequencer's tick-0
+    /// events on a freshly-built sequencer.
+    static func sendControlChange(
+        into instrument: AVAudioUnitMIDIInstrument,
+        controller: UInt8,
+        value: UInt8,
+        onChannel channel: UInt8,
+    ) {
+        let status = UInt32(0xB0) | UInt32(channel & 0x0F)
+        _ = MusicDeviceMIDIEvent(
+            instrument.audioUnit,
+            status,
+            UInt32(controller),
+            UInt32(value),
+            0,
+        )
     }
 }
