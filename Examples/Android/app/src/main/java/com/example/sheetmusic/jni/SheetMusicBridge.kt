@@ -42,4 +42,19 @@ object SheetMusicBridge {
         scoreHandle: Long,
         cursorBytes: ByteArray,
     ): ByteArray
+
+    /**
+     * Resolve the highlight rectangles (mm coordinates) covering a
+     * loop region spanning ticks `[fromTick, toTick)`. Returns one
+     * rect per intersected system; the rect spans the full staff
+     * height of that system and the X range of the included measures.
+     *
+     * Wire format: u16 version=1, i32 count, count × 4×i64 micros.
+     * Empty array when the range yields no measures.
+     */
+    @JvmStatic external fun nativeLoopHighlightRects(
+        scoreHandle: Long,
+        fromTick: Long,
+        toTick: Long,
+    ): ByteArray
 }
