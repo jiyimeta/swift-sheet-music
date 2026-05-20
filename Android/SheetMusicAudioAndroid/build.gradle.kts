@@ -4,7 +4,7 @@ plugins {
 }
 
 android {
-    namespace = "io.github.kiichiio.sheetmusic.audio"
+    namespace = "io.github.jiyimeta.sheetmusic.audio"
     compileSdk = 35
 
     buildFeatures {
@@ -59,7 +59,7 @@ android {
     }
 }
 
-group = "io.github.kiichiio"
+group = "io.github.jiyimeta"
 version = "0.0.0-SNAPSHOT"
 
 val syncGoldenBinaries by tasks.registering(Copy::class) {

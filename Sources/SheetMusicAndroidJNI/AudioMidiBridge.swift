@@ -83,9 +83,9 @@ extension AudioMidiBridge {
         return Data(buf)
     }
 
-    @_cdecl("Java_io_github_kiichiio_sheetmusic_audio_jni_SheetMusicAudioJNI_nativePitchAndStaffOfNote")
+    @_cdecl("Java_io_github_jiyimeta_sheetmusic_audio_jni_SheetMusicAudioJNI_nativePitchAndStaffOfNote")
     // swiftlint:disable:next identifier_name
-    public func Java_io_github_kiichiio_sheetmusic_audio_jni_SheetMusicAudioJNI_nativePitchAndStaffOfNote(
+    public func Java_io_github_jiyimeta_sheetmusic_audio_jni_SheetMusicAudioJNI_nativePitchAndStaffOfNote(
         _ envPtr: UnsafeMutablePointer<JNIEnv?>,
         _ clazz: jclass,
         _ scoreHandle: jlong,
@@ -99,9 +99,9 @@ extension AudioMidiBridge {
         return AudioMidiBridge.pitchAndStaffOfNote(score: score, noteId: noteId)
     }
 
-    @_cdecl("Java_io_github_kiichiio_sheetmusic_audio_jni_SheetMusicAudioJNI_nativeEarliestOf")
+    @_cdecl("Java_io_github_jiyimeta_sheetmusic_audio_jni_SheetMusicAudioJNI_nativeEarliestOf")
     // swiftlint:disable:next identifier_name
-    public func Java_io_github_kiichiio_sheetmusic_audio_jni_SheetMusicAudioJNI_nativeEarliestOf(
+    public func Java_io_github_jiyimeta_sheetmusic_audio_jni_SheetMusicAudioJNI_nativeEarliestOf(
         _ envPtr: UnsafeMutablePointer<JNIEnv?>,
         _ clazz: jclass,
         _ scoreHandle: jlong,

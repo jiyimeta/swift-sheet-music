@@ -3,7 +3,7 @@ package com.example.sheetmusic.audio
 import android.content.Context
 import android.net.Uri
 import androidx.core.net.toUri
-import io.github.kiichiio.sheetmusic.audio.SoundfontResolver
+import io.github.jiyimeta.sheetmusic.audio.SoundfontResolver
 import java.io.File
 
 /**

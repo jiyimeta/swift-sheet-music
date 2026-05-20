@@ -19,7 +19,7 @@ include(":app")
 // Android/ Gradle project instead of Maven Central.
 includeBuild("../../Android") {
     dependencySubstitution {
-        substitute(module("io.github.kiichiio:sheet-music-audio-android"))
+        substitute(module("io.github.jiyimeta:sheet-music-audio-android"))
             .using(project(":SheetMusicAudioAndroid"))
     }
 }

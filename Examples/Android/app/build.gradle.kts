@@ -52,5 +52,5 @@ dependencies {
 
     // Audio backend — resolved from the Android/ composite build.
     // Version must match Android/SheetMusicAudioAndroid/build.gradle.kts.
-    implementation("io.github.kiichiio:sheet-music-audio-android:0.0.0-SNAPSHOT")
+    implementation("io.github.jiyimeta:sheet-music-audio-android:0.0.0-SNAPSHOT")
 }

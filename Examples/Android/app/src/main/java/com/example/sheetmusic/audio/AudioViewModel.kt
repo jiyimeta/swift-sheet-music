@@ -3,10 +3,10 @@ package com.example.sheetmusic.audio
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import io.github.kiichiio.sheetmusic.audio.AndroidPlaybackEngine
-import io.github.kiichiio.sheetmusic.audio.model.MixerChannel
-import io.github.kiichiio.sheetmusic.audio.model.PlaybackState
-import io.github.kiichiio.sheetmusic.audio.model.ScoreCursor
+import io.github.jiyimeta.sheetmusic.audio.AndroidPlaybackEngine
+import io.github.jiyimeta.sheetmusic.audio.model.MixerChannel
+import io.github.jiyimeta.sheetmusic.audio.model.PlaybackState
+import io.github.jiyimeta.sheetmusic.audio.model.ScoreCursor
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 

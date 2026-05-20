@@ -35,7 +35,7 @@ Not yet supported (planned for v1+):
 ```kotlin
 // In your Gradle build:
 dependencies {
-    implementation("io.github.kiichiio:sheet-music-audio-android:0.0.0-SNAPSHOT")
+    implementation("io.github.jiyimeta:sheet-music-audio-android:0.0.0-SNAPSHOT")
 }
 
 // In your ViewModel:

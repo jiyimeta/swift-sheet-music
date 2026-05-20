@@ -23,7 +23,7 @@ static fluid_player_t *player_from(jlong handle) {
 // ─────────────────────────────────────────────────────────────────────
 
 extern "C" JNIEXPORT jlong JNICALL
-Java_io_github_kiichiio_sheetmusic_audio_native_FluidSynthNative_newSynth(
+Java_io_github_jiyimeta_sheetmusic_audio_native_FluidSynthNative_newSynth(
     JNIEnv *, jobject, jint sampleRate
 ) {
     fluid_settings_t *settings = new_fluid_settings();
@@ -49,7 +49,7 @@ Java_io_github_kiichiio_sheetmusic_audio_native_FluidSynthNative_newSynth(
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_io_github_kiichiio_sheetmusic_audio_native_FluidSynthNative_deleteSynth(
+Java_io_github_jiyimeta_sheetmusic_audio_native_FluidSynthNative_deleteSynth(
     JNIEnv *, jobject, jlong handle
 ) {
     fluid_synth_t *synth = synth_from(handle);
@@ -60,7 +60,7 @@ Java_io_github_kiichiio_sheetmusic_audio_native_FluidSynthNative_deleteSynth(
 }
 
 extern "C" JNIEXPORT jint JNICALL
-Java_io_github_kiichiio_sheetmusic_audio_native_FluidSynthNative_sfload(
+Java_io_github_jiyimeta_sheetmusic_audio_native_FluidSynthNative_sfload(
     JNIEnv *env, jobject, jlong handle, jstring path, jboolean resetPresets
 ) {
     fluid_synth_t *synth = synth_from(handle);
@@ -77,7 +77,7 @@ Java_io_github_kiichiio_sheetmusic_audio_native_FluidSynthNative_sfload(
 }
 
 extern "C" JNIEXPORT jint JNICALL
-Java_io_github_kiichiio_sheetmusic_audio_native_FluidSynthNative_programSelect(
+Java_io_github_jiyimeta_sheetmusic_audio_native_FluidSynthNative_programSelect(
     JNIEnv *, jobject, jlong handle,
     jint channel, jint sfid, jint bank, jint program
 ) {
@@ -91,7 +91,7 @@ Java_io_github_kiichiio_sheetmusic_audio_native_FluidSynthNative_programSelect(
 // ─────────────────────────────────────────────────────────────────────
 
 extern "C" JNIEXPORT jint JNICALL
-Java_io_github_kiichiio_sheetmusic_audio_native_FluidSynthNative_noteOn(
+Java_io_github_jiyimeta_sheetmusic_audio_native_FluidSynthNative_noteOn(
     JNIEnv *, jobject, jlong handle, jint ch, jint pitch, jint vel
 ) {
     fluid_synth_t *synth = synth_from(handle);
@@ -100,7 +100,7 @@ Java_io_github_kiichiio_sheetmusic_audio_native_FluidSynthNative_noteOn(
 }
 
 extern "C" JNIEXPORT jint JNICALL
-Java_io_github_kiichiio_sheetmusic_audio_native_FluidSynthNative_noteOff(
+Java_io_github_jiyimeta_sheetmusic_audio_native_FluidSynthNative_noteOff(
     JNIEnv *, jobject, jlong handle, jint ch, jint pitch
 ) {
     fluid_synth_t *synth = synth_from(handle);
@@ -109,7 +109,7 @@ Java_io_github_kiichiio_sheetmusic_audio_native_FluidSynthNative_noteOff(
 }
 
 extern "C" JNIEXPORT jint JNICALL
-Java_io_github_kiichiio_sheetmusic_audio_native_FluidSynthNative_allNotesOff(
+Java_io_github_jiyimeta_sheetmusic_audio_native_FluidSynthNative_allNotesOff(
     JNIEnv *, jobject, jlong handle, jint ch
 ) {
     fluid_synth_t *synth = synth_from(handle);
@@ -118,7 +118,7 @@ Java_io_github_kiichiio_sheetmusic_audio_native_FluidSynthNative_allNotesOff(
 }
 
 extern "C" JNIEXPORT jint JNICALL
-Java_io_github_kiichiio_sheetmusic_audio_native_FluidSynthNative_cc(
+Java_io_github_jiyimeta_sheetmusic_audio_native_FluidSynthNative_cc(
     JNIEnv *, jobject, jlong handle, jint ch, jint ctrl, jint val
 ) {
     fluid_synth_t *synth = synth_from(handle);
@@ -127,7 +127,7 @@ Java_io_github_kiichiio_sheetmusic_audio_native_FluidSynthNative_cc(
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_io_github_kiichiio_sheetmusic_audio_native_FluidSynthNative_setGain(
+Java_io_github_jiyimeta_sheetmusic_audio_native_FluidSynthNative_setGain(
     JNIEnv *, jobject, jlong handle, jfloat value
 ) {
     fluid_synth_t *synth = synth_from(handle);
@@ -136,7 +136,7 @@ Java_io_github_kiichiio_sheetmusic_audio_native_FluidSynthNative_setGain(
 }
 
 extern "C" JNIEXPORT jint JNICALL
-Java_io_github_kiichiio_sheetmusic_audio_native_FluidSynthNative_setChannelType(
+Java_io_github_jiyimeta_sheetmusic_audio_native_FluidSynthNative_setChannelType(
     JNIEnv *, jobject, jlong handle, jint channel, jint type
 ) {
     fluid_synth_t *synth = synth_from(handle);
@@ -148,7 +148,7 @@ Java_io_github_kiichiio_sheetmusic_audio_native_FluidSynthNative_setChannelType(
 }
 
 extern "C" JNIEXPORT jint JNICALL
-Java_io_github_kiichiio_sheetmusic_audio_native_FluidSynthNative_getCC(
+Java_io_github_jiyimeta_sheetmusic_audio_native_FluidSynthNative_getCC(
     JNIEnv *, jobject, jlong handle, jint channel, jint controller
 ) {
     fluid_synth_t *synth = synth_from(handle);
@@ -163,7 +163,7 @@ Java_io_github_kiichiio_sheetmusic_audio_native_FluidSynthNative_getCC(
 // ─────────────────────────────────────────────────────────────────────
 
 extern "C" JNIEXPORT jint JNICALL
-Java_io_github_kiichiio_sheetmusic_audio_native_FluidSynthNative_writeFloat(
+Java_io_github_jiyimeta_sheetmusic_audio_native_FluidSynthNative_writeFloat(
     JNIEnv *env, jobject, jlong handle, jint frameCount,
     jfloatArray leftArr, jfloatArray rightArr
 ) {
@@ -184,7 +184,7 @@ Java_io_github_kiichiio_sheetmusic_audio_native_FluidSynthNative_writeFloat(
 // ─────────────────────────────────────────────────────────────────────
 
 extern "C" JNIEXPORT jlong JNICALL
-Java_io_github_kiichiio_sheetmusic_audio_native_FluidSynthNative_newPlayer(
+Java_io_github_jiyimeta_sheetmusic_audio_native_FluidSynthNative_newPlayer(
     JNIEnv *, jobject, jlong synthHandle
 ) {
     fluid_synth_t *synth = synth_from(synthHandle);
@@ -194,7 +194,7 @@ Java_io_github_kiichiio_sheetmusic_audio_native_FluidSynthNative_newPlayer(
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_io_github_kiichiio_sheetmusic_audio_native_FluidSynthNative_deletePlayer(
+Java_io_github_jiyimeta_sheetmusic_audio_native_FluidSynthNative_deletePlayer(
     JNIEnv *, jobject, jlong handle
 ) {
     fluid_player_t *player = player_from(handle);
@@ -203,7 +203,7 @@ Java_io_github_kiichiio_sheetmusic_audio_native_FluidSynthNative_deletePlayer(
 }
 
 extern "C" JNIEXPORT jint JNICALL
-Java_io_github_kiichiio_sheetmusic_audio_native_FluidSynthNative_playerAddMem(
+Java_io_github_jiyimeta_sheetmusic_audio_native_FluidSynthNative_playerAddMem(
     JNIEnv *env, jobject, jlong handle, jbyteArray bytes
 ) {
     fluid_player_t *player = player_from(handle);
@@ -216,7 +216,7 @@ Java_io_github_kiichiio_sheetmusic_audio_native_FluidSynthNative_playerAddMem(
 }
 
 extern "C" JNIEXPORT jint JNICALL
-Java_io_github_kiichiio_sheetmusic_audio_native_FluidSynthNative_playerPlay(
+Java_io_github_jiyimeta_sheetmusic_audio_native_FluidSynthNative_playerPlay(
     JNIEnv *, jobject, jlong handle
 ) {
     fluid_player_t *player = player_from(handle);
@@ -225,7 +225,7 @@ Java_io_github_kiichiio_sheetmusic_audio_native_FluidSynthNative_playerPlay(
 }
 
 extern "C" JNIEXPORT jint JNICALL
-Java_io_github_kiichiio_sheetmusic_audio_native_FluidSynthNative_playerStop(
+Java_io_github_jiyimeta_sheetmusic_audio_native_FluidSynthNative_playerStop(
     JNIEnv *, jobject, jlong handle
 ) {
     fluid_player_t *player = player_from(handle);
@@ -234,7 +234,7 @@ Java_io_github_kiichiio_sheetmusic_audio_native_FluidSynthNative_playerStop(
 }
 
 extern "C" JNIEXPORT jint JNICALL
-Java_io_github_kiichiio_sheetmusic_audio_native_FluidSynthNative_playerJoin(
+Java_io_github_jiyimeta_sheetmusic_audio_native_FluidSynthNative_playerJoin(
     JNIEnv *, jobject, jlong handle
 ) {
     fluid_player_t *player = player_from(handle);
@@ -243,7 +243,7 @@ Java_io_github_kiichiio_sheetmusic_audio_native_FluidSynthNative_playerJoin(
 }
 
 extern "C" JNIEXPORT jint JNICALL
-Java_io_github_kiichiio_sheetmusic_audio_native_FluidSynthNative_playerSeek(
+Java_io_github_jiyimeta_sheetmusic_audio_native_FluidSynthNative_playerSeek(
     JNIEnv *, jobject, jlong handle, jlong tick
 ) {
     fluid_player_t *player = player_from(handle);
@@ -252,7 +252,7 @@ Java_io_github_kiichiio_sheetmusic_audio_native_FluidSynthNative_playerSeek(
 }
 
 extern "C" JNIEXPORT jlong JNICALL
-Java_io_github_kiichiio_sheetmusic_audio_native_FluidSynthNative_playerGetCurrentTick(
+Java_io_github_jiyimeta_sheetmusic_audio_native_FluidSynthNative_playerGetCurrentTick(
     JNIEnv *, jobject, jlong handle
 ) {
     fluid_player_t *player = player_from(handle);

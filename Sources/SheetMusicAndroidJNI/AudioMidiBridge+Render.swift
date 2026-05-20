@@ -47,9 +47,9 @@ extension AudioMidiBridge {
 #if os(Android)
     import CJNI
 
-    @_cdecl("Java_io_github_kiichiio_sheetmusic_audio_jni_SheetMusicAudioJNI_nativeRenderMidi")
+    @_cdecl("Java_io_github_jiyimeta_sheetmusic_audio_jni_SheetMusicAudioJNI_nativeRenderMidi")
     // swiftlint:disable:next identifier_name
-    public func Java_io_github_kiichiio_sheetmusic_audio_jni_SheetMusicAudioJNI_nativeRenderMidi(
+    public func Java_io_github_jiyimeta_sheetmusic_audio_jni_SheetMusicAudioJNI_nativeRenderMidi(
         _ envPtr: UnsafeMutablePointer<JNIEnv?>,
         _ clazz: jclass,
         _ scoreHandle: jlong,
