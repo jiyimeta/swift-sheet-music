@@ -2,6 +2,7 @@ package io.github.kiichiio.sheetmusic.audio.model
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 class MixerChannelTest {
@@ -33,5 +34,17 @@ class MixerChannelTest {
         val a = MixerChannel(staffIndex = 1, displayName = "Flute", volume = 0.8f)
         val b = MixerChannel(staffIndex = 1, displayName = "Flute", volume = 0.8f)
         assertEquals(a, b)
+    }
+
+    @Test
+    fun mixerChannelDefaultsProgramToNull() {
+        val ch = MixerChannel(staffIndex = 0, displayName = "Staff 1")
+        assertNull(ch.program)
+    }
+
+    @Test
+    fun mixerChannelHoldsProgramValue() {
+        val ch = MixerChannel(staffIndex = 0, displayName = "Staff 1", program = 24)
+        assertEquals(24, ch.program)
     }
 }
