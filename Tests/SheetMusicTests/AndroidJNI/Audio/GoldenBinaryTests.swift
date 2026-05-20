@@ -5,6 +5,10 @@
     import SheetMusicCore
     import Testing
 
+    #if canImport(CoreGraphics)
+        import CoreGraphics
+    #endif
+
     struct GoldenBinaryTests {
         // MARK: - Canonical values
         //
@@ -90,6 +94,11 @@
             StaffParams(staffIndex: 0, bankLSB: 0, program: 0, isDrums: false, partAddressHash: 0),
             StaffParams(staffIndex: 1, bankLSB: 0, program: 0, isDrums: true, partAddressHash: 1001),
         ]
+
+        // cursorFrame-v1.bin: CGRect(x: 10.5, y: 20.0, width: 4.0, height: 80.5)
+        static let canonicalCursorFrameRect = CGRect(
+            x: 10.5, y: 20.0, width: 4.0, height: 80.5,
+        )
 
         // MARK: - Golden directory helper
         //
@@ -204,6 +213,16 @@
         @Test func staffParamsGoldenMatches() throws {
             let encoded = StaffParamsCodec.encodeArray(GoldenBinaryTests.canonicalStaffParams)
             let committed = try Data(contentsOf: goldenDir.appendingPathComponent("staffParams-v1.bin"))
+            #expect(encoded == committed)
+        }
+
+        // cursorFrame-v1.bin: version(2) + 4 × i64(8) = 34 bytes
+
+        @Test func cursorFrameGoldenMatches() throws {
+            let encoded = CursorFrameCodec.encode(GoldenBinaryTests.canonicalCursorFrameRect)
+            let committed = try Data(
+                contentsOf: goldenDir.appendingPathComponent("cursorFrame-v1.bin"),
+            )
             #expect(encoded == committed)
         }
     }
