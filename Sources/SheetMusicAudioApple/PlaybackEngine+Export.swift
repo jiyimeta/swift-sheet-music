@@ -39,8 +39,8 @@ extension PlaybackEngine {
             throw AudioExportError.noScorePrepared
         }
 
-        let (startTick, endTick) = try Self.resolveRange(
-            range, timeline: timeline, loop: loopRange,
+        let (startTick, endTick) = try range.resolveTickRange(
+            timeline: timeline, loop: loopRange,
         )
         let startSec = timeline.frame(atTick: startTick)?.timeSeconds ?? 0
         let endSec = timeline.frame(atTick: endTick)?.timeSeconds
@@ -304,75 +304,5 @@ extension PlaybackEngine {
         let sequencer: AVAudioSequencer
         let samplers: [AVAudioUnitMIDIInstrument]
         let metronomeSampler: AVAudioUnitMIDIInstrument?
-    }
-
-    private static func resolveRange(
-        _ range: AudioExportRange,
-        timeline: PlaybackTimeline,
-        loop: LoopRange?,
-    ) throws -> (Int, Int) {
-        switch range {
-        case .full:
-            return (0, timeline.totalTicks)
-        case .currentLoop:
-            if let loop {
-                return (loop.startTick, loop.endTick)
-            }
-            return (0, timeline.totalTicks)
-        case let .region(from, to):
-            guard let sTick = resolveCursorTick(from, in: timeline),
-                  let eTick = resolveCursorTick(to, in: timeline),
-                  sTick < eTick
-            else { throw AudioExportError.rangeNotInTimeline }
-            return (sTick, eTick)
-        case let .regionThroughEnd(from, last):
-            guard let sTick = resolveCursorTick(from, in: timeline),
-                  let endTick = timeline.itemEndTicks[last],
-                  sTick < endTick
-            else { throw AudioExportError.rangeNotInTimeline }
-            return (sTick, endTick)
-        }
-    }
-
-    /// Resolve a `ScoreCursor` to a timeline tick, with fallback for
-    /// `.beat` cursors whose tick is occupied by a chord/rest frame
-    /// (and therefore has no dedicated `.beat` frame).
-    private static func resolveCursorTick(
-        _ cursor: ScoreCursor,
-        in timeline: PlaybackTimeline,
-    ) -> Int? {
-        if let frame = timeline.frame(forCursor: cursor) {
-            return frame.tick
-        }
-        guard case let .beat(measureIndex: mi, tickInMeasure: tim) = cursor else {
-            return nil
-        }
-        for frame in timeline.frames {
-            if case let .beat(measureIndex: fmi, tickInMeasure: ftim) = frame.cursor,
-               fmi == mi
-            {
-                let measureStart = frame.tick - ftim
-                let absoluteTick = measureStart + tim
-                if absoluteTick >= 0, absoluteTick <= timeline.totalTicks {
-                    return absoluteTick
-                }
-            }
-        }
-        var measureStartTick: Int?
-        for (id, tick) in timeline.itemTicks {
-            guard id.measureIndex == mi else { continue }
-            if let existing = measureStartTick {
-                measureStartTick = min(existing, tick)
-            } else {
-                measureStartTick = tick
-            }
-        }
-        if let start = measureStartTick {
-            let absoluteTick = start + tim
-            if absoluteTick >= 0, absoluteTick <= timeline.totalTicks {
-                return absoluteTick
-            }
-        }
-        return nil
     }
 }
