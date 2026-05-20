@@ -15,11 +15,9 @@ enum GlissandoRenderer {
         text: String?,
         metrics: StaffMetrics,
     ) {
-        let dx = to.x - from.x
-        let dy = to.y - from.y
-        let length = sqrt(dx * dx + dy * dy)
+        let length = GlissandoGeometry.length(from: from, to: to)
         guard length > 0.01 else { return }
-        let angle = atan2(dy, dx) // radians, screen-coords
+        let angle = GlissandoGeometry.angle(from: from, to: to)
 
         // Work in a rotated coordinate system anchored at `from`, so
         // the line runs horizontally from (0, 0) to (length, 0).
@@ -28,24 +26,19 @@ enum GlissandoRenderer {
         local.concatenate(CGAffineTransform(rotationAngle: angle))
 
         // --- Line ---
+        let points = GlissandoGeometry.linePoints(
+            length: length, wavy: wavy, sp: metrics.sp,
+        )
         var linePath = Path()
-        if wavy {
-            let waveAmp = metrics.sp * 0.3
-            let segments = max(3, Int(length / (metrics.sp * 0.8)))
-            let segLen = length / CGFloat(segments)
-            linePath.move(to: .zero)
-            for i in 1 ... segments {
-                let x = segLen * CGFloat(i)
-                let y = i.isMultiple(of: 2) ? waveAmp : -waveAmp
-                linePath.addLine(to: CGPoint(x: x, y: y))
+        if let first = points.first {
+            linePath.move(to: first)
+            for pt in points.dropFirst() {
+                linePath.addLine(to: pt)
             }
-        } else {
-            linePath.move(to: .zero)
-            linePath.addLine(to: CGPoint(x: length, y: 0))
         }
         local.stroke(
             linePath, with: .color(.primary),
-            lineWidth: metrics.sp * 0.15,
+            lineWidth: metrics.sp * GlissandoGeometry.lineThicknessSp,
         )
 
         // --- Text label (centred along the line) ---
@@ -68,16 +61,12 @@ enum GlissandoRenderer {
                 height: CGFloat.greatestFiniteMagnitude,
             )).width
             if textWidth < length {
-                // Place the text's descender bottom just above the
-                // line — `tdraw.cpp:1584` raises the baseline by
-                // 0.1 sp (straight) or 0.4 sp (wavy) above the
-                // descender depth, which means the ink bottom ends
-                // at exactly that clearance above the line.
-                let clearance = metrics.sp * (wavy ? 0.4 : 0.1)
-                let textX = length / 2
+                let anchor = GlissandoGeometry.textAnchorLocal(
+                    length: length, wavy: wavy, sp: metrics.sp,
+                )
                 local.draw(
                     resolved,
-                    at: CGPoint(x: textX, y: -clearance),
+                    at: anchor,
                     anchor: UnitPoint(x: 0.5, y: 1.0),
                 )
             }

@@ -1,3 +1,4 @@
+// swiftlint:disable file_length
 import Foundation
 import SheetMusicCore
 import SheetMusicLayout
@@ -287,32 +288,95 @@ public enum LayoutBridge {
         case let .note(_, _, _, _, origin, _, _, _):
             placeholderRect(atX: Double(origin.x), atY: Double(origin.y), mox: mox, moy: moy, sp: sp, into: &out)
 
-        case let .fermata(_, origin):
-            placeholderRect(atX: Double(origin.x), atY: Double(origin.y), mox: mox, moy: moy, sp: sp, into: &out)
+        case let .fermata(subtype, origin):
+            emitCenterAnchoredGlyph(
+                codepoint: FermataGlyph.codepoint(forSubtype: subtype),
+                cxPt: mox + Double(origin.x),
+                cyPt: moy + Double(origin.y),
+                sizePt: glyphSize,
+                into: &out,
+            )
 
-        case let .marker(_, _, origin):
-            placeholderRect(atX: Double(origin.x), atY: Double(origin.y), mox: mox, moy: moy, sp: sp, into: &out)
+        case let .marker(kind, text, origin):
+            switch MarkerGlyph.variant(for: kind, text: text) {
+            case let .glyph(codepoint):
+                emitCenterAnchoredGlyph(
+                    codepoint: codepoint,
+                    cxPt: mox + Double(origin.x),
+                    cyPt: moy + Double(origin.y),
+                    sizePt: glyphSize,
+                    into: &out,
+                )
+            case let .text(label):
+                encodeNotationText(
+                    text: label, role: .markerText,
+                    originX: mox + Double(origin.x),
+                    originY: moy + Double(origin.y),
+                    sp: sp,
+                    into: &out,
+                )
+            }
 
-        case let .rehearsalMark(_, origin, _, _):
-            placeholderRect(atX: Double(origin.x), atY: Double(origin.y), mox: mox, moy: moy, sp: sp, into: &out)
+        case let .rehearsalMark(text, origin, frame, color):
+            encodeRehearsalMark(
+                text: text,
+                originX: mox + Double(origin.x),
+                originY: moy + Double(origin.y),
+                frame: frame,
+                color: color,
+                sp: sp,
+                into: &out,
+            )
 
-        case let .jump(_, origin):
-            placeholderRect(atX: Double(origin.x), atY: Double(origin.y), mox: mox, moy: moy, sp: sp, into: &out)
+        case let .jump(text, origin):
+            encodeNotationText(
+                text: text, role: .jump,
+                originX: mox + Double(origin.x),
+                originY: moy + Double(origin.y),
+                sp: sp,
+                into: &out,
+            )
 
-        case let .measureRepeat(_, origin):
-            placeholderRect(atX: Double(origin.x), atY: Double(origin.y), mox: mox, moy: moy, sp: sp, into: &out)
+        case let .measureRepeat(count, origin):
+            emitCenterAnchoredGlyph(
+                codepoint: MeasureRepeatGlyph.codepoint(forCount: count),
+                cxPt: mox + Double(origin.x),
+                cyPt: moy + Double(origin.y),
+                sizePt: glyphSize,
+                into: &out,
+            )
 
         case let .multiMeasureRest(_, origin):
             placeholderRect(atX: Double(origin.x), atY: Double(origin.y), mox: mox, moy: moy, sp: sp, into: &out)
 
-        case let .measureNumber(_, origin):
-            placeholderRect(atX: Double(origin.x), atY: Double(origin.y), mox: mox, moy: moy, sp: sp, into: &out)
+        case let .measureNumber(text, origin):
+            encodeNotationText(
+                text: text, role: .measureNumber,
+                originX: mox + Double(origin.x),
+                originY: moy + Double(origin.y),
+                sp: sp,
+                into: &out,
+            )
 
-        case let .staffName(_, origin):
-            placeholderRect(atX: Double(origin.x), atY: Double(origin.y), mox: mox, moy: moy, sp: sp, into: &out)
+        case let .staffName(text, origin):
+            encodeNotationText(
+                text: text, role: .staffName,
+                originX: mox + Double(origin.x),
+                originY: moy + Double(origin.y),
+                sp: sp,
+                into: &out,
+            )
 
-        case let .articulation(_, origin, _):
-            placeholderRect(atX: Double(origin.x), atY: Double(origin.y), mox: mox, moy: moy, sp: sp, into: &out)
+        case let .articulation(kind, origin, isAbove):
+            emitCenterAnchoredGlyph(
+                codepoint: ArticulationGlyph.codepoint(
+                    kind: kind, isAbove: isAbove,
+                ),
+                cxPt: mox + Double(origin.x),
+                cyPt: moy + Double(origin.y),
+                sizePt: glyphSize,
+                into: &out,
+            )
 
         case let .tieArc(fromOrigin, toOrigin, above):
             encodeTieArc(
@@ -361,9 +425,89 @@ public enum LayoutBridge {
                 into: &out,
             )
 
-        // Decorations deferred to a future task — require richer geometry.
-        case .harmony, .spannerSegment, .glissandoLine,
-             .arpeggioWiggle, .tremoloBars:
+        case let .harmony(lh):
+            encodeHarmony(
+                harmony: lh,
+                measureOriginX: mox, measureOriginY: moy,
+                sp: sp,
+                into: &out,
+            )
+
+        case let .tremoloBars(anchor, barCount):
+            let shiftedAnchor: TremoloAnchor
+            switch anchor {
+            case let .single(c):
+                shiftedAnchor = .single(center: CGPoint(
+                    x: CGFloat(mox) + c.x,
+                    y: CGFloat(moy) + c.y,
+                ))
+            case let .between(left, right):
+                shiftedAnchor = .between(
+                    leftStemMid: CGPoint(
+                        x: CGFloat(mox) + left.x,
+                        y: CGFloat(moy) + left.y,
+                    ),
+                    rightStemMid: CGPoint(
+                        x: CGFloat(mox) + right.x,
+                        y: CGFloat(moy) + right.y,
+                    ),
+                )
+            }
+            let bars = TremoloGeometry.bars(
+                anchor: shiftedAnchor, barCount: barCount,
+                sp: CGFloat(sp),
+            )
+            let thickness = Double(
+                TremoloGeometry.barThickness(sp: CGFloat(sp)),
+            )
+            for bar in bars {
+                out.append(.moveTo(
+                    x: Double(bar.from.x) * ptToMM,
+                    y: Double(bar.from.y) * ptToMM,
+                ))
+                out.append(.lineTo(
+                    x: Double(bar.to.x) * ptToMM,
+                    y: Double(bar.to.y) * ptToMM,
+                ))
+                out.append(.stroke(width: thickness * ptToMM))
+            }
+
+        case let .glissandoLine(fromOrigin, toOrigin, wavy, _):
+            // Text label is omitted on Android until we can measure
+            // text in the rotated frame; the line itself is the
+            // visually-dominant element of the glissando.
+            encodeGlissandoLine(
+                fromX: mox + Double(fromOrigin.x),
+                fromY: moy + Double(fromOrigin.y),
+                toX: mox + Double(toOrigin.x),
+                toY: moy + Double(toOrigin.y),
+                wavy: wavy,
+                sp: sp,
+                into: &out,
+            )
+
+        case let .spannerSegment(
+            kind, fromOrigin, toOrigin, continuesLeft, continuesRight, text,
+        ):
+            encodeSpanner(
+                kind: kind,
+                fromX: mox + Double(fromOrigin.x),
+                fromY: moy + Double(fromOrigin.y),
+                toX: mox + Double(toOrigin.x),
+                toY: moy + Double(toOrigin.y),
+                continuesLeft: continuesLeft,
+                continuesRight: continuesRight,
+                text: text,
+                sp: sp,
+                glyphSize: glyphSize,
+                into: &out,
+            )
+
+        // Arpeggio defers until a rotation opcode lands in the wire
+        // format — the wiggle glyphs are designed for a horizontal
+        // baseline and need a -90° rotation to read as a vertical
+        // arpeggio.
+        case .arpeggioWiggle:
             break
         }
     }

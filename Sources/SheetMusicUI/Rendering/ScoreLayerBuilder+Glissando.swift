@@ -17,26 +17,19 @@ extension ScoreLayerBuilder {
         metrics: StaffMetrics, height: CGFloat,
         into parent: CALayer,
     ) {
-        let dx = to.x - from.x
-        let dy = to.y - from.y
-        let length = sqrt(dx * dx + dy * dy)
+        let length = GlissandoGeometry.length(from: from, to: to)
         guard length > 0.01 else { return }
-        let angle = atan2(dy, dx)
+        let angle = GlissandoGeometry.angle(from: from, to: to)
 
+        let points = GlissandoGeometry.linePoints(
+            length: length, wavy: wavy, sp: metrics.sp,
+        )
         let linePath = CGMutablePath()
-        if wavy {
-            let waveAmp = metrics.sp * 0.3
-            let segments = max(3, Int(length / (metrics.sp * 0.8)))
-            let segLen = length / CGFloat(segments)
-            linePath.move(to: .zero)
-            for i in 1 ... segments {
-                let x = segLen * CGFloat(i)
-                let y = i.isMultiple(of: 2) ? waveAmp : -waveAmp
-                linePath.addLine(to: CGPoint(x: x, y: y))
+        if let first = points.first {
+            linePath.move(to: first)
+            for pt in points.dropFirst() {
+                linePath.addLine(to: pt)
             }
-        } else {
-            linePath.move(to: .zero)
-            linePath.addLine(to: CGPoint(x: length, y: 0))
         }
         // Want: P → rotate(P) → + from.
         // Matrix: T_from · R.  In CGAffineTransform chained API, each
@@ -50,7 +43,8 @@ extension ScoreLayerBuilder {
         if let transformed = linePath.copy(using: &transform) {
             parent.addSublayer(strokeLayer(
                 path: transformed, height: height,
-                lineWidth: metrics.sp * 0.15,
+                lineWidth: metrics.sp
+                    * GlissandoGeometry.lineThicknessSp,
             ))
         }
 
@@ -86,16 +80,15 @@ extension ScoreLayerBuilder {
             CTLineGetTypographicBounds(line, nil, nil, nil),
         )
         guard textWidth < length else { return }
-        let clearance = metrics.sp * (wavy ? 0.4 : 0.1)
-        let localX = length / 2
-        let localY = -clearance
-        let worldX = cos(angle) * localX
-            - sin(angle) * localY + from.x
-        let worldY = sin(angle) * localX
-            + cos(angle) * localY + from.y
+        let anchorLocal = GlissandoGeometry.textAnchorLocal(
+            length: length, wavy: wavy, sp: metrics.sp,
+        )
+        let world = GlissandoGeometry.toWorld(
+            local: anchorLocal, from: from, angle: angle,
+        )
         if let layer = textLayer(
             text: text,
-            at: CGPoint(x: worldX, y: worldY),
+            at: world,
             size: style.pointSize,
             italic: style.isItalic,
             anchor: CGPoint(x: 0.5, y: 1.0),

@@ -1,3 +1,4 @@
+// swiftlint:disable file_length
 import Foundation
 import SheetMusicCore
 import SheetMusicLayout
@@ -5,6 +6,7 @@ import SheetMusicLayout
 #if !canImport(CoreGraphics)
     private typealias CGFloat = SheetMusicLayout.CGFloat
     private typealias CGPoint = SheetMusicLayout.CGPoint
+    private typealias CGRect = SheetMusicLayout.CGRect
 #endif
 
 /// Per-element encoders for the time-signature and key-signature
@@ -331,6 +333,498 @@ extension LayoutBridge {
             y: Double(to.y) * ptToMMScale,
         ))
         out.append(.stroke(width: width * ptToMMScale))
+    }
+
+    // MARK: - Spanners
+
+    // swiftlint:disable:next function_parameter_count function_body_length
+    static func encodeSpanner(
+        kind: LayoutElement.SpannerKind,
+        fromX: Double, fromY: Double,
+        toX: Double, toY: Double,
+        continuesLeft: Bool, continuesRight: Bool,
+        text: String,
+        sp: Double,
+        glyphSize: Double,
+        into out: inout [DrawCommand],
+    ) {
+        let from = CGPoint(x: CGFloat(fromX), y: CGFloat(fromY))
+        let to = CGPoint(x: CGFloat(toX), y: CGFloat(toY))
+        let stroke = Double(sp)
+            * Double(SpannerGeometry.strokeThicknessSp)
+        let line = Double(sp) * Double(SpannerGeometry.lineThicknessSp)
+        switch kind {
+        case .slur:
+            let control = SpannerGeometry.slurControlPoint(
+                from: from, to: to, sp: CGFloat(sp),
+            )
+            // Convert quad(P0, C, P1) → cubic(P0, C1, C2, P1).
+            //   C1 = (P0 + 2C) / 3
+            //   C2 = (P1 + 2C) / 3
+            let c1 = CGPoint(
+                x: (from.x + 2 * control.x) / 3,
+                y: (from.y + 2 * control.y) / 3,
+            )
+            let c2 = CGPoint(
+                x: (to.x + 2 * control.x) / 3,
+                y: (to.y + 2 * control.y) / 3,
+            )
+            out.append(.moveTo(
+                x: Double(from.x) * ptToMMScale,
+                y: Double(from.y) * ptToMMScale,
+            ))
+            out.append(.cubicTo(
+                cx1: Double(c1.x) * ptToMMScale,
+                cy1: Double(c1.y) * ptToMMScale,
+                cx2: Double(c2.x) * ptToMMScale,
+                cy2: Double(c2.y) * ptToMMScale,
+                x: Double(to.x) * ptToMMScale,
+                y: Double(to.y) * ptToMMScale,
+            ))
+            out.append(.stroke(width: stroke * ptToMMScale))
+
+        case let .volta(endings):
+            let pts = SpannerGeometry.voltaBracketPoints(
+                from: from, to: to,
+                continuesLeft: continuesLeft,
+                continuesRight: continuesRight,
+                sp: CGFloat(sp),
+            )
+            emitPolyline(pts, lineWidth: stroke, into: &out)
+            if let label = SpannerGeometry.voltaLabel(
+                from: from, to: to, endings: endings,
+                continuesLeft: continuesLeft, sp: CGFloat(sp),
+            ) {
+                encodeNotationText(
+                    text: label.text, role: .markerText,
+                    originX: Double(label.origin.x),
+                    originY: Double(label.origin.y),
+                    sp: sp,
+                    into: &out,
+                )
+            }
+
+        case .hairpinOpen, .hairpinClose:
+            let segs = SpannerGeometry.hairpin(
+                from: from, to: to,
+                open: kind == .hairpinOpen,
+                sp: CGFloat(sp),
+            )
+            emitSegment(
+                from: segs.upperFrom, to: segs.upperTo,
+                lineWidth: stroke, into: &out,
+            )
+            emitSegment(
+                from: segs.lowerFrom, to: segs.lowerTo,
+                lineWidth: stroke, into: &out,
+            )
+
+        case .pedal:
+            let parts = SpannerGeometry.pedal(from: from, to: to)
+            // Canvas.drawText anchors at baseline-leading. Apple uses
+            // `(0, 0.5)` (vertical centre, leading); shift by the
+            // glyph half-height.
+            let glyphFont = LayoutFont(
+                face: SMuFLFamily.bravura, pointSize: CGFloat(glyphSize),
+            )
+            let ascent = Double(
+                FontMetrics.provider.ascent(font: glyphFont),
+            )
+            let descent = Double(
+                FontMetrics.provider.descent(font: glyphFont),
+            )
+            let dy = (ascent - descent) / 2
+            out.append(.glyph(
+                codepoint: parts.downCodepoint,
+                x: Double(parts.downOrigin.x) * ptToMMScale,
+                y: (Double(parts.downOrigin.y) + dy) * ptToMMScale,
+                size: glyphSize * ptToMMScale,
+                fontId: .smufl,
+            ))
+            out.append(.glyph(
+                codepoint: parts.upCodepoint,
+                x: Double(parts.upOrigin.x) * ptToMMScale,
+                y: (Double(parts.upOrigin.y) + dy) * ptToMMScale,
+                size: glyphSize * ptToMMScale,
+                fontId: .smufl,
+            ))
+
+        case .ottava:
+            let parts = SpannerGeometry.ottava(
+                from: from, to: to, sp: CGFloat(sp),
+            )
+            // No dashed-line opcode in the wire format yet; v1 falls
+            // back to a solid stroke.
+            encodeNotationText(
+                text: parts.label, role: .jump,
+                originX: Double(parts.labelOrigin.x),
+                originY: Double(parts.labelOrigin.y),
+                sp: sp, into: &out,
+            )
+            emitSegment(
+                from: parts.lineStart, to: parts.lineEnd,
+                lineWidth: line, into: &out,
+            )
+
+        case .textLine:
+            let parts = SpannerGeometry.textLine(
+                from: from, to: to, text: text, sp: CGFloat(sp),
+            )
+            if !parts.label.isEmpty {
+                encodeNotationText(
+                    text: parts.label, role: .jump,
+                    originX: Double(parts.labelOrigin.x),
+                    originY: Double(parts.labelOrigin.y),
+                    sp: sp, into: &out,
+                )
+            }
+            emitSegment(
+                from: parts.lineStart, to: parts.lineEnd,
+                lineWidth: line, into: &out,
+            )
+        }
+    }
+
+    private static func emitPolyline(
+        _ points: [CGPoint], lineWidth: Double,
+        into out: inout [DrawCommand],
+    ) {
+        guard let first = points.first else { return }
+        out.append(.moveTo(
+            x: Double(first.x) * ptToMMScale,
+            y: Double(first.y) * ptToMMScale,
+        ))
+        for pt in points.dropFirst() {
+            out.append(.lineTo(
+                x: Double(pt.x) * ptToMMScale,
+                y: Double(pt.y) * ptToMMScale,
+            ))
+        }
+        out.append(.stroke(width: lineWidth * ptToMMScale))
+    }
+
+    private static func emitSegment(
+        from: CGPoint, to: CGPoint, lineWidth: Double,
+        into out: inout [DrawCommand],
+    ) {
+        out.append(.moveTo(
+            x: Double(from.x) * ptToMMScale,
+            y: Double(from.y) * ptToMMScale,
+        ))
+        out.append(.lineTo(
+            x: Double(to.x) * ptToMMScale,
+            y: Double(to.y) * ptToMMScale,
+        ))
+        out.append(.stroke(width: lineWidth * ptToMMScale))
+    }
+
+    // MARK: - Glissando line
+
+    // swiftlint:disable:next function_parameter_count
+    static func encodeGlissandoLine(
+        fromX: Double, fromY: Double,
+        toX: Double, toY: Double,
+        wavy: Bool,
+        sp: Double,
+        into out: inout [DrawCommand],
+    ) {
+        let from = CGPoint(x: CGFloat(fromX), y: CGFloat(fromY))
+        let to = CGPoint(x: CGFloat(toX), y: CGFloat(toY))
+        let length = GlissandoGeometry.length(from: from, to: to)
+        guard length > 0.01 else { return }
+        let angle = GlissandoGeometry.angle(from: from, to: to)
+        let localPoints = GlissandoGeometry.linePoints(
+            length: length, wavy: wavy, sp: CGFloat(sp),
+        )
+        guard !localPoints.isEmpty else { return }
+        let lineWidth = Double(sp)
+            * Double(GlissandoGeometry.lineThicknessSp)
+        let worldPoints = localPoints.map {
+            GlissandoGeometry.toWorld(
+                local: $0, from: from, angle: angle,
+            )
+        }
+        // Emit as moveTo + lineTo* + stroke.
+        // swiftlint:disable:next force_unwrapping
+        let first = worldPoints.first!
+        out.append(.moveTo(
+            x: Double(first.x) * ptToMMScale,
+            y: Double(first.y) * ptToMMScale,
+        ))
+        for pt in worldPoints.dropFirst() {
+            out.append(.lineTo(
+                x: Double(pt.x) * ptToMMScale,
+                y: Double(pt.y) * ptToMMScale,
+            ))
+        }
+        out.append(.stroke(width: lineWidth * ptToMMScale))
+    }
+
+    // MARK: - Harmony (chord symbol)
+
+    /// Emit a pre-laid-out `LayoutHarmony`. Walks the `runs` array
+    /// emitting Edwin text for `.text` runs and Bravura glyphs for
+    /// `.accidental` runs at their pre-computed X offsets. Mirrors the
+    /// Apple `HarmonyRenderer` walk.
+    static func encodeHarmony(
+        harmony lh: LayoutHarmony,
+        measureOriginX mox: Double,
+        measureOriginY moy: Double,
+        sp: Double,
+        into out: inout [DrawCommand],
+    ) {
+        guard !lh.runs.isEmpty else { return }
+        let argb = lh.harmony.color.flatMap(argb(from:))
+        if let argb { out.append(.setColor(argb: argb)) }
+        let style = lh.harmony.styleType
+        let textPt = TextRoleStyle.fontSize(for: style, sp: CGFloat(sp))
+        let glyphPt = HarmonyRendering.glyphPointSize(
+            for: lh.harmony,
+            metrics: StaffMetrics(staffSize: CGFloat(sp) * 4),
+        )
+        let textFont = LayoutFont(face: "Edwin", pointSize: textPt)
+        let glyphFont = LayoutFont(
+            face: SMuFLFamily.bravura, pointSize: glyphPt,
+        )
+        let textAscent = Double(
+            FontMetrics.provider.ascent(font: textFont),
+        )
+        let textDescent = Double(
+            FontMetrics.provider.descent(font: textFont),
+        )
+        let glyphAscent = Double(
+            FontMetrics.provider.ascent(font: glyphFont),
+        )
+        let glyphDescent = Double(
+            FontMetrics.provider.descent(font: glyphFont),
+        )
+        let originX = mox + lh.anchorX
+        let originY = moy + lh.y
+        // Apple anchors each run at `.leading` (vertical centre,
+        // leading edge). Canvas anchors at baseline, so shift by
+        // `(ascent - descent) / 2` to align the typographic centres.
+        for run in lh.runs {
+            let runX = originX + run.x
+            switch run.kind {
+            case .text:
+                let baselineY = originY
+                    + (textAscent - textDescent) / 2
+                out.append(.text(
+                    run.content,
+                    x: runX * ptToMMScale,
+                    y: baselineY * ptToMMScale,
+                    size: Double(textPt) * ptToMMScale,
+                    fontId: .textRoman,
+                ))
+            case let .accidental(acc):
+                let baselineY = originY
+                    + (glyphAscent - glyphDescent) / 2
+                out.append(.glyph(
+                    codepoint: acc.codepoint.unicodeScalars.first.map {
+                        UInt32($0.value)
+                    } ?? 0,
+                    x: runX * ptToMMScale,
+                    y: baselineY * ptToMMScale,
+                    size: Double(glyphPt) * ptToMMScale,
+                    fontId: .smufl,
+                ))
+            }
+        }
+        if argb != nil {
+            out.append(.setColor(argb: 0xFF00_0000))
+        }
+    }
+
+    // MARK: - Notation text labels
+
+    /// Emit a plain text label (jump / measure number / staff name /
+    /// part label) using the `NotationTextStyle` constants. Computes a
+    /// baseline Y from the role's anchor + the platform-measured
+    /// ascent/descent so Canvas.drawText lands where SwiftUI's anchored
+    /// `Text` would on Apple.
+    static func encodeNotationText(
+        text: String,
+        role: NotationTextStyle.Role,
+        originX: Double,
+        originY: Double,
+        sp: Double,
+        into out: inout [DrawCommand],
+    ) {
+        guard !text.isEmpty else { return }
+        let textPt = NotationTextStyle.fontSize(
+            for: role, sp: CGFloat(sp),
+        )
+        let font = LayoutFont(face: "Edwin", pointSize: textPt)
+        let advance = Double(FontMetrics.provider.typographicWidth(
+            text: text, font: font,
+        ))
+        let ascent = Double(FontMetrics.provider.ascent(font: font))
+        let descent = Double(FontMetrics.provider.descent(font: font))
+        let anchor = NotationTextStyle.anchor(for: role)
+        let dx: Double
+        let baselineY: Double
+        switch anchor {
+        case .leadingCenter:
+            // SwiftUI `.leading` = `(0, 0.5)`. Vertical centre is at
+            // `(ascent - descent) / 2` above the baseline.
+            dx = 0
+            baselineY = originY + (ascent - descent) / 2
+        case .bottomLeading:
+            // SwiftUI `(0, 1)` puts the typographic frame's BOTTOM at
+            // `originY`. The descender hangs below the baseline by
+            // `descent`, so the baseline is `originY - descent`.
+            dx = 0
+            baselineY = originY - descent
+        case .trailingCenter:
+            // SwiftUI `.trailing` = `(1, 0.5)`. Shift the X by the
+            // negative of the advance so the right edge lands at
+            // `originX`.
+            dx = -advance
+            baselineY = originY + (ascent - descent) / 2
+        }
+        out.append(.text(
+            text,
+            x: (originX + dx) * ptToMMScale,
+            y: baselineY * ptToMMScale,
+            size: Double(textPt) * ptToMMScale,
+            fontId: .textRoman,
+        ))
+    }
+
+    // MARK: - Rehearsal mark
+
+    // swiftlint:disable:next function_parameter_count
+    static func encodeRehearsalMark(
+        text: String,
+        originX: Double,
+        originY: Double,
+        frame: TextFrameType,
+        color: ScoreColor?,
+        sp: Double,
+        into out: inout [DrawCommand],
+    ) {
+        guard !text.isEmpty else { return }
+        let argb = color.flatMap(argb(from:))
+        if let argb { out.append(.setColor(argb: argb)) }
+        let pad = Double(RehearsalMarkFrame.paddingSp(sp: CGFloat(sp)))
+        let textPt = TextRoleStyle.fontSize(
+            for: .rehearsalMark, sp: CGFloat(sp),
+        )
+        let font = LayoutFont(face: "Edwin", pointSize: textPt)
+        let advance = Double(FontMetrics.provider.typographicWidth(
+            text: text, font: font,
+        ))
+        let ascent = Double(FontMetrics.provider.ascent(font: font))
+        let descent = Double(FontMetrics.provider.descent(font: font))
+        let textWidth = max(advance, Double(textPt) * 0.5)
+        let textHeight = ascent + descent
+        // Apple anchors the text at bottom-leading inside the box;
+        // Canvas.drawText anchors at baseline, so the baseline Y is
+        // `origin.y - pad - descent`.
+        let textOriginX = originX + pad
+        let baselineY = originY - pad - descent
+        out.append(.text(
+            text,
+            x: textOriginX * ptToMMScale,
+            y: baselineY * ptToMMScale,
+            size: Double(textPt) * ptToMMScale,
+            fontId: .textRoman,
+        ))
+        let boxRect = RehearsalMarkFrame.boxRect(
+            textWidth: CGFloat(textWidth),
+            textHeight: CGFloat(textHeight),
+            origin: CGPoint(x: CGFloat(originX), y: CGFloat(originY)),
+            pad: CGFloat(pad),
+        )
+        let strokeWidth = Double(
+            RehearsalMarkFrame.strokeWidthSp(sp: CGFloat(sp)),
+        )
+        switch RehearsalMarkFrame.shape(for: frame, around: boxRect) {
+        case .none:
+            break
+        case let .rectangle(rect):
+            emitRectStroke(
+                rect: rect, lineWidth: strokeWidth, into: &out,
+            )
+        case let .ellipse(rect):
+            // Approximate an ellipse with four cubic Bezier arcs. The
+            // wire format has no native ellipse opcode; this matches
+            // SVG's standard 4-arc approximation (kappa = 0.5522847498).
+            emitEllipseStroke(
+                rect: rect, lineWidth: strokeWidth, into: &out,
+            )
+        }
+        if argb != nil {
+            out.append(.setColor(argb: 0xFF00_0000))
+        }
+    }
+
+    private static func emitRectStroke(
+        rect: CGRect, lineWidth: Double,
+        into out: inout [DrawCommand],
+    ) {
+        let x0 = Double(rect.minX) * ptToMMScale
+        let y0 = Double(rect.minY) * ptToMMScale
+        let x1 = Double(rect.maxX) * ptToMMScale
+        let y1 = Double(rect.maxY) * ptToMMScale
+        out.append(.moveTo(x: x0, y: y0))
+        out.append(.lineTo(x: x1, y: y0))
+        out.append(.lineTo(x: x1, y: y1))
+        out.append(.lineTo(x: x0, y: y1))
+        out.append(.lineTo(x: x0, y: y0))
+        out.append(.stroke(width: lineWidth * ptToMMScale))
+    }
+
+    private static func emitEllipseStroke(
+        rect: CGRect, lineWidth: Double,
+        into out: inout [DrawCommand],
+    ) {
+        // Standard 4-arc cubic Bezier approximation of an ellipse.
+        let kappa = 0.5522847498
+        let cx = Double(rect.midX) * ptToMMScale
+        let cy = Double(rect.midY) * ptToMMScale
+        let rx = Double(rect.width) / 2 * ptToMMScale
+        let ry = Double(rect.height) / 2 * ptToMMScale
+        let ox: Double = rx * kappa
+        let oy: Double = ry * kappa
+        out.append(.moveTo(x: cx - rx, y: cy))
+        emitCubic(
+            out: &out,
+            cx1: cx - rx, cy1: cy - oy,
+            cx2: cx - ox, cy2: cy - ry,
+            x: cx, y: cy - ry,
+        )
+        emitCubic(
+            out: &out,
+            cx1: cx + ox, cy1: cy - ry,
+            cx2: cx + rx, cy2: cy - oy,
+            x: cx + rx, y: cy,
+        )
+        emitCubic(
+            out: &out,
+            cx1: cx + rx, cy1: cy + oy,
+            cx2: cx + ox, cy2: cy + ry,
+            x: cx, y: cy + ry,
+        )
+        emitCubic(
+            out: &out,
+            cx1: cx - ox, cy1: cy + ry,
+            cx2: cx - rx, cy2: cy + oy,
+            x: cx - rx, y: cy,
+        )
+        out.append(.stroke(width: lineWidth * ptToMMScale))
+    }
+
+    // swiftlint:disable:next function_parameter_count
+    private static func emitCubic(
+        out: inout [DrawCommand],
+        cx1: Double, cy1: Double,
+        cx2: Double, cy2: Double,
+        x: Double, y: Double,
+    ) {
+        out.append(.cubicTo(
+            cx1: cx1, cy1: cy1, cx2: cx2, cy2: cy2, x: x, y: y,
+        ))
     }
 
     // MARK: - Key signature

@@ -62,16 +62,15 @@ extension ScoreLayerBuilder {
         metrics: StaffMetrics, height: CGFloat,
         into parent: CALayer,
     ) {
-        let mid = CGPoint(
-            x: (from.x + to.x) / 2,
-            y: min(from.y, to.y) - metrics.sp * 2,
+        let control = SpannerGeometry.slurControlPoint(
+            from: from, to: to, sp: metrics.sp,
         )
         let p = CGMutablePath()
         p.move(to: from)
-        p.addQuadCurve(to: to, control: mid)
+        p.addQuadCurve(to: to, control: control)
         parent.addSublayer(strokeLayer(
             path: p, height: height,
-            lineWidth: metrics.sp * 0.15,
+            lineWidth: metrics.sp * SpannerGeometry.strokeThicknessSp,
         ))
     }
 
@@ -82,38 +81,36 @@ extension ScoreLayerBuilder {
         metrics: StaffMetrics, height: CGFloat,
         into parent: CALayer,
     ) {
-        let top = min(from.y, to.y)
+        let pts = SpannerGeometry.voltaBracketPoints(
+            from: from, to: to,
+            continuesLeft: continuesLeft,
+            continuesRight: continuesRight,
+            sp: metrics.sp,
+        )
         let p = CGMutablePath()
-        if !continuesLeft {
-            p.move(to: CGPoint(x: from.x, y: top + metrics.sp))
-            p.addLine(to: CGPoint(x: from.x, y: top))
-        } else {
-            p.move(to: CGPoint(x: from.x, y: top))
-        }
-        p.addLine(to: CGPoint(x: to.x, y: top))
-        if !continuesRight {
-            p.addLine(to: CGPoint(x: to.x, y: top + metrics.sp))
+        if let first = pts.first {
+            p.move(to: first)
+            for pt in pts.dropFirst() {
+                p.addLine(to: pt)
+            }
         }
         parent.addSublayer(strokeLayer(
             path: p, height: height,
-            lineWidth: metrics.sp * 0.15,
+            lineWidth: metrics.sp * SpannerGeometry.strokeThicknessSp,
         ))
-        if !endings.isEmpty, !continuesLeft {
-            let label = endings
-                .map(String.init)
-                .joined(separator: ", ") + "."
-            if let layer = textLayer(
-                text: label,
-                at: CGPoint(
-                    x: from.x + metrics.sp,
-                    y: top + metrics.sp / 2,
-                ),
-                size: metrics.sp * 2, italic: false,
+        if let label = SpannerGeometry.voltaLabel(
+            from: from, to: to, endings: endings,
+            continuesLeft: continuesLeft, sp: metrics.sp,
+        ),
+            let layer = textLayer(
+                text: label.text,
+                at: label.origin,
+                size: metrics.sp * label.sizeSp, italic: false,
                 anchor: CGPoint(x: 0, y: 0.5),
                 height: height,
-            ) {
-                parent.addSublayer(layer)
-            }
+            )
+        {
+            parent.addSublayer(layer)
         }
     }
 
@@ -122,22 +119,17 @@ extension ScoreLayerBuilder {
         metrics: StaffMetrics, height: CGFloat,
         into parent: CALayer,
     ) {
+        let segs = SpannerGeometry.hairpin(
+            from: from, to: to, open: open, sp: metrics.sp,
+        )
         let p = CGMutablePath()
-        let y = max(from.y, to.y)
-        if open {
-            p.move(to: CGPoint(x: from.x, y: y))
-            p.addLine(to: CGPoint(x: to.x, y: y - metrics.sp))
-            p.move(to: CGPoint(x: from.x, y: y))
-            p.addLine(to: CGPoint(x: to.x, y: y + metrics.sp))
-        } else {
-            p.move(to: CGPoint(x: from.x, y: y - metrics.sp))
-            p.addLine(to: CGPoint(x: to.x, y: y))
-            p.move(to: CGPoint(x: from.x, y: y + metrics.sp))
-            p.addLine(to: CGPoint(x: to.x, y: y))
-        }
+        p.move(to: segs.upperFrom)
+        p.addLine(to: segs.upperTo)
+        p.move(to: segs.lowerFrom)
+        p.addLine(to: segs.lowerTo)
         parent.addSublayer(strokeLayer(
             path: p, height: height,
-            lineWidth: metrics.sp * 0.15,
+            lineWidth: metrics.sp * SpannerGeometry.strokeThicknessSp,
         ))
     }
 
@@ -149,8 +141,13 @@ extension ScoreLayerBuilder {
         // MuseScore pedal marks are SMuFL glyphs from the music
         // font: `keyboardPedalPed` (U+E650) and `keyboardPedalUp`
         // (U+E655), rendered at music-symbol size (1 em = 4 sp).
+        let parts = SpannerGeometry.pedal(from: from, to: to)
+        // swiftlint:disable:next force_unwrapping
+        let down = Character(UnicodeScalar(parts.downCodepoint)!)
+        // swiftlint:disable:next force_unwrapping
+        let up = Character(UnicodeScalar(parts.upCodepoint)!)
         if let layer = glyphLayer(
-            SMuFLGlyph.keyboardPedalPed, at: from,
+            down, at: parts.downOrigin,
             size: metrics.glyphFontSize,
             anchor: CGPoint(x: 0, y: 0.5),
             height: height,
@@ -158,7 +155,7 @@ extension ScoreLayerBuilder {
             parent.addSublayer(layer)
         }
         if let layer = glyphLayer(
-            SMuFLGlyph.keyboardPedalUp, at: to,
+            up, at: parts.upOrigin,
             size: metrics.glyphFontSize,
             anchor: CGPoint(x: 0, y: 0.5),
             height: height,
@@ -172,21 +169,24 @@ extension ScoreLayerBuilder {
         metrics: StaffMetrics, height: CGFloat,
         into parent: CALayer,
     ) {
+        let parts = SpannerGeometry.ottava(
+            from: from, to: to, sp: metrics.sp,
+        )
         if let layer = textLayer(
-            text: "8va", at: from,
-            size: metrics.sp * 2.5, italic: true,
+            text: parts.label, at: parts.labelOrigin,
+            size: metrics.sp * parts.labelSizeSp, italic: true,
             anchor: CGPoint(x: 0, y: 0.5),
             height: height,
         ) {
             parent.addSublayer(layer)
         }
         let p = CGMutablePath()
-        p.move(to: CGPoint(x: from.x + metrics.sp * 3, y: from.y))
-        p.addLine(to: to)
+        p.move(to: parts.lineStart)
+        p.addLine(to: parts.lineEnd)
         parent.addSublayer(strokeLayer(
             path: p, height: height,
-            lineWidth: metrics.sp * 0.1,
-            dashPattern: [3, 3],
+            lineWidth: metrics.sp * parts.lineThicknessSp,
+            dashPattern: parts.dashPattern.map { NSNumber(value: Double($0)) },
         ))
     }
 
@@ -195,10 +195,13 @@ extension ScoreLayerBuilder {
         metrics: StaffMetrics, height: CGFloat,
         into parent: CALayer,
     ) {
-        if !text.isEmpty,
+        let parts = SpannerGeometry.textLine(
+            from: from, to: to, text: text, sp: metrics.sp,
+        )
+        if !parts.label.isEmpty,
            let layer = textLayer(
-               text: text, at: from,
-               size: metrics.sp * 2.2, italic: true,
+               text: parts.label, at: parts.labelOrigin,
+               size: metrics.sp * parts.labelSizeSp, italic: true,
                anchor: CGPoint(x: 0, y: 0.5),
                height: height,
            )
@@ -206,11 +209,11 @@ extension ScoreLayerBuilder {
             parent.addSublayer(layer)
         }
         let p = CGMutablePath()
-        p.move(to: from)
-        p.addLine(to: to)
+        p.move(to: parts.lineStart)
+        p.addLine(to: parts.lineEnd)
         parent.addSublayer(strokeLayer(
             path: p, height: height,
-            lineWidth: metrics.sp * 0.1,
+            lineWidth: metrics.sp * parts.lineThicknessSp,
         ))
     }
 
@@ -283,25 +286,15 @@ extension ScoreLayerBuilder {
         metrics: StaffMetrics, height: CGFloat,
         into parent: CALayer,
     ) {
-        guard barCount > 0 else { return }
-        let (center, halfWidth, slantDy) = TremoloRenderer.geometry(
-            anchor: anchor, metrics: metrics,
+        let bars = TremoloGeometry.bars(
+            anchor: anchor, barCount: barCount, sp: metrics.sp,
         )
-        let thickness = TremoloRenderer.barThickness(metrics: metrics)
-        let spacing = TremoloRenderer.barSpacing(metrics: metrics)
-        let firstOffset = -CGFloat(barCount - 1) / 2 * spacing
-        for i in 0 ..< barCount {
-            let offsetY = firstOffset + CGFloat(i) * spacing
+        guard !bars.isEmpty else { return }
+        let thickness = TremoloGeometry.barThickness(sp: metrics.sp)
+        for bar in bars {
             let path = CGMutablePath()
-            // Slant left-low → right-high — see TremoloRenderer.draw.
-            path.move(to: CGPoint(
-                x: center.x - halfWidth,
-                y: center.y + offsetY + slantDy,
-            ))
-            path.addLine(to: CGPoint(
-                x: center.x + halfWidth,
-                y: center.y + offsetY - slantDy,
-            ))
+            path.move(to: bar.from)
+            path.addLine(to: bar.to)
             parent.addSublayer(strokeLayer(
                 path: path, height: height, lineWidth: thickness,
             ))

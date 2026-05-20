@@ -34,10 +34,11 @@ extension LayoutBridge {
         // augmentation-dot emit.
         let (baseDur, dotCount) = DurationInterpretation.split(duration)
         // ── Noteheads ────────────────────────────────────────────────
-        let headCp = noteheadCodepoint(duration: baseDur)
         for note in notes {
             emitCenterAnchoredGlyph(
-                codepoint: headCp,
+                codepoint: NoteheadGlyph.codepoint(
+                    duration: baseDur, headType: note.headType,
+                ),
                 cxPt: mox + Double(note.origin.x),
                 cyPt: moy + Double(note.origin.y),
                 sizePt: glyphSize,
@@ -124,14 +125,6 @@ extension LayoutBridge {
                 w: 2 * radius * ptToMMScale,
                 h: 2 * radius * ptToMMScale,
             ))
-        }
-    }
-
-    static func noteheadCodepoint(duration: NoteDuration) -> UInt32 {
-        switch duration {
-        case .whole: return SMuFLCodepoint.noteheadWhole
-        case .half: return SMuFLCodepoint.noteheadHalf
-        default: return SMuFLCodepoint.noteheadBlack
         }
     }
 }

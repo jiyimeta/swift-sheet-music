@@ -19,10 +19,9 @@ extension ScoreLayerBuilder {
         metrics: StaffMetrics, height: CGFloat,
         into parent: CALayer,
     ) {
-        let below = subtype.hasPrefix("fermataBelow")
-        let glyph = below
-            ? SMuFLGlyph.fermataBelow
-            : SMuFLGlyph.fermataAbove
+        let codepoint = FermataGlyph.codepoint(forSubtype: subtype)
+        // swiftlint:disable:next force_unwrapping
+        let glyph = Character(UnicodeScalar(codepoint)!)
         if let layer = glyphLayer(
             glyph, at: origin,
             size: metrics.glyphFontSize,
@@ -60,13 +59,9 @@ extension ScoreLayerBuilder {
         metrics: StaffMetrics, height: CGFloat,
         into parent: CALayer,
     ) {
-        let glyph: Character
-        switch count {
-        case 1: glyph = SMuFLGlyph.repeat1Bar
-        case 2: glyph = SMuFLGlyph.repeat2Bars
-        case 4: glyph = SMuFLGlyph.repeat4Bars
-        default: glyph = SMuFLGlyph.repeat1Bar
-        }
+        let codepoint = MeasureRepeatGlyph.codepoint(forCount: count)
+        // swiftlint:disable:next force_unwrapping
+        let glyph = Character(UnicodeScalar(codepoint)!)
         if let layer = glyphLayer(
             glyph, at: origin,
             size: metrics.glyphFontSize,
@@ -131,43 +126,22 @@ extension ScoreLayerBuilder {
         // arpeggios rotate each segment -90° around its anchor.
         // Mirrors MuseScore's `Arpeggio::draw` (`painter->rotate(-90)`).
         let rotation: CGFloat = -.pi / 2
-        let x = top.x - metrics.sp * 1.5
-        var y = top.y
-        while y <= bottom.y {
+        let segments = ArpeggioGeometry.segments(
+            top: top, bottom: bottom,
+            subtype: subtype, sp: metrics.sp,
+        )
+        for segment in segments {
+            // swiftlint:disable:next force_unwrapping
+            let glyph = Character(UnicodeScalar(segment.codepoint)!)
             if let layer = glyphLayer(
-                SMuFLGlyph.arpeggioWiggle,
-                at: CGPoint(x: x, y: y),
+                glyph,
+                at: segment.origin,
                 size: metrics.glyphFontSize,
                 rotation: rotation,
                 height: height,
             ) {
                 parent.addSublayer(layer)
             }
-            y += metrics.sp
-        }
-        switch subtype {
-        case "up":
-            if let layer = glyphLayer(
-                SMuFLGlyph.arpeggioUpArrow,
-                at: CGPoint(x: x, y: top.y - metrics.sp),
-                size: metrics.glyphFontSize,
-                rotation: rotation,
-                height: height,
-            ) {
-                parent.addSublayer(layer)
-            }
-        case "down":
-            if let layer = glyphLayer(
-                SMuFLGlyph.arpeggioDownArrow,
-                at: CGPoint(x: x, y: bottom.y + metrics.sp),
-                size: metrics.glyphFontSize,
-                rotation: rotation,
-                height: height,
-            ) {
-                parent.addSublayer(layer)
-            }
-        default:
-            break
         }
     }
 
@@ -268,29 +242,24 @@ extension ScoreLayerBuilder {
         metrics: StaffMetrics, height: CGFloat,
         into parent: CALayer,
     ) {
-        switch kind {
-        case .segno, .varsegno:
+        switch MarkerGlyph.variant(for: kind, text: text) {
+        case let .glyph(codepoint):
+            // swiftlint:disable:next force_unwrapping
+            let glyph = Character(UnicodeScalar(codepoint)!)
             if let layer = glyphLayer(
-                SMuFLGlyph.segno, at: origin,
+                glyph, at: origin,
                 size: metrics.glyphFontSize,
                 height: height,
             ) {
                 parent.addSublayer(layer)
             }
-        case .coda, .varcoda, .codetta, .toCodaSym:
-            if let layer = glyphLayer(
-                SMuFLGlyph.coda, at: origin,
-                size: metrics.glyphFontSize,
-                height: height,
-            ) {
-                parent.addSublayer(layer)
-            }
-        case .fine, .toCoda, .daCapo, .dalSegno, .other:
-            let label = text.isEmpty
-                ? fallbackMarkerLabel(for: kind) : text
+        case let .text(label):
             if let layer = textLayer(
                 text: label, at: origin,
-                size: metrics.sp * 2.5, italic: false,
+                size: NotationTextStyle.fontSize(
+                    for: .markerText, sp: metrics.sp,
+                ),
+                italic: NotationTextStyle.isItalic(for: .markerText),
                 anchor: CGPoint(x: 0, y: 0.5),
                 height: height,
             ) {
@@ -334,10 +303,7 @@ extension ScoreLayerBuilder {
         let textWidth = max(advance, textSize * 0.5)
         let textHeight = ascent + descent
 
-        // MuseScore `Sid::rehearsalMarkFramePadding` = 0.5 sp inside
-        // the box on every side; `Sid::rehearsalMarkFrameWidth` =
-        // 0.16 sp stroke.
-        let pad = metrics.sp * 0.5
+        let pad = RehearsalMarkFrame.paddingSp(sp: metrics.sp)
         let textOrigin = CGPoint(
             x: origin.x + pad, y: origin.y - pad,
         )
@@ -353,58 +319,25 @@ extension ScoreLayerBuilder {
             parent.addSublayer(layer)
         }
 
-        // Frame box around the text. y grows downward in layout
-        // coords, so the box's top is `origin.y - 2*pad - textHeight`
-        // and its bottom is `origin.y`.
-        let boxRect = CGRect(
-            x: origin.x,
-            y: origin.y - 2 * pad - textHeight,
-            width: textWidth + 2 * pad,
-            height: textHeight + 2 * pad,
+        let boxRect = RehearsalMarkFrame.boxRect(
+            textWidth: textWidth, textHeight: textHeight,
+            origin: origin, pad: pad,
         )
-        let lineWidth = metrics.sp * 0.16
+        let lineWidth = RehearsalMarkFrame.strokeWidthSp(sp: metrics.sp)
         let framePath: CGPath?
-        switch frame {
+        switch RehearsalMarkFrame.shape(for: frame, around: boxRect) {
         case .none:
             framePath = nil
-        case .rectangle:
-            framePath = CGPath(rect: boxRect, transform: nil)
-        case .circle:
-            // Inscribe the text in a circle whose diameter matches
-            // the larger of the box's two sides — letterbox-friendly
-            // for short labels ("A") and short-and-wide ("1サビ")
-            // alike.
-            let diameter = max(boxRect.width, boxRect.height)
-            let cx = boxRect.midX
-            let cy = boxRect.midY
-            framePath = CGPath(
-                ellipseIn: CGRect(
-                    x: cx - diameter / 2,
-                    y: cy - diameter / 2,
-                    width: diameter,
-                    height: diameter,
-                ),
-                transform: nil,
-            )
+        case let .rectangle(rect):
+            framePath = CGPath(rect: rect, transform: nil)
+        case let .ellipse(rect):
+            framePath = CGPath(ellipseIn: rect, transform: nil)
         }
         if let fp = framePath {
             parent.addSublayer(strokeLayer(
                 path: fp, height: height,
                 lineWidth: lineWidth, color: color,
             ))
-        }
-    }
-
-    private static func fallbackMarkerLabel(
-        for kind: Marker.Kind,
-    ) -> String {
-        switch kind {
-        case .fine: "Fine"
-        case .toCoda: "To Coda"
-        case .daCapo: "D.C."
-        case .dalSegno: "D.S."
-        case .other: ""
-        default: ""
         }
     }
 }

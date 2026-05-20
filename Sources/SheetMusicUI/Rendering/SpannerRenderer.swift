@@ -51,16 +51,15 @@ enum SpannerRenderer {
         context: inout GraphicsContext, from: CGPoint, to: CGPoint,
         metrics: StaffMetrics,
     ) {
-        let mid = CGPoint(
-            x: (from.x + to.x) / 2,
-            y: min(from.y, to.y) - metrics.sp * 2,
+        let control = SpannerGeometry.slurControlPoint(
+            from: from, to: to, sp: metrics.sp,
         )
         var p = Path()
         p.move(to: from)
-        p.addQuadCurve(to: to, control: mid)
+        p.addQuadCurve(to: to, control: control)
         context.stroke(
             p, with: .color(.primary),
-            lineWidth: metrics.sp * 0.15,
+            lineWidth: metrics.sp * SpannerGeometry.strokeThicknessSp,
         )
     }
 
@@ -70,28 +69,32 @@ enum SpannerRenderer {
         continuesLeft: Bool, continuesRight: Bool,
         metrics: StaffMetrics,
     ) {
-        let top = min(from.y, to.y)
+        let pts = SpannerGeometry.voltaBracketPoints(
+            from: from, to: to,
+            continuesLeft: continuesLeft,
+            continuesRight: continuesRight,
+            sp: metrics.sp,
+        )
         var p = Path()
-        if !continuesLeft {
-            p.move(to: CGPoint(x: from.x, y: top + metrics.sp))
-            p.addLine(to: CGPoint(x: from.x, y: top))
-        } else {
-            p.move(to: CGPoint(x: from.x, y: top))
-        }
-        p.addLine(to: CGPoint(x: to.x, y: top))
-        if !continuesRight {
-            p.addLine(to: CGPoint(x: to.x, y: top + metrics.sp))
+        if let first = pts.first {
+            p.move(to: first)
+            for pt in pts.dropFirst() {
+                p.addLine(to: pt)
+            }
         }
         context.stroke(
             p, with: .color(.primary),
-            lineWidth: metrics.sp * 0.15,
+            lineWidth: metrics.sp * SpannerGeometry.strokeThicknessSp,
         )
-        if !endings.isEmpty, !continuesLeft {
-            let label = endings.map(String.init).joined(separator: ", ") + "."
+        if let label = SpannerGeometry.voltaLabel(
+            from: from, to: to, endings: endings,
+            continuesLeft: continuesLeft, sp: metrics.sp,
+        ) {
             context.drawExpressionText(
-                label,
-                at: CGPoint(x: from.x + metrics.sp, y: top + metrics.sp / 2),
-                size: metrics.sp * 2, italic: false,
+                label.text,
+                at: label.origin,
+                size: metrics.sp * label.sizeSp,
+                italic: false,
             )
         }
     }
@@ -100,22 +103,17 @@ enum SpannerRenderer {
         context: inout GraphicsContext, from: CGPoint, to: CGPoint,
         open: Bool, metrics: StaffMetrics,
     ) {
+        let segs = SpannerGeometry.hairpin(
+            from: from, to: to, open: open, sp: metrics.sp,
+        )
         var p = Path()
-        let y = max(from.y, to.y)
-        if open {
-            p.move(to: CGPoint(x: from.x, y: y))
-            p.addLine(to: CGPoint(x: to.x, y: y - metrics.sp))
-            p.move(to: CGPoint(x: from.x, y: y))
-            p.addLine(to: CGPoint(x: to.x, y: y + metrics.sp))
-        } else {
-            p.move(to: CGPoint(x: from.x, y: y - metrics.sp))
-            p.addLine(to: CGPoint(x: to.x, y: y))
-            p.move(to: CGPoint(x: from.x, y: y + metrics.sp))
-            p.addLine(to: CGPoint(x: to.x, y: y))
-        }
+        p.move(to: segs.upperFrom)
+        p.addLine(to: segs.upperTo)
+        p.move(to: segs.lowerFrom)
+        p.addLine(to: segs.lowerTo)
         context.stroke(
             p, with: .color(.primary),
-            lineWidth: metrics.sp * 0.15,
+            lineWidth: metrics.sp * SpannerGeometry.strokeThicknessSp,
         )
     }
 
@@ -126,14 +124,18 @@ enum SpannerRenderer {
         // MuseScore renders pedal marks as SMuFL glyphs from the
         // music font: `keyboardPedalPed` (U+E650) for the "Ped."
         // sigil and `keyboardPedalUp` (U+E655) for the closing
-        // "*" / asterisk. They sit on the keyboard-pedal cluster
-        // alongside the music-symbol-sized bold serifs of dynamics.
+        // "*" / asterisk.
+        let parts = SpannerGeometry.pedal(from: from, to: to)
+        // swiftlint:disable:next force_unwrapping
+        let down = Character(UnicodeScalar(parts.downCodepoint)!)
+        // swiftlint:disable:next force_unwrapping
+        let up = Character(UnicodeScalar(parts.upCodepoint)!)
         context.drawGlyph(
-            SMuFLGlyph.keyboardPedalPed, at: from,
+            down, at: parts.downOrigin,
             size: metrics.glyphFontSize, anchor: .leading,
         )
         context.drawGlyph(
-            SMuFLGlyph.keyboardPedalUp, at: to,
+            up, at: parts.upOrigin,
             size: metrics.glyphFontSize, anchor: .leading,
         )
     }
@@ -142,20 +144,21 @@ enum SpannerRenderer {
         context: inout GraphicsContext, from: CGPoint, to: CGPoint,
         metrics: StaffMetrics,
     ) {
-        // v1 always labels "8va"; distinguishing 8vb would need the raw
-        // type string threaded through. Good enough for "the marking is
-        // visible".
+        let parts = SpannerGeometry.ottava(
+            from: from, to: to, sp: metrics.sp,
+        )
         context.drawExpressionText(
-            "8va", at: from,
-            size: metrics.sp * 2.5, italic: true,
+            parts.label, at: parts.labelOrigin,
+            size: metrics.sp * parts.labelSizeSp, italic: true,
         )
         var p = Path()
-        p.move(to: CGPoint(x: from.x + metrics.sp * 3, y: from.y))
-        p.addLine(to: to)
+        p.move(to: parts.lineStart)
+        p.addLine(to: parts.lineEnd)
         context.stroke(
             p, with: .color(.primary),
             style: StrokeStyle(
-                lineWidth: metrics.sp * 0.1, dash: [3, 3],
+                lineWidth: metrics.sp * parts.lineThicknessSp,
+                dash: parts.dashPattern,
             ),
         )
     }
@@ -164,18 +167,21 @@ enum SpannerRenderer {
         context: inout GraphicsContext, from: CGPoint, to: CGPoint,
         text: String, metrics: StaffMetrics,
     ) {
-        if !text.isEmpty {
+        let parts = SpannerGeometry.textLine(
+            from: from, to: to, text: text, sp: metrics.sp,
+        )
+        if !parts.label.isEmpty {
             context.drawExpressionText(
-                text, at: from,
-                size: metrics.sp * 2.2, italic: true,
+                parts.label, at: parts.labelOrigin,
+                size: metrics.sp * parts.labelSizeSp, italic: true,
             )
         }
         var p = Path()
-        p.move(to: from)
-        p.addLine(to: to)
+        p.move(to: parts.lineStart)
+        p.addLine(to: parts.lineEnd)
         context.stroke(
             p, with: .color(.primary),
-            lineWidth: metrics.sp * 0.1,
+            lineWidth: metrics.sp * parts.lineThicknessSp,
         )
     }
 }

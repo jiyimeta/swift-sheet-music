@@ -206,7 +206,10 @@ extension ScoreLayerBuilder {
             if !text.isEmpty,
                let layer = textLayer(
                    text: text, at: shift(p),
-                   size: metrics.sp * 2.5, italic: true,
+                   size: NotationTextStyle.fontSize(
+                       for: .jump, sp: metrics.sp,
+                   ),
+                   italic: NotationTextStyle.isItalic(for: .jump),
                    anchor: CGPoint(x: 0, y: 0.5),
                    height: height,
                )
@@ -223,7 +226,12 @@ extension ScoreLayerBuilder {
             if !text.isEmpty,
                let layer = textLayer(
                    text: text, at: shift(p),
-                   size: metrics.sp * 2.0, italic: false,
+                   size: NotationTextStyle.fontSize(
+                       for: .measureNumber, sp: metrics.sp,
+                   ),
+                   italic: NotationTextStyle.isItalic(
+                       for: .measureNumber,
+                   ),
                    anchor: CGPoint(x: 0, y: 1),
                    height: height,
                )
@@ -318,7 +326,10 @@ extension ScoreLayerBuilder {
             if !text.isEmpty,
                let layer = textLayer(
                    text: text, at: shift(p),
-                   size: metrics.sp * 2.0, italic: false,
+                   size: NotationTextStyle.fontSize(
+                       for: .staffName, sp: metrics.sp,
+                   ),
+                   italic: NotationTextStyle.isItalic(for: .staffName),
                    anchor: CGPoint(x: 0, y: 1),
                    height: height,
                )
