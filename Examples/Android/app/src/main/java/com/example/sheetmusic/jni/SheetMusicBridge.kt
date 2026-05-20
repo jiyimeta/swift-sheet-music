@@ -28,4 +28,18 @@ object SheetMusicBridge {
      * format spec is on `Sources/SheetMusicAndroidJNI/SMuFLMetricsTable.swift`.
      */
     @JvmStatic external fun nativeInstallSMuFLMetrics(bytes: ByteArray): Boolean
+
+    /**
+     * Resolve the bounding rectangle (document/mm coordinates) of the cursor
+     * identified by [cursorBytes] within the laid-out score [scoreHandle].
+     *
+     * Returns a 34-byte payload in the CursorFrame wire format on success, or
+     * an empty array if the cursor did not resolve (e.g. stale ID after
+     * re-layout). Wire format: u16 version (=1), then 4 × i64 micros
+     * (x, y, width, height), little-endian.
+     */
+    @JvmStatic external fun nativeCursorFrame(
+        scoreHandle: Long,
+        cursorBytes: ByteArray,
+    ): ByteArray
 }

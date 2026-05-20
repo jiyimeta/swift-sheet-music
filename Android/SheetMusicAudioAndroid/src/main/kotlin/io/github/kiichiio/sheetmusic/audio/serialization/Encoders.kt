@@ -147,7 +147,7 @@ internal object ScoreItemIDCodec {
 // ScoreCursorCodec
 // ---------------------------------------------------------------------------
 
-internal object ScoreCursorCodec {
+public object ScoreCursorCodec {
     fun encode(cursor: ScoreCursor): ByteArray {
         val w = BinaryWriter()
         w.writeU16(1)
@@ -155,7 +155,7 @@ internal object ScoreCursorCodec {
         return w.toByteArray()
     }
 
-    fun encodePayload(cursor: ScoreCursor, w: BinaryWriter) {
+    public fun encodePayload(cursor: ScoreCursor, w: BinaryWriter) {
         when (cursor) {
             is ScoreCursor.Item -> {
                 w.writeU8(0)
