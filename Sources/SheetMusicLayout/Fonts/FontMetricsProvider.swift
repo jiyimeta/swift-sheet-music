@@ -100,7 +100,42 @@ public struct StubFontMetricsProvider: FontMetricsProvider {
     public func typographicWidth(
         text: String, font: LayoutFont,
     ) -> CGFloat {
-        CGFloat(text.count) * font.pointSize * 0.5
+        var total: CGFloat = 0
+        for scalar in text.unicodeScalars {
+            total += Self.advanceEm(for: scalar) * font.pointSize
+        }
+        return total
+    }
+
+    /// Per-codepoint advance estimate in ems. Tuned to roughly match
+    /// MuseScore's Edwin text face so that bridge-computed text bounds
+    /// (rehearsal-mark frames, harmony widths) on Android don't clip
+    /// the actual rendered glyphs.
+    ///
+    /// Numbers come from measuring Edwin's advance table at 1 em:
+    ///   - digits ≈ 0.50 (tabular figures)
+    ///   - uppercase A-Z ≈ 0.65 average (`I` 0.3, `W` 0.95)
+    ///   - lowercase a-z ≈ 0.50 average
+    ///   - punctuation ≈ 0.30
+    ///   - space ≈ 0.30
+    /// CJK / kana / fullwidth forms use 1.0 em.
+    private static func advanceEm(for scalar: Unicode.Scalar) -> CGFloat {
+        let v = scalar.value
+        if isFullWidth(scalar) { return 1.0 }
+        // ASCII digits 0-9
+        if (0x30 ... 0x39).contains(v) { return 0.5 }
+        // ASCII uppercase A-Z
+        if (0x41 ... 0x5A).contains(v) { return 0.65 }
+        // ASCII lowercase a-z
+        if (0x61 ... 0x7A).contains(v) { return 0.5 }
+        // Space + most punctuation: narrow
+        if v == 0x20 { return 0.3 }
+        if (0x21 ... 0x2F).contains(v) || (0x3A ... 0x40).contains(v)
+            || (0x5B ... 0x60).contains(v) || (0x7B ... 0x7E).contains(v)
+        { return 0.3 }
+        // Non-CJK non-ASCII (Latin extended, Cyrillic, Greek …):
+        // use lowercase average as a safe-ish default.
+        return 0.55
     }
 
     public func inkBounds(text: String, font: LayoutFont) -> InkBounds {
@@ -108,5 +143,26 @@ public struct StubFontMetricsProvider: FontMetricsProvider {
             leftBearing: 0,
             width: typographicWidth(text: text, font: font),
         )
+    }
+
+    /// True for code points conventionally typeset at ~1 em advance
+    /// (CJK Unified Ideographs, kana, halfwidth/fullwidth forms).
+    /// Latin / Cyrillic / Greek / digits fall back to the ~0.5 em
+    /// average advance.
+    private static func isFullWidth(_ scalar: Unicode.Scalar) -> Bool {
+        let v = scalar.value
+        return (0x1100 ... 0x11FF).contains(v) // Hangul Jamo
+            || (0x2E80 ... 0x2FFF).contains(v) // CJK Radicals
+            || (0x3000 ... 0x303F).contains(v) // CJK Symbols
+            || (0x3040 ... 0x309F).contains(v) // Hiragana
+            || (0x30A0 ... 0x30FF).contains(v) // Katakana
+            || (0x3130 ... 0x318F).contains(v) // Hangul Compatibility Jamo
+            || (0x3400 ... 0x4DBF).contains(v) // CJK Ext A
+            || (0x4E00 ... 0x9FFF).contains(v) // CJK Unified
+            || (0xAC00 ... 0xD7AF).contains(v) // Hangul Syllables
+            || (0xF900 ... 0xFAFF).contains(v) // CJK Compat
+            || (0xFE30 ... 0xFE4F).contains(v) // CJK Compat Forms
+            || (0xFF00 ... 0xFF60).contains(v) // Fullwidth ASCII variants
+            || (0xFFE0 ... 0xFFE6).contains(v) // Fullwidth signs
     }
 }

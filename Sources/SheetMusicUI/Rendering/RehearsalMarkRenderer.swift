@@ -54,39 +54,28 @@ enum RehearsalMarkRenderer {
             anchor: UnitPoint(x: 0, y: 1),
         )
 
-        let boxWidth = measured.width + 2 * pad
-        let boxHeight = measured.height + 2 * pad
-        let boxRect = CGRect(
-            x: origin.x,
-            y: origin.y - boxHeight,
-            width: boxWidth,
-            height: boxHeight,
+        let boxRect = RehearsalMarkFrame.boxRect(
+            textWidth: measured.width,
+            textHeight: measured.height,
+            origin: origin,
+            pad: pad,
         )
-        if let p = framePath(for: frame, around: boxRect) {
-            // `Sid::rehearsalMarkFrameWidth` default.
-            context.stroke(
-                p, with: .color(textColor),
-                lineWidth: metrics.sp * 0.16,
-            )
-        }
-    }
-
-    private static func framePath(
-        for frame: TextFrameType, around boxRect: CGRect,
-    ) -> Path? {
-        switch frame {
+        let strokeWidth = RehearsalMarkFrame.strokeWidthSp(
+            sp: metrics.sp,
+        )
+        switch RehearsalMarkFrame.shape(for: frame, around: boxRect) {
         case .none:
-            return nil
-        case .rectangle:
-            return Path(boxRect)
-        case .circle:
-            let diameter = max(boxRect.width, boxRect.height)
-            return Path(ellipseIn: CGRect(
-                x: boxRect.midX - diameter / 2,
-                y: boxRect.midY - diameter / 2,
-                width: diameter,
-                height: diameter,
-            ))
+            break
+        case let .rectangle(rect):
+            context.stroke(
+                Path(rect), with: .color(textColor),
+                lineWidth: strokeWidth,
+            )
+        case let .ellipse(rect):
+            context.stroke(
+                Path(ellipseIn: rect), with: .color(textColor),
+                lineWidth: strokeWidth,
+            )
         }
     }
 }

@@ -13,10 +13,9 @@ enum FermataRenderer {
         origin: CGPoint,
         metrics: StaffMetrics,
     ) {
-        let below = subtype.hasPrefix("fermataBelow")
-        let glyph = below
-            ? SMuFLGlyph.fermataBelow
-            : SMuFLGlyph.fermataAbove
+        let codepoint = FermataGlyph.codepoint(forSubtype: subtype)
+        // swiftlint:disable:next force_unwrapping
+        let glyph = Character(UnicodeScalar(codepoint)!)
         context.drawGlyph(
             glyph, at: origin, size: metrics.glyphFontSize,
         )

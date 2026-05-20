@@ -15,73 +15,24 @@ import SwiftUI
 /// `CALayer` path in `ScoreLayerBuilder+Spanners`.
 @available(macOS 15.0, *)
 enum TremoloRenderer {
-    /// Beam-bar thickness, matching `drawBeam`.
-    static func barThickness(metrics: StaffMetrics) -> CGFloat {
-        metrics.sp * 0.5
-    }
-
-    /// Gap between successive bars, matching `drawBeam`.
-    static func barSpacing(metrics: StaffMetrics) -> CGFloat {
-        metrics.sp * 0.8 // thickness (0.5 sp) + gap (0.3 sp)
-    }
-
-    /// Geometry shared by both rendering surfaces. `halfWidth` is
-    /// the horizontal half-length of each bar; `slantDy` is the
-    /// vertical run between centre and either endpoint (matches a
-    /// +12° slant); `center` is the bars' shared anchor.
-    static func geometry(
-        anchor: TremoloAnchor,
-        metrics: StaffMetrics,
-    ) -> (center: CGPoint, halfWidth: CGFloat, slantDy: CGFloat) {
-        let center: CGPoint
-        let halfWidth: CGFloat
-        switch anchor {
-        case let .single(c):
-            center = c
-            // Bars span the notehead width — Bravura's noteheadBlack
-            // is 1.18 sp wide, so halfWidth = 0.59 sp matches.
-            halfWidth = metrics.sp * 0.59
-        case let .between(left, right):
-            center = CGPoint(
-                x: (left.x + right.x) / 2,
-                y: (left.y + right.y) / 2,
-            )
-            halfWidth = max(
-                metrics.sp * 0.3,
-                (right.x - left.x) / 2 - metrics.sp * 0.2,
-            )
-        }
-        let slantDy = halfWidth * tan(.pi / 15) // +12° (~0.2126)
-        return (center, halfWidth, slantDy)
-    }
-
     static func draw(
         context: inout GraphicsContext,
         anchor: TremoloAnchor,
         barCount: Int,
         metrics: StaffMetrics,
     ) {
-        guard barCount > 0 else { return }
-        let (center, halfWidth, slantDy) = geometry(
-            anchor: anchor, metrics: metrics,
+        let bars = TremoloGeometry.bars(
+            anchor: anchor, barCount: barCount, sp: metrics.sp,
         )
-        let thickness = barThickness(metrics: metrics)
-        let spacing = barSpacing(metrics: metrics)
-        let firstOffset = -CGFloat(barCount - 1) / 2 * spacing
-        for i in 0 ..< barCount {
-            let offsetY = firstOffset + CGFloat(i) * spacing
+        guard !bars.isEmpty else { return }
+        let thickness = TremoloGeometry.barThickness(sp: metrics.sp)
+        // Slant left-low → right-high (visually rising), matching
+        // MuseScore's tremolo bar convention regardless of stem
+        // direction.
+        for bar in bars {
             var path = Path()
-            // Slant left-low → right-high (visually rising), matching
-            // MuseScore's tremolo bar convention regardless of stem
-            // direction. Screen y grows downward, so left = +slantDy.
-            path.move(to: CGPoint(
-                x: center.x - halfWidth,
-                y: center.y + offsetY + slantDy,
-            ))
-            path.addLine(to: CGPoint(
-                x: center.x + halfWidth,
-                y: center.y + offsetY - slantDy,
-            ))
+            path.move(to: bar.from)
+            path.addLine(to: bar.to)
             context.stroke(
                 path, with: .color(.primary), lineWidth: thickness,
             )

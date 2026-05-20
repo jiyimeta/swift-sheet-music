@@ -12,7 +12,8 @@ enum JumpRenderer {
         guard !text.isEmpty else { return }
         context.drawExpressionText(
             text, at: origin,
-            size: metrics.sp * 2.5, italic: true,
+            size: NotationTextStyle.fontSize(for: .jump, sp: metrics.sp),
+            italic: NotationTextStyle.isItalic(for: .jump),
         )
     }
 }

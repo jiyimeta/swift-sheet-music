@@ -18,34 +18,19 @@ enum ArpeggioRenderer {
         subtype: String?,
         metrics: StaffMetrics,
     ) {
-        let x = top.x - metrics.sp * 1.5
-        var y = top.y
-        while y <= bottom.y {
+        let segments = ArpeggioGeometry.segments(
+            top: top, bottom: bottom,
+            subtype: subtype, sp: metrics.sp,
+        )
+        for segment in segments {
+            // swiftlint:disable:next force_unwrapping
+            let glyph = Character(UnicodeScalar(segment.codepoint)!)
             drawRotated(
                 &context,
-                glyph: SMuFLGlyph.arpeggioWiggle,
-                at: CGPoint(x: x, y: y),
+                glyph: glyph,
+                at: segment.origin,
                 size: metrics.glyphFontSize,
             )
-            y += metrics.sp
-        }
-        switch subtype {
-        case "up":
-            drawRotated(
-                &context,
-                glyph: SMuFLGlyph.arpeggioUpArrow,
-                at: CGPoint(x: x, y: top.y - metrics.sp),
-                size: metrics.glyphFontSize,
-            )
-        case "down":
-            drawRotated(
-                &context,
-                glyph: SMuFLGlyph.arpeggioDownArrow,
-                at: CGPoint(x: x, y: bottom.y + metrics.sp),
-                size: metrics.glyphFontSize,
-            )
-        default:
-            break
         }
     }
 

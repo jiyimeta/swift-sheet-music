@@ -32,7 +32,8 @@
             let f = LayoutFont(face: "Edwin", pointSize: 12)
             let ink = stub.inkBounds(text: "C", font: f)
             #expect(ink.leftBearing == 0)
-            #expect(ink.width == 1 * 12 * 0.5)
+            // Uppercase = 0.65 em in the per-class advance table.
+            #expect(ink.width == 1 * 12 * 0.65)
         }
 
         @Test func stubIsAFontMetricsProvider() {

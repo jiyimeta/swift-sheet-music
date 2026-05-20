@@ -11,13 +11,9 @@ enum MeasureRepeatRenderer {
         origin: CGPoint,
         metrics: StaffMetrics,
     ) {
-        let glyph: Character
-        switch count {
-        case 1: glyph = SMuFLGlyph.repeat1Bar
-        case 2: glyph = SMuFLGlyph.repeat2Bars
-        case 4: glyph = SMuFLGlyph.repeat4Bars
-        default: glyph = SMuFLGlyph.repeat1Bar
-        }
+        let codepoint = MeasureRepeatGlyph.codepoint(forCount: count)
+        // swiftlint:disable:next force_unwrapping
+        let glyph = Character(UnicodeScalar(codepoint)!)
         context.drawGlyph(
             glyph, at: origin, size: metrics.glyphFontSize,
         )

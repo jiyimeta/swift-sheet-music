@@ -11,34 +11,21 @@ enum MarkerRenderer {
         origin: CGPoint,
         metrics: StaffMetrics,
     ) {
-        switch kind {
-        case .segno, .varsegno:
+        switch MarkerGlyph.variant(for: kind, text: text) {
+        case let .glyph(codepoint):
+            // swiftlint:disable:next force_unwrapping
+            let glyph = Character(UnicodeScalar(codepoint)!)
             context.drawGlyph(
-                SMuFLGlyph.segno, at: origin,
-                size: metrics.glyphFontSize,
+                glyph, at: origin, size: metrics.glyphFontSize,
             )
-        case .coda, .varcoda, .codetta, .toCodaSym:
-            context.drawGlyph(
-                SMuFLGlyph.coda, at: origin,
-                size: metrics.glyphFontSize,
-            )
-        case .fine, .toCoda, .daCapo, .dalSegno, .other:
-            let label = text.isEmpty ? fallbackLabel(for: kind) : text
+        case let .text(label):
             context.drawExpressionText(
                 label, at: origin,
-                size: metrics.sp * 2.5, italic: false,
+                size: NotationTextStyle.fontSize(
+                    for: .markerText, sp: metrics.sp,
+                ),
+                italic: NotationTextStyle.isItalic(for: .markerText),
             )
-        }
-    }
-
-    private static func fallbackLabel(for kind: Marker.Kind) -> String {
-        switch kind {
-        case .fine: "Fine"
-        case .toCoda: "To Coda"
-        case .daCapo: "D.C."
-        case .dalSegno: "D.S."
-        case .other: ""
-        default: ""
         }
     }
 }
