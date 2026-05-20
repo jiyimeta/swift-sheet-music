@@ -19,6 +19,8 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -87,17 +89,14 @@ class AudioViewModel(application: Application) : AndroidViewModel(application) {
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     /**
-     * Calls [AndroidPlaybackEngine.prepare] on the connected engine
-     * when it becomes available; otherwise waits and retries on
-     * subsequent service-connection events. Safe to call repeatedly.
+     * Suspends until the engine is service-bound, then calls
+     * [AndroidPlaybackEngine.prepare]. Safe to call before the
+     * service connects — the coroutine suspends on the engine flow
+     * and resumes on the first non-null value.
      */
     fun preparePlayback(scoreHandle: Long) {
         viewModelScope.launch {
-            val e = engine.value ?: run {
-                // Wait one tick — the service binds asynchronously.
-                // In practice this resolves within a few ms after init.
-                engine.value ?: return@launch
-            }
+            val e = engine.filterNotNull().first()
             try {
                 e.prepare(scoreHandle)
             } catch (ex: Exception) {

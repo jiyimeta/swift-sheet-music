@@ -31,6 +31,23 @@ class EnginePlayer(
     private val mediaItem: MediaItem,
 ) : SimpleBasePlayer(Looper.getMainLooper()) {
 
+    private val audioAttributes = AudioAttributes.Builder()
+        .setUsage(C.USAGE_MEDIA)
+        .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
+        .build()
+
+    private val availableCommands = Player.Commands.Builder()
+        .addAll(
+            Player.COMMAND_PLAY_PAUSE,
+            Player.COMMAND_STOP,
+            Player.COMMAND_SEEK_TO_DEFAULT_POSITION,
+            Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM,
+            Player.COMMAND_GET_CURRENT_MEDIA_ITEM,
+            Player.COMMAND_GET_METADATA,
+            Player.COMMAND_SET_SPEED_AND_PITCH,
+        )
+        .build()
+
     init {
         // Push state to listeners (and via MediaSession to controllers)
         // whenever engine flows tick. We collect on the service scope so
@@ -55,19 +72,7 @@ class EnginePlayer(
             PlaybackState.EXPORTING -> Player.STATE_IDLE
         }
         return State.Builder()
-            .setAvailableCommands(
-                Player.Commands.Builder()
-                    .addAll(
-                        Player.COMMAND_PLAY_PAUSE,
-                        Player.COMMAND_STOP,
-                        Player.COMMAND_SEEK_TO_DEFAULT_POSITION,
-                        Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM,
-                        Player.COMMAND_GET_CURRENT_MEDIA_ITEM,
-                        Player.COMMAND_GET_METADATA,
-                        Player.COMMAND_SET_SPEED_AND_PITCH,
-                    )
-                    .build()
-            )
+            .setAvailableCommands(availableCommands)
             .setPlaybackState(media3State)
             .setPlayWhenReady(isPlaying, Player.PLAY_WHEN_READY_CHANGE_REASON_USER_REQUEST)
             .setPlaylist(
@@ -81,12 +86,7 @@ class EnginePlayer(
             )
             .setCurrentMediaItemIndex(0)
             .setContentPositionMs { (engine.currentTimeSeconds.value * 1000).toLong() }
-            .setAudioAttributes(
-                AudioAttributes.Builder()
-                    .setUsage(C.USAGE_MEDIA)
-                    .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
-                    .build()
-            )
+            .setAudioAttributes(audioAttributes)
             .setPlaybackParameters(PlaybackParameters(engine.currentRate.value))
             .build()
     }
@@ -101,6 +101,10 @@ class EnginePlayer(
         return Futures.immediateVoidFuture()
     }
 
+    /**
+     * All seek commands map to absolute-time seek for our single-item
+     * playlist, so [seekCommand] is intentionally ignored.
+     */
     override fun handleSeek(
         mediaItemIndex: Int,
         positionMs: Long,
