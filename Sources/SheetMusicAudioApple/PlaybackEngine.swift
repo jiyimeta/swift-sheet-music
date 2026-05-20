@@ -622,6 +622,22 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         }
     }
 
+    /// Seek to an absolute time in seconds, clamped to
+    /// `[0, totalTimeSeconds]`. Preserves play / pause state — when
+    /// playing, restarts the sequencer at the new position; when
+    /// paused, moves the cursor and the next `play()` resumes from
+    /// there. No-op when no sequencer is built or when `state` is
+    /// `.exporting`.
+    ///
+    /// Provided alongside `skip(by:)` for natural integration with
+    /// `MPRemoteCommandCenter.changePlaybackPositionCommand`, whose
+    /// handler receives an absolute target time. Internally reuses
+    /// `skip(by:)`'s clamp + state-preserve machinery — no new code
+    /// path through the sequencer.
+    public func seek(toTimeSeconds seconds: TimeInterval) {
+        skip(by: seconds - currentTimeSeconds)
+    }
+
     /// Pause playback at the current position. `play(...)` resumes
     /// from there.
     ///

@@ -80,6 +80,16 @@
             #expect(engine.midiChannel(forStaff: 0) != nil)
             #expect(engine.synth != nil)
         }
+
+        @Test("seek(toTimeSeconds:) is a no-op when no sequencer is built")
+        func seekToTimeWithoutPrepareNoOps() {
+            let engine = PlaybackEngine(soundfontResolver: NullResolver())
+            // Smoke: must not crash even though sequencer/timeline are nil.
+            engine.seek(toTimeSeconds: 5.0)
+            engine.seek(toTimeSeconds: -10.0)
+            engine.seek(toTimeSeconds: .infinity)
+            #expect(engine.currentTimeSeconds == 0)
+        }
     }
 
     private struct NullResolver: SoundfontResolver {
