@@ -199,13 +199,24 @@ additional setup is required beyond the Phase 1 toolchain.
 `setLoop(from:throughEndOf:)`, `clearLoop()`, `setRate(_:)`, and
 `setStaffProgram(staffIndex:program:)` — parity with
 `SheetMusicAudioApple.PlaybackEngine`. The Compose demo at
-`Examples/Android/` exposes a rate slider and program picker; the loop
-UI is wired as a status row + clear-only toggle for v0 (full
-tap-to-set-A/B selection is a Phase 5.1 follow-up). Loop wrap is host-
-driven inside the engine's poll loop (FluidSynth's `fluid_player_set_loop`
-loops the entire SMF only). Rate uses `fluid_player_set_tempo` in
-`FLUID_PLAYER_TEMPO_INTERNAL` mode. Program change reuses the existing
-sfid via `programSelect`.
+`Examples/Android/` exposes a rate slider, a GM program picker, and a
+fixed-range loop toggle (measures 2–3) with a multi-system amber
+highlight overlay. Tap-to-pick-A/B spatial selection is a Phase 5.1
+follow-up. Loop wrap is host-driven inside the engine's poll loop
+(FluidSynth's `fluid_player_set_loop` loops the entire SMF only).
+Rate uses `fluid_player_set_tempo` in `FLUID_PLAYER_TEMPO_INTERNAL`
+mode. Program change reuses the existing sfid via `programSelect`.
+
+GMInstrument is single-sourced from Swift `SheetMusicAudioCore`;
+Kotlin loads the 128-patch table via `nativeGMInstrumentList()` JNI on
+first access (see `Sources/SheetMusicAndroidJNI/Audio/GMInstrumentCodec.swift`).
+The multi-system loop highlight is plumbed through
+`LayoutDocument.loopHighlightRects(fromMeasureIndex:toMeasureExclusive:)`
++ `nativeLoopHighlightRects` JNI + `LoopHighlightOverlay` composable.
+`PlaybackTimeline.frame(forCursor:)` now falls back to a tick-based
+lookup for `.beat` cursors whose dedicated frame was dropped by the
+dedup against an item at the same tick (otherwise `setLoop` with beat
+boundaries would silently no-op when an item sits on the downbeat).
 
 ### Android example app
 
