@@ -36,7 +36,9 @@ android {
 }
 
 group = "io.github.jiyimeta"
-version = "0.0.0-SNAPSHOT"
+version = (project.findProperty("version") as String?)
+    ?.takeIf { it != "unspecified" }
+    ?: "0.0.0-SNAPSHOT"
 
 dependencies {
     // No third-party deps. Pure JNI bindings + a Kotlin façade.

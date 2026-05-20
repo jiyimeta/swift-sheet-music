@@ -1,0 +1,77 @@
+name: Publish Android modules to GitHub Packages
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Override version (defaults to the tag without leading v)'
+        required: false
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    runs-on: macos-14
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve version
+        id: ver
+        run: |
+          if [[ -n "${{ inputs.version }}" ]]; then
+            echo "version=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install Swift 6.3.2 toolchain
+        run: |
+          curl -fLO https://download.swift.org/swift-6.3.2-release/xcode/swift-6.3.2-RELEASE/swift-6.3.2-RELEASE-osx.pkg
+          sudo installer -pkg swift-6.3.2-RELEASE-osx.pkg -target /
+          xcode-select -p
+
+      - name: Install Swift Android SDK
+        env:
+          # Re-derive the checksum from https://www.swift.org/install/macos/
+          # -> Swift 6.3 -> Android if upstream rotates the artifact. The value
+          # below is a placeholder; fill it in before the first real release.
+          ANDROID_SDK_CHECKSUM: 0000000000000000000000000000000000000000000000000000000000000000
+        run: |
+          export TOOLCHAINS=org.swift.632202605101a
+          swift sdk install \
+              https://download.swift.org/swift-6.3.2-release/swift-6.3.2-RELEASE_android-0.1.artifactbundle.tar.gz \
+              --checksum "$ANDROID_SDK_CHECKSUM"
+          # Run the SDK's NDK sysroot setup (one-time)
+          NDK_DIR="$ANDROID_HOME/ndk/26.1.10909125"
+          ANDROID_NDK_HOME="$NDK_DIR" \
+              ~/Library/org.swift.swiftpm/swift-sdks/swift-6.3.2-RELEASE_android.artifactbundle/swift-android/scripts/setup-android-sdk.sh
+
+      - name: Cross-compile JNI natives
+        env:
+          TOOLCHAINS: org.swift.632202605101a
+        run: Scripts/android-build-libs.sh
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v3
+
+      - name: Publish to GitHub Packages
+        working-directory: Android
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ORG_GRADLE_PROJECT_version: ${{ steps.ver.outputs.version }}
+        run: |
+          ./gradlew \
+              -Pversion="${ORG_GRADLE_PROJECT_version}" \
+              :SheetMusicAndroid:publishReleasePublicationToGithubPackagesRepository \
+              :SheetMusicAudioAndroid:publishReleasePublicationToGithubPackagesRepository

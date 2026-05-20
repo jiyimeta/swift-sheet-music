@@ -61,7 +61,9 @@ android {
 }
 
 group = "io.github.jiyimeta"
-version = "0.0.0-SNAPSHOT"
+version = (project.findProperty("version") as String?)
+    ?.takeIf { it != "unspecified" }
+    ?: "0.0.0-SNAPSHOT"
 
 val syncGoldenBinaries by tasks.registering(Copy::class) {
     from(rootProject.file("../Tests/SheetMusicTests/Resources/Golden/Audio"))
