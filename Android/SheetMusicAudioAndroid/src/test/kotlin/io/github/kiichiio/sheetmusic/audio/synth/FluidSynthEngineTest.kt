@@ -429,4 +429,111 @@ class FluidSynthEngineTest {
             synth.calls.contains("cc(0,7,90)"),
         )
     }
+
+    // ── T4: setStaffProgram ─────────────────────────────────────────────────
+
+    /**
+     * Helper that sets up one melodic staff with bankLSB and program for T4 tests.
+     * FakeSynth.loadSoundFont always returns sfid=0.
+     */
+    private fun setupStavesMelodic(engine: FluidSynthEngine, count: Int) {
+        engine.setupStaves(
+            params = (0 until count).map { fakeStaffParams(it, isDrums = false) },
+            resolver = FakeResolver(),
+            context = null,
+        )
+    }
+
+    @Test fun setStaffProgram_callsProgramSelectOnExistingSfid() {
+        val engine = buildEngine()
+        setupStavesMelodic(engine, 1)
+        val synth = capturedSynth!!
+        // Clear setupStaves' initial programSelect calls so we only see setStaffProgram's call.
+        synth.calls.clear()
+
+        engine.setStaffProgram(0, 40)
+
+        // sfid=0 (FakeSynth returns 0), channel=0, bank=0 (melodic, bankLSB=0), program=40
+        assertTrue(
+            "setStaffProgram should issue programSelect(sfid=0,channel=0,bank=0,program=40)",
+            synth.calls.contains("programSelect(0,0,0,40)"),
+        )
+    }
+
+    @Test fun setStaffProgram_onDrumStaff_usesBank128() {
+        val engine = FluidSynthEngine(synthFactory = { _ ->
+            FakeSynth().also { capturedSynth = it }
+        })
+        engine.setupStaves(
+            params = listOf(fakeStaffParams(0, isDrums = true)),
+            resolver = FakeResolver(),
+            context = null,
+        )
+        val synth = capturedSynth!!
+        synth.calls.clear()
+
+        engine.setStaffProgram(0, 8)
+
+        // Drum staff: bank=128, program=8
+        assertTrue(
+            "setStaffProgram on drum staff should issue programSelect with bank=128",
+            synth.calls.contains("programSelect(0,0,128,8)"),
+        )
+    }
+
+    @Test fun setStaffProgram_clampsProgram() {
+        val engine = buildEngine()
+        setupStavesMelodic(engine, 1)
+        val synth = capturedSynth!!
+        synth.calls.clear()
+
+        engine.setStaffProgram(0, 999)
+
+        // Program clamped to 127
+        assertTrue(
+            "setStaffProgram should clamp program to 127",
+            synth.calls.contains("programSelect(0,0,0,127)"),
+        )
+    }
+
+    @Test fun setStaffProgram_noOpsBeforeSetupStaves() {
+        val engine = buildEngine()
+        // No setupStaves — synth is null, loadedSfid=-1, staffLoadParams empty.
+
+        engine.setStaffProgram(0, 40)
+
+        // capturedSynth is null since factory was never called.
+        assertTrue(
+            "setStaffProgram before setupStaves should record no programSelect calls",
+            capturedSynth == null || capturedSynth!!.calls.none { it.startsWith("programSelect") },
+        )
+    }
+
+    @Test fun setStaffProgram_noOpsForOutOfRangeStaff() {
+        val engine = buildEngine()
+        setupStavesMelodic(engine, 1) // staffCount=1, valid index is 0 only
+        val synth = capturedSynth!!
+        synth.calls.clear()
+
+        engine.setStaffProgram(99, 40)
+
+        assertFalse(
+            "setStaffProgram with out-of-range staffIndex should not call programSelect",
+            synth.calls.any { it.startsWith("programSelect") },
+        )
+    }
+
+    @Test fun setStaffProgram_clampsNegativeProgram() {
+        val engine = buildEngine()
+        setupStavesMelodic(engine, 1)
+        val synth = capturedSynth!!
+        synth.calls.clear()
+
+        engine.setStaffProgram(0, -5)
+
+        assertTrue(
+            "setStaffProgram should clamp negative program to 0",
+            synth.calls.contains("programSelect(0,0,0,0)"),
+        )
+    }
 }

@@ -21,8 +21,22 @@ internal class FluidSynthEngine(
         FluidSynthDriver.create(sr)
     },
 ) {
+
+    /**
+     * Resolved soundfont + bank parameters captured at [setupStaves] time for
+     * a single staff channel. [effectiveBank] is already the effective bank: drum staves
+     * store 128 here so [setStaffProgram] doesn't need to re-branch on [isDrums].
+     */
+    private data class StaffLoadParams(val effectiveBank: Int, val isDrums: Boolean)
+
     private var synth: SynthDriver? = null
     private var staffCountValue: Int = 0
+
+    /** sfid returned by [SynthDriver.loadSoundFont] at last [setupStaves]; -1 if none loaded. */
+    private var loadedSfid: Int = -1
+
+    /** Per-channel load parameters populated by [setupStaves]; null for unassigned channels. */
+    private val staffLoadParams: Array<StaffLoadParams?> = arrayOfNulls(16)
 
     val staffCount: Int get() = staffCountValue
 
@@ -78,28 +92,28 @@ internal class FluidSynthEngine(
         val uri = resolver.defaultGmSoundfontUri
             ?: resolver.soundfontUriFor(params[0].bankLSB, params[0].program, params[0].isDrums)
         val sfid = driver.loadSoundFont(uri, context)
+        loadedSfid = sfid
+
+        // Populate per-staff load params (resolved bank: drums use 128, melodic use bankLSB).
+        for (p in params) {
+            val resolvedBank = if (p.isDrums) 128 else p.bankLSB
+            staffLoadParams[p.staffIndex] = StaffLoadParams(effectiveBank = resolvedBank, isDrums = p.isDrums)
+        }
 
         if (sfid >= 0) {
             for (p in params) {
                 if (p.isDrums) {
                     // Bug 1 fix: lock the channel into drum semantics so FluidSynth
                     // treats it as a percussion channel regardless of the channel number.
-                    // Then select from bank 128 (GM drum bank).
                     driver.setChannelType(p.staffIndex, isDrum = true)
-                    driver.programSelect(
-                        sfid = sfid,
-                        channel = p.staffIndex,
-                        bank = 128,
-                        program = p.program.coerceIn(0, 127),
-                    )
-                } else {
-                    driver.programSelect(
-                        sfid = sfid,
-                        channel = p.staffIndex,
-                        bank = p.bankLSB,
-                        program = p.program,
-                    )
                 }
+                val resolved = staffLoadParams[p.staffIndex] ?: continue
+                driver.programSelect(
+                    sfid = sfid,
+                    channel = p.staffIndex,
+                    bank = resolved.effectiveBank,
+                    program = p.program.coerceIn(0, 127),
+                )
             }
         }
         // Staff is silent (sfid < 0 or uri was null) but the channel routing is
@@ -165,6 +179,29 @@ internal class FluidSynthEngine(
         synth?.cc(channel = staffIndex, controller = 7, value = rememberedCC7[staffIndex])
     }
 
+    /**
+     * Changes the instrument program on [staffIndex]'s channel at runtime.
+     *
+     * Uses the soundfont id and bank captured during [setupStaves] so the caller
+     * only needs to supply the new GM program number (0–127).
+     * Out-of-range [program] values are clamped to [0, 127].
+     * No-ops if [setupStaves] has not been called, if the sfid is invalid, or if
+     * [staffIndex] is outside [0, staffCount).
+     */
+    fun setStaffProgram(staffIndex: Int, program: Int) {
+        if (staffIndex !in 0 until staffCountValue) return
+        val params = staffLoadParams[staffIndex] ?: return
+        if (loadedSfid < 0) return
+        val s = synth ?: return
+        val clamped = program.coerceIn(0, 127)
+        s.programSelect(
+            sfid = loadedSfid,
+            channel = staffIndex,
+            bank = params.effectiveBank,
+            program = clamped,
+        )
+    }
+
     /** Fires noteOn on [staffIndex]'s channel. */
     fun previewNoteOn(staffIndex: Int, pitch: Int, velocity: Int) {
         synth?.noteOn(staffIndex, pitch, velocity)
@@ -198,6 +235,8 @@ internal class FluidSynthEngine(
         synth?.close()
         synth = null
         staffCountValue = 0
+        loadedSfid = -1
+        staffLoadParams.fill(null)
         for (i in 0 until 16) {
             rememberedCC7[i] = 100
             channelMuted[i] = false
