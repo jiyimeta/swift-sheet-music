@@ -25,6 +25,16 @@ android {
 
     buildFeatures { compose = true }
 
+    // SheetMusicAndroid (Swift JNI runtime) and SheetMusicAudioAndroid
+    // (CMake-built FluidSynth wrapper) both ship libc++_shared.so from
+    // the NDK. Pick first to resolve the merge collision — both copies
+    // are byte-identical NDK artefacts.
+    packaging {
+        jniLibs {
+            pickFirsts += setOf("**/libc++_shared.so")
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
