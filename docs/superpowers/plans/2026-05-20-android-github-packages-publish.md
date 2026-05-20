@@ -6,15 +6,15 @@
 
 **Architecture:**
 
-1. **Library-owned JNI namespace.** Rename the five `@_cdecl` JNI symbols currently bound to `com.example.sheetmusic.jni.SheetMusicBridge` to `io.github.kiichiio.sheetmusic.SheetMusicJNI`. The bridge becomes a published Kotlin object that any consumer (the example app, or a third-party Compose app) can call directly.
+1. **Library-owned JNI namespace.** Rename the five `@_cdecl` JNI symbols currently bound to `com.example.sheetmusic.jni.SheetMusicBridge` to `io.github.jiyimeta.sheetmusic.SheetMusicJNI`. The bridge becomes a published Kotlin object that any consumer (the example app, or a third-party Compose app) can call directly.
 
 2. **Two Gradle modules.**
-   - `Android/SheetMusicAndroid/` (new) — owns `SheetMusicJNI.kt`, `ScoreHandle.kt`, `BravuraMetricsBuilder.kt`. Bundles prebuilt `libSheetMusicJNI.so` + Swift runtime `.so` files into the AAR via `jniLibs.srcDirs`. Loads `libSheetMusicJNI` in a `System.loadLibrary` companion initializer. Group `io.github.kiichiio`, artifact `sheet-music-android`.
+   - `Android/SheetMusicAndroid/` (new) — owns `SheetMusicJNI.kt`, `ScoreHandle.kt`, `BravuraMetricsBuilder.kt`. Bundles prebuilt `libSheetMusicJNI.so` + Swift runtime `.so` files into the AAR via `jniLibs.srcDirs`. Loads `libSheetMusicJNI` in a `System.loadLibrary` companion initializer. Group `io.github.jiyimeta`, artifact `sheet-music-android`.
    - `Android/SheetMusicAudioAndroid/` (existing) — adds `api(project(":SheetMusicAndroid"))` to inherit the JNI .so transitively. Removes its own `System.loadLibrary("SheetMusicJNI")` (the core module now owns that).
 
 3. **GitHub Packages on tag.** A new `.github/workflows/android-publish.yml` triggers on `v*` tag push, cross-compiles the Swift JNI for both ABIs, runs `./gradlew publishReleasePublicationToGithubPackagesRepository` on each module. Version is derived from the tag (`v0.1.0` → `0.1.0`). Authentication uses the workflow's built-in `GITHUB_TOKEN`.
 
-4. **Composite-build example.** `Examples/Android/settings.gradle.kts` keeps its `includeBuild("../../Android")` composite, but with an added `dependencySubstitution` for `sheet-music-android`. The example app stops vendoring JNI Kotlin code in its own package; it depends on the core module and uses `io.github.kiichiio.sheetmusic.SheetMusicJNI` directly.
+4. **Composite-build example.** `Examples/Android/settings.gradle.kts` keeps its `includeBuild("../../Android")` composite, but with an added `dependencySubstitution` for `sheet-music-android`. The example app stops vendoring JNI Kotlin code in its own package; it depends on the core module and uses `io.github.jiyimeta.sheetmusic.SheetMusicJNI` directly.
 
 **Tech Stack:** Swift 6.3.2 (host + Android cross-compile), Kotlin/JVM via AGP 8.5 + Kotlin 2.0.20, Gradle 8.x, Android API 28+, FluidSynth 2.4.6 (transitive, LGPL-2.1 dynamic-link), GitHub Actions, `maven-publish` Gradle plugin.
 
@@ -23,6 +23,150 @@
 - SoundFont sample asset distribution (consumer responsibility per existing README).
 - Signing of the AAR with PGP (GitHub Packages does not require it; add when migrating to Maven Central).
 - API documentation site (dokka).
+
+---
+
+## Task 0: Migrate existing audio module namespace `kiichiio` → `jiyimeta`
+
+**Why first:** Plan-wide we agreed on `io.github.jiyimeta` as the reverse-DNS group ID (matches the GitHub username). The existing `SheetMusicAudioAndroid` module currently uses `io.github.kiichiio.*` everywhere — Kotlin packages, Swift JNI symbols, Gradle group, test imports, README. Migrating it first means every subsequent task can assume the canonical `jiyimeta` namespace.
+
+**Scope (mechanical rename, no behavioural change):**
+- ~40 Kotlin `.kt` files: `package io.github.kiichiio.sheetmusic.audio…` → `io.github.jiyimeta.sheetmusic.audio…`, and matching imports inside the audio module + the example app's PlaybackCursorOverlay.kt.
+- 3 Swift JNI files (`Sources/SheetMusicAndroidJNI/AudioMidiBridge*.swift`): 8 `@_cdecl` symbols of the form `Java_io_github_kiichiio_sheetmusic_audio_jni_SheetMusicAudioJNI_*` → `Java_io_github_jiyimeta_sheetmusic_audio_jni_SheetMusicAudioJNI_*`.
+- `Android/SheetMusicAudioAndroid/build.gradle.kts`: `namespace = "io.github.kiichiio.sheetmusic.audio"` → `"io.github.jiyimeta.sheetmusic.audio"`; `group = "io.github.kiichiio"` → `"io.github.jiyimeta"`.
+- `Android/SheetMusicAudioAndroid/README.md`: all `io.github.kiichiio` mentions.
+- `Examples/Android/settings.gradle.kts` + `Examples/Android/app/build.gradle.kts`: dependency substitution / coordinates.
+
+**Files:**
+- Move directory: `Android/SheetMusicAudioAndroid/src/main/kotlin/io/github/kiichiio/` → `…/io/github/jiyimeta/`
+- Move directory: `Android/SheetMusicAudioAndroid/src/test/kotlin/io/github/kiichiio/` → `…/io/github/jiyimeta/`
+- Modify: all `.kt` files inside those trees (package + imports)
+- Modify: `Sources/SheetMusicAndroidJNI/AudioMidiBridge.swift`, `AudioMidiBridge+Timeline.swift`, `AudioMidiBridge+Render.swift`
+- Modify: `Android/SheetMusicAudioAndroid/build.gradle.kts`
+- Modify: `Android/SheetMusicAudioAndroid/README.md`
+- Modify: `Examples/Android/settings.gradle.kts`
+- Modify: `Examples/Android/app/build.gradle.kts`
+- Modify: `Examples/Android/app/src/main/java/com/example/sheetmusic/cursor/PlaybackCursorOverlay.kt` (imports `io.github.kiichiio.sheetmusic.audio.model.ScoreCursor` etc.)
+
+- [ ] **Step 0.1: Move Kotlin source directories**
+
+```bash
+cd Android/SheetMusicAudioAndroid/src/main/kotlin/io/github
+git mv kiichiio jiyimeta
+cd -
+
+cd Android/SheetMusicAudioAndroid/src/test/kotlin/io/github
+git mv kiichiio jiyimeta
+cd -
+```
+
+`git mv` preserves history. After this, every `.kt` file inside still has `package io.github.kiichiio.…` declarations and possibly imports — those are rewritten in the next step.
+
+- [ ] **Step 0.2: Rewrite `package` + `import` lines in Kotlin files**
+
+Use a single `perl -pi` pass — the substitution is the same string everywhere (`io.github.kiichiio` → `io.github.jiyimeta`), which makes a manual edit per file unnecessarily slow.
+
+```bash
+git ls-files 'Android/SheetMusicAudioAndroid/src/**/*.kt' | while read -r f; do
+    perl -pi -e 's/io\.github\.kiichiio/io.github.jiyimeta/g' "$f"
+done
+```
+
+Verify zero references remain inside the audio module:
+
+```bash
+grep -rln 'io\.github\.kiichiio' Android/SheetMusicAudioAndroid/src
+```
+
+Expected: empty output.
+
+- [ ] **Step 0.3: Rewrite Swift JNI `@_cdecl` symbols + function names**
+
+Three files contain `Java_io_github_kiichiio_sheetmusic_audio_jni_SheetMusicAudioJNI_*` (8 symbols total). Apply the same substitution:
+
+```bash
+for f in Sources/SheetMusicAndroidJNI/AudioMidiBridge.swift \
+         Sources/SheetMusicAndroidJNI/AudioMidiBridge+Timeline.swift \
+         Sources/SheetMusicAndroidJNI/AudioMidiBridge+Render.swift; do
+    perl -pi -e 's/io_github_kiichiio/io_github_jiyimeta/g' "$f"
+done
+```
+
+Verify:
+
+```bash
+grep -rln 'io_github_kiichiio\|io\.github\.kiichiio' Sources
+```
+
+Expected: empty output.
+
+- [ ] **Step 0.4: Update `SheetMusicAudioAndroid/build.gradle.kts`**
+
+In `Android/SheetMusicAudioAndroid/build.gradle.kts`, change two lines:
+
+```kotlin
+namespace = "io.github.jiyimeta.sheetmusic.audio"   // was io.github.kiichiio.sheetmusic.audio
+```
+
+```kotlin
+group = "io.github.jiyimeta"                        // was io.github.kiichiio
+```
+
+- [ ] **Step 0.5: Update `SheetMusicAudioAndroid/README.md`**
+
+```bash
+perl -pi -e 's/io\.github\.kiichiio/io.github.jiyimeta/g' Android/SheetMusicAudioAndroid/README.md
+```
+
+- [ ] **Step 0.6: Update example app Gradle coordinates + imports**
+
+```bash
+perl -pi -e 's/io\.github\.kiichiio/io.github.jiyimeta/g' \
+    Examples/Android/settings.gradle.kts \
+    Examples/Android/app/build.gradle.kts \
+    Examples/Android/app/src/main/java/com/example/sheetmusic/cursor/PlaybackCursorOverlay.kt
+```
+
+Verify nothing remains anywhere:
+
+```bash
+grep -rln 'kiichiio' Sources Android Examples Tests Scripts .github
+```
+
+Expected: empty output (this is the canonical pre-Task-1 invariant).
+
+- [ ] **Step 0.7: Re-cross-compile the JNI .so to confirm new symbols are exported**
+
+```bash
+Scripts/android-build-libs.sh
+nm -D Android/SheetMusicAndroid/src/main/jniLibs/arm64-v8a/libSheetMusicJNI.so 2>/dev/null \
+  || nm -D Examples/Android/app/src/main/jniLibs/arm64-v8a/libSheetMusicJNI.so \
+  | grep -E 'jiyimeta_sheetmusic_audio_jni_SheetMusicAudioJNI'
+```
+
+Expected: 8 lines, each containing `T Java_io_github_jiyimeta_sheetmusic_audio_jni_SheetMusicAudioJNI_…`. (At this point in the plan the staging dest is still the example app; Task 4 moves it.)
+
+- [ ] **Step 0.8: Build + test the audio module**
+
+```bash
+cd Android && ./gradlew :SheetMusicAudioAndroid:testDebugUnitTest :SheetMusicAudioAndroid:assembleRelease && cd -
+```
+
+Expected: BUILD SUCCESSFUL, all unit tests pass.
+
+- [ ] **Step 0.9: Commit**
+
+```bash
+git add -A
+git commit -m "refactor(android-audio): migrate namespace to io.github.jiyimeta
+
+Mechanical rename: every io.github.kiichiio reference (Kotlin
+packages + imports, Swift @_cdecl JNI symbols, Gradle group +
+namespace, README, example app composite-build coordinates) becomes
+io.github.jiyimeta to match the GitHub username.
+
+No behavioural change. Unit tests + assembleRelease still pass."
+```
 
 ---
 
@@ -38,24 +182,24 @@
 
 | Old JNI symbol | New JNI symbol |
 |---|---|
-| `Java_com_example_sheetmusic_jni_SheetMusicBridge_nativeLoadScore` | `Java_io_github_kiichiio_sheetmusic_SheetMusicJNI_nativeLoadScore` |
-| `Java_com_example_sheetmusic_jni_SheetMusicBridge_nativeReleaseScore` | `Java_io_github_kiichiio_sheetmusic_SheetMusicJNI_nativeReleaseScore` |
-| `Java_com_example_sheetmusic_jni_SheetMusicBridge_nativeInstallSMuFLMetrics` | `Java_io_github_kiichiio_sheetmusic_SheetMusicJNI_nativeInstallSMuFLMetrics` |
-| `Java_com_example_sheetmusic_jni_SheetMusicBridge_nativeComputeLayout` | `Java_io_github_kiichiio_sheetmusic_SheetMusicJNI_nativeComputeLayout` |
-| `Java_com_example_sheetmusic_jni_SheetMusicBridge_nativeCursorFrame` | `Java_io_github_kiichiio_sheetmusic_SheetMusicJNI_nativeCursorFrame` |
+| `Java_com_example_sheetmusic_jni_SheetMusicBridge_nativeLoadScore` | `Java_io_github_jiyimeta_sheetmusic_SheetMusicJNI_nativeLoadScore` |
+| `Java_com_example_sheetmusic_jni_SheetMusicBridge_nativeReleaseScore` | `Java_io_github_jiyimeta_sheetmusic_SheetMusicJNI_nativeReleaseScore` |
+| `Java_com_example_sheetmusic_jni_SheetMusicBridge_nativeInstallSMuFLMetrics` | `Java_io_github_jiyimeta_sheetmusic_SheetMusicJNI_nativeInstallSMuFLMetrics` |
+| `Java_com_example_sheetmusic_jni_SheetMusicBridge_nativeComputeLayout` | `Java_io_github_jiyimeta_sheetmusic_SheetMusicJNI_nativeComputeLayout` |
+| `Java_com_example_sheetmusic_jni_SheetMusicBridge_nativeCursorFrame` | `Java_io_github_jiyimeta_sheetmusic_SheetMusicJNI_nativeCursorFrame` |
 
-(The five Audio symbols under `io.github.kiichiio.sheetmusic.audio.jni.SheetMusicAudioJNI` already use the library-owned namespace and **stay as-is**.)
+(The five Audio symbols under `io.github.jiyimeta.sheetmusic.audio.jni.SheetMusicAudioJNI` already use the library-owned namespace and **stay as-is**.)
 
 - [ ] **Step 1.1: Apply rename in `JNISymbols.swift`**
 
-In `Sources/SheetMusicAndroidJNI/JNISymbols.swift`, replace all four occurrences of the substring `com_example_sheetmusic_jni_SheetMusicBridge` with `io_github_kiichiio_sheetmusic_SheetMusicJNI`. This rewrites both the `@_cdecl("Java_...")` string and the matching `public func Java_...` Swift identifier (the C symbol must match the function name byte-for-byte under `@_cdecl`).
+In `Sources/SheetMusicAndroidJNI/JNISymbols.swift`, replace all four occurrences of the substring `com_example_sheetmusic_jni_SheetMusicBridge` with `io_github_jiyimeta_sheetmusic_SheetMusicJNI`. This rewrites both the `@_cdecl("Java_...")` string and the matching `public func Java_...` Swift identifier (the C symbol must match the function name byte-for-byte under `@_cdecl`).
 
 Concretely, four pairs of lines change:
 
 ```swift
-@_cdecl("Java_io_github_kiichiio_sheetmusic_SheetMusicJNI_nativeLoadScore")
+@_cdecl("Java_io_github_jiyimeta_sheetmusic_SheetMusicJNI_nativeLoadScore")
 // swiftlint:disable:next identifier_name
-public func Java_io_github_kiichiio_sheetmusic_SheetMusicJNI_nativeLoadScore(
+public func Java_io_github_jiyimeta_sheetmusic_SheetMusicJNI_nativeLoadScore(
 ```
 
 and likewise for `nativeReleaseScore`, `nativeInstallSMuFLMetrics`, `nativeComputeLayout`.
@@ -77,7 +221,7 @@ Expected: Builds `libSheetMusicJNI.so` for `arm64-v8a` + `x86_64` into `Examples
 - [ ] **Step 1.5: Verify the renamed symbols are exported in the .so**
 
 Run: `nm -D Examples/Android/app/src/main/jniLibs/arm64-v8a/libSheetMusicJNI.so | grep -E 'kiichiio_sheetmusic_SheetMusicJNI_native(LoadScore|ReleaseScore|InstallSMuFLMetrics|ComputeLayout|CursorFrame)'`
-Expected: 5 lines, each containing `T Java_io_github_kiichiio_sheetmusic_SheetMusicJNI_native…`.
+Expected: 5 lines, each containing `T Java_io_github_jiyimeta_sheetmusic_SheetMusicJNI_native…`.
 
 Also confirm the old symbols are gone:
 
@@ -93,9 +237,9 @@ git commit -m "refactor(jni): rename score/layout/cursor symbols to library name
 
 Move the @_cdecl Score/Layout/Cursor bridge from the example app
 namespace (com.example.sheetmusic.jni.SheetMusicBridge) to a
-library-owned namespace (io.github.kiichiio.sheetmusic.SheetMusicJNI)
+library-owned namespace (io.github.jiyimeta.sheetmusic.SheetMusicJNI)
 so the Kotlin bridge can be packaged into a published AAR. The
-Audio JNI symbols already live in the io.github.kiichiio namespace.
+Audio JNI symbols already live in the io.github.jiyimeta namespace.
 
 Note: this commit transiently breaks Examples/Android (which still
 loads the old symbols). The next commits introduce the new
@@ -148,7 +292,7 @@ Write `Android/SheetMusicAndroid/proguard-consumer.pro`:
 
 ```
 # JNI entrypoints loaded via System.loadLibrary; keep their classes.
--keep class io.github.kiichiio.sheetmusic.SheetMusicJNI { *; }
+-keep class io.github.jiyimeta.sheetmusic.SheetMusicJNI { *; }
 ```
 
 - [ ] **Step 2.4: Create the module build script**
@@ -162,7 +306,7 @@ plugins {
 }
 
 android {
-    namespace = "io.github.kiichiio.sheetmusic"
+    namespace = "io.github.jiyimeta.sheetmusic"
     compileSdk = 35
 
     defaultConfig {
@@ -192,7 +336,7 @@ android {
     }
 }
 
-group = "io.github.kiichiio"
+group = "io.github.jiyimeta"
 version = "0.0.0-SNAPSHOT"
 
 dependencies {
@@ -228,7 +372,7 @@ publishable AAR. Sources land in subsequent commits."
 
 Three Kotlin files move from `Examples/Android/app/src/main/java/com/example/sheetmusic/jni/` into the new module's source tree, with:
 
-- Package: `com.example.sheetmusic.jni` → `io.github.kiichiio.sheetmusic`.
+- Package: `com.example.sheetmusic.jni` → `io.github.jiyimeta.sheetmusic`.
 - Class rename: `SheetMusicBridge` → `SheetMusicJNI` (matches the renamed JNI symbols).
 - `SheetMusicJNI` keeps `System.loadLibrary("SheetMusicJNI")` — this is the canonical loader for the JNI .so now.
 
@@ -239,7 +383,7 @@ The example-app copies under `Examples/Android/app/src/main/java/com/example/she
 Create `Android/SheetMusicAndroid/src/main/kotlin/io/github/kiichiio/sheetmusic/SheetMusicJNI.kt`:
 
 ```kotlin
-package io.github.kiichiio.sheetmusic
+package io.github.jiyimeta.sheetmusic
 
 /**
  * Thin façade over the @_cdecl symbols exported by
@@ -247,8 +391,8 @@ package io.github.kiichiio.sheetmusic
  * Sources/SheetMusicAndroidJNI/CursorBridge.swift.
  *
  * Symbol names map to the JNI convention:
- *   io.github.kiichiio.sheetmusic.SheetMusicJNI.<name>
- *       → Java_io_github_kiichiio_sheetmusic_SheetMusicJNI_<name>
+ *   io.github.jiyimeta.sheetmusic.SheetMusicJNI.<name>
+ *       → Java_io_github_jiyimeta_sheetmusic_SheetMusicJNI_<name>
  *
  * The companion's init also loads libSheetMusicJNI; consumers that
  * link this module transitively (e.g. SheetMusicAudioAndroid) inherit
@@ -298,7 +442,7 @@ object SheetMusicJNI {
 Create `Android/SheetMusicAndroid/src/main/kotlin/io/github/kiichiio/sheetmusic/ScoreHandle.kt`:
 
 ```kotlin
-package io.github.kiichiio.sheetmusic
+package io.github.jiyimeta.sheetmusic
 
 /** Auto-releasing wrapper around a native score handle. */
 class ScoreHandle internal constructor(val raw: Long) : AutoCloseable {
@@ -328,7 +472,7 @@ class ScoreHandle internal constructor(val raw: Long) : AutoCloseable {
 Copy the body of `Examples/Android/app/src/main/java/com/example/sheetmusic/jni/BravuraMetricsBuilder.kt` into `Android/SheetMusicAndroid/src/main/kotlin/io/github/kiichiio/sheetmusic/BravuraMetricsBuilder.kt`, changing only the `package` line:
 
 ```kotlin
-package io.github.kiichiio.sheetmusic
+package io.github.jiyimeta.sheetmusic
 ```
 
 (All other content — imports, doc comments, `object BravuraMetricsBuilder { … }` body — is identical. Read the source file and reproduce it verbatim under the new package, since the contents are too long to duplicate inline in this plan and they change rarely.)
@@ -350,7 +494,7 @@ git add Android/SheetMusicAndroid/src
 git commit -m "feat(android): port JNI Kotlin bridge into SheetMusicAndroid
 
 SheetMusicJNI (renamed from SheetMusicBridge), ScoreHandle, and
-BravuraMetricsBuilder now live in the io.github.kiichiio.sheetmusic
+BravuraMetricsBuilder now live in the io.github.jiyimeta.sheetmusic
 package inside the new library module. The example app's copies
 under com.example.sheetmusic.jni become unreferenced; they are
 removed in a later commit once consumer call-sites migrate."
@@ -415,7 +559,7 @@ In `Examples/Android/app/build.gradle.kts`, delete line 38:
 sourceSets["main"].jniLibs.srcDirs("src/main/jniLibs")
 ```
 
-After this edit, the `android { … }` block ends at the `buildTypes` block. The example app will now receive the JNI .so files through its transitive `implementation("io.github.kiichiio:sheet-music-android:…")` dependency (added in Task 7).
+After this edit, the `android { … }` block ends at the `buildTypes` block. The example app will now receive the JNI .so files through its transitive `implementation("io.github.jiyimeta:sheet-music-android:…")` dependency (added in Task 7).
 
 - [ ] **Step 4.4: Remove the stale example jniLibs directory**
 
@@ -486,12 +630,12 @@ In `Android/SheetMusicAudioAndroid/src/main/kotlin/io/github/kiichiio/sheetmusic
 ```kotlin
 internal object SheetMusicAudioJNI {
     init {
-        // Force-load io.github.kiichiio.sheetmusic.SheetMusicJNI so its
+        // Force-load io.github.jiyimeta.sheetmusic.SheetMusicJNI so its
         // static initialiser runs System.loadLibrary("SheetMusicJNI")
         // before any of our external fun calls bind. Direct reference
         // to a member (not just the class) guarantees class init.
         @Suppress("UNUSED_EXPRESSION")
-        io.github.kiichiio.sheetmusic.SheetMusicJNI.toString()
+        io.github.jiyimeta.sheetmusic.SheetMusicJNI.toString()
     }
 
     external fun nativeRenderMidi(scoreHandle: Long): ByteArray
@@ -560,7 +704,7 @@ afterEvaluate {
         publications {
             register<MavenPublication>("release") {
                 from(components["release"])
-                groupId = "io.github.kiichiio"
+                groupId = "io.github.jiyimeta"
                 artifactId = "sheet-music-android"
                 // Version comes from the top-level `version = …` declaration.
                 pom {
@@ -569,7 +713,7 @@ afterEvaluate {
                         "Kotlin/JNI bindings for swift-sheet-music: " +
                             "score parsing, engraving layout, cursor resolution."
                     )
-                    url.set("https://github.com/kiichiio/swift-sheet-music")
+                    url.set("https://github.com/jiyimeta/swift-sheet-music")
                     licenses {
                         license {
                             name.set("MIT")
@@ -582,7 +726,7 @@ afterEvaluate {
         repositories {
             maven {
                 name = "GithubPackages"
-                url = uri("https://maven.pkg.github.com/kiichiio/swift-sheet-music")
+                url = uri("https://maven.pkg.github.com/jiyimeta/swift-sheet-music")
                 credentials {
                     username = System.getenv("GITHUB_ACTOR")
                         ?: project.findProperty("gpr.user") as String?
@@ -617,14 +761,14 @@ afterEvaluate {
         publications {
             register<MavenPublication>("release") {
                 from(components["release"])
-                groupId = "io.github.kiichiio"
+                groupId = "io.github.jiyimeta"
                 artifactId = "sheet-music-audio-android"
                 pom {
                     name.set("SheetMusic Audio Android")
                     description.set(
                         "FluidSynth-backed audio playback for swift-sheet-music on Android."
                     )
-                    url.set("https://github.com/kiichiio/swift-sheet-music")
+                    url.set("https://github.com/jiyimeta/swift-sheet-music")
                     licenses {
                         license {
                             name.set("MIT")
@@ -637,7 +781,7 @@ afterEvaluate {
         repositories {
             maven {
                 name = "GithubPackages"
-                url = uri("https://maven.pkg.github.com/kiichiio/swift-sheet-music")
+                url = uri("https://maven.pkg.github.com/jiyimeta/swift-sheet-music")
                 credentials {
                     username = System.getenv("GITHUB_ACTOR")
                         ?: project.findProperty("gpr.user") as String?
@@ -670,7 +814,7 @@ git add Android/SheetMusicAndroid/build.gradle.kts \
 git commit -m "build(android): wire maven-publish for GitHub Packages
 
 Both Android library modules now expose a release MavenPublication
-targeting https://maven.pkg.github.com/kiichiio/swift-sheet-music.
+targeting https://maven.pkg.github.com/jiyimeta/swift-sheet-music.
 Credentials come from GITHUB_ACTOR / GITHUB_TOKEN (CI) or
 gpr.user / gpr.token gradle properties (local dev)."
 ```
@@ -695,9 +839,9 @@ In `Examples/Android/settings.gradle.kts`, expand the `dependencySubstitution` b
 ```kotlin
 includeBuild("../../Android") {
     dependencySubstitution {
-        substitute(module("io.github.kiichiio:sheet-music-audio-android"))
+        substitute(module("io.github.jiyimeta:sheet-music-audio-android"))
             .using(project(":SheetMusicAudioAndroid"))
-        substitute(module("io.github.kiichiio:sheet-music-android"))
+        substitute(module("io.github.jiyimeta:sheet-music-android"))
             .using(project(":SheetMusicAndroid"))
     }
 }
@@ -708,10 +852,10 @@ includeBuild("../../Android") {
 In `Examples/Android/app/build.gradle.kts`, alongside the existing audio dep, add:
 
 ```kotlin
-    implementation("io.github.kiichiio:sheet-music-android:0.0.0-SNAPSHOT")
+    implementation("io.github.jiyimeta:sheet-music-android:0.0.0-SNAPSHOT")
     // Audio backend — resolved from the Android/ composite build.
     // Version must match Android/SheetMusicAudioAndroid/build.gradle.kts.
-    implementation("io.github.kiichiio:sheet-music-audio-android:0.0.0-SNAPSHOT")
+    implementation("io.github.jiyimeta:sheet-music-audio-android:0.0.0-SNAPSHOT")
 ```
 
 (`sheet-music-audio-android` already pulls `sheet-music-android` transitively, but stating it explicitly makes the relationship visible to anyone reading the example.)
@@ -722,9 +866,9 @@ In `Examples/Android/app/src/main/java/com/example/sheetmusic/ScoreViewModel.kt`
 
 ```kotlin
 import com.example.sheetmusic.draw.DrawProgramDecoder
-import io.github.kiichiio.sheetmusic.BravuraMetricsBuilder
-import io.github.kiichiio.sheetmusic.ScoreHandle
-import io.github.kiichiio.sheetmusic.SheetMusicJNI
+import io.github.jiyimeta.sheetmusic.BravuraMetricsBuilder
+import io.github.jiyimeta.sheetmusic.ScoreHandle
+import io.github.jiyimeta.sheetmusic.SheetMusicJNI
 ```
 
 Then update the in-method reference (around line 48) from `SheetMusicBridge.nativeInstallSMuFLMetrics(table)` to `SheetMusicJNI.nativeInstallSMuFLMetrics(table)`. Read the file and grep for `SheetMusicBridge` to catch any others.
@@ -740,7 +884,7 @@ import com.example.sheetmusic.jni.SheetMusicBridge
 with:
 
 ```kotlin
-import io.github.kiichiio.sheetmusic.SheetMusicJNI
+import io.github.jiyimeta.sheetmusic.SheetMusicJNI
 ```
 
 …and update the in-body call (around line 60) from `SheetMusicBridge.nativeCursorFrame(…)` to `SheetMusicJNI.nativeCursorFrame(…)`.
@@ -772,7 +916,7 @@ git add Examples/Android
 git commit -m "refactor(example): consume SheetMusicAndroid via composite build
 
 The example app no longer vendors its own JNI bridge under
-com.example.sheetmusic.jni; it imports io.github.kiichiio.sheetmusic
+com.example.sheetmusic.jni; it imports io.github.jiyimeta.sheetmusic
 from the published SheetMusicAndroid module (resolved through the
 existing composite build during local development)."
 ```
@@ -921,7 +1065,7 @@ Create `Android/SheetMusicAndroid/README.md`:
 ```markdown
 # SheetMusicAndroid
 
-Kotlin/JNI bindings for [swift-sheet-music](https://github.com/kiichiio/swift-sheet-music)
+Kotlin/JNI bindings for [swift-sheet-music](https://github.com/jiyimeta/swift-sheet-music)
 covering score parsing, engraving layout, and cursor resolution.
 
 This module ships the prebuilt `libSheetMusicJNI.so` for the supported
@@ -941,7 +1085,7 @@ dependencyResolutionManagement {
         mavenCentral()
         maven {
             name = "SheetMusicGithubPackages"
-            url = uri("https://maven.pkg.github.com/kiichiio/swift-sheet-music")
+            url = uri("https://maven.pkg.github.com/jiyimeta/swift-sheet-music")
             credentials {
                 username = providers.gradleProperty("gpr.user").orNull
                     ?: System.getenv("GITHUB_ACTOR")
@@ -954,7 +1098,7 @@ dependencyResolutionManagement {
 
 // app/build.gradle.kts
 dependencies {
-    implementation("io.github.kiichiio:sheet-music-android:<version>")
+    implementation("io.github.jiyimeta:sheet-music-android:<version>")
 }
 ```
 
@@ -980,9 +1124,9 @@ Set the credentials via either:
 ## Usage
 
 ```kotlin
-import io.github.kiichiio.sheetmusic.SheetMusicJNI
-import io.github.kiichiio.sheetmusic.ScoreHandle
-import io.github.kiichiio.sheetmusic.BravuraMetricsBuilder
+import io.github.jiyimeta.sheetmusic.SheetMusicJNI
+import io.github.jiyimeta.sheetmusic.ScoreHandle
+import io.github.jiyimeta.sheetmusic.BravuraMetricsBuilder
 
 val table = BravuraMetricsBuilder.buildTable(context.assets)
 SheetMusicJNI.nativeInstallSMuFLMetrics(table)
@@ -1026,7 +1170,7 @@ Replace:
 
 ```kotlin
 dependencies {
-    implementation("io.github.kiichiio:sheet-music-audio-android:0.0.0-SNAPSHOT")
+    implementation("io.github.jiyimeta:sheet-music-audio-android:0.0.0-SNAPSHOT")
 }
 ```
 
@@ -1034,7 +1178,7 @@ with:
 
 ```kotlin
 dependencies {
-    implementation("io.github.kiichiio:sheet-music-audio-android:<version>")
+    implementation("io.github.jiyimeta:sheet-music-audio-android:<version>")
     // sheet-music-android is pulled in transitively.
 }
 ```
@@ -1044,7 +1188,7 @@ In the "Architecture (1-line summary)" section (around line 75–83), the descri
 ```markdown
 ## Architecture (1-line summary)
 
-`io.github.kiichiio.sheetmusic.SheetMusicJNI` (in the `sheet-music-android`
+`io.github.jiyimeta.sheetmusic.SheetMusicJNI` (in the `sheet-music-android`
 module) is the canonical loader of `libSheetMusicJNI.so` (Swift bridge).
 This module ships `libsheetmusicaudio.so` — a C JNI shim over FluidSynth
 via `libfluidsynth.so` — and triggers `SheetMusicJNI`'s class init early
@@ -1078,10 +1222,10 @@ Insert (before "### Format support on Android"):
 The Android libraries are published to GitHub Packages on `v*` tag
 push via `.github/workflows/android-publish.yml`. Two artifacts:
 
-- `io.github.kiichiio:sheet-music-android:<v>` — JNI bridge + bundled
+- `io.github.jiyimeta:sheet-music-android:<v>` — JNI bridge + bundled
   `libSheetMusicJNI.so` (the new home for what used to be the
   example-app's `com.example.sheetmusic.jni` package).
-- `io.github.kiichiio:sheet-music-audio-android:<v>` — FluidSynth +
+- `io.github.jiyimeta:sheet-music-audio-android:<v>` — FluidSynth +
   Oboe audio playback. Has `api` dep on `sheet-music-android`.
 
 Consumers need a GitHub PAT with `read:packages`. See
@@ -1159,7 +1303,7 @@ Expected: BUILD SUCCESSFUL. Two AARs + two POMs land under `~/.m2/repository/io/
 Verify a POM:
 
 Run: `cat ~/.m2/repository/io/github/kiichiio/sheet-music-audio-android/0.1.0-dryrun/*.pom`
-Expected: contains `<groupId>io.github.kiichiio</groupId>`, `<artifactId>sheet-music-audio-android</artifactId>`, `<version>0.1.0-dryrun</version>`, and a `<dependency>` on `sheet-music-android`.
+Expected: contains `<groupId>io.github.jiyimeta</groupId>`, `<artifactId>sheet-music-audio-android</artifactId>`, `<version>0.1.0-dryrun</version>`, and a `<dependency>` on `sheet-music-android`.
 
 - [ ] **Step 10.8: Verification commit (no code changes)**
 
@@ -1184,4 +1328,4 @@ If any drift surfaced in 10.1–10.7, return to the relevant task. Otherwise no 
 **Type consistency:**
 - Class rename `SheetMusicBridge` → `SheetMusicJNI` is applied consistently in Tasks 1 (JNI symbol), 3 (Kotlin class), 5 (audio module init), 7 (example app callers), and 9 (README usage).
 - Module names `sheet-music-android` / `sheet-music-audio-android` (artifactIds) and `:SheetMusicAndroid` / `:SheetMusicAudioAndroid` (Gradle paths) are used consistently.
-- `groupId` `io.github.kiichiio` matches the existing audio module's group.
+- `groupId` `io.github.jiyimeta` matches the existing audio module's group.
