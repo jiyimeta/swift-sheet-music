@@ -77,6 +77,8 @@ afterEvaluate {
 }
 
 dependencies {
+    api(project(":SheetMusicAndroid"))
+
     // FluidSynth (LGPL-2.1 dynamic-link). Vetted in Task 1; see
     // docs/superpowers/notes/2026-05-19-fluidsynth-android-vetting.md
     api("net.volcanomobile.fluidsynth-android:fluidsynth-android:2.4.6")

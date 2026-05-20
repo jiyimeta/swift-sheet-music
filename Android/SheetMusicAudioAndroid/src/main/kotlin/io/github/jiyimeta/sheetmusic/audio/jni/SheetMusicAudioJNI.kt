@@ -2,11 +2,12 @@ package io.github.jiyimeta.sheetmusic.audio.jni
 
 internal object SheetMusicAudioJNI {
     init {
-        // libSheetMusicJNI.so is staged into jniLibs by the consumer app
-        // (Scripts/android-build-libs.sh). This module does not vendor
-        // the .so itself; the bindings just expect the JVM to find it
-        // on the JNI library path.
-        System.loadLibrary("SheetMusicJNI")
+        // Force-load io.github.jiyimeta.sheetmusic.SheetMusicJNI so its
+        // static initialiser runs System.loadLibrary("SheetMusicJNI")
+        // before any of our external fun calls bind. Direct reference
+        // to a member (not just the class) guarantees class init.
+        @Suppress("UNUSED_EXPRESSION")
+        io.github.jiyimeta.sheetmusic.SheetMusicJNI.toString()
     }
 
     external fun nativeRenderMidi(scoreHandle: Long): ByteArray
