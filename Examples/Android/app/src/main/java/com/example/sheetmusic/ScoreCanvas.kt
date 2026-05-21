@@ -10,6 +10,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -54,15 +55,22 @@ fun ScoreCanvas(
         Typeface.createFromAsset(context.assets, "fonts/Edwin-Roman.otf")
     }
     val page = state.program.pages[state.currentPage]
+    // `pointerInput(Unit)` captures its lambda once at first composition, so
+    // reads of `transform` / `onTransformChange` inside `detectTransformGestures`
+    // would otherwise see stale parameter values from that initial frame and
+    // overwrite each pan delta against zero. Re-read through state holders.
+    val currentTransform by rememberUpdatedState(transform)
+    val currentOnTransformChange by rememberUpdatedState(onTransformChange)
     Canvas(
         modifier = modifier
             .fillMaxSize()
             .pointerInput(Unit) {
                 detectTransformGestures { _, pan, zoom, _ ->
-                    onTransformChange(
-                        transform.copy(
-                            scale = (transform.scale * zoom).coerceIn(0.25f, 8f),
-                            panOffset = transform.panOffset + pan,
+                    val t = currentTransform
+                    currentOnTransformChange(
+                        t.copy(
+                            scale = (t.scale * zoom).coerceIn(0.25f, 8f),
+                            panOffset = t.panOffset + pan,
                         )
                     )
                 }
