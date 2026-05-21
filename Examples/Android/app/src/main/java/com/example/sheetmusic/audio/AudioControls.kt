@@ -48,6 +48,7 @@ fun AudioControls(
     val currentSecs by viewModel.currentTimeSeconds.collectAsState()
     val totalSecs by viewModel.totalTimeSeconds.collectAsState()
     val rate by viewModel.currentRate.collectAsState()
+    val engine by viewModel.engine.collectAsState()
 
     val isPrepared = state != PlaybackState.STOPPED && state != PlaybackState.EXPORTING
 
@@ -100,10 +101,12 @@ fun AudioControls(
                 enabled = isPrepared
             ) { Text("+5s") }
 
-            // Export to audio file (only enabled once a score handle exists)
-            if (scoreHandle != null) {
+            // Export to audio file (only enabled once a score handle exists
+            // and the engine is ready)
+            val readyEngine = engine
+            if (scoreHandle != null && readyEngine != null) {
                 ExportButton(
-                    playbackEngine = viewModel.engine,
+                    playbackEngine = readyEngine,
                     scoreHandle = scoreHandle,
                 )
             }
