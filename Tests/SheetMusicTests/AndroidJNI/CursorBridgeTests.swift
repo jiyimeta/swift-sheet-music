@@ -101,13 +101,13 @@
 
             // Round-trip through CursorFrameCodec.
             let encoded = CursorFrameCodec.encode(rect)
-            #expect(encoded.count == 34) // u16 + 4 × i64
+            #expect(encoded.count == 32) // 4 × f64
 
             let decoded = try #require(try CursorFrameCodec.decode(encoded))
-            #expect(abs(decoded.x - Double(rect.origin.x)) < 0.001)
-            #expect(abs(decoded.y - Double(rect.origin.y)) < 0.001)
-            #expect(abs(decoded.width - Double(rect.size.width)) < 0.001)
-            #expect(abs(decoded.height - Double(rect.size.height)) < 0.001)
+            #expect(decoded.x == Double(rect.origin.x))
+            #expect(decoded.y == Double(rect.origin.y))
+            #expect(decoded.width == Double(rect.size.width))
+            #expect(decoded.height == Double(rect.size.height))
         }
 
         @Test

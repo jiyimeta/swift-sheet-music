@@ -28,6 +28,9 @@ class BinaryWriter {
         for (i in 0..7) writeU8(((v shr (i * 8)) and 0xFF).toInt())
     }
 
+    /** Writes eight bytes as a little-endian IEEE 754 [Double]. */
+    fun writeF64(v: Double) { writeI64(v.toRawBits()) }
+
     /** Returns the accumulated bytes as a [ByteArray]. */
     fun toByteArray(): ByteArray = out.toByteArray()
 }

@@ -8,7 +8,6 @@ import io.github.jiyimeta.sheetmusic.audio.model.StaffAddress
 import io.github.jiyimeta.sheetmusic.audio.model.TupletID
 import io.github.jiyimeta.sheetmusic.audio.model.VoiceElementID
 import org.junit.Assert.assertEquals
-import org.junit.Assert.fail
 import org.junit.Test
 
 class ScoreItemIDDecoderTest {
@@ -103,9 +102,9 @@ class ScoreItemIDDecoderTest {
     @Test
     fun decodeArrayDecodesTwoItems() {
         // Build a 2-element array: [Note(canonicalNoteID), Rest(canonicalRestID)]
-        // version(2) + count(4) + Note payload + Rest payload
+        // count(4) + Note payload + Rest payload (no version envelope)
         val notePayload = byteArrayOf(
-            0x00,  // kind = 0 (Note)
+            0x00,  // discriminator = 0 (Note)
             0x01, 0x00, 0x00, 0x00,  // partIndex = 1
             0x00, 0x00, 0x00, 0x00,  // staffIndexInPart = 0
             0x04, 0x00, 0x00, 0x00,  // measureIndex = 4
@@ -114,17 +113,14 @@ class ScoreItemIDDecoderTest {
             0x01, 0x00, 0x00, 0x00,  // noteIndexInChord = 1
         )
         val restPayload = byteArrayOf(
-            0x01,  // kind = 1 (Rest)
+            0x01,  // discriminator = 1 (Rest)
             0x00, 0x00, 0x00, 0x00,  // partIndex = 0
             0x00, 0x00, 0x00, 0x00,  // staffIndexInPart = 0
             0x02, 0x00, 0x00, 0x00,  // measureIndex = 2
             0x01, 0x00, 0x00, 0x00,  // voiceIndex = 1
             0x00, 0x00, 0x00, 0x00,  // elementIndex = 0
         )
-        val header = byteArrayOf(
-            0x01, 0x00,              // version = 1
-            0x02, 0x00, 0x00, 0x00,  // count = 2
-        )
+        val header = byteArrayOf(0x02, 0x00, 0x00, 0x00) // count = 2
         val bytes = header + notePayload + restPayload
         val decoded = ScoreItemIDDecoder.decodeArray(bytes)
         assertEquals(2, decoded.size)
@@ -134,24 +130,8 @@ class ScoreItemIDDecoderTest {
 
     @Test
     fun decodeArrayEmptyList() {
-        val bytes = byteArrayOf(
-            0x01, 0x00,              // version = 1
-            0x00, 0x00, 0x00, 0x00,  // count = 0
-        )
+        val bytes = byteArrayOf(0x00, 0x00, 0x00, 0x00) // count = 0
         val decoded = ScoreItemIDDecoder.decodeArray(bytes)
         assertEquals(0, decoded.size)
-    }
-
-    // MARK: - Version mismatch
-
-    @Test
-    fun versionMismatchThrows() {
-        val bytes = byteArrayOf(0x02, 0x00) + ByteArray(24)
-        try {
-            ScoreItemIDDecoder.decode(bytes)
-            fail("Expected VersionMismatchException")
-        } catch (_: BinaryReader.VersionMismatchException) {
-            // expected
-        }
     }
 }

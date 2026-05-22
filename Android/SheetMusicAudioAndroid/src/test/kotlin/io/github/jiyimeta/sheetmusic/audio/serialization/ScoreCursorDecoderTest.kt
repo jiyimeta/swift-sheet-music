@@ -50,10 +50,9 @@ class ScoreCursorDecoderTest {
 
     @Test
     fun beatCaseInlineDecodes() {
-        // version=1, kind=1 (Beat), measureIndex=7, tickInMeasure=960
+        // discriminator=1 (Beat), measureIndex=7, tickInMeasure=960
         val bytes = byteArrayOf(
-            0x01, 0x00,              // version = 1
-            0x01,                    // kind = 1 (Beat)
+            0x01,                    // discriminator = 1 (Beat)
             0x07, 0x00, 0x00, 0x00,  // measureIndex = 7
             0xC0.toByte(), 0x03, 0x00, 0x00,  // tickInMeasure = 960
         )
@@ -61,31 +60,15 @@ class ScoreCursorDecoderTest {
         assertEquals(ScoreCursor.Beat(measureIndex = 7, tickInMeasure = 960), decoded)
     }
 
-    // MARK: - Unknown kind
+    // MARK: - Unknown discriminator
 
     @Test
-    fun unknownKindThrows() {
-        val bytes = byteArrayOf(
-            0x01, 0x00,  // version = 1
-            0x02,        // kind = 2 (unknown)
-        )
+    fun unknownDiscriminatorThrows() {
+        val bytes = byteArrayOf(0x02) // discriminator = 2 (unknown)
         try {
             ScoreCursorDecoder.decode(bytes)
-            fail("Expected error for unknown kind")
+            fail("Expected error for unknown discriminator")
         } catch (_: IllegalStateException) {
-            // expected
-        }
-    }
-
-    // MARK: - Version mismatch
-
-    @Test
-    fun versionMismatchThrows() {
-        val bytes = byteArrayOf(0x02, 0x00) + ByteArray(10)
-        try {
-            ScoreCursorDecoder.decode(bytes)
-            fail("Expected VersionMismatchException")
-        } catch (_: BinaryReader.VersionMismatchException) {
             // expected
         }
     }

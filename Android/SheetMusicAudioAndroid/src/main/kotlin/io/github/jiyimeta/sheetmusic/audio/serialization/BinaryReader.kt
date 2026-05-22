@@ -43,4 +43,7 @@ class BinaryReader(private val data: ByteArray) {
         for (i in 0..7) v = v or (readU8().toLong() shl (i * 8))
         return v
     }
+
+    /** Reads eight bytes as a little-endian IEEE 754 [Double]. */
+    fun readF64(): Double = Double.fromBits(readI64())
 }

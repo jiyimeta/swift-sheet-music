@@ -3,12 +3,12 @@ package io.github.jiyimeta.sheetmusic.audio.serialization
 import io.github.jiyimeta.sheetmusic.audio.model.ScoreCursor
 
 /**
- * Decoder for [ScoreCursor] — single values.
+ * Decoder for [ScoreCursor].
  *
- * Wire format:
- *   version (u16) + kind (u8) + payload
- *     kind 0 → Item(ScoreItemID payload)
- *     kind 1 → Beat(measureIndex: i32, tickInMeasure: i32)
+ * Wire format produced by Swift's `@WireFormatChoice` on `ScoreCursorWire`:
+ *   u8 discriminator (0 = Item, 1 = Beat) + payload
+ *
+ * No version envelope.
  */
 object ScoreCursorDecoder {
     fun decodePayload(r: BinaryReader): ScoreCursor = when (val kind = r.readU8()) {
@@ -20,10 +20,5 @@ object ScoreCursorDecoder {
         else -> error("Unknown ScoreCursor kind: $kind")
     }
 
-    fun decode(data: ByteArray): ScoreCursor {
-        val r = BinaryReader(data)
-        val version = r.readU16()
-        if (version != 1) throw BinaryReader.VersionMismatchException(1, version)
-        return decodePayload(r)
-    }
+    fun decode(data: ByteArray): ScoreCursor = decodePayload(BinaryReader(data))
 }

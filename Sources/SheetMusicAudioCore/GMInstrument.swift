@@ -1,8 +1,16 @@
 import Foundation
+import SheetMusicWireFormat
 
 /// One General-MIDI Level 1 melodic program (0...127), with the
 /// canonical name and family grouping. Drives the program picker
 /// in the mixer.
+///
+/// `@WireFormat` synthesizes a `WireFormat` conformance whose encoded
+/// layout is each stored property in declaration order: `program` (u8),
+/// `name` (i32-prefixed UTF-8), `family` (u8 ordinal). The blob has no
+/// envelope — `[GMInstrument]` encodes as the standard
+/// `Array<T: WireFormat>` (i32 length prefix + elements).
+@WireFormat
 public struct GMInstrument: Sendable, Equatable, Identifiable {
     public let program: UInt8 // 0...127
     public let name: String
@@ -14,6 +22,9 @@ public struct GMInstrument: Sendable, Equatable, Identifiable {
     /// 16 GM families, each spanning 8 consecutive programs. Used
     /// to group the picker's 128-item list under collapsible
     /// section headers so the user isn't scrolling a flat list.
+    ///
+    /// Wire layout: `UInt8` = ordinal in `allCases` (0...15).
+    @WireFormatEnum
     public enum Family: String, CaseIterable, Sendable {
         case piano = "Piano"
         case chromaticPercussion = "Chromatic Percussion"

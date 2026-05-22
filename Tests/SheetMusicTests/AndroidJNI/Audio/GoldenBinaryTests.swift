@@ -115,13 +115,10 @@
 
         // MARK: - Verifier tests
 
-        // staffAddress-v1.bin: version(2) + StaffAddress payload(8) = 10 bytes
+        // staffAddress-v1.bin: StaffAddressWire (8 bytes; no version envelope)
 
         @Test func staffAddressGoldenMatches() throws {
-            var w = AudioBinaryWriter()
-            w.append(UInt16(1)) // version
-            StaffAddressCodec.encodePayload(GoldenBinaryTests.canonicalStaffAddress, into: &w)
-            let encoded = w.data
+            let encoded = StaffAddressCodec.encode(GoldenBinaryTests.canonicalStaffAddress)
             let committed = try Data(contentsOf: goldenDir.appendingPathComponent("staffAddress-v1.bin"))
             #expect(encoded == committed)
         }
