@@ -10,6 +10,10 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        // swift-java's swiftkit-core is not yet on Maven Central — propagated
+        // via SheetMusicAndroid's `api` dep. Locally-published via
+        // `cd .build/checkouts/swift-java && ./gradlew :SwiftKitCore:publishToMavenLocal`.
+        mavenLocal()
     }
 }
 rootProject.name = "SheetMusicAndroidExample"
