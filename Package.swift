@@ -94,7 +94,7 @@ var targets: [Target] = [
             "SheetMusicAudioCore",
             "SheetMusicWireFormat",
             .product(name: "SwiftJava", package: "swift-java"),
-        ] + (isAndroid ? ["CJNI"] : []),
+        ],
         exclude: [
             "swift-java.config",
         ],
