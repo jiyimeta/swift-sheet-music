@@ -33,21 +33,35 @@ object SheetMusicJNI {
      * Missing tags come back as zero-length strings; an unknown handle
      * returns an empty array. Decode via [ScoreMetadata.decode].
      */
-    @JvmStatic external fun nativeScoreMetadata(handle: Long): ByteArray
+    fun nativeScoreMetadata(handle: Long): ByteArray {
+        val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
+        return SwiftJavaJNI.nativeScoreMetadata(handle, arena).toByteArray()
+    }
 
     /** Returns an empty array on failure (e.g. invalid handle). */
-    @JvmStatic external fun nativeComputeLayout(
+    fun nativeComputeLayout(
         scoreHandle: Long,
         pageWidthMM: Double,
         pageHeightMM: Double,
-    ): ByteArray
+    ): ByteArray {
+        val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
+        return SwiftJavaJNI.nativeComputeLayout(
+            scoreHandle,
+            pageWidthMM,
+            pageHeightMM,
+            arena,
+        ).toByteArray()
+    }
 
     /**
      * Install a SMuFL glyph-metrics table on the Swift side. Returns
      * `true` on success, `false` if the byte format is invalid. Wire
      * format spec is on `Sources/SheetMusicAndroidJNI/SMuFLMetricsTable.swift`.
      */
-    @JvmStatic external fun nativeInstallSMuFLMetrics(bytes: ByteArray): Boolean
+    fun nativeInstallSMuFLMetrics(bytes: ByteArray): Boolean {
+        val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
+        return SwiftJavaJNI.nativeInstallSMuFLMetrics(SwiftData.fromByteArray(bytes, arena))
+    }
 
     /**
      * Resolve the bounding rectangle (document/mm coordinates) of the cursor
@@ -58,10 +72,17 @@ object SheetMusicJNI {
      * re-layout). Wire format: u16 version (=1), then 4 × i64 micros
      * (x, y, width, height), little-endian.
      */
-    @JvmStatic external fun nativeCursorFrame(
+    fun nativeCursorFrame(
         scoreHandle: Long,
         cursorBytes: ByteArray,
-    ): ByteArray
+    ): ByteArray {
+        val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
+        return SwiftJavaJNI.nativeCursorFrame(
+            scoreHandle,
+            SwiftData.fromByteArray(cursorBytes, arena),
+            arena,
+        ).toByteArray()
+    }
 
     /**
      * Resolve the highlight rectangles (mm coordinates) covering a
@@ -72,9 +93,17 @@ object SheetMusicJNI {
      * Wire format: u16 version=1, i32 count, count × 4×i64 micros.
      * Empty array when the range yields no measures.
      */
-    @JvmStatic external fun nativeLoopHighlightRects(
+    fun nativeLoopHighlightRects(
         scoreHandle: Long,
         fromTick: Long,
         toTick: Long,
-    ): ByteArray
+    ): ByteArray {
+        val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
+        return SwiftJavaJNI.nativeLoopHighlightRects(
+            scoreHandle,
+            fromTick,
+            toTick,
+            arena,
+        ).toByteArray()
+    }
 }
