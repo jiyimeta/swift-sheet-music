@@ -1,5 +1,8 @@
 package io.github.jiyimeta.sheetmusic.audio.jni
 
+import org.swift.swiftkit.core.SwiftMemoryManagement
+import io.github.jiyimeta.sheetmusic.swiftjava.SheetMusicAndroidJNI as SwiftJavaJNI
+
 internal object SheetMusicAudioJNI {
     init {
         // Force-load io.github.jiyimeta.sheetmusic.SheetMusicJNI so its
@@ -19,6 +22,11 @@ internal object SheetMusicAudioJNI {
     external fun nativePitchAndStaffOfNote(scoreHandle: Long, noteIdBytes: ByteArray): Long
     external fun nativeEarliestOf(scoreHandle: Long, idsBytes: ByteArray): ByteArray
     external fun nativeItemEndTick(scoreHandle: Long, idBytes: ByteArray): Long
-    external fun nativeGMInstrumentList(): ByteArray
     external fun nativeResolveExportTickRange(scoreHandle: Long, rangeBytes: ByteArray): LongArray
+
+    // Migrated to swift-java — see Sources/SheetMusicAndroidJNI/AudioMidiBridge+Timeline.swift
+    fun nativeGMInstrumentList(): ByteArray {
+        val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
+        return SwiftJavaJNI.nativeGMInstrumentList(arena).toByteArray()
+    }
 }

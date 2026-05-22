@@ -62,6 +62,14 @@ extension AudioMidiBridge {
     }
 }
 
+// MARK: - swift-java entry points
+
+/// JNI entry point exposed via swift-java for the Kotlin
+/// `SheetMusicAudioJNI.nativeGMInstrumentList()` call site.
+public func nativeGMInstrumentList() -> Data {
+    GMInstrumentCodec.encodeAll()
+}
+
 #if os(Android)
     import CJNI
 
@@ -172,17 +180,5 @@ extension AudioMidiBridge {
               let id = try? ScoreItemIDCodec.decode(data)
         else { return -1 }
         return AudioMidiBridge.itemEndTick(score: score, id: id)
-    }
-
-    @_cdecl("Java_io_github_jiyimeta_sheetmusic_audio_jni_SheetMusicAudioJNI_nativeGMInstrumentList")
-    // swiftlint:disable:next identifier_name
-    public func Java_io_github_jiyimeta_sheetmusic_audio_jni_SheetMusicAudioJNI_nativeGMInstrumentList(
-        _ envPtr: UnsafeMutablePointer<JNIEnv?>,
-        _ clazz: jclass,
-    ) -> jbyteArray? {
-        guard let env = envPtr.pointee else { return nil }
-        let data = GMInstrumentCodec.encodeAll()
-        guard !data.isEmpty else { return env.pointee.NewByteArray(envPtr, 0) }
-        return makeJByteArray(env: envPtr, bytes: data)
     }
 #endif
