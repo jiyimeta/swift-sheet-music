@@ -44,6 +44,10 @@ var targets: [Target] = [
         ],
     ),
     .target(
+        name: "WireFormatKotlinEmitter",
+        dependencies: ["WireFormatSchema"],
+    ),
+    .target(
         name: "SheetMusicXMLTools",
         dependencies: ["SheetMusicCore"],
     ),
@@ -115,6 +119,11 @@ var targets: [Target] = [
     .testTarget(
         name: "WireFormatSchemaTests",
         dependencies: ["WireFormatSchema"],
+        resources: [.copy("Fixtures")],
+    ),
+    .testTarget(
+        name: "WireFormatKotlinEmitterTests",
+        dependencies: ["WireFormatKotlinEmitter", "WireFormatSchema"],
         resources: [.copy("Fixtures")],
     ),
     .testTarget(
