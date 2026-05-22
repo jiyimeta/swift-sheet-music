@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build SheetMusicJNI for each enabled Android ABI and stage .so files
+# Build SheetMusicAndroidJNI for each enabled Android ABI and stage .so files
 # (plus Swift runtime stubs) into Android/SheetMusicAndroid/src/main/jniLibs/.
 set -euo pipefail
 
@@ -42,6 +42,25 @@ TARGETS=(
     "x86_64-unknown-linux-android28:x86_64:swift-x86_64:x86_64-linux-android"
 )
 
+# Allow restricting to a subset of ABIs for faster local iteration.
+# Comma-separated list of ABI names (e.g. "arm64-v8a", "x86_64",
+# "arm64-v8a,x86_64"). Default is all supported ABIs.
+SHEET_MUSIC_ANDROID_ABIS="${SHEET_MUSIC_ANDROID_ABIS:-arm64-v8a,x86_64}"
+filtered=()
+for entry in "${TARGETS[@]}"; do
+    rest="${entry#*:}"
+    abi="${rest%%:*}"
+    if [[ ",${SHEET_MUSIC_ANDROID_ABIS}," == *",${abi},"* ]]; then
+        filtered+=("$entry")
+    fi
+done
+if [[ ${#filtered[@]} -eq 0 ]]; then
+    echo "error: SHEET_MUSIC_ANDROID_ABIS='${SHEET_MUSIC_ANDROID_ABIS}' matched no known ABIs" >&2
+    exit 1
+fi
+TARGETS=("${filtered[@]}")
+echo "==> Building ABIs: ${SHEET_MUSIC_ANDROID_ABIS}"
+
 for entry in "${TARGETS[@]}"; do
     triple="${entry%%:*}"
     rest="${entry#*:}"
@@ -51,14 +70,18 @@ for entry in "${TARGETS[@]}"; do
     ndk_triple="${rest#*:}"
 
     echo
-    echo "==> Building libSheetMusicJNI.so for $abi ($triple)"
+    echo "==> Building libSheetMusicAndroidJNI.so for $abi ($triple)"
     swift build --package-path "$ROOT" \
-                --product SheetMusicJNI \
+                --product SheetMusicAndroidJNI \
                 --swift-sdk "$triple" \
                 -c release
 
-    src_so="$ROOT/.build/$triple/release/libSheetMusicJNI.so"
+    src_so="$ROOT/.build/$triple/release/libSheetMusicAndroidJNI.so"
     dst_dir="$JNI_DIR/$abi"
+    # Clean stale artifacts (e.g. a previous run's libSheetMusicJNI.so under
+    # the old product name, or runtime .so files that were renamed/removed
+    # in an SDK update) so APK stays lean and there are no surprises.
+    rm -rf "$dst_dir"
     mkdir -p "$dst_dir"
     cp "$src_so" "$dst_dir/"
 
@@ -74,7 +97,7 @@ for entry in "${TARGETS[@]}"; do
         exit 1
     fi
     # Copy every runtime .so produced by the SDK *except* the
-    # test/XCTest-only ones. libSheetMusicJNI.so transitively pulls
+    # test/XCTest-only ones. libSheetMusicAndroidJNI.so transitively pulls
     # libswift_StringProcessing.so, lib_FoundationICU.so, etc. — listing
     # them by hand is fragile. Excluding the test libs keeps the APK lean.
     for so in "$runtime_src"/*.so; do
@@ -117,7 +140,7 @@ else
 fi
 
 echo
-echo "Done. libSheetMusicJNI.so + libSwiftJava.so + runtime staged under:"
+echo "Done. libSheetMusicAndroidJNI.so + libSwiftJava.so + runtime staged under:"
 echo "  $JNI_DIR/{arm64-v8a,x86_64}/"
 echo
 echo "Next: place ~/Desktop/test.mscz and run"

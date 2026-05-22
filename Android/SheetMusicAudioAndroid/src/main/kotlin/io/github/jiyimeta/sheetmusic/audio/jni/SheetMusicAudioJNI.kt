@@ -5,16 +5,6 @@ import io.github.jiyimeta.sheetmusic.swiftjava.Data as SwiftData
 import io.github.jiyimeta.sheetmusic.swiftjava.SheetMusicAndroidJNI as SwiftJavaJNI
 
 internal object SheetMusicAudioJNI {
-    init {
-        // Force-load io.github.jiyimeta.sheetmusic.SheetMusicJNI so its
-        // static initialiser runs System.loadLibrary("SheetMusicJNI")
-        // before any of the swift-java-generated JNI bindings bind.
-        // Direct reference to a member (not just the class) guarantees
-        // class init.
-        @Suppress("UNUSED_EXPRESSION")
-        io.github.jiyimeta.sheetmusic.SheetMusicJNI.toString()
-    }
-
     // All entry points have been migrated to swift-java. The Kotlin
     // wrappers below delegate through the generated SheetMusicAndroidJNI
     // class (aliased SwiftJavaJNI), passing/receiving `Data` through the

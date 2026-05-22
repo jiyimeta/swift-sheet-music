@@ -203,7 +203,7 @@ if !isAndroid {
 if isAndroid {
     products += [
         .library(
-            name: "SheetMusicJNI",
+            name: "SheetMusicAndroidJNI",
             type: .dynamic,
             targets: ["SheetMusicAndroidJNI"],
         ),
