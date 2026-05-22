@@ -8,7 +8,7 @@ options:
 
 packages:
   swift-sheet-music:
-    path: ../
+    path: ../../
 
 targets:
   SheetMusicExample:

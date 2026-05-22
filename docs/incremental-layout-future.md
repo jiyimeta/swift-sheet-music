@@ -139,7 +139,7 @@ This mirrors MuseScore's `rangeDone` early exit
 granularity — a single-note edit invalidates one system, the rest
 are reused intact.
 
-### Bench (`Example/SheetMusicExample/test.mscx`, 112 measures × 6 staves)
+### Bench (`Examples/Apple/SheetMusicExample/test.mscx`, 112 measures × 6 staves)
 
 Release config, `swift test -c release`:
 

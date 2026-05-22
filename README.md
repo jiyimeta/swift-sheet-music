@@ -43,8 +43,8 @@ Both are distributed via GitHub Releases (the SF2 files are too
 large to track in git). The split per-program SF2 set lives at
 [jiyimeta/musescore-general-sf2-split](https://github.com/jiyimeta/musescore-general-sf2-split).
 Download the release archive, unzip into
-`Example/SheetMusicExample/Sounds/`, regenerate the project
-(`xcodegen` from `Example/`), and rebuild — the example app picks
+`Examples/Apple/SheetMusicExample/Sounds/`, regenerate the project
+(`xcodegen` from `Examples/Apple/`), and rebuild — the example app picks
 them up automatically.
 
 > `AVAudioUnitSampler` only reads `.sf2` and `.dls`, **not** `.sf3`

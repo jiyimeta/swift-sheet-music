@@ -12,11 +12,11 @@ DerivedData/
 tmp/
 .worktrees/
 /build/
-Example/build/
+Examples/Apple/build/
 
 # SoundFont samples for the example app — distributed via GitHub
 # Releases (too large for git). See README §"SoundFonts".
-Example/SheetMusicExample/Sounds/
+Examples/Apple/SheetMusicExample/Sounds/
 
 # Android Gradle module
 Android/.gradle/

@@ -7,7 +7,7 @@
 
     /// One-off benchmark for the LayoutCache. Disabled by default —
     /// set `SHEETMUSIC_RUN_LAYOUT_BENCH=1` in the environment to opt in.
-    /// Loads `Example/SheetMusicExample/test.mscx` (1356 measures) from
+    /// Loads `Examples/Apple/SheetMusicExample/test.mscx` (1356 measures) from
     /// the package root and reports cold / warm / single-edit timings.
     @Suite("LayoutCacheBenchmark", .enabled(
         if:
@@ -22,7 +22,7 @@
         func benchmark() throws { // swiftlint:disable:this function_body_length
             guard #available(macOS 15.0, *) else { return }
             // Test process cwd is the package root.
-            let path = "Example/SheetMusicExample/test.mscx"
+            let path = "Examples/Apple/SheetMusicExample/test.mscx"
             let url = URL(fileURLWithPath: path)
             let data = try Data(contentsOf: url)
             let score = try MSCXParser.parse(data)

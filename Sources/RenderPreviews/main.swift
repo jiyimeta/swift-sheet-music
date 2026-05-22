@@ -101,12 +101,13 @@
     @available(macOS 15.0, *)
     @MainActor
     func renderRealWorldCheck(outputDir: URL) throws {
-        // Parse Example/SheetMusicExample/test.mscx if present and render
-        // the first couple of systems. Useful for spot-checking synthesized
-        // clefs on staves that rely on MuseScore instrument defaults.
+        // Parse Examples/Apple/SheetMusicExample/test.mscx if present and
+        // render the first couple of systems. Useful for spot-checking
+        // synthesized clefs on staves that rely on MuseScore instrument
+        // defaults.
         let examplePath = URL(
             fileURLWithPath:
-            "Example/SheetMusicExample/test.mscx",
+            "Examples/Apple/SheetMusicExample/test.mscx",
         )
         if FileManager.default.fileExists(atPath: examplePath.path),
            let data = try? Data(contentsOf: examplePath),
@@ -126,7 +127,7 @@
             try renderScoreToPNG(drumSlice, to: drumURL, scale: 2)
             print("wrote \(drumURL.path)")
         } else {
-            print("skipped 90-real-mscx: Example/SheetMusicExample/test.mscx not readable")
+            print("skipped 90-real-mscx: Examples/Apple/SheetMusicExample/test.mscx not readable")
         }
     }
 

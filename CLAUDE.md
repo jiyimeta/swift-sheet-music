@@ -83,14 +83,14 @@ swift test --filter MidiExportTests             # the 12 MuseScore-equivalence c
 swiftlint --quiet Sources Tests                 # should be 0 warnings/errors
 
 # Example app (iOS Simulator)
-cd Example && xcodegen generate                 # regenerate after editing project.yml
-xcodebuild -project Example/SheetMusicExample.xcodeproj \
+cd Examples/Apple && xcodegen generate          # regenerate after editing project.yml
+xcodebuild -project Examples/Apple/SheetMusicExample.xcodeproj \
            -scheme SheetMusicExample \
            -destination 'platform=iOS Simulator,name=iPhone 17' build
 ```
 
 The example app's `.xcodeproj` is **gitignored**; regenerate from
-`Example/project.yml` with `xcodegen` whenever you change project
+`Examples/Apple/project.yml` with `xcodegen` whenever you change project
 settings or sources.
 
 ## Android build (Phase 1–3)
@@ -406,9 +406,9 @@ MuseScore repository root.
 - **`@_exported import` doesn't transitively re-export `@testable`
   access.** Test targets must `@testable import` each sub-library
   individually.
-- **Xcode project drift**: `Example/SheetMusicExample.xcodeproj` is
+- **Xcode project drift**: `Examples/Apple/SheetMusicExample.xcodeproj` is
   gitignored. After changing example sources or `project.yml`,
-  regenerate with `cd Example && xcodegen`.
+  regenerate with `cd Examples/Apple && xcodegen`.
 - **Audio file writer back-ends differ by format**: `AVAudioFile`
   natively writes WAV (URL `.wav`), AIFF (`.aiff` int / `.aifc`
   float), and M4A (settings dict `kAudioFormatMPEG4AAC`). Only

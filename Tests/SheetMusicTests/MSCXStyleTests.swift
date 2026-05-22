@@ -48,7 +48,7 @@ struct MSCXStyleTests {
         #expect(score.style == ScoreStyle.museScoreDefaults)
     }
 
-    /// The repo-root example (`Example/SheetMusicExample/test.mscx`)
+    /// The repo-root example (`Examples/Apple/SheetMusicExample/test.mscx`)
     /// shape: `<Style><spatium>1.75</spatium></Style>`. Spatium
     /// captured, page layout untouched (== `.museScoreA4`).
     @Test func defaultsWhenStyleHasOnlySpatium() throws {
