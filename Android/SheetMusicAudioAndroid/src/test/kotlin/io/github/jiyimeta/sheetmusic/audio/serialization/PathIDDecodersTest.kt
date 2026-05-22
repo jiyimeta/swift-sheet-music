@@ -6,7 +6,6 @@ import io.github.jiyimeta.sheetmusic.audio.model.StaffAddress
 import io.github.jiyimeta.sheetmusic.audio.model.TupletID
 import io.github.jiyimeta.sheetmusic.audio.model.VoiceElementID
 import org.junit.Assert.assertEquals
-import org.junit.Assert.fail
 import org.junit.Test
 
 class PathIDDecodersTest {
@@ -39,7 +38,8 @@ class PathIDDecodersTest {
     @Test
     fun staffAddressGoldenPayloadLength() {
         val bytes = loadGolden("staffAddress-v1.bin")
-        assertEquals(10, bytes.size)
+        // partIndex(4) + staffIndexInPart(4) = 8 bytes (no version envelope)
+        assertEquals(8, bytes.size)
     }
 
     // MARK: - NoteID golden tests
@@ -54,9 +54,9 @@ class PathIDDecodersTest {
     @Test
     fun noteIdGoldenPayloadLength() {
         val bytes = loadGolden("noteId-v1.bin")
-        // version(2) + StaffAddress(8) + measureIndex(4) + voiceIndex(4)
-        // + elementIndex(4) + noteIndexInChord(4) = 26 bytes
-        assertEquals(26, bytes.size)
+        // StaffAddress(8) + measureIndex(4) + voiceIndex(4)
+        // + elementIndex(4) + noteIndexInChord(4) = 24 bytes (no version envelope)
+        assertEquals(24, bytes.size)
     }
 
     // MARK: - Payload-only decoder tests (inline byte arrays)
@@ -142,17 +142,4 @@ class PathIDDecodersTest {
         )
     }
 
-    // MARK: - Version mismatch
-
-    @Test
-    fun noteIdVersionMismatchThrows() {
-        // Version 2 where 1 is expected
-        val bytes = byteArrayOf(0x02, 0x00) + ByteArray(24)
-        try {
-            NoteIDDecoder.decode(bytes)
-            fail("Expected VersionMismatchException")
-        } catch (e: BinaryReader.VersionMismatchException) {
-            assertEquals("Codec version mismatch: expected 1, found 2", e.message)
-        }
-    }
 }

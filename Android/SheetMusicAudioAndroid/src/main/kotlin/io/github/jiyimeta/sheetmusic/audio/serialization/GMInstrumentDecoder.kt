@@ -3,46 +3,45 @@ package io.github.jiyimeta.sheetmusic.audio.serialization
 import io.github.jiyimeta.sheetmusic.audio.model.GMInstrument
 
 /**
- * Decodes the `GMInstrumentArray` blob produced by Swift's
- * `GMInstrumentCodec.encodeAll()`.
+ * Decodes the `[GMInstrument]` blob produced by Swift's
+ * `GMInstrumentCodec.encodeAll()` (which goes through `@WireFormat` on
+ * `GMInstrument` and `@WireFormatEnum` on `GMInstrument.Family`).
  *
  * Wire layout:
  * ```
- * u16 version (= 1)
- * i32 count
- * count × {
- *   u8  program       0..127
- *   u8  familyIndex   0..15
- *   u16 nameLen       UTF-8 byte length
- *   nameLen × u8      UTF-8 bytes
+ * i32 instrumentCount       ← Array<T> length prefix
+ * instrumentCount × {
+ *   u8  program             0..127
+ *   i32 nameByteCount       ← String length prefix
+ *   nameByteCount × u8      UTF-8 bytes
+ *   u8  familyOrdinal       0..15 (index into Swift's Family.allCases)
  * }
  * ```
+ *
+ * No version envelope — the `.so` and `.aar` ship together from the same
+ * git commit, so a wire mismatch would already manifest as a structural
+ * decode failure, not a missed version assertion.
  */
 internal object GMInstrumentDecoder {
-    private const val VERSION = 1
-
     fun decodeArray(bytes: ByteArray): List<GMInstrument> {
         val r = BinaryReader(bytes)
-        val version = r.readU16()
-        require(version == VERSION) {
-            "GMInstrument codec version mismatch: expected $VERSION, found $version"
-        }
         val count = r.readI32()
         val out = ArrayList<GMInstrument>(count)
         for (i in 0 until count) {
             val program = r.readU8()
-            val familyIndex = r.readU8()
-            val nameLen = r.readU16()
+            val nameLen = r.readI32()
+            require(nameLen >= 0) { "GMInstrument name length is negative: $nameLen" }
             val nameBytes = ByteArray(nameLen)
             for (j in 0 until nameLen) {
                 nameBytes[j] = r.readU8().toByte()
             }
             val name = String(nameBytes, Charsets.UTF_8)
+            val familyOrdinal = r.readU8()
             out.add(
                 GMInstrument(
                     program = program,
                     displayName = name,
-                    familyIndex = familyIndex,
+                    familyIndex = familyOrdinal,
                 ),
             )
         }

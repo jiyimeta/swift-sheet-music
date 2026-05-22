@@ -23,10 +23,17 @@ android {
 
     kotlinOptions { jvmTarget = "17" }
 
-    // Prebuilt libSheetMusicJNI.so + Swift runtime live here. They
-    // are staged by Scripts/android-build-libs.sh before any Gradle
-    // task that consumes them (assembleRelease / publish).
+    // Prebuilt libSheetMusicJNI.so + libSheetMusicJNISwiftJava.so +
+    // Swift runtime live here. They are staged by
+    // Scripts/android-build-libs.sh before any Gradle task that
+    // consumes them (assembleRelease / publish).
     sourceSets["main"].jniLibs.srcDirs("src/main/jniLibs")
+
+    // swift-java jextract output (Java bindings) is copied here by
+    // Scripts/android-build-libs.sh from the SwiftPM plugin output
+    // directory. The directory is gitignored — regenerate via the
+    // script before any Gradle invocation that compiles sources.
+    sourceSets["main"].java.srcDirs("src/main/java-generated")
 
     publishing {
         singleVariant("release") {
@@ -41,8 +48,13 @@ version = (project.findProperty("version") as String?)
     ?: "0.0.0-SNAPSHOT"
 
 dependencies {
-    // No third-party deps. Pure JNI bindings + a Kotlin façade.
-    // AndroidX / Compose live in consumer apps, not here.
+    // Runtime support for swift-java-generated Java bindings under
+    // src/main/java-generated/ (PoC adoption). `api` so downstream
+    // modules using the generated `SheetMusicAndroidJNISwiftJava`
+    // class get `org.swift.swiftkit.core.*` on their classpath.
+    // Locally-published from the swift-java repo until it ships to
+    // Maven Central — see project_swift_java_strategy.md.
+    api("org.swift.swiftkit:swiftkit-core:1.0-SNAPSHOT")
 }
 
 afterEvaluate {

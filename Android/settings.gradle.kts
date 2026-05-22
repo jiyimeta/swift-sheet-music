@@ -11,6 +11,10 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        // swift-java's swiftkit-core is not yet on Maven Central
+        // (see project_swift_java_strategy.md). Local-publish via
+        // `cd swift-java && ./gradlew :SwiftKitCore:publishToMavenLocal`.
+        mavenLocal()
     }
 }
 

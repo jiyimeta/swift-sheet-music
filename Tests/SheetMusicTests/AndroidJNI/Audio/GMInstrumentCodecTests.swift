@@ -2,51 +2,57 @@
     import Foundation
     @testable import SheetMusicAndroidJNI
     @testable import SheetMusicAudioCore
+    import SheetMusicWireFormat
     import Testing
 
     struct GMInstrumentCodecTests {
-        @Test func encodesAll128PatchesInOrder() {
+        @Test func encodesAll128PatchesInOrder() throws {
             let data = GMInstrumentCodec.encodeAll()
             #expect(!data.isEmpty)
 
-            var r = AudioBinaryReader(data)
-            let version = try? r.readUInt16()
-            #expect(version == GMInstrumentCodec.version)
-            let count = try? r.readInt32()
-            #expect(count == 128)
+            let decoded = try [GMInstrument](decoding: data)
+            #expect(decoded.count == 128)
 
-            for expected in GMInstrument.all {
-                let program = try? r.readUInt8()
-                _ = try? r.readUInt8() // familyIndex
-                let nameLen = try? r.readUInt16()
-                guard let len = nameLen else {
-                    Issue.record("nameLen decode failed")
-                    return
-                }
-                let nameBytes = try? r.readBytes(Int(len))
-                let name = nameBytes.flatMap { String(data: Data($0), encoding: .utf8) }
-
-                #expect(program == expected.program)
-                #expect(name == expected.name)
+            for (row, expected) in zip(decoded, GMInstrument.all) {
+                #expect(row.program == expected.program)
+                #expect(row.name == expected.name)
+                #expect(row.family == expected.family)
             }
         }
 
-        @Test func familyIndexMatchesCanonicalOrder() {
+        @Test func familyOrdinalMatchesAllCasesOrder() throws {
             let data = GMInstrumentCodec.encodeAll()
-            var r = AudioBinaryReader(data)
-            _ = try? r.readUInt16() // version
-            _ = try? r.readInt32() // count
-
-            let families = GMInstrument.Family.allCases
-            for expected in GMInstrument.all {
-                _ = try? r.readUInt8() // program
-                let familyIdx = try? r.readUInt8()
-                let nameLen = (try? r.readUInt16()) ?? 0
-                _ = try? r.readBytes(Int(nameLen))
-
-                let expectedIdx = families.firstIndex(of: expected.family)
-                #expect(familyIdx.map { Int($0) } == expectedIdx)
+            let decoded = try [GMInstrument](decoding: data)
+            for (row, expected) in zip(decoded, GMInstrument.all) {
+                #expect(row.family == expected.family)
             }
+        }
+
+        @Test func rawByteLayoutForFirstRow() {
+            // Sanity: explicit byte layout for the first row matches the
+            // documented wire format. Layout:
+            //   i32 instrumentCount, then per row:
+            //   u8 program, i32 nameLen, utf-8 bytes, u8 familyOrdinal.
+            let data = GMInstrumentCodec.encodeAll()
+            let bytes = Array(data)
+
+            // i32 instrumentCount (le) = 128
+            let count = Int32(bytes[0])
+                | (Int32(bytes[1]) << 8)
+                | (Int32(bytes[2]) << 16)
+                | (Int32(bytes[3]) << 24)
+            #expect(count == 128)
+            // Row 0: program == 0
+            #expect(bytes[4] == 0)
+            // i32 nameLen, name = "Acoustic Grand Piano" → 20 UTF-8 bytes
+            let nameLen = Int32(bytes[5])
+                | (Int32(bytes[6]) << 8)
+                | (Int32(bytes[7]) << 16)
+                | (Int32(bytes[8]) << 24)
+            #expect(nameLen == 20)
+            // After name bytes, family ordinal 0 (Piano)
+            let familyOrdinalIndex = 9 + 20
+            #expect(bytes[familyOrdinalIndex] == 0)
         }
     }
 #endif

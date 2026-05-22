@@ -78,17 +78,6 @@ class FrameMetronomeBeatStaffParamsDecoderTest {
         assertNull(decoded)
     }
 
-    @Test
-    fun frameVersionMismatchThrows() {
-        val bytes = byteArrayOf(0x02, 0x00) + ByteArray(30)
-        try {
-            FrameDecoder.decode(bytes)
-            throw AssertionError("Expected VersionMismatchException")
-        } catch (_: BinaryReader.VersionMismatchException) {
-            // expected
-        }
-    }
-
     // MARK: - MetronomeBeat golden tests
 
     @Test

@@ -5,15 +5,11 @@ import io.github.jiyimeta.sheetmusic.audio.model.ScoreItemID
 /**
  * Decoder for [ScoreItemID] — single values and arrays.
  *
- * Single-value wire format:
- *   version (u16) + kind (u8) + payload
- *     kind 0 → Note(NoteID payload)
- *     kind 1 → Rest(RestID payload)
- *     kind 2 → Tuplet(TupletID payload)
- *     kind 3 → Clef(ClefAnchor payload)
+ * Single-value wire format (no version envelope):
+ *   u8 discriminator (0 = Note, 1 = Rest, 2 = Tuplet, 3 = Clef) + payload
  *
  * Array wire format:
- *   version (u16) + count (i32) + count × (kind (u8) + payload)
+ *   i32 count + count × (u8 discriminator + payload)
  */
 object ScoreItemIDDecoder {
     fun decodePayload(r: BinaryReader): ScoreItemID = when (val kind = r.readU8()) {
@@ -24,17 +20,10 @@ object ScoreItemIDDecoder {
         else -> error("Unknown ScoreItemID kind: $kind")
     }
 
-    fun decode(data: ByteArray): ScoreItemID {
-        val r = BinaryReader(data)
-        val version = r.readU16()
-        if (version != 1) throw BinaryReader.VersionMismatchException(1, version)
-        return decodePayload(r)
-    }
+    fun decode(data: ByteArray): ScoreItemID = decodePayload(BinaryReader(data))
 
     fun decodeArray(data: ByteArray): List<ScoreItemID> {
         val r = BinaryReader(data)
-        val version = r.readU16()
-        if (version != 1) throw BinaryReader.VersionMismatchException(1, version)
         val count = r.readI32()
         return List(count) { decodePayload(r) }
     }

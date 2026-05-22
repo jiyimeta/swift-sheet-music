@@ -15,10 +15,11 @@
             let rect = CGRect(x: 10.5, y: 20.0, width: 4.0, height: 80.5)
             let encoded = CursorFrameCodec.encode(rect)
             let decoded = try #require(try CursorFrameCodec.decode(encoded))
-            #expect(abs(decoded.x - Double(rect.origin.x)) < 0.0001)
-            #expect(abs(decoded.y - Double(rect.origin.y)) < 0.0001)
-            #expect(abs(decoded.width - Double(rect.size.width)) < 0.0001)
-            #expect(abs(decoded.height - Double(rect.size.height)) < 0.0001)
+            // Raw IEEE 754 Double is bit-identical for representable values.
+            #expect(decoded.x == Double(rect.origin.x))
+            #expect(decoded.y == Double(rect.origin.y))
+            #expect(decoded.width == Double(rect.size.width))
+            #expect(decoded.height == Double(rect.size.height))
         }
 
         @Test
@@ -34,14 +35,15 @@
 
         @Test
         func roundTripSubMillimeterPrecision() throws {
-            // Verify microsecond-level precision is preserved.
+            // Raw Double round-trip is bit-identical, so precision is exact
+            // (~15 significant decimal digits), not micros-quantized.
             let rect = CGRect(x: 1.000001, y: 2.000002, width: 0.5, height: 100.123456)
             let encoded = CursorFrameCodec.encode(rect)
             let decoded = try #require(try CursorFrameCodec.decode(encoded))
-            #expect(abs(decoded.x - Double(rect.origin.x)) < 1e-5)
-            #expect(abs(decoded.y - Double(rect.origin.y)) < 1e-5)
-            #expect(abs(decoded.width - Double(rect.size.width)) < 1e-5)
-            #expect(abs(decoded.height - Double(rect.size.height)) < 1e-5)
+            #expect(decoded.x == Double(rect.origin.x))
+            #expect(decoded.y == Double(rect.origin.y))
+            #expect(decoded.width == Double(rect.size.width))
+            #expect(decoded.height == Double(rect.size.height))
         }
 
         // MARK: - Empty data → nil
@@ -52,39 +54,14 @@
             #expect(result == nil)
         }
 
-        // MARK: - Version mismatch throws
-
-        @Test
-        func versionMismatchThrows() throws {
-            let rect = CGRect(x: 1, y: 2, width: 3, height: 4)
-            var encoded = CursorFrameCodec.encode(rect)
-            // Corrupt the version bytes to 0xFF 0xFF.
-            encoded[0] = 0xFF
-            encoded[1] = 0xFF
-            #expect(throws: AudioBinaryReader.BinaryReaderError.self) {
-                _ = try CursorFrameCodec.decode(encoded)
-            }
-        }
-
         // MARK: - Byte length
 
         @Test
-        func encodedLengthIs34Bytes() {
-            // u16 version + 4 × i64 = 2 + 4*8 = 34 bytes.
+        func encodedLengthIs32Bytes() {
+            // 4 × f64 = 32 bytes.
             let rect = CGRect(x: 1, y: 2, width: 3, height: 4)
             let encoded = CursorFrameCodec.encode(rect)
-            #expect(encoded.count == 34)
-        }
-
-        // MARK: - Known-bytes spot check
-
-        @Test
-        func knownBytesVersionField() {
-            let rect = CGRect(x: 0, y: 0, width: 0, height: 0)
-            let encoded = CursorFrameCodec.encode(rect)
-            // First 2 bytes: version = 1 LE.
-            #expect(encoded[0] == 0x01)
-            #expect(encoded[1] == 0x00)
+            #expect(encoded.count == 32)
         }
     }
 #endif

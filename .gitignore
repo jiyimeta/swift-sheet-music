@@ -20,6 +20,7 @@ Examples/Apple/SheetMusicExample/Sounds/
 
 # Android Gradle module
 Android/.gradle/
+Android/.kotlin/
 Android/build/
 Android/*/build/
 Android/*/.cxx/
@@ -31,3 +32,7 @@ Android/SheetMusicAudioAndroid/src/test/resources/golden/
 # Cross-compiled native libs staged by Scripts/android-build-libs.sh.
 # Generated artifacts, not checked in.
 Android/SheetMusicAndroid/src/main/jniLibs/
+
+# swift-java jextract-generated Java bindings, copied by
+# Scripts/android-build-libs.sh from the SwiftPM plugin output.
+Android/SheetMusicAndroid/src/main/java-generated/

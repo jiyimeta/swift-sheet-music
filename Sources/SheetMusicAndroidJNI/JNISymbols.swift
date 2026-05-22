@@ -3,6 +3,7 @@
     import Foundation
     import SheetMusicCore
     import SheetMusicLayout
+    import SheetMusicWireFormat
 
     /// Singleton tables — one per Swift type. Lifetimes are explicit; Kotlin
     /// must release every handle it gets, or the score will leak until process
@@ -49,8 +50,8 @@
     }
 
     /// Reads `workTitle` + `composer` from the score's `metaTags`
-    /// dictionary and returns them as a length-prefixed UTF-8 blob:
-    /// `[titleByteLen:I32 LE][titleBytes][composerByteLen:I32 LE][composerBytes]`.
+    /// dictionary and returns them as a `ScoreMetadataWire` blob
+    /// (wire layout: `i32 titleByteLen + UTF-8 + i32 composerByteLen + UTF-8`).
     /// Missing tags return as zero-length strings; an unknown handle
     /// returns an empty byte array.
     @_cdecl("Java_io_github_jiyimeta_sheetmusic_SheetMusicJNI_nativeScoreMetadata")
@@ -64,16 +65,10 @@
         guard let score = scoreTable.value(for: scoreHandle) else {
             return env.pointee.NewByteArray(envPtr, 0)
         }
-        let title = score.metaTags["workTitle"] ?? ""
-        let composer = score.metaTags["composer"] ?? ""
-        var writer = AudioBinaryWriter()
-        let titleBytes = Array(title.utf8)
-        let composerBytes = Array(composer.utf8)
-        writer.append(Int32(titleBytes.count))
-        writer.append(bytes: titleBytes)
-        writer.append(Int32(composerBytes.count))
-        writer.append(bytes: composerBytes)
-        let encoded = writer.data
+        let encoded = ScoreMetadataWire(
+            title: score.metaTags["workTitle"] ?? "",
+            composer: score.metaTags["composer"] ?? "",
+        ).encodeToData()
         let array = env.pointee.NewByteArray(envPtr, jsize(encoded.count))
         encoded.withUnsafeBytes { rawBuf in
             let typed = rawBuf.bindMemory(to: jbyte.self)
@@ -86,6 +81,12 @@
             )
         }
         return array
+    }
+
+    @WireFormat
+    struct ScoreMetadataWire {
+        var title: String
+        var composer: String
     }
 
     // MARK: - SMuFL font metrics

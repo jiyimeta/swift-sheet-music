@@ -1,5 +1,6 @@
 // swift-tools-version: 6.2
 
+import CompilerPluginSupport
 import Foundation
 import PackageDescription
 
@@ -17,10 +18,24 @@ var products: [Product] = [
     .library(name: "SheetMusicMIDI", targets: ["SheetMusicMIDI"]),
     .library(name: "SheetMusicLayout", targets: ["SheetMusicLayout"]),
     .library(name: "SheetMusicAudioCore", targets: ["SheetMusicAudioCore"]),
+    .library(name: "SheetMusicWireFormat", targets: ["SheetMusicWireFormat"]),
 ]
 
 var targets: [Target] = [
     .target(name: "SheetMusicCore"),
+    .macro(
+        name: "SheetMusicWireFormatMacros",
+        dependencies: [
+            .product(name: "SwiftSyntax", package: "swift-syntax"),
+            .product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
+            .product(name: "SwiftCompilerPlugin", package: "swift-syntax"),
+            .product(name: "SwiftDiagnostics", package: "swift-syntax"),
+        ],
+    ),
+    .target(
+        name: "SheetMusicWireFormat",
+        dependencies: ["SheetMusicWireFormatMacros"],
+    ),
     .target(
         name: "SheetMusicXMLTools",
         dependencies: ["SheetMusicCore"],
@@ -53,7 +68,7 @@ var targets: [Target] = [
     ),
     .target(
         name: "SheetMusicAudioCore",
-        dependencies: ["SheetMusicCore", "SheetMusicMIDI"],
+        dependencies: ["SheetMusicCore", "SheetMusicMIDI", "SheetMusicWireFormat"],
     ),
     .target(
         name: "SheetMusic",
@@ -77,7 +92,24 @@ var targets: [Target] = [
             "SheetMusicLayout",
             "SheetMusicMIDI",
             "SheetMusicAudioCore",
+            "SheetMusicWireFormat",
         ] + (isAndroid ? ["CJNI"] : []),
+    ),
+    .target(
+        name: "SheetMusicAndroidJNISwiftJava",
+        dependencies: [
+            "SheetMusicAndroidJNI",
+            .product(name: "SwiftJava", package: "swift-java"),
+        ],
+        exclude: [
+            "swift-java.config",
+        ],
+        swiftSettings: [
+            .swiftLanguageMode(.v5),
+        ],
+        plugins: [
+            .plugin(name: "JExtractSwiftPlugin", package: "swift-java"),
+        ],
     ),
     .testTarget(
         name: "SheetMusicTests",
@@ -90,6 +122,7 @@ var targets: [Target] = [
             "SheetMusicLayout",
             "SheetMusicAndroidJNI",
             "SheetMusicAudioCore",
+            "SheetMusicWireFormat",
             "SheetMusicXMLTools",
             "SheetMusicZip",
         ] : [
@@ -104,6 +137,7 @@ var targets: [Target] = [
             "SheetMusicUI",
             "SheetMusicAudio",
             "SheetMusicPDF",
+            "SheetMusicWireFormat",
             "SheetMusicXMLTools",
             "SheetMusicZip",
         ],
@@ -179,6 +213,11 @@ if isAndroid {
             type: .dynamic,
             targets: ["SheetMusicAndroidJNI"],
         ),
+        .library(
+            name: "SheetMusicJNISwiftJava",
+            type: .dynamic,
+            targets: ["SheetMusicAndroidJNISwiftJava"],
+        ),
     ]
     targets += [
         .target(
@@ -189,7 +228,14 @@ if isAndroid {
     ]
 }
 
-let packageDependencies: [Package.Dependency] = []
+let packageDependencies: [Package.Dependency] = [
+    .package(url: "https://github.com/swiftlang/swift-java.git", exact: "0.3.0"),
+    // Pulled in transitively by swift-java already; declared here so
+    // `SheetMusicWireFormatMacros` can depend on SwiftSyntax / SwiftSyntaxMacros
+    // / SwiftCompilerPlugin / SwiftDiagnostics directly. Pinned to the same
+    // major as what swift-java 0.3.0 resolves to (603.x).
+    .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "603.0.0"),
+]
 
 let package = Package(
     name: "swift-sheet-music",

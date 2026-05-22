@@ -1093,7 +1093,8 @@ class AndroidPlaybackEngineTest {
     /**
      * Builds a raw [Frame] byte array for use in [FakeJniBridge] results.
      *
-     * Wire format: version(u16) + tick(i64) + timeMicros(i64) + ScoreCursor payload
+     * Wire format (no version envelope):
+     *   i64 tick + f64 timeSeconds + ScoreCursor payload
      */
     private fun encodeFrameBytes(
         tick: Long,
@@ -1101,9 +1102,8 @@ class AndroidPlaybackEngineTest {
         cursor: ScoreCursor,
     ): ByteArray {
         val w = io.github.jiyimeta.sheetmusic.audio.serialization.BinaryWriter()
-        w.writeU16(1)
         w.writeI64(tick)
-        w.writeI64(timeMicros)
+        w.writeF64(timeMicros.toDouble() / 1_000_000.0)
         ScoreCursorCodec.encodePayload(cursor, w)
         return w.toByteArray()
     }

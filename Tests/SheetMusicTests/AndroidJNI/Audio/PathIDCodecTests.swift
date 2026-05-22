@@ -2,39 +2,28 @@
     import Foundation
     @testable import SheetMusicAndroidJNI
     import SheetMusicCore
+    import SheetMusicWireFormat
     import Testing
 
     struct PathIDCodecTests {
         private let addr = StaffAddress(partIndex: 1, staffIndexInPart: 0)
 
-        // MARK: - VoiceElementID (20 bytes)
-        // StaffAddress(8) + i32 measureIndex + i32 voiceIndex + i32 elementIndex
+        // MARK: - VoiceElementID (20 bytes via VoiceElementIDWire)
 
         @Test
-        func voiceElementIDPayloadIs20Bytes() {
-            let id = VoiceElementID(
-                staff: addr,
-                measureIndex: 0,
-                voiceIndex: 0,
-                elementIndex: 0,
-            )
-            var w = AudioBinaryWriter()
-            PathIDCodecs.encodeVoiceElementIDPayload(id, into: &w)
-            #expect(w.data.count == 20)
+        func voiceElementIDIs20Bytes() {
+            let id = VoiceElementID(staff: addr, measureIndex: 0, voiceIndex: 0, elementIndex: 0)
+            #expect(VoiceElementIDWire(from: id).encodeToData().count == 20)
         }
 
         @Test
         func voiceElementIDKnownBytes() {
-            // partIndex=0, staffIndexInPart=0, measureIndex=2, voiceIndex=1, elementIndex=3
-            // [0,0,0,0, 0,0,0,0, 2,0,0,0, 1,0,0,0, 3,0,0,0]
             let id = VoiceElementID(
                 staff: StaffAddress(partIndex: 0, staffIndexInPart: 0),
                 measureIndex: 2,
                 voiceIndex: 1,
                 elementIndex: 3,
             )
-            var w = AudioBinaryWriter()
-            PathIDCodecs.encodeVoiceElementIDPayload(id, into: &w)
             let expected = Data([
                 0x00, 0x00, 0x00, 0x00, // partIndex=0
                 0x00, 0x00, 0x00, 0x00, // staffIndexInPart=0
@@ -42,44 +31,32 @@
                 0x01, 0x00, 0x00, 0x00, // voiceIndex=1
                 0x03, 0x00, 0x00, 0x00, // elementIndex=3
             ])
-            #expect(w.data == expected)
+            #expect(VoiceElementIDWire(from: id).encodeToData() == expected)
         }
 
         @Test
         func voiceElementIDRoundTrip() throws {
             let original = VoiceElementID(
-                staff: addr,
-                measureIndex: 5,
-                voiceIndex: 2,
-                elementIndex: 10,
+                staff: addr, measureIndex: 5, voiceIndex: 2, elementIndex: 10,
             )
-            var w = AudioBinaryWriter()
-            PathIDCodecs.encodeVoiceElementIDPayload(original, into: &w)
-            var r = AudioBinaryReader(w.data)
-            let decoded = try PathIDCodecs.decodeVoiceElementIDPayload(&r)
+            let bytes = VoiceElementIDWire(from: original).encodeToData()
+            let decoded = try VoiceElementIDWire(decoding: bytes).decoded()
             #expect(decoded == original)
         }
 
-        // MARK: - NoteID (24 bytes: 20 + i32 noteIndexInChord)
-        // Top-level blob: u16 version=1 + NoteIDPayload (24 bytes) = 26 bytes
+        // MARK: - NoteID (24 bytes via NoteIDWire; top-level is same 24 bytes)
 
         @Test
-        func noteIDPayloadIs24Bytes() {
+        func noteIDIs24Bytes() {
             let id = NoteID(
-                staff: addr,
-                measureIndex: 0,
-                voiceIndex: 0,
-                elementIndex: 0,
-                noteIndexInChord: 0,
+                staff: addr, measureIndex: 0, voiceIndex: 0,
+                elementIndex: 0, noteIndexInChord: 0,
             )
-            var w = AudioBinaryWriter()
-            PathIDCodecs.encodeNoteIDPayload(id, into: &w)
-            #expect(w.data.count == 24)
+            #expect(PathIDCodecs.encode(id).count == 24)
         }
 
         @Test
         func noteIDKnownBytes() {
-            // partIndex=0, staffIndexInPart=1, measureIndex=3, voiceIndex=0, elementIndex=2, noteIndexInChord=1
             let id = NoteID(
                 staff: StaffAddress(partIndex: 0, staffIndexInPart: 1),
                 measureIndex: 3,
@@ -87,8 +64,6 @@
                 elementIndex: 2,
                 noteIndexInChord: 1,
             )
-            var w = AudioBinaryWriter()
-            PathIDCodecs.encodeNoteIDPayload(id, into: &w)
             let expected = Data([
                 0x00, 0x00, 0x00, 0x00, // partIndex=0
                 0x01, 0x00, 0x00, 0x00, // staffIndexInPart=1
@@ -97,125 +72,50 @@
                 0x02, 0x00, 0x00, 0x00, // elementIndex=2
                 0x01, 0x00, 0x00, 0x00, // noteIndexInChord=1
             ])
-            #expect(w.data == expected)
+            #expect(PathIDCodecs.encode(id) == expected)
         }
 
         @Test
         func noteIDRoundTrip() throws {
             let original = NoteID(
-                staff: addr,
-                measureIndex: 7,
-                voiceIndex: 1,
-                elementIndex: 4,
-                noteIndexInChord: 2,
+                staff: addr, measureIndex: 7, voiceIndex: 1,
+                elementIndex: 4, noteIndexInChord: 2,
             )
-            var w = AudioBinaryWriter()
-            PathIDCodecs.encodeNoteIDPayload(original, into: &w)
-            var r = AudioBinaryReader(w.data)
-            let decoded = try PathIDCodecs.decodeNoteIDPayload(&r)
+            let decoded = try PathIDCodecs.decode(PathIDCodecs.encode(original))
             #expect(decoded == original)
         }
 
-        @Test
-        func noteIDTopLevelIs26Bytes() {
-            let id = NoteID(
-                staff: addr,
-                measureIndex: 0,
-                voiceIndex: 0,
-                elementIndex: 0,
-                noteIndexInChord: 0,
-            )
-            let blob = PathIDCodecs.encode(id)
-            #expect(blob.count == 26) // 2 (version) + 24 (payload)
-        }
+        // MARK: - RestID (20 bytes via RestIDWire)
 
         @Test
-        func noteIDTopLevelRoundTrip() throws {
-            let original = NoteID(
-                staff: addr,
-                measureIndex: 3,
-                voiceIndex: 0,
-                elementIndex: 1,
-                noteIndexInChord: 0,
-            )
-            let blob = PathIDCodecs.encode(original)
-            let decoded = try PathIDCodecs.decode(blob)
-            #expect(decoded == original)
-        }
-
-        @Test
-        func noteIDTopLevelVersionMismatch() {
-            let id = NoteID(
-                staff: addr,
-                measureIndex: 0,
-                voiceIndex: 0,
-                elementIndex: 0,
-                noteIndexInChord: 0,
-            )
-            var blob = PathIDCodecs.encode(id)
-            blob[0] = 0xFF // corrupt version LSB
-            #expect(throws: AudioBinaryReader.BinaryReaderError.self) {
-                _ = try PathIDCodecs.decode(blob)
-            }
-        }
-
-        // MARK: - RestID (20 bytes)
-
-        @Test
-        func restIDPayloadIs20Bytes() {
-            let id = RestID(
-                staff: addr,
-                measureIndex: 0,
-                voiceIndex: 0,
-                elementIndex: 0,
-            )
-            var w = AudioBinaryWriter()
-            PathIDCodecs.encodeRestIDPayload(id, into: &w)
-            #expect(w.data.count == 20)
+        func restIDIs20Bytes() {
+            let id = RestID(staff: addr, measureIndex: 0, voiceIndex: 0, elementIndex: 0)
+            #expect(RestIDWire(from: id).encodeToData().count == 20)
         }
 
         @Test
         func restIDRoundTrip() throws {
-            let original = RestID(
-                staff: addr,
-                measureIndex: 4,
-                voiceIndex: 3,
-                elementIndex: 0,
-            )
-            var w = AudioBinaryWriter()
-            PathIDCodecs.encodeRestIDPayload(original, into: &w)
-            var r = AudioBinaryReader(w.data)
-            let decoded = try PathIDCodecs.decodeRestIDPayload(&r)
+            let original = RestID(staff: addr, measureIndex: 4, voiceIndex: 3, elementIndex: 0)
+            let bytes = RestIDWire(from: original).encodeToData()
+            let decoded = try RestIDWire(decoding: bytes).decoded()
             #expect(decoded == original)
         }
 
-        // MARK: - TupletID (20 bytes)
+        // MARK: - TupletID (20 bytes via TupletIDWire)
 
         @Test
-        func tupletIDPayloadIs20Bytes() {
-            let id = TupletID(
-                staff: addr,
-                measureIndex: 0,
-                voiceIndex: 0,
-                startElementIndex: 0,
-            )
-            var w = AudioBinaryWriter()
-            PathIDCodecs.encodeTupletIDPayload(id, into: &w)
-            #expect(w.data.count == 20)
+        func tupletIDIs20Bytes() {
+            let id = TupletID(staff: addr, measureIndex: 0, voiceIndex: 0, startElementIndex: 0)
+            #expect(TupletIDWire(from: id).encodeToData().count == 20)
         }
 
         @Test
         func tupletIDRoundTrip() throws {
             let original = TupletID(
-                staff: addr,
-                measureIndex: 2,
-                voiceIndex: 1,
-                startElementIndex: 5,
+                staff: addr, measureIndex: 2, voiceIndex: 1, startElementIndex: 5,
             )
-            var w = AudioBinaryWriter()
-            PathIDCodecs.encodeTupletIDPayload(original, into: &w)
-            var r = AudioBinaryReader(w.data)
-            let decoded = try PathIDCodecs.decodeTupletIDPayload(&r)
+            let bytes = TupletIDWire(from: original).encodeToData()
+            let decoded = try TupletIDWire(decoding: bytes).decoded()
             #expect(decoded == original)
         }
     }

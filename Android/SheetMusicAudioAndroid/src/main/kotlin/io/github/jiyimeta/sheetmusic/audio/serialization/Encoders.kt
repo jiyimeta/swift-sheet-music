@@ -42,7 +42,6 @@ internal object VoiceElementIDCodec {
 internal object NoteIDCodec {
     fun encode(id: NoteID): ByteArray {
         val w = BinaryWriter()
-        w.writeU16(1)
         encodePayload(id, w)
         return w.toByteArray()
     }
@@ -108,7 +107,6 @@ internal object ClefAnchorCodec {
 internal object ScoreItemIDCodec {
     fun encode(id: ScoreItemID): ByteArray {
         val w = BinaryWriter()
-        w.writeU16(1)
         encodePayload(id, w)
         return w.toByteArray()
     }
@@ -136,7 +134,6 @@ internal object ScoreItemIDCodec {
 
     fun encodeArray(ids: List<ScoreItemID>): ByteArray {
         val w = BinaryWriter()
-        w.writeU16(1)
         w.writeI32(ids.size)
         for (id in ids) encodePayload(id, w)
         return w.toByteArray()
@@ -150,7 +147,6 @@ internal object ScoreItemIDCodec {
 public object ScoreCursorCodec {
     fun encode(cursor: ScoreCursor): ByteArray {
         val w = BinaryWriter()
-        w.writeU16(1)
         encodePayload(cursor, w)
         return w.toByteArray()
     }
@@ -171,38 +167,37 @@ public object ScoreCursorCodec {
 }
 
 // ---------------------------------------------------------------------------
-// MetronomeBeatCodec
+// MetronomeBeatCodec — must round-trip with Swift's `@WireFormat` mirror.
+// Wire: i32 count + count × (tick: i64, isDownbeat: u8 0/1). 9 bytes/entry.
 // ---------------------------------------------------------------------------
 
 internal object MetronomeBeatCodec {
     fun encodeArray(beats: List<MetronomeBeat>): ByteArray {
         val w = BinaryWriter()
-        w.writeU16(1)
         w.writeI32(beats.size)
         for (b in beats) {
             w.writeI64(b.tick)
-            w.writeI32(if (b.isDownbeat) 0 else 1)
-            w.writeI32(0) // reserved
+            w.writeU8(if (b.isDownbeat) 1 else 0)
         }
         return w.toByteArray()
     }
 }
 
 // ---------------------------------------------------------------------------
-// StaffParamsCodec
+// StaffParamsCodec — must round-trip with Swift's `@WireFormat` mirror.
+// Wire: i32 count + count × (staffIndex: i32, bankLSB: u8, program: u8,
+// isDrums: u8 0/1, partAddressHash: i64). 15 bytes/entry.
 // ---------------------------------------------------------------------------
 
 internal object StaffParamsCodec {
     fun encodeArray(params: List<StaffParams>): ByteArray {
         val w = BinaryWriter()
-        w.writeU16(1)
         w.writeI32(params.size)
         for (p in params) {
             w.writeI32(p.staffIndex)
             w.writeU8(p.bankLSB)
             w.writeU8(p.program)
             w.writeU8(if (p.isDrums) 1 else 0)
-            w.writeU8(0) // reserved
             w.writeI64(p.partAddressHash)
         }
         return w.toByteArray()

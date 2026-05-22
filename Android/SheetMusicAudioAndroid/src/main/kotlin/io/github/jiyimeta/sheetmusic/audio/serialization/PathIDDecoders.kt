@@ -9,7 +9,9 @@ import io.github.jiyimeta.sheetmusic.audio.model.VoiceElementID
 /**
  * Payload decoder for [StaffAddress].
  * Reads partIndex (i32) + staffIndexInPart (i32) — 8 bytes total.
- * No version byte; callers own version handling for top-level blobs.
+ *
+ * Wire format produced by Swift's `@WireFormat` on `StaffAddressWire`.
+ * No version envelope (top-level codecs no longer emit one).
  */
 object StaffAddressDecoder {
     fun decodePayload(r: BinaryReader): StaffAddress = StaffAddress(
@@ -17,13 +19,7 @@ object StaffAddressDecoder {
         staffIndexInPart = r.readI32(),
     )
 
-    /** Top-level decode: reads a 2-byte version header then delegates to [decodePayload]. */
-    fun decode(data: ByteArray): StaffAddress {
-        val r = BinaryReader(data)
-        val version = r.readU16()
-        if (version != 1) throw BinaryReader.VersionMismatchException(1, version)
-        return decodePayload(r)
-    }
+    fun decode(data: ByteArray): StaffAddress = decodePayload(BinaryReader(data))
 }
 
 /**
@@ -41,8 +37,7 @@ object VoiceElementIDDecoder {
 
 /**
  * Top-level decoder for [NoteID].
- * Wire format: version(u16) + StaffAddress(8) + measureIndex(4) + voiceIndex(4)
- *              + elementIndex(4) + noteIndexInChord(4) = 26 bytes.
+ * Wire: StaffAddress(8) + i32 × 4 (measure / voice / element / noteIndexInChord) = 24 bytes.
  */
 object NoteIDDecoder {
     fun decodePayload(r: BinaryReader): NoteID = NoteID(
@@ -53,12 +48,7 @@ object NoteIDDecoder {
         noteIndexInChord = r.readI32(),
     )
 
-    fun decode(data: ByteArray): NoteID {
-        val r = BinaryReader(data)
-        val version = r.readU16()
-        if (version != 1) throw BinaryReader.VersionMismatchException(1, version)
-        return decodePayload(r)
-    }
+    fun decode(data: ByteArray): NoteID = decodePayload(BinaryReader(data))
 }
 
 /**
