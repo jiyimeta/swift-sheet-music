@@ -19,14 +19,30 @@ internal object SheetMusicAudioJNI {
     external fun nativeFrameForCursor(scoreHandle: Long, cursorBytes: ByteArray): ByteArray
     external fun nativeMetronomeBeats(scoreHandle: Long): ByteArray
     external fun nativeStaffParams(scoreHandle: Long): ByteArray
-    external fun nativePitchAndStaffOfNote(scoreHandle: Long, noteIdBytes: ByteArray): Long
     external fun nativeEarliestOf(scoreHandle: Long, idsBytes: ByteArray): ByteArray
-    external fun nativeItemEndTick(scoreHandle: Long, idBytes: ByteArray): Long
     external fun nativeResolveExportTickRange(scoreHandle: Long, rangeBytes: ByteArray): LongArray
 
     // Migrated to swift-java — see Sources/SheetMusicAndroidJNI/AudioMidiBridge+Timeline.swift
     fun nativeGMInstrumentList(): ByteArray {
         val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
         return SwiftJavaJNI.nativeGMInstrumentList(arena).toByteArray()
+    }
+
+    // Migrated to swift-java — see Sources/SheetMusicAndroidJNI/AudioMidiBridge.swift
+    fun nativePitchAndStaffOfNote(scoreHandle: Long, noteIdBytes: ByteArray): Long {
+        val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
+        return SwiftJavaJNI.nativePitchAndStaffOfNote(
+            scoreHandle,
+            io.github.jiyimeta.sheetmusic.swiftjava.Data.fromByteArray(noteIdBytes, arena),
+        )
+    }
+
+    // Migrated to swift-java — see Sources/SheetMusicAndroidJNI/AudioMidiBridge+Timeline.swift
+    fun nativeItemEndTick(scoreHandle: Long, idBytes: ByteArray): Long {
+        val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
+        return SwiftJavaJNI.nativeItemEndTick(
+            scoreHandle,
+            io.github.jiyimeta.sheetmusic.swiftjava.Data.fromByteArray(idBytes, arena),
+        )
     }
 }

@@ -58,7 +58,21 @@ extension AudioMidiBridge {
     }
 }
 
-// MARK: - @_cdecl JNI helpers + T18 entry points (Android only)
+// MARK: - swift-java entry points
+
+/// JNI entry point exposed via swift-java for the Kotlin
+/// `SheetMusicAudioJNI.nativePitchAndStaffOfNote(...)` call site.
+/// Returns the sentinel `0xFFFF_FFFF_FFFF_FFFF` (-1 as Int64) when the
+/// score handle is unknown or the note id no longer resolves.
+public func nativePitchAndStaffOfNote(scoreHandle: Int64, noteIdBytes: Data) -> Int64 {
+    let invalid = Int64(bitPattern: 0xFFFF_FFFF_FFFF_FFFF)
+    guard let score = scoreTable.value(for: scoreHandle) else { return invalid }
+    guard !noteIdBytes.isEmpty else { return invalid }
+    guard let noteId = try? PathIDCodecs.decode(noteIdBytes) else { return invalid }
+    return AudioMidiBridge.pitchAndStaffOfNote(score: score, noteId: noteId)
+}
+
+// MARK: - @_cdecl JNI helpers (Android only)
 
 #if os(Android)
     import CJNI
@@ -93,22 +107,6 @@ extension AudioMidiBridge {
             }
         }
         return Data(buf)
-    }
-
-    @_cdecl("Java_io_github_jiyimeta_sheetmusic_audio_jni_SheetMusicAudioJNI_nativePitchAndStaffOfNote")
-    // swiftlint:disable:next identifier_name
-    public func Java_io_github_jiyimeta_sheetmusic_audio_jni_SheetMusicAudioJNI_nativePitchAndStaffOfNote(
-        _ envPtr: UnsafeMutablePointer<JNIEnv?>,
-        _ clazz: jclass,
-        _ scoreHandle: jlong,
-        _ noteIdBytes: jbyteArray,
-    ) -> jlong {
-        let invalid = jlong(bitPattern: 0xFFFF_FFFF_FFFF_FFFF)
-        guard let score = scoreTable.value(for: scoreHandle) else { return invalid }
-        let data = readJByteArray(env: envPtr, array: noteIdBytes)
-        guard !data.isEmpty else { return invalid }
-        guard let noteId = try? PathIDCodecs.decode(data) else { return invalid }
-        return AudioMidiBridge.pitchAndStaffOfNote(score: score, noteId: noteId)
     }
 
     @_cdecl("Java_io_github_jiyimeta_sheetmusic_audio_jni_SheetMusicAudioJNI_nativeEarliestOf")

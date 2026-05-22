@@ -70,6 +70,19 @@ public func nativeGMInstrumentList() -> Data {
     GMInstrumentCodec.encodeAll()
 }
 
+/// JNI entry point exposed via swift-java for the Kotlin
+/// `SheetMusicAudioJNI.nativeItemEndTick(...)` call site. Returns -1 when
+/// the score handle is unknown, the id payload is empty / undecodable, or
+/// the timeline has no end-tick entry for the id (only `.note` / `.rest`
+/// items are tracked).
+public func nativeItemEndTick(scoreHandle: Int64, idBytes: Data) -> Int64 {
+    guard let score = scoreTable.value(for: scoreHandle) else { return -1 }
+    guard !idBytes.isEmpty,
+          let id = try? ScoreItemIDCodec.decode(idBytes)
+    else { return -1 }
+    return AudioMidiBridge.itemEndTick(score: score, id: id)
+}
+
 #if os(Android)
     import CJNI
 
@@ -166,19 +179,4 @@ public func nativeGMInstrumentList() -> Data {
         return makeJByteArray(env: envPtr, bytes: data)
     }
 
-    @_cdecl("Java_io_github_jiyimeta_sheetmusic_audio_jni_SheetMusicAudioJNI_nativeItemEndTick")
-    // swiftlint:disable:next identifier_name
-    public func Java_io_github_jiyimeta_sheetmusic_audio_jni_SheetMusicAudioJNI_nativeItemEndTick(
-        _ envPtr: UnsafeMutablePointer<JNIEnv?>,
-        _ clazz: jclass,
-        _ scoreHandle: jlong,
-        _ idBytes: jbyteArray,
-    ) -> jlong {
-        guard let score = scoreTable.value(for: scoreHandle) else { return -1 }
-        let data = readJByteArray(env: envPtr, array: idBytes)
-        guard !data.isEmpty,
-              let id = try? ScoreItemIDCodec.decode(data)
-        else { return -1 }
-        return AudioMidiBridge.itemEndTick(score: score, id: id)
-    }
 #endif
