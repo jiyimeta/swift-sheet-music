@@ -1,95 +1,129 @@
 import Foundation
+import SheetMusicWireFormat
 
 /// Self-describing binary format that ferries layout output across the JNI
 /// boundary. Little-endian throughout. Both the Swift encoder and the Kotlin
 /// decoder must agree on the magic + version; mismatches are fail-fast.
+///
+/// ### Wire layout (v4)
+///
+/// ```text
+/// u32 magic       = 0x534D4450 ("SMDP")
+/// u32 version     = 4
+/// i32 pageCount
+/// [page] × pageCount:
+///     f64 widthMM
+///     f64 heightMM
+///     i32 commandCount
+///     [command] × commandCount   ← @WireFormatChoice discriminator + payload
+/// ```
+///
+/// The page list, page struct, command sum-type, and the `FontID` enum
+/// inside `glyph` / `text` commands all derive their byte layout from the
+/// `@WireFormat` family of macros — magic / version are validated by
+/// `DrawProgramCodec` after the structural decode.
+///
+/// v4 swapped the hand-written opcode bytes (0x01…0x08) and `UInt16`
+/// string length for the macro's declaration-order discriminator (0…7)
+/// and `Int32` length prefix. Older decoders reject v4 with
+/// `unsupportedVersion`; v3 readers and v4 readers are not wire-compatible.
 public enum DrawProgram {
     public static let magic: UInt32 = 0x534D_4450 // "SMDP"
-    /// v3 adds the `cubicTo` opcode (0x08). v2 added `setColor` (0x07).
-    /// Older decoders must reject newer payloads.
-    public static let version: UInt32 = 3
+    public static let version: UInt32 = 4
 
-    public enum Opcode: UInt8 {
-        case moveTo = 0x01
-        case lineTo = 0x02
-        case stroke = 0x03
-        case fillRect = 0x04
-        case glyph = 0x05
-        case text = 0x06
-        /// Sets the active paint colour (ARGB, 0xAARRGGBB). All draw
-        /// commands until the next `setColor` use this colour; the
-        /// initial colour is opaque black (0xFF000000).
-        case setColor = 0x07
-        /// Cubic Bezier curve from the current point to (x, y) with
-        /// control points (cx1, cy1) and (cx2, cy2). Used for tie /
-        /// slur arcs so Compose can render a true cubic with native
-        /// anti-aliasing instead of a many-segment polyline.
-        case cubicTo = 0x08
-    }
-
-    public enum FontID: UInt8, Sendable {
+    @WireFormatEnum
+    public enum FontID: UInt8, Sendable, CaseIterable, Equatable {
         case textRoman = 0x00 // body text (Edwin / system serif)
         case smufl = 0x01 // music glyphs (Bravura / Edwin SMuFL)
     }
 }
 
-/// Minimal LE byte sink. No throws on append; capacity grows naturally.
-public struct BinaryWriter {
-    public private(set) var data = Data()
+/// One page worth of draw commands. The shape mirrors how the Kotlin
+/// renderer paints — paint everything in `commands` onto a canvas sized
+/// `widthMM × heightMM`.
+@WireFormat
+public struct EncodablePage: Sendable, Equatable {
+    public var widthMM: Double
+    public var heightMM: Double
+    public var commands: [DrawCommand]
 
-    public init() {}
-
-    public mutating func append<T: FixedWidthInteger>(_ value: T) {
-        var v = value.littleEndian
-        withUnsafeBytes(of: &v) { data.append(contentsOf: $0) }
-    }
-
-    public mutating func append(_ value: Double) {
-        append(value.bitPattern)
-    }
-
-    public mutating func append(utf8 string: String) {
-        let bytes = Array(string.utf8)
-        precondition(
-            bytes.count <= Int(UInt16.max),
-            "draw-program text payload exceeds 65535 bytes",
-        )
-        append(UInt16(bytes.count))
-        data.append(contentsOf: bytes)
+    public init(widthMM: Double, heightMM: Double, commands: [DrawCommand]) {
+        self.widthMM = widthMM
+        self.heightMM = heightMM
+        self.commands = commands
     }
 }
 
-/// Pull-style LE byte reader. Used only by Swift-side tests (the production
-/// decoder is the Kotlin DrawProgramDecoder).
-public struct BinaryReader {
-    public let data: Data
-    public private(set) var offset: Int
+/// One painter command. The encoded discriminator is the case's
+/// declaration order (`moveTo` = 0 … `cubicTo` = 7). Reorder with care:
+/// changes here are wire-breaking across the Kotlin boundary.
+@WireFormatChoice
+public enum DrawCommand: Sendable, Equatable {
+    case moveTo(x: Double, y: Double)
+    case lineTo(x: Double, y: Double)
+    case stroke(width: Double)
+    case fillRect(x: Double, y: Double, w: Double, h: Double)
+    case glyph(
+        codepoint: UInt32,
+        x: Double,
+        y: Double,
+        size: Double,
+        fontId: DrawProgram.FontID,
+    )
+    case text(
+        String,
+        x: Double,
+        y: Double,
+        size: Double,
+        fontId: DrawProgram.FontID,
+    )
+    /// Set the active paint colour as a packed ARGB value
+    /// (0xAARRGGBB). Affects every subsequent stroke / fill /
+    /// glyph / text until the next `.setColor`.
+    case setColor(argb: UInt32)
+    /// Cubic Bezier curve from the current path point to (x, y) with
+    /// control points (cx1, cy1) and (cx2, cy2).
+    case cubicTo(
+        cx1: Double, cy1: Double,
+        cx2: Double, cy2: Double,
+        x: Double, y: Double,
+    )
+}
 
-    public init(_ data: Data, offset: Int = 0) {
-        self.data = data
-        self.offset = offset
+/// Top-level encode / decode for a draw-program payload. The byte layout
+/// is `magic | version | [EncodablePage]`; both header fields are
+/// validated against the constants in `DrawProgram` after the structural
+/// decode so format / version drift surfaces as a typed error instead of
+/// a silent mis-parse.
+public enum DrawProgramCodec {
+    public enum DecodeError: Error, Equatable {
+        case badMagic(UInt32)
+        case unsupportedVersion(UInt32)
     }
 
-    public mutating func read<T: FixedWidthInteger>(_ type: T.Type) -> T {
-        let size = MemoryLayout<T>.size
-        precondition(offset + size <= data.count, "draw-program read overflow")
-        var value: T = 0
-        _ = withUnsafeMutableBytes(of: &value) { dest in
-            data.copyBytes(to: dest, from: offset ..< (offset + size))
+    public static func encode(pages: [EncodablePage]) -> Data {
+        DrawProgramWire(
+            magic: DrawProgram.magic,
+            version: DrawProgram.version,
+            pages: pages,
+        ).encodeToData()
+    }
+
+    public static func decode(_ data: Data) throws -> [EncodablePage] {
+        let wire = try DrawProgramWire(decoding: data)
+        guard wire.magic == DrawProgram.magic else {
+            throw DecodeError.badMagic(wire.magic)
         }
-        offset += size
-        return T(littleEndian: value)
+        guard wire.version == DrawProgram.version else {
+            throw DecodeError.unsupportedVersion(wire.version)
+        }
+        return wire.pages
     }
+}
 
-    public mutating func readDouble() -> Double {
-        Double(bitPattern: read(UInt64.self))
-    }
-
-    public mutating func readUTF8() -> String {
-        let len = Int(read(UInt16.self))
-        precondition(offset + len <= data.count, "draw-program string overflow")
-        let bytes = data.subdata(in: offset ..< (offset + len))
-        offset += len
-        return String(bytes: bytes, encoding: .utf8) ?? ""
-    }
+@WireFormat
+struct DrawProgramWire {
+    var magic: UInt32
+    var version: UInt32
+    var pages: [EncodablePage]
 }

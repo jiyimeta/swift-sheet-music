@@ -1,6 +1,7 @@
 #if !os(Android)
     import Foundation
     @testable import SheetMusicAndroidJNI
+    import SheetMusicWireFormat
     import Testing
 
     struct LayoutBridgeTests {
@@ -21,7 +22,7 @@
                 pageWidthMM: 210,
                 pageHeightMM: 297,
             )
-            let pages = try DrawProgramDecoder.decode(encoded)
+            let pages = try DrawProgramCodec.decode(encoded)
             #expect(!pages.isEmpty)
         }
 
@@ -38,9 +39,9 @@
                 pageWidthMM: 210,
                 pageHeightMM: 297,
             )
-            var r = BinaryReader(encoded)
-            #expect(r.read(UInt32.self) == DrawProgram.magic)
-            #expect(r.read(UInt32.self) == DrawProgram.version)
+            var r = WireFormatReader(data: encoded)
+            #expect(try r.readInteger(UInt32.self) == DrawProgram.magic)
+            #expect(try r.readInteger(UInt32.self) == DrawProgram.version)
         }
     }
 #endif

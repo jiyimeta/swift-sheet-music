@@ -2,24 +2,33 @@
 
     import struct Foundation.Data
     import SheetMusicLayout
+    import SheetMusicWireFormat
 
-    /// Glyph-metrics table populated from Android `Paint.getTextBounds` /
-    /// `Paint.measureText` at a fixed reference point size. Wire format:
+    /// Glyph-metrics table populated from Android `Paint.getTextPath` /
+    /// `Path.computeBounds` at a fixed reference point size. Wire layout:
     ///
-    ///     u32  magic   = 0x53_4D_46_54 ("SMFT")
-    ///     u32  version = 1
-    ///     f64  referenceSize
-    ///     u32  glyphCount
-    ///     [glyph] × glyphCount:
-    ///         u32 codepoint
-    ///         f32 advance
-    ///         f32 bboxX
-    ///         f32 bboxY
-    ///         f32 bboxW
-    ///         f32 bboxH
+    /// ```text
+    /// u32 magic         = 0x534D4654 ("SMFT")
+    /// u32 version       = 2
+    /// f64 referenceSize
+    /// i32 glyphCount
+    /// [entry] × glyphCount:
+    ///     u32 codepoint
+    ///     f32 advance
+    ///     f32 bboxX
+    ///     f32 bboxY
+    ///     f32 bboxW
+    ///     f32 bboxH
+    /// ```
     ///
     /// All little-endian. The values stored are in points at `referenceSize`;
     /// the provider rescales to the requested `pointSize` at lookup.
+    ///
+    /// v2 swapped the hand-written byte cursor for `@WireFormat`. Array
+    /// count is now an `Int32` length prefix (was `UInt32`) — byte layout
+    /// is identical for any non-negative count, but a version bump
+    /// surfaces accidental mix-and-match builds as
+    /// `unsupportedVersion`.
     public struct SMuFLMetricsTable: Sendable {
         public struct Entry: Sendable {
             public let advance: Double
@@ -30,66 +39,56 @@
         }
 
         public static let magic: UInt32 = 0x534D_4654
-        public static let version: UInt32 = 1
+        public static let version: UInt32 = 2
 
         public let referenceSize: Double
         public let entries: [UInt32: Entry]
 
-        public enum DecodeError: Error {
-            case truncated
+        public enum DecodeError: Error, Equatable {
             case badMagic(UInt32)
             case unsupportedVersion(UInt32)
         }
 
         public static func decode(_ data: Data) throws -> SMuFLMetricsTable {
-            var cursor = 0
-            func readU32() throws -> UInt32 {
-                guard cursor + 4 <= data.count else { throw DecodeError.truncated }
-                let v = data.withUnsafeBytes { raw -> UInt32 in
-                    raw.loadUnaligned(fromByteOffset: cursor, as: UInt32.self)
-                }
-                cursor += 4
-                return UInt32(littleEndian: v)
+            let wire = try SMuFLMetricsWire(decoding: data)
+            guard wire.magic == magic else { throw DecodeError.badMagic(wire.magic) }
+            guard wire.version == version else {
+                throw DecodeError.unsupportedVersion(wire.version)
             }
-            func readF32() throws -> Float {
-                guard cursor + 4 <= data.count else { throw DecodeError.truncated }
-                let bits = data.withUnsafeBytes { raw -> UInt32 in
-                    raw.loadUnaligned(fromByteOffset: cursor, as: UInt32.self)
-                }
-                cursor += 4
-                return Float(bitPattern: UInt32(littleEndian: bits))
-            }
-            func readF64() throws -> Double {
-                guard cursor + 8 <= data.count else { throw DecodeError.truncated }
-                let bits = data.withUnsafeBytes { raw -> UInt64 in
-                    raw.loadUnaligned(fromByteOffset: cursor, as: UInt64.self)
-                }
-                cursor += 8
-                return Double(bitPattern: UInt64(littleEndian: bits))
-            }
-
-            let m = try readU32()
-            guard m == magic else { throw DecodeError.badMagic(m) }
-            let v = try readU32()
-            guard v == version else { throw DecodeError.unsupportedVersion(v) }
-            let refSize = try readF64()
-            let count = try Int(readU32())
             var entries: [UInt32: Entry] = [:]
-            entries.reserveCapacity(count)
-            for _ in 0 ..< count {
-                let cp = try readU32()
-                let advance = try Double(readF32())
-                let x = try Double(readF32())
-                let y = try Double(readF32())
-                let w = try Double(readF32())
-                let h = try Double(readF32())
-                entries[cp] = Entry(
-                    advance: advance,
-                    bboxX: x, bboxY: y, bboxW: w, bboxH: h,
+            entries.reserveCapacity(wire.entries.count)
+            for entry in wire.entries {
+                entries[entry.codepoint] = Entry(
+                    advance: Double(entry.advance),
+                    bboxX: Double(entry.bboxX),
+                    bboxY: Double(entry.bboxY),
+                    bboxW: Double(entry.bboxW),
+                    bboxH: Double(entry.bboxH),
                 )
             }
-            return SMuFLMetricsTable(referenceSize: refSize, entries: entries)
+            return SMuFLMetricsTable(
+                referenceSize: wire.referenceSize,
+                entries: entries,
+            )
         }
+    }
+
+    @WireFormat
+    struct SMuFLMetricsWire {
+        var magic: UInt32
+        var version: UInt32
+        var referenceSize: Double
+        var entries: [SMuFLMetricsEntryWire]
+    }
+
+    @WireFormat
+    struct SMuFLMetricsEntryWire {
+        var codepoint: UInt32
+        var advance: Float
+        var bboxX: Float
+        var bboxY: Float
+        var bboxW: Float
+        var bboxH: Float
     }
 
     /// `FontMetricsProvider` that serves Bravura glyph metrics from a table

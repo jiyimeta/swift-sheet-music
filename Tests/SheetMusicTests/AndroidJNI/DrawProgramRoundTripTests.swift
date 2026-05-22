@@ -1,16 +1,20 @@
 import Foundation
 @testable import SheetMusicAndroidJNI
+import SheetMusicWireFormat
 import Testing
 
 struct DrawProgramRoundTripTests {
     @Test
-    func emptyDocumentRoundTrips() {
-        let encoded = DrawProgramEncoder.encode(pages: [])
-        var reader = BinaryReader(encoded)
+    func emptyDocumentRoundTrips() throws {
+        let encoded = DrawProgramCodec.encode(pages: [])
+        var reader = WireFormatReader(data: encoded)
 
-        #expect(reader.read(UInt32.self) == DrawProgram.magic)
-        #expect(reader.read(UInt32.self) == DrawProgram.version)
-        #expect(reader.read(UInt32.self) == 0) // pageCount
+        #expect(try reader.readInteger(UInt32.self) == DrawProgram.magic)
+        #expect(try reader.readInteger(UInt32.self) == DrawProgram.version)
+        #expect(try reader.readInteger(Int32.self) == 0) // pageCount
+
+        let pages = try DrawProgramCodec.decode(encoded)
+        #expect(pages.isEmpty)
     }
 
     @Test
@@ -30,8 +34,8 @@ struct DrawProgramRoundTripTests {
                 ), // gClef
             ],
         )
-        let encoded = DrawProgramEncoder.encode(pages: [page])
-        let decoded = try DrawProgramDecoder.decode(encoded)
+        let encoded = DrawProgramCodec.encode(pages: [page])
+        let decoded = try DrawProgramCodec.decode(encoded)
 
         #expect(decoded.count == 1)
         #expect(decoded[0].widthMM == 210)
@@ -49,20 +53,48 @@ struct DrawProgramRoundTripTests {
     }
 
     @Test
+    func textCommandRoundTrips() throws {
+        let page = EncodablePage(
+            widthMM: 100, heightMM: 100,
+            commands: [
+                .text(
+                    "Allegro",
+                    x: 10, y: 20,
+                    size: 12,
+                    fontId: .textRoman,
+                ),
+            ],
+        )
+        let encoded = DrawProgramCodec.encode(pages: [page])
+        let decoded = try DrawProgramCodec.decode(encoded)
+
+        #expect(decoded.count == 1)
+        if case let .text(s, x, y, size, fontId) = decoded[0].commands[0] {
+            #expect(s == "Allegro")
+            #expect(x == 10)
+            #expect(y == 20)
+            #expect(size == 12)
+            #expect(fontId == .textRoman)
+        } else {
+            Issue.record("expected text opcode at index 0")
+        }
+    }
+
+    @Test
     func corruptMagicRaisesBadMagic() {
-        var bytes = DrawProgramEncoder.encode(pages: [])
+        var bytes = DrawProgramCodec.encode(pages: [])
         bytes[0] = 0xFF
-        #expect(throws: DrawProgramDecoder.DecodeError.self) {
-            _ = try DrawProgramDecoder.decode(bytes)
+        #expect(throws: DrawProgramCodec.DecodeError.self) {
+            _ = try DrawProgramCodec.decode(bytes)
         }
     }
 
     @Test
     func wrongVersionRaisesUnsupportedVersion() {
-        var bytes = DrawProgramEncoder.encode(pages: [])
+        var bytes = DrawProgramCodec.encode(pages: [])
         bytes[4] = 0xFF // bump version byte
-        #expect(throws: DrawProgramDecoder.DecodeError.self) {
-            _ = try DrawProgramDecoder.decode(bytes)
+        #expect(throws: DrawProgramCodec.DecodeError.self) {
+            _ = try DrawProgramCodec.decode(bytes)
         }
     }
 }

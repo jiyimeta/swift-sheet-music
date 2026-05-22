@@ -19,7 +19,7 @@
                 pageWidthMM: 210,
                 pageHeightMM: 297,
             )
-            let pages = try DrawProgramDecoder.decode(encoded)
+            let pages = try DrawProgramCodec.decode(encoded)
             #expect(!pages.isEmpty)
             // midi01 has 4 quarter notes; each chord now emits a
             // moveTo/lineTo/stroke triple for its stem in addition to

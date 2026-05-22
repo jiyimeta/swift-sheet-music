@@ -1,7 +1,6 @@
 package com.example.sheetmusic.draw
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -12,8 +11,8 @@ class DrawProgramDecoderTest {
     fun emptyProgramHasZeroPages() {
         val bytes = ByteBuffer.allocate(12).order(ByteOrder.LITTLE_ENDIAN).apply {
             putInt(0x53_4D_44_50.toInt())   // magic "SMDP"
-            putInt(1)                       // version
-            putInt(0)                       // pageCount
+            putInt(4)                       // version
+            putInt(0)                       // pageCount (i32)
         }.array()
 
         val program = DrawProgramDecoder.decode(bytes)
@@ -46,11 +45,36 @@ class DrawProgramDecoderTest {
         assertEquals(1, glyph.fontId)
     }
 
+    @Test
+    fun textCommandDecodesUtf8WithInt32LengthPrefix() {
+        val bytes = buildProgram {
+            page(widthMM = 100.0, heightMM = 100.0) {
+                text("Allegro", x = 10.0, y = 20.0,
+                     size = 12.0, fontId = 0)
+            }
+        }
+
+        val program = DrawProgramDecoder.decode(bytes)
+        val cmd = program.pages[0].commands[0] as DrawCommand.Text
+        assertEquals("Allegro", cmd.text)
+        assertEquals(10.0, cmd.x, 0.0)
+        assertEquals(0, cmd.fontId)
+    }
+
     @Test(expected = DrawProgramDecoder.BadMagicException::class)
     fun corruptMagicThrows() {
         val bytes = ByteBuffer.allocate(12).order(ByteOrder.LITTLE_ENDIAN).apply {
             putInt(0xCAFEBABE.toInt())
-            putInt(1); putInt(0)
+            putInt(4); putInt(0)
+        }.array()
+        DrawProgramDecoder.decode(bytes)
+    }
+
+    @Test(expected = DrawProgramDecoder.UnsupportedVersionException::class)
+    fun wrongVersionThrows() {
+        val bytes = ByteBuffer.allocate(12).order(ByteOrder.LITTLE_ENDIAN).apply {
+            putInt(0x53_4D_44_50.toInt())
+            putInt(99); putInt(0)
         }.array()
         DrawProgramDecoder.decode(bytes)
     }
@@ -70,10 +94,10 @@ private class ProgramBuilder {
         p.block(); pages.add(p)
     }
     fun toBytes(): ByteArray {
-        var capacity = 12
+        var capacity = 12 // magic + version + pageCount
         for (p in pages) capacity += p.byteSize
         val buf = ByteBuffer.allocate(capacity).order(ByteOrder.LITTLE_ENDIAN)
-        buf.putInt(0x53_4D_44_50.toInt()); buf.putInt(1); buf.putInt(pages.size)
+        buf.putInt(0x53_4D_44_50.toInt()); buf.putInt(4); buf.putInt(pages.size)
         for (p in pages) p.writeTo(buf)
         return buf.array()
     }
@@ -83,17 +107,23 @@ private class PageBuilder(val widthMM: Double, val heightMM: Double) {
     private val cmds = mutableListOf<ByteArray>()
     val byteSize: Int get() = 8 + 8 + 4 + cmds.sumOf { it.size }
 
-    fun moveTo(x: Double, y: Double)   = emit { it.put(0x01); it.putDouble(x); it.putDouble(y) }
-    fun lineTo(x: Double, y: Double)   = emit { it.put(0x02); it.putDouble(x); it.putDouble(y) }
-    fun stroke(w: Double)              = emit { it.put(0x03); it.putDouble(w) }
+    fun moveTo(x: Double, y: Double)   = emit { it.put(0); it.putDouble(x); it.putDouble(y) }
+    fun lineTo(x: Double, y: Double)   = emit { it.put(1); it.putDouble(x); it.putDouble(y) }
+    fun stroke(w: Double)              = emit { it.put(2); it.putDouble(w) }
     fun glyph(codepoint: UInt, x: Double, y: Double, size: Double, fontId: Int) =
         emit {
-            it.put(0x05); it.putInt(codepoint.toInt())
+            it.put(4); it.putInt(codepoint.toInt())
+            it.putDouble(x); it.putDouble(y); it.putDouble(size); it.put(fontId.toByte())
+        }
+    fun text(s: String, x: Double, y: Double, size: Double, fontId: Int) =
+        emit {
+            val utf8 = s.toByteArray(Charsets.UTF_8)
+            it.put(5); it.putInt(utf8.size); it.put(utf8)
             it.putDouble(x); it.putDouble(y); it.putDouble(size); it.put(fontId.toByte())
         }
 
     private fun emit(write: (ByteBuffer) -> Unit) {
-        val tmp = ByteBuffer.allocate(64).order(ByteOrder.LITTLE_ENDIAN)
+        val tmp = ByteBuffer.allocate(128).order(ByteOrder.LITTLE_ENDIAN)
         write(tmp); tmp.flip()
         val arr = ByteArray(tmp.remaining()); tmp.get(arr); cmds.add(arr)
     }

@@ -37,6 +37,6 @@ extension LayoutBridge {
             heightMM: pageHeightMM,
             commands: commands,
         )
-        return (layout, DrawProgramEncoder.encode(pages: [page]))
+        return (layout, DrawProgramCodec.encode(pages: [page]))
     }
 }
