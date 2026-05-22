@@ -7,13 +7,37 @@ import java.nio.ByteOrder
  * Decodes the little-endian draw-program byte stream produced by the
  * SheetMusicAndroidJNI Swift target. Format spec lives at
  * Sources/SheetMusicAndroidJNI/DrawProgram.swift — keep both sides in sync.
+ *
+ * ### Wire layout (v4)
+ *
+ * ```
+ * u32 magic       = 0x534D4450 ("SMDP")
+ * u32 version     = 4
+ * i32 pageCount
+ * [page] × pageCount:
+ *     f64 widthMM
+ *     f64 heightMM
+ *     i32 commandCount
+ *     [command] × commandCount   ← u8 discriminator + payload
+ *         0 moveTo   (f64 x, f64 y)
+ *         1 lineTo   (f64 x, f64 y)
+ *         2 stroke   (f64 width)
+ *         3 fillRect (f64 x, f64 y, f64 w, f64 h)
+ *         4 glyph    (u32 codepoint, f64 x, f64 y, f64 size, u8 fontId)
+ *         5 text     (i32 byteLen, utf8, f64 x, f64 y, f64 size, u8 fontId)
+ *         6 setColor (u32 argb)
+ *         7 cubicTo  (f64 cx1, f64 cy1, f64 cx2, f64 cy2, f64 x, f64 y)
+ * ```
+ *
+ * Discriminators are the declaration-order index from the Swift
+ * `@WireFormatChoice` macro on `DrawCommand`. Reordering breaks the
+ * wire — bump `version` on the Swift side and update this file in
+ * lockstep.
  */
 object DrawProgramDecoder {
 
     private const val MAGIC = 0x53_4D_44_50   // "SMDP"
-    // v3 adds cubicTo (0x08); v2 added setColor (0x07). Keep in lockstep
-    // with Sources/SheetMusicAndroidJNI/DrawProgram.swift.
-    private const val VERSION = 3
+    private const val VERSION = 4
 
     class BadMagicException(actual: Int) :
         RuntimeException("bad draw-program magic: 0x${actual.toString(16)}")
@@ -47,18 +71,18 @@ object DrawProgramDecoder {
 
     private fun decodeCommand(buf: ByteBuffer): DrawCommand =
         when (val op = buf.get().toInt() and 0xFF) {
-            0x01 -> DrawCommand.MoveTo(buf.double, buf.double)
-            0x02 -> DrawCommand.LineTo(buf.double, buf.double)
-            0x03 -> DrawCommand.Stroke(buf.double)
-            0x04 -> DrawCommand.FillRect(buf.double, buf.double,
-                                         buf.double, buf.double)
-            0x05 -> DrawCommand.Glyph(
-                        codepoint = buf.int.toUInt(),
-                        x = buf.double, y = buf.double,
-                        size = buf.double,
-                        fontId = buf.get().toInt() and 0xFF)
-            0x06 -> {
-                val len = buf.short.toInt() and 0xFFFF
+            0 -> DrawCommand.MoveTo(buf.double, buf.double)
+            1 -> DrawCommand.LineTo(buf.double, buf.double)
+            2 -> DrawCommand.Stroke(buf.double)
+            3 -> DrawCommand.FillRect(buf.double, buf.double,
+                                     buf.double, buf.double)
+            4 -> DrawCommand.Glyph(
+                    codepoint = buf.int.toUInt(),
+                    x = buf.double, y = buf.double,
+                    size = buf.double,
+                    fontId = buf.get().toInt() and 0xFF)
+            5 -> {
+                val len = buf.int
                 val bytes = ByteArray(len); buf.get(bytes)
                 DrawCommand.Text(
                     text = String(bytes, Charsets.UTF_8),
@@ -66,8 +90,8 @@ object DrawProgramDecoder {
                     size = buf.double,
                     fontId = buf.get().toInt() and 0xFF)
             }
-            0x07 -> DrawCommand.SetColor(argb = buf.int.toUInt())
-            0x08 -> DrawCommand.CubicTo(
+            6 -> DrawCommand.SetColor(argb = buf.int.toUInt())
+            7 -> DrawCommand.CubicTo(
                 cx1 = buf.double, cy1 = buf.double,
                 cx2 = buf.double, cy2 = buf.double,
                 x = buf.double, y = buf.double,

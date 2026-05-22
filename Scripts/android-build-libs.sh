@@ -109,7 +109,7 @@ done
 # directly so the Android Gradle Plugin sees stable input paths under
 # version control conventions, and so editor / lint tooling resolves
 # imports without needing to know about .build/plugins/.../.
-GEN_JAVA_SRC="$ROOT/.build/plugins/outputs/swift-java-poc/SheetMusicAndroidJNISwiftJava/destination/JExtractSwiftPlugin/src/generated/java"
+GEN_JAVA_SRC="$ROOT/.build/plugins/outputs/$(basename "$ROOT")/SheetMusicAndroidJNISwiftJava/destination/JExtractSwiftPlugin/src/generated/java"
 GEN_JAVA_DST="$ROOT/Android/SheetMusicAndroid/src/main/java-generated"
 if [[ -d "$GEN_JAVA_SRC" ]]; then
     echo

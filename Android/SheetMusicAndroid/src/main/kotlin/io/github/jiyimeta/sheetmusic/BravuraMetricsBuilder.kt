@@ -29,7 +29,10 @@ import java.nio.ByteOrder
 object BravuraMetricsBuilder {
 
     private const val MAGIC = 0x53_4D_46_54
-    private const val VERSION = 1
+    // Keep in lockstep with `SMuFLMetricsTable.version` on the Swift side.
+    // v2 swapped the hand-written byte cursor for `@WireFormat`; layout is
+    // byte-identical for any non-negative glyph count.
+    private const val VERSION = 2
     private const val REFERENCE_SIZE = 1000.0
 
     /** Bravura's BMP PUA range as defined by SMuFL. */

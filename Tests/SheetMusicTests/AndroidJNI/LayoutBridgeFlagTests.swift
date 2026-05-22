@@ -18,7 +18,7 @@
             let encoded = LayoutBridge.compute(
                 score: score, pageWidthMM: 210, pageHeightMM: 297,
             )
-            let pages = try DrawProgramDecoder.decode(encoded)
+            let pages = try DrawProgramCodec.decode(encoded)
             let flagCount = countFlagGlyphs(in: pages)
             #expect(flagCount == 0)
         }
