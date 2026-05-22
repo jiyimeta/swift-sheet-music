@@ -113,6 +113,11 @@ var targets: [Target] = [
         ],
     ),
     .testTarget(
+        name: "WireFormatSchemaTests",
+        dependencies: ["WireFormatSchema"],
+        resources: [.copy("Fixtures")],
+    ),
+    .testTarget(
         name: "SheetMusicTests",
         dependencies: isAndroid ? [
             "SheetMusic",
