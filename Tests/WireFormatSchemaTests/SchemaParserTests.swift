@@ -65,3 +65,19 @@ import Testing
     #expect(e.name == "GMInstrumentFamilyWire")
     #expect(e.cases == ["piano", "chromaticPercussion", "organ"])
 }
+
+@Test func parsesKotlinTargetOverrides() throws {
+    let url = try #require(Bundle.module.url(
+        forResource: "KotlinTargetOverrides",
+        withExtension: "swift",
+        subdirectory: "Fixtures",
+    ))
+    let source = try String(contentsOf: url, encoding: .utf8)
+
+    let schema = SchemaParser.parse(source: source, fileName: "KotlinTargetOverrides.swift")
+
+    #expect(schema.types.count == 3)
+    #expect(schema.types[0].kotlinTarget == .skip)
+    #expect(schema.types[1].kotlinTarget == .explicit("io.example.legacy.Frame"))
+    #expect(schema.types[2].kotlinTarget == .skip)
+}
