@@ -46,3 +46,22 @@ import Testing
         WireChoiceCase(name: "beat", payloadTypes: ["Int32", "Int32"]),
     ])
 }
+
+@Test func parsesRawEnum() throws {
+    let url = try #require(Bundle.module.url(
+        forResource: "RawEnum",
+        withExtension: "swift",
+        subdirectory: "Fixtures",
+    ))
+    let source = try String(contentsOf: url, encoding: .utf8)
+
+    let schema = SchemaParser.parse(source: source, fileName: "RawEnum.swift")
+
+    #expect(schema.types.count == 1)
+    guard case let .rawEnum(e) = schema.types[0] else {
+        Issue.record("Expected rawEnum, got \(schema.types[0])")
+        return
+    }
+    #expect(e.name == "GMInstrumentFamilyWire")
+    #expect(e.cases == ["piano", "chromaticPercussion", "organ"])
+}
