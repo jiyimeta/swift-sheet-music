@@ -1,6 +1,7 @@
 import Foundation
 import SheetMusicAudioCore
 import SheetMusicCore
+import SheetMusicLayout
 
 /// Helper that maps a tick range to a measure range via the score's
 /// `PlaybackTimeline.measureStartTicks`. Pure function; testable on
@@ -32,50 +33,42 @@ enum LoopHighlightTickResolver {
     }
 }
 
-// JNI entry point.
-#if os(Android)
-    import CJNI
-    import SheetMusicLayout
+/// JNI entry point exposed via swift-java for the Kotlin
+/// `SheetMusicJNI.nativeLoopHighlightRects(...)` call site. Returns an
+/// empty `Data` when the score handle is unknown, the layout document is
+/// not cached, or the tick range yields no measures.
+public func nativeLoopHighlightRects(
+    scoreHandle: Int64,
+    fromTick: Int64,
+    toTick: Int64,
+) -> Data {
+    guard let score = scoreTable.value(for: scoreHandle),
+          let document = LayoutDocumentCache.value(for: scoreHandle)
+    else { return Data() }
 
-    @_cdecl("Java_io_github_jiyimeta_sheetmusic_SheetMusicJNI_nativeLoopHighlightRects")
-    // swiftlint:disable:next identifier_name
-    public func Java_io_github_jiyimeta_sheetmusic_SheetMusicJNI_nativeLoopHighlightRects(
-        _ envPtr: UnsafeMutablePointer<JNIEnv?>,
-        _ clazz: jclass,
-        _ scoreHandle: jlong,
-        _ fromTick: jlong,
-        _ toTick: jlong,
-    ) -> jbyteArray? {
-        guard let env = envPtr.pointee else { return nil }
-        guard let score = scoreTable.value(for: scoreHandle),
-              let document = LayoutDocumentCache.value(for: scoreHandle)
-        else { return env.pointee.NewByteArray(envPtr, 0) }
-
-        let timeline = PlaybackTimeline(score: score)
-        guard let range = LoopHighlightTickResolver.measureRange(
-            fromTick: fromTick,
-            toTick: toTick,
-            timeline: timeline,
-        ) else {
-            return env.pointee.NewByteArray(envPtr, 0)
-        }
-
-        let rectsPt = document.loopHighlightRects(
-            fromMeasureIndex: range.from,
-            toMeasureExclusive: range.toExclusive,
-        )
-        // SheetMusicLayout works in typographic points; convert to mm
-        // to match the same unit consumed by the Compose overlay.
-        let ptToMM = 25.4 / 72.0
-        let rects = rectsPt.map { r in
-            LoopHighlightCodec.Rect(
-                x: Double(r.origin.x) * ptToMM,
-                y: Double(r.origin.y) * ptToMM,
-                width: Double(r.size.width) * ptToMM,
-                height: Double(r.size.height) * ptToMM,
-            )
-        }
-        let encoded = LoopHighlightCodec.encode(rects)
-        return makeJByteArray(env: envPtr, bytes: encoded)
+    let timeline = PlaybackTimeline(score: score)
+    guard let range = LoopHighlightTickResolver.measureRange(
+        fromTick: fromTick,
+        toTick: toTick,
+        timeline: timeline,
+    ) else {
+        return Data()
     }
-#endif
+
+    let rectsPt = document.loopHighlightRects(
+        fromMeasureIndex: range.from,
+        toMeasureExclusive: range.toExclusive,
+    )
+    // SheetMusicLayout works in typographic points; convert to mm
+    // to match the same unit consumed by the Compose overlay.
+    let ptToMM = 25.4 / 72.0
+    let rects = rectsPt.map { r in
+        LoopHighlightCodec.Rect(
+            x: Double(r.origin.x) * ptToMM,
+            y: Double(r.origin.y) * ptToMM,
+            width: Double(r.size.width) * ptToMM,
+            height: Double(r.size.height) * ptToMM,
+        )
+    }
+    return LoopHighlightCodec.encode(rects)
+}

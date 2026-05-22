@@ -1,155 +1,94 @@
-#if os(Android)
-    import CJNI
-    import Foundation
-    import SheetMusicCore
-    import SheetMusicLayout
-    import SheetMusicWireFormat
+import Foundation
+import SheetMusicCore
+import SheetMusicLayout
+import SheetMusicWireFormat
 
-    /// Singleton tables — one per Swift type. Lifetimes are explicit; Kotlin
-    /// must release every handle it gets, or the score will leak until process
-    /// exit.
-    let scoreTable = HandleTable<Score>()
+/// Singleton tables — one per Swift type. Lifetimes are explicit; Kotlin
+/// must release every handle it gets, or the score will leak until process
+/// exit.
+let scoreTable = HandleTable<Score>()
 
-    // MARK: - Score lifecycle
+// MARK: - Wire format payloads
 
-    @_cdecl("Java_io_github_jiyimeta_sheetmusic_SheetMusicJNI_nativeLoadScore")
-    // swiftlint:disable:next identifier_name
-    public func Java_io_github_jiyimeta_sheetmusic_SheetMusicJNI_nativeLoadScore(
-        _ envPtr: UnsafeMutablePointer<JNIEnv?>,
-        _ clazz: jclass,
-        _ byteArray: jbyteArray,
-    ) -> jlong {
-        guard let env = envPtr.pointee else { return 0 }
-        let len = env.pointee.GetArrayLength(envPtr, byteArray)
-        guard len > 0 else { return 0 }
-        var bytes = [UInt8](repeating: 0, count: Int(len))
-        bytes.withUnsafeMutableBufferPointer { buf in
-            guard let base = buf.baseAddress else { return }
-            base.withMemoryRebound(to: jbyte.self, capacity: Int(len)) { jbytes in
-                env.pointee.GetByteArrayRegion(envPtr, byteArray, 0, len, jbytes)
-            }
-        }
-        let data = Data(bytes)
-        do {
-            let score = try ScoreBridge.loadScore(bytes: data)
-            return scoreTable.insert(score)
-        } catch {
-            return 0
-        }
+@WireFormat
+struct ScoreMetadataWire {
+    var title: String
+    var composer: String
+}
+
+// MARK: - Score lifecycle (swift-java entry points)
+
+/// JNI entry point exposed via swift-java for the Kotlin
+/// `SheetMusicJNI.nativeLoadScore(...)` call site. Returns 0 on parse
+/// failure or empty input.
+public func nativeLoadScore(bytes: Data) -> Int64 {
+    guard !bytes.isEmpty else { return 0 }
+    do {
+        let score = try ScoreBridge.loadScore(bytes: bytes)
+        return scoreTable.insert(score)
+    } catch {
+        return 0
     }
+}
 
-    @_cdecl("Java_io_github_jiyimeta_sheetmusic_SheetMusicJNI_nativeReleaseScore")
-    // swiftlint:disable:next identifier_name
-    public func Java_io_github_jiyimeta_sheetmusic_SheetMusicJNI_nativeReleaseScore(
-        _ envPtr: UnsafeMutablePointer<JNIEnv?>,
-        _ clazz: jclass,
-        _ handle: jlong,
-    ) {
-        scoreTable.release(handle)
-        LayoutDocumentCache.release(handle)
+/// JNI entry point exposed via swift-java for the Kotlin
+/// `SheetMusicJNI.nativeReleaseScore(...)` call site. Releases the score
+/// handle and its associated layout document cache entry.
+public func nativeReleaseScore(handle: Int64) {
+    scoreTable.release(handle)
+    LayoutDocumentCache.release(handle)
+}
+
+// MARK: - Score metadata (swift-java entry point)
+
+/// JNI entry point exposed via swift-java for the Kotlin
+/// `SheetMusicJNI.nativeScoreMetadata(...)` call site. Returns an empty
+/// `Data` when the score handle is unknown. The wire format is
+/// `i32 titleByteLen + UTF-8 + i32 composerByteLen + UTF-8` per
+/// `ScoreMetadataWire`'s @WireFormat encoding.
+public func nativeScoreMetadata(scoreHandle: Int64) -> Data {
+    guard let score = scoreTable.value(for: scoreHandle) else { return Data() }
+    return ScoreMetadataWire(
+        title: score.metaTags["workTitle"] ?? "",
+        composer: score.metaTags["composer"] ?? "",
+    ).encodeToData()
+}
+
+// MARK: - SMuFL font metrics (swift-java entry point)
+
+/// JNI entry point exposed via swift-java for the Kotlin
+/// `SheetMusicJNI.nativeInstallSMuFLMetrics(...)` call site. Returns
+/// `true` on success, `false` if the byte payload is empty or fails to
+/// decode.
+public func nativeInstallSMuFLMetrics(bytes: Data) -> Bool {
+    guard !bytes.isEmpty else { return false }
+    do {
+        let table = try SMuFLMetricsTable.decode(bytes)
+        FontMetrics.provider = makeSMuFLMetricsTableProvider(table: table)
+        return true
+    } catch {
+        return false
     }
+}
 
-    /// Reads `workTitle` + `composer` from the score's `metaTags`
-    /// dictionary and returns them as a `ScoreMetadataWire` blob
-    /// (wire layout: `i32 titleByteLen + UTF-8 + i32 composerByteLen + UTF-8`).
-    /// Missing tags return as zero-length strings; an unknown handle
-    /// returns an empty byte array.
-    @_cdecl("Java_io_github_jiyimeta_sheetmusic_SheetMusicJNI_nativeScoreMetadata")
-    // swiftlint:disable:next identifier_name
-    public func Java_io_github_jiyimeta_sheetmusic_SheetMusicJNI_nativeScoreMetadata(
-        _ envPtr: UnsafeMutablePointer<JNIEnv?>,
-        _ clazz: jclass,
-        _ scoreHandle: jlong,
-    ) -> jbyteArray? {
-        guard let env = envPtr.pointee else { return nil }
-        guard let score = scoreTable.value(for: scoreHandle) else {
-            return env.pointee.NewByteArray(envPtr, 0)
-        }
-        let encoded = ScoreMetadataWire(
-            title: score.metaTags["workTitle"] ?? "",
-            composer: score.metaTags["composer"] ?? "",
-        ).encodeToData()
-        let array = env.pointee.NewByteArray(envPtr, jsize(encoded.count))
-        encoded.withUnsafeBytes { rawBuf in
-            let typed = rawBuf.bindMemory(to: jbyte.self)
-            env.pointee.SetByteArrayRegion(
-                envPtr,
-                array,
-                0,
-                jsize(encoded.count),
-                typed.baseAddress,
-            )
-        }
-        return array
-    }
+// MARK: - Layout (swift-java entry point)
 
-    @WireFormat
-    struct ScoreMetadataWire {
-        var title: String
-        var composer: String
-    }
-
-    // MARK: - SMuFL font metrics
-
-    @_cdecl("Java_io_github_jiyimeta_sheetmusic_SheetMusicJNI_nativeInstallSMuFLMetrics")
-    // swiftlint:disable:next identifier_name
-    public func Java_io_github_jiyimeta_sheetmusic_SheetMusicJNI_nativeInstallSMuFLMetrics(
-        _ envPtr: UnsafeMutablePointer<JNIEnv?>,
-        _ clazz: jclass,
-        _ byteArray: jbyteArray,
-    ) -> jboolean {
-        guard let env = envPtr.pointee else { return 0 }
-        let len = env.pointee.GetArrayLength(envPtr, byteArray)
-        guard len > 0 else { return 0 }
-        var bytes = [UInt8](repeating: 0, count: Int(len))
-        bytes.withUnsafeMutableBufferPointer { buf in
-            guard let base = buf.baseAddress else { return }
-            base.withMemoryRebound(to: jbyte.self, capacity: Int(len)) { jbytes in
-                env.pointee.GetByteArrayRegion(envPtr, byteArray, 0, len, jbytes)
-            }
-        }
-        do {
-            let table = try SMuFLMetricsTable.decode(Data(bytes))
-            FontMetrics.provider = SMuFLMetricsTableProvider(table: table)
-            return 1
-        } catch {
-            return 0
-        }
-    }
-
-    // MARK: - Layout
-
-    @_cdecl("Java_io_github_jiyimeta_sheetmusic_SheetMusicJNI_nativeComputeLayout")
-    // swiftlint:disable:next identifier_name
-    public func Java_io_github_jiyimeta_sheetmusic_SheetMusicJNI_nativeComputeLayout(
-        _ envPtr: UnsafeMutablePointer<JNIEnv?>,
-        _ clazz: jclass,
-        _ scoreHandle: jlong,
-        _ pageWidthMM: jdouble,
-        _ pageHeightMM: jdouble,
-    ) -> jbyteArray? {
-        guard let env = envPtr.pointee else { return nil }
-        guard let score = scoreTable.value(for: scoreHandle) else {
-            return env.pointee.NewByteArray(envPtr, 0)
-        }
-        let result = LayoutBridge.computeWithDocument(
-            score: score,
-            pageWidthMM: pageWidthMM,
-            pageHeightMM: pageHeightMM,
-        )
-        LayoutDocumentCache.store(handle: scoreHandle, document: result.document)
-        let encoded = result.encoded
-        let array = env.pointee.NewByteArray(envPtr, jsize(encoded.count))
-        encoded.withUnsafeBytes { rawBuf in
-            let typed = rawBuf.bindMemory(to: jbyte.self)
-            env.pointee.SetByteArrayRegion(
-                envPtr,
-                array,
-                0,
-                jsize(encoded.count),
-                typed.baseAddress,
-            )
-        }
-        return array
-    }
-#endif
+/// JNI entry point exposed via swift-java for the Kotlin
+/// `SheetMusicJNI.nativeComputeLayout(...)` call site. Returns an empty
+/// `Data` when the score handle is unknown; otherwise stores the laid-out
+/// document in `LayoutDocumentCache` and returns the encoded draw-program
+/// payload.
+public func nativeComputeLayout(
+    scoreHandle: Int64,
+    pageWidthMM: Double,
+    pageHeightMM: Double,
+) -> Data {
+    guard let score = scoreTable.value(for: scoreHandle) else { return Data() }
+    let result = LayoutBridge.computeWithDocument(
+        score: score,
+        pageWidthMM: pageWidthMM,
+        pageHeightMM: pageHeightMM,
+    )
+    LayoutDocumentCache.store(handle: scoreHandle, document: result.document)
+    return result.encoded
+}

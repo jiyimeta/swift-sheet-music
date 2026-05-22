@@ -3,8 +3,8 @@ import SheetMusicAudioCore
 import SheetMusicCore
 import SheetMusicMIDI
 
-// Host-testable bridge helpers + Android-only @_cdecl entry point for
-// resolving an `AudioExportRange` (encoded by Kotlin) into a half-open
+// Host-testable bridge helpers + swift-java JNI entry point for resolving
+// an `AudioExportRange` (encoded by Kotlin) into a half-open
 // `[startTick, endTick)` range against a score's `PlaybackTimeline`.
 
 extension AudioMidiBridge {
@@ -29,41 +29,18 @@ extension AudioMidiBridge {
     }
 }
 
-#if os(Android)
-    import CJNI
+// MARK: - swift-java entry points
 
-    @_cdecl("Java_io_github_jiyimeta_sheetmusic_audio_jni_SheetMusicAudioJNI_nativeResolveExportTickRange")
-    // swiftlint:disable:next identifier_name
-    public func Java_io_github_jiyimeta_sheetmusic_audio_jni_SheetMusicAudioJNI_nativeResolveExportTickRange(
-        _ envPtr: UnsafeMutablePointer<JNIEnv?>,
-        _ clazz: jclass,
-        _ scoreHandle: jlong,
-        _ rangeBytes: jbyteArray,
-    ) -> jlongArray? {
-        guard envPtr.pointee != nil else { return nil }
-        guard let score = scoreTable.value(for: scoreHandle) else {
-            return makeResolveResultArray(envPtr: envPtr, start: -1, end: -1)
-        }
-        let data = readJByteArray(env: envPtr, array: rangeBytes)
-        guard !data.isEmpty else {
-            return makeResolveResultArray(envPtr: envPtr, start: -1, end: -1)
-        }
-        let (start, end) = AudioMidiBridge.resolveExportTickRange(
-            score: score, rangePayload: data,
-        )
-        return makeResolveResultArray(envPtr: envPtr, start: start, end: end)
-    }
-
-    private func makeResolveResultArray(
-        envPtr: UnsafeMutablePointer<JNIEnv?>, start: Int64, end: Int64,
-    ) -> jlongArray? {
-        guard let env = envPtr.pointee else { return nil }
-        let array = env.pointee.NewLongArray(envPtr, 2)
-        var values: [jlong] = [jlong(start), jlong(end)]
-        values.withUnsafeMutableBufferPointer { ptr in
-            guard let base = ptr.baseAddress else { return }
-            env.pointee.SetLongArrayRegion(envPtr, array, 0, 2, base)
-        }
-        return array
-    }
-#endif
+/// JNI entry point exposed via swift-java for the Kotlin
+/// `SheetMusicAudioJNI.nativeResolveExportTickRange(...)` call site.
+/// Returns `[startTick, endTick]`, or `[-1, -1]` on any failure
+/// (unknown score handle, empty / undecodable payload, version
+/// mismatch, unresolvable cursor, empty range).
+public func nativeResolveExportTickRange(scoreHandle: Int64, rangeBytes: Data) -> [Int64] {
+    guard let score = scoreTable.value(for: scoreHandle) else { return [-1, -1] }
+    guard !rangeBytes.isEmpty else { return [-1, -1] }
+    let (start, end) = AudioMidiBridge.resolveExportTickRange(
+        score: score, rangePayload: rangeBytes,
+    )
+    return [start, end]
+}
