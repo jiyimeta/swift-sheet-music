@@ -145,21 +145,23 @@ KotlinCodegenConfig (from JSON) ──────────────┤
 ```swift
 public struct KotlinCodegenConfig {
     public var defaultModelPackage: String     // where the Kotlin data class lives
-    public var codecPackageSuffix: String?     // appended to model package, e.g. ".serialization"
+    public var defaultCodecPackage: String     // where the codec lands (may differ)
     public var nameTransform: NameTransform    // e.g. .stripSuffix("Wire")
-    public var rules: [Rule]                   // pattern → model package override
+    public var rules: [Rule]                   // pattern → per-type override
 }
 public struct Rule {
     public var pattern: String                 // glob, e.g. "Score*"
-    public var modelPackage: String
+    public var modelPackage: String?           // nil → use default
+    public var codecPackage: String?           // nil → use default
 }
 public enum NameTransform { case identity, stripSuffix(String) }
 ```
 
-`codecPackageSuffix` preserves the existing layering where codecs sit
-in a `.serialization` subpackage while data classes live in
-`.model` — this keeps current test imports valid. When the suffix is
-absent, codec and model land in the same package.
+Model package and codec package are treated as independent because
+the existing Kotlin layout has them as siblings
+(`audio.model` / `audio.serialization`), not parent-child. Generated
+codec files reference data classes via `import <modelPackage>.<Name>`
+in their header.
 
 Resolution order for a given `@WireFormat` type's Kotlin location:
 
@@ -167,10 +169,12 @@ Resolution order for a given `@WireFormat` type's Kotlin location:
    verbatim, skip config entirely.
 2. `@WireFormat(kotlinTarget: .none)` — emit no Kotlin file for this
    type. Useful for Apple-only types that happen to use the macro.
-3. Config `rules[]` pattern match (first hit wins) → `modelPackage +
-   transform(simpleName)` for the data class type, codec placed at
-   `modelPackage + codecPackageSuffix`.
-4. Config `defaultModelPackage + transform(simpleName)` likewise.
+3. Config `rules[]` pattern match (first hit wins) → model class
+   placed at `(modelPackage ?? default) + transform(simpleName)`,
+   codec placed at `(codecPackage ?? default) + transform(simpleName)
+   + "Codec"` (or `…Decoder`/`…Encoder` per type — see Generated
+   file layout).
+4. Config defaults likewise.
 5. No match and no default → CLI exits non-zero with an error
    identifying the unmapped type.
 
