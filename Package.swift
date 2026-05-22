@@ -93,14 +93,8 @@ var targets: [Target] = [
             "SheetMusicMIDI",
             "SheetMusicAudioCore",
             "SheetMusicWireFormat",
-        ] + (isAndroid ? ["CJNI"] : []),
-    ),
-    .target(
-        name: "SheetMusicAndroidJNISwiftJava",
-        dependencies: [
-            "SheetMusicAndroidJNI",
             .product(name: "SwiftJava", package: "swift-java"),
-        ],
+        ] + (isAndroid ? ["CJNI"] : []),
         exclude: [
             "swift-java.config",
         ],
@@ -212,11 +206,6 @@ if isAndroid {
             name: "SheetMusicJNI",
             type: .dynamic,
             targets: ["SheetMusicAndroidJNI"],
-        ),
-        .library(
-            name: "SheetMusicJNISwiftJava",
-            type: .dynamic,
-            targets: ["SheetMusicAndroidJNISwiftJava"],
         ),
     ]
     targets += [

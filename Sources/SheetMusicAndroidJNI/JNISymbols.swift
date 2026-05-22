@@ -110,7 +110,7 @@
         }
         do {
             let table = try SMuFLMetricsTable.decode(Data(bytes))
-            FontMetrics.provider = SMuFLMetricsTableProvider(table: table)
+            FontMetrics.provider = makeSMuFLMetricsTableProvider(table: table)
             return 1
         } catch {
             return 0

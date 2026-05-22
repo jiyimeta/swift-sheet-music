@@ -62,14 +62,8 @@ for entry in "${TARGETS[@]}"; do
     mkdir -p "$dst_dir"
     cp "$src_so" "$dst_dir/"
 
-    # PoC: swift-java-backed bridge alongside the hand-written one.
-    # See project_swift_java_strategy.md memory + Sources/SheetMusicAndroidJNISwiftJava/.
-    echo "==> Building libSheetMusicJNISwiftJava.so for $abi (swift-java)"
-    swift build --package-path "$ROOT" \
-                --product SheetMusicJNISwiftJava \
-                --swift-sdk "$triple" \
-                -c release
-    cp "$ROOT/.build/$triple/release/libSheetMusicJNISwiftJava.so" "$dst_dir/"
+    # swift-java's SwiftJava runtime ships as its own .so; stage it so the
+    # JNI library can resolve symbols at load time.
     cp "$ROOT/.build/$triple/release/libSwiftJava.so" "$dst_dir/"
 
     echo "==> Staging Swift runtime stubs into $dst_dir"
@@ -109,7 +103,7 @@ done
 # directly so the Android Gradle Plugin sees stable input paths under
 # version control conventions, and so editor / lint tooling resolves
 # imports without needing to know about .build/plugins/.../.
-GEN_JAVA_SRC="$ROOT/.build/plugins/outputs/$(basename "$ROOT")/SheetMusicAndroidJNISwiftJava/destination/JExtractSwiftPlugin/src/generated/java"
+GEN_JAVA_SRC="$ROOT/.build/plugins/outputs/$(basename "$ROOT")/SheetMusicAndroidJNI/destination/JExtractSwiftPlugin/src/generated/java"
 GEN_JAVA_DST="$ROOT/Android/SheetMusicAndroid/src/main/java-generated"
 if [[ -d "$GEN_JAVA_SRC" ]]; then
     echo
@@ -123,7 +117,7 @@ else
 fi
 
 echo
-echo "Done. libSheetMusicJNI.so + libSheetMusicJNISwiftJava.so + runtime staged under:"
+echo "Done. libSheetMusicJNI.so + libSwiftJava.so + runtime staged under:"
 echo "  $JNI_DIR/{arm64-v8a,x86_64}/"
 echo
 echo "Next: place ~/Desktop/test.mscz and run"
