@@ -3,8 +3,8 @@ import SheetMusicAudioCore
 import SheetMusicCore
 import SheetMusicMIDI
 
-// Host-testable bridge helpers + Android-only @_cdecl entry point for
-// resolving an `AudioExportRange` (encoded by Kotlin) into a half-open
+// Host-testable bridge helpers + swift-java JNI entry point for resolving
+// an `AudioExportRange` (encoded by Kotlin) into a half-open
 // `[startTick, endTick)` range against a score's `PlaybackTimeline`.
 
 extension AudioMidiBridge {
