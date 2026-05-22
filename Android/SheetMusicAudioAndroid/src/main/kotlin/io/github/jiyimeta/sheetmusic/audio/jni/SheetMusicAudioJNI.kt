@@ -1,6 +1,7 @@
 package io.github.jiyimeta.sheetmusic.audio.jni
 
 import org.swift.swiftkit.core.SwiftMemoryManagement
+import io.github.jiyimeta.sheetmusic.swiftjava.Data as SwiftData
 import io.github.jiyimeta.sheetmusic.swiftjava.SheetMusicAndroidJNI as SwiftJavaJNI
 
 internal object SheetMusicAudioJNI {
@@ -13,36 +14,72 @@ internal object SheetMusicAudioJNI {
         io.github.jiyimeta.sheetmusic.SheetMusicJNI.toString()
     }
 
-    external fun nativeRenderMidi(scoreHandle: Long): ByteArray
-    external fun nativeTimelineSummary(scoreHandle: Long): LongArray
-    external fun nativeFrameAtTick(scoreHandle: Long, tick: Long): ByteArray
-    external fun nativeFrameForCursor(scoreHandle: Long, cursorBytes: ByteArray): ByteArray
-    external fun nativeMetronomeBeats(scoreHandle: Long): ByteArray
-    external fun nativeStaffParams(scoreHandle: Long): ByteArray
-    external fun nativeEarliestOf(scoreHandle: Long, idsBytes: ByteArray): ByteArray
     external fun nativeResolveExportTickRange(scoreHandle: Long, rangeBytes: ByteArray): LongArray
 
-    // Migrated to swift-java — see Sources/SheetMusicAndroidJNI/AudioMidiBridge+Timeline.swift
+    // All other entry points have been migrated to swift-java. The Kotlin
+    // wrappers below delegate through the generated SheetMusicAndroidJNI
+    // class (aliased SwiftJavaJNI), passing/receiving `Data` through the
+    // default auto-arena.
+
     fun nativeGMInstrumentList(): ByteArray {
         val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
         return SwiftJavaJNI.nativeGMInstrumentList(arena).toByteArray()
     }
 
-    // Migrated to swift-java — see Sources/SheetMusicAndroidJNI/AudioMidiBridge.swift
     fun nativePitchAndStaffOfNote(scoreHandle: Long, noteIdBytes: ByteArray): Long {
         val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
         return SwiftJavaJNI.nativePitchAndStaffOfNote(
             scoreHandle,
-            io.github.jiyimeta.sheetmusic.swiftjava.Data.fromByteArray(noteIdBytes, arena),
+            SwiftData.fromByteArray(noteIdBytes, arena),
         )
     }
 
-    // Migrated to swift-java — see Sources/SheetMusicAndroidJNI/AudioMidiBridge+Timeline.swift
     fun nativeItemEndTick(scoreHandle: Long, idBytes: ByteArray): Long {
         val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
         return SwiftJavaJNI.nativeItemEndTick(
             scoreHandle,
-            io.github.jiyimeta.sheetmusic.swiftjava.Data.fromByteArray(idBytes, arena),
+            SwiftData.fromByteArray(idBytes, arena),
         )
+    }
+
+    fun nativeRenderMidi(scoreHandle: Long): ByteArray {
+        val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
+        return SwiftJavaJNI.nativeRenderMidi(scoreHandle, arena).toByteArray()
+    }
+
+    fun nativeTimelineSummary(scoreHandle: Long): LongArray =
+        SwiftJavaJNI.nativeTimelineSummary(scoreHandle)
+
+    fun nativeFrameAtTick(scoreHandle: Long, tick: Long): ByteArray {
+        val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
+        return SwiftJavaJNI.nativeFrameAtTick(scoreHandle, tick, arena).toByteArray()
+    }
+
+    fun nativeFrameForCursor(scoreHandle: Long, cursorBytes: ByteArray): ByteArray {
+        val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
+        return SwiftJavaJNI.nativeFrameForCursor(
+            scoreHandle,
+            SwiftData.fromByteArray(cursorBytes, arena),
+            arena,
+        ).toByteArray()
+    }
+
+    fun nativeMetronomeBeats(scoreHandle: Long): ByteArray {
+        val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
+        return SwiftJavaJNI.nativeMetronomeBeats(scoreHandle, arena).toByteArray()
+    }
+
+    fun nativeStaffParams(scoreHandle: Long): ByteArray {
+        val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
+        return SwiftJavaJNI.nativeStaffParams(scoreHandle, arena).toByteArray()
+    }
+
+    fun nativeEarliestOf(scoreHandle: Long, idsBytes: ByteArray): ByteArray {
+        val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
+        return SwiftJavaJNI.nativeEarliestOf(
+            scoreHandle,
+            SwiftData.fromByteArray(idsBytes, arena),
+            arena,
+        ).toByteArray()
     }
 }

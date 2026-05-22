@@ -83,100 +83,46 @@ public func nativeItemEndTick(scoreHandle: Int64, idBytes: Data) -> Int64 {
     return AudioMidiBridge.itemEndTick(score: score, id: id)
 }
 
-#if os(Android)
-    import CJNI
+/// JNI entry point exposed via swift-java for the Kotlin
+/// `SheetMusicAudioJNI.nativeTimelineSummary(...)` call site. Returns
+/// `[totalTicks, totalSecondsMicros, division]`, or an empty array when
+/// the score handle is unknown.
+public func nativeTimelineSummary(scoreHandle: Int64) -> [Int64] {
+    guard let score = scoreTable.value(for: scoreHandle) else { return [] }
+    let summary = AudioMidiBridge.timelineSummary(score: score)
+    return [summary.totalTicks, summary.totalSecondsMicros, summary.division]
+}
 
-    @_cdecl("Java_io_github_jiyimeta_sheetmusic_audio_jni_SheetMusicAudioJNI_nativeTimelineSummary")
-    // swiftlint:disable:next identifier_name
-    public func Java_io_github_jiyimeta_sheetmusic_audio_jni_SheetMusicAudioJNI_nativeTimelineSummary(
-        _ envPtr: UnsafeMutablePointer<JNIEnv?>,
-        _ clazz: jclass,
-        _ scoreHandle: jlong,
-    ) -> jlongArray? {
-        guard let env = envPtr.pointee else { return nil }
-        guard let score = scoreTable.value(for: scoreHandle) else {
-            return env.pointee.NewLongArray(envPtr, 0)
-        }
-        let summary = AudioMidiBridge.timelineSummary(score: score)
-        var values: [Int64] = [
-            summary.totalTicks,
-            summary.totalSecondsMicros,
-            summary.division,
-        ]
-        let array = env.pointee.NewLongArray(envPtr, 3)
-        values.withUnsafeMutableBufferPointer { ptr in
-            guard let base = ptr.baseAddress else { return }
-            env.pointee.SetLongArrayRegion(envPtr, array, 0, 3, base)
-        }
-        return array
-    }
+/// JNI entry point exposed via swift-java for the Kotlin
+/// `SheetMusicAudioJNI.nativeFrameAtTick(...)` call site. Returns an empty
+/// `Data` when the score handle is unknown or the tick has no frame.
+public func nativeFrameAtTick(scoreHandle: Int64, tick: Int64) -> Data {
+    guard let score = scoreTable.value(for: scoreHandle) else { return Data() }
+    return AudioMidiBridge.frameAtTick(score: score, tick: tick)
+}
 
-    @_cdecl("Java_io_github_jiyimeta_sheetmusic_audio_jni_SheetMusicAudioJNI_nativeFrameAtTick")
-    // swiftlint:disable:next identifier_name
-    public func Java_io_github_jiyimeta_sheetmusic_audio_jni_SheetMusicAudioJNI_nativeFrameAtTick(
-        _ envPtr: UnsafeMutablePointer<JNIEnv?>,
-        _ clazz: jclass,
-        _ scoreHandle: jlong,
-        _ tick: jlong,
-    ) -> jbyteArray? {
-        guard let env = envPtr.pointee else { return nil }
-        guard let score = scoreTable.value(for: scoreHandle) else {
-            return env.pointee.NewByteArray(envPtr, 0)
-        }
-        let data = AudioMidiBridge.frameAtTick(score: score, tick: tick)
-        guard !data.isEmpty else { return env.pointee.NewByteArray(envPtr, 0) }
-        return makeJByteArray(env: envPtr, bytes: data)
-    }
+/// JNI entry point exposed via swift-java for the Kotlin
+/// `SheetMusicAudioJNI.nativeFrameForCursor(...)` call site. Returns an
+/// empty `Data` when the score handle is unknown, the cursor payload is
+/// empty / undecodable, or the timeline has no frame for the cursor.
+public func nativeFrameForCursor(scoreHandle: Int64, cursorBytes: Data) -> Data {
+    guard let score = scoreTable.value(for: scoreHandle) else { return Data() }
+    guard !cursorBytes.isEmpty,
+          let cursor = try? ScoreCursorCodec.decode(cursorBytes)
+    else { return Data() }
+    return AudioMidiBridge.frameForCursor(score: score, cursor: cursor)
+}
 
-    @_cdecl("Java_io_github_jiyimeta_sheetmusic_audio_jni_SheetMusicAudioJNI_nativeFrameForCursor")
-    // swiftlint:disable:next identifier_name
-    public func Java_io_github_jiyimeta_sheetmusic_audio_jni_SheetMusicAudioJNI_nativeFrameForCursor(
-        _ envPtr: UnsafeMutablePointer<JNIEnv?>,
-        _ clazz: jclass,
-        _ scoreHandle: jlong,
-        _ cursorBytes: jbyteArray,
-    ) -> jbyteArray? {
-        guard let env = envPtr.pointee else { return nil }
-        guard let score = scoreTable.value(for: scoreHandle) else {
-            return env.pointee.NewByteArray(envPtr, 0)
-        }
-        let cursorData = readJByteArray(env: envPtr, array: cursorBytes)
-        guard !cursorData.isEmpty,
-              let cursor = try? ScoreCursorCodec.decode(cursorData)
-        else { return env.pointee.NewByteArray(envPtr, 0) }
-        let data = AudioMidiBridge.frameForCursor(score: score, cursor: cursor)
-        guard !data.isEmpty else { return env.pointee.NewByteArray(envPtr, 0) }
-        return makeJByteArray(env: envPtr, bytes: data)
-    }
+/// JNI entry point exposed via swift-java for the Kotlin
+/// `SheetMusicAudioJNI.nativeMetronomeBeats(...)` call site.
+public func nativeMetronomeBeats(scoreHandle: Int64) -> Data {
+    guard let score = scoreTable.value(for: scoreHandle) else { return Data() }
+    return AudioMidiBridge.metronomeBeats(score: score)
+}
 
-    @_cdecl("Java_io_github_jiyimeta_sheetmusic_audio_jni_SheetMusicAudioJNI_nativeMetronomeBeats")
-    // swiftlint:disable:next identifier_name
-    public func Java_io_github_jiyimeta_sheetmusic_audio_jni_SheetMusicAudioJNI_nativeMetronomeBeats(
-        _ envPtr: UnsafeMutablePointer<JNIEnv?>,
-        _ clazz: jclass,
-        _ scoreHandle: jlong,
-    ) -> jbyteArray? {
-        guard let env = envPtr.pointee else { return nil }
-        guard let score = scoreTable.value(for: scoreHandle) else {
-            return env.pointee.NewByteArray(envPtr, 0)
-        }
-        let data = AudioMidiBridge.metronomeBeats(score: score)
-        return makeJByteArray(env: envPtr, bytes: data)
-    }
-
-    @_cdecl("Java_io_github_jiyimeta_sheetmusic_audio_jni_SheetMusicAudioJNI_nativeStaffParams")
-    // swiftlint:disable:next identifier_name
-    public func Java_io_github_jiyimeta_sheetmusic_audio_jni_SheetMusicAudioJNI_nativeStaffParams(
-        _ envPtr: UnsafeMutablePointer<JNIEnv?>,
-        _ clazz: jclass,
-        _ scoreHandle: jlong,
-    ) -> jbyteArray? {
-        guard let env = envPtr.pointee else { return nil }
-        guard let score = scoreTable.value(for: scoreHandle) else {
-            return env.pointee.NewByteArray(envPtr, 0)
-        }
-        let data = AudioMidiBridge.staffParams(score: score)
-        return makeJByteArray(env: envPtr, bytes: data)
-    }
-
-#endif
+/// JNI entry point exposed via swift-java for the Kotlin
+/// `SheetMusicAudioJNI.nativeStaffParams(...)` call site.
+public func nativeStaffParams(scoreHandle: Int64) -> Data {
+    guard let score = scoreTable.value(for: scoreHandle) else { return Data() }
+    return AudioMidiBridge.staffParams(score: score)
+}

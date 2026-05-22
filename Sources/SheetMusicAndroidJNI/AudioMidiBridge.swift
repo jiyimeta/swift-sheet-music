@@ -72,6 +72,18 @@ public func nativePitchAndStaffOfNote(scoreHandle: Int64, noteIdBytes: Data) -> 
     return AudioMidiBridge.pitchAndStaffOfNote(score: score, noteId: noteId)
 }
 
+/// JNI entry point exposed via swift-java for the Kotlin
+/// `SheetMusicAudioJNI.nativeEarliestOf(...)` call site. Returns an empty
+/// `Data` when the score handle is unknown, the ids payload is empty /
+/// undecodable, or the timeline reports no earliest item.
+public func nativeEarliestOf(scoreHandle: Int64, idsBytes: Data) -> Data {
+    guard let score = scoreTable.value(for: scoreHandle) else { return Data() }
+    guard !idsBytes.isEmpty,
+          let ids = try? ScoreItemIDCodec.decodeArray(idsBytes)
+    else { return Data() }
+    return AudioMidiBridge.earliestOf(score: score, ids: ids)
+}
+
 // MARK: - @_cdecl JNI helpers (Android only)
 
 #if os(Android)
@@ -109,24 +121,4 @@ public func nativePitchAndStaffOfNote(scoreHandle: Int64, noteIdBytes: Data) -> 
         return Data(buf)
     }
 
-    @_cdecl("Java_io_github_jiyimeta_sheetmusic_audio_jni_SheetMusicAudioJNI_nativeEarliestOf")
-    // swiftlint:disable:next identifier_name
-    public func Java_io_github_jiyimeta_sheetmusic_audio_jni_SheetMusicAudioJNI_nativeEarliestOf(
-        _ envPtr: UnsafeMutablePointer<JNIEnv?>,
-        _ clazz: jclass,
-        _ scoreHandle: jlong,
-        _ idsBytes: jbyteArray,
-    ) -> jbyteArray? {
-        guard let env = envPtr.pointee else { return nil }
-        guard let score = scoreTable.value(for: scoreHandle) else {
-            return env.pointee.NewByteArray(envPtr, 0)
-        }
-        let data = readJByteArray(env: envPtr, array: idsBytes)
-        guard !data.isEmpty,
-              let ids = try? ScoreItemIDCodec.decodeArray(data)
-        else { return env.pointee.NewByteArray(envPtr, 0) }
-        let result = AudioMidiBridge.earliestOf(score: score, ids: ids)
-        guard !result.isEmpty else { return env.pointee.NewByteArray(envPtr, 0) }
-        return makeJByteArray(env: envPtr, bytes: result)
-    }
 #endif

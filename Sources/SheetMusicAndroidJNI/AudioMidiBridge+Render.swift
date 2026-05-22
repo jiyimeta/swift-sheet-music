@@ -44,23 +44,15 @@ extension AudioMidiBridge {
     }
 }
 
-#if os(Android)
-    import CJNI
+// MARK: - swift-java entry points
 
-    @_cdecl("Java_io_github_jiyimeta_sheetmusic_audio_jni_SheetMusicAudioJNI_nativeRenderMidi")
-    // swiftlint:disable:next identifier_name
-    public func Java_io_github_jiyimeta_sheetmusic_audio_jni_SheetMusicAudioJNI_nativeRenderMidi(
-        _ envPtr: UnsafeMutablePointer<JNIEnv?>,
-        _ clazz: jclass,
-        _ scoreHandle: jlong,
-    ) -> jbyteArray? {
-        guard let env = envPtr.pointee else { return nil }
-        guard let score = scoreTable.value(for: scoreHandle) else {
-            return env.pointee.NewByteArray(envPtr, 0)
-        }
-        guard let bytes = try? AudioMidiBridge.renderMidi(score: score) else {
-            return env.pointee.NewByteArray(envPtr, 0)
-        }
-        return makeJByteArray(env: envPtr, bytes: bytes)
+/// JNI entry point exposed via swift-java for the Kotlin
+/// `SheetMusicAudioJNI.nativeRenderMidi(...)` call site. Returns an
+/// empty `Data` when the score handle is unknown or rendering throws.
+public func nativeRenderMidi(scoreHandle: Int64) -> Data {
+    guard let score = scoreTable.value(for: scoreHandle) else { return Data() }
+    guard let bytes = try? AudioMidiBridge.renderMidi(score: score) else {
+        return Data()
     }
-#endif
+    return bytes
+}
