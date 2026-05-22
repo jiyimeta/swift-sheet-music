@@ -8,49 +8,33 @@ import SheetMusicCore
 /// duplicating the table.
 let scoreTable = HandleTable<Score>()
 
+// MARK: - Score lifecycle (swift-java entry points)
+
+/// JNI entry point exposed via swift-java for the Kotlin
+/// `SheetMusicJNI.nativeLoadScore(...)` call site. Returns 0 on parse
+/// failure or empty input.
+public func nativeLoadScore(bytes: Data) -> Int64 {
+    guard !bytes.isEmpty else { return 0 }
+    do {
+        let score = try ScoreBridge.loadScore(bytes: bytes)
+        return scoreTable.insert(score)
+    } catch {
+        return 0
+    }
+}
+
+/// JNI entry point exposed via swift-java for the Kotlin
+/// `SheetMusicJNI.nativeReleaseScore(...)` call site. Releases the score
+/// handle and its associated layout document cache entry.
+public func nativeReleaseScore(handle: Int64) {
+    scoreTable.release(handle)
+    LayoutDocumentCache.release(handle)
+}
+
 #if os(Android)
     import CJNI
     import SheetMusicLayout
     import SheetMusicWireFormat
-
-    // MARK: - Score lifecycle
-
-    @_cdecl("Java_io_github_jiyimeta_sheetmusic_SheetMusicJNI_nativeLoadScore")
-    // swiftlint:disable:next identifier_name
-    public func Java_io_github_jiyimeta_sheetmusic_SheetMusicJNI_nativeLoadScore(
-        _ envPtr: UnsafeMutablePointer<JNIEnv?>,
-        _ clazz: jclass,
-        _ byteArray: jbyteArray,
-    ) -> jlong {
-        guard let env = envPtr.pointee else { return 0 }
-        let len = env.pointee.GetArrayLength(envPtr, byteArray)
-        guard len > 0 else { return 0 }
-        var bytes = [UInt8](repeating: 0, count: Int(len))
-        bytes.withUnsafeMutableBufferPointer { buf in
-            guard let base = buf.baseAddress else { return }
-            base.withMemoryRebound(to: jbyte.self, capacity: Int(len)) { jbytes in
-                env.pointee.GetByteArrayRegion(envPtr, byteArray, 0, len, jbytes)
-            }
-        }
-        let data = Data(bytes)
-        do {
-            let score = try ScoreBridge.loadScore(bytes: data)
-            return scoreTable.insert(score)
-        } catch {
-            return 0
-        }
-    }
-
-    @_cdecl("Java_io_github_jiyimeta_sheetmusic_SheetMusicJNI_nativeReleaseScore")
-    // swiftlint:disable:next identifier_name
-    public func Java_io_github_jiyimeta_sheetmusic_SheetMusicJNI_nativeReleaseScore(
-        _ envPtr: UnsafeMutablePointer<JNIEnv?>,
-        _ clazz: jclass,
-        _ handle: jlong,
-    ) {
-        scoreTable.release(handle)
-        LayoutDocumentCache.release(handle)
-    }
 
     /// Reads `workTitle` + `composer` from the score's `metaTags`
     /// dictionary and returns them as a `ScoreMetadataWire` blob
