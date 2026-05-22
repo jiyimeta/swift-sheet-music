@@ -37,6 +37,13 @@ var targets: [Target] = [
         dependencies: ["SheetMusicWireFormatMacros"],
     ),
     .target(
+        name: "WireFormatSchema",
+        dependencies: [
+            .product(name: "SwiftSyntax", package: "swift-syntax"),
+            .product(name: "SwiftParser", package: "swift-syntax"),
+        ],
+    ),
+    .target(
         name: "SheetMusicXMLTools",
         dependencies: ["SheetMusicCore"],
     ),
