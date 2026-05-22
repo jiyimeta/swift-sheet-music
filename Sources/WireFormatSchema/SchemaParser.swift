@@ -33,6 +33,61 @@ final class WireTypeVisitor: SyntaxVisitor {
         return .skipChildren
     }
 
+    override func visit(_ node: EnumDeclSyntax) -> SyntaxVisitorContinueKind {
+        for attribute in node.attributes {
+            guard
+                let attr = attribute.as(AttributeSyntax.self)
+            else { continue }
+            let attrName = attr.attributeName.trimmedDescription
+            let target = AttributeArgumentExtractor.kotlinTarget(of: attr)
+            switch attrName {
+            case "WireFormatChoice":
+                types.append(.choice(WireChoice(
+                    name: node.name.text,
+                    cases: collectChoiceCases(from: node),
+                    kotlinTarget: target,
+                )))
+            case "WireFormatEnum":
+                types.append(.rawEnum(WireRawEnum(
+                    name: node.name.text,
+                    cases: collectRawCases(from: node),
+                    kotlinTarget: target,
+                )))
+            default:
+                continue
+            }
+        }
+        return .skipChildren
+    }
+
+    private func collectChoiceCases(from enumDecl: EnumDeclSyntax) -> [WireChoiceCase] {
+        var out: [WireChoiceCase] = []
+        for member in enumDecl.memberBlock.members {
+            guard let caseDecl = member.decl.as(EnumCaseDeclSyntax.self) else { continue }
+            for element in caseDecl.elements {
+                let payload: [String] = element.parameterClause?.parameters.map { param in
+                    param.type.trimmedDescription
+                } ?? []
+                out.append(WireChoiceCase(
+                    name: element.name.text,
+                    payloadTypes: payload,
+                ))
+            }
+        }
+        return out
+    }
+
+    private func collectRawCases(from enumDecl: EnumDeclSyntax) -> [String] {
+        var out: [String] = []
+        for member in enumDecl.memberBlock.members {
+            guard let caseDecl = member.decl.as(EnumCaseDeclSyntax.self) else { continue }
+            for element in caseDecl.elements {
+                out.append(element.name.text)
+            }
+        }
+        return out
+    }
+
     private func collectFields(from struct: StructDeclSyntax) -> [WireField] {
         var out: [WireField] = []
         for member in `struct`.memberBlock.members {

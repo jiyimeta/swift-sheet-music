@@ -24,3 +24,25 @@ import Testing
     ])
     #expect(s.kotlinTarget == .auto)
 }
+
+@Test func parsesChoiceEnum() throws {
+    let url = try #require(Bundle.module.url(
+        forResource: "ChoiceEnum",
+        withExtension: "swift",
+        subdirectory: "Fixtures",
+    ))
+    let source = try String(contentsOf: url, encoding: .utf8)
+
+    let schema = SchemaParser.parse(source: source, fileName: "ChoiceEnum.swift")
+
+    #expect(schema.types.count == 1)
+    guard case let .choice(c) = schema.types[0] else {
+        Issue.record("Expected choice, got \(schema.types[0])")
+        return
+    }
+    #expect(c.name == "ScoreCursorWire")
+    #expect(c.cases == [
+        WireChoiceCase(name: "item", payloadTypes: ["ScoreItemIDWire"]),
+        WireChoiceCase(name: "beat", payloadTypes: ["Int32", "Int32"]),
+    ])
+}
