@@ -46,6 +46,23 @@ public enum WireFormatError: Error, Equatable {
     case invalidUTF8
 }
 
+/// Per-type override controlling how the external Kotlin codec
+/// emitter (`emit-kotlin-codecs`) handles this type. The Swift macro
+/// expansion ignores this argument — it's metadata for the external
+/// tool only.
+///
+/// - `.auto`: resolve target Kotlin location via project config
+///   (`kotlin-codegen.json`). Default when the argument is omitted.
+/// - `.skip`: do not emit a Kotlin codec for this type. Use for types
+///   that exist only in Swift-side flows.
+/// - `.explicit(String)`: place the Kotlin codec at the given
+///   fully-qualified package + class name, ignoring config rules.
+public enum KotlinTarget: Sendable {
+    case auto
+    case skip
+    case explicit(String)
+}
+
 /// Attach to a `struct` to synthesize a `WireFormat` conformance whose
 /// encoding is each stored property in declaration order. All stored
 /// property types must themselves conform to `WireFormat`.
@@ -67,6 +84,16 @@ public macro WireFormat() = #externalMacro(
     type: "WireFormatMacro",
 )
 
+@attached(
+    extension,
+    conformances: WireFormatEncodable, WireFormatDecodable,
+    names: named(encode(into:)), named(init(from:))
+)
+public macro WireFormat(kotlin: KotlinTarget) = #externalMacro(
+    module: "SheetMusicWireFormatMacros",
+    type: "WireFormatMacro",
+)
+
 /// Attach to a `CaseIterable & Equatable` enum to synthesize a `WireFormat`
 /// conformance whose encoding is the case's `allCases` ordinal as a single
 /// `UInt8`. Caps at 256 cases.
@@ -81,6 +108,16 @@ public macro WireFormat() = #externalMacro(
     names: named(encode(into:)), named(init(from:))
 )
 public macro WireFormatEnum() = #externalMacro(
+    module: "SheetMusicWireFormatMacros",
+    type: "WireFormatEnumMacro",
+)
+
+@attached(
+    extension,
+    conformances: WireFormatEncodable, WireFormatDecodable,
+    names: named(encode(into:)), named(init(from:))
+)
+public macro WireFormatEnum(kotlin: KotlinTarget) = #externalMacro(
     module: "SheetMusicWireFormatMacros",
     type: "WireFormatEnumMacro",
 )
@@ -107,6 +144,16 @@ public macro WireFormatEnum() = #externalMacro(
     names: named(encode(into:)), named(init(from:))
 )
 public macro WireFormatChoice() = #externalMacro(
+    module: "SheetMusicWireFormatMacros",
+    type: "WireFormatChoiceMacro",
+)
+
+@attached(
+    extension,
+    conformances: WireFormatEncodable, WireFormatDecodable,
+    names: named(encode(into:)), named(init(from:))
+)
+public macro WireFormatChoice(kotlin: KotlinTarget) = #externalMacro(
     module: "SheetMusicWireFormatMacros",
     type: "WireFormatChoiceMacro",
 )
