@@ -14,9 +14,7 @@ internal object SheetMusicAudioJNI {
         io.github.jiyimeta.sheetmusic.SheetMusicJNI.toString()
     }
 
-    external fun nativeResolveExportTickRange(scoreHandle: Long, rangeBytes: ByteArray): LongArray
-
-    // All other entry points have been migrated to swift-java. The Kotlin
+    // All entry points have been migrated to swift-java. The Kotlin
     // wrappers below delegate through the generated SheetMusicAndroidJNI
     // class (aliased SwiftJavaJNI), passing/receiving `Data` through the
     // default auto-arena.
@@ -81,5 +79,13 @@ internal object SheetMusicAudioJNI {
             SwiftData.fromByteArray(idsBytes, arena),
             arena,
         ).toByteArray()
+    }
+
+    fun nativeResolveExportTickRange(scoreHandle: Long, rangeBytes: ByteArray): LongArray {
+        val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
+        return SwiftJavaJNI.nativeResolveExportTickRange(
+            scoreHandle,
+            SwiftData.fromByteArray(rangeBytes, arena),
+        )
     }
 }
