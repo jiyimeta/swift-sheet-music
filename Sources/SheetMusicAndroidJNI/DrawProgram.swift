@@ -31,7 +31,7 @@ public enum DrawProgram {
     public static let magic: UInt32 = 0x534D_4450 // "SMDP"
     public static let version: UInt32 = 4
 
-    @WireFormatEnum
+    @WireFormatEnum(kotlin: .skip)
     public enum FontID: UInt8, Sendable, CaseIterable, Equatable {
         case textRoman = 0x00 // body text (Edwin / system serif)
         case smufl = 0x01 // music glyphs (Bravura / Edwin SMuFL)
@@ -41,7 +41,7 @@ public enum DrawProgram {
 /// One page worth of draw commands. The shape mirrors how the Kotlin
 /// renderer paints — paint everything in `commands` onto a canvas sized
 /// `widthMM × heightMM`.
-@WireFormat
+@WireFormat(kotlin: .skip)
 public struct EncodablePage: Sendable, Equatable {
     public var widthMM: Double
     public var heightMM: Double
@@ -57,7 +57,7 @@ public struct EncodablePage: Sendable, Equatable {
 /// One painter command. The encoded discriminator is the case's
 /// declaration order (`moveTo` = 0 … `cubicTo` = 7). Reorder with care:
 /// changes here are wire-breaking across the Kotlin boundary.
-@WireFormatChoice
+@WireFormatChoice(kotlin: .skip)
 public enum DrawCommand: Sendable, Equatable {
     case moveTo(x: Double, y: Double)
     case lineTo(x: Double, y: Double)
@@ -121,7 +121,7 @@ public enum DrawProgramCodec {
     }
 }
 
-@WireFormat
+@WireFormat(kotlin: .skip)
 struct DrawProgramWire {
     var magic: UInt32
     var version: UInt32

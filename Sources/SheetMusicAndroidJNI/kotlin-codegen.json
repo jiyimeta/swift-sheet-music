@@ -9,16 +9,6 @@
       "codecPackage": "io.github.jiyimeta.sheetmusic"
     },
     {
-      "pattern": "DrawProgram*",
-      "modelPackage": "com.example.sheetmusic.draw.model",
-      "codecPackage": "com.example.sheetmusic.draw"
-    },
-    {
-      "pattern": "DrawCommand*",
-      "modelPackage": "com.example.sheetmusic.draw.model",
-      "codecPackage": "com.example.sheetmusic.draw"
-    },
-    {
       "pattern": "SMuFL*",
       "modelPackage": "io.github.jiyimeta.sheetmusic",
       "codecPackage": "io.github.jiyimeta.sheetmusic"
