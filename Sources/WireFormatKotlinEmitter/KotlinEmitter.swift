@@ -29,17 +29,17 @@ public struct KotlinEmitter: Sendable {
             guard case let .emit(modelPkg, codecPkg, kotlinName) = resolved else { continue }
             switch type {
             case let .struct(s):
-                // Placeholder: real emission implemented in Task 8 (StructEmitter).
-                _ = (s, modelPkg, codecPkg, kotlinName)
-                throw KotlinEmitterError.unsupportedType(type.name)
+                files.append(StructEmitter.emit(
+                    s,
+                    kotlinName: kotlinName,
+                    modelPackage: modelPkg,
+                    codecPackage: codecPkg,
+                    nameTransform: config.nameTransform,
+                ))
             case let .choice(c):
-                // Placeholder: real emission implemented in Task 9 (ChoiceEmitter).
-                _ = (c, modelPkg, codecPkg, kotlinName)
-                throw KotlinEmitterError.unsupportedType(type.name)
+                throw KotlinEmitterError.unsupportedType("WireFormatChoice not yet implemented: \(c.name)")
             case let .rawEnum(e):
-                // Placeholder: real emission implemented in Task 10 (EnumEmitter).
-                _ = (e, modelPkg, codecPkg, kotlinName)
-                throw KotlinEmitterError.unsupportedType(type.name)
+                throw KotlinEmitterError.unsupportedType("WireFormatEnum not yet implemented: \(e.name)")
             }
         }
         return files
