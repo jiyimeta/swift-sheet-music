@@ -115,6 +115,8 @@ val emitKotlinCodecs by tasks.registering(Exec::class) {
     inputs.file(packageRoot.resolve("Sources/SheetMusicAndroidJNI/kotlin-codegen.json"))
         .withPropertyName("codegenConfig")
     outputs.dir(emitKotlinCodecsOutput)
+    // Skip if outputs are already populated (pre-flight or prior run).
+    onlyIf { !emitKotlinCodecsOutput.get().asFile.walk().any { it.isFile } }
     commandLine(
         "swift", "run", "--package-path", packageRoot.absolutePath,
         "emit-kotlin-codecs",

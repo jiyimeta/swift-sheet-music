@@ -23,7 +23,7 @@ class ClefAnchorDecoderTest {
             0x04, 0x00, 0x00, 0x00,  // elementIndex = 4
         )
         val r = BinaryReader(bytes)
-        val decoded = ClefAnchorDecoder.decodePayload(r)
+        val decoded = ClefAnchorCodec.decodePayload(r)
         assertEquals(
             ClefAnchor.Explicit(
                 VoiceElementID(
@@ -48,7 +48,7 @@ class ClefAnchorDecoderTest {
             0x00, 0x00, 0x00, 0x00,  // staffIndexInPart = 0
         )
         val r = BinaryReader(bytes)
-        val decoded = ClefAnchorDecoder.decodePayload(r)
+        val decoded = ClefAnchorCodec.decodePayload(r)
         assertEquals(
             ClefAnchor.StaffDefault(StaffAddress(partIndex = 0, staffIndexInPart = 0)),
             decoded,
@@ -64,7 +64,7 @@ class ClefAnchorDecoderTest {
             0x01, 0x00, 0x00, 0x00,  // staffIndexInPart = 1
         )
         val r = BinaryReader(bytes)
-        val decoded = ClefAnchorDecoder.decodePayload(r)
+        val decoded = ClefAnchorCodec.decodePayload(r)
         assertEquals(
             ClefAnchor.StaffDefault(StaffAddress(partIndex = 2, staffIndexInPart = 1)),
             decoded,
@@ -78,10 +78,10 @@ class ClefAnchorDecoderTest {
         val bytes = byteArrayOf(0x02)  // kind = 2 (unknown)
         val r = BinaryReader(bytes)
         try {
-            ClefAnchorDecoder.decodePayload(r)
+            ClefAnchorCodec.decodePayload(r)
             fail("Expected error for unknown kind")
-        } catch (_: IllegalStateException) {
-            // expected
+        } catch (_: IllegalArgumentException) {
+            // expected — generated codec throws IllegalArgumentException
         }
     }
 }

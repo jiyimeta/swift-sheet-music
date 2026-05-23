@@ -90,13 +90,13 @@ internal class FluidSynthEngine(
         // Load the default GM SF2 once; resolve the URI via defaultGmSoundfontUri
         // first, falling back to a per-staff lookup for the first staff.
         val uri = resolver.defaultGmSoundfontUri
-            ?: resolver.soundfontUriFor(params[0].bankLSB, params[0].program, params[0].isDrums)
+            ?: resolver.soundfontUriFor(params[0].bankLSB.toInt(), params[0].program.toInt(), params[0].isDrums)
         val sfid = driver.loadSoundFont(uri, context)
         loadedSfid = sfid
 
         // Populate per-staff load params (resolved bank: drums use 128, melodic use bankLSB).
         for (p in params) {
-            val resolvedBank = if (p.isDrums) 128 else p.bankLSB
+            val resolvedBank = if (p.isDrums) 128 else p.bankLSB.toInt()
             staffLoadParams[p.staffIndex] = StaffLoadParams(effectiveBank = resolvedBank, isDrums = p.isDrums)
         }
 
@@ -112,7 +112,7 @@ internal class FluidSynthEngine(
                     sfid = sfid,
                     channel = p.staffIndex,
                     bank = resolved.effectiveBank,
-                    program = p.program.coerceIn(0, 127),
+                    program = p.program.toInt().coerceIn(0, 127),
                 )
             }
         }

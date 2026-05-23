@@ -14,23 +14,23 @@ import org.junit.Test
 //   u8 discriminator
 //     0 = Full              (no payload)
 //     1 = CurrentLoop       (no payload)
-//     2 = Region            ScoreCursor(from) + ScoreCursor(to)
-//     3 = RegionThroughEnd  ScoreCursor(from) + ScoreItemID(last)
+//     2 = Region            ScoreCursor(arg0) + ScoreCursor(arg1)
+//     3 = RegionThroughEnd  ScoreCursor(arg0) + ScoreItemID(arg1)
 class AudioExportRangeEncoderTest {
     @Test fun encodesFullAsTagZero() {
-        val bytes = AudioExportRangeEncoder.encode(AudioExportRange.Full)
+        val bytes = AudioExportRangeCodec.encode(AudioExportRange.Full)
         assertArrayEquals(byteArrayOf(0x00), bytes)
     }
 
     @Test fun encodesCurrentLoopAsTagOne() {
-        val bytes = AudioExportRangeEncoder.encode(AudioExportRange.CurrentLoop)
+        val bytes = AudioExportRangeCodec.encode(AudioExportRange.CurrentLoop)
         assertArrayEquals(byteArrayOf(0x01), bytes)
     }
 
     @Test fun encodesRegionWithCursorPair() {
         val from = ScoreCursor.Beat(measureIndex = 0, tickInMeasure = 0)
         val to = ScoreCursor.Beat(measureIndex = 1, tickInMeasure = 240)
-        val bytes = AudioExportRangeEncoder.encode(AudioExportRange.Region(from, to))
+        val bytes = AudioExportRangeCodec.encode(AudioExportRange.Region(from, to))
 
         // tag(1) + ScoreCursor.Beat × 2 (each 9 bytes) = 19 bytes.
         assertEquals(0x02.toByte(), bytes[0])
@@ -61,7 +61,7 @@ class AudioExportRangeEncoderTest {
                 noteIndexInChord = 0,
             ),
         )
-        val bytes = AudioExportRangeEncoder.encode(AudioExportRange.RegionThroughEnd(from, last))
+        val bytes = AudioExportRangeCodec.encode(AudioExportRange.RegionThroughEnd(from, last))
 
         // tag(1) + Beat cursor(9) + ScoreItemID.Note(1 + 24) = 35 bytes.
         assertEquals(0x03.toByte(), bytes[0])

@@ -105,15 +105,15 @@ internal class AudioExporter(
     ) {
         val uri = resolver.defaultGmSoundfontUri
             ?: staffParams.firstOrNull()?.let {
-                resolver.soundfontUriFor(it.bankLSB, it.program, it.isDrums)
+                resolver.soundfontUriFor(it.bankLSB.toInt(), it.program.toInt(), it.isDrums)
             }
         val sfid = uri?.let { synth.loadSoundFont(it, context) } ?: -1
         if (sfid >= 0) {
             for (p in staffParams) {
                 if (p.isDrums) synth.setChannelType(p.staffIndex, isDrum = true)
-                val effectiveBank = if (p.isDrums) 128 else p.bankLSB
+                val effectiveBank = if (p.isDrums) 128 else p.bankLSB.toInt()
                 val mixerProgram = snapshot.mixerChannels
-                    .firstOrNull { it.staffIndex == p.staffIndex }?.program ?: p.program
+                    .firstOrNull { it.staffIndex == p.staffIndex }?.program ?: p.program.toInt()
                 synth.programSelect(sfid, p.staffIndex, effectiveBank, mixerProgram.coerceIn(0, 127))
             }
             val soloed = snapshot.mixerChannels.any { it.isSoloed }

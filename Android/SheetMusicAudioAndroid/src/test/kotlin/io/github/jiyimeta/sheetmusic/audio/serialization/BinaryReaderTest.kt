@@ -9,14 +9,14 @@ class BinaryReaderTest {
     @Test
     fun readU8_singleByte() {
         val r = BinaryReader(byteArrayOf(0x42))
-        assertEquals(0x42, r.readU8())
+        assertEquals(0x42, r.readU8().toInt())
         assertEquals(0, r.remaining)
     }
 
     @Test
     fun readU8_maxValue() {
         val r = BinaryReader(byteArrayOf(0xFF.toByte()))
-        assertEquals(255, r.readU8())
+        assertEquals(255, r.readU8().toInt())
     }
 
     @Test

@@ -16,7 +16,7 @@ import io.github.jiyimeta.sheetmusic.audio.model.ScoreCursor
 import io.github.jiyimeta.sheetmusic.audio.model.ScoreItemID
 import io.github.jiyimeta.sheetmusic.audio.model.StaffAddress
 import io.github.jiyimeta.sheetmusic.audio.model.StaffParams
-import io.github.jiyimeta.sheetmusic.audio.serialization.FrameDecoder
+import io.github.jiyimeta.sheetmusic.audio.serialization.BinaryWriter
 import io.github.jiyimeta.sheetmusic.audio.serialization.MetronomeBeatCodec
 import io.github.jiyimeta.sheetmusic.audio.serialization.NoteIDCodec
 import io.github.jiyimeta.sheetmusic.audio.serialization.ScoreCursorCodec
@@ -60,18 +60,32 @@ private class StubSoundfontResolver : SoundfontResolver {
 
 // ── Helpers for constructing encoded payloads ──────────────────────────────
 
-private fun twoStavesPayload(): ByteArray = StaffParamsCodec.encodeArray(
+private fun encodeStaffParamsArray(params: List<StaffParams>): ByteArray {
+    val w = BinaryWriter()
+    w.writeI32(params.size)
+    for (p in params) StaffParamsCodec.encodePayload(p, w)
+    return w.toByteArray()
+}
+
+private fun encodeMetronomeBeatArray(beats: List<MetronomeBeat>): ByteArray {
+    val w = BinaryWriter()
+    w.writeI32(beats.size)
+    for (b in beats) MetronomeBeatCodec.encodePayload(b, w)
+    return w.toByteArray()
+}
+
+private fun twoStavesPayload(): ByteArray = encodeStaffParamsArray(
     listOf(
         StaffParams(0, 0, 0, false, 1L),
         StaffParams(1, 0, 0, true, 2L),
     ),
 )
 
-private fun oneStaffPayload(): ByteArray = StaffParamsCodec.encodeArray(
+private fun oneStaffPayload(): ByteArray = encodeStaffParamsArray(
     listOf(StaffParams(0, 0, 0, false, 1L)),
 )
 
-private fun downbeatOnlyBeats(): ByteArray = MetronomeBeatCodec.encodeArray(
+private fun downbeatOnlyBeats(): ByteArray = encodeMetronomeBeatArray(
     listOf(MetronomeBeat(tick = 0, isDownbeat = true)),
 )
 
@@ -221,7 +235,7 @@ class AndroidPlaybackEngineTest {
     fun `prepare throws EmptyScore when no staves`() = runTest {
         val bridge = FakeJniBridge(
             timelineSummaryResult = longArrayOf(960L, 2_000_000L, 480L),
-            staffParamsResult = StaffParamsCodec.encodeArray(emptyList()),
+            staffParamsResult = encodeStaffParamsArray(emptyList()),
             metronomeBeatsResult = downbeatOnlyBeats(),
             renderMidiResult = minimalSmf,
         )
@@ -245,7 +259,7 @@ class AndroidPlaybackEngineTest {
     fun `prepare throws TooManyStaves when more than 16 staves`() = runTest {
         val bridge = FakeJniBridge(
             timelineSummaryResult = longArrayOf(960L, 2_000_000L, 480L),
-            staffParamsResult = StaffParamsCodec.encodeArray(
+            staffParamsResult = encodeStaffParamsArray(
                 (0..16).map { StaffParams(it, 0, 0, false, it.toLong()) },
             ),
             metronomeBeatsResult = downbeatOnlyBeats(),
@@ -767,7 +781,7 @@ class AndroidPlaybackEngineTest {
 
     @Test
     fun `prepare sets initial program from StaffParams`() = runTest(testDispatcher) {
-        val payload = StaffParamsCodec.encodeArray(
+        val payload = encodeStaffParamsArray(
             listOf(StaffParams(0, 0, 24, false, 1L)),  // acoustic guitar nylon
         )
         val bridge = FakeJniBridge(
@@ -784,7 +798,7 @@ class AndroidPlaybackEngineTest {
 
     @Test
     fun `prepare sets null program for drum staff`() = runTest(testDispatcher) {
-        val payload = StaffParamsCodec.encodeArray(
+        val payload = encodeStaffParamsArray(
             listOf(StaffParams(0, 0, 0, isDrums = true, partAddressHash = 1L)),
         )
         val bridge = FakeJniBridge(
@@ -801,7 +815,7 @@ class AndroidPlaybackEngineTest {
 
     @Test
     fun `setStaffProgram updates mixer and synth`() = runTest(testDispatcher) {
-        val payload = StaffParamsCodec.encodeArray(
+        val payload = encodeStaffParamsArray(
             listOf(StaffParams(0, 0, 0, false, 1L)),
         )
         val bridge = FakeJniBridge(
@@ -1077,7 +1091,7 @@ class AndroidPlaybackEngineTest {
     ): AndroidPlaybackEngine {
         val bridge = FakeJniBridge(
             timelineSummaryResult = longArrayOf(960L, 2_000_000L, 480L),
-            staffParamsResult = StaffParamsCodec.encodeArray(
+            staffParamsResult = encodeStaffParamsArray(
                 (0 until staffCount).map { StaffParams(it, 0, 0, false, it.toLong()) },
             ),
             metronomeBeatsResult = downbeatOnlyBeats(),

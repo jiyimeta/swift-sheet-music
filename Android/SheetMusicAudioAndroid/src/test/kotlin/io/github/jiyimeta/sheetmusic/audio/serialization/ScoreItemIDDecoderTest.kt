@@ -57,7 +57,7 @@ class ScoreItemIDDecoderTest {
     @Test
     fun scoreItemIdNoteGoldenDecodes() {
         val bytes = loadGolden("scoreItemId-v1.bin")
-        val decoded = ScoreItemIDDecoder.decode(bytes)
+        val decoded = ScoreItemIDCodec.decode(bytes)
         assertEquals(ScoreItemID.Note(canonicalNoteID), decoded)
     }
 
@@ -66,7 +66,7 @@ class ScoreItemIDDecoderTest {
     @Test
     fun scoreItemIdRestGoldenDecodes() {
         val bytes = loadGolden("scoreItemId-rest-v1.bin")
-        val decoded = ScoreItemIDDecoder.decode(bytes)
+        val decoded = ScoreItemIDCodec.decode(bytes)
         assertEquals(ScoreItemID.Rest(canonicalRestID), decoded)
     }
 
@@ -75,7 +75,7 @@ class ScoreItemIDDecoderTest {
     @Test
     fun scoreItemIdTupletGoldenDecodes() {
         val bytes = loadGolden("scoreItemId-tuplet-v1.bin")
-        val decoded = ScoreItemIDDecoder.decode(bytes)
+        val decoded = ScoreItemIDCodec.decode(bytes)
         assertEquals(ScoreItemID.Tuplet(canonicalTupletID), decoded)
     }
 
@@ -84,7 +84,7 @@ class ScoreItemIDDecoderTest {
     @Test
     fun scoreItemIdClefExplicitGoldenDecodes() {
         val bytes = loadGolden("scoreItemId-clef-explicit-v1.bin")
-        val decoded = ScoreItemIDDecoder.decode(bytes)
+        val decoded = ScoreItemIDCodec.decode(bytes)
         assertEquals(ScoreItemID.Clef(canonicalClefExplicit), decoded)
     }
 
@@ -93,7 +93,7 @@ class ScoreItemIDDecoderTest {
     @Test
     fun scoreItemIdClefStaffDefaultGoldenDecodes() {
         val bytes = loadGolden("scoreItemId-clef-staffDefault-v1.bin")
-        val decoded = ScoreItemIDDecoder.decode(bytes)
+        val decoded = ScoreItemIDCodec.decode(bytes)
         assertEquals(ScoreItemID.Clef(canonicalClefStaffDefault), decoded)
     }
 
@@ -122,7 +122,10 @@ class ScoreItemIDDecoderTest {
         )
         val header = byteArrayOf(0x02, 0x00, 0x00, 0x00) // count = 2
         val bytes = header + notePayload + restPayload
-        val decoded = ScoreItemIDDecoder.decodeArray(bytes)
+        val r = BinaryReader(bytes)
+        val count = r.readI32()
+        val decoded = ArrayList<ScoreItemID>(count)
+        for (i in 0 until count) decoded.add(ScoreItemIDCodec.decodePayload(r))
         assertEquals(2, decoded.size)
         assertEquals(ScoreItemID.Note(canonicalNoteID), decoded[0])
         assertEquals(ScoreItemID.Rest(canonicalRestID), decoded[1])
@@ -131,7 +134,10 @@ class ScoreItemIDDecoderTest {
     @Test
     fun decodeArrayEmptyList() {
         val bytes = byteArrayOf(0x00, 0x00, 0x00, 0x00) // count = 0
-        val decoded = ScoreItemIDDecoder.decodeArray(bytes)
+        val r = BinaryReader(bytes)
+        val count = r.readI32()
+        val decoded = ArrayList<ScoreItemID>(count)
+        for (i in 0 until count) decoded.add(ScoreItemIDCodec.decodePayload(r))
         assertEquals(0, decoded.size)
     }
 }

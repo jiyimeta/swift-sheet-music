@@ -33,7 +33,7 @@ class ScoreCursorDecoderTest {
     @Test
     fun scoreCursorItemGoldenDecodes() {
         val bytes = loadGolden("scoreCursor-v1.bin")
-        val decoded = ScoreCursorDecoder.decode(bytes)
+        val decoded = ScoreCursorCodec.decode(bytes)
         assertEquals(canonicalCursorItem, decoded)
     }
 
@@ -42,7 +42,7 @@ class ScoreCursorDecoderTest {
     @Test
     fun scoreCursorBeatGoldenDecodes() {
         val bytes = loadGolden("scoreCursor-beat-v1.bin")
-        val decoded = ScoreCursorDecoder.decode(bytes)
+        val decoded = ScoreCursorCodec.decode(bytes)
         assertEquals(canonicalCursorBeat, decoded)
     }
 
@@ -56,7 +56,7 @@ class ScoreCursorDecoderTest {
             0x07, 0x00, 0x00, 0x00,  // measureIndex = 7
             0xC0.toByte(), 0x03, 0x00, 0x00,  // tickInMeasure = 960
         )
-        val decoded = ScoreCursorDecoder.decode(bytes)
+        val decoded = ScoreCursorCodec.decode(bytes)
         assertEquals(ScoreCursor.Beat(measureIndex = 7, tickInMeasure = 960), decoded)
     }
 
@@ -66,9 +66,9 @@ class ScoreCursorDecoderTest {
     fun unknownDiscriminatorThrows() {
         val bytes = byteArrayOf(0x02) // discriminator = 2 (unknown)
         try {
-            ScoreCursorDecoder.decode(bytes)
+            ScoreCursorCodec.decode(bytes)
             fail("Expected error for unknown discriminator")
-        } catch (_: IllegalStateException) {
+        } catch (_: IllegalArgumentException) {
             // expected
         }
     }
