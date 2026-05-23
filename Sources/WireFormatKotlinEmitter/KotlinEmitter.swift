@@ -45,7 +45,12 @@ public struct KotlinEmitter: Sendable {
                     nameTransform: config.nameTransform,
                 ))
             case let .rawEnum(e):
-                throw KotlinEmitterError.unsupportedType("WireFormatEnum not yet implemented: \(e.name)")
+                files.append(EnumEmitter.emit(
+                    e,
+                    kotlinName: kotlinName,
+                    modelPackage: modelPkg,
+                    codecPackage: codecPkg,
+                ))
             }
         }
         return files
