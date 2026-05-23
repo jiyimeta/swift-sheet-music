@@ -26,7 +26,7 @@ public struct KotlinEmitter: Sendable {
         var files: [KotlinFile] = []
         for type in schema.types {
             let resolved = resolver.resolve(swiftName: type.name, target: type.kotlinTarget)
-            guard case let .emit(modelPkg, codecPkg, kotlinName) = resolved else { continue }
+            guard case let .emit(modelPkg, codecPkg, serPkg, kotlinName) = resolved else { continue }
             switch type {
             case let .struct(s):
                 files.append(StructEmitter.emit(
@@ -34,6 +34,7 @@ public struct KotlinEmitter: Sendable {
                     kotlinName: kotlinName,
                     modelPackage: modelPkg,
                     codecPackage: codecPkg,
+                    serializationPackage: serPkg,
                     nameTransform: config.nameTransform,
                 ))
             case let .choice(c):
@@ -42,6 +43,7 @@ public struct KotlinEmitter: Sendable {
                     kotlinName: kotlinName,
                     modelPackage: modelPkg,
                     codecPackage: codecPkg,
+                    serializationPackage: serPkg,
                     nameTransform: config.nameTransform,
                 ))
             case let .rawEnum(e):

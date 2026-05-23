@@ -6,12 +6,14 @@
     {
       "pattern": "ScoreMetadata*",
       "modelPackage": "io.github.jiyimeta.sheetmusic",
-      "codecPackage": "io.github.jiyimeta.sheetmusic"
+      "codecPackage": "io.github.jiyimeta.sheetmusic",
+      "serializationPackage": "io.github.jiyimeta.sheetmusic"
     },
     {
       "pattern": "SMuFL*",
       "modelPackage": "io.github.jiyimeta.sheetmusic",
-      "codecPackage": "io.github.jiyimeta.sheetmusic"
+      "codecPackage": "io.github.jiyimeta.sheetmusic",
+      "serializationPackage": "io.github.jiyimeta.sheetmusic"
     }
   ]
 }

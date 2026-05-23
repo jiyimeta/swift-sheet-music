@@ -2,8 +2,6 @@
 package io.example.audio.serialization
 
 import io.example.audio.model.Point
-import io.github.jiyimeta.sheetmusic.audio.serialization.BinaryReader
-import io.github.jiyimeta.sheetmusic.audio.serialization.BinaryWriter
 
 internal object PointCodec {
     fun encode(value: Point): ByteArray {

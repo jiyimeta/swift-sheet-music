@@ -2,7 +2,12 @@ import WireFormatSchema
 
 public enum ResolvedTarget: Equatable, Sendable {
     case skip
-    case emit(modelPackage: String, codecPackage: String, kotlinName: String)
+    case emit(
+        modelPackage: String,
+        codecPackage: String,
+        serializationPackage: String,
+        kotlinName: String,
+    )
 }
 
 public struct PackageResolver: Sendable {
@@ -12,24 +17,34 @@ public struct PackageResolver: Sendable {
     }
 
     public func resolve(swiftName: String, target: KotlinTarget) -> ResolvedTarget {
+        let fallbackSerialization = config.defaultSerializationPackage ?? config.defaultCodecPackage
         switch target {
         case .skip:
             return .skip
         case let .explicit(fqn):
             let (pkg, name) = splitFQN(fqn)
-            return .emit(modelPackage: pkg, codecPackage: pkg, kotlinName: name)
+            return .emit(
+                modelPackage: pkg,
+                codecPackage: pkg,
+                serializationPackage: fallbackSerialization,
+                kotlinName: name,
+            )
         case .auto:
             let kotlinName = config.nameTransform.apply(to: swiftName)
             for rule in config.rules where matches(pattern: rule.pattern, name: swiftName) {
+                let codecPkg = rule.codecPackage ?? config.defaultCodecPackage
+                let serPkg = rule.serializationPackage ?? fallbackSerialization
                 return .emit(
                     modelPackage: rule.modelPackage ?? config.defaultModelPackage,
-                    codecPackage: rule.codecPackage ?? config.defaultCodecPackage,
+                    codecPackage: codecPkg,
+                    serializationPackage: serPkg,
                     kotlinName: kotlinName,
                 )
             }
             return .emit(
                 modelPackage: config.defaultModelPackage,
                 codecPackage: config.defaultCodecPackage,
+                serializationPackage: fallbackSerialization,
                 kotlinName: kotlinName,
             )
         }

@@ -15,6 +15,7 @@ import WireFormatSchema
     #expect(resolved == .emit(
         modelPackage: "io.example.audio.model",
         codecPackage: "io.example.audio.serialization",
+        serializationPackage: "io.example.audio.serialization",
         kotlinName: "MetronomeBeat",
     ))
 }
@@ -37,6 +38,7 @@ import WireFormatSchema
     #expect(resolved == .emit(
         modelPackage: "io.example.score",
         codecPackage: "io.example.score",
+        serializationPackage: "io.example.audio.serialization",
         kotlinName: "ScoreMetadata",
     ))
 }
@@ -53,6 +55,7 @@ import WireFormatSchema
     #expect(resolved == .emit(
         modelPackage: "io.other",
         codecPackage: "io.other",
+        serializationPackage: "io.example.audio.serialization",
         kotlinName: "Foo",
     ))
 }

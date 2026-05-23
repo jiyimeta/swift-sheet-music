@@ -89,6 +89,16 @@ android {
 tasks.matching { it.name.startsWith("compile") && it.name.endsWith("Kotlin") }
     .configureEach { dependsOn(emitKotlinCodecs) }
 
+// Exclude codecs that reference types not available in this module:
+//  - audio/** codecs belong to SheetMusicAudioAndroid (audio model + BinaryReader/Writer)
+//  - SMuFLMetrics* codecs reference SMuFLMetrics / SMuFLMetricsEntry which live in
+//    SheetMusicAudioAndroid; they are compiled there instead.
+// Only ScoreMetadataCodec (and its BinaryReader/BinaryWriter helpers) are needed here.
+tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
+    exclude("io/github/jiyimeta/sheetmusic/audio/**")
+    exclude("io/github/jiyimeta/sheetmusic/SMuFLMetrics*")
+}
+
 afterEvaluate {
     publishing {
         publications {

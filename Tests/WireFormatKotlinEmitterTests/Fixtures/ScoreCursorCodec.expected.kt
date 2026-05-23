@@ -3,8 +3,6 @@ package io.example.audio.serialization
 
 import io.example.audio.model.ScoreCursor
 import io.example.audio.model.ScoreItemID
-import io.github.jiyimeta.sheetmusic.audio.serialization.BinaryReader
-import io.github.jiyimeta.sheetmusic.audio.serialization.BinaryWriter
 
 internal object ScoreCursorCodec {
     fun encode(value: ScoreCursor): ByteArray {
