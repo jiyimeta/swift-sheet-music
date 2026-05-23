@@ -11,12 +11,12 @@ enum StructEmitter {
         let codecName = "\(kotlinName)Codec"
         let path = codecPackage.replacingOccurrences(of: ".", with: "/") + "/\(codecName).kt"
 
-        let encodeLines = wireStruct.fields.map { field in
-            "        " + writeCall(for: field, transform: nameTransform)
+        let encodeLines = wireStruct.fields.flatMap { field in
+            emitFieldEncode(field: field, transform: nameTransform).map { "        \($0)" }
         }.joined(separator: "\n")
 
-        let decodeLocals = wireStruct.fields.map { field in
-            "        val \(field.name) = " + readExpr(for: field, transform: nameTransform)
+        let decodeLocals = wireStruct.fields.flatMap { field in
+            emitFieldDecode(field: field, transform: nameTransform).locals.map { "        \($0)" }
         }.joined(separator: "\n")
 
         let decodeBuild = wireStruct.fields.map { field in
@@ -60,20 +60,92 @@ enum StructEmitter {
         return KotlinFile(relativePath: path, content: content)
     }
 
-    private static func writeCall(for field: WireField, transform: NameTransform) -> String {
-        if let primitive = KotlinTypeMap.primitive(field.typeText) {
-            return primitive.write("value.\(field.name)")
+    /// Returns one or more lines of code to encode `field` into `w`.
+    /// For scalar fields this is one line; for array fields it is two lines.
+    /// The loop variable is the field name with its trailing 's' dropped when
+    /// the name ends in 's' (e.g. "entries" → "entry"), otherwise the name itself.
+    private static func emitFieldEncode(field: WireField, transform: NameTransform) -> [String] {
+        if isArrayType(field.typeText) {
+            let elemType = arrayElementType(field.typeText)
+            let loopVar = singularize(field.name)
+            if let primitive = KotlinTypeMap.primitive(elemType) {
+                return [
+                    "w.writeI32(value.\(field.name).size)",
+                    "for (\(loopVar) in value.\(field.name)) \(primitive.write(loopVar))",
+                ]
+            } else {
+                let elemCodec = transform.apply(to: elemType) + "Codec"
+                return [
+                    "w.writeI32(value.\(field.name).size)",
+                    "for (\(loopVar) in value.\(field.name)) \(elemCodec).encodePayload(\(loopVar), w)",
+                ]
+            }
         }
-        // Non-primitive: delegate to that type's codec by transformed name.
+        if let primitive = KotlinTypeMap.primitive(field.typeText) {
+            return [primitive.write("value.\(field.name)")]
+        }
         let codecName = transform.apply(to: field.typeText) + "Codec"
-        return "\(codecName).encodePayload(value.\(field.name), w)"
+        return ["\(codecName).encodePayload(value.\(field.name), w)"]
     }
 
-    private static func readExpr(for field: WireField, transform: NameTransform) -> String {
+    /// Returns `(locals, buildAccess)` where `locals` is the list of lines
+    /// that declare local variables in `decodePayload`, and `buildAccess`
+    /// is the expression used in the constructor call for this field.
+    ///
+    /// For scalar fields: `locals = ["val <name> = <readExpr>"]`, `buildAccess = "<name>"`.
+    /// For array fields: `locals` is three lines that declare and fill an `ArrayList`,
+    /// and `buildAccess = "<name>"` (refers to the local ArrayList).
+    private static func emitFieldDecode(
+        field: WireField,
+        transform: NameTransform,
+    ) -> (locals: [String], buildAccess: String) {
+        if isArrayType(field.typeText) {
+            let elemType = arrayElementType(field.typeText)
+            let kotlinElemType: String
+            let addExpr: String
+            if let primitive = KotlinTypeMap.primitive(elemType) {
+                kotlinElemType = primitive.kotlinType
+                addExpr = primitive.read
+            } else {
+                kotlinElemType = transform.apply(to: elemType)
+                let elemCodec = kotlinElemType + "Codec"
+                addExpr = "\(elemCodec).decodePayload(r)"
+            }
+            let locals = [
+                "val count = r.readI32()",
+                "val \(field.name) = ArrayList<\(kotlinElemType)>(count)",
+                "repeat(count) { \(field.name).add(\(addExpr)) }",
+            ]
+            return (locals: locals, buildAccess: field.name)
+        }
         if let primitive = KotlinTypeMap.primitive(field.typeText) {
-            return primitive.read
+            return (locals: ["val \(field.name) = \(primitive.read)"], buildAccess: field.name)
         }
         let codecName = transform.apply(to: field.typeText) + "Codec"
-        return "\(codecName).decodePayload(r)"
+        return (
+            locals: ["val \(field.name) = \(codecName).decodePayload(r)"],
+            buildAccess: field.name,
+        )
+    }
+
+    private static func isArrayType(_ typeText: String) -> Bool {
+        typeText.hasPrefix("[") && typeText.hasSuffix("]") && !typeText.contains(":")
+    }
+
+    private static func arrayElementType(_ typeText: String) -> String {
+        String(typeText.dropFirst().dropLast())
+    }
+
+    /// Returns a simple singular form of a plural field name for use as a loop
+    /// variable. Handles the common English patterns needed for Swift field names:
+    /// `entries` → `entry`, `items` → `item`, `flags` → `flag`.
+    private static func singularize(_ name: String) -> String {
+        if name.hasSuffix("ies") {
+            return String(name.dropLast(3)) + "y"
+        }
+        if name.hasSuffix("s") {
+            return String(name.dropLast())
+        }
+        return name
     }
 }
