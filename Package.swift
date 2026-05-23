@@ -109,6 +109,7 @@ var targets: [Target] = [
         ],
         exclude: [
             "swift-java.config",
+            "kotlin-codegen.json",
         ],
         swiftSettings: [
             .swiftLanguageMode(.v5),
@@ -123,7 +124,7 @@ var targets: [Target] = [
     ),
     .testTarget(
         name: "EmitKotlinCodecsTests",
-        dependencies: ["EmitKotlinCodecs"],
+        dependencies: ["EmitKotlinCodecs", "WireFormatKotlinEmitter", "WireFormatSchema"],
         resources: [.copy("Fixtures")],
     ),
     .testTarget(
