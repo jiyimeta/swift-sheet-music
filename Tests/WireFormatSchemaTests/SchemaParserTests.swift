@@ -71,6 +71,28 @@ import Testing
     #expect(e.cases == ["piano", "chromaticPercussion", "organ"])
 }
 
+@Test func parsesNestedStruct() throws {
+    let url = try #require(Bundle.module.url(
+        forResource: "NestedStruct",
+        withExtension: "swift",
+        subdirectory: "Fixtures",
+    ))
+    let source = try String(contentsOf: url, encoding: .utf8)
+
+    let schema = SchemaParser.parse(source: source, fileName: "NestedStruct.swift")
+
+    #expect(schema.types.count == 1)
+    guard case let .struct(s) = schema.types[0] else {
+        Issue.record("Expected struct, got \(schema.types[0])")
+        return
+    }
+    #expect(s.name == "DecodedFrame")
+    #expect(s.fields == [
+        WireField(name: "x", typeText: "Double"),
+        WireField(name: "y", typeText: "Double"),
+    ])
+}
+
 @Test func parsesKotlinTargetOverrides() throws {
     let url = try #require(Bundle.module.url(
         forResource: "KotlinTargetOverrides",

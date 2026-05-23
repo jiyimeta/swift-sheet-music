@@ -30,7 +30,7 @@ final class WireTypeVisitor: SyntaxVisitor {
                 kotlinTarget: target,
             )))
         }
-        return .skipChildren
+        return .visitChildren
     }
 
     override func visit(_ node: EnumDeclSyntax) -> SyntaxVisitorContinueKind {
@@ -57,7 +57,7 @@ final class WireTypeVisitor: SyntaxVisitor {
                 continue
             }
         }
-        return .skipChildren
+        return .visitChildren
     }
 
     private func collectChoiceCases(from enumDecl: EnumDeclSyntax) -> [WireChoiceCase] {
