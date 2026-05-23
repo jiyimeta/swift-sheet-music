@@ -67,11 +67,21 @@ public struct WireChoice: Equatable, Sendable {
 
 public struct WireChoiceCase: Equatable, Sendable {
     public var name: String
-    /// Associated value types in declaration order. Empty if the case has no payload.
-    public var payloadTypes: [String]
-    public init(name: String, payloadTypes: [String]) {
+    /// Associated value fields in declaration order. Empty if the case has no payload.
+    public var payload: [PayloadField]
+    public init(name: String, payload: [PayloadField]) {
         self.name = name
-        self.payloadTypes = payloadTypes
+        self.payload = payload
+    }
+}
+
+public struct PayloadField: Equatable, Sendable {
+    /// The associated-value label, or nil when the case has no label.
+    public var label: String?
+    public var typeText: String
+    public init(label: String?, typeText: String) {
+        self.label = label
+        self.typeText = typeText
     }
 }
 

@@ -14,8 +14,8 @@ enum ChoiceEmitter {
         // Collect non-primitive referenced types (for `import` lines).
         var referenced = Set<String>()
         for c in choice.cases {
-            for ty in c.payloadTypes where KotlinTypeMap.primitive(ty) == nil {
-                referenced.insert(nameTransform.apply(to: ty))
+            for field in c.payload where KotlinTypeMap.primitive(field.typeText) == nil {
+                referenced.insert(nameTransform.apply(to: field.typeText))
             }
         }
         let extraImports = referenced.sorted()
@@ -72,6 +72,10 @@ enum ChoiceEmitter {
         return KotlinFile(relativePath: path, content: content)
     }
 
+    private static func propName(for field: PayloadField, at index: Int) -> String {
+        field.label ?? "arg\(index)"
+    }
+
     private static func emitEncodeBranch(
         case c: WireChoiceCase,
         index: Int,
@@ -82,12 +86,13 @@ enum ChoiceEmitter {
         var lines: [String] = []
         lines.append("            is \(subtype) -> {")
         lines.append("                w.writeU8(\(index)u)")
-        for (i, ty) in c.payloadTypes.enumerated() {
-            let propAccess = "value.arg\(i)"
-            if let primitive = KotlinTypeMap.primitive(ty) {
+        for (i, field) in c.payload.enumerated() {
+            let prop = propName(for: field, at: i)
+            let propAccess = "value.\(prop)"
+            if let primitive = KotlinTypeMap.primitive(field.typeText) {
                 lines.append("                " + primitive.write(propAccess))
             } else {
-                let codecName = nameTransform.apply(to: ty) + "Codec"
+                let codecName = nameTransform.apply(to: field.typeText) + "Codec"
                 lines.append("                \(codecName).encodePayload(\(propAccess), w)")
             }
         }
@@ -102,17 +107,18 @@ enum ChoiceEmitter {
         nameTransform: NameTransform,
     ) -> String {
         let subtype = "\(kotlinName).\(c.name.capitalizedFirst)"
-        if c.payloadTypes.isEmpty {
+        if c.payload.isEmpty {
             return "                    \(index) -> \(subtype)"
         }
         var lines: [String] = []
         lines.append("                    \(index) -> \(subtype)(")
-        for (i, ty) in c.payloadTypes.enumerated() {
-            if let primitive = KotlinTypeMap.primitive(ty) {
-                lines.append("                        arg\(i) = \(primitive.read),")
+        for (i, field) in c.payload.enumerated() {
+            let prop = propName(for: field, at: i)
+            if let primitive = KotlinTypeMap.primitive(field.typeText) {
+                lines.append("                        \(prop) = \(primitive.read),")
             } else {
-                let codecName = nameTransform.apply(to: ty) + "Codec"
-                lines.append("                        arg\(i) = \(codecName).decodePayload(r),")
+                let codecName = nameTransform.apply(to: field.typeText) + "Codec"
+                lines.append("                        \(prop) = \(codecName).decodePayload(r),")
             }
         }
         lines.append("                    )")

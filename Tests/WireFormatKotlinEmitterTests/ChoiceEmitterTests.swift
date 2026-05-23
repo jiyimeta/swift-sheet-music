@@ -8,8 +8,13 @@ import WireFormatSchema
         .choice(WireChoice(
             name: "ScoreCursorWire",
             cases: [
-                WireChoiceCase(name: "item", payloadTypes: ["ScoreItemIDWire"]),
-                WireChoiceCase(name: "beat", payloadTypes: ["Int32", "Int32"]),
+                WireChoiceCase(name: "item", payload: [
+                    PayloadField(label: nil, typeText: "ScoreItemIDWire"),
+                ]),
+                WireChoiceCase(name: "beat", payload: [
+                    PayloadField(label: "measureIndex", typeText: "Int32"),
+                    PayloadField(label: "tickInMeasure", typeText: "Int32"),
+                ]),
             ],
             kotlinTarget: .auto,
         )),

@@ -21,8 +21,8 @@ internal object ScoreCursorCodec {
             }
             is ScoreCursor.Beat -> {
                 w.writeU8(1u)
-                w.writeI32(value.arg0)
-                w.writeI32(value.arg1)
+                w.writeI32(value.measureIndex)
+                w.writeI32(value.tickInMeasure)
             }
         }
     }
@@ -38,8 +38,8 @@ internal object ScoreCursorCodec {
                         arg0 = ScoreItemIDCodec.decodePayload(r),
                     )
                     1 -> ScoreCursor.Beat(
-                        arg0 = r.readI32(),
-                        arg1 = r.readI32(),
+                        measureIndex = r.readI32(),
+                        tickInMeasure = r.readI32(),
                     )
             else -> throw IllegalArgumentException(
                 "Unknown ScoreCursor discriminator: $disc",

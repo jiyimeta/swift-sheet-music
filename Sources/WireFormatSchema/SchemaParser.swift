@@ -65,12 +65,15 @@ final class WireTypeVisitor: SyntaxVisitor {
         for member in enumDecl.memberBlock.members {
             guard let caseDecl = member.decl.as(EnumCaseDeclSyntax.self) else { continue }
             for element in caseDecl.elements {
-                let payload: [String] = element.parameterClause?.parameters.map { param in
-                    param.type.trimmedDescription
+                let payload: [PayloadField] = element.parameterClause?.parameters.map { param in
+                    PayloadField(
+                        label: param.firstName?.text,
+                        typeText: param.type.trimmedDescription,
+                    )
                 } ?? []
                 out.append(WireChoiceCase(
                     name: element.name.text,
-                    payloadTypes: payload,
+                    payload: payload,
                 ))
             }
         }
