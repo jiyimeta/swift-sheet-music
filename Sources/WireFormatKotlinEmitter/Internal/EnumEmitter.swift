@@ -18,7 +18,7 @@ enum EnumEmitter {
         import io.github.jiyimeta.sheetmusic.audio.serialization.BinaryReader
         import io.github.jiyimeta.sheetmusic.audio.serialization.BinaryWriter
 
-        internal object \(codecName) {
+        public object \(codecName) {
             fun encode(value: \(kotlinName)): ByteArray {
                 val w = BinaryWriter()
                 encodePayload(value, w)

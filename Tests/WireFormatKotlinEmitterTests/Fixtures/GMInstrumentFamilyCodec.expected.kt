@@ -5,7 +5,7 @@ import io.example.audio.model.GMInstrumentFamily
 import io.github.jiyimeta.sheetmusic.audio.serialization.BinaryReader
 import io.github.jiyimeta.sheetmusic.audio.serialization.BinaryWriter
 
-internal object GMInstrumentFamilyCodec {
+public object GMInstrumentFamilyCodec {
     fun encode(value: GMInstrumentFamily): ByteArray {
         val w = BinaryWriter()
         encodePayload(value, w)

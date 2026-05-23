@@ -43,7 +43,7 @@ enum ChoiceEmitter {
 
         \(allImports)
 
-        internal object \(codecName) {
+        public object \(codecName) {
             fun encode(value: \(kotlinName)): ByteArray {
                 val w = BinaryWriter()
                 encodePayload(value, w)

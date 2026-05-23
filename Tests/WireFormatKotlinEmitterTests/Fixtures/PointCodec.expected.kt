@@ -3,7 +3,7 @@ package io.example.audio.serialization
 
 import io.example.audio.model.Point
 
-internal object PointCodec {
+public object PointCodec {
     fun encode(value: Point): ByteArray {
         val w = BinaryWriter()
         encodePayload(value, w)

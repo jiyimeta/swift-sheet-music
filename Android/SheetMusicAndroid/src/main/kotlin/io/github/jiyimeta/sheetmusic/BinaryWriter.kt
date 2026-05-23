@@ -7,11 +7,11 @@ package io.github.jiyimeta.sheetmusic
  * bridge. All multi-byte integers are stored little-endian to match the
  * Swift encoding.
  *
- * This is an internal copy used by generated codecs in this module.
+ * This copy is used by generated codecs in this module.
  * Audio-module codecs use the equivalent class in
  * `io.github.jiyimeta.sheetmusic.audio.serialization`.
  */
-internal class BinaryWriter {
+class BinaryWriter {
     private val out = mutableListOf<Byte>()
 
     /** Writes one unsigned byte. [v] is masked to [0, 255]. */

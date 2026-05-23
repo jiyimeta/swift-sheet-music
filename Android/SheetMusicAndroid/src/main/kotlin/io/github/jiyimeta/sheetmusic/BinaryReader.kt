@@ -7,11 +7,11 @@ package io.github.jiyimeta.sheetmusic
  * bridge. All multi-byte integers are little-endian to match the Swift
  * `withUnsafeBytes` store order on the wire.
  *
- * This is an internal copy used by generated codecs in this module.
+ * This copy is used by generated codecs in this module.
  * Audio-module codecs use the equivalent class in
  * `io.github.jiyimeta.sheetmusic.audio.serialization`.
  */
-internal class BinaryReader(private val data: ByteArray) {
+class BinaryReader(private val data: ByteArray) {
     private var offset = 0
 
     val remaining: Int get() = data.size - offset

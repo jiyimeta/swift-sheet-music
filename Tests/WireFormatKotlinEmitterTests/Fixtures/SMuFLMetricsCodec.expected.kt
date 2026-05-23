@@ -5,7 +5,7 @@ import io.github.jiyimeta.sheetmusic.SMuFLMetrics
 import io.github.jiyimeta.sheetmusic.audio.serialization.BinaryReader
 import io.github.jiyimeta.sheetmusic.audio.serialization.BinaryWriter
 
-internal object SMuFLMetricsCodec {
+public object SMuFLMetricsCodec {
     fun encode(value: SMuFLMetrics): ByteArray {
         val w = BinaryWriter()
         encodePayload(value, w)

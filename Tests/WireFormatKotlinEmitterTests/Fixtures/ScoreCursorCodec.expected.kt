@@ -4,7 +4,7 @@ package io.example.audio.serialization
 import io.example.audio.model.ScoreCursor
 import io.example.audio.model.ScoreItemID
 
-internal object ScoreCursorCodec {
+public object ScoreCursorCodec {
     fun encode(value: ScoreCursor): ByteArray {
         val w = BinaryWriter()
         encodePayload(value, w)

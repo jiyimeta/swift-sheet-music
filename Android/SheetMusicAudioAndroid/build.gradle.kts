@@ -133,6 +133,14 @@ android {
 tasks.matching { it.name.startsWith("compile") && it.name.endsWith("Kotlin") }
     .configureEach { dependsOn(emitKotlinCodecs) }
 
+// Exclude codecs that belong to SheetMusicAndroid (non-audio types in the top-level
+// io.github.jiyimeta.sheetmusic package). Those are compiled in SheetMusicAndroid
+// and available transitively; compiling them here would produce duplicate classes.
+tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
+    exclude("io/github/jiyimeta/sheetmusic/ScoreMetadata*")
+    exclude("io/github/jiyimeta/sheetmusic/SMuFLMetrics*")
+}
+
 afterEvaluate {
     publishing {
         publications {
