@@ -19,6 +19,7 @@ var products: [Product] = [
     .library(name: "SheetMusicLayout", targets: ["SheetMusicLayout"]),
     .library(name: "SheetMusicAudioCore", targets: ["SheetMusicAudioCore"]),
     .library(name: "SheetMusicWireFormat", targets: ["SheetMusicWireFormat"]),
+    .executable(name: "emit-kotlin-codecs", targets: ["EmitKotlinCodecs"]),
 ]
 
 var targets: [Target] = [
@@ -115,6 +116,15 @@ var targets: [Target] = [
         plugins: [
             .plugin(name: "JExtractSwiftPlugin", package: "swift-java"),
         ],
+    ),
+    .executableTarget(
+        name: "EmitKotlinCodecs",
+        dependencies: ["WireFormatSchema", "WireFormatKotlinEmitter"],
+    ),
+    .testTarget(
+        name: "EmitKotlinCodecsTests",
+        dependencies: ["EmitKotlinCodecs"],
+        resources: [.copy("Fixtures")],
     ),
     .testTarget(
         name: "WireFormatSchemaTests",

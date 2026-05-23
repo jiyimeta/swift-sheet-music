@@ -1,0 +1,6 @@
+{
+  "defaultModelPackage": "io.example.audio.model",
+  "defaultCodecPackage": "io.example.audio.serialization",
+  "nameTransform": { "stripSuffix": "Wire" },
+  "rules": []
+}
