@@ -115,14 +115,14 @@ val emitKotlinCodecs by tasks.registering(Exec::class) {
     inputs.file(packageRoot.resolve("Sources/SheetMusicAndroidJNI/kotlin-codegen.json"))
         .withPropertyName("codegenConfig")
     outputs.dir(emitKotlinCodecsOutput)
-    // Skip if outputs are already populated (pre-flight or prior run).
-    onlyIf { !emitKotlinCodecsOutput.get().asFile.walk().any { it.isFile } }
+    // This module owns the audio.serialization codecs.
     commandLine(
         "swift", "run", "--package-path", packageRoot.absolutePath,
         "emit-kotlin-codecs",
         "--config", "Sources/SheetMusicAndroidJNI/kotlin-codegen.json",
         "--source", "Sources/SheetMusicAndroidJNI",
         "--output", emitKotlinCodecsOutput.get().asFile.absolutePath,
+        "--include-package", "io.github.jiyimeta.sheetmusic.audio.serialization",
     )
 }
 
@@ -132,17 +132,6 @@ android {
 
 tasks.matching { it.name.startsWith("compile") && it.name.endsWith("Kotlin") }
     .configureEach { dependsOn(emitKotlinCodecs) }
-
-// Exclude codecs that belong to other modules:
-//  - SheetMusicAndroid: non-audio types in the top-level
-//    io.github.jiyimeta.sheetmusic package (ScoreMetadata*, SMuFLMetrics*).
-//  - Examples/Android app: com/example/sheetmusic draw codecs (they
-//    reference the demo's model + BinaryReader/Writer).
-tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
-    exclude("io/github/jiyimeta/sheetmusic/ScoreMetadata*")
-    exclude("io/github/jiyimeta/sheetmusic/SMuFLMetrics*")
-    exclude("com/example/sheetmusic/**")
-}
 
 afterEvaluate {
     publishing {

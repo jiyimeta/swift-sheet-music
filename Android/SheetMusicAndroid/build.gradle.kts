@@ -71,14 +71,18 @@ val emitKotlinCodecs by tasks.registering(Exec::class) {
     inputs.file(packageRoot.resolve("Sources/SheetMusicAndroidJNI/kotlin-codegen.json"))
         .withPropertyName("codegenConfig")
     outputs.dir(emitKotlinCodecsOutput)
-    // Skip if outputs are already populated (pre-flight or prior run).
-    onlyIf { !emitKotlinCodecsOutput.get().asFile.walk().any { it.isFile } }
+    // This module owns the top-level io.github.jiyimeta.sheetmusic codecs
+    // (ScoreMetadata + SMuFLMetrics) and the shared wireformat runtime —
+    // wireformat itself is hand-written, so we don't ask the generator
+    // for it. Audio + Examples-app codecs are emitted by their own
+    // modules' :emitKotlinCodecs tasks.
     commandLine(
         "swift", "run", "--package-path", packageRoot.absolutePath,
         "emit-kotlin-codecs",
         "--config", "Sources/SheetMusicAndroidJNI/kotlin-codegen.json",
         "--source", "Sources/SheetMusicAndroidJNI",
         "--output", emitKotlinCodecsOutput.get().asFile.absolutePath,
+        "--include-package", "io.github.jiyimeta.sheetmusic",
     )
 }
 
@@ -89,18 +93,6 @@ android {
 tasks.matching { it.name.startsWith("compile") && it.name.endsWith("Kotlin") }
     .configureEach { dependsOn(emitKotlinCodecs) }
 
-// Exclude codecs that reference types not available in this module:
-//  - audio/** codecs belong to SheetMusicAudioAndroid (audio model + BinaryReader/Writer)
-//  - SMuFLMetrics* codecs reference SMuFLMetrics / SMuFLMetricsEntry which live in
-//    SheetMusicAudioAndroid; they are compiled there instead.
-//  - com/example/sheetmusic codecs belong to the Examples/Android app (they
-//    reference the demo's draw model + BinaryReader/Writer).
-// Only ScoreMetadataCodec (and its BinaryReader/BinaryWriter helpers) are needed here.
-tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
-    exclude("io/github/jiyimeta/sheetmusic/audio/**")
-    exclude("io/github/jiyimeta/sheetmusic/SMuFLMetrics*")
-    exclude("com/example/sheetmusic/**")
-}
 
 afterEvaluate {
     publishing {

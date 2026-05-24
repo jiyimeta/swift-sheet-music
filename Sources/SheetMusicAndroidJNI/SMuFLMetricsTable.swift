@@ -85,7 +85,13 @@ struct SMuFLMetricsTable {
     }
 }
 
-@WireFormat
+// Kotlin codecs are intentionally skipped: `BravuraMetricsBuilder.kt`
+// hand-rolls the on-wire bytes directly with a ByteBuffer (it consumes
+// raw Android Paint output) and never goes through a generated codec.
+// Emitting one would produce dead code that drifts from the model class
+// in `audio.model.SMuFLMetrics`.
+
+@WireFormat(kotlin: .skip)
 struct SMuFLMetricsWire {
     var magic: UInt32
     var version: UInt32
@@ -93,7 +99,7 @@ struct SMuFLMetricsWire {
     var entries: [SMuFLMetricsEntryWire]
 }
 
-@WireFormat
+@WireFormat(kotlin: .skip)
 struct SMuFLMetricsEntryWire {
     var codepoint: UInt32
     var advance: Float

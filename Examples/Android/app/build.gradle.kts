@@ -18,12 +18,14 @@ val emitKotlinCodecs by tasks.registering(Exec::class) {
     inputs.file(packageRoot.resolve("Sources/SheetMusicAndroidJNI/kotlin-codegen.json"))
         .withPropertyName("codegenConfig")
     outputs.dir(emitKotlinCodecsOutput)
+    // The example app owns the draw-program codecs only.
     commandLine(
         "swift", "run", "--package-path", packageRoot.absolutePath,
         "emit-kotlin-codecs",
         "--config", "Sources/SheetMusicAndroidJNI/kotlin-codegen.json",
         "--source", "Sources/SheetMusicAndroidJNI",
         "--output", emitKotlinCodecsOutput.get().asFile.absolutePath,
+        "--include-package", "com.example.sheetmusic.draw",
     )
 }
 
@@ -73,14 +75,6 @@ android {
 
 tasks.matching { it.name.startsWith("compile") && it.name.endsWith("Kotlin") }
     .configureEach { dependsOn(emitKotlinCodecs) }
-
-// Generated codecs in the io.github.jiyimeta.sheetmusic.* packages are
-// compiled by SheetMusicAndroid / SheetMusicAudioAndroid and reach the app
-// transitively. Compiling them here would produce duplicate classes at
-// dex-merge time.
-tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
-    exclude("io/github/jiyimeta/sheetmusic/**")
-}
 
 dependencies {
     val composeBom = platform("androidx.compose:compose-bom:2024.09.02")

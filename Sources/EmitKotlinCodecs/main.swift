@@ -6,11 +6,18 @@ struct CLIArguments {
     var configPath: String
     var sourceDir: String
     var outputDir: String
+    /// When non-empty, only codecs whose Kotlin package exactly matches one of
+    /// these entries are written. Lets a multi-module Gradle build invoke the
+    /// same generator once per module, with each module owning a disjoint set
+    /// of packages — replacing the older "emit everything then exclude in
+    /// Kotlin compile" workaround.
+    var includePackages: Set<String>
 
     static func parse(_ argv: [String]) -> CLIArguments? {
         var config: String?
         var source: String?
         var output: String?
+        var includePackages = Set<String>()
         var i = 1
         while i < argv.count {
             let key = argv[i]
@@ -18,13 +25,21 @@ struct CLIArguments {
             case "--config": config = argv[safe: i + 1]; i += 2
             case "--source": source = argv[safe: i + 1]; i += 2
             case "--output": output = argv[safe: i + 1]; i += 2
+            case "--include-package":
+                if let pkg = argv[safe: i + 1] { includePackages.insert(pkg) }
+                i += 2
             default:
                 fputs("Unknown argument: \(key)\n", stderr)
                 return nil
             }
         }
         guard let c = config, let s = source, let o = output else { return nil }
-        return CLIArguments(configPath: c, sourceDir: s, outputDir: o)
+        return CLIArguments(
+            configPath: c,
+            sourceDir: s,
+            outputDir: o,
+            includePackages: includePackages,
+        )
     }
 }
 
@@ -35,7 +50,10 @@ extension Array {
 }
 
 guard let args = CLIArguments.parse(CommandLine.arguments) else {
-    fputs("usage: emit-kotlin-codecs --config <file> --source <dir> --output <dir>\n", stderr)
+    fputs("""
+    usage: emit-kotlin-codecs --config <file> --source <dir> --output <dir> \
+    [--include-package <name>]...
+    """, stderr)
     exit(2)
 }
 
@@ -58,7 +76,19 @@ if let enumerator = FileManager.default.enumerator(
 }
 
 let emitter = KotlinEmitter(config: config)
-let files = try emitter.emit(schema: aggregateSchema)
+let allFiles = try emitter.emit(schema: aggregateSchema)
+
+/// Derives the Kotlin package from a file's relativePath
+/// (e.g. `io/github/jiyimeta/sheetmusic/SMuFLMetricsCodec.kt` →
+/// `io.github.jiyimeta.sheetmusic`).
+func kotlinPackage(of relativePath: String) -> String {
+    let dir = (relativePath as NSString).deletingLastPathComponent
+    return dir.replacingOccurrences(of: "/", with: ".")
+}
+
+let files: [KotlinFile] = args.includePackages.isEmpty
+    ? allFiles
+    : allFiles.filter { args.includePackages.contains(kotlinPackage(of: $0.relativePath)) }
 
 let outputURL = URL(fileURLWithPath: args.outputDir, isDirectory: true)
 
