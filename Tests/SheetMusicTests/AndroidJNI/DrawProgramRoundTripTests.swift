@@ -58,7 +58,7 @@ struct DrawProgramRoundTripTests {
             widthMM: 100, heightMM: 100,
             commands: [
                 .text(
-                    "Allegro",
+                    text: "Allegro",
                     x: 10, y: 20,
                     size: 12,
                     fontId: .textRoman,

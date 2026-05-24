@@ -93,10 +93,13 @@ tasks.matching { it.name.startsWith("compile") && it.name.endsWith("Kotlin") }
 //  - audio/** codecs belong to SheetMusicAudioAndroid (audio model + BinaryReader/Writer)
 //  - SMuFLMetrics* codecs reference SMuFLMetrics / SMuFLMetricsEntry which live in
 //    SheetMusicAudioAndroid; they are compiled there instead.
+//  - com/example/sheetmusic codecs belong to the Examples/Android app (they
+//    reference the demo's draw model + BinaryReader/Writer).
 // Only ScoreMetadataCodec (and its BinaryReader/BinaryWriter helpers) are needed here.
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
     exclude("io/github/jiyimeta/sheetmusic/audio/**")
     exclude("io/github/jiyimeta/sheetmusic/SMuFLMetrics*")
+    exclude("com/example/sheetmusic/**")
 }
 
 afterEvaluate {

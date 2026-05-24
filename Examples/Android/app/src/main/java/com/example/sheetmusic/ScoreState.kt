@@ -1,6 +1,6 @@
 package com.example.sheetmusic
 
-import com.example.sheetmusic.draw.DrawProgram
+import com.example.sheetmusic.draw.model.DrawProgram
 
 sealed interface ScoreState {
     data object Loading : ScoreState

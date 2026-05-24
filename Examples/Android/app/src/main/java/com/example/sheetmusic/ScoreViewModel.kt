@@ -3,7 +3,7 @@ package com.example.sheetmusic
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.sheetmusic.draw.DrawProgramDecoder
+import com.example.sheetmusic.draw.DrawProgramReader
 import io.github.jiyimeta.sheetmusic.BravuraMetricsBuilder
 import io.github.jiyimeta.sheetmusic.ScoreHandle
 import io.github.jiyimeta.sheetmusic.SheetMusicJNI
@@ -76,7 +76,7 @@ class ScoreViewModel(app: Application) : AndroidViewModel(app) {
             }
 
             val program = try {
-                DrawProgramDecoder.decode(programBytes)
+                DrawProgramReader.decode(programBytes)
             } catch (e: Exception) {
                 _state.value = ScoreState.ParseError(
                     "draw-program decode error: ${e.message}"
