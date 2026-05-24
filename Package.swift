@@ -19,6 +19,7 @@ var products: [Product] = [
     .library(name: "SheetMusicLayout", targets: ["SheetMusicLayout"]),
     .library(name: "SheetMusicAudioCore", targets: ["SheetMusicAudioCore"]),
     .library(name: "SheetMusicWireFormat", targets: ["SheetMusicWireFormat"]),
+    .executable(name: "emit-kotlin-codecs", targets: ["EmitKotlinCodecs"]),
 ]
 
 var targets: [Target] = [
@@ -35,6 +36,17 @@ var targets: [Target] = [
     .target(
         name: "SheetMusicWireFormat",
         dependencies: ["SheetMusicWireFormatMacros"],
+    ),
+    .target(
+        name: "WireFormatSchema",
+        dependencies: [
+            .product(name: "SwiftSyntax", package: "swift-syntax"),
+            .product(name: "SwiftParser", package: "swift-syntax"),
+        ],
+    ),
+    .target(
+        name: "WireFormatKotlinEmitter",
+        dependencies: ["WireFormatSchema"],
     ),
     .target(
         name: "SheetMusicXMLTools",
@@ -97,6 +109,7 @@ var targets: [Target] = [
         ],
         exclude: [
             "swift-java.config",
+            "kotlin-codegen.json",
         ],
         swiftSettings: [
             .swiftLanguageMode(.v5),
@@ -104,6 +117,25 @@ var targets: [Target] = [
         plugins: [
             .plugin(name: "JExtractSwiftPlugin", package: "swift-java"),
         ],
+    ),
+    .executableTarget(
+        name: "EmitKotlinCodecs",
+        dependencies: ["WireFormatSchema", "WireFormatKotlinEmitter"],
+    ),
+    .testTarget(
+        name: "EmitKotlinCodecsTests",
+        dependencies: ["EmitKotlinCodecs", "WireFormatKotlinEmitter", "WireFormatSchema"],
+        resources: [.copy("Fixtures")],
+    ),
+    .testTarget(
+        name: "WireFormatSchemaTests",
+        dependencies: ["WireFormatSchema"],
+        resources: [.copy("Fixtures")],
+    ),
+    .testTarget(
+        name: "WireFormatKotlinEmitterTests",
+        dependencies: ["WireFormatKotlinEmitter", "WireFormatSchema"],
+        resources: [.copy("Fixtures")],
     ),
     .testTarget(
         name: "SheetMusicTests",

@@ -30,23 +30,23 @@ class CursorEqualityTest {
     }
 
     @Test fun clefAnchorExplicitEquality() {
-        val a = ClefAnchor.Explicit(voiceElementID = voiceElemID)
-        val b = ClefAnchor.Explicit(voiceElementID = voiceElemID)
+        val a = ClefAnchor.Explicit(arg0 = voiceElemID)
+        val b = ClefAnchor.Explicit(arg0 = voiceElemID)
         assertEquals(a, b)
         assertTrue(a.toString().contains("Explicit"))
     }
 
     @Test fun clefAnchorStaffDefaultEquality() {
-        val a = ClefAnchor.StaffDefault(staff = staff)
-        val b = ClefAnchor.StaffDefault(staff = staff)
+        val a = ClefAnchor.StaffDefault(arg0 = staff)
+        val b = ClefAnchor.StaffDefault(arg0 = staff)
         assertEquals(a, b)
         assertTrue(a.toString().contains("StaffDefault"))
     }
 
     @Test fun scoreCursorItemEquality() {
         val noteID = NoteID(staff = staff, measureIndex = 0, voiceIndex = 0, elementIndex = 0, noteIndexInChord = 0)
-        val a = ScoreCursor.Item(item = ScoreItemID.Note(id = noteID))
-        val b = ScoreCursor.Item(item = ScoreItemID.Note(id = noteID))
+        val a = ScoreCursor.Item(arg0 = ScoreItemID.Note(arg0 = noteID))
+        val b = ScoreCursor.Item(arg0 = ScoreItemID.Note(arg0 = noteID))
         assertEquals(a, b)
         assertTrue(a.toString().contains("Item"))
     }

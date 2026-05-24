@@ -1,6 +1,7 @@
 package io.github.jiyimeta.sheetmusic.audio.serialization
 
 import io.github.jiyimeta.sheetmusic.audio.model.GMInstrument
+import io.github.jiyimeta.sheetmusic.wireformat.BinaryReader
 
 /**
  * Decodes the `[GMInstrument]` blob produced by Swift's
@@ -28,7 +29,7 @@ internal object GMInstrumentDecoder {
         val count = r.readI32()
         val out = ArrayList<GMInstrument>(count)
         for (i in 0 until count) {
-            val program = r.readU8()
+            val program = r.readU8().toInt()
             val nameLen = r.readI32()
             require(nameLen >= 0) { "GMInstrument name length is negative: $nameLen" }
             val nameBytes = ByteArray(nameLen)
@@ -36,7 +37,7 @@ internal object GMInstrumentDecoder {
                 nameBytes[j] = r.readU8().toByte()
             }
             val name = String(nameBytes, Charsets.UTF_8)
-            val familyOrdinal = r.readU8()
+            val familyOrdinal = r.readU8().toInt()
             out.add(
                 GMInstrument(
                     program = program,

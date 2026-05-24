@@ -1,5 +1,6 @@
 package io.github.jiyimeta.sheetmusic.audio.serialization
 
+import io.github.jiyimeta.sheetmusic.wireformat.BinaryReader
 import org.junit.Assert.assertEquals
 import org.junit.Assert.fail
 import org.junit.Test
@@ -9,14 +10,14 @@ class BinaryReaderTest {
     @Test
     fun readU8_singleByte() {
         val r = BinaryReader(byteArrayOf(0x42))
-        assertEquals(0x42, r.readU8())
+        assertEquals(0x42, r.readU8().toInt())
         assertEquals(0, r.remaining)
     }
 
     @Test
     fun readU8_maxValue() {
         val r = BinaryReader(byteArrayOf(0xFF.toByte()))
-        assertEquals(255, r.readU8())
+        assertEquals(255, r.readU8().toInt())
     }
 
     @Test
@@ -95,11 +96,5 @@ class BinaryReaderTest {
         assertEquals(1, r.remaining)
         r.readU8()
         assertEquals(0, r.remaining)
-    }
-
-    @Test
-    fun versionMismatchException_message() {
-        val ex = BinaryReader.VersionMismatchException(expected = 1, found = 2)
-        assertEquals("Codec version mismatch: expected 1, found 2", ex.message)
     }
 }

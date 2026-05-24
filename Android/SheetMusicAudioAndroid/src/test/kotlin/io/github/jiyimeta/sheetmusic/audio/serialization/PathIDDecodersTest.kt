@@ -1,5 +1,7 @@
 package io.github.jiyimeta.sheetmusic.audio.serialization
 
+import io.github.jiyimeta.sheetmusic.wireformat.BinaryReader
+
 import io.github.jiyimeta.sheetmusic.audio.model.NoteID
 import io.github.jiyimeta.sheetmusic.audio.model.RestID
 import io.github.jiyimeta.sheetmusic.audio.model.StaffAddress
@@ -31,7 +33,7 @@ class PathIDDecodersTest {
     fun staffAddressGoldenDecodes() {
         val bytes = loadGolden("staffAddress-v1.bin")
         // staffAddress-v1.bin: version(2) + partIndex(4) + staffIndexInPart(4) = 10 bytes
-        val decoded = StaffAddressDecoder.decode(bytes)
+        val decoded = StaffAddressCodec.decode(bytes)
         assertEquals(canonicalStaffAddress, decoded)
     }
 
@@ -47,7 +49,7 @@ class PathIDDecodersTest {
     @Test
     fun noteIdGoldenDecodes() {
         val bytes = loadGolden("noteId-v1.bin")
-        val decoded = NoteIDDecoder.decode(bytes)
+        val decoded = NoteIDCodec.decode(bytes)
         assertEquals(canonicalNoteID, decoded)
     }
 
@@ -69,7 +71,7 @@ class PathIDDecodersTest {
             0x01, 0x00, 0x00, 0x00,  // staffIndexInPart = 1
         )
         val r = BinaryReader(bytes)
-        val decoded = StaffAddressDecoder.decodePayload(r)
+        val decoded = StaffAddressCodec.decodePayload(r)
         assertEquals(StaffAddress(partIndex = 3, staffIndexInPart = 1), decoded)
     }
 
@@ -84,7 +86,7 @@ class PathIDDecodersTest {
             0x03, 0x00, 0x00, 0x00,  // elementIndex = 3
         )
         val r = BinaryReader(bytes)
-        val decoded = VoiceElementIDDecoder.decodePayload(r)
+        val decoded = VoiceElementIDCodec.decodePayload(r)
         assertEquals(
             VoiceElementID(
                 staff = StaffAddress(2, 0),
@@ -107,7 +109,7 @@ class PathIDDecodersTest {
             0x00, 0x00, 0x00, 0x00,  // elementIndex = 0
         )
         val r = BinaryReader(bytes)
-        val decoded = RestIDDecoder.decodePayload(r)
+        val decoded = RestIDCodec.decodePayload(r)
         assertEquals(
             RestID(
                 staff = StaffAddress(0, 0),
@@ -130,7 +132,7 @@ class PathIDDecodersTest {
             0x05, 0x00, 0x00, 0x00,  // startElementIndex = 5
         )
         val r = BinaryReader(bytes)
-        val decoded = TupletIDDecoder.decodePayload(r)
+        val decoded = TupletIDCodec.decodePayload(r)
         assertEquals(
             TupletID(
                 staff = StaffAddress(0, 0),

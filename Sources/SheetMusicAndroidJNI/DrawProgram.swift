@@ -71,7 +71,7 @@ public enum DrawCommand: Sendable, Equatable {
         fontId: DrawProgram.FontID,
     )
     case text(
-        String,
+        text: String,
         x: Double,
         y: Double,
         size: Double,

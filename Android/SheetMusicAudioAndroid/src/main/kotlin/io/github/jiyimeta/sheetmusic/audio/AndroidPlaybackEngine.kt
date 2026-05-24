@@ -13,14 +13,15 @@ import io.github.jiyimeta.sheetmusic.audio.model.NoteID
 import io.github.jiyimeta.sheetmusic.audio.model.PlaybackState
 import io.github.jiyimeta.sheetmusic.audio.model.ScoreCursor
 import io.github.jiyimeta.sheetmusic.audio.model.ScoreItemID
-import io.github.jiyimeta.sheetmusic.audio.serialization.AudioExportRangeEncoder
-import io.github.jiyimeta.sheetmusic.audio.serialization.FrameDecoder
-import io.github.jiyimeta.sheetmusic.audio.serialization.MetronomeBeatDecoder
+import io.github.jiyimeta.sheetmusic.audio.serialization.AudioExportRangeCodec
+import io.github.jiyimeta.sheetmusic.wireformat.BinaryReader
+import io.github.jiyimeta.sheetmusic.wireformat.BinaryWriter
+import io.github.jiyimeta.sheetmusic.audio.serialization.FrameCodec
+import io.github.jiyimeta.sheetmusic.audio.serialization.MetronomeBeatCodec
 import io.github.jiyimeta.sheetmusic.audio.serialization.NoteIDCodec
 import io.github.jiyimeta.sheetmusic.audio.serialization.ScoreCursorCodec
 import io.github.jiyimeta.sheetmusic.audio.serialization.ScoreItemIDCodec
-import io.github.jiyimeta.sheetmusic.audio.serialization.ScoreItemIDDecoder
-import io.github.jiyimeta.sheetmusic.audio.serialization.StaffParamsDecoder
+import io.github.jiyimeta.sheetmusic.audio.serialization.StaffParamsCodec
 import io.github.jiyimeta.sheetmusic.audio.synth.FluidSynthDriver
 import io.github.jiyimeta.sheetmusic.audio.synth.FluidSynthEngine
 import io.github.jiyimeta.sheetmusic.audio.synth.MetronomeMixer
@@ -126,7 +127,7 @@ class AndroidPlaybackEngine internal constructor(
         fun itemEndTick(scoreHandle: Long, idBytes: ByteArray): Long
 
         /**
-         * Resolve an [AudioExportRange] (encoded by [AudioExportRangeEncoder])
+         * Resolve an [AudioExportRange] (encoded by [AudioExportRangeCodec])
          * to `[startTick, endTick]`. Returns `[-1, -1]` on failure.
          */
         fun resolveExportTickRange(scoreHandle: Long, rangeBytes: ByteArray): LongArray
@@ -262,12 +263,24 @@ class AndroidPlaybackEngine internal constructor(
             ticksPerBeat = summary[2].toInt()
 
             val staffBytes = jniBridge.staffParams(scoreHandle)
-            val staves = StaffParamsDecoder.decodeArray(staffBytes)
+            val staves = run {
+                val r = BinaryReader(staffBytes)
+                val count = r.readI32()
+                val out = ArrayList<io.github.jiyimeta.sheetmusic.audio.model.StaffParams>(count)
+                for (i in 0 until count) out.add(StaffParamsCodec.decodePayload(r))
+                out
+            }
             if (staves.isEmpty()) throw AudioBackendException.EmptyScore()
             if (staves.size > 16) throw AudioBackendException.TooManyStaves(staves.size)
 
             val beatBytes = jniBridge.metronomeBeats(scoreHandle)
-            val beats = MetronomeBeatDecoder.decodeArray(beatBytes)
+            val beats = run {
+                val r = BinaryReader(beatBytes)
+                val count = r.readI32()
+                val out = ArrayList<io.github.jiyimeta.sheetmusic.audio.model.MetronomeBeat>(count)
+                for (i in 0 until count) out.add(MetronomeBeatCodec.decodePayload(r))
+                out
+            }
 
             val smfBytes = jniBridge.renderMidi(scoreHandle)
             if (smfBytes.isEmpty()) throw AudioBackendException.InvalidScoreHandle()
@@ -328,7 +341,7 @@ class AndroidPlaybackEngine internal constructor(
                 MixerChannel(
                     staffIndex = i,
                     displayName = "Staff ${i + 1}",
-                    program = if (p.isDrums) null else p.program,
+                    program = if (p.isDrums) null else p.program.toInt(),
                 )
             }
             _totalTimeSeconds.value = totalSecs
@@ -420,7 +433,8 @@ class AndroidPlaybackEngine internal constructor(
         val player = playerDriver ?: return
         val cursorBytes = ScoreCursorCodec.encode(to)
         val frameBytes = jniBridge.frameForCursor(scoreHandle, cursorBytes)
-        val frame = FrameDecoder.decode(frameBytes) ?: return
+        val frame = if (frameBytes.isEmpty()) null else FrameCodec.decode(frameBytes)
+        frame ?: return
         val snapped = snapTickToLoop(frame.tick)
         fluidSynthEngine?.allNotesOff()
         player.seekTick(snapped)
@@ -442,7 +456,8 @@ class AndroidPlaybackEngine internal constructor(
             (target / total * totalTicks).toLong()
         } else 0L
         val frameBytes = jniBridge.frameAtTick(scoreHandle, targetTickEstimate)
-        val frame = FrameDecoder.decode(frameBytes) ?: return
+        val frame = if (frameBytes.isEmpty()) null else FrameCodec.decode(frameBytes)
+        frame ?: return
         val snapped = snapTickToLoop(frame.tick)
         fluidSynthEngine?.allNotesOff()
         player.seekTick(snapped)
@@ -483,8 +498,10 @@ class AndroidPlaybackEngine internal constructor(
         if (playerDriver == null) return
         val fromBytes = jniBridge.frameForCursor(scoreHandle, ScoreCursorCodec.encode(from))
         val toBytes = jniBridge.frameForCursor(scoreHandle, ScoreCursorCodec.encode(to))
-        val fromFrame = FrameDecoder.decode(fromBytes) ?: return
-        val toFrame = FrameDecoder.decode(toBytes) ?: return
+        val fromFrame = if (fromBytes.isEmpty()) null else FrameCodec.decode(fromBytes)
+        fromFrame ?: return
+        val toFrame = if (toBytes.isEmpty()) null else FrameCodec.decode(toBytes)
+        toFrame ?: return
         if (fromFrame.tick >= toFrame.tick) return
         _loopRange.value = LoopRange(startTick = fromFrame.tick, endTick = toFrame.tick)
     }
@@ -501,7 +518,8 @@ class AndroidPlaybackEngine internal constructor(
         if (_state.value == PlaybackState.EXPORTING) return
         if (playerDriver == null) return
         val fromBytes = jniBridge.frameForCursor(scoreHandle, ScoreCursorCodec.encode(from))
-        val fromFrame = FrameDecoder.decode(fromBytes) ?: return
+        val fromFrame = if (fromBytes.isEmpty()) null else FrameCodec.decode(fromBytes)
+        fromFrame ?: return
         val endTick = jniBridge.itemEndTick(scoreHandle, ScoreItemIDCodec.encode(throughEndOf))
         if (endTick < 0) return
         if (fromFrame.tick >= endTick) return
@@ -552,9 +570,15 @@ class AndroidPlaybackEngine internal constructor(
      * or `null` if [of] is empty or no item matches.
      */
     fun earliest(of: List<ScoreItemID>): ScoreItemID? {
-        val bytes = jniBridge.earliestOf(scoreHandle, ScoreItemIDCodec.encodeArray(of))
+        val encodedIds = run {
+            val w = BinaryWriter()
+            w.writeI32(of.size)
+            for (id in of) ScoreItemIDCodec.encodePayload(id, w)
+            w.toByteArray()
+        }
+        val bytes = jniBridge.earliestOf(scoreHandle, encodedIds)
         if (bytes.isEmpty()) return null
-        return ScoreItemIDDecoder.decode(bytes)
+        return ScoreItemIDCodec.decode(bytes)
     }
 
     // ── Mixer ────────────────────────────────────────────────────────
@@ -710,7 +734,7 @@ class AndroidPlaybackEngine internal constructor(
                 if (loop != null) Pair(loop.startTick, loop.endTick) else Pair(0L, totalTicks)
             }
             else -> {
-                val rangeBytes = AudioExportRangeEncoder.encode(range)
+                val rangeBytes = AudioExportRangeCodec.encode(range)
                 val resolved = jniBridge.resolveExportTickRange(scoreHandle, rangeBytes)
                 if (resolved.size < 2 || resolved[0] < 0 || resolved[1] < 0) {
                     throw AudioBackendException.RangeNotInTimeline()
@@ -723,7 +747,13 @@ class AndroidPlaybackEngine internal constructor(
         // state machine — these reads must not race with the EXPORTING
         // transition (live mutators already no-op once we set EXPORTING).
         val beatBytes = jniBridge.metronomeBeats(scoreHandle)
-        val beats = MetronomeBeatDecoder.decodeArray(beatBytes)
+        val beats = run {
+            val r = BinaryReader(beatBytes)
+            val count = r.readI32()
+            val out = ArrayList<io.github.jiyimeta.sheetmusic.audio.model.MetronomeBeat>(count)
+            for (i in 0 until count) out.add(MetronomeBeatCodec.decodePayload(r))
+            out
+        }
         val snapshot = ExportEngineSnapshot(
             mixerChannels = _mixerChannels.value,
             metronomeEnabled = metronomeMixer?.isEnabled ?: false,
@@ -733,7 +763,14 @@ class AndroidPlaybackEngine internal constructor(
         )
 
         val smfBytes = jniBridge.renderMidi(scoreHandle)
-        val staffParams = StaffParamsDecoder.decodeArray(jniBridge.staffParams(scoreHandle))
+        val staffParams = run {
+            val spBytes = jniBridge.staffParams(scoreHandle)
+            val r = BinaryReader(spBytes)
+            val count = r.readI32()
+            val out = ArrayList<io.github.jiyimeta.sheetmusic.audio.model.StaffParams>(count)
+            for (i in 0 until count) out.add(StaffParamsCodec.decodePayload(r))
+            out
+        }
 
         // Synth and encoder MUST share the same sample rate; otherwise the file
         // header advertises one rate while the samples were produced at another,
@@ -809,7 +846,7 @@ class AndroidPlaybackEngine internal constructor(
                 metronomeMixer?.updateCurrentTick(tick)
 
                 val frameBytes = jniBridge.frameAtTick(scoreHandle, tick)
-                val frame = FrameDecoder.decode(frameBytes)
+                val frame = if (frameBytes.isEmpty()) null else FrameCodec.decode(frameBytes)
                 // StateFlow.value assignments are atomic and thread-safe;
                 // no Main-dispatch required here. Collectors in ViewModels
                 // can observe on the UI dispatcher themselves via flowOn().

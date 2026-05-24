@@ -57,6 +57,43 @@ dependencies {
     api("org.swift.swiftkit:swiftkit-core:1.0-SNAPSHOT")
 }
 
+// ─── Wire-format codec codegen ────────────────────────────────────────
+// Runs `swift run emit-kotlin-codecs` to regenerate Kotlin codecs from
+// Swift `@WireFormat` types. See
+// docs/superpowers/specs/2026-05-23-kotlin-codec-codegen-design.md.
+val packageRoot: File = rootProject.projectDir.resolve("..").canonicalFile
+val emitKotlinCodecsOutput = layout.buildDirectory.dir("generated/source/wire-format/kotlin")
+
+val emitKotlinCodecs by tasks.registering(Exec::class) {
+    workingDir(packageRoot)
+    inputs.dir(packageRoot.resolve("Sources/SheetMusicAndroidJNI"))
+        .withPropertyName("swiftSources")
+    inputs.file(packageRoot.resolve("Sources/SheetMusicAndroidJNI/kotlin-codegen.json"))
+        .withPropertyName("codegenConfig")
+    outputs.dir(emitKotlinCodecsOutput)
+    // This module owns the top-level io.github.jiyimeta.sheetmusic codecs
+    // (ScoreMetadata + SMuFLMetrics) and the shared wireformat runtime —
+    // wireformat itself is hand-written, so we don't ask the generator
+    // for it. Audio + Examples-app codecs are emitted by their own
+    // modules' :emitKotlinCodecs tasks.
+    commandLine(
+        "swift", "run", "--package-path", packageRoot.absolutePath,
+        "emit-kotlin-codecs",
+        "--config", "Sources/SheetMusicAndroidJNI/kotlin-codegen.json",
+        "--source", "Sources/SheetMusicAndroidJNI",
+        "--output", emitKotlinCodecsOutput.get().asFile.absolutePath,
+        "--include-package", "io.github.jiyimeta.sheetmusic",
+    )
+}
+
+android {
+    sourceSets["main"].kotlin.srcDir(emitKotlinCodecsOutput)
+}
+
+tasks.matching { it.name.startsWith("compile") && it.name.endsWith("Kotlin") }
+    .configureEach { dependsOn(emitKotlinCodecs) }
+
+
 afterEvaluate {
     publishing {
         publications {

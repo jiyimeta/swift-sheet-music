@@ -92,7 +92,7 @@ extension LayoutBridge {
             switch run.kind {
             case .musicSymbol:
                 out.append(.text(
-                    run.text,
+                    text: run.text,
                     x: cursorX * ptToMMScale,
                     y: originY * ptToMMScale,
                     size: Double(glyphPt) * ptToMMScale,
@@ -100,7 +100,7 @@ extension LayoutBridge {
                 ))
             case .text:
                 out.append(.text(
-                    run.text,
+                    text: run.text,
                     x: cursorX * ptToMMScale,
                     y: originY * ptToMMScale,
                     size: Double(textPt) * ptToMMScale,
@@ -286,7 +286,7 @@ extension LayoutBridge {
         // digit on `labelCenter.y`.
         let baselineY = Double(segments.labelCenter.y) + (ascent - descent) / 2
         out.append(.text(
-            text,
+            text: text,
             x: (Double(segments.labelCenter.x) - labelWidth / 2) * ptToMMScale,
             y: baselineY * ptToMMScale,
             size: fontSize * ptToMMScale,
@@ -610,7 +610,7 @@ extension LayoutBridge {
                 let baselineY = originY
                     + (textAscent - textDescent) / 2
                 out.append(.text(
-                    run.content,
+                    text: run.content,
                     x: runX * ptToMMScale,
                     y: baselineY * ptToMMScale,
                     size: Double(textPt) * ptToMMScale,
@@ -683,7 +683,7 @@ extension LayoutBridge {
             baselineY = originY + (ascent - descent) / 2
         }
         out.append(.text(
-            text,
+            text: text,
             x: (originX + dx) * ptToMMScale,
             y: baselineY * ptToMMScale,
             size: Double(textPt) * ptToMMScale,
@@ -724,7 +724,7 @@ extension LayoutBridge {
         let textOriginX = originX + pad
         let baselineY = originY - pad - descent
         out.append(.text(
-            text,
+            text: text,
             x: textOriginX * ptToMMScale,
             y: baselineY * ptToMMScale,
             size: Double(textPt) * ptToMMScale,

@@ -24,11 +24,9 @@ import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
-import com.example.sheetmusic.draw.DrawCommand
-import com.example.sheetmusic.draw.DrawPage
-
-private const val FONT_ID_TEXT_ROMAN = 0
-private const val FONT_ID_SMUFL = 1
+import com.example.sheetmusic.draw.model.DrawCommand
+import com.example.sheetmusic.draw.model.EncodablePage
+import com.example.sheetmusic.draw.model.FontID
 
 /**
  * Holds the pan/zoom transform state for the score canvas.
@@ -91,7 +89,7 @@ private fun DrawScope.pxPerMM(canvasSizeMM: Double): Float =
     (size.width / canvasSizeMM).toFloat()
 
 private fun DrawScope.drawPage(
-    page: DrawPage,
+    page: EncodablePage,
     pxPerMM: Float,
     bravura: Typeface,
     edwin: Typeface
@@ -148,7 +146,7 @@ private fun DrawScope.drawPage(
             }
             is DrawCommand.Glyph -> {
                 glyphPaint.typeface =
-                    if (cmd.fontId == FONT_ID_SMUFL) bravura else edwin
+                    if (cmd.fontId == FontID.SMUFL) bravura else edwin
                 glyphPaint.textSize = cmd.size.toFloat() * pxPerMM
                 glyphPaint.color = currentArgb
                 val s = codepointToString(cmd.codepoint.toInt())
@@ -163,7 +161,7 @@ private fun DrawScope.drawPage(
             }
             is DrawCommand.Text -> {
                 glyphPaint.typeface =
-                    if (cmd.fontId == FONT_ID_SMUFL) bravura else edwin
+                    if (cmd.fontId == FontID.SMUFL) bravura else edwin
                 glyphPaint.textSize = cmd.size.toFloat() * pxPerMM
                 glyphPaint.color = currentArgb
                 drawIntoCanvas { canvas ->
