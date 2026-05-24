@@ -1,9 +1,9 @@
-package com.example.sheetmusic.draw
+package io.github.jiyimeta.sheetmusic.wireformat
 
 /**
- * Sequential little-endian binary writer. Used by the auto-generated
- * `DrawProgramCodec` / `EncodablePageCodec` / `DrawCommandCodec` /
- * `FontIDCodec` objects in this package.
+ * Sequential little-endian binary writer. Used by every code-generated
+ * codec produced by `emit-kotlin-codecs`. See [BinaryReader] for the
+ * rationale behind hosting this in `:SheetMusicAndroid`.
  *
  * Mirrors the write side of the Swift wire-format encoder.
  */

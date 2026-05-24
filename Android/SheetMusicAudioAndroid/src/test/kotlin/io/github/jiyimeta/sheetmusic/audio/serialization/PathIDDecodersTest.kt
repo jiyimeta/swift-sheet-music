@@ -1,5 +1,7 @@
 package io.github.jiyimeta.sheetmusic.audio.serialization
 
+import io.github.jiyimeta.sheetmusic.wireformat.BinaryReader
+
 import io.github.jiyimeta.sheetmusic.audio.model.NoteID
 import io.github.jiyimeta.sheetmusic.audio.model.RestID
 import io.github.jiyimeta.sheetmusic.audio.model.StaffAddress

@@ -16,7 +16,7 @@ import io.github.jiyimeta.sheetmusic.audio.model.ScoreCursor
 import io.github.jiyimeta.sheetmusic.audio.model.ScoreItemID
 import io.github.jiyimeta.sheetmusic.audio.model.StaffAddress
 import io.github.jiyimeta.sheetmusic.audio.model.StaffParams
-import io.github.jiyimeta.sheetmusic.audio.serialization.BinaryWriter
+import io.github.jiyimeta.sheetmusic.wireformat.BinaryWriter
 import io.github.jiyimeta.sheetmusic.audio.serialization.MetronomeBeatCodec
 import io.github.jiyimeta.sheetmusic.audio.serialization.NoteIDCodec
 import io.github.jiyimeta.sheetmusic.audio.serialization.ScoreCursorCodec
@@ -1115,7 +1115,7 @@ class AndroidPlaybackEngineTest {
         timeMicros: Long,
         cursor: ScoreCursor,
     ): ByteArray {
-        val w = io.github.jiyimeta.sheetmusic.audio.serialization.BinaryWriter()
+        val w = BinaryWriter()
         w.writeI64(tick)
         w.writeF64(timeMicros.toDouble() / 1_000_000.0)
         ScoreCursorCodec.encodePayload(cursor, w)
