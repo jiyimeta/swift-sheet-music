@@ -52,6 +52,7 @@ public struct KotlinEmitter: Sendable {
                     kotlinName: kotlinName,
                     modelPackage: modelPkg,
                     codecPackage: codecPkg,
+                    serializationPackage: serPkg,
                 ))
             }
         }

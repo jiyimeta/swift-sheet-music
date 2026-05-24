@@ -42,6 +42,34 @@ import WireFormatSchema
     #expect(files[0].relativePath == "io/github/jiyimeta/sheetmusic/SMuFLMetricsCodec.kt")
 }
 
+/// Regression: a field whose Swift type is a nested ref (`Outer.Inner`)
+/// must produce `InnerCodec.encodePayload(...)`, not `Outer.InnerCodec…`.
+@Test func emitsStructCodecForNestedTypeReferenceField() throws {
+    let schema = Schema(types: [
+        .struct(WireStruct(
+            name: "Sample",
+            fields: [
+                WireField(name: "scalar", typeText: "Outer.Inner"),
+                WireField(name: "items", typeText: "[Outer.Inner]"),
+            ],
+            kotlinTarget: .auto,
+        )),
+    ])
+    let config = KotlinCodegenConfig(
+        defaultModelPackage: "io.example.audio.model",
+        defaultCodecPackage: "io.example.audio.serialization",
+    )
+
+    let files = try KotlinEmitter(config: config).emit(schema: schema)
+
+    #expect(files.count == 1)
+    let content = files[0].content
+    #expect(!content.contains("Outer.Inner"))
+    #expect(content.contains("InnerCodec.encodePayload"))
+    #expect(content.contains("InnerCodec.decodePayload"))
+    #expect(content.contains("ArrayList<Inner>"))
+}
+
 @Test func emitsStructCodec() throws {
     let schema = Schema(types: [
         .struct(WireStruct(

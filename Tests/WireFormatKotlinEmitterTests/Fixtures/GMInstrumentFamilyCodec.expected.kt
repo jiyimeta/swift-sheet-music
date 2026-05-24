@@ -2,8 +2,6 @@
 package io.example.audio.serialization
 
 import io.example.audio.model.GMInstrumentFamily
-import io.github.jiyimeta.sheetmusic.audio.serialization.BinaryReader
-import io.github.jiyimeta.sheetmusic.audio.serialization.BinaryWriter
 
 public object GMInstrumentFamilyCodec {
     fun encode(value: GMInstrumentFamily): ByteArray {

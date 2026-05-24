@@ -2,6 +2,7 @@
 package io.github.jiyimeta.sheetmusic
 
 import io.github.jiyimeta.sheetmusic.SMuFLMetrics
+import io.github.jiyimeta.sheetmusic.SMuFLMetricsEntry
 import io.github.jiyimeta.sheetmusic.audio.serialization.BinaryReader
 import io.github.jiyimeta.sheetmusic.audio.serialization.BinaryWriter
 

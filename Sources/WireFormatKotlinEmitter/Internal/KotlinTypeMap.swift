@@ -23,4 +23,13 @@ enum KotlinTypeMap {
             return nil
         }
     }
+
+    /// Strips a Swift nested-type prefix (`Outer.Inner` → `Inner`). Codecs
+    /// and model classes are emitted at top level, so namespace-qualified
+    /// references in field / payload type text must be flattened before
+    /// they become codec object names or import targets.
+    static func simpleName(of typeText: String) -> String {
+        guard let lastDot = typeText.lastIndex(of: ".") else { return typeText }
+        return String(typeText[typeText.index(after: lastDot)...])
+    }
 }

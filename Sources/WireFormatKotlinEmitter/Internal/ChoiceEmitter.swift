@@ -13,10 +13,12 @@ enum ChoiceEmitter {
         let path = codecPackage.replacingOccurrences(of: ".", with: "/") + "/\(codecName).kt"
 
         // Collect non-primitive referenced types (for `import` lines).
+        // Nested-type refs like "Outer.Inner" must be flattened to "Inner" —
+        // codecs and model classes are emitted at top level.
         var referenced = Set<String>()
         for c in choice.cases {
             for field in c.payload where KotlinTypeMap.primitive(field.typeText) == nil {
-                referenced.insert(nameTransform.apply(to: field.typeText))
+                referenced.insert(nameTransform.apply(to: KotlinTypeMap.simpleName(of: field.typeText)))
             }
         }
         let encodeBranches = choice.cases.enumerated().map { idx, c in
@@ -96,7 +98,7 @@ enum ChoiceEmitter {
             if let primitive = KotlinTypeMap.primitive(field.typeText) {
                 lines.append("                " + primitive.write(propAccess))
             } else {
-                let codecName = nameTransform.apply(to: field.typeText) + "Codec"
+                let codecName = nameTransform.apply(to: KotlinTypeMap.simpleName(of: field.typeText)) + "Codec"
                 lines.append("                \(codecName).encodePayload(\(propAccess), w)")
             }
         }
@@ -121,7 +123,7 @@ enum ChoiceEmitter {
             if let primitive = KotlinTypeMap.primitive(field.typeText) {
                 lines.append("                        \(prop) = \(primitive.read),")
             } else {
-                let codecName = nameTransform.apply(to: field.typeText) + "Codec"
+                let codecName = nameTransform.apply(to: KotlinTypeMap.simpleName(of: field.typeText)) + "Codec"
                 lines.append("                        \(prop) = \(codecName).decodePayload(r),")
             }
         }
