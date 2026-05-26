@@ -109,17 +109,64 @@ extension ScoreLayerBuilder {
                 }
             }
         case let .textMark(.tempo, text, p):
+            // Tempo text mixes a leading Bravura metronome glyph (a
+            // SMuFL Private Use Area codepoint, e.g. U+E1D5) with Edwin
+            // text (" = 120"). Three things a single textLayer gets
+            // wrong, all fixed here:
+            //   * the Edwin/system font has no PUA glyph — and
+            //     process-registered Bravura is not in CoreText's
+            //     fallback cascade — so the music run must use Bravura;
+            //   * the music glyph must be centred by its *ink* box so
+            //     the whole note straddles the text centre instead of
+            //     resting its head on the baseline with the stem poking
+            //     above the text;
+            //   * the space separating the note from "=" carries no ink,
+            //     so ink-left anchoring would drop it — re-add it.
             let style = ResolvedTextStyle.resolve(
                 .tempo, metrics: metrics,
             )
-            if let layer = textLayer(
-                text: text, at: shift(p),
-                size: style.pointSize, italic: style.isItalic,
-                anchor: CGPoint(x: 0, y: 0.5),
-                font: style.ctFont,
-                height: height,
-            ) {
-                parent.addSublayer(layer)
+            let origin = shift(p)
+            let textFont = LayoutFont(
+                face: style.face, pointSize: style.pointSize,
+            )
+            var penX = origin.x
+            for (index, run) in MusicTextRuns.runs(in: text).enumerated() {
+                switch run.kind {
+                case .musicSymbol:
+                    if let (layer, advance) = bravuraInkCenteredLayer(
+                        run.text, x: penX, centerY: origin.y,
+                        size: style.pointSize, height: height,
+                    ) {
+                        parent.addSublayer(layer)
+                        penX += advance
+                    }
+                case .text:
+                    var runText = run.text
+                    // Re-add the inter-run leading space dropped by
+                    // ink-left anchoring (a space carries no ink).
+                    if index > 0 {
+                        let lead = runText.prefix { $0 == " " }
+                        if !lead.isEmpty {
+                            penX += FontMetrics.provider.typographicWidth(
+                                text: String(lead), font: textFont,
+                            )
+                            runText.removeFirst(lead.count)
+                        }
+                    }
+                    if let layer = textLayer(
+                        text: runText,
+                        at: CGPoint(x: penX, y: origin.y),
+                        size: style.pointSize, italic: style.isItalic,
+                        anchor: CGPoint(x: 0, y: 0.5),
+                        font: style.ctFont,
+                        height: height,
+                    ) {
+                        parent.addSublayer(layer)
+                        penX += FontMetrics.provider.typographicWidth(
+                            text: runText, font: textFont,
+                        )
+                    }
+                }
             }
         case let .textMark(.lyrics, text, p):
             let style = ResolvedTextStyle.resolve(
