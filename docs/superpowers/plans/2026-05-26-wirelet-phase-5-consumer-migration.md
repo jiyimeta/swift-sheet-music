@@ -2,18 +2,18 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Cut swift-sheet-music's in-tree wire-format toolkit over to the published `swift-wirelet` package (v0.1.0-alpha.1), deleting the in-tree copies and switching Android codegen from `Exec` tasks + `kotlin-codegen.json` to the `io.github.jiyimeta.wirelet` Gradle plugin DSL.
+**Goal:** Cut swift-sheet-music's in-tree wire-format toolkit over to the published `swift-wirelet` package (v0.1.0-alpha.2 — bumped from alpha.1 during Task 1 to resolve a swift-syntax version conflict with swift-java 0.3.0), deleting the in-tree copies and switching Android codegen from `Exec` tasks + `kotlin-codegen.json` to the `io.github.jiyimeta.wirelet` Gradle plugin DSL.
 
-**Architecture:** Swift side replaces `SheetMusicWireFormat` + `SheetMusicWireFormatMacros` + `WireFormatSchema` + `WireFormatKotlinEmitter` + `EmitKotlinCodecs` with a single `.package(url: …swift-wirelet, revision: <alpha.1 sha>)` dependency. Macro spellings (`@WireFormat`, `@WireFormatEnum`, `@WireFormatChoice`, `@WireFormatField`) stay identical; only the imported module name changes (`SheetMusicWireFormat` → `Wirelet`). Kotlin side applies the new Gradle plugin, deletes hand-written `BinaryReader/Writer.kt`, and pulls those from the `wirelet-runtime` Maven artifact. `Sources/SheetMusicAndroidJNI/` is reshuffled into per-codec-package sub-dirs (`Metadata/`, `Audio/`, `Draw/`) so each module's `wirelet { sources { … } }` scans a single coherent directory (the v1 plugin DSL has no per-type pattern rules).
+**Architecture:** Swift side replaces `SheetMusicWireFormat` + `SheetMusicWireFormatMacros` + `WireFormatSchema` + `WireFormatKotlinEmitter` + `EmitKotlinCodecs` with a single `.package(url: …swift-wirelet, revision: <alpha.2 sha>)` dependency. Macro spellings (`@WireFormat`, `@WireFormatEnum`, `@WireFormatChoice`, `@WireFormatField`) stay identical; only the imported module name changes (`SheetMusicWireFormat` → `Wirelet`). Kotlin side applies the new Gradle plugin, deletes hand-written `BinaryReader/Writer.kt`, and pulls those from the `wirelet-runtime` Maven artifact. `Sources/SheetMusicAndroidJNI/` is reshuffled into per-codec-package sub-dirs (`Metadata/`, `Audio/`, `Draw/`) so each module's `wirelet { sources { … } }` scans a single coherent directory (the v1 plugin DSL has no per-type pattern rules).
 
 **Tech Stack:**
-- `swift-wirelet` `v0.1.0-alpha.1` published at `maven.pkg.github.com/jiyimeta/swift-wirelet`. Swift package URL: `git@github.com:jiyimeta/swift-wirelet.git`. Resolved revision SHA: `509a86a5b93d518b0c0f17abf85d28b62e8de4ef`.
+- `swift-wirelet` `v0.1.0-alpha.2` published at `maven.pkg.github.com/jiyimeta/swift-wirelet`. Swift package URL: `git@github.com:jiyimeta/swift-wirelet.git`. Resolved revision SHA: `31be47c84fddf2834b3cccc05ff955dcd1f2668e` (alpha.2 — alpha.1's `509a86a` declared `swift-syntax from: "600.0.0"` and could not resolve alongside swift-java 0.3.0, which requires `from: "603.0.0"`).
 - Gradle 8.x, Kotlin 2.0.20, AGP 8.5.0.
 - GitHub Packages credentials sourced from `GITHUB_ACTOR` / `GITHUB_TOKEN` env vars (already in use for `sheet-music-android`).
 
 **Wire-format break (intentional):** The legacy positional encoding and the wirelet TLV encoding are byte-incompatible. All `Tests/SheetMusicTests/Resources/Golden/Audio/*.bin` fixtures are regenerated in this plan (Task 11). The spec accepts this — no persisted users exist.
 
-**Branch / commit cadence:** Land as a single PR (PR-S1 in spec terminology). Commit per task; do not squash mid-plan. Wirelet itself stays at `v0.1.0-alpha.1` unless a fix is needed mid-integration — in which case bump to `v0.1.0-alpha.2` after Phase 5 lands, not before.
+**Branch / commit cadence:** Land as a single PR (PR-S1 in spec terminology). Commit per task; do not squash mid-plan. Wirelet was bumped to `v0.1.0-alpha.2` during Task 1 (swift-syntax compat fix); no further wirelet changes are expected in Phase 5.
 
 ---
 
@@ -46,7 +46,7 @@
 ### Gradle / Kotlin — edited
 - `Android/settings.gradle.kts` — add `pluginManagement` Maven URL for `jiyimeta/swift-wirelet`; add dependency-resolution Maven URL for the same repo
 - `Android/build.gradle.kts` — add wirelet plugin classpath stanza or alias declaration
-- `Android/SheetMusicAndroid/build.gradle.kts` — replace `emitKotlinCodecs` Exec task with `plugins { id("io.github.jiyimeta.wirelet") }` + `wirelet { sources { … } }`; add `api("io.github.jiyimeta:wirelet-runtime:0.1.0-alpha.1")`
+- `Android/SheetMusicAndroid/build.gradle.kts` — replace `emitKotlinCodecs` Exec task with `plugins { id("io.github.jiyimeta.wirelet") }` + `wirelet { sources { … } }`; add `api("io.github.jiyimeta:wirelet-runtime:0.1.0-alpha.2")`
 - `Android/SheetMusicAudioAndroid/build.gradle.kts` — same plugin application; reuses `wirelet-runtime` transitively via `api(project(":SheetMusicAndroid"))`
 - `Examples/Android/settings.gradle.kts` — add pluginManagement + dependency-resolution Maven URLs for the wirelet GitHub Packages repo
 - `Examples/Android/app/build.gradle.kts` — same plugin migration
@@ -89,16 +89,16 @@ Locate the `dependencies` array near the bottom of `Package.swift` (Apple-and-An
 ```swift
 .package(
     url: "git@github.com:jiyimeta/swift-wirelet.git",
-    revision: "509a86a5b93d518b0c0f17abf85d28b62e8de4ef",
+    revision: "31be47c84fddf2834b3cccc05ff955dcd1f2668e",
 ),
 ```
 
-The revision pins to the `v0.1.0-alpha.1` tag commit. Do not change to a branch name — committed configuration must be reproducible.
+The revision pins to the `v0.1.0-alpha.2` tag commit. Do not change to a branch name — committed configuration must be reproducible.
 
 - [ ] **Step 2: Verify resolution succeeds (Apple shape)**
 
 Run: `swift package resolve`
-Expected: `Fetching git@github.com:jiyimeta/swift-wirelet.git ... resolved at 509a86a (v0.1.0-alpha.1)`. `Package.resolved` updates to pin the new dep.
+Expected: `Fetching git@github.com:jiyimeta/swift-wirelet.git ... resolved at 31be47c (v0.1.0-alpha.2)`. `Package.resolved` updates to pin the new dep.
 
 If the fetch fails with an SSH auth error, the user needs a working SSH deploy key. Surface this to the user instead of switching to HTTPS — committed config uses SSH per spec.
 
@@ -111,7 +111,7 @@ Expected: same fetch + resolve message.
 
 ```bash
 git add Package.swift Package.resolved
-git commit -m "feat(wirelet-phase5): add swift-wirelet package dep at v0.1.0-alpha.1"
+git commit -m "feat(wirelet-phase5): add swift-wirelet package dep at v0.1.0-alpha.2"
 ```
 
 ---
@@ -410,7 +410,7 @@ Delete the entire `// ─── Wire-format codec codegen ───…` block fr
 
 - [ ] **Step 2: Apply the wirelet plugin**
 
-In the top `plugins { ... }` block, add `id("io.github.jiyimeta.wirelet") version "0.1.0-alpha.1"`.
+In the top `plugins { ... }` block, add `id("io.github.jiyimeta.wirelet") version "0.1.0-alpha.2"`.
 
 - [ ] **Step 3: Configure the wirelet extension**
 
@@ -440,7 +440,7 @@ If this constraint becomes a footgun in practice, file a follow-up issue on wire
 In the `dependencies { … }` block:
 
 ```kotlin
-api("io.github.jiyimeta:wirelet-runtime:0.1.0-alpha.1")
+api("io.github.jiyimeta:wirelet-runtime:0.1.0-alpha.2")
 ```
 
 Use `api` (not `implementation`) so downstream modules (SheetMusicAudioAndroid, Examples/Android) see the runtime classes (`BinaryReader`, `BinaryWriter`) on the compile classpath.
@@ -485,7 +485,7 @@ Remove the entire `// ─── Wire-format codec codegen ───…` block (a
 
 - [ ] **Step 2: Apply the plugin + extension**
 
-Add `id("io.github.jiyimeta.wirelet") version "0.1.0-alpha.1"` to `plugins { ... }`.
+Add `id("io.github.jiyimeta.wirelet") version "0.1.0-alpha.2"` to `plugins { ... }`.
 
 Append:
 
@@ -538,7 +538,7 @@ Same pattern as Tasks 6/7. The current Exec invocation filters `--include-packag
 
 - [ ] **Step 2: Apply the plugin + extension**
 
-Add `id("io.github.jiyimeta.wirelet") version "0.1.0-alpha.1"` to `plugins { ... }`.
+Add `id("io.github.jiyimeta.wirelet") version "0.1.0-alpha.2"` to `plugins { ... }`.
 
 Append:
 
@@ -775,7 +775,7 @@ once per workspace:
 
     git clone git@github.com:jiyimeta/swift-wirelet.git wirelet-checkout
     cd wirelet-checkout
-    git checkout 509a86a5b93d518b0c0f17abf85d28b62e8de4ef   # v0.1.0-alpha.1
+    git checkout 31be47c84fddf2834b3cccc05ff955dcd1f2668e   # v0.1.0-alpha.2
 
 A symlink works too if you already have a checkout elsewhere:
 
