@@ -256,6 +256,10 @@ let packageDependencies: [Package.Dependency] = [
     // / SwiftCompilerPlugin / SwiftDiagnostics directly. Pinned to the same
     // major as what swift-java 0.3.0 resolves to (603.x).
     .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "603.0.0"),
+    .package(
+        url: "git@github.com:jiyimeta/swift-wirelet.git",
+        revision: "31be47c84fddf2834b3cccc05ff955dcd1f2668e",
+    ),
 ]
 
 let package = Package(
