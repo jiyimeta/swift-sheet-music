@@ -8,14 +8,6 @@ import SheetMusicWireFormat
 /// exit.
 let scoreTable = HandleTable<Score>()
 
-// MARK: - Wire format payloads
-
-@WireFormat
-struct ScoreMetadataWire {
-    var title: String
-    var composer: String
-}
-
 // MARK: - Score lifecycle (swift-java entry points)
 
 /// JNI entry point exposed via swift-java for the Kotlin
