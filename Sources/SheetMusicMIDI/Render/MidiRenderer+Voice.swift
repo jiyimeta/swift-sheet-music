@@ -363,6 +363,9 @@ extension MidiRenderer {
         offTick: Int,
         events: inout [TimedMidiEvent],
     ) {
+        // A muted note (`<play>0</play>`) emits no MIDI. Mirrors the
+        // `if (!note->play()) return;` guard in CompatMidiRender::collectNote.
+        guard note.play else { return }
         if note.tieBack == nil {
             let on = MidiEvent.noteOn(channel: channel, pitch: note.pitch, velocity: velocity)
             events.append(TimedMidiEvent(tick: onTick, event: on))

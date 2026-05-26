@@ -18,6 +18,11 @@ public struct Note: Sendable, Equatable {
     /// percussion rim, "triangle-down" for cowbell). When nil, the
     /// standard notehead for the duration is used.
     public var headType: String?
+    /// Whether this note sounds during playback. MuseScore stores a
+    /// per-note "play" flag (`<play>0</play>` when false); a muted
+    /// note is still engraved but emits no MIDI. C++: `Note::play()`,
+    /// which gates `CompatMidiRender::collectNote`.
+    public var play: Bool
 
     public init(
         pitch: Int,
@@ -27,6 +32,7 @@ public struct Note: Sendable, Equatable {
         tieBack: Int? = nil,
         glissando: Glissando? = nil,
         headType: String? = nil,
+        play: Bool = true,
     ) {
         self.pitch = pitch
         self.tpc = tpc
@@ -35,5 +41,6 @@ public struct Note: Sendable, Equatable {
         self.tieBack = tieBack
         self.glissando = glissando
         self.headType = headType
+        self.play = play
     }
 }

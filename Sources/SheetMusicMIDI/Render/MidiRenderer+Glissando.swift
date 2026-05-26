@@ -23,6 +23,9 @@ extension MidiRenderer {
         currentKey: Int,
         events: inout [TimedMidiEvent],
     ) {
+        // A muted note (`<play>0</play>`) emits no MIDI. Mirrors the
+        // `if (!note->play()) return;` guard in CompatMidiRender::collectNote.
+        guard note.play else { return }
         let suppressStartOn = note.tieBack != nil
         let suppressFinalOff = note.tieForward != nil
         switch glissando.style {

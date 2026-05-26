@@ -643,50 +643,18 @@ extension LayoutEngine {
                     voiceChordOutIndex[voiceElemIdx] = out.count
                     chordTickByOutIndex[out.count] = tickCursor
                     out.append(mainElement)
-                    // Chord-level articulation glyphs (staccato / staccatissimo /
-                    // tenuto). Round-trip-only `.unknown` kinds are filtered.
-                    // Anchor: explicit `art.anchor` wins; `nil` falls back to
-                    // Gould's opposite-side rule (stem-up → below).
-                    // Stacking: each additional glyph on the same side adds
-                    // 1 sp away from the staff. Outside-staff push: if the
-                    // base Y lands inside the staff, clamp it past the
-                    // nearest staff edge by 0.5 sp.
-                    let staffTopY = staffMidY - metrics.sp * 2
-                    let staffBottomY = staffMidY + metrics.sp * 2
-                    var aboveCount = 0
-                    var belowCount = 0
-                    for art in chord.articulations {
-                        guard let artKind = renderableArticulationKind(art.kind)
-                        else { continue }
-                        let isAbove: Bool
-                        switch art.anchor {
-                        case .above: isAbove = true
-                        case .below: isAbove = false
-                        case nil: isAbove = (stem == .down)
-                        }
-                        let noteYs = chordNotes.map(\.origin.y)
-                        let baseY: CGFloat
-                        if isAbove {
-                            baseY = (noteYs.min() ?? staffMidY) - metrics.sp * 0.5
-                        } else {
-                            baseY = (noteYs.max() ?? staffMidY) + metrics.sp * 0.5
-                        }
-                        let pushed: CGFloat
-                        if isAbove {
-                            pushed = min(baseY, staffTopY - metrics.sp * 0.5)
-                        } else {
-                            pushed = max(baseY, staffBottomY + metrics.sp * 0.5)
-                        }
-                        let stackUnits = isAbove ? aboveCount : belowCount
-                        let stackOffset = metrics.sp * CGFloat(stackUnits)
-                        let y = pushed + (isAbove ? -stackOffset : stackOffset)
-                        out.append(.articulation(
-                            kind: artKind,
-                            origin: CGPoint(x: chordX, y: y),
-                            isAbove: isAbove,
-                        ))
-                        if isAbove { aboveCount += 1 } else { belowCount += 1 }
-                    }
+                    // Chord-level articulation glyphs. Placement mirrors
+                    // MuseScore's `Chord::layoutArticulations` — see
+                    // `articulationElements(for:…)`. Re-placed after the beam
+                    // pass fixes a beamed chord's stem direction.
+                    out.append(contentsOf: Self.articulationElements(
+                        for: chord.articulations,
+                        stem: stem,
+                        noteYs: chordNotes.map(\.origin.y),
+                        chordX: chordX,
+                        staffMidY: staffMidY,
+                        metrics: metrics,
+                    ))
                     for (gIdx, g) in chord.graceNotesAfter.enumerated() {
                         let relX = graceW * CGFloat(gIdx + 1)
                         let layoutNotes = makeGraceLayoutNotes(
@@ -1234,6 +1202,38 @@ extension LayoutEngine {
                         beamLevel: memberLevels[i],
                         metrics: metrics,
                     )
+                    // Re-place this chord's articulations: they were emitted
+                    // before the beam fixed the stem direction, so a beamed
+                    // chord whose per-chord stem differed from the group could
+                    // have its staccato on the wrong side.
+                    if case let .chord(modelChord) = voice.elements[memberIdx],
+                       !modelChord.articulations.isEmpty
+                    {
+                        let replacements = Self.articulationElements(
+                            for: modelChord.articulations,
+                            stem: groupDirection,
+                            noteYs: n.map(\.origin.y),
+                            chordX: so.x,
+                            staffMidY: staffMidY,
+                            metrics: metrics,
+                        )
+                        var j = outIdx + 1
+                        var k = 0
+                        while j < out.count, k < replacements.count,
+                              case let .articulation(_, oldOrigin, _) = out[j],
+                              case let .articulation(kind, newOrigin, isAbove)
+                              = replacements[k]
+                        {
+                            // Keep the original X (beaming changes only Y).
+                            out[j] = .articulation(
+                                kind: kind,
+                                origin: CGPoint(x: oldOrigin.x, y: newOrigin.y),
+                                isAbove: isAbove,
+                            )
+                            j += 1
+                            k += 1
+                        }
+                    }
                 }
 
                 // --- Phase 5: emit per-level beam runs ---
@@ -1741,5 +1741,115 @@ extension LayoutEngine {
         case .marcatoStaccato: .marcatoStaccato
         case .unknown: nil
         }
+    }
+
+    /// Whether the articulation is placed close to the notehead (it may stay
+    /// inside the staff) rather than pushed clear of the staff.
+    ///
+    /// Mirrors MuseScore's `Articulation::layoutCloseToNote()`: the single
+    /// staccato dot, staccatissimo wedge, and tenuto line hug the note; accent,
+    /// marcato, and the combined forms sit outside the staff.
+    static func articulationHugsNote(
+        _ kind: LayoutElement.ArticulationKind,
+    ) -> Bool {
+        switch kind {
+        case .staccato, .staccatissimo, .tenuto: true
+        case .accent, .marcato, .accentStaccato, .marcatoStaccato: false
+        }
+    }
+
+    /// Marcato-family glyphs that always sit above the staff regardless of
+    /// stem direction (Gould p.117 — "strong accents above the staff"),
+    /// mirroring MuseScore's `Chord::layoutArticulations` special case for
+    /// `articMarcato…` SymIds.
+    static func articulationForcesAbove(
+        _ kind: LayoutElement.ArticulationKind,
+    ) -> Bool {
+        switch kind {
+        case .marcato, .marcatoStaccato: true
+        case .staccato, .staccatissimo, .tenuto, .accent, .accentStaccato: false
+        }
+    }
+
+    /// Build the `.articulation` layout elements for one chord, mirroring
+    /// MuseScore's `Chord::layoutArticulations` (libmscore/chord.cpp).
+    ///
+    /// Round-trip-only `.unknown` kinds are filtered.
+    ///
+    /// Side: the stored SymId `…Above`/`…Below` suffix is glyph orientation
+    /// only. For the default (CHORD) anchor MuseScore recomputes the side from
+    /// stem direction on load — away from the stem, on the notehead side — so
+    /// `art.anchor` is deliberately not consulted. Marcato-family glyphs always
+    /// sit above. Because beaming can flip a chord's stem after the first
+    /// placement pass, the beam pass re-invokes this with the group direction.
+    ///
+    /// Distance, close-to-note glyphs (staccato / staccatissimo / tenuto):
+    /// staff-line aware — 1 sp into a space, 1.5 sp when the note is on a staff
+    /// line, and 1 sp once the note reaches the outer staff line or beyond. The
+    /// reference Y is then shifted by the glyph's ink-centre offset so the
+    /// rendered dot lands exactly there (see `ArticulationGlyphMetrics`). Other
+    /// glyphs (accent / marcato / combinations) are pushed clear of the staff.
+    /// Stacking adds 1 sp per extra glyph on a side.
+    static func articulationElements(
+        for articulations: [ChordArticulation],
+        stem: StemDirection,
+        noteYs: [CGFloat],
+        chordX: CGFloat,
+        staffMidY: CGFloat,
+        metrics: StaffMetrics,
+    ) -> [LayoutElement] {
+        let staffTopY = staffMidY - metrics.sp * 2
+        let staffBottomY = staffMidY + metrics.sp * 2
+        let topLineY = staffMidY - metrics.sp * 2
+        let lastStaffLine = 8 // (5 staff lines − 1) × 2, in half-spaces
+        var aboveCount = 0
+        var belowCount = 0
+        var result: [LayoutElement] = []
+        for art in articulations {
+            guard let artKind = renderableArticulationKind(art.kind)
+            else { continue }
+            let isAbove = articulationForcesAbove(artKind)
+                ? true
+                : (stem == .down)
+            let positioned: CGFloat
+            if articulationHugsNote(artKind) {
+                // `line` is MuseScore's half-space index from the top staff
+                // line (lines even, spaces odd); higher line == lower.
+                let refY = isAbove
+                    ? (noteYs.min() ?? staffMidY)
+                    : (noteYs.max() ?? staffMidY)
+                let line = Int(((refY - topLineY) * 2 / metrics.sp).rounded())
+                let halfSpaces: Int
+                if isAbove {
+                    halfSpaces = line > 0 ? ((line + 1) & ~1) - 3 : line - 2
+                } else {
+                    halfSpaces = line < lastStaffLine ? (line & ~1) + 3 : line + 2
+                }
+                let reference = topLineY + CGFloat(halfSpaces) * 0.5 * metrics.sp
+                let cp = UInt16(truncatingIfNeeded: ArticulationGlyph.codepoint(
+                    kind: artKind, isAbove: isAbove,
+                ))
+                let inkOffset = ArticulationGlyphMetrics.inkCenterOffset(
+                    codepoint: cp,
+                )
+                positioned = reference - inkOffset * metrics.sp
+            } else if isAbove {
+                let baseY = (noteYs.min() ?? staffMidY) - metrics.sp * 0.5
+                positioned = min(baseY, staffTopY - metrics.sp * 0.5)
+            } else {
+                let baseY = (noteYs.max() ?? staffMidY) + metrics.sp * 0.5
+                positioned = max(baseY, staffBottomY + metrics.sp * 0.5)
+            }
+            let stackUnits = isAbove ? aboveCount : belowCount
+            let stackOffset = metrics.sp * CGFloat(stackUnits)
+            let y = positioned + (isAbove ? -stackOffset : stackOffset)
+            result.append(.articulation(
+                kind: artKind,
+                origin: CGPoint(x: chordX, y: y),
+                isAbove: isAbove,
+            ))
+            if isAbove { aboveCount += 1 } else { belowCount += 1 }
+        }
+        return result
     }
 }
