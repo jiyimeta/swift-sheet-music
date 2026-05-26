@@ -3,8 +3,8 @@
     @testable import SheetMusicAndroidJNI
     import SheetMusicAudioCore
     import SheetMusicCore
-    import SheetMusicWireFormat
     import Testing
+    import Wirelet
 
     struct AudioExportRangeCodecTests {
         private let addr = StaffAddress(partIndex: 0, staffIndexInPart: 0)

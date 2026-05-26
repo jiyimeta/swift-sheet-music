@@ -1,6 +1,5 @@
 // swift-tools-version: 6.2
 
-import CompilerPluginSupport
 import Foundation
 import PackageDescription
 
@@ -18,36 +17,10 @@ var products: [Product] = [
     .library(name: "SheetMusicMIDI", targets: ["SheetMusicMIDI"]),
     .library(name: "SheetMusicLayout", targets: ["SheetMusicLayout"]),
     .library(name: "SheetMusicAudioCore", targets: ["SheetMusicAudioCore"]),
-    .library(name: "SheetMusicWireFormat", targets: ["SheetMusicWireFormat"]),
-    .executable(name: "emit-kotlin-codecs", targets: ["EmitKotlinCodecs"]),
 ]
 
 var targets: [Target] = [
     .target(name: "SheetMusicCore"),
-    .macro(
-        name: "SheetMusicWireFormatMacros",
-        dependencies: [
-            .product(name: "SwiftSyntax", package: "swift-syntax"),
-            .product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
-            .product(name: "SwiftCompilerPlugin", package: "swift-syntax"),
-            .product(name: "SwiftDiagnostics", package: "swift-syntax"),
-        ],
-    ),
-    .target(
-        name: "SheetMusicWireFormat",
-        dependencies: ["SheetMusicWireFormatMacros"],
-    ),
-    .target(
-        name: "WireFormatSchema",
-        dependencies: [
-            .product(name: "SwiftSyntax", package: "swift-syntax"),
-            .product(name: "SwiftParser", package: "swift-syntax"),
-        ],
-    ),
-    .target(
-        name: "WireFormatKotlinEmitter",
-        dependencies: ["WireFormatSchema"],
-    ),
     .target(
         name: "SheetMusicXMLTools",
         dependencies: ["SheetMusicCore"],
@@ -121,25 +94,6 @@ var targets: [Target] = [
         plugins: [
             .plugin(name: "JExtractSwiftPlugin", package: "swift-java"),
         ],
-    ),
-    .executableTarget(
-        name: "EmitKotlinCodecs",
-        dependencies: ["WireFormatSchema", "WireFormatKotlinEmitter"],
-    ),
-    .testTarget(
-        name: "EmitKotlinCodecsTests",
-        dependencies: ["EmitKotlinCodecs", "WireFormatKotlinEmitter", "WireFormatSchema"],
-        resources: [.copy("Fixtures")],
-    ),
-    .testTarget(
-        name: "WireFormatSchemaTests",
-        dependencies: ["WireFormatSchema"],
-        resources: [.copy("Fixtures")],
-    ),
-    .testTarget(
-        name: "WireFormatKotlinEmitterTests",
-        dependencies: ["WireFormatKotlinEmitter", "WireFormatSchema"],
-        resources: [.copy("Fixtures")],
     ),
     .testTarget(
         name: "SheetMusicTests",
@@ -255,11 +209,6 @@ if isAndroid {
 
 let packageDependencies: [Package.Dependency] = [
     .package(url: "https://github.com/swiftlang/swift-java.git", exact: "0.3.0"),
-    // Pulled in transitively by swift-java already; declared here so
-    // `SheetMusicWireFormatMacros` can depend on SwiftSyntax / SwiftSyntaxMacros
-    // / SwiftCompilerPlugin / SwiftDiagnostics directly. Pinned to the same
-    // major as what swift-java 0.3.0 resolves to (603.x).
-    .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "603.0.0"),
     .package(
         url: "git@github.com:jiyimeta/swift-wirelet.git",
         revision: "31be47c84fddf2834b3cccc05ff955dcd1f2668e",

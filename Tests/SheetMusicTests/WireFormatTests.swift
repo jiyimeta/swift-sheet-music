@@ -1,7 +1,7 @@
 #if !os(Android)
     import Foundation
-    import SheetMusicWireFormat
     import Testing
+    import Wirelet
 
     @WireFormat
     private struct TrivialPair: Equatable {

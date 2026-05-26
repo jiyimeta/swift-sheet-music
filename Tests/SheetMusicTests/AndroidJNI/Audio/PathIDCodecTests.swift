@@ -2,8 +2,8 @@
     import Foundation
     @testable import SheetMusicAndroidJNI
     import SheetMusicCore
-    import SheetMusicWireFormat
     import Testing
+    import Wirelet
 
     struct PathIDCodecTests {
         private let addr = StaffAddress(partIndex: 1, staffIndexInPart: 0)

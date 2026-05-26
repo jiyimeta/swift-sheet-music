@@ -1,8 +1,8 @@
 #if !os(Android)
     import Foundation
     @testable import SheetMusicAndroidJNI
-    import SheetMusicWireFormat
     import Testing
+    import Wirelet
 
     struct LayoutBridgeTests {
         /// Ensures AppleFontMetricsProvider is installed so LayoutEngine's

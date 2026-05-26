@@ -2,8 +2,8 @@
     import Foundation
     @testable import SheetMusicAndroidJNI
     @testable import SheetMusicAudioCore
-    import SheetMusicWireFormat
     import Testing
+    import Wirelet
 
     struct GMInstrumentCodecTests {
         @Test func encodesAll128PatchesInOrder() throws {

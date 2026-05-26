@@ -1,7 +1,7 @@
 import Foundation
 @testable import SheetMusicAndroidJNI
-import SheetMusicWireFormat
 import Testing
+import Wirelet
 
 struct DrawProgramRoundTripTests {
     @Test
