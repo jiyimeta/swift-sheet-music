@@ -16,7 +16,7 @@ import io.github.jiyimeta.sheetmusic.audio.model.ScoreCursor
 import io.github.jiyimeta.sheetmusic.audio.model.ScoreItemID
 import io.github.jiyimeta.sheetmusic.audio.model.StaffAddress
 import io.github.jiyimeta.sheetmusic.audio.model.StaffParams
-import io.github.jiyimeta.sheetmusic.wireformat.BinaryWriter
+import io.github.jiyimeta.wirelet.BinaryWriter
 import io.github.jiyimeta.sheetmusic.audio.serialization.MetronomeBeatCodec
 import io.github.jiyimeta.sheetmusic.audio.serialization.NoteIDCodec
 import io.github.jiyimeta.sheetmusic.audio.serialization.ScoreCursorCodec

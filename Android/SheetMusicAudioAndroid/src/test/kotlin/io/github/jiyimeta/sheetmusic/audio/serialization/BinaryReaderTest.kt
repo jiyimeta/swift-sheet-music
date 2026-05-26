@@ -1,6 +1,6 @@
 package io.github.jiyimeta.sheetmusic.audio.serialization
 
-import io.github.jiyimeta.sheetmusic.wireformat.BinaryReader
+import io.github.jiyimeta.wirelet.BinaryReader
 import org.junit.Assert.assertEquals
 import org.junit.Assert.fail
 import org.junit.Test

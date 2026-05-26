@@ -1,7 +1,7 @@
 package io.github.jiyimeta.sheetmusic.audio.serialization
 
 import io.github.jiyimeta.sheetmusic.audio.model.GMInstrument
-import io.github.jiyimeta.sheetmusic.wireformat.BinaryReader
+import io.github.jiyimeta.wirelet.BinaryReader
 
 /**
  * Decodes the `[GMInstrument]` blob produced by Swift's

@@ -1,6 +1,6 @@
 package io.github.jiyimeta.sheetmusic.audio.serialization
 
-import io.github.jiyimeta.sheetmusic.wireformat.BinaryReader
+import io.github.jiyimeta.wirelet.BinaryReader
 
 import io.github.jiyimeta.sheetmusic.audio.model.Frame
 import io.github.jiyimeta.sheetmusic.audio.model.MetronomeBeat
