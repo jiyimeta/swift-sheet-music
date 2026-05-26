@@ -46,6 +46,9 @@ extension Note {
         if node.children.contains(where: { $0.name == "Tie" }) { tieForward = 1 }
         if node.children.contains(where: { $0.name == "endSpanner" }) { tieBack = 1 }
         let headType = decodeHeadType(node.first("head")?.text)
+        // MuseScore writes `<play>0</play>` only when the note is
+        // muted; the element is absent (→ true) for normal notes.
+        let play = node.first("play")?.text != "0"
         return Note(
             pitch: pitch,
             tpc: tpc,
@@ -54,6 +57,7 @@ extension Note {
             tieBack: tieBack,
             glissando: glissando,
             headType: headType,
+            play: play,
         )
     }
 

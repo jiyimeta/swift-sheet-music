@@ -157,7 +157,7 @@ extension MidiRenderer {
                 onset = headCursor
                 headCursor += dur
             }
-            for note in g.notes {
+            for note in g.notes where note.play {
                 events.append(TimedMidiEvent(
                     tick: max(0, onset),
                     event: .noteOn(
@@ -233,7 +233,7 @@ extension MidiRenderer {
             let dur = playbackTicks(
                 for: g, mainTicks: mainTicks, division: division,
             )
-            for note in g.notes {
+            for note in g.notes where note.play {
                 events.append(TimedMidiEvent(
                     tick: afterCursor,
                     event: .noteOn(
@@ -308,6 +308,9 @@ extension MidiRenderer {
         offTick: Int,
         events: inout [TimedMidiEvent],
     ) {
+        // A muted note (`<play>0</play>`) emits no MIDI. Mirrors the
+        // `if (!note->play()) return;` guard in CompatMidiRender::collectNote.
+        guard note.play else { return }
         if note.tieBack == nil {
             events.append(TimedMidiEvent(
                 tick: onTick,

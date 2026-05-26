@@ -29,7 +29,7 @@ extension MidiRenderer {
     ) throws -> [TremoloSegment] {
         guard let trem = chord.tremolo else {
             return [TremoloSegment(
-                pitches: chord.notes.map(\.pitch),
+                pitches: chord.notes.filter(\.play).map(\.pitch),
                 ticks: nominalDuration,
             )]
         }
@@ -39,7 +39,7 @@ extension MidiRenderer {
             let dur = nominalDuration / strokesPerChord
             return Array(
                 repeating: TremoloSegment(
-                    pitches: chord.notes.map(\.pitch),
+                    pitches: chord.notes.filter(\.play).map(\.pitch),
                     ticks: dur,
                 ),
                 count: strokesPerChord,
@@ -57,7 +57,7 @@ extension MidiRenderer {
             return (0 ..< totalStrokes).map { i in
                 let src = i.isMultiple(of: 2) ? chord : follower
                 return TremoloSegment(
-                    pitches: src.notes.map(\.pitch),
+                    pitches: src.notes.filter(\.play).map(\.pitch),
                     ticks: perStroke,
                 )
             }

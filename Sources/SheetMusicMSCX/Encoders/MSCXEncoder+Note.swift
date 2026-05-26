@@ -66,6 +66,12 @@ extension Note {
         } else if let drumDefaultHead {
             children.append(XMLTreeNode(name: "head", text: drumDefaultHead))
         }
+        // MuseScore omits `<play>` for the default (true); emit only
+        // the muted form. Element order mirrors the writer: after
+        // `<head>`. C++: `TWrite::write(const Note*, …)`.
+        if !play {
+            children.append(XMLTreeNode(name: "play", text: "0"))
+        }
         return XMLTreeNode(name: "Note", children: children)
     }
 
