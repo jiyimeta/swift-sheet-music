@@ -1,6 +1,5 @@
 pluginManagement {
     repositories {
-        mavenLocal()
         google()
         mavenCentral()
         gradlePluginPortal()
@@ -14,7 +13,9 @@ pluginManagement {
                     ?: providers.gradleProperty("gpr.key").orNull
             }
             content {
-                includeGroup("io.github.jiyimeta")
+                // gradle-plugin artifact lives under io.github.jiyimeta;
+                // plugin marker POM lives under io.github.jiyimeta.wirelet
+                includeGroupByRegex("io\\.github\\.jiyimeta.*")
             }
         }
     }
@@ -39,7 +40,7 @@ dependencyResolutionManagement {
                     ?: providers.gradleProperty("gpr.key").orNull
             }
             content {
-                includeGroup("io.github.jiyimeta")
+                includeGroupByRegex("io\\.github\\.jiyimeta.*")
             }
         }
     }
