@@ -244,6 +244,48 @@ extension ScoreLayerBuilder {
         )
     }
 
+    /// Render a run of Bravura SMuFL symbols (e.g. a tempo mark's
+    /// metronome note) as one layer whose **ink** bounding box is
+    /// vertically centred on `centerY`, with its ink left edge at `x`.
+    ///
+    /// Unlike `glyphLayer` / `textLayer` — which centre the font's
+    /// ascent/descent box — this centres the visible glyph, so the
+    /// whole note (head *and* stem) straddles `centerY` instead of
+    /// resting its head there with the stem poking above the text.
+    ///
+    /// Returns the layer plus the run's typographic advance so the
+    /// caller can position the following run.
+    static func bravuraInkCenteredLayer(
+        _ text: String,
+        x: CGFloat,
+        centerY: CGFloat,
+        size: CGFloat,
+        height: CGFloat,
+    ) -> (layer: CAShapeLayer, advance: CGFloat)? {
+        guard !text.isEmpty else { return nil }
+        let font = bravuraFont(size: size)
+        guard let path = textPathSingleLine(text, font: font) else {
+            return nil
+        }
+        let bbox = path.boundingBoxOfPath
+        // CT Y-up → LayoutEngine Y-down: ink left edge at `x`, ink
+        // centre at `centerY`. `fillLayer` flips to the host
+        // orientation afterwards.
+        var t = CGAffineTransform(
+            a: 1, b: 0, c: 0, d: -1,
+            tx: x - bbox.minX,
+            ty: centerY + bbox.midY,
+        )
+        guard let transformed = path.copy(using: &t) else { return nil }
+        let advance = FontMetrics.provider.typographicWidth(
+            text: text,
+            font: LayoutFont(
+                face: BravuraFont.familyName, pointSize: size,
+            ),
+        )
+        return (fillLayer(path: transformed, height: height), advance)
+    }
+
     // MARK: - Text layer (system font, via path for vector quality)
 
     private static func textPath(
@@ -268,7 +310,7 @@ extension ScoreLayerBuilder {
             guard let linePath = textPathSingleLine(
                 line, font: font,
             ) else { continue }
-            var t = CGAffineTransform(
+            let t = CGAffineTransform(
                 translationX: 0,
                 y: -CGFloat(i) * lineHeight,
             )
