@@ -833,18 +833,7 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         // new position, restoring the tempo trajectory for every
         // iteration.
         if let loop = loopRange, rawTick >= loop.endTick {
-            let startBeats =
-                Double(loop.startTick) / Double(timeline.division)
-            sequencer.currentPositionInBeats = startBeats
-            // Writing `currentPositionInBeats` while the sequencer is
-            // playing halts it — restart immediately so audio keeps
-            // flowing. start() on an already-running sequencer is a
-            // no-op, but Apple's setter halts before the assignment
-            // returns, so we must always re-start here.
-            try? sequencer.start()
-            if let frame = timeline.frame(atTick: loop.startTick) {
-                currentCursor = frame.cursor
-            }
+            wrapToLoopStart(loop)
             return
         }
         let tick = rawTick
@@ -860,6 +849,32 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         // read here mustn't fire `stop()`.
         if loopRange == nil, tick >= timeline.totalTicks {
             stop()
+        }
+    }
+
+    /// Seek the playhead back to the loop's start and resume. Driven by
+    /// `tickCursor` when the polled position reaches the loop end.
+    func wrapToLoopStart(_ loop: LoopRange) {
+        guard let sequencer, let timeline else { return }
+        let startBeats =
+            Double(loop.startTick) / Double(timeline.division)
+        sequencer.currentPositionInBeats = startBeats
+        // Writing `currentPositionInBeats` while the sequencer is
+        // playing halts it — restart immediately so audio keeps
+        // flowing. start() on an already-running sequencer is a
+        // no-op, but Apple's setter halts before the assignment
+        // returns, so we must always re-start here.
+        try? sequencer.start()
+        // The backward seek across tick 0 re-fires the SMF's tick-0
+        // controllers — CC 7 (channel volume) and programChange — which
+        // overwrite the live mixer with the score's baked-in defaults.
+        // Re-assert program selection + volume / mute / solo so the
+        // user's mixer choices survive every loop iteration, exactly as
+        // `play(from:in:)` does after its own `sequencer.start()`.
+        reapplyMixerPrograms()
+        applyMixerState()
+        if let frame = timeline.frame(atTick: loop.startTick) {
+            currentCursor = frame.cursor
         }
     }
 
