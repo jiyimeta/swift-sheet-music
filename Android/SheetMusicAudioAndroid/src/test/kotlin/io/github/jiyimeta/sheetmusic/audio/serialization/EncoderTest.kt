@@ -20,6 +20,10 @@ import org.junit.Test
 /**
  * Round-trip tests for all codecs — encode then decode should equal the original value.
  * Uses generated XxxCodec objects throughout.
+ *
+ * Array encoding follows the wirelet TLV format:
+ *   varint(outerLen) + N × (varint(itemLen) + TLV payload)
+ * This mirrors Swift's `[T].encodeToData()` / `[T](decoding:)` conformance.
  */
 class EncoderTest {
 
@@ -61,6 +65,29 @@ class EncoderTest {
 
     private val canonicalClefExplicit = ClefAnchor.Explicit(canonicalVoiceElementID)
     private val canonicalClefDefault = ClefAnchor.StaffDefault(canonicalStaffAddress)
+
+    // ── helpers for TLV array encode / decode ─────────────────────────────
+
+    private fun <T> encodeArray(items: List<T>, encodePayload: BinaryWriter.(T) -> Unit): ByteArray {
+        val w = BinaryWriter()
+        w.writeLengthPrefixed {
+            for (item in items) {
+                writeLengthPrefixed { encodePayload(item) }
+            }
+        }
+        return w.toByteArray()
+    }
+
+    private fun <T> decodeArray(bytes: ByteArray, decodePayload: (BinaryReader) -> T): List<T> {
+        val r = BinaryReader(bytes)
+        val result = mutableListOf<T>()
+        r.readLengthPrefixed { inner ->
+            while (inner.remaining > 0) {
+                result.add(inner.readLengthPrefixed { decodePayload(it) })
+            }
+        }
+        return result
+    }
 
     // ── NoteIDCodec ───────────────────────────────────────────────────────
 
@@ -112,27 +139,14 @@ class EncoderTest {
             ScoreItemID.Note(canonicalNoteID),
             ScoreItemID.Rest(canonicalRestID),
         )
-        // Encode array: i32 count + payload per item
-        val w = BinaryWriter()
-        w.writeI32(ids.size)
-        for (id in ids) ScoreItemIDCodec.encodePayload(id, w)
-        val encoded = w.toByteArray()
-        // Decode array
-        val r = BinaryReader(encoded)
-        val count = r.readI32()
-        val decoded = ArrayList<ScoreItemID>(count)
-        for (i in 0 until count) decoded.add(ScoreItemIDCodec.decodePayload(r))
+        val encoded = encodeArray(ids) { ScoreItemIDCodec.encodePayload(it, this) }
+        val decoded = decodeArray(encoded) { ScoreItemIDCodec.decodePayload(it) }
         assertEquals(ids, decoded)
     }
 
     @Test fun scoreItemIDCodec_emptyArray_roundTrip() {
-        val w = BinaryWriter()
-        w.writeI32(0)
-        val encoded = w.toByteArray()
-        val r = BinaryReader(encoded)
-        val count = r.readI32()
-        val decoded = ArrayList<ScoreItemID>(count)
-        for (i in 0 until count) decoded.add(ScoreItemIDCodec.decodePayload(r))
+        val encoded = encodeArray(emptyList<ScoreItemID>()) { ScoreItemIDCodec.encodePayload(it, this) }
+        val decoded = decodeArray(encoded) { ScoreItemIDCodec.decodePayload(it) }
         assertEquals(emptyList<ScoreItemID>(), decoded)
     }
 
@@ -158,27 +172,14 @@ class EncoderTest {
             MetronomeBeat(tick = 480L, isDownbeat = false),
             MetronomeBeat(tick = 960L, isDownbeat = true),
         )
-        // Encode array: i32 count + payload per beat
-        val w = BinaryWriter()
-        w.writeI32(beats.size)
-        for (b in beats) MetronomeBeatCodec.encodePayload(b, w)
-        val encoded = w.toByteArray()
-        // Decode array
-        val r = BinaryReader(encoded)
-        val count = r.readI32()
-        val decoded = ArrayList<MetronomeBeat>(count)
-        for (i in 0 until count) decoded.add(MetronomeBeatCodec.decodePayload(r))
+        val encoded = encodeArray(beats) { MetronomeBeatCodec.encodePayload(it, this) }
+        val decoded = decodeArray(encoded) { MetronomeBeatCodec.decodePayload(it) }
         assertEquals(beats, decoded)
     }
 
     @Test fun metronomeBeatCodec_emptyArray_roundTrip() {
-        val w = BinaryWriter()
-        w.writeI32(0)
-        val encoded = w.toByteArray()
-        val r = BinaryReader(encoded)
-        val count = r.readI32()
-        val decoded = ArrayList<MetronomeBeat>(count)
-        for (i in 0 until count) decoded.add(MetronomeBeatCodec.decodePayload(r))
+        val encoded = encodeArray(emptyList<MetronomeBeat>()) { MetronomeBeatCodec.encodePayload(it, this) }
+        val decoded = decodeArray(encoded) { MetronomeBeatCodec.decodePayload(it) }
         assertEquals(emptyList<MetronomeBeat>(), decoded)
     }
 
@@ -189,16 +190,8 @@ class EncoderTest {
             StaffParams(staffIndex = 0, bankLSB = 0, program = 0, isDrums = false, partAddressHash = 0L),
             StaffParams(staffIndex = 1, bankLSB = 0, program = 0, isDrums = true, partAddressHash = 1001L),
         )
-        // Encode array
-        val w = BinaryWriter()
-        w.writeI32(params.size)
-        for (p in params) StaffParamsCodec.encodePayload(p, w)
-        val encoded = w.toByteArray()
-        // Decode array
-        val r = BinaryReader(encoded)
-        val count = r.readI32()
-        val decoded = ArrayList<StaffParams>(count)
-        for (i in 0 until count) decoded.add(StaffParamsCodec.decodePayload(r))
+        val encoded = encodeArray(params) { StaffParamsCodec.encodePayload(it, this) }
+        val decoded = decodeArray(encoded) { StaffParamsCodec.decodePayload(it) }
         assertEquals(params, decoded)
     }
 
@@ -208,10 +201,7 @@ class EncoderTest {
             StaffParams(staffIndex = 0, bankLSB = 0, program = 0, isDrums = false, partAddressHash = 0L),
             StaffParams(staffIndex = 1, bankLSB = 0, program = 0, isDrums = true, partAddressHash = 1001L),
         )
-        val w = BinaryWriter()
-        w.writeI32(params.size)
-        for (p in params) StaffParamsCodec.encodePayload(p, w)
-        val encoded = w.toByteArray()
+        val encoded = encodeArray(params) { StaffParamsCodec.encodePayload(it, this) }
         val golden = javaClass.classLoader!!.getResourceAsStream("golden/staffParams-v1.bin")!!
             .readBytes()
         assertArrayEquals("encode(canonical) must match Swift golden binary", golden, encoded)
@@ -223,10 +213,7 @@ class EncoderTest {
             MetronomeBeat(tick = 480L, isDownbeat = false),
             MetronomeBeat(tick = 960L, isDownbeat = true),
         )
-        val w = BinaryWriter()
-        w.writeI32(beats.size)
-        for (b in beats) MetronomeBeatCodec.encodePayload(b, w)
-        val encoded = w.toByteArray()
+        val encoded = encodeArray(beats) { MetronomeBeatCodec.encodePayload(it, this) }
         val golden = javaClass.classLoader!!.getResourceAsStream("golden/metronomeBeat-v1.bin")!!
             .readBytes()
         assertArrayEquals("encode(canonical) must match Swift golden binary", golden, encoded)

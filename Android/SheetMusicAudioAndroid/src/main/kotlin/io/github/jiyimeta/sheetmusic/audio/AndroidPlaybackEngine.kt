@@ -265,9 +265,12 @@ class AndroidPlaybackEngine internal constructor(
             val staffBytes = jniBridge.staffParams(scoreHandle)
             val staves = run {
                 val r = BinaryReader(staffBytes)
-                val count = r.readI32()
-                val out = ArrayList<io.github.jiyimeta.sheetmusic.audio.model.StaffParams>(count)
-                for (i in 0 until count) out.add(StaffParamsCodec.decodePayload(r))
+                val out = ArrayList<io.github.jiyimeta.sheetmusic.audio.model.StaffParams>()
+                r.readLengthPrefixed { inner ->
+                    while (inner.remaining > 0) {
+                        out.add(inner.readLengthPrefixed { StaffParamsCodec.decodePayload(it) })
+                    }
+                }
                 out
             }
             if (staves.isEmpty()) throw AudioBackendException.EmptyScore()
@@ -276,9 +279,12 @@ class AndroidPlaybackEngine internal constructor(
             val beatBytes = jniBridge.metronomeBeats(scoreHandle)
             val beats = run {
                 val r = BinaryReader(beatBytes)
-                val count = r.readI32()
-                val out = ArrayList<io.github.jiyimeta.sheetmusic.audio.model.MetronomeBeat>(count)
-                for (i in 0 until count) out.add(MetronomeBeatCodec.decodePayload(r))
+                val out = ArrayList<io.github.jiyimeta.sheetmusic.audio.model.MetronomeBeat>()
+                r.readLengthPrefixed { inner ->
+                    while (inner.remaining > 0) {
+                        out.add(inner.readLengthPrefixed { MetronomeBeatCodec.decodePayload(it) })
+                    }
+                }
                 out
             }
 
@@ -572,8 +578,9 @@ class AndroidPlaybackEngine internal constructor(
     fun earliest(of: List<ScoreItemID>): ScoreItemID? {
         val encodedIds = run {
             val w = BinaryWriter()
-            w.writeI32(of.size)
-            for (id in of) ScoreItemIDCodec.encodePayload(id, w)
+            w.writeLengthPrefixed {
+                for (id in of) writeLengthPrefixed { ScoreItemIDCodec.encodePayload(id, this) }
+            }
             w.toByteArray()
         }
         val bytes = jniBridge.earliestOf(scoreHandle, encodedIds)
@@ -749,9 +756,12 @@ class AndroidPlaybackEngine internal constructor(
         val beatBytes = jniBridge.metronomeBeats(scoreHandle)
         val beats = run {
             val r = BinaryReader(beatBytes)
-            val count = r.readI32()
-            val out = ArrayList<io.github.jiyimeta.sheetmusic.audio.model.MetronomeBeat>(count)
-            for (i in 0 until count) out.add(MetronomeBeatCodec.decodePayload(r))
+            val out = ArrayList<io.github.jiyimeta.sheetmusic.audio.model.MetronomeBeat>()
+            r.readLengthPrefixed { inner ->
+                while (inner.remaining > 0) {
+                    out.add(inner.readLengthPrefixed { MetronomeBeatCodec.decodePayload(it) })
+                }
+            }
             out
         }
         val snapshot = ExportEngineSnapshot(
@@ -766,9 +776,12 @@ class AndroidPlaybackEngine internal constructor(
         val staffParams = run {
             val spBytes = jniBridge.staffParams(scoreHandle)
             val r = BinaryReader(spBytes)
-            val count = r.readI32()
-            val out = ArrayList<io.github.jiyimeta.sheetmusic.audio.model.StaffParams>(count)
-            for (i in 0 until count) out.add(StaffParamsCodec.decodePayload(r))
+            val out = ArrayList<io.github.jiyimeta.sheetmusic.audio.model.StaffParams>()
+            r.readLengthPrefixed { inner ->
+                while (inner.remaining > 0) {
+                    out.add(inner.readLengthPrefixed { StaffParamsCodec.decodePayload(it) })
+                }
+            }
             out
         }
 

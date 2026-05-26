@@ -17,6 +17,8 @@ import io.github.jiyimeta.sheetmusic.audio.model.ScoreItemID
 import io.github.jiyimeta.sheetmusic.audio.model.StaffAddress
 import io.github.jiyimeta.sheetmusic.audio.model.StaffParams
 import io.github.jiyimeta.wirelet.BinaryWriter
+import io.github.jiyimeta.sheetmusic.audio.model.Frame
+import io.github.jiyimeta.sheetmusic.audio.serialization.FrameCodec
 import io.github.jiyimeta.sheetmusic.audio.serialization.MetronomeBeatCodec
 import io.github.jiyimeta.sheetmusic.audio.serialization.NoteIDCodec
 import io.github.jiyimeta.sheetmusic.audio.serialization.ScoreCursorCodec
@@ -62,15 +64,17 @@ private class StubSoundfontResolver : SoundfontResolver {
 
 private fun encodeStaffParamsArray(params: List<StaffParams>): ByteArray {
     val w = BinaryWriter()
-    w.writeI32(params.size)
-    for (p in params) StaffParamsCodec.encodePayload(p, w)
+    w.writeLengthPrefixed {
+        for (p in params) writeLengthPrefixed { StaffParamsCodec.encodePayload(p, this) }
+    }
     return w.toByteArray()
 }
 
 private fun encodeMetronomeBeatArray(beats: List<MetronomeBeat>): ByteArray {
     val w = BinaryWriter()
-    w.writeI32(beats.size)
-    for (b in beats) MetronomeBeatCodec.encodePayload(b, w)
+    w.writeLengthPrefixed {
+        for (b in beats) writeLengthPrefixed { MetronomeBeatCodec.encodePayload(b, this) }
+    }
     return w.toByteArray()
 }
 
@@ -1105,20 +1109,20 @@ class AndroidPlaybackEngineTest {
     }
 
     /**
-     * Builds a raw [Frame] byte array for use in [FakeJniBridge] results.
+     * Builds a [Frame] byte array (wirelet TLV format) for use in [FakeJniBridge] results.
      *
-     * Wire format (no version envelope):
-     *   i64 tick + f64 timeSeconds + ScoreCursor payload
+     * Uses [FrameCodec.encode] to produce bytes in the same TLV format that
+     * the Swift JNI bridge sends across the boundary.
      */
     private fun encodeFrameBytes(
         tick: Long,
         timeMicros: Long,
         cursor: ScoreCursor,
-    ): ByteArray {
-        val w = BinaryWriter()
-        w.writeI64(tick)
-        w.writeF64(timeMicros.toDouble() / 1_000_000.0)
-        ScoreCursorCodec.encodePayload(cursor, w)
-        return w.toByteArray()
-    }
+    ): ByteArray = FrameCodec.encode(
+        Frame(
+            tick = tick,
+            timeSeconds = timeMicros.toDouble() / 1_000_000.0,
+            cursor = cursor,
+        ),
+    )
 }
