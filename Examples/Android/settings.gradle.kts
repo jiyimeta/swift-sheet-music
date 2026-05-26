@@ -39,7 +39,10 @@ dependencyResolutionManagement {
                     ?: providers.gradleProperty("gpr.key").orNull
             }
             content {
-                includeGroup("io.github.jiyimeta")
+                // Match the pluginManagement filter — covers both the runtime
+                // artifact (io.github.jiyimeta) and any sub-namespaced
+                // artefacts that may appear later.
+                includeGroupByRegex("io\\.github\\.jiyimeta.*")
             }
         }
     }
