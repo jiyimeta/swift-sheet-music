@@ -720,13 +720,33 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// seek-to-start, clobbering mixer-driven program overrides —
     /// `play()` re-applies the mixer state after `sequencer.start()`
     /// to win the race deterministically.
-    static func postProcessForMIDISynth(midi: inout MidiFile) {
+    ///
+    /// `CC 7` (Channel Volume) on `mixerManagedChannels` is **stripped**.
+    /// The renderer emits the score's baked-in CC 7 only at tick 0; every
+    /// backward seek across / behind tick 0 (the loop-wrap rewind in
+    /// `tickCursor`, the export sequencer's start) makes AVAudioSequencer
+    /// chase and re-fire it on the render thread, clobbering the live
+    /// mixer's volume / mute / solo. Re-applying the mixer *after*
+    /// `sequencer.start()` races that chase and loses. Removing CC 7 for
+    /// the channels the mixer owns (each staff's primary channel) makes
+    /// `applyMixerState()` the sole authority on their volume — no race.
+    /// Secondary playback-flavour channels (not mixer-managed) keep their
+    /// CC 7 so the score's volume balance survives.
+    nonisolated static func postProcessForMIDISynth(
+        midi: inout MidiFile, mixerManagedChannels: Set<Int>,
+    ) {
         for trackIdx in midi.tracks.indices {
             var out: [TimedMidiEvent] = []
             out.reserveCapacity(midi.tracks[trackIdx].events.count + 8)
             for event in midi.tracks[trackIdx].events {
                 if case let .controlChange(_, controller, _) = event.event,
                    controller == 121
+                {
+                    continue
+                }
+                if case let .controlChange(channel, controller, _)
+                    = event.event, controller == 7,
+                    mixerManagedChannels.contains(channel)
                 {
                     continue
                 }
@@ -758,7 +778,10 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         midi.tracks.append(metronome.metronomeTrack(
             beats: metronomeBeats, division: midi.division,
         ))
-        Self.postProcessForMIDISynth(midi: &midi)
+        Self.postProcessForMIDISynth(
+            midi: &midi,
+            mixerManagedChannels: Set(staffMIDIChannels.values.map(Int.init)),
+        )
         let bytes = try MidiWriter.write(midi)
         try sequencer.load(from: bytes, options: [])
         // Every staff track routes to the shared multi-timbral synth;
@@ -865,12 +888,16 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         // no-op, but Apple's setter halts before the assignment
         // returns, so we must always re-start here.
         try? sequencer.start()
-        // The backward seek across tick 0 re-fires the SMF's tick-0
-        // controllers — CC 7 (channel volume) and programChange — which
-        // overwrite the live mixer with the score's baked-in defaults.
-        // Re-assert program selection + volume / mute / solo so the
-        // user's mixer choices survive every loop iteration, exactly as
+        // The backward seek re-fires the SMF's tick-0 programChange via
+        // AVAudioSequencer's controller chase, overwriting any
+        // mixer-driven program override with the score's baked-in
+        // default. Re-assert program selection so the user's program
+        // choice survives every loop iteration, exactly as
         // `play(from:in:)` does after its own `sequencer.start()`.
+        // (CC 7 volume / mute / solo no longer needs racing here: it is
+        // stripped from the SMF for mixer-managed channels in
+        // `postProcessForMIDISynth`, so the chase can't clobber it.
+        // `applyMixerState()` stays as a cheap belt-and-suspenders.)
         reapplyMixerPrograms()
         applyMixerState()
         if let frame = timeline.frame(atTick: loop.startTick) {

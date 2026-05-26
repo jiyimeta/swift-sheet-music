@@ -152,9 +152,14 @@ extension PlaybackEngine {
                 beats: snapshot.metronomeBeats, division: midi.division,
             ))
         }
-        // Strip RAC + complete RPN Data-Entry pair — see
-        // `PlaybackEngine.postProcessForMIDISynth` for rationale.
-        postProcessForMIDISynth(midi: &midi)
+        // Strip RAC + complete RPN Data-Entry pair, and drop CC 7 on the
+        // mixer-managed channels so the export's `applyMixerSnapshot`
+        // volume / mute / solo wins instead of the SMF's tick-0 CC 7 —
+        // see `PlaybackEngine.postProcessForMIDISynth` for rationale.
+        postProcessForMIDISynth(
+            midi: &midi,
+            mixerManagedChannels: Set(exportSynth.staffChannels.values.map(Int.init)),
+        )
         let bytes = try MidiWriter.write(midi)
         let sequencer = AVAudioSequencer(audioEngine: engine)
         try sequencer.load(from: bytes, options: [])

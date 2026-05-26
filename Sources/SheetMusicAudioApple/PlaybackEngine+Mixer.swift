@@ -94,11 +94,11 @@ extension PlaybackEngine {
 
     /// Push the current mixer state into the live audio graph. Mute /
     /// volume are sent as CC 7 (Channel Volume) on each staff's
-    /// renderer-assigned MIDI channel of the shared synth. The SMF
-    /// re-fires its tick-0 CC 7 on rewind, so `applyMixerState()` must
-    /// also be called after every seek that crosses tick 0 to win the
-    /// race — `play(from:in:)` already does this after
-    /// `sequencer.start()`.
+    /// renderer-assigned MIDI channel of the shared synth. This is the
+    /// *sole* authority on those channels' volume: the SMF's competing
+    /// tick-0 CC 7 is stripped for mixer-managed channels in
+    /// `PlaybackEngine.postProcessForMIDISynth`, so a seek / loop-wrap
+    /// rewind can no longer chase-fire it and clobber the user's choice.
     ///
     /// Solo overrides everything else — when any channel is soloed,
     /// non-soloed channels go silent.
