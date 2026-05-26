@@ -106,7 +106,6 @@ extension MidiRenderer {
             nominalDuration: chordTicks,
             followerChord: followerChord,
         )
-        var cursor = localTick
         let pitchShift = OttavaRanges.semitones(
             in: ottavaRanges,
             at: localTick + originalTickDelta,
@@ -120,26 +119,88 @@ extension MidiRenderer {
                 atOriginalTick: localTick + originalTickDelta,
             )
         } ?? velocity
-        for seg in segments {
-            for pitch in seg.pitches {
-                let shifted = min(127, max(0, pitch + pitchShift))
-                events.append(TimedMidiEvent(
-                    tick: cursor,
-                    event: .noteOn(
-                        channel: channel, pitch: shifted, velocity: segVelocity,
-                    ),
-                ))
-                events.append(TimedMidiEvent(
-                    tick: cursor + seg.ticks - 1,
-                    event: .noteOff(
-                        channel: channel, pitch: shifted, velocity: 0,
-                    ),
-                ))
-            }
-            cursor += seg.ticks
-        }
+        emitTremoloSegments(
+            segments,
+            chord: chord,
+            followerChord: followerChord,
+            startTick: localTick,
+            channel: channel,
+            pitchShift: pitchShift,
+            velocity: segVelocity,
+            events: &events,
+        )
         // Advance localTick by the start-chord's own duration only.
         // The follower's advance happens via consumedByTremolo skip.
         localTick += chordTicks
+    }
+
+    /// Lay down the note-on/off pairs for an expanded tremolo, honouring
+    /// ties so note-on/off counts stay balanced. A pitch tied INTO the
+    /// chord (`tieBack`) skips its first-stroke attack — its sound
+    /// continues from the preceding chord's still-open note-on. A pitch
+    /// tied OUT of it (`tieForward`) skips its last-stroke release so it
+    /// flows into the following note. For `.between` span the last
+    /// sounding stroke belongs to the follower, so its `tieForward`
+    /// governs the final release.
+    ///
+    /// Balance matters: an unmatched note-on (or note-off) left by an
+    /// unhonoured tie cascades through `resolveUnisonOverlap`'s FIFO
+    /// note-on/off pairing and stretches a later same-pitch note across
+    /// a rest gap into a stuck note. This mirrors the tie contract that
+    /// `emitNoteEvents` enforces on the standard chord path.
+    private static func emitTremoloSegments(
+        _ segments: [TremoloSegment],
+        chord: Chord,
+        followerChord: Chord?,
+        startTick: Int,
+        channel: Int,
+        pitchShift: Int,
+        velocity: Int,
+        events: inout [TimedMidiEvent],
+    ) {
+        let tiedBackPitches = Set(
+            chord.notes.filter { $0.tieBack != nil }.map(\.pitch),
+        )
+        let tieForwardSource: [Note] = chord.tremolo?.span == .between
+            ? (followerChord.map { Array($0.notes) } ?? [])
+            : Array(chord.notes)
+        let tiedForwardPitches = Set(
+            tieForwardSource.filter { $0.tieForward != nil }.map(\.pitch),
+        )
+        var firstSegIndex: [Int: Int] = [:]
+        var lastSegIndex: [Int: Int] = [:]
+        for (i, seg) in segments.enumerated() {
+            for pitch in seg.pitches {
+                if firstSegIndex[pitch] == nil { firstSegIndex[pitch] = i }
+                lastSegIndex[pitch] = i
+            }
+        }
+        var cursor = startTick
+        for (segIndex, seg) in segments.enumerated() {
+            for pitch in seg.pitches {
+                let shifted = min(127, max(0, pitch + pitchShift))
+                let suppressOn = tiedBackPitches.contains(pitch)
+                    && firstSegIndex[pitch] == segIndex
+                let suppressOff = tiedForwardPitches.contains(pitch)
+                    && lastSegIndex[pitch] == segIndex
+                if !suppressOn {
+                    events.append(TimedMidiEvent(
+                        tick: cursor,
+                        event: .noteOn(
+                            channel: channel, pitch: shifted, velocity: velocity,
+                        ),
+                    ))
+                }
+                if !suppressOff {
+                    events.append(TimedMidiEvent(
+                        tick: cursor + seg.ticks - 1,
+                        event: .noteOff(
+                            channel: channel, pitch: shifted, velocity: 0,
+                        ),
+                    ))
+                }
+            }
+            cursor += seg.ticks
+        }
     }
 }
