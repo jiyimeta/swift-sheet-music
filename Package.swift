@@ -86,7 +86,6 @@ var targets: [Target] = [
         ],
         exclude: [
             "swift-java.config",
-            "kotlin-codegen.json",
         ],
         swiftSettings: [
             .swiftLanguageMode(.v5),
