@@ -1,6 +1,6 @@
 import Foundation
 import SheetMusicLayout
-import SheetMusicWireFormat
+import Wirelet
 
 #if !canImport(CoreGraphics)
     /// On Android, Foundation's CoreGraphics shims also export `CGFloat`,

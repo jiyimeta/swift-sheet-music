@@ -1,5 +1,5 @@
 import Foundation
-import SheetMusicWireFormat
+import Wirelet
 #if canImport(CoreGraphics)
     import CoreGraphics
 #endif

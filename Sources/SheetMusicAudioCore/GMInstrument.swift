@@ -1,5 +1,5 @@
 import Foundation
-import SheetMusicWireFormat
+import Wirelet
 
 /// One General-MIDI Level 1 melodic program (0...127), with the
 /// canonical name and family grouping. Drives the program picker

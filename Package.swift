@@ -80,7 +80,11 @@ var targets: [Target] = [
     ),
     .target(
         name: "SheetMusicAudioCore",
-        dependencies: ["SheetMusicCore", "SheetMusicMIDI", "SheetMusicWireFormat"],
+        dependencies: [
+            "SheetMusicCore",
+            "SheetMusicMIDI",
+            .product(name: "Wirelet", package: "swift-wirelet"),
+        ],
     ),
     .target(
         name: "SheetMusic",
@@ -104,7 +108,7 @@ var targets: [Target] = [
             "SheetMusicLayout",
             "SheetMusicMIDI",
             "SheetMusicAudioCore",
-            "SheetMusicWireFormat",
+            .product(name: "Wirelet", package: "swift-wirelet"),
             .product(name: "SwiftJava", package: "swift-java"),
         ],
         exclude: [
@@ -148,7 +152,7 @@ var targets: [Target] = [
             "SheetMusicLayout",
             "SheetMusicAndroidJNI",
             "SheetMusicAudioCore",
-            "SheetMusicWireFormat",
+            .product(name: "Wirelet", package: "swift-wirelet"),
             "SheetMusicXMLTools",
             "SheetMusicZip",
         ] : [
@@ -163,7 +167,7 @@ var targets: [Target] = [
             "SheetMusicUI",
             "SheetMusicAudio",
             "SheetMusicPDF",
-            "SheetMusicWireFormat",
+            .product(name: "Wirelet", package: "swift-wirelet"),
             "SheetMusicXMLTools",
             "SheetMusicZip",
         ],

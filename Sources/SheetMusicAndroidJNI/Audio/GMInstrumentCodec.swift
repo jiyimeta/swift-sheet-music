@@ -1,6 +1,6 @@
 import Foundation
 import SheetMusicAudioCore
-import SheetMusicWireFormat
+import Wirelet
 
 /// Codec for `[GMInstrument]` — Swift is the source of truth for the
 /// canonical GM Level 1 patch names; Kotlin loads this serialized blob

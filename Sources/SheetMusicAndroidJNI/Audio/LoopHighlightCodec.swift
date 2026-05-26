@@ -1,5 +1,5 @@
 import Foundation
-import SheetMusicWireFormat
+import Wirelet
 
 /// Wire format for the loop-region highlight rectangles. One rect per
 /// intersected system, in mm coordinates.
