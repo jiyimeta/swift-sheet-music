@@ -13,7 +13,9 @@ pluginManagement {
                     ?: providers.gradleProperty("gpr.key").orNull
             }
             content {
-                includeGroup("io.github.jiyimeta")
+                // Plugin marker POM lives under io.github.jiyimeta.wirelet;
+                // plugin artifact lives under io.github.jiyimeta — cover both.
+                includeGroupByRegex("io\\.github\\.jiyimeta.*")
             }
         }
     }
