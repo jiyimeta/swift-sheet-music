@@ -151,7 +151,23 @@ extension Voice {
                 )
                 appendVoiceElement(.chord(rest))
                 if case .measure = rest.duration {
-                    // Same reasoning as the .Chord arm above.
+                    // A measure rest's `NoteDuration` is the bare
+                    // `.measure` marker (its fraction is resolved
+                    // against the bar later), but the rest still
+                    // occupies the whole bar. Advance the positioning
+                    // cursor by the rest's *written* `<duration>` so a
+                    // following `<location>` / lifted system element
+                    // (e.g. a `<Tempo>` near the bar end) is placed
+                    // relative to the bar END, matching MuseScore's
+                    // write cursor. Without this a backward
+                    // `<location>` after a full-measure rest underflows
+                    // to a negative tick and trips `MidiWriter`'s
+                    // "events must be sorted by tick" precondition.
+                    if let durText = child.first("duration")?.text,
+                       let durFrac = Fraction(mscxString: durText)
+                    {
+                        cursor += durFrac
+                    }
                 } else {
                     cursor += rest.duration.asFraction
                 }
