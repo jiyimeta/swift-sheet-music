@@ -39,6 +39,11 @@ public struct LayoutMeasure: Sendable, Equatable {
     /// trailing barline; no chord/rest elements are emitted. Nil for
     /// every normal measure.
     public let multiMeasureRest: Int?
+    /// Elements whose source is hidden (`visible == false`) but emitted
+    /// anyway because `showsInvisibleElements` is on. Renderers draw these
+    /// at 50 % opacity (MuseScore `#808080` on white). Empty in print
+    /// layout. Origins follow the same convention as `elements`.
+    public let invisibleElements: [LayoutElement]
 
     public init(
         measureIndex: Int,
@@ -51,6 +56,7 @@ public struct LayoutMeasure: Sendable, Equatable {
         pageBreak: Bool = false,
         tickColumns: [Int: CGFloat] = [:],
         multiMeasureRest: Int? = nil,
+        invisibleElements: [LayoutElement] = [],
     ) {
         self.measureIndex = measureIndex
         self.origin = origin
@@ -62,5 +68,6 @@ public struct LayoutMeasure: Sendable, Equatable {
         self.pageBreak = pageBreak
         self.tickColumns = tickColumns
         self.multiMeasureRest = multiMeasureRest
+        self.invisibleElements = invisibleElements
     }
 }

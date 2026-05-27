@@ -25,6 +25,9 @@ public struct LayoutSystem: Sendable, Equatable {
     /// Cross-measure spanner segments (slurs, voltas, hairpins, etc.)
     /// resolved after measure placement. Origins are in system coords.
     public let spanners: [LayoutElement]
+    /// System-level spanner segments whose source is hidden but emitted
+    /// because `showsInvisibleElements` is on. Drawn at 50 % opacity.
+    public let invisibleSpanners: [LayoutElement]
     /// Chord/rest anchors of every measure flattened into one
     /// X-sorted index. Built deterministically from `measures` —
     /// callers MUST NOT supply a divergent value via `init`.
@@ -50,6 +53,7 @@ public struct LayoutSystem: Sendable, Equatable {
         brackets: [LayoutBracket] = [],
         spanners: [LayoutElement],
         sp: CGFloat,
+        invisibleSpanners: [LayoutElement] = [],
     ) {
         self.origin = origin
         self.size = size
@@ -60,6 +64,7 @@ public struct LayoutSystem: Sendable, Equatable {
         self.brackets = brackets
         self.spanners = spanners
         self.sp = sp
+        self.invisibleSpanners = invisibleSpanners
         let columns = Self.buildEventColumns(measures: measures, sp: sp)
         eventColumns = columns
         maxBBoxHalfWidth = columns
