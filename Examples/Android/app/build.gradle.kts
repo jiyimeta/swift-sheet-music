@@ -77,7 +77,9 @@ dependencies {
 val packageRoot: File = rootProject.projectDir.resolve("../..").canonicalFile
 
 wirelet {
-    swiftPackagePath.set(File(packageRoot, "wirelet-checkout"))
+    // Single source of truth via SwiftPM's Package.resolved — see
+    // Android/SheetMusicAndroid/build.gradle.kts for context.
+    swiftPackagePath.set(File(packageRoot, ".build/checkouts/swift-wirelet"))
     sources {
         register("main") {
             schemaPaths.from(packageRoot.resolve("Sources/SheetMusicAndroidJNI/Draw"))

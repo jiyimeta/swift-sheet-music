@@ -66,7 +66,11 @@ dependencies {
 val packageRoot: File = rootProject.projectDir.resolve("..").canonicalFile
 
 wirelet {
-    swiftPackagePath.set(File(packageRoot, "wirelet-checkout"))
+    // SwiftPM resolves the swift-wirelet dep into .build/checkouts/swift-wirelet
+    // at the revision pinned in Package.resolved. Reuse that instead of asking
+    // contributors to bootstrap a separate clone or symlink. Run
+    // `swift package resolve` once after cloning before any Gradle task.
+    swiftPackagePath.set(File(packageRoot, ".build/checkouts/swift-wirelet"))
     sources {
         register("main") {
             schemaPaths.from(packageRoot.resolve("Sources/SheetMusicAndroidJNI/Metadata"))
