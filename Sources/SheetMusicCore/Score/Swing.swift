@@ -41,7 +41,15 @@ public struct Swing: Sendable, Equatable {
     public var offsetY: Double
     public var color: ScoreColor?
     public var properties: TextProperties
-    public var visible: Bool
+    /// Base element properties shared with every engravable element.
+    /// Currently carries only `<visible>`; see `ElementProperties`.
+    public var elementProperties: ElementProperties
+    /// MuseScore `<visible>0</visible>` flag. Sugar over
+    /// `elementProperties.visible`. Playback / MIDI is unaffected.
+    public var visible: Bool {
+        get { elementProperties.visible }
+        set { elementProperties.visible = newValue }
+    }
 
     public init(
         text: String = "Swing",
@@ -62,7 +70,7 @@ public struct Swing: Sendable, Equatable {
         self.offsetY = offsetY
         self.color = color
         self.properties = properties
-        self.visible = visible
+        elementProperties = ElementProperties(visible: visible)
     }
 
     /// Swing-unit length in MIDI ticks for a given PPQ. Eighth =

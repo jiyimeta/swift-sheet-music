@@ -31,10 +31,15 @@ public struct Harmony: Sendable, Equatable {
     /// Per-element font overrides. `nil`-fields inherit from
     /// `styleType`'s row in `TextStyleDefaults`.
     public var properties: TextProperties
-    /// MuseScore `<visible>0</visible>` flag. When false the chord
-    /// symbol is hidden — layout drops it entirely (no glyphs, no
-    /// reserved horizontal/vertical space).
-    public var visible: Bool
+    /// Base element properties shared with every engravable element.
+    /// Currently carries only `<visible>`; see `ElementProperties`.
+    public var elementProperties: ElementProperties
+    /// MuseScore `<visible>0</visible>` flag. Sugar over
+    /// `elementProperties.visible`. Playback / MIDI is unaffected.
+    public var visible: Bool {
+        get { elementProperties.visible }
+        set { elementProperties.visible = newValue }
+    }
 
     public init(
         name: String,
@@ -65,7 +70,7 @@ public struct Harmony: Sendable, Equatable {
         self.offsetY = offsetY
         self.color = color
         self.properties = properties
-        self.visible = visible
+        elementProperties = ElementProperties(visible: visible)
     }
 
     /// The `TextStyleType` row this element inherits from. Roman

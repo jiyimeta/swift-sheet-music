@@ -20,7 +20,6 @@ extension Swing {
         let offset = node.first("offset")
             .map(StaffText.decodeOffset(_:)) ?? (0, 0)
         let props = TextProperties.decode(node)
-        let visible = (node.first("visible")?.text ?? "1") != "0"
         // Swing marker child: `<swing unit="eighth|16th|" ratio="60"/>`.
         // Defaults match `StaffTextBase`'s constructor (eighth, 60).
         var unit: SwingUnit = .eighth
@@ -36,7 +35,7 @@ extension Swing {
                 ratio = v
             }
         }
-        return Swing(
+        var swing = Swing(
             text: text,
             unit: unit,
             ratio: ratio,
@@ -45,8 +44,9 @@ extension Swing {
             offsetY: offset.1,
             color: color,
             properties: props,
-            visible: visible,
         )
+        swing.elementProperties = ElementProperties(decodingMSCXChildrenOf: node)
+        return swing
     }
 
     /// True when the given `<StaffText>` / `<SystemText>` node has a

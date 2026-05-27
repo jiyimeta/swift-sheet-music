@@ -15,16 +15,16 @@ extension StaffText {
         let offset = node.first("offset")
             .map(decodeOffset(_:)) ?? (0, 0)
         let props = TextProperties.decode(node)
-        let visible = (node.first("visible")?.text ?? "1") != "0"
-        return StaffText(
+        var staffText = StaffText(
             text: text,
             offsetX: offset.0,
             offsetY: offset.1,
             color: color,
             isSystemText: isSystemText,
             properties: props,
-            visible: visible,
         )
+        staffText.elementProperties = ElementProperties(decodingMSCXChildrenOf: node)
+        return staffText
     }
 
     /// Recursively concatenate the text content of `node` and any
