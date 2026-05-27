@@ -160,6 +160,10 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         let metronomeVolume: Float
         let rate: Float
         let metronomeBeats: [MetronomeBeat]
+        /// Linear amplitude multiplier captured from
+        /// `PlaybackEngine.masterGain`, so the export engine rebuilds
+        /// the master stage at the same gain the user hears live.
+        let masterGain: Float // swiftlint:disable:this inclusive_language
     }
 
     func exportEngineSnapshot() -> ExportEngineSnapshot {
@@ -170,6 +174,7 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
             metronomeVolume: metronome.volume,
             rate: pendingRate,
             metronomeBeats: metronomeBeats,
+            masterGain: masterGain,
         )
     }
 
