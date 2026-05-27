@@ -15,10 +15,17 @@ public struct Tempo: Sendable, Equatable {
     /// `nil`-fields inherit from `TextStyleType.tempo`
     /// (Edwin 12 pt bold by default). Has no effect on MIDI output.
     public var properties: TextProperties
+    /// Base element properties shared with every engravable element.
+    /// Currently carries only `<visible>`; see `ElementProperties`.
+    public var elementProperties: ElementProperties
     /// MuseScore `<visible>0</visible>` flag. When false the tempo
     /// label is hidden — layout drops it (no glyph, no reserved
     /// space) but the tempo change still applies to playback / MIDI.
-    public var visible: Bool
+    /// Sugar over `elementProperties.visible`.
+    public var visible: Bool {
+        get { elementProperties.visible }
+        set { elementProperties.visible = newValue }
+    }
 
     public init(
         beatsPerSecond: Double,
@@ -31,7 +38,7 @@ public struct Tempo: Sendable, Equatable {
         self.offsetX = offsetX
         self.offsetY = offsetY
         self.properties = properties
-        self.visible = visible
+        elementProperties = ElementProperties(visible: visible)
     }
 
     /// Microseconds per quarter note for SMF tempo meta event.
