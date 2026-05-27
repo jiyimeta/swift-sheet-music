@@ -3,6 +3,21 @@ pluginManagement {
         google()
         mavenCentral()
         gradlePluginPortal()
+        maven {
+            name = "WireletGitHubPackages"
+            url = uri("https://maven.pkg.github.com/jiyimeta/swift-wirelet")
+            credentials {
+                username = System.getenv("GITHUB_ACTOR")
+                    ?: providers.gradleProperty("gpr.user").orNull
+                password = System.getenv("GITHUB_TOKEN")
+                    ?: providers.gradleProperty("gpr.key").orNull
+            }
+            content {
+                // gradle-plugin artifact lives under io.github.jiyimeta;
+                // plugin marker POM lives under io.github.jiyimeta.wirelet
+                includeGroupByRegex("io\\.github\\.jiyimeta.*")
+            }
+        }
     }
 }
 
@@ -15,6 +30,19 @@ dependencyResolutionManagement {
         // (see project_swift_java_strategy.md). Local-publish via
         // `cd swift-java && ./gradlew :SwiftKitCore:publishToMavenLocal`.
         mavenLocal()
+        maven {
+            name = "WireletGitHubPackages"
+            url = uri("https://maven.pkg.github.com/jiyimeta/swift-wirelet")
+            credentials {
+                username = System.getenv("GITHUB_ACTOR")
+                    ?: providers.gradleProperty("gpr.user").orNull
+                password = System.getenv("GITHUB_TOKEN")
+                    ?: providers.gradleProperty("gpr.key").orNull
+            }
+            content {
+                includeGroupByRegex("io\\.github\\.jiyimeta.*")
+            }
+        }
     }
 }
 

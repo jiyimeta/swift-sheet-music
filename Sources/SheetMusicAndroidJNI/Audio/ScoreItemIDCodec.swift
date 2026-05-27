@@ -1,6 +1,6 @@
 import Foundation
 import SheetMusicCore
-import SheetMusicWireFormat
+import Wirelet
 
 /// Codec for `ScoreItemID` — a sum-type variable-length payload, plus
 /// top-level single + array blobs.

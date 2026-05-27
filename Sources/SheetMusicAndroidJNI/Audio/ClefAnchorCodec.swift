@@ -1,6 +1,6 @@
 import Foundation
 import SheetMusicCore
-import SheetMusicWireFormat
+import Wirelet
 
 /// Codec for `ClefAnchor` — a sum-type variable-length payload.
 ///

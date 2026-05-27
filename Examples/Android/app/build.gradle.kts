@@ -1,32 +1,8 @@
-import org.gradle.api.tasks.Exec
-
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
-}
-
-// Resolve the SwiftPM package root (../../) so emit-kotlin-codecs can find
-// the Swift sources + codegen config.
-val packageRoot = rootProject.projectDir.parentFile.parentFile
-val emitKotlinCodecsOutput = layout.buildDirectory.dir("generated/source/wire-format/kotlin")
-
-val emitKotlinCodecs by tasks.registering(Exec::class) {
-    workingDir(packageRoot)
-    inputs.dir(packageRoot.resolve("Sources/SheetMusicAndroidJNI"))
-        .withPropertyName("swiftSources")
-    inputs.file(packageRoot.resolve("Sources/SheetMusicAndroidJNI/kotlin-codegen.json"))
-        .withPropertyName("codegenConfig")
-    outputs.dir(emitKotlinCodecsOutput)
-    // The example app owns the draw-program codecs only.
-    commandLine(
-        "swift", "run", "--package-path", packageRoot.absolutePath,
-        "emit-kotlin-codecs",
-        "--config", "Sources/SheetMusicAndroidJNI/kotlin-codegen.json",
-        "--source", "Sources/SheetMusicAndroidJNI",
-        "--output", emitKotlinCodecsOutput.get().asFile.absolutePath,
-        "--include-package", "com.example.sheetmusic.draw",
-    )
+    id("io.github.jiyimeta.wirelet") version "0.1.0-alpha.2"
 }
 
 android {
@@ -69,12 +45,7 @@ android {
             )
         }
     }
-
-    sourceSets["main"].kotlin.srcDir(emitKotlinCodecsOutput)
 }
-
-tasks.matching { it.name.startsWith("compile") && it.name.endsWith("Kotlin") }
-    .configureEach { dependsOn(emitKotlinCodecs) }
 
 dependencies {
     val composeBom = platform("androidx.compose:compose-bom:2024.09.02")
@@ -95,6 +66,45 @@ dependencies {
 
     // JNI bridge + audio backend — resolved from the Android/ composite build.
     // Versions must match the corresponding build.gradle.kts files in Android/.
+    // wirelet-runtime is propagated transitively via SheetMusicAndroid's
+    // `api("io.github.jiyimeta:wirelet-runtime:0.1.0-alpha.2")`.
     implementation("io.github.jiyimeta:sheet-music-android:0.0.0-SNAPSHOT")
     implementation("io.github.jiyimeta:sheet-music-audio-android:0.0.0-SNAPSHOT")
 }
+
+// Resolve the SwiftPM package root (../../ from Examples/Android/) so
+// the wirelet plugin can find the Swift sources.
+val packageRoot: File = rootProject.projectDir.resolve("../..").canonicalFile
+
+wirelet {
+    swiftPackagePath.set(File(packageRoot, "wirelet-checkout"))
+    sources {
+        register("main") {
+            schemaPaths.from(packageRoot.resolve("Sources/SheetMusicAndroidJNI/Draw"))
+            codecPackage.set("com.example.sheetmusic.draw")
+            modelPackage.set("com.example.sheetmusic.draw.model")
+            // emitModels intentionally NOT set (default false) — hand-written model
+            // classes exist at app/src/main/java/com/example/sheetmusic/draw/model/
+            // (DrawProgram.kt, DrawCommand.kt, EncodablePage.kt, FontID.kt). The
+            // codec output references these by their original names (no "Wire" suffix
+            // on the Swift side, so no stripNameSuffix needed).
+        }
+    }
+}
+
+// Wire the wirelet-generated source directory into the Android source set
+// and make every Kotlin compile task depend on codegen. The wirelet plugin
+// v1 only hooks into kotlin.jvm; kotlin.android needs the same wiring added
+// manually here.
+val generateWireletCodecsMain = tasks.named("generateWireletCodecsMain")
+
+android {
+    sourceSets["main"].kotlin.srcDir(
+        generateWireletCodecsMain.flatMap {
+            (it as io.github.jiyimeta.wirelet.gradle.GenerateWireletCodecs).outputDir
+        }
+    )
+}
+
+tasks.matching { it.name.startsWith("compile") && it.name.endsWith("Kotlin") }
+    .configureEach { dependsOn(generateWireletCodecsMain) }

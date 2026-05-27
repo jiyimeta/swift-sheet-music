@@ -1,15 +1,17 @@
 import Foundation
-import SheetMusicWireFormat
+import Wirelet
 
 /// One General-MIDI Level 1 melodic program (0...127), with the
 /// canonical name and family grouping. Drives the program picker
 /// in the mixer.
 ///
-/// `@WireFormat` synthesizes a `WireFormat` conformance whose encoded
-/// layout is each stored property in declaration order: `program` (u8),
-/// `name` (i32-prefixed UTF-8), `family` (u8 ordinal). The blob has no
-/// envelope — `[GMInstrument]` encodes as the standard
-/// `Array<T: WireFormat>` (i32 length prefix + elements).
+/// `@WireFormat` synthesizes a TLV `WireFormat` conformance: each stored
+/// property in declaration order gets an implicit tag (1, 2, 3, …). The
+/// `family` field uses `@WireFormatEnum` on the `String`-raw `Family`
+/// enum, which encodes the rawValue string (e.g. "Piano"). The array
+/// `[GMInstrument]` encodes as the standard wirelet `Array<T: WireFormat>`
+/// (varint outer length prefix + varint-length-prefixed per-element TLV
+/// payloads).
 @WireFormat
 public struct GMInstrument: Sendable, Equatable, Identifiable {
     public let program: UInt8 // 0...127

@@ -2,6 +2,7 @@ plugins {
     id("com.android.library")
     id("org.jetbrains.kotlin.android")
     `maven-publish`
+    id("io.github.jiyimeta.wirelet") version "0.1.0-alpha.2"
 }
 
 android {
@@ -55,44 +56,43 @@ dependencies {
     // Locally-published from the swift-java repo until it ships to
     // Maven Central — see project_swift_java_strategy.md.
     api("org.swift.swiftkit:swiftkit-core:1.0-SNAPSHOT")
+    // wirelet-runtime provides BinaryReader/BinaryWriter used by
+    // wirelet-generated codecs. `api` so downstream modules
+    // (SheetMusicAudioAndroid, Examples/Android) see the classes
+    // on their compile classpath.
+    api("io.github.jiyimeta:wirelet-runtime:0.1.0-alpha.2")
 }
 
-// ─── Wire-format codec codegen ────────────────────────────────────────
-// Runs `swift run emit-kotlin-codecs` to regenerate Kotlin codecs from
-// Swift `@WireFormat` types. See
-// docs/superpowers/specs/2026-05-23-kotlin-codec-codegen-design.md.
 val packageRoot: File = rootProject.projectDir.resolve("..").canonicalFile
-val emitKotlinCodecsOutput = layout.buildDirectory.dir("generated/source/wire-format/kotlin")
 
-val emitKotlinCodecs by tasks.registering(Exec::class) {
-    workingDir(packageRoot)
-    inputs.dir(packageRoot.resolve("Sources/SheetMusicAndroidJNI"))
-        .withPropertyName("swiftSources")
-    inputs.file(packageRoot.resolve("Sources/SheetMusicAndroidJNI/kotlin-codegen.json"))
-        .withPropertyName("codegenConfig")
-    outputs.dir(emitKotlinCodecsOutput)
-    // This module owns the top-level io.github.jiyimeta.sheetmusic codecs
-    // (ScoreMetadata + SMuFLMetrics) and the shared wireformat runtime —
-    // wireformat itself is hand-written, so we don't ask the generator
-    // for it. Audio + Examples-app codecs are emitted by their own
-    // modules' :emitKotlinCodecs tasks.
-    commandLine(
-        "swift", "run", "--package-path", packageRoot.absolutePath,
-        "emit-kotlin-codecs",
-        "--config", "Sources/SheetMusicAndroidJNI/kotlin-codegen.json",
-        "--source", "Sources/SheetMusicAndroidJNI",
-        "--output", emitKotlinCodecsOutput.get().asFile.absolutePath,
-        "--include-package", "io.github.jiyimeta.sheetmusic",
+wirelet {
+    swiftPackagePath.set(File(packageRoot, "wirelet-checkout"))
+    sources {
+        register("main") {
+            schemaPaths.from(packageRoot.resolve("Sources/SheetMusicAndroidJNI/Metadata"))
+            codecPackage.set("io.github.jiyimeta.sheetmusic")
+            modelPackage.set("io.github.jiyimeta.sheetmusic")
+            emitModels.set(true)
+        }
+    }
+}
+
+// Wire the wirelet-generated source directory into the Android source set
+// and make every Kotlin compile task depend on codegen. The wirelet plugin
+// v1 only hooks into kotlin.jvm; kotlin.android needs the same wiring added
+// manually here.
+val generateWireletCodecsMain = tasks.named("generateWireletCodecsMain")
+
+android {
+    sourceSets["main"].kotlin.srcDir(
+        generateWireletCodecsMain.flatMap {
+            (it as io.github.jiyimeta.wirelet.gradle.GenerateWireletCodecs).outputDir
+        }
     )
 }
 
-android {
-    sourceSets["main"].kotlin.srcDir(emitKotlinCodecsOutput)
-}
-
 tasks.matching { it.name.startsWith("compile") && it.name.endsWith("Kotlin") }
-    .configureEach { dependsOn(emitKotlinCodecs) }
-
+    .configureEach { dependsOn(generateWireletCodecsMain) }
 
 afterEvaluate {
     publishing {

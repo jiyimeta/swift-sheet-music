@@ -1,8 +1,8 @@
 #if !os(Android)
     import Foundation
     @testable import SheetMusicAndroidJNI
-    import SheetMusicWireFormat
     import Testing
+    import Wirelet
 
     struct LayoutBridgeTests {
         /// Ensures AppleFontMetricsProvider is installed so LayoutEngine's
@@ -39,9 +39,12 @@
                 pageWidthMM: 210,
                 pageHeightMM: 297,
             )
-            var r = WireFormatReader(data: encoded)
-            #expect(try r.readInteger(UInt32.self) == DrawProgram.magic)
-            #expect(try r.readInteger(UInt32.self) == DrawProgram.version)
+            // Decode via DrawProgramWire to validate magic and version fields
+            // without relying on positional byte offsets (TLV encoding places
+            // fields as tag-prefixed varints, not at fixed offsets).
+            let wire = try DrawProgramWire(decoding: encoded)
+            #expect(wire.magic == DrawProgram.magic)
+            #expect(wire.version == DrawProgram.version)
         }
     }
 #endif

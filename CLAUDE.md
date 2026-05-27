@@ -293,6 +293,28 @@ Tests that import any Apple framework (`SwiftUI`, `AVFoundation`,
 `#if !os(Android)` ... `#endif`. Run `Scripts/gate-android-tests.sh`
 after creating new test files to apply this guard automatically.
 
+### Wirelet local checkout
+
+Android Gradle builds invoke the `io.github.jiyimeta.wirelet` plugin
+(from `maven.pkg.github.com/jiyimeta/swift-wirelet`), which forks
+`swift run` against a local `swift-wirelet` checkout pinned by
+`swiftPackagePath` in each module's `wirelet { … }` block. Bootstrap
+once per workspace before any Gradle task:
+
+    # Symlink an existing checkout (preferred — single source of truth):
+    ln -sfn ~/Developer/Personal/swift-packages/swift-wirelet wirelet-checkout
+
+    # Or clone fresh at the pinned tag:
+    git clone git@github.com:jiyimeta/swift-wirelet.git wirelet-checkout
+    git -C wirelet-checkout checkout v0.1.0-alpha.2
+
+The `wirelet-checkout/` path is gitignored. The Maven side
+(`io.github.jiyimeta:wirelet-runtime`) requires
+`~/.gradle/gradle.properties` to set `gpr.user` + `gpr.key` (a classic
+GitHub PAT with `read:packages` scope on the `jiyimeta/swift-wirelet`
+private repo). Env vars `GITHUB_ACTOR` / `GITHUB_TOKEN` also work if
+preferred.
+
 ## Conventions
 
 - **Idiomatic Swift naming.** Don't transliterate C++ names. When the

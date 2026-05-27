@@ -1,20 +1,12 @@
 import Foundation
 import SheetMusicCore
 import SheetMusicLayout
-import SheetMusicWireFormat
+import Wirelet
 
 /// Singleton tables — one per Swift type. Lifetimes are explicit; Kotlin
 /// must release every handle it gets, or the score will leak until process
 /// exit.
 let scoreTable = HandleTable<Score>()
-
-// MARK: - Wire format payloads
-
-@WireFormat
-struct ScoreMetadataWire {
-    var title: String
-    var composer: String
-}
 
 // MARK: - Score lifecycle (swift-java entry points)
 

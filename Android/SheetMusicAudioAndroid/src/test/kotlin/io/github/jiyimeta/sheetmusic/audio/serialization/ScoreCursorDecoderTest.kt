@@ -1,5 +1,9 @@
 package io.github.jiyimeta.sheetmusic.audio.serialization
 
+import io.github.jiyimeta.wirelet.BinaryReader
+import io.github.jiyimeta.wirelet.BinaryWriter
+import io.github.jiyimeta.wirelet.WireFormatException
+
 import io.github.jiyimeta.sheetmusic.audio.model.NoteID
 import io.github.jiyimeta.sheetmusic.audio.model.ScoreCursor
 import io.github.jiyimeta.sheetmusic.audio.model.ScoreItemID
@@ -46,30 +50,31 @@ class ScoreCursorDecoderTest {
         assertEquals(canonicalCursorBeat, decoded)
     }
 
-    // MARK: - Beat case inline test
+    // MARK: - Beat case inline TLV test
 
     @Test
     fun beatCaseInlineDecodes() {
-        // discriminator=1 (Beat), measureIndex=7, tickInMeasure=960
-        val bytes = byteArrayOf(
-            0x01,                    // discriminator = 1 (Beat)
-            0x07, 0x00, 0x00, 0x00,  // measureIndex = 7
-            0xC0.toByte(), 0x03, 0x00, 0x00,  // tickInMeasure = 960
-        )
-        val decoded = ScoreCursorCodec.decode(bytes)
-        assertEquals(ScoreCursor.Beat(measureIndex = 7, tickInMeasure = 960), decoded)
+        // ScoreCursor.Beat(measureIndex=7, tickInMeasure=960) encoded with TLV codec
+        val value = ScoreCursor.Beat(measureIndex = 7, tickInMeasure = 960)
+        val encoded = ScoreCursorCodec.encode(value)
+        val decoded = ScoreCursorCodec.decode(encoded)
+        assertEquals(value, decoded)
     }
 
     // MARK: - Unknown discriminator
 
     @Test
     fun unknownDiscriminatorThrows() {
-        val bytes = byteArrayOf(0x02) // discriminator = 2 (unknown)
+        // Build a TLV payload with discriminator=2 (unknown)
+        val outer = BinaryWriter()
+        outer.writeLengthPrefixed {
+            writeVarint(2L) // discriminator = 2 (unknown)
+        }
         try {
-            ScoreCursorCodec.decode(bytes)
+            ScoreCursorCodec.decode(outer.toByteArray())
             fail("Expected error for unknown discriminator")
-        } catch (_: IllegalArgumentException) {
-            // expected
+        } catch (_: WireFormatException.UnknownChoiceDiscriminator) {
+            // expected — TLV codecs throw UnknownChoiceDiscriminator for out-of-range discriminators
         }
     }
 }

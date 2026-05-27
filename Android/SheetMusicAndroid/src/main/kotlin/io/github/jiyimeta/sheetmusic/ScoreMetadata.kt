@@ -18,7 +18,9 @@ data class ScoreMetadata(
         fun fetch(scoreHandle: Long): ScoreMetadata? {
             val bytes = SheetMusicJNI.nativeScoreMetadata(scoreHandle)
             if (bytes.isEmpty()) return null
-            return ScoreMetadataCodec.decode(bytes)
+            return ScoreMetadataWireCodec.decode(bytes).let {
+                ScoreMetadata(title = it.title, composer = it.composer)
+            }
         }
     }
 }

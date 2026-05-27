@@ -1,18 +1,13 @@
 import Foundation
 @testable import SheetMusicAndroidJNI
-import SheetMusicWireFormat
 import Testing
+import Wirelet
 
 struct DrawProgramRoundTripTests {
     @Test
     func emptyDocumentRoundTrips() throws {
         let encoded = DrawProgramCodec.encode(pages: [])
-        var reader = WireFormatReader(data: encoded)
-
-        #expect(try reader.readInteger(UInt32.self) == DrawProgram.magic)
-        #expect(try reader.readInteger(UInt32.self) == DrawProgram.version)
-        #expect(try reader.readInteger(Int32.self) == 0) // pageCount
-
+        // Verify round-trip via the public API: decode must return an empty page list.
         let pages = try DrawProgramCodec.decode(encoded)
         #expect(pages.isEmpty)
     }
@@ -81,20 +76,31 @@ struct DrawProgramRoundTripTests {
     }
 
     @Test
-    func corruptMagicRaisesBadMagic() {
-        var bytes = DrawProgramCodec.encode(pages: [])
-        bytes[0] = 0xFF
+    func corruptMagicRaisesBadMagic() throws {
+        // Encode a draw program with a wrong magic value to verify that
+        // DrawProgramCodec.decode raises .badMagic. We build the wire struct
+        // directly with an invalid magic so the TLV layer parses cleanly but
+        // the semantic check fires.
+        let wrongMagicBytes = DrawProgramWire(
+            magic: 0xDEAD_BEEF,
+            version: DrawProgram.version,
+            pages: [],
+        ).encodeToData()
         #expect(throws: DrawProgramCodec.DecodeError.self) {
-            _ = try DrawProgramCodec.decode(bytes)
+            _ = try DrawProgramCodec.decode(wrongMagicBytes)
         }
     }
 
     @Test
-    func wrongVersionRaisesUnsupportedVersion() {
-        var bytes = DrawProgramCodec.encode(pages: [])
-        bytes[4] = 0xFF // bump version byte
+    func wrongVersionRaisesUnsupportedVersion() throws {
+        // Encode a draw program with a wrong version value.
+        let wrongVersionBytes = DrawProgramWire(
+            magic: DrawProgram.magic,
+            version: DrawProgram.version + 1,
+            pages: [],
+        ).encodeToData()
         #expect(throws: DrawProgramCodec.DecodeError.self) {
-            _ = try DrawProgramCodec.decode(bytes)
+            _ = try DrawProgramCodec.decode(wrongVersionBytes)
         }
     }
 }

@@ -36,3 +36,7 @@ Android/SheetMusicAndroid/src/main/jniLibs/
 # swift-java jextract-generated Java bindings, copied by
 # Scripts/android-build-libs.sh from the SwiftPM plugin output.
 Android/SheetMusicAndroid/src/main/java-generated/
+
+# Local checkout of swift-wirelet referenced by the Gradle plugin's
+# swiftPackagePath. See CLAUDE.md "Wirelet local checkout".
+/wirelet-checkout

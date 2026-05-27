@@ -1,5 +1,5 @@
 import Foundation
-import SheetMusicWireFormat
+import Wirelet
 
 /// Self-describing binary format that ferries layout output across the JNI
 /// boundary. Little-endian throughout. Both the Swift encoder and the Kotlin

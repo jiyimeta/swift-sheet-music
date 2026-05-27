@@ -1,6 +1,6 @@
 package io.github.jiyimeta.sheetmusic.audio.serialization
 
-import io.github.jiyimeta.sheetmusic.wireformat.BinaryReader
+import io.github.jiyimeta.wirelet.BinaryReader
 
 import io.github.jiyimeta.sheetmusic.audio.model.Frame
 import io.github.jiyimeta.sheetmusic.audio.model.MetronomeBeat
@@ -52,6 +52,31 @@ class FrameMetronomeBeatStaffParamsDecoderTest {
         StaffParams(staffIndex = 1, bankLSB = 0, program = 0, isDrums = true, partAddressHash = 1001L),
     )
 
+    // MARK: - Helper: decode a wirelet TLV array from golden bytes
+
+    /** Decode a wirelet-encoded array: varint(outerLen) + N × (varint(len) + TLV payload). */
+    private fun decodeMetronomeBeatArray(bytes: ByteArray): List<MetronomeBeat> {
+        val r = BinaryReader(bytes)
+        val result = mutableListOf<MetronomeBeat>()
+        r.readLengthPrefixed { inner ->
+            while (inner.remaining > 0) {
+                result.add(inner.readLengthPrefixed { MetronomeBeatCodec.decodePayload(it) })
+            }
+        }
+        return result
+    }
+
+    private fun decodeStaffParamsArray(bytes: ByteArray): List<StaffParams> {
+        val r = BinaryReader(bytes)
+        val result = mutableListOf<StaffParams>()
+        r.readLengthPrefixed { inner ->
+            while (inner.remaining > 0) {
+                result.add(inner.readLengthPrefixed { StaffParamsCodec.decodePayload(it) })
+            }
+        }
+        return result
+    }
+
     // MARK: - Frame golden tests
 
     @Test
@@ -89,28 +114,21 @@ class FrameMetronomeBeatStaffParamsDecoderTest {
     @Test
     fun metronomeBeatGoldenDecodes() {
         val bytes = loadGolden("metronomeBeat-v1.bin")
-        val r = BinaryReader(bytes)
-        val count = r.readI32()
-        val decoded = ArrayList<MetronomeBeat>(count)
-        for (i in 0 until count) decoded.add(MetronomeBeatCodec.decodePayload(r))
+        val decoded = decodeMetronomeBeatArray(bytes)
         assertEquals(canonicalBeats, decoded)
     }
 
     @Test
     fun metronomeBeatCount() {
         val bytes = loadGolden("metronomeBeat-v1.bin")
-        val r = BinaryReader(bytes)
-        val count = r.readI32()
-        assertEquals(3, count)
+        val decoded = decodeMetronomeBeatArray(bytes)
+        assertEquals(3, decoded.size)
     }
 
     @Test
     fun metronomeBeatTicksAndDownbeats() {
         val bytes = loadGolden("metronomeBeat-v1.bin")
-        val r = BinaryReader(bytes)
-        val count = r.readI32()
-        val decoded = ArrayList<MetronomeBeat>(count)
-        for (i in 0 until count) decoded.add(MetronomeBeatCodec.decodePayload(r))
+        val decoded = decodeMetronomeBeatArray(bytes)
         assertEquals(0L, decoded[0].tick)
         assertEquals(true, decoded[0].isDownbeat)
         assertEquals(480L, decoded[1].tick)
@@ -124,28 +142,21 @@ class FrameMetronomeBeatStaffParamsDecoderTest {
     @Test
     fun staffParamsGoldenDecodes() {
         val bytes = loadGolden("staffParams-v1.bin")
-        val r = BinaryReader(bytes)
-        val count = r.readI32()
-        val decoded = ArrayList<StaffParams>(count)
-        for (i in 0 until count) decoded.add(StaffParamsCodec.decodePayload(r))
+        val decoded = decodeStaffParamsArray(bytes)
         assertEquals(canonicalStaffParams, decoded)
     }
 
     @Test
     fun staffParamsCount() {
         val bytes = loadGolden("staffParams-v1.bin")
-        val r = BinaryReader(bytes)
-        val count = r.readI32()
-        assertEquals(2, count)
+        val decoded = decodeStaffParamsArray(bytes)
+        assertEquals(2, decoded.size)
     }
 
     @Test
     fun staffParamsEntry0() {
         val bytes = loadGolden("staffParams-v1.bin")
-        val r = BinaryReader(bytes)
-        val count = r.readI32()
-        val decoded = ArrayList<StaffParams>(count)
-        for (i in 0 until count) decoded.add(StaffParamsCodec.decodePayload(r))
+        val decoded = decodeStaffParamsArray(bytes)
         val e0 = decoded[0]
         assertEquals(0, e0.staffIndex)
         assertEquals(0.toUByte(), e0.bankLSB)
@@ -157,10 +168,7 @@ class FrameMetronomeBeatStaffParamsDecoderTest {
     @Test
     fun staffParamsEntry1() {
         val bytes = loadGolden("staffParams-v1.bin")
-        val r = BinaryReader(bytes)
-        val count = r.readI32()
-        val decoded = ArrayList<StaffParams>(count)
-        for (i in 0 until count) decoded.add(StaffParamsCodec.decodePayload(r))
+        val decoded = decodeStaffParamsArray(bytes)
         val e1 = decoded[1]
         assertEquals(1, e1.staffIndex)
         assertEquals(0.toUByte(), e1.bankLSB)

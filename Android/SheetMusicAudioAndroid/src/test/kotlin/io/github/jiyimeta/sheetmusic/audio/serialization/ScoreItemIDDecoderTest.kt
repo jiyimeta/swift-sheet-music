@@ -1,6 +1,7 @@
 package io.github.jiyimeta.sheetmusic.audio.serialization
 
-import io.github.jiyimeta.sheetmusic.wireformat.BinaryReader
+import io.github.jiyimeta.wirelet.BinaryReader
+import io.github.jiyimeta.wirelet.BinaryWriter
 
 import io.github.jiyimeta.sheetmusic.audio.model.ClefAnchor
 import io.github.jiyimeta.sheetmusic.audio.model.NoteID
@@ -99,35 +100,32 @@ class ScoreItemIDDecoderTest {
         assertEquals(ScoreItemID.Clef(canonicalClefStaffDefault), decoded)
     }
 
-    // MARK: - Array decoder
+    // MARK: - Array decoder using TLV wirelet encoding
 
     @Test
     fun decodeArrayDecodesTwoItems() {
         // Build a 2-element array: [Note(canonicalNoteID), Rest(canonicalRestID)]
-        // count(4) + Note payload + Rest payload (no version envelope)
-        val notePayload = byteArrayOf(
-            0x00,  // discriminator = 0 (Note)
-            0x01, 0x00, 0x00, 0x00,  // partIndex = 1
-            0x00, 0x00, 0x00, 0x00,  // staffIndexInPart = 0
-            0x04, 0x00, 0x00, 0x00,  // measureIndex = 4
-            0x00, 0x00, 0x00, 0x00,  // voiceIndex = 0
-            0x02, 0x00, 0x00, 0x00,  // elementIndex = 2
-            0x01, 0x00, 0x00, 0x00,  // noteIndexInChord = 1
+        // using wirelet TLV encoding: varint(outerLen) + N × (varint(len) + TLV payload)
+        val ids = listOf(
+            ScoreItemID.Note(canonicalNoteID),
+            ScoreItemID.Rest(canonicalRestID),
         )
-        val restPayload = byteArrayOf(
-            0x01,  // discriminator = 1 (Rest)
-            0x00, 0x00, 0x00, 0x00,  // partIndex = 0
-            0x00, 0x00, 0x00, 0x00,  // staffIndexInPart = 0
-            0x02, 0x00, 0x00, 0x00,  // measureIndex = 2
-            0x01, 0x00, 0x00, 0x00,  // voiceIndex = 1
-            0x00, 0x00, 0x00, 0x00,  // elementIndex = 0
-        )
-        val header = byteArrayOf(0x02, 0x00, 0x00, 0x00) // count = 2
-        val bytes = header + notePayload + restPayload
-        val r = BinaryReader(bytes)
-        val count = r.readI32()
-        val decoded = ArrayList<ScoreItemID>(count)
-        for (i in 0 until count) decoded.add(ScoreItemIDCodec.decodePayload(r))
+        // Encode as wirelet TLV array
+        val w = BinaryWriter()
+        w.writeLengthPrefixed {
+            for (id in ids) {
+                writeLengthPrefixed { ScoreItemIDCodec.encodePayload(id, this) }
+            }
+        }
+        val encoded = w.toByteArray()
+        // Decode back using TLV array reader
+        val r = BinaryReader(encoded)
+        val decoded = mutableListOf<ScoreItemID>()
+        r.readLengthPrefixed { inner ->
+            while (inner.remaining > 0) {
+                decoded.add(inner.readLengthPrefixed { ScoreItemIDCodec.decodePayload(it) })
+            }
+        }
         assertEquals(2, decoded.size)
         assertEquals(ScoreItemID.Note(canonicalNoteID), decoded[0])
         assertEquals(ScoreItemID.Rest(canonicalRestID), decoded[1])
@@ -135,11 +133,17 @@ class ScoreItemIDDecoderTest {
 
     @Test
     fun decodeArrayEmptyList() {
-        val bytes = byteArrayOf(0x00, 0x00, 0x00, 0x00) // count = 0
-        val r = BinaryReader(bytes)
-        val count = r.readI32()
-        val decoded = ArrayList<ScoreItemID>(count)
-        for (i in 0 until count) decoded.add(ScoreItemIDCodec.decodePayload(r))
+        // Empty wirelet TLV array: varint(1) + varint(0) inside the length-prefixed body
+        val w = BinaryWriter()
+        w.writeLengthPrefixed { /* empty */ }
+        val encoded = w.toByteArray()
+        val r = BinaryReader(encoded)
+        val decoded = mutableListOf<ScoreItemID>()
+        r.readLengthPrefixed { inner ->
+            while (inner.remaining > 0) {
+                decoded.add(inner.readLengthPrefixed { ScoreItemIDCodec.decodePayload(it) })
+            }
+        }
         assertEquals(0, decoded.size)
     }
 }

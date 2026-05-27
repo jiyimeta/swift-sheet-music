@@ -1,6 +1,6 @@
 import Foundation
 import SheetMusicCore
-import SheetMusicWireFormat
+import Wirelet
 
 /// Instrument/channel parameters for one staff, passed across the JNI
 /// boundary so Kotlin can configure the Android audio engine.

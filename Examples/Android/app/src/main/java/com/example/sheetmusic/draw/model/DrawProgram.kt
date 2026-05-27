@@ -1,13 +1,10 @@
 package com.example.sheetmusic.draw.model
 
 /**
- * Mirrors the `DrawProgramWire` struct in
- * `Sources/SheetMusicAndroidJNI/DrawProgram.swift`. `magic` / `version`
- * are validated by `DrawProgramReader` after the structural decode so
- * format drift surfaces as a typed error.
+ * View-friendly representation of a decoded draw program. `magic` /
+ * `version` are validated by `DrawProgramReader` before this object is
+ * constructed; only `pages` survives the header-strip.
  */
 data class DrawProgram(
-    val magic: Long,
-    val version: Long,
     val pages: List<EncodablePage>,
 )

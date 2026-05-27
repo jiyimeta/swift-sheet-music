@@ -8,6 +8,9 @@
     #endif
 
     struct CursorFrameCodecTests {
+        // Byte-count assertions are superseded by golden fixtures in the Kotlin
+        // codec tests. Only round-trip and nil-sentinel tests are kept here.
+
         // MARK: - Round-trip tests
 
         @Test
@@ -52,16 +55,6 @@
         func emptyDataReturnsNil() throws {
             let result = try CursorFrameCodec.decode(Data())
             #expect(result == nil)
-        }
-
-        // MARK: - Byte length
-
-        @Test
-        func encodedLengthIs32Bytes() {
-            // 4 × f64 = 32 bytes.
-            let rect = CGRect(x: 1, y: 2, width: 3, height: 4)
-            let encoded = CursorFrameCodec.encode(rect)
-            #expect(encoded.count == 32)
         }
     }
 #endif

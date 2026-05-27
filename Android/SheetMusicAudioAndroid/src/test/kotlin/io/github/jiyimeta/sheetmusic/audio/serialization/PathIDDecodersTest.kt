@@ -1,6 +1,7 @@
 package io.github.jiyimeta.sheetmusic.audio.serialization
 
-import io.github.jiyimeta.sheetmusic.wireformat.BinaryReader
+import io.github.jiyimeta.wirelet.BinaryReader
+import io.github.jiyimeta.wirelet.BinaryWriter
 
 import io.github.jiyimeta.sheetmusic.audio.model.NoteID
 import io.github.jiyimeta.sheetmusic.audio.model.RestID
@@ -32,7 +33,6 @@ class PathIDDecodersTest {
     @Test
     fun staffAddressGoldenDecodes() {
         val bytes = loadGolden("staffAddress-v1.bin")
-        // staffAddress-v1.bin: version(2) + partIndex(4) + staffIndexInPart(4) = 10 bytes
         val decoded = StaffAddressCodec.decode(bytes)
         assertEquals(canonicalStaffAddress, decoded)
     }
@@ -40,8 +40,8 @@ class PathIDDecodersTest {
     @Test
     fun staffAddressGoldenPayloadLength() {
         val bytes = loadGolden("staffAddress-v1.bin")
-        // partIndex(4) + staffIndexInPart(4) = 8 bytes (no version envelope)
-        assertEquals(8, bytes.size)
+        // TLV format: varint(4) + tag(1,varint) zigzag(partIndex=1) + tag(2,varint) zigzag(staffIndexInPart=0) = 5 bytes
+        assertEquals(5, bytes.size)
     }
 
     // MARK: - NoteID golden tests
@@ -56,20 +56,18 @@ class PathIDDecodersTest {
     @Test
     fun noteIdGoldenPayloadLength() {
         val bytes = loadGolden("noteId-v1.bin")
-        // StaffAddress(8) + measureIndex(4) + voiceIndex(4)
-        // + elementIndex(4) + noteIndexInChord(4) = 24 bytes (no version envelope)
-        assertEquals(24, bytes.size)
+        // TLV format: varint(len) + nested StaffAddress(5) + 4 zigzag varint fields = 15 bytes
+        assertEquals(15, bytes.size)
     }
 
-    // MARK: - Payload-only decoder tests (inline byte arrays)
+    // MARK: - Payload-only decoder tests (TLV-encoded inline byte arrays)
 
     @Test
     fun staffAddressPayloadDecodes() {
-        // partIndex=3, staffIndexInPart=1
-        val bytes = byteArrayOf(
-            0x03, 0x00, 0x00, 0x00,  // partIndex = 3
-            0x01, 0x00, 0x00, 0x00,  // staffIndexInPart = 1
-        )
+        // Build TLV payload for StaffAddress(partIndex=3, staffIndexInPart=1) using codec
+        val w = BinaryWriter()
+        StaffAddressCodec.encodePayload(StaffAddress(partIndex = 3, staffIndexInPart = 1), w)
+        val bytes = w.toByteArray()
         val r = BinaryReader(bytes)
         val decoded = StaffAddressCodec.decodePayload(r)
         assertEquals(StaffAddress(partIndex = 3, staffIndexInPart = 1), decoded)
@@ -77,71 +75,53 @@ class PathIDDecodersTest {
 
     @Test
     fun voiceElementIDPayloadDecodes() {
-        // StaffAddress(2,0) + measureIndex=5 + voiceIndex=1 + elementIndex=3
-        val bytes = byteArrayOf(
-            0x02, 0x00, 0x00, 0x00,  // partIndex = 2
-            0x00, 0x00, 0x00, 0x00,  // staffIndexInPart = 0
-            0x05, 0x00, 0x00, 0x00,  // measureIndex = 5
-            0x01, 0x00, 0x00, 0x00,  // voiceIndex = 1
-            0x03, 0x00, 0x00, 0x00,  // elementIndex = 3
+        // Build TLV payload for VoiceElementID(StaffAddress(2,0), measureIndex=5, voiceIndex=1, elementIndex=3)
+        val value = VoiceElementID(
+            staff = StaffAddress(2, 0),
+            measureIndex = 5,
+            voiceIndex = 1,
+            elementIndex = 3,
         )
+        val w = BinaryWriter()
+        VoiceElementIDCodec.encodePayload(value, w)
+        val bytes = w.toByteArray()
         val r = BinaryReader(bytes)
         val decoded = VoiceElementIDCodec.decodePayload(r)
-        assertEquals(
-            VoiceElementID(
-                staff = StaffAddress(2, 0),
-                measureIndex = 5,
-                voiceIndex = 1,
-                elementIndex = 3,
-            ),
-            decoded,
-        )
+        assertEquals(value, decoded)
     }
 
     @Test
     fun restIDPayloadDecodes() {
-        // StaffAddress(0,0) + measureIndex=2 + voiceIndex=1 + elementIndex=0
-        val bytes = byteArrayOf(
-            0x00, 0x00, 0x00, 0x00,  // partIndex = 0
-            0x00, 0x00, 0x00, 0x00,  // staffIndexInPart = 0
-            0x02, 0x00, 0x00, 0x00,  // measureIndex = 2
-            0x01, 0x00, 0x00, 0x00,  // voiceIndex = 1
-            0x00, 0x00, 0x00, 0x00,  // elementIndex = 0
+        // Build TLV payload for RestID(StaffAddress(0,0), measureIndex=2, voiceIndex=1, elementIndex=0)
+        val value = RestID(
+            staff = StaffAddress(0, 0),
+            measureIndex = 2,
+            voiceIndex = 1,
+            elementIndex = 0,
         )
+        val w = BinaryWriter()
+        RestIDCodec.encodePayload(value, w)
+        val bytes = w.toByteArray()
         val r = BinaryReader(bytes)
         val decoded = RestIDCodec.decodePayload(r)
-        assertEquals(
-            RestID(
-                staff = StaffAddress(0, 0),
-                measureIndex = 2,
-                voiceIndex = 1,
-                elementIndex = 0,
-            ),
-            decoded,
-        )
+        assertEquals(value, decoded)
     }
 
     @Test
     fun tupletIDPayloadDecodes() {
-        // StaffAddress(0,0) + measureIndex=3 + voiceIndex=0 + startElementIndex=5
-        val bytes = byteArrayOf(
-            0x00, 0x00, 0x00, 0x00,  // partIndex = 0
-            0x00, 0x00, 0x00, 0x00,  // staffIndexInPart = 0
-            0x03, 0x00, 0x00, 0x00,  // measureIndex = 3
-            0x00, 0x00, 0x00, 0x00,  // voiceIndex = 0
-            0x05, 0x00, 0x00, 0x00,  // startElementIndex = 5
+        // Build TLV payload for TupletID(StaffAddress(0,0), measureIndex=3, voiceIndex=0, startElementIndex=5)
+        val value = TupletID(
+            staff = StaffAddress(0, 0),
+            measureIndex = 3,
+            voiceIndex = 0,
+            startElementIndex = 5,
         )
+        val w = BinaryWriter()
+        TupletIDCodec.encodePayload(value, w)
+        val bytes = w.toByteArray()
         val r = BinaryReader(bytes)
         val decoded = TupletIDCodec.decodePayload(r)
-        assertEquals(
-            TupletID(
-                staff = StaffAddress(0, 0),
-                measureIndex = 3,
-                voiceIndex = 0,
-                startElementIndex = 5,
-            ),
-            decoded,
-        )
+        assertEquals(value, decoded)
     }
 
 }

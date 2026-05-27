@@ -100,9 +100,8 @@
             #expect(rect.size.height > 0)
 
             // Round-trip through CursorFrameCodec.
+            // Total byte count varies with TLV varint encoding; round-trip covers correctness.
             let encoded = CursorFrameCodec.encode(rect)
-            #expect(encoded.count == 32) // 4 × f64
-
             let decoded = try #require(try CursorFrameCodec.decode(encoded))
             #expect(decoded.x == Double(rect.origin.x))
             #expect(decoded.y == Double(rect.origin.y))

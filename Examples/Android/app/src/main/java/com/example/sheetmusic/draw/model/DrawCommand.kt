@@ -16,7 +16,7 @@ sealed class DrawCommand {
         val w: Double, val h: Double,
     ) : DrawCommand()
     data class Glyph(
-        val codepoint: Long,
+        val codepoint: UInt,
         val x: Double, val y: Double,
         val size: Double,
         val fontId: FontID,
@@ -28,7 +28,7 @@ sealed class DrawCommand {
         val fontId: FontID,
     ) : DrawCommand()
     /** Active paint colour as packed ARGB (0xAARRGGBB). */
-    data class SetColor(val argb: Long) : DrawCommand()
+    data class SetColor(val argb: UInt) : DrawCommand()
     /** Cubic Bezier curve from current path point to (x, y). */
     data class CubicTo(
         val cx1: Double, val cy1: Double,

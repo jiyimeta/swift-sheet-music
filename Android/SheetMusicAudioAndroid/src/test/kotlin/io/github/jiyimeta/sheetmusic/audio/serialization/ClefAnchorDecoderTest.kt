@@ -1,6 +1,8 @@
 package io.github.jiyimeta.sheetmusic.audio.serialization
 
-import io.github.jiyimeta.sheetmusic.wireformat.BinaryReader
+import io.github.jiyimeta.wirelet.BinaryReader
+import io.github.jiyimeta.wirelet.BinaryWriter
+import io.github.jiyimeta.wirelet.WireFormatException
 
 import io.github.jiyimeta.sheetmusic.audio.model.ClefAnchor
 import io.github.jiyimeta.sheetmusic.audio.model.StaffAddress
@@ -11,79 +13,64 @@ import org.junit.Test
 
 class ClefAnchorDecoderTest {
 
-    // MARK: - Explicit branch (kind = 0)
+    // MARK: - Explicit branch
 
     @Test
     fun explicitBranchDecodes() {
-        // kind=0 + VoiceElementID(StaffAddress(1,2), measure=3, voice=0, elem=4)
-        val bytes = byteArrayOf(
-            0x00,  // kind = 0 (Explicit)
-            0x01, 0x00, 0x00, 0x00,  // partIndex = 1
-            0x02, 0x00, 0x00, 0x00,  // staffIndexInPart = 2
-            0x03, 0x00, 0x00, 0x00,  // measureIndex = 3
-            0x00, 0x00, 0x00, 0x00,  // voiceIndex = 0
-            0x04, 0x00, 0x00, 0x00,  // elementIndex = 4
-        )
-        val r = BinaryReader(bytes)
-        val decoded = ClefAnchorCodec.decodePayload(r)
-        assertEquals(
-            ClefAnchor.Explicit(
-                VoiceElementID(
-                    staff = StaffAddress(partIndex = 1, staffIndexInPart = 2),
-                    measureIndex = 3,
-                    voiceIndex = 0,
-                    elementIndex = 4,
-                ),
+        // ClefAnchor.Explicit(VoiceElementID(StaffAddress(1,2), measure=3, voice=0, elem=4))
+        val value = ClefAnchor.Explicit(
+            VoiceElementID(
+                staff = StaffAddress(partIndex = 1, staffIndexInPart = 2),
+                measureIndex = 3,
+                voiceIndex = 0,
+                elementIndex = 4,
             ),
-            decoded,
         )
+        val w = BinaryWriter()
+        ClefAnchorCodec.encodePayload(value, w)
+        val r = BinaryReader(w.toByteArray())
+        val decoded = ClefAnchorCodec.decodePayload(r)
+        assertEquals(value, decoded)
     }
 
-    // MARK: - StaffDefault branch (kind = 1)
+    // MARK: - StaffDefault branch
 
     @Test
     fun staffDefaultBranchDecodes() {
-        // kind=1 + StaffAddress(0,0)
-        val bytes = byteArrayOf(
-            0x01,  // kind = 1 (StaffDefault)
-            0x00, 0x00, 0x00, 0x00,  // partIndex = 0
-            0x00, 0x00, 0x00, 0x00,  // staffIndexInPart = 0
-        )
-        val r = BinaryReader(bytes)
+        // ClefAnchor.StaffDefault(StaffAddress(0,0))
+        val value = ClefAnchor.StaffDefault(StaffAddress(partIndex = 0, staffIndexInPart = 0))
+        val w = BinaryWriter()
+        ClefAnchorCodec.encodePayload(value, w)
+        val r = BinaryReader(w.toByteArray())
         val decoded = ClefAnchorCodec.decodePayload(r)
-        assertEquals(
-            ClefAnchor.StaffDefault(StaffAddress(partIndex = 0, staffIndexInPart = 0)),
-            decoded,
-        )
+        assertEquals(value, decoded)
     }
 
     @Test
     fun staffDefaultWithNonZeroAddress() {
-        // kind=1 + StaffAddress(2,1)
-        val bytes = byteArrayOf(
-            0x01,  // kind = 1 (StaffDefault)
-            0x02, 0x00, 0x00, 0x00,  // partIndex = 2
-            0x01, 0x00, 0x00, 0x00,  // staffIndexInPart = 1
-        )
-        val r = BinaryReader(bytes)
+        // ClefAnchor.StaffDefault(StaffAddress(2,1))
+        val value = ClefAnchor.StaffDefault(StaffAddress(partIndex = 2, staffIndexInPart = 1))
+        val w = BinaryWriter()
+        ClefAnchorCodec.encodePayload(value, w)
+        val r = BinaryReader(w.toByteArray())
         val decoded = ClefAnchorCodec.decodePayload(r)
-        assertEquals(
-            ClefAnchor.StaffDefault(StaffAddress(partIndex = 2, staffIndexInPart = 1)),
-            decoded,
-        )
+        assertEquals(value, decoded)
     }
 
-    // MARK: - Unknown kind
+    // MARK: - Unknown discriminator
 
     @Test
     fun unknownKindThrows() {
-        val bytes = byteArrayOf(0x02)  // kind = 2 (unknown)
-        val r = BinaryReader(bytes)
+        // Encode a valid discriminator=0 payload, then hand-craft discriminator=2 (unknown).
+        // In TLV format the choice discriminator is a varint. Build a payload with disc=2.
+        val w = BinaryWriter()
+        w.writeVarint(2L) // discriminator = 2 (unknown)
+        val r = BinaryReader(w.toByteArray())
         try {
             ClefAnchorCodec.decodePayload(r)
-            fail("Expected error for unknown kind")
-        } catch (_: IllegalArgumentException) {
-            // expected — generated codec throws IllegalArgumentException
+            fail("Expected error for unknown discriminator")
+        } catch (_: WireFormatException.UnknownChoiceDiscriminator) {
+            // expected — TLV codecs throw UnknownChoiceDiscriminator for out-of-range discriminators
         }
     }
 }

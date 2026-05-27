@@ -1,6 +1,6 @@
 import Foundation
 import SheetMusicCore
-import SheetMusicWireFormat
+import Wirelet
 
 /// Codec for `StaffAddress` — an 8-byte fixed-size payload.
 ///
