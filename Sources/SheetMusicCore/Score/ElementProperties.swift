@@ -4,7 +4,7 @@
 /// mostly non-visual (offset, autoplace, placement, part-linking, …) and
 /// keeps growing, so value-typed fields must be addable here later.
 /// C++: mu::engraving::EngravingItem base properties (subset).
-public struct ElementProperties: Sendable, Equatable {
+public struct ElementProperties: Sendable, Equatable, Codable {
     /// Hidden from rendered/printed output. MuseScore
     /// `ElementFlag::INVISIBLE` / `<visible>0</visible>`. Default true.
     /// Playback (MIDI) is unaffected — sounding is governed elsewhere
