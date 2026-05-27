@@ -155,8 +155,14 @@ extension PlaybackEngine {
         //    fresh engine.
         var midi = try MidiRenderer.render(score: score)
         if metronomeSampler != nil {
+            // This controller is used only to generate the metronome
+            // MIDI track; `prepare(soundfontURL:)` is never called on it,
+            // so `output` is never connected. Pass `sumMixer` anyway (not
+            // `mainMixerNode`) so that if a future change does call
+            // `prepare`, the metronome stays inside the master stage
+            // rather than silently bypassing the limiter.
             let metronome = MetronomeController(
-                engine: engine, output: engine.mainMixerNode,
+                engine: engine, output: sumMixer,
             )
             midi.tracks.append(metronome.metronomeTrack(
                 beats: snapshot.metronomeBeats, division: midi.division,
