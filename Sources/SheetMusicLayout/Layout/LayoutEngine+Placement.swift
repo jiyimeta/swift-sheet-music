@@ -63,9 +63,19 @@ extension LayoutEngine {
         effectiveMelismaTicks: [MelismaLyricKey: Int] = [:],
         coversBelowStaffSpanner: Bool = false,
         systemElements: [PositionedSystemElement] = [],
-    ) -> (elements: [LayoutElement], clef: NotatedClef, key: Int) {
+    ) -> (
+        elements: [LayoutElement],
+        invisibleElements: [LayoutElement],
+        clef: NotatedClef,
+        key: Int,
+    ) {
         let staffMidY = metrics.staffHeight / 2 + metrics.sp * 2
         var out: [LayoutElement] = []
+        // Parallel accumulator for hidden annotations that are still
+        // laid out (because `options.showsInvisibleElements` is on) but
+        // routed away from `out` so they don't print and don't affect
+        // spacing / autoplace passes. See Task 0.7's `invisibleElements`.
+        var invisibleOut: [LayoutElement] = []
         var currentClef = activeClef
         var currentKey = activeKey
 
@@ -954,8 +964,13 @@ extension LayoutEngine {
                     // nor width — drop before measurement so the
                     // pre-spacing pass and autoplace stacking ignore
                     // them. Playback (`harmony.play`) is independent
-                    // of visibility.
-                    if !harmony.visible { break }
+                    // of visibility. When `showsInvisibleElements` is
+                    // on we still BUILD the element below, but route it
+                    // into `invisibleOut` (NOT `out`) so the autoplace /
+                    // stacking passes that mutate `out` continue to
+                    // ignore it — hidden harmony must not widen the bar.
+                    guard harmony.visible || options.showsInvisibleElements
+                    else { break }
                     // Anchor at the next timed-element column (or
                     // header start while still in the header). Same
                     // anchoring rule as .staffText so multiple
@@ -979,13 +994,18 @@ extension LayoutEngine {
                     let anchorX = Double(
                         stX + CGFloat(harmony.offsetX) * metrics.sp,
                     )
-                    out.append(.harmony(LayoutHarmony(
+                    let harmonyElement = LayoutElement.harmony(LayoutHarmony(
                         harmony: harmony,
                         anchorX: anchorX,
                         y: Double(yLocal),
                         runs: runs,
                         width: width,
-                    )))
+                    ))
+                    if harmony.visible {
+                        out.append(harmonyElement)
+                    } else {
+                        invisibleOut.append(harmonyElement)
+                    }
                 }
             }
 
@@ -1432,12 +1452,12 @@ extension LayoutEngine {
                 ?? headerSchedule.contentStartX
             switch positioned.element {
             case let .tempo(t):
-                if !t.visible { break }
+                guard t.visible || options.showsInvisibleElements else { break }
                 let bpm = Int((t.beatsPerSecond * 60.0).rounded())
                 // U+E1D5 = SMuFL `metNoteQuarterUp` (Bravura music
                 // font). Renderers split the string into Bravura-glyph
                 // and Edwin-text runs via `MusicTextRuns.runs`.
-                out.append(.textMark(
+                let element = LayoutElement.textMark(
                     kind: .tempo,
                     text: "\u{E1D5} = \(bpm)",
                     origin: CGPoint(
@@ -1446,10 +1466,11 @@ extension LayoutEngine {
                         y: staffMidY - metrics.sp * 4
                             + CGFloat(t.offsetY) * metrics.sp,
                     ),
-                ))
+                )
+                if t.visible { out.append(element) } else { invisibleOut.append(element) }
             case let .staffText(st):
-                if !st.visible { break }
-                out.append(.staffText(
+                guard st.visible || options.showsInvisibleElements else { break }
+                let element = LayoutElement.staffText(
                     text: st.text,
                     origin: CGPoint(
                         x: xAtTick
@@ -1459,10 +1480,11 @@ extension LayoutEngine {
                     ),
                     color: st.color,
                     isSystemText: st.isSystemText,
-                ))
+                )
+                if st.visible { out.append(element) } else { invisibleOut.append(element) }
             case let .swing(s):
-                if !s.visible { break }
-                out.append(.staffText(
+                guard s.visible || options.showsInvisibleElements else { break }
+                let element = LayoutElement.staffText(
                     text: s.text,
                     origin: CGPoint(
                         x: xAtTick
@@ -1472,7 +1494,8 @@ extension LayoutEngine {
                     ),
                     color: s.color,
                     isSystemText: s.isSystemText,
-                ))
+                )
+                if s.visible { out.append(element) } else { invisibleOut.append(element) }
             case let .rehearsalMark(rm):
                 let originX = metrics.sp * 0.5
                 out.append(.rehearsalMark(
@@ -1508,7 +1531,7 @@ extension LayoutEngine {
         // among above-staff text marks (tempo / staff text / system
         // text / rehearsal mark) by stacking them upward.
         autoStackAboveStaffMarks(in: &out, metrics: metrics)
-        return (out, currentClef, currentKey)
+        return (out, invisibleOut, currentClef, currentKey)
     }
 
     /// Decide which notes in a chord need to render on the OPPOSITE

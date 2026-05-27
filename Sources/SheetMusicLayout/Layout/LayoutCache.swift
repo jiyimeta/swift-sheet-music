@@ -63,6 +63,12 @@ public final class LayoutCache: @unchecked Sendable {
     struct StaffPlacement {
         let inputs: PlacementInputs
         let elements: [LayoutElement]
+        /// Hidden annotations laid out under `showsInvisibleElements`
+        /// (routed away from `elements`). Cached so a placement hit
+        /// restores them too. `inputs.showsInvisibleElements` is part
+        /// of the cache-hit predicate, so toggling visibility forces a
+        /// miss and a fresh route.
+        let invisibleElements: [LayoutElement]
         let newClef: NotatedClef
         let newKey: Int
     }
@@ -140,6 +146,10 @@ public final class LayoutCache: @unchecked Sendable {
         /// changes here invalidate the placement cache so reflows
         /// pick up edited or relocated system markings.
         let systemElements: [PositionedSystemElement]
+        /// Whether hidden annotations are laid out into the invisible
+        /// container. Part of the cache-hit predicate so flipping the
+        /// `showsInvisibleElements` toggle invalidates stale placements.
+        let showsInvisibleElements: Bool
         /// Prevailing time-signature duration for this measure, derived
         /// from the full staff measure list via
         /// `[Measure].effectiveMeasureDurations()`. Used to resolve any

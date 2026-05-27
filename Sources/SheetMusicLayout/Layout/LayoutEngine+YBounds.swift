@@ -141,6 +141,11 @@ extension LayoutEngine {
             pageBreak: measure.pageBreak,
             tickColumns: measure.tickColumns,
             multiMeasureRest: measure.multiMeasureRest,
+            // Carry hidden annotations through the top-shift pass too,
+            // shifted by the same dy so they stay aligned with the
+            // visible content the renderer draws alongside them.
+            invisibleElements: measure.invisibleElements
+                .map { translate(element: $0, dy: dy) },
         )
     }
 }
