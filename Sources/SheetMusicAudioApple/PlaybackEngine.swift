@@ -26,7 +26,10 @@ import SheetMusicMIDI
 @Observable
 public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     private let resolver: SoundfontResolver
-    private let engine = AVAudioEngine()
+    /// `internal` so `PlaybackEngine+Master` can call
+    /// `engine.attach` / `engine.connect` from a sibling file when
+    /// building the master output stage.
+    let engine = AVAudioEngine()
     /// The shared multi-timbral AUMIDISynth. Rebuilt on every
     /// `prepare(score:)`. `internal` so the mixer / export extensions
     /// in sibling files can read it directly.
@@ -38,6 +41,23 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// decide whether to expose a GM-program picker (drum-kit parts
     /// hide it because the program slot is ignored on MIDI channel 9).
     private var staffIsDrum: [Int: Bool] = [:]
+
+    /// Master output stage. The score synth feeds `scoreGainMixer`,
+    /// whose `outputVolume` is the user's master gain (`0...3`). Its
+    /// output is summed with the metronome at `sumMixer`, brick-walled
+    /// by `limiter`, then routed into `mainMixerNode`. Built once in
+    /// `init` and reused across every `prepare(score:)`, so `masterGain`
+    /// survives score reloads. `internal` so the `+Master` / `+Export`
+    /// extensions in sibling files can reach the nodes directly.
+    let scoreGainMixer = AVAudioMixerNode()
+    let sumMixer = AVAudioMixerNode()
+    let limiter = PlaybackEngine.makePeakLimiter()
+
+    /// Linear amplitude multiplier applied to the full mix, post
+    /// per-channel mixing. `1.0` = unity. Clamped to `0...3` by
+    /// `setMasterGain`. Setter is module-internal so the `+Master`
+    /// extension (a different file) can mirror the clamped value here.
+    public internal(set) var masterGain: Float = 1.0 // swiftlint:disable:this inclusive_language
 
     /// Used to silence pending preview note-offs when the engine is
     /// torn down or a new score is prepared.
@@ -101,7 +121,11 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
 
     public init(soundfontResolver: SoundfontResolver) {
         resolver = soundfontResolver
-        metronome = MetronomeController(engine: engine)
+        // The metronome joins the master stage at `sumMixer` (post-gain,
+        // pre-limiter) so it is limited along with the boosted score but
+        // is not itself boosted by the master gain.
+        metronome = MetronomeController(engine: engine, output: sumMixer)
+        buildMasterChain()
     }
 
     /// Scale playback speed. `1.0` is the score's native tempo;
@@ -308,7 +332,7 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         let instrument = MIDISynthBuilder.make()
         engine.attach(instrument)
         engine.connect(
-            instrument, to: engine.mainMixerNode, format: nil,
+            instrument, to: scoreGainMixer, format: nil,
         )
         if let url {
             // Load the SF2 with (0, 0) as the seed preset so the file

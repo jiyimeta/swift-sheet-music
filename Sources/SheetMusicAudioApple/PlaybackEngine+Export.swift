@@ -147,7 +147,9 @@ extension PlaybackEngine {
         //    fresh engine.
         var midi = try MidiRenderer.render(score: score)
         if metronomeSampler != nil {
-            let metronome = MetronomeController(engine: engine)
+            let metronome = MetronomeController(
+                engine: engine, output: engine.mainMixerNode,
+            )
             midi.tracks.append(metronome.metronomeTrack(
                 beats: snapshot.metronomeBeats, division: midi.division,
             ))
