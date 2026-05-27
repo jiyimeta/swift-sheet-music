@@ -338,6 +338,34 @@
             }
         }
 
+        @Test("export with master gain set produces a readable file")
+        // swiftlint:disable:next inclusive_language
+        func exportWithMasterGain() async throws {
+            let score = try loadMidi01()
+            let engine = PlaybackEngine(soundfontResolver: SilentResolver())
+            try engine.prepare(score: score)
+            engine.setMasterGain(2.0)
+
+            let url = FileManager.default.temporaryDirectory
+                .appendingPathComponent("smexp-\(UUID().uuidString).wav")
+            defer { try? FileManager.default.removeItem(at: url) }
+
+            try await engine.exportAudioFile(
+                to: url,
+                score: score,
+                format: .wav(PCMOptions(sampleRate: 22050, bitDepth: .int16, channels: .stereo)),
+            )
+
+            // SilentResolver produces silence regardless of gain, so this
+            // is a pipeline-integrity / no-crash guard: the rewired export
+            // chain (scoreGainMixer → sumMixer → limiter) must still render
+            // a valid file with a non-unity master gain set. Audible boost
+            // is verified in the Mac example app with a real soundfont.
+            let file = try AVAudioFile(forReading: url)
+            #expect(file.length > 0)
+            #expect(engine.state == .stopped)
+        }
+
         @Test("Cancellation removes the partial file")
         func cancellationCleansUp() async throws {
             let score = try loadMidi01()

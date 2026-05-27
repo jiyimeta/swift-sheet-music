@@ -124,10 +124,17 @@ extension PlaybackEngine {
         let engine = AVAudioEngine()
         let resolver = snapshot.resolver
 
-        // 1. Build the score synth.
+        // Gain-limiter output chain — mirrors the live engine's master
+        // chain (PlaybackEngine.buildMasterChain). Rebuilt here so
+        // exported files reflect the chosen master gain.
+        let (scoreGainMixer, sumMixer) = buildOutputChain(
+            engine: engine, gain: snapshot.masterGain,
+        )
+
+        // 1. Build the score synth (routed through the master stage).
         let exportSynth = buildScoreSynth(
             score: score, snapshot: snapshot, resolver: resolver,
-            engine: engine,
+            engine: engine, output: scoreGainMixer,
         )
         let soloedExists = snapshot.mixerChannels.contains { $0.isSoloed }
         applyMixerSnapshot(
@@ -140,6 +147,7 @@ extension PlaybackEngine {
         // 2. Optional metronome synth / track.
         let metronomeSampler = buildMetronomeSampler(
             snapshot: snapshot, resolver: resolver, engine: engine,
+            output: sumMixer,
         )
 
         // 3. Render MIDI bytes (score tracks + optional metronome
@@ -147,7 +155,15 @@ extension PlaybackEngine {
         //    fresh engine.
         var midi = try MidiRenderer.render(score: score)
         if metronomeSampler != nil {
-            let metronome = MetronomeController(engine: engine)
+            // This controller is used only to generate the metronome
+            // MIDI track; `prepare(soundfontURL:)` is never called on it,
+            // so `output` is never connected. Pass `sumMixer` anyway (not
+            // `mainMixerNode`) so that if a future change does call
+            // `prepare`, the metronome stays inside the master stage
+            // rather than silently bypassing the limiter.
+            let metronome = MetronomeController(
+                engine: engine, output: sumMixer,
+            )
             midi.tracks.append(metronome.metronomeTrack(
                 beats: snapshot.metronomeBeats, division: midi.division,
             ))
@@ -190,6 +206,29 @@ extension PlaybackEngine {
         )
     }
 
+    /// Attach the gain-limiter output chain
+    /// (scoreGainMixer → sumMixer → PeakLimiter → mainMixerNode) to
+    /// `engine` and seed `scoreGainMixer.outputVolume` with `gain`.
+    /// Returns `(scoreGainMixer, sumMixer)` so callers can route the
+    /// score synth and metronome sampler through the same chain.
+    /// Mirrors `PlaybackEngine.buildMasterChain` from `+Master.swift`.
+    private static func buildOutputChain(
+        engine: AVAudioEngine,
+        gain: Float,
+    ) -> (scoreGainMixer: AVAudioMixerNode, sumMixer: AVAudioMixerNode) {
+        let scoreGainMixer = AVAudioMixerNode()
+        let sumMixer = AVAudioMixerNode()
+        let limiter = makePeakLimiter()
+        engine.attach(scoreGainMixer)
+        engine.attach(sumMixer)
+        engine.attach(limiter)
+        engine.connect(scoreGainMixer, to: sumMixer, format: nil)
+        engine.connect(sumMixer, to: limiter, format: nil)
+        engine.connect(limiter, to: engine.mainMixerNode, format: nil)
+        scoreGainMixer.outputVolume = gain
+        return (scoreGainMixer, sumMixer)
+    }
+
     private struct ScoreSynth {
         let synth: AVAudioUnitMIDIInstrument
         let staffChannels: [Int: UInt8]
@@ -200,11 +239,12 @@ extension PlaybackEngine {
         snapshot: ExportEngineSnapshot,
         resolver: SoundfontResolver,
         engine: AVAudioEngine,
+        output: AVAudioNode,
     ) -> ScoreSynth {
         let instrument = MIDISynthBuilder.make()
         engine.attach(instrument)
         engine.connect(
-            instrument, to: engine.mainMixerNode, format: nil,
+            instrument, to: output, format: nil,
         )
         if let url = resolver.defaultGMSoundfontURL {
             try? MIDISynthBuilder.loadSoundFont(
@@ -256,6 +296,7 @@ extension PlaybackEngine {
         snapshot: ExportEngineSnapshot,
         resolver: SoundfontResolver,
         engine: AVAudioEngine,
+        output: AVAudioNode,
     ) -> AVAudioUnitMIDIInstrument? {
         guard snapshot.metronomeEnabled,
               let metroURL = resolver.soundfontURL(
@@ -264,7 +305,7 @@ extension PlaybackEngine {
         else { return nil }
         let s = MIDISynthBuilder.make()
         engine.attach(s)
-        engine.connect(s, to: engine.mainMixerNode, format: nil)
+        engine.connect(s, to: output, format: nil)
         try? MIDISynthBuilder.loadSoundFont(
             into: s, url: metroURL,
             bankMSB: 0, bankLSB: 0, program: 0, channel: 9,

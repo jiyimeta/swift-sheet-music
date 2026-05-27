@@ -20,6 +20,7 @@ import SheetMusicMIDI
 @MainActor
 final class MetronomeController {
     private let engine: AVAudioEngine
+    private let output: AVAudioNode
     private var sampler: AVAudioUnitMIDIInstrument?
     /// The sequencer track scheduling our note-ons. We hold a weak
     /// reference so the next `buildSequencer` rebuild doesn't keep
@@ -42,8 +43,9 @@ final class MetronomeController {
         didSet { sampler?.volume = volume }
     }
 
-    init(engine: AVAudioEngine) {
+    init(engine: AVAudioEngine, output: AVAudioNode) {
         self.engine = engine
+        self.output = output
     }
 
     /// Idempotent: attaches a synth to the audio engine the first
@@ -55,7 +57,7 @@ final class MetronomeController {
         let instrument = sampler ?? {
             let s = MIDISynthBuilder.make()
             engine.attach(s)
-            engine.connect(s, to: engine.mainMixerNode, format: nil)
+            engine.connect(s, to: output, format: nil)
             s.volume = volume
             self.sampler = s
             return s
