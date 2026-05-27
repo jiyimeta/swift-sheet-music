@@ -1,30 +1,45 @@
 # swift-sheet-music
 
 A Swift package for working with engraved music notation: parsing
-MuseScore (`.mscx` / `.mscz`) score files, modelling them as Swift value
-types, and exporting them back to MuseScore format or to Standard MIDI
-Files. Built from scratch in Swift, with no direct runtime dependency
-on the MuseScore application.
+MuseScore (`.mscx` / `.mscz`) and MusicXML (`.musicxml` / `.mxl`) score
+files, modelling them as Swift value types, exporting them back to
+MuseScore format or to Standard MIDI Files, rendering to SwiftUI /
+PDF, and playing them back via AVFoundation. Built from scratch in
+Swift, with no direct runtime dependency on the MuseScore application.
+
+A subset of the package (parsing, model, MIDI, layout, audio types)
+cross-compiles to Android via the Swift 6.3 official Android SDK and
+is consumable from Kotlin through a Gradle module that ships as an
+`.aar`. See [Android](#android) below.
 
 > **Status:** unofficial. Not affiliated with MuseScore Limited / Muse Group,
 > nor with Apple's `MusicKit` framework (which is for Apple Music integration).
 
 ## Libraries
 
-The package is split into focused libraries; pick what you need.
+The package is split into focused libraries; pick what you need. The
+"Android" column marks targets that cross-compile cleanly to the
+Swift Android SDK; the rest are Apple-only.
 
-| Product | Contents |
-|---|---|
-| `SheetMusic` | **Umbrella.** Re-exports the libraries below + a small convenience façade. Most consumers want this. |
-| `SheetMusicCore` | Score data model (Score, Part, Measure, Voice, Note, Chord, …) and the shared error type. No format I/O. |
-| `SheetMusicMSCX` | MuseScore file I/O: `.mscx` / `.mscz` read and write (main score only). |
-| `SheetMusicMIDI` | In-memory MIDI model, score → MIDI rendering, SMF read/write. |
-| `SheetMusicUI` | SwiftUI read-only notation viewer (macOS 15+), bundles Bravura SMuFL font (SIL OFL). |
-| `SheetMusicAudio` | AVAudioEngine-backed playback. Per-staff `AVAudioUnitSampler`s, `SoundfontResolver` protocol, single-note preview, and full timeline-driven playback (chord-by-chord cursor via `PlaybackEngine.currentCursor`). |
-| `SheetMusicPDF` | PDF export (macOS 15+ / iOS 16+). Reuses `SheetMusicUI`'s layout + drawing pipeline through an `ImageRenderer` → `CGPDFContext` bridge, so glyphs stay vector. |
+| Product | Android | Contents |
+|---|:---:|---|
+| `SheetMusic` | ✓ | **Umbrella.** Re-exports `Core` + `MSCX` + `MusicXML` + `MIDI` + a small convenience façade. Most format-only consumers want this. |
+| `SheetMusicCore` | ✓ | Score data model (Score, Part, Measure, Voice, Note, Chord, …) and the shared `SheetMusicError`. No format I/O. |
+| `SheetMusicMSCX` | ✓ | MuseScore file I/O: `.mscx` / `.mscz` read + write, including brackets, harmony / chord symbols, articulations, ornaments, MS3-compatibility export (`MSCXEncoderOptions(targetVersion: .v3)`). |
+| `SheetMusicMusicXML` | ✓ | MusicXML import: `.musicxml` plain XML + `.mxl` zipped containers. |
+| `SheetMusicMIDI` | ✓ | In-memory MIDI model, score → MIDI rendering, Standard MIDI File read + write. |
+| `SheetMusicLayout` | ✓ | Pure-geometry layout engine. Foundation-only, no Apple frameworks. Talks to glyphs through a `FontMetricsProvider` DI seam so Apple hosts can wire CoreText and Android hosts can wire a `Paint`-based provider. |
+| `SheetMusicAudioCore` | ✓ | Foundation-only audio value types (`PlaybackTimeline`, `MetronomeBeat`, `GMInstrument`, `MixerChannel`, `LoopRange`, `PlaybackState`, `AudioFileFormat`, …) shared between the Apple and Android playback engines. |
+| `SheetMusicLayoutApple` |   | CoreText-backed `FontMetricsProvider` for `SheetMusicLayout`. Auto-installed by `SheetMusicUI` and `SheetMusicPDF`. |
+| `SheetMusicUI` |   | SwiftUI read-only notation viewer (iOS 17+ / macOS 14+ / tvOS 17+). Bundles Bravura SMuFL font (SIL OFL). |
+| `SheetMusicAudio` |   | Apple-only audio umbrella. Re-exports `SheetMusicAudioCore` + `SheetMusicAudioApple`. |
+| `SheetMusicAudioApple` |   | AVAudioEngine-backed `PlaybackEngine` + audio-file export. Per-staff `AVAudioUnitSampler`s, `SoundfontResolver` protocol, single-note preview, timeline-driven playback with chord-by-chord cursor via `PlaybackEngine.currentCursor`. |
+| `SheetMusicPDF` |   | PDF export (iOS 17+ / macOS 14+). Reuses `SheetMusicUI`'s layout + drawing pipeline through an `ImageRenderer` → `CGPDFContext` bridge, so glyphs stay vector. |
 
-Future libraries on the roadmap: additional `SheetMusic<FormatName>`
-libraries (e.g. MusicXML export) as they're added.
+Android playback is delivered out-of-band as the
+`io.github.jiyimeta:sheet-music-audio-android` Kotlin Gradle module
+(`Android/SheetMusicAudioAndroid/`), which wraps FluidSynth + Oboe.
+See [Android](#android).
 
 ### SoundFonts
 
@@ -99,7 +114,7 @@ let midiFile = try MidiRenderer.render(score: score)
 let bytes    = try MidiWriter.write(midiFile)
 ```
 
-To display a score in SwiftUI (macOS 15+):
+To display a score in SwiftUI (iOS 17+ / macOS 14+):
 
 ```swift
 import SheetMusic
@@ -109,7 +124,7 @@ let score = try SheetMusic.loadScore(mscxData: data)
 ScoreView(score: score)
 ```
 
-To play a score with a moving cursor (macOS 13+ / iOS 16+):
+To play a score with a moving cursor (iOS 17+ / macOS 14+):
 
 ```swift
 import SheetMusic
@@ -126,7 +141,7 @@ struct PlayerView: View {
         VStack {
             ScoreView(
                 score: score,
-                playbackCursor: engine.currentItem)
+                playbackCursor: engine.currentCursor)
             HStack {
                 Button(engine.state == .playing ? "Pause" : "Play") {
                     engine.state == .playing
@@ -149,7 +164,7 @@ between); `ScoreView` translates it into a tall translucent
 rectangle spanning every staff in the system that contains the
 current column.
 
-To export a `Score` to PDF (macOS 15+ / iOS 16+):
+To export a `Score` to PDF (iOS 17+ / macOS 14+):
 
 ```swift
 import SheetMusic
@@ -173,6 +188,46 @@ The same drawing pipeline that paints `ScoreView` on screen paints
 the PDF — so the printed pages match the on-screen layout exactly,
 glyphs are vector, and a single set of options covers both surfaces.
 
+## Android
+
+The Foundation-only subset of the package (Core / MSCX / MusicXML /
+MIDI / Layout / AudioCore) cross-compiles to Android via the
+[Swift 6.3 official Android SDK](https://www.swift.org/install/). Two
+companion Kotlin Gradle modules under `Android/` ship as `.aar`
+artifacts to GitHub Packages:
+
+| Maven artifact | Contents |
+|---|---|
+| `io.github.jiyimeta:sheet-music-android` | JNI bridge + bundled `libSheetMusicJNI.so`. Score load, layout, draw-program emit. |
+| `io.github.jiyimeta:sheet-music-audio-android` | FluidSynth (via [VolcanoMobile's `.aar`](https://github.com/VolcanoMobile/fluidsynth-android)) + [Oboe](https://github.com/google/oboe) low-latency PCM. Mirrors `PlaybackEngine` API on the Kotlin side. |
+
+A working Compose demo lives at `Examples/Android/` (Pixel 6 Pro
+API 36 verified). Bootstrap is documented in `CLAUDE.md` —
+the short form:
+
+```bash
+# Build the native libs into Android/SheetMusicAndroid/src/main/jniLibs/
+Scripts/android-build-libs.sh
+
+# Resolve the wirelet codegen dep (used by the Android Gradle plugin)
+swift package resolve
+
+# Open Android/ or Examples/Android/ in Android Studio and Run
+```
+
+Android codegen relies on the
+[`io.github.jiyimeta.wirelet`](https://github.com/jiyimeta/swift-wirelet)
+Gradle plugin to generate Kotlin codecs from Swift `@WireFormat`
+sources. The plugin + runtime resolve from GitHub Packages — set
+`gpr.user` / `gpr.key` in `~/.gradle/gradle.properties` (a classic
+GitHub PAT with `read:packages` scope) before running any Gradle
+task. Supported ABIs: `arm64-v8a`, `x86_64`. Lowest API level: 28.
+
+Format support on Android matches Apple: `.mscz`, `.mscx`,
+`.musicxml`, `.mxl` all parse. Glyph rendering on Android uses a
+`StubFontMetricsProvider` rectangle approximation today — a
+SMuFL-aware Android provider is a future phase.
+
 ## Coverage
 
 All 12 enabled cases of MuseScore's own `midiexport_tests.cpp` pass via
@@ -192,6 +247,10 @@ Major features supported by the renderer:
 - mid-piece tempo / dynamic / key-signature / time-signature changes
 - iteration-boundary tempo and dynamic state reset
 - gateTime, dotted notes, full-measure rests
+- articulations (staccato / staccatissimo / accent / marcato / tenuto), with both layout placement and per-note velocity / gateTime offsets
+- hairpins (crescendo / decrescendo) as continuous MIDI velocity ramps
+- fermatas, ornaments (trill / mordent / turn), grace notes, tremolo, glissando
+- per-note play flag (muted notes emit no MIDI), MS3 export round-trip
 
 ## Licensing
 
