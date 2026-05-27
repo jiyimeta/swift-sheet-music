@@ -92,6 +92,11 @@ public struct ScoreViewOptions: Sendable, Equatable {
     /// Multi-measure rest collapse policy. Default `.disabled` matches
     /// pre-existing behavior — every rest measure renders individually.
     public var multiMeasureRest: MultiMeasureRestPolicy
+    /// MuseScore "Show Invisible". When true, elements with
+    /// `visible == false` are still laid out and tagged invisible so
+    /// renderers grey them (`#808080`). When false (print behaviour),
+    /// invisible elements are dropped entirely. Default false.
+    public var showsInvisibleElements: Bool
 
     public init(
         staffSize: CGFloat = 28,
@@ -102,6 +107,7 @@ public struct ScoreViewOptions: Sendable, Equatable {
         breakIndicatorVisibility: BreakIndicatorVisibility = .all,
         graceNoteMag: CGFloat = 0.6,
         multiMeasureRest: MultiMeasureRestPolicy = .disabled,
+        showsInvisibleElements: Bool = false,
     ) {
         self.staffSize = staffSize
         self.systemGap = systemGap
@@ -111,5 +117,6 @@ public struct ScoreViewOptions: Sendable, Equatable {
         self.breakIndicatorVisibility = breakIndicatorVisibility
         self.graceNoteMag = graceNoteMag
         self.multiMeasureRest = multiMeasureRest
+        self.showsInvisibleElements = showsInvisibleElements
     }
 }
