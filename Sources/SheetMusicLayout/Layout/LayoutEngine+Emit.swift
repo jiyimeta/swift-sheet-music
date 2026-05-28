@@ -163,31 +163,34 @@ extension LayoutEngine {
         start: Int,
         end: Int,
         level: Int,
-        memberStemXs: [CGFloat],
-        memberStemYs: [CGFloat],
+        memberStemXs: [CGFloat?],
+        memberStemYs: [CGFloat?],
         memberCount: Int,
         beamYAt: (CGFloat) -> CGFloat,
         direction: StemDirection,
         metrics: StaffMetrics,
         out: inout [LayoutElement],
     ) {
+        // Phase 5 only enters this function with positions [start, end]
+        // whose member level >= 1 — which in turn means each such
+        // member's chord exists in `out`, so the per-member arrays
+        // hold non-nil entries at those indices. Guard defensively
+        // anyway: a nil here means an invisible / missing member
+        // sneaked into a run and we should just drop the bar.
         if end > start {
+            guard let xs = memberStemXs[start], let ys = memberStemYs[start],
+                  let xe = memberStemXs[end], let ye = memberStemYs[end]
+            else { return }
             out.append(.beam(
-                fromOrigin: CGPoint(
-                    x: memberStemXs[start],
-                    y: memberStemYs[start],
-                ),
-                toOrigin: CGPoint(
-                    x: memberStemXs[end],
-                    y: memberStemYs[end],
-                ),
+                fromOrigin: CGPoint(x: xs, y: ys),
+                toOrigin: CGPoint(x: xe, y: ye),
                 direction: direction,
                 level: level,
             ))
             return
         }
         let stubLen = metrics.sp * 1.5
-        let x = memberStemXs[start]
+        guard let x = memberStemXs[start] else { return }
         let fromX: CGFloat
         let toX: CGFloat
         if start > 0 {

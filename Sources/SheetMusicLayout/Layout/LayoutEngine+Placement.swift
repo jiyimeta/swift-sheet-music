@@ -1256,15 +1256,27 @@ extension LayoutEngine {
                     * (groupDirection == .up ? 1 : -1)
 
                 // --- Phase 2: per-member anchor info + levels ---
-                var memberStemXs: [CGFloat] = []
-                var anchorSteps: [Int] = []
-                var anchorYs: [CGFloat] = []
+                //
+                // All four arrays are length-N (= `group.memberIndices.count`)
+                // so a later `enumerated()` over `group.memberIndices` can
+                // index them positionally. Members whose chord is missing
+                // from `out` (e.g. routed to `invisibleOut` because the
+                // chord is fully hidden) get `nil` placeholders in the
+                // CGFloat / Int arrays, and `0` in `memberLevels` (a safe
+                // placeholder since Phase 5 only emits runs for levels
+                // >= 1).
+                var memberStemXs: [CGFloat?] = []
+                var anchorSteps: [Int?] = []
+                var anchorYs: [CGFloat?] = []
                 var memberLevels: [Int] = []
                 for memberIdx in group.memberIndices {
                     guard let outIdx = voiceChordOutIndex[memberIdx],
                           case let .chord(n, _, _, so, _, _, _, _, _)
                           = out[outIdx]
                     else {
+                        memberStemXs.append(nil)
+                        anchorSteps.append(nil)
+                        anchorYs.append(nil)
                         memberLevels.append(0)
                         continue
                     }
@@ -1286,16 +1298,19 @@ extension LayoutEngine {
                         memberLevels.append(0)
                     }
                 }
-                guard memberStemXs.count >= 2,
-                      let beamStartX = memberStemXs.first,
-                      let beamEndX = memberStemXs.last
+                let validStemXs = memberStemXs.compactMap(\.self)
+                let validAnchorSteps = anchorSteps.compactMap(\.self)
+                let validAnchorYs = anchorYs.compactMap(\.self)
+                guard validStemXs.count >= 2,
+                      let beamStartX = validStemXs.first,
+                      let beamEndX = validStemXs.last
                 else { continue }
 
                 // --- Phase 3: sloped beam line ---
                 let line = computeBeamLine(
-                    anchorSteps: anchorSteps,
-                    anchorYs: anchorYs,
-                    stemXs: memberStemXs,
+                    anchorSteps: validAnchorSteps,
+                    anchorYs: validAnchorYs,
+                    stemXs: validStemXs,
                     direction: groupDirection,
                     metrics: metrics,
                 )
@@ -1349,11 +1364,16 @@ extension LayoutEngine {
                     }
                     return base + beamShift
                 }
-                let memberStemYs = memberStemXs.map(beamYAt)
+                // Length stays at N; nil where the chord is missing
+                // (e.g. fully-invisible chord routed to invisibleOut).
+                let memberStemYs: [CGFloat?] = memberStemXs.map { x in
+                    x.map(beamYAt)
+                }
 
                 // --- Phase 4: rewrite each chord with its own beam y ---
                 for (i, memberIdx) in group.memberIndices.enumerated() {
                     guard let outIdx = voiceChordOutIndex[memberIdx],
+                          let beamY = memberStemYs[i],
                           case let .chord(
                               n,
                               d,
@@ -1374,7 +1394,7 @@ extension LayoutEngine {
                         duration: d,
                         stem: groupDirection,
                         stemOrigin: CGPoint(
-                            x: so.x, y: memberStemYs[i],
+                            x: so.x, y: beamY,
                         ),
                         hasArpeggio: arp,
                         arpeggioRawType: art,
@@ -1391,7 +1411,7 @@ extension LayoutEngine {
                     reanchorBeamedTremoloBars(
                         in: &out,
                         afterChordAt: outIdx,
-                        beamY: memberStemYs[i],
+                        beamY: beamY,
                         stem: groupDirection,
                         beamLevel: memberLevels[i],
                         metrics: metrics,

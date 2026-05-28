@@ -743,6 +743,63 @@
             return scoreWithSingleChord(chord)
         }
 
+        // MARK: - Beam pass robustness with hidden chord
+
+        /// Build a one-measure 4/4 score whose voice contains two eighth
+        /// chords; both notes of the SECOND chord are hidden, so the
+        /// all-notes-invisible rule routes that chord into `invisibleOut`
+        /// — but the model's beam grouping still pairs them together.
+        ///
+        /// Before the fix the beam pass crashed at
+        /// `LayoutEngine+Placement.swift` line 1377 (`memberStemYs[i]`):
+        /// `memberLevels` had length N (= group.memberIndices.count) but
+        /// `memberStemXs` / `memberStemYs` had length < N, because the
+        /// invisible chord's branch only appended to `memberLevels`.
+        private func scoreWithBeamGroupContainingHiddenChord() -> Score {
+            let visibleNote = Note(pitch: 60, tpc: 14)
+            let visibleChord = Chord(
+                duration: .eighth,
+                notes: ChordNotes([visibleNote]),
+            )
+            var hiddenNote = Note(pitch: 62, tpc: 16)
+            hiddenNote.visible = false
+            let hiddenChord = Chord(
+                duration: .eighth,
+                notes: ChordNotes([hiddenNote]),
+            )
+            let voice = Voice(elements: [
+                .clef(Clef(concertClefType: "G")),
+                .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+                .chord(visibleChord),
+                .chord(hiddenChord),
+            ])
+            let measure = Measure(voices: [voice])
+            return Score(
+                division: 480,
+                parts: [Part(
+                    id: "P1",
+                    instrument: Instrument(id: "voice"),
+                    staves: [Staff(measures: [measure])],
+                )],
+            )
+        }
+
+        @Test func beamGroupWithFullyInvisibleChordDoesNotCrash() {
+            let score = scoreWithBeamGroupContainingHiddenChord()
+            // Both toggles must complete without an index-out-of-range
+            // crash in the beam pass.
+            _ = LayoutEngine.layout(
+                score: score,
+                options: ScoreViewOptions(showsInvisibleElements: false),
+                availableWidth: 800,
+            )
+            _ = LayoutEngine.layout(
+                score: score,
+                options: ScoreViewOptions(showsInvisibleElements: true),
+                availableWidth: 800,
+            )
+        }
+
         @Test func partialHiddenChordPreservesStemGeometry() {
             for toggle in [false, true] {
                 let doc = LayoutEngine.layout(
