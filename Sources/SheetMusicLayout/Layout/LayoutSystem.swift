@@ -42,6 +42,13 @@ public struct LayoutSystem: Sendable, Equatable {
     /// staff height) used to compute event bboxes.
     /// Equals `StaffMetrics(staffSize:).sp` for the current staff size.
     public let sp: CGFloat
+    /// Whether this system was laid out with the
+    /// `ScoreViewOptions.showsInvisibleElements` toggle on. Renderers
+    /// read this to decide per-note whether a hidden notehead should
+    /// be greyed (50 %) or skipped outright — the chord's full note
+    /// list is preserved in either case so stem / beam geometry stays
+    /// stable across the toggle.
+    public let showsInvisibleElements: Bool
 
     public init(
         origin: CGPoint,
@@ -54,6 +61,7 @@ public struct LayoutSystem: Sendable, Equatable {
         spanners: [LayoutElement],
         sp: CGFloat,
         invisibleSpanners: [LayoutElement] = [],
+        showsInvisibleElements: Bool = false,
     ) {
         self.origin = origin
         self.size = size
@@ -65,6 +73,7 @@ public struct LayoutSystem: Sendable, Equatable {
         self.spanners = spanners
         self.sp = sp
         self.invisibleSpanners = invisibleSpanners
+        self.showsInvisibleElements = showsInvisibleElements
         let columns = Self.buildEventColumns(measures: measures, sp: sp)
         eventColumns = columns
         maxBBoxHalfWidth = columns

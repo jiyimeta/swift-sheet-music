@@ -56,13 +56,17 @@ extension ScoreLayerBuilder {
             let visualOrigin = CGPoint(
                 x: n.origin.x + mirrorDx, y: n.origin.y,
             )
-            // When a single notehead is invisible, route it (plus its
-            // accidental and dots) into a half-opacity group layer.
-            // MuseScore invisibleColor() = #808080; 50% black on the
-            // white score background is the exact equivalent.
-            // Ledger lines and stem stay in `parent` at full opacity.
+            // When a single notehead is invisible:
+            //   * toggle off → skip drawing the head / accidental /
+            //     dots entirely. Stem / ledger lines below still see
+            //     this note via `shifted` (slot preserved).
+            //   * toggle on → route the head + accidental + dots into a
+            //     half-opacity group layer. MuseScore invisibleColor()
+            //     = #808080; 50% black on white is the equivalent.
+            //     Stem / ledger lines stay in `parent` at full opacity.
             let noteTarget: CALayer
             if n.isInvisible {
+                guard context.showsInvisibleElements else { continue }
                 let greyGroup = CALayer()
                 greyGroup.frame = parent.bounds
                 greyGroup.opacity = 0.5

@@ -814,6 +814,7 @@ extension LayoutEngine {
             brackets: adjustedBrackets,
             spanners: [],
             sp: metrics.sp,
+            showsInvisibleElements: context.options.showsInvisibleElements,
         )
     }
 }

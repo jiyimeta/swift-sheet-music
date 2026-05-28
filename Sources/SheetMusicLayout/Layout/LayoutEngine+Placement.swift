@@ -583,14 +583,33 @@ extension LayoutEngine {
                             restY < staffTopLocal
                                 || restY > staffBottomLocal
                         )
-                    voiceRestOutIndex[voiceElemIdx] = out.count
-                    out.append(.rest(
+                    let restElement = LayoutElement.rest(
                         duration: r.duration,
                         origin: CGPoint(x: restX, y: restY),
                         voiceIndex: voiceIdx,
                         restID: restID,
                         hasLegerLine: needsLeger,
-                    ))
+                    )
+                    // Visibility: a `Chord` with empty notes is the
+                    // rest case (an actual rest, not a chord). Hidden
+                    // rests are routed by `chord.visible`; the slot is
+                    // preserved by the unconditional `tickCursor`
+                    // advance below.
+                    if r.visible {
+                        voiceRestOutIndex[voiceElemIdx] = out.count
+                        out.append(restElement)
+                    } else if options.showsInvisibleElements {
+                        // Route the hidden rest into the invisible
+                        // accumulator. Do NOT register
+                        // `voiceRestOutIndex` for invisibleOut entries —
+                        // downstream tuplet / etc. passes index `out`
+                        // only. A hidden rest doesn't visually
+                        // contribute to a tuplet bracket; acceptable v1.
+                        invisibleOut.append(restElement)
+                    }
+                    // else: toggle off + hidden — skip emission. Slot
+                    // is preserved by the unconditional tick advance
+                    // below.
                     tickCursor += r.duration.resolved(in: measureDuration).ticks(division: division)
                 case let .chord(chord):
                     inHeader = false
@@ -634,7 +653,10 @@ extension LayoutEngine {
                             tieBack: note.tieBack,
                             hasGlissando: note.glissando != nil,
                             headType: note.headType,
-                            isInvisible: !note.visible && options.showsInvisibleElements,
+                            // Pure "source hidden" flag — renderers
+                            // consult `LayoutSystem.showsInvisibleElements`
+                            // to decide whether to grey or skip per-note.
+                            isInvisible: !note.visible,
                         )
                     }
                     let stem = forcedStem
@@ -647,24 +669,14 @@ extension LayoutEngine {
                     let stemExtension = tremoloStemExtension(
                         for: chord, metrics: metrics,
                     )
-                    // With toggle off, hidden notes are suppressed at
-                    // the glyph level: drop them from the emitted notes
-                    // list so renderers don't draw a head, but keep
-                    // `chordNotes` intact for downstream geometry
-                    // (stem direction was already computed; tremolo /
-                    // articulation / arpeggio / glissando lookups
-                    // below still see all source notes).
-                    let emittedChordNotes: [LayoutChordNote]
-                    if options.showsInvisibleElements {
-                        emittedChordNotes = chordNotes
-                    } else {
-                        emittedChordNotes = zip(chordNotes, chord.notes)
-                            .compactMap { layoutNote, sourceNote in
-                                sourceNote.visible ? layoutNote : nil
-                            }
-                    }
+                    // Pass the FULL `chordNotes` list (per-note
+                    // `isInvisible` flags set) so stem / beam geometry
+                    // is computed from every source note regardless of
+                    // per-note visibility. Renderers consult the system's
+                    // `showsInvisibleElements` to decide per-note whether
+                    // to grey or skip the notehead.
                     let mainElement: LayoutElement = .chord(
-                        notes: emittedChordNotes,
+                        notes: chordNotes,
                         duration: chord.duration,
                         stem: stem,
                         stemOrigin: CGPoint(x: chordX, y: staffMidY),
@@ -674,6 +686,13 @@ extension LayoutEngine {
                         voiceIndex: voiceIdx,
                         stemExtension: stemExtension,
                     )
+                    // Fully-invisible chord ⇔ `chord.visible == false`
+                    // OR every per-note `visible == false`. Mirrors
+                    // MuseScore's `allElementsInvisible`. When fully
+                    // invisible, the stem / flag / beam are suppressed
+                    // alongside the noteheads (spec §6).
+                    let allNotesInvisible = chord.notes.allSatisfy { !$0.visible }
+                    let chordFullyHidden = !chord.visible || allNotesInvisible
                     let graceW = LayoutEngine.graceWidth(sp: metrics.sp)
                     let mag = options.graceNoteMag
                     for (gIdx, g) in chord.graceNotesBefore.enumerated() {
@@ -704,9 +723,31 @@ extension LayoutEngine {
                             voiceIndex: voiceIdx,
                         ))
                     }
-                    voiceChordOutIndex[voiceElemIdx] = out.count
-                    chordTickByOutIndex[out.count] = tickCursor
-                    out.append(mainElement)
+                    if !chordFullyHidden {
+                        voiceChordOutIndex[voiceElemIdx] = out.count
+                        chordTickByOutIndex[out.count] = tickCursor
+                        out.append(mainElement)
+                    } else if options.showsInvisibleElements {
+                        // Hidden chord with toggle on: route the main
+                        // element into invisibleOut. Satellite emissions
+                        // (articulations, arpeggio, tremolo, lyrics) for
+                        // a fully-invisible chord still go to `out`
+                        // below; in practice MuseScore hides them too
+                        // when their host chord is hidden, but those
+                        // passes already check `<visible>` on their own
+                        // model objects (lyric / arpeggio / etc.), and
+                        // the user's visual test (a wholly-hidden chord)
+                        // is satisfied by suppressing the main notehead
+                        // + stem + flag/beam. We do NOT register
+                        // `voiceChordOutIndex` / `chordTickByOutIndex`
+                        // because downstream beam / tuplet / glissando
+                        // passes index `out` only and shouldn't see a
+                        // fully-invisible chord.
+                        invisibleOut.append(mainElement)
+                    }
+                    // else: toggle off + fully hidden — skip emission.
+                    // Slot is preserved by the unconditional tick
+                    // advance at the end of this case.
                     // Chord-level articulation glyphs. Placement mirrors
                     // MuseScore's `Chord::layoutArticulations` — see
                     // `articulationElements(for:…)`. Re-placed after the beam
@@ -1784,7 +1825,10 @@ extension LayoutEngine {
                 tieForward: nil, tieBack: nil,
                 hasGlissando: false,
                 headType: note.headType,
-                isInvisible: !note.visible && showsInvisibleElements,
+                // Pure "source hidden" flag — renderers consult
+                // `LayoutSystem.showsInvisibleElements` to decide
+                // whether to grey or skip per-note.
+                isInvisible: !note.visible,
             )
         }
     }

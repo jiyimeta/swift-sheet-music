@@ -81,10 +81,16 @@ public enum ScoreLayerBuilder {
         drawPartLabels(system: system, metrics: metrics, height: height, into: root)
 
         var ctx = BuildContext()
+        ctx.showsInvisibleElements = system.showsInvisibleElements
         drawVisibleElements(
             system: system, metrics: metrics,
             height: height, context: &ctx, into: root,
         )
+        // Routed-to-invisible chord/note glyphs already sit under a
+        // 50% group opacity layer (see drawInvisibleElements); flip
+        // the flag so per-note dispatch greys those noteheads rather
+        // than skipping them.
+        ctx.showsInvisibleElements = true
         drawInvisibleElements(
             system: system, metrics: metrics,
             height: height, context: &ctx, root: root,
@@ -140,8 +146,16 @@ public enum ScoreLayerBuilder {
 
     /// Context threaded through draw calls to collect the layers that
     /// the selection renderer will later re-tint.
+    ///
+    /// `showsInvisibleElements` mirrors `LayoutSystem.showsInvisibleElements`
+    /// for the current build pass. Per-note dispatch in
+    /// `ScoreLayerBuilder+Chord.drawChord` reads it to decide whether
+    /// a hidden notehead should be greyed (50 %) or skipped outright.
+    /// Stem / beam / ledger geometry uses the full note list either
+    /// way (spec §6).
     struct BuildContext {
         var items: [ScoreItemID: [CAShapeLayer]] = [:]
+        var showsInvisibleElements = false
 
         mutating func attach(
             _ layer: CAShapeLayer, to id: ScoreItemID,

@@ -233,6 +233,8 @@ extension LayoutEngine {
                 brackets: system.brackets,
                 spanners: system.spanners + extraPerSystem[idx],
                 sp: system.sp,
+                invisibleSpanners: system.invisibleSpanners,
+                showsInvisibleElements: system.showsInvisibleElements,
             )
         }
     }

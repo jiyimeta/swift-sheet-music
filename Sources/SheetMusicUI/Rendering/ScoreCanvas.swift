@@ -139,6 +139,7 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
             )
         }
         // Measures — skip those entirely outside the visible x range.
+        let showsInvisible = system.showsInvisibleElements
         for measure in system.measures {
             if let vx = visibleX {
                 let mLeft = system.origin.x + measure.origin.x
@@ -156,6 +157,7 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                     element,
                     base: base,
                     metrics: metrics,
+                    showsInvisibleElements: showsInvisible,
                     into: &context,
                 )
             }
@@ -169,6 +171,11 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                         element,
                         base: base,
                         metrics: metrics,
+                        // Routed-to-invisible chord/note glyphs already
+                        // sit under a 50% group context; force-enable
+                        // showsInvisible so per-note dispatch greys
+                        // rather than skips them.
+                        showsInvisibleElements: true,
                         into: &grey,
                     )
                 }
@@ -178,6 +185,7 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                     el,
                     base: base,
                     metrics: metrics,
+                    showsInvisibleElements: showsInvisible,
                     into: &context,
                 )
             }
@@ -186,6 +194,7 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                     el,
                     base: base,
                     metrics: metrics,
+                    showsInvisibleElements: showsInvisible,
                     into: &context,
                 )
             }
@@ -196,6 +205,7 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                 el,
                 base: system.origin,
                 metrics: metrics,
+                showsInvisibleElements: showsInvisible,
                 into: &context,
             )
         }
@@ -209,6 +219,7 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                     el,
                     base: system.origin,
                     metrics: metrics,
+                    showsInvisibleElements: true,
                     into: &grey,
                 )
             }
@@ -219,6 +230,7 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
         _ element: LayoutElement,
         base: CGPoint,
         metrics: StaffMetrics,
+        showsInvisibleElements: Bool = false,
         into context: inout GraphicsContext,
     ) {
         func shift(_ p: CGPoint) -> CGPoint {
@@ -291,6 +303,11 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                     x: n.origin.x + mirrorDx, y: n.origin.y,
                 )
                 if n.isInvisible {
+                    // Toggle off + per-note hidden: skip the head /
+                    // accidental / dots entirely (stem geometry still
+                    // sees the note via shiftedNotes below). Slot is
+                    // preserved by the chord's natural origin.
+                    guard showsInvisibleElements else { continue }
                     // MuseScore invisibleColor() = #808080; 50% black on the
                     // white score background is the exact equivalent.
                     var grey = context
