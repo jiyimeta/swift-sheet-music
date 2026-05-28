@@ -686,13 +686,16 @@ extension LayoutEngine {
                         voiceIndex: voiceIdx,
                         stemExtension: stemExtension,
                     )
-                    // Fully-invisible chord ⇔ `chord.visible == false`
-                    // OR every per-note `visible == false`. Mirrors
-                    // MuseScore's `allElementsInvisible`. When fully
-                    // invisible, the stem / flag / beam are suppressed
-                    // alongside the noteheads (spec §6).
-                    let allNotesInvisible = chord.notes.allSatisfy { !$0.visible }
-                    let chordFullyHidden = !chord.visible || allNotesInvisible
+                    // MuseScore stores Stem visibility independently from
+                    // Note visibility (see <Chord><Stem><visible> in mscx).
+                    // Hiding all noteheads in a chord must NOT suppress
+                    // the stem/flag/beam — only `chord.visible == false`
+                    // suppresses the whole chord. Per-notehead invisibility
+                    // is handled downstream via `LayoutChordNote.isInvisible`;
+                    // the renderer skips drawing those noteheads (toggle off)
+                    // or greys them (toggle on) while leaving stem geometry
+                    // derived from the full note list.
+                    let chordFullyHidden = !chord.visible
                     let graceW = LayoutEngine.graceWidth(sp: metrics.sp)
                     let mag = options.graceNoteMag
                     for (gIdx, g) in chord.graceNotesBefore.enumerated() {

@@ -104,21 +104,22 @@ public struct ScoreViewOptions: Sendable, Equatable {
     ///   `Tempo`, `StaffText`, `Swing`, `Harmony`, `Clef`,
     ///   `KeySignature`, `TimeSignature`, `BarLine`, `Dynamic`,
     ///   `Fermata`, `Lyric` (per-verse), `RehearsalMark`,
-    ///   per-`Note` within a visible chord, `Arpeggio`.
-    /// - **Partial — whole chord/rest visibility:**
-    ///   `Chord.visible == false` round-trips through MSCX but the
-    ///   layout currently does NOT route the chord to the invisible
-    ///   container (per-note `Note.visible` IS handled). Hidden
-    ///   chords therefore render unchanged regardless of the toggle.
-    ///   Tracked as follow-up.
+    ///   `Chord.visible` (chord-level, routes whole chord including
+    ///   stem/flag/beam), per-`Note` visibility within a visible chord
+    ///   (per-notehead grey/skip; stem/beam unaffected — matches
+    ///   MuseScore), `Arpeggio`.
     /// - **Partial — spanners:**
     ///   `Spanner.visible == false` round-trips, and layout drops
     ///   hidden spanners. The invisible-container routing (so toggle-on
     ///   greys them) is not yet wired. Tracked as follow-up.
     /// - **Out of scope:**
     ///   MusicXML's `print-object="no"` is not yet ingested into
-    ///   `ElementProperties.visible`. MIDI is unaffected by visibility
-    ///   regardless of the toggle — `Note.play` governs playback.
+    ///   `ElementProperties.visible`. MSCX's `<Stem><visible>` per-stem
+    ///   visibility (independent of `Note.visible`) is not yet parsed —
+    ///   today a chord with hidden stem and visible noteheads renders
+    ///   the stem at full opacity (wrong but rare). MIDI is unaffected
+    ///   by visibility regardless of the toggle — `Note.play` governs
+    ///   playback.
     ///
     /// Default: `false` (print behaviour).
     public var showsInvisibleElements: Bool

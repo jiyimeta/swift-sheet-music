@@ -696,37 +696,95 @@
                 }
         }
 
-        @Test func allNotesInvisibleHidesChordWhenToggleOff() {
+        @Test func allNotesInvisibleKeepsChordInElementsWhenToggleOff() {
+            // All notes hidden ≠ chord hidden. MuseScore stores Stem
+            // visibility independently from Note visibility, so hiding
+            // every notehead must NOT suppress the stem/beam. The chord
+            // stays in `elements` so the stem/beam renderer can still
+            // operate on the full chord geometry; the noteheads alone
+            // disappear (per-note `isInvisible` + toggle off → renderer
+            // skips notehead draw).
             let doc = LayoutEngine.layout(
                 score: scoreWithAllNotesHiddenChord(),
                 options: ScoreViewOptions(showsInvisibleElements: false),
                 availableWidth: 800,
             )
-            // No chord in either visible or invisible list — slot still
-            // preserved by tick cursor.
-            #expect(chords(doc, inInvisible: false).isEmpty)
-            #expect(chords(doc, inInvisible: true).isEmpty)
+            let visibleChords = chords(doc, inInvisible: false)
+            #expect(visibleChords.count == 1, "chord must remain in elements")
+            if let first = visibleChords.first,
+               case let .chord(notes, _, _, _, _, _, _, _, _) = first
+            {
+                #expect(
+                    notes.count(where: \.isInvisible) == notes.count,
+                    "all notes flagged invisible",
+                )
+                #expect(notes.count == 2)
+            }
+            #expect(
+                chords(doc, inInvisible: true).isEmpty,
+                "chord must NOT route to invisibleElements",
+            )
         }
 
-        @Test func allNotesInvisibleRoutesChordWhenToggleOn() {
+        @Test func allNotesInvisibleKeepsChordInElementsWhenToggleOn() {
+            // Same as above but with toggle on. Chord still stays in
+            // `elements` — only the noteheads grey at 50% via per-note
+            // flags; the chord-level routing (to `invisibleElements`)
+            // is reserved for `chord.visible == false`.
             let doc = LayoutEngine.layout(
                 score: scoreWithAllNotesHiddenChord(),
                 options: ScoreViewOptions(showsInvisibleElements: true),
                 availableWidth: 800,
             )
-            #expect(chords(doc, inInvisible: false).isEmpty)
-            let invisibleChords = chords(doc, inInvisible: true)
-            #expect(invisibleChords.count == 1)
-            if let first = invisibleChords.first,
+            let visibleChords = chords(doc, inInvisible: false)
+            #expect(visibleChords.count == 1)
+            if let first = visibleChords.first,
                case let .chord(notes, _, _, _, _, _, _, _, _) = first
             {
-                let invisibleCount = notes.count(where: \.isInvisible)
-                #expect(invisibleCount == notes.count)
-                // Both source notes must be present (full list, per-note
-                // isInvisible flags set) — this is what proves the
-                // emittedChordNotes filter was removed.
+                #expect(notes.count(where: \.isInvisible) == notes.count)
                 #expect(notes.count == 2)
             }
+            #expect(chords(doc, inInvisible: true).isEmpty)
+        }
+
+        // MARK: - chord.visible == false (whole-chord routing)
+
+        /// Single quarter chord whose `chord.visible == false`. This is
+        /// the ONLY in-spec way (without a `<Stem>` element) to suppress
+        /// the entire chord including its stem/flag/beam.
+        private func scoreWithFullyHiddenChord() -> Score {
+            var chord = Chord(
+                duration: .quarter,
+                notes: ChordNotes([Note(pitch: 60, tpc: 14)]),
+            )
+            chord.visible = false
+            return scoreWithSingleChord(chord)
+        }
+
+        @Test func chordVisibleFalseRoutesToInvisibleOutWhenToggleOn() {
+            // chord.visible = false is the ONLY way (without a Stem
+            // element) to suppress the entire chord including
+            // stem/beam. Toggle on routes the whole .chord to
+            // invisibleElements; toggle off drops it.
+            let doc = LayoutEngine.layout(
+                score: scoreWithFullyHiddenChord(),
+                options: ScoreViewOptions(showsInvisibleElements: true),
+                availableWidth: 800,
+            )
+            #expect(chords(doc, inInvisible: true).count == 1)
+            #expect(chords(doc, inInvisible: false).isEmpty)
+        }
+
+        @Test func chordVisibleFalseDroppedWhenToggleOff() {
+            let doc = LayoutEngine.layout(
+                score: scoreWithFullyHiddenChord(),
+                options: ScoreViewOptions(showsInvisibleElements: false),
+                availableWidth: 800,
+            )
+            // Chord in neither list — slot is still preserved by the
+            // unconditional tick advance.
+            #expect(chords(doc, inInvisible: false).isEmpty)
+            #expect(chords(doc, inInvisible: true).isEmpty)
         }
 
         /// Two-note chord where only one note is hidden. The emitted
@@ -746,9 +804,9 @@
         // MARK: - Beam pass robustness with hidden chord
 
         /// Build a one-measure 4/4 score whose voice contains two eighth
-        /// chords; both notes of the SECOND chord are hidden, so the
-        /// all-notes-invisible rule routes that chord into `invisibleOut`
-        /// — but the model's beam grouping still pairs them together.
+        /// chords; `chord.visible == false` on the SECOND chord routes
+        /// it into `invisibleOut` — but the model's beam grouping
+        /// still pairs them together.
         ///
         /// Before the fix the beam pass crashed at
         /// `LayoutEngine+Placement.swift` line 1377 (`memberStemYs[i]`):
@@ -761,12 +819,12 @@
                 duration: .eighth,
                 notes: ChordNotes([visibleNote]),
             )
-            var hiddenNote = Note(pitch: 62, tpc: 16)
-            hiddenNote.visible = false
-            let hiddenChord = Chord(
+            let hiddenNote = Note(pitch: 62, tpc: 16)
+            var hiddenChord = Chord(
                 duration: .eighth,
                 notes: ChordNotes([hiddenNote]),
             )
+            hiddenChord.visible = false
             let voice = Voice(elements: [
                 .clef(Clef(concertClefType: "G")),
                 .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
@@ -807,9 +865,10 @@
                     options: ScoreViewOptions(showsInvisibleElements: toggle),
                     availableWidth: 800,
                 )
-                // Inspect either visible or invisible chord (only the
-                // partial case applies — chord must remain in visible
-                // because not allNotesInvisible).
+                // Chord stays in `elements` regardless of toggle —
+                // per-note invisibility never routes the whole chord
+                // to `invisibleElements` (only `chord.visible == false`
+                // does that).
                 let allChords = chords(doc, inInvisible: false)
                 #expect(allChords.count == 1)
                 if let first = allChords.first,
