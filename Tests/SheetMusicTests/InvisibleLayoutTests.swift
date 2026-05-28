@@ -71,5 +71,78 @@
             #expect(tempoMarks(doc).isEmpty) // not in visible list
             #expect(invisibleTempoMarks(doc).count == 1) // tagged invisible
         }
+
+        /// Build a minimal one-measure score whose single voice contains
+        /// the supplied chord. Mirrors `scoreWithHiddenTempo()`'s scaffold
+        /// (clef + time sig + chord) but without any tempo annotation, so
+        /// the chord is the only timed element to inspect.
+        private func scoreWithSingleChord(_ chord: Chord) -> Score {
+            let voice = Voice(elements: [
+                .clef(Clef(concertClefType: "G")),
+                .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+                .chord(chord),
+            ])
+            let measure = Measure(voices: [voice])
+            return Score(
+                division: 480,
+                parts: [Part(
+                    id: "P1",
+                    instrument: Instrument(id: "voice"),
+                    staves: [Staff(measures: [measure])],
+                )],
+            )
+        }
+
+        @Test func hiddenNoteTaggedInvisibleWhenToggleOn() {
+            var note = Note(pitch: 60, tpc: 14)
+            note.visible = false
+            let chord = Chord(duration: .quarter, notes: ChordNotes([note]))
+            let doc = LayoutEngine.layout(
+                score: scoreWithSingleChord(chord),
+                options: ScoreViewOptions(showsInvisibleElements: true),
+                availableWidth: 800,
+            )
+            // Search BOTH `.elements` and `.invisibleElements`: with a
+            // single-note chord where that note is hidden, the
+            // all-notes-invisible rule may route the whole chord to
+            // `invisibleElements` instead.
+            let allChordNotes = doc.systems.flatMap(\.measures)
+                .flatMap { $0.elements + $0.invisibleElements }
+                .compactMap { el -> [LayoutChordNote]? in
+                    if case let .chord(notes, _, _, _, _, _, _, _, _) = el { notes } else { nil }
+                }
+                .flatMap(\.self)
+            #expect(allChordNotes.contains { $0.isInvisible })
+        }
+
+        @Test func hiddenNotePreservesSlotWhenToggleOff() {
+            /// Same single-note chord, visible vs hidden, must produce
+            /// the same chord stemOrigin.x with toggle OFF — slot is
+            /// preserved, only glyph suppression differs.
+            func chordStemX(hidden: Bool) -> CGFloat? {
+                var note = Note(pitch: 60, tpc: 14)
+                note.visible = !hidden
+                let chord = Chord(duration: .quarter, notes: ChordNotes([note]))
+                let doc = LayoutEngine.layout(
+                    score: scoreWithSingleChord(chord),
+                    options: ScoreViewOptions(showsInvisibleElements: false),
+                    availableWidth: 800,
+                )
+                // Look in BOTH `.elements` and `.invisibleElements`:
+                // a fully-hidden chord may be dropped from `.elements`
+                // when the toggle is off but its slot still needs to
+                // line up with the visible variant's stem column.
+                for el in doc.systems.flatMap(\.measures)
+                    .flatMap({ $0.elements + $0.invisibleElements })
+                {
+                    if case let .chord(_, _, _, so, _, _, _, _, _) = el { return so.x }
+                }
+                return nil
+            }
+            let xVisible = chordStemX(hidden: false)
+            let xHidden = chordStemX(hidden: true)
+            #expect(xVisible != nil)
+            #expect(xVisible == xHidden)
+        }
     }
 #endif

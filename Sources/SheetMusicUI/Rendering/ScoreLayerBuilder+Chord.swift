@@ -42,6 +42,7 @@ extension ScoreLayerBuilder {
                 hasGlissando: n.hasGlissando,
                 headType: n.headType,
                 mirror: n.mirror,
+                isInvisible: n.isInvisible,
             )
         }
         for n in shifted {

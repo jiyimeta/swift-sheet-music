@@ -598,6 +598,7 @@ extension LayoutEngine {
                             tieBack: note.tieBack,
                             hasGlissando: note.glissando != nil,
                             headType: note.headType,
+                            isInvisible: !note.visible && options.showsInvisibleElements,
                         )
                     }
                     let stem = forcedStem
@@ -610,8 +611,24 @@ extension LayoutEngine {
                     let stemExtension = tremoloStemExtension(
                         for: chord, metrics: metrics,
                     )
+                    // With toggle off, hidden notes are suppressed at
+                    // the glyph level: drop them from the emitted notes
+                    // list so renderers don't draw a head, but keep
+                    // `chordNotes` intact for downstream geometry
+                    // (stem direction was already computed; tremolo /
+                    // articulation / arpeggio / glissando lookups
+                    // below still see all source notes).
+                    let emittedChordNotes: [LayoutChordNote]
+                    if options.showsInvisibleElements {
+                        emittedChordNotes = chordNotes
+                    } else {
+                        emittedChordNotes = zip(chordNotes, chord.notes)
+                            .compactMap { layoutNote, sourceNote in
+                                sourceNote.visible ? layoutNote : nil
+                            }
+                    }
                     let mainElement: LayoutElement = .chord(
-                        notes: chordNotes,
+                        notes: emittedChordNotes,
                         duration: chord.duration,
                         stem: stem,
                         stemOrigin: CGPoint(x: chordX, y: staffMidY),
@@ -635,6 +652,7 @@ extension LayoutEngine {
                             voiceElemIdx: voiceElemIdx,
                             graceIdx: gIdx, isAfter: false,
                             drumLineMap: drumLineMap,
+                            showsInvisibleElements: options.showsInvisibleElements,
                         )
                         let graceStem = StemDirectionRule.direction(
                             for: layoutNotes.map(\.step),
@@ -677,6 +695,7 @@ extension LayoutEngine {
                             voiceElemIdx: voiceElemIdx,
                             graceIdx: gIdx, isAfter: true,
                             drumLineMap: drumLineMap,
+                            showsInvisibleElements: options.showsInvisibleElements,
                         )
                         let graceStem = StemDirectionRule.direction(
                             for: layoutNotes.map(\.step),
@@ -1581,6 +1600,7 @@ extension LayoutEngine {
                 hasGlissando: n.hasGlissando,
                 headType: n.headType,
                 mirror: mirrors[i],
+                isInvisible: n.isInvisible,
             )
         }
     }
@@ -1603,6 +1623,7 @@ extension LayoutEngine {
         graceIdx: Int,
         isAfter: Bool,
         drumLineMap: [Int: Int]?,
+        showsInvisibleElements: Bool = false,
     ) -> [LayoutChordNote] {
         // Grace NoteIDs reuse the parent's element index but encode
         // the grace position in `noteIndexInChord` so they stay
@@ -1638,6 +1659,7 @@ extension LayoutEngine {
                 tieForward: nil, tieBack: nil,
                 hasGlissando: false,
                 headType: note.headType,
+                isInvisible: !note.visible && showsInvisibleElements,
             )
         }
     }

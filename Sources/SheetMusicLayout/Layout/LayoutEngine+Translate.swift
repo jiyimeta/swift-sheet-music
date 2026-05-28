@@ -52,6 +52,7 @@ extension LayoutEngine {
                     hasGlissando: $0.hasGlissando,
                     headType: $0.headType,
                     mirror: $0.mirror,
+                    isInvisible: $0.isInvisible,
                 )
             }
             return .chord(
@@ -183,6 +184,7 @@ extension LayoutEngine {
                     hasGlissando: $0.hasGlissando,
                     headType: $0.headType,
                     mirror: $0.mirror,
+                    isInvisible: $0.isInvisible,
                 )
             }
             return .graceChord(
