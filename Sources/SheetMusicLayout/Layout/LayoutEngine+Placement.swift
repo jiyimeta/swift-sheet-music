@@ -747,15 +747,22 @@ extension LayoutEngine {
                             voiceIndex: voiceIdx,
                         ))
                     }
-                    if let arp = chord.arpeggio {
+                    if let arp = chord.arpeggio,
+                       arp.visible || options.showsInvisibleElements
+                    {
                         let ys = chordNotes.map(\.origin.y)
                         let top = ys.min() ?? staffMidY
                         let bot = ys.max() ?? staffMidY
-                        out.append(.arpeggioWiggle(
+                        let wiggle = LayoutElement.arpeggioWiggle(
                             top: CGPoint(x: chordX, y: top),
                             bottom: CGPoint(x: chordX, y: bot),
                             subtype: arpeggioSubtype(arp),
-                        ))
+                        )
+                        if arp.visible {
+                            out.append(wiggle)
+                        } else {
+                            invisibleOut.append(wiggle)
+                        }
                     }
                     if let trem = chord.tremolo {
                         if let bars = makeTremoloBarsElement(

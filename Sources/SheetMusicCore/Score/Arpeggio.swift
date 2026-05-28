@@ -10,10 +10,26 @@ public struct Arpeggio: Sendable, Equatable {
     /// `<userLen1>` (currently unused by the renderer; mirrors the C++ field).
     public var userLen1: Double
 
-    public init(subtype: Int, timeStretch: Double = 1.0, userLen1: Double = 0.0) {
+    /// Base element properties shared with every engravable element.
+    /// Currently carries only `<visible>`; see `ElementProperties`.
+    public var elementProperties: ElementProperties
+    /// MuseScore `<visible>0</visible>` flag. Sugar over
+    /// `elementProperties.visible`. Playback / MIDI is unaffected.
+    public var visible: Bool {
+        get { elementProperties.visible }
+        set { elementProperties.visible = newValue }
+    }
+
+    public init(
+        subtype: Int,
+        timeStretch: Double = 1.0,
+        userLen1: Double = 0.0,
+        visible: Bool = true,
+    ) {
         self.subtype = subtype
         self.timeStretch = timeStretch
         self.userLen1 = userLen1
+        elementProperties = ElementProperties(visible: visible)
     }
 
     /// True for ascending arpeggios (lowest note first); false for DOWN/DOWN_STRAIGHT.

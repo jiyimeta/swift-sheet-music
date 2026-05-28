@@ -20,6 +20,7 @@ extension Chord {
             let stretch = Double(arpeggioNode.first("timeStretch")?.text ?? "1") ?? 1.0
             let userLen = Double(arpeggioNode.first("userLen1")?.text ?? "0") ?? 0.0
             arpeggio = Arpeggio(subtype: subtype, timeStretch: stretch, userLen1: userLen)
+            arpeggio?.elementProperties = ElementProperties(decodingMSCXChildrenOf: arpeggioNode)
         }
 
         // <Lyrics><text>syllable</text></Lyrics> — one per verse line.
