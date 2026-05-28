@@ -800,6 +800,33 @@ extension LayoutEngine {
                     let chordLyricCenterY = voiceMaxLyricCenterY
                     for (verseIdx, lyric) in chord.lyrics.enumerated() {
                         guard !lyric.text.isEmpty else { continue }
+                        // Hidden lyrics: drop entirely when toggle is
+                        // off (print-by-default); when toggle is on
+                        // route the syllable text to `invisibleOut`
+                        // (NOT `out`) so the hidden glyph is exposed
+                        // for invisible-overlay rendering but does not
+                        // print. Decorations (hyphens / melisma rule)
+                        // are NOT emitted for hidden lyrics — they
+                        // would otherwise dangle visually without their
+                        // anchor syllable. The `previousLyric` trail is
+                        // still updated so a following visible
+                        // syllable in the same verse hyphenates from
+                        // the hidden lyric's slot rather than reaching
+                        // back to an earlier visible syllable.
+                        guard lyric.visible || options.showsInvisibleElements
+                        else {
+                            let textWidth = Self.lyricsTextWidth(
+                                lyric.text, sp: metrics.sp,
+                            )
+                            previousLyric[verseIdx] = LyricTrail(
+                                centerX: chordX,
+                                textWidth: textWidth,
+                                lyricsY: chordLyricCenterY
+                                    + CGFloat(verseIdx) * metrics.sp * 1.7,
+                                syllabic: lyric.syllabic,
+                            )
+                            continue
+                        }
                         // Verse stride 1.7 sp keeps multi-verse
                         // stacks compact while still clearing
                         // ascender/descender overlap between
@@ -808,17 +835,29 @@ extension LayoutEngine {
                         // height).
                         let lyricsY = chordLyricCenterY
                             + CGFloat(verseIdx) * metrics.sp * 1.7
-                        out.append(.textMark(
+                        let lyricElement = LayoutElement.textMark(
                             kind: .lyrics,
                             text: lyric.text,
                             origin: CGPoint(x: chordX, y: lyricsY),
-                        ))
+                        )
+                        if lyric.visible {
+                            out.append(lyricElement)
+                        } else {
+                            invisibleOut.append(lyricElement)
+                        }
                         let textWidth = Self.lyricsTextWidth(
                             lyric.text, sp: metrics.sp,
                         )
                         // Hyphens between this syllable and the
-                        // previous one in the same verse.
-                        if let prev = previousLyric[verseIdx],
+                        // previous one in the same verse. Only emitted
+                        // when both endpoints are visible (a hidden
+                        // syllable on either end takes the early
+                        // `continue` above and never reaches here, so
+                        // the test here is simply that the current
+                        // lyric is visible — the previous one was too
+                        // by induction).
+                        if lyric.visible,
+                           let prev = previousLyric[verseIdx],
                            connectsWithHyphen(
                                prev: prev.syllabic,
                                curr: lyric.syllabic,
@@ -851,7 +890,7 @@ extension LayoutEngine {
                         // it equals the anchor chord's own duration
                         // (in which case the target is whatever
                         // chord follows the anchor).
-                        if lyric.ticks > 0 {
+                        if lyric.visible, lyric.ticks > 0 {
                             // `>=`: a melisma that lands exactly on
                             // the barline still needs to extend past
                             // it so the boundary-cap continuation in
@@ -893,6 +932,8 @@ extension LayoutEngine {
                     // (i.e. the next timed element at the current tick).
                     // Shift 1 sp left so the label doesn't overlap the
                     // following chord's notehead or stem.
+                    guard d.visible || options.showsInvisibleElements
+                    else { break }
                     let baseX = inHeader
                         ? headerSchedule.contentStartX
                         : timedX(atTick: tickCursor)
@@ -911,15 +952,36 @@ extension LayoutEngine {
                         ?? -.infinity
                     let chordAvoid = chordSouth + metrics.sp * 2.5
                     let dynY = max(defaultDynY, chordAvoid)
-                    out.append(.textMark(
+                    let dynamicElement = LayoutElement.textMark(
                         kind: .dynamic,
                         text: d.subtype,
                         origin: CGPoint(
                             x: baseX - metrics.sp,
                             y: dynY,
                         ),
-                    ))
+                    )
+                    if d.visible {
+                        out.append(dynamicElement)
+                    } else {
+                        invisibleOut.append(dynamicElement)
+                    }
                 case let .fermata(f):
+                    // Hidden fermata: drop entirely when the toggle is
+                    // off; otherwise build the element below and route
+                    // it into `invisibleOut`. Routing to `invisibleOut`
+                    // skips the beam-stemtip post-process refinement
+                    // (which mutates `out` by outIndex) — that's
+                    // acceptable for hidden glyphs since the
+                    // `anchorY` computed here (chord skyline +
+                    // visualGap) is already collision-free against the
+                    // pre-beam estimate; the refinement only nudges
+                    // visible fermatas down further when the beam
+                    // endpoint extends past the standalone-stem
+                    // estimate. Hidden fermatas don't print, so a
+                    // slightly less-refined Y in the invisible overlay
+                    // is fine.
+                    guard f.visible || options.showsInvisibleElements
+                    else { break }
                     // Anchor to the chord/rest the fermata applies to.
                     // Forward search first (canonical MusicXML order:
                     // fermata before chord). Backward fallback handles
@@ -996,15 +1058,24 @@ extension LayoutEngine {
                         let needed = chordNorth - visualGap - bottomOffset
                         anchorY = min(defaultY, needed)
                     }
-                    fermataPostProcessAnchors.append((
-                        outIndex: out.count,
-                        anchorTick: anchorTick,
-                        isBelow: isBelow,
-                    ))
-                    out.append(.fermata(
+                    let fermataElement = LayoutElement.fermata(
                         subtype: f.subtype,
                         origin: CGPoint(x: anchorX, y: anchorY),
-                    ))
+                    )
+                    if f.visible {
+                        // Only visible fermatas participate in the
+                        // beam-stemtip post-process pass — that pass
+                        // indexes into `out` directly and is purely a
+                        // visual refinement.
+                        fermataPostProcessAnchors.append((
+                            outIndex: out.count,
+                            anchorTick: anchorTick,
+                            isBelow: isBelow,
+                        ))
+                        out.append(fermataElement)
+                    } else {
+                        invisibleOut.append(fermataElement)
+                    }
                 case .measureRepeat:
                     out.append(.measureRepeat(
                         count: 1,
@@ -1564,8 +1635,9 @@ extension LayoutEngine {
                 )
                 if s.visible { out.append(element) } else { invisibleOut.append(element) }
             case let .rehearsalMark(rm):
+                guard rm.visible || options.showsInvisibleElements else { break }
                 let originX = metrics.sp * 0.5
-                out.append(.rehearsalMark(
+                let rehearsalElement = LayoutElement.rehearsalMark(
                     text: rm.text,
                     origin: CGPoint(
                         x: originX
@@ -1575,7 +1647,12 @@ extension LayoutEngine {
                     ),
                     frame: rm.frame,
                     color: rm.color,
-                ))
+                )
+                if rm.visible {
+                    out.append(rehearsalElement)
+                } else {
+                    invisibleOut.append(rehearsalElement)
+                }
             }
         }
         // Same chord-clearance pass for chord symbols. Without this,

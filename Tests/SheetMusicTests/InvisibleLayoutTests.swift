@@ -9,7 +9,7 @@
     /// `ScoreViewOptions.showsInvisibleElements` is on, hidden
     /// annotations must still be laid out but routed into the
     /// invisible container; when off they are dropped as today.
-    struct InvisibleLayoutTests {
+    struct InvisibleLayoutTests { // swiftlint:disable:this type_body_length
         private let _installApple = TestSupport.installApple
 
         /// Build the smallest valid score whose single measure carries a
@@ -385,6 +385,232 @@
             // `initialKeyForSynth` and is unrelated.)
             #expect(!keySignatures(doc, inInvisible: true).isEmpty)
             #expect(keySignatures(doc, inInvisible: false).isEmpty)
+        }
+
+        // MARK: - Annotation elements (Dynamic / Fermata / Lyric / RehearsalMark)
+
+        /// Build a one-measure score whose voice carries a chord followed
+        /// by a Dynamic with controllable visibility.
+        private func scoreWithDynamic(visible: Bool) -> Score {
+            let note = Note(pitch: 60, tpc: 14)
+            let chord = Chord(duration: .quarter, notes: ChordNotes([note]))
+            let voice = Voice(elements: [
+                .clef(Clef(concertClefType: "G")),
+                .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+                .dynamic(Dynamic(subtype: "mf", velocity: 80, visible: visible)),
+                .chord(chord),
+            ])
+            let measure = Measure(voices: [voice])
+            return Score(
+                division: 480,
+                parts: [Part(
+                    id: "P1",
+                    instrument: Instrument(id: "voice"),
+                    staves: [Staff(measures: [measure])],
+                )],
+            )
+        }
+
+        private func dynamicMarks(
+            _ doc: LayoutDocument,
+            inInvisible: Bool = false,
+        ) -> [LayoutElement] {
+            doc.systems.flatMap(\.measures)
+                .flatMap { inInvisible ? $0.invisibleElements : $0.elements }
+                .filter {
+                    if case .textMark(.dynamic, _, _) = $0 { true } else { false }
+                }
+        }
+
+        @Test func hiddenDynamicDroppedWhenToggleOff() {
+            let doc = LayoutEngine.layout(
+                score: scoreWithDynamic(visible: false),
+                options: ScoreViewOptions(showsInvisibleElements: false),
+                availableWidth: 800,
+            )
+            #expect(dynamicMarks(doc, inInvisible: false).isEmpty)
+            #expect(dynamicMarks(doc, inInvisible: true).isEmpty)
+        }
+
+        @Test func hiddenDynamicTaggedWhenToggleOn() {
+            let doc = LayoutEngine.layout(
+                score: scoreWithDynamic(visible: false),
+                options: ScoreViewOptions(showsInvisibleElements: true),
+                availableWidth: 800,
+            )
+            #expect(dynamicMarks(doc, inInvisible: false).isEmpty)
+            #expect(dynamicMarks(doc, inInvisible: true).count == 1)
+        }
+
+        /// Build a one-measure score whose voice carries a chord followed
+        /// by a Fermata with controllable visibility. (Anchor lookup
+        /// scans backward through `out` so the fermata sits after the
+        /// chord here — same arrangement MSCX uses.)
+        private func scoreWithFermata(visible: Bool) -> Score {
+            let note = Note(pitch: 60, tpc: 14)
+            let chord = Chord(duration: .quarter, notes: ChordNotes([note]))
+            let voice = Voice(elements: [
+                .clef(Clef(concertClefType: "G")),
+                .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+                .chord(chord),
+                .fermata(Fermata(subtype: "fermataAbove", visible: visible)),
+            ])
+            let measure = Measure(voices: [voice])
+            return Score(
+                division: 480,
+                parts: [Part(
+                    id: "P1",
+                    instrument: Instrument(id: "voice"),
+                    staves: [Staff(measures: [measure])],
+                )],
+            )
+        }
+
+        private func fermataMarks(
+            _ doc: LayoutDocument,
+            inInvisible: Bool = false,
+        ) -> [LayoutElement] {
+            doc.systems.flatMap(\.measures)
+                .flatMap { inInvisible ? $0.invisibleElements : $0.elements }
+                .filter {
+                    if case .fermata = $0 { true } else { false }
+                }
+        }
+
+        @Test func hiddenFermataDroppedWhenToggleOff() {
+            let doc = LayoutEngine.layout(
+                score: scoreWithFermata(visible: false),
+                options: ScoreViewOptions(showsInvisibleElements: false),
+                availableWidth: 800,
+            )
+            #expect(fermataMarks(doc, inInvisible: false).isEmpty)
+            #expect(fermataMarks(doc, inInvisible: true).isEmpty)
+        }
+
+        @Test func hiddenFermataTaggedWhenToggleOn() {
+            let doc = LayoutEngine.layout(
+                score: scoreWithFermata(visible: false),
+                options: ScoreViewOptions(showsInvisibleElements: true),
+                availableWidth: 800,
+            )
+            #expect(fermataMarks(doc, inInvisible: false).isEmpty)
+            #expect(fermataMarks(doc, inInvisible: true).count == 1)
+        }
+
+        /// Build a one-measure score whose chord carries a single Lyric
+        /// with controllable visibility.
+        private func scoreWithLyric(visible: Bool) -> Score {
+            let note = Note(pitch: 60, tpc: 14)
+            let lyric = Lyric(text: "la", visible: visible)
+            let chord = Chord(
+                duration: .quarter,
+                notes: ChordNotes([note]),
+                lyrics: [lyric],
+            )
+            let voice = Voice(elements: [
+                .clef(Clef(concertClefType: "G")),
+                .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+                .chord(chord),
+            ])
+            let measure = Measure(voices: [voice])
+            return Score(
+                division: 480,
+                parts: [Part(
+                    id: "P1",
+                    instrument: Instrument(id: "voice"),
+                    staves: [Staff(measures: [measure])],
+                )],
+            )
+        }
+
+        private func lyricMarks(
+            _ doc: LayoutDocument,
+            inInvisible: Bool = false,
+        ) -> [LayoutElement] {
+            doc.systems.flatMap(\.measures)
+                .flatMap { inInvisible ? $0.invisibleElements : $0.elements }
+                .filter {
+                    if case .textMark(.lyrics, _, _) = $0 { true } else { false }
+                }
+        }
+
+        @Test func hiddenLyricDroppedWhenToggleOff() {
+            let doc = LayoutEngine.layout(
+                score: scoreWithLyric(visible: false),
+                options: ScoreViewOptions(showsInvisibleElements: false),
+                availableWidth: 800,
+            )
+            #expect(lyricMarks(doc, inInvisible: false).isEmpty)
+            #expect(lyricMarks(doc, inInvisible: true).isEmpty)
+        }
+
+        @Test func hiddenLyricTaggedWhenToggleOn() {
+            let doc = LayoutEngine.layout(
+                score: scoreWithLyric(visible: false),
+                options: ScoreViewOptions(showsInvisibleElements: true),
+                availableWidth: 800,
+            )
+            #expect(lyricMarks(doc, inInvisible: false).isEmpty)
+            #expect(lyricMarks(doc, inInvisible: true).count == 1)
+        }
+
+        /// Build a one-measure score whose system measure carries a
+        /// RehearsalMark with controllable visibility.
+        private func scoreWithRehearsalMark(visible: Bool) -> Score {
+            let note = Note(pitch: 60, tpc: 14)
+            let chord = Chord(duration: .quarter, notes: ChordNotes([note]))
+            let voice = Voice(elements: [
+                .clef(Clef(concertClefType: "G")),
+                .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+                .chord(chord),
+            ])
+            let measure = Measure(voices: [voice])
+            let systemMeasure = SystemMeasure(elements: [
+                PositionedSystemElement(
+                    position: .start,
+                    element: .rehearsalMark(RehearsalMark(text: "A", visible: visible)),
+                ),
+            ])
+            return Score(
+                division: 480,
+                parts: [Part(
+                    id: "P1",
+                    instrument: Instrument(id: "voice"),
+                    staves: [Staff(measures: [measure])],
+                )],
+                systemMeasures: [systemMeasure],
+            )
+        }
+
+        private func rehearsalMarks(
+            _ doc: LayoutDocument,
+            inInvisible: Bool = false,
+        ) -> [LayoutElement] {
+            doc.systems.flatMap(\.measures)
+                .flatMap { inInvisible ? $0.invisibleElements : $0.elements }
+                .filter {
+                    if case .rehearsalMark = $0 { true } else { false }
+                }
+        }
+
+        @Test func hiddenRehearsalMarkDroppedWhenToggleOff() {
+            let doc = LayoutEngine.layout(
+                score: scoreWithRehearsalMark(visible: false),
+                options: ScoreViewOptions(showsInvisibleElements: false),
+                availableWidth: 800,
+            )
+            #expect(rehearsalMarks(doc, inInvisible: false).isEmpty)
+            #expect(rehearsalMarks(doc, inInvisible: true).isEmpty)
+        }
+
+        @Test func hiddenRehearsalMarkTaggedWhenToggleOn() {
+            let doc = LayoutEngine.layout(
+                score: scoreWithRehearsalMark(visible: false),
+                options: ScoreViewOptions(showsInvisibleElements: true),
+                availableWidth: 800,
+            )
+            #expect(rehearsalMarks(doc, inInvisible: false).isEmpty)
+            #expect(rehearsalMarks(doc, inInvisible: true).count == 1)
         }
     }
 #endif
