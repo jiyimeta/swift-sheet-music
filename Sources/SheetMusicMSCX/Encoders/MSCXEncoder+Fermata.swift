@@ -18,6 +18,7 @@ extension Fermata {
                 text: formatStretch(timeStretch),
             ))
         }
+        children.append(contentsOf: elementProperties.mscxChildren())
         return XMLTreeNode(name: "Fermata", children: children)
     }
 

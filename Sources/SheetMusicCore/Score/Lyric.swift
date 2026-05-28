@@ -48,6 +48,15 @@ public struct Lyric: Sendable, Equatable {
     /// Per-element font overrides. `nil`-fields inherit from
     /// `lyricsOdd` / `lyricsEven` (both Edwin 10 pt by default).
     public var properties: TextProperties
+    /// Base element properties shared with every engravable element.
+    /// Currently carries only `<visible>`; see `ElementProperties`.
+    public var elementProperties: ElementProperties
+    /// MuseScore `<visible>0</visible>` flag. Sugar over
+    /// `elementProperties.visible`. Playback / MIDI is unaffected.
+    public var visible: Bool {
+        get { elementProperties.visible }
+        set { elementProperties.visible = newValue }
+    }
 
     public init(
         text: String,
@@ -55,12 +64,14 @@ public struct Lyric: Sendable, Equatable {
         ticks: Int = 0,
         verse: Int = 0,
         properties: TextProperties = TextProperties(),
+        visible: Bool = true,
     ) {
         self.text = text
         self.syllabic = syllabic
         self.ticks = ticks
         self.verse = verse
         self.properties = properties
+        elementProperties = ElementProperties(visible: visible)
     }
 
     /// Style row this lyric inherits from, picked by verse parity.

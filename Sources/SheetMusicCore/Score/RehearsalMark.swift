@@ -30,6 +30,15 @@ public struct RehearsalMark: Sendable, Equatable {
     /// Per-element font overrides. `nil`-fields inherit from the
     /// `rehearsalMark` style row.
     public var properties: TextProperties
+    /// Base element properties shared with every engravable element.
+    /// Currently carries only `<visible>`; see `ElementProperties`.
+    public var elementProperties: ElementProperties
+    /// MuseScore `<visible>0</visible>` flag. Sugar over
+    /// `elementProperties.visible`. Playback / MIDI is unaffected.
+    public var visible: Bool {
+        get { elementProperties.visible }
+        set { elementProperties.visible = newValue }
+    }
 
     public init(
         text: String,
@@ -38,6 +47,7 @@ public struct RehearsalMark: Sendable, Equatable {
         color: ScoreColor? = nil,
         frame: TextFrameType = .rectangle,
         properties: TextProperties = TextProperties(),
+        visible: Bool = true,
     ) {
         self.text = text
         self.offsetX = offsetX
@@ -45,5 +55,6 @@ public struct RehearsalMark: Sendable, Equatable {
         self.color = color
         self.frame = frame
         self.properties = properties
+        elementProperties = ElementProperties(visible: visible)
     }
 }

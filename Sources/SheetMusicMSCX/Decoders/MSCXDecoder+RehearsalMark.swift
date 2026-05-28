@@ -20,7 +20,7 @@ extension RehearsalMark {
         // (matches `Sid::rehearsalMarkFrameType`).
         let frame = props.frameType ?? .rectangle
         props.frameType = nil
-        return RehearsalMark(
+        var mark = RehearsalMark(
             text: text,
             offsetX: offset.0,
             offsetY: offset.1,
@@ -28,6 +28,8 @@ extension RehearsalMark {
             frame: frame,
             properties: props,
         )
+        mark.elementProperties = ElementProperties(decodingMSCXChildrenOf: node)
+        return mark
     }
 
     /// Recursively concatenate the text content, mirroring
