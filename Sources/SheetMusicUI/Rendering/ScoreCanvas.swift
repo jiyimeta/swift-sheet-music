@@ -290,24 +290,49 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                 let visualOrigin = CGPoint(
                     x: n.origin.x + mirrorDx, y: n.origin.y,
                 )
-                NoteheadRenderer.drawHead(
-                    context: &context, at: visualOrigin,
-                    duration: baseDur, headType: n.headType,
-                    metrics: metrics,
-                )
-                if let acc = n.accidental {
-                    AccidentalRenderer.draw(
-                        context: &context, accidental: acc,
-                        origin: visualOrigin, metrics: metrics,
+                if n.isInvisible {
+                    // MuseScore invisibleColor() = #808080; 50% black on the
+                    // white score background is the exact equivalent.
+                    var grey = context
+                    grey.opacity = 0.5
+                    NoteheadRenderer.drawHead(
+                        context: &grey, at: visualOrigin,
+                        duration: baseDur, headType: n.headType,
+                        metrics: metrics,
+                    )
+                    if let acc = n.accidental {
+                        AccidentalRenderer.draw(
+                            context: &grey, accidental: acc,
+                            origin: visualOrigin, metrics: metrics,
+                        )
+                    }
+                    DotRenderer.draw(
+                        context: &grey,
+                        after: visualOrigin,
+                        count: dots,
+                        onStaffLine: n.step.isMultiple(of: 2),
+                        metrics: metrics,
+                    )
+                } else {
+                    NoteheadRenderer.drawHead(
+                        context: &context, at: visualOrigin,
+                        duration: baseDur, headType: n.headType,
+                        metrics: metrics,
+                    )
+                    if let acc = n.accidental {
+                        AccidentalRenderer.draw(
+                            context: &context, accidental: acc,
+                            origin: visualOrigin, metrics: metrics,
+                        )
+                    }
+                    DotRenderer.draw(
+                        context: &context,
+                        after: visualOrigin,
+                        count: dots,
+                        onStaffLine: n.step.isMultiple(of: 2),
+                        metrics: metrics,
                     )
                 }
-                DotRenderer.draw(
-                    context: &context,
-                    after: visualOrigin,
-                    count: dots,
-                    onStaffLine: n.step.isMultiple(of: 2),
-                    metrics: metrics,
-                )
             }
             // Ledger lines
             drawLedgerLines(

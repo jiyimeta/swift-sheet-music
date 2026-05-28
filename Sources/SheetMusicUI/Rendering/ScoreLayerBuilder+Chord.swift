@@ -56,18 +56,34 @@ extension ScoreLayerBuilder {
             let visualOrigin = CGPoint(
                 x: n.origin.x + mirrorDx, y: n.origin.y,
             )
+            // When a single notehead is invisible, route it (plus its
+            // accidental and dots) into a half-opacity group layer.
+            // MuseScore invisibleColor() = #808080; 50% black on the
+            // white score background is the exact equivalent.
+            // Ledger lines and stem stay in `parent` at full opacity.
+            let noteTarget: CALayer
+            if n.isInvisible {
+                let greyGroup = CALayer()
+                greyGroup.frame = parent.bounds
+                greyGroup.opacity = 0.5
+                greyGroup.masksToBounds = false
+                parent.addSublayer(greyGroup)
+                noteTarget = greyGroup
+            } else {
+                noteTarget = parent
+            }
             if let layer = glyphLayer(
                 glyph, at: visualOrigin,
                 size: metrics.glyphFontSize,
                 height: height,
             ) {
-                parent.addSublayer(layer)
+                noteTarget.addSublayer(layer)
                 context.attach(layer, to: .note(n.noteID))
             }
             if let acc = n.accidental,
                let accLayer = drawAccidental(
                    accidental: acc, origin: visualOrigin,
-                   metrics: metrics, height: height, into: parent,
+                   metrics: metrics, height: height, into: noteTarget,
                )
             {
                 context.attach(accLayer, to: .note(n.noteID))
@@ -75,7 +91,7 @@ extension ScoreLayerBuilder {
             drawDots(
                 after: visualOrigin, count: dots,
                 onStaffLine: n.step.isMultiple(of: 2),
-                metrics: metrics, height: height, into: parent,
+                metrics: metrics, height: height, into: noteTarget,
             )
         }
         drawLedgerLines(
