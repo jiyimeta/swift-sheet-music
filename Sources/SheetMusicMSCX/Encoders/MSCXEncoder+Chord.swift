@@ -69,6 +69,7 @@ extension Chord {
                 drumDefaultHead: isPercussionV3 ? "normal" : nil,
             ))
         }
+        children.append(contentsOf: elementProperties.mscxChildren())
         return XMLTreeNode(name: "Chord", children: children)
     }
 
@@ -80,6 +81,7 @@ extension Chord {
     func encodeAsRest(options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
         var children: [XMLTreeNode] = []
         duration.appendDurationXML(to: &children)
+        children.append(contentsOf: elementProperties.mscxChildren())
         return XMLTreeNode(name: "Rest", children: children)
     }
 
@@ -93,6 +95,7 @@ extension Chord {
     ) -> XMLTreeNode {
         var children: [XMLTreeNode] = []
         duration.appendDurationXML(to: &children, in: measureDuration)
+        children.append(contentsOf: elementProperties.mscxChildren())
         return XMLTreeNode(name: "Rest", children: children)
     }
 }

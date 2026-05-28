@@ -49,7 +49,7 @@ extension Note {
         // MuseScore writes `<play>0</play>` only when the note is
         // muted; the element is absent (→ true) for normal notes.
         let play = node.first("play")?.text != "0"
-        return Note(
+        var note = Note(
             pitch: pitch,
             tpc: tpc,
             accidental: accidental,
@@ -59,6 +59,8 @@ extension Note {
             headType: headType,
             play: play,
         )
+        note.elementProperties = ElementProperties(decodingMSCXChildrenOf: node)
+        return note
     }
 
     /// Normalise `<head>` to the MS3+ string form. MS2 writes an integer

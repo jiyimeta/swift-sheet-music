@@ -72,6 +72,7 @@ extension Note {
         if !play {
             children.append(XMLTreeNode(name: "play", text: "0"))
         }
+        children.append(contentsOf: elementProperties.mscxChildren())
         return XMLTreeNode(name: "Note", children: children)
     }
 

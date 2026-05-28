@@ -59,12 +59,14 @@ extension Chord {
             ?? node.first("TremoloTwoChord")
         let tremolo = try tremoloNode.map(Tremolo.decode)
 
-        return Chord(
+        var chord = Chord(
             duration: duration, notes: ChordNotes(notes),
             arpeggio: arpeggio, lyrics: lyrics,
             articulations: articulations,
             tremolo: tremolo,
         )
+        chord.elementProperties = ElementProperties(decodingMSCXChildrenOf: node)
+        return chord
     }
 
     /// Inspect a `<Chord>` node and return its grace category if any

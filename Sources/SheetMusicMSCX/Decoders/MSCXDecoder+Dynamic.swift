@@ -18,10 +18,12 @@ extension Dynamic {
         } else {
             velocity = defaultVelocity[subtype] ?? 80
         }
-        return Dynamic(
+        var dynamic = Dynamic(
             subtype: subtype,
             velocity: velocity,
             properties: TextProperties.decode(node),
         )
+        dynamic.elementProperties = ElementProperties(decodingMSCXChildrenOf: node)
+        return dynamic
     }
 }
