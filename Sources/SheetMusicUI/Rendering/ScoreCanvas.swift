@@ -159,6 +159,20 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                     into: &context,
                 )
             }
+            if !measure.invisibleElements.isEmpty {
+                var grey = context
+                // MuseScore invisibleColor() = #808080; 50% black on the
+                // white score background is the exact equivalent.
+                grey.opacity = 0.5
+                for element in measure.invisibleElements {
+                    drawElement(
+                        element,
+                        base: base,
+                        metrics: metrics,
+                        into: &grey,
+                    )
+                }
+            }
             for el in measure.markers {
                 drawElement(
                     el,
@@ -184,6 +198,20 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                 metrics: metrics,
                 into: &context,
             )
+        }
+        if !system.invisibleSpanners.isEmpty {
+            var grey = context
+            // MuseScore invisibleColor() = #808080; 50% black on the
+            // white score background is the exact equivalent.
+            grey.opacity = 0.5
+            for el in system.invisibleSpanners {
+                drawElement(
+                    el,
+                    base: system.origin,
+                    metrics: metrics,
+                    into: &grey,
+                )
+            }
         }
     }
 
