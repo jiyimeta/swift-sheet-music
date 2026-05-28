@@ -93,6 +93,26 @@ The example app's `.xcodeproj` is **gitignored**; regenerate from
 `Examples/Apple/project.yml` with `xcodegen` whenever you change project
 settings or sources.
 
+### Worktree setup — symlink the gitignored `Sounds/`
+
+`Examples/Apple/SheetMusicExample/Sounds/` is **gitignored** — its sole
+content (`MuseScore_General.sf2`, ~215 MB) lives in the main worktree and
+is distributed via GitHub Releases, not git. Secondary worktrees (under
+`.claude/worktrees/…`) start without the directory, so the Apple example
+app can't find the bundled SoundFont and plays silence.
+
+After creating a worktree, run once from inside it:
+
+```bash
+Scripts/link-apple-sounds.sh
+```
+
+The script symlinks the worktree's `Sounds/` to the main worktree's copy
+(idempotent; no-op from the main worktree itself). When working in a
+worktree, Claude should run this once at the start of the session if the
+Apple example app is in scope. Avoid duplicating the 215 MB sf2 across
+worktrees.
+
 ## Android build (Phase 1–3)
 
 `swift-sheet-music` cross-compiles to Android via the Swift 6.3 official
