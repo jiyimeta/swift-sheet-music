@@ -67,11 +67,13 @@ extension ScoreLayerBuilder {
             beamed,
             _,
             stemExt,
+            stemHidden,
         ):
             drawChord(
                 notes: notes, duration: dur, stem: stem,
                 stemOrigin: so, isBeamed: beamed,
                 tremoloStemExtension: stemExt,
+                stemIsInvisible: stemHidden,
                 base: base,
                 metrics: metrics, height: height,
                 context: &context, into: parent,

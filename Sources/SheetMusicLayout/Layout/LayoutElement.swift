@@ -56,6 +56,12 @@ public enum LayoutElement: Sendable, Equatable {
         // length; tremolo placement uses the same value so the bars
         // stay centred on the extended stem.
         stemExtension: CGFloat,
+        // True when the source `Chord.stemVisible == false` (i.e. MSCX
+        // `<Stem><visible>0`). The stem (and its flag) is skipped at
+        // toggle-off and greyed at 50% at toggle-on. Notehead visibility
+        // is independent and carried by `LayoutChordNote.isInvisible`.
+        // Beam suppression on hidden-stem chords is a separate concern.
+        stemIsInvisible: Bool,
     )
     /// A grace note (or grace chord) drawn at reduced size next to
     /// its parent main chord. Carries a `relativeX` offset from the

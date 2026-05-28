@@ -53,7 +53,7 @@
             var target: (x: CGFloat, y: CGFloat, id: NoteID)?
             for measure in system.measures {
                 for el in measure.elements {
-                    guard case let .chord(notes, _, _, _, _, _, _, _, _) = el,
+                    guard case let .chord(notes, _, _, _, _, _, _, _, _, _) = el,
                           let n = notes.first
                     else { continue }
                     let ax = system.origin.x + measure.origin.x + n.origin.x

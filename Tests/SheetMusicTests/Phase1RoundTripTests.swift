@@ -86,6 +86,42 @@ struct Phase1RoundTripTests {
         #expect(!encoded.children.contains(where: { $0.name == "visible" }))
     }
 
+    // MARK: - Chord <Stem><visible>
+
+    @Test func stemVisibleFalseRoundTrips() throws {
+        let node = XMLTreeNode(
+            name: "Chord",
+            children: [
+                XMLTreeNode(name: "durationType", text: "eighth"),
+                XMLTreeNode(name: "Stem", children: [
+                    XMLTreeNode(name: "visible", text: "0"),
+                ]),
+                XMLTreeNode(
+                    name: "Note",
+                    children: [
+                        XMLTreeNode(name: "pitch", text: "60"),
+                        XMLTreeNode(name: "tpc", text: "14"),
+                    ],
+                ),
+            ],
+        )
+        let chord = try Chord.decode(node)
+        #expect(chord.stemVisible == false)
+        let reencoded = chord.encodeAsChord()
+        let stem = reencoded.first("Stem")
+        #expect(stem != nil)
+        #expect(stem?.first("visible")?.text == "0")
+    }
+
+    @Test func stemVisibleTrueOmitsTag() {
+        let chord = Chord(
+            duration: .eighth,
+            notes: ChordNotes([Note(pitch: 60, tpc: 14)]),
+        )
+        let encoded = chord.encodeAsChord()
+        #expect(!encoded.children.contains(where: { $0.name == "Stem" }))
+    }
+
     // MARK: - Rest (decoded via MSCXRestDecoder, encoded via encodeAsRest)
 
     @Test func restVisibleFalseRoundTrips() throws {

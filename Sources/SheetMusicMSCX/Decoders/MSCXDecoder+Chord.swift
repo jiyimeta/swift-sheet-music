@@ -62,11 +62,21 @@ extension Chord {
             ?? node.first("TremoloTwoChord")
         let tremolo = try tremoloNode.map(Tremolo.decode)
 
+        // `<Stem>` element inside `<Chord>` carries per-stem properties
+        // (e.g. `<userLen>`, `<visible>`). We currently honour only
+        // `<visible>` — when 0 the stem (and flag) are hidden while the
+        // noteheads stay visible. Default is visible.
+        var stemVisible = true
+        if let stemNode = node.first("Stem") {
+            stemVisible = (stemNode.first("visible")?.text ?? "1") != "0"
+        }
+
         var chord = Chord(
             duration: duration, notes: ChordNotes(notes),
             arpeggio: arpeggio, lyrics: lyrics,
             articulations: articulations,
             tremolo: tremolo,
+            stemVisible: stemVisible,
         )
         chord.elementProperties = ElementProperties(decodingMSCXChildrenOf: node)
         return chord

@@ -685,6 +685,7 @@ extension LayoutEngine {
                         isBeamed: false,
                         voiceIndex: voiceIdx,
                         stemExtension: stemExtension,
+                        stemIsInvisible: !chord.stemVisible,
                     )
                     // MuseScore stores Stem visibility independently from
                     // Note visibility (see <Chord><Stem><visible> in mscx).
@@ -1205,9 +1206,9 @@ extension LayoutEngine {
                 guard let fromOutIdx = voiceChordOutIndex[voiceIdx],
                       let toOutIdx = voiceChordOutIndex[nextVoiceIdx]
                 else { continue }
-                guard case let .chord(fromNotes, _, _, _, _, _, _, _, _) =
+                guard case let .chord(fromNotes, _, _, _, _, _, _, _, _, _) =
                     out[fromOutIdx],
-                    case let .chord(toNotes, _, _, _, _, _, _, _, _) =
+                    case let .chord(toNotes, _, _, _, _, _, _, _, _, _) =
                     out[toOutIdx]
                 else { continue }
                 guard let fromFallback = fromNotes.last,
@@ -1247,7 +1248,7 @@ extension LayoutEngine {
                 var groupSteps: [Int] = []
                 for memberIdx in group.memberIndices {
                     guard let outIdx = voiceChordOutIndex[memberIdx],
-                          case let .chord(n, _, _, _, _, _, _, _, _)
+                          case let .chord(n, _, _, _, _, _, _, _, _, _)
                           = out[outIdx]
                     else { continue }
                     groupSteps.append(contentsOf: n.map(\.step))
@@ -1274,7 +1275,7 @@ extension LayoutEngine {
                 var memberLevels: [Int] = []
                 for memberIdx in group.memberIndices {
                     guard let outIdx = voiceChordOutIndex[memberIdx],
-                          case let .chord(n, _, _, so, _, _, _, _, _)
+                          case let .chord(n, _, _, so, _, _, _, _, _, _)
                           = out[outIdx]
                     else {
                         memberStemXs.append(nil)
@@ -1387,6 +1388,7 @@ extension LayoutEngine {
                               _,
                               vi,
                               _,
+                              stemHidden,
                           ) = out[outIdx]
                     else { continue }
                     // Beamed chords don't need stem-extension threading
@@ -1404,6 +1406,7 @@ extension LayoutEngine {
                         isBeamed: true,
                         voiceIndex: vi,
                         stemExtension: 0,
+                        stemIsInvisible: stemHidden,
                     )
                     // Re-anchor any .tremoloBars element belonging to
                     // this chord so its bar block sits past the full
@@ -1511,7 +1514,7 @@ extension LayoutEngine {
             if !fermataPostProcessAnchors.isEmpty {
                 var actualStemTipByTick: [Int: CGFloat] = [:]
                 for (outIdx, outEl) in out.enumerated() {
-                    guard case let .chord(_, _, stemDir, stemOrigin, _, _, _, _, _) = outEl,
+                    guard case let .chord(_, _, stemDir, stemOrigin, _, _, _, _, _, _) = outEl,
                           let tick = chordTickByOutIndex[outIdx]
                     else { continue }
                     // Per `LayoutEngine+Extents.swift`, the beam pass

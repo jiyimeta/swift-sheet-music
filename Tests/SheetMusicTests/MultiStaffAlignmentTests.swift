@@ -67,7 +67,7 @@
             // emits first (3 chords), staff 2 second (2 chords).
             var chords: [(y: CGFloat, x: CGFloat)] = []
             for el in measure.elements {
-                if case let .chord(_, _, _, so, _, _, _, _, _) = el {
+                if case let .chord(_, _, _, so, _, _, _, _, _, _) = el {
                     chords.append((y: so.y, x: so.x))
                 }
             }
@@ -148,7 +148,7 @@
             var voice0Count = 0
             for el in measure.elements {
                 switch el {
-                case let .chord(_, _, _, so, _, _, _, _, _):
+                case let .chord(_, _, _, so, _, _, _, _, _, _):
                     if voice0Count < 4 {
                         v0Xs.append(so.x)
                         voice0Count += 1
@@ -233,7 +233,7 @@
             var measureRestX: CGFloat?
             for el in measure.elements {
                 switch el {
-                case let .chord(_, _, _, so, _, _, _, _, _):
+                case let .chord(_, _, _, so, _, _, _, _, _, _):
                     v0Xs.append(so.x)
                 case let .rest(dur, origin, _, _, _):
                     if case .measure = dur {
@@ -329,7 +329,7 @@
             var rows: [Emit] = []
             for el in measure.elements {
                 switch el {
-                case let .chord(_, _, _, so, _, _, _, _, _):
+                case let .chord(_, _, _, so, _, _, _, _, _, _):
                     rows.append(Emit(y: so.y, x: so.x))
                 case let .rest(_, origin, _, _, _):
                     rows.append(Emit(y: origin.y, x: origin.x))
@@ -401,7 +401,7 @@
             // Voice 0 (whole) then voice 1 (4 quarters), in emission order.
             var xs: [CGFloat] = []
             for el in measure.elements {
-                if case let .chord(_, _, _, so, _, _, _, _, _) = el {
+                if case let .chord(_, _, _, so, _, _, _, _, _, _) = el {
                     xs.append(so.x)
                 }
             }

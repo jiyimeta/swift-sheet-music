@@ -52,6 +52,16 @@ extension Chord {
         if let trem = tremolo ?? injectedTremolo {
             children.append(trem.encodeXML())
         }
+        // Stem properties (`<Stem><visible>0</visible></Stem>`) sit
+        // before Lyrics/Notes, matching MuseScore's `Chord::write`
+        // ordering and the position in MS4-authored fixtures. Emitted
+        // only when the stem is hidden — the default (visible) omits
+        // the tag entirely.
+        if !stemVisible {
+            children.append(XMLTreeNode(name: "Stem", children: [
+                XMLTreeNode(name: "visible", text: "0"),
+            ]))
+        }
         // Lyrics sit between durationType and the first <Note>: this
         // matches MuseScore's serializer (Chord::write) and is what
         // both MS3 and MS4 readers expect. Empty-text placeholders

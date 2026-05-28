@@ -281,6 +281,7 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
             isBeamed,
             _,
             stemExt,
+            stemIsInvisible,
         ):
             let (baseDur, dots) = DurationInterpretation.split(dur)
             let shiftedNotes = notes.map {
@@ -351,19 +352,54 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                     )
                 }
             }
-            // Ledger lines
+            // Ledger lines — per-note. A ledger line attached to a
+            // hidden notehead must follow the notehead's visibility:
+            // skip at toggle-off, grey at 50% at toggle-on. Visible
+            // notes' ledger lines stay at full opacity.
+            let visibleLedgerNotes = shiftedNotes.filter { !$0.isInvisible }
+            let invisibleLedgerNotes = shiftedNotes.filter(\.isInvisible)
             drawLedgerLines(
                 context: &context,
-                notes: shiftedNotes, stem: stem,
+                notes: visibleLedgerNotes, stem: stem,
                 metrics: metrics,
             )
+            if !invisibleLedgerNotes.isEmpty, showsInvisibleElements {
+                // MuseScore invisibleColor() = #808080; 50% black on
+                // white is the equivalent.
+                var grey = context
+                grey.opacity = 0.5
+                drawLedgerLines(
+                    context: &grey,
+                    notes: invisibleLedgerNotes, stem: stem,
+                    metrics: metrics,
+                )
+            }
             let beamY: CGFloat? = isBeamed ? shift(stemOrigin).y : nil
-            StemRenderer.draw(
-                context: &context, notes: shiftedNotes,
-                direction: stem, duration: baseDur,
-                isBeamed: isBeamed, beamY: beamY,
-                stemExtension: stemExt, metrics: metrics,
-            )
+            // Stem visibility (MSCX `<Stem><visible>`) is independent of
+            // notehead visibility. When the stem is hidden:
+            //   * toggle off → skip stem + flag entirely.
+            //   * toggle on  → grey both at 50%.
+            // Beam suppression on hidden-stem chords is a separate
+            // concern (would require `<Beam><visible>`).
+            if stemIsInvisible {
+                if showsInvisibleElements {
+                    var grey = context
+                    grey.opacity = 0.5
+                    StemRenderer.draw(
+                        context: &grey, notes: shiftedNotes,
+                        direction: stem, duration: baseDur,
+                        isBeamed: isBeamed, beamY: beamY,
+                        stemExtension: stemExt, metrics: metrics,
+                    )
+                }
+            } else {
+                StemRenderer.draw(
+                    context: &context, notes: shiftedNotes,
+                    direction: stem, duration: baseDur,
+                    isBeamed: isBeamed, beamY: beamY,
+                    stemExtension: stemExt, metrics: metrics,
+                )
+            }
         case let .textMark(.dynamic, text, p):
             TextMarkRenderer.drawDynamic(
                 context: &context, text: text,

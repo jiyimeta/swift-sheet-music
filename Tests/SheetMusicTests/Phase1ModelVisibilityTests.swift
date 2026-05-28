@@ -17,4 +17,11 @@ struct Phase1ModelVisibilityTests {
         let c = Chord(duration: .quarter, notes: [])
         #expect(c.visible == true)
     }
+
+    @Test func chordStemVisibleDefaultsTrue() {
+        var c = Chord(duration: .quarter, notes: [])
+        #expect(c.stemVisible == true)
+        c.stemVisible = false
+        #expect(c.stemVisible == false)
+    }
 }

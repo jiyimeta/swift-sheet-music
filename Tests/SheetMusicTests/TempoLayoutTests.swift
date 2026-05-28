@@ -58,7 +58,7 @@
                         if case let .textMark(.tempo, _, p) = el, tempoY == nil {
                             tempoY = absY + p.y
                         }
-                        if case let .chord(notes, _, _, _, _, _, _, _, _) = el,
+                        if case let .chord(notes, _, _, _, _, _, _, _, _, _) = el,
                            noteY == nil,
                            let n = notes.first
                         {

@@ -57,7 +57,7 @@ extension LayoutEngine {
             }
             for measure in system.measures {
                 for el in measure.elements {
-                    guard case let .chord(notes, _, stem, _, _, _, _, _, _)
+                    guard case let .chord(notes, _, stem, _, _, _, _, _, _, _)
                         = el else { continue }
                     let noteSteps = notes.map(\.step)
                     let maxStep = noteSteps.max() ?? 0
@@ -249,7 +249,7 @@ extension LayoutEngine {
         var firstX: CGFloat = .infinity
         for el in firstMeasure.elements {
             switch el {
-            case let .chord(notes, _, _, _, _, _, _, _, _):
+            case let .chord(notes, _, _, _, _, _, _, _, _, _):
                 if let n = notes.first {
                     firstX = min(
                         firstX,

@@ -109,7 +109,7 @@
             let allChordNotes = doc.systems.flatMap(\.measures)
                 .flatMap { $0.elements + $0.invisibleElements }
                 .compactMap { el -> [LayoutChordNote]? in
-                    if case let .chord(notes, _, _, _, _, _, _, _, _) = el { notes } else { nil }
+                    if case let .chord(notes, _, _, _, _, _, _, _, _, _) = el { notes } else { nil }
                 }
                 .flatMap(\.self)
             #expect(allChordNotes.contains { $0.isInvisible })
@@ -137,7 +137,7 @@
                 for el in doc.systems.flatMap(\.measures)
                     .flatMap({ $0.elements + $0.invisibleElements })
                 {
-                    if case let .chord(_, _, _, so, _, _, _, _, _) = el { return so.x }
+                    if case let .chord(_, _, _, so, _, _, _, _, _, _) = el { return so.x }
                 }
                 return nil
             }
@@ -220,7 +220,7 @@
                 for el in doc.systems.flatMap(\.measures)
                     .flatMap({ $0.elements + $0.invisibleElements })
                 {
-                    if case let .chord(_, _, _, so, _, _, _, _, _) = el {
+                    if case let .chord(_, _, _, so, _, _, _, _, _, _) = el {
                         return so.x
                     }
                 }
@@ -712,7 +712,7 @@
             let visibleChords = chords(doc, inInvisible: false)
             #expect(visibleChords.count == 1, "chord must remain in elements")
             if let first = visibleChords.first,
-               case let .chord(notes, _, _, _, _, _, _, _, _) = first
+               case let .chord(notes, _, _, _, _, _, _, _, _, _) = first
             {
                 #expect(
                     notes.count(where: \.isInvisible) == notes.count,
@@ -739,7 +739,7 @@
             let visibleChords = chords(doc, inInvisible: false)
             #expect(visibleChords.count == 1)
             if let first = visibleChords.first,
-               case let .chord(notes, _, _, _, _, _, _, _, _) = first
+               case let .chord(notes, _, _, _, _, _, _, _, _, _) = first
             {
                 #expect(notes.count(where: \.isInvisible) == notes.count)
                 #expect(notes.count == 2)
@@ -872,7 +872,7 @@
                 let allChords = chords(doc, inInvisible: false)
                 #expect(allChords.count == 1)
                 if let first = allChords.first,
-                   case let .chord(notes, _, _, _, _, _, _, _, _) = first
+                   case let .chord(notes, _, _, _, _, _, _, _, _, _) = first
                 {
                     // FULL note list must be present — proves stem
                     // geometry sees both notes regardless of toggle.
@@ -881,6 +881,59 @@
                     #expect(notes.count(where: \.isInvisible) == 1)
                 }
             }
+        }
+
+        // MARK: - Stem visibility (Chord.stemVisible / <Stem><visible>)
+
+        /// Single chord whose `stemVisible == false`. Plumbed through the
+        /// `.chord` LayoutElement's `stemIsInvisible` field so the renderer
+        /// can grey or skip the stem independently of notehead visibility.
+        @Test func stemVisibleFalseSetsStemIsInvisibleInLayoutElement() {
+            for toggle in [false, true] {
+                var chord = Chord(
+                    duration: .quarter,
+                    notes: ChordNotes([Note(pitch: 60, tpc: 14)]),
+                )
+                chord.stemVisible = false
+                let score = scoreWithSingleChord(chord)
+                let doc = LayoutEngine.layout(
+                    score: score,
+                    options: ScoreViewOptions(showsInvisibleElements: toggle),
+                    availableWidth: 800,
+                )
+                let flags = doc.systems.flatMap(\.measures)
+                    .flatMap { $0.elements + $0.invisibleElements }
+                    .compactMap { el -> Bool? in
+                        if case let .chord(_, _, _, _, _, _, _, _, _, stemHidden) = el {
+                            return stemHidden
+                        }
+                        return nil
+                    }
+                #expect(flags == [true])
+            }
+        }
+
+        @Test func stemVisibleTrueDefaultStemIsInvisibleFalse() {
+            let chord = Chord(
+                duration: .quarter,
+                notes: ChordNotes([Note(pitch: 60, tpc: 14)]),
+            )
+            // No stemVisible mutation → default true.
+            let score = scoreWithSingleChord(chord)
+            let doc = LayoutEngine.layout(
+                score: score,
+                options: ScoreViewOptions(showsInvisibleElements: false),
+                availableWidth: 800,
+            )
+            let flags = doc.systems.flatMap(\.measures)
+                .flatMap { $0.elements + $0.invisibleElements }
+                .compactMap { el -> Bool? in
+                    if case let .chord(_, _, _, _, _, _, _, _, _, stemHidden) = el {
+                        return stemHidden
+                    }
+                    return nil
+                }
+            #expect(flags == [false])
         }
     }
 #endif

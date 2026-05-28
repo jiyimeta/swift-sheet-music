@@ -41,6 +41,15 @@ public struct Chord: Sendable, Equatable {
         set { elementProperties.visible = newValue }
     }
 
+    /// Visibility of this chord's stem, independent of note visibility.
+    /// MuseScore `<Stem><visible>0</visible></Stem>` inside `<Chord>`.
+    /// Default `true`. When false, the stem (and flag) glyphs are
+    /// suppressed; the noteheads are NOT affected and continue to be
+    /// governed by per-note `Note.visible` / `Chord.visible`. Beam
+    /// suppression (`<Beam><visible>`) is a separate concern not yet
+    /// parsed.
+    public var stemVisible: Bool
+
     public init(
         duration: NoteDuration,
         notes: ChordNotes,
@@ -51,6 +60,7 @@ public struct Chord: Sendable, Equatable {
         articulations: [ChordArticulation] = [],
         tremolo: Tremolo? = nil,
         visible: Bool = true,
+        stemVisible: Bool = true,
     ) {
         self.duration = duration
         self.notes = notes
@@ -60,6 +70,7 @@ public struct Chord: Sendable, Equatable {
         self.graceNotesAfter = graceNotesAfter
         self.articulations = articulations
         self.tremolo = tremolo
+        self.stemVisible = stemVisible
         elementProperties = ElementProperties(visible: visible)
     }
 }

@@ -45,6 +45,7 @@ extension LayoutEngine {
                           _,
                           _,
                           _,
+                          _,
                       ) = out[outIdx]
                 else { continue }
                 memberSpanXs.append(so.x)
@@ -106,8 +107,8 @@ extension LayoutEngine {
             guard
                 let firstIdx = voiceChordOutIndex[tuplet.startIndex],
                 let lastIdx = voiceChordOutIndex[tuplet.endIndex],
-                case let .chord(_, _, _, firstSO, _, _, _, _, _) = out[firstIdx],
-                case let .chord(_, _, _, lastSO, _, _, _, _, _) = out[lastIdx]
+                case let .chord(_, _, _, firstSO, _, _, _, _, _, _) = out[firstIdx],
+                case let .chord(_, _, _, lastSO, _, _, _, _, _, _) = out[lastIdx]
             else { return }
             let outward: CGFloat = isAbove ? -labelPad : labelPad
             fromY = firstSO.y + outward
@@ -250,7 +251,7 @@ extension LayoutEngine {
     ) -> CGFloat? {
         for el in elements.reversed() {
             switch el {
-            case let .chord(_, _, _, origin, _, _, _, _, _):
+            case let .chord(_, _, _, origin, _, _, _, _, _, _):
                 return origin.x
             case let .rest(_, origin, _, _, _):
                 return origin.x
