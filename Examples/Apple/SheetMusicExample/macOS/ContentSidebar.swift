@@ -20,6 +20,7 @@
         @Binding var magnification: CGFloat
         @Binding var isMarqueeMode: Bool
         @Binding var collapseMultiMeasureRests: Bool
+        @Binding var showsInvisibleElements: Bool
 
         let onLoadBundled: () -> Void
         let onLoadHarmonyBasic: () -> Void
@@ -130,6 +131,18 @@
                     .disabled(score == nil)
                     Text(
                         "Folds runs of ≥2 consecutive whole rests into a single H-bar with a count.",
+                    )
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    Toggle(isOn: $showsInvisibleElements) {
+                        Label(
+                            "Show invisible elements",
+                            systemImage: "eye.trianglebadge.exclamationmark",
+                        )
+                    }
+                    .disabled(score == nil)
+                    Text(
+                        "Draws elements with `visible == false` at 50 % opacity (MuseScore #808080 on white). Off = print behaviour (hidden entirely).",
                     )
                     .font(.caption2)
                     .foregroundStyle(.secondary)

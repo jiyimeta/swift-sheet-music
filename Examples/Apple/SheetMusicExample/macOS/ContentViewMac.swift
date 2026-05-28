@@ -167,6 +167,11 @@
         /// scroll or click. Toggled from the sidebar.
         @State private var isMarqueeMode = false
         @State private var collapseMultiMeasureRests = false
+        /// MuseScore "Show Invisible" toggle. When ON, elements with
+        /// `visible == false` are laid out and drawn at 50 % opacity
+        /// (= MuseScore's `#808080` on white). When OFF (print default),
+        /// they are dropped entirely. Wired into `ScoreViewOptions.showsInvisibleElements`.
+        @State private var showsInvisibleElements = false
         @State private var showExport = false
 
         /// systemGap targets MuseScore's `Sid::minSystemDistance` of
@@ -179,6 +184,7 @@
                 multiMeasureRest: collapseMultiMeasureRests
                     ? .collapse(minimumMeasures: 2)
                     : .disabled,
+                showsInvisibleElements: showsInvisibleElements,
             )
         }
 
@@ -189,6 +195,7 @@
                 multiMeasureRest: collapseMultiMeasureRests
                     ? .collapse(minimumMeasures: 2)
                     : .disabled,
+                showsInvisibleElements: showsInvisibleElements,
             )
         }
 
@@ -205,6 +212,7 @@
                     magnification: $magnification,
                     isMarqueeMode: $isMarqueeMode,
                     collapseMultiMeasureRests: $collapseMultiMeasureRests,
+                    showsInvisibleElements: $showsInvisibleElements,
                     onLoadBundled: loadBundled,
                     onLoadHarmonyBasic: loadHarmonyBasic,
                     onOpenFile: showOpenPanel,
@@ -254,6 +262,9 @@
             }
             .onDisappear(perform: removeKeyMonitor)
             .onChange(of: collapseMultiMeasureRests) { _, _ in
+                rebuildLayoutsForOptionsChange()
+            }
+            .onChange(of: showsInvisibleElements) { _, _ in
                 rebuildLayoutsForOptionsChange()
             }
             .toolbar {
@@ -2541,6 +2552,7 @@
                         multiMeasureRest: collapseMultiMeasureRests
                             ? .collapse(minimumMeasures: 2)
                             : .disabled,
+                        showsInvisibleElements: showsInvisibleElements,
                     ),
                     pageIndex: $pageIndex,
                     totalPages: $totalPages,
@@ -2810,8 +2822,9 @@
 
         /// Adopt a score edited via `inputController`.
         ///
-        /// Re-layout when a runtime `ScoreViewOptions` toggle (currently
-        /// just `collapseMultiMeasureRests`) changes without a score reload.
+        /// Re-layout when a runtime `ScoreViewOptions` toggle
+        /// (`collapseMultiMeasureRests` or `showsInvisibleElements`)
+        /// changes without a score reload.
         /// The vertical doc rebuilds via its `.task(id:)` once `scoreVersion`
         /// advances; the horizontal doc must be rebuilt directly here,
         /// matching the logic in `adoptEditedScore`.
