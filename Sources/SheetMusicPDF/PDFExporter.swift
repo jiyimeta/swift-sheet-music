@@ -99,6 +99,10 @@ public enum PDFExporter {
             systemGap: options.systemGap,
             wrapToViewWidth: true,
             breakPolicy: options.breakPolicy,
+            // PDF export always uses print behaviour: invisible elements
+            // are fully omitted, never greyed. Explicit even though false
+            // is the default — guards against the default ever changing.
+            showsInvisibleElements: false,
         )
         let availableWidth = max(
             resolved.staffSize * 4,
