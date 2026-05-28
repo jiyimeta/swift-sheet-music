@@ -42,6 +42,7 @@ extension RehearsalMark {
         if frame != .rectangle {
             props.frameType = frame
         }
+        children.append(contentsOf: elementProperties.mscxChildren())
         props.appendXML(to: &children)
         return XMLTreeNode(name: "RehearsalMark", children: children)
     }

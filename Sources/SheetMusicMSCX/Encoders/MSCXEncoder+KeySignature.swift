@@ -9,11 +9,10 @@ extension KeySignature {
         case .v2, .v3: childName = "accidental"
         case .v4: childName = "concertKey"
         }
-        return XMLTreeNode(
-            name: "KeySig",
-            children: [
-                XMLTreeNode(name: childName, text: String(concertKey)),
-            ],
-        )
+        var children: [XMLTreeNode] = [
+            XMLTreeNode(name: childName, text: String(concertKey)),
+        ]
+        children.append(contentsOf: elementProperties.mscxChildren())
+        return XMLTreeNode(name: "KeySig", children: children)
     }
 }

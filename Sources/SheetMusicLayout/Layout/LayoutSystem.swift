@@ -25,6 +25,9 @@ public struct LayoutSystem: Sendable, Equatable {
     /// Cross-measure spanner segments (slurs, voltas, hairpins, etc.)
     /// resolved after measure placement. Origins are in system coords.
     public let spanners: [LayoutElement]
+    /// System-level spanner segments whose source is hidden but emitted
+    /// because `showsInvisibleElements` is on. Drawn at 50 % opacity.
+    public let invisibleSpanners: [LayoutElement]
     /// Chord/rest anchors of every measure flattened into one
     /// X-sorted index. Built deterministically from `measures` —
     /// callers MUST NOT supply a divergent value via `init`.
@@ -39,6 +42,13 @@ public struct LayoutSystem: Sendable, Equatable {
     /// staff height) used to compute event bboxes.
     /// Equals `StaffMetrics(staffSize:).sp` for the current staff size.
     public let sp: CGFloat
+    /// Whether this system was laid out with the
+    /// `ScoreViewOptions.showsInvisibleElements` toggle on. Renderers
+    /// read this to decide per-note whether a hidden notehead should
+    /// be greyed (50 %) or skipped outright — the chord's full note
+    /// list is preserved in either case so stem / beam geometry stays
+    /// stable across the toggle.
+    public let showsInvisibleElements: Bool
 
     public init(
         origin: CGPoint,
@@ -50,6 +60,8 @@ public struct LayoutSystem: Sendable, Equatable {
         brackets: [LayoutBracket] = [],
         spanners: [LayoutElement],
         sp: CGFloat,
+        invisibleSpanners: [LayoutElement] = [],
+        showsInvisibleElements: Bool = false,
     ) {
         self.origin = origin
         self.size = size
@@ -60,6 +72,8 @@ public struct LayoutSystem: Sendable, Equatable {
         self.brackets = brackets
         self.spanners = spanners
         self.sp = sp
+        self.invisibleSpanners = invisibleSpanners
+        self.showsInvisibleElements = showsInvisibleElements
         let columns = Self.buildEventColumns(measures: measures, sp: sp)
         eventColumns = columns
         maxBBoxHalfWidth = columns
@@ -105,7 +119,7 @@ public struct LayoutSystem: Sendable, Equatable {
             let my = measure.origin.y
             for el in measure.elements {
                 switch el {
-                case let .chord(notes, _, _, _, _, _, _, voiceIndex, _):
+                case let .chord(notes, _, _, _, _, _, _, voiceIndex, _, _):
                     guard !notes.isEmpty else { continue }
                     let xs = notes.map { mx + $0.origin.x }
                     let ys = notes.map { my + $0.origin.y }

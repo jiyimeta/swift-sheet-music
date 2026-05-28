@@ -28,10 +28,15 @@ public struct StaffText: Sendable, Equatable {
     /// Per-element font overrides. `nil`-fields inherit from the
     /// `staffText` / `systemText` row of `TextStyleDefaults`.
     public var properties: TextProperties
-    /// MuseScore `<visible>0</visible>` flag. When false the text is
-    /// hidden — layout drops it entirely so it neither draws nor
-    /// reserves vertical space.
-    public var visible: Bool
+    /// Base element properties shared with every engravable element.
+    /// Currently carries only `<visible>`; see `ElementProperties`.
+    public var elementProperties: ElementProperties
+    /// MuseScore `<visible>0</visible>` flag. Sugar over
+    /// `elementProperties.visible`. Playback / MIDI is unaffected.
+    public var visible: Bool {
+        get { elementProperties.visible }
+        set { elementProperties.visible = newValue }
+    }
 
     public init(
         text: String,
@@ -48,7 +53,7 @@ public struct StaffText: Sendable, Equatable {
         self.color = color
         self.isSystemText = isSystemText
         self.properties = properties
-        self.visible = visible
+        elementProperties = ElementProperties(visible: visible)
     }
 
     /// The `TextStyleType` row this element inherits from. Picks

@@ -25,10 +25,18 @@ public struct Spanner: Sendable, Equatable {
     /// non-nil case is spanners that end mid-measure.
     public var nextFractionsOffset: Fraction?
     public var voltaEndings: [Int] // for Volta: the take-numbers (1, 2, …)
+    /// Base element properties shared with every engravable element.
+    /// Currently carries only `<visible>`; see `ElementProperties`.
+    public var elementProperties: ElementProperties
     /// MuseScore `<visible>0</visible>` flag. When false the spanner
     /// is hidden — layout omits it entirely (no glyphs, no reserved
-    /// space). Playback / MIDI continue to honour the spanner.
-    public var visible: Bool
+    /// space). Playback / MIDI continue to honour the spanner. Sugar over
+    /// `elementProperties.visible`.
+    public var visible: Bool {
+        get { elementProperties.visible }
+        set { elementProperties.visible = newValue }
+    }
+
     public var hairpin: HairpinPayload?
     /// MuseScore `<Ottava><subtype>8va</subtype></Ottava>` payload.
     /// Meaningful only when `kind == .ottava`. Drives MIDI pitch
@@ -50,7 +58,7 @@ public struct Spanner: Sendable, Equatable {
         self.nextMeasuresOffset = nextMeasuresOffset
         self.nextFractionsOffset = nextFractionsOffset
         self.voltaEndings = voltaEndings
-        self.visible = visible
+        elementProperties = ElementProperties(visible: visible)
         self.hairpin = hairpin
         self.ottava = ottava
     }

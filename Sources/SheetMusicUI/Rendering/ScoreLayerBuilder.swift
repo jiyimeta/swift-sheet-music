@@ -70,70 +70,92 @@ public enum ScoreLayerBuilder {
         let height = system.size.height + 1
         root.frame = CGRect(
             origin: .zero,
-            size: CGSize(
-                width: system.size.width,
-                height: height,
-            ),
+            size: CGSize(width: system.size.width, height: height),
         )
         root.masksToBounds = false
         root.backgroundColor = CGColor(gray: 1, alpha: 1)
 
-        drawStaves(
-            system: system, metrics: metrics,
-            height: height, into: root,
-        )
-        drawSystemBar(
-            system: system, metrics: metrics,
-            height: height, into: root,
-        )
-        drawBrackets(
-            system: system, metrics: metrics,
-            height: height, into: root,
-        )
-        drawPartLabels(
-            system: system, metrics: metrics,
-            height: height, into: root,
-        )
+        drawStaves(system: system, metrics: metrics, height: height, into: root)
+        drawSystemBar(system: system, metrics: metrics, height: height, into: root)
+        drawBrackets(system: system, metrics: metrics, height: height, into: root)
+        drawPartLabels(system: system, metrics: metrics, height: height, into: root)
 
         var ctx = BuildContext()
+        ctx.showsInvisibleElements = system.showsInvisibleElements
+        drawVisibleElements(
+            system: system, metrics: metrics,
+            height: height, context: &ctx, into: root,
+        )
+        // Routed-to-invisible chord/note glyphs already sit under a
+        // 50% group opacity layer (see drawInvisibleElements); flip
+        // the flag so per-note dispatch greys those noteheads rather
+        // than skipping them.
+        ctx.showsInvisibleElements = true
+        drawInvisibleElements(
+            system: system, metrics: metrics,
+            height: height, context: &ctx, root: root,
+        )
+        return (root, ctx.items)
+    }
+
+    private static func drawVisibleElements(
+        system: LayoutSystem, metrics: StaffMetrics,
+        height: CGFloat, context ctx: inout BuildContext, into parent: CALayer,
+    ) {
         for measure in system.measures {
             let base = CGPoint(x: measure.origin.x, y: measure.origin.y)
             for element in measure.elements {
-                drawElement(
-                    element, base: base,
-                    metrics: metrics, height: height,
-                    context: &ctx, into: root,
-                )
+                drawElement(element, base: base, metrics: metrics, height: height, context: &ctx, into: parent)
             }
             for el in measure.markers {
-                drawElement(
-                    el, base: base,
-                    metrics: metrics, height: height,
-                    context: &ctx, into: root,
-                )
+                drawElement(el, base: base, metrics: metrics, height: height, context: &ctx, into: parent)
             }
             for el in measure.jumps {
-                drawElement(
-                    el, base: base,
-                    metrics: metrics, height: height,
-                    context: &ctx, into: root,
-                )
+                drawElement(el, base: base, metrics: metrics, height: height, context: &ctx, into: parent)
             }
         }
         for el in system.spanners {
-            drawElement(
-                el, base: .zero,
-                metrics: metrics, height: height,
-                context: &ctx, into: root,
-            )
+            drawElement(el, base: .zero, metrics: metrics, height: height, context: &ctx, into: parent)
         }
-        return (root, ctx.items)
+    }
+
+    /// Builds invisible elements into a half-opacity sublayer.
+    /// MuseScore invisibleColor() = #808080; 50% black on white is the exact equivalent.
+    private static func drawInvisibleElements(
+        system: LayoutSystem, metrics: StaffMetrics,
+        height: CGFloat, context ctx: inout BuildContext, root: CALayer,
+    ) {
+        let hasInvisible = system.measures.contains { !$0.invisibleElements.isEmpty }
+            || !system.invisibleSpanners.isEmpty
+        guard hasInvisible else { return }
+        let invisibleLayer = CALayer()
+        invisibleLayer.frame = root.bounds
+        invisibleLayer.opacity = 0.5
+        invisibleLayer.masksToBounds = false
+        for measure in system.measures where !measure.invisibleElements.isEmpty {
+            let base = CGPoint(x: measure.origin.x, y: measure.origin.y)
+            for element in measure.invisibleElements {
+                drawElement(element, base: base, metrics: metrics, height: height, context: &ctx, into: invisibleLayer)
+            }
+        }
+        for el in system.invisibleSpanners {
+            drawElement(el, base: .zero, metrics: metrics, height: height, context: &ctx, into: invisibleLayer)
+        }
+        root.addSublayer(invisibleLayer)
     }
 
     /// Context threaded through draw calls to collect the layers that
     /// the selection renderer will later re-tint.
+    ///
+    /// `showsInvisibleElements` mirrors `LayoutSystem.showsInvisibleElements`
+    /// for the current build pass. Per-note dispatch in
+    /// `ScoreLayerBuilder+Chord.drawChord` reads it to decide whether
+    /// a hidden notehead should be greyed (50 %) or skipped outright.
+    /// Stem / beam / ledger geometry uses the full note list either
+    /// way (spec §6).
     struct BuildContext {
         var items: [ScoreItemID: [CAShapeLayer]] = [:]
+        var showsInvisibleElements = false
 
         mutating func attach(
             _ layer: CAShapeLayer, to id: ScoreItemID,

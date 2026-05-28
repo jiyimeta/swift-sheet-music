@@ -12,6 +12,7 @@ extension Clef {
                 name: "transposingClefType", text: transposingClefType,
             ))
         }
+        children.append(contentsOf: elementProperties.mscxChildren())
         return XMLTreeNode(name: "Clef", children: children)
     }
 }

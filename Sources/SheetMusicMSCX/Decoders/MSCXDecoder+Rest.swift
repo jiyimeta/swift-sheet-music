@@ -15,7 +15,9 @@ enum MSCXRestDecoder {
         let duration = try duration(
             forDurationType: durationText, node: node,
         )
-        return Chord(duration: duration, notes: [])
+        var rest = Chord(duration: duration, notes: [])
+        rest.elementProperties = ElementProperties(decodingMSCXChildrenOf: node)
+        return rest
     }
 
     private static func duration(

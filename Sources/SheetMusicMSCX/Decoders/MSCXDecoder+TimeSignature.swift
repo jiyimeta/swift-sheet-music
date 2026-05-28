@@ -10,6 +10,8 @@ extension TimeSignature {
         guard let dText = node.first("sigD")?.text, let d = Int(dText) else {
             throw SheetMusicError.malformedScore(reason: "TimeSig missing <sigD>")
         }
-        return TimeSignature(numerator: n, denominator: d)
+        var timeSig = TimeSignature(numerator: n, denominator: d)
+        timeSig.elementProperties = ElementProperties(decodingMSCXChildrenOf: node)
+        return timeSig
     }
 }

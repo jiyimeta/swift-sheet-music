@@ -30,6 +30,25 @@ public struct Chord: Sendable, Equatable {
     /// pair; the follower is identified by adjacency in the voice's
     /// element list.
     public var tremolo: Tremolo?
+    /// Base element properties shared with every engravable element.
+    /// Currently carries only `<visible>`; see `ElementProperties`.
+    public var elementProperties: ElementProperties
+    /// MuseScore `<visible>0</visible>` flag. Sugar over
+    /// `elementProperties.visible`. Playback / MIDI is unaffected.
+    /// Also covers rests (a rest is a `Chord` with `notes: []`).
+    public var visible: Bool {
+        get { elementProperties.visible }
+        set { elementProperties.visible = newValue }
+    }
+
+    /// Visibility of this chord's stem, independent of note visibility.
+    /// MuseScore `<Stem><visible>0</visible></Stem>` inside `<Chord>`.
+    /// Default `true`. When false, the stem (and flag) glyphs are
+    /// suppressed; the noteheads are NOT affected and continue to be
+    /// governed by per-note `Note.visible` / `Chord.visible`. Beam
+    /// suppression (`<Beam><visible>`) is a separate concern not yet
+    /// parsed.
+    public var stemVisible: Bool
 
     public init(
         duration: NoteDuration,
@@ -40,6 +59,8 @@ public struct Chord: Sendable, Equatable {
         graceNotesAfter: [GraceChord] = [],
         articulations: [ChordArticulation] = [],
         tremolo: Tremolo? = nil,
+        visible: Bool = true,
+        stemVisible: Bool = true,
     ) {
         self.duration = duration
         self.notes = notes
@@ -49,5 +70,7 @@ public struct Chord: Sendable, Equatable {
         self.graceNotesAfter = graceNotesAfter
         self.articulations = articulations
         self.tremolo = tremolo
+        self.stemVisible = stemVisible
+        elementProperties = ElementProperties(visible: visible)
     }
 }

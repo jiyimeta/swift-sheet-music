@@ -23,6 +23,15 @@ public struct Note: Sendable, Equatable {
     /// note is still engraved but emits no MIDI. C++: `Note::play()`,
     /// which gates `CompatMidiRender::collectNote`.
     public var play: Bool
+    /// Base element properties shared with every engravable element.
+    /// Currently carries only `<visible>`; see `ElementProperties`.
+    public var elementProperties: ElementProperties
+    /// MuseScore `<visible>0</visible>` flag. Sugar over
+    /// `elementProperties.visible`. Playback / MIDI is unaffected.
+    public var visible: Bool {
+        get { elementProperties.visible }
+        set { elementProperties.visible = newValue }
+    }
 
     public init(
         pitch: Int,
@@ -33,6 +42,7 @@ public struct Note: Sendable, Equatable {
         glissando: Glissando? = nil,
         headType: String? = nil,
         play: Bool = true,
+        visible: Bool = true,
     ) {
         self.pitch = pitch
         self.tpc = tpc
@@ -42,5 +52,6 @@ public struct Note: Sendable, Equatable {
         self.glissando = glissando
         self.headType = headType
         self.play = play
+        elementProperties = ElementProperties(visible: visible)
     }
 }

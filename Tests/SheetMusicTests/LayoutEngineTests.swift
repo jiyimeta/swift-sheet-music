@@ -144,7 +144,7 @@
                 score: score, options: .init(), availableWidth: 800,
             )
             for el in doc.systems[0].measures[0].elements {
-                if case let .chord(n, _, s, _, _, _, _, _, _) = el {
+                if case let .chord(n, _, s, _, _, _, _, _, _, _) = el {
                     return (n, s)
                 }
             }
@@ -266,7 +266,7 @@
             )
             var seen = -1
             for el in doc.systems[0].measures[0].elements {
-                if case let .chord(_, _, s, _, _, _, _, _, _) = el {
+                if case let .chord(_, _, s, _, _, _, _, _, _, _) = el {
                     seen += 1
                     if seen == voiceIndex { return s }
                 }

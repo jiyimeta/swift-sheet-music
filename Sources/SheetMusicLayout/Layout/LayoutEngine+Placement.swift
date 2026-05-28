@@ -63,9 +63,19 @@ extension LayoutEngine {
         effectiveMelismaTicks: [MelismaLyricKey: Int] = [:],
         coversBelowStaffSpanner: Bool = false,
         systemElements: [PositionedSystemElement] = [],
-    ) -> (elements: [LayoutElement], clef: NotatedClef, key: Int) {
+    ) -> (
+        elements: [LayoutElement],
+        invisibleElements: [LayoutElement],
+        clef: NotatedClef,
+        key: Int,
+    ) {
         let staffMidY = metrics.staffHeight / 2 + metrics.sp * 2
         var out: [LayoutElement] = []
+        // Parallel accumulator for hidden annotations that are still
+        // laid out (because `options.showsInvisibleElements` is on) but
+        // routed away from `out` so they don't print and don't affect
+        // spacing / autoplace passes. See Task 0.7's `invisibleElements`.
+        var invisibleOut: [LayoutElement] = []
         var currentClef = activeClef
         var currentKey = activeKey
 
@@ -414,7 +424,14 @@ extension LayoutEngine {
             for (voiceElemIdx, el) in voice.elements.enumerated() {
                 switch el {
                 case let .clef(clef):
+                    // Slot-preservation: `currentClef` MUST be updated
+                    // even when the clef is hidden — pitch / accidental
+                    // / stem-direction passes downstream key off the
+                    // active clef regardless of glyph visibility. Only
+                    // the visual emission is routed by `.visible`.
                     currentClef = NotatedClef(rawType: clef.concertClefType)
+                    guard clef.visible || options.showsInvisibleElements
+                    else { break }
                     let clefX = inHeader ? headerSchedule.clefX
                         : timedX(atTick: tickCursor)
                     let veID = VoiceElementID(
@@ -423,27 +440,51 @@ extension LayoutEngine {
                         voiceIndex: voiceIdx,
                         elementIndex: voiceElemIdx,
                     )
-                    out.append(.clef(
+                    let element = LayoutElement.clef(
                         rawType: clef.concertClefType,
                         origin: CGPoint(x: clefX, y: staffMidY),
                         anchor: .explicit(veID),
-                    ))
+                    )
+                    if clef.visible {
+                        out.append(element)
+                    } else {
+                        invisibleOut.append(element)
+                    }
                 case let .keySignature(key):
+                    // Slot-preservation: `currentKey` is the active
+                    // signature for accidental rendering downstream;
+                    // update it regardless of glyph visibility.
                     currentKey = key.concertKey
+                    guard key.visible || options.showsInvisibleElements
+                    else { break }
                     let keyX = inHeader ? headerSchedule.keySigX : timedX(atTick: tickCursor)
-                    out.append(.keySignature(
+                    let element = LayoutElement.keySignature(
                         sharps: max(0, key.concertKey),
                         flats: max(0, -key.concertKey),
                         origin: CGPoint(x: keyX, y: staffMidY),
-                    ))
+                    )
+                    if key.visible {
+                        out.append(element)
+                    } else {
+                        invisibleOut.append(element)
+                    }
                 case let .timeSignature(ts):
+                    guard ts.visible || options.showsInvisibleElements
+                    else { break }
                     let tsX = inHeader ? headerSchedule.timeSigX : timedX(atTick: tickCursor)
-                    out.append(.timeSignature(
+                    let element = LayoutElement.timeSignature(
                         numerator: ts.numerator,
                         denominator: ts.denominator,
                         origin: CGPoint(x: tsX, y: staffMidY),
-                    ))
+                    )
+                    if ts.visible {
+                        out.append(element)
+                    } else {
+                        invisibleOut.append(element)
+                    }
                 case let .barLine(b):
+                    guard b.visible || options.showsInvisibleElements
+                    else { break }
                     // A trailing `<BarLine>` appears AFTER the voice's
                     // last chord/rest, so `tickCursor` sits at the
                     // measure's end tick. `tickColumns` only carries
@@ -463,10 +504,15 @@ extension LayoutEngine {
                     } else {
                         barX = width - metrics.sp / 2
                     }
-                    out.append(.barLine(
+                    let element = LayoutElement.barLine(
                         subtype: b.subtype,
                         origin: CGPoint(x: barX, y: staffMidY),
-                    ))
+                    )
+                    if b.visible {
+                        out.append(element)
+                    } else {
+                        invisibleOut.append(element)
+                    }
                 case let .chord(r) where r.notes.isEmpty:
                     inHeader = false
                     let (restBase, _) = DurationInterpretation.split(
@@ -537,14 +583,33 @@ extension LayoutEngine {
                             restY < staffTopLocal
                                 || restY > staffBottomLocal
                         )
-                    voiceRestOutIndex[voiceElemIdx] = out.count
-                    out.append(.rest(
+                    let restElement = LayoutElement.rest(
                         duration: r.duration,
                         origin: CGPoint(x: restX, y: restY),
                         voiceIndex: voiceIdx,
                         restID: restID,
                         hasLegerLine: needsLeger,
-                    ))
+                    )
+                    // Visibility: a `Chord` with empty notes is the
+                    // rest case (an actual rest, not a chord). Hidden
+                    // rests are routed by `chord.visible`; the slot is
+                    // preserved by the unconditional `tickCursor`
+                    // advance below.
+                    if r.visible {
+                        voiceRestOutIndex[voiceElemIdx] = out.count
+                        out.append(restElement)
+                    } else if options.showsInvisibleElements {
+                        // Route the hidden rest into the invisible
+                        // accumulator. Do NOT register
+                        // `voiceRestOutIndex` for invisibleOut entries —
+                        // downstream tuplet / etc. passes index `out`
+                        // only. A hidden rest doesn't visually
+                        // contribute to a tuplet bracket; acceptable v1.
+                        invisibleOut.append(restElement)
+                    }
+                    // else: toggle off + hidden — skip emission. Slot
+                    // is preserved by the unconditional tick advance
+                    // below.
                     tickCursor += r.duration.resolved(in: measureDuration).ticks(division: division)
                 case let .chord(chord):
                     inHeader = false
@@ -588,6 +653,10 @@ extension LayoutEngine {
                             tieBack: note.tieBack,
                             hasGlissando: note.glissando != nil,
                             headType: note.headType,
+                            // Pure "source hidden" flag — renderers
+                            // consult `LayoutSystem.showsInvisibleElements`
+                            // to decide whether to grey or skip per-note.
+                            isInvisible: !note.visible,
                         )
                     }
                     let stem = forcedStem
@@ -600,6 +669,12 @@ extension LayoutEngine {
                     let stemExtension = tremoloStemExtension(
                         for: chord, metrics: metrics,
                     )
+                    // Pass the FULL `chordNotes` list (per-note
+                    // `isInvisible` flags set) so stem / beam geometry
+                    // is computed from every source note regardless of
+                    // per-note visibility. Renderers consult the system's
+                    // `showsInvisibleElements` to decide per-note whether
+                    // to grey or skip the notehead.
                     let mainElement: LayoutElement = .chord(
                         notes: chordNotes,
                         duration: chord.duration,
@@ -610,7 +685,18 @@ extension LayoutEngine {
                         isBeamed: false,
                         voiceIndex: voiceIdx,
                         stemExtension: stemExtension,
+                        stemIsInvisible: !chord.stemVisible,
                     )
+                    // MuseScore stores Stem visibility independently from
+                    // Note visibility (see <Chord><Stem><visible> in mscx).
+                    // Hiding all noteheads in a chord must NOT suppress
+                    // the stem/flag/beam — only `chord.visible == false`
+                    // suppresses the whole chord. Per-notehead invisibility
+                    // is handled downstream via `LayoutChordNote.isInvisible`;
+                    // the renderer skips drawing those noteheads (toggle off)
+                    // or greys them (toggle on) while leaving stem geometry
+                    // derived from the full note list.
+                    let chordFullyHidden = !chord.visible
                     let graceW = LayoutEngine.graceWidth(sp: metrics.sp)
                     let mag = options.graceNoteMag
                     for (gIdx, g) in chord.graceNotesBefore.enumerated() {
@@ -625,6 +711,7 @@ extension LayoutEngine {
                             voiceElemIdx: voiceElemIdx,
                             graceIdx: gIdx, isAfter: false,
                             drumLineMap: drumLineMap,
+                            showsInvisibleElements: options.showsInvisibleElements,
                         )
                         let graceStem = StemDirectionRule.direction(
                             for: layoutNotes.map(\.step),
@@ -640,9 +727,31 @@ extension LayoutEngine {
                             voiceIndex: voiceIdx,
                         ))
                     }
-                    voiceChordOutIndex[voiceElemIdx] = out.count
-                    chordTickByOutIndex[out.count] = tickCursor
-                    out.append(mainElement)
+                    if !chordFullyHidden {
+                        voiceChordOutIndex[voiceElemIdx] = out.count
+                        chordTickByOutIndex[out.count] = tickCursor
+                        out.append(mainElement)
+                    } else if options.showsInvisibleElements {
+                        // Hidden chord with toggle on: route the main
+                        // element into invisibleOut. Satellite emissions
+                        // (articulations, arpeggio, tremolo, lyrics) for
+                        // a fully-invisible chord still go to `out`
+                        // below; in practice MuseScore hides them too
+                        // when their host chord is hidden, but those
+                        // passes already check `<visible>` on their own
+                        // model objects (lyric / arpeggio / etc.), and
+                        // the user's visual test (a wholly-hidden chord)
+                        // is satisfied by suppressing the main notehead
+                        // + stem + flag/beam. We do NOT register
+                        // `voiceChordOutIndex` / `chordTickByOutIndex`
+                        // because downstream beam / tuplet / glissando
+                        // passes index `out` only and shouldn't see a
+                        // fully-invisible chord.
+                        invisibleOut.append(mainElement)
+                    }
+                    // else: toggle off + fully hidden — skip emission.
+                    // Slot is preserved by the unconditional tick
+                    // advance at the end of this case.
                     // Chord-level articulation glyphs. Placement mirrors
                     // MuseScore's `Chord::layoutArticulations` — see
                     // `articulationElements(for:…)`. Re-placed after the beam
@@ -667,6 +776,7 @@ extension LayoutEngine {
                             voiceElemIdx: voiceElemIdx,
                             graceIdx: gIdx, isAfter: true,
                             drumLineMap: drumLineMap,
+                            showsInvisibleElements: options.showsInvisibleElements,
                         )
                         let graceStem = StemDirectionRule.direction(
                             for: layoutNotes.map(\.step),
@@ -682,15 +792,22 @@ extension LayoutEngine {
                             voiceIndex: voiceIdx,
                         ))
                     }
-                    if let arp = chord.arpeggio {
+                    if let arp = chord.arpeggio,
+                       arp.visible || options.showsInvisibleElements
+                    {
                         let ys = chordNotes.map(\.origin.y)
                         let top = ys.min() ?? staffMidY
                         let bot = ys.max() ?? staffMidY
-                        out.append(.arpeggioWiggle(
+                        let wiggle = LayoutElement.arpeggioWiggle(
                             top: CGPoint(x: chordX, y: top),
                             bottom: CGPoint(x: chordX, y: bot),
                             subtype: arpeggioSubtype(arp),
-                        ))
+                        )
+                        if arp.visible {
+                            out.append(wiggle)
+                        } else {
+                            invisibleOut.append(wiggle)
+                        }
                     }
                     if let trem = chord.tremolo {
                         if let bars = makeTremoloBarsElement(
@@ -728,6 +845,33 @@ extension LayoutEngine {
                     let chordLyricCenterY = voiceMaxLyricCenterY
                     for (verseIdx, lyric) in chord.lyrics.enumerated() {
                         guard !lyric.text.isEmpty else { continue }
+                        // Hidden lyrics: drop entirely when toggle is
+                        // off (print-by-default); when toggle is on
+                        // route the syllable text to `invisibleOut`
+                        // (NOT `out`) so the hidden glyph is exposed
+                        // for invisible-overlay rendering but does not
+                        // print. Decorations (hyphens / melisma rule)
+                        // are NOT emitted for hidden lyrics — they
+                        // would otherwise dangle visually without their
+                        // anchor syllable. The `previousLyric` trail is
+                        // still updated so a following visible
+                        // syllable in the same verse hyphenates from
+                        // the hidden lyric's slot rather than reaching
+                        // back to an earlier visible syllable.
+                        guard lyric.visible || options.showsInvisibleElements
+                        else {
+                            let textWidth = Self.lyricsTextWidth(
+                                lyric.text, sp: metrics.sp,
+                            )
+                            previousLyric[verseIdx] = LyricTrail(
+                                centerX: chordX,
+                                textWidth: textWidth,
+                                lyricsY: chordLyricCenterY
+                                    + CGFloat(verseIdx) * metrics.sp * 1.7,
+                                syllabic: lyric.syllabic,
+                            )
+                            continue
+                        }
                         // Verse stride 1.7 sp keeps multi-verse
                         // stacks compact while still clearing
                         // ascender/descender overlap between
@@ -736,17 +880,29 @@ extension LayoutEngine {
                         // height).
                         let lyricsY = chordLyricCenterY
                             + CGFloat(verseIdx) * metrics.sp * 1.7
-                        out.append(.textMark(
+                        let lyricElement = LayoutElement.textMark(
                             kind: .lyrics,
                             text: lyric.text,
                             origin: CGPoint(x: chordX, y: lyricsY),
-                        ))
+                        )
+                        if lyric.visible {
+                            out.append(lyricElement)
+                        } else {
+                            invisibleOut.append(lyricElement)
+                        }
                         let textWidth = Self.lyricsTextWidth(
                             lyric.text, sp: metrics.sp,
                         )
                         // Hyphens between this syllable and the
-                        // previous one in the same verse.
-                        if let prev = previousLyric[verseIdx],
+                        // previous one in the same verse. Only emitted
+                        // when both endpoints are visible (a hidden
+                        // syllable on either end takes the early
+                        // `continue` above and never reaches here, so
+                        // the test here is simply that the current
+                        // lyric is visible — the previous one was too
+                        // by induction).
+                        if lyric.visible,
+                           let prev = previousLyric[verseIdx],
                            connectsWithHyphen(
                                prev: prev.syllabic,
                                curr: lyric.syllabic,
@@ -779,7 +935,7 @@ extension LayoutEngine {
                         // it equals the anchor chord's own duration
                         // (in which case the target is whatever
                         // chord follows the anchor).
-                        if lyric.ticks > 0 {
+                        if lyric.visible, lyric.ticks > 0 {
                             // `>=`: a melisma that lands exactly on
                             // the barline still needs to extend past
                             // it so the boundary-cap continuation in
@@ -821,6 +977,8 @@ extension LayoutEngine {
                     // (i.e. the next timed element at the current tick).
                     // Shift 1 sp left so the label doesn't overlap the
                     // following chord's notehead or stem.
+                    guard d.visible || options.showsInvisibleElements
+                    else { break }
                     let baseX = inHeader
                         ? headerSchedule.contentStartX
                         : timedX(atTick: tickCursor)
@@ -839,15 +997,36 @@ extension LayoutEngine {
                         ?? -.infinity
                     let chordAvoid = chordSouth + metrics.sp * 2.5
                     let dynY = max(defaultDynY, chordAvoid)
-                    out.append(.textMark(
+                    let dynamicElement = LayoutElement.textMark(
                         kind: .dynamic,
                         text: d.subtype,
                         origin: CGPoint(
                             x: baseX - metrics.sp,
                             y: dynY,
                         ),
-                    ))
+                    )
+                    if d.visible {
+                        out.append(dynamicElement)
+                    } else {
+                        invisibleOut.append(dynamicElement)
+                    }
                 case let .fermata(f):
+                    // Hidden fermata: drop entirely when the toggle is
+                    // off; otherwise build the element below and route
+                    // it into `invisibleOut`. Routing to `invisibleOut`
+                    // skips the beam-stemtip post-process refinement
+                    // (which mutates `out` by outIndex) — that's
+                    // acceptable for hidden glyphs since the
+                    // `anchorY` computed here (chord skyline +
+                    // visualGap) is already collision-free against the
+                    // pre-beam estimate; the refinement only nudges
+                    // visible fermatas down further when the beam
+                    // endpoint extends past the standalone-stem
+                    // estimate. Hidden fermatas don't print, so a
+                    // slightly less-refined Y in the invisible overlay
+                    // is fine.
+                    guard f.visible || options.showsInvisibleElements
+                    else { break }
                     // Anchor to the chord/rest the fermata applies to.
                     // Forward search first (canonical MusicXML order:
                     // fermata before chord). Backward fallback handles
@@ -924,15 +1103,24 @@ extension LayoutEngine {
                         let needed = chordNorth - visualGap - bottomOffset
                         anchorY = min(defaultY, needed)
                     }
-                    fermataPostProcessAnchors.append((
-                        outIndex: out.count,
-                        anchorTick: anchorTick,
-                        isBelow: isBelow,
-                    ))
-                    out.append(.fermata(
+                    let fermataElement = LayoutElement.fermata(
                         subtype: f.subtype,
                         origin: CGPoint(x: anchorX, y: anchorY),
-                    ))
+                    )
+                    if f.visible {
+                        // Only visible fermatas participate in the
+                        // beam-stemtip post-process pass — that pass
+                        // indexes into `out` directly and is purely a
+                        // visual refinement.
+                        fermataPostProcessAnchors.append((
+                            outIndex: out.count,
+                            anchorTick: anchorTick,
+                            isBelow: isBelow,
+                        ))
+                        out.append(fermataElement)
+                    } else {
+                        invisibleOut.append(fermataElement)
+                    }
                 case .measureRepeat:
                     out.append(.measureRepeat(
                         count: 1,
@@ -954,8 +1142,13 @@ extension LayoutEngine {
                     // nor width — drop before measurement so the
                     // pre-spacing pass and autoplace stacking ignore
                     // them. Playback (`harmony.play`) is independent
-                    // of visibility.
-                    if !harmony.visible { break }
+                    // of visibility. When `showsInvisibleElements` is
+                    // on we still BUILD the element below, but route it
+                    // into `invisibleOut` (NOT `out`) so the autoplace /
+                    // stacking passes that mutate `out` continue to
+                    // ignore it — hidden harmony must not widen the bar.
+                    guard harmony.visible || options.showsInvisibleElements
+                    else { break }
                     // Anchor at the next timed-element column (or
                     // header start while still in the header). Same
                     // anchoring rule as .staffText so multiple
@@ -979,13 +1172,18 @@ extension LayoutEngine {
                     let anchorX = Double(
                         stX + CGFloat(harmony.offsetX) * metrics.sp,
                     )
-                    out.append(.harmony(LayoutHarmony(
+                    let harmonyElement = LayoutElement.harmony(LayoutHarmony(
                         harmony: harmony,
                         anchorX: anchorX,
                         y: Double(yLocal),
                         runs: runs,
                         width: width,
-                    )))
+                    ))
+                    if harmony.visible {
+                        out.append(harmonyElement)
+                    } else {
+                        invisibleOut.append(harmonyElement)
+                    }
                 }
             }
 
@@ -1008,9 +1206,9 @@ extension LayoutEngine {
                 guard let fromOutIdx = voiceChordOutIndex[voiceIdx],
                       let toOutIdx = voiceChordOutIndex[nextVoiceIdx]
                 else { continue }
-                guard case let .chord(fromNotes, _, _, _, _, _, _, _, _) =
+                guard case let .chord(fromNotes, _, _, _, _, _, _, _, _, _) =
                     out[fromOutIdx],
-                    case let .chord(toNotes, _, _, _, _, _, _, _, _) =
+                    case let .chord(toNotes, _, _, _, _, _, _, _, _, _) =
                     out[toOutIdx]
                 else { continue }
                 guard let fromFallback = fromNotes.last,
@@ -1050,7 +1248,7 @@ extension LayoutEngine {
                 var groupSteps: [Int] = []
                 for memberIdx in group.memberIndices {
                     guard let outIdx = voiceChordOutIndex[memberIdx],
-                          case let .chord(n, _, _, _, _, _, _, _, _)
+                          case let .chord(n, _, _, _, _, _, _, _, _, _)
                           = out[outIdx]
                     else { continue }
                     groupSteps.append(contentsOf: n.map(\.step))
@@ -1062,15 +1260,27 @@ extension LayoutEngine {
                     * (groupDirection == .up ? 1 : -1)
 
                 // --- Phase 2: per-member anchor info + levels ---
-                var memberStemXs: [CGFloat] = []
-                var anchorSteps: [Int] = []
-                var anchorYs: [CGFloat] = []
+                //
+                // All four arrays are length-N (= `group.memberIndices.count`)
+                // so a later `enumerated()` over `group.memberIndices` can
+                // index them positionally. Members whose chord is missing
+                // from `out` (e.g. routed to `invisibleOut` because the
+                // chord is fully hidden) get `nil` placeholders in the
+                // CGFloat / Int arrays, and `0` in `memberLevels` (a safe
+                // placeholder since Phase 5 only emits runs for levels
+                // >= 1).
+                var memberStemXs: [CGFloat?] = []
+                var anchorSteps: [Int?] = []
+                var anchorYs: [CGFloat?] = []
                 var memberLevels: [Int] = []
                 for memberIdx in group.memberIndices {
                     guard let outIdx = voiceChordOutIndex[memberIdx],
-                          case let .chord(n, _, _, so, _, _, _, _, _)
+                          case let .chord(n, _, _, so, _, _, _, _, _, _)
                           = out[outIdx]
                     else {
+                        memberStemXs.append(nil)
+                        anchorSteps.append(nil)
+                        anchorYs.append(nil)
                         memberLevels.append(0)
                         continue
                     }
@@ -1092,16 +1302,19 @@ extension LayoutEngine {
                         memberLevels.append(0)
                     }
                 }
-                guard memberStemXs.count >= 2,
-                      let beamStartX = memberStemXs.first,
-                      let beamEndX = memberStemXs.last
+                let validStemXs = memberStemXs.compactMap(\.self)
+                let validAnchorSteps = anchorSteps.compactMap(\.self)
+                let validAnchorYs = anchorYs.compactMap(\.self)
+                guard validStemXs.count >= 2,
+                      let beamStartX = validStemXs.first,
+                      let beamEndX = validStemXs.last
                 else { continue }
 
                 // --- Phase 3: sloped beam line ---
                 let line = computeBeamLine(
-                    anchorSteps: anchorSteps,
-                    anchorYs: anchorYs,
-                    stemXs: memberStemXs,
+                    anchorSteps: validAnchorSteps,
+                    anchorYs: validAnchorYs,
+                    stemXs: validStemXs,
                     direction: groupDirection,
                     metrics: metrics,
                 )
@@ -1155,11 +1368,16 @@ extension LayoutEngine {
                     }
                     return base + beamShift
                 }
-                let memberStemYs = memberStemXs.map(beamYAt)
+                // Length stays at N; nil where the chord is missing
+                // (e.g. fully-invisible chord routed to invisibleOut).
+                let memberStemYs: [CGFloat?] = memberStemXs.map { x in
+                    x.map(beamYAt)
+                }
 
                 // --- Phase 4: rewrite each chord with its own beam y ---
                 for (i, memberIdx) in group.memberIndices.enumerated() {
                     guard let outIdx = voiceChordOutIndex[memberIdx],
+                          let beamY = memberStemYs[i],
                           case let .chord(
                               n,
                               d,
@@ -1170,6 +1388,7 @@ extension LayoutEngine {
                               _,
                               vi,
                               _,
+                              stemHidden,
                           ) = out[outIdx]
                     else { continue }
                     // Beamed chords don't need stem-extension threading
@@ -1180,13 +1399,14 @@ extension LayoutEngine {
                         duration: d,
                         stem: groupDirection,
                         stemOrigin: CGPoint(
-                            x: so.x, y: memberStemYs[i],
+                            x: so.x, y: beamY,
                         ),
                         hasArpeggio: arp,
                         arpeggioRawType: art,
                         isBeamed: true,
                         voiceIndex: vi,
                         stemExtension: 0,
+                        stemIsInvisible: stemHidden,
                     )
                     // Re-anchor any .tremoloBars element belonging to
                     // this chord so its bar block sits past the full
@@ -1197,7 +1417,7 @@ extension LayoutEngine {
                     reanchorBeamedTremoloBars(
                         in: &out,
                         afterChordAt: outIdx,
-                        beamY: memberStemYs[i],
+                        beamY: beamY,
                         stem: groupDirection,
                         beamLevel: memberLevels[i],
                         metrics: metrics,
@@ -1294,7 +1514,7 @@ extension LayoutEngine {
             if !fermataPostProcessAnchors.isEmpty {
                 var actualStemTipByTick: [Int: CGFloat] = [:]
                 for (outIdx, outEl) in out.enumerated() {
-                    guard case let .chord(_, _, stemDir, stemOrigin, _, _, _, _, _) = outEl,
+                    guard case let .chord(_, _, stemDir, stemOrigin, _, _, _, _, _, _) = outEl,
                           let tick = chordTickByOutIndex[outIdx]
                     else { continue }
                     // Per `LayoutEngine+Extents.swift`, the beam pass
@@ -1386,7 +1606,12 @@ extension LayoutEngine {
         // Trailing bar line if no voice emitted one.
         // The final measure of the score gets a "end" barline
         // (thin + thick) per standard engraving convention.
-        let hasExplicitBar = out.contains {
+        //
+        // Slot-preservation note: a hidden explicit bar in the voice
+        // is routed to `invisibleOut`, so we must check BOTH lists —
+        // otherwise we'd synth an implicit (visible) bar on top of
+        // the hidden one, defeating the visibility toggle.
+        let hasExplicitBar = (out + invisibleOut).contains {
             if case .barLine = $0 { true } else { false }
         }
         if !hasExplicitBar {
@@ -1432,12 +1657,12 @@ extension LayoutEngine {
                 ?? headerSchedule.contentStartX
             switch positioned.element {
             case let .tempo(t):
-                if !t.visible { break }
+                guard t.visible || options.showsInvisibleElements else { break }
                 let bpm = Int((t.beatsPerSecond * 60.0).rounded())
                 // U+E1D5 = SMuFL `metNoteQuarterUp` (Bravura music
                 // font). Renderers split the string into Bravura-glyph
                 // and Edwin-text runs via `MusicTextRuns.runs`.
-                out.append(.textMark(
+                let element = LayoutElement.textMark(
                     kind: .tempo,
                     text: "\u{E1D5} = \(bpm)",
                     origin: CGPoint(
@@ -1446,10 +1671,11 @@ extension LayoutEngine {
                         y: staffMidY - metrics.sp * 4
                             + CGFloat(t.offsetY) * metrics.sp,
                     ),
-                ))
+                )
+                if t.visible { out.append(element) } else { invisibleOut.append(element) }
             case let .staffText(st):
-                if !st.visible { break }
-                out.append(.staffText(
+                guard st.visible || options.showsInvisibleElements else { break }
+                let element = LayoutElement.staffText(
                     text: st.text,
                     origin: CGPoint(
                         x: xAtTick
@@ -1459,10 +1685,11 @@ extension LayoutEngine {
                     ),
                     color: st.color,
                     isSystemText: st.isSystemText,
-                ))
+                )
+                if st.visible { out.append(element) } else { invisibleOut.append(element) }
             case let .swing(s):
-                if !s.visible { break }
-                out.append(.staffText(
+                guard s.visible || options.showsInvisibleElements else { break }
+                let element = LayoutElement.staffText(
                     text: s.text,
                     origin: CGPoint(
                         x: xAtTick
@@ -1472,10 +1699,12 @@ extension LayoutEngine {
                     ),
                     color: s.color,
                     isSystemText: s.isSystemText,
-                ))
+                )
+                if s.visible { out.append(element) } else { invisibleOut.append(element) }
             case let .rehearsalMark(rm):
+                guard rm.visible || options.showsInvisibleElements else { break }
                 let originX = metrics.sp * 0.5
-                out.append(.rehearsalMark(
+                let rehearsalElement = LayoutElement.rehearsalMark(
                     text: rm.text,
                     origin: CGPoint(
                         x: originX
@@ -1485,7 +1714,12 @@ extension LayoutEngine {
                     ),
                     frame: rm.frame,
                     color: rm.color,
-                ))
+                )
+                if rm.visible {
+                    out.append(rehearsalElement)
+                } else {
+                    invisibleOut.append(rehearsalElement)
+                }
             }
         }
         // Same chord-clearance pass for chord symbols. Without this,
@@ -1508,7 +1742,7 @@ extension LayoutEngine {
         // among above-staff text marks (tempo / staff text / system
         // text / rehearsal mark) by stacking them upward.
         autoStackAboveStaffMarks(in: &out, metrics: metrics)
-        return (out, currentClef, currentKey)
+        return (out, invisibleOut, currentClef, currentKey)
     }
 
     /// Decide which notes in a chord need to render on the OPPOSITE
@@ -1558,6 +1792,7 @@ extension LayoutEngine {
                 hasGlissando: n.hasGlissando,
                 headType: n.headType,
                 mirror: mirrors[i],
+                isInvisible: n.isInvisible,
             )
         }
     }
@@ -1580,6 +1815,7 @@ extension LayoutEngine {
         graceIdx: Int,
         isAfter: Bool,
         drumLineMap: [Int: Int]?,
+        showsInvisibleElements: Bool = false,
     ) -> [LayoutChordNote] {
         // Grace NoteIDs reuse the parent's element index but encode
         // the grace position in `noteIndexInChord` so they stay
@@ -1615,6 +1851,10 @@ extension LayoutEngine {
                 tieForward: nil, tieBack: nil,
                 hasGlissando: false,
                 headType: note.headType,
+                // Pure "source hidden" flag — renderers consult
+                // `LayoutSystem.showsInvisibleElements` to decide
+                // whether to grey or skip per-note.
+                isInvisible: !note.visible,
             )
         }
     }

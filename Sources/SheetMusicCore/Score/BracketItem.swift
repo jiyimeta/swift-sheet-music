@@ -22,7 +22,16 @@ public struct BracketItem: Sendable, Equatable, Codable {
     public var type: BracketType
     public var span: Int
     public var column: Int
-    public var visible: Bool
+    /// Base element properties shared with every engravable element.
+    /// Currently carries only `<visible>`; see `ElementProperties`.
+    public var elementProperties: ElementProperties
+    /// MuseScore `<visible>0</visible>` attribute flag. When false the
+    /// bracket is hidden from rendered/printed output. Sugar over
+    /// `elementProperties.visible`.
+    public var visible: Bool {
+        get { elementProperties.visible }
+        set { elementProperties.visible = newValue }
+    }
 
     public init(
         type: BracketType,
@@ -33,6 +42,6 @@ public struct BracketItem: Sendable, Equatable, Codable {
         self.type = type
         self.span = max(span, 1)
         self.column = max(column, 0)
-        self.visible = visible
+        elementProperties = ElementProperties(visible: visible)
     }
 }

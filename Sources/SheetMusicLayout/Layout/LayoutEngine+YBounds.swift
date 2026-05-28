@@ -55,7 +55,7 @@ extension LayoutEngine {
             return [p.y]
         case let .note(_, _, _, _, p, _, _, _):
             return [p.y]
-        case let .chord(notes, _, _, so, _, _, _, _, _):
+        case let .chord(notes, _, _, so, _, _, _, _, _, _):
             var ys = notes.map(\.origin.y)
             ys.append(so.y)
             return ys
@@ -141,6 +141,11 @@ extension LayoutEngine {
             pageBreak: measure.pageBreak,
             tickColumns: measure.tickColumns,
             multiMeasureRest: measure.multiMeasureRest,
+            // Carry hidden annotations through the top-shift pass too,
+            // shifted by the same dy so they stay aligned with the
+            // visible content the renderer draws alongside them.
+            invisibleElements: measure.invisibleElements
+                .map { translate(element: $0, dy: dy) },
         )
     }
 }

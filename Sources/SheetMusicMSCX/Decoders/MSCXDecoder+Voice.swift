@@ -211,7 +211,9 @@ extension Voice {
             case "Fermata":
                 let subtype = child.first("subtype")?.text ?? ""
                 let stretch: Double? = child.first("timeStretch").flatMap { Double($0.text) }
-                appendVoiceElement(.fermata(Fermata(subtype: subtype, timeStretch: stretch)))
+                var fermata = Fermata(subtype: subtype, timeStretch: stretch)
+                fermata.elementProperties = ElementProperties(decodingMSCXChildrenOf: child)
+                appendVoiceElement(.fermata(fermata))
             case "StaffText":
                 if Swing.isSwingMarker(child) {
                     lifted(.swing(

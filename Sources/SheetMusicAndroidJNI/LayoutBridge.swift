@@ -192,7 +192,7 @@ public enum LayoutBridge {
             )
 
         case let .chord(
-            notes, duration, stem, stemOrigin, _, _, isBeamed, _, stemExtension,
+            notes, duration, stem, stemOrigin, _, _, isBeamed, _, stemExtension, _,
         ):
             encodeChord(
                 notes: notes, duration: duration, stem: stem,

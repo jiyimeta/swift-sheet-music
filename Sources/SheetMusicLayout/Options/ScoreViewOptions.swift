@@ -92,6 +92,36 @@ public struct ScoreViewOptions: Sendable, Equatable {
     /// Multi-measure rest collapse policy. Default `.disabled` matches
     /// pre-existing behavior — every rest measure renders individually.
     public var multiMeasureRest: MultiMeasureRestPolicy
+    /// MuseScore "Show Invisible". When true, elements with
+    /// `visible == false` are still laid out and tagged invisible so
+    /// renderers grey them (`#808080` on white = 50% opacity). When
+    /// false (print behaviour, the default), invisible elements are
+    /// dropped entirely.
+    ///
+    /// **Coverage** — element families and how this toggle applies:
+    ///
+    /// - **Fully honoured (visible+invisible routing, slot preserved):**
+    ///   `Tempo`, `StaffText`, `Swing`, `Harmony`, `Clef`,
+    ///   `KeySignature`, `TimeSignature`, `BarLine`, `Dynamic`,
+    ///   `Fermata`, `Lyric` (per-verse), `RehearsalMark`,
+    ///   `Chord.visible` (chord-level, routes whole chord including
+    ///   stem/flag/beam), per-`Note` visibility within a visible chord
+    ///   (per-notehead grey/skip — accompanying ledger lines follow
+    ///   the notehead; stem/beam unaffected, matches MuseScore),
+    ///   `Chord.stemVisible` (MSCX `<Stem><visible>`; stem + flag glyph
+    ///   suppressed when false; beam suppression via `<Beam><visible>`
+    ///   is separate future work), `Arpeggio`.
+    /// - **Partial — spanners:**
+    ///   `Spanner.visible == false` round-trips, and layout drops
+    ///   hidden spanners. The invisible-container routing (so toggle-on
+    ///   greys them) is not yet wired. Tracked as follow-up.
+    /// - **Out of scope:**
+    ///   MusicXML's `print-object="no"` is not yet ingested into
+    ///   `ElementProperties.visible`. MIDI is unaffected by visibility
+    ///   regardless of the toggle — `Note.play` governs playback.
+    ///
+    /// Default: `false` (print behaviour).
+    public var showsInvisibleElements: Bool
 
     public init(
         staffSize: CGFloat = 28,
@@ -102,6 +132,7 @@ public struct ScoreViewOptions: Sendable, Equatable {
         breakIndicatorVisibility: BreakIndicatorVisibility = .all,
         graceNoteMag: CGFloat = 0.6,
         multiMeasureRest: MultiMeasureRestPolicy = .disabled,
+        showsInvisibleElements: Bool = false,
     ) {
         self.staffSize = staffSize
         self.systemGap = systemGap
@@ -111,5 +142,6 @@ public struct ScoreViewOptions: Sendable, Equatable {
         self.breakIndicatorVisibility = breakIndicatorVisibility
         self.graceNoteMag = graceNoteMag
         self.multiMeasureRest = multiMeasureRest
+        self.showsInvisibleElements = showsInvisibleElements
     }
 }

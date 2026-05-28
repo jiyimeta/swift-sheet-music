@@ -11,6 +11,7 @@ extension BarLine {
         if let subtype {
             children.append(XMLTreeNode(name: "subtype", text: subtype))
         }
+        children.append(contentsOf: elementProperties.mscxChildren())
         return XMLTreeNode(name: "BarLine", children: children)
     }
 }

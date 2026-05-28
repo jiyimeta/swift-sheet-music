@@ -97,7 +97,7 @@
                     return false
                 },
             )
-            guard case let .chord(notes, _, _, _, _, _, _, _, _) = chord,
+            guard case let .chord(notes, _, _, _, _, _, _, _, _, _) = chord,
                   let n = notes.first
             else { throw InkAbsenceError.noChordElement }
 

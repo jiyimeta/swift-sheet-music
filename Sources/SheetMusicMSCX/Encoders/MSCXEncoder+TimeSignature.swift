@@ -4,12 +4,11 @@ import SheetMusicXMLTools
 
 extension TimeSignature {
     func encode() -> XMLTreeNode {
-        XMLTreeNode(
-            name: "TimeSig",
-            children: [
-                XMLTreeNode(name: "sigN", text: String(numerator)),
-                XMLTreeNode(name: "sigD", text: String(denominator)),
-            ],
-        )
+        var children: [XMLTreeNode] = [
+            XMLTreeNode(name: "sigN", text: String(numerator)),
+            XMLTreeNode(name: "sigD", text: String(denominator)),
+        ]
+        children.append(contentsOf: elementProperties.mscxChildren())
+        return XMLTreeNode(name: "TimeSig", children: children)
     }
 }

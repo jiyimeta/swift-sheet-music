@@ -5,8 +5,19 @@ public struct KeySignature: Sendable, Equatable {
     /// Sharp/flat count: -7 (Cb) … +7 (C#). 0 = C major / a minor.
     public var concertKey: Int
 
-    public init(concertKey: Int) {
+    /// Base element properties shared with every engravable element.
+    /// Currently carries only `<visible>`; see `ElementProperties`.
+    public var elementProperties: ElementProperties
+    /// MuseScore `<visible>0</visible>` flag. Sugar over
+    /// `elementProperties.visible`. Playback / MIDI is unaffected.
+    public var visible: Bool {
+        get { elementProperties.visible }
+        set { elementProperties.visible = newValue }
+    }
+
+    public init(concertKey: Int, visible: Bool = true) {
         self.concertKey = concertKey
+        elementProperties = ElementProperties(visible: visible)
     }
 }
 

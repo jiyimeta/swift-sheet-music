@@ -139,6 +139,7 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
             )
         }
         // Measures — skip those entirely outside the visible x range.
+        let showsInvisible = system.showsInvisibleElements
         for measure in system.measures {
             if let vx = visibleX {
                 let mLeft = system.origin.x + measure.origin.x
@@ -156,14 +157,35 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                     element,
                     base: base,
                     metrics: metrics,
+                    showsInvisibleElements: showsInvisible,
                     into: &context,
                 )
+            }
+            if !measure.invisibleElements.isEmpty {
+                var grey = context
+                // MuseScore invisibleColor() = #808080; 50% black on the
+                // white score background is the exact equivalent.
+                grey.opacity = 0.5
+                for element in measure.invisibleElements {
+                    drawElement(
+                        element,
+                        base: base,
+                        metrics: metrics,
+                        // Routed-to-invisible chord/note glyphs already
+                        // sit under a 50% group context; force-enable
+                        // showsInvisible so per-note dispatch greys
+                        // rather than skips them.
+                        showsInvisibleElements: true,
+                        into: &grey,
+                    )
+                }
             }
             for el in measure.markers {
                 drawElement(
                     el,
                     base: base,
                     metrics: metrics,
+                    showsInvisibleElements: showsInvisible,
                     into: &context,
                 )
             }
@@ -172,6 +194,7 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                     el,
                     base: base,
                     metrics: metrics,
+                    showsInvisibleElements: showsInvisible,
                     into: &context,
                 )
             }
@@ -182,8 +205,24 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                 el,
                 base: system.origin,
                 metrics: metrics,
+                showsInvisibleElements: showsInvisible,
                 into: &context,
             )
+        }
+        if !system.invisibleSpanners.isEmpty {
+            var grey = context
+            // MuseScore invisibleColor() = #808080; 50% black on the
+            // white score background is the exact equivalent.
+            grey.opacity = 0.5
+            for el in system.invisibleSpanners {
+                drawElement(
+                    el,
+                    base: system.origin,
+                    metrics: metrics,
+                    showsInvisibleElements: true,
+                    into: &grey,
+                )
+            }
         }
     }
 
@@ -191,6 +230,7 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
         _ element: LayoutElement,
         base: CGPoint,
         metrics: StaffMetrics,
+        showsInvisibleElements: Bool = false,
         into context: inout GraphicsContext,
     ) {
         func shift(_ p: CGPoint) -> CGPoint {
@@ -241,6 +281,7 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
             isBeamed,
             _,
             stemExt,
+            stemIsInvisible,
         ):
             let (baseDur, dots) = DurationInterpretation.split(dur)
             let shiftedNotes = notes.map {
@@ -254,6 +295,7 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                     hasGlissando: $0.hasGlissando,
                     headType: $0.headType,
                     mirror: $0.mirror,
+                    isInvisible: $0.isInvisible,
                 )
             }
             for n in shiftedNotes {
@@ -261,38 +303,103 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                 let visualOrigin = CGPoint(
                     x: n.origin.x + mirrorDx, y: n.origin.y,
                 )
-                NoteheadRenderer.drawHead(
-                    context: &context, at: visualOrigin,
-                    duration: baseDur, headType: n.headType,
-                    metrics: metrics,
-                )
-                if let acc = n.accidental {
-                    AccidentalRenderer.draw(
-                        context: &context, accidental: acc,
-                        origin: visualOrigin, metrics: metrics,
+                if n.isInvisible {
+                    // Toggle off + per-note hidden: skip the head /
+                    // accidental / dots entirely (stem geometry still
+                    // sees the note via shiftedNotes below). Slot is
+                    // preserved by the chord's natural origin.
+                    guard showsInvisibleElements else { continue }
+                    // MuseScore invisibleColor() = #808080; 50% black on the
+                    // white score background is the exact equivalent.
+                    var grey = context
+                    grey.opacity = 0.5
+                    NoteheadRenderer.drawHead(
+                        context: &grey, at: visualOrigin,
+                        duration: baseDur, headType: n.headType,
+                        metrics: metrics,
+                    )
+                    if let acc = n.accidental {
+                        AccidentalRenderer.draw(
+                            context: &grey, accidental: acc,
+                            origin: visualOrigin, metrics: metrics,
+                        )
+                    }
+                    DotRenderer.draw(
+                        context: &grey,
+                        after: visualOrigin,
+                        count: dots,
+                        onStaffLine: n.step.isMultiple(of: 2),
+                        metrics: metrics,
+                    )
+                } else {
+                    NoteheadRenderer.drawHead(
+                        context: &context, at: visualOrigin,
+                        duration: baseDur, headType: n.headType,
+                        metrics: metrics,
+                    )
+                    if let acc = n.accidental {
+                        AccidentalRenderer.draw(
+                            context: &context, accidental: acc,
+                            origin: visualOrigin, metrics: metrics,
+                        )
+                    }
+                    DotRenderer.draw(
+                        context: &context,
+                        after: visualOrigin,
+                        count: dots,
+                        onStaffLine: n.step.isMultiple(of: 2),
+                        metrics: metrics,
                     )
                 }
-                DotRenderer.draw(
-                    context: &context,
-                    after: visualOrigin,
-                    count: dots,
-                    onStaffLine: n.step.isMultiple(of: 2),
+            }
+            // Ledger lines — per-note. A ledger line attached to a
+            // hidden notehead must follow the notehead's visibility:
+            // skip at toggle-off, grey at 50% at toggle-on. Visible
+            // notes' ledger lines stay at full opacity.
+            let visibleLedgerNotes = shiftedNotes.filter { !$0.isInvisible }
+            let invisibleLedgerNotes = shiftedNotes.filter(\.isInvisible)
+            drawLedgerLines(
+                context: &context,
+                notes: visibleLedgerNotes, stem: stem,
+                metrics: metrics,
+            )
+            if !invisibleLedgerNotes.isEmpty, showsInvisibleElements {
+                // MuseScore invisibleColor() = #808080; 50% black on
+                // white is the equivalent.
+                var grey = context
+                grey.opacity = 0.5
+                drawLedgerLines(
+                    context: &grey,
+                    notes: invisibleLedgerNotes, stem: stem,
                     metrics: metrics,
                 )
             }
-            // Ledger lines
-            drawLedgerLines(
-                context: &context,
-                notes: shiftedNotes, stem: stem,
-                metrics: metrics,
-            )
             let beamY: CGFloat? = isBeamed ? shift(stemOrigin).y : nil
-            StemRenderer.draw(
-                context: &context, notes: shiftedNotes,
-                direction: stem, duration: baseDur,
-                isBeamed: isBeamed, beamY: beamY,
-                stemExtension: stemExt, metrics: metrics,
-            )
+            // Stem visibility (MSCX `<Stem><visible>`) is independent of
+            // notehead visibility. When the stem is hidden:
+            //   * toggle off → skip stem + flag entirely.
+            //   * toggle on  → grey both at 50%.
+            // Beam suppression on hidden-stem chords is a separate
+            // concern (would require `<Beam><visible>`).
+            if stemIsInvisible {
+                if showsInvisibleElements {
+                    var grey = context
+                    grey.opacity = 0.5
+                    StemRenderer.draw(
+                        context: &grey, notes: shiftedNotes,
+                        direction: stem, duration: baseDur,
+                        isBeamed: isBeamed, beamY: beamY,
+                        stemExtension: stemExt, metrics: metrics,
+                    )
+                }
+            } else {
+                StemRenderer.draw(
+                    context: &context, notes: shiftedNotes,
+                    direction: stem, duration: baseDur,
+                    isBeamed: isBeamed, beamY: beamY,
+                    stemExtension: stemExt, metrics: metrics,
+                )
+            }
         case let .textMark(.dynamic, text, p):
             TextMarkRenderer.drawDynamic(
                 context: &context, text: text,

@@ -13,9 +13,20 @@ public struct Fermata: Sendable, Equatable {
     /// C++: `mu::engraving::Fermata::timeStretch`.
     public var timeStretch: Double
 
-    public init(subtype: String, timeStretch: Double? = nil) {
+    /// Base element properties shared with every engravable element.
+    /// Currently carries only `<visible>`; see `ElementProperties`.
+    public var elementProperties: ElementProperties
+    /// MuseScore `<visible>0</visible>` flag. Sugar over
+    /// `elementProperties.visible`. Playback / MIDI is unaffected.
+    public var visible: Bool {
+        get { elementProperties.visible }
+        set { elementProperties.visible = newValue }
+    }
+
+    public init(subtype: String, timeStretch: Double? = nil, visible: Bool = true) {
         self.subtype = subtype
         self.timeStretch = timeStretch ?? Self.defaultTimeStretch(for: subtype)
+        elementProperties = ElementProperties(visible: visible)
     }
 
     /// Subtype → default MIDI hold ratio. Mirrors MuseScore's

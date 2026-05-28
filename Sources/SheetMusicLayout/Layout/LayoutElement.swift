@@ -56,6 +56,12 @@ public enum LayoutElement: Sendable, Equatable {
         // length; tremolo placement uses the same value so the bars
         // stay centred on the extended stem.
         stemExtension: CGFloat,
+        // True when the source `Chord.stemVisible == false` (i.e. MSCX
+        // `<Stem><visible>0`). The stem (and its flag) is skipped at
+        // toggle-off and greyed at 50% at toggle-on. Notehead visibility
+        // is independent and carried by `LayoutChordNote.isInvisible`.
+        // Beam suppression on hidden-stem chords is a separate concern.
+        stemIsInvisible: Bool,
     )
     /// A grace note (or grace chord) drawn at reduced size next to
     /// its parent main chord. Carries a `relativeX` offset from the
@@ -272,6 +278,10 @@ public struct LayoutChordNote: Sendable, Equatable {
     /// cluster (adjacent staff lines / spaces). Mirrors MuseScore's
     /// `ChordLayout::layoutChords2`.
     public let mirror: Bool
+    /// True when this notehead's source `Note.visible == false` and the
+    /// chord is being laid out with `showsInvisibleElements`. Renderers
+    /// grey just this notehead. The slot is preserved regardless.
+    public let isInvisible: Bool
 
     public init(
         noteID: NoteID,
@@ -283,6 +293,7 @@ public struct LayoutChordNote: Sendable, Equatable {
         hasGlissando: Bool,
         headType: String? = nil,
         mirror: Bool = false,
+        isInvisible: Bool = false,
     ) {
         self.noteID = noteID
         self.step = step
@@ -293,6 +304,7 @@ public struct LayoutChordNote: Sendable, Equatable {
         self.hasGlissando = hasGlissando
         self.headType = headType
         self.mirror = mirror
+        self.isInvisible = isInvisible
     }
 
     /// Horizontal offset from `origin.x` to the visual centre of the

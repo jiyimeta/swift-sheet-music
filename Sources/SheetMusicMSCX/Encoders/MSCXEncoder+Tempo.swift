@@ -20,9 +20,7 @@ extension Tempo {
                 ],
             ))
         }
-        if !visible {
-            children.append(XMLTreeNode(name: "visible", text: "0"))
-        }
+        children.append(contentsOf: elementProperties.mscxChildren())
         properties.appendXML(to: &children)
         return XMLTreeNode(name: "Tempo", children: children)
     }

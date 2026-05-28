@@ -21,6 +21,7 @@ extension ScoreLayerBuilder {
         stemOrigin: CGPoint,
         isBeamed: Bool,
         tremoloStemExtension: CGFloat = 0,
+        stemIsInvisible: Bool = false,
         base: CGPoint,
         metrics: StaffMetrics,
         height: CGFloat,
@@ -42,6 +43,7 @@ extension ScoreLayerBuilder {
                 hasGlissando: n.hasGlissando,
                 headType: n.headType,
                 mirror: n.mirror,
+                isInvisible: n.isInvisible,
             )
         }
         for n in shifted {
@@ -55,18 +57,38 @@ extension ScoreLayerBuilder {
             let visualOrigin = CGPoint(
                 x: n.origin.x + mirrorDx, y: n.origin.y,
             )
+            // When a single notehead is invisible:
+            //   * toggle off → skip drawing the head / accidental /
+            //     dots entirely. Stem / ledger lines below still see
+            //     this note via `shifted` (slot preserved).
+            //   * toggle on → route the head + accidental + dots into a
+            //     half-opacity group layer. MuseScore invisibleColor()
+            //     = #808080; 50% black on white is the equivalent.
+            //     Stem / ledger lines stay in `parent` at full opacity.
+            let noteTarget: CALayer
+            if n.isInvisible {
+                guard context.showsInvisibleElements else { continue }
+                let greyGroup = CALayer()
+                greyGroup.frame = parent.bounds
+                greyGroup.opacity = 0.5
+                greyGroup.masksToBounds = false
+                parent.addSublayer(greyGroup)
+                noteTarget = greyGroup
+            } else {
+                noteTarget = parent
+            }
             if let layer = glyphLayer(
                 glyph, at: visualOrigin,
                 size: metrics.glyphFontSize,
                 height: height,
             ) {
-                parent.addSublayer(layer)
+                noteTarget.addSublayer(layer)
                 context.attach(layer, to: .note(n.noteID))
             }
             if let acc = n.accidental,
                let accLayer = drawAccidental(
                    accidental: acc, origin: visualOrigin,
-                   metrics: metrics, height: height, into: parent,
+                   metrics: metrics, height: height, into: noteTarget,
                )
             {
                 context.attach(accLayer, to: .note(n.noteID))
@@ -74,13 +96,31 @@ extension ScoreLayerBuilder {
             drawDots(
                 after: visualOrigin, count: dots,
                 onStaffLine: n.step.isMultiple(of: 2),
-                metrics: metrics, height: height, into: parent,
+                metrics: metrics, height: height, into: noteTarget,
             )
         }
+        // Ledger lines — per-note. A ledger line attached to a hidden
+        // notehead must follow the notehead's visibility: skip at
+        // toggle-off, grey at 50% at toggle-on.
+        let visibleLedgerNotes = shifted.filter { !$0.isInvisible }
+        let invisibleLedgerNotes = shifted.filter(\.isInvisible)
         drawLedgerLines(
-            notes: shifted, stem: stem, metrics: metrics,
+            notes: visibleLedgerNotes, stem: stem, metrics: metrics,
             height: height, into: parent,
         )
+        if !invisibleLedgerNotes.isEmpty, context.showsInvisibleElements {
+            // MuseScore invisibleColor() = #808080; 50% black on
+            // white is the equivalent.
+            let greyGroup = CALayer()
+            greyGroup.frame = parent.bounds
+            greyGroup.opacity = 0.5
+            greyGroup.masksToBounds = false
+            parent.addSublayer(greyGroup)
+            drawLedgerLines(
+                notes: invisibleLedgerNotes, stem: stem, metrics: metrics,
+                height: height, into: greyGroup,
+            )
+        }
         let shiftedStemOrigin = CGPoint(
             x: base.x + stemOrigin.x,
             y: base.y + stemOrigin.y,
@@ -103,12 +143,35 @@ extension ScoreLayerBuilder {
         let dotOnLineExtension: CGFloat = stemUpTopOnLine
             ? metrics.sp * 0.5
             : 0
-        drawStem(
-            notes: shifted, direction: stem, duration: baseDur,
-            isBeamed: isBeamed, beamY: beamY,
-            stemExtension: dotOnLineExtension + tremoloStemExtension,
-            metrics: metrics, height: height, into: parent,
-        )
+        // Stem visibility (MSCX `<Stem><visible>`) is independent of
+        // notehead visibility. When the stem is hidden:
+        //   * toggle off → skip stem + flag entirely.
+        //   * toggle on  → grey both at 50% via a child layer group.
+        // Beam suppression on hidden-stem chords is a separate concern.
+        if stemIsInvisible {
+            if context.showsInvisibleElements {
+                // MuseScore invisibleColor() = #808080; 50% black on
+                // white is the equivalent.
+                let greyGroup = CALayer()
+                greyGroup.frame = parent.bounds
+                greyGroup.opacity = 0.5
+                greyGroup.masksToBounds = false
+                parent.addSublayer(greyGroup)
+                drawStem(
+                    notes: shifted, direction: stem, duration: baseDur,
+                    isBeamed: isBeamed, beamY: beamY,
+                    stemExtension: dotOnLineExtension + tremoloStemExtension,
+                    metrics: metrics, height: height, into: greyGroup,
+                )
+            }
+        } else {
+            drawStem(
+                notes: shifted, direction: stem, duration: baseDur,
+                isBeamed: isBeamed, beamY: beamY,
+                stemExtension: dotOnLineExtension + tremoloStemExtension,
+                metrics: metrics, height: height, into: parent,
+            )
+        }
     }
 
     /// True when `dur` would normally be drawn with a flag (i.e.,

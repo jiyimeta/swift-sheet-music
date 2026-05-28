@@ -4,6 +4,8 @@ import SheetMusicXMLTools
 
 extension BarLine {
     static func decode(_ node: XMLTreeNode) throws -> BarLine {
-        BarLine(subtype: node.first("subtype")?.text)
+        var bar = BarLine(subtype: node.first("subtype")?.text)
+        bar.elementProperties = ElementProperties(decodingMSCXChildrenOf: node)
+        return bar
     }
 }

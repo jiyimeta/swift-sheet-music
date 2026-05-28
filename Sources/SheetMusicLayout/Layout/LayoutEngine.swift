@@ -154,6 +154,8 @@ public enum LayoutEngine {
             brackets: system.brackets,
             spanners: system.spanners,
             sp: system.sp,
+            invisibleSpanners: system.invisibleSpanners,
+            showsInvisibleElements: system.showsInvisibleElements,
         )
     }
 

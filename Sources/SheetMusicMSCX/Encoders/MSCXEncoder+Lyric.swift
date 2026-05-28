@@ -27,6 +27,7 @@ extension Lyric {
         if options.targetVersion == .v3 {
             children.append(XMLTreeNode(name: "linkedMain"))
         }
+        children.append(contentsOf: elementProperties.mscxChildren())
         properties.appendXML(to: &children)
         children.append(XMLTreeNode(name: "text", text: text))
         return XMLTreeNode(name: "Lyrics", children: children)

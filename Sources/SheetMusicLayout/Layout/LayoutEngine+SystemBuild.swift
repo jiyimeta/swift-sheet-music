@@ -74,6 +74,10 @@ extension LayoutEngine {
             let measureIdx: Int
             let width: CGFloat
             var perStaffElements: [Int: [LayoutElement]]
+            /// Hidden annotations laid out under `showsInvisibleElements`,
+            /// kept parallel to `perStaffElements` so the system-wide
+            /// post-passes (lyric/melisma Y align) leave them alone.
+            var perStaffInvisibleElements: [Int: [LayoutElement]]
             let staff0Measure: Measure?
             let tickCols: [Int: CGFloat]
             /// When non-nil, this entry is a multi-measure-rest run-start
@@ -114,6 +118,7 @@ extension LayoutEngine {
                     measureIdx: measureIdx,
                     width: widths[j],
                     perStaffElements: [:],
+                    perStaffInvisibleElements: [:],
                     staff0Measure: staff0Measure,
                     tickCols: [:],
                     multiMeasureRestCount: runLen,
@@ -140,6 +145,7 @@ extension LayoutEngine {
                 division: context.score.division,
             )
             var perStaff: [Int: [LayoutElement]] = [:]
+            var perStaffInvisible: [Int: [LayoutElement]] = [:]
             for (staffIdx, staff) in staves.enumerated() {
                 guard measureIdx < staff.measures.count else { continue }
                 let m = staff.measures[measureIdx]
@@ -201,9 +207,11 @@ extension LayoutEngine {
                     graceNoteMag: context.options.graceNoteMag,
                     coversBelowStaffSpanner: coversBelowStaffSpanner,
                     systemElements: systemElementsForStaff,
+                    showsInvisibleElements: context.options.showsInvisibleElements,
                     measureDuration: measDuration,
                 )
                 let els: [LayoutElement]
+                let invisibleEls: [LayoutElement]
                 let newClef: NotatedClef
                 let newKey: Int
                 if let cached = context.cache?
@@ -211,6 +219,7 @@ extension LayoutEngine {
                     cached.inputs == placementInputs
                 {
                     els = cached.elements
+                    invisibleEls = cached.invisibleElements
                     newClef = cached.newClef
                     newKey = cached.newKey
                     context.cache?.placementHits += 1
@@ -239,6 +248,7 @@ extension LayoutEngine {
                         systemElements: systemElementsForStaff,
                     )
                     els = result.elements
+                    invisibleEls = result.invisibleElements
                     newClef = result.clef
                     newKey = result.key
                     context.cache?.placementMisses += 1
@@ -247,6 +257,7 @@ extension LayoutEngine {
                             .StaffPlacement(
                                 inputs: placementInputs,
                                 elements: els,
+                                invisibleElements: invisibleEls,
                                 newClef: newClef,
                                 newKey: newKey,
                             )
@@ -256,6 +267,9 @@ extension LayoutEngine {
                 clefs[staffIdx] = newClef
                 keys[staffIdx] = newKey
                 perStaff[staffIdx] = els
+                if !invisibleEls.isEmpty {
+                    perStaffInvisible[staffIdx] = invisibleEls
+                }
             }
             let staff0Measure: Measure? = measureIdx
                 < (staves.first?.measures.count ?? 0)
@@ -265,6 +279,7 @@ extension LayoutEngine {
                 measureIdx: measureIdx,
                 width: w,
                 perStaffElements: perStaff,
+                perStaffInvisibleElements: perStaffInvisible,
                 staff0Measure: staff0Measure,
                 tickCols: tickCols,
                 multiMeasureRestCount: nil,
@@ -641,20 +656,28 @@ extension LayoutEngine {
             let w = um.width
             let measureIdx = um.measureIdx
             var aggregated: [LayoutElement] = []
+            var aggregatedInvisible: [LayoutElement] = []
             var markers: [LayoutElement] = []
             var jumps: [LayoutElement] = []
             for staffIdx in staves.indices {
-                guard let els = um.perStaffElements[staffIdx]
-                else { continue }
                 // Placement emits positions relative to "staff top
                 // at sp*2" (see `staffMidY` inside
                 // `placeMeasureElements`). Shift by the difference
                 // so placement coords end up in system coords.
                 let yOffset = staffOrigins[staffIdx].y
                     - metrics.sp * 2
-                aggregated.append(contentsOf: els.map {
-                    translate(element: $0, dy: yOffset)
-                })
+                if let els = um.perStaffElements[staffIdx] {
+                    aggregated.append(contentsOf: els.map {
+                        translate(element: $0, dy: yOffset)
+                    })
+                }
+                // Hidden annotations get the same staff-local → system
+                // translation so renderers can draw them at the right Y.
+                if let invisible = um.perStaffInvisibleElements[staffIdx] {
+                    aggregatedInvisible.append(contentsOf: invisible.map {
+                        translate(element: $0, dy: yOffset)
+                    })
+                }
             }
             // Markers / jumps come from the first staff only — they
             // apply to the whole system at this measure, not per
@@ -723,6 +746,7 @@ extension LayoutEngine {
                 lineBreak: sourceMeasure?.lineBreak ?? false,
                 pageBreak: sourceMeasure?.pageBreak ?? false,
                 tickColumns: um.tickCols,
+                invisibleElements: aggregatedInvisible,
             ))
             xCursor += w
         }
@@ -790,6 +814,7 @@ extension LayoutEngine {
             brackets: adjustedBrackets,
             spanners: [],
             sp: metrics.sp,
+            showsInvisibleElements: context.options.showsInvisibleElements,
         )
     }
 }

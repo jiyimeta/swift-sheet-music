@@ -20,6 +20,7 @@ extension Chord {
             let stretch = Double(arpeggioNode.first("timeStretch")?.text ?? "1") ?? 1.0
             let userLen = Double(arpeggioNode.first("userLen1")?.text ?? "0") ?? 0.0
             arpeggio = Arpeggio(subtype: subtype, timeStretch: stretch, userLen1: userLen)
+            arpeggio?.elementProperties = ElementProperties(decodingMSCXChildrenOf: arpeggioNode)
         }
 
         // <Lyrics><text>syllable</text></Lyrics> — one per verse line.
@@ -33,11 +34,13 @@ extension Chord {
             let syllabic = (lyricsNode.first("syllabic")?.text)
                 .flatMap(Syllabic.init(mscxValue:)) ?? .single
             let ticks = Int(lyricsNode.first("ticks")?.text ?? "0") ?? 0
-            lyricsMap[verse] = Lyric(
+            var lyric = Lyric(
                 text: text, syllabic: syllabic, ticks: ticks,
                 verse: verse,
                 properties: TextProperties.decode(lyricsNode),
             )
+            lyric.elementProperties = ElementProperties(decodingMSCXChildrenOf: lyricsNode)
+            lyricsMap[verse] = lyric
         }
         let maxVerse = lyricsMap.keys.max() ?? -1
         let lyrics: [Lyric] = maxVerse >= 0
@@ -59,12 +62,24 @@ extension Chord {
             ?? node.first("TremoloTwoChord")
         let tremolo = try tremoloNode.map(Tremolo.decode)
 
-        return Chord(
+        // `<Stem>` element inside `<Chord>` carries per-stem properties
+        // (e.g. `<userLen>`, `<visible>`). We currently honour only
+        // `<visible>` — when 0 the stem (and flag) are hidden while the
+        // noteheads stay visible. Default is visible.
+        var stemVisible = true
+        if let stemNode = node.first("Stem") {
+            stemVisible = (stemNode.first("visible")?.text ?? "1") != "0"
+        }
+
+        var chord = Chord(
             duration: duration, notes: ChordNotes(notes),
             arpeggio: arpeggio, lyrics: lyrics,
             articulations: articulations,
             tremolo: tremolo,
+            stemVisible: stemVisible,
         )
+        chord.elementProperties = ElementProperties(decodingMSCXChildrenOf: node)
+        return chord
     }
 
     /// Inspect a `<Chord>` node and return its grace category if any

@@ -12,6 +12,7 @@ extension Dynamic {
             XMLTreeNode(name: "subtype", text: subtype),
             XMLTreeNode(name: "velocity", text: String(velocity)),
         ]
+        children.append(contentsOf: elementProperties.mscxChildren())
         properties.appendXML(to: &children)
         return XMLTreeNode(name: "Dynamic", children: children)
     }
