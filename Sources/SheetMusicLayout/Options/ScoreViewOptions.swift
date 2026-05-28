@@ -94,8 +94,33 @@ public struct ScoreViewOptions: Sendable, Equatable {
     public var multiMeasureRest: MultiMeasureRestPolicy
     /// MuseScore "Show Invisible". When true, elements with
     /// `visible == false` are still laid out and tagged invisible so
-    /// renderers grey them (`#808080`). When false (print behaviour),
-    /// invisible elements are dropped entirely. Default false.
+    /// renderers grey them (`#808080` on white = 50% opacity). When
+    /// false (print behaviour, the default), invisible elements are
+    /// dropped entirely.
+    ///
+    /// **Coverage** — element families and how this toggle applies:
+    ///
+    /// - **Fully honoured (visible+invisible routing, slot preserved):**
+    ///   `Tempo`, `StaffText`, `Swing`, `Harmony`, `Clef`,
+    ///   `KeySignature`, `TimeSignature`, `BarLine`, `Dynamic`,
+    ///   `Fermata`, `Lyric` (per-verse), `RehearsalMark`,
+    ///   per-`Note` within a visible chord, `Arpeggio`.
+    /// - **Partial — whole chord/rest visibility:**
+    ///   `Chord.visible == false` round-trips through MSCX but the
+    ///   layout currently does NOT route the chord to the invisible
+    ///   container (per-note `Note.visible` IS handled). Hidden
+    ///   chords therefore render unchanged regardless of the toggle.
+    ///   Tracked as follow-up.
+    /// - **Partial — spanners:**
+    ///   `Spanner.visible == false` round-trips, and layout drops
+    ///   hidden spanners. The invisible-container routing (so toggle-on
+    ///   greys them) is not yet wired. Tracked as follow-up.
+    /// - **Out of scope:**
+    ///   MusicXML's `print-object="no"` is not yet ingested into
+    ///   `ElementProperties.visible`. MIDI is unaffected by visibility
+    ///   regardless of the toggle — `Note.play` governs playback.
+    ///
+    /// Default: `false` (print behaviour).
     public var showsInvisibleElements: Bool
 
     public init(
