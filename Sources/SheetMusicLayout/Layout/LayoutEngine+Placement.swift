@@ -424,7 +424,14 @@ extension LayoutEngine {
             for (voiceElemIdx, el) in voice.elements.enumerated() {
                 switch el {
                 case let .clef(clef):
+                    // Slot-preservation: `currentClef` MUST be updated
+                    // even when the clef is hidden — pitch / accidental
+                    // / stem-direction passes downstream key off the
+                    // active clef regardless of glyph visibility. Only
+                    // the visual emission is routed by `.visible`.
                     currentClef = NotatedClef(rawType: clef.concertClefType)
+                    guard clef.visible || options.showsInvisibleElements
+                    else { break }
                     let clefX = inHeader ? headerSchedule.clefX
                         : timedX(atTick: tickCursor)
                     let veID = VoiceElementID(
@@ -433,27 +440,51 @@ extension LayoutEngine {
                         voiceIndex: voiceIdx,
                         elementIndex: voiceElemIdx,
                     )
-                    out.append(.clef(
+                    let element = LayoutElement.clef(
                         rawType: clef.concertClefType,
                         origin: CGPoint(x: clefX, y: staffMidY),
                         anchor: .explicit(veID),
-                    ))
+                    )
+                    if clef.visible {
+                        out.append(element)
+                    } else {
+                        invisibleOut.append(element)
+                    }
                 case let .keySignature(key):
+                    // Slot-preservation: `currentKey` is the active
+                    // signature for accidental rendering downstream;
+                    // update it regardless of glyph visibility.
                     currentKey = key.concertKey
+                    guard key.visible || options.showsInvisibleElements
+                    else { break }
                     let keyX = inHeader ? headerSchedule.keySigX : timedX(atTick: tickCursor)
-                    out.append(.keySignature(
+                    let element = LayoutElement.keySignature(
                         sharps: max(0, key.concertKey),
                         flats: max(0, -key.concertKey),
                         origin: CGPoint(x: keyX, y: staffMidY),
-                    ))
+                    )
+                    if key.visible {
+                        out.append(element)
+                    } else {
+                        invisibleOut.append(element)
+                    }
                 case let .timeSignature(ts):
+                    guard ts.visible || options.showsInvisibleElements
+                    else { break }
                     let tsX = inHeader ? headerSchedule.timeSigX : timedX(atTick: tickCursor)
-                    out.append(.timeSignature(
+                    let element = LayoutElement.timeSignature(
                         numerator: ts.numerator,
                         denominator: ts.denominator,
                         origin: CGPoint(x: tsX, y: staffMidY),
-                    ))
+                    )
+                    if ts.visible {
+                        out.append(element)
+                    } else {
+                        invisibleOut.append(element)
+                    }
                 case let .barLine(b):
+                    guard b.visible || options.showsInvisibleElements
+                    else { break }
                     // A trailing `<BarLine>` appears AFTER the voice's
                     // last chord/rest, so `tickCursor` sits at the
                     // measure's end tick. `tickColumns` only carries
@@ -473,10 +504,15 @@ extension LayoutEngine {
                     } else {
                         barX = width - metrics.sp / 2
                     }
-                    out.append(.barLine(
+                    let element = LayoutElement.barLine(
                         subtype: b.subtype,
                         origin: CGPoint(x: barX, y: staffMidY),
-                    ))
+                    )
+                    if b.visible {
+                        out.append(element)
+                    } else {
+                        invisibleOut.append(element)
+                    }
                 case let .chord(r) where r.notes.isEmpty:
                     inHeader = false
                     let (restBase, _) = DurationInterpretation.split(
@@ -1425,7 +1461,12 @@ extension LayoutEngine {
         // Trailing bar line if no voice emitted one.
         // The final measure of the score gets a "end" barline
         // (thin + thick) per standard engraving convention.
-        let hasExplicitBar = out.contains {
+        //
+        // Slot-preservation note: a hidden explicit bar in the voice
+        // is routed to `invisibleOut`, so we must check BOTH lists —
+        // otherwise we'd synth an implicit (visible) bar on top of
+        // the hidden one, defeating the visibility toggle.
+        let hasExplicitBar = (out + invisibleOut).contains {
             if case .barLine = $0 { true } else { false }
         }
         if !hasExplicitBar {
