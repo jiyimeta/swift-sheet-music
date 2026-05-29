@@ -44,6 +44,41 @@ public enum MSCZReader {
         return try parse(data)
     }
 
+    /// Parse `.mscz` bytes, returning the score with non-fatal
+    /// anomalies. Behaves like `parse(_:)` but surfaces diagnostics
+    /// from the inner MSCX decode.
+    public static func parseWithDiagnostics(
+        _ data: Data,
+    ) throws -> MSCXParseResult {
+        let reader = try openReader(data)
+        let mainPath = try resolveMainPath(in: reader)
+        let mscxData: Data
+        do {
+            mscxData = try reader.read(path: mainPath)
+        } catch let error as ZipError {
+            throw SheetMusicError.corruptedContainer(
+                reason: "failed to extract \(mainPath): \(error)",
+            )
+        }
+        let inner = try MSCXParser.parseWithDiagnostics(mscxData)
+        let settings = audioSettings(in: reader)
+        let finalScore = settings.map { apply($0, to: inner.score) } ?? inner.score
+        return MSCXParseResult(score: finalScore, diagnostics: inner.diagnostics)
+    }
+
+    /// Read `.mscz` bytes from a file URL and parse with diagnostics.
+    public static func parseWithDiagnostics(
+        contentsOf url: URL,
+    ) throws -> MSCXParseResult {
+        let data: Data
+        do {
+            data = try Data(contentsOf: url)
+        } catch {
+            throw SheetMusicError.ioError(url: url, underlying: error)
+        }
+        return try parseWithDiagnostics(data)
+    }
+
     private static func openReader(_ data: Data) throws -> ZipReader {
         do {
             return try ZipReader(data: data)
