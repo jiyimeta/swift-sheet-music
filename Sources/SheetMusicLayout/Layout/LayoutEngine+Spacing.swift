@@ -349,29 +349,38 @@ extension LayoutEngine {
                             CGFloat(HarmonyRendering.width(of: runs))
                                 + metrics.sp * 0.5,
                         )
-                    case let .breath(b) where b.pause > 0:
-                        // Advance the spacing tick cursor by the
-                        // breath's MIDI tick budget so subsequent
-                        // chords sit at their post-pause ticks and
-                        // `tickColumns` produces matching keys for
-                        // the placement walker (which also advances
-                        // on `.breath`). The gap between the previous
-                        // chord's endTick and the next chord's new
-                        // startTick has no element alive across it,
-                        // so it picks up zero weight from this pass —
-                        // visually that's an acceptable v1 (the
-                        // breath glyph already sits between the two
-                        // chords; the cursor's gap arrival time is
-                        // the part that needs to line up with MIDI).
+                    case let .breath(b):
+                        // EVERY breath reserves a fixed visual slot
+                        // for its glyph (regardless of pause). Without
+                        // this, two consecutive breath marks in the
+                        // same gap (e.g. one between chords, one at
+                        // the end of a measure) collapse on top of
+                        // each other because no spacing element is
+                        // alive across them. The reservation is given
+                        // in ticks so the existing tick→X mapping
+                        // produces ~one quarter's worth of breathing
+                        // room (≈ 2 sp at default spacing).
+                        //
+                        // Breaths with `pause > 0` (caesuras with
+                        // their pause-seconds) additionally advance
+                        // the tick cursor by the MIDI tick budget so
+                        // subsequent chords sit at their post-pause
+                        // ticks and `tickColumns` produces matching
+                        // keys for the placement walker.
                         //
                         // TODO: multi-tempo scores — sample the tempo
                         // timeline at the breath's tick instead of
                         // hard-coding 2.0 bps (120 BPM). Mirrors the
                         // same TODO in `LayoutEngine+Placement.swift`.
-                        let bps = 2.0
-                        let extraTicks = Int(
-                            (b.pause * bps * Double(division)).rounded(),
-                        )
+                        let breathGlyphReservationTicks = 120
+                        var extraTicks = breathGlyphReservationTicks
+                        if b.pause > 0 {
+                            let bps = 2.0
+                            extraTicks += Int(
+                                (b.pause * bps * Double(division))
+                                    .rounded(),
+                            )
+                        }
                         tick += extraTicks
                     default:
                         break

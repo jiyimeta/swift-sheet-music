@@ -1204,17 +1204,24 @@ extension LayoutEngine {
                                 ? headerSchedule.contentStartX
                                 : timedX(atTick: tickCursor)
                         )
-                    // Account for THIS breath's own pause when looking
-                    // ahead — the next chord's `tickColumns` entry was
-                    // built by the spacing pass at the post-pause tick.
+                    // Account for THIS breath's own glyph reservation
+                    // + pause when looking ahead — the next chord's
+                    // `tickColumns` entry was built by the spacing
+                    // pass at the post-breath tick.
+                    let breathGlyphReservationTicks = 120
                     let breathExtraTicks: Int = {
-                        guard b.pause > 0 else { return 0 }
-                        // TODO: multi-tempo — sample the timeline at
-                        // the breath's tick. v1 hard-codes 2.0 bps.
-                        let bps = 2.0
-                        return Int(
-                            (b.pause * bps * Double(division)).rounded(),
-                        )
+                        var t = breathGlyphReservationTicks
+                        if b.pause > 0 {
+                            // TODO: multi-tempo — sample the timeline
+                            // at the breath's tick. v1 hard-codes 2.0
+                            // bps.
+                            let bps = 2.0
+                            t += Int(
+                                (b.pause * bps * Double(division))
+                                    .rounded(),
+                            )
+                        }
+                        return t
                     }()
                     var lookaheadTick = tickCursor + breathExtraTicks
                     var nextChordX: CGFloat?
@@ -1258,8 +1265,17 @@ extension LayoutEngine {
                         originX = glyphRightX
                             - (glyphAdvanceSp / 2) * metrics.sp
                     } else {
-                        // Fallback: sit half a sp past the preceding chord.
-                        originX = prevChordX + 0.5 * metrics.sp
+                        // No next chord in this voice (breath at the
+                        // end of a measure). Sit one reservation
+                        // worth of width past the preceding chord —
+                        // matches the horizontal space the spacing
+                        // pass reserved for this glyph, so the glyph
+                        // doesn't collide with the previous chord and
+                        // ends up roughly between the prev chord and
+                        // the upcoming bar line.
+                        originX = prevChordX
+                            + (glyphAdvanceSp / 2 + gapBeforeNextSp)
+                            * metrics.sp
                     }
                     // Y placement: target the visible BOTTOM edge to
                     // clear the top staff line by a kind-dependent
@@ -1272,8 +1288,8 @@ extension LayoutEngine {
                     let staffTopY = staffMidY - metrics.sp * 2
                     let visibleBottomClearanceSp: CGFloat
                     switch b.kind {
-                    case .breathMark: visibleBottomClearanceSp = 1.0
-                    case .caesura: visibleBottomClearanceSp = 0.5
+                    case .breathMark: visibleBottomClearanceSp = 0.5
+                    case .caesura: visibleBottomClearanceSp = 0.0
                     }
                     let targetBottomY = staffTopY
                         - visibleBottomClearanceSp * metrics.sp
@@ -1303,13 +1319,11 @@ extension LayoutEngine {
                     // hard-coding 2.0 bps (120 BPM). The current
                     // fixture is constant-tempo so the simplification
                     // is acceptable for v1.
-                    if b.pause > 0 {
-                        let bps = 2.0
-                        let extraTicks = Int(
-                            (b.pause * bps * Double(division)).rounded(),
-                        )
-                        tickCursor += extraTicks
-                    }
+                    // Mirrors the same advance in
+                    // `LayoutEngine+Spacing.swift`'s `.breath` arm —
+                    // the reservation + pause-derived ticks computed
+                    // above as `breathExtraTicks`.
+                    tickCursor += breathExtraTicks
                 }
             }
 
