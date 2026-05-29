@@ -6,7 +6,7 @@ import SheetMusicCore
 import SheetMusicXMLTools
 
 #if canImport(os)
-    private let mscxDecoderLogger = Logger(
+    let mscxDecoderLogger = Logger(
         subsystem: "swift-sheet-music.SheetMusicMSCX",
         category: "MSCXDecoder",
     )

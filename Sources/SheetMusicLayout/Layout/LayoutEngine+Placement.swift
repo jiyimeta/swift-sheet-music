@@ -1184,6 +1184,158 @@ extension LayoutEngine {
                     } else {
                         invisibleOut.append(harmonyElement)
                     }
+                case let .breath(b):
+                    // Hidden breath: drop entirely when the toggle is
+                    // off; otherwise build the element below and route
+                    // it into `invisibleOut`. Same visibility wiring
+                    // as `.fermata`.
+                    guard b.visible || options.showsInvisibleElements
+                    else { break }
+                    // X placement: anchor breath to the FOLLOWING chord,
+                    // not the midpoint. MuseScore reads breath as
+                    // belonging to the next chord (similar to how an
+                    // accidental sits left of its notehead). Glyph's
+                    // right edge sits a small gap before the next
+                    // chord's X; fallback to "just past preceding chord"
+                    // when no following chord exists.
+                    let prevChordX = lastChordOrRestX(in: out)
+                        ?? (
+                            inHeader
+                                ? headerSchedule.contentStartX
+                                : timedX(atTick: tickCursor)
+                        )
+                    // Account for THIS breath's own glyph reservation
+                    // + pause when looking ahead — the next chord's
+                    // `tickColumns` entry was built by the spacing
+                    // pass at the post-breath tick.
+                    let breathGlyphReservationTicks = 120
+                    let breathExtraTicks: Int = {
+                        var t = breathGlyphReservationTicks
+                        if b.pause > 0 {
+                            // TODO: multi-tempo — sample the timeline
+                            // at the breath's tick. v1 hard-codes 2.0
+                            // bps.
+                            let bps = 2.0
+                            t += Int(
+                                (b.pause * bps * Double(division))
+                                    .rounded(),
+                            )
+                        }
+                        return t
+                    }()
+                    var lookaheadTick = tickCursor + breathExtraTicks
+                    var nextChordX: CGFloat?
+                    for j in (voiceElemIdx + 1) ..< voice.elements.count {
+                        let next = voice.elements[j]
+                        switch next {
+                        case .chord:
+                            nextChordX = timedX(atTick: lookaheadTick)
+                        case let .locationShift(delta):
+                            lookaheadTick += delta.ticks(division: division)
+                            continue
+                        default:
+                            continue
+                        }
+                        break
+                    }
+                    // Glyph advance — approximate via the bbox width.
+                    // The actual advance for breath/caesura glyphs is
+                    // small (~1-1.5 sp); use a conservative fallback
+                    // when metrics aren't available.
+                    let glyphOffsets = BreathGlyphMetrics.offsets(forKind: b.kind)
+                    let bravuraEm = LayoutFont(
+                        face: SMuFLFamily.bravura, pointSize: 4,
+                    )
+                    let codepoint = UInt16(
+                        BreathGlyph.codepoint(forKind: b.kind),
+                    )
+                    let glyphAdvanceSp = FontMetrics.provider
+                        .glyphPathBoundingBox(
+                            font: bravuraEm, codepoint: codepoint,
+                        )?.width ?? 1.0
+
+                    let gapBeforeNextSp: CGFloat = 0.5
+                    let originX: CGFloat
+                    if let nx = nextChordX {
+                        // Right-align: glyph's visible right edge sits
+                        // `gapBeforeNextSp` sp left of the next chord.
+                        // With anchor-.center, origin.x is the typographic
+                        // CENTRE, so subtract half the glyph advance.
+                        let glyphRightX = nx - gapBeforeNextSp * metrics.sp
+                        originX = glyphRightX
+                            - (glyphAdvanceSp / 2) * metrics.sp
+                    } else {
+                        // No next chord in this voice — breath sits
+                        // at the end of the measure, just before the
+                        // bar line. MuseScore right-aligns the glyph
+                        // to the bar line with a small gap, mirroring
+                        // how breaths placed BETWEEN chords right-
+                        // align to the next chord. The bar line lands
+                        // at `width - sp/2` (see the `.barLine` arm
+                        // ~line 505 for the fallback that owns this
+                        // constant).
+                        let barLineX = width - metrics.sp / 2
+                        let glyphRightX = barLineX
+                            - gapBeforeNextSp * metrics.sp
+                        originX = glyphRightX
+                            - (glyphAdvanceSp / 2) * metrics.sp
+                    }
+                    // Y placement:
+                    // - Breath marks: target the visible BOTTOM edge
+                    //   `0.5 sp` above the top staff line so the
+                    //   glyph hangs JUST above the staff.
+                    // - Caesuras: center the visible glyph on the
+                    //   top staff line (MuseScore convention; the
+                    //   caesura crosses through the line).
+                    // With anchor-.center, the visible bottom edge
+                    // sits at `origin.y + bottomOffset * sp` and the
+                    // visible top edge at `origin.y + topOffset * sp`,
+                    // so origin.y for bottom-clearance is
+                    //   originY = targetBottomY - bottomOffset * sp
+                    // and origin.y for visible-center is
+                    //   originY = targetCenterY - (bottomOffset + topOffset)/2 * sp.
+                    let staffTopY = staffMidY - metrics.sp * 2
+                    let originY: CGFloat
+                    switch b.kind {
+                    case .breathMark:
+                        let clearanceSp: CGFloat = 0.5
+                        let targetBottomY = staffTopY - clearanceSp * metrics.sp
+                        originY = targetBottomY
+                            - glyphOffsets.bottomOffset * metrics.sp
+                    case .caesura:
+                        let visibleCentreOffsetSp =
+                            (glyphOffsets.bottomOffset + glyphOffsets.topOffset) / 2
+                        originY = staffTopY - visibleCentreOffsetSp * metrics.sp
+                    }
+                    let breathElement = LayoutElement.breath(
+                        kind: b.kind,
+                        origin: CGPoint(x: originX, y: originY),
+                    )
+                    if b.visible {
+                        out.append(breathElement)
+                    } else {
+                        invisibleOut.append(breathElement)
+                    }
+                    // Advance the tick cursor by the breath's MIDI
+                    // tick budget so subsequent chord X lookups in
+                    // `tickColumns` use the post-pause tick. This
+                    // keeps the layout's tick→X mapping in sync with
+                    // MIDI's tick advancement (see
+                    // `MidiRenderer+Voice.swift`'s `.breath` arm), so
+                    // the playback cursor crosses the silence at the
+                    // natural visual rate instead of racing across an
+                    // undersized layout gap.
+                    //
+                    // TODO: multi-tempo scores — sample the tempo
+                    // timeline at this breath's tick rather than
+                    // hard-coding 2.0 bps (120 BPM). The current
+                    // fixture is constant-tempo so the simplification
+                    // is acceptable for v1.
+                    // Mirrors the same advance in
+                    // `LayoutEngine+Spacing.swift`'s `.breath` arm —
+                    // the reservation + pause-derived ticks computed
+                    // above as `breathExtraTicks`.
+                    tickCursor += breathExtraTicks
                 }
             }
 

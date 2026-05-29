@@ -120,6 +120,25 @@ public enum SMuFLCodepoint {
     public static let fermataAbove: UInt32 = 0xE4C0
     public static let fermataBelow: UInt32 = 0xE4C1
 
+    // MARK: - Breath marks + caesuras
+
+    /// Breath mark (comma) — SMuFL `breathMarkComma`.
+    public static let breathMarkComma: UInt32 = 0xE4CE
+    /// Breath mark (tick) — SMuFL `breathMarkTick`.
+    public static let breathMarkTick: UInt32 = 0xE4CF
+    /// Breath mark (up bow) — SMuFL `breathMarkUpbow`.
+    public static let breathMarkUpbow: UInt32 = 0xE4D0
+    /// Breath mark (Salzedo) — SMuFL `breathMarkSalzedo`.
+    public static let breathMarkSalzedo: UInt32 = 0xE4D5
+    /// Caesura — SMuFL `caesura`.
+    public static let caesura: UInt32 = 0xE4D1
+    /// Short caesura — SMuFL `caesuraShort`.
+    public static let caesuraShort: UInt32 = 0xE4D3
+    /// Thick caesura — SMuFL `caesuraThick`.
+    public static let caesuraThick: UInt32 = 0xE4D2
+    /// Curved caesura — SMuFL `caesuraCurved`.
+    public static let caesuraCurved: UInt32 = 0xE4D4
+
     // MARK: - Articulations
 
     /// Above/below pairs render the same shape mirrored across the

@@ -328,6 +328,8 @@ extension Voice {
             return measureRepeat.encode(options: options, in: effectiveDuration)
         case let .fermata(fermata):
             return fermata.encode()
+        case let .breath(breath):
+            return breath.encode()
         case let .locationShift(delta):
             // Inverse of the inline `<location>` decode: the
             // voice-level cursor shift is `<location><fractions>N/D

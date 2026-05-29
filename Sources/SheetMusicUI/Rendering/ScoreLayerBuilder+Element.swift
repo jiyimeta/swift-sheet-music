@@ -194,6 +194,11 @@ extension ScoreLayerBuilder {
                 subtype: subtype, origin: shift(p),
                 metrics: metrics, height: height, into: parent,
             )
+        case let .breath(kind, p):
+            drawBreath(
+                kind: kind, origin: shift(p),
+                metrics: metrics, height: height, into: parent,
+            )
         case let .articulation(kind, p, isAbove):
             drawArticulation(
                 kind: kind, isAbove: isAbove,

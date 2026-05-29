@@ -31,6 +31,25 @@ extension ScoreLayerBuilder {
         }
     }
 
+    // MARK: - Breath
+
+    static func drawBreath(
+        kind: Breath.Kind, origin: CGPoint,
+        metrics: StaffMetrics, height: CGFloat,
+        into parent: CALayer,
+    ) {
+        let codepoint = BreathGlyph.codepoint(forKind: kind)
+        // swiftlint:disable:next force_unwrapping
+        let glyph = Character(UnicodeScalar(codepoint)!)
+        if let layer = glyphLayer(
+            glyph, at: origin,
+            size: metrics.glyphFontSize,
+            height: height,
+        ) {
+            parent.addSublayer(layer)
+        }
+    }
+
     // MARK: - Articulation
 
     static func drawArticulation(

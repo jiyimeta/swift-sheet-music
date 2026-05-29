@@ -25,6 +25,7 @@ public enum VoiceElement: Sendable, Equatable {
     case spanner(Spanner)
     case measureRepeat(MeasureRepeat)
     case fermata(Fermata)
+    case breath(Breath)
     case harmony(Harmony)
     /// MuseScore `<location><fractions>N/D</fractions></location>`
     /// at voice level — a cursor move that places the next attached

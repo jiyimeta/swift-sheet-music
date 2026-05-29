@@ -41,6 +41,7 @@ extension LayoutEngine {
              let .barLine(_, p),
              let .textMark(_, _, p),
              let .fermata(_, p),
+             let .breath(_, p),
              let .articulation(_, p, _),
              let .marker(_, _, p),
              let .jump(_, p),

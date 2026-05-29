@@ -176,12 +176,18 @@ enum MusicXMLMeasureWalker {
                     drumTable: drumTable,
                 )
                 switch decoded {
-                case let .foldIntoLastChord(note, duration):
+                case let .foldIntoLastChord(note, duration, trailingBreaths):
                     perStaff[staffIdx].foldIntoLastChord(
                         voice: voice,
                         note: note,
                         duration: duration,
                     )
+                    // Breath marks / caesuras on a chord-folded note still
+                    // belong after the host chord, which is the same chord
+                    // we just merged into.
+                    for breath in trailingBreaths {
+                        perStaff[staffIdx].append(.breath(breath), toVoice: voice)
+                    }
                 case let .new(elements):
                     for element in elements {
                         perStaff[staffIdx].append(element, toVoice: voice)

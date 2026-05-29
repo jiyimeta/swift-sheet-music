@@ -95,6 +95,26 @@
         print("wrote \(mmRestURL.path)")
 
         try renderRealWorldCheck(outputDir: outputDir)
+        try renderBreathFixture(outputDir: outputDir)
+    }
+
+    /// Render the unpacked `test_breath.mscx` fixture if present.
+    /// Used by the controller to iterate on layout constants for the
+    /// breath / caesura placement against the MuseScore reference.
+    @available(macOS 15.0, *)
+    @MainActor
+    func renderBreathFixture(outputDir: URL) throws {
+        let path = "/tmp/test_breath_unpacked/test_breath.mscx"
+        guard FileManager.default.fileExists(atPath: path),
+              let data = try? Data(contentsOf: URL(fileURLWithPath: path)),
+              let score = try? SheetMusic.loadScore(mscxData: data)
+        else {
+            print("skipped 99-breath-fixture: \(path) not present")
+            return
+        }
+        let url = outputDir.appendingPathComponent("99-breath-fixture.png")
+        try renderScoreToPNG(score, to: url, scale: 2)
+        print("wrote \(url.path)")
     }
 
     /// Render the real-world test.mscx sample if available.
