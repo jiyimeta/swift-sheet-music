@@ -30,4 +30,57 @@ struct MSCXDiagnosticsTests {
         )
         #expect(url != nil)
     }
+
+    @Test func unknownTremoloSubtype_emitsDiagnostic_andDropsTremolo() throws {
+        let url = try #require(Bundle.module.url(
+            forResource: "diagnostics-tremolo-unknown-subtype",
+            withExtension: "mscx",
+            subdirectory: "own",
+        ))
+        let result = try MSCXParser.parseWithDiagnostics(contentsOf: url)
+
+        // Score loaded.
+        #expect(result.score.parts.count == 1)
+        let chord = firstChord(in: result.score)
+        #expect(chord != nil)
+        // Tremolo was dropped — chord still present.
+        #expect(chord?.tremolo == nil)
+
+        // Exactly one diagnostic, with the stable code and the offending token.
+        #expect(result.diagnostics.count == 1)
+        let d = result.diagnostics.first
+        #expect(d?.severity == .warning)
+        #expect(d?.code == "mscx.tremolo.unknownSubtype")
+        #expect(d?.message.contains("r128") == true)
+    }
+
+    @Test func plainParse_alsoLoadsFileWithUnknownTremolo() throws {
+        // The non-diagnostics API must also load (it just discards warnings).
+        let url = try #require(Bundle.module.url(
+            forResource: "diagnostics-tremolo-unknown-subtype",
+            withExtension: "mscx",
+            subdirectory: "own",
+        ))
+        let score = try MSCXParser.parse(contentsOf: url)
+        #expect(score.parts.count == 1)
+        let chord = firstChord(in: score)
+        #expect(chord?.tremolo == nil)
+    }
+}
+
+private func firstChord(in score: Score) -> Chord? {
+    for part in score.parts {
+        for staff in part.staves {
+            for measure in staff.measures {
+                for voice in measure.voices {
+                    for el in voice.elements {
+                        if case let .chord(c) = el, !c.notes.isEmpty {
+                            return c
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return nil
 }

@@ -60,7 +60,7 @@ extension Chord {
         let tremoloNode = node.first("Tremolo")
             ?? node.first("TremoloSingleChord")
             ?? node.first("TremoloTwoChord")
-        let tremolo = try tremoloNode.map(Tremolo.decode)
+        let tremolo = tremoloNode.flatMap(Tremolo.decode)
 
         // `<Stem>` element inside `<Chord>` carries per-stem properties
         // (e.g. `<userLen>`, `<visible>`). We currently honour only
