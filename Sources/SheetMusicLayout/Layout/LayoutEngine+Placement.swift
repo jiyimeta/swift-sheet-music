@@ -1246,7 +1246,6 @@ extension LayoutEngine {
                     let breathElement = LayoutElement.breath(
                         kind: b.kind,
                         origin: CGPoint(x: centreX, y: anchorY),
-                        visible: b.visible,
                     )
                     if b.visible {
                         out.append(breathElement)

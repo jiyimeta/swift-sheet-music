@@ -194,7 +194,7 @@ extension ScoreLayerBuilder {
                 subtype: subtype, origin: shift(p),
                 metrics: metrics, height: height, into: parent,
             )
-        case let .breath(kind, p, _):
+        case let .breath(kind, p):
             drawBreath(
                 kind: kind, origin: shift(p),
                 metrics: metrics, height: height, into: parent,

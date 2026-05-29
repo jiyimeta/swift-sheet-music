@@ -429,7 +429,7 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                 context: &context, subtype: subtype,
                 origin: shift(p), metrics: metrics,
             )
-        case let .breath(kind, p, _):
+        case let .breath(kind, p):
             BreathRenderer.draw(
                 context: &context, kind: kind,
                 origin: shift(p), metrics: metrics,

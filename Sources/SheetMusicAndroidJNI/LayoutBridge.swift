@@ -297,7 +297,7 @@ public enum LayoutBridge {
                 into: &out,
             )
 
-        case let .breath(kind, origin, _):
+        case let .breath(kind, origin):
             emitCenterAnchoredGlyph(
                 codepoint: BreathGlyph.codepoint(forKind: kind),
                 cxPt: mox + Double(origin.x),
