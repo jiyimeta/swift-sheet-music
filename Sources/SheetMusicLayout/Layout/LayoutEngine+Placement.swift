@@ -1204,7 +1204,19 @@ extension LayoutEngine {
                                 ? headerSchedule.contentStartX
                                 : timedX(atTick: tickCursor)
                         )
-                    var lookaheadTick = tickCursor
+                    // Account for THIS breath's own pause when looking
+                    // ahead — the next chord's `tickColumns` entry was
+                    // built by the spacing pass at the post-pause tick.
+                    let breathExtraTicks: Int = {
+                        guard b.pause > 0 else { return 0 }
+                        // TODO: multi-tempo — sample the timeline at
+                        // the breath's tick. v1 hard-codes 2.0 bps.
+                        let bps = 2.0
+                        return Int(
+                            (b.pause * bps * Double(division)).rounded(),
+                        )
+                    }()
+                    var lookaheadTick = tickCursor + breathExtraTicks
                     var nextChordX: CGFloat?
                     for j in (voiceElemIdx + 1) ..< voice.elements.count {
                         let next = voice.elements[j]
@@ -1275,6 +1287,28 @@ extension LayoutEngine {
                         out.append(breathElement)
                     } else {
                         invisibleOut.append(breathElement)
+                    }
+                    // Advance the tick cursor by the breath's MIDI
+                    // tick budget so subsequent chord X lookups in
+                    // `tickColumns` use the post-pause tick. This
+                    // keeps the layout's tick→X mapping in sync with
+                    // MIDI's tick advancement (see
+                    // `MidiRenderer+Voice.swift`'s `.breath` arm), so
+                    // the playback cursor crosses the silence at the
+                    // natural visual rate instead of racing across an
+                    // undersized layout gap.
+                    //
+                    // TODO: multi-tempo scores — sample the tempo
+                    // timeline at this breath's tick rather than
+                    // hard-coding 2.0 bps (120 BPM). The current
+                    // fixture is constant-tempo so the simplification
+                    // is acceptable for v1.
+                    if b.pause > 0 {
+                        let bps = 2.0
+                        let extraTicks = Int(
+                            (b.pause * bps * Double(division)).rounded(),
+                        )
+                        tickCursor += extraTicks
                     }
                 }
             }
