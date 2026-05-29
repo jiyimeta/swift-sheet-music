@@ -105,12 +105,23 @@
             try #require(chordXs.count == 2)
             let (kind, origin) = visible[0]
             #expect(kind == .breathMark(.comma))
-            // X sits strictly BETWEEN the two chords.
+            // X sits strictly BETWEEN the two chords AND is biased
+            // toward the following chord (right-aligned: glyph reads
+            // as belonging to the next chord, similar to how an
+            // accidental sits left of its notehead).
             let cX = chordXs[0]
             let dX = chordXs[1]
             #expect(
                 origin.x > cX && origin.x < dX,
                 "breath x \(origin.x) must sit strictly between C4 x \(cX) and D4 x \(dX)",
+            )
+            let midpoint = (cX + dX) / 2
+            #expect(
+                origin.x > midpoint,
+                """
+                breath x \(origin.x) should sit past the midpoint \
+                \(midpoint) (biased toward following chord at \(dX))
+                """,
             )
         }
 

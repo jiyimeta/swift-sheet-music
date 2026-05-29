@@ -1191,14 +1191,13 @@ extension LayoutEngine {
                     // as `.fermata`.
                     guard b.visible || options.showsInvisibleElements
                     else { break }
-                    // X placement: breath marks sit BETWEEN the
-                    // preceding chord and the following chord. We
-                    // anchor at the midpoint between the two so the
-                    // glyph reads as belonging to the gap, not to a
-                    // specific chord. If there is no following chord
-                    // (breath at end of measure / voice) we fall back
-                    // to the preceding chord's X plus a small offset
-                    // so the glyph still has a place to sit.
+                    // X placement: anchor breath to the FOLLOWING chord,
+                    // not the midpoint. MuseScore reads breath as
+                    // belonging to the next chord (similar to how an
+                    // accidental sits left of its notehead). Glyph's
+                    // right edge sits a small gap before the next
+                    // chord's X; fallback to "just past preceding chord"
+                    // when no following chord exists.
                     let prevChordX = lastChordOrRestX(in: out)
                         ?? (
                             inHeader
@@ -1220,32 +1219,57 @@ extension LayoutEngine {
                         }
                         break
                     }
-                    // Bias slightly toward the following chord so the
-                    // glyph reads as preceding its target. v1: simple
-                    // midpoint when both bounds are known; fallback
-                    // sits half a sp past the preceding chord when no
-                    // following chord exists. Visual tuning to follow.
-                    let centreX: CGFloat
+                    // Glyph advance — approximate via the bbox width.
+                    // The actual advance for breath/caesura glyphs is
+                    // small (~1-1.5 sp); use a conservative fallback
+                    // when metrics aren't available.
+                    let glyphOffsets = BreathGlyphMetrics.offsets(forKind: b.kind)
+                    let bravuraEm = LayoutFont(
+                        face: SMuFLFamily.bravura, pointSize: 4,
+                    )
+                    let codepoint = UInt16(
+                        BreathGlyph.codepoint(forKind: b.kind),
+                    )
+                    let glyphAdvanceSp = FontMetrics.provider
+                        .glyphPathBoundingBox(
+                            font: bravuraEm, codepoint: codepoint,
+                        )?.width ?? 1.0
+
+                    let gapBeforeNextSp: CGFloat = 0.5
+                    let originX: CGFloat
                     if let nx = nextChordX {
-                        centreX = (prevChordX + nx) / 2
+                        // Right-align: glyph's visible right edge sits
+                        // `gapBeforeNextSp` sp left of the next chord.
+                        // With anchor-.center, origin.x is the typographic
+                        // CENTRE, so subtract half the glyph advance.
+                        let glyphRightX = nx - gapBeforeNextSp * metrics.sp
+                        originX = glyphRightX
+                            - (glyphAdvanceSp / 2) * metrics.sp
                     } else {
-                        centreX = prevChordX + metrics.sp * 0.5
+                        // Fallback: sit half a sp past the preceding chord.
+                        originX = prevChordX + 0.5 * metrics.sp
                     }
-                    // Y placement: above the top staff line by a
-                    // kind-dependent gap. screen-Y-down, so subtract
-                    // from `staffTopY`. The top staff line sits 2 sp
-                    // above `staffMidY` (5-line staff). These are
-                    // placeholder constants — visual tuning to follow.
+                    // Y placement: target the visible BOTTOM edge to
+                    // clear the top staff line by a kind-dependent
+                    // gap. With anchor-.center, the visible bottom
+                    // edge sits at `origin.y + bottomOffset * sp`, so
+                    // origin.y = targetBottomY - bottomOffset * sp.
+                    // Breath marks: visible bottom 1 sp above the top
+                    // staff line. Caesuras are taller and look natural
+                    // closer to the staff: visible bottom 0.5 sp above.
                     let staffTopY = staffMidY - metrics.sp * 2
-                    let yAboveTopLineSp: CGFloat
+                    let visibleBottomClearanceSp: CGFloat
                     switch b.kind {
-                    case .breathMark: yAboveTopLineSp = 1.0
-                    case .caesura: yAboveTopLineSp = 2.0
+                    case .breathMark: visibleBottomClearanceSp = 1.0
+                    case .caesura: visibleBottomClearanceSp = 0.5
                     }
-                    let anchorY = staffTopY - yAboveTopLineSp * metrics.sp
+                    let targetBottomY = staffTopY
+                        - visibleBottomClearanceSp * metrics.sp
+                    let originY = targetBottomY
+                        - glyphOffsets.bottomOffset * metrics.sp
                     let breathElement = LayoutElement.breath(
                         kind: b.kind,
-                        origin: CGPoint(x: centreX, y: anchorY),
+                        origin: CGPoint(x: originX, y: originY),
                     )
                     if b.visible {
                         out.append(breathElement)
