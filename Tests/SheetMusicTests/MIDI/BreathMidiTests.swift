@@ -96,4 +96,42 @@ struct BreathMidiTests {
         let offsControl = try noteOffTicks(in: MidiRenderer.render(score: withoutPause))
         #expect(offsCaesura.first == offsControl.first)
     }
+
+    @Test("caesura uses the tempo active going into the silence")
+    func caesuraUsesTempoAtBreathTick() throws {
+        // Score: 4/4, first chord at 120 BPM (2 bps), then a <Tempo> change
+        // to 60 BPM (1 bps) just before the caesura, then the caesura, then
+        // the second chord. At 60 BPM with caesura .normal pause = 0.5 s and
+        // PPQ = 480, the silence is 0.5 * 1 * 480 = 240 ticks. The second
+        // chord onset should therefore be at 480 (first quarter) + 240 = 720
+        // — NOT 960, which is what the original 120-BPM tempo would give.
+        let xml = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <museScore version="4.40">
+          <Score>
+            <Division>480</Division>
+            <Part>
+              <Staff id="1"/>
+              <Instrument id="piano"><trackName>Piano</trackName><Channel/></Instrument>
+            </Part>
+            <Staff id="1">
+              <Measure>
+                <voice>
+                  <Tempo><tempo>2</tempo></Tempo>
+                  <Chord><durationType>quarter</durationType>
+                    <Note><pitch>60</pitch><tpc>14</tpc></Note></Chord>
+                  <Tempo><tempo>1</tempo></Tempo>
+                  <Breath><subtype>caesura</subtype></Breath>
+                  <Chord><durationType>quarter</durationType>
+                    <Note><pitch>62</pitch><tpc>16</tpc></Note></Chord>
+                </voice>
+              </Measure>
+            </Staff>
+          </Score>
+        </museScore>
+        """
+        let score = try MSCXParser.parse(Data(xml.utf8))
+        let midi = try MidiRenderer.render(score: score)
+        #expect(noteOnTicks(in: midi) == [0, 720])
+    }
 }

@@ -349,7 +349,10 @@ extension MidiRenderer {
             // via the active tempo: ticks = pause * bps * ppq. A pause of
             // zero (breath marks default) is a no-op. The preceding chord's
             // note-off events stay at their natural release — MuseScore
-            // inserts dead time rather than shortening the chord.
+            // inserts dead time rather than shortening the chord. Tempo is
+            // sampled once at the breath's tick; tempo changes that fall
+            // inside the silence are ignored, matching MuseScore.
+            // Mirrors mu::engraving::Breath::play().
             if breath.pause > 0 {
                 let extraTicks = Int(
                     (breath.pause * currentTempoBps * Double(division)).rounded(),
