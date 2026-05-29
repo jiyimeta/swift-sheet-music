@@ -132,6 +132,20 @@ extension MidiRenderer {
             case let .measureRepeat(rep): ticks += rep.duration
                 .resolved(in: measureDuration)
                 .ticks(division: division)
+            case let .breath(b) where b.pause > 0:
+                // Breath pauses shift subsequent note onsets forward
+                // at the constant tempo (mirroring MuseScore's
+                // ExportMidi behaviour). The pause therefore counts
+                // toward the measure's total tick budget so the next
+                // measure's playback-plan offset accounts for it.
+                //
+                // TODO: multi-tempo scores — sample the tempo timeline
+                // at the breath's tick instead of hard-coding 2.0 bps
+                // (120 BPM). Same TODO lives in the layout side.
+                let bps = 2.0
+                ticks += Int(
+                    (b.pause * bps * Double(division)).rounded(),
+                )
             default: continue
             }
         }
