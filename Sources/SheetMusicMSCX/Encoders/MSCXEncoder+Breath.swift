@@ -41,7 +41,7 @@ extension Breath {
     /// `Fermata.encode()` for `<timeStretch>`.
     func encode() -> XMLTreeNode {
         var children: [XMLTreeNode] = [
-            XMLTreeNode(name: "subtype", text: kind.mscxSubtype),
+            XMLTreeNode(name: "symbol", text: kind.mscxSubtype),
         ]
         let defaultPause = Breath.defaultPause(for: kind)
         if pause != defaultPause {
