@@ -1,6 +1,7 @@
 import Foundation
 @testable import SheetMusicCore
 @testable import SheetMusicMSCX
+@testable import SheetMusicXMLTools
 import Testing
 
 struct MSCXDiagnosticsTests {
@@ -52,6 +53,25 @@ struct MSCXDiagnosticsTests {
         #expect(d?.severity == .warning)
         #expect(d?.code == "mscx.tremolo.unknownSubtype")
         #expect(d?.message.contains("r128") == true)
+    }
+
+    @Test func breath_unknownSubtype_emitsDiagnostic() throws {
+        // A direct-decode probe: feed a `<Breath>` with an unknown
+        // subtype into the decoder under an active collector.
+        let xml = """
+        <Breath>
+          <subtype>not-a-real-breath</subtype>
+        </Breath>
+        """
+        let node = try XMLTreeParser.parse(Data(xml.utf8))
+        let collector = MSCXDiagnosticCollector()
+        let breath = MSCXParserContext.$collector.withValue(collector) {
+            Breath.decodeMSCX(node)
+        }
+        // Decoder still returns a fallback breath.
+        _ = breath
+        #expect(collector.entries.count == 1)
+        #expect(collector.entries.first?.code == "mscx.breath.unknownSubtype")
     }
 
     @Test func plainParse_alsoLoadsFileWithUnknownTremolo() throws {
