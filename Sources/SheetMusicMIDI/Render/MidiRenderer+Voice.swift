@@ -344,6 +344,11 @@ extension MidiRenderer {
             // `FermataRanges`. The voice walk does not need to
             // touch tempo or tick state here.
             break
+        case .breath:
+            // Implemented in Task 5: advance localTick by the
+            // breath's pause-seconds converted to ticks via the
+            // current tempo. Placeholder so the switch compiles.
+            break
         }
     }
 
