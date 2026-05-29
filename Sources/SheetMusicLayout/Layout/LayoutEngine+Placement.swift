@@ -1265,36 +1265,48 @@ extension LayoutEngine {
                         originX = glyphRightX
                             - (glyphAdvanceSp / 2) * metrics.sp
                     } else {
-                        // No next chord in this voice (breath at the
-                        // end of a measure). Sit one reservation
-                        // worth of width past the preceding chord —
-                        // matches the horizontal space the spacing
-                        // pass reserved for this glyph, so the glyph
-                        // doesn't collide with the previous chord and
-                        // ends up roughly between the prev chord and
-                        // the upcoming bar line.
-                        originX = prevChordX
-                            + (glyphAdvanceSp / 2 + gapBeforeNextSp)
-                            * metrics.sp
+                        // No next chord in this voice — breath sits
+                        // at the end of the measure, just before the
+                        // bar line. MuseScore right-aligns the glyph
+                        // to the bar line with a small gap, mirroring
+                        // how breaths placed BETWEEN chords right-
+                        // align to the next chord. The bar line lands
+                        // at `width - sp/2` (see the `.barLine` arm
+                        // ~line 505 for the fallback that owns this
+                        // constant).
+                        let barLineX = width - metrics.sp / 2
+                        let glyphRightX = barLineX
+                            - gapBeforeNextSp * metrics.sp
+                        originX = glyphRightX
+                            - (glyphAdvanceSp / 2) * metrics.sp
                     }
-                    // Y placement: target the visible BOTTOM edge to
-                    // clear the top staff line by a kind-dependent
-                    // gap. With anchor-.center, the visible bottom
-                    // edge sits at `origin.y + bottomOffset * sp`, so
-                    // origin.y = targetBottomY - bottomOffset * sp.
-                    // Breath marks: visible bottom 1 sp above the top
-                    // staff line. Caesuras are taller and look natural
-                    // closer to the staff: visible bottom 0.5 sp above.
+                    // Y placement:
+                    // - Breath marks: target the visible BOTTOM edge
+                    //   `0.5 sp` above the top staff line so the
+                    //   glyph hangs JUST above the staff.
+                    // - Caesuras: center the visible glyph on the
+                    //   top staff line (MuseScore convention; the
+                    //   caesura crosses through the line).
+                    // With anchor-.center, the visible bottom edge
+                    // sits at `origin.y + bottomOffset * sp` and the
+                    // visible top edge at `origin.y + topOffset * sp`,
+                    // so origin.y for bottom-clearance is
+                    //   originY = targetBottomY - bottomOffset * sp
+                    // and origin.y for visible-center is
+                    //   originY = targetCenterY - (bottomOffset + topOffset)/2 * sp.
                     let staffTopY = staffMidY - metrics.sp * 2
-                    let visibleBottomClearanceSp: CGFloat
+                    let originY: CGFloat
                     switch b.kind {
-                    case .breathMark: visibleBottomClearanceSp = 0.5
-                    case .caesura: visibleBottomClearanceSp = 0.0
+                    case .breathMark:
+                        let clearanceSp: CGFloat = 0.5
+                        let targetBottomY = staffTopY - clearanceSp * metrics.sp
+                        originY = targetBottomY
+                            - glyphOffsets.bottomOffset * metrics.sp
+                    case .caesura:
+                        let visibleCentreOffsetSp =
+                            (glyphOffsets.bottomOffset + glyphOffsets.topOffset) / 2
+                        originY = staffTopY - visibleCentreOffsetSp * metrics.sp
                     }
-                    let targetBottomY = staffTopY
-                        - visibleBottomClearanceSp * metrics.sp
-                    let originY = targetBottomY
-                        - glyphOffsets.bottomOffset * metrics.sp
                     let breathElement = LayoutElement.breath(
                         kind: b.kind,
                         origin: CGPoint(x: originX, y: originY),

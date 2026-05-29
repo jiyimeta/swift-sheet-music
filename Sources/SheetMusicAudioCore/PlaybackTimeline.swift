@@ -228,8 +228,13 @@ extension PlaybackTimeline {
                 ? measureDurations[mi]
                 : Fraction(numerator: 4, denominator: 4)
             // Advance the spine by voice 0 / staff 0's chord+rest
-            // durations. Other voices in the same measure share
-            // this start tick by construction.
+            // durations PLUS any breath pause-tick budgets. Other
+            // voices in the same measure share this start tick by
+            // construction. Breath pauses must be included here so
+            // subsequent measures' `measureStarts` align with MIDI's
+            // tick coordinates — otherwise the cursor poller maps
+            // playback ticks to frames at the wrong measure during /
+            // after the silence.
             if let voice0 = score.parts.first?.staves.first?.measures[mi].voices.first {
                 for el in voice0.elements {
                     switch el {
@@ -237,6 +242,16 @@ extension PlaybackTimeline {
                         spineTick += c.duration
                             .resolved(in: measureDuration)
                             .ticks(division: division)
+                    case let .breath(b) where b.pause > 0:
+                        // TODO: multi-tempo — sample the tempo
+                        // timeline at the breath's tick instead of
+                        // hard-coding 2.0 bps (120 BPM). Mirrors the
+                        // same TODO in MidiRenderer's measureTicks.
+                        let bps = 2.0
+                        spineTick += Int(
+                            (b.pause * bps * Double(division))
+                                .rounded(),
+                        )
                     default:
                         break
                     }
@@ -338,6 +353,24 @@ extension PlaybackTimeline {
                                 ))
                             }
                             tick += restTicks
+                        case let .breath(b) where b.pause > 0:
+                            // Mirrors `MidiRenderer.renderVoiceElement`'s
+                            // `.breath` arm and the `measureStarts`
+                            // accumulation above. Without this the
+                            // cursor walker drifts behind MIDI by the
+                            // total caesura silence inserted earlier
+                            // in the measure, so during / after the
+                            // pause the cursor maps to the wrong
+                            // chord frame.
+                            //
+                            // TODO: multi-tempo — sample the tempo
+                            // timeline at the breath's tick instead
+                            // of hard-coding 2.0 bps (120 BPM).
+                            let bps = 2.0
+                            tick += Int(
+                                (b.pause * bps * Double(division))
+                                    .rounded(),
+                            )
                         default:
                             break
                         }
