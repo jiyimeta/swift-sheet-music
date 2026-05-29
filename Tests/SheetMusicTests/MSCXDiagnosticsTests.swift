@@ -86,6 +86,44 @@ struct MSCXDiagnosticsTests {
         let chord = firstChord(in: score)
         #expect(chord?.tremolo == nil)
     }
+
+    @Test func missingTremoloSubtype_emitsDiagnostic_andDropsTremolo() throws {
+        // Construct the XML in-line by stripping the <subtype> child from
+        // the bundled fixture — keeps the assertion targeted on the
+        // missing-subtype path.
+        let url = try #require(Bundle.module.url(
+            forResource: "diagnostics-tremolo-unknown-subtype",
+            withExtension: "mscx",
+            subdirectory: "own",
+        ))
+        var xml = try String(contentsOf: url, encoding: .utf8)
+        xml = xml.replacingOccurrences(
+            of: "<subtype>r128</subtype>",
+            with: "",
+        )
+        let result = try MSCXParser.parseWithDiagnostics(Data(xml.utf8))
+        let chord = firstChord(in: result.score)
+        #expect(chord?.tremolo == nil)
+        #expect(result.diagnostics.count == 1)
+        #expect(result.diagnostics.first?.code == "mscx.tremolo.missingSubtype")
+    }
+
+    @Test func diagnosticHasStableCode() throws {
+        // The dotted-namespace contract is a public guarantee — if any
+        // emitter drifts from it, callers' downstream filters break
+        // silently. Verify a few known codes round-trip through a real
+        // parse.
+        let url = try #require(Bundle.module.url(
+            forResource: "diagnostics-tremolo-unknown-subtype",
+            withExtension: "mscx",
+            subdirectory: "own",
+        ))
+        let result = try MSCXParser.parseWithDiagnostics(contentsOf: url)
+        for d in result.diagnostics {
+            #expect(d.code.hasPrefix("mscx."))
+            #expect(d.code.split(separator: ".").count >= 3)
+        }
+    }
 }
 
 private func firstChord(in score: Score) -> Chord? {
