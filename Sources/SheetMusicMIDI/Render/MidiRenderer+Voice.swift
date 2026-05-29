@@ -344,21 +344,16 @@ extension MidiRenderer {
             // `FermataRanges`. The voice walk does not need to
             // touch tempo or tick state here.
             break
-        case let .breath(breath):
-            // Advance localTick by the breath's pause-seconds, converted
-            // via the active tempo: ticks = pause * bps * ppq. A pause of
-            // zero (breath marks default) is a no-op. The preceding chord's
-            // note-off events stay at their natural release — MuseScore
-            // inserts dead time rather than shortening the chord. Tempo is
-            // sampled once at the breath's tick; tempo changes that fall
-            // inside the silence are ignored, matching MuseScore.
-            // Mirrors mu::engraving::Breath::play().
-            if breath.pause > 0 {
-                let extraTicks = Int(
-                    (breath.pause * currentTempoBps * Double(division)).rounded(),
-                )
-                localTick += extraTicks
-            }
+        case .breath:
+            // Pause-seconds are realized as tempo bookends emitted in
+            // `MidiRenderer.renderTrack` from `BreathRanges`: a
+            // 1-tick window of very slow tempo at the breath's
+            // original tick consumes `pause` seconds of wall clock.
+            // The next chord stays at its natural tick. This mirrors
+            // the `.fermata` arm above and lets the playback cursor
+            // visually freeze on the breath glyph during the silence
+            // instead of running through empty MIDI space.
+            break
         }
     }
 

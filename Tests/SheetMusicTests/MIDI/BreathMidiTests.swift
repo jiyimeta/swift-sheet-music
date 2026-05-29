@@ -59,6 +59,22 @@ struct BreathMidiTests {
         return result.sorted()
     }
 
+    /// All tempo meta events in the rendered MIDI as
+    /// `(tick, microsecondsPerQuarter)` pairs, sorted by tick.
+    private func tempoMetaEvents(in midi: MidiFile) -> [(tick: Int, micros: Int)] {
+        var out: [(tick: Int, micros: Int)] = []
+        for track in midi.tracks {
+            for ev in track.events {
+                if case let .meta(meta) = ev.event,
+                   case let .tempo(micros) = meta
+                {
+                    out.append((tick: ev.tick, micros: micros))
+                }
+            }
+        }
+        return out.sorted { $0.tick < $1.tick }
+    }
+
     @Test("breath mark with pause=0 does not shift the next chord")
     func breathMarkNoShift() throws {
         let s = try Self.score(breathKind: .breathMark(.comma), pause: nil)
@@ -67,21 +83,45 @@ struct BreathMidiTests {
         #expect(noteOnTicks(in: midi) == [0, 480])
     }
 
-    @Test("caesura with default pause shifts the next chord by pause-seconds")
+    @Test("caesura with default pause realizes pause-seconds via tempo bookend")
     func caesuraDefaultPauseShifts() throws {
-        // 120 BPM = 2 bps. Caesura .normal pause = 0.5s = 1 beat = 480 ticks at PPQ=480.
+        // 120 BPM = 2 bps. Caesura .normal pause = 0.5s. With tempo
+        // bookends (vs. tick shifting), the next chord stays at tick
+        // 480 (right after the first quarter); a slow-tempo meta
+        // event at tick 480 consumes the 0.5s of wall clock.
+        // Slow micros = 0.5 * 1_000_000 * 480 = 240_000_000.
+        // Restore at tick 481 = 1_000_000 / 2.0 = 500_000.
         let s = try Self.score(breathKind: .caesura(.normal), pause: nil)
         let midi = try MidiRenderer.render(score: s)
-        // First chord onset = 0; second chord onset = 480 (quarter) + 480 (0.5s pause).
-        #expect(noteOnTicks(in: midi) == [0, 960])
+        #expect(noteOnTicks(in: midi) == [0, 480])
+        let tempos = tempoMetaEvents(in: midi)
+        #expect(
+            tempos.contains { $0.tick == 480 && $0.micros == 240_000_000 },
+            "expected slow-tempo bookend at tick 480; got \(tempos)",
+        )
+        #expect(
+            tempos.contains { $0.tick == 481 && $0.micros == 500_000 },
+            "expected restore-tempo bookend at tick 481; got \(tempos)",
+        )
     }
 
     @Test("explicit pause overrides default")
     func explicitPauseOverridesDefault() throws {
-        // 0.25s at 120 bpm / 480 ppq = 240 ticks.
+        // breathMark with explicit pause = 0.25s at 120 BPM / 480 PPQ.
+        // Next chord stays at tick 480; slow micros = 0.25 *
+        // 1_000_000 * 480 = 120_000_000.
         let s = try Self.score(breathKind: .breathMark(.comma), pause: 0.25)
         let midi = try MidiRenderer.render(score: s)
-        #expect(noteOnTicks(in: midi) == [0, 720])
+        #expect(noteOnTicks(in: midi) == [0, 480])
+        let tempos = tempoMetaEvents(in: midi)
+        #expect(
+            tempos.contains { $0.tick == 480 && $0.micros == 120_000_000 },
+            "expected slow-tempo bookend at tick 480; got \(tempos)",
+        )
+        #expect(
+            tempos.contains { $0.tick == 481 && $0.micros == 500_000 },
+            "expected restore-tempo bookend at tick 481; got \(tempos)",
+        )
     }
 
     @Test("preceding chord's note-off stays at its natural release")
@@ -97,14 +137,15 @@ struct BreathMidiTests {
         #expect(offsCaesura.first == offsControl.first)
     }
 
-    @Test("caesura uses the tempo active going into the silence")
+    @Test("caesura restore tempo honours the in-effect tempo")
     func caesuraUsesTempoAtBreathTick() throws {
-        // Score: 4/4, first chord at 120 BPM (2 bps), then a <Tempo> change
-        // to 60 BPM (1 bps) just before the caesura, then the caesura, then
-        // the second chord. At 60 BPM with caesura .normal pause = 0.5 s and
-        // PPQ = 480, the silence is 0.5 * 1 * 480 = 240 ticks. The second
-        // chord onset should therefore be at 480 (first quarter) + 240 = 720
-        // — NOT 960, which is what the original 120-BPM tempo would give.
+        // Score: 4/4, first chord at 120 BPM (2 bps), then a <Tempo>
+        // change to 60 BPM (1 bps) just before the caesura, then the
+        // caesura, then the second chord. With tempo bookends, the
+        // next chord stays at tick 480. The restore-tempo event at
+        // tick 481 should be the 60-BPM micros (1_000_000), NOT the
+        // initial 120-BPM 500_000 — i.e. it samples the timeline at
+        // tick 481 where the 60-BPM change is already in effect.
         let xml = """
         <?xml version="1.0" encoding="UTF-8"?>
         <museScore version="4.40">
@@ -132,6 +173,13 @@ struct BreathMidiTests {
         """
         let score = try MSCXParser.parse(Data(xml.utf8))
         let midi = try MidiRenderer.render(score: score)
-        #expect(noteOnTicks(in: midi) == [0, 720])
+        #expect(noteOnTicks(in: midi) == [0, 480])
+        let tempos = tempoMetaEvents(in: midi)
+        // Restore at tick 481 should reflect 60 BPM (1_000_000),
+        // not the original 120 BPM (500_000).
+        #expect(
+            tempos.contains { $0.tick == 481 && $0.micros == 1_000_000 },
+            "expected restore-tempo bookend at tick 481 = 60 BPM; got \(tempos)",
+        )
     }
 }

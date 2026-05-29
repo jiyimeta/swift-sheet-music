@@ -99,44 +99,12 @@ public enum MidiRenderer {
             isTopOfPart: isTopOfPart,
         )
 
-        // Per-staff fermata ranges + tempo bookends. Built BEFORE
-        // voice walks so close events sort ahead of any same-tick
-        // `.tempo` from those walks; open events are appended AFTER
-        // so they sort after same-tick `.tempo`. The renderer's
-        // stable sort below realises the documented close → .tempo
-        // → open ordering at boundary ticks.
-        //
-        // Bookends are collected at original (pre-repeat) ticks; we
-        // project them through `playbackPlan` so each repeat
-        // iteration re-fires its own pair. Without this projection a
-        // fermata inside `<startRepeat>...<endRepeat>` would hold
-        // only on the first take.
-        let fermataRanges = FermataRanges.collect(from: staff, division: division)
-        let staffSystemMeasures = systemElementsByMeasure.map {
-            SystemMeasure(elements: $0)
-        }
-        let timeline = TempoTimeline.build(
-            measures: staff.measures,
-            systemMeasures: staffSystemMeasures,
+        let bookends = collectTempoBookends(
+            staff: staff,
             division: division,
+            systemElementsByMeasure: systemElementsByMeasure,
         )
-        let bookends = FermataRanges.tempoEvents(
-            ranges: fermataRanges, timeline: timeline,
-        )
-        let plan = playbackPlan(for: staff.measures, division: division)
-        let (measureBases, measureSpans) = measureBaseLayout(
-            measures: staff.measures, division: division,
-        )
-        let projectedClose = projectBookends(
-            bookends.closeEvents, plan: plan,
-            measureBases: measureBases, measureSpans: measureSpans,
-        )
-        let projectedOpen = projectBookends(
-            bookends.openEvents, plan: plan,
-            measureBases: measureBases, measureSpans: measureSpans,
-        )
-
-        events.append(contentsOf: projectedClose)
+        events.append(contentsOf: bookends.closeEvents)
 
         var voiceEventBuckets: [[TimedMidiEvent]] = []
         let voiceCount = staff.measures.map(\.voices.count).max() ?? 0
@@ -156,7 +124,7 @@ public enum MidiRenderer {
         let merged = resolveUnisonOverlap(voiceEventBuckets.flatMap(\.self))
         events.append(contentsOf: merged)
 
-        events.append(contentsOf: projectedOpen)
+        events.append(contentsOf: bookends.openEvents)
 
         // EoT lands one tick after the last produced event (MuseScore convention):
         // for note-bearing tracks this is final-noteOff + 1; for empty tracks it's 1.
@@ -175,6 +143,72 @@ public enum MidiRenderer {
             .map { TimedMidiEvent(tick: max(0, $0.element.tick), event: $0.element.event) }
 
         return MidiTrack(events: sorted)
+    }
+
+    /// Bundled tempo bookends for a staff: fermata holds + breath
+    /// pauses, both projected through the playback plan so each
+    /// repeat iteration re-fires its own pairs. Built BEFORE voice
+    /// walks so close events sort ahead of any same-tick `.tempo`;
+    /// open events get appended AFTER so they sort after same-tick
+    /// `.tempo`. The renderer's stable sort then realises the
+    /// documented close → .tempo → open ordering at boundary ticks.
+    private struct StaffTempoBookends {
+        var openEvents: [TimedMidiEvent]
+        var closeEvents: [TimedMidiEvent]
+    }
+
+    private static func collectTempoBookends(
+        staff: Staff,
+        division: Int,
+        systemElementsByMeasure: [[PositionedSystemElement]],
+    ) -> StaffTempoBookends {
+        let fermataRanges = FermataRanges.collect(
+            from: staff, division: division,
+        )
+        let staffSystemMeasures = systemElementsByMeasure.map {
+            SystemMeasure(elements: $0)
+        }
+        let timeline = TempoTimeline.build(
+            measures: staff.measures,
+            systemMeasures: staffSystemMeasures,
+            division: division,
+        )
+        let fermataBookends = FermataRanges.tempoEvents(
+            ranges: fermataRanges, timeline: timeline,
+        )
+        // Per-staff breath/caesura pause bookends. Mirrors the
+        // fermata pattern: a 1-tick slow-tempo window at the breath's
+        // original tick consumes the pause-seconds of wall-clock
+        // time, while the next chord stays at its natural tick.
+        let breathPauses = BreathRanges.collect(
+            from: staff, division: division,
+        )
+        let breathBookends = BreathRanges.tempoEvents(
+            pauses: breathPauses, timeline: timeline, division: division,
+        )
+        let plan = playbackPlan(for: staff.measures, division: division)
+        let (measureBases, measureSpans) = measureBaseLayout(
+            measures: staff.measures, division: division,
+        )
+        let projectedClose = projectBookends(
+            fermataBookends.closeEvents, plan: plan,
+            measureBases: measureBases, measureSpans: measureSpans,
+        )
+            + projectBookends(
+                breathBookends.closeEvents, plan: plan,
+                measureBases: measureBases, measureSpans: measureSpans,
+            )
+        let projectedOpen = projectBookends(
+            fermataBookends.openEvents, plan: plan,
+            measureBases: measureBases, measureSpans: measureSpans,
+        )
+            + projectBookends(
+                breathBookends.openEvents, plan: plan,
+                measureBases: measureBases, measureSpans: measureSpans,
+            )
+        return StaffTempoBookends(
+            openEvents: projectedOpen, closeEvents: projectedClose,
+        )
     }
 
     /// Project a list of bookend events (originally collected at
