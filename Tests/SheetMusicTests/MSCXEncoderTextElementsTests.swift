@@ -81,7 +81,7 @@ struct MSCXEncoderTextElementsTests {
         }
     }
 
-    @Test("StaffText round-trips text, offset, colour, visibility")
+    @Test("StaffText round-trips text, offset, color, visibility")
     func staffTextRoundTrip() throws {
         let staffText = StaffText(
             text: "rit.",
@@ -128,7 +128,7 @@ struct MSCXEncoderTextElementsTests {
         #expect(reparsed == systemText)
     }
 
-    @Test("RehearsalMark round-trips text, frame, offset, colour")
+    @Test("RehearsalMark round-trips text, frame, offset, color")
     func rehearsalMarkRoundTrip() throws {
         let mark = RehearsalMark(
             text: "A",

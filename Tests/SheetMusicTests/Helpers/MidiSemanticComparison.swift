@@ -9,7 +9,7 @@ enum MidiSemanticComparison {
     struct Options {
         /// MuseScore's `tempomapWithPauses` restoration occasionally
         /// emits the same kind of meta event twice within ≤1 tick at
-        /// section boundaries. The default normaliser already drops
+        /// section boundaries. The default normalizer already drops
         /// these; this flag is reserved for future tuning and is a
         /// no-op today (kept in the spec for API stability).
         var ignoreTempoNoise = false
@@ -63,7 +63,7 @@ enum MidiSemanticComparison {
         }
     }
 
-    /// Normalise:
+    /// Normalize:
     /// - drop the per-note CC2 sndController the renderer doesn't emit,
     /// - snap noteOffs 1 tick before next noteOn (479 vs 480),
     /// - drop adjacent same-kind meta events (MuseScore's tempomap restoration

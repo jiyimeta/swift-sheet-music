@@ -54,7 +54,7 @@ public enum RehearsalMarkFrame {
     /// For `.circle`, the diameter is `max(boxRect.width, boxRect.height)`
     /// so short labels ("A") get a tight circle and wide labels ("1サビ")
     /// get a letterbox-friendly enclosing ellipse — matching the Apple
-    /// renderer's existing behaviour.
+    /// renderer's existing behavior.
     public static func shape(
         for frame: TextFrameType, around boxRect: CGRect,
     ) -> Shape {

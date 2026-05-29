@@ -44,7 +44,7 @@ extension LayoutEngine {
         // merges beats only when BOTH sides of the boundary are uniform
         // — a beat containing a dotted-8th + 16th has levels {1, 2}
         // (mixed) and forces a break even though both levels appear in
-        // the neighbouring beat too.
+        // the neighboring beat too.
         var beatLevelSets: [Int: Set<Int>] = [:]
         var scanTick = 0
         for el in voice.elements {

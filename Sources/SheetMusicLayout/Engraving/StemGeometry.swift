@@ -10,7 +10,7 @@ import Foundation
 /// "beam Y substitutes for the stem terminus" rule that gives every
 /// stem in a beam group the same outer endpoint.
 public enum StemGeometry {
-    /// Horizontal distance from a Bravura `noteheadBlack` centre to
+    /// Horizontal distance from a Bravura `noteheadBlack` center to
     /// the stem. Derived from Bravura's published `stemUpSE.x = 1.18 sp`
     /// (half-width when glyphs are drawn with a `.center` anchor):
     /// `|stem_x − center| = 0.59 sp`.

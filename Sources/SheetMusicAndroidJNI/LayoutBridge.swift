@@ -245,7 +245,7 @@ public enum LayoutBridge {
             let dy = Double(BeamGeometry.levelOffsetDy(
                 level: level, stemDirection: direction, sp: CGFloat(sp),
             ))
-            // Draw the centre of the beam stroke at `dy + beamThickness/2`
+            // Draw the center of the beam stroke at `dy + beamThickness/2`
             // so the stroke's outer edge aligns with the chord's stem
             // tip (matching Apple's filled-rectangle geometry).
             let thickness = Double(BeamGeometry.beamThicknessSp) * sp

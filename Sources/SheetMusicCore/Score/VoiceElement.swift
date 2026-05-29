@@ -11,7 +11,7 @@ import Foundation
 /// the last note) leave the score in a valid state automatically.
 ///
 /// Layout / MIDI / MSCX layers dispatch on `chord.notes.isEmpty` to
-/// pick rest behaviour; renderers can still use a richer
+/// pick rest behavior; renderers can still use a richer
 /// representation (`LayoutElement.rest`) downstream.
 ///
 /// C++: not a single type (heterogeneous segment children).

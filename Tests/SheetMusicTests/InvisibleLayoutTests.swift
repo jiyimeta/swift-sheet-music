@@ -728,7 +728,7 @@
 
         @Test func allNotesInvisibleKeepsChordInElementsWhenToggleOn() {
             // Same as above but with toggle on. Chord still stays in
-            // `elements` — only the noteheads grey at 50% via per-note
+            // `elements` — only the noteheads gray at 50% via per-note
             // flags; the chord-level routing (to `invisibleElements`)
             // is reserved for `chord.visible == false`.
             let doc = LayoutEngine.layout(
@@ -887,7 +887,7 @@
 
         /// Single chord whose `stemVisible == false`. Plumbed through the
         /// `.chord` LayoutElement's `stemIsInvisible` field so the renderer
-        /// can grey or skip the stem independently of notehead visibility.
+        /// can gray or skip the stem independently of notehead visibility.
         @Test func stemVisibleFalseSetsStemIsInvisibleInLayoutElement() {
             for toggle in [false, true] {
                 var chord = Chord(

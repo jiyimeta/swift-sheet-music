@@ -109,7 +109,7 @@
             let cy = Int(sysBase.y + n.origin.y)
             let em = Int(doc.metrics.glyphFontSize)
 
-            // Search a 1.5em × em box centred on the expected notehead.
+            // Search a 1.5em × em box centered on the expected notehead.
             var headInk = 0
             let x0 = max(0, cx - em * 3 / 4)
             let x1 = min(width - 1, cx + em * 3 / 4)

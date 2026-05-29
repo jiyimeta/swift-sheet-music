@@ -334,7 +334,7 @@ struct SetChordDurationTests {
     /// Lengthening into a tuplet — MuseScore deletes the whole
     /// tuplet as a unit (`makeGap` → `cmdDeleteTuplet`) and the
     /// overshoot becomes plain rests via `setRest`. We mirror that
-    /// behaviour: the tuplet vanishes, its tick count is consumed,
+    /// behavior: the tuplet vanishes, its tick count is consumed,
     /// and any leftover is rest-decomposed (no tied chord clones).
     @Test("Lengthen consumes a downstream tuplet wholesale")
     func lengthenConsumesTupletWhole() throws {

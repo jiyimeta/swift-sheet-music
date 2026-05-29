@@ -19,13 +19,13 @@ note timing, pause-aware tempo map handling, MeasureRepeat group
 resolution, Volta-aware repeat playback) were studied from the MuseScore
 C++ implementation (https://github.com/musescore/MuseScore, GPL-3.0) but
 no source code is copied; the Swift implementation was rewritten from
-scratch using the referenced behaviour as a specification. Inline doc
+scratch using the referenced behavior as a specification. Inline doc
 comments occasionally cross-reference the originating MuseScore class or
 function for traceability.
 
 MuseScore is a trademark of Muse Group. Use of the name in this project's
 documentation and code identifiers is nominative (to indicate file format
-and behavioural compatibility) and does not imply affiliation.
+and behavioral compatibility) and does not imply affiliation.
 
 Test fixtures
 -------------

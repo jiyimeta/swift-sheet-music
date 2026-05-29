@@ -4,7 +4,7 @@
 import Foundation
 
 /// Glissando line geometry: straight or wavy line between two
-/// noteheads, with an optional centred text label whose baseline
+/// noteheads, with an optional centered text label whose baseline
 /// follows the line's slope. Mirrors MuseScore's
 /// `tdraw.cpp::draw(GlissandoSegment)`.
 ///
@@ -59,7 +59,7 @@ public enum GlissandoGeometry {
         wavy ? 0.4 : 0.1
     }
 
-    /// Position of the label's anchor (bottom-centre) in the LOCAL
+    /// Position of the label's anchor (bottom-center) in the LOCAL
     /// rotated frame. The label sits at the midpoint of the line
     /// with its descender just above the line by `textClearanceSp(:)`.
     public static func textAnchorLocal(

@@ -12,7 +12,7 @@
     /// notehead / stem / beam / lyric, plus a text-only red chord symbol
     /// (the MuseScore-4.4 `<harmonyInfo>` shape) must rasterize with
     /// genuinely red pixels — not the default black ink.
-    @Suite("Element colour rasterization")
+    @Suite("Element color rasterization")
     struct ElementColorRenderTests {
         private let _installApple = TestSupport.installApple
 
@@ -31,7 +31,7 @@
             }
             var redLyric = Lyric(text: "あ")
             redLyric.elementProperties.color = red
-            // Two beamed eighths so the beam-colour path runs; the first
+            // Two beamed eighths so the beam-color path runs; the first
             // carries the red lyric.
             let c1 = Chord(
                 duration: .eighth, notes: [redNote(60)], lyrics: [redLyric],
@@ -105,10 +105,10 @@
             }
             #expect(
                 redPixels > 100,
-                "expected red ink for coloured elements, got \(redPixels)",
+                "expected red ink for colored elements, got \(redPixels)",
             )
             // Staff lines / ledger are still black; the score is not
-            // entirely red. (Sanity: the colour path didn't tint
+            // entirely red. (Sanity: the color path didn't tint
             // everything.)
             #expect(
                 blackInk > 50,

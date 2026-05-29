@@ -94,19 +94,19 @@ public struct ScoreViewOptions: Sendable, Equatable {
     public var multiMeasureRest: MultiMeasureRestPolicy
     /// MuseScore "Show Invisible". When true, elements with
     /// `visible == false` are still laid out and tagged invisible so
-    /// renderers grey them (`#808080` on white = 50% opacity). When
-    /// false (print behaviour, the default), invisible elements are
+    /// renderers gray them (`#808080` on white = 50% opacity). When
+    /// false (print behavior, the default), invisible elements are
     /// dropped entirely.
     ///
     /// **Coverage** — element families and how this toggle applies:
     ///
-    /// - **Fully honoured (visible+invisible routing, slot preserved):**
+    /// - **Fully honored (visible+invisible routing, slot preserved):**
     ///   `Tempo`, `StaffText`, `Swing`, `Harmony`, `Clef`,
     ///   `KeySignature`, `TimeSignature`, `BarLine`, `Dynamic`,
     ///   `Fermata`, `Lyric` (per-verse), `RehearsalMark`,
     ///   `Chord.visible` (chord-level, routes whole chord including
     ///   stem/flag/beam), per-`Note` visibility within a visible chord
-    ///   (per-notehead grey/skip — accompanying ledger lines follow
+    ///   (per-notehead gray/skip — accompanying ledger lines follow
     ///   the notehead; stem/beam unaffected, matches MuseScore),
     ///   `Chord.stemVisible` (MSCX `<Stem><visible>`; stem + flag glyph
     ///   suppressed when false; beam suppression via `<Beam><visible>`
@@ -114,13 +114,13 @@ public struct ScoreViewOptions: Sendable, Equatable {
     /// - **Partial — spanners:**
     ///   `Spanner.visible == false` round-trips, and layout drops
     ///   hidden spanners. The invisible-container routing (so toggle-on
-    ///   greys them) is not yet wired. Tracked as follow-up.
+    ///   grays them) is not yet wired. Tracked as follow-up.
     /// - **Out of scope:**
     ///   MusicXML's `print-object="no"` is not yet ingested into
     ///   `ElementProperties.visible`. MIDI is unaffected by visibility
     ///   regardless of the toggle — `Note.play` governs playback.
     ///
-    /// Default: `false` (print behaviour).
+    /// Default: `false` (print behavior).
     public var showsInvisibleElements: Bool
 
     public init(

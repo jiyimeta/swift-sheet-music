@@ -162,10 +162,10 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                 )
             }
             if !measure.invisibleElements.isEmpty {
-                var grey = context
+                var gray = context
                 // MuseScore invisibleColor() = #808080; 50% black on the
                 // white score background is the exact equivalent.
-                grey.opacity = 0.5
+                gray.opacity = 0.5
                 for element in measure.invisibleElements {
                     drawElement(
                         element,
@@ -173,10 +173,10 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                         metrics: metrics,
                         // Routed-to-invisible chord/note glyphs already
                         // sit under a 50% group context; force-enable
-                        // showsInvisible so per-note dispatch greys
+                        // showsInvisible so per-note dispatch grays
                         // rather than skips them.
                         showsInvisibleElements: true,
-                        into: &grey,
+                        into: &gray,
                     )
                 }
             }
@@ -210,17 +210,17 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
             )
         }
         if !system.invisibleSpanners.isEmpty {
-            var grey = context
+            var gray = context
             // MuseScore invisibleColor() = #808080; 50% black on the
             // white score background is the exact equivalent.
-            grey.opacity = 0.5
+            gray.opacity = 0.5
             for el in system.invisibleSpanners {
                 drawElement(
                     el,
                     base: system.origin,
                     metrics: metrics,
                     showsInvisibleElements: true,
-                    into: &grey,
+                    into: &gray,
                 )
             }
         }
@@ -299,9 +299,9 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                     color: $0.color,
                 )
             }
-            // Stem / flag inherit the chord's notehead colour (the first
-            // coloured note wins) — MuseScore stores `<Stem>/<Hook>`
-            // colour separately but in practice it matches the note.
+            // Stem / flag inherit the chord's notehead color (the first
+            // colored note wins) — MuseScore stores `<Stem>/<Hook>`
+            // color separately but in practice it matches the note.
             let stemColor: Color = shiftedNotes
                 .compactMap(\.color).first
                 .map { Color(scoreColor: $0) } ?? .primary
@@ -309,7 +309,7 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
             // beams drawn by later elements) render ON TOP of them — the
             // ledger sits visually behind the chord's ink. A ledger
             // attached to a hidden notehead follows the notehead's
-            // visibility: skip at toggle-off, grey at 50% at toggle-on.
+            // visibility: skip at toggle-off, gray at 50% at toggle-on.
             let visibleLedgerNotes = shiftedNotes.filter { !$0.isInvisible }
             let invisibleLedgerNotes = shiftedNotes.filter(\.isInvisible)
             drawLedgerLines(
@@ -320,10 +320,10 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
             if !invisibleLedgerNotes.isEmpty, showsInvisibleElements {
                 // MuseScore invisibleColor() = #808080; 50% black on
                 // white is the equivalent.
-                var grey = context
-                grey.opacity = 0.5
+                var gray = context
+                gray.opacity = 0.5
                 drawLedgerLines(
-                    context: &grey,
+                    context: &gray,
                     notes: invisibleLedgerNotes, stem: stem,
                     metrics: metrics,
                 )
@@ -341,21 +341,21 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                     guard showsInvisibleElements else { continue }
                     // MuseScore invisibleColor() = #808080; 50% black on the
                     // white score background is the exact equivalent.
-                    var grey = context
-                    grey.opacity = 0.5
+                    var gray = context
+                    gray.opacity = 0.5
                     NoteheadRenderer.drawHead(
-                        context: &grey, at: visualOrigin,
+                        context: &gray, at: visualOrigin,
                         duration: baseDur, headType: n.headType,
                         metrics: metrics,
                     )
                     if let acc = n.accidental {
                         AccidentalRenderer.draw(
-                            context: &grey, accidental: acc,
+                            context: &gray, accidental: acc,
                             origin: visualOrigin, metrics: metrics,
                         )
                     }
                     DotRenderer.draw(
-                        context: &grey,
+                        context: &gray,
                         after: visualOrigin,
                         count: dots,
                         onStaffLine: n.step.isMultiple(of: 2),
@@ -390,15 +390,15 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
             // Stem visibility (MSCX `<Stem><visible>`) is independent of
             // notehead visibility. When the stem is hidden:
             //   * toggle off → skip stem + flag entirely.
-            //   * toggle on  → grey both at 50%.
+            //   * toggle on  → gray both at 50%.
             // Beam suppression on hidden-stem chords is a separate
             // concern (would require `<Beam><visible>`).
             if stemIsInvisible {
                 if showsInvisibleElements {
-                    var grey = context
-                    grey.opacity = 0.5
+                    var gray = context
+                    gray.opacity = 0.5
                     StemRenderer.draw(
-                        context: &grey, notes: shiftedNotes,
+                        context: &gray, notes: shiftedNotes,
                         direction: stem, duration: baseDur,
                         isBeamed: isBeamed, beamY: beamY,
                         stemExtension: stemExt, color: stemColor,

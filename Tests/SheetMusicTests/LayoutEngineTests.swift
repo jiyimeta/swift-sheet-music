@@ -280,7 +280,7 @@
             // Pitch 47 (Low-Mid Tom) sits at line=1 → step=3 (above
             // the middle line). The median heuristic picks DOWN for a
             // step-3 chord, but MuseScore's Drumset says stem=up for
-            // pitch 47. The renderer must honour the drum-staff
+            // pitch 47. The renderer must honor the drum-staff
             // convention (voice 1 = up) regardless of multi-voice state.
             let chord = Chord(
                 duration: .quarter,

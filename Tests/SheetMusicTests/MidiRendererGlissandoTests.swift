@@ -225,13 +225,13 @@ struct MidiRendererGlissandoTests {
             return nil
         }
         #expect(bends.count >= 5)
-        // First bend is the centre reset at tick 0.
+        // First bend is the center reset at tick 0.
         #expect(bends[0].value == MidiEvent.pitchBendCenter)
         // Ramp ends at +7 semitones ≈ 8192 + (7/12)*8191 ≈ 8192 + 4778 = 12970.
         let approxPeak = bends.dropLast().last?.value ?? 0
         #expect(approxPeak > MidiEvent.pitchBendCenter + 3000)
         #expect(approxPeak <= MidiEvent.pitchBendCenter + 8191)
-        // Final bend resets to centre so the next chord plays unbent.
+        // Final bend resets to center so the next chord plays unbent.
         #expect(bends.last?.value == MidiEvent.pitchBendCenter)
         // And the target (end) pitch 67 receives a note-off like any chord.
         let targetOffs = Self.noteOffs(in: track).filter { $0.pitch == 67 }

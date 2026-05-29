@@ -63,7 +63,7 @@ extension Chord {
         let tremolo = tremoloNode.flatMap(Tremolo.decode)
 
         // `<Stem>` element inside `<Chord>` carries per-stem properties
-        // (e.g. `<userLen>`, `<visible>`). We currently honour only
+        // (e.g. `<userLen>`, `<visible>`). We currently honor only
         // `<visible>` — when 0 the stem (and flag) are hidden while the
         // noteheads stay visible. Default is visible.
         var stemVisible = true

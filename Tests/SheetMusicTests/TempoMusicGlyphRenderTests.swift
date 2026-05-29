@@ -129,15 +129,15 @@
             )
 
             // Y regression: the whole note straddles the text's vertical
-            // centre rather than resting its head on the baseline with
-            // the stem poking above (font-metric centring did the latter).
-            let centreDelta = abs(note.midY - textBox.midY)
+            // center rather than resting its head on the baseline with
+            // the stem poking above (font-metric centering did the latter).
+            let centerDelta = abs(note.midY - textBox.midY)
             #expect(
-                centreDelta < doc.metrics.sp,
+                centerDelta < doc.metrics.sp,
                 Comment(
-                    rawValue: "metronome glyph centre is "
-                        + "\(centreDelta) pt from the text centre — the whole "
-                        + "note is not vertically centred",
+                    rawValue: "metronome glyph center is "
+                        + "\(centerDelta) pt from the text center — the whole "
+                        + "note is not vertically centered",
                 ),
             )
         }

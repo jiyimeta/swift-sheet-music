@@ -10,7 +10,7 @@ import SwiftUI
 #endif
 
 /// Internal rendering state computed from a public `ScoreSelection`
-/// plus caller-supplied voice colours. Passed to the layer builder so
+/// plus caller-supplied voice colors. Passed to the layer builder so
 /// it can tint selected items and draw a range-box overlay.
 @available(macOS 15.0, *)
 struct SelectionRenderState {
@@ -30,8 +30,8 @@ struct SelectionRenderState {
         rangeBoxColor: defaultBoxColor,
     )
 
-    /// Selected ink colour for an item of `voiceIndex`, or `nil` when
-    /// the item is not selected or the caller did not supply a colour
+    /// Selected ink color for an item of `voiceIndex`, or `nil` when
+    /// the item is not selected or the caller did not supply a color
     /// for that voice.
     func color(for id: ScoreItemID, voiceIndex: Int) -> CGColor? {
         guard selectedIDs.contains(id) else { return nil }
@@ -55,8 +55,8 @@ struct SelectionRenderState {
         case let .single(id):
             // Tuplet selection expands to the set of member IDs
             // (every note/rest the bracket spans) so the existing
-            // per-element colouring path lights them up; the
-            // bracket itself stays default-coloured.
+            // per-element coloring path lights them up; the
+            // bracket itself stays default-colored.
             let expandedIDs = Self.expand(id, in: score)
             return SelectionRenderState(
                 selectedIDs: expandedIDs,

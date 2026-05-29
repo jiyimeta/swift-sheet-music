@@ -61,7 +61,7 @@ struct MidiRendererArticulationTests {
 
     @Test func multipleInScopeArticulationsTakeMinimumGate() {
         // staccato (50) + tenuto (100) → 50 wins. Mirrors
-        // MuseScore's MidiArticulation::aggregateOf behaviour.
+        // MuseScore's MidiArticulation::aggregateOf behavior.
         let gate = MidiRenderer.effectiveGateTime(
             for: chord([.staccato, .tenuto]), instrument: bareInstrument,
         )

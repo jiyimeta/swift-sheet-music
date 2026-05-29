@@ -156,7 +156,7 @@ public enum MidiReader {
         switch metaType {
         case 0x03:
             // String(decoding:as:) replaces invalid UTF-8 with U+FFFD,
-            // which is the permissive behaviour we want for SMF.
+            // which is the permissive behavior we want for SMF.
             // swiftlint:disable:next non_optional_string_data_conversion optional_data_string_conversion
             let name = String(decoding: payload, as: UTF8.self)
                 .trimmingCharacters(in: .controlCharacters)

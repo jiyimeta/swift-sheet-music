@@ -7,7 +7,7 @@ import Foundation
 /// `AVAudioUnitSampler` because AUSampler ignores RPN 0,0 (Pitch
 /// Bend Sensitivity) — its bend range is hard-coded to ±2 semitones,
 /// which truncates portamento glissandi that we render at ±12. The
-/// MIDISynth AU honours the RPN that the renderer emits in each
+/// MIDISynth AU honors the RPN that the renderer emits in each
 /// track header.
 ///
 /// API surface mirrors `AVAudioUnitSampler.loadSoundBankInstrument`

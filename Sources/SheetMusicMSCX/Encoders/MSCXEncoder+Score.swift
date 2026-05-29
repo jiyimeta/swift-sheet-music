@@ -43,7 +43,7 @@ extension Score {
         )
 
         let museScoreVersion: String
-        // `.v2` is detection-only; MSCXEncoderOptions normalises it to
+        // `.v2` is detection-only; MSCXEncoderOptions normalizes it to
         // `.v3` at init/assignment, but the switch still needs the
         // case to be exhaustive.
         switch options.targetVersion {

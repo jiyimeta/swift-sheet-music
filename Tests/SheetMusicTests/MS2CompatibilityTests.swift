@@ -6,7 +6,7 @@ import Testing
 
 /// MuseScore 2.x files use a few legacy spellings that our MS3/MS4-shaped
 /// reader silently drops when handled naively. These tests pin the
-/// compat behaviour for the three forms we hit on real MS2 inputs (e.g.
+/// compat behavior for the three forms we hit on real MS2 inputs (e.g.
 /// MuseScore 2.3.2-produced `.mscz`):
 ///
 /// - `<duration z="N" n="D"/>` instead of `<duration>N/D</duration>`
@@ -393,7 +393,7 @@ struct MS2CompatibilityTests {
         // Sanity check that the demux only kicks in when voice 1+ is
         // present — flat-form MS2 measures with only voice 0 should
         // still come through the single-implicit-voice fallback,
-        // matching today's behaviour for the non-percussion staves.
+        // matching today's behavior for the non-percussion staves.
         let xml = """
         <Measure number="1">
           <KeySig><concertKey>0</concertKey></KeySig>

@@ -5,7 +5,7 @@ import Foundation
 /// replace its members with a single chord/rest of the same total
 /// tick span.
 ///
-/// Behaviour:
+/// Behavior:
 /// - First-member-with-notes case → a single `Chord` carrying the
 ///   first member's notes / arpeggio / lyrics, with duration equal
 ///   to the tuplet's total tick span.

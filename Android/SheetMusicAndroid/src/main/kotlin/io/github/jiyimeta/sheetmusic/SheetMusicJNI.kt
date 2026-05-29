@@ -10,7 +10,7 @@ import io.github.jiyimeta.sheetmusic.swiftjava.SheetMusicAndroidJNI as SwiftJava
  *
  * `libSheetMusicAndroidJNI.so` and its dependencies (libSwiftJava.so,
  * the Swift runtime) are loaded via the generated swift-java
- * [SheetMusicAndroidJNI]'s static initialiser the first time any
+ * [SheetMusicAndroidJNI]'s static initializer the first time any
  * delegating call below resolves the class.
  */
 object SheetMusicJNI {

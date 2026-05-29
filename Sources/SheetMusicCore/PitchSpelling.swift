@@ -131,16 +131,16 @@ public enum PitchSpelling {
     ///   D♮ (TPC 16) → .natural (cancels key D♭)
     ///
     /// Doesn't account for prior accidentals on the same letter
-    /// within the same measure — callers that need that behaviour
+    /// within the same measure — callers that need that behavior
     /// (e.g. cancelling a mid-measure ♯ with ♮) should compute it
     /// themselves and override.
     public static func displayedAccidental(
         forTpc tpc: Int, in keySig: Int,
     ) -> Accidental? {
-        let centred = tpc - 13
+        let centered = tpc - 13
         // Position in line of fifths from F (FCGDAEB = 0…6).
-        let posInFifths = ((centred % 7) + 7) % 7
-        let alteration = (centred - posInFifths) / 7
+        let posInFifths = ((centered % 7) + 7) % 7
+        let alteration = (centered - posInFifths) / 7
         let keyAlteration: Int
         if keySig > 0 {
             keyAlteration = posInFifths < keySig ? 1 : 0

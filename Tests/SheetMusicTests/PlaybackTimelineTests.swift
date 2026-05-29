@@ -283,7 +283,7 @@
 
         /// Regression for the idea8.mscx playback-cursor "lead" symptom:
         /// when the lowest staff carries a whole-measure rest, the
-        /// engraver renders that rest *centred* in the bar (not at the
+        /// engraver renders that rest *centered* in the bar (not at the
         /// rhythmic onset column), so a `.item(.rest)` cursor on it
         /// would park visually around beat 2.5 while audio is still on
         /// beat 1. The timeline must skip whole-note rests so a chord
@@ -320,7 +320,7 @@
             // Tick 0 must resolve to the staff 1 chord, not the staff 0
             // whole-rest. Without the skip, dedup would prefer staff 0's
             // rest (sortKey (0, 0) wins over staff 1's (1, 0)) and the
-            // cursor would render at the centred rest glyph.
+            // cursor would render at the centered rest glyph.
             let frame0 = timeline.frame(atTick: 0)
             if case let .item(.note(id)) = frame0?.cursor {
                 #expect(id.staff.partIndex == 1)

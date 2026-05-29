@@ -26,14 +26,14 @@ import SheetMusicLayout
 /// no flip is applied.
 @available(macOS 15.0, *)
 public enum ScoreLayerBuilder {
-    /// Ink colour for all strokes / fills.  Matches the prior
+    /// Ink color for all strokes / fills.  Matches the prior
     /// `.environment(\.colorScheme, .light)` + `.color(.primary)`
     /// combination — always black on white.
     static let inkColor: CGColor = .init(gray: 0, alpha: 1)
 
-    /// Convert MuseScore's RGBA score colour into a `CGColor`. Used
-    /// for `.staffText` (and any future author-coloured element) so
-    /// the renderer can honour `<color>` attributes from `.mscx`.
+    /// Convert MuseScore's RGBA score color into a `CGColor`. Used
+    /// for `.staffText` (and any future author-colored element) so
+    /// the renderer can honor `<color>` attributes from `.mscx`.
     static func scoreColorToCGColor(
         _ color: ScoreColor,
     ) -> CGColor {
@@ -59,7 +59,7 @@ public enum ScoreLayerBuilder {
     /// CAShapeLayers that must be re-tinted when the selection
     /// changes.
     ///
-    /// The tree is always drawn in `inkColor` — selection colouring
+    /// The tree is always drawn in `inkColor` — selection coloring
     /// is applied afterwards via `applySelection(...)` so that a
     /// selection change does not force a full layer rebuild.
     static func buildSystemWithItems(
@@ -88,7 +88,7 @@ public enum ScoreLayerBuilder {
         )
         // Routed-to-invisible chord/note glyphs already sit under a
         // 50% group opacity layer (see drawInvisibleElements); flip
-        // the flag so per-note dispatch greys those noteheads rather
+        // the flag so per-note dispatch grays those noteheads rather
         // than skipping them.
         ctx.showsInvisibleElements = true
         drawInvisibleElements(
@@ -150,7 +150,7 @@ public enum ScoreLayerBuilder {
     /// `showsInvisibleElements` mirrors `LayoutSystem.showsInvisibleElements`
     /// for the current build pass. Per-note dispatch in
     /// `ScoreLayerBuilder+Chord.drawChord` reads it to decide whether
-    /// a hidden notehead should be greyed (50 %) or skipped outright.
+    /// a hidden notehead should be grayed (50 %) or skipped outright.
     /// Stem / beam / ledger geometry uses the full note list either
     /// way (spec §6).
     struct BuildContext {
@@ -167,7 +167,7 @@ public enum ScoreLayerBuilder {
     /// Re-tints the already-built `items` so they reflect
     /// `newSelection`. Layers previously tinted for `previousSelection`
     /// are reset to `inkColor`; layers for the new selection pick up
-    /// their voice colour.
+    /// their voice color.
     ///
     /// Work is O(|previous ∪ new|), not O(score size), so selection
     /// changes stay cheap regardless of how large the score is.

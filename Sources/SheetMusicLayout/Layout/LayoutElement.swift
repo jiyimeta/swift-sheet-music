@@ -10,7 +10,7 @@ public enum StemDirection: Sendable, Equatable { case up, down }
 /// Geometry is pre-computed by the placement / beam passes so the
 /// renderer just strokes parallel bars around `center`.
 public enum TremoloAnchor: Sendable, Equatable {
-    /// Bars cross a single stem. `center` is the bar block centre
+    /// Bars cross a single stem. `center` is the bar block center
     /// (mid of the topmost and bottommost bar). For BEAMED chords the
     /// layout biases this toward the beam so bars sit just under the
     /// beam, matching MuseScore engraving; for UNBEAMED chords it
@@ -54,11 +54,11 @@ public enum LayoutElement: Sendable, Equatable {
         // by attached decorations (currently: tremolo bars on flagged
         // notes). The stem renderer adds this to the natural stem
         // length; tremolo placement uses the same value so the bars
-        // stay centred on the extended stem.
+        // stay centered on the extended stem.
         stemExtension: CGFloat,
         // True when the source `Chord.stemVisible == false` (i.e. MSCX
         // `<Stem><visible>0`). The stem (and its flag) is skipped at
-        // toggle-off and greyed at 50% at toggle-on. Notehead visibility
+        // toggle-off and grayed at 50% at toggle-on. Notehead visibility
         // is independent and carried by `LayoutChordNote.isInvisible`.
         // Beam suppression on hidden-stem chords is a separate concern.
         stemIsInvisible: Bool,
@@ -101,15 +101,15 @@ public enum LayoutElement: Sendable, Equatable {
         toOrigin: CGPoint,
         direction: StemDirection,
         level: Int,
-        // Author-supplied beam colour (`<Beam><color>`), derived at
-        // emission from the beamed group's notehead colour. `nil` =
+        // Author-supplied beam color (`<Beam><color>`), derived at
+        // emission from the beamed group's notehead color. `nil` =
         // default ink (black).
         color: ScoreColor? = nil,
     )
     case textMark(kind: TextMarkKind, text: String, origin: CGPoint)
     /// Free-form staff or system text imported from MuseScore.
     /// Distinct from `.textMark` because it carries author-supplied
-    /// colour and the placement comes pre-shifted by the user offset
+    /// color and the placement comes pre-shifted by the user offset
     /// declared in the source file.
     case staffText(
         text: String,
@@ -127,7 +127,7 @@ public enum LayoutElement: Sendable, Equatable {
     /// SMuFL glyph (`BreathGlyph.codepoint(forKind:)`); `origin` is the
     /// glyph anchor (`.center`) in measure-local coordinates. Placement
     /// uses `BreathGlyphMetrics` so the visible glyph edge — not the
-    /// typographic bbox centre — aligns with the staff-line clearance.
+    /// typographic bbox center — aligns with the staff-line clearance.
     /// Mirrors the visibility wiring used for `.fermata`: when
     /// `Breath.visible == false`, the element is routed into the
     /// `invisibleElements` overlay (only laid out when
@@ -262,10 +262,10 @@ public enum LayoutElement: Sendable, Equatable {
     public enum TextMarkKind: Sendable, Equatable {
         case dynamic
         case tempo
-        /// Lyric syllable. Carries the author-supplied colour
+        /// Lyric syllable. Carries the author-supplied color
         /// (`<Lyrics><color>`) from `Lyric.elementProperties.color`;
         /// `nil` = default ink. Dynamics / tempo inherit their style
-        /// colour and don't carry a per-element override here.
+        /// color and don't carry a per-element override here.
         case lyrics(color: ScoreColor? = nil)
     }
 
@@ -298,14 +298,14 @@ public struct LayoutChordNote: Sendable, Equatable {
     public let mirror: Bool
     /// True when this notehead's source `Note.visible == false` and the
     /// chord is being laid out with `showsInvisibleElements`. Renderers
-    /// grey just this notehead. The slot is preserved regardless.
+    /// gray just this notehead. The slot is preserved regardless.
     public let isInvisible: Bool
-    /// Author-supplied notehead colour (`<Note><color>`), carried from
+    /// Author-supplied notehead color (`<Note><color>`), carried from
     /// `Note.elementProperties.color`. `nil` = default ink (black).
-    /// Renderers also use it as the colour for this note's stem, flag,
+    /// Renderers also use it as the color for this note's stem, flag,
     /// and augmentation dots (MuseScore writes `<Stem>/<Hook>/<NoteDot>`
-    /// colours separately, but in practice they match the notehead; a
-    /// faithful per-sub-element colour is a future refinement).
+    /// colors separately, but in practice they match the notehead; a
+    /// faithful per-sub-element color is a future refinement).
     public let color: ScoreColor?
 
     public init(
@@ -334,7 +334,7 @@ public struct LayoutChordNote: Sendable, Equatable {
         self.color = color
     }
 
-    /// Horizontal offset from `origin.x` to the visual centre of the
+    /// Horizontal offset from `origin.x` to the visual center of the
     /// notehead. Zero unless `mirror` is set, in which case the head
     /// shifts by one notehead-width (Bravura's `noteheadBlack`
     /// width = 1.18 sp) to the side opposite the chord's natural

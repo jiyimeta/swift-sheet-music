@@ -6,7 +6,7 @@ import Foundation
 /// Geometry constants and helpers for engraved barlines.
 ///
 /// `LayoutElement.barLine(subtype:origin:)` carries the staff-middle Y
-/// (the centre of the four staff spaces) as the barline's origin. The
+/// (the center of the four staff spaces) as the barline's origin. The
 /// barline strokes extend ±2 sp from that origin, matching MuseScore's
 /// convention.
 public enum BarLineGeometry {

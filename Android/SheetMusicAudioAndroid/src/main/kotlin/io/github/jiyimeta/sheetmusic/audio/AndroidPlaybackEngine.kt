@@ -203,7 +203,7 @@ class AndroidPlaybackEngine internal constructor(
      * `[loop.startTick, loop.endTick)` before reading the frame
      * time, so observers see the wrapped (audible) position rather
      * than a value that climbs past `loop.endTick`. This is the
-     * behaviour MediaSession scrubbers and `getCurrentPosition()`
+     * behavior MediaSession scrubbers and `getCurrentPosition()`
      * implementations expect — without the fold, the lock-screen
      * scrubber would keep advancing and saturate at score end.
      */

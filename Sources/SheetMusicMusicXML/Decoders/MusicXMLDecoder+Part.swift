@@ -45,7 +45,7 @@ extension Part {
     /// MusicXML nests instrument metadata in `<score-instrument>` and
     /// `<midi-instrument>`. We surface names + track name; minPitch ranges and
     /// articulation playback data are MuseScore-template-only and are left
-    /// defaulted. `ScoreSemanticComparison` normalises both sides accordingly.
+    /// defaulted. `ScoreSemanticComparison` normalizes both sides accordingly.
     /// `<score-instrument><instrument-name>` wins over `<part-name>` for
     /// `trackName` — MuseScore uses the more-specific instrument name.
     private static func decodeInstrument(

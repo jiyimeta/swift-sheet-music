@@ -61,8 +61,8 @@ extension LayoutEngine {
         guard dashCount > 0 else { return }
         let dashWidth = min(curLength, dashMaxLength)
         // With `firstAndLastGapAreHalf = true`, the spacing between
-        // dash centres is `curLength / dashCount`, and the first
-        // centre sits at half that distance from the start.
+        // dash centers is `curLength / dashCount`, and the first
+        // center sits at half that distance from the start.
         let dashDist = curLength / CGFloat(dashCount)
         var xCenter: CGFloat = 0
         for i in 0 ..< dashCount {

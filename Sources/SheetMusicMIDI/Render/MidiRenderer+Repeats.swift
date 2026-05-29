@@ -5,7 +5,7 @@ extension MidiRenderer {
     /// One measure-play in the unrolled playback order.
     /// `isIterationStart` is true for the first measure of a new repeat iteration
     /// (i.e., immediately after a loop-back). The renderer uses this to re-emit
-    /// timeSig and reset tempo to default — matching MuseScore's behaviour of
+    /// timeSig and reset tempo to default — matching MuseScore's behavior of
     /// restarting state at every section boundary.
     struct PlaybackEntry {
         var measureIndex: Int
@@ -13,7 +13,7 @@ extension MidiRenderer {
         var isIterationStart: Bool
     }
 
-    /// Build the unrolled playback sequence honouring `<startRepeat>` / `<endRepeat>`
+    /// Build the unrolled playback sequence honoring `<startRepeat>` / `<endRepeat>`
     /// markers and Volta filtering.
     ///
     /// Algorithm:
@@ -135,7 +135,7 @@ extension MidiRenderer {
             case let .breath(b) where b.pause > 0:
                 // Breath pauses shift subsequent note onsets forward
                 // at the constant tempo (mirroring MuseScore's
-                // ExportMidi behaviour). The pause therefore counts
+                // ExportMidi behavior). The pause therefore counts
                 // toward the measure's total tick budget so the next
                 // measure's playback-plan offset accounts for it.
                 //

@@ -41,7 +41,7 @@ enum GlissandoRenderer {
             lineWidth: metrics.sp * GlissandoGeometry.lineThicknessSp,
         )
 
-        // --- Text label (centred along the line) ---
+        // --- Text label (centered along the line) ---
         // Font defaults via `TextStyleType.glissando` (Edwin 8 pt
         // italic, spatium-dependent). Width gating mirrors
         // `tdraw.cpp:1580` (`if (r.width() < l)`): when the rendered

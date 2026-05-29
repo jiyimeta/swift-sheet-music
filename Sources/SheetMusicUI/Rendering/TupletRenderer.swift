@@ -3,7 +3,7 @@ import SwiftUI
 
 /// Draws a tuplet marking — either a square bracket with hooks at each
 /// end and a number in the middle (non-beamed tuplets), or just the
-/// number centred over the beam (beamed tuplets).
+/// number centered over the beam (beamed tuplets).
 ///
 /// Follows MuseScore's convention from
 /// `src/engraving/rendering/score/tupletlayout.cpp`:

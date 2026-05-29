@@ -63,7 +63,7 @@ extension Note {
         return note
     }
 
-    /// Normalise `<head>` to the MS3+ string form. MS2 writes an integer
+    /// Normalize `<head>` to the MS3+ string form. MS2 writes an integer
     /// (`NoteHead::Group` enum, C++: MuseScore 2 `libmscore/note.h`); the
     /// renderer (`NoteheadRenderer`) keys off the string names. Returning
     /// the raw integer would silently fall back to "normal", so the
@@ -138,7 +138,7 @@ extension Note {
     }
 
     private static func parseGlissandoStyle(_ text: String) -> Glissando.Style? {
-        // MuseScore serialises these as ALL-CAPS tokens. Be tolerant of the
+        // MuseScore serializes these as ALL-CAPS tokens. Be tolerant of the
         // lower-case forms that appear in older files (e.g. "chromatic").
         switch text.uppercased() {
         case "CHROMATIC": return .chromatic

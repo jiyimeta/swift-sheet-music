@@ -29,7 +29,7 @@ struct MusicXMLImportTests {
 
     /// Phase 1 — tie support. `Note.tieForward` / `Note.tieBack` added in
     /// both decoders. This PR ships with `testUnterminatedTies` only: it
-    /// validates the "permissive drop unterminated ties" behaviour (a tie
+    /// validates the "permissive drop unterminated ties" behavior (a tie
     /// start whose very next same-voice chord isn't the same pitch is
     /// silently dropped, matching MuseScore). The `importTie1`-`4`
     /// fixtures trip orthogonal asymmetries (explicit `<BarLine/>`s at

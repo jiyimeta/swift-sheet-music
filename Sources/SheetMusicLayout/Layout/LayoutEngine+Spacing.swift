@@ -595,7 +595,7 @@ extension LayoutEngine {
     ///   * `lyricsDashForce`      = true
     ///   * `lyricsMinDistance`    = 0.25 sp
     ///
-    /// Lyrics are rendered centred on the chord anchor, so the centre
+    /// Lyrics are rendered centered on the chord anchor, so the center
     /// distance must clear `halfL1 + interSyllable + halfL2`. The
     /// previous implementation used only the CURRENT chord's lyric
     /// width and assumed symmetry — fine for uniform Latin runs but

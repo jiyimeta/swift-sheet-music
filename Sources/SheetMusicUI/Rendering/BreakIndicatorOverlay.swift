@@ -119,7 +119,7 @@ public struct BreakIndicatorOverlay: View {
         }
     }
 
-    /// Badge centre's distance from the system's top edge. We sit
+    /// Badge center's distance from the system's top edge. We sit
     /// the badge slightly above the top staff so it floats clearly
     /// without overlapping staff lines.
     private func badgeOffsetY(metrics: StaffMetrics) -> CGFloat {

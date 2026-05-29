@@ -25,7 +25,7 @@ struct HairpinDecoderTests {
         #expect(s.hairpin?.subtype == .decrescendo)
     }
 
-    @Test func veloChangeZeroIsNormalisedToNil() throws {
+    @Test func veloChangeZeroIsNormalizedToNil() throws {
         let s = try decode(#"""
         <Spanner type="HairPin"><HairPin><veloChange>0</veloChange></HairPin></Spanner>
         """#)

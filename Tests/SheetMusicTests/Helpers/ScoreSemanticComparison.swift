@@ -227,7 +227,7 @@ enum ScoreSemanticComparison {
         // `.whole` and `.fraction(1/1)` compare equal. MSCX emits
         // `<durationType>measure</durationType>` for whole-measure rests
         // (decoded as `.measure`), while MusicXML's `<type>whole</type>`
-        // lands on `.whole`. Both describe the same music; we normalise
+        // lands on `.whole`. Both describe the same music; we normalize
         // `.measure` to `.fraction(1/1)` for cross-format comparison
         // (the actual bar duration is unknowable from a NoteDuration in
         // isolation — measure-resolution happens in renderers / encoders).

@@ -8,7 +8,7 @@ import Testing
 /// and BarLine (Task 2.1). Each test encodes an element with `visible == false`,
 /// re-parses the XML, and asserts the flag survives both directions of the
 /// round-trip. Tests also confirm the default (visible) omits the tag entirely,
-/// matching MuseScore's own serialisation behaviour.
+/// matching MuseScore's own serialization behavior.
 struct Phase2RoundTripTests {
     // MARK: - BarLine
 

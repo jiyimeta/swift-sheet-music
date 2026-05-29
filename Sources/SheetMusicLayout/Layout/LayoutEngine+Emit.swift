@@ -156,7 +156,7 @@ extension LayoutEngine {
     /// Emit a single beam bar for a run of consecutive members that
     /// share the given level. Multi-member runs span from the first
     /// member's stem tip to the last's; single-member runs become a
-    /// partial stub pointing back toward the neighbour (or forward if
+    /// partial stub pointing back toward the neighbor (or forward if
     /// the lone member is first in the group). All endpoints are
     /// anchored to the sloped beam line via `beamYAt` so sloped beams
     /// keep secondary bars parallel to the primary.

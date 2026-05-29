@@ -151,7 +151,7 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
 
     /// Snapshot of mutable engine state captured at export start, so
     /// the export pipeline can reproduce live mixer / metronome /
-    /// rate behaviour on its own dedicated `AVAudioEngine` without
+    /// rate behavior on its own dedicated `AVAudioEngine` without
     /// reaching back into the live engine while rendering.
     struct ExportEngineSnapshot {
         let resolver: SoundfontResolver
@@ -799,7 +799,7 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         let sequencer = AVAudioSequencer(audioEngine: engine)
         // SheetMusicMIDI emits 1 track per staff (see
         // `MidiRenderer.render`). We append a metronome track to
-        // the in-memory `MidiFile` *before* serialising — the
+        // the in-memory `MidiFile` *before* serializing — the
         // public `MidiRenderer.render` / `SheetMusic.exportMIDI`
         // path stays free of metronome events; only this playback
         // pipeline injects them.

@@ -7,7 +7,7 @@ import Testing
 
 /// MuseScore 3.x spells the single-measure-repeat marker `<RepeatMeasure>`,
 /// while 4.x uses `<MeasureRepeat>`. The reader treats them as aliases
-/// (`MeasureRead::readVoice` in `measureread.cpp:336`). We must recognise both
+/// (`MeasureRead::readVoice` in `measureread.cpp:336`). We must recognize both
 /// or 3.x scores end up with silent measures where they should replay the prior bar.
 struct RepeatMeasureAliasTests {
     @Test func parsesRepeatMeasureAsMeasureRepeat() throws {

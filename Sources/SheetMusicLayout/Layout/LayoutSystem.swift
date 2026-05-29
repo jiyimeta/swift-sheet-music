@@ -45,7 +45,7 @@ public struct LayoutSystem: Sendable, Equatable {
     /// Whether this system was laid out with the
     /// `ScoreViewOptions.showsInvisibleElements` toggle on. Renderers
     /// read this to decide per-note whether a hidden notehead should
-    /// be greyed (50 %) or skipped outright — the chord's full note
+    /// be grayed (50 %) or skipped outright — the chord's full note
     /// list is preserved in either case so stem / beam geometry stays
     /// stable across the toggle.
     public let showsInvisibleElements: Bool

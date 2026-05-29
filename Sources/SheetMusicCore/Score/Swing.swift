@@ -39,7 +39,7 @@ public struct Swing: Sendable, Equatable {
     public var isSystemText: Bool
     public var offsetX: Double
     public var offsetY: Double
-    /// Author-supplied colour. Sugar over `elementProperties.color` —
+    /// Author-supplied color. Sugar over `elementProperties.color` —
     /// the single source of truth shared with every engravable element.
     public var color: ScoreColor? {
         get { elementProperties.color }
@@ -108,7 +108,7 @@ public enum SwingUnit: String, Sendable, Equatable, CaseIterable {
         }
     }
 
-    /// Inverse of `mscxString`. Returns nil for unrecognised values
+    /// Inverse of `mscxString`. Returns nil for unrecognized values
     /// so the caller can apply its own fallback (defaults to `.off`).
     public init?(mscxString: String) {
         switch mscxString {

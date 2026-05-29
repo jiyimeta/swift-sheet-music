@@ -106,7 +106,7 @@ extension MidiImporter {
     ///       the same stronger box
     /// Case (b) lets a syncopated dotted-quarter at offset 240
     /// stand as a single value when its end falls on the
-    /// half-measure boundary (a recognised engraving pattern).
+    /// half-measure boundary (a recognized engraving pattern).
     /// Both clauses still reject crossings that span two scope
     /// boxes (e.g. dotted-half at offset 240, dotted-eighth at
     /// offset 840).

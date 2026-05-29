@@ -62,7 +62,7 @@
             PDFImporter.emitUnknownGlyphDiagnostics([glyph], options: opts)
         }
 
-        @Test func recognisedCodepointsDoNotFire() {
+        @Test func recognizedCodepointsDoNotFire() {
             let sink = DiagnosticSink()
             var opts = PDFImportOptions()
             opts.diagnostics = { d in sink.append(d) }

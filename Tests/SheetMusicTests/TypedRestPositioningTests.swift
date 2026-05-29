@@ -56,7 +56,7 @@
             #expect(xs[0] < xs[1], "whole rest must precede the half rest in X")
         }
 
-        @Test(".measure rest still centres in the bar's chord area")
+        @Test(".measure rest still centers in the bar's chord area")
         func measureRestStillCenters() {
             guard #available(macOS 15.0, *) else { return }
             let score = Self.makeScore(elements: [
@@ -77,7 +77,7 @@
             let oneSpace: CGFloat = 80
             #expect(
                 leftmostHeader > oneSpace,
-                "centred .measure rest x=\(leftmostHeader) should be well right of the header",
+                "centered .measure rest x=\(leftmostHeader) should be well right of the header",
             )
         }
     }

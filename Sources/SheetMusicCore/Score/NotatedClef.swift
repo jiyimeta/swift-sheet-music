@@ -7,7 +7,7 @@ import Foundation
 /// Distinct from `Clef` (a value placed in a `Voice` that records a
 /// concert + transposing clef-type pair). This enum is the typed view
 /// of a single clef glyph, useful when an API needs to enumerate or
-/// constrain the recognised set (e.g. MIDI import clef inference).
+/// constrain the recognized set (e.g. MIDI import clef inference).
 public enum NotatedClef: Sendable, Equatable, Hashable, CaseIterable {
     case treble // G4 on line 2 (second from bottom)
     case treble8va // G clef, 8va alta — notes read 1 octave higher
@@ -27,7 +27,7 @@ public enum NotatedClef: Sendable, Equatable, Hashable, CaseIterable {
     /// Parse a `Clef.concertClefType` string (MuseScore encoding).
     /// Accepts canonical forms (`"G"`, `"F8vb"`, …) and the legacy
     /// aliases MuseScore itself emits (`"treble"`, `"bass"`, …).
-    /// Unrecognised strings collapse to `.treble`.
+    /// Unrecognized strings collapse to `.treble`.
     public init(rawType: String) {
         switch rawType {
         case "G", "G1", "G2", "treble": self = .treble

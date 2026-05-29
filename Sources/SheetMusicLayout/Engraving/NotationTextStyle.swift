@@ -43,12 +43,12 @@ public enum NotationTextStyle {
     /// `CGPoint(x:y:)` on `textLayer`, Canvas baseline-leading on
     /// Android).
     public enum Anchor: Sendable, Equatable {
-        /// Vertical centre, leading edge (SwiftUI `.leading`,
+        /// Vertical center, leading edge (SwiftUI `.leading`,
         /// `UnitPoint(x: 0, y: 0.5)`).
         case leadingCenter
         /// Bottom-leading: `UnitPoint(x: 0, y: 1)`.
         case bottomLeading
-        /// Vertical centre, trailing edge: `UnitPoint(x: 1, y: 0.5)`.
+        /// Vertical center, trailing edge: `UnitPoint(x: 1, y: 0.5)`.
         case trailingCenter
     }
 

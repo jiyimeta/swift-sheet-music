@@ -82,7 +82,7 @@ public struct HeaderFooter: Sendable, Equatable {
     )
 
     /// Default footer per `styledef.cpp:625-634`:
-    /// copyright in the centre on every page.
+    /// copyright in the center on every page.
     public static let museScoreDefaultFooter = HeaderFooter(
         enabled: true,
         showOnFirstPage: true,

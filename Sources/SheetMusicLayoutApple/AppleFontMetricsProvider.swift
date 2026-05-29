@@ -6,7 +6,7 @@ import SheetMusicLayout
 /// CoreText-backed `FontMetricsProvider`. Wraps the entire CT path in
 /// a single `NSLock` because `CTFontCreateWithName` for unregistered
 /// family names deadlocks under concurrent access (Swift Testing runs
-/// test cases in parallel). The lock also serialises an internal
+/// test cases in parallel). The lock also serializes an internal
 /// `[LayoutFont: CTFont]` cache — consolidates the per-file caches
 /// (`BraceMetrics.bboxCache`, `FermataGlyphMetrics.cache`,
 /// `HarmonyRendering.fontCache`) that the Layout-side rewrites

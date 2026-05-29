@@ -9,7 +9,7 @@ extension MidiRenderer {
     /// (chromatic / whiteKeys / blackKeys / diatonic) or a continuous
     /// pitch-bend (portamento). Called from `renderChord` when the note has a
     /// glissando and the next chord's first-note pitch could be resolved.
-    /// Honours `tieBack` so a glissando starting on a tied-in note does NOT
+    /// Honors `tieBack` so a glissando starting on a tied-in note does NOT
     /// re-strike — that would leave a hung MIDI note when the synth tracks
     /// note-on counts (the tie's earlier note-on never sees a matching off).
     static func renderGlissandoNote(
@@ -127,7 +127,7 @@ extension MidiRenderer {
             // Suppress the very last sweep pitch's note-off only when the note
             // ties forward AND that pitch coincides with the next chord's first
             // note — otherwise the discrete sweep ends here. This is rare but
-            // harmless to honour.
+            // harmless to honor.
             let suppressOff = (i == b - 1) && suppressFinalOff
             if !suppressOff {
                 events.append(TimedMidiEvent(
@@ -146,7 +146,7 @@ extension MidiRenderer {
     /// `MidiRenderer+Header.swift`); intervals larger than an octave are
     /// clamped to the bend range. A pitch-bend reset is emitted just after
     /// the note-off so the following chord plays at its natural pitch.
-    /// `suppressStartOn` / `suppressFinalOff` honour ties: when the source
+    /// `suppressStartOn` / `suppressFinalOff` honor ties: when the source
     /// note ties from the previous chord we must NOT re-attack (the tied
     /// predecessor's note-on is still open — a duplicate note-on without a
     /// matching off causes the synth to keep one of the notes hung until end
@@ -169,7 +169,7 @@ extension MidiRenderer {
         let targetOffset = max(-8192.0, min(8191.0, semitones / sensitivity * 8191.0))
 
         // Strike the start pitch (unless tied from a still-sounding predecessor);
-        // pitch-bend starts at centre.
+        // pitch-bend starts at center.
         if !suppressStartOn {
             events.append(TimedMidiEvent(
                 tick: startTick,
@@ -183,7 +183,7 @@ extension MidiRenderer {
 
         // Sample density: one event every ~16 ticks, clamped to [4, 64].
         // Peak lands at offTick − 1 (one tick before the chord's natural end)
-        // so the centre-reset at offTick has the WHOLE tick to itself —
+        // so the center-reset at offTick has the WHOLE tick to itself —
         // otherwise a synth that reorders simultaneous events by message
         // type can apply the reset BEFORE the peak and leave the wheel
         // stuck at peak for the rest of the song.
@@ -210,7 +210,7 @@ extension MidiRenderer {
         // pitch-bend at the same tick. The reset is now the only pitch-bend
         // event at offTick (peak landed at offTick−1), so any synth — even
         // ones that reorder simultaneous events — sees the reset as the
-        // most-recent bend and the wheel returns to centre cleanly.
+        // most-recent bend and the wheel returns to center cleanly.
         if !suppressFinalOff {
             events.append(TimedMidiEvent(
                 tick: offTick,

@@ -1,7 +1,7 @@
 import Foundation
 import SheetMusicCore
 
-/// Serialises a `MidiFile` into SMF bytes (format 0/1).
+/// Serializes a `MidiFile` into SMF bytes (format 0/1).
 public enum MidiWriter {
     /// Encode the given `MidiFile` into a complete SMF byte stream
     /// (`MThd` header + one `MTrk` chunk per track).

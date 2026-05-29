@@ -60,14 +60,14 @@ enum TextMarkRenderer {
                 .font(.custom(BravuraFont.familyName, size: glyphSize)),
         )
         // Anchor: glyph's baseline at `origin.y`; use SwiftUI
-        // `.leading` (vertically centred) since callers position
+        // `.leading` (vertically centered) since callers position
         // dynamics at staff-relative Y already accounting for
         // glyph height.
         context.draw(resolved, at: origin, anchor: .leading)
     }
 
     /// Lyric syllable. MuseScore default: Edwin 10 pt normal,
-    /// centred on the chord stem (anchor = `.center`).
+    /// centered on the chord stem (anchor = `.center`).
     static func drawLyric(
         context: inout GraphicsContext,
         text: String,
