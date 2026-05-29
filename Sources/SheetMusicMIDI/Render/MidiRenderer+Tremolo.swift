@@ -18,7 +18,7 @@ extension MidiRenderer {
     /// consumed and skip its independent emission.
     ///
     /// Stroke count per chord follows MuseScore's tremolo subtype:
-    /// r8 → 2, r16 → 4, r32 → 8 (i.e. `1 << subtype.rawValue`).
+    /// r8 → 2, r16 → 4, r32 → 8, r64 → 16 (i.e. `1 << subtype.rawValue`).
     ///
     /// Reference: `engraving/dom/tremolo.cpp` (`Tremolo::tremoloLen`) and
     /// `engraving/playback/renderer/internal/tremolorenderer.cpp`.

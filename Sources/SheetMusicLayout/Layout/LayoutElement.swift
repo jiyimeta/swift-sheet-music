@@ -221,7 +221,7 @@ public enum LayoutElement: Sendable, Equatable {
         subtype: String?,
     )
     /// Beamed-stem tremolo bars. Bar count comes from
-    /// `Tremolo.Subtype.rawValue` (1, 2, or 3). Slant is fixed at +12°
+    /// `Tremolo.Subtype.rawValue` (1, 2, 3, or 4). Slant is fixed at +12°
     /// for v1 (a flat slant matches the MuseScore default sufficiently
     /// for visual review). Drawn as slanted rectangles using
     /// `metrics.beamThickness` and `metrics.beamSpacing`.

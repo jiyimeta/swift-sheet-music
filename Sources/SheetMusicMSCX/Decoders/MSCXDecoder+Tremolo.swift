@@ -40,9 +40,11 @@ extension Tremolo {
         case "r8": return (.r8, .single)
         case "r16": return (.r16, .single)
         case "r32": return (.r32, .single)
+        case "r64": return (.r64, .single)
         case "c8": return (.r8, .between)
         case "c16": return (.r16, .between)
         case "c32": return (.r32, .between)
+        case "c64": return (.r64, .between)
         default:
             throw SheetMusicError.malformedScore(
                 reason: "Tremolo unknown <subtype> \(text)",
@@ -60,6 +62,7 @@ extension Tremolo {
         case "r8", "c8": return .r8
         case "r16", "c16": return .r16
         case "r32", "c32": return .r32
+        case "r64", "c64": return .r64
         default:
             throw SheetMusicError.malformedScore(
                 reason: "Tremolo unknown <subtype> \(text)",

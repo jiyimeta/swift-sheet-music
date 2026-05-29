@@ -81,7 +81,7 @@ struct TremoloMSCXDecodeFirstPassTests {
         <Chord>
             <durationType>quarter</durationType>
             <Tremolo>
-                <subtype>r64</subtype>
+                <subtype>r128</subtype>
             </Tremolo>
             <Note><pitch>60</pitch><tpc>14</tpc></Note>
         </Chord>
@@ -89,6 +89,21 @@ struct TremoloMSCXDecodeFirstPassTests {
         #expect(throws: SheetMusicError.self) {
             _ = try parseChord(xml)
         }
+    }
+
+    @Test func decodes_r64_as_single() throws {
+        let xml = """
+        <Chord>
+            <durationType>quarter</durationType>
+            <Tremolo>
+                <subtype>r64</subtype>
+            </Tremolo>
+            <Note><pitch>60</pitch><tpc>14</tpc></Note>
+        </Chord>
+        """
+        let chord = try parseChord(xml)
+        #expect(chord.tremolo?.subtype == .r64)
+        #expect(chord.tremolo?.span == .single)
     }
 
     @Test func decodes_ms4_TremoloSingleChord() throws {
