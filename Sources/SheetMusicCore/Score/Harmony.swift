@@ -26,8 +26,14 @@ public struct Harmony: Sendable, Equatable {
     public var offsetX: Double
     /// Author-supplied Y offset (spatium units, positive = down).
     public var offsetY: Double
-    /// Author-supplied colour (RGBA 0..255). Nil = inherit.
-    public var color: ScoreColor?
+    /// Author-supplied colour (RGBA 0..255). Nil = inherit. Sugar over
+    /// `elementProperties.color` — the single source of truth shared
+    /// with every engravable element.
+    public var color: ScoreColor? {
+        get { elementProperties.color }
+        set { elementProperties.color = newValue }
+    }
+
     /// Per-element font overrides. `nil`-fields inherit from
     /// `styleType`'s row in `TextStyleDefaults`.
     public var properties: TextProperties
@@ -68,9 +74,8 @@ public struct Harmony: Sendable, Equatable {
         self.play = play
         self.offsetX = offsetX
         self.offsetY = offsetY
-        self.color = color
         self.properties = properties
-        elementProperties = ElementProperties(visible: visible)
+        elementProperties = ElementProperties(visible: visible, color: color)
     }
 
     /// The `TextStyleType` row this element inherits from. Roman

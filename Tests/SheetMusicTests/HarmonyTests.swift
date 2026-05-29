@@ -140,6 +140,49 @@
             #expect(h.color?.blue == 40)
         }
 
+        /// MuseScore 4.4+ nests the chord-symbol content (`<name>`,
+        /// `<root>`, `<base>`) inside a `<harmonyInfo>` wrapper while
+        /// leaving `<rootCase>`, `<color>`, `<eid>` … as direct children
+        /// of `<Harmony>`. The decoder must read the wrapped content;
+        /// otherwise text-only chord symbols decode to an empty name and
+        /// render nothing.
+        @Test func decodesNameNestedInHarmonyInfo() throws {
+            let xml = """
+            <Harmony>
+              <rootCase>1</rootCase>
+              <harmonyInfo>
+                <name>赤色のところは裏声でもよい</name>
+              </harmonyInfo>
+              <color r="255" g="0" b="0" a="255"/>
+            </Harmony>
+            """
+            let h = try Harmony.decode(
+                XMLTreeParser.parse(Data(xml.utf8)),
+            )
+            #expect(h.name == "赤色のところは裏声でもよい")
+            #expect(h.color?.red == 255)
+            #expect(h.color?.green == 0)
+            #expect(h.color?.blue == 0)
+        }
+
+        @Test func decodesRootAndBaseNestedInHarmonyInfo() throws {
+            let xml = """
+            <Harmony>
+              <harmonyInfo>
+                <name>m7</name>
+                <root>12</root>
+                <base>17</base>
+              </harmonyInfo>
+            </Harmony>
+            """
+            let h = try Harmony.decode(
+                XMLTreeParser.parse(Data(xml.utf8)),
+            )
+            #expect(h.name == "m7")
+            #expect(h.rootTpc == 12)
+            #expect(h.bassTpc == 17)
+        }
+
         @Test func decodesPlayDefaultsTrue() throws {
             let h = try Harmony.decode(
                 XMLTreeParser.parse(Data(

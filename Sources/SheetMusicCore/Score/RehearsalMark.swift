@@ -22,8 +22,13 @@ public struct RehearsalMark: Sendable, Equatable {
     /// in spatium units (positive = down).
     public var offsetY: Double
     /// Author-supplied colour (RGBA 0..255). Nil = inherit the
-    /// default text colour.
-    public var color: ScoreColor?
+    /// default text colour. Sugar over `elementProperties.color` —
+    /// the single source of truth shared with every engravable element.
+    public var color: ScoreColor? {
+        get { elementProperties.color }
+        set { elementProperties.color = newValue }
+    }
+
     /// Frame around the text. Defaults to `.rectangle`, matching
     /// MuseScore's `Sid::rehearsalMarkFrameType` default.
     public var frame: TextFrameType
@@ -52,9 +57,8 @@ public struct RehearsalMark: Sendable, Equatable {
         self.text = text
         self.offsetX = offsetX
         self.offsetY = offsetY
-        self.color = color
         self.frame = frame
         self.properties = properties
-        elementProperties = ElementProperties(visible: visible)
+        elementProperties = ElementProperties(visible: visible, color: color)
     }
 }

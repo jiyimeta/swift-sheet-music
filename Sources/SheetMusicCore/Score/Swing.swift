@@ -39,7 +39,13 @@ public struct Swing: Sendable, Equatable {
     public var isSystemText: Bool
     public var offsetX: Double
     public var offsetY: Double
-    public var color: ScoreColor?
+    /// Author-supplied colour. Sugar over `elementProperties.color` —
+    /// the single source of truth shared with every engravable element.
+    public var color: ScoreColor? {
+        get { elementProperties.color }
+        set { elementProperties.color = newValue }
+    }
+
     public var properties: TextProperties
     /// Base element properties shared with every engravable element.
     /// Currently carries only `<visible>`; see `ElementProperties`.
@@ -68,9 +74,8 @@ public struct Swing: Sendable, Equatable {
         self.isSystemText = isSystemText
         self.offsetX = offsetX
         self.offsetY = offsetY
-        self.color = color
         self.properties = properties
-        elementProperties = ElementProperties(visible: visible)
+        elementProperties = ElementProperties(visible: visible, color: color)
     }
 
     /// Swing-unit length in MIDI ticks for a given PPQ. Eighth =

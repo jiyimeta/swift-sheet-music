@@ -27,4 +27,21 @@ struct ElementPropertiesMSCXTests {
         #expect(out.first?.name == "visible")
         #expect(out.first?.text == "0")
     }
+
+    @Test func decodeMissingColorIsNil() {
+        let node = XMLTreeNode(name: "Note")
+        #expect(ElementProperties(decodingMSCXChildrenOf: node).color == nil)
+    }
+
+    @Test func decodeColorReadsRGBA() {
+        let node = XMLTreeNode(
+            name: "Note",
+            children: [XMLTreeNode(
+                name: "color",
+                attributes: ["r": "255", "g": "0", "b": "0", "a": "255"],
+            )],
+        )
+        let color = ElementProperties(decodingMSCXChildrenOf: node).color
+        #expect(color == ScoreColor(red: 255, green: 0, blue: 0, alpha: 255))
+    }
 }

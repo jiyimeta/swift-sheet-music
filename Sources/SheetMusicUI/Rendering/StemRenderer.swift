@@ -14,6 +14,7 @@ enum StemRenderer {
         isBeamed: Bool,
         beamY: CGFloat?,
         stemExtension: CGFloat = 0,
+        color: Color = .primary,
         metrics: StaffMetrics,
     ) {
         // Whole notes are stemless.
@@ -34,7 +35,7 @@ enum StemRenderer {
         path.addLine(to: CGPoint(x: xStem, y: endY))
         context.stroke(
             path,
-            with: .color(.primary),
+            with: .color(color),
             lineWidth: metrics.stemThickness,
         )
         // Beamed chords get their flag replaced by a BeamRenderer bar —
@@ -49,6 +50,7 @@ enum StemRenderer {
                 stemX: xStem,
                 startY: startY,
                 endY: endY,
+                color: color,
                 metrics: metrics,
             )
         }
@@ -77,6 +79,7 @@ enum StemRenderer {
         stemX: CGFloat,
         startY: CGFloat,
         endY: CGFloat,
+        color: Color = .primary,
         metrics: StaffMetrics,
     ) {
         let tipY: CGFloat = direction == .up ? startY : endY
@@ -86,6 +89,7 @@ enum StemRenderer {
             glyph,
             at: CGPoint(x: stemX, y: tipY - ascent),
             size: metrics.glyphFontSize,
+            color: color,
             anchor: .topLeading,
         )
     }

@@ -44,6 +44,36 @@ extension ScoreLayerBuilder {
                 headType: n.headType,
                 mirror: n.mirror,
                 isInvisible: n.isInvisible,
+                color: n.color,
+            )
+        }
+        // Stem / flag inherit the chord's notehead colour (first
+        // coloured note wins) — MuseScore stores `<Stem>/<Hook>` colour
+        // separately but in practice it matches the note.
+        let stemColor: CGColor = shifted.compactMap(\.color).first
+            .map(scoreColorToCGColor) ?? inkColor
+        // Ledger lines first, so note heads / stems / flags (and the
+        // beams drawn by later elements) render ON TOP of them — the
+        // ledger sits visually behind the chord's ink. A ledger attached
+        // to a hidden notehead follows the notehead's visibility: skip at
+        // toggle-off, grey at 50% at toggle-on.
+        let visibleLedgerNotes = shifted.filter { !$0.isInvisible }
+        let invisibleLedgerNotes = shifted.filter(\.isInvisible)
+        drawLedgerLines(
+            notes: visibleLedgerNotes, stem: stem, metrics: metrics,
+            height: height, into: parent,
+        )
+        if !invisibleLedgerNotes.isEmpty, context.showsInvisibleElements {
+            // MuseScore invisibleColor() = #808080; 50% black on
+            // white is the equivalent.
+            let greyGroup = CALayer()
+            greyGroup.frame = parent.bounds
+            greyGroup.opacity = 0.5
+            greyGroup.masksToBounds = false
+            parent.addSublayer(greyGroup)
+            drawLedgerLines(
+                notes: invisibleLedgerNotes, stem: stem, metrics: metrics,
+                height: height, into: greyGroup,
             )
         }
         for n in shifted {
@@ -77,9 +107,12 @@ extension ScoreLayerBuilder {
             } else {
                 noteTarget = parent
             }
+            let headColor: CGColor = n.color
+                .map(scoreColorToCGColor) ?? inkColor
             if let layer = glyphLayer(
                 glyph, at: visualOrigin,
                 size: metrics.glyphFontSize,
+                color: headColor,
                 height: height,
             ) {
                 noteTarget.addSublayer(layer)
@@ -96,29 +129,8 @@ extension ScoreLayerBuilder {
             drawDots(
                 after: visualOrigin, count: dots,
                 onStaffLine: n.step.isMultiple(of: 2),
+                color: headColor,
                 metrics: metrics, height: height, into: noteTarget,
-            )
-        }
-        // Ledger lines — per-note. A ledger line attached to a hidden
-        // notehead must follow the notehead's visibility: skip at
-        // toggle-off, grey at 50% at toggle-on.
-        let visibleLedgerNotes = shifted.filter { !$0.isInvisible }
-        let invisibleLedgerNotes = shifted.filter(\.isInvisible)
-        drawLedgerLines(
-            notes: visibleLedgerNotes, stem: stem, metrics: metrics,
-            height: height, into: parent,
-        )
-        if !invisibleLedgerNotes.isEmpty, context.showsInvisibleElements {
-            // MuseScore invisibleColor() = #808080; 50% black on
-            // white is the equivalent.
-            let greyGroup = CALayer()
-            greyGroup.frame = parent.bounds
-            greyGroup.opacity = 0.5
-            greyGroup.masksToBounds = false
-            parent.addSublayer(greyGroup)
-            drawLedgerLines(
-                notes: invisibleLedgerNotes, stem: stem, metrics: metrics,
-                height: height, into: greyGroup,
             )
         }
         let shiftedStemOrigin = CGPoint(
@@ -161,6 +173,7 @@ extension ScoreLayerBuilder {
                     notes: shifted, direction: stem, duration: baseDur,
                     isBeamed: isBeamed, beamY: beamY,
                     stemExtension: dotOnLineExtension + tremoloStemExtension,
+                    color: stemColor,
                     metrics: metrics, height: height, into: greyGroup,
                 )
             }
@@ -169,6 +182,7 @@ extension ScoreLayerBuilder {
                 notes: shifted, direction: stem, duration: baseDur,
                 isBeamed: isBeamed, beamY: beamY,
                 stemExtension: dotOnLineExtension + tremoloStemExtension,
+                color: stemColor,
                 metrics: metrics, height: height, into: parent,
             )
         }
@@ -231,6 +245,7 @@ extension ScoreLayerBuilder {
     static func drawDots(
         after origin: CGPoint, count: Int,
         onStaffLine: Bool,
+        color: CGColor = inkColor,
         metrics: StaffMetrics, height: CGFloat,
         into parent: CALayer,
     ) {
@@ -249,7 +264,7 @@ extension ScoreLayerBuilder {
             )
             parent.addSublayer(fillLayer(
                 path: CGPath(ellipseIn: rect, transform: nil),
-                height: height,
+                height: height, color: color,
             ))
         }
     }
@@ -341,6 +356,7 @@ extension ScoreLayerBuilder {
         isBeamed: Bool,
         beamY: CGFloat?,
         stemExtension: CGFloat = 0,
+        color: CGColor = inkColor,
         metrics: StaffMetrics,
         height: CGFloat,
         into parent: CALayer,
@@ -389,6 +405,7 @@ extension ScoreLayerBuilder {
         parent.addSublayer(strokeLayer(
             path: path, height: height,
             lineWidth: metrics.stemThickness,
+            color: color,
         ))
 
         if isBeamed { return }
@@ -403,6 +420,7 @@ extension ScoreLayerBuilder {
                 at: CGPoint(x: xStem, y: tipY - ascent),
                 size: metrics.glyphFontSize,
                 anchor: CGPoint(x: 0, y: 0),
+                color: color,
                 height: height,
             ) {
                 parent.addSublayer(layer)
@@ -431,6 +449,7 @@ extension ScoreLayerBuilder {
     static func drawBeam(
         from: CGPoint, to: CGPoint,
         direction: StemDirection, level: Int,
+        color: CGColor = inkColor,
         metrics: StaffMetrics, height: CGFloat,
         into parent: CALayer,
     ) {
@@ -448,7 +467,7 @@ extension ScoreLayerBuilder {
         path.addLine(to: CGPoint(x: from.x, y: from.y + barOuter))
         path.closeSubpath()
         parent.addSublayer(fillLayer(
-            path: path, height: height,
+            path: path, height: height, color: color,
         ))
     }
 }

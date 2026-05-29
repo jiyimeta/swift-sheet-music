@@ -361,6 +361,7 @@ extension LayoutEngine {
                 tieForward: nil,
                 tieBack: nil,
                 hasGlissando: false,
+                color: note.elementProperties.color,
             )
         }
     }

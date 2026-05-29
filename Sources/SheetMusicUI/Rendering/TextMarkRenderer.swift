@@ -74,6 +74,7 @@ enum TextMarkRenderer {
         origin: CGPoint,
         properties: TextProperties = TextProperties(),
         verse: Int = 0,
+        color: Color = .primary,
         metrics: StaffMetrics,
     ) {
         let style = ResolvedTextStyle.resolve(
@@ -82,7 +83,7 @@ enum TextMarkRenderer {
         )
         let resolved = context.resolve(
             Text(text)
-                .foregroundColor(.primary)
+                .foregroundColor(color)
                 .font(style.font),
         )
         context.draw(resolved, at: origin, anchor: .center)

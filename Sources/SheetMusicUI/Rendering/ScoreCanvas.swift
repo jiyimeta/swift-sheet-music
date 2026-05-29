@@ -296,6 +296,36 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                     headType: $0.headType,
                     mirror: $0.mirror,
                     isInvisible: $0.isInvisible,
+                    color: $0.color,
+                )
+            }
+            // Stem / flag inherit the chord's notehead colour (the first
+            // coloured note wins) — MuseScore stores `<Stem>/<Hook>`
+            // colour separately but in practice it matches the note.
+            let stemColor: Color = shiftedNotes
+                .compactMap(\.color).first
+                .map { Color(scoreColor: $0) } ?? .primary
+            // Ledger lines first, so note heads / stems / flags (and the
+            // beams drawn by later elements) render ON TOP of them — the
+            // ledger sits visually behind the chord's ink. A ledger
+            // attached to a hidden notehead follows the notehead's
+            // visibility: skip at toggle-off, grey at 50% at toggle-on.
+            let visibleLedgerNotes = shiftedNotes.filter { !$0.isInvisible }
+            let invisibleLedgerNotes = shiftedNotes.filter(\.isInvisible)
+            drawLedgerLines(
+                context: &context,
+                notes: visibleLedgerNotes, stem: stem,
+                metrics: metrics,
+            )
+            if !invisibleLedgerNotes.isEmpty, showsInvisibleElements {
+                // MuseScore invisibleColor() = #808080; 50% black on
+                // white is the equivalent.
+                var grey = context
+                grey.opacity = 0.5
+                drawLedgerLines(
+                    context: &grey,
+                    notes: invisibleLedgerNotes, stem: stem,
+                    metrics: metrics,
                 )
             }
             for n in shiftedNotes {
@@ -332,9 +362,12 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                         metrics: metrics,
                     )
                 } else {
+                    let headColor: Color = n.color
+                        .map { Color(scoreColor: $0) } ?? .primary
                     NoteheadRenderer.drawHead(
                         context: &context, at: visualOrigin,
                         duration: baseDur, headType: n.headType,
+                        color: headColor,
                         metrics: metrics,
                     )
                     if let acc = n.accidental {
@@ -348,31 +381,10 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                         after: visualOrigin,
                         count: dots,
                         onStaffLine: n.step.isMultiple(of: 2),
+                        color: headColor,
                         metrics: metrics,
                     )
                 }
-            }
-            // Ledger lines — per-note. A ledger line attached to a
-            // hidden notehead must follow the notehead's visibility:
-            // skip at toggle-off, grey at 50% at toggle-on. Visible
-            // notes' ledger lines stay at full opacity.
-            let visibleLedgerNotes = shiftedNotes.filter { !$0.isInvisible }
-            let invisibleLedgerNotes = shiftedNotes.filter(\.isInvisible)
-            drawLedgerLines(
-                context: &context,
-                notes: visibleLedgerNotes, stem: stem,
-                metrics: metrics,
-            )
-            if !invisibleLedgerNotes.isEmpty, showsInvisibleElements {
-                // MuseScore invisibleColor() = #808080; 50% black on
-                // white is the equivalent.
-                var grey = context
-                grey.opacity = 0.5
-                drawLedgerLines(
-                    context: &grey,
-                    notes: invisibleLedgerNotes, stem: stem,
-                    metrics: metrics,
-                )
             }
             let beamY: CGFloat? = isBeamed ? shift(stemOrigin).y : nil
             // Stem visibility (MSCX `<Stem><visible>`) is independent of
@@ -389,7 +401,8 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                         context: &grey, notes: shiftedNotes,
                         direction: stem, duration: baseDur,
                         isBeamed: isBeamed, beamY: beamY,
-                        stemExtension: stemExt, metrics: metrics,
+                        stemExtension: stemExt, color: stemColor,
+                        metrics: metrics,
                     )
                 }
             } else {
@@ -397,7 +410,8 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                     context: &context, notes: shiftedNotes,
                     direction: stem, duration: baseDur,
                     isBeamed: isBeamed, beamY: beamY,
-                    stemExtension: stemExt, metrics: metrics,
+                    stemExtension: stemExt, color: stemColor,
+                    metrics: metrics,
                 )
             }
         case let .textMark(.dynamic, text, p):
@@ -410,18 +424,21 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                 context: &context, text: text,
                 origin: shift(p), metrics: metrics,
             )
-        case let .textMark(.lyrics, text, p):
+        case let .textMark(.lyrics(lyricColor), text, p):
             TextMarkRenderer.drawLyric(
                 context: &context, text: text,
-                origin: shift(p), metrics: metrics,
+                origin: shift(p),
+                color: lyricColor.map { Color(scoreColor: $0) } ?? .primary,
+                metrics: metrics,
             )
-        case let .beam(from, to, direction, level):
+        case let .beam(from, to, direction, level, beamColor):
             BeamRenderer.draw(
                 context: &context,
                 from: shift(from),
                 to: shift(to),
                 direction: direction,
                 level: level,
+                color: beamColor.map { Color(scoreColor: $0) } ?? .primary,
                 metrics: metrics,
             )
         case let .fermata(subtype, p):

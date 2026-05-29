@@ -10,16 +10,33 @@ extension Harmony {
     /// `<function>`, `<harmonyVoiceLiteral>`, `<harmonyVoicing>`,
     /// `<harmonyDuration>`) are silently skipped.
     static func decode(_ node: XMLTreeNode) throws -> Harmony {
-        let name = node.first("name")
+        // MuseScore 4.4+ nests the chord-symbol content (`<name>`,
+        // `<root>`, `<base>`) inside a `<harmonyInfo>` wrapper, while
+        // leaving structural flags (`<rootCase>`, `<color>`, `<eid>`,
+        // `<offset>`, `<visible>`, …) as direct children of `<Harmony>`.
+        // Older files put everything directly under `<Harmony>`. Prefer
+        // the wrapper for each lookup, falling back to the node itself so
+        // both layouts decode. Text-only symbols (no `<root>`) keep their
+        // whole text in `<name>` — failing to unwrap it leaves the name
+        // empty and the symbol renders nothing.
+        let info = node.first("harmonyInfo")
+        func child(_ tag: String) -> XMLTreeNode? {
+            info?.first(tag) ?? node.first(tag)
+        }
+        func hasChild(_ tag: String) -> Bool {
+            (info?.children.contains { $0.name == tag } ?? false)
+                || node.children.contains { $0.name == tag }
+        }
+        let name = child("name")
             .map(StaffText.plainText(of:)) ?? ""
-        let typeRaw = node.first("harmonyType")?.text ?? "0"
+        let typeRaw = child("harmonyType")?.text ?? "0"
         let harmonyType = decodeHarmonyType(typeRaw)
-        let rootTpc = decodeTpc(node.first("root")?.text)
-        let bassTpc = decodeTpc(node.first("base")?.text)
-        let rootCase = decodeNoteCase(node.first("rootCase")?.text)
-        let bassCase = decodeNoteCase(node.first("baseCase")?.text)
-        let leftParen = node.children.contains { $0.name == "leftParen" }
-        let rightParen = node.children.contains { $0.name == "rightParen" }
+        let rootTpc = decodeTpc(child("root")?.text)
+        let bassTpc = decodeTpc(child("base")?.text)
+        let rootCase = decodeNoteCase(child("rootCase")?.text)
+        let bassCase = decodeNoteCase(child("baseCase")?.text)
+        let leftParen = hasChild("leftParen")
+        let rightParen = hasChild("rightParen")
         let play = decodePlay(node.first("play")?.text)
         let color = node.first("color").flatMap(StaffText.decodeColor(_:))
         let offset = node.first("offset")

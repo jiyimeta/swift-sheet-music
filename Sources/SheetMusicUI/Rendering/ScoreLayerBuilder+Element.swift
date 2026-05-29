@@ -170,7 +170,7 @@ extension ScoreLayerBuilder {
                     }
                 }
             }
-        case let .textMark(.lyrics, text, p):
+        case let .textMark(.lyrics(lyricColor), text, p):
             let style = ResolvedTextStyle.resolve(
                 .lyricsOdd, metrics: metrics,
             )
@@ -178,15 +178,17 @@ extension ScoreLayerBuilder {
                 text: text, at: shift(p),
                 size: style.pointSize, italic: style.isItalic,
                 anchor: CGPoint(x: 0.5, y: 0.5),
+                color: lyricColor.map(scoreColorToCGColor) ?? inkColor,
                 font: style.ctFont,
                 height: height,
             ) {
                 parent.addSublayer(layer)
             }
-        case let .beam(from, to, direction, level):
+        case let .beam(from, to, direction, level, beamColor):
             drawBeam(
                 from: shift(from), to: shift(to),
                 direction: direction, level: level,
+                color: beamColor.map(scoreColorToCGColor) ?? inkColor,
                 metrics: metrics, height: height, into: parent,
             )
         case let .fermata(subtype, p):

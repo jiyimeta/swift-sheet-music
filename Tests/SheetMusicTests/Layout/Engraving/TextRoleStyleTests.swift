@@ -27,6 +27,6 @@ struct TextRoleStyleTests {
     @Test func textMarkKindMapsToRole() {
         #expect(TextRoleStyle.style(for: .dynamic) == .dynamics)
         #expect(TextRoleStyle.style(for: .tempo) == .tempo)
-        #expect(TextRoleStyle.style(for: .lyrics) == .lyricsOdd)
+        #expect(TextRoleStyle.style(for: .lyrics(color: nil)) == .lyricsOdd)
     }
 }

@@ -657,6 +657,7 @@ extension LayoutEngine {
                             // consult `LayoutSystem.showsInvisibleElements`
                             // to decide whether to grey or skip per-note.
                             isInvisible: !note.visible,
+                            color: note.elementProperties.color,
                         )
                     }
                     let stem = forcedStem
@@ -881,7 +882,7 @@ extension LayoutEngine {
                         let lyricsY = chordLyricCenterY
                             + CGFloat(verseIdx) * metrics.sp * 1.7
                         let lyricElement = LayoutElement.textMark(
-                            kind: .lyrics,
+                            kind: .lyrics(color: lyric.elementProperties.color),
                             text: lyric.text,
                             origin: CGPoint(x: chordX, y: lyricsY),
                         )
@@ -1425,6 +1426,11 @@ extension LayoutEngine {
                 var anchorSteps: [Int?] = []
                 var anchorYs: [CGFloat?] = []
                 var memberLevels: [Int] = []
+                // Beam colour is derived from the beamed group's
+                // noteheads — MuseScore writes `<Beam><color>` as a
+                // standalone sibling element, but in practice it matches
+                // the member notes' colour. First coloured note wins.
+                var memberColors: [ScoreColor] = []
                 for memberIdx in group.memberIndices {
                     guard let outIdx = voiceChordOutIndex[memberIdx],
                           case let .chord(n, _, _, so, _, _, _, _, _, _)
@@ -1436,6 +1442,7 @@ extension LayoutEngine {
                         memberLevels.append(0)
                         continue
                     }
+                    memberColors.append(contentsOf: n.compactMap(\.color))
                     memberStemXs.append(so.x + stemSideDx)
                     let anchorStep: Int
                     let anchorY: CGFloat
@@ -1611,6 +1618,7 @@ extension LayoutEngine {
                 // --- Phase 5: emit per-level beam runs ---
                 let maxLvl = memberLevels.max() ?? 0
                 guard maxLvl >= 1 else { continue }
+                let beamColor = memberColors.first
                 for lvl in 1 ... maxLvl {
                     var runStart: Int?
                     for i in 0 ..< memberLevels.count {
@@ -1626,6 +1634,7 @@ extension LayoutEngine {
                                 memberCount: memberLevels.count,
                                 beamYAt: beamYAt,
                                 direction: groupDirection,
+                                color: beamColor,
                                 metrics: metrics,
                                 out: &out,
                             )
@@ -1642,6 +1651,7 @@ extension LayoutEngine {
                             memberCount: memberLevels.count,
                             beamYAt: beamYAt,
                             direction: groupDirection,
+                            color: beamColor,
                             metrics: metrics,
                             out: &out,
                         )
@@ -1945,6 +1955,7 @@ extension LayoutEngine {
                 headType: n.headType,
                 mirror: mirrors[i],
                 isInvisible: n.isInvisible,
+                color: n.color,
             )
         }
     }
@@ -2007,6 +2018,7 @@ extension LayoutEngine {
                 // `LayoutSystem.showsInvisibleElements` to decide
                 // whether to grey or skip per-note.
                 isInvisible: !note.visible,
+                color: note.elementProperties.color,
             )
         }
     }

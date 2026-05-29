@@ -46,7 +46,7 @@ extension LayoutEngine {
                 ) {
                     minY = min(minY, tieTop)
                 }
-            case let .beam(from, to, _, _):
+            case let .beam(from, to, _, _, _):
                 minY = min(minY, from.y, to.y)
             default:
                 break

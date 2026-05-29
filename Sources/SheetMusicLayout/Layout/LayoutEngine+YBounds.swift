@@ -64,7 +64,7 @@ extension LayoutEngine {
             var ys = notes.map(\.origin.y)
             ys.append(so.y)
             return ys
-        case let .beam(from, to, _, _):
+        case let .beam(from, to, _, _, _):
             // fromOrigin, toOrigin, direction, level — only endpoints
             // contribute to the bbox at the primary-beam y; secondary
             // bars stack a fraction of sp away and are accounted for
@@ -101,9 +101,10 @@ extension LayoutEngine {
             CGPoint(x: p.x, y: p.y + dy)
         }
         switch element {
-        case let .textMark(kind, text, p)
-            where kind == .lyrics:
-            return .textMark(kind: kind, text: text, origin: bump(p))
+        case let .textMark(.lyrics(color), text, p):
+            return .textMark(
+                kind: .lyrics(color: color), text: text, origin: bump(p),
+            )
         case let .lyricHyphen(from, to):
             return .lyricHyphen(
                 fromOrigin: bump(from), toOrigin: bump(to),

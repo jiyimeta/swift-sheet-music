@@ -17,6 +17,7 @@ enum BeamRenderer {
         to: CGPoint,
         direction: StemDirection,
         level: Int,
+        color: Color = .primary,
         metrics: StaffMetrics,
     ) {
         guard level >= 1 else { return }
@@ -33,6 +34,6 @@ enum BeamRenderer {
         path.addLine(to: CGPoint(x: to.x, y: to.y + barOuter))
         path.addLine(to: CGPoint(x: from.x, y: from.y + barOuter))
         path.closeSubpath()
-        context.fill(path, with: .color(.primary))
+        context.fill(path, with: .color(color))
     }
 }

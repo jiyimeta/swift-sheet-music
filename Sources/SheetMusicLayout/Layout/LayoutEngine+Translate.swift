@@ -54,6 +54,7 @@ extension LayoutEngine {
                     headType: $0.headType,
                     mirror: $0.mirror,
                     isInvisible: $0.isInvisible,
+                    color: $0.color,
                 )
             }
             return .chord(
@@ -86,12 +87,13 @@ extension LayoutEngine {
             // Multi-measure rest contributes no special translation logic;
             // shift the anchor origin for correct staff stacking.
             return .multiMeasureRest(count: c, origin: shift(p))
-        case let .beam(from, to, direction, level):
+        case let .beam(from, to, direction, level, color):
             return .beam(
                 fromOrigin: shift(from),
                 toOrigin: shift(to),
                 direction: direction,
                 level: level,
+                color: color,
             )
         case let .glissandoLine(from, to, wavy, text):
             return .glissandoLine(
@@ -189,6 +191,7 @@ extension LayoutEngine {
                     headType: $0.headType,
                     mirror: $0.mirror,
                     isInvisible: $0.isInvisible,
+                    color: $0.color,
                 )
             }
             return .graceChord(

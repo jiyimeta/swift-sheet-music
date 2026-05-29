@@ -18,8 +18,13 @@ public struct StaffText: Sendable, Equatable {
     /// in spatium units (positive = down).
     public var offsetY: Double
     /// Author-supplied colour (RGBA 0..255). Nil = inherit the
-    /// default text colour.
-    public var color: ScoreColor?
+    /// default text colour. Sugar over `elementProperties.color` —
+    /// the single source of truth shared with every engravable element.
+    public var color: ScoreColor? {
+        get { elementProperties.color }
+        set { elementProperties.color = newValue }
+    }
+
     /// True when this came from a `<SystemText>` element. System
     /// texts are conceptually shown once per system (typically
     /// above the top staff); staff texts attach to a specific
@@ -50,10 +55,9 @@ public struct StaffText: Sendable, Equatable {
         self.text = text
         self.offsetX = offsetX
         self.offsetY = offsetY
-        self.color = color
         self.isSystemText = isSystemText
         self.properties = properties
-        elementProperties = ElementProperties(visible: visible)
+        elementProperties = ElementProperties(visible: visible, color: color)
     }
 
     /// The `TextStyleType` row this element inherits from. Picks
@@ -67,7 +71,7 @@ public struct StaffText: Sendable, Equatable {
 /// `<color r="…" g="…" b="…" a="…"/>` attributes. Kept Foundation-
 /// only so it can live in `SheetMusicCore` without pulling in
 /// CoreGraphics or SwiftUI.
-public struct ScoreColor: Sendable, Equatable {
+public struct ScoreColor: Sendable, Equatable, Codable {
     public var red: Int
     public var green: Int
     public var blue: Int

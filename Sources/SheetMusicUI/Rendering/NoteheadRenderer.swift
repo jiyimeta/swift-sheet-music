@@ -23,12 +23,14 @@ enum NoteheadRenderer {
         at origin: CGPoint,
         duration: NoteDuration,
         headType: String? = nil,
+        color: Color = .primary,
         metrics: StaffMetrics,
     ) {
         context.drawGlyph(
             glyph(for: duration, headType: headType),
             at: origin,
             size: metrics.glyphFontSize,
+            color: color,
         )
     }
 }

@@ -16,6 +16,7 @@ enum DotRenderer {
         after origin: CGPoint,
         count: Int,
         onStaffLine: Bool,
+        color: Color = .primary,
         metrics: StaffMetrics,
     ) {
         guard count > 0 else { return }
@@ -32,7 +33,7 @@ enum DotRenderer {
                 height: radius * 2,
             )
             context.fill(
-                Path(ellipseIn: rect), with: .color(.primary),
+                Path(ellipseIn: rect), with: .color(color),
             )
         }
     }

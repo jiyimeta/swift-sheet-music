@@ -238,7 +238,7 @@ public enum LayoutBridge {
                 width: Double(BarLineGeometry.thinThicknessSp) * sp * ptToMM,
             ))
 
-        case let .beam(fromOrigin, toOrigin, direction, level):
+        case let .beam(fromOrigin, toOrigin, direction, level, _):
             // Each beam emit at a given level: shift Y by the level
             // offset so secondaries stack inward from the primary,
             // matching Apple BeamRenderer's geometry.

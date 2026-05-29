@@ -169,6 +169,7 @@ extension LayoutEngine {
         memberCount: Int,
         beamYAt: (CGFloat) -> CGFloat,
         direction: StemDirection,
+        color: ScoreColor? = nil,
         metrics: StaffMetrics,
         out: inout [LayoutElement],
     ) {
@@ -187,6 +188,7 @@ extension LayoutEngine {
                 toOrigin: CGPoint(x: xe, y: ye),
                 direction: direction,
                 level: level,
+                color: color,
             ))
             return
         }
@@ -208,6 +210,7 @@ extension LayoutEngine {
             toOrigin: CGPoint(x: toX, y: beamYAt(toX)),
             direction: direction,
             level: level,
+            color: color,
         ))
     }
 

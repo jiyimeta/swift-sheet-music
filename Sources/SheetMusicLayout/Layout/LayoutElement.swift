@@ -101,6 +101,10 @@ public enum LayoutElement: Sendable, Equatable {
         toOrigin: CGPoint,
         direction: StemDirection,
         level: Int,
+        // Author-supplied beam colour (`<Beam><color>`), derived at
+        // emission from the beamed group's notehead colour. `nil` =
+        // default ink (black).
+        color: ScoreColor? = nil,
     )
     case textMark(kind: TextMarkKind, text: String, origin: CGPoint)
     /// Free-form staff or system text imported from MuseScore.
@@ -258,7 +262,11 @@ public enum LayoutElement: Sendable, Equatable {
     public enum TextMarkKind: Sendable, Equatable {
         case dynamic
         case tempo
-        case lyrics
+        /// Lyric syllable. Carries the author-supplied colour
+        /// (`<Lyrics><color>`) from `Lyric.elementProperties.color`;
+        /// `nil` = default ink. Dynamics / tempo inherit their style
+        /// colour and don't carry a per-element override here.
+        case lyrics(color: ScoreColor? = nil)
     }
 
     public enum SpannerKind: Sendable, Equatable {
@@ -292,6 +300,13 @@ public struct LayoutChordNote: Sendable, Equatable {
     /// chord is being laid out with `showsInvisibleElements`. Renderers
     /// grey just this notehead. The slot is preserved regardless.
     public let isInvisible: Bool
+    /// Author-supplied notehead colour (`<Note><color>`), carried from
+    /// `Note.elementProperties.color`. `nil` = default ink (black).
+    /// Renderers also use it as the colour for this note's stem, flag,
+    /// and augmentation dots (MuseScore writes `<Stem>/<Hook>/<NoteDot>`
+    /// colours separately, but in practice they match the notehead; a
+    /// faithful per-sub-element colour is a future refinement).
+    public let color: ScoreColor?
 
     public init(
         noteID: NoteID,
@@ -304,6 +319,7 @@ public struct LayoutChordNote: Sendable, Equatable {
         headType: String? = nil,
         mirror: Bool = false,
         isInvisible: Bool = false,
+        color: ScoreColor? = nil,
     ) {
         self.noteID = noteID
         self.step = step
@@ -315,6 +331,7 @@ public struct LayoutChordNote: Sendable, Equatable {
         self.headType = headType
         self.mirror = mirror
         self.isInvisible = isInvisible
+        self.color = color
     }
 
     /// Horizontal offset from `origin.x` to the visual centre of the

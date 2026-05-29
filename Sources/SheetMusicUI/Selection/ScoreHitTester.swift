@@ -241,7 +241,7 @@ public struct ScoreHitTester: Sendable {
     ) -> ScoreHitTarget? {
         let threshold = sp * 0.7
         for el in measure.elements {
-            guard case let .beam(from, to, direction, level) = el
+            guard case let .beam(from, to, direction, level, _) = el
             else { continue }
             // Secondary beams (level >= 2) are drawn offset from the
             // stored `from`/`to` Y toward the noteheads. Mirror the
