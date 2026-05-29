@@ -214,6 +214,8 @@ extension Voice {
                 var fermata = Fermata(subtype: subtype, timeStretch: stretch)
                 fermata.elementProperties = ElementProperties(decodingMSCXChildrenOf: child)
                 appendVoiceElement(.fermata(fermata))
+            case "Breath":
+                appendVoiceElement(.breath(Breath.decodeMSCX(child)))
             case "StaffText":
                 if Swing.isSwingMarker(child) {
                     lifted(.swing(

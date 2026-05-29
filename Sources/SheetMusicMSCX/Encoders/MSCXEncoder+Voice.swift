@@ -328,12 +328,8 @@ extension Voice {
             return measureRepeat.encode(options: options, in: effectiveDuration)
         case let .fermata(fermata):
             return fermata.encode()
-        case .breath:
-            // Real MSCX encoding lands in Task 4 (breath MSCX I/O).
-            // Placeholder: emit an empty <Breath/> node so the switch
-            // compiles without altering encoder behaviour for fixtures
-            // that don't yet contain breath marks.
-            return XMLTreeNode(name: "Breath")
+        case let .breath(breath):
+            return breath.encode()
         case let .locationShift(delta):
             // Inverse of the inline `<location>` decode: the
             // voice-level cursor shift is `<location><fractions>N/D
