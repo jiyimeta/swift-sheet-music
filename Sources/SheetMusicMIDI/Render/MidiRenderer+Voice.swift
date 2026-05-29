@@ -344,11 +344,18 @@ extension MidiRenderer {
             // `FermataRanges`. The voice walk does not need to
             // touch tempo or tick state here.
             break
-        case .breath:
-            // Implemented in Task 5: advance localTick by the
-            // breath's pause-seconds converted to ticks via the
-            // current tempo. Placeholder so the switch compiles.
-            break
+        case let .breath(breath):
+            // Advance localTick by the breath's pause-seconds, converted
+            // via the active tempo: ticks = pause * bps * ppq. A pause of
+            // zero (breath marks default) is a no-op. The preceding chord's
+            // note-off events stay at their natural release — MuseScore
+            // inserts dead time rather than shortening the chord.
+            if breath.pause > 0 {
+                let extraTicks = Int(
+                    (breath.pause * currentTempoBps * Double(division)).rounded(),
+                )
+                localTick += extraTicks
+            }
         }
     }
 
