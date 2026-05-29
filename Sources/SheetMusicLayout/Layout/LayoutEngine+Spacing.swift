@@ -502,7 +502,7 @@ extension LayoutEngine {
                 case let .chord(r):
                     // Empty chord = rest.
                     w += durationWidth(r.duration, metrics: metrics)
-                case .dynamic, .fermata,
+                case .dynamic, .fermata, .breath,
                      .measureRepeat, .spanner,
                      .locationShift, .harmony:
                     break

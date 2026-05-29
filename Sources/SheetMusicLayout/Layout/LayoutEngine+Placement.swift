@@ -1184,6 +1184,13 @@ extension LayoutEngine {
                     } else {
                         invisibleOut.append(harmonyElement)
                     }
+                case .breath:
+                    // Real layout emission lands in the breath-layout
+                    // task. Placeholder so the switch compiles —
+                    // breath marks contribute no width and no glyph
+                    // here yet (parallel to `.fermata`'s post-process
+                    // anchor, but emit nothing for now).
+                    break
                 }
             }
 
