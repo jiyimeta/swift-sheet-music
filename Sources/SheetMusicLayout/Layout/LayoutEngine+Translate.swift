@@ -72,6 +72,10 @@ extension LayoutEngine {
             return .textMark(kind: k, text: t, origin: shift(p))
         case let .fermata(s, p):
             return .fermata(subtype: s, origin: shift(p))
+        case let .breath(kind, p, visible):
+            return .breath(
+                kind: kind, origin: shift(p), visible: visible,
+            )
         case let .articulation(kind, p, isAbove):
             return .articulation(
                 kind: kind,

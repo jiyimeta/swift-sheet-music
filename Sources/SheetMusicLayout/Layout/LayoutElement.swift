@@ -119,6 +119,16 @@ public enum LayoutElement: Sendable, Equatable {
     /// just walk the runs.
     case harmony(LayoutHarmony)
     case fermata(subtype: String, origin: CGPoint)
+    /// A breath mark or caesura between two chords. `kind` selects the
+    /// SMuFL glyph (`BreathGlyph.codepoint(forKind:)`); `origin` is the
+    /// glyph anchor (`.center`) in measure-local coordinates. The
+    /// visible-edge offsets in `BreathGlyphMetrics` translate `origin.y`
+    /// to the visible glyph edge for placement and bounds passes.
+    /// Mirrors the visibility wiring used for `.fermata`: when
+    /// `Breath.visible == false`, the element is routed into the
+    /// `invisibleElements` overlay (only laid out when
+    /// `ScoreViewOptions.showsInvisibleElements` is on).
+    case breath(kind: Breath.Kind, origin: CGPoint, visible: Bool)
     /// Per-chord articulation glyph (staccato dot / staccatissimo wedge /
     /// tenuto bar). Emitted from `placeMeasureElements` for each
     /// `ChordArticulation` whose `kind` is in scope; round-trip-only

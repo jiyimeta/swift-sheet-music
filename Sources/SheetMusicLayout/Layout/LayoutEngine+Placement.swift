@@ -1184,13 +1184,75 @@ extension LayoutEngine {
                     } else {
                         invisibleOut.append(harmonyElement)
                     }
-                case .breath:
-                    // Real layout emission lands in the breath-layout
-                    // task. Placeholder so the switch compiles —
-                    // breath marks contribute no width and no glyph
-                    // here yet (parallel to `.fermata`'s post-process
-                    // anchor, but emit nothing for now).
-                    break
+                case let .breath(b):
+                    // Hidden breath: drop entirely when the toggle is
+                    // off; otherwise build the element below and route
+                    // it into `invisibleOut`. Same visibility wiring
+                    // as `.fermata`.
+                    guard b.visible || options.showsInvisibleElements
+                    else { break }
+                    // X placement: breath marks sit BETWEEN the
+                    // preceding chord and the following chord. We
+                    // anchor at the midpoint between the two so the
+                    // glyph reads as belonging to the gap, not to a
+                    // specific chord. If there is no following chord
+                    // (breath at end of measure / voice) we fall back
+                    // to the preceding chord's X plus a small offset
+                    // so the glyph still has a place to sit.
+                    let prevChordX = lastChordOrRestX(in: out)
+                        ?? (
+                            inHeader
+                                ? headerSchedule.contentStartX
+                                : timedX(atTick: tickCursor)
+                        )
+                    var lookaheadTick = tickCursor
+                    var nextChordX: CGFloat?
+                    for j in (voiceElemIdx + 1) ..< voice.elements.count {
+                        let next = voice.elements[j]
+                        switch next {
+                        case .chord:
+                            nextChordX = timedX(atTick: lookaheadTick)
+                        case let .locationShift(delta):
+                            lookaheadTick += delta.ticks(division: division)
+                            continue
+                        default:
+                            continue
+                        }
+                        break
+                    }
+                    // Bias slightly toward the following chord so the
+                    // glyph reads as preceding its target. v1: simple
+                    // midpoint when both bounds are known; fallback
+                    // sits half a sp past the preceding chord when no
+                    // following chord exists. Visual tuning to follow.
+                    let centreX: CGFloat
+                    if let nx = nextChordX {
+                        centreX = (prevChordX + nx) / 2
+                    } else {
+                        centreX = prevChordX + metrics.sp * 0.5
+                    }
+                    // Y placement: above the top staff line by a
+                    // kind-dependent gap. screen-Y-down, so subtract
+                    // from `staffTopY`. The top staff line sits 2 sp
+                    // above `staffMidY` (5-line staff). These are
+                    // placeholder constants — visual tuning to follow.
+                    let staffTopY = staffMidY - metrics.sp * 2
+                    let yAboveTopLineSp: CGFloat
+                    switch b.kind {
+                    case .breathMark: yAboveTopLineSp = 1.0
+                    case .caesura: yAboveTopLineSp = 2.0
+                    }
+                    let anchorY = staffTopY - yAboveTopLineSp * metrics.sp
+                    let breathElement = LayoutElement.breath(
+                        kind: b.kind,
+                        origin: CGPoint(x: centreX, y: anchorY),
+                        visible: b.visible,
+                    )
+                    if b.visible {
+                        out.append(breathElement)
+                    } else {
+                        invisibleOut.append(breathElement)
+                    }
                 }
             }
 

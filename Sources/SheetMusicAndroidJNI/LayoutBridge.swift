@@ -297,6 +297,15 @@ public enum LayoutBridge {
                 into: &out,
             )
 
+        case let .breath(kind, origin, _):
+            emitCenterAnchoredGlyph(
+                codepoint: BreathGlyph.codepoint(forKind: kind),
+                cxPt: mox + Double(origin.x),
+                cyPt: moy + Double(origin.y),
+                sizePt: glyphSize,
+                into: &out,
+            )
+
         case let .marker(kind, text, origin):
             switch MarkerGlyph.variant(for: kind, text: text) {
             case let .glyph(codepoint):
