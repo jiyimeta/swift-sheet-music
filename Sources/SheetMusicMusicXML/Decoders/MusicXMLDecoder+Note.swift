@@ -11,8 +11,14 @@ enum MusicXMLNoteDecoder {
         /// A fermata on the note prepends a `.fermata` element so it precedes
         /// the chord/rest in the resulting voice, matching MuseScore's MSCX
         /// layout where `<Fermata>` sits as a sibling just before its target.
+        /// Breath marks / caesuras (when present) are appended after the
+        /// chord/rest — `.chord(...), .breath(...)` — matching MuseScore's
+        /// segment-position semantics ("breath taken after this note").
         case new([VoiceElement])
-        case foldIntoLastChord(Note, NoteDuration)
+        /// The note's pitch is folded into the previous chord. Trailing
+        /// breaths (if any) are appended to the same voice after the fold,
+        /// since the host chord remains the previous one.
+        case foldIntoLastChord(Note, NoteDuration, trailingBreaths: [Breath])
     }
 
     static func decodeNote(
@@ -32,6 +38,8 @@ enum MusicXMLNoteDecoder {
 
         let fermata = decodeFermata(node)
         let prefix: [VoiceElement] = fermata.map { [.fermata($0)] } ?? []
+        let breaths = decodeBreaths(node)
+        let suffix: [VoiceElement] = breaths.map { .breath($0) }
 
         if isRest {
             let restNode = node.children.first(where: { $0.name == "rest" })
@@ -40,9 +48,9 @@ enum MusicXMLNoteDecoder {
                 // `<duration>` (which `MusicXMLDuration.decode` already
                 // consumed for divisions-cursor correctness) is
                 // informational under the `.measure` marker model.
-                return .new(prefix + [.rest(duration: .measure)])
+                return .new(prefix + [.rest(duration: .measure)] + suffix)
             }
-            return .new(prefix + [.rest(duration: duration)])
+            return .new(prefix + [.rest(duration: duration)] + suffix)
         }
 
         let midi: Int
@@ -77,7 +85,7 @@ enum MusicXMLNoteDecoder {
         )
 
         if isChord {
-            return .foldIntoLastChord(note, duration)
+            return .foldIntoLastChord(note, duration, trailingBreaths: breaths)
         }
 
         let arpeggio = decodeArpeggio(node)
@@ -87,7 +95,28 @@ enum MusicXMLNoteDecoder {
             arpeggio: arpeggio, lyrics: lyrics,
         )
         _ = existingVoiceElements // reserved for future use (e.g. tie backrefs)
-        return .new(prefix + [.chord(chord)])
+        return .new(prefix + [.chord(chord)] + suffix)
+    }
+
+    /// MusicXML encodes breath marks and caesuras under
+    /// `<notations><breath-mark>` / `<notations><caesura>`. Either may
+    /// repeat (rare but legal); we return them in document order so the
+    /// caller can append `.breath(...)` voice elements after the host
+    /// chord, matching MuseScore's segment placement.
+    private static func decodeBreaths(_ node: XMLTreeNode) -> [Breath] {
+        guard let notations = node.first("notations") else { return [] }
+        var result: [Breath] = []
+        for child in notations.children {
+            switch child.name {
+            case "breath-mark":
+                result.append(Breath.decodeMusicXMLBreathMark(child))
+            case "caesura":
+                result.append(Breath.decodeMusicXMLCaesura(child))
+            default:
+                continue
+            }
+        }
+        return result
     }
 
     /// MusicXML encodes fermatas under `<notations><fermata>`. The element's
