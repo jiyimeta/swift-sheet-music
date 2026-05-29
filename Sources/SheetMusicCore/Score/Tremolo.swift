@@ -8,7 +8,7 @@ import Foundation
 public struct Tremolo: Sendable, Hashable {
     /// Number of tremolo bars. Maps to MuseScore subtype tokens:
     /// `r8`/`c8` = 1 (eighth bar), `r16`/`c16` = 2, `r32`/`c32` = 3,
-    /// `r64`/`c64` = 4 (64th-note tremolo).
+    /// `r64`/`c64` = 4 (64th bar).
     public enum Subtype: UInt8, Sendable, Hashable {
         case r8 = 1
         case r16 = 2

@@ -130,34 +130,29 @@ extension Score {
            let majorInt = Int(major)
         {
             if majorInt <= 2 {
-                #if canImport(os)
-                    let programVersion = scoreNode.first("programVersion")?.text ?? "unknown"
-                    mscxDecoderLogger.warning(
-                        """
-                        detected MuseScore 2 file \
-                        (museScore version=\"\(versionAttr, privacy: .public)\", \
-                        programVersion=\(programVersion, privacy: .public)); \
-                        parsing through the MS3/MS4-shaped reader — some \
-                        MS2-only fields will be skipped silently.
-                        """,
-                    )
-                #endif
+                let programVersion = scoreNode.first("programVersion")?.text ?? "unknown"
+                mscxDecoderWarn(
+                    code: "mscx.score.museScoreVersion2",
+                    message: """
+                    detected MuseScore 2 file (museScore version=\"\(versionAttr)\", \
+                    programVersion=\(programVersion)); parsing through the MS3/MS4-shaped \
+                    reader — some MS2-only fields will be skipped silently.
+                    """,
+                )
                 return .v2
             }
             return majorInt == 3 ? .v3 : .v4
         }
         if let programVersion = scoreNode.first("programVersion")?.text {
             if programVersion.hasPrefix("2.") {
-                #if canImport(os)
-                    mscxDecoderLogger.warning(
-                        """
-                        detected MuseScore 2 file via programVersion \
-                        \(programVersion, privacy: .public); parsing through \
-                        the MS3/MS4-shaped reader — some MS2-only fields will \
-                        be skipped silently.
-                        """,
-                    )
-                #endif
+                mscxDecoderWarn(
+                    code: "mscx.score.museScoreVersion2",
+                    message: """
+                    detected MuseScore 2 file via programVersion \(programVersion); \
+                    parsing through the MS3/MS4-shaped reader — some MS2-only fields \
+                    will be skipped silently.
+                    """,
+                )
                 return .v2
             }
             if programVersion.hasPrefix("3.") {

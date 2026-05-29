@@ -1,0 +1,11 @@
+Test fixtures in this directory (Tests/SheetMusicTests/Resources/own/)
+are hand-authored by the swift-sheet-music project under the MIT
+license — identical to the terms in the repository root LICENSE.
+
+They are distinct from the GPL-3.0 MuseScore-imported fixtures in the
+parent directory (Tests/SheetMusicTests/Resources/), which retain
+their original GPL-3.0 license per
+Tests/SheetMusicTests/Resources/LICENSE.
+
+Like all test fixtures in this repository, these files are confined to
+the test target and are not bundled into any published library product.

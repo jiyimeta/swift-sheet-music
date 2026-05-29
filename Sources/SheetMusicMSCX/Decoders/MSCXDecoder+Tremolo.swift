@@ -5,29 +5,46 @@ import SheetMusicXMLTools
 extension Tremolo {
     /// First-pass MSCX decode of a `<Tremolo>` / `<TremoloSingleChord>` /
     /// `<TremoloTwoChord>` child of `<Chord>`. For the MS3-style
-    /// `<Tremolo>` tag, `r8/r16/r32` map to `.single` and `c8/c16/c32`
-    /// to `.between` (the pairing-validation second pass runs in
-    /// `MSCXDecoder+Voice`). For MS4's tag-discriminated form, the tag
-    /// name fixes the span and either prefix is accepted in `<subtype>`.
+    /// `<Tremolo>` tag, `r8/r16/r32/r64` map to `.single` and
+    /// `c8/c16/c32/c64` to `.between` (the pairing-validation second pass
+    /// runs in `MSCXDecoder+Voice`). For MS4's tag-discriminated form,
+    /// the tag name fixes the span and either prefix is accepted in
+    /// `<subtype>`.
+    ///
+    /// Returns `nil` for non-fatal anomalies (missing or unknown
+    /// `<subtype>`) after emitting a `ScoreDiagnostic`. The caller in
+    /// `MSCXDecoder+Chord` treats `nil` the same as "no Tremolo child
+    /// present".
     /// C++: `mu::engraving::TremoloDispatcher::read`,
     /// `TremoloSingleChord::read`, `TremoloTwoChord::read`.
-    static func decode(_ node: XMLTreeNode) throws -> Tremolo {
+    static func decode(_ node: XMLTreeNode) -> Tremolo? {
         guard let subtypeText = node.first("subtype")?.text else {
-            throw SheetMusicError.malformedScore(
-                reason: "\(node.name) missing <subtype>",
+            mscxDecoderWarn(
+                code: "mscx.tremolo.missingSubtype",
+                message: "\(node.name) missing <subtype> — tremolo dropped",
             )
+            return nil
         }
         let span: Span
         let subtype: Subtype
         switch node.name {
         case "TremoloSingleChord":
+            guard let bars = parseBars(subtypeText, tagName: node.name) else {
+                return nil
+            }
             span = .single
-            subtype = try parseBars(subtypeText)
+            subtype = bars
         case "TremoloTwoChord":
+            guard let bars = parseBars(subtypeText, tagName: node.name) else {
+                return nil
+            }
             span = .between
-            subtype = try parseBars(subtypeText)
+            subtype = bars
         default:
-            (subtype, span) = try parseSubtype(subtypeText)
+            guard let pair = parseSubtype(subtypeText) else {
+                return nil
+            }
+            (subtype, span) = pair
         }
         let stroke = parseStrokeStyle(node.first("strokeStyle")?.text ?? "0")
         return Tremolo(subtype: subtype, span: span, strokeStyle: stroke)
@@ -35,7 +52,7 @@ extension Tremolo {
 
     private static func parseSubtype(
         _ text: String,
-    ) throws -> (Subtype, Span) {
+    ) -> (Subtype, Span)? {
         switch text {
         case "r8": return (.r8, .single)
         case "r16": return (.r16, .single)
@@ -46,9 +63,11 @@ extension Tremolo {
         case "c32": return (.r32, .between)
         case "c64": return (.r64, .between)
         default:
-            throw SheetMusicError.malformedScore(
-                reason: "Tremolo unknown <subtype> \(text)",
+            mscxDecoderWarn(
+                code: "mscx.tremolo.unknownSubtype",
+                message: "Tremolo unknown <subtype> \(text) — tremolo dropped",
             )
+            return nil
         }
     }
 
@@ -57,16 +76,21 @@ extension Tremolo {
     /// resolve the bar count. Either the `r*` or `c*` prefix is
     /// accepted defensively since both MS4 readers in upstream
     /// MuseScore route through the same TConv-driven token table.
-    private static func parseBars(_ text: String) throws -> Subtype {
+    private static func parseBars(
+        _ text: String,
+        tagName: String,
+    ) -> Subtype? {
         switch text {
         case "r8", "c8": return .r8
         case "r16", "c16": return .r16
         case "r32", "c32": return .r32
         case "r64", "c64": return .r64
         default:
-            throw SheetMusicError.malformedScore(
-                reason: "Tremolo unknown <subtype> \(text)",
+            mscxDecoderWarn(
+                code: "mscx.tremolo.unknownSubtype",
+                message: "\(tagName) unknown <subtype> \(text) — tremolo dropped",
             )
+            return nil
         }
     }
 

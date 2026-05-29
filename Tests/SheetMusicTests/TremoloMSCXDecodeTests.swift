@@ -76,7 +76,7 @@ struct TremoloMSCXDecodeFirstPassTests {
         #expect(chord.tremolo?.strokeStyle == .traditional)
     }
 
-    @Test func unknown_subtype_throws() throws {
+    @Test func unknown_subtype_emits_diagnostic_and_drops_tremolo() throws {
         let xml = """
         <Chord>
             <durationType>quarter</durationType>
@@ -86,9 +86,13 @@ struct TremoloMSCXDecodeFirstPassTests {
             <Note><pitch>60</pitch><tpc>14</tpc></Note>
         </Chord>
         """
-        #expect(throws: SheetMusicError.self) {
-            _ = try parseChord(xml)
+        let collector = MSCXDiagnosticCollector()
+        let chord = try MSCXParserContext.$collector.withValue(collector) {
+            try parseChord(xml)
         }
+        #expect(chord.tremolo == nil)
+        #expect(collector.entries.count == 1)
+        #expect(collector.entries.first?.code == "mscx.tremolo.unknownSubtype")
     }
 
     @Test func decodes_r64_as_single() throws {

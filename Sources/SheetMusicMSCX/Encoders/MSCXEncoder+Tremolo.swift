@@ -6,8 +6,8 @@ extension Tremolo {
     /// Build the `<Tremolo>` MSCX element. `subtype + span` map to
     /// MuseScore's eight-token alphabet (`r8/r16/r32/r64` single,
     /// `c8/c16/c32/c64` between); `strokeStyle` round-trips the
-    /// `<strokeStyle>` integer when non-default. Inverse of
-    /// `MSCXDecoder+Tremolo.decode`.
+    /// `<strokeStyle>` integer
+    /// when non-default. Inverse of `MSCXDecoder+Tremolo.decode`.
     /// C++: `mu::engraving::TremoloDispatcher::write`.
     func encodeXML() -> XMLTreeNode {
         let token: String

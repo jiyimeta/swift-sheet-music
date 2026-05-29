@@ -354,8 +354,19 @@ plugin's `swiftPackagePath` follows along automatically. Run
   When `MidiRenderer.swift` outgrew this it was split into
   `MidiRenderer+Header.swift`, `…+Voice.swift`, `…+Repeats.swift`, etc.
 - **Permissive parser.** Unknown XML elements inside a `<voice>` are
-  silently skipped (see `MSCXDecoder+Voice.swift`). Required elements
-  that genuinely can't be defaulted throw `SheetMusicError.malformedScore`.
+  silently skipped (see `MSCXDecoder+Voice.swift`). For known elements
+  with unknown / missing values, MSCX decoders use a three-way policy:
+  - **Structural** (pitch, voice structure, time signature, division):
+    throw `SheetMusicError.malformedScore` — the score can't be loaded
+    coherently.
+  - **Embellishment** (tremolo subtype, articulation kind, ornament
+    subtype, fermata / breath style, hairpin shape, glissando style):
+    drop the element and emit a `ScoreDiagnostic` via `mscxDecoderWarn`.
+    The score still loads; the decoration is silently absent. Surface
+    via `MSCXParser.parseWithDiagnostics(...)` /
+    `MSCZReader.parseWithDiagnostics(...)`.
+  - **Cosmetic** (color, offset, font, stroke style): silent default
+    to the model's neutral value.
 - **Errors via `throws`.** Single error enum `SheetMusicError`; no
   `Result` types; no Optional return for "failed" cases.
 - **`MIDIRenderer` algorithm choices mirror MuseScore.** When you
