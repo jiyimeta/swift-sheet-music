@@ -7,11 +7,13 @@ import Foundation
 /// C++: `mu::engraving::TremoloSingleChord` / `TremoloTwoChord`.
 public struct Tremolo: Sendable, Hashable {
     /// Number of tremolo bars. Maps to MuseScore subtype tokens:
-    /// `r8`/`c8` = 1 (eighth bar), `r16`/`c16` = 2, `r32`/`c32` = 3.
+    /// `r8`/`c8` = 1 (eighth bar), `r16`/`c16` = 2, `r32`/`c32` = 3,
+    /// `r64`/`c64` = 4 (64th bar).
     public enum Subtype: UInt8, Sendable, Hashable {
         case r8 = 1
         case r16 = 2
         case r32 = 3
+        case r64 = 4
     }
 
     /// `.single`: bars cross the chord's own stem.

@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<museScore version="4.40">
+  <Score>
+    <Division>480</Division>
+    <Part>
+      <Staff id="1"/>
+      <Instrument>
+        <trackName>Test</trackName>
+        <Channel>
+          <program value="0"/>
+        </Channel>
+      </Instrument>
+    </Part>
+    <Staff id="1">
+      <Measure>
+        <voice>
+          <TimeSig>
+            <sigN>4</sigN>
+            <sigD>4</sigD>
+          </TimeSig>
+          <Chord>
+            <durationType>quarter</durationType>
+            <TremoloSingleChord>
+              <subtype>r128</subtype>
+            </TremoloSingleChord>
+            <Note>
+              <pitch>60</pitch>
+              <tpc>14</tpc>
+            </Note>
+          </Chord>
+          <Rest>
+            <durationType>half</durationType>
+          </Rest>
+          <Rest>
+            <durationType>quarter</durationType>
+          </Rest>
+        </voice>
+      </Measure>
+    </Staff>
+  </Score>
+</museScore>

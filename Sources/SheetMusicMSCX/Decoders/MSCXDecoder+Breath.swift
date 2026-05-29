@@ -17,15 +17,10 @@ extension Breath {
         if let parsed = Breath.Kind.decode(mscxSubtype: rawSubtype) {
             kind = parsed
         } else {
-            #if canImport(os)
-                mscxDecoderLogger.warning(
-                    """
-                    unknown <Breath><subtype>: \
-                    \(rawSubtype, privacy: .public) — falling back to \
-                    breathMarkComma
-                    """,
-                )
-            #endif
+            mscxDecoderWarn(
+                code: "mscx.breath.unknownSubtype",
+                message: "unknown <Breath><subtype>: \(rawSubtype) — falling back to breathMarkComma",
+            )
             kind = .breathMark(.comma)
         }
         let pause: Double? = node.first("pause").flatMap { Double($0.text) }
