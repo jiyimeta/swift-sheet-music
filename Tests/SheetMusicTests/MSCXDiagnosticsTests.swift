@@ -21,4 +21,13 @@ struct MSCXDiagnosticsTests {
         #expect(result.diagnostics.isEmpty)
         #expect(!result.score.parts.isEmpty)
     }
+
+    @Test func diagnostic_fixture_resource_resolves() {
+        let url = Bundle.module.url(
+            forResource: "diagnostics-tremolo-unknown-subtype",
+            withExtension: "mscx",
+            subdirectory: "own",
+        )
+        #expect(url != nil)
+    }
 }
