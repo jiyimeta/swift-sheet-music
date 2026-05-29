@@ -118,8 +118,8 @@ extension ScoreLayerBuilder {
             //   * the Edwin/system font has no PUA glyph — and
             //     process-registered Bravura is not in CoreText's
             //     fallback cascade — so the music run must use Bravura;
-            //   * the music glyph must be centred by its *ink* box so
-            //     the whole note straddles the text centre instead of
+            //   * the music glyph must be centered by its *ink* box so
+            //     the whole note straddles the text center instead of
             //     resting its head on the baseline with the stem poking
             //     above the text;
             //   * the space separating the note from "=" carries no ink,
@@ -295,7 +295,7 @@ extension ScoreLayerBuilder {
                 parent.addSublayer(layer)
             }
         case let .staffText(text, p, color, isSystem):
-            // Author-supplied staff/system text. Colour and offset
+            // Author-supplied staff/system text. Color and offset
             // (already baked into `p` by placement) come from the
             // source `.mscx`. Bottom-leading anchor at `p` matches
             // the placement convention used for dynamics/tempo.

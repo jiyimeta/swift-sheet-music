@@ -33,7 +33,7 @@ public enum TremoloGeometry {
     public struct Resolved: Sendable, Equatable {
         public let center: CGPoint
         public let halfWidth: CGFloat
-        /// Vertical offset between bar centre and either endpoint
+        /// Vertical offset between bar center and either endpoint
         /// — matches a +12° slant. Screen y grows downward, so the
         /// LEFT endpoint sits at `center.y + slantDy` (lower) and the
         /// RIGHT endpoint at `center.y - slantDy` (higher).

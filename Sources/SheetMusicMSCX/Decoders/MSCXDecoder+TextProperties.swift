@@ -11,7 +11,7 @@ extension TextProperties {
     ///
     /// MuseScore writes `<bold>1</bold>` etc. only when the value
     /// diverges from the style; an absent flag thus means "inherit".
-    /// We honour that exactly.
+    /// We honor that exactly.
     static func decode(_ node: XMLTreeNode) -> TextProperties {
         var props = TextProperties()
         if let face = node.first("face")?.text, !face.isEmpty {

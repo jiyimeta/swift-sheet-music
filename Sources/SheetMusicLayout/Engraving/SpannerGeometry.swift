@@ -44,7 +44,7 @@ public enum SpannerGeometry {
 
     public struct VoltaLabel: Sendable, Equatable {
         public let text: String
-        /// Origin at vertical-centre, leading-edge (matching Apple's
+        /// Origin at vertical-center, leading-edge (matching Apple's
         /// `(0, 0.5)` anchor convention).
         public let origin: CGPoint
         public let sizeSp: CGFloat

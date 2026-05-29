@@ -1,13 +1,13 @@
 import Foundation
 
 /// MuseScore wire-format major version targeted by the MSCX encoder
-/// and recognised by the MSCX decoder.
+/// and recognized by the MSCX decoder.
 ///
 /// `v4` is the current default. `v3` covers MuseScore 3.x readers
 /// (programVersion 3.6.2 in `~/Desktop/test-min.mscx`). `v2` is
 /// **detection-only**: the decoder reports it when a file declares
 /// `<museScore version="2.x">` so consumers can surface a "MuseScore 2"
-/// badge, but the encoder normalises `.v2` to `.v3` (see
+/// badge, but the encoder normalizes `.v2` to `.v3` (see
 /// `MSCXEncoderOptions.init`) and the decoder still parses MS2 files
 /// through the MS3-shaped reader, so the parsed `Score` is best-effort.
 public enum MSCXVersion: Sendable, Hashable {

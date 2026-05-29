@@ -7,7 +7,7 @@ import Foundation
 ///
 /// Renderers iterate `String(numerator)` / `String(denominator)`,
 /// drawing each digit glyph at `digitAdvance * index + rowOffsetX`. The
-/// helpers below produce the offsets that centre multi-digit numerators
+/// helpers below produce the offsets that center multi-digit numerators
 /// and denominators on a shared vertical axis (so "12/8" still looks
 /// like a balanced fraction).
 public enum TimeSignatureLayout {
@@ -32,7 +32,7 @@ public enum TimeSignatureLayout {
     }
 
     /// `(numeratorOffsetX, denominatorOffsetX, maxWidth)` such that the
-    /// two rows are centred on the same vertical axis at the row
+    /// two rows are centered on the same vertical axis at the row
     /// origin's `x`.
     public static func rowOffsets(
         numerator: Int, denominator: Int, sp: CGFloat,

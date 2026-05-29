@@ -284,7 +284,7 @@ extension LayoutEngine {
                     // Stem-down on a low chord (typical of voice 2 in
                     // a piano grand staff) extends below the lowest
                     // notehead by `defaultStemLength` measured from
-                    // the HIGHEST note's centre, mirroring
+                    // the HIGHEST note's center, mirroring
                     // `StemRenderer`.
                     if stemDir == .down, let highestStep = steps.max() {
                         let highestNoteY = staffMidY
@@ -331,7 +331,7 @@ extension LayoutEngine {
                         ?? StemDirectionRule.direction(for: steps)
                     // Stem-up on a high chord extends above the
                     // highest notehead by `defaultStemLength`
-                    // measured from the LOWEST note's centre,
+                    // measured from the LOWEST note's center,
                     // mirroring `StemRenderer`. A flag/beam adds
                     // ~0.5 sp of further vertical extent which the
                     // existing 0.5 sp buffer subsumes for v1.
@@ -347,7 +347,7 @@ extension LayoutEngine {
                 return map
             }()
 
-            // Final lyric centre Y for this voice — the max over
+            // Final lyric center Y for this voice — the max over
             // all chords' south-skyline-pushed Ys. Pre-computed
             // here (rather than ratcheted incrementally during
             // emission) so every chord's lyric uses the SAME Y;
@@ -530,27 +530,27 @@ extension LayoutEngine {
                     default:
                         restY = staffMidY + restVoiceOffset
                     }
-                    // Centre only true measure-fill markers
+                    // Center only true measure-fill markers
                     // (`NoteDuration.measure`). Typed `.whole`
                     // rests carry an explicit duration and sit on
                     // their start beat — MuseScore's data model:
-                    // a "centred" rest in any voice is authored as
+                    // a "centered" rest in any voice is authored as
                     // `<durationType>measure</…>`, not
                     // `<durationType>whole</…>`. With
                     // `NoteDuration.measure` present in the model,
-                    // this distinction is honoured.
+                    // this distinction is honored.
                     let isMeasureRest: Bool = {
                         if case .measure = r.duration { return true }
                         return false
                     }()
                     let restX: CGFloat
                     if isMeasureRest {
-                        // Centre the rest in the measure's chord
+                        // Center the rest in the measure's chord
                         // area: midpoint of [contentStart,
                         // width − trailingPadding]. Must track
                         // `minimumMeasureWidth.rightPadding` and
                         // `chordSpacingTickToX.trailingGap` —
-                        // otherwise the rest drifts off-centre
+                        // otherwise the rest drifts off-center
                         // whenever those constants are tuned.
                         let trailingPad = metrics.sp * 1
                         restX = (
@@ -655,7 +655,7 @@ extension LayoutEngine {
                             headType: note.headType,
                             // Pure "source hidden" flag — renderers
                             // consult `LayoutSystem.showsInvisibleElements`
-                            // to decide whether to grey or skip per-note.
+                            // to decide whether to gray or skip per-note.
                             isInvisible: !note.visible,
                             color: note.elementProperties.color,
                         )
@@ -675,7 +675,7 @@ extension LayoutEngine {
                     // is computed from every source note regardless of
                     // per-note visibility. Renderers consult the system's
                     // `showsInvisibleElements` to decide per-note whether
-                    // to grey or skip the notehead.
+                    // to gray or skip the notehead.
                     let mainElement: LayoutElement = .chord(
                         notes: chordNotes,
                         duration: chord.duration,
@@ -695,7 +695,7 @@ extension LayoutEngine {
                     // suppresses the whole chord. Per-notehead invisibility
                     // is handled downstream via `LayoutChordNote.isInvisible`;
                     // the renderer skips drawing those noteheads (toggle off)
-                    // or greys them (toggle on) while leaving stem geometry
+                    // or grays them (toggle on) while leaving stem geometry
                     // derived from the full note list.
                     let chordFullyHidden = !chord.visible
                     let graceW = LayoutEngine.graceWidth(sp: metrics.sp)
@@ -839,7 +839,7 @@ extension LayoutEngine {
                         .ticks(division: division)
                     // Use the voice's pre-computed max south-driven
                     // Y so every chord in the measure shares the
-                    // same lyric centre (within-measure horizontal
+                    // same lyric center (within-measure horizontal
                     // alignment). The system-wide post-pass in
                     // `LayoutEngine.layout` then aligns this Y
                     // across measures of the same system.
@@ -988,9 +988,9 @@ extension LayoutEngine {
                     // chord at the same tick extends below the staff
                     // (low ledger lines, stem-down low chord), push
                     // the Y down so the SMuFL glyph clears the chord
-                    // skyline. Anchor `.leading` puts the glyph centre
+                    // skyline. Anchor `.leading` puts the glyph center
                     // at `origin.y` and the glyph height is ~4 sp, so
-                    // a centre Y of `chordSouth + 2.5 sp` leaves
+                    // a center Y of `chordSouth + 2.5 sp` leaves
                     // ~0.5 sp of clearance above the glyph top —
                     // matching MuseScore's `Sid::dynamicsMinDistance`.
                     let defaultDynY = staffMidY + metrics.sp * 4
@@ -1072,7 +1072,7 @@ extension LayoutEngine {
                     // origin.y — NOT the visible glyph. Bravura's
                     // ascent/descent are highly asymmetric, so the
                     // visible glyph sits ~1.4 sp BELOW origin.y in
-                    // screen coords (not centred on it). Use measured
+                    // screen coords (not centered on it). Use measured
                     // offsets via `FermataGlyphMetrics` so the visible
                     // glyph EDGE — not its typographic bbox — clears
                     // the chord skyline by the visual gap.
@@ -1136,7 +1136,7 @@ extension LayoutEngine {
                     // non-temporal element (text mark, dynamic,
                     // tempo, rehearsal mark) attaches at the
                     // shifted tick. Mirrors MuseScore's
-                    // `setLocation` behaviour during voice read.
+                    // `setLocation` behavior during voice read.
                     tickCursor += delta.ticks(division: division)
                 case let .harmony(harmony):
                     // Hidden chord symbols contribute neither glyphs
@@ -1261,7 +1261,7 @@ extension LayoutEngine {
                         // Right-align: glyph's visible right edge sits
                         // `gapBeforeNextSp` sp left of the next chord.
                         // With anchor-.center, origin.x is the typographic
-                        // CENTRE, so subtract half the glyph advance.
+                        // CENTER, so subtract half the glyph advance.
                         let glyphRightX = nx - gapBeforeNextSp * metrics.sp
                         originX = glyphRightX
                             - (glyphAdvanceSp / 2) * metrics.sp
@@ -1304,9 +1304,9 @@ extension LayoutEngine {
                         originY = targetBottomY
                             - glyphOffsets.bottomOffset * metrics.sp
                     case .caesura:
-                        let visibleCentreOffsetSp =
+                        let visibleCenterOffsetSp =
                             (glyphOffsets.bottomOffset + glyphOffsets.topOffset) / 2
-                        originY = staffTopY - visibleCentreOffsetSp * metrics.sp
+                        originY = staffTopY - visibleCenterOffsetSp * metrics.sp
                     }
                     let breathElement = LayoutElement.breath(
                         kind: b.kind,
@@ -1426,10 +1426,10 @@ extension LayoutEngine {
                 var anchorSteps: [Int?] = []
                 var anchorYs: [CGFloat?] = []
                 var memberLevels: [Int] = []
-                // Beam colour is derived from the beamed group's
+                // Beam color is derived from the beamed group's
                 // noteheads — MuseScore writes `<Beam><color>` as a
                 // standalone sibling element, but in practice it matches
-                // the member notes' colour. First coloured note wins.
+                // the member notes' color. First colored note wins.
                 var memberColors: [ScoreColor] = []
                 for memberIdx in group.memberIndices {
                     guard let outIdx = voiceChordOutIndex[memberIdx],
@@ -1928,7 +1928,7 @@ extension LayoutEngine {
         var mirrors = [Bool](repeating: false, count: notes.count)
         // `isLeft` tracks which side of the stem the current note
         // sits on. Default = the chord's natural side: left for
-        // stem-up, right for stem-down. (MuseScore initialises
+        // stem-up, right for stem-down. (MuseScore initializes
         // `isLeft = chord.up()` for the same reason.) `prevLine`
         // starts huge so the first iteration never registers a
         // conflict.
@@ -2016,7 +2016,7 @@ extension LayoutEngine {
                 headType: note.headType,
                 // Pure "source hidden" flag — renderers consult
                 // `LayoutSystem.showsInvisibleElements` to decide
-                // whether to grey or skip per-note.
+                // whether to gray or skip per-note.
                 isInvisible: !note.visible,
                 color: note.elementProperties.color,
             )
@@ -2190,7 +2190,7 @@ extension LayoutEngine {
     /// Distance, close-to-note glyphs (staccato / staccatissimo / tenuto):
     /// staff-line aware — 1 sp into a space, 1.5 sp when the note is on a staff
     /// line, and 1 sp once the note reaches the outer staff line or beyond. The
-    /// reference Y is then shifted by the glyph's ink-centre offset so the
+    /// reference Y is then shifted by the glyph's ink-center offset so the
     /// rendered dot lands exactly there (see `ArticulationGlyphMetrics`). Other
     /// glyphs (accent / marcato / combinations) are pushed clear of the staff.
     /// Stacking adds 1 sp per extra glyph on a side.

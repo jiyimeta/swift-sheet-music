@@ -47,10 +47,10 @@ extension LayoutEngine {
         return CGFloat(barCount - 1) * spacing + thickness
     }
 
-    /// Bar block centre for a `.single` tremolo on an UNBEAMED chord.
+    /// Bar block center for a `.single` tremolo on an UNBEAMED chord.
     /// FLAGGED durations bias toward the stem tip (with `flagHeight +
     /// barBeamGap` clearance); UNFLAGGED durations (quarter / half)
-    /// centre at midstem. Beamed chords are re-anchored later by
+    /// center at midstem. Beamed chords are re-anchored later by
     /// `reanchorBeamedTremoloBars`.
     private static func singleTremoloCenter( // swiftlint:disable:this function_parameter_count
         stemTopY: CGFloat,
@@ -255,7 +255,7 @@ extension LayoutEngine {
     ///
     /// X must match `StemRenderer`'s `stemAttachDx = sp * 0.59`
     /// (Bravura `noteheadBlack` `stemUpSE.x` / `stemDownNW.x` anchor),
-    /// so the bars centre on the stem rather than the notehead.
+    /// so the bars center on the stem rather than the notehead.
     private static func stemEndpoints( // swiftlint:disable:this function_parameter_count
         chordX: CGFloat,
         chordNotes: [LayoutChordNote],

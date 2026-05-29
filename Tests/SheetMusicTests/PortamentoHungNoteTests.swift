@@ -50,7 +50,7 @@ struct PortamentoHungNoteTests {
         }
     }
 
-    /// The pitch wheel must return to centre at or before the next chord
+    /// The pitch wheel must return to center at or before the next chord
     /// starts so that subsequent notes don't inherit the bend.
     /// User-reported regression: previous chord ties pitch 68 forward into a
     /// dotted-quarter (tieBack+tieForward, no events of its own), which then
@@ -107,7 +107,7 @@ struct PortamentoHungNoteTests {
         #expect(last68OffTick <= 1200, "pitch 68 release at \(last68OffTick) > 1200 — sustained past glissando")
     }
 
-    /// User-reported regression: with peak pitch-bend and the centre-reset
+    /// User-reported regression: with peak pitch-bend and the center-reset
     /// scheduled at the same tick, some synths reordered the simultaneous
     /// events and applied the reset BEFORE the peak — leaving the wheel
     /// stuck at peak for the remainder of the song. Peak must land strictly
@@ -133,10 +133,10 @@ struct PortamentoHungNoteTests {
             if case let .pitchBend(_, v) = $0.event { return ($0.tick, v) }
             return nil
         }
-        // The very last pitch-bend in the entire track must be a centre reset.
+        // The very last pitch-bend in the entire track must be a center reset.
         #expect(
             bends.last?.value == MidiEvent.pitchBendCenter,
-            "last bend was \(bends.last?.value ?? -1), should be centre",
+            "last bend was \(bends.last?.value ?? -1), should be center",
         )
         // The peak (highest absolute deviation) must occur at a strictly
         // earlier tick than the reset that follows it.
@@ -152,7 +152,7 @@ struct PortamentoHungNoteTests {
         )
     }
 
-    @Test func portamento_pitchWheelReturnsToCentreBeforeNextChord() throws {
+    @Test func portamento_pitchWheelReturnsToCenterBeforeNextChord() throws {
         let chords: [Chord] = [
             Chord(
                 duration: .quarter,

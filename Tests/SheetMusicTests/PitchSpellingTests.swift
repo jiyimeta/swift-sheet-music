@@ -109,7 +109,7 @@ struct PitchSpellingTests {
         #expect(shifted?.tieForward == 1)
     }
 
-    @Test("displayedAccidental honours the key signature")
+    @Test("displayedAccidental honors the key signature")
     func displayedAccidentalRule() {
         let aFlatMajor = -4
         // In key (no symbol)
@@ -141,7 +141,7 @@ struct PitchSpellingTests {
         ) == nil) // C natural
     }
 
-    /// MuseScore's reference behaviour in A♭ major (keySig = −4):
+    /// MuseScore's reference behavior in A♭ major (keySig = −4):
     /// ascending from C natural follows the alternating
     /// "diatonic-then-chromatic" pattern.
     @Test("A♭ major ascending: C → D♭ → D♮ → E♭ → E♮ → F → F♯")
@@ -162,7 +162,7 @@ struct PitchSpellingTests {
         #expect(n.pitch == 66 && n.tpc == 20) // F♯
     }
 
-    /// MuseScore's reference behaviour in A♭ major (keySig = −4):
+    /// MuseScore's reference behavior in A♭ major (keySig = −4):
     /// descending from C natural produces
     /// C → C♭ → B♭ → B♭♭ → A♭ → G → G♭ — alternating
     /// "stay on the same letter and add a flat" with "advance to

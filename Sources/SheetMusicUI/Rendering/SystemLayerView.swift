@@ -24,7 +24,7 @@ import SwiftUI
 /// the noteheads' / rests' `fillColor` is re-applied via
 /// `ScoreLayerBuilder.applySelection`. The range box is a separate
 /// overlay layer that is cleared and rebuilt on each selection
-/// change. This keeps click-to-recolour work O(|previous ∪ new|)
+/// change. This keeps click-to-recolor work O(|previous ∪ new|)
 /// instead of O(score size).
 @available(macOS 15.0, *)
 struct SystemLayerView: View {

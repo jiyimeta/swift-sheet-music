@@ -11,15 +11,15 @@ public struct ElementProperties: Sendable, Equatable, Codable {
     /// (e.g. `Note.play`).
     public var visible: Bool
 
-    /// Author-supplied element colour (RGBA 0..255). MuseScore
+    /// Author-supplied element color (RGBA 0..255). MuseScore
     /// `<color r="…" g="…" b="…" a="…"/>`. `nil` = inherit the default
-    /// (black / voice colour). Applies to the element's own ink —
-    /// noteheads, rests, lyrics, etc. — wherever a renderer honours it.
+    /// (black / voice color). Applies to the element's own ink —
+    /// noteheads, rests, lyrics, etc. — wherever a renderer honors it.
     public var color: ScoreColor?
 
     // Reserved extension points (NOT implemented in this work):
     //   public var offset: ...             // <offset>
-    //   public var autoplace / placement   // behavioural
+    //   public var autoplace / placement   // behavioral
 
     public init(visible: Bool = true, color: ScoreColor? = nil) {
         self.visible = visible

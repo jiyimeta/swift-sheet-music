@@ -320,7 +320,7 @@ extension LayoutEngine {
     /// Y baseline for a spanner segment. Above-staff spanners (slur,
     /// volta, ottava, …) sit a few sp above the spanner's *own staff*;
     /// below-staff spanners (hairpin, pedal) sit below it. The legacy
-    /// behaviour anchored everything to the top / bottom staff of the
+    /// behavior anchored everything to the top / bottom staff of the
     /// system, which placed an 8va belonging to staff N onto the top
     /// staff of a multi-staff score.
     /// Walk voice 0 of `measure` summing chord durations to recover the

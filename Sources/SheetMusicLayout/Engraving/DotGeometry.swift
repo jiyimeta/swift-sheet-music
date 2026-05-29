@@ -15,13 +15,13 @@ public enum DotGeometry {
     /// Dot disc radius in staff-spaces.
     public static let radiusSp: CGFloat = 0.22
 
-    /// Distance from the notehead anchor X to the FIRST dot's centre X.
+    /// Distance from the notehead anchor X to the FIRST dot's center X.
     public static let firstOffsetSp: CGFloat = 1.15
 
-    /// Spacing between consecutive dot centres.
+    /// Spacing between consecutive dot centers.
     public static let spacingSp: CGFloat = 0.6
 
-    /// Dot centre positions for `count` augmentation dots after a
+    /// Dot center positions for `count` augmentation dots after a
     /// notehead/rest at `anchor`. Caller draws each as a filled
     /// circle of radius `radiusSp · sp`.
     public static func centers(

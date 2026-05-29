@@ -2,7 +2,7 @@ import Foundation
 import SheetMusicCore
 
 extension PDFImporter {
-    /// Map a SMuFL codepoint to its semantic. Unrecognised codepoints
+    /// Map a SMuFL codepoint to its semantic. Unrecognized codepoints
     /// → `.unknown(codepoint)` so callers can emit a diagnostic.
     static func smuflSemantic(codepoint cp: UInt32) -> SMuFLSemantic {
         switch cp {

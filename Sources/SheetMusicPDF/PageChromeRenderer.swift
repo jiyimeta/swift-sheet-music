@@ -11,7 +11,7 @@ import SheetMusicCore
 
 /// Draws header / footer / page-number text into the margin area of
 /// a PDF page. Pulls from `score.style.pageChrome` (defaults from
-/// MuseScore: page number on outer header, copyright in centre
+/// MuseScore: page number on outer header, copyright in center
 /// footer).
 ///
 /// All measurements arrive in points. The renderer never touches
@@ -134,7 +134,7 @@ enum PageChromeRenderer {
             // Y-down (CGContext default for ImageRenderer/PDF):
             // baseline = midpoint of top margin shifted down by
             // (h/2 - descent) so the visible glyph midline sits at
-            // the band's centre.
+            // the band's center.
             let mid = margins.top / 2
             return mid + (h / 2) - descent
         case .footer:

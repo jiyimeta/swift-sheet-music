@@ -1,10 +1,10 @@
 import Foundation
 import SheetMusicCore
 
-/// Options controlling MIDI import behaviour. All fields have
+/// Options controlling MIDI import behavior. All fields have
 /// defaults that produce a reasonable Score from a typical
 /// notation-style SMF (DAW exports, MuseScore exports). Construct
-/// with the memberwise initialiser and override only the fields you
+/// with the memberwise initializer and override only the fields you
 /// care about, e.g. `MidiImportOptions(clefCandidates: [.treble])`.
 public struct MidiImportOptions: Sendable {
     /// Smallest binary subdivision the quantizer will produce.

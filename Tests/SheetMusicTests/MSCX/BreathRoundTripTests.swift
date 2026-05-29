@@ -76,7 +76,7 @@ struct BreathRoundTripTests {
         #expect(b.pause == 0.5)
     }
 
-    @Test("decode honours explicit <pause>")
+    @Test("decode honors explicit <pause>")
     func decodeExplicitPause() throws {
         let xml = Self.mscxWith(symbol: "caesura", pauseChild: "1.25")
         let score = try Self.parse(xml)

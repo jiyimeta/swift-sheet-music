@@ -9,7 +9,7 @@ import SheetMusicCore
 ///
 /// `.v2` is a detection-only marker on `MSCXVersion` (the decoder
 /// uses it to report MuseScore 2 provenance via `ScoreSource`); the
-/// encoder has no MS2 writer, so passing `.v2` here is normalised to
+/// encoder has no MS2 writer, so passing `.v2` here is normalized to
 /// `.v3` at construction time. That keeps the per-element encoder
 /// switches a tight `.v3` / `.v4` pair and prevents `.v2` from ever
 /// reaching them.

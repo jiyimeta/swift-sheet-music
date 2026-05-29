@@ -37,7 +37,7 @@ public enum FermataGlyphMetrics {
         let provider = FontMetrics.provider
         let ascent = provider.ascent(font: bravuraEm)
         let descent = provider.descent(font: bravuraEm)
-        // Anchor .center puts the text view's typographic CENTRE at
+        // Anchor .center puts the text view's typographic CENTER at
         // origin.y. Text view height = ascent + descent. The baseline
         // therefore sits `(ascent - descent) / 2` BELOW origin in
         // screen-Y-down coords.

@@ -6,7 +6,7 @@ import Foundation
 /// including every note in it). Single-note removal from a chord
 /// would be a separate command.
 ///
-/// Behaviour by element kind:
+/// Behavior by element kind:
 ///   - `.chord` with notes: replaced with `.rest(duration:)` of the
 ///     same duration (an empty `Chord`).
 ///   - `.chord` already empty (= rest): replaced with itself

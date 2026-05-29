@@ -9,7 +9,7 @@
     /// Coverage for `<{role}Align>` overrides on the `<VBox>` title
     /// block — the field that was missing when test-platinum.mscx
     /// rendered Lyricist text along the page's left edge instead of
-    /// MuseScore's centred three-column lyric layout.
+    /// MuseScore's centered three-column lyric layout.
     @Suite("Title-block align overrides") struct TitleBlockAlignTests {
         private let _installApple = TestSupport.installApple
 
@@ -117,7 +117,7 @@
             #expect(centered.position.x == availableWidth / 2)
         }
 
-        @Test("FrameText carries per-element <size>; layout honours it")
+        @Test("FrameText carries per-element <size>; layout honors it")
         func perTextFontSizeOverride() throws {
             guard #available(macOS 15.0, iOS 16.0, *) else { return }
             let mscx = """
@@ -266,11 +266,11 @@
         /// A `<Text>` inside `<VBox>` can carry an `<align>` element that
         /// overrides the styledef default for just that element (e.g. a
         /// "lyricist" text repositioned to top-left via
-        /// `<align>left,top</align>`). The layout engine must honour the
+        /// `<align>left,top</align>`). The layout engine must honor the
         /// per-element override; otherwise the text falls back to the
         /// role default (bottom-left for lyricist) and may overlap with
         /// other texts in the frame.
-        @Test("LayoutEngine honours per-element <align> override")
+        @Test("LayoutEngine honors per-element <align> override")
         func layoutHonorsPerElementAlignOverride() throws {
             guard #available(macOS 15.0, iOS 16.0, *) else { return }
             let mscx = """

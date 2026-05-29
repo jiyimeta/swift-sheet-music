@@ -21,8 +21,8 @@ public struct RehearsalMark: Sendable, Equatable {
     /// Author-supplied Y offset relative to the default placement,
     /// in spatium units (positive = down).
     public var offsetY: Double
-    /// Author-supplied colour (RGBA 0..255). Nil = inherit the
-    /// default text colour. Sugar over `elementProperties.color` —
+    /// Author-supplied color (RGBA 0..255). Nil = inherit the
+    /// default text color. Sugar over `elementProperties.color` —
     /// the single source of truth shared with every engravable element.
     public var color: ScoreColor? {
         get { elementProperties.color }

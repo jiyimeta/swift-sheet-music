@@ -6,7 +6,7 @@ import Foundation
 /// chord/rest elements (and surfaces overshoot of a chord as a
 /// tied chain of that chord's clones, preserving its pitch).
 ///
-/// Identical out-of-scope behaviour to `SetChordDuration`:
+/// Identical out-of-scope behavior to `SetChordDuration`:
 /// - rest is inside a tuplet
 /// - lengthening crosses the measure boundary
 /// - lengthening consumes past a non-timed element

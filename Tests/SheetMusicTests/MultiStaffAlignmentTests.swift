@@ -204,9 +204,9 @@
                     // measure-filling rest in voice 1 alongside
                     // voice 0's melody. With `NoteDuration.measure`
                     // present in the model, the layout engine
-                    // centres only `.measure`; typed `.whole`
+                    // centers only `.measure`; typed `.whole`
                     // rests sit on their start beat. This
-                    // fixture's intent is the centring case, so
+                    // fixture's intent is the centering case, so
                     // it should use `.measure`.
                     .rest(duration: .measure),
                 ]),
@@ -251,7 +251,7 @@
             )
 
             // The measure rest must NOT share x with voice 0's first chord
-            // — it's centered in the measure body (MuseScore behaviour),
+            // — it's centered in the measure body (MuseScore behavior),
             // distinct from tick 0 even when other voices carry content.
             // 3 pt is enough headroom to be unambiguous after we tightened
             // measure padding to match MuseScore's `Sid::measureSpacing`
@@ -431,7 +431,7 @@
             guard #available(macOS 15.0, *) else { return }
 
             // Single staff, single voice, four 8ths — a simpler shape
-            // that anchors the numeric behaviour of tickColumns.
+            // that anchors the numeric behavior of tickColumns.
             let c4 = Note(pitch: 60, tpc: 14)
             let voice = Voice(elements: [
                 .chord(Chord(duration: .eighth, notes: [c4])),

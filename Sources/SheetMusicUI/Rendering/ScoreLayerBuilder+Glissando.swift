@@ -57,7 +57,7 @@ extension ScoreLayerBuilder {
         }
     }
 
-    /// Centred label above the glissando line. Font defaults from
+    /// Centered label above the glissando line. Font defaults from
     /// `TextStyleType.glissando` (Edwin 8 pt italic, spatium-dependent)
     /// and the width gate mirrors `tdraw.cpp:1580`. Anchored at
     /// bottom-center so the descender clears the line by the spacing

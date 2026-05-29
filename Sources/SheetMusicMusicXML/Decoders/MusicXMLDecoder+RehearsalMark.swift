@@ -26,7 +26,7 @@ enum MusicXMLRehearsalDecoder {
 
     /// MusicXML's `enclosure` attribute. `square` → rectangle (matches
     /// MuseScore default), `circle` → circle, `none` → none. Missing
-    /// attribute defaults to rectangle, mirroring MuseScore's behaviour
+    /// attribute defaults to rectangle, mirroring MuseScore's behavior
     /// when the importer doesn't see an explicit enclosure.
     private static func frameKind(
         forEnclosure raw: String?,

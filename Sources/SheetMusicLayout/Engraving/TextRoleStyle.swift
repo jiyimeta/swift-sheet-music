@@ -67,7 +67,7 @@ public enum TextRoleStyle {
     }
 
     /// Horizontal anchor MuseScore uses to position the given role.
-    /// Lyrics centre on the chord stem; everything else is leading-
+    /// Lyrics center on the chord stem; everything else is leading-
     /// anchored by default.
     public static func horizontalAnchor(
         for style: TextStyleType,

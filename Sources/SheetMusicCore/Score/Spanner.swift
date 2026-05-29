@@ -30,7 +30,7 @@ public struct Spanner: Sendable, Equatable {
     public var elementProperties: ElementProperties
     /// MuseScore `<visible>0</visible>` flag. When false the spanner
     /// is hidden — layout omits it entirely (no glyphs, no reserved
-    /// space). Playback / MIDI continue to honour the spanner. Sugar over
+    /// space). Playback / MIDI continue to honor the spanner. Sugar over
     /// `elementProperties.visible`.
     public var visible: Bool {
         get { elementProperties.visible }
@@ -85,7 +85,7 @@ public struct Spanner: Sendable, Equatable {
         public var subtype: Subtype
         /// `<veloChange>` value (1..127). Used when bracket Dynamics
         /// don't pin both endpoints. MuseScore's default of 0 is
-        /// normalised to nil at decode time.
+        /// normalized to nil at decode time.
         public var veloChange: Int?
         public var veloChangeMethod: VeloChangeMethod
 

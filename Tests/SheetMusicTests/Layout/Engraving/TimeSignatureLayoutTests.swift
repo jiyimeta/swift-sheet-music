@@ -23,10 +23,10 @@ struct TimeSignatureLayoutTests {
         #expect(max == 7)
     }
 
-    @Test func twoDigitNumeratorCentresSingleDigitDenominator() {
+    @Test func twoDigitNumeratorCentersSingleDigitDenominator() {
         // "12" over "8": numerator row is 2 advances wide, denominator
         // is 1 advance wide; denominator shifts right by half an advance
-        // to centre.
+        // to center.
         let (numDx, denDx, max) = TimeSignatureLayout.rowOffsets(
             numerator: 12, denominator: 8, sp: 5,
         )

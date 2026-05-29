@@ -116,7 +116,7 @@ extension Score {
     /// Detect MuseScore wire-format major version from the
     /// `<museScore version="…">` attribute. Falls back to `<programVersion>`
     /// (used by 3.x exports) and finally defaults to `.v4` when no
-    /// recognisable marker is present.
+    /// recognizable marker is present.
     ///
     /// `version="2.x"` is reported as `.v2` so `ScoreSource` can
     /// surface a "MuseScore 2" badge. A warning is logged because the

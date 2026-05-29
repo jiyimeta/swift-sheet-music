@@ -77,7 +77,7 @@ public enum DrawCommand: Sendable, Equatable {
         size: Double,
         fontId: DrawProgram.FontID,
     )
-    /// Set the active paint colour as a packed ARGB value
+    /// Set the active paint color as a packed ARGB value
     /// (0xAARRGGBB). Affects every subsequent stroke / fill /
     /// glyph / text until the next `.setColor`.
     case setColor(argb: UInt32)

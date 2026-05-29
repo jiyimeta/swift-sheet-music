@@ -95,7 +95,7 @@ children (title block, section headers, etc.).
 * `<height>` is in **spatium units**; `absoluteFromSpatium()` does
   the conversion (see `engraving/rendering/score/boxlayout.cpp`).
 * `<boxAutoSize>` (1 / 0) toggles between "grow to fit text" and
-  "honour the declared height".
+  "honor the declared height".
 
 **Surprises:**
 
@@ -164,7 +164,7 @@ diff the relevant `case` against `read400` / `read206` first.
 * **Style defaults:** `engraving/style/styledef.cpp`. Every
   `styleDef(...)` line is a default value; the symbolic `Sid::*`
   IDs cross-reference into `styledef.h`.
-* **Property serialisation:** `engraving/dom/property.cpp`
+* **Property serialization:** `engraving/dom/property.cpp`
   (`propertyToString`) and `engraving/rw/read460/tread.cpp`
   (`readProperty`) — the canonical XML round-trip with the
   unit-conversion table embedded in the `case P_TYPE::*` switch.

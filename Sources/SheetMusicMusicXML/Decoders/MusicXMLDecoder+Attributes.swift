@@ -4,7 +4,7 @@ import SheetMusicXMLTools
 
 /// Decodes `<attributes>` into a sequence of `Emission`s (clef, key, time) and
 /// updates the current divisions as a side effect. Mirrors MuseScore's
-/// behaviour of only emitting changed attributes in the measure stream; the
+/// behavior of only emitting changed attributes in the measure stream; the
 /// initial measure always emits all three (save that C-major keysigs are
 /// suppressed, matching `.mscx` exporter output).
 enum AttributesDecoder {

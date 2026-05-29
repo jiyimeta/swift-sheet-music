@@ -12,7 +12,7 @@ import SheetMusicCore
 ///
 /// Same shape and semantics as `FermataGlyphOffsets` — see
 /// `FermataGlyphMetrics.swift` for the rationale (anchor-.center
-/// places the typographic bbox centre at origin.y, but Bravura's
+/// places the typographic bbox center at origin.y, but Bravura's
 /// asymmetric ascent/descent puts the visible glyph below it).
 ///
 /// All values are at `fontSize = 4` (i.e. 1 sp = 1 unit), so callers
@@ -37,7 +37,7 @@ public enum BreathGlyphMetrics {
         let provider = FontMetrics.provider
         let ascent = provider.ascent(font: bravuraEm)
         let descent = provider.descent(font: bravuraEm)
-        // Anchor .center puts the text view's typographic CENTRE at
+        // Anchor .center puts the text view's typographic CENTER at
         // origin.y. Text view height = ascent + descent. The baseline
         // therefore sits `(ascent - descent) / 2` BELOW origin in
         // screen-Y-down coords.

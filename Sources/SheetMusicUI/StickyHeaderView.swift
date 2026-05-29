@@ -35,7 +35,7 @@ public struct StickyHeaderView: View {
     /// Convenience: compute measure contexts on the fly. Suitable
     /// for one-off / static use; performance-sensitive callers
     /// (e.g. live pinch / scroll) should cache the contexts in their
-    /// own state and use the explicit-array initialiser so they
+    /// own state and use the explicit-array initializer so they
     /// don't pay an O(measures × staves) recompute on every body
     /// re-evaluation.
     public init(

@@ -103,7 +103,7 @@ struct BreathMidiTests {
         #expect(offsCaesura.first == offsControl.first)
     }
 
-    @Test("caesura tick shift honours the in-effect tempo at the breath")
+    @Test("caesura tick shift honors the in-effect tempo at the breath")
     func caesuraUsesTempoAtBreathTick() throws {
         // Score: 4/4, first chord at 120 BPM (2 bps), then a <Tempo>
         // change to 60 BPM (1 bps) just before the caesura, then the

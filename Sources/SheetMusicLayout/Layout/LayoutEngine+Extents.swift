@@ -143,7 +143,7 @@ extension LayoutEngine {
     /// Y clears the topmost chord/beam in the measure. The author's
     /// `<offset y>` is preserved — only the BASE position changes.
     /// Mirrors `autoPlaceStaffText`; harmony sits 1.5 sp above the
-    /// chord top (0.5 sp clearance + ~1 sp half-height of the centre-
+    /// chord top (0.5 sp clearance + ~1 sp half-height of the center-
     /// anchored chord-symbol text body).
     static func autoPlaceHarmony(
         in out: inout [LayoutElement],
@@ -155,7 +155,7 @@ extension LayoutEngine {
         // Default base matches the constant used at emission
         // (`staffTopLocal + harmonyPlacementAbove`, i.e.
         // `staffMidY - sp*2 - sp*2.5`). Auto base puts the symbol's
-        // centre 1.5 sp above the highest chord/beam point.
+        // center 1.5 sp above the highest chord/beam point.
         let staffTopLocal = staffMidY - metrics.sp * 2
         let defaultBase = staffTopLocal + metrics.harmonyPlacementAbove
         let autoBase = chordTop - metrics.sp * 1.5
@@ -271,13 +271,13 @@ extension LayoutEngine {
     ) -> AboveStaffAnchor {
         switch element {
         case .textMark(.tempo, _, _):
-            // `TextMarkRenderer.drawTempo` uses `.leading` (centre-Y).
+            // `TextMarkRenderer.drawTempo` uses `.leading` (center-Y).
             return .center
         case .staffText:
             // `StaffTextRenderer` uses `.bottomLeading`.
             return .bottom
         case .harmony:
-            // `HarmonyRenderer` anchors at `.leading` (centre Y).
+            // `HarmonyRenderer` anchors at `.leading` (center Y).
             return .center
         case .rehearsalMark:
             // `RehearsalMarkRenderer` anchors the FRAME box's
@@ -347,7 +347,7 @@ extension LayoutEngine {
         // while still in the measure's header zone (anchored at
         // `contentStartX`, a couple sp to the left) — should stack
         // vertically so neither is partially hidden. Exact-X
-        // grouping (the old behaviour) missed pairs like this
+        // grouping (the old behavior) missed pairs like this
         // because their anchor X differs by 1–2 sp.
         let sorted = entries.sorted { $0.xMin < $1.xMin }
         let minDistance = metrics.sp * 0.5
@@ -386,7 +386,7 @@ extension LayoutEngine {
         let anchor: AboveStaffAnchor
         let priority: Int
         /// Horizontal extent (leading…trailing) used to detect
-        /// visual overlap with neighbouring marks. Two marks whose
+        /// visual overlap with neighboring marks. Two marks whose
         /// extents touch — even at slightly different anchor X —
         /// must stack vertically so neither is partially hidden.
         let xMin: CGFloat

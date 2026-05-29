@@ -7,7 +7,7 @@ extension ChordArticulation {
     /// element. Inverse of `MSCXDecoder+Chord`'s harvest path.
     /// Both MS3 (3.6.2+) and MS4 readers accept the SymId-string form.
     func encode(options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
-        _ = options // reserved for API consistency with neighbour encoders
+        _ = options // reserved for API consistency with neighbor encoders
         return XMLTreeNode(
             name: "Articulation",
             children: [XMLTreeNode(name: "subtype", text: subtypeXML())],

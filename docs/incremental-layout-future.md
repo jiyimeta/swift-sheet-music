@@ -98,7 +98,7 @@ synchronous relayout per edit, but skips two redundant walks:
 * `LayoutEngine.naturalContentWidth(score:, options:)` — full-score
   width walk. The host reuses `horizontalDoc.size.width` from the
   previous layout (drift on note-vs-rest swap is sub-glyph; the
-  layout engine renormalises within each system).
+  layout engine renormalizes within each system).
 
 Even with those skipped, the relayout itself remains `O(measures)`,
 hence the residual lag.
@@ -130,7 +130,7 @@ rest. `LayoutCache.SystemEntry` captures all `buildSystem` inputs
 (`measureRange`, stretched widths, `isFirstSystem`, carry-in
 clef/key, sliced melisma data, drum maps, `ScoreViewOptions`, all
 staves' `Measure` values for the range) and stores the produced
-`LayoutSystem` normalised to `origin.y == 0`. On a hit the entire
+`LayoutSystem` normalized to `origin.y == 0`. On a hit the entire
 `buildSystem` call is skipped; the cached system is shifted to the
 current packing Y and the carry-out clef/key restored.
 

@@ -123,7 +123,7 @@ extension LayoutBridge {
     }
 
     /// Emit a SMuFL glyph whose position was computed assuming Apple's
-    /// `.center` anchor (typographic frame centre at `(cxPt, cyPt)`).
+    /// `.center` anchor (typographic frame center at `(cxPt, cyPt)`).
     /// `Canvas.drawText` on Android anchors at the baseline-leading
     /// corner; the offset comes from the glyph's typographic metrics
     /// (advance, ascent, descent) via `GlyphAnchor.centerToBaselineLeading`.
@@ -268,10 +268,10 @@ extension LayoutBridge {
             sp: CGFloat(sp),
         )
         let fontSize = Double(TupletBracketGeometry.labelFontSizeSp) * sp
-        // Label — emit as centred Edwin italic. The bridge's wire
+        // Label — emit as centered Edwin italic. The bridge's wire
         // format has no italic bit yet; falls back to the default
         // text style, matching Apple's "looks slightly off but
-        // recognisable" behaviour for tuplet digits.
+        // recognizable" behavior for tuplet digits.
         let labelFont = LayoutFont(
             face: "Edwin", pointSize: CGFloat(fontSize),
         )
@@ -281,8 +281,8 @@ extension LayoutBridge {
         let ascent = Double(FontMetrics.provider.ascent(font: labelFont))
         let descent = Double(FontMetrics.provider.descent(font: labelFont))
         // Canvas.drawText anchors at the baseline. The bracket geometry
-        // hands back the label's visual centre Y, so shift baseline
-        // down by half of (ascent − descent) to vertically centre the
+        // hands back the label's visual center Y, so shift baseline
+        // down by half of (ascent − descent) to vertically center the
         // digit on `labelCenter.y`.
         let baselineY = Double(segments.labelCenter.y) + (ascent - descent) / 2
         out.append(.text(
@@ -422,7 +422,7 @@ extension LayoutBridge {
         case .pedal:
             let parts = SpannerGeometry.pedal(from: from, to: to)
             // Canvas.drawText anchors at baseline-leading. Apple uses
-            // `(0, 0.5)` (vertical centre, leading); shift by the
+            // `(0, 0.5)` (vertical center, leading); shift by the
             // glyph half-height.
             let glyphFont = LayoutFont(
                 face: SMuFLFamily.bravura, pointSize: CGFloat(glyphSize),
@@ -600,9 +600,9 @@ extension LayoutBridge {
         )
         let originX = mox + lh.anchorX
         let originY = moy + lh.y
-        // Apple anchors each run at `.leading` (vertical centre,
+        // Apple anchors each run at `.leading` (vertical center,
         // leading edge). Canvas anchors at baseline, so shift by
-        // `(ascent - descent) / 2` to align the typographic centres.
+        // `(ascent - descent) / 2` to align the typographic centers.
         for run in lh.runs {
             let runX = originX + run.x
             switch run.kind {
@@ -665,7 +665,7 @@ extension LayoutBridge {
         let baselineY: Double
         switch anchor {
         case .leadingCenter:
-            // SwiftUI `.leading` = `(0, 0.5)`. Vertical centre is at
+            // SwiftUI `.leading` = `(0, 0.5)`. Vertical center is at
             // `(ascent - descent) / 2` above the baseline.
             dx = 0
             baselineY = originY + (ascent - descent) / 2

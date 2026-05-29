@@ -246,10 +246,10 @@ extension ScoreLayerBuilder {
 
     /// Render a run of Bravura SMuFL symbols (e.g. a tempo mark's
     /// metronome note) as one layer whose **ink** bounding box is
-    /// vertically centred on `centerY`, with its ink left edge at `x`.
+    /// vertically centered on `centerY`, with its ink left edge at `x`.
     ///
-    /// Unlike `glyphLayer` / `textLayer` — which centre the font's
-    /// ascent/descent box — this centres the visible glyph, so the
+    /// Unlike `glyphLayer` / `textLayer` — which center the font's
+    /// ascent/descent box — this centers the visible glyph, so the
     /// whole note (head *and* stem) straddles `centerY` instead of
     /// resting its head there with the stem poking above the text.
     ///
@@ -269,7 +269,7 @@ extension ScoreLayerBuilder {
         }
         let bbox = path.boundingBoxOfPath
         // CT Y-up → LayoutEngine Y-down: ink left edge at `x`, ink
-        // centre at `centerY`. `fillLayer` flips to the host
+        // center at `centerY`. `fillLayer` flips to the host
         // orientation afterwards.
         var t = CGAffineTransform(
             a: 1, b: 0, c: 0, d: -1,

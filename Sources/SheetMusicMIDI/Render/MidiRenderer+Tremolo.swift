@@ -134,7 +134,7 @@ extension MidiRenderer {
         localTick += chordTicks
     }
 
-    /// Lay down the note-on/off pairs for an expanded tremolo, honouring
+    /// Lay down the note-on/off pairs for an expanded tremolo, honoring
     /// ties so note-on/off counts stay balanced. A pitch tied INTO the
     /// chord (`tieBack`) skips its first-stroke attack — its sound
     /// continues from the preceding chord's still-open note-on. A pitch
@@ -144,7 +144,7 @@ extension MidiRenderer {
     /// governs the final release.
     ///
     /// Balance matters: an unmatched note-on (or note-off) left by an
-    /// unhonoured tie cascades through `resolveUnisonOverlap`'s FIFO
+    /// unhonored tie cascades through `resolveUnisonOverlap`'s FIFO
     /// note-on/off pairing and stretches a later same-pitch note across
     /// a rest gap into a stuck note. This mirrors the tie contract that
     /// `emitNoteEvents` enforces on the standard chord path.

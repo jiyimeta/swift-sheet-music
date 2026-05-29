@@ -41,7 +41,7 @@ struct MeterChangePreservesMeasureRestTests {
         }
 
         // Resolution check via the helper directly: we don't depend
-        // on the MIDI renderer to verify the model behaviour.
+        // on the MIDI renderer to verify the model behavior.
         let fourFour = makeScore(numerator: 4, denominator: 4)
         let threeFour = makeScore(numerator: 3, denominator: 4)
 

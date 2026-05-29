@@ -74,7 +74,7 @@ public final class LayoutCache: @unchecked Sendable {
     }
 
     /// One system's cached inputs and outputs. The cached `system`
-    /// is normalised to `origin.y == 0`; callers shift it to the
+    /// is normalized to `origin.y == 0`; callers shift it to the
     /// current packing Y when they consume the entry.
     struct SystemEntry {
         let inputs: SystemInputs

@@ -4,7 +4,7 @@ import SheetMusicCore
 
 extension MidiRenderer {
     /// Walk one voice across all measures producing notes + tempo/dynamic events.
-    /// Honours `<startRepeat>`/`<endRepeat>` repeat markers (via `playbackPlan`)
+    /// Honors `<startRepeat>`/`<endRepeat>` repeat markers (via `playbackPlan`)
     /// and `<MeasureRepeat>` group replay (via `resolvedVoice`). Volta-aware
     /// playback filtering is not yet implemented.
     static func renderVoice( // swiftlint:disable:this function_body_length cyclomatic_complexity
@@ -67,7 +67,7 @@ extension MidiRenderer {
 
             // When a new iteration loops back to original measure 0 (e.g. volta
             // playback returning to the top of the score), re-emit timeSig + reset
-            // tempo to default — matches MuseScore's exportmidi behaviour where
+            // tempo to default — matches MuseScore's exportmidi behavior where
             // each RepeatSegment whose first measure starts at tick 0 also emits
             // those meta events at its utick start. Loops that repeat a measure
             // mid-score (single-measure repeat) keep their existing state.
@@ -411,7 +411,7 @@ extension MidiRenderer {
     /// returns the **minimum** gateTime% among the candidates (matches
     /// MuseScore's `MidiArticulation::aggregateOf` — most-shortening
     /// wins). When no in-scope articulation is present, falls through
-    /// to `defaultArticulationGateTime(for:)` so existing behaviour is
+    /// to `defaultArticulationGateTime(for:)` so existing behavior is
     /// preserved. C++:
     ///   engraving/compat/midi/compatmidirender.cpp
     ///   `CompatMidiRender::collectMeasureEvents` — `articulationGateTime`.
@@ -445,7 +445,7 @@ extension MidiRenderer {
     /// among the candidates (matches MuseScore's
     /// `MidiArticulation::aggregateOf` — loudest wins). When no
     /// in-scope articulation is present, falls through to
-    /// `defaultArticulationVelocityScale(for:)` so existing behaviour
+    /// `defaultArticulationVelocityScale(for:)` so existing behavior
     /// is preserved. C++:
     ///   engraving/compat/midi/compatmidirender.cpp
     ///   `CompatMidiRender::collectMeasureEvents` — articulation velocity.

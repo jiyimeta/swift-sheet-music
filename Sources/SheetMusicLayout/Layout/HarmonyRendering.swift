@@ -14,17 +14,17 @@ public enum HarmonyRendering {
     ///   1. After an alphanumeric character, `b` / `bb` / `#` / `##`
     ///      become flat / double-flat / sharp / double-sharp glyphs.
     ///   2. For `.roman` / `.nashville`, a leading `b` / `#` (index 0)
-    ///      is also recognised as an accidental.
+    ///      is also recognized as an accidental.
     ///   3. Everything else (digits, slashes, parens, letters) stays
     ///      in a text run; consecutive text characters coalesce.
     public static func runs(
         for harmony: Harmony,
         metrics: StaffMetrics,
     ) -> [HarmonyRun] {
-        // Bravura registration (Apple) and CoreText serialisation are
+        // Bravura registration (Apple) and CoreText serialization are
         // handled by the `FontMetrics.provider` implementation: the
         // Apple provider's `init` triggers `BravuraFont.register` and
-        // serialises CT calls internally. The Stub provider on
+        // serializes CT calls internally. The Stub provider on
         // non-Apple hosts needs neither.
         let displayName = displayedName(for: harmony)
         let kindedSlices = parseSlices(
@@ -230,14 +230,14 @@ public enum HarmonyRendering {
     ///     row = floor(tpc / 7) - 2 → -2 / -1 / 0 / 1 / 2
     ///         (double-flat / flat / natural / sharp / double-sharp)
     ///     letter = tpc mod 7 → 0=F, 1=C, 2=G, 3=D, 4=A, 5=E, 6=B.
-    /// `tpc < 0` (TPC_INVALID) is normalised to `nil` at decode time
+    /// `tpc < 0` (TPC_INVALID) is normalized to `nil` at decode time
     /// and never reaches here.
     private static func tpcToText(_ tpc: Int) -> String {
         let letters: [Character] = ["F", "C", "G", "D", "A", "E", "B"]
         let letter = letters[((tpc % 7) + 7) % 7]
         // Floor division — Swift's `/` truncates toward zero, which
         // gives the wrong sign for negative TPCs. We never see
-        // negative TPCs in practice (decoder normalises -1 → nil),
+        // negative TPCs in practice (decoder normalizes -1 → nil),
         // but using floor keeps the math correct if someone ever
         // passes a raw value through.
         let row = Int((Double(tpc) / 7.0).rounded(.down)) - 2

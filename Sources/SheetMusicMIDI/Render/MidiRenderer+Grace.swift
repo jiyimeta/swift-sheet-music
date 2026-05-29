@@ -188,7 +188,7 @@ extension MidiRenderer {
             instrument: instrument,
         )
         if let arpeggio = chord.arpeggio {
-            // Keep arpeggio behaviour intact: same call as the
+            // Keep arpeggio behavior intact: same call as the
             // pre-grace path, just with the shifted onset / shortened
             // length. This preserves the existing arpeggio tests.
             let pairs = arpeggioNoteEvents(

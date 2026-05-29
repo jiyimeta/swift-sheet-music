@@ -84,8 +84,8 @@
             // (0.5 sp) produces once you add the glyph's half-height.
             for pitch in [83, 86, 89, 92, 95] {
                 let (tempo, note) = try #require(Self.tempoAndNoteY(forPitch: pitch))
-                // Tempo's centre Y must sit strictly above the notehead's
-                // centre Y, with at least 1 sp clearance. (Without the
+                // Tempo's center Y must sit strictly above the notehead's
+                // center Y, with at least 1 sp clearance. (Without the
                 // autoplace pass this gap is NEGATIVE — tempo Y > note Y.)
                 #expect(note - tempo > 7.0, "pitch=\(pitch) tempoY=\(tempo) noteY=\(note)")
             }

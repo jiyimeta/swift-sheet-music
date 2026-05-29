@@ -79,7 +79,7 @@ extension Harmony {
     }
 
     /// MuseScore writes `TPC_INVALID` (`-1`) when no root / bass is
-    /// resolved. Normalise to `nil` so downstream code never does
+    /// resolved. Normalize to `nil` so downstream code never does
     /// arithmetic on -1.
     private static func decodeTpc(_ raw: String?) -> Int? {
         guard let raw = raw?.trimmingCharacters(

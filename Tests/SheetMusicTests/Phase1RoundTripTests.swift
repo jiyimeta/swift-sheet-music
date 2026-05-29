@@ -8,7 +8,7 @@ import Testing
 /// (Task 1.2). Each test encodes an element with `visible == false`, re-parses
 /// the XML, and asserts the flag survives both directions of the round-trip.
 /// Tests also confirm the default (visible) omits the tag entirely, matching
-/// MuseScore's own serialisation behaviour.
+/// MuseScore's own serialization behavior.
 struct Phase1RoundTripTests {
     // MARK: - Dynamic
 

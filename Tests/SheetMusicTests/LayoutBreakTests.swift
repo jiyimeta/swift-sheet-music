@@ -107,11 +107,11 @@
             ) == false)
         }
 
-        /// `measureForcesLineBreak` honours `LayoutBreakPolicy`:
+        /// `measureForcesLineBreak` honors `LayoutBreakPolicy`:
         /// `.honor` keeps the existing line-or-page logic;
         /// `.ignoreSystemBreaks` only respects page breaks;
         /// `.ignoreAll` returns false unconditionally.
-        @Test func helperHonoursPolicy() {
+        @Test func helperHonorsPolicy() {
             guard #available(macOS 15.0, iOS 16.0, *) else { return }
             let mLine = Measure(voices: [], lineBreak: true)
             let mPage = Measure(voices: [], pageBreak: true)
@@ -383,11 +383,11 @@
             #expect(doc.systems.count == 3)
         }
 
-        /// `PagedScoreView.paginate` honours `<LayoutBreak>page` under
+        /// `PagedScoreView.paginate` honors `<LayoutBreak>page` under
         /// `.honor` (closing the page early) and ignores it under
         /// `.ignoreAll` (only vertical overflow closes pages).
         /// Mirrors spec test case 3.
-        @Test func paginateHonoursPolicy() {
+        @Test func paginateHonorsPolicy() {
             guard #available(macOS 15.0, iOS 16.0, *) else { return }
             /// Three lightweight systems, each 100 pt tall. Page height
             /// 1000 pt easily fits them all on one page — only a

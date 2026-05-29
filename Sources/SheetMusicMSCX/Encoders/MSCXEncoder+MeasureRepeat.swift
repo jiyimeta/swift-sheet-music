@@ -8,7 +8,7 @@ extension MeasureRepeat {
     /// `<MeasureRepeat><subtype>N</subtype>…</MeasureRepeat>` matching
     /// MuseScore 4's serialization, while v3 emits the legacy
     /// `<RepeatMeasure><linkedMain/>…</RepeatMeasure>` form that
-    /// MuseScore 3.6.2's reader recognises. Native MS3 treats the v4
+    /// MuseScore 3.6.2's reader recognizes. Native MS3 treats the v4
     /// element name as an unknown tag and skips the body, leaving the
     /// bar empty (`got 0/1`) and surfacing an "incomplete measure"
     /// diagnostic on file open. The duration is preserved in

@@ -26,7 +26,7 @@ public struct Harmony: Sendable, Equatable {
     public var offsetX: Double
     /// Author-supplied Y offset (spatium units, positive = down).
     public var offsetY: Double
-    /// Author-supplied colour (RGBA 0..255). Nil = inherit. Sugar over
+    /// Author-supplied color (RGBA 0..255). Nil = inherit. Sugar over
     /// `elementProperties.color` — the single source of truth shared
     /// with every engravable element.
     public var color: ScoreColor? {

@@ -21,7 +21,7 @@
             #expect(opts.channels == .stereo)
         }
 
-        @Test("Bare-case construction uses default-initialised payload")
+        @Test("Bare-case construction uses default-initialized payload")
         func bareCaseUsesDefaults() {
             let wav = AudioFileFormat.wav()
             if case let .wav(opts) = wav {

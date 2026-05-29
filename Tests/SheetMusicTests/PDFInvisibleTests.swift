@@ -6,7 +6,7 @@
 
     /// Asserts that PDF-style layout (showsInvisibleElements == false)
     /// never routes hidden annotations into `invisibleElements` — they
-    /// are simply dropped, so a PDF always reflects print behaviour.
+    /// are simply dropped, so a PDF always reflects print behavior.
     struct PDFInvisibleTests {
         private let _installApple = TestSupport.installApple
 

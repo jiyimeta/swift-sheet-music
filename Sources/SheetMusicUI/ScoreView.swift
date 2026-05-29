@@ -209,7 +209,7 @@ public struct ScoreView: View {
                         selection: selection,
                     )
                     .overlay(alignment: .topLeading) {
-                        // Horizontal mode honours no breaks at
+                        // Horizontal mode honors no breaks at
                         // layout time, but the indicator badges
                         // are still useful as authoring hints.
                         if options.breakIndicatorVisibility != .none {

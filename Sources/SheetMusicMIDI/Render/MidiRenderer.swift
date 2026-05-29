@@ -12,7 +12,7 @@ public enum MidiRenderer {
     /// Default tempo if the score has no Tempo markers (120 BPM = 500000 µs/quarter).
     static let defaultMicrosPerQuarter = 500_000
 
-    /// Render the given `Score` into a `MidiFile` ready for serialisation.
+    /// Render the given `Score` into a `MidiFile` ready for serialization.
     public static func render(score: Score) throws -> MidiFile {
         var tracks: [MidiTrack] = []
         let channelAssignments = assignChannels(score: score)

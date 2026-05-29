@@ -84,8 +84,8 @@
         }
 
         /// `.single` tremolo's `.single(center:)` anchor must place the
-        /// bar centre x at the stem x (notehead x + `sp * 0.59`, matching
-        /// `StemRenderer`'s `stemAttachDx`) so bars centre on the stem
+        /// bar center x at the stem x (notehead x + `sp * 0.59`, matching
+        /// `StemRenderer`'s `stemAttachDx`) so bars center on the stem
         /// rather than the notehead.
         @Test("Single tremolo anchor x is stem-x (notehead + sp*0.59) for stem-up")
         func single_anchor_x_is_stem_x_for_stem_up() {

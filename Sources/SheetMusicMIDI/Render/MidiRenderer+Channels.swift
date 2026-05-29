@@ -7,7 +7,7 @@ extension MidiRenderer {
     static let drumChannel = 9
 
     /// Assign a unique MIDI channel index to each `<Channel>` of every part.
-    /// - Explicit `<midiChannel>` is honoured.
+    /// - Explicit `<midiChannel>` is honored.
     /// - Drumset instruments (`<useDrumset>1</useDrumset>`) are auto-routed to
     ///   GM channel 10 (0-indexed: 9). Multiple drumset parts share that
     ///   channel — General MIDI percussion is keyed on note number, not part.

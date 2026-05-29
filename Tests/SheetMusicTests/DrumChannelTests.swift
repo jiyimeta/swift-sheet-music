@@ -71,7 +71,7 @@ struct DrumChannelTests {
 
     @Test func explicitMidiChannelOverridesDrumDefault() throws {
         // If the score author explicitly sets <midiChannel>5</midiChannel>
-        // we honour it even when useDrumset is true.
+        // we honor it even when useDrumset is true.
         let part = Self.makePart(useDrumset: true, channelOverride: 5)
         let score = Score(division: 480, parts: [part])
         let file = try MidiRenderer.render(score: score)
@@ -132,7 +132,7 @@ struct DrumChannelTests {
 
     @Test func multipleDrumParts_allShareChannel9() throws {
         // Two drum parts both go to channel 9. GM percussion is keyed on note
-        // number, not part — sharing the channel is the correct behaviour.
+        // number, not part — sharing the channel is the correct behavior.
         let drum1 = Self.makePart(useDrumset: true)
         let drum2 = Self.makePart(useDrumset: true)
         let score = Score(division: 480, parts: [drum1, drum2])

@@ -4,9 +4,9 @@ import Foundation
 import SheetMusicXMLTools
 import Testing
 
-/// Covers the `<color>` decode path that drives author-coloured
+/// Covers the `<color>` decode path that drives author-colored
 /// noteheads / rests / lyrics (the consolidated `ElementProperties.color`
-/// extension point). Rendering of these colours is verified visually.
+/// extension point). Rendering of these colors is verified visually.
 struct ElementColorTests {
     private func parse(_ xml: String) throws -> XMLTreeNode {
         try XMLTreeParser.parse(Data(xml.utf8))
@@ -30,7 +30,7 @@ struct ElementColorTests {
         )
     }
 
-    @Test func uncolouredNoteHasNilColor() throws {
+    @Test func uncoloredNoteHasNilColor() throws {
         let chord = try Chord.decode(parse("""
         <Chord>
           <durationType>quarter</durationType>

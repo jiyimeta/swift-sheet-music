@@ -29,7 +29,7 @@ extension LayoutEngine {
     /// Dynamic part-label width = max(measured label widths) +
     /// padding. `useLong` selects long instrument names (first
     /// system) vs short names (continuation systems). Mirrors
-    /// MuseScore's behaviour where the indent fits the longest
+    /// MuseScore's behavior where the indent fits the longest
     /// label in the active system rather than a fixed value.
     ///
     /// `bracketColumnCount` widens the gutter by one `sp` per
@@ -143,7 +143,7 @@ extension LayoutEngine {
     /// returns an even split so 8 measures between two breaks
     /// land as 4 + 4 instead of greedy 6 + 2. For longer spans,
     /// returns `Int.max` — letting the system packer fall back
-    /// to width-only greedy wrap, matching MuseScore's behaviour
+    /// to width-only greedy wrap, matching MuseScore's behavior
     /// for unbroken stretches.
     static func balancedMeasuresPerSystem(
         fromIndex startIdx: Int,

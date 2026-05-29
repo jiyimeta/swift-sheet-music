@@ -71,7 +71,7 @@ actor AudioFileExporter {
 
     /// Render `framesToRender` from `engine` (already in offline
     /// manual rendering mode) to `writer`, reporting progress
-    /// via `progress` and honouring cancellation.
+    /// via `progress` and honoring cancellation.
     ///
     /// `engine` and sequencer must already be primed by the
     /// caller. This method does NOT toggle manual rendering mode

@@ -131,7 +131,7 @@ public enum MSCZReader {
     /// useful preset in third-party SoundFonts (e.g. MuseScore_General
     /// has no preset at SF2 bank LSB 128). The mscx-declared channel
     /// (typically `<program value="0"/>` = GM Standard Drum Kit) is
-    /// the right fallback when the playback host can't honour MS
+    /// the right fallback when the playback host can't honor MS
     /// Basic's kit variants.
     private static func apply(
         _ settings: AudioSettings, to score: Score,

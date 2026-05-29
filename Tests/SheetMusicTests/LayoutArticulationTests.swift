@@ -70,7 +70,7 @@
             return (a, c)
         }
 
-        /// The Y at which the glyph's INK centre renders. `origin.y` is the
+        /// The Y at which the glyph's INK center renders. `origin.y` is the
         /// `.center` (typographic-frame) anchor; the layout shifts it inward by
         /// `ArticulationGlyphMetrics.inkCenterOffset` so the rendered ink lands
         /// on the intended reference. Tests assert against the rendered ink.
@@ -293,8 +293,8 @@
             ))
             guard let measure = doc.systems.first?.measures.first
             else { Issue.record("no measure"); return }
-            // Rendered ink centres stack exactly 1 sp apart (MuseScore stacks
-            // the bbox centres, so per-glyph ink offsets must not skew it).
+            // Rendered ink centers stack exactly 1 sp apart (MuseScore stacks
+            // the bbox centers, so per-glyph ink offsets must not skew it).
             let inkYs = measure.elements.compactMap { el in
                 Self.renderedInkY(el, sp: doc.metrics.sp)
             }

@@ -21,7 +21,7 @@ extension PDFImporter {
     ) -> BarLine {
         _ = measureXRange // reserved: future "barline belongs to which side" disambiguation
         let primaryX = primary.rect.midX
-        let neighbours = paths.filter {
+        let neighbors = paths.filter {
             $0.kind == .vertical
                 && $0.rect != primary.rect
                 && abs($0.rect.midX - primaryX) <= 6
@@ -33,7 +33,7 @@ extension PDFImporter {
         }
         if dotsRight > 0 { return BarLine(subtype: "start-repeat") }
         if dotsLeft > 0 { return BarLine(subtype: "end-repeat") }
-        return classifyByVerticals(primary: primary, neighbours: neighbours)
+        return classifyByVerticals(primary: primary, neighbors: neighbors)
     }
 
     private enum RepeatDotsSide { case left, right }
@@ -55,9 +55,9 @@ extension PDFImporter {
 
     private static func classifyByVerticals(
         primary: PathSegment,
-        neighbours: [PathSegment],
+        neighbors: [PathSegment],
     ) -> BarLine {
-        guard let other = neighbours.first else {
+        guard let other = neighbors.first else {
             // Single vertical: a thick line on its own is a final-style
             // ending (rare in MuseScore output but observed). Default
             // (nil) covers the common single barline.
@@ -107,10 +107,10 @@ extension PDFImporter {
         texts: [TextGlyph],
     ) -> (measureIndex: Int, spanner: Spanner)? {
         let covered = measures.filter { m in
-            // A measure is "covered" when its xRange centre lies
+            // A measure is "covered" when its xRange center lies
             // inside the rectangle's x-extent.
-            let centre = (m.xRange.lowerBound + m.xRange.upperBound) / 2
-            return rect.rect.minX <= centre && centre <= rect.rect.maxX
+            let center = (m.xRange.lowerBound + m.xRange.upperBound) / 2
+            return rect.rect.minX <= center && center <= rect.rect.maxX
         }
         guard let first = covered.first, let last = covered.last else { return nil }
         let inside = texts.filter { rect.rect.intersects($0.bbox) }
@@ -177,12 +177,12 @@ extension PDFImporter {
         guard inside.count == 1 else { return nil }
         let stripped = inside[0].text.trimmingCharacters(in: .whitespaces)
         guard isRehearsalLabel(stripped) else { return nil }
-        let centre = box.rect.midX
+        let center = box.rect.midX
         guard let owner = measures.first(where: { m in
-            m.xRange.contains(centre)
+            m.xRange.contains(center)
         }) ?? measures.min(by: {
-            abs(($0.xRange.lowerBound + $0.xRange.upperBound) / 2 - centre)
-                < abs(($1.xRange.lowerBound + $1.xRange.upperBound) / 2 - centre)
+            abs(($0.xRange.lowerBound + $0.xRange.upperBound) / 2 - center)
+                < abs(($1.xRange.lowerBound + $1.xRange.upperBound) / 2 - center)
         }) else { return nil }
         return (owner.index, RehearsalMark(text: stripped))
     }

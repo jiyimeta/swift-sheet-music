@@ -3,7 +3,7 @@ import SheetMusicCore
 import SheetMusicXMLTools
 
 extension ScoreStyle {
-    /// Parse a `<Style>` element. Permissive — unrecognised children
+    /// Parse a `<Style>` element. Permissive — unrecognized children
     /// are silently ignored, matching the existing
     /// `MSCXDecoder+Voice` convention. Returns the MuseScore default
     /// for any field the XML does not specify.
@@ -25,7 +25,7 @@ extension ScoreStyle {
 }
 
 /// Parse the four `<{role}Align>` children that the `<VBox>` title
-/// block honours. Each holds the MuseScore `"horiz,vert"` form
+/// block honors. Each holds the MuseScore `"horiz,vert"` form
 /// (e.g. `"center,bottom"`). `nil` is preserved for fields the
 /// score did not override, so encoders can elide them.
 private func decodeTitleBlockAlign(

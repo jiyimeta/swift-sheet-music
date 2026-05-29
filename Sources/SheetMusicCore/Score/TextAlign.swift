@@ -2,7 +2,7 @@ import Foundation
 
 /// Two-axis alignment for a text element. Mirrors MuseScore's
 /// `mu::engraving::Align` (`engraving/types/types.h`), which is
-/// stored as a `(AlignH, AlignV)` pair and serialised in MSCX as
+/// stored as a `(AlignH, AlignV)` pair and serialized in MSCX as
 /// `"horizontal,vertical"` (e.g. `"center,bottom"`).
 public struct TextAlign: Sendable, Equatable, Hashable {
     public enum Horizontal: String, Sendable, Equatable, Hashable {
@@ -44,7 +44,7 @@ public struct TextAlign: Sendable, Equatable, Hashable {
         self.init(horizontal: hh, vertical: vv)
     }
 
-    /// MSCX serialisation. `center` is emitted as `"center"` (not
+    /// MSCX serialization. `center` is emitted as `"center"` (not
     /// `"hcenter"` / `"vcenter"`) — MuseScore Studio 4 accepts both
     /// but writes the short form.
     public var mscxString: String {

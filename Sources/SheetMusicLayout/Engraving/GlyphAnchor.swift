@@ -9,11 +9,11 @@ import Foundation
 ///
 /// `LayoutEngine` emits glyph origins assuming Apple's
 /// `context.draw(resolved, at:, anchor: .center)` semantics. SwiftUI
-/// centres the **typographic frame** (advance × line-height built from
+/// centers the **typographic frame** (advance × line-height built from
 /// the font's ascent/descent) on the anchor point — NOT the ink-path
 /// bbox. For Bravura specifically, `CTFontGetAscent` and
 /// `CTFontGetDescent` are symmetric (≈ 2 em each), so the typographic
-/// frame's vertical centre coincides with the baseline:
+/// frame's vertical center coincides with the baseline:
 ///
 ///     leading.x  = center.x - advance / 2
 ///     baseline.y = center.y   // Bravura: (ascent − descent) / 2 == 0

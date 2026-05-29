@@ -42,7 +42,7 @@ public enum TupletBracketGeometry {
         public let labelCenter: CGPoint
     }
 
-    /// Compute the four bracket segments + the label centre for a
+    /// Compute the four bracket segments + the label center for a
     /// tuplet whose horizontal span is `from → to`. The hook descent
     /// flips sign based on whether the bracket is drawn above or below
     /// the staff.

@@ -69,7 +69,7 @@ extension Spanner {
     ///
     /// On the begin-side, MuseScore stores `<visible>0</visible>` on
     /// the inner subtype child (not on the `<Spanner>` wrapper). We
-    /// honour either location and treat any `0` as hidden.
+    /// honor either location and treat any `0` as hidden.
     private static func decodeVisible(_ node: XMLTreeNode) -> Bool {
         if (node.first("visible")?.text ?? "1") == "0" { return false }
         var hasPayload = false

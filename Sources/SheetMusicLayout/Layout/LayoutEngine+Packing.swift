@@ -362,7 +362,7 @@ extension LayoutEngine {
 
     /// Resolve each staff's starting-of-score default clef from the
     /// part's declarations.  Mirrors the logic used previously inside
-    /// `buildSystem`; factored out so `packSystems` can initialise the
+    /// `buildSystem`; factored out so `packSystems` can initialize the
     /// clef carry-over state before entering the system loop.
     ///
     /// Previously used a flat staff index to look up the part, which
@@ -386,7 +386,7 @@ extension LayoutEngine {
     /// Build a `LayoutCache.SystemInputs` snapshot for the given
     /// system. The snapshot is the cache-hit predicate — every input
     /// that affects `buildSystem` output (apart from `systemOriginY`,
-    /// which is normalised away) must appear here.
+    /// which is normalized away) must appear here.
     static func systemInputs(
         measureStart: Int,
         measureCount: Int,

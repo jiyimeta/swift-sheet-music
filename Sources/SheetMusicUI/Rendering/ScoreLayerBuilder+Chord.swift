@@ -47,8 +47,8 @@ extension ScoreLayerBuilder {
                 color: n.color,
             )
         }
-        // Stem / flag inherit the chord's notehead colour (first
-        // coloured note wins) — MuseScore stores `<Stem>/<Hook>` colour
+        // Stem / flag inherit the chord's notehead color (first
+        // colored note wins) — MuseScore stores `<Stem>/<Hook>` color
         // separately but in practice it matches the note.
         let stemColor: CGColor = shifted.compactMap(\.color).first
             .map(scoreColorToCGColor) ?? inkColor
@@ -56,7 +56,7 @@ extension ScoreLayerBuilder {
         // beams drawn by later elements) render ON TOP of them — the
         // ledger sits visually behind the chord's ink. A ledger attached
         // to a hidden notehead follows the notehead's visibility: skip at
-        // toggle-off, grey at 50% at toggle-on.
+        // toggle-off, gray at 50% at toggle-on.
         let visibleLedgerNotes = shifted.filter { !$0.isInvisible }
         let invisibleLedgerNotes = shifted.filter(\.isInvisible)
         drawLedgerLines(
@@ -66,14 +66,14 @@ extension ScoreLayerBuilder {
         if !invisibleLedgerNotes.isEmpty, context.showsInvisibleElements {
             // MuseScore invisibleColor() = #808080; 50% black on
             // white is the equivalent.
-            let greyGroup = CALayer()
-            greyGroup.frame = parent.bounds
-            greyGroup.opacity = 0.5
-            greyGroup.masksToBounds = false
-            parent.addSublayer(greyGroup)
+            let grayGroup = CALayer()
+            grayGroup.frame = parent.bounds
+            grayGroup.opacity = 0.5
+            grayGroup.masksToBounds = false
+            parent.addSublayer(grayGroup)
             drawLedgerLines(
                 notes: invisibleLedgerNotes, stem: stem, metrics: metrics,
-                height: height, into: greyGroup,
+                height: height, into: grayGroup,
             )
         }
         for n in shifted {
@@ -81,7 +81,7 @@ extension ScoreLayerBuilder {
                 for: baseDur, headType: n.headType,
             )
             // Mirrored seconds: notehead, accidental and dots track
-            // the visual centre, while ledger lines + stem stay on
+            // the visual center, while ledger lines + stem stay on
             // the chord's natural anchor x.
             let mirrorDx = n.mirrorDx(stem: stem, sp: metrics.sp)
             let visualOrigin = CGPoint(
@@ -98,12 +98,12 @@ extension ScoreLayerBuilder {
             let noteTarget: CALayer
             if n.isInvisible {
                 guard context.showsInvisibleElements else { continue }
-                let greyGroup = CALayer()
-                greyGroup.frame = parent.bounds
-                greyGroup.opacity = 0.5
-                greyGroup.masksToBounds = false
-                parent.addSublayer(greyGroup)
-                noteTarget = greyGroup
+                let grayGroup = CALayer()
+                grayGroup.frame = parent.bounds
+                grayGroup.opacity = 0.5
+                grayGroup.masksToBounds = false
+                parent.addSublayer(grayGroup)
+                noteTarget = grayGroup
             } else {
                 noteTarget = parent
             }
@@ -158,23 +158,23 @@ extension ScoreLayerBuilder {
         // Stem visibility (MSCX `<Stem><visible>`) is independent of
         // notehead visibility. When the stem is hidden:
         //   * toggle off → skip stem + flag entirely.
-        //   * toggle on  → grey both at 50% via a child layer group.
+        //   * toggle on  → gray both at 50% via a child layer group.
         // Beam suppression on hidden-stem chords is a separate concern.
         if stemIsInvisible {
             if context.showsInvisibleElements {
                 // MuseScore invisibleColor() = #808080; 50% black on
                 // white is the equivalent.
-                let greyGroup = CALayer()
-                greyGroup.frame = parent.bounds
-                greyGroup.opacity = 0.5
-                greyGroup.masksToBounds = false
-                parent.addSublayer(greyGroup)
+                let grayGroup = CALayer()
+                grayGroup.frame = parent.bounds
+                grayGroup.opacity = 0.5
+                grayGroup.masksToBounds = false
+                parent.addSublayer(grayGroup)
                 drawStem(
                     notes: shifted, direction: stem, duration: baseDur,
                     isBeamed: isBeamed, beamY: beamY,
                     stemExtension: dotOnLineExtension + tremoloStemExtension,
                     color: stemColor,
-                    metrics: metrics, height: height, into: greyGroup,
+                    metrics: metrics, height: height, into: grayGroup,
                 )
             }
         } else {
@@ -379,8 +379,8 @@ extension ScoreLayerBuilder {
         //
         // For Bravura's noteheadBlack at `.center`-anchored (glyph
         // width 1.18 sp, so bbox right = 0.59 sp from notehead
-        // centre), the stem's far edge sits at ±0.59 sp from centre,
-        // giving a stem centre offset of 0.59 sp - stemWidth/2.
+        // center), the stem's far edge sits at ±0.59 sp from center,
+        // giving a stem center offset of 0.59 sp - stemWidth/2.
         let stemAttachDx = metrics.sp * 0.59 - metrics.stemThickness / 2
         let xMin = xs.min() ?? 0
         let xMax = xs.max() ?? 0
