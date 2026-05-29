@@ -27,7 +27,6 @@ struct MSCXDiagnosticsTests {
         let url = Bundle.module.url(
             forResource: "diagnostics-tremolo-unknown-subtype",
             withExtension: "mscx",
-            subdirectory: "own",
         )
         #expect(url != nil)
     }
@@ -36,7 +35,6 @@ struct MSCXDiagnosticsTests {
         let url = try #require(Bundle.module.url(
             forResource: "diagnostics-tremolo-unknown-subtype",
             withExtension: "mscx",
-            subdirectory: "own",
         ))
         let result = try MSCXParser.parseWithDiagnostics(contentsOf: url)
 
@@ -79,7 +77,6 @@ struct MSCXDiagnosticsTests {
         let url = try #require(Bundle.module.url(
             forResource: "diagnostics-tremolo-unknown-subtype",
             withExtension: "mscx",
-            subdirectory: "own",
         ))
         let score = try MSCXParser.parse(contentsOf: url)
         #expect(score.parts.count == 1)
@@ -94,7 +91,6 @@ struct MSCXDiagnosticsTests {
         let url = try #require(Bundle.module.url(
             forResource: "diagnostics-tremolo-unknown-subtype",
             withExtension: "mscx",
-            subdirectory: "own",
         ))
         var xml = try String(contentsOf: url, encoding: .utf8)
         xml = xml.replacingOccurrences(
@@ -116,7 +112,6 @@ struct MSCXDiagnosticsTests {
         let url = try #require(Bundle.module.url(
             forResource: "diagnostics-tremolo-unknown-subtype",
             withExtension: "mscx",
-            subdirectory: "own",
         ))
         let result = try MSCXParser.parseWithDiagnostics(contentsOf: url)
         for d in result.diagnostics {
