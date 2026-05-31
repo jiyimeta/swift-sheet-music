@@ -71,32 +71,11 @@ extension MidiRenderer {
 
     // MARK: - Ease-in / ease-out timing (cubic Bezier)
 
-    /// Returns `segments + 1` monotonically increasing tick offsets from 0 to
-    /// `duration`, distributed according to the Bezier transfer curve defined
-    /// by `easeIn`/`easeOut` (percent values 0…100). When both are 0 the
-    /// distribution is linear. Mirrors `EaseInOut::timeList` in
-    /// `dom/easeInOut.cpp:112`.
-    static func easeTimeList(
-        segments: Int, duration: Int, easeIn: Int, easeOut: Int,
-    ) -> [Int] {
-        precondition(segments >= 1, "segments must be ≥ 1")
-        let n = Double(segments)
-        let space = Double(duration)
-        let eIn = Double(max(0, min(100, easeIn))) / 100.0
-        let eOut = Double(max(0, min(100, easeOut))) / 100.0
-        var result: [Int] = []
-        result.reserveCapacity(segments + 1)
-        for i in 0 ... segments {
-            let y = Double(i) / n
-            let x = (eIn < 1e-9 && eOut < 1e-9) ? y : xFromYBezier(y, easeIn: eIn, easeOut: eOut)
-            result.append(Int((x * space).rounded()))
-        }
-        return result
-    }
-
     /// Cubic Bezier transfer with endpoints (0,0),(1,1) and controls
     /// (easeIn, 0),(1-easeOut, 1). Given Y returns X. Mirrors MuseScore's
-    /// `tFromY` + X(t) composition in `dom/easeInOut.cpp:103`.
+    /// `tFromY` + X(t) composition in `dom/easeInOut.cpp:103`. Used by the
+    /// portamento pitch-bend ramp (`renderPortamento`); the discrete glissando
+    /// renderer distributes its steps uniformly and does not consult it.
     static func xFromYBezier(_ y: Double, easeIn: Double, easeOut: Double) -> Double {
         let clamped = max(0, min(1, y))
         // Y(t) = 3*(1-t)*t² + t³; closed-form solve via trig identity.

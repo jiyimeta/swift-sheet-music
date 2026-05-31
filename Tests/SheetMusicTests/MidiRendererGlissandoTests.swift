@@ -8,8 +8,10 @@ import Testing
 /// Verifies Glissando rendering to MIDI. Every `Glissando.Style` is covered:
 ///   - chromatic, whiteKeys, blackKeys, diatonic (discrete note sweeps);
 ///   - portamento (continuous pitch-bend ramp).
-/// The renderer devotes ~33% of the start chord to the sweep and the leading
-/// 67% to the held start pitch, matching MuseScore's `compatmidirender.cpp`.
+/// Discrete sweeps mirror MuseScore 4's playback engine
+/// (`glissandosrenderer.cpp`): the whole start chord is split into equal steps
+/// that begin at note onset — NOT the legacy `compatmidirender.cpp` export
+/// behavior that held the start pitch for ~67% then swept the final ~33%.
 struct MidiRendererGlissandoTests {
     // MARK: - Fixtures
 
@@ -63,8 +65,11 @@ struct MidiRendererGlissandoTests {
     // MARK: - Discrete rendering
 
     @Test func chromaticGlissando_emitsAllIntermediatePitches() throws {
-        // 60 → 64 over a quarter note (480 ticks). Held portion ≈ 67%,
-        // sweep ≈ 33% hosting pitches [60, 61, 62, 63]. End 64 plays next.
+        // 60 → 64 over a quarter note (480 ticks). MuseScore 4's playback
+        // engine (`glissandosrenderer.cpp::renderDiscreteGlissando`) divides
+        // the WHOLE note into equal steps that begin at note onset:
+        // steps [60, 61, 62, 63] each occupy 480/4 = 120 ticks. End 64 plays
+        // as the next chord.
         let start = Chord(
             duration: .quarter,
             notes: [Note(pitch: 60, tpc: 14, glissando: Glissando(style: .chromatic))],
@@ -76,10 +81,11 @@ struct MidiRendererGlissandoTests {
         let ons = Self.noteOns(in: track)
         let pitches = ons.map(\.pitch)
         #expect(pitches == [60, 61, 62, 63, 64])
-        // Held portion occupies 67% of 480 = ~321 ticks; first intermediate
-        // (pitch 61) kicks in right after.
+        // Equal steps from the very start of the note: 0, 120, 240, 360.
         #expect(ons[0].tick == 0)
-        #expect(ons[1].tick >= 300 && ons[1].tick <= 340)
+        #expect(ons[1].tick == 120)
+        #expect(ons[2].tick == 240)
+        #expect(ons[3].tick == 360)
         #expect(ons[4].tick == 480) // end chord plays on time
         Self.assertBalancedNoteEvents(track: track)
     }
@@ -148,6 +154,29 @@ struct MidiRendererGlissandoTests {
         Self.assertBalancedNoteEvents(track: track)
     }
 
+    @Test func discreteGlissando_tooShortForAllSteps_playsStartNoteNormally() throws {
+        // When the chord is too short to host one tick per step, the equal-step
+        // split would collide boundaries and emit note-offs before their
+        // note-ons. Guard by falling back to the held start pitch for the whole
+        // note (no sweep), keeping the MIDI well-formed. division 12 → quarter
+        // note is 12 ticks; a 60 → 79 chromatic gliss needs 19 steps > 12.
+        let start = Chord(
+            duration: .quarter,
+            notes: [Note(pitch: 60, tpc: 14, glissando: Glissando(style: .chromatic))],
+        )
+        let end = Chord(duration: .quarter, notes: [Note(pitch: 79, tpc: 14)])
+        let file = try MidiRenderer.render(
+            score: Self.makeScore(division: 12, chords: [start, end]),
+        )
+        let track = try #require(file.tracks.first)
+
+        let ons = Self.noteOns(in: track)
+        // Only the held start pitch (60) and the end chord (79) — no sweep.
+        #expect(ons.map(\.pitch) == [60, 79])
+        #expect(ons[0].tick == 0)
+        Self.assertBalancedNoteEvents(track: track)
+    }
+
     @Test func glissandoWithNoFollowingChord_playsStartNoteNormally() throws {
         // No end chord means no end pitch → renderer falls back to normal note.
         let lone = Chord(
@@ -163,19 +192,20 @@ struct MidiRendererGlissandoTests {
         Self.assertBalancedNoteEvents(track: track)
     }
 
-    @Test func easeCurve_nonZero_shiftsSweepTiming() throws {
-        // With easeIn=0/easeOut=0 the sweep is evenly spaced. A strong easeIn
-        // bunches the early part of the sweep so later pitches fire SOONER
-        // after the sweep starts (they're compressed toward the beginning).
-        // We assert that the last intermediate pitch's on-tick arrives earlier
-        // when ease-in is applied.
-        let division = 1920 // bigger division amplifies sub-tick differences
-        func sweepOnTicks(easeIn: Int) throws -> [Int] {
+    @Test func discreteGlissando_ignoresEaseCurve() throws {
+        // MuseScore 4's playback renderer distributes discrete-glissando steps
+        // uniformly and never consults easeIn/easeOut (the ease curve only
+        // shaped the legacy compatmidirender export sweep). So the step onsets
+        // must be identical regardless of the ease values. 60 → 66 chromatic
+        // over a quarter note at division 1920: steps [60…65], each 1920/6 =
+        // 320 ticks → onsets 0, 320, 640, 960, 1280, 1600.
+        let division = 1920
+        func sweepOnTicks(easeIn: Int, easeOut: Int) throws -> [Int] {
             let start = Chord(
                 duration: .quarter,
                 notes: [Note(
                     pitch: 60, tpc: 14,
-                    glissando: Glissando(style: .chromatic, easeIn: easeIn, easeOut: 0),
+                    glissando: Glissando(style: .chromatic, easeIn: easeIn, easeOut: easeOut),
                 )],
             )
             let end = Chord(duration: .quarter, notes: [Note(pitch: 66, tpc: 14)])
@@ -186,18 +216,10 @@ struct MidiRendererGlissandoTests {
                 .filter { $0.pitch < 66 } // drop the final chord
                 .map(\.tick)
         }
-        let linear = try sweepOnTicks(easeIn: 0)
-        let eased = try sweepOnTicks(easeIn: 100)
-        #expect(linear.count == 6)
-        #expect(eased.count == 6)
-        // Both share tick[0]=0 (held-pitch start) and tick[1]=heldDuration.
-        #expect(linear[0] == 0 && eased[0] == 0)
-        #expect(linear[1] == eased[1])
-        // With max easeIn, indices 2…5 are pulled earlier than linear — their
-        // event separations are compressed toward the sweep's start.
-        for i in 2 ..< linear.count {
-            #expect(eased[i] < linear[i], "index \(i): eased=\(eased[i]) linear=\(linear[i])")
-        }
+        let linear = try sweepOnTicks(easeIn: 0, easeOut: 0)
+        let eased = try sweepOnTicks(easeIn: 100, easeOut: 100)
+        #expect(linear == [0, 320, 640, 960, 1280, 1600])
+        #expect(eased == linear) // ease values have no effect on discrete steps
     }
 
     // MARK: - Portamento
