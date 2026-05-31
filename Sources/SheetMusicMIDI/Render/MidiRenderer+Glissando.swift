@@ -56,6 +56,19 @@ extension MidiRenderer {
     // MARK: - Discrete glissando (chromatic / whiteKeys / blackKeys / diatonic)
 
     // swiftlint:disable:next function_parameter_count
+    /// Mirrors `GlissandosRenderer::renderDiscreteGlissando` in MuseScore 4's
+    /// playback engine (`engraving/playback/renderers/glissandosrenderer.cpp`).
+    /// The WHOLE start-chord duration is split into `stepsCount` equal slices —
+    /// one per pitch step — and the sweep begins at note onset (step 0 is the
+    /// start pitch). This is deliberately the *playback* algorithm, not the
+    /// older `compatmidirender.cpp` MIDI-export one (which held the start pitch
+    /// for ~67% then crammed the sweep into the final ~33%): MuseScore's audible
+    /// playback walks the staircase across the entire note. The end pitch itself
+    /// plays as the NEXT chord in the voice, not here.
+    ///
+    /// `easeIn` / `easeOut` are intentionally ignored: the playback renderer
+    /// distributes the steps uniformly and does not consult the ease curve
+    /// (that curve only shaped `compatmidirender`'s trailing sweep).
     static func renderDiscreteGlissando(
         glissando: Glissando,
         startPitch: Int,
@@ -74,15 +87,14 @@ extension MidiRenderer {
             endPitch: endPitch, keySignature: keySignature,
         )
         let body = offsets.isEmpty ? [0] : offsets
-        let b = body.count
+        let stepsCount = body.count
 
-        // MuseScore reserves 33% of the chord for the sweep; the held start
-        // pitch occupies the other 67% (compatmidirender.cpp:818).
-        let glissandoDuration = durationTicks * 33 / 100
-        let heldDuration = durationTicks - glissandoDuration
-
-        guard b >= 2, glissandoDuration >= b else {
-            // Not enough material for a sweep — emit the start pitch normally.
+        // Too short to give every step its own tick: equal-width boundaries
+        // would collide and emit note-offs before their note-ons. Fall back to
+        // holding the start pitch for the whole note (no sweep) so the MIDI
+        // stays well-formed. Only triggers for extreme low-division / long-span
+        // cases; normal scores have durationTicks ≫ stepsCount.
+        guard durationTicks >= stepsCount else {
             if !suppressStartOn {
                 events.append(TimedMidiEvent(
                     tick: startTick,
@@ -98,37 +110,33 @@ extension MidiRenderer {
             return
         }
 
-        var times = easeTimeList(
-            segments: b - 1, duration: glissandoDuration,
-            easeIn: glissando.easeIn, easeOut: glissando.easeOut,
-        )
-        // Shift indices 1… to place the sweep inside the trailing glissando
-        // portion (the held portion consumes times[0…1]).
-        let originalTimesOne = times[1]
-        for i in 1 ..< times.count {
-            times[i] += heldDuration - originalTimesOne
+        /// Equal-width step boundaries across the whole duration. Rounding each
+        /// boundary independently (rather than accumulating a per-step width)
+        /// keeps the steps evenly spaced and the final boundary exactly at
+        /// `durationTicks`, so the last step releases right before the next chord.
+        func boundary(_ k: Int) -> Int {
+            Int((Double(k) * Double(durationTicks) / Double(stepsCount)).rounded())
         }
 
-        for i in 0 ..< b {
+        for i in 0 ..< stepsCount {
             let pitch = startPitch + body[i]
-            let onTick = startTick + times[i]
-            let offTick = (i + 1 < b) ? startTick + times[i + 1] - 1 : startTick + durationTicks - 1
-            // Suppress only the held start pitch's note-on (i==0) when the
-            // glissando-bearing note ties back to a still-sounding predecessor.
-            // We keep its note-off so the held pitch is released cleanly before
-            // the sweep takes over (the sweep pitches at i>0 are different
-            // pitch numbers, so no MIDI key collision). Sweep pitches always emit.
+            let onTick = startTick + boundary(i)
+            let offTick = startTick + boundary(i + 1) - 1
+            // Suppress only the start pitch's note-on (i==0) when the glissando
+            // note ties back to a still-sounding predecessor. We keep its
+            // note-off so the held pitch is released cleanly before the sweep
+            // takes over (steps at i>0 are different pitch numbers, so no MIDI
+            // key collision). Later steps always emit.
             if !(i == 0 && suppressStartOn) {
                 events.append(TimedMidiEvent(
                     tick: onTick,
                     event: .noteOn(channel: channel, pitch: pitch, velocity: velocity),
                 ))
             }
-            // Suppress the very last sweep pitch's note-off only when the note
-            // ties forward AND that pitch coincides with the next chord's first
-            // note — otherwise the discrete sweep ends here. This is rare but
-            // harmless to honor.
-            let suppressOff = (i == b - 1) && suppressFinalOff
+            // Suppress the very last step's note-off only when the note ties
+            // forward AND that pitch coincides with the next chord's first note
+            // — otherwise the discrete sweep ends here. Rare but harmless.
+            let suppressOff = (i == stepsCount - 1) && suppressFinalOff
             if !suppressOff {
                 events.append(TimedMidiEvent(
                     tick: offTick,
