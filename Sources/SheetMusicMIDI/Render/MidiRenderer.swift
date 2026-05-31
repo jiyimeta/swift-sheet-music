@@ -14,6 +14,10 @@ public enum MidiRenderer {
 
     /// Render the given `Score` into a `MidiFile` ready for serialization.
     public static func render(score: Score) throws -> MidiFile {
+        // Hold each tie chain at its head note's sounding pitch so a tie
+        // whose endpoints differ in pitch (e.g. C♯ tied across a key change
+        // into an invisible C-double-sharp) doesn't leave a stuck note.
+        let score = resolvingTiedPitches(in: score)
         var tracks: [MidiTrack] = []
         let channelAssignments = assignChannels(score: score)
         var trackIndex = 0
