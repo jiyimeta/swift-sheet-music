@@ -17,19 +17,52 @@ on:
       - 'Tests/SheetMusicTests/Resources/Golden/Audio/**'
       - '.github/workflows/android-audio.yml'
 
+# The Android Gradle build pulls the wirelet code generator from two private
+# sources, both under github.com/jiyimeta/swift-wirelet:
+#   1. The `io.github.jiyimeta.wirelet` Gradle plugin from GitHub Packages
+#      (maven.pkg.github.com) — authenticated via GITHUB_ACTOR/GITHUB_TOKEN.
+#   2. The Swift package itself, declared in Package.swift via the SSH URL
+#      git@github.com:jiyimeta/swift-wirelet.git — `swift package resolve`
+#      clones it into .build/checkouts/swift-wirelet, which the plugin then
+#      runs via `swift run` to generate Kotlin codecs.
+# Both are served by a single classic PAT stored as the WIRELET_PAT secret
+# (scopes: repo + read:packages). The git insteadOf rewrite below lets the
+# SSH-form dependency clone over HTTPS with that PAT.
+env:
+  WIRELET_PAT: ${{ secrets.WIRELET_PAT }}
+
 jobs:
   kotlin-unit-tests:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+
+      - name: Authenticate git for the private swift-wirelet dependency
+        run: |
+          git config --global \
+            url."https://x-access-token:${WIRELET_PAT}@github.com/".insteadOf \
+            "git@github.com:"
+
+      - uses: swift-actions/setup-swift@v2
+        with:
+          swift-version: "6.3.2"
+
+      - name: Resolve SwiftPM dependencies (populates .build/checkouts/swift-wirelet)
+        run: swift package resolve
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 17
+
       - uses: gradle/actions/setup-gradle@v3
+
       - name: Run Kotlin unit tests
         working-directory: Android
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.WIRELET_PAT }}
         run: ./gradlew :SheetMusicAudioAndroid:testDebugUnitTest --info
       - name: Upload test reports on failure
         if: failure()
@@ -41,9 +74,23 @@ jobs:
 
   android-assemble:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
+
+      - name: Authenticate git for the private swift-wirelet dependency
+        run: |
+          git config --global \
+            url."https://x-access-token:${WIRELET_PAT}@github.com/".insteadOf \
+            "git@github.com:"
+
+      - uses: swift-actions/setup-swift@v2
+        with:
+          swift-version: "6.3.2"
+
+      - name: Resolve SwiftPM dependencies (populates .build/checkouts/swift-wirelet)
+        run: swift package resolve
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -55,6 +102,9 @@ jobs:
       - uses: gradle/actions/setup-gradle@v3
       - name: Assemble release AAR
         working-directory: Android
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.WIRELET_PAT }}
         run: ./gradlew :SheetMusicAudioAndroid:assembleRelease
       - name: Upload AAR artifact
         uses: actions/upload-artifact@v4
