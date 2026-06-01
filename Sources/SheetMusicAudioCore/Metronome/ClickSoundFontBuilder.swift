@@ -154,7 +154,7 @@ public enum ClickSoundFontBuilder {
         return w.data
     }
 
-    /// 4-byte modulator: a single all-zero terminal record (no modulators).
+    /// 10-byte modulator: a single all-zero terminal record (no modulators).
     private static func terminalMOD() -> Data {
         Data(repeating: 0, count: 10)
     }
