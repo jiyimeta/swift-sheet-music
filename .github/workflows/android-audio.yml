@@ -44,9 +44,15 @@ jobs:
             url."https://x-access-token:${WIRELET_PAT}@github.com/".insteadOf \
             "git@github.com:"
 
-      - uses: swift-actions/setup-swift@v2
-        with:
-          swift-version: "6.3.2"
+      - name: Install Swift 6.3.2 via swiftly
+        run: |
+          curl -fsSL "https://download.swift.org/swiftly/linux/swiftly-$(uname -m).tar.gz" -o swiftly.tar.gz
+          tar zxf swiftly.tar.gz
+          ./swiftly init --assume-yes --skip-install --no-modify-profile --quiet-shell-followup
+          . "$HOME/.local/share/swiftly/env.sh"
+          swiftly install 6.3.2 --use --assume-yes
+          echo "$HOME/.local/share/swiftly/bin" >> "$GITHUB_PATH"
+          swift --version
 
       - name: Resolve SwiftPM dependencies (populates .build/checkouts/swift-wirelet)
         run: swift package resolve
@@ -84,9 +90,15 @@ jobs:
             url."https://x-access-token:${WIRELET_PAT}@github.com/".insteadOf \
             "git@github.com:"
 
-      - uses: swift-actions/setup-swift@v2
-        with:
-          swift-version: "6.3.2"
+      - name: Install Swift 6.3.2 via swiftly
+        run: |
+          curl -fsSL "https://download.swift.org/swiftly/linux/swiftly-$(uname -m).tar.gz" -o swiftly.tar.gz
+          tar zxf swiftly.tar.gz
+          ./swiftly init --assume-yes --skip-install --no-modify-profile --quiet-shell-followup
+          . "$HOME/.local/share/swiftly/env.sh"
+          swiftly install 6.3.2 --use --assume-yes
+          echo "$HOME/.local/share/swiftly/bin" >> "$GITHUB_PATH"
+          swift --version
 
       - name: Resolve SwiftPM dependencies (populates .build/checkouts/swift-wirelet)
         run: swift package resolve
