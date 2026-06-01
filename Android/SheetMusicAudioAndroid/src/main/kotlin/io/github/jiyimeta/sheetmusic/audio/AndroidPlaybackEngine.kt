@@ -131,6 +131,9 @@ class AndroidPlaybackEngine internal constructor(
          * to `[startTick, endTick]`. Returns `[-1, -1]` on failure.
          */
         fun resolveExportTickRange(scoreHandle: Long, rangeBytes: ByteArray): LongArray
+
+        /** Builds a click SF2 from two WAV blobs; empty array on failure. */
+        fun buildClickSoundFont(strongWav: ByteArray, weakWav: ByteArray): ByteArray
     }
 
     companion object {
@@ -150,6 +153,8 @@ class AndroidPlaybackEngine internal constructor(
                 SheetMusicAudioJNI.nativeItemEndTick(h, i)
             override fun resolveExportTickRange(h: Long, bytes: ByteArray) =
                 SheetMusicAudioJNI.nativeResolveExportTickRange(h, bytes)
+            override fun buildClickSoundFont(strongWav: ByteArray, weakWav: ByteArray) =
+                SheetMusicAudioJNI.nativeBuildClickSoundFont(strongWav, weakWav)
         }
     }
 

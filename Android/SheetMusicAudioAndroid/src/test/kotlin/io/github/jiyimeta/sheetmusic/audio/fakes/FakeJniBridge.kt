@@ -59,4 +59,11 @@ internal open class FakeJniBridge(
         resolveExportTickRangeCalls += rangeBytes
         return resolveExportTickRangeResult
     }
+
+    var buildClickSoundFontResult: ByteArray = byteArrayOf()
+    val buildClickSoundFontCalls = mutableListOf<Pair<ByteArray, ByteArray>>()
+    override fun buildClickSoundFont(strongWav: ByteArray, weakWav: ByteArray): ByteArray {
+        buildClickSoundFontCalls += strongWav to weakWav
+        return buildClickSoundFontResult
+    }
 }
