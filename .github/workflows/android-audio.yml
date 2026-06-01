@@ -46,6 +46,8 @@ jobs:
 
       - name: Install Swift 6.3.2 via swiftly
         run: |
+          sudo apt-get update
+          sudo apt-get install -y libcurl4-openssl-dev
           curl -fsSL "https://download.swift.org/swiftly/linux/swiftly-$(uname -m).tar.gz" -o swiftly.tar.gz
           tar zxf swiftly.tar.gz
           ./swiftly init --assume-yes --skip-install --no-modify-profile --quiet-shell-followup
@@ -92,6 +94,8 @@ jobs:
 
       - name: Install Swift 6.3.2 via swiftly
         run: |
+          sudo apt-get update
+          sudo apt-get install -y libcurl4-openssl-dev
           curl -fsSL "https://download.swift.org/swiftly/linux/swiftly-$(uname -m).tar.gz" -o swiftly.tar.gz
           tar zxf swiftly.tar.gz
           ./swiftly init --assume-yes --skip-install --no-modify-profile --quiet-shell-followup
