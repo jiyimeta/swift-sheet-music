@@ -146,8 +146,7 @@ extension PlaybackEngine {
 
         // 2. Optional metronome synth / track.
         let metronomeSampler = buildMetronomeSampler(
-            snapshot: snapshot, resolver: resolver, engine: engine,
-            output: sumMixer,
+            snapshot: snapshot, engine: engine, output: sumMixer,
         )
 
         // 3. Render MIDI bytes (score tracks + optional metronome
@@ -294,14 +293,11 @@ extension PlaybackEngine {
 
     private static func buildMetronomeSampler(
         snapshot: ExportEngineSnapshot,
-        resolver: SoundfontResolver,
         engine: AVAudioEngine,
         output: AVAudioNode,
     ) -> AVAudioUnitMIDIInstrument? {
         guard snapshot.metronomeEnabled,
-              let metroURL = resolver.soundfontURL(
-                  forBank: 0, program: 0, isDrums: true,
-              ) ?? resolver.defaultGMSoundfontURL
+              let metroURL = snapshot.metronomeSoundFontURL
         else { return nil }
         let s = MIDISynthBuilder.make()
         engine.attach(s)
