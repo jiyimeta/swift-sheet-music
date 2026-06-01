@@ -1820,13 +1820,13 @@ extension LayoutEngine {
             switch positioned.element {
             case let .tempo(t):
                 guard t.visible || options.showsInvisibleElements else { break }
-                let bpm = Int((t.beatsPerSecond * 60.0).rounded())
-                // U+E1D5 = SMuFL `metNoteQuarterUp` (Bravura music
-                // font). Renderers split the string into Bravura-glyph
-                // and Edwin-text runs via `MusicTextRuns.runs`.
+                let value = Int(t.beatsPerMinute.rounded())
+                // `t.beatGlyph` is the marking's beat note as Bravura "Individual notes" glyphs (e.g. a quarter
+                // U+E1D5, or a dotted quarter U+E1D5 U+E1E7). Renderers split the string into Bravura-glyph and
+                // Edwin-text runs via `MusicTextRuns.runs`.
                 let element = LayoutElement.textMark(
                     kind: .tempo,
-                    text: "\u{E1D5} = \(bpm)",
+                    text: "\(t.beatGlyph) = \(value)",
                     origin: CGPoint(
                         x: xAtTick
                             + CGFloat(t.offsetX) * metrics.sp,
