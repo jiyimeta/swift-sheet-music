@@ -22,9 +22,11 @@ import io.github.jiyimeta.sheetmusic.audio.serialization.NoteIDCodec
 import io.github.jiyimeta.sheetmusic.audio.serialization.ScoreCursorCodec
 import io.github.jiyimeta.sheetmusic.audio.serialization.ScoreItemIDCodec
 import io.github.jiyimeta.sheetmusic.audio.serialization.StaffParamsCodec
+import io.github.jiyimeta.sheetmusic.audio.synth.AndroidMetronomeClickResolver
 import io.github.jiyimeta.sheetmusic.audio.synth.FluidSynthDriver
 import io.github.jiyimeta.sheetmusic.audio.synth.FluidSynthEngine
 import io.github.jiyimeta.sheetmusic.audio.synth.MetronomeMixer
+import io.github.jiyimeta.sheetmusic.audio.synth.MetronomeSf2Loader
 import io.github.jiyimeta.sheetmusic.audio.synth.OboeStream
 import io.github.jiyimeta.sheetmusic.audio.synth.PlayerDriver
 import io.github.jiyimeta.sheetmusic.audio.synth.SynthDriver
@@ -78,6 +80,7 @@ import kotlinx.coroutines.withContext
 class AndroidPlaybackEngine internal constructor(
     private val context: Context?,
     private val soundfontResolver: SoundfontResolver,
+    private val metronomeClickProvider: MetronomeClickProvider? = null,
     private val jniBridge: JniBridge,
     private val synthFactory: (Int) -> SynthDriver,
     private val playerFactory: (Long) -> PlayerDriver,
@@ -131,6 +134,9 @@ class AndroidPlaybackEngine internal constructor(
          * to `[startTick, endTick]`. Returns `[-1, -1]` on failure.
          */
         fun resolveExportTickRange(scoreHandle: Long, rangeBytes: ByteArray): LongArray
+
+        /** Builds a click SF2 from two WAV blobs; empty array on failure. */
+        fun buildClickSoundFont(strongWav: ByteArray, weakWav: ByteArray): ByteArray
     }
 
     companion object {
@@ -150,13 +156,20 @@ class AndroidPlaybackEngine internal constructor(
                 SheetMusicAudioJNI.nativeItemEndTick(h, i)
             override fun resolveExportTickRange(h: Long, bytes: ByteArray) =
                 SheetMusicAudioJNI.nativeResolveExportTickRange(h, bytes)
+            override fun buildClickSoundFont(strongWav: ByteArray, weakWav: ByteArray) =
+                SheetMusicAudioJNI.nativeBuildClickSoundFont(strongWav, weakWav)
         }
     }
 
     /** Public production constructor — uses [defaultBridge] and real sub-components. */
-    constructor(context: Context, soundfontResolver: SoundfontResolver) : this(
+    constructor(
+        context: Context,
+        soundfontResolver: SoundfontResolver,
+        metronomeClickProvider: MetronomeClickProvider? = null,
+    ) : this(
         context = context,
         soundfontResolver = soundfontResolver,
+        metronomeClickProvider = metronomeClickProvider,
         jniBridge = defaultBridge,
         synthFactory = { sr -> FluidSynthDriver.create(sr) },
         playerFactory = { synthHandle -> PlayerDriver(synthHandle) },
@@ -234,6 +247,9 @@ class AndroidPlaybackEngine internal constructor(
     private var playerDriver: PlayerDriver? = null
     private var oboeStream: OboeStream? = null
     private var metronomeMixer: MetronomeMixer? = null
+    private val clickResolver by lazy {
+        AndroidMetronomeClickResolver(metronomeClickProvider, jniBridge)
+    }
     private var pollJob: Job? = null
     // Scopes are lazy so pollDispatcher is captured after construction.
     private val pollScope by lazy { CoroutineScope(SupervisorJob() + pollDispatcher) }
@@ -299,11 +315,14 @@ class AndroidPlaybackEngine internal constructor(
             engine.setupStaves(staves, soundfontResolver, context)
             this@AndroidPlaybackEngine.fluidSynthEngine = engine
 
-            // Dedicated metronome synth on a separate fluid_synth_t.
+            // Dedicated metronome synth on a separate fluid_synth_t. The
+            // click sound comes from the provider: .clickSamples builds an
+            // SF2 from the host's WAVs (via JNI), .soundFont uses a host SF2,
+            // .defaultGM / no provider falls back to the GM drum-kit.
             val metronomeSynth = synthFactory(48_000)
-            val metronomeUri = soundfontResolver.soundfontUriFor(bank = 0, program = 0, isDrums = true)
-                ?: soundfontResolver.defaultGmSoundfontUri
-            metronomeUri?.let { uri -> metronomeSynth.loadSoundFont(uri, context) }
+            MetronomeSf2Loader.load(
+                metronomeSynth, clickResolver.resolve(), soundfontResolver, context,
+            )
             metronomeMixer = MetronomeMixer(metronomeSynth, beats)
 
             // PlayerDriver wired to the real fluid_synth_t handle.
@@ -770,6 +789,7 @@ class AndroidPlaybackEngine internal constructor(
             metronomeVolume = metronomeMixer?.volume ?: 1f,
             metronomeBeats = beats,
             rate = _currentRate.value,
+            metronomeResolution = clickResolver.resolve(),
         )
 
         val smfBytes = jniBridge.renderMidi(scoreHandle)

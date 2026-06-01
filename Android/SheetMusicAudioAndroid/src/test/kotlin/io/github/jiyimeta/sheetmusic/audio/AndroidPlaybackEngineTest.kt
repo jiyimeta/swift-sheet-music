@@ -136,6 +136,7 @@ private fun newEngineForTests(
     bridge: FakeJniBridge = FakeJniBridge(),
     playerBindings: RecordingBindings = RecordingBindings(),
     fakeSynthDrivers: MutableList<FakeSynthDriver> = mutableListOf(),
+    metronomeClickProvider: MetronomeClickProvider? = null,
     // UnconfinedTestDispatcher: poll job starts eagerly, delay() is controlled
     // by testScheduler. All tests use the shared scheduler so advanceTimeBy()
     // works correctly. Tests that call play() must register in managedEngines
@@ -145,6 +146,7 @@ private fun newEngineForTests(
 ): AndroidPlaybackEngine = AndroidPlaybackEngine(
     context = null,
     soundfontResolver = StubSoundfontResolver(),
+    metronomeClickProvider = metronomeClickProvider,
     jniBridge = bridge,
     synthFactory = { _ ->
         FakeSynthDriver(fakeSynthDrivers.size).also { fakeSynthDrivers += it }
@@ -271,6 +273,27 @@ class AndroidPlaybackEngineTest {
         )
         val engine = newEngineForTests(bridge = bridge)
         engine.prepare(1L)
+    }
+
+    @Test
+    fun `prepare with click provider calls buildClickSoundFont on bridge`() = runTest {
+        val bridge = FakeJniBridge(
+            timelineSummaryResult = longArrayOf(960L, 2_000_000L, 480L),
+            staffParamsResult = oneStaffPayload(),
+            metronomeBeatsResult = downbeatOnlyBeats(),
+            renderMidiResult = minimalSmf,
+        ).apply {
+            buildClickSoundFontResult = byteArrayOf(1, 2, 3)
+        }
+        val engine = newEngineForTests(
+            bridge = bridge,
+            metronomeClickProvider = MetronomeClickProvider {
+                MetronomeClickSource.ClickSamples(byteArrayOf(9), byteArrayOf(8))
+            },
+        )
+        engine.prepare(scoreHandle = 1L)
+        assertEquals(1, bridge.buildClickSoundFontCalls.size)
+        engine.teardown()
     }
 
     // T38 — play / pause / stop

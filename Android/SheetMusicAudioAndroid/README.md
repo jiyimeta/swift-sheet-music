@@ -73,6 +73,54 @@ class AudioViewModel(application: Application) : AndroidViewModel(application) {
 Same semantics, idiomatic naming per language. Apple uses `URL` /
 `UInt8`; Kotlin uses `Uri` / `Int` (no `UInt8` in mainstream Kotlin).
 
+## Custom metronome click
+
+By default `AndroidPlaybackEngine` uses the GM drum-kit (program 0, channel 9)
+for metronome clicks. A host can replace this with its own click sound by
+passing a `metronomeClickProvider` at construction time:
+
+```kotlin
+val engine = AndroidPlaybackEngine(
+    context,
+    soundfontResolver,
+    metronomeClickProvider = MetronomeClickProvider {
+        MetronomeClickSource.ClickSamples(strongWavBytes, weakWavBytes)
+    },
+)
+```
+
+`strongWavBytes` / `weakWavBytes` are the raw contents of PCM WAV files
+(16-bit integer or 32-bit float, mono or stereo), e.g. loaded from `assets`:
+
+```kotlin
+val strongWavBytes = context.assets.open("click_strong.wav").readBytes()
+val weakWavBytes   = context.assets.open("click_weak.wav").readBytes()
+```
+
+The WAV data is converted to a minimal SF2 (via `nativeBuildClickSoundFont`
+in the Swift JNI bridge, reusing `SheetMusicAudioCore`); the generated SF2 is
+written to a content-addressed file under the app cache, so identical clicks
+reuse the same file rather than re-writing it. Both **live playback** and
+**offline audio export** load the same resolved click, so they remain in sync.
+
+### Other `MetronomeClickSource` variants
+
+| Variant | Behaviour |
+|---|---|
+| `ClickSamples(strongWav, weakWav)` | Build a custom SF2 from the supplied WAV bytes (described above) |
+| `SoundFont(uri)` | Use a host-supplied `.sf2` directly (no conversion step) |
+| `DefaultGm` | Legacy GM drum-kit — identical to passing no provider (backward compatible) |
+
+### Verification status
+
+The custom click wiring is covered by JVM unit tests
+(`AndroidMetronomeClickResolverTest`, `AudioExporterMetronomeTest`).
+**On-device audio verification is the remaining manual step**: build the
+native libraries with `Scripts/android-build-libs.sh`, run the Compose
+example app (`Examples/Android/`), enable the metronome, and confirm that
+the custom click sounds correctly in both live playback and an exported
+audio file. No physical device was available when this feature landed.
+
 ## Architecture (1-line summary)
 
 `io.github.jiyimeta.sheetmusic.SheetMusicJNI` (in the `sheet-music-android`

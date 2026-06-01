@@ -7,6 +7,8 @@ import io.github.jiyimeta.sheetmusic.audio.SoundfontResolver
 import io.github.jiyimeta.sheetmusic.audio.model.AudioFileFormat
 import io.github.jiyimeta.sheetmusic.audio.model.StaffParams
 import io.github.jiyimeta.sheetmusic.audio.synth.FluidSynthDriver
+import io.github.jiyimeta.sheetmusic.audio.synth.MetronomeMixer
+import io.github.jiyimeta.sheetmusic.audio.synth.MetronomeSf2Loader
 import io.github.jiyimeta.sheetmusic.audio.synth.PlayerDriver
 import io.github.jiyimeta.sheetmusic.audio.synth.SynthDriver
 import kotlinx.coroutines.CancellationException
@@ -48,6 +50,17 @@ internal class AudioExporter(
         val synth = synthFactory(sampleRate)
         val player = playerFactory(synth.nativeHandle)
         val encoder = encoderFactory(format, sampleRate, outputFd)
+        val metronomeSynth = if (snapshot.metronomeEnabled && snapshot.metronomeBeats.isNotEmpty()) {
+            synthFactory(sampleRate).also { ms ->
+                MetronomeSf2Loader.load(ms, snapshot.metronomeResolution, resolver, context)
+                ms.setGain(snapshot.metronomeVolume)
+            }
+        } else {
+            null
+        }
+        val metronomeMixer = metronomeSynth?.let { ms ->
+            MetronomeMixer(ms, snapshot.metronomeBeats).also { it.isEnabled = true }
+        }
         var lastProgressEmitMs = 0L
         try {
             applyStaffProgramsAndMixer(synth, staffParams, snapshot)
@@ -68,6 +81,16 @@ internal class AudioExporter(
                 // currentTick crossing endTick regardless of frame budget.
                 val frames = BUFFER_FRAMES
                 synth.writeFloat(frames, left, right)
+                metronomeMixer?.let { mm ->
+                    mm.updateCurrentTick(player.currentTick)
+                    val mLeft = FloatArray(frames)
+                    val mRight = FloatArray(frames)
+                    mm.synth.writeFloat(frames, mLeft, mRight)
+                    for (i in 0 until frames) {
+                        left[i] += mLeft[i]
+                        right[i] += mRight[i]
+                    }
+                }
                 encoder.appendPcmFloat(left, right, frames)
                 val nowMs = System.currentTimeMillis()
                 if (progress != null && totalTicks > 0 &&
@@ -87,6 +110,7 @@ internal class AudioExporter(
             // (e.g. EngineSetupFailed) propagates without being masked.
             try { player.close() } catch (_: Throwable) {}
             try { synth.close() } catch (_: Throwable) {}
+            try { metronomeSynth?.close() } catch (_: Throwable) {}
             try { encoder.close() } catch (_: Throwable) {}
         }
     }

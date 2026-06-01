@@ -79,4 +79,13 @@ internal object SheetMusicAudioJNI {
             SwiftData.fromByteArray(rangeBytes, arena),
         )
     }
+
+    fun nativeBuildClickSoundFont(strongWav: ByteArray, weakWav: ByteArray): ByteArray {
+        val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
+        return SwiftJavaJNI.nativeBuildClickSoundFont(
+            SwiftData.fromByteArray(strongWav, arena),
+            SwiftData.fromByteArray(weakWav, arena),
+            arena,
+        ).toByteArray()
+    }
 }

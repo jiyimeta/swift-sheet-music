@@ -71,6 +71,22 @@ public func nativeGMInstrumentList() -> Data {
 }
 
 /// JNI entry point exposed via swift-java for the Kotlin
+/// `SheetMusicAudioJNI.nativeBuildClickSoundFont(...)` call site. Reuses
+/// the Phase 1 Core (`WavPcmReader` + `ClickSoundFontBuilder`) to turn two
+/// click WAVs into a bank-128 SF2 mapping strong→note 76 / weak→note 77.
+/// Returns empty `Data` on any read failure so the Kotlin caller can fall
+/// back to the GM drum-kit.
+public func nativeBuildClickSoundFont(strongWav: Data, weakWav: Data) -> Data {
+    guard let strong = try? WavPcmReader.read(strongWav),
+          let weak = try? WavPcmReader.read(weakWav)
+    else { return Data() }
+    return ClickSoundFontBuilder.build(
+        strong: strong.samples, strongRate: strong.sampleRate,
+        weak: weak.samples, weakRate: weak.sampleRate,
+    )
+}
+
+/// JNI entry point exposed via swift-java for the Kotlin
 /// `SheetMusicAudioJNI.nativeItemEndTick(...)` call site. Returns -1 when
 /// the score handle is unknown, the id payload is empty / undecodable, or
 /// the timeline has no end-tick entry for the id (only `.note` / `.rest`

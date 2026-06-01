@@ -8,6 +8,7 @@ import io.github.jiyimeta.sheetmusic.audio.fakes.FakeSynthDriver
 import io.github.jiyimeta.sheetmusic.audio.model.AudioFileFormat
 import io.github.jiyimeta.sheetmusic.audio.model.MixerChannel
 import io.github.jiyimeta.sheetmusic.audio.model.StaffParams
+import io.github.jiyimeta.sheetmusic.audio.synth.AndroidMetronomeClickResolver
 import io.github.jiyimeta.sheetmusic.audio.synth.PlayerDriver
 import io.github.jiyimeta.sheetmusic.audio.synth.SynthDriver
 import kotlinx.coroutines.test.runTest
@@ -40,6 +41,7 @@ class AudioExporterTest {
         metronomeVolume = 1.0f,
         metronomeBeats = emptyList(),
         rate = 1.0f,
+        metronomeResolution = AndroidMetronomeClickResolver.Resolution.DefaultGm,
     )
 
     private val staffParams = listOf(
