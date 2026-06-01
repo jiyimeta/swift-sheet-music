@@ -209,8 +209,8 @@ if isAndroid {
 let packageDependencies: [Package.Dependency] = [
     .package(url: "https://github.com/swiftlang/swift-java.git", exact: "0.3.0"),
     .package(
-        url: "git@github.com:jiyimeta/swift-wirelet.git",
-        revision: "31be47c84fddf2834b3cccc05ff955dcd1f2668e",
+        url: "https://github.com/jiyimeta/swift-wirelet.git",
+        revision: "cd0d148e9d4dddad1c6afc47d5ef0a8d6f4a4a13", // v0.2.2
     ),
 ]
 
