@@ -159,7 +159,7 @@ UI / PDF remain Apple-only.
 
   ```bash
   swift sdk install \
-      https://download.swift.org/swift-6.3.2-release/swift-6.3.2-RELEASE_android-0.1.artifactbundle.tar.gz \
+      https://download.swift.org/swift-6.3.2-release/android-sdk/swift-6.3.2-RELEASE/swift-6.3.2-RELEASE_android.artifactbundle.tar.gz \
       --checksum <SHA256-from-swift.org-release-page>
   ```
 

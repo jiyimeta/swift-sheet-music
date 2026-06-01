@@ -67,7 +67,7 @@ jobs:
           ANDROID_SDK_CHECKSUM: 939e933549d12d28f2e0bf71019d734d309859e9773c572657ce565a81f85d68
         run: |
           swift sdk install \
-              https://download.swift.org/swift-6.3.2-release/swift-6.3.2-RELEASE_android-0.1.artifactbundle.tar.gz \
+              https://download.swift.org/swift-6.3.2-release/android-sdk/swift-6.3.2-RELEASE/swift-6.3.2-RELEASE_android.artifactbundle.tar.gz \
               --checksum "$ANDROID_SDK_CHECKSUM"
           NDK_DIR="$ANDROID_HOME/ndk/26.1.10909125"
           ANDROID_NDK_HOME="$NDK_DIR" \
