@@ -4,7 +4,7 @@ import Foundation
 /// through a `MetronomeClickProvider`. Kept separate from
 /// `SoundfontResolver` so adding click overrides doesn't disturb the
 /// score-soundfont seam.
-public enum MetronomeClickSource: Sendable, Equatable {
+public enum MetronomeClickSource: Sendable, Equatable, Hashable {
     /// Two WAV files (strong downbeat / weak beat). The engine converts
     /// them to an SF2 at load time via `ClickSoundFontBuilder`.
     case clickSamples(strong: URL, weak: URL)
