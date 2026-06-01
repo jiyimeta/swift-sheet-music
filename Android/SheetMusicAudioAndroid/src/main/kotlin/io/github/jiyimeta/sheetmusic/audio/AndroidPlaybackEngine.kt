@@ -789,6 +789,7 @@ class AndroidPlaybackEngine internal constructor(
             metronomeVolume = metronomeMixer?.volume ?: 1f,
             metronomeBeats = beats,
             rate = _currentRate.value,
+            metronomeResolution = clickResolver.resolve(),
         )
 
         val smfBytes = jniBridge.renderMidi(scoreHandle)
