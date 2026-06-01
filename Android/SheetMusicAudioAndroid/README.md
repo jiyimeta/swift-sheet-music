@@ -97,10 +97,11 @@ val strongWavBytes = context.assets.open("click_strong.wav").readBytes()
 val weakWavBytes   = context.assets.open("click_weak.wav").readBytes()
 ```
 
-The WAV data is converted to a minimal SF2 once (via `nativeBuildClickSoundFont`
-in the Swift JNI bridge, reusing `SheetMusicAudioCore`) and cached for the
-lifetime of the engine. Both **live playback** and **offline audio export** use
-the same SF2, so they remain in sync.
+The WAV data is converted to a minimal SF2 (via `nativeBuildClickSoundFont`
+in the Swift JNI bridge, reusing `SheetMusicAudioCore`); the generated SF2 is
+written to a content-addressed file under the app cache, so identical clicks
+reuse the same file rather than re-writing it. Both **live playback** and
+**offline audio export** load the same resolved click, so they remain in sync.
 
 ### Other `MetronomeClickSource` variants
 
@@ -113,7 +114,7 @@ the same SF2, so they remain in sync.
 ### Verification status
 
 The custom click wiring is covered by JVM unit tests
-(`MetronomeClickResolverTest`, `MetronomeClickExporterTest`).
+(`AndroidMetronomeClickResolverTest`, `AudioExporterMetronomeTest`).
 **On-device audio verification is the remaining manual step**: build the
 native libraries with `Scripts/android-build-libs.sh`, run the Compose
 example app (`Examples/Android/`), enable the metronome, and confirm that
