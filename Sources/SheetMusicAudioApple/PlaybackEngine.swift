@@ -26,6 +26,9 @@ import SheetMusicMIDI
 @Observable
 public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     private let resolver: SoundfontResolver
+    /// Resolves the metronome's click sound (host WAVs → SF2, host SF2,
+    /// or the GM drum-kit fallback). See `MetronomeClickResolver`.
+    private let clickResolver: MetronomeClickResolver
     /// `internal` so `PlaybackEngine+Master` can call
     /// `engine.attach` / `engine.connect` from a sibling file when
     /// building the master output stage.
@@ -119,8 +122,15 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// this array and re-render on change.
     public private(set) var mixerChannels: [MixerChannel] = []
 
-    public init(soundfontResolver: SoundfontResolver) {
+    public init(
+        soundfontResolver: SoundfontResolver,
+        metronomeClickProvider: MetronomeClickProvider? = nil,
+    ) {
         resolver = soundfontResolver
+        clickResolver = MetronomeClickResolver(
+            provider: metronomeClickProvider,
+            soundfontResolver: soundfontResolver,
+        )
         // The metronome joins the master stage at `sumMixer` (post-gain,
         // pre-limiter) so it is limited along with the boosted score but
         // is not itself boosted by the master gain.
@@ -164,6 +174,9 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         /// `PlaybackEngine.masterGain`, so the export engine rebuilds
         /// the master stage at the same gain the user hears live.
         let masterGain: Float // swiftlint:disable:this inclusive_language
+        /// Resolved metronome SoundFont URL (host click SF2, host SF2, or
+        /// GM drum-kit), so the export plays the same click as live.
+        let metronomeSoundFontURL: URL?
     }
 
     func exportEngineSnapshot() -> ExportEngineSnapshot {
@@ -175,6 +188,7 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
             rate: pendingRate,
             metronomeBeats: metronomeBeats,
             masterGain: masterGain,
+            metronomeSoundFontURL: clickResolver.resolvedSoundFontURL(),
         )
     }
 
@@ -291,16 +305,11 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         sequencerScore = nil
         timeline = PlaybackTimeline(score: score)
         metronomeBeats = PlaybackTimeline.metronomeBeats(score: score)
-        // Metronome always plays GM percussion (hi/low wood block on
-        // notes 76 / 77). Ask the resolver for the drum kit at
-        // (bank: 0, program: 0, isDrums: true) so a host that doesn't
-        // ship a full GM SoundFont can still serve the metronome from
-        // a per-(bank, program) split file. Falls back to the GM URL
-        // for hosts that haven't moved over.
-        let metronomeURL =
-            resolver.soundfontURL(forBank: 0, program: 0, isDrums: true)
-            ?? resolver.defaultGMSoundfontURL
-        metronome.prepare(soundfontURL: metronomeURL)
+        // Resolve the metronome's SoundFont through the click provider:
+        // `.clickSamples` builds an SF2 from the host's WAVs, `.soundFont`
+        // uses a host SF2, and `.defaultGM` (or no provider) falls back to
+        // the GM drum-kit (notes 76 / 77). AUMIDISynth loads it unchanged.
+        metronome.prepare(soundfontURL: clickResolver.resolvedSoundFontURL())
         // Tear down the synth from a previous score, if any.
         if let oldSynth = synth {
             engine.disconnectNodeOutput(oldSynth)
