@@ -48,12 +48,14 @@
                 pcmFormat: format, frameCapacity: AVAudioFrameCount(file.length),
             ))
             try file.read(into: buffer)
+            // `processingFormat` is always deinterleaved float32, so
+            // `floatChannelData` is non-nil; require it so a future format
+            // change fails loudly instead of silently reporting peak 0.
+            let data = try #require(buffer.floatChannelData)
             var peak: Float = 0
-            if let data = buffer.floatChannelData {
-                for c in 0 ..< Int(format.channelCount) {
-                    for i in 0 ..< Int(buffer.frameLength) {
-                        peak = max(peak, abs(data[c][i]))
-                    }
+            for c in 0 ..< Int(format.channelCount) {
+                for i in 0 ..< Int(buffer.frameLength) {
+                    peak = max(peak, abs(data[c][i]))
                 }
             }
             return peak
