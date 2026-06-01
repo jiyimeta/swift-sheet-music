@@ -66,6 +66,12 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v3
 
+      - name: Publish swift-java SwiftKitCore to Maven local
+        run: >-
+          .build/checkouts/swift-java/gradlew
+          -p .build/checkouts/swift-java
+          :SwiftKitCore:publishToMavenLocal
+
       - name: Run Kotlin unit tests
         working-directory: Android
         env:
@@ -116,6 +122,11 @@ jobs:
         run: |
           sdkmanager "ndk;26.1.10909125"
       - uses: gradle/actions/setup-gradle@v3
+      - name: Publish swift-java SwiftKitCore to Maven local
+        run: >-
+          .build/checkouts/swift-java/gradlew
+          -p .build/checkouts/swift-java
+          :SwiftKitCore:publishToMavenLocal
       - name: Assemble release AAR
         working-directory: Android
         env:
