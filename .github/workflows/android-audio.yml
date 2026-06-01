@@ -17,24 +17,31 @@ on:
       - 'Tests/SheetMusicTests/Resources/Golden/Audio/**'
       - '.github/workflows/android-audio.yml'
 
-# The Android Gradle build pulls the wirelet code generator from two private
-# sources, both under github.com/jiyimeta/swift-wirelet:
-#   1. The `io.github.jiyimeta.wirelet` Gradle plugin from GitHub Packages
-#      (maven.pkg.github.com) — authenticated via GITHUB_ACTOR/GITHUB_TOKEN.
-#   2. The Swift package itself, declared in Package.swift via the SSH URL
-#      git@github.com:jiyimeta/swift-wirelet.git — `swift package resolve`
-#      clones it into .build/checkouts/swift-wirelet, which the plugin then
-#      runs via `swift run` to generate Kotlin codecs.
-# Both are served by a single classic PAT stored as the WIRELET_PAT secret
-# (scopes: repo + read:packages). The git insteadOf rewrite below lets the
-# SSH-form dependency clone over HTTPS with that PAT.
+# Building the Android audio module reproduces the full local-dev
+# cross-compile pipeline, so this runs on macOS (Scripts/android-build-libs.sh
+# hardcodes darwin NDK paths). The chain mirrors android-publish.yml:
+#
+#   1. Host Swift 6.3.2 (org.swift toolchain) + Android Swift SDK + NDK.
+#   2. Scripts/android-build-libs.sh cross-compiles SheetMusicAndroidJNI for
+#      each ABI and stages the swift-java JExtract Java bindings into
+#      SheetMusicAndroid/src/main/java-generated. This also resolves the
+#      SwiftPM deps (swift-wirelet via SSH, swift-java) into .build/checkouts.
+#   3. swift-java's SwiftKitCore is published to mavenLocal (not on Central).
+#   4. The wirelet Gradle plugin is fetched from GitHub Packages and runs
+#      `swift run` against .build/checkouts/swift-wirelet to emit Kotlin codecs.
+#
+# A single classic PAT (repo + read:packages) as WIRELET_PAT covers both
+# private swift-wirelet sources: the git insteadOf rewrite clones the SSH-form
+# SwiftPM dependency over HTTPS, and GITHUB_TOKEN authenticates the Gradle
+# plugin download.
 env:
   WIRELET_PAT: ${{ secrets.WIRELET_PAT }}
+  TOOLCHAINS: org.swift.632202605101a
 
 jobs:
-  kotlin-unit-tests:
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
+  build-and-test:
+    runs-on: macos-14
+    timeout-minutes: 75
     steps:
       - uses: actions/checkout@v4
 
@@ -44,20 +51,30 @@ jobs:
             url."https://x-access-token:${WIRELET_PAT}@github.com/".insteadOf \
             "git@github.com:"
 
-      - name: Install Swift 6.3.2 via swiftly
+      - name: Install Swift 6.3.2 toolchain
         run: |
-          sudo apt-get update
-          sudo apt-get install -y libcurl4-openssl-dev
-          curl -fsSL "https://download.swift.org/swiftly/linux/swiftly-$(uname -m).tar.gz" -o swiftly.tar.gz
-          tar zxf swiftly.tar.gz
-          ./swiftly init --assume-yes --skip-install --no-modify-profile --quiet-shell-followup
-          . "$HOME/.local/share/swiftly/env.sh"
-          swiftly install 6.3.2 --use --assume-yes
-          echo "$HOME/.local/share/swiftly/bin" >> "$GITHUB_PATH"
+          curl -fLO https://download.swift.org/swift-6.3.2-release/xcode/swift-6.3.2-RELEASE/swift-6.3.2-RELEASE-osx.pkg
+          sudo installer -pkg swift-6.3.2-RELEASE-osx.pkg -target /
           swift --version
 
-      - name: Resolve SwiftPM dependencies (populates .build/checkouts/swift-wirelet)
-        run: swift package resolve
+      - uses: android-actions/setup-android@v3
+
+      - name: Install required NDK
+        run: sdkmanager "ndk;26.1.10909125"
+
+      - name: Install Swift Android SDK
+        env:
+          ANDROID_SDK_CHECKSUM: 939e933549d12d28f2e0bf71019d734d309859e9773c572657ce565a81f85d68
+        run: |
+          swift sdk install \
+              https://download.swift.org/swift-6.3.2-release/swift-6.3.2-RELEASE_android-0.1.artifactbundle.tar.gz \
+              --checksum "$ANDROID_SDK_CHECKSUM"
+          NDK_DIR="$ANDROID_HOME/ndk/26.1.10909125"
+          ANDROID_NDK_HOME="$NDK_DIR" \
+              ~/Library/org.swift.swiftpm/swift-sdks/swift-6.3.2-RELEASE_android.artifactbundle/swift-android/scripts/setup-android-sdk.sh
+
+      - name: Cross-compile JNI natives + stage swift-java bindings
+        run: Scripts/android-build-libs.sh
 
       - uses: actions/setup-java@v4
         with:
@@ -78,6 +95,14 @@ jobs:
           GITHUB_ACTOR: ${{ github.actor }}
           GITHUB_TOKEN: ${{ secrets.WIRELET_PAT }}
         run: ./gradlew :SheetMusicAudioAndroid:testDebugUnitTest --info
+
+      - name: Assemble release AAR
+        working-directory: Android
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.WIRELET_PAT }}
+        run: ./gradlew :SheetMusicAudioAndroid:assembleRelease
+
       - name: Upload test reports on failure
         if: failure()
         uses: actions/upload-artifact@v4
@@ -86,53 +111,6 @@ jobs:
           path: |
             Android/SheetMusicAudioAndroid/build/reports/tests/
 
-  android-assemble:
-    runs-on: ubuntu-latest
-    timeout-minutes: 40
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Authenticate git for the private swift-wirelet dependency
-        run: |
-          git config --global \
-            url."https://x-access-token:${WIRELET_PAT}@github.com/".insteadOf \
-            "git@github.com:"
-
-      - name: Install Swift 6.3.2 via swiftly
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libcurl4-openssl-dev
-          curl -fsSL "https://download.swift.org/swiftly/linux/swiftly-$(uname -m).tar.gz" -o swiftly.tar.gz
-          tar zxf swiftly.tar.gz
-          ./swiftly init --assume-yes --skip-install --no-modify-profile --quiet-shell-followup
-          . "$HOME/.local/share/swiftly/env.sh"
-          swiftly install 6.3.2 --use --assume-yes
-          echo "$HOME/.local/share/swiftly/bin" >> "$GITHUB_PATH"
-          swift --version
-
-      - name: Resolve SwiftPM dependencies (populates .build/checkouts/swift-wirelet)
-        run: swift package resolve
-
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 17
-      - uses: android-actions/setup-android@v3
-      - name: Install required NDK
-        run: |
-          sdkmanager "ndk;26.1.10909125"
-      - uses: gradle/actions/setup-gradle@v3
-      - name: Publish swift-java SwiftKitCore to Maven local
-        run: >-
-          .build/checkouts/swift-java/gradlew
-          -p .build/checkouts/swift-java
-          :SwiftKitCore:publishToMavenLocal
-      - name: Assemble release AAR
-        working-directory: Android
-        env:
-          GITHUB_ACTOR: ${{ github.actor }}
-          GITHUB_TOKEN: ${{ secrets.WIRELET_PAT }}
-        run: ./gradlew :SheetMusicAudioAndroid:assembleRelease
       - name: Upload AAR artifact
         uses: actions/upload-artifact@v4
         with:

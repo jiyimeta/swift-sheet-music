@@ -60,8 +60,8 @@ jobs:
         env:
           # Re-derive the checksum from https://www.swift.org/install/macos/
           # -> Swift 6.3 -> Android if upstream rotates the artifact. The value
-          # below is a placeholder; fill it in before the first real release.
-          ANDROID_SDK_CHECKSUM: 0000000000000000000000000000000000000000000000000000000000000000
+          # below was filled from the swift.org Swift 6.3 -> Android release page.
+          ANDROID_SDK_CHECKSUM: 939e933549d12d28f2e0bf71019d734d309859e9773c572657ce565a81f85d68
         run: |
           export TOOLCHAINS=org.swift.632202605101a
           swift sdk install \
