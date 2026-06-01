@@ -43,3 +43,19 @@ else
     echo "WARNING: $SRC_SF2 not found — audio will be silent." >&2
     echo "         Download a General MIDI SoundFont (e.g. GeneralUserGS) and save as $SRC_SF2" >&2
 fi
+
+# ── click_strong.wav / click_weak.wav (optional — custom metronome click) ────
+# When both are present the example app passes them to AndroidPlaybackEngine
+# via a MetronomeClickProvider, so the metronome plays these samples instead of
+# the GM drum-kit. Absent → the metronome falls back to GM (DefaultGm).
+
+for click in click_strong click_weak; do
+    src="$HOME/Desktop/$click.wav"
+    dst="$ASSETS_DIR/$click.wav"
+    if [[ -f "$src" ]]; then
+        cp "$src" "$dst"
+        echo "copied $src -> $dst"
+    else
+        echo "note: $src not found — metronome uses the GM drum-kit click" >&2
+    fi
+done
