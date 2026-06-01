@@ -40,6 +40,9 @@ final class MetronomeClickResolver {
         case let .clickSamples(strong, weak):
             if let cached = generatedCache[source] { return cached }
             guard let built = buildClickSoundFont(strong: strong, weak: weak) else {
+                // Bad WAV / write failure: degrade to the GM drum-kit rather
+                // than failing score prep (metronome load is non-fatal). The
+                // host currently isn't told the custom click was dropped.
                 return defaultGMURL()
             }
             generatedCache[source] = built
@@ -68,8 +71,27 @@ final class MetronomeClickResolver {
         try? FileManager.default.createDirectory(
             at: dir, withIntermediateDirectories: true,
         )
-        let file = dir.appendingPathComponent("\(UUID().uuidString).sf2")
-        guard (try? sf2.write(to: file)) != nil else { return nil }
+        // Content-addressed name: identical clicks map to the same file,
+        // so generated SF2s don't accumulate across resolver instances /
+        // app launches, and a changed click (new bytes) gets a new name.
+        let file = dir.appendingPathComponent(
+            String(format: "%016llx.sf2", Self.fnv1a(sf2)),
+        )
+        if !FileManager.default.fileExists(atPath: file.path) {
+            guard (try? sf2.write(to: file)) != nil else { return nil }
+        }
         return file
+    }
+
+    /// FNV-1a 64-bit hash, used to derive a stable, content-addressed
+    /// filename for the generated SF2 (Swift's `Hasher` is seeded per
+    /// process, so it can't produce a stable on-disk name).
+    private static func fnv1a(_ data: Data) -> UInt64 {
+        var hash: UInt64 = 0xCBF2_9CE4_8422_2325
+        for byte in data {
+            hash ^= UInt64(byte)
+            hash = hash &* 0x0000_0100_0000_01B3
+        }
+        return hash
     }
 }

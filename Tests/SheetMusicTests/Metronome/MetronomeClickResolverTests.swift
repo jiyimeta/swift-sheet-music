@@ -66,6 +66,7 @@
                 soundfontResolver: StubResolver(drumURL: nil, gmURL: nil),
             )
             let url = try #require(resolver.resolvedSoundFontURL())
+            defer { try? FileManager.default.removeItem(at: url) }
             #expect(FileManager.default.fileExists(atPath: url.path))
 
             let engine = AVAudioEngine()
@@ -107,6 +108,7 @@
                 soundfontResolver: StubResolver(drumURL: nil, gmURL: nil),
             )
             let first = try #require(resolver.resolvedSoundFontURL())
+            defer { try? FileManager.default.removeItem(at: first) }
             let second = try #require(resolver.resolvedSoundFontURL())
             #expect(first == second)
         }
