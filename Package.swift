@@ -210,7 +210,7 @@ let packageDependencies: [Package.Dependency] = [
     .package(url: "https://github.com/swiftlang/swift-java.git", exact: "0.3.0"),
     .package(
         url: "https://github.com/jiyimeta/swift-wirelet.git",
-        revision: "cd0d148e9d4dddad1c6afc47d5ef0a8d6f4a4a13", // v0.2.2
+        exact: "0.3.1",
     ),
 ]
 
