@@ -18,6 +18,8 @@ import androidx.media3.session.MediaSessionService
 import com.example.sheetmusic.MainActivity
 import com.example.sheetmusic.R
 import io.github.jiyimeta.sheetmusic.audio.AndroidPlaybackEngine
+import io.github.jiyimeta.sheetmusic.audio.MetronomeClickProvider
+import io.github.jiyimeta.sheetmusic.audio.MetronomeClickSource
 import io.github.jiyimeta.sheetmusic.audio.model.PlaybackState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -30,6 +32,24 @@ import kotlinx.coroutines.launch
 private const val NOTIFICATION_ID = 1001
 private const val CHANNEL_ID = "playback"
 private const val CHANNEL_NAME = "Playback"
+
+/**
+ * Builds a [MetronomeClickProvider] that loads `click_strong.wav` /
+ * `click_weak.wav` (PCM WAV) from the app's `assets/`, staged by
+ * `Scripts/android-bundle-test-score.sh`. If either file is absent the
+ * metronome falls back to the GM drum-kit (`DefaultGm`) — so the app still
+ * runs without bundled click samples.
+ */
+private fun assetClickProvider(context: Context): MetronomeClickProvider {
+    val source = try {
+        val strong = context.assets.open("click_strong.wav").use { it.readBytes() }
+        val weak = context.assets.open("click_weak.wav").use { it.readBytes() }
+        MetronomeClickSource.ClickSamples(strong, weak)
+    } catch (_: Exception) {
+        MetronomeClickSource.DefaultGm
+    }
+    return MetronomeClickProvider { source }
+}
 
 /**
  * Hosts the singleton [AndroidPlaybackEngine] for the example app and
@@ -96,6 +116,7 @@ class PlaybackService : MediaSessionService() {
         engine = AndroidPlaybackEngine(
             context = applicationContext,
             soundfontResolver = AssetSoundfontResolver(applicationContext),
+            metronomeClickProvider = assetClickProvider(applicationContext),
         )
         val player = EnginePlayer(engine, serviceScope, mediaItemFlow)
         val sessionActivity = PendingIntent.getActivity(
