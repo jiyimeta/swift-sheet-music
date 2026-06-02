@@ -950,6 +950,22 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         clearLoop()
         sequencer = nil
         sequencerScore = nil
+        // Quiesce the render thread BEFORE detaching any node. `stop()` above
+        // only *pauses* the engine (it calls `engine.pause()`), which leaves
+        // AURemoteIO's IO thread and the output unit's render-notify block
+        // live. Detaching / disconnecting the synth or the metronome sampler
+        // out from under a paused-but-not-stopped engine races the in-flight
+        // render cycle and faults on the IO thread — observed in Crashlytics
+        // as EXC_BAD_ACCESS in `_Block_copy` (render-notify) and in
+        // `ProcessMono` / `SamplerNote::Render` (MIDISynth voice render). A
+        // full `engine.stop()` tears the IO thread down synchronously, so the
+        // graph edits below run with no renderer active.
+        //
+        // `engine.stop()` is unconditional: `pause()` already cleared
+        // `isRunning`, so the previous `if engine.isRunning` guard skipped the
+        // hard stop entirely and left the graph being mutated under a live
+        // render unit. `stop()` is a safe no-op on an already-stopped engine.
+        engine.stop()
         if let synth {
             engine.disconnectNodeOutput(synth)
             engine.detach(synth)
@@ -958,8 +974,5 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         staffMIDIChannels.removeAll()
         staffIsDrum.removeAll()
         metronome.teardown()
-        if engine.isRunning {
-            engine.stop()
-        }
     }
 }

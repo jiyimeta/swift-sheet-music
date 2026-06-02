@@ -81,6 +81,40 @@
             #expect(engine.synth != nil)
         }
 
+        @Test("teardown stops the engine, releases the synth, and re-prepares")
+        func teardownStopsEngineAndReleasesSynth() throws {
+            let part = Part(
+                id: "p",
+                instrument: Instrument(
+                    id: "i",
+                    channels: [InstrumentChannel(program: 0)],
+                ),
+                staves: [Staff(measures: [Measure(voices: [])])],
+            )
+            let score = Score(division: 480, parts: [part])
+            let engine = PlaybackEngine(soundfontResolver: NullResolver())
+            try engine.prepare(score: score)
+            #expect(engine.synth != nil)
+            #expect(engine.engine.isRunning)
+
+            engine.teardown()
+            // The synth is detached and the underlying AVAudioEngine is fully
+            // stopped — `teardown` must hard-stop before detaching nodes so the
+            // render thread can't fault on a detached synth / sampler. (See the
+            // `engine.stop()` ordering note in `PlaybackEngine.teardown`.)
+            #expect(engine.synth == nil)
+            #expect(engine.engine.isRunning == false)
+
+            // Idempotent: a second teardown must not crash.
+            engine.teardown()
+            #expect(engine.engine.isRunning == false)
+
+            // The engine spins back up on the next prepare.
+            try engine.prepare(score: score)
+            #expect(engine.synth != nil)
+            #expect(engine.engine.isRunning)
+        }
+
         @Test("seek(toTimeSeconds:) is a no-op when no sequencer is built")
         func seekToTimeWithoutPrepareNoOps() {
             let engine = PlaybackEngine(soundfontResolver: NullResolver())
