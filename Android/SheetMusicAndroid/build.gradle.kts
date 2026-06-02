@@ -98,6 +98,12 @@ android {
 tasks.matching { it.name.startsWith("compile") && it.name.endsWith("Kotlin") }
     .configureEach { dependsOn(generateWireletCodecsMain) }
 
+// The sources jar (withSourcesJar) packs the wirelet-generated source dir, so it
+// must run after codegen. Declare the dependency explicitly to satisfy Gradle's
+// task-validation — otherwise publishToMavenLocal fails on sourceReleaseJar.
+tasks.matching { it.name == "sourceReleaseJar" }
+    .configureEach { dependsOn(generateWireletCodecsMain) }
+
 afterEvaluate {
     publishing {
         publications {
