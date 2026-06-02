@@ -13,7 +13,9 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.withTransform
 import io.github.jiyimeta.sheetmusic.SheetMusicJNI
+import io.github.jiyimeta.sheetmusic.audio.model.DecodedFrame
 import io.github.jiyimeta.sheetmusic.audio.model.ScoreCursor
+import io.github.jiyimeta.sheetmusic.audio.serialization.DecodedFrameCodec
 import io.github.jiyimeta.sheetmusic.audio.serialization.ScoreCursorCodec
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
@@ -50,7 +52,7 @@ fun PlaybackCursorOverlay(
     color: Color = Color(0x33_3D_8E_FF.toInt()), // semi-transparent MuseScore blue
     modifier: Modifier = Modifier,
 ) {
-    var frame by remember { mutableStateOf<CursorFrame?>(null) }
+    var frame by remember { mutableStateOf<DecodedFrame?>(null) }
 
     LaunchedEffect(scoreHandle, cursorFlow) {
         cursorFlow.collectLatest { cursor ->
@@ -61,7 +63,10 @@ fun PlaybackCursorOverlay(
                     scoreHandle,
                     ScoreCursorCodec.encode(cursor),
                 )
-                CursorFrame.decode(bytes)
+                // `nativeCursorFrame` returns the wirelet @WireFormat encoding of
+                // DecodedFrame (length-prefixed, tagged f64 fields) — decode with
+                // the generated codec. Empty bytes mean the cursor didn't resolve.
+                if (bytes.isEmpty()) null else DecodedFrameCodec.decode(bytes)
             }
         }
     }
