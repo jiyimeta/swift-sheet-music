@@ -49,3 +49,4 @@ dependencyResolutionManagement {
 rootProject.name = "swift-sheet-music-android"
 include(":SheetMusicAudioAndroid")
 include(":SheetMusicAndroid")
+include(":SheetMusicComposeAndroid")
