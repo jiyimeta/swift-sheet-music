@@ -207,7 +207,14 @@ if isAndroid {
 }
 
 let packageDependencies: [Package.Dependency] = [
-    .package(url: "https://github.com/swiftlang/swift-java.git", exact: "0.3.0"),
+    .package(url: "https://github.com/swiftlang/swift-java.git", exact: "0.4.0"),
+    // swift-java 0.4.0's SwiftJavaTool is written against swift-subprocess 0.4.x
+    // (`OutputProtocol.standardOutput` / `ErrorOutputProtocol.standardError`).
+    // swift-subprocess 0.5.0 removed those static members, which breaks the
+    // jextract tool's compile under the swift-6.3.2 toolchain. Pin to 0.4.0 — the
+    // last release where that API still exists — so JExtractSwiftPlugin builds.
+    // Aligns with Folino's swift-java pin so a single swiftkit-core satisfies both.
+    .package(url: "https://github.com/swiftlang/swift-subprocess.git", exact: "0.4.0"),
     .package(
         url: "https://github.com/jiyimeta/swift-wirelet.git",
         exact: "0.3.1",
