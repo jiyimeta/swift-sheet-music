@@ -128,9 +128,9 @@ extension PlaybackEngine {
         )
     }
 
-    /// Best-effort staff label: prefers the part's track name, then
-    /// the instrument long name, falling back to "Staff N". Delegates to the
-    /// shared `Score.staffDisplayName(at:)` so iOS and Android stay identical.
+    /// Best-effort staff label: prefers the instrument's long name, then the
+    /// part's track name, falling back to "Staff N". Delegates to the shared
+    /// `Score.staffDisplayName(at:)` so iOS and Android stay identical.
     private func staffName(at address: StaffAddress, in score: Score) -> String {
         score.staffDisplayName(at: address)
     }

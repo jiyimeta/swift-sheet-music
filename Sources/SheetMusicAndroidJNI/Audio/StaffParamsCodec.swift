@@ -30,7 +30,7 @@ public struct StaffParams: Equatable, Sendable {
     /// Staff index within the owning part (`StaffAddress.staffIndexInPart`).
     public let staffIndexInPart: Int
     /// Mixer display label, derived once in shared Swift via
-    /// `Score.staffDisplayName(at:)` (track name → instrument long name →
+    /// `Score.staffDisplayName(at:)` (instrument long name → track name →
     /// "Staff N"). The Android engine uses this verbatim.
     public let displayName: String
     /// Owning part's `trackName`, or "" when absent.
