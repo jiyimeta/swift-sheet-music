@@ -21,6 +21,27 @@ public struct StaffParams: Equatable, Sendable {
     /// Opaque Int64 fingerprint of the owning `StaffAddress`.
     /// Computed as `Int64(partIndex) * 1_000 + Int64(staffIndexInPart)`.
     public let partAddressHash: Int64
+    /// Score-derived fields surfaced for the Android Reader inspector at iOS
+    /// parity. String fields use "" to mean "absent" (no optionals on the wire),
+    /// matching the `ScoreMetadata` convention. The Kotlin side maps "" back to
+    /// null / "not set" as needed.
+    /// Owning part's index (`StaffAddress.partIndex`).
+    public let partIndex: Int
+    /// Staff index within the owning part (`StaffAddress.staffIndexInPart`).
+    public let staffIndexInPart: Int
+    /// Mixer display label, derived once in shared Swift via
+    /// `Score.staffDisplayName(at:)` (track name → instrument long name →
+    /// "Staff N"). The Android engine uses this verbatim.
+    public let displayName: String
+    /// Owning part's `trackName`, or "" when absent.
+    public let trackName: String
+    /// Owning instrument's `longName`, or "" when absent.
+    public let instrumentLongName: String
+    /// Instrument channel volume (MIDI CC7, 0...127) — the initial staff volume.
+    public let channelVolume: UInt8
+    /// Staff's authored `defaultClefType` (e.g. "G", "F", "PERC"), or "" when
+    /// absent. Surfaced for a future Android visual inspector.
+    public let defaultClefType: String
 
     public init(
         staffIndex: Int,
@@ -28,12 +49,26 @@ public struct StaffParams: Equatable, Sendable {
         program: UInt8,
         isDrums: Bool,
         partAddressHash: Int64,
+        partIndex: Int = 0,
+        staffIndexInPart: Int = 0,
+        displayName: String = "",
+        trackName: String = "",
+        instrumentLongName: String = "",
+        channelVolume: UInt8 = 100,
+        defaultClefType: String = "",
     ) {
         self.staffIndex = staffIndex
         self.bankLSB = bankLSB
         self.program = program
         self.isDrums = isDrums
         self.partAddressHash = partAddressHash
+        self.partIndex = partIndex
+        self.staffIndexInPart = staffIndexInPart
+        self.displayName = displayName
+        self.trackName = trackName
+        self.instrumentLongName = instrumentLongName
+        self.channelVolume = channelVolume
+        self.defaultClefType = defaultClefType
     }
 
     /// Convenience factory that derives `partAddressHash` from a
@@ -67,8 +102,17 @@ public struct StaffParams: Equatable, Sendable {
 ///   u8  program
 ///   u8  isDrums                   ← 0 = false, 1 = true
 ///   i64 partAddressHash
+///   i32 partIndex
+///   i32 staffIndexInPart
+///   str displayName
+///   str trackName                 ← "" = absent
+///   str instrumentLongName        ← "" = absent
+///   u8  channelVolume             ← MIDI CC7 (0...127)
+///   str defaultClefType           ← "" = absent
 /// }
 /// ```
+/// New fields are appended (tags ≥ 6) so the original five tags keep their
+/// numbers; the tag-based Kotlin decoder skips any it doesn't recognize.
 public enum StaffParamsCodec {
     public static func encodeArray(_ params: [StaffParams]) -> Data {
         params.map(StaffParamsWire.init(from:)).encodeToData()
@@ -86,6 +130,13 @@ struct StaffParamsWire {
     var program: UInt8
     var isDrums: Bool
     var partAddressHash: Int64
+    var partIndex: Int32
+    var staffIndexInPart: Int32
+    var displayName: String
+    var trackName: String
+    var instrumentLongName: String
+    var channelVolume: UInt8
+    var defaultClefType: String
 
     init(from params: StaffParams) {
         staffIndex = Int32(params.staffIndex)
@@ -93,6 +144,13 @@ struct StaffParamsWire {
         program = params.program
         isDrums = params.isDrums
         partAddressHash = params.partAddressHash
+        partIndex = Int32(params.partIndex)
+        staffIndexInPart = Int32(params.staffIndexInPart)
+        displayName = params.displayName
+        trackName = params.trackName
+        instrumentLongName = params.instrumentLongName
+        channelVolume = params.channelVolume
+        defaultClefType = params.defaultClefType
     }
 
     func decoded() -> StaffParams {
@@ -102,6 +160,13 @@ struct StaffParamsWire {
             program: program,
             isDrums: isDrums,
             partAddressHash: partAddressHash,
+            partIndex: Int(partIndex),
+            staffIndexInPart: Int(staffIndexInPart),
+            displayName: displayName,
+            trackName: trackName,
+            instrumentLongName: instrumentLongName,
+            channelVolume: channelVolume,
+            defaultClefType: defaultClefType,
         )
     }
 }

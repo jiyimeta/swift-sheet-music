@@ -59,4 +59,19 @@ extension Score {
         guard parts.indices.contains(address.partIndex) else { return nil }
         return parts[address.partIndex]
     }
+
+    /// Best-effort per-staff display label, shared by the mixer UI on every
+    /// platform: the owning part's track name, then the instrument long name,
+    /// else "Staff N" (1-based flat display index). Both the Apple mixer
+    /// (`PlaybackEngine`) and the Android JNI staff-params bridge call this so
+    /// iOS and Android show identical names — the derivation lives here once
+    /// rather than being reimplemented per platform.
+    public func staffDisplayName(at address: StaffAddress) -> String {
+        if let part = part(at: address) {
+            if let name = part.trackName, !name.isEmpty { return name }
+            if let name = part.instrument.longName, !name.isEmpty { return name }
+        }
+        let flatIndex = allStaves.firstIndex(where: { $0.address == address }) ?? 0
+        return "Staff \(flatIndex + 1)"
+    }
 }

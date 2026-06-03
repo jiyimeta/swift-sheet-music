@@ -129,15 +129,9 @@ extension PlaybackEngine {
     }
 
     /// Best-effort staff label: prefers the part's track name, then
-    /// the instrument long name, falling back to "Staff N".
+    /// the instrument long name, falling back to "Staff N". Delegates to the
+    /// shared `Score.staffDisplayName(at:)` so iOS and Android stay identical.
     private func staffName(at address: StaffAddress, in score: Score) -> String {
-        if let part = score.part(at: address) {
-            if let n = part.trackName, !n.isEmpty { return n }
-            if let n = part.instrument.longName, !n.isEmpty {
-                return n
-            }
-        }
-        let flatIdx = score.allStaves.firstIndex(where: { $0.address == address }) ?? 0
-        return "Staff \(flatIdx + 1)"
+        score.staffDisplayName(at: address)
     }
 }

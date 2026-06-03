@@ -365,7 +365,10 @@ class AndroidPlaybackEngine internal constructor(
             _mixerChannels.value = staves.mapIndexed { i, p ->
                 MixerChannel(
                     staffIndex = i,
-                    displayName = "Staff ${i + 1}",
+                    // Shared Swift derivation (track name → instrument long name →
+                    // "Staff N"), matching the iOS mixer. Falls back to "Staff N"
+                    // if an older bridge sent an empty name.
+                    displayName = p.displayName.ifEmpty { "Staff ${i + 1}" },
                     program = if (p.isDrums) null else p.program.toInt(),
                 )
             }

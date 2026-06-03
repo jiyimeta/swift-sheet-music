@@ -31,15 +31,23 @@ extension AudioMidiBridge {
 
     static func staffParams(score: Score) -> Data {
         let entries = score.allStaves.enumerated().map { idx, entry -> StaffParams in
-            let part = score.part(at: entry.address)
+            let address = entry.address
+            let part = score.part(at: address)
             let channel = part?.instrument.channels.first ?? InstrumentChannel()
             return StaffParams(
                 staffIndex: idx,
                 bankLSB: UInt8(clamping: channel.bank),
                 program: UInt8(clamping: channel.program),
                 isDrums: part?.instrument.useDrumset == true,
-                partAddressHash: Int64(entry.address.partIndex) * 1000
-                    + Int64(entry.address.staffIndexInPart),
+                partAddressHash: Int64(address.partIndex) * 1000
+                    + Int64(address.staffIndexInPart),
+                partIndex: address.partIndex,
+                staffIndexInPart: address.staffIndexInPart,
+                displayName: score.staffDisplayName(at: address),
+                trackName: part?.trackName ?? "",
+                instrumentLongName: part?.instrument.longName ?? "",
+                channelVolume: UInt8(clamping: channel.volume),
+                defaultClefType: entry.staff.defaultClefType ?? "",
             )
         }
         return StaffParamsCodec.encodeArray(entries)
