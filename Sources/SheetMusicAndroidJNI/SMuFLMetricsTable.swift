@@ -1,6 +1,5 @@
 import Foundation
 import SheetMusicLayout
-import Wirelet
 
 #if !canImport(CoreGraphics)
     /// On Android, Foundation's CoreGraphics shims also export `CGFloat`,
@@ -36,10 +35,14 @@ import Wirelet
 /// All little-endian. The values stored are in points at `referenceSize`;
 /// the provider rescales to the requested `pointSize` at lookup.
 ///
-/// v2 swapped the hand-written byte cursor for `@WireFormat`. Array
-/// count is now an `Int32` length prefix (was `UInt32`) — byte layout
-/// is identical for any non-negative count, but a version bump
-/// surfaces accidental mix-and-match builds as
+/// The layout is a flat byte cursor — magic, version, referenceSize, an
+/// `Int32` glyph count, then `count` fixed-size entries. It is NOT
+/// `@WireFormat`/protobuf framing: the producer (`BravuraMetricsBuilder.kt`)
+/// hand-writes the bytes from raw `Paint` output, so `decode` hand-parses
+/// them to match. (A brief `@WireFormat` migration decoded this with the
+/// macro, which silently failed — the macro's tag/varint/length-delimited
+/// framing never matched the flat producer, so the table never installed.)
+/// The `version` field guards against accidental mix-and-match builds via
 /// `unsupportedVersion`.
 struct SMuFLMetricsTable {
     struct Entry {
@@ -59,54 +62,70 @@ struct SMuFLMetricsTable {
     enum DecodeError: Error, Equatable {
         case badMagic(UInt32)
         case unsupportedVersion(UInt32)
+        case truncated
     }
 
+    /// Parse the flat little-endian byte layout written by Android's
+    /// `BravuraMetricsBuilder.kt` (a raw `ByteBuffer`, NOT protobuf-style
+    /// `@WireFormat` framing). The producer hand-rolls the bytes from raw
+    /// `Paint.getTextPath` output, so the reader is hand-written to match
+    /// it field-for-field — `magic | version | referenceSize | count |
+    /// [entry × count]` per the wire-layout doc above. (This used to go
+    /// through `@WireFormat`, but that macro emits tag/varint/length-
+    /// delimited framing the hand-written producer never matched, so the
+    /// decode silently failed and the metrics table was never installed.)
     static func decode(_ data: Data) throws -> SMuFLMetricsTable {
-        let wire = try SMuFLMetricsWire(decoding: data)
-        guard wire.magic == magic else { throw DecodeError.badMagic(wire.magic) }
-        guard wire.version == version else {
-            throw DecodeError.unsupportedVersion(wire.version)
+        var cursor = 0
+        func readU32() throws -> UInt32 {
+            guard cursor + 4 <= data.count else { throw DecodeError.truncated }
+            let base = data.index(data.startIndex, offsetBy: cursor)
+            var v: UInt32 = 0
+            for i in 0 ..< 4 {
+                v |= UInt32(data[data.index(base, offsetBy: i)]) << (8 * i)
+            }
+            cursor += 4
+            return v
         }
+        func readU64() throws -> UInt64 {
+            guard cursor + 8 <= data.count else { throw DecodeError.truncated }
+            let base = data.index(data.startIndex, offsetBy: cursor)
+            var v: UInt64 = 0
+            for i in 0 ..< 8 {
+                v |= UInt64(data[data.index(base, offsetBy: i)]) << (8 * i)
+            }
+            cursor += 8
+            return v
+        }
+        func readF32() throws -> Double {
+            try Double(Float(bitPattern: readU32()))
+        }
+        func readF64() throws -> Double {
+            try Double(bitPattern: readU64())
+        }
+
+        let magicValue = try readU32()
+        guard magicValue == magic else { throw DecodeError.badMagic(magicValue) }
+        let versionValue = try readU32()
+        guard versionValue == version else {
+            throw DecodeError.unsupportedVersion(versionValue)
+        }
+        let referenceSize = try readF64()
+        let count = try readU32()
         var entries: [UInt32: Entry] = [:]
-        entries.reserveCapacity(wire.entries.count)
-        for entry in wire.entries {
-            entries[entry.codepoint] = Entry(
-                advance: Double(entry.advance),
-                bboxX: Double(entry.bboxX),
-                bboxY: Double(entry.bboxY),
-                bboxW: Double(entry.bboxW),
-                bboxH: Double(entry.bboxH),
+        entries.reserveCapacity(Int(count))
+        for _ in 0 ..< count {
+            let cp = try readU32()
+            let entry = try Entry(
+                advance: readF32(),
+                bboxX: readF32(),
+                bboxY: readF32(),
+                bboxW: readF32(),
+                bboxH: readF32(),
             )
+            entries[cp] = entry
         }
-        return SMuFLMetricsTable(
-            referenceSize: wire.referenceSize,
-            entries: entries,
-        )
+        return SMuFLMetricsTable(referenceSize: referenceSize, entries: entries)
     }
-}
-
-// Kotlin codecs are intentionally skipped: `BravuraMetricsBuilder.kt`
-// hand-rolls the on-wire bytes directly with a ByteBuffer (it consumes
-// raw Android Paint output) and never goes through a generated codec.
-// Emitting one would produce dead code that drifts from the model class
-// in `audio.model.SMuFLMetrics`.
-
-@WireFormat(kotlin: .skip)
-struct SMuFLMetricsWire {
-    var magic: UInt32
-    var version: UInt32
-    var referenceSize: Double
-    var entries: [SMuFLMetricsEntryWire]
-}
-
-@WireFormat(kotlin: .skip)
-struct SMuFLMetricsEntryWire {
-    var codepoint: UInt32
-    var advance: Float
-    var bboxX: Float
-    var bboxY: Float
-    var bboxW: Float
-    var bboxH: Float
 }
 
 /// Factory that returns a `FontMetricsProvider` backed by the given
