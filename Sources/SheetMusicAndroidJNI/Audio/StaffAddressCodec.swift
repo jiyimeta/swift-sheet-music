@@ -20,16 +20,16 @@ public enum StaffAddressCodec {
 }
 
 @WireFormat
-struct StaffAddressWire {
-    var partIndex: Int32
-    var staffIndexInPart: Int32
+public struct StaffAddressWire {
+    public var partIndex: Int32
+    public var staffIndexInPart: Int32
 
-    init(from value: StaffAddress) {
+    public init(from value: StaffAddress) {
         partIndex = Int32(value.partIndex)
         staffIndexInPart = Int32(value.staffIndexInPart)
     }
 
-    func decoded() -> StaffAddress {
+    public func decoded() -> StaffAddress {
         StaffAddress(
             partIndex: Int(partIndex),
             staffIndexInPart: Int(staffIndexInPart),
