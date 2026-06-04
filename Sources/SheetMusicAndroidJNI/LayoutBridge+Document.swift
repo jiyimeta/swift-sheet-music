@@ -32,9 +32,16 @@ extension LayoutBridge {
         )
 
         let commands = buildCommands(layout: layout)
+        // `pageHeightMM` is only a viewport hint and is intentionally NOT used as
+        // the page height: the layout is continuous (`wrapToViewWidth`), so the
+        // page's real height is the laid-out document height. Reporting the hint
+        // here (the previous behavior) made scroll-host consumers size their
+        // scrollable content too short — everything below the hint height became
+        // unreachable. Convert pt → mm so it matches the mm-space draw commands
+        // emitted by `buildCommands`.
         let page = EncodablePage(
             widthMM: pageWidthMM,
-            heightMM: pageHeightMM,
+            heightMM: Double(layout.size.height) / mmToPt,
             commands: commands,
         )
         return (layout, DrawProgramCodec.encode(pages: [page]))

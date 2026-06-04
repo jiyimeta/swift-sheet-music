@@ -77,6 +77,33 @@ fun ScoreCanvas(
     }
 }
 
+/**
+ * Gesture-free renderer for a single [EncodablePage]. Unlike [ScoreCanvas],
+ * this installs no pan/zoom pointer input and applies no translate — the
+ * caller is expected to host it inside a native scroll container (which owns
+ * scroll bounds, fling, and overscroll) and to bake zoom into [pxPerMM]
+ * (`fitPxPerMM * scale`). Drawing at the zoomed [pxPerMM] re-rasterizes glyphs
+ * at the target resolution, so the score stays sharp at every zoom level.
+ *
+ * @param page          the page to draw (document coordinates in mm)
+ * @param fontProvider  supplies the SMuFL + text typefaces
+ * @param pxPerMM       pixels per document-millimetre, already including zoom
+ * @param modifier      should size the canvas to the zoomed content extent
+ */
+@Composable
+fun ScorePage(
+    page: EncodablePage,
+    fontProvider: FontProvider,
+    pxPerMM: Float,
+    modifier: Modifier = Modifier,
+) {
+    val smufl = fontProvider.smuflTypeface()
+    val text = fontProvider.textTypeface()
+    Canvas(modifier = modifier) {
+        drawPage(page, pxPerMM, smufl, text)
+    }
+}
+
 private fun DrawScope.drawPage(
     page: EncodablePage,
     pxPerMM: Float,
