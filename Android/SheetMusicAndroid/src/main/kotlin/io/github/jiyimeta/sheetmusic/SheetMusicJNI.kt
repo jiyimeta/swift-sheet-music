@@ -45,17 +45,25 @@ object SheetMusicJNI {
     fun nativeOpeningQuarterBpm(scoreHandle: Long): Double =
         SwiftJavaJNI.nativeOpeningQuarterBpm(scoreHandle)
 
-    /** Returns an empty array on failure (e.g. invalid handle). */
+    /**
+     * Returns an empty array on failure (e.g. invalid handle or an
+     * `optionsBlob` that fails to decode). `optionsBlob` is a
+     * `LayoutOptionsWire` payload carrying the layout mode, staff size,
+     * break / multi-measure-rest / invisible-element toggles, hidden staves,
+     * and clef overrides from the Reader's display inspector.
+     */
     fun nativeComputeLayout(
         scoreHandle: Long,
         pageWidthMM: Double,
         pageHeightMM: Double,
+        optionsBlob: ByteArray,
     ): ByteArray {
         val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
         return SwiftJavaJNI.nativeComputeLayout(
             scoreHandle,
             pageWidthMM,
             pageHeightMM,
+            SwiftData.fromByteArray(optionsBlob, arena),
             arena,
         ).toByteArray()
     }

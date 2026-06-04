@@ -88,19 +88,30 @@ public func nativeInstallSMuFLMetrics(bytes: Data) -> Bool {
 
 /// JNI entry point exposed via swift-java for the Kotlin
 /// `SheetMusicJNI.nativeComputeLayout(...)` call site. Returns an empty
-/// `Data` when the score handle is unknown; otherwise stores the laid-out
-/// document in `LayoutDocumentCache` and returns the encoded draw-program
-/// payload.
+/// `Data` when the score handle is unknown or the options blob fails to
+/// decode; otherwise stores the laid-out document in `LayoutDocumentCache`
+/// and returns the encoded draw-program payload. `optionsBlob` is a
+/// `LayoutOptionsWire` payload carrying the layout mode, staff size, break /
+/// multi-measure-rest / invisible-element toggles, hidden staves, and clef
+/// overrides selected in the Android Reader's display inspector.
 public func nativeComputeLayout(
     scoreHandle: Int64,
     pageWidthMM: Double,
     pageHeightMM: Double,
+    optionsBlob: Data,
 ) -> Data {
     guard let score = scoreTable.value(for: scoreHandle) else { return Data() }
+    let optionsWire: LayoutOptionsWire
+    do {
+        optionsWire = try LayoutOptionsCodec.decode(optionsBlob)
+    } catch {
+        return Data()
+    }
     let result = LayoutBridge.computeWithDocument(
         score: score,
         pageWidthMM: pageWidthMM,
         pageHeightMM: pageHeightMM,
+        options: optionsWire,
     )
     LayoutDocumentCache.store(handle: scoreHandle, document: result.document)
     return result.encoded

@@ -45,6 +45,22 @@ extension LayoutOptionsWire {
     public var clefOverrideMap: [StaffAddress: String] {
         Dictionary(uniqueKeysWithValues: clefOverrides.map { ($0.address.decoded(), $0.rawType) })
     }
+
+    /// Vertical-mode options with engine defaults — no hidden staves, no clef
+    /// overrides, honor authored breaks, multi-measure rests off, invisible
+    /// elements hidden. Used as the fallback when a caller has no display
+    /// options (legacy `LayoutBridge.compute`).
+    public static var verticalDefault: LayoutOptionsWire {
+        LayoutOptionsWire(
+            layoutMode: Mode.vertical.rawValue,
+            staffSize: 28,
+            honorLayoutBreaks: 1,
+            collapseMultiMeasureRests: 0,
+            showsInvisibleElements: 0,
+            hiddenStaves: [],
+            clefOverrides: [],
+        )
+    }
 }
 
 /// Codec for `LayoutOptionsWire`.

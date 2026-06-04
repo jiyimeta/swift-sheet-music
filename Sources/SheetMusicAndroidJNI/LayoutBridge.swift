@@ -57,6 +57,7 @@ public enum LayoutBridge {
             score: score,
             pageWidthMM: pageWidthMM,
             pageHeightMM: pageHeightMM,
+            options: .verticalDefault,
         ).encoded
     }
 

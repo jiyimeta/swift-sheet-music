@@ -24,6 +24,7 @@
 
             let result = LayoutBridge.computeWithDocument(
                 score: score, pageWidthMM: 210, pageHeightMM: 297,
+                options: .verticalDefault,
             )
             LayoutDocumentCache.store(handle: handle, document: result.document)
             defer { LayoutDocumentCache.release(handle) }
@@ -43,6 +44,7 @@
 
             let result = LayoutBridge.computeWithDocument(
                 score: score, pageWidthMM: 210, pageHeightMM: 297,
+                options: .verticalDefault,
             )
             LayoutDocumentCache.store(handle: handle, document: result.document)
             LayoutDocumentCache.release(handle)
@@ -65,6 +67,7 @@
 
             let result = LayoutBridge.computeWithDocument(
                 score: score, pageWidthMM: 210, pageHeightMM: 297,
+                options: .verticalDefault,
             )
             LayoutDocumentCache.store(handle: handle, document: result.document)
             defer { LayoutDocumentCache.release(handle) }
@@ -121,6 +124,7 @@
 
             let result = LayoutBridge.computeWithDocument(
                 score: score, pageWidthMM: 210, pageHeightMM: 297,
+                options: .verticalDefault,
             )
             LayoutDocumentCache.store(handle: handle, document: result.document)
             defer { LayoutDocumentCache.release(handle) }
