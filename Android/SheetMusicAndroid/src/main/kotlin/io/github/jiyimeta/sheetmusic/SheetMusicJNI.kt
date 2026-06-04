@@ -110,6 +110,24 @@ object SheetMusicJNI {
     }
 
     /**
+     * Bounding rectangle (document/mm coordinates) of the MEASURE the cursor
+     * [cursorBytes] sits in — the measure anchor for the horizontal Reader's
+     * leading-edge auto-scroll. Same wire format as [nativeCursorFrame]
+     * (a single CursorFrame DecodedFrame). Empty array if unresolved.
+     */
+    fun nativeMeasureFrame(
+        scoreHandle: Long,
+        cursorBytes: ByteArray,
+    ): ByteArray {
+        val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
+        return SwiftJavaJNI.nativeMeasureFrame(
+            scoreHandle,
+            SwiftData.fromByteArray(cursorBytes, arena),
+            arena,
+        ).toByteArray()
+    }
+
+    /**
      * Resolve the highlight rectangles (mm coordinates) covering a
      * loop region spanning ticks `[fromTick, toTick)`. Returns one
      * rect per intersected system; the rect spans the full staff
