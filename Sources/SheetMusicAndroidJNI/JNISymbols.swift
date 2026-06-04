@@ -56,6 +56,17 @@ public func nativeOpeningQuarterBpm(scoreHandle: Int64) -> Double {
     return score.openingQuarterBpm
 }
 
+// MARK: - Parts/staves descriptor (swift-java entry point)
+
+/// JNI entry point exposed via swift-java for the Kotlin
+/// `SheetMusicJNI.nativePartsStaves(...)` call site. Returns the parts/staves
+/// descriptor (names + per-staff default clef) for the inspector's Parts section.
+/// Empty `Data` when the handle is unknown.
+public func nativePartsStaves(scoreHandle: Int64) -> Data {
+    guard let score = scoreTable.value(for: scoreHandle) else { return Data() }
+    return PartsStavesWire(score: score).encodeToData()
+}
+
 // MARK: - SMuFL font metrics (swift-java entry point)
 
 /// JNI entry point exposed via swift-java for the Kotlin

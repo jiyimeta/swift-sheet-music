@@ -71,6 +71,16 @@ object SheetMusicJNI {
     }
 
     /**
+     * Parts/staves descriptor for the Reader display inspector's Parts section:
+     * per part a name + each staff's default clef rawType. Empty array for an
+     * unknown handle. Decode via the generated PartsStavesWireCodec.
+     */
+    fun nativePartsStaves(handle: Long): ByteArray {
+        val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
+        return SwiftJavaJNI.nativePartsStaves(handle, arena).toByteArray()
+    }
+
+    /**
      * Resolve the bounding rectangle (document/mm coordinates) of the cursor
      * identified by [cursorBytes] within the laid-out score [scoreHandle].
      *
