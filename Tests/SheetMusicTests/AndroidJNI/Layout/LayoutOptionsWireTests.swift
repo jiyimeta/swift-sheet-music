@@ -13,11 +13,8 @@
                 honorLayoutBreaks: 1,
                 collapseMultiMeasureRests: 0,
                 showsInvisibleElements: 1,
-                hiddenStaves: [StaffAddressWire(from: StaffAddress(partIndex: 1, staffIndexInPart: 0))],
-                clefOverrides: [ClefOverrideWire(
-                    address: StaffAddressWire(from: StaffAddress(partIndex: 0, staffIndexInPart: 1)),
-                    rawType: "F8va",
-                )],
+                hiddenStaves: [HiddenStaffWire(partIndex: 1, staffIndexInPart: 0)],
+                clefOverrides: [ClefOverrideWire(partIndex: 0, staffIndexInPart: 1, rawType: "F8va")],
             )
             let decoded = try LayoutOptionsCodec.decode(wire.encodeToData())
             #expect(decoded.staffSize == 18.5)
