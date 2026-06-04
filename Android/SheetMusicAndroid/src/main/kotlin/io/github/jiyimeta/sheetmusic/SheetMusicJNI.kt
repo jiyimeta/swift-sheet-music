@@ -37,6 +37,14 @@ object SheetMusicJNI {
         return SwiftJavaJNI.nativeScoreMetadata(handle, arena).toByteArray()
     }
 
+    /**
+     * Quarter-note BPM of the score's opening tempo marking (the tempo governing
+     * the start), or MuseScore's 120 default. The Reader multiplies this by the
+     * playback rate for the inspector's "♩ = N" tempo readout.
+     */
+    fun nativeOpeningQuarterBpm(scoreHandle: Long): Double =
+        SwiftJavaJNI.nativeOpeningQuarterBpm(scoreHandle)
+
     /** Returns an empty array on failure (e.g. invalid handle). */
     fun nativeComputeLayout(
         scoreHandle: Long,

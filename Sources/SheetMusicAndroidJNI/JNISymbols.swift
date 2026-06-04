@@ -46,6 +46,16 @@ public func nativeScoreMetadata(scoreHandle: Int64) -> Data {
     ).encodeToData()
 }
 
+/// JNI entry point exposed via swift-java for the Kotlin
+/// `SheetMusicJNI.nativeOpeningQuarterBpm(...)` call site. Returns the score's
+/// opening quarter-note BPM (the tempo governing the start), or MuseScore's
+/// 120 default when the handle is unknown. The Android Reader multiplies this
+/// by the playback rate to render the "♩ = N" tempo readout.
+public func nativeOpeningQuarterBpm(scoreHandle: Int64) -> Double {
+    guard let score = scoreTable.value(for: scoreHandle) else { return 120 }
+    return score.openingQuarterBpm
+}
+
 // MARK: - SMuFL font metrics (swift-java entry point)
 
 /// JNI entry point exposed via swift-java for the Kotlin
