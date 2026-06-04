@@ -23,13 +23,14 @@ public struct StaffWire {
 }
 
 extension PartsStavesWire {
-    /// Derives the descriptor from a decoded `Score`. Mirrors the display-name
-    /// priority used by `Score.staffDisplayName(at:)` and `LayoutEngine`:
-    /// `instrument.longName ?? part.trackName ?? ""`.
+    /// Derives the descriptor from a decoded `Score`, using the canonical
+    /// `Score.staffDisplayName(at:)` helper for iOS/Android name parity:
+    /// instrument long name → track name → "Staff N" fallback, with empty
+    /// strings treated as absent.
     public init(score: Score) {
-        parts = score.parts.map { part in
+        parts = score.parts.enumerated().map { partIndex, part in
             PartWire(
-                name: part.instrument.longName ?? part.trackName ?? "",
+                name: score.staffDisplayName(at: StaffAddress(partIndex: partIndex, staffIndexInPart: 0)),
                 staves: part.staves.map { staff in
                     StaffWire(defaultClefRawType: staff.defaultClefType ?? "")
                 },
