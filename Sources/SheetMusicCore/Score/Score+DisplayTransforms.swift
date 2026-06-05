@@ -1,4 +1,97 @@
 extension Score {
+    /// Transpose a key-signature accidental count (`-7…+7`, flats negative) by `delta` semitones along the circle of
+    /// fifths. One semitone up = +7 positions (7 fifths). The result is normalized to `[-6, +6]` so the simpler
+    /// enharmonic spelling wins (e.g. C +1 → Db (-5), not C# (+7)); adding/removing 12 accidentals is an enharmonic
+    /// respelling of the same pitch set, so this never changes which pitches sound — only how the key is written.
+    static func transposedKey(_ key: Int, bySemitones delta: Int) -> Int {
+        var k = key + 7 * delta
+        while k > 6 {
+            k -= 12
+        }
+        while k < -6 {
+            k += 12
+        }
+        return k
+    }
+
+    /// Returns a copy of the score with every pitched note shifted by `delta` semitones and every key signature
+    /// transposed to match. Notes are re-spelled against the **destination** key via
+    /// `Note.shifted(bySemitones:in:)`, so the engraving reads in the new key rather than as a wall of accidentals.
+    ///
+    /// Skipped, leaving pitch untouched:
+    /// - parts whose instrument `useDrumset` is true, and
+    /// - staves whose `group` is `"percussion"` (unpitched — transposing would re-map drum sounds).
+    ///
+    /// The active key per note is resolved at **per-measure** granularity via `activeKey(staff:measureIndex:)`,
+    /// matching the coarsening the arrow-key transpose already uses; mid-measure key changes (rare) take effect from
+    /// their measure start. Grace notes are transposed alongside their parent chord.
+    ///
+    /// Tick structure, note IDs, and element ordering are unchanged — only `pitch` / `tpc` / `accidental` and
+    /// `KeySignature.concertKey` move — so playback cursors and seek positions stay valid against the transposed score.
+    public func transposed(bySemitones delta: Int) -> Score {
+        guard delta != 0 else { return self }
+        var copy = self
+        for partIndex in copy.parts.indices {
+            if copy.parts[partIndex].instrument.useDrumset { continue }
+            for staffIndex in copy.parts[partIndex].staves.indices {
+                if copy.parts[partIndex].staves[staffIndex].group == "percussion" {
+                    continue
+                }
+                let address = StaffAddress(
+                    partIndex: partIndex, staffIndexInPart: staffIndex,
+                )
+                let measures = copy.parts[partIndex].staves[staffIndex].measures
+                for measureIndex in measures.indices {
+                    let oldKey = activeKey(staff: address, measureIndex: measureIndex)
+                    let newKey = Self.transposedKey(oldKey, bySemitones: delta)
+                    let voices = copy.parts[partIndex].staves[staffIndex]
+                        .measures[measureIndex].voices
+                    for voiceIndex in voices.indices {
+                        let elements = copy.parts[partIndex].staves[staffIndex]
+                            .measures[measureIndex].voices[voiceIndex].elements
+                        for elementIndex in elements.indices {
+                            switch elements[elementIndex] {
+                            case var .keySignature(k):
+                                k.concertKey = Self.transposedKey(
+                                    k.concertKey, bySemitones: delta,
+                                )
+                                copy.parts[partIndex].staves[staffIndex]
+                                    .measures[measureIndex].voices[voiceIndex]
+                                    .elements[elementIndex] = .keySignature(k)
+                            case var .chord(c):
+                                c.notes = ChordNotes(c.notes.map {
+                                    $0.shifted(bySemitones: delta, in: newKey) ?? $0
+                                })
+                                c.graceNotesBefore = c.graceNotesBefore.map {
+                                    Self.transposedGrace($0, delta: delta, key: newKey)
+                                }
+                                c.graceNotesAfter = c.graceNotesAfter.map {
+                                    Self.transposedGrace($0, delta: delta, key: newKey)
+                                }
+                                copy.parts[partIndex].staves[staffIndex]
+                                    .measures[measureIndex].voices[voiceIndex]
+                                    .elements[elementIndex] = .chord(c)
+                            default:
+                                break
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return copy
+    }
+
+    private static func transposedGrace(
+        _ grace: GraceChord, delta: Int, key: Int,
+    ) -> GraceChord {
+        var g = grace
+        g.notes = ChordNotes(grace.notes.map {
+            $0.shifted(bySemitones: delta, in: key) ?? $0
+        })
+        return g
+    }
+
     /// Authored opening clef rawType for the staff at `address`: the explicit measure-0 clef when one exists, otherwise
     /// the staff's `defaultClefType`. Returns nil when the address points outside the score or the staff declares no
     /// default. Callers (e.g. the Reader's clef-override picker) layer their own fallback on top. Shared by iOS and the
