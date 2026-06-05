@@ -16,6 +16,9 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -136,6 +139,28 @@ fun AudioControls(
                     onValueChange = { viewModel.engine.value?.setRate(it) },
                     valueRange = 0.5f..2.0f,
                     steps = 29,
+                )
+            }
+
+            var a4Hz by remember { mutableFloatStateOf(440f) }
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp)
+            ) {
+                Text(
+                    text = "A4: %.1f Hz".format(a4Hz),
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                Slider(
+                    value = a4Hz,
+                    onValueChange = { hz ->
+                        a4Hz = hz
+                        viewModel.engine.value?.setMasterTuning(
+                            1200.0 * (kotlin.math.ln(hz.toDouble() / 440.0) / kotlin.math.ln(2.0))
+                        )
+                    },
+                    valueRange = 415f..466f,
                 )
             }
         }

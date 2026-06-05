@@ -202,6 +202,19 @@ internal class FluidSynthEngine(
         )
     }
 
+    /**
+     * Retune every melodic staff channel by [cents] off A4=440 via MIDI Master
+     * Tuning RPN (FluidSynth honors it). Drum channels stay at concert pitch.
+     */
+    fun setMasterTuning(cents: Double) {
+        val s = synth ?: return
+        val rpn = MasterTuning.rpnControlChanges(cents)
+        for (ch in 0 until staffCountValue) {
+            if (staffLoadParams[ch]?.isDrums == true) continue
+            for (cc in rpn) s.cc(ch, cc.controller, cc.value)
+        }
+    }
+
     /** Fires noteOn on [staffIndex]'s channel. */
     fun previewNoteOn(staffIndex: Int, pitch: Int, velocity: Int) {
         synth?.noteOn(staffIndex, pitch, velocity)

@@ -257,6 +257,7 @@ class AndroidPlaybackEngine internal constructor(
 
     @Volatile private var masterVolume: Float = 1.0f
     @Volatile private var pendingRate: Float = 1.0f
+    @Volatile private var masterTuningCents: Double = 0.0
 
     // ── prepare ──────────────────────────────────────────────────────
 
@@ -313,6 +314,7 @@ class AndroidPlaybackEngine internal constructor(
             // Single fluid_synth_t — channels 0..N-1 map to staves 0..N-1.
             val engine = FluidSynthEngine(synthFactory)
             engine.setupStaves(staves, soundfontResolver, context)
+            if (masterTuningCents != 0.0) engine.setMasterTuning(masterTuningCents)
             this@AndroidPlaybackEngine.fluidSynthEngine = engine
 
             // Dedicated metronome synth on a separate fluid_synth_t. The
@@ -670,6 +672,16 @@ class AndroidPlaybackEngine internal constructor(
         if (_state.value == PlaybackState.EXPORTING) return
         fluidSynthEngine?.setStaffProgram(staffIndex, program)
         updateChannel(staffIndex) { it.copy(program = program) }
+    }
+
+    /**
+     * Retune playback to an A4 reference ([cents] offset from 440). Persists across prepare.
+     * No-op when [state] is [PlaybackState.EXPORTING].
+     */
+    fun setMasterTuning(cents: Double) {
+        if (_state.value == PlaybackState.EXPORTING) return
+        masterTuningCents = cents
+        fluidSynthEngine?.setMasterTuning(cents)
     }
 
     // ── Metronome ────────────────────────────────────────────────────
