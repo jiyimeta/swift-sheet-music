@@ -46,6 +46,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * Public facade that wires [SheetMusicAudioJNI] + [FluidSynthEngine] +
@@ -258,6 +259,13 @@ class AndroidPlaybackEngine internal constructor(
     @Volatile private var masterVolume: Float = 1.0f
     @Volatile private var pendingRate: Float = 1.0f
     @Volatile private var masterTuningCents: Double = 0.0
+
+    /**
+     * Count of in-flight previews that started the Oboe output stream while the
+     * engine was idle/paused. The last one to drain restores the stream to its
+     * stopped state. See [playPreview].
+     */
+    private val previewStreamHolders = AtomicInteger(0)
 
     // ── prepare ──────────────────────────────────────────────────────
 
@@ -585,10 +593,28 @@ class AndroidPlaybackEngine internal constructor(
         if (packed == -1L || packed.toULong() == 0xFFFF_FFFF_FFFF_FFFFuL) return
         val pitch = ((packed.toULong() shr 32) and 0xFFFF_FFFFu).toInt()
         val staffIndex = (packed.toULong() and 0xFFFF_FFFFu).toInt()
+        // The Oboe output driver pulls samples only while it's running — it is
+        // started in play() and stopped in pause() / stop(). When we're idle or
+        // paused the stream is open but not running, so previewNoteOn() would
+        // queue a note nobody pulls → silence. Start the stream for the preview
+        // (no-op if already running) and restore the host's paused/idle state
+        // after the note drains, so the audio-focus / MediaSession behavior that
+        // pause() established (the reason it stops the stream) is preserved.
+        val startedStreamForPreview = _state.value != PlaybackState.PLAYING
+        if (startedStreamForPreview) {
+            previewStreamHolders.incrementAndGet()
+            oboeStream?.play()
+        }
         engine.previewNoteOn(staffIndex, pitch, velocity)
         previewScope.launch {
             delay(durationMillis)
             engine.previewNoteOff(staffIndex, pitch)
+            if (startedStreamForPreview &&
+                previewStreamHolders.decrementAndGet() == 0 &&
+                _state.value != PlaybackState.PLAYING
+            ) {
+                oboeStream?.stop()
+            }
         }
     }
 

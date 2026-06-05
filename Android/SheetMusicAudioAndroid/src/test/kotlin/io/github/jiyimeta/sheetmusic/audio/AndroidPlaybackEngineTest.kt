@@ -102,6 +102,25 @@ private val minimalSmf: ByteArray = byteArrayOf(
     0x01, 0xE0.toByte(),              // 480 ticks/quarter
 )
 
+// ── Recording OboeStream for inspection ──────────────────────────────────
+
+/**
+ * [OboeStream] subclass that records play/stop invocation counts.
+ *
+ * Mirrors [NoOpOboeStream] (no AudioTrack is ever constructed) but counts
+ * [play] / [stop] so tests can assert the audio output driver is started for
+ * a preview and restored afterward. Counters are [java.util.concurrent.atomic.AtomicInteger]
+ * because [stop] may be invoked from the preview drain coroutine.
+ */
+internal class RecordingOboeStream : OboeStream() {
+    val playCount = java.util.concurrent.atomic.AtomicInteger(0)
+    val stopCount = java.util.concurrent.atomic.AtomicInteger(0)
+    override fun open() { /* skip AudioTrack construction */ }
+    override fun play() { playCount.incrementAndGet() }
+    override fun stop() { stopCount.incrementAndGet() }
+    override fun close() { /* no-op */ }
+}
+
 // ── FakePlayerBindings for inspection ────────────────────────────────────
 
 /** Records calls made through PlayerDriver's NativeBindings seam. */
@@ -143,6 +162,7 @@ private fun newEngineForTests(
     // or call teardown() in finally — enforced via tracked() / preparedEngine().
     pollDispatcher: kotlinx.coroutines.CoroutineDispatcher =
         kotlinx.coroutines.test.UnconfinedTestDispatcher(testScheduler),
+    oboeFactory: () -> OboeStream = { FakeOboeStream.create() },
 ): AndroidPlaybackEngine = AndroidPlaybackEngine(
     context = null,
     soundfontResolver = StubSoundfontResolver(),
@@ -152,7 +172,7 @@ private fun newEngineForTests(
         FakeSynthDriver(fakeSynthDrivers.size).also { fakeSynthDrivers += it }
     },
     playerFactory = { _ -> PlayerDriver(0L, playerBindings) },
-    oboeFactory = { FakeOboeStream.create() },
+    oboeFactory = oboeFactory,
     pollDispatcher = pollDispatcher,
 )
 
@@ -535,6 +555,93 @@ class AndroidPlaybackEngineTest {
             )
         }
     }
+
+    // T40b — playPreview starts/restores the Oboe output stream (Bug: silent preview)
+
+    private fun previewBridge(): FakeJniBridge = FakeJniBridge(
+        timelineSummaryResult = longArrayOf(960L, 2_000_000L, 480L),
+        staffParamsResult = oneStaffPayload(),
+        metronomeBeatsResult = downbeatOnlyBeats(),
+        renderMidiResult = minimalSmf,
+        // Valid packed value: pitch 67 in high 32 bits, staffIndex 0 in low.
+        pitchAndStaffOfNoteResult = (67L shl 32) or 0L,
+    )
+
+    @Test
+    fun `preview while not playing starts the audio stream then restores it stopped`() =
+        runTest(testDispatcher) {
+            val oboe = RecordingOboeStream()
+            val engine = newEngineForTests(bridge = previewBridge(), oboeFactory = { oboe })
+                .also { managedEngines += it }
+            engine.prepare(1L)
+            // state == PREPARED; not playing.
+            val playBefore = oboe.playCount.get()
+            val stopBefore = oboe.stopCount.get()
+
+            val noteID = NoteID(StaffAddress(0, 0), 0, 0, 0, 0)
+            engine.playPreview(noteID, durationMillis = 50)
+
+            assertTrue(
+                "preview must START the audio stream so the queued note is audible",
+                oboe.playCount.get() > playBefore,
+            )
+
+            advanceTimeBy(50 + 20)
+            testScheduler.runCurrent()
+
+            assertTrue(
+                "preview must STOP (restore) the audio stream after the note drains, " +
+                    "since we were not playing",
+                oboe.stopCount.get() > stopBefore,
+            )
+        }
+
+    @Test
+    fun `preview while playing does not stop the stream on drain`() = runTest(testDispatcher) {
+        val oboe = RecordingOboeStream()
+        val engine = newEngineForTests(bridge = previewBridge(), oboeFactory = { oboe })
+            .also { managedEngines += it }
+        engine.prepare(1L)
+        engine.play() // state == PLAYING, stream running
+        val stopBefore = oboe.stopCount.get()
+
+        val noteID = NoteID(StaffAddress(0, 0), 0, 0, 0, 0)
+        engine.playPreview(noteID, durationMillis = 50)
+
+        advanceTimeBy(50 + 20)
+        testScheduler.runCurrent()
+
+        assertEquals(
+            "preview must NOT stop the stream while playing — playback keeps running",
+            stopBefore,
+            oboe.stopCount.get(),
+        )
+        engine.teardown()
+    }
+
+    @Test
+    fun `overlapping previews only stop the stream once after both drain`() =
+        runTest(testDispatcher) {
+            val oboe = RecordingOboeStream()
+            val engine = newEngineForTests(bridge = previewBridge(), oboeFactory = { oboe })
+                .also { managedEngines += it }
+            engine.prepare(1L)
+            val stopBefore = oboe.stopCount.get()
+
+            val noteID = NoteID(StaffAddress(0, 0), 0, 0, 0, 0)
+            // Two overlapping previews before the first drains.
+            engine.playPreview(noteID, durationMillis = 50)
+            engine.playPreview(noteID, durationMillis = 50)
+
+            advanceTimeBy(50 + 20)
+            testScheduler.runCurrent()
+
+            assertEquals(
+                "two overlapping previews must produce exactly ONE stop after both drain",
+                stopBefore + 1,
+                oboe.stopCount.get(),
+            )
+        }
 
     // T41 — mixer methods + solo precedence
 
