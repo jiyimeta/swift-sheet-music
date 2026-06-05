@@ -77,10 +77,14 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// the previous preview — including a drum one-shot (cymbal) whose decay a
     /// note-off would not truncate. Main-actor isolated.
     private var activePreviewChannels: Set<UInt8> = []
-    /// The single pending end-of-preview action (note-off for melodic staves,
-    /// CC 120 for drum one-shots) plus the host-parked-graph drain. Cancelled and
-    /// replaced on each new tap so only one preview is ever alive.
-    private var previewEndWorkItem: DispatchWorkItem?
+    /// Bumped on every new preview (and on teardown). The delayed end-of-preview
+    /// action captures the value current when it was scheduled and bails if it no
+    /// longer matches — so a superseded preview's note-off / drain never fires.
+    /// Replaces a `DispatchWorkItem`: a `DispatchWorkItem`'s Swift block inherits
+    /// this `@MainActor` class's isolation and trips the actor-executor assertion
+    /// (EXC_BREAKPOINT) when run on `previewQueue`; the `@convention(block)`
+    /// trailing closure of `asyncAfter(deadline:)` does not.
+    private var previewGeneration = 0
     /// How long a drum-staff preview rings before it is ended and the graph
     /// drained. Melodic previews use the caller's `duration` (0.5 s); drums ring
     /// longer because a cymbal's musical value is its decay. By-ear tunable.
@@ -400,18 +404,19 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
 
         rebuildMixerChannels(for: score)
         applyMixerState()
-        // Select each non-drum channel's program now. Program selection
-        // otherwise only happens in `reapplyMixerPrograms()` right after
-        // `sequencer.start()` (the first `play()`), so a tap-preview fired
-        // before any playback would sound on the SF2 seed preset
-        // (GM program 0 = piano). Real playback re-applies programs after
-        // `sequencer.start()` to win the race against the SMF's tick-0
-        // program-change events, so playback behavior is unchanged.
-        reapplyMixerPrograms()
 
         if !engine.isRunning {
             try engine.start()
         }
+        // Select each non-drum channel's program now — *after* the graph is
+        // running, so the program-change MIDI events actually reach the synth.
+        // Selection otherwise only happens in `reapplyMixerPrograms()` right
+        // after `sequencer.start()` (the first `play()`), so a tap-preview
+        // fired before any playback would sound on the SF2 seed preset
+        // (GM program 0 = piano). Real playback re-applies programs after
+        // `sequencer.start()` to win the race against the SMF's tick-0
+        // program-change events, so playback behavior is unchanged.
+        reapplyMixerPrograms()
     }
 
     /// Build the shared multi-timbral AUMIDISynth, load the full GM
@@ -465,12 +470,12 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// when the user clicks / taps a single note — mirrors MuseScore's
     /// "preview on selection" behavior. Calls are non-blocking; the
     /// matching note-off is scheduled on a high-QoS background queue.
-    /// Stop and forget any in-flight tap-preview: cancel the pending end action,
-    /// silence every still-sounding preview channel, and clear tracking. Called
-    /// on teardown so a ringing preview can't outlive the synth it played on.
+    /// Stop and forget any in-flight tap-preview: invalidate the pending end
+    /// action (bump the generation), silence every still-sounding preview
+    /// channel, and clear tracking. Called on teardown so a ringing preview
+    /// can't outlive the synth it played on.
     private func cancelActivePreview() {
-        previewEndWorkItem?.cancel()
-        previewEndWorkItem = nil
+        previewGeneration &+= 1
         if let synth {
             for channel in activePreviewChannels {
                 MIDISynthBuilder.sendControlChange(
@@ -500,9 +505,9 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         // Cut any still-sounding previous preview before starting the new one.
         // All Sound Off (CC 120) is immediate and ignores release, so it also
         // silences a ringing drum one-shot (cymbal) that a note-off would leave
-        // decaying. Cancel its pending end action so it can't fire late.
-        previewEndWorkItem?.cancel()
-        previewEndWorkItem = nil
+        // decaying. Bumping the generation invalidates its pending end action so
+        // it can't fire late and cut this new note.
+        previewGeneration &+= 1
         for channel in activePreviewChannels {
             MIDISynthBuilder.sendControlChange(
                 into: instrument, controller: 120, value: 0, onChannel: channel,
@@ -527,24 +532,27 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
 
         // Drums ring for `drumPreviewTail` (the decay is the point); melodic
         // notes ring for the caller's `duration`. End melodic with a note-off
-        // and drums with CC 120 (note-off won't stop a one-shot's decay).
+        // and drums with CC 120 (note-off won't stop a one-shot's decay). The
+        // timer fires a plain `@convention(block)` closure (no actor-executor
+        // assertion off the main queue); the actual end + drain run on the main
+        // actor and bail if a newer tap has bumped `previewGeneration`.
         let isDrum = isDrumStaff(flatIdx)
         let tail = isDrum ? drumPreviewTail : duration
-        let workItem = DispatchWorkItem { [weak self, weak instrument] in
-            if let instrument {
-                if isDrum {
-                    MIDISynthBuilder.sendControlChange(
-                        into: instrument, controller: 120, value: 0,
-                        onChannel: midiChannel,
-                    )
-                } else {
-                    instrument.stopNote(pitch, onChannel: midiChannel)
-                }
-            }
+        let generation = previewGeneration
+        previewQueue.asyncAfter(deadline: .now() + tail) { [weak self] in
             Task { @MainActor [weak self] in
-                guard let self else { return }
+                guard let self, previewGeneration == generation else { return }
+                if let synth {
+                    if isDrum {
+                        MIDISynthBuilder.sendControlChange(
+                            into: synth, controller: 120, value: 0,
+                            onChannel: midiChannel,
+                        )
+                    } else {
+                        synth.stopNote(pitch, onChannel: midiChannel)
+                    }
+                }
                 activePreviewChannels.remove(midiChannel)
-                previewEndWorkItem = nil
                 guard activePreviewChannels.isEmpty,
                       previewShouldRepauseEngineOnDrain
                 else { return }
@@ -555,8 +563,6 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
                 }
             }
         }
-        previewEndWorkItem = workItem
-        previewQueue.asyncAfter(deadline: .now() + tail, execute: workItem)
     }
 
     /// MIDI pitch for the chord-note this `NoteID` references, or
