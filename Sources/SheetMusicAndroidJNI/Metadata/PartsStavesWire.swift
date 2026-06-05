@@ -31,8 +31,9 @@ extension PartsStavesWire {
         parts = score.parts.enumerated().map { partIndex, part in
             PartWire(
                 name: score.staffDisplayName(at: StaffAddress(partIndex: partIndex, staffIndexInPart: 0)),
-                staves: part.staves.map { staff in
-                    StaffWire(defaultClefRawType: staff.defaultClefType ?? "")
+                staves: part.staves.indices.map { staffIndex in
+                    let address = StaffAddress(partIndex: partIndex, staffIndexInPart: staffIndex)
+                    return StaffWire(defaultClefRawType: score.authoredClef(at: address) ?? "")
                 },
             )
         }
