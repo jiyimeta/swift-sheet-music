@@ -105,6 +105,37 @@
             #expect(resolved.elementIndex == 0)
         }
 
+        @Test("tap on a ledger-line note returns it, not an in-band neighbor")
+        func tapOnLedgerLineNoteReturnsIt() throws {
+            guard #available(macOS 15.0, *) else { return }
+            // One staff, one measure, two quarter-note beats: beat 0 is a very low note that needs ledger lines well
+            // below the staff (its notehead sits far outside the 2.5 sp band around the centerline); beat 1 sits near
+            // the centerline. Tapping beat 0's notehead must return beat 0 — the old visual-Y staff-membership filter
+            // rejected it and snapped to beat 1. This is the hidden-staff tap-to-seek bug in miniature.
+            let lowChord = Chord(duration: .quarter, notes: [Note(pitch: 36, tpc: 14)]) // C2, ledger lines below
+            let centerChord = Chord(duration: .quarter, notes: [Note(pitch: 71, tpc: 14)]) // B4, ~centerline
+            let part = Part(
+                id: "p0",
+                instrument: Instrument(id: "p0", channels: [InstrumentChannel(program: 0)]),
+                staves: [Staff(measures: [Measure(voices: [
+                    Voice(elements: [.chord(lowChord), .chord(centerChord)]),
+                ])])],
+            )
+            let score = Score(division: 480, parts: [part])
+            let document = LayoutEngine.layout(
+                score: score, options: .init(), availableWidth: 800,
+            )
+            let beat0 = NoteID(
+                staff: StaffAddress(partIndex: 0, staffIndexInPart: 0),
+                measureIndex: 0, voiceIndex: 0, elementIndex: 0, noteIndexInChord: 0,
+            )
+            let point = try #require(anchor(for: beat0, in: document))
+            let cursor = nearestEngineCursor(
+                at: point, in: document, score: score, hiddenStaves: [],
+            )
+            #expect(cursor == .item(.note(beat0)))
+        }
+
         @Test("tap in empty space returns nil")
         func tapInEmptySpaceReturnsNil() throws {
             guard #available(macOS 15.0, *) else { return }
