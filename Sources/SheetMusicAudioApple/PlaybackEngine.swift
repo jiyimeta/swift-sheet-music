@@ -365,6 +365,23 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         #if os(iOS) || os(tvOS) || os(watchOS)
             let session = AVAudioSession.sharedInstance()
             try session.setCategory(.playback, mode: .default, options: [])
+            // Request a concrete hardware sample rate before activating.
+            // iOS's audio HAL can get its system-wide I/O rate stuck at an
+            // odd value (e.g. 24 kHz left over from another app's Bluetooth
+            // HFP call), and a session that simply adopts whatever rate the
+            // system hands back then renders the whole graph against that
+            // stale clock — heard as playback that is both sped up and
+            // pitched up, and which survives an app relaunch because the
+            // wedge lives in the system audio daemon, not our process.
+            // Asking for a definite rate makes `setActive` reconfigure the
+            // HAL toward it, which un-sticks that state without a reboot.
+            // 48 kHz is the native rate of modern iOS output hardware, so on
+            // a healthy device this is a no-op (no forced resample); it only
+            // takes effect when the system was parked somewhere unexpected.
+            // Best-effort: the route may clamp or ignore it (the graph still
+            // adapts because every `connect` uses `format: nil`), so a
+            // failure here must not abort score preparation.
+            try? session.setPreferredSampleRate(48000)
             try session.setActive(true, options: [])
         #endif
 
