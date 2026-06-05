@@ -62,6 +62,10 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// extension (a different file) can mirror the clamped value here.
     public internal(set) var masterGain: Float = 1.0 // swiftlint:disable:this inclusive_language
 
+    /// Current A4-calibration offset in cents (0 = A4 440 Hz). Stored so it survives
+    /// synth rebuilds in `prepareSynth`, like `masterGain`.
+    public private(set) var masterTuningCents: Double = 0 // swiftlint:disable:this inclusive_language
+
     /// Used to silence pending preview note-offs when the engine is
     /// torn down or a new score is prepared.
     private let previewQueue = DispatchQueue(
@@ -147,6 +151,37 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         guard state != .exporting else { return }
         pendingRate = rate
         sequencer?.rate = rate
+    }
+
+    /// Retune playback to an A4 reference expressed as a cents offset from 440 Hz
+    /// (e.g. 432 Hz ≈ -31.77¢). AUMIDISynth ignores MIDI master-tuning RPNs but
+    /// honors its global AudioUnit Coarse/Fine Tuning params, which we set here —
+    /// covering every channel with zero latency. Persists across `prepare`.
+    public func setMasterTuning(cents: Double) { // swiftlint:disable:this inclusive_language
+        guard state != .exporting else { return }
+        masterTuningCents = cents
+        guard let synth else { return }
+        Self.applyMasterTuning(to: synth, cents: cents)
+    }
+
+    /// AUMIDISynth global-scope AudioUnit tuning parameter ids (from its
+    /// `kAudioUnitProperty_ParameterList`): 901 = Coarse Tuning (semitones),
+    /// 902 = Fine Tuning (cents).
+    private static let coarseTuningParameterID: AudioUnitParameterID = 901
+    private static let fineTuningParameterID: AudioUnitParameterID = 902
+
+    private static func applyMasterTuning( // swiftlint:disable:this inclusive_language
+        to instrument: AVAudioUnitMIDIInstrument, cents: Double,
+    ) {
+        let split = MasterTuning.split(cents: cents)
+        AudioUnitSetParameter(
+            instrument.audioUnit, coarseTuningParameterID, kAudioUnitScope_Global, 0,
+            AudioUnitParameterValue(split.coarseSemitones), 0,
+        )
+        AudioUnitSetParameter(
+            instrument.audioUnit, fineTuningParameterID, kAudioUnitScope_Global, 0,
+            AudioUnitParameterValue(split.fineCents), 0,
+        )
     }
 
     // MARK: Internal accessors for `PlaybackEngine+Export`
@@ -367,6 +402,7 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
             )
         }
         synth = instrument
+        Self.applyMasterTuning(to: instrument, cents: masterTuningCents)
 
         for (idx, entry) in score.allStaves.enumerated() {
             let part = score.part(at: entry.address)

@@ -9,8 +9,20 @@ import SwiftUI
 struct MixerView: View {
     let engine: PlaybackEngine
 
+    @State private var a4Hz: Double = 440
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(String(format: "A4 = %.1f Hz", a4Hz))
+                    .font(.caption)
+                Slider(value: $a4Hz, in: 415 ... 466)
+                    .onChange(of: a4Hz) { _, hz in
+                        engine.setMasterTuning(cents: 1200 * log2(hz / 440))
+                    }
+            }
+            .padding(.bottom, 6)
+
             ForEach(engine.mixerChannels) { channel in
                 MixerStrip(channel: channel, engine: engine)
             }
