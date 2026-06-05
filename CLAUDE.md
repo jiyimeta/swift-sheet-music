@@ -89,6 +89,32 @@ xcodebuild -project Examples/Apple/SheetMusicExample.xcodeproj \
            -destination 'platform=iOS Simulator,name=iPhone 17' build
 ```
 
+## Pre-merge verification (CI is manual-only)
+
+GitHub Actions CI is **not** run automatically. The `android-audio.yml`
+workflow runs on a `macos-14` runner whose 10x billing multiplier (at
+~40-75 min wall-clock per run) exhausted this private repo's free-tier
+Actions minutes, so its automatic `push` / `pull_request` triggers were
+removed — it is `workflow_dispatch`-only now. `android-publish.yml` still
+fires on `v*` tags (release publish, infrequent).
+
+Instead, run the equivalent verification **locally before merging any
+branch into `main`**:
+
+```bash
+Scripts/preflight.sh            # full suite: Apple swift test + Android
+Scripts/preflight.sh --apple    # Apple/SwiftPM only (fast iteration)
+Scripts/preflight.sh --android  # Android cross-compile + Kotlin tests + AAR
+```
+
+This reproduces what CI did (Android cross-compile → Kotlin unit tests →
+`assembleRelease`) **plus** the Apple-side `swift test` that CI never
+covered. A green `Scripts/preflight.sh` is the merge gate. The Android
+stage needs the same toolchain/SDK/NDK + `WIRELET_PAT` setup documented
+under "Android build" below; on a host without that, use `--apple`. If you
+ever want a clean-room CI reproduction, trigger the workflow manually from
+the Actions tab (`gh workflow run "Android audio module"`).
+
 The example app's `.xcodeproj` is **gitignored**; regenerate from
 `Examples/Apple/project.yml` with `xcodegen` whenever you change project
 settings or sources.

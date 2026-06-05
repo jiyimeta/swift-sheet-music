@@ -128,6 +128,38 @@ object SheetMusicJNI {
     }
 
     /**
+     * Resolve the nearest playable cursor (a chord onset or a rest) for a tap
+     * at ([tapXmm], [tapYmm]) in document/mm coordinates within the laid-out
+     * score [scoreHandle]. The hit-test picks the staff closest to the touch,
+     * then the nearest event on it, and re-addresses the result against the full
+     * (unfiltered) score so the returned cursor drives the audio engine.
+     *
+     * [hiddenStavesBytes] is the SAME `LayoutOptionsWire` blob passed to
+     * [nativeComputeLayout] (only its hidden-staves set is read); reusing it
+     * keeps the re-addressing in lockstep with the filtered layout.
+     *
+     * Returns a `ScoreCursor` wire payload (the format [nativeCursorFrame] /
+     * [nativeMeasureFrame] accept back) on a hit, or an empty array when the
+     * handle is unknown, the layout is not cached, the options blob fails to
+     * decode, or the tap hit no playable element.
+     */
+    fun nativeNearestCursor(
+        scoreHandle: Long,
+        tapXmm: Double,
+        tapYmm: Double,
+        hiddenStavesBytes: ByteArray,
+    ): ByteArray {
+        val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
+        return SwiftJavaJNI.nativeNearestCursor(
+            scoreHandle,
+            tapXmm,
+            tapYmm,
+            SwiftData.fromByteArray(hiddenStavesBytes, arena),
+            arena,
+        ).toByteArray()
+    }
+
+    /**
      * Resolve the highlight rectangles (mm coordinates) covering a
      * loop region spanning ticks `[fromTick, toTick)`. Returns one
      * rect per intersected system; the rect spans the full staff

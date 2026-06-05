@@ -72,6 +72,14 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         label: "swift-sheet-music.playback.preview",
         qos: .userInteractive,
     )
+    /// Preview notes currently sounding (note-off pending). Lets the
+    /// drain logic re-pause the audio graph only once the *last*
+    /// overlapping preview has ended. Main-actor isolated.
+    private var activePreviewCount = 0
+    /// True when a preview resumed an audio graph the host had paused.
+    /// Tells the drain to restore that paused state once previews drain
+    /// — preserving the host's "graph parked until play" behavior.
+    private var previewShouldRepauseEngineOnDrain = false
 
     /// Sequencer used for full-score playback. Lazily built the
     /// first time `play(...)` is called for a given score.
@@ -435,13 +443,37 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         guard let instrument = synth,
               let midiChannel = staffMIDIChannels[flatIdx]
         else { return }
+        // A paused `AVAudioEngine` renders nothing, so a preview note would be
+        // silent when the host parks the graph between plays (e.g. to keep
+        // Control Center from showing active audio before the user hits play).
+        // Resume the graph for the preview; the drain below restores the paused
+        // state once the last overlapping preview ends.
+        if !engine.isRunning {
+            try? engine.start()
+            if state != .playing {
+                previewShouldRepauseEngineOnDrain = true
+            }
+        }
+        activePreviewCount += 1
         instrument.startNote(
             pitch, withVelocity: velocity, onChannel: midiChannel,
         )
         previewQueue.asyncAfter(
             deadline: .now() + duration,
-        ) { [weak instrument] in
+        ) { [weak self, weak instrument] in
             instrument?.stopNote(pitch, onChannel: midiChannel)
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                activePreviewCount -= 1
+                guard activePreviewCount == 0,
+                      previewShouldRepauseEngineOnDrain
+                else { return }
+                previewShouldRepauseEngineOnDrain = false
+                // Don't pause a graph that real playback is now driving.
+                if state != .playing, engine.isRunning {
+                    engine.pause()
+                }
+            }
         }
     }
 

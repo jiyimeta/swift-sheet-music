@@ -1,21 +1,15 @@
 name: Android audio module
 
+# Manual-only. Automatic push / pull_request triggers were removed because
+# this job runs on a macos-14 runner (10x billing multiplier) and reproduces
+# the local-dev cross-compile pipeline verbatim — at ~40-75 min wall-clock it
+# exhausted the private-repo free-tier Actions minutes. The same verification
+# now runs locally before merging to main via Scripts/preflight.sh; see
+# CLAUDE.md "Pre-merge verification (CI is manual-only)". Trigger this from the
+# Actions tab (or `gh workflow run "Android audio module"`) only when you want
+# a clean-room CI reproduction.
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'Android/**'
-      - 'Sources/SheetMusicAndroidJNI/**'
-      - 'Tests/SheetMusicTests/AndroidJNI/**'
-      - 'Tests/SheetMusicTests/Resources/Golden/Audio/**'
-      - '.github/workflows/android-audio.yml'
-  pull_request:
-    paths:
-      - 'Android/**'
-      - 'Sources/SheetMusicAndroidJNI/**'
-      - 'Tests/SheetMusicTests/AndroidJNI/**'
-      - 'Tests/SheetMusicTests/Resources/Golden/Audio/**'
-      - '.github/workflows/android-audio.yml'
+  workflow_dispatch:
 
 # Building the Android audio module reproduces the full local-dev
 # cross-compile pipeline, so this runs on macOS (Scripts/android-build-libs.sh
