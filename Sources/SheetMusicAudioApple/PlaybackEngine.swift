@@ -72,10 +72,19 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         label: "swift-sheet-music.playback.preview",
         qos: .userInteractive,
     )
-    /// Preview notes currently sounding (note-off pending). Lets the
-    /// drain logic re-pause the audio graph only once the *last*
-    /// overlapping preview has ended. Main-actor isolated.
-    private var activePreviewCount = 0
+    /// MIDI channels with a currently sounding tap-preview note. A new preview
+    /// sends All Sound Off (CC 120) to each before starting, so a fresh tap cuts
+    /// the previous preview — including a drum one-shot (cymbal) whose decay a
+    /// note-off would not truncate. Main-actor isolated.
+    private var activePreviewChannels: Set<UInt8> = []
+    /// The single pending end-of-preview action (note-off for melodic staves,
+    /// CC 120 for drum one-shots) plus the host-parked-graph drain. Cancelled and
+    /// replaced on each new tap so only one preview is ever alive.
+    private var previewEndWorkItem: DispatchWorkItem?
+    /// How long a drum-staff preview rings before it is ended and the graph
+    /// drained. Melodic previews use the caller's `duration` (0.5 s); drums ring
+    /// longer because a cymbal's musical value is its decay. By-ear tunable.
+    private let drumPreviewTail: TimeInterval = 2.0
     /// True when a preview resumed an audio graph the host had paused.
     /// Tells the drain to restore that paused state once previews drain
     /// — preserving the host's "graph parked until play" behavior.
@@ -340,6 +349,8 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         }
         // Stop any in-flight playback before tearing down samplers.
         stop()
+        // Drop any ringing tap-preview so it can't outlive this synth.
+        cancelActivePreview()
         // Loop ticks are resolved against the previous timeline; clear
         // them so a stale region from the prior score can't fire on
         // the new one.
@@ -454,6 +465,23 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// when the user clicks / taps a single note — mirrors MuseScore's
     /// "preview on selection" behavior. Calls are non-blocking; the
     /// matching note-off is scheduled on a high-QoS background queue.
+    /// Stop and forget any in-flight tap-preview: cancel the pending end action,
+    /// silence every still-sounding preview channel, and clear tracking. Called
+    /// on teardown so a ringing preview can't outlive the synth it played on.
+    private func cancelActivePreview() {
+        previewEndWorkItem?.cancel()
+        previewEndWorkItem = nil
+        if let synth {
+            for channel in activePreviewChannels {
+                MIDISynthBuilder.sendControlChange(
+                    into: synth, controller: 120, value: 0, onChannel: channel,
+                )
+            }
+        }
+        activePreviewChannels.removeAll()
+        previewShouldRepauseEngineOnDrain = false
+    }
+
     public func playPreview(
         noteID: NoteID,
         in score: Score,
@@ -468,29 +496,56 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         guard let instrument = synth,
               let midiChannel = staffMIDIChannels[flatIdx]
         else { return }
-        // A paused `AVAudioEngine` renders nothing, so a preview note would be
-        // silent when the host parks the graph between plays (e.g. to keep
-        // Control Center from showing active audio before the user hits play).
-        // Resume the graph for the preview; the drain below restores the paused
-        // state once the last overlapping preview ends.
+
+        // Cut any still-sounding previous preview before starting the new one.
+        // All Sound Off (CC 120) is immediate and ignores release, so it also
+        // silences a ringing drum one-shot (cymbal) that a note-off would leave
+        // decaying. Cancel its pending end action so it can't fire late.
+        previewEndWorkItem?.cancel()
+        previewEndWorkItem = nil
+        for channel in activePreviewChannels {
+            MIDISynthBuilder.sendControlChange(
+                into: instrument, controller: 120, value: 0, onChannel: channel,
+            )
+        }
+        activePreviewChannels.removeAll()
+
+        // A paused `AVAudioEngine` renders nothing, so resume the graph for the
+        // preview; the drain below restores the host-parked state once the
+        // preview ends with no follow-up tap.
         if !engine.isRunning {
             try? engine.start()
             if state != .playing {
                 previewShouldRepauseEngineOnDrain = true
             }
         }
-        activePreviewCount += 1
+
         instrument.startNote(
             pitch, withVelocity: velocity, onChannel: midiChannel,
         )
-        previewQueue.asyncAfter(
-            deadline: .now() + duration,
-        ) { [weak self, weak instrument] in
-            instrument?.stopNote(pitch, onChannel: midiChannel)
+        activePreviewChannels.insert(midiChannel)
+
+        // Drums ring for `drumPreviewTail` (the decay is the point); melodic
+        // notes ring for the caller's `duration`. End melodic with a note-off
+        // and drums with CC 120 (note-off won't stop a one-shot's decay).
+        let isDrum = isDrumStaff(flatIdx)
+        let tail = isDrum ? drumPreviewTail : duration
+        let workItem = DispatchWorkItem { [weak self, weak instrument] in
+            if let instrument {
+                if isDrum {
+                    MIDISynthBuilder.sendControlChange(
+                        into: instrument, controller: 120, value: 0,
+                        onChannel: midiChannel,
+                    )
+                } else {
+                    instrument.stopNote(pitch, onChannel: midiChannel)
+                }
+            }
             Task { @MainActor [weak self] in
                 guard let self else { return }
-                activePreviewCount -= 1
-                guard activePreviewCount == 0,
+                activePreviewChannels.remove(midiChannel)
+                previewEndWorkItem = nil
+                guard activePreviewChannels.isEmpty,
                       previewShouldRepauseEngineOnDrain
                 else { return }
                 previewShouldRepauseEngineOnDrain = false
@@ -500,6 +555,8 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
                 }
             }
         }
+        previewEndWorkItem = workItem
+        previewQueue.asyncAfter(deadline: .now() + tail, execute: workItem)
     }
 
     /// MIDI pitch for the chord-note this `NoteID` references, or
