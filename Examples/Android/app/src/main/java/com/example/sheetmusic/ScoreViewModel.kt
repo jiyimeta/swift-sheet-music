@@ -5,6 +5,8 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.sheetmusic.draw.DrawProgramReader
 import io.github.jiyimeta.sheetmusic.BravuraMetricsBuilder
+import io.github.jiyimeta.sheetmusic.LayoutOptionsWire
+import io.github.jiyimeta.sheetmusic.LayoutOptionsWireCodec
 import io.github.jiyimeta.sheetmusic.ScoreHandle
 import io.github.jiyimeta.sheetmusic.SheetMusicJNI
 import kotlinx.coroutines.Dispatchers
@@ -66,9 +68,23 @@ class ScoreViewModel(app: Application) : AndroidViewModel(app) {
             handle = h
             _scoreHandle.value = h.raw
 
+            // Default display options (PAGE mode, 28.0 staff) encoded for the
+            // current nativeComputeLayout(..., optionsBlob) contract. Mirrors
+            // Folino's LayoutOptions.DEFAULT; the example doesn't expose an
+            // inspector, so it always lays out with these defaults.
+            val optionsBlob = LayoutOptionsWireCodec.encode(
+                LayoutOptionsWire(
+                    layoutMode = 2u, // PAGE
+                    staffSize = 28.0,
+                    honorLayoutBreaks = 1u,
+                    collapseMultiMeasureRests = 0u,
+                    showsInvisibleElements = 0u,
+                    hiddenStaves = emptyList(),
+                    clefOverrides = emptyList(),
+                ),
+            )
             val programBytes = withContext(Dispatchers.Default) {
-                SheetMusicJNI.nativeComputeLayout(h.raw,
-                                                    PAGE_WIDTH_MM, PAGE_HEIGHT_MM)
+                SheetMusicJNI.nativeComputeLayout(h.raw, PAGE_WIDTH_MM, PAGE_HEIGHT_MM, optionsBlob)
             }
             if (programBytes.isEmpty()) {
                 _state.value = ScoreState.ParseError("layout returned empty result")
