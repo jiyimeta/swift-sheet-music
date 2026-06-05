@@ -389,6 +389,14 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
 
         rebuildMixerChannels(for: score)
         applyMixerState()
+        // Select each non-drum channel's program now. Program selection
+        // otherwise only happens in `reapplyMixerPrograms()` right after
+        // `sequencer.start()` (the first `play()`), so a tap-preview fired
+        // before any playback would sound on the SF2 seed preset
+        // (GM program 0 = piano). Real playback re-applies programs after
+        // `sequencer.start()` to win the race against the SMF's tick-0
+        // program-change events, so playback behavior is unchanged.
+        reapplyMixerPrograms()
 
         if !engine.isRunning {
             try engine.start()
