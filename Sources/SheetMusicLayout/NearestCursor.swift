@@ -1,4 +1,6 @@
-import CoreGraphics
+#if canImport(CoreGraphics)
+    import CoreGraphics
+#endif
 import SheetMusicCore
 
 /// Maps a point in `LayoutDocument` coordinates to the nearest playable cursor (a chord onset or a rest) on the staff
