@@ -3,6 +3,12 @@ import SheetMusicCore
 import SheetMusicLayout
 import Wirelet
 
+#if !canImport(CoreGraphics)
+    /// On Android, Foundation's CoreGraphics shims also export `CGFloat`,
+    /// clashing with SheetMusicLayout's stub. Anchor to the Layout definition.
+    private typealias CGFloat = SheetMusicLayout.CGFloat
+#endif
+
 /// Singleton tables — one per Swift type. Lifetimes are explicit; Kotlin
 /// must release every handle it gets, or the score will leak until process
 /// exit.
@@ -115,4 +121,46 @@ public func nativeComputeLayout(
     )
     LayoutDocumentCache.store(handle: scoreHandle, document: result.document)
     return result.encoded
+}
+
+// MARK: - Page boundaries (swift-java entry point)
+
+/// JNI entry point exposed via swift-java for the Kotlin
+/// `SheetMusicJNI.nativePageBreaks(...)` call site. Returns page-boundary
+/// document-Y offsets in millimetres for the cached layout of `scoreHandle`,
+/// paginated with the same `pageHeightMM` + `optionsBytes` passed to
+/// `nativeComputeLayout` so the boundaries match the `.page` draw-program
+/// pages exactly.
+///
+/// Wire format: `i32 count` (big-endian) then `count × f64` big-endian IEEE 754.
+/// The sequence is `[0, top1, …, contentBottom]` — one entry per page boundary
+/// plus the content bottom (`count == pageCount + 1`). Returns empty `Data`
+/// when the handle is unknown, the options blob fails to decode, or
+/// `LayoutPaginator` returns no ranges.
+public func nativePageBreaks(scoreHandle: Int64, pageHeightMM: Double, optionsBytes: Data) -> Data {
+    guard let document = LayoutDocumentCache.value(for: scoreHandle) else { return Data() }
+    let optionsWire: LayoutOptionsWire
+    do {
+        optionsWire = try LayoutOptionsCodec.decode(optionsBytes)
+    } catch {
+        return Data()
+    }
+    let mmToPt = 72.0 / 25.4
+    let pageHeightPt = CGFloat(pageHeightMM * mmToPt)
+    let breakPolicy: LayoutBreakPolicy = optionsWire.honorLayoutBreaks == 1 ? .honor : .ignoreAll
+    let ranges = LayoutPaginator.paginate(
+        systems: document.systems, pageHeight: pageHeightPt, policy: breakPolicy,
+    )
+    guard !ranges.isEmpty else { return Data() }
+    var offsetsMm: [Double] = []
+    for (i, range) in ranges.enumerated() {
+        let topPt: CGFloat = i == 0
+            ? 0
+            : document.systems[range.lowerBound - 1].origin.y
+            + document.systems[range.lowerBound - 1].size.height
+        offsetsMm.append(Double(topPt) / mmToPt)
+    }
+    let lastSystem = document.systems[document.systems.count - 1]
+    offsetsMm.append(Double(lastSystem.origin.y + lastSystem.size.height) / mmToPt)
+    return PageBreaksWire.encode(offsetsMm)
 }

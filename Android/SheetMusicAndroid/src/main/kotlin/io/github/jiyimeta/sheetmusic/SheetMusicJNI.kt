@@ -149,4 +149,20 @@ object SheetMusicJNI {
             arena,
         ).toByteArray()
     }
+
+    /**
+     * Page-break offsets (document-Y, mm) for the cached layout of [scoreHandle], paginated
+     * with the same [pageHeightMM] and [optionsBytes] passed to [nativeComputeLayout] so
+     * they line up with the `.page` program pages. Wire: i32 count then count × f64, big-endian.
+     * `[0, top1, …, contentBottom]`; empty if the handle is unknown.
+     */
+    fun nativePageBreaks(scoreHandle: Long, pageHeightMM: Double, optionsBytes: ByteArray): ByteArray {
+        val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
+        return SwiftJavaJNI.nativePageBreaks(
+            scoreHandle,
+            pageHeightMM,
+            SwiftData.fromByteArray(optionsBytes, arena),
+            arena,
+        ).toByteArray()
+    }
 }
