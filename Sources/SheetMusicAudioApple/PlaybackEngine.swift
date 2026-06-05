@@ -66,6 +66,11 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// synth rebuilds in `prepareSynth`, like `masterGain`.
     public private(set) var masterTuningCents: Double = 0 // swiftlint:disable:this inclusive_language
 
+    /// Whole-score transpose in semitones (`-7…+7`). Applied as MIDI
+    /// coarse tuning to every pitched channel; re-applied after each
+    /// `prepare(score:)` so a score reload preserves it. `0` = concert.
+    public private(set) var transposeSemitones = 0
+
     /// Used to silence pending preview note-offs when the engine is
     /// torn down or a new score is prepared.
     private let previewQueue = DispatchQueue(
@@ -262,6 +267,31 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         staffIsDrum[idx] ?? false
     }
 
+    /// Live whole-score transpose. Sends RPN 0,2 coarse tuning to every
+    /// pitched channel (all 16 MIDI channels except the GM drum channel
+    /// 9). No score reload — instant during playback, zero-artifact.
+    /// Clamped to `-7…+7`.
+    public func setTranspose(semitones: Int) {
+        let clamped = max(-7, min(7, semitones))
+        transposeSemitones = clamped
+        guard let synth else { return }
+        applyCoarseTuning(clamped, to: synth)
+    }
+
+    /// Send RPN 0,2 (Channel Coarse Tuning) for `semitones` to every
+    /// pitched channel on `instrument` (channels 0–15, skipping the GM
+    /// drum channel 9). Extracted to avoid duplicating the channel loop
+    /// between `setTranspose` and the re-assert block in `prepareSynth`.
+    private func applyCoarseTuning(
+        _ semitones: Int, to instrument: AVAudioUnitMIDIInstrument,
+    ) {
+        for ch: UInt8 in 0 ..< 16 where ch != 9 {
+            MIDISynthBuilder.setChannelCoarseTuning(
+                into: instrument, semitones: semitones, onChannel: ch,
+            )
+        }
+    }
+
     /// Re-send program-change on each staff's primary channel using
     /// the program the mixer currently advertises. Called right after
     /// `sequencer.start()` so the SMF's tick-0 programChange events
@@ -453,6 +483,11 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
             MIDISynthBuilder.setPitchBendSensitivity(
                 into: instrument, semitones: 12, onChannel: ch,
             )
+        }
+        // Re-assert any active transpose: a fresh synth resets all
+        // channels to concert pitch, so reapply the saved value.
+        if transposeSemitones != 0 {
+            applyCoarseTuning(transposeSemitones, to: instrument)
         }
         synth = instrument
         Self.applyMasterTuning(to: instrument, cents: masterTuningCents)

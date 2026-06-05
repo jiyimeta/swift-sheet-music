@@ -204,6 +204,35 @@ enum MIDISynthBuilder {
         send(100, 127)
     }
 
+    /// Set MIDI **RPN 0,2 (Channel Coarse Tuning)** on `channel` to
+    /// `semitones` half-steps (negative = down). Data Entry MSB is
+    /// `64 + semitones` (64 = no shift), per the MIDI Tuning spec.
+    /// Goes through `MusicDeviceMIDIEvent` (synchronous C API) for the
+    /// same race-avoidance reason as `setPitchBendSensitivity`.
+    ///
+    /// Caller is responsible for NOT calling this on the GM drum
+    /// channel (9) — coarse-tuning a drum channel re-maps which drum
+    /// sound each key triggers.
+    static func setChannelCoarseTuning(
+        into instrument: AVAudioUnitMIDIInstrument,
+        semitones: Int,
+        onChannel channel: UInt8,
+    ) {
+        let audioUnit = instrument.audioUnit
+        let ccStatus = UInt32(0xB0) | UInt32(channel & 0x0F)
+        func send(_ controller: UInt8, _ value: UInt8) {
+            _ = MusicDeviceMIDIEvent(
+                audioUnit, ccStatus, UInt32(controller), UInt32(value), 0,
+            )
+        }
+        let dataEntry = UInt8(max(0, min(127, 64 + semitones)))
+        send(101, 0) // RPN MSB
+        send(100, 2) // RPN LSB → RPN (0,2) = Channel Coarse Tuning
+        send(6, dataEntry) // Data Entry MSB (64 = center)
+        send(101, 127) // RPN null (deselect, lock the value in)
+        send(100, 127)
+    }
+
     /// Send a MIDI Control Change to the AU directly via
     /// `MusicDeviceMIDIEvent`. Used by the shared-synth topology to apply
     /// mixer state (CC 7 / CC 10) on a specific channel of the shared
