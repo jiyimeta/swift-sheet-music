@@ -95,6 +95,10 @@ var targets: [Target] = [
         ],
     ),
     .testTarget(
+        name: "SheetMusicAudioCoreTests",
+        dependencies: ["SheetMusicAudioCore"],
+    ),
+    .testTarget(
         name: "SheetMusicTests",
         dependencies: isAndroid ? [
             "SheetMusic",
