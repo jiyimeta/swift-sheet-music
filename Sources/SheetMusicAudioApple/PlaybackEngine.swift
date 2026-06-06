@@ -72,11 +72,15 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         label: "swift-sheet-music.playback.preview",
         qos: .userInteractive,
     )
-    /// MIDI channels with a currently sounding tap-preview note. A new preview
-    /// sends All Sound Off (CC 120) to each before starting, so a fresh tap cuts
-    /// the previous preview — including a drum one-shot (cymbal) whose decay a
-    /// note-off would not truncate. Main-actor isolated.
-    private var activePreviewChannels: Set<UInt8> = []
+    /// The single tap-preview note currently sounding (`(channel, pitch)`), or
+    /// `nil`. A new preview clears it first: on a *different* channel with All
+    /// Sound Off (CC 120, which also truncates a ringing drum cymbal a note-off
+    /// would leave decaying); on the *same* channel with a plain note-off —
+    /// because CC 120 immediately followed by a note-on on the same channel
+    /// gets swallowed by AUMIDISynth (the next drum tap would be silent), and a
+    /// drum re-hit overlapping its own decay is natural anyway. Main-actor
+    /// isolated.
+    private var activePreview: (channel: UInt8, pitch: UInt8)?
     /// Bumped on every new preview (and on teardown). The delayed end-of-preview
     /// action captures the value current when it was scheduled and bails if it no
     /// longer matches — so a superseded preview's note-off / drain never fires.
@@ -476,14 +480,14 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// can't outlive the synth it played on.
     private func cancelActivePreview() {
         previewGeneration &+= 1
-        if let synth {
-            for channel in activePreviewChannels {
-                MIDISynthBuilder.sendControlChange(
-                    into: synth, controller: 120, value: 0, onChannel: channel,
-                )
-            }
+        if let synth, let active = activePreview {
+            // No note-on follows here, so All Sound Off is safe and also stops a
+            // ringing drum decay.
+            MIDISynthBuilder.sendControlChange(
+                into: synth, controller: 120, value: 0, onChannel: active.channel,
+            )
         }
-        activePreviewChannels.removeAll()
+        activePreview = nil
         previewShouldRepauseEngineOnDrain = false
     }
 
@@ -502,18 +506,26 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
               let midiChannel = staffMIDIChannels[flatIdx]
         else { return }
 
-        // Cut any still-sounding previous preview before starting the new one.
-        // All Sound Off (CC 120) is immediate and ignores release, so it also
-        // silences a ringing drum one-shot (cymbal) that a note-off would leave
-        // decaying. Bumping the generation invalidates its pending end action so
-        // it can't fire late and cut this new note.
+        // Cut the previous preview before starting the new one. Bumping the
+        // generation invalidates its pending end action so it can't fire late
+        // and cut this new note. On a *different* channel use All Sound Off
+        // (CC 120) — immediate and ignores release, so it also truncates a
+        // ringing cymbal. On the *same* channel use a plain note-off: CC 120
+        // right before a note-on on the same channel is swallowed by AUMIDISynth
+        // (the next drum tap would be silent), and a drum re-hit overlapping its
+        // own decay is natural.
         previewGeneration &+= 1
-        for channel in activePreviewChannels {
-            MIDISynthBuilder.sendControlChange(
-                into: instrument, controller: 120, value: 0, onChannel: channel,
-            )
+        if let previous = activePreview {
+            if previous.channel == midiChannel {
+                instrument.stopNote(previous.pitch, onChannel: previous.channel)
+            } else {
+                MIDISynthBuilder.sendControlChange(
+                    into: instrument, controller: 120, value: 0,
+                    onChannel: previous.channel,
+                )
+            }
         }
-        activePreviewChannels.removeAll()
+        activePreview = nil
 
         // A paused `AVAudioEngine` renders nothing, so resume the graph for the
         // preview; the drain below restores the host-parked state once the
@@ -528,7 +540,7 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         instrument.startNote(
             pitch, withVelocity: velocity, onChannel: midiChannel,
         )
-        activePreviewChannels.insert(midiChannel)
+        activePreview = (midiChannel, pitch)
 
         // Drums ring for `drumPreviewTail` (the decay is the point); melodic
         // notes ring for the caller's `duration`. End melodic with a note-off
@@ -552,10 +564,8 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
                         synth.stopNote(pitch, onChannel: midiChannel)
                     }
                 }
-                activePreviewChannels.remove(midiChannel)
-                guard activePreviewChannels.isEmpty,
-                      previewShouldRepauseEngineOnDrain
-                else { return }
+                activePreview = nil
+                guard previewShouldRepauseEngineOnDrain else { return }
                 previewShouldRepauseEngineOnDrain = false
                 // Don't pause a graph that real playback is now driving.
                 if state != .playing, engine.isRunning {
