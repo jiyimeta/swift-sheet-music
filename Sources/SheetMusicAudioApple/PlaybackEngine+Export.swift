@@ -71,10 +71,12 @@ extension PlaybackEngine {
             // Re-assert pitch-bend sensitivity right before the
             // sequencer starts — see the matching block in
             // `PlaybackEngine.play(from:in:)` for the rationale.
-            for instrument in pipeline.samplers {
+            // Melodic only: percussion (GM ch 9) never uses pitch bend,
+            // mirroring the live engine's `play(from:in:)` path.
+            if let melodic = pipeline.samplers.first {
                 for ch: UInt8 in 0 ..< 16 where ch != 9 {
                     MIDISynthBuilder.setPitchBendSensitivity(
-                        into: instrument, semitones: 12, onChannel: ch,
+                        into: melodic, semitones: 12, onChannel: ch,
                     )
                 }
             }
@@ -106,11 +108,11 @@ extension PlaybackEngine {
         }
     }
 
-    /// Build a dedicated `AVAudioEngine` + a multi-timbral AUMIDISynth
-    /// + a loaded `AVAudioSequencer` ready to drive an offline render
-    /// of `score`. Mirrors the live engine: full GM SoundFont loaded
-    /// once into one synth, every staff addressed by its
-    /// renderer-assigned MIDI channel.
+    /// Build a dedicated `AVAudioEngine` + melodic and percussion
+    /// `AVAudioUnitMIDIInstrument` units + a loaded `AVAudioSequencer`
+    /// ready to drive an offline render of `score`. Mirrors the live
+    /// engine: melodic carries pitched channels (ch≠9), percussion
+    /// carries GM channel 9; drum staves route to percussion.
     ///
     /// The engine is left in manual-rendering mode and started so the
     /// caller can immediately call `renderLoop`. Caller owns the
