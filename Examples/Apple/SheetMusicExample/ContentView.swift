@@ -80,12 +80,16 @@
         /// `nil` outside an in-progress drag; the overlay reads this
         /// to draw the live selection rectangle.
         @State private var marqueeRect: CGRect?
+        /// Transposition offset in semitones (clamped ±7). Applied to
+        /// the rendered score via `Score.transposed(bySemitones:)` and
+        /// to the audio engine via `PlaybackEngine.setTranspose(semitones:)`.
+        @State private var transposeSemitones = 0
 
         var body: some View {
             NavigationStack {
                 Group {
                     if let score {
-                        scoreContent(score: score)
+                        scoreContent(score: score.transposed(bySemitones: transposeSemitones))
                     } else if let error = errorMessage {
                         VStack {
                             Image(systemName: "exclamationmark.triangle")
@@ -106,6 +110,7 @@
                         score: score,
                         layoutMode: $layoutMode,
                         staffSize: $staffSize,
+                        transposeSemitones: $transposeSemitones,
                         isMixerPresented: $isMixerPresented,
                         isImportingFile: $isImportingFile,
                         isMarqueeMode: $isMarqueeMode,
@@ -129,6 +134,9 @@
             }
             .onChange(of: playbackEngine.totalTimeSeconds) { _, _ in
                 nowPlaying?.refreshNowPlayingInfo()
+            }
+            .onChange(of: transposeSemitones) { _, newValue in
+                playbackEngine.setTranspose(semitones: newValue)
             }
             .fileImporter(
                 isPresented: $isImportingFile,
@@ -254,6 +262,7 @@
                             width: width,
                             staffSize: staffSize,
                             scoreVersion: scoreVersion,
+                            transposeSemitones: transposeSemitones,
                         ),
                     ) {
                         verticalDoc = LayoutEngine.layout(
@@ -309,6 +318,7 @@
                         id: HorizontalLayoutKey(
                             staffSize: staffSize,
                             scoreVersion: scoreVersion,
+                            transposeSemitones: transposeSemitones,
                         ),
                     ) {
                         let natural = LayoutEngine.naturalContentWidth(
@@ -347,7 +357,7 @@
                         .background(Color(white: 0.92))
                 }
             }
-            .task(id: scoreVersion) {
+            .task(id: PDFLayoutKey(scoreVersion: scoreVersion, transposeSemitones: transposeSemitones)) {
                 pdfLayout = PDFPreviewLayout.build(score: score)
             }
         }
@@ -590,11 +600,18 @@
         let width: CGFloat
         let staffSize: CGFloat
         let scoreVersion: UUID
+        let transposeSemitones: Int
     }
 
     private struct HorizontalLayoutKey: Hashable {
         let staffSize: CGFloat
         let scoreVersion: UUID
+        let transposeSemitones: Int
+    }
+
+    private struct PDFLayoutKey: Hashable {
+        let scoreVersion: UUID
+        let transposeSemitones: Int
     }
 
     private struct PDFShareItem: Identifiable {
