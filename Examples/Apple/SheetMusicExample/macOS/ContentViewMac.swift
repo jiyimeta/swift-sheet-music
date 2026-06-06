@@ -172,6 +172,10 @@
         /// (= MuseScore's `#808080` on white). When OFF (print default),
         /// they are dropped entirely. Wired into `ScoreViewOptions.showsInvisibleElements`.
         @State private var showsInvisibleElements = false
+        /// Transposition offset in semitones (clamped ±7). Applied to
+        /// the rendered score via `Score.transposed(bySemitones:)` and
+        /// to the audio engine via `PlaybackEngine.setTranspose(semitones:)`.
+        @State private var transposeSemitones = 0
         @State private var showExport = false
 
         /// systemGap targets MuseScore's `Sid::minSystemDistance` of
@@ -213,6 +217,7 @@
                     isMarqueeMode: $isMarqueeMode,
                     collapseMultiMeasureRests: $collapseMultiMeasureRests,
                     showsInvisibleElements: $showsInvisibleElements,
+                    transposeSemitones: $transposeSemitones,
                     onLoadBundled: loadBundled,
                     onLoadHarmonyBasic: loadHarmonyBasic,
                     onOpenFile: showOpenPanel,
@@ -226,7 +231,7 @@
                 )
             } detail: {
                 if let score {
-                    scoreContent(score: score)
+                    scoreContent(score: score.transposed(bySemitones: transposeSemitones))
                         .popover(item: $clefPopover, arrowEdge: .top) { state in
                             ClefPopover(
                                 current: ClefChoice.from(rawType: state.currentRawType),
@@ -265,6 +270,10 @@
                 rebuildLayoutsForOptionsChange()
             }
             .onChange(of: showsInvisibleElements) { _, _ in
+                rebuildLayoutsForOptionsChange()
+            }
+            .onChange(of: transposeSemitones) { _, newValue in
+                playbackEngine.setTranspose(semitones: newValue)
                 rebuildLayoutsForOptionsChange()
             }
             .toolbar {
