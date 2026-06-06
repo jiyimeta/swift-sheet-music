@@ -117,4 +117,32 @@ struct ScoreTransposeTests {
         #expect(n.tpc == 7) // C♭, not B♮ (tpc 13)
         #expect(n.accidental == .flat)
     }
+
+    @Test func transposePreservesDoubleAlterationSpelling() {
+        // A♭ (tpc 10, pitch 68) in G major (key +1), transposed +1 semitone.
+        // It must stay a *doubly-lowered* scale degree → B𝄫 (tpc 5,
+        // double-flat) in A♭ major, NOT A♮ (tpc 17).
+        let note = Note(pitch: 68, tpc: 10)
+        let chord = Chord(duration: .quarter, notes: ChordNotes([note]))
+        let voice = Voice(elements: [
+            .keySignature(KeySignature(concertKey: 1)),
+            .chord(chord),
+        ])
+        let staff = Staff(group: "pitched", measures: [Measure(voices: [voice])])
+        let inst = Instrument(id: "i", longName: "i")
+        let score = Score(division: 480, parts: [
+            Part(id: "p0", instrument: inst, staves: [staff]),
+        ])
+        let out = score.transposed(bySemitones: 1)
+        guard case let .chord(c) = out.parts[0].staves[0]
+            .measures[0].voices[0].elements[1],
+            let n = c.notes.first
+        else {
+            Issue.record("unexpected transposed structure")
+            return
+        }
+        #expect(n.pitch == 69)
+        #expect(n.tpc == 5) // B𝄫, not A♮ (tpc 17)
+        #expect(n.accidental == .doubleFlat)
+    }
 }
