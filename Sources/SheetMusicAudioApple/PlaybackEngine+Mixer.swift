@@ -94,9 +94,10 @@ extension PlaybackEngine {
 
     /// Push the current mixer state into the live audio graph. Mute /
     /// volume are sent as CC 7 (Channel Volume) on each staff's
-    /// renderer-assigned MIDI channel of the shared synth. This is the
-    /// *sole* authority on those channels' volume: the SMF's competing
-    /// tick-0 CC 7 is stripped for mixer-managed channels in
+    /// renderer-assigned MIDI channel of its owning synth unit (melodic
+    /// or percussion, depending on the staff). This is the *sole*
+    /// authority on those channels' volume: the SMF's competing tick-0
+    /// CC 7 is stripped for mixer-managed channels in
     /// `PlaybackEngine.postProcessForMIDISynth`, so a seek / loop-wrap
     /// rewind can no longer chase-fire it and clobber the user's choice.
     ///
@@ -119,12 +120,12 @@ extension PlaybackEngine {
     }
 
     private func applyStaffGain(at staffIdx: Int, gain: Float) {
-        guard let synth,
+        guard let unit = synth(forStaff: staffIdx),
               let midiCh = midiChannel(forStaff: staffIdx)
         else { return }
         let cc7 = UInt8(clamping: Int((gain * 127).rounded()))
         MIDISynthBuilder.sendControlChange(
-            into: synth, controller: 7, value: cc7, onChannel: midiCh,
+            into: unit, controller: 7, value: cc7, onChannel: midiCh,
         )
     }
 
