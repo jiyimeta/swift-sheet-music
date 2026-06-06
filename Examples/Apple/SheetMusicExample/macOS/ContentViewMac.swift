@@ -178,6 +178,12 @@
         @State private var transposeSemitones = 0
         @State private var showExport = false
 
+        /// The score handed to the layout engine: the loaded score with
+        /// the active transpose applied, so the engraving reflects it.
+        private func laidOut(_ s: Score) -> Score {
+            s.transposed(bySemitones: transposeSemitones)
+        }
+
         /// systemGap targets MuseScore's `Sid::minSystemDistance` of
         /// 8.5 sp; with our staff-distance pads contributing ~3.5 sp
         /// below the last lyric staff, ~5 sp here (≈ 1.25 × staffSize)
@@ -2786,14 +2792,14 @@
             // a previous score have no validity here.
             layoutCache = LayoutCache()
             horizontalDoc = LayoutEngine.layout(
-                score: loaded, options: hOpts,
+                score: laidOut(loaded), options: hOpts,
                 availableWidth: LayoutEngine.naturalContentWidth(
-                    score: loaded, options: hOpts,
+                    score: laidOut(loaded), options: hOpts,
                 ),
                 cache: layoutCache,
             )
             horizontalContexts = LayoutEngine.measureContexts(
-                for: loaded,
+                for: laidOut(loaded),
             )
             // Vertical layout still needs the viewport width, so it's
             // built by a .task in the .vertical case.
@@ -2847,10 +2853,10 @@
             let hOpts = horizontalOptions
             let availableWidth = horizontalDoc?.size.width
                 ?? LayoutEngine.naturalContentWidth(
-                    score: score, options: hOpts,
+                    score: laidOut(score), options: hOpts,
                 )
             horizontalDoc = LayoutEngine.layout(
-                score: score, options: hOpts,
+                score: laidOut(score), options: hOpts,
                 availableWidth: availableWidth,
                 cache: layoutCache,
             )
@@ -2876,11 +2882,11 @@
             // saves a full-score width walk.
             let availableWidth = horizontalDoc?.size.width
                 ?? LayoutEngine.naturalContentWidth(
-                    score: edited, options: hOpts,
+                    score: laidOut(edited), options: hOpts,
                 )
             let tLayoutStart = Date()
             horizontalDoc = LayoutEngine.layout(
-                score: edited, options: hOpts,
+                score: laidOut(edited), options: hOpts,
                 availableWidth: availableWidth,
                 cache: layoutCache,
             )
