@@ -86,4 +86,35 @@ struct ScoreTransposeTests {
                 == score.parts[0].staves[0].measures[0].voices[0].elements.count,
         )
     }
+
+    @Test func transposePreservesChromaticSpellingRelativeToKey() {
+        // B♭ (tpc 12, pitch 70) in G major (key +1), transposed +1 semitone.
+        // The key becomes A♭ major (-4) and the note must stay a *lowered*
+        // scale degree → C♭ (tpc 7, flat), NOT B♮ (tpc 13).
+        let note = Note(pitch: 70, tpc: 12)
+        let chord = Chord(duration: .quarter, notes: ChordNotes([note]))
+        let voice = Voice(elements: [
+            .keySignature(KeySignature(concertKey: 1)),
+            .chord(chord),
+        ])
+        let staff = Staff(group: "pitched", measures: [Measure(voices: [voice])])
+        let inst = Instrument(id: "i", longName: "i")
+        let score = Score(division: 480, parts: [
+            Part(id: "p0", instrument: inst, staves: [staff]),
+        ])
+        let out = score.transposed(bySemitones: 1)
+        guard case let .keySignature(k) = out.parts[0].staves[0]
+            .measures[0].voices[0].elements[0],
+            case let .chord(c) = out.parts[0].staves[0]
+                .measures[0].voices[0].elements[1],
+                let n = c.notes.first
+        else {
+            Issue.record("unexpected transposed structure")
+            return
+        }
+        #expect(k.concertKey == -4) // A♭ major
+        #expect(n.pitch == 71)
+        #expect(n.tpc == 7) // C♭, not B♮ (tpc 13)
+        #expect(n.accidental == .flat)
+    }
 }

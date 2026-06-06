@@ -15,8 +15,10 @@ extension Score {
     }
 
     /// Returns a copy of the score with every pitched note shifted by `delta` semitones and every key signature
-    /// transposed to match. Notes are re-spelled against the **destination** key via
-    /// `Note.shifted(bySemitones:in:)`, so the engraving reads in the new key rather than as a wall of accidentals.
+    /// transposed to match. Each note's tonal pitch class is shifted by the same number of fifths the key moved
+    /// (`newKey − oldKey` on the line of fifths), so spelling is preserved relative to the key: a chromatic raise /
+    /// lower of a scale degree stays a raise / lower of the transposed degree (e.g. B♭ in G major → C♭ in A♭ major at
+    /// `+1`, never B♮). The displayed accidental is recomputed against the destination key.
     ///
     /// Skipped, leaving pitch untouched:
     /// - parts whose instrument `useDrumset` is true, and
@@ -44,6 +46,8 @@ extension Score {
                 for measureIndex in measures.indices {
                     let oldKey = activeKey(staff: address, measureIndex: measureIndex)
                     let newKey = Self.transposedKey(oldKey, bySemitones: delta)
+                    // Notes' tonal pitch class shifts by the same fifths the key moved, preserving spelling.
+                    let fifthsDelta = newKey - oldKey
                     let voices = copy.parts[partIndex].staves[staffIndex]
                         .measures[measureIndex].voices
                     for voiceIndex in voices.indices {
@@ -60,13 +64,19 @@ extension Score {
                                     .elements[elementIndex] = .keySignature(k)
                             case var .chord(c):
                                 c.notes = ChordNotes(c.notes.map {
-                                    $0.shifted(bySemitones: delta, in: newKey) ?? $0
+                                    Self.transposedNote(
+                                        $0, semitones: delta, fifthsDelta: fifthsDelta, key: newKey,
+                                    )
                                 })
                                 c.graceNotesBefore = c.graceNotesBefore.map {
-                                    Self.transposedGrace($0, delta: delta, key: newKey)
+                                    Self.transposedGrace(
+                                        $0, semitones: delta, fifthsDelta: fifthsDelta, key: newKey,
+                                    )
                                 }
                                 c.graceNotesAfter = c.graceNotesAfter.map {
-                                    Self.transposedGrace($0, delta: delta, key: newKey)
+                                    Self.transposedGrace(
+                                        $0, semitones: delta, fifthsDelta: fifthsDelta, key: newKey,
+                                    )
                                 }
                                 copy.parts[partIndex].staves[staffIndex]
                                     .measures[measureIndex].voices[voiceIndex]
@@ -83,13 +93,30 @@ extension Score {
     }
 
     private static func transposedGrace(
-        _ grace: GraceChord, delta: Int, key: Int,
+        _ grace: GraceChord, semitones: Int, fifthsDelta: Int, key: Int,
     ) -> GraceChord {
         var g = grace
         g.notes = ChordNotes(grace.notes.map {
-            $0.shifted(bySemitones: delta, in: key) ?? $0
+            Self.transposedNote($0, semitones: semitones, fifthsDelta: fifthsDelta, key: key)
         })
         return g
+    }
+
+    /// Transpose a single note by `semitones`, preserving its spelling relative to the key: the tonal pitch class
+    /// shifts by `fifthsDelta` (= newKey − oldKey on the line of fifths), so a chromatic raise / lower of a scale
+    /// degree stays a raise / lower of the transposed degree (e.g. B♭ in G major → C♭ in A♭ major at `+1`, never B♮).
+    /// The displayed accidental is recomputed against `key`. Returns the note unchanged if the shifted pitch would
+    /// leave the MIDI range `0…127`.
+    private static func transposedNote(
+        _ note: Note, semitones: Int, fifthsDelta: Int, key: Int,
+    ) -> Note {
+        let newPitch = note.pitch + semitones
+        guard (0 ... 127).contains(newPitch) else { return note }
+        var n = note
+        n.pitch = newPitch
+        n.tpc = note.tpc + fifthsDelta
+        n.accidental = PitchSpelling.displayedAccidental(forTpc: n.tpc, in: key)
+        return n
     }
 
     /// Authored opening clef rawType for the staff at `address`: the explicit measure-0 clef when one exists, otherwise
