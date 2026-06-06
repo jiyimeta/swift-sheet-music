@@ -138,9 +138,8 @@ extension PlaybackEngine {
         )
         let soloedExists = snapshot.mixerChannels.contains { $0.isSoloed }
         applyMixerSnapshot(
-            synth: exportSynth.synth,
+            scoreSynth: exportSynth,
             channels: snapshot.mixerChannels,
-            staffChannels: exportSynth.staffChannels,
             soloedExists: soloedExists,
         )
 
@@ -181,7 +180,9 @@ extension PlaybackEngine {
         let staffTrackCount = score.allStaves.count
         for (i, track) in sequencer.tracks.enumerated() {
             if i < staffTrackCount {
-                track.destinationAudioUnit = exportSynth.synth
+                track.destinationAudioUnit = exportSynth.staffIsDrum[i] == true
+                    ? exportSynth.percussion
+                    : exportSynth.melodic
             } else if let s = metronomeSampler {
                 track.destinationAudioUnit = s
             }
@@ -200,7 +201,7 @@ extension PlaybackEngine {
         return ExportPipeline(
             engine: engine,
             sequencer: sequencer,
-            samplers: [exportSynth.synth],
+            samplers: [exportSynth.melodic, exportSynth.percussion],
             metronomeSampler: metronomeSampler,
         )
     }
@@ -229,8 +230,11 @@ extension PlaybackEngine {
     }
 
     private struct ScoreSynth {
-        let synth: AVAudioUnitMIDIInstrument
+        let melodic: AVAudioUnitMIDIInstrument
+        let percussion: AVAudioUnitMIDIInstrument
         let staffChannels: [Int: UInt8]
+        /// Flat staff index → is-drum, for per-track routing + mixer dispatch.
+        let staffIsDrum: [Int: Bool]
     }
 
     private static func buildScoreSynth(
@@ -240,34 +244,46 @@ extension PlaybackEngine {
         engine: AVAudioEngine,
         output: AVAudioNode,
     ) -> ScoreSynth {
-        let instrument = MIDISynthBuilder.make()
-        engine.attach(instrument)
-        engine.connect(
-            instrument, to: output, format: nil,
-        )
+        let melodic = MIDISynthBuilder.make()
+        engine.attach(melodic)
+        engine.connect(melodic, to: output, format: nil)
         if let url = resolver.defaultGMSoundfontURL {
             try? MIDISynthBuilder.loadSoundFont(
-                into: instrument, url: url,
+                into: melodic, url: url,
                 bankMSB: 0, bankLSB: 0, program: 0,
             )
         }
         for ch: UInt8 in 0 ..< 16 where ch != 9 {
             MIDISynthBuilder.setPitchBendSensitivity(
-                into: instrument, semitones: 12, onChannel: ch,
+                into: melodic, semitones: 12, onChannel: ch,
             )
         }
+
+        let percussion = MIDISynthBuilder.make()
+        engine.attach(percussion)
+        engine.connect(percussion, to: output, format: nil)
+        if let url = resolver.defaultGMSoundfontURL {
+            try? MIDISynthBuilder.loadSoundFont(
+                into: percussion, url: url,
+                bankMSB: 0, bankLSB: 0, program: 0, channel: 9,
+            )
+        }
+
         // The SMF's tick-0 programChange events on each track set up
         // every channel's preset; pre-engine sendProgramChange is only
         // needed for mixer overrides that should win on the primary
         // channel of each staff.
         let perStaffChan = MidiRenderer.staffChannels(score: score)
         var staffChannels: [Int: UInt8] = [:]
-        for idx in score.allStaves.indices {
+        var staffIsDrum: [Int: Bool] = [:]
+        for (idx, entry) in score.allStaves.enumerated() {
             let midiCh = UInt8(
                 clamping: idx < perStaffChan.count
                     ? perStaffChan[idx] : 0,
             )
             staffChannels[idx] = midiCh
+            staffIsDrum[idx] = score.part(at: entry.address)?
+                .instrument.useDrumset == true
             if midiCh != 9,
                let chan = snapshot.mixerChannels.first(
                    where: { $0.id == .staff(idx) },
@@ -276,18 +292,19 @@ extension PlaybackEngine {
                 // See PlaybackEngine.loadProgram — preload to load
                 // the preset, then plain PC to select.
                 MIDISynthBuilder.preloadPreset(
-                    into: instrument,
+                    into: melodic,
                     bankMSB: 0, bankLSB: 0, program: p,
                     onChannel: midiCh,
                 )
                 let pcStatus = UInt32(0xC0) | UInt32(midiCh & 0x0F)
                 _ = MusicDeviceMIDIEvent(
-                    instrument.audioUnit, pcStatus, UInt32(p), 0, 0,
+                    melodic.audioUnit, pcStatus, UInt32(p), 0, 0,
                 )
             }
         }
         return ScoreSynth(
-            synth: instrument, staffChannels: staffChannels,
+            melodic: melodic, percussion: percussion,
+            staffChannels: staffChannels, staffIsDrum: staffIsDrum,
         )
     }
 
@@ -315,20 +332,21 @@ extension PlaybackEngine {
     /// the live mixer rules: if any channel is soloed, only soloed
     /// channels are audible; otherwise muted channels are silenced.
     private static func applyMixerSnapshot(
-        synth: AVAudioUnitMIDIInstrument,
+        scoreSynth: ScoreSynth,
         channels: [MixerChannel],
-        staffChannels: [Int: UInt8],
         soloedExists: Bool,
     ) {
         for chan in channels {
             guard case let .staff(idx) = chan.id,
-                  let midiCh = staffChannels[idx]
+                  let midiCh = scoreSynth.staffChannels[idx]
             else { continue }
+            let unit = scoreSynth.staffIsDrum[idx] == true
+                ? scoreSynth.percussion : scoreSynth.melodic
             let audible = soloedExists ? chan.isSoloed : !chan.isMuted
             let gain = audible ? chan.volume : 0
             let cc7 = UInt8(clamping: Int((gain * 127).rounded()))
             MIDISynthBuilder.sendControlChange(
-                into: synth, controller: 7, value: cc7, onChannel: midiCh,
+                into: unit, controller: 7, value: cc7, onChannel: midiCh,
             )
         }
     }
