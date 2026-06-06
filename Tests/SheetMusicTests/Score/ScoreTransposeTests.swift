@@ -146,21 +146,22 @@ struct ScoreTransposeTests {
         #expect(n.accidental == .doubleFlat)
     }
 
-    @Test func tieAcrossKeyChangeKeepsConsistentSpelling() {
-        // F♮ (tpc 13, pitch 65) tied across a key change: measure 0 in C
-        // major (key 0), measure 1 in F major (key −1). Transposed +1, a
-        // naive per-measure transpose would spell the origin G♭ (tpc 8)
-        // and the continuation F♯ (tpc 20) — different letters → different
-        // staff step → the layout drops the tie. The continuation must
-        // inherit the origin's spelling: BOTH G♭ (tpc 8).
-        let origin = Note(pitch: 65, tpc: 13, tieForward: 1)
-        let cont = Note(pitch: 65, tpc: 13, tieBack: 1)
+    @Test func transposeSpellsEachTieEndInItsOwnKey() {
+        // D♮ (tpc 16, pitch 62) tied across a key change: measure 0 in D♭
+        // major (key −5, where D♮ shows a natural), measure 1 in B♭ major
+        // (key −2, where D♮ is diatonic / no accidental). Transposed +3,
+        // each end is spelled in ITS OWN key, preserving its accidental
+        // policy: origin → E♯ (tpc 25, sharp) in E major; continuation →
+        // F♮ (tpc 13, no accidental) in D♭ major. The tpcs differ on
+        // purpose — the layout pairs the tie by pitch, not spelling.
+        let origin = Note(pitch: 62, tpc: 16, tieForward: 1)
+        let cont = Note(pitch: 62, tpc: 16, tieBack: 1)
         let m0 = Measure(voices: [Voice(elements: [
-            .keySignature(KeySignature(concertKey: 0)),
+            .keySignature(KeySignature(concertKey: -5)),
             .chord(Chord(duration: .quarter, notes: ChordNotes([origin]))),
         ])])
         let m1 = Measure(voices: [Voice(elements: [
-            .keySignature(KeySignature(concertKey: -1)),
+            .keySignature(KeySignature(concertKey: -2)),
             .chord(Chord(duration: .quarter, notes: ChordNotes([cont]))),
         ])])
         let staff = Staff(group: "pitched", measures: [m0, m1])
@@ -168,14 +169,19 @@ struct ScoreTransposeTests {
         let score = Score(division: 480, parts: [
             Part(id: "p0", instrument: inst, staves: [staff]),
         ])
-        let out = score.transposed(bySemitones: 1)
+        let out = score.transposed(bySemitones: 3)
         func note(measure: Int) -> Note? {
             guard case let .chord(c) = out.parts[0].staves[0]
                 .measures[measure].voices[0].elements[1] else { return nil }
             return c.notes.first
         }
-        #expect(note(measure: 0)?.tpc == 8) // G♭
-        #expect(note(measure: 1)?.tpc == 8) // G♭, NOT F♯ (tpc 20)
-        #expect(note(measure: 0)?.tpc == note(measure: 1)?.tpc)
+        // Origin: E♯ in E major — raised degree, accidental shown.
+        #expect(note(measure: 0)?.pitch == 65)
+        #expect(note(measure: 0)?.tpc == 25)
+        #expect(note(measure: 0)?.accidental == .sharp)
+        // Continuation: F♮ in D♭ major — diatonic, no accidental.
+        #expect(note(measure: 1)?.pitch == 65)
+        #expect(note(measure: 1)?.tpc == 13)
+        #expect(note(measure: 1)?.accidental == nil)
     }
 }

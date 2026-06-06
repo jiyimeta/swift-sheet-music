@@ -26,12 +26,12 @@ extension LayoutEngine {
         var pairs: [TiePair] = []
         // For open ties: store (origin, above) so the arc direction is
         // consistent between the start note and the end note.
-        // Keyed by (tieNumber, noteStep, staffIndex) — all three are
-        // needed to prevent cross-staff mis-matching:
+        // Keyed by (tieNumber, pitch, staffIndex) — all three are
+        // needed to prevent cross-staff / cross-voice mis-matching:
         //
         // - tieNumber alone collides across ALL staves.
-        // - (number, step) collides when two staves share the same
-        //   clef (e.g. two treble staves both have C4 at step −6).
+        // - (number, pitch) collides when two staves share the same
+        //   clef (e.g. two treble staves both holding C4).
         // - Adding `staffIndex` (the index of the staff within the
         //   system, derived by closest-midline match) uniquely
         //   identifies the staff in a way that is STABLE across
@@ -40,10 +40,23 @@ extension LayoutEngine {
         //   vertical / page mode (different `system.origin.y`),
         //   so a tie crossing a system break failed to match and
         //   was silently dropped.
+        //
+        // `pitch` (not staff step) is the discriminator so a tie whose
+        // ends are spelled enharmonically differently after a transpose
+        // (E♯ tied to F) still pairs — same pitch, different step.
         struct TieKey: Hashable {
             let number: Int
-            let step: Int
+            let pitch: Int
             let staffIndex: Int
+        }
+        /// Pair ties by SOUNDING pitch, not staff step. Transpose can spell the
+        /// two ends of a tie enharmonically differently across a key change
+        /// (e.g. E♯ tied to F) — same pitch, different step — and a step-keyed
+        /// match would silently drop such a tie. Resolve the laid-out note to
+        /// its score pitch; fall back to step only if it can't be resolved
+        /// (shouldn't happen for a real note).
+        func tieDiscriminator(_ n: LayoutChordNote) -> Int {
+            score[n.noteID]?.pitch ?? n.step
         }
         var open: [TieKey: (origin: CGPoint, above: Bool)] = [:]
         let sp = document.metrics.sp
@@ -111,7 +124,7 @@ extension LayoutEngine {
 
                         if let back = n.tieBack {
                             let key = TieKey(
-                                number: back, step: n.step,
+                                number: back, pitch: tieDiscriminator(n),
                                 staffIndex: staffIndex,
                             )
                             if let openTie = open[key] {
@@ -126,7 +139,7 @@ extension LayoutEngine {
                         }
                         if let fwd = n.tieForward {
                             let key = TieKey(
-                                number: fwd, step: n.step,
+                                number: fwd, pitch: tieDiscriminator(n),
                                 staffIndex: staffIndex,
                             )
                             open[key] = (absolute, above)

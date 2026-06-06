@@ -43,11 +43,6 @@ extension Score {
                     partIndex: partIndex, staffIndexInPart: staffIndex,
                 )
                 let measures = copy.parts[partIndex].staves[staffIndex].measures
-                // Spelling context (fifths shift + destination key) of each open tie, keyed by (voice, tie number).
-                // A note continuing a tie (`tieBack`) inherits its origin's context so both ends keep the SAME
-                // spelling across a key change — otherwise they get different letters (e.g. G♭ vs F♯) and the layout's
-                // tie-pairing (which matches on staff step) silently drops the tie. Reset per staff; ties never cross.
-                var openTies: [TieSpellingKey: (fifths: Int, key: Int)] = [:]
                 for measureIndex in measures.indices {
                     let oldKey = activeKey(staff: address, measureIndex: measureIndex)
                     let newKey = Self.transposedKey(oldKey, bySemitones: delta)
@@ -71,8 +66,7 @@ extension Score {
                                 copy.parts[partIndex].staves[staffIndex]
                                     .measures[measureIndex].voices[voiceIndex]
                                     .elements[elementIndex] = .chord(Self.transposedChord(
-                                        c, voice: voiceIndex, semitones: delta,
-                                        fifthsDelta: fifthsDelta, key: newKey, openTies: &openTies,
+                                        c, semitones: delta, fifthsDelta: fifthsDelta, key: newKey,
                                     ))
                             default:
                                 break
@@ -85,39 +79,18 @@ extension Score {
         return copy
     }
 
-    /// Keys an open tie by voice + tie number during transposition, so a continuation note can inherit its origin's
-    /// spelling context.
-    private struct TieSpellingKey: Hashable {
-        let voice: Int
-        let number: Int
-    }
-
-    /// Transpose every note (and grace note) of `chord`. Each note shifts by `semitones`; its tonal pitch class shifts
-    /// by `fifthsDelta` unless it continues a tie (`tieBack`), in which case it inherits the origin's spelling context
-    /// from `openTies` so both ends of a tie keep the same letter across a key change. A note that starts a tie
-    /// (`tieForward`) records its context for the continuation to read.
+    /// Transpose every note (and grace note) of `chord`. Each note is spelled in **its own** measure's key, so it keeps
+    /// its original accidental policy (a chromatic raise / lower of a scale degree stays a raise / lower of the
+    /// transposed degree; a diatonic note stays diatonic). Ties across a key change therefore may end up with
+    /// different spellings on each side (e.g. E♯ tied to F) — that is intentional; the layout pairs ties by pitch,
+    /// not spelling, so they stay connected.
     private static func transposedChord(
-        _ chord: Chord, voice: Int, semitones: Int, fifthsDelta: Int, key: Int,
-        openTies: inout [TieSpellingKey: (fifths: Int, key: Int)],
+        _ chord: Chord, semitones: Int, fifthsDelta: Int, key: Int,
     ) -> Chord {
         var c = chord
-        var shifted: [Note] = []
-        for note in c.notes {
-            var ctx = (fifths: fifthsDelta, key: key)
-            if let back = note.tieBack,
-               let inherited = openTies[TieSpellingKey(voice: voice, number: back)]
-            {
-                ctx = inherited
-                openTies[TieSpellingKey(voice: voice, number: back)] = nil
-            }
-            if let fwd = note.tieForward {
-                openTies[TieSpellingKey(voice: voice, number: fwd)] = ctx
-            }
-            shifted.append(transposedNote(
-                note, semitones: semitones, fifthsDelta: ctx.fifths, key: ctx.key,
-            ))
-        }
-        c.notes = ChordNotes(shifted)
+        c.notes = ChordNotes(c.notes.map {
+            transposedNote($0, semitones: semitones, fifthsDelta: fifthsDelta, key: key)
+        })
         c.graceNotesBefore = c.graceNotesBefore.map {
             transposedGrace($0, semitones: semitones, fifthsDelta: fifthsDelta, key: key)
         }
