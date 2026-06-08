@@ -183,7 +183,7 @@ extension PlaybackEngine {
         for (i, track) in sequencer.tracks.enumerated() {
             if i < staffTrackCount {
                 track.destinationAudioUnit = exportSynth.staffIsDrum[i] == true
-                    ? exportSynth.percussion
+                    ? (exportSynth.percussion ?? exportSynth.melodic)
                     : exportSynth.melodic
             } else if let s = metronomeSampler {
                 track.destinationAudioUnit = s
@@ -203,7 +203,7 @@ extension PlaybackEngine {
         return ExportPipeline(
             engine: engine,
             sequencer: sequencer,
-            samplers: [exportSynth.melodic, exportSynth.percussion],
+            samplers: [exportSynth.melodic, exportSynth.percussion].compactMap(\.self),
             metronomeSampler: metronomeSampler,
         )
     }
@@ -233,7 +233,9 @@ extension PlaybackEngine {
 
     private struct ScoreSynth {
         let melodic: AVAudioUnitMIDIInstrument
-        let percussion: AVAudioUnitMIDIInstrument
+        /// Separate percussion unit (GM channel 9), built only when the score has a drum part — mirrors the live
+        /// engine's lazy percussion unit so a drumless export doesn't load the SoundFont twice. `nil` ⇒ no drums.
+        let percussion: AVAudioUnitMIDIInstrument?
         let staffChannels: [Int: UInt8]
         /// Flat staff index → is-drum, for per-track routing + mixer dispatch.
         let staffIsDrum: [Int: Bool]
@@ -261,14 +263,19 @@ extension PlaybackEngine {
             )
         }
 
-        let percussion = MIDISynthBuilder.make()
-        engine.attach(percussion)
-        engine.connect(percussion, to: output, format: nil)
-        if let url = resolver.defaultGMSoundfontURL {
-            try? MIDISynthBuilder.loadSoundFont(
-                into: percussion, url: url,
-                bankMSB: 0, bankLSB: 0, program: 0, channel: 9,
-            )
+        // Percussion unit only when the score has a drum part (matches the live engine).
+        var percussion: AVAudioUnitMIDIInstrument?
+        if score.parts.contains(where: \.instrument.useDrumset) {
+            let p = MIDISynthBuilder.make()
+            engine.attach(p)
+            engine.connect(p, to: output, format: nil)
+            if let url = resolver.defaultGMSoundfontURL {
+                try? MIDISynthBuilder.loadSoundFont(
+                    into: p, url: url,
+                    bankMSB: 0, bankLSB: 0, program: 0, channel: 9,
+                )
+            }
+            percussion = p
         }
 
         // The SMF's tick-0 programChange events on each track set up
@@ -343,7 +350,7 @@ extension PlaybackEngine {
                   let midiCh = scoreSynth.staffChannels[idx]
             else { continue }
             let unit = scoreSynth.staffIsDrum[idx] == true
-                ? scoreSynth.percussion : scoreSynth.melodic
+                ? (scoreSynth.percussion ?? scoreSynth.melodic) : scoreSynth.melodic
             let audible = soloedExists ? chan.isSoloed : !chan.isMuted
             let gain = audible ? chan.volume : 0
             let cc7 = UInt8(clamping: Int((gain * 127).rounded()))

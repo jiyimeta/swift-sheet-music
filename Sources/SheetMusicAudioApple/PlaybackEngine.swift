@@ -475,13 +475,15 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         reapplyMixerPrograms()
     }
 
-    /// Build two AUMIDISynth units — one melodic (pitched channels),
-    /// one percussion (GM channel 9) — load the full GM SoundFont into
-    /// each, pre-configure pitch-bend sensitivity on the melodic unit,
-    /// and apply the current calibration + transpose.
+    /// Build the AUMIDISynth unit(s): always a melodic unit (pitched channels), plus a separate percussion unit (GM
+    /// channel 9) ONLY when the score has a drum part. The percussion unit lets the melodic unit carry a global
+    /// coarse-tuning transpose without re-pitching drums; a drumless score doesn't pay for a second full-SoundFont
+    /// load. Loads the GM SoundFont into each built unit, configures pitch-bend on the melodic unit, and applies the
+    /// current calibration + transpose.
     private func prepareSynth(score: Score) throws {
         let url = resolver.defaultGMSoundfontURL
         let channels = MidiRenderer.staffChannels(score: score)
+        let hasDrums = score.parts.contains { $0.instrument.useDrumset }
 
         // Melodic unit — all pitched channels.
         let melodic = MIDISynthBuilder.make()
@@ -497,22 +499,22 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
                 into: melodic, semitones: 12, onChannel: ch,
             )
         }
-
-        // Percussion unit — GM channel 9. Same SF2, drum bank preloaded
-        // on channel 9 (mirrors MetronomeController). No pitch-bend, no
-        // transpose.
-        let percussion = MIDISynthBuilder.make()
-        engine.attach(percussion)
-        engine.connect(percussion, to: scoreGainMixer, format: nil)
-        if let url {
-            try? MIDISynthBuilder.loadSoundFont(
-                into: percussion, url: url,
-                bankMSB: 0, bankLSB: 0, program: 0, channel: 9,
-            )
-        }
-
         melodicSynth = melodic
-        percussionSynth = percussion
+
+        // Percussion unit — GM channel 9. Built only when the score has drums (mirrors MetronomeController's
+        // separate sampler). Same SF2, drum bank preloaded on channel 9. No pitch-bend, no transpose.
+        if hasDrums {
+            let percussion = MIDISynthBuilder.make()
+            engine.attach(percussion)
+            engine.connect(percussion, to: scoreGainMixer, format: nil)
+            if let url {
+                try? MIDISynthBuilder.loadSoundFont(
+                    into: percussion, url: url,
+                    bankMSB: 0, bankLSB: 0, program: 0, channel: 9,
+                )
+            }
+            percussionSynth = percussion
+        }
         applyTuning()
 
         for (idx, entry) in score.allStaves.enumerated() {
