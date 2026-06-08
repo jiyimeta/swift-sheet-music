@@ -2,22 +2,18 @@
 import Testing
 
 struct ScoreTransposeTests {
-    // MARK: - transposedKey
+    // MARK: - respelledKey
 
-    @Test func keyUpTwoSemitonesFromCgoesToDmajor() {
-        #expect(Score.transposedKey(0, bySemitones: 2) == 2)
+    @Test func respelledKeyKeepsInRangeValues() {
+        #expect(Score.respelledKey(3) == 3)
+        #expect(Score.respelledKey(7) == 7) // C# major stays C# (not Db)
+        #expect(Score.respelledKey(-7) == -7) // Cb major stays Cb
     }
 
-    @Test func keyUpOneSemitonePrefersFlatEnharmonic() {
-        #expect(Score.transposedKey(0, bySemitones: 1) == -5)
-    }
-
-    @Test func keyDownOneSemitonePrefersSharpEnharmonic() {
-        #expect(Score.transposedKey(0, bySemitones: -1) == 5)
-    }
-
-    @Test func keyZeroDeltaIsIdentity() {
-        #expect(Score.transposedKey(3, bySemitones: 0) == 3)
+    @Test func respelledKeyClampsOverflow() {
+        #expect(Score.respelledKey(8) == -4) // 8 sharps → Ab major
+        #expect(Score.respelledKey(-8) == 4) // 8 flats → E major
+        #expect(Score.respelledKey(14) == 2) // → D major
     }
 
     // MARK: - transposed(bySemitones:)
@@ -146,14 +142,10 @@ struct ScoreTransposeTests {
         #expect(n.accidental == .doubleFlat)
     }
 
-    @Test func transposeSpellsEachTieEndInItsOwnKey() {
-        // D♮ (tpc 16, pitch 62) tied across a key change: measure 0 in D♭
-        // major (key −5, where D♮ shows a natural), measure 1 in B♭ major
-        // (key −2, where D♮ is diatonic / no accidental). Transposed +3,
-        // each end is spelled in ITS OWN key, preserving its accidental
-        // policy: origin → E♯ (tpc 25, sharp) in E major; continuation →
-        // F♮ (tpc 13, no accidental) in D♭ major. The tpcs differ on
-        // purpose — the layout pairs the tie by pitch, not spelling.
+    @Test func transposePreservesTieMetadata() {
+        // A tie spanning a key change keeps its forward/back markers. Here
+        // both sections stay in range under the chosen offset (D♭→E, B♭→C♯),
+        // so the tied D♮ is spelled consistently as E♯ on both ends.
         let origin = Note(pitch: 62, tpc: 16, tieForward: 1)
         let cont = Note(pitch: 62, tpc: 16, tieBack: 1)
         let m0 = Measure(voices: [Voice(elements: [
@@ -175,13 +167,65 @@ struct ScoreTransposeTests {
                 .measures[measure].voices[0].elements[1] else { return nil }
             return c.notes.first
         }
-        // Origin: E♯ in E major — raised degree, accidental shown.
-        #expect(note(measure: 0)?.pitch == 65)
-        #expect(note(measure: 0)?.tpc == 25)
-        #expect(note(measure: 0)?.accidental == .sharp)
-        // Continuation: F♮ in D♭ major — diatonic, no accidental.
-        #expect(note(measure: 1)?.pitch == 65)
-        #expect(note(measure: 1)?.tpc == 13)
-        #expect(note(measure: 1)?.accidental == nil)
+        #expect(note(measure: 0)?.tieForward == 1)
+        #expect(note(measure: 1)?.tieBack == 1)
+        #expect(note(measure: 0)?.tpc == 25) // E♯
+        #expect(note(measure: 1)?.tpc == 25) // E♯ (consistent)
+    }
+
+    // MARK: - modulation enharmonic-key selection
+
+    /// Build a single-staff score from `(key, measureCount)` sections; each
+    /// section opens with its key signature, every measure holds one note.
+    private func makeModulatingScore(_ sections: [(key: Int, measures: Int)]) -> Score {
+        var measures: [Measure] = []
+        for section in sections {
+            for index in 0 ..< section.measures {
+                var elements: [VoiceElement] = []
+                if index == 0 {
+                    elements.append(.keySignature(KeySignature(concertKey: section.key)))
+                }
+                elements.append(.chord(Chord(
+                    duration: .quarter, notes: ChordNotes([Note(pitch: 60, tpc: 14)]),
+                )))
+                measures.append(Measure(voices: [Voice(elements: elements)]))
+            }
+        }
+        let staff = Staff(group: "pitched", measures: measures)
+        let inst = Instrument(id: "i", longName: "i")
+        return Score(division: 480, parts: [Part(id: "p", instrument: inst, staves: [staff])])
+    }
+
+    private func keySignatures(_ score: Score) -> [Int] {
+        var result: [Int] = []
+        for measure in score.parts[0].staves[0].measures {
+            for element in measure.voices[0].elements {
+                if case let .keySignature(k) = element { result.append(k.concertKey) }
+            }
+        }
+        return result
+    }
+
+    @Test func modulationDbBbBup3PrefersSharpForLongerKeys() {
+        // Db(long)→Bb(med)→B(short), +3 → E→C#→D: the prominent Db & Bb
+        // sections keep sharp spelling (E, C#); the brief B section is the
+        // one forced to respell (D).
+        let score = makeModulatingScore([(-5, 4), (-2, 2), (5, 1)])
+        #expect(keySignatures(score.transposed(bySemitones: 3)) == [4, 7, 2])
+    }
+
+    @Test func modulationDbBbBup1SacrificesBriefKey() {
+        let score = makeModulatingScore([(-5, 4), (-2, 2), (5, 1)])
+        #expect(keySignatures(score.transposed(bySemitones: 1)) == [2, 5, 0]) // D, B, C
+    }
+
+    @Test func modulationCEbCdown1KeepsAllInRange() {
+        let score = makeModulatingScore([(0, 2), (-3, 2), (0, 2)])
+        #expect(keySignatures(score.transposed(bySemitones: -1)) == [5, 2, 5]) // B, D, B
+    }
+
+    @Test func modulationCCsharpUp1ChoosesFlatToStayInRange() {
+        let score = makeModulatingScore([(0, 2), (7, 2)])
+        #expect(keySignatures(score.transposed(bySemitones: 1)) == [-5, 2]) // Db, D
     }
 }

@@ -1,37 +1,40 @@
 extension Score {
-    /// Transpose a key-signature accidental count (`-7…+7`, flats negative) by `delta` semitones along the circle of
-    /// fifths. One semitone up = +7 positions (7 fifths). The result is normalized to `[-6, +6]` so the simpler
-    /// enharmonic spelling wins (e.g. C +1 → Db (-5), not C# (+7)); adding/removing 12 accidentals is an enharmonic
-    /// respelling of the same pitch set, so this never changes which pitches sound — only how the key is written.
-    static func transposedKey(_ key: Int, bySemitones delta: Int) -> Int {
-        var k = key + 7 * delta
-        while k > 6 {
+    /// Clamp a key-signature value (sharps +, flats −) into the writable range `[-7, +7]` by enharmonic respelling
+    /// (adding / removing 12 accidentals spells the same pitch set the other way). Brings a fifths-shifted key back to
+    /// a notatable signature; e.g. `+8` (8 sharps, unwritable) → `-4` (A♭ major). Values already in range — including
+    /// `±7` (C♯ / C♭ major) — are returned unchanged, so a deliberately sharp/flat context keeps its spelling.
+    static func respelledKey(_ key: Int) -> Int {
+        var k = key
+        while k > 7 {
             k -= 12
         }
-        while k < -6 {
+        while k < -7 {
             k += 12
         }
         return k
     }
 
-    /// Returns a copy of the score with every pitched note shifted by `delta` semitones and every key signature
-    /// transposed to match. Each note's tonal pitch class is shifted by the same number of fifths the key moved
-    /// (`newKey − oldKey` on the line of fifths), so spelling is preserved relative to the key: a chromatic raise /
-    /// lower of a scale degree stays a raise / lower of the transposed degree (e.g. B♭ in G major → C♭ in A♭ major at
-    /// `+1`, never B♮). The displayed accidental is recomputed against the destination key.
+    /// Returns a copy of the score transposed by `delta` semitones: every pitched note is shifted and every key
+    /// signature re-spelled. A SINGLE global fifths offset (`φ ≡ 7·delta mod 12`) is chosen for the whole score and
+    /// added to every key, so all modulation relationships are preserved by construction — the circle of fifths
+    /// rotates uniformly. When no offset keeps every key inside the writable `[-7, +7]` range, `globalFifthsOffset`
+    /// picks the offset that forces the *fewest measures* of music out of range, and the overflowing keys are
+    /// respelled enharmonically. So a long D♭ section transposed +3 becomes E and the following B♭ section becomes
+    /// C♯ (matching the sharp context), while a brief passing key is the one that respells.
     ///
-    /// Skipped, leaving pitch untouched:
-    /// - parts whose instrument `useDrumset` is true, and
-    /// - staves whose `group` is `"percussion"` (unpitched — transposing would re-map drum sounds).
+    /// Each note's tonal pitch class shifts by `newKey − oldKey` (the same fifths the key moved), preserving its
+    /// spelling relative to the key (a chromatic raise / lower stays a raise / lower; a diatonic note stays diatonic).
+    /// The displayed accidental is recomputed against the destination key.
     ///
-    /// The active key per note is resolved at **per-measure** granularity via `activeKey(staff:measureIndex:)`,
-    /// matching the coarsening the arrow-key transpose already uses; mid-measure key changes (rare) take effect from
-    /// their measure start. Grace notes are transposed alongside their parent chord.
+    /// Skipped, leaving pitch untouched: parts whose instrument `useDrumset` is true, and staves whose `group` is
+    /// `"percussion"` (unpitched — transposing would re-map drum sounds). The active key per note is resolved at
+    /// per-measure granularity via `activeKey(staff:measureIndex:)`. Grace notes transpose with their parent chord.
     ///
     /// Tick structure, note IDs, and element ordering are unchanged — only `pitch` / `tpc` / `accidental` and
     /// `KeySignature.concertKey` move — so playback cursors and seek positions stay valid against the transposed score.
     public func transposed(bySemitones delta: Int) -> Score {
         guard delta != 0 else { return self }
+        let phi = globalFifthsOffset(bySemitones: delta)
         var copy = self
         for partIndex in copy.parts.indices {
             if copy.parts[partIndex].instrument.useDrumset { continue }
@@ -45,8 +48,7 @@ extension Score {
                 let measures = copy.parts[partIndex].staves[staffIndex].measures
                 for measureIndex in measures.indices {
                     let oldKey = activeKey(staff: address, measureIndex: measureIndex)
-                    let newKey = Self.transposedKey(oldKey, bySemitones: delta)
-                    // Notes' tonal pitch class shifts by the same fifths the key moved, preserving spelling.
+                    let newKey = Self.respelledKey(oldKey + phi)
                     let fifthsDelta = newKey - oldKey
                     let voices = copy.parts[partIndex].staves[staffIndex]
                         .measures[measureIndex].voices
@@ -56,9 +58,7 @@ extension Score {
                         for elementIndex in elements.indices {
                             switch elements[elementIndex] {
                             case var .keySignature(k):
-                                k.concertKey = Self.transposedKey(
-                                    k.concertKey, bySemitones: delta,
-                                )
+                                k.concertKey = Self.respelledKey(k.concertKey + phi)
                                 copy.parts[partIndex].staves[staffIndex]
                                     .measures[measureIndex].voices[voiceIndex]
                                     .elements[elementIndex] = .keySignature(k)
@@ -77,6 +77,59 @@ extension Score {
             }
         }
         return copy
+    }
+
+    /// Choose the single fifths offset (`≡ 7·delta mod 12`) added to every key signature. Among the ≤3 candidate
+    /// offsets, picks the one that forces the fewest measures' worth of keys out of the writable `[-7, +7]` range
+    /// (so a longer / more prominent key keeps its natural spelling and a brief passing modulation is the one
+    /// respelled). Ties break toward fewer total accidentals, then toward the smaller shift.
+    private func globalFifthsOffset(bySemitones delta: Int) -> Int {
+        let hist = keyDurationHistogram()
+        let residue = ((7 * delta) % 12 + 12) % 12
+        let candidates = [residue - 12, residue, residue + 12]
+        var best = residue
+        var bestCost = Int.max
+        var bestLoad = Int.max
+        for offset in candidates {
+            var cost = 0
+            var load = 0
+            for (key, weight) in hist {
+                let shifted = key + offset
+                let respelled = Self.respelledKey(shifted)
+                if respelled != shifted { cost += weight }
+                load += abs(respelled) * weight
+            }
+            if (cost, load, abs(offset)) < (bestCost, bestLoad, abs(best)) {
+                bestCost = cost
+                bestLoad = load
+                best = offset
+            }
+        }
+        return best
+    }
+
+    /// Tally how many measures each key signature is in effect, walking the first pitched staff once (key signatures
+    /// are uniform across staves in tonal scores, and a global transpose rotates them all the same way). Weights the
+    /// offset choice toward keeping prominent keys spelled naturally. Empty when the score has no pitched measures.
+    private func keyDurationHistogram() -> [Int: Int] {
+        for part in parts where !part.instrument.useDrumset {
+            for staff in part.staves where staff.group != "percussion" {
+                var hist: [Int: Int] = [:]
+                var runningKey = 0
+                for measure in staff.measures {
+                    if let leading = measure.voices.first {
+                        for element in leading.elements {
+                            if case let .keySignature(k) = element {
+                                runningKey = k.concertKey
+                            }
+                        }
+                    }
+                    hist[runningKey, default: 0] += 1
+                }
+                return hist
+            }
+        }
+        return [:]
     }
 
     /// Transpose every note (and grace note) of `chord`. Each note is spelled in **its own** measure's key, so it keeps
