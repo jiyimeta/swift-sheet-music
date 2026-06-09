@@ -197,4 +197,36 @@ object SheetMusicJNI {
             arena,
         ).toByteArray()
     }
+
+    /**
+     * Rehearsal marks for [scoreHandle], each carrying its text, its 0..1 notated-time
+     * fraction (the seek-bar position to align with), and the `ScoreCursor` wire blob to
+     * seek to when tapped. An unknown handle returns an empty list payload (the count
+     * header is still present). Decode via [RehearsalMarkCodec.decode]. Wire format:
+     * `[count:I32 LE]` then per entry `[textLen:I32 LE][textBytes][fraction:F64 LE]
+     * [cursorLen:I32 LE][cursorBytes]`.
+     */
+    fun nativeRehearsalMarks(scoreHandle: Long): ByteArray {
+        val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
+        return SwiftJavaJNI.nativeRehearsalMarks(scoreHandle, arena).toByteArray()
+    }
+
+    /**
+     * Step the engine cursor [fromCursorBytes] by one measure in [direction]
+     * (`0 = backward`, `1 = forward`) within [scoreHandle], using the shared
+     * `Score.cursorSteppingMeasure` semantics (forward clamps at the last measure;
+     * backward restarts the current measure when past its first beat, else jumps to the
+     * previous measure's downbeat, clamping at measure 0). [fromCursorBytes] and the
+     * result are both `ScoreCursor` wire payloads. Returns [fromCursorBytes] unchanged
+     * for an unknown handle or an undecodable input cursor.
+     */
+    fun nativeStepMeasureCursor(scoreHandle: Long, fromCursorBytes: ByteArray, direction: Int): ByteArray {
+        val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
+        return SwiftJavaJNI.nativeStepMeasureCursor(
+            scoreHandle,
+            SwiftData.fromByteArray(fromCursorBytes, arena),
+            direction,
+            arena,
+        ).toByteArray()
+    }
 }
