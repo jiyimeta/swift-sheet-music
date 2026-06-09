@@ -351,14 +351,29 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
             out.append(.stroke(width: thickness * ptToMM))
 
         case let .textMark(kind, text, origin):
-            emitText(
-                text: text,
-                style: TextRoleStyle.style(for: kind),
-                originX: mox + Double(origin.x),
-                originY: moy + Double(origin.y),
-                sp: sp,
-                into: &out,
-            )
+            // Standard dynamics (p, mf, ff, sfz, …) render as bold
+            // Bravura SMuFL glyphs, NOT Edwin text — mirrors Apple's
+            // `TextMarkRenderer.drawDynamic`. `emitText` alone would
+            // emit the literal letters in Edwin (the bug this fixes).
+            // Non-symbol / other text marks keep the generic path.
+            if kind == .dynamic {
+                emitDynamic(
+                    text: text,
+                    originX: mox + Double(origin.x),
+                    originY: moy + Double(origin.y),
+                    sp: sp,
+                    into: &out,
+                )
+            } else {
+                emitText(
+                    text: text,
+                    style: TextRoleStyle.style(for: kind),
+                    originX: mox + Double(origin.x),
+                    originY: moy + Double(origin.y),
+                    sp: sp,
+                    into: &out,
+                )
+            }
 
         case let .staffText(text, origin, color, isSystemText):
             let argb = color.flatMap(LayoutBridge.argb(from:))

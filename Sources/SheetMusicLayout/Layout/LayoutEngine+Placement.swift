@@ -1729,6 +1729,48 @@ extension LayoutEngine {
                 }
             }
 
+            // --- Lyric post-beam re-clearance ---
+            //
+            // `voiceMaxLyricCenterY` (computed before emission) estimates
+            // each chord's south extent from a STANDALONE
+            // `defaultStemLength` stem + flag. The beam pass can drive a
+            // stem-down endpoint DEEPER than that: `groupDirection` is
+            // decided from the group's combined steps, so it can point a
+            // member down whose own median pointed up, and that member's
+            // stem then reaches the shared beam well below the staff —
+            // past the pre-beam lyric row. Lyrics were laid out before
+            // beaming, so recompute the row against the actual post-beam
+            // stem-down endpoints now stored in `out` and lower the whole
+            // voice's lyric row if a beam intrudes. Mirrors the fermata
+            // post-beam re-clearance above. It only ever DEEPENS the row:
+            // a non-beamed stem-down chord's `stemOrigin.y + stem/flag pad`
+            // stays inside the pre-beam estimate (which already added
+            // `flagSouthExtent`), so shallow / unbeamed measures — and
+            // thus the common case on both iOS and Android — are
+            // untouched.
+            let voiceHasLyrics = voice.elements.contains { el in
+                if case let .chord(chord) = el {
+                    return chord.lyrics.contains { !$0.text.isEmpty }
+                }
+                return false
+            }
+            if voiceHasLyrics {
+                var lowestDownTip = -CGFloat.infinity
+                for outIdx in voiceChordOutIndex.values where outIdx < out.count {
+                    guard case let .chord(_, _, stemDir, stemOrigin, _, _, _, _, _, _)
+                        = out[outIdx], stemDir == .down
+                    else { continue }
+                    lowestDownTip = max(lowestDownTip, stemOrigin.y)
+                }
+                // Same tight stem/flag pad the pre-beam estimate uses
+                // (0.25 sp `lyricsMinDistance` + 1.1 sp lyric ascender).
+                let requiredCenterY = lowestDownTip + metrics.sp * (0.25 + 1.1)
+                if lowestDownTip.isFinite, requiredCenterY > voiceMaxLyricCenterY {
+                    let dy = requiredCenterY - voiceMaxLyricCenterY
+                    out = out.map { shiftLyricTextY($0, dy: dy) }
+                }
+            }
+
             // --- Tuplet brackets / numbers ---
             //
             // For each tuplet span in the voice, determine whether every

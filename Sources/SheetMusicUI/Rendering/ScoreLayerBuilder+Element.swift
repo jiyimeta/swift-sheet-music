@@ -82,13 +82,13 @@ extension ScoreLayerBuilder {
             // Standard dynamics → Bravura SMuFL glyphs at 4 sp.
             // Free-form text dynamics → Edwin italic 10 pt fallback.
             // See `TextMarkRenderer.drawDynamic` for the rationale.
-            if let glyphs = DynamicSymbolMap.glyphs(for: text) {
+            if let glyphString = DynamicSymbolMap.glyphString(for: text) {
                 let glyphSize = metrics.sp * 4
                 let bravura = CTFontCreateWithName(
                     BravuraFont.familyName as CFString, glyphSize, nil,
                 )
                 if let layer = textLayer(
-                    text: String(glyphs), at: shift(p),
+                    text: glyphString, at: shift(p),
                     size: glyphSize, italic: false,
                     anchor: CGPoint(x: 0, y: 0.5),
                     font: bravura,

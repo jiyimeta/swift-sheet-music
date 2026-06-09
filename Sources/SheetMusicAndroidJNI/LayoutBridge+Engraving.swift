@@ -111,6 +111,55 @@ extension LayoutBridge {
         }
     }
 
+    /// Emit a dynamic marking. Standard symbol dynamics (p, mf, ff,
+    /// sfz, …) draw as bold Bravura SMuFL glyphs at 4 sp — matching
+    /// Apple's `TextMarkRenderer.drawDynamic` and the shared
+    /// `DynamicSymbolMap`. Free-form text dynamics ("cresc.",
+    /// "espressivo") fall back to the generic Edwin text path.
+    ///
+    /// Apple anchors dynamics at `(0, 0.5)` (leading edge, vertical
+    /// center); `Canvas.drawText` anchors at baseline-leading, so the
+    /// baseline is shifted down by `(ascent − descent) / 2` to center
+    /// the glyph row on `originY`, and the run advances X left-to-right.
+    static func emitDynamic(
+        text: String,
+        originX: Double,
+        originY: Double,
+        sp: Double,
+        into out: inout [DrawCommand],
+    ) {
+        guard let codepoints = DynamicSymbolMap.codepoints(for: text) else {
+            emitText(
+                text: text, style: .dynamics,
+                originX: originX, originY: originY, sp: sp, into: &out,
+            )
+            return
+        }
+        // SMuFL music-font convention: 1 em = 4 sp (MuseScore's
+        // MUSICAL_SYMBOLS_DEFAULT_FONT_SIZE 10 pt × 2 at 5 pt/sp).
+        let glyphSize = sp * 4
+        let font = LayoutFont(
+            face: SMuFLFamily.bravura, pointSize: CGFloat(glyphSize),
+        )
+        let ascent = Double(FontMetrics.provider.ascent(font: font))
+        let descent = Double(FontMetrics.provider.descent(font: font))
+        let baselineY = originY + (ascent - descent) / 2
+        var cursorX = originX
+        for cp in codepoints {
+            out.append(.glyph(
+                codepoint: cp,
+                x: cursorX * ptToMMScale,
+                y: baselineY * ptToMMScale,
+                size: glyphSize * ptToMMScale,
+                fontId: .smufl,
+            ))
+            guard let scalar = UnicodeScalar(cp) else { continue }
+            cursorX += Double(FontMetrics.provider.typographicWidth(
+                text: String(scalar), font: font,
+            ))
+        }
+    }
+
     private static func fontFor(
         run: MusicTextRuns.Run, textPt: CGFloat, glyphPt: CGFloat,
     ) -> LayoutFont {

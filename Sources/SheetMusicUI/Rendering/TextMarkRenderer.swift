@@ -23,9 +23,9 @@ enum TextMarkRenderer {
         properties: TextProperties = TextProperties(),
         metrics: StaffMetrics,
     ) {
-        if let glyphs = DynamicSymbolMap.glyphs(for: text) {
+        if let glyphString = DynamicSymbolMap.glyphString(for: text) {
             drawDynamicGlyphs(
-                context: &context, glyphs: glyphs,
+                context: &context, glyphString: glyphString,
                 origin: origin, metrics: metrics,
             )
         } else {
@@ -45,7 +45,7 @@ enum TextMarkRenderer {
 
     private static func drawDynamicGlyphs(
         context: inout GraphicsContext,
-        glyphs: [Character],
+        glyphString: String,
         origin: CGPoint,
         metrics: StaffMetrics,
     ) {
@@ -53,9 +53,8 @@ enum TextMarkRenderer {
         // `MUSICAL_SYMBOLS_DEFAULT_FONT_SIZE = 10 pt` × 2 = 20 pt
         // at default spatium (5 pt/sp) which is exactly 4 sp.
         let glyphSize = metrics.sp * 4
-        let str = String(glyphs)
         let resolved = context.resolve(
-            Text(str)
+            Text(glyphString)
                 .foregroundColor(.primary)
                 .font(.custom(BravuraFont.familyName, size: glyphSize)),
         )
