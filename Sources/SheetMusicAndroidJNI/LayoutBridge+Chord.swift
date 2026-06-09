@@ -29,43 +29,37 @@ extension LayoutBridge {
         measureOriginX mox: Double,
         measureOriginY moy: Double,
         metrics ctx: MetricsContext,
+        // When false, per-note-invisible noteheads are dropped; when true
+        // they are drawn in MuseScore's invisibleColor() = #808080.
+        showsInvisible: Bool,
         into out: inout [DrawCommand],
     ) {
         let glyphSize = ctx.glyphSize * mag
         // Split base duration + dot count for both notehead glyph and
         // augmentation-dot emit.
         let (baseDur, dotCount) = DurationInterpretation.split(duration)
-        // ── Noteheads ────────────────────────────────────────────────
-        for note in notes {
-            emitCenterAnchoredGlyph(
-                codepoint: NoteheadGlyph.codepoint(
-                    duration: baseDur, headType: note.headType,
-                ),
-                cxPt: mox + Double(note.origin.x),
-                cyPt: moy + Double(note.origin.y),
-                sizePt: glyphSize,
-                into: &out,
-            )
-        }
-        // ── Accidentals ──────────────────────────────────────────────
-        emitAccidentals(
-            notes: notes,
-            measureOriginX: mox, measureOriginY: moy,
-            glyphSize: glyphSize, sp: ctx.sp, mag: mag,
-            into: &out,
+        // ── Noteheads / accidentals / dots, partitioned by visibility ──
+        // Invisible noteheads are dropped when the toggle is off and grayed
+        // when on — mirrors Apple's ScoreCanvas per-note dispatch. A chord
+        // with *every* note invisible is routed wholesale to
+        // `invisibleElements` upstream, so `visibleNotes` is non-empty here
+        // in the normal pass; the stem geometry below still spans all notes,
+        // matching the toggle-agnostic stem the layout engine computes.
+        let visibleNotes = notes.filter { !$0.isInvisible }
+        let invisibleNotes = showsInvisible ? notes.filter(\.isInvisible) : []
+        emitNoteGlyphs(
+            visibleNotes, baseDuration: baseDur, dotCount: dotCount,
+            glyphSize: glyphSize, metrics: ctx, mag: mag,
+            measureOriginX: mox, measureOriginY: moy, into: &out,
         )
-        // ── Augmentation dots ───────────────────────────────────────
-        if dotCount > 0 {
-            for note in notes {
-                emitAugmentationDots(
-                    anchorX: mox + Double(note.origin.x),
-                    anchorY: moy + Double(note.origin.y),
-                    count: dotCount,
-                    onStaffLine: note.step.isMultiple(of: 2),
-                    sp: ctx.sp,
-                    into: &out,
-                )
-            }
+        if !invisibleNotes.isEmpty {
+            out.append(.setColor(argb: LayoutBridge.invisibleARGB))
+            emitNoteGlyphs(
+                invisibleNotes, baseDuration: baseDur, dotCount: dotCount,
+                glyphSize: glyphSize, metrics: ctx, mag: mag,
+                measureOriginX: mox, measureOriginY: moy, into: &out,
+            )
+            out.append(.setColor(argb: LayoutBridge.blackARGB))
         }
         // Whole notes (and lower-resolution rests) are stemless.
         if case .whole = baseDur { return }
@@ -110,6 +104,51 @@ extension LayoutBridge {
             size: glyphSize * ptToMMScale,
             fontId: .smufl,
         ))
+    }
+
+    /// Emit noteheads + accidentals + augmentation dots for a subset of a
+    /// chord's notes in the ambient paint color. Factored so the chord
+    /// encoder can run it once for the visible notes and again (wrapped in
+    /// `invisibleARGB`) for the per-note-invisible ones.
+    static func emitNoteGlyphs(
+        _ notes: [LayoutChordNote],
+        baseDuration baseDur: NoteDuration,
+        dotCount: Int,
+        glyphSize: Double,
+        metrics ctx: MetricsContext,
+        mag: Double,
+        measureOriginX mox: Double,
+        measureOriginY moy: Double,
+        into out: inout [DrawCommand],
+    ) {
+        for note in notes {
+            emitCenterAnchoredGlyph(
+                codepoint: NoteheadGlyph.codepoint(
+                    duration: baseDur, headType: note.headType,
+                ),
+                cxPt: mox + Double(note.origin.x),
+                cyPt: moy + Double(note.origin.y),
+                sizePt: glyphSize,
+                into: &out,
+            )
+        }
+        emitAccidentals(
+            notes: notes,
+            measureOriginX: mox, measureOriginY: moy,
+            glyphSize: glyphSize, sp: ctx.sp, mag: mag,
+            into: &out,
+        )
+        guard dotCount > 0 else { return }
+        for note in notes {
+            emitAugmentationDots(
+                anchorX: mox + Double(note.origin.x),
+                anchorY: moy + Double(note.origin.y),
+                count: dotCount,
+                onStaffLine: note.step.isMultiple(of: 2),
+                sp: ctx.sp,
+                into: &out,
+            )
+        }
     }
 
     /// Emit `count` filled-disc augmentation dots after a notehead /

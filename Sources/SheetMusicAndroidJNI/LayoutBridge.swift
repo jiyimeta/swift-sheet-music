@@ -63,6 +63,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
 
     // MARK: - Command builder
 
+    // swiftlint:disable:next function_body_length
     static func buildCommands(layout: LayoutDocument) -> [DrawCommand] {
         var out: [DrawCommand] = []
         let metrics = layout.metrics
@@ -112,6 +113,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                         measureOriginX: mox,
                         measureOriginY: moy,
                         metrics: context,
+                        showsInvisible: system.showsInvisibleElements,
                         into: &out,
                     )
                 }
@@ -129,12 +131,79 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                     measureOriginX: sysOriginX,
                     measureOriginY: sysOriginY,
                     metrics: context,
+                    showsInvisible: system.showsInvisibleElements,
+                    into: &out,
+                )
+            }
+
+            // ── 4. Invisible elements (MuseScore "Show Invisible") ──────────
+            appendInvisibleElements(
+                of: system,
+                systemOriginX: sysOriginX,
+                systemOriginY: sysOriginY,
+                metrics: context,
+                into: &out,
+            )
+        }
+        return out
+    }
+
+    /// Draw the system's invisible-container elements in MuseScore gray.
+    ///
+    /// With `showsInvisibleElements` on, the layout engine parks elements
+    /// authored `visible == false` in parallel `invisibleElements` /
+    /// `invisibleSpanners` containers instead of dropping them. Mirror the
+    /// Apple renderers (`ScoreCanvas` / `ScoreLayerBuilder`): draw them in
+    /// MuseScore's `invisibleColor()` = #808080 (50 % black on white), then
+    /// restore black. The DrawProgram has no group-opacity opcode, so the
+    /// gray is applied via `setColor` around the whole invisible pass.
+    /// No-op when the system has nothing parked as invisible.
+    private static func appendInvisibleElements(
+        of system: LayoutSystem,
+        systemOriginX sysOriginX: Double,
+        systemOriginY sysOriginY: Double,
+        metrics context: MetricsContext,
+        into out: inout [DrawCommand],
+    ) {
+        let hasInvisible = system.measures.contains { !$0.invisibleElements.isEmpty }
+            || !system.invisibleSpanners.isEmpty
+        guard hasInvisible else { return }
+        out.append(.setColor(argb: invisibleARGB))
+        for measure in system.measures where !measure.invisibleElements.isEmpty {
+            let mox = Double(measure.origin.x) + sysOriginX
+            let moy = Double(measure.origin.y) + sysOriginY
+            for element in measure.invisibleElements {
+                encodeElement(
+                    element,
+                    measureOriginX: mox,
+                    measureOriginY: moy,
+                    metrics: context,
+                    showsInvisible: true,
                     into: &out,
                 )
             }
         }
-        return out
+        for element in system.invisibleSpanners {
+            encodeElement(
+                element,
+                measureOriginX: sysOriginX,
+                measureOriginY: sysOriginY,
+                metrics: context,
+                showsInvisible: true,
+                into: &out,
+            )
+        }
+        out.append(.setColor(argb: blackARGB))
     }
+
+    /// MuseScore `invisibleColor()` = #808080 — 50 % black on white. Opaque
+    /// gray ARGB (0xAARRGGBB) for the `setColor` opcode, used to draw
+    /// elements parked in the invisible containers and per-note-invisible
+    /// noteheads when the "Show Invisible" toggle is on.
+    static let invisibleARGB: UInt32 = 0xFF80_8080
+    /// Plain opaque black — the default paint, re-asserted after a colored
+    /// or invisible run so subsequent commands paint normally.
+    static let blackARGB: UInt32 = 0xFF00_0000
 
     /// Scalar metrics passed down to per-element encoders so they don't
     /// each re-derive sp / glyph size / stem geometry from `StaffMetrics`.
@@ -153,6 +222,10 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
         measureOriginX mox: Double,
         measureOriginY moy: Double,
         metrics ctx: MetricsContext,
+        // When true, a chord's per-note-invisible noteheads are drawn grayed
+        // (the caller has already set the ambient color for the invisible
+        // pass); when false they are dropped. Only chord/graceChord consult it.
+        showsInvisible: Bool,
         into out: inout [DrawCommand],
     ) {
         let sp = ctx.sp
@@ -201,7 +274,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                 isBeamed: isBeamed, stemExtension: Double(stemExtension),
                 mag: 1,
                 measureOriginX: mox, measureOriginY: moy,
-                metrics: ctx, into: &out,
+                metrics: ctx, showsInvisible: showsInvisible, into: &out,
             )
 
         case let .graceChord(notes, duration, stem, stemOrigin, _, _, mag, _):
@@ -211,7 +284,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                 isBeamed: false, stemExtension: 0,
                 mag: Double(mag),
                 measureOriginX: mox, measureOriginY: moy,
-                metrics: ctx, into: &out,
+                metrics: ctx, showsInvisible: showsInvisible, into: &out,
             )
 
         case let .rest(duration, origin, _, _, hasLegerLine):
