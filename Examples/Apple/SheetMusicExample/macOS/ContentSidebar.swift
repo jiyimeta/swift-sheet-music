@@ -26,6 +26,8 @@
         let onLoadHarmonyBasic: () -> Void
         let onOpenFile: () -> Void
         let onTogglePlayback: () -> Void
+        let isRepeating: Bool
+        let onToggleRepeat: () -> Void
         let onExportPDF: () -> Void
         let onExportMSCX: () -> Void
         let onExportMSCXv3: () -> Void
@@ -66,6 +68,15 @@
                             Image(systemName: "stop.fill")
                         }
                         .disabled(playbackEngine.state == .stopped)
+
+                        Button(action: onToggleRepeat) {
+                            Image(systemName: "repeat")
+                                .foregroundStyle(
+                                    isRepeating ? Color.accentColor : .primary,
+                                )
+                        }
+                        .disabled(score == nil)
+                        .help("Repeat the whole score (loop to start at the end).")
 
                         Spacer()
 

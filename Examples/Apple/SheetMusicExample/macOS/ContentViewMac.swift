@@ -173,6 +173,10 @@
         /// they are dropped entirely. Wired into `ScoreViewOptions.showsInvisibleElements`.
         @State private var showsInvisibleElements = false
         @State private var showExport = false
+        /// Whole-score repeat toggle (mirrors Folino's
+        /// `RepeatMode.loopAll`). When on, the engine loops the full
+        /// score so the playhead wraps to the start at the end.
+        @State private var isRepeating = false
 
         /// systemGap targets MuseScore's `Sid::minSystemDistance` of
         /// 8.5 sp; with our staff-distance pads contributing ~3.5 sp
@@ -217,6 +221,8 @@
                     onLoadHarmonyBasic: loadHarmonyBasic,
                     onOpenFile: showOpenPanel,
                     onTogglePlayback: togglePlayback,
+                    isRepeating: isRepeating,
+                    onToggleRepeat: toggleRepeatAll,
                     onExportPDF: exportPDF,
                     onExportMSCX: exportMSCX,
                     onExportMSCXv3: exportMSCXv3,
@@ -466,6 +472,90 @@
         /// `installKeyMonitor`. The loop wraps once the last selected
         /// note has finished its notated duration, so the user hears
         /// the full selection before each loop iteration.
+        /// Toggle whole-score repeat (Folino's `RepeatMode.loopAll`).
+        /// On → loop the full score so the playhead wraps to the start
+        /// each time it reaches the end; off → clear the loop. The
+        /// engine's `tickCursor` performs the wrap — the path that
+        /// re-fires the SMF's tick-0 program changes and clobbers
+        /// per-staff program overrides (the bug under investigation).
+        private func toggleRepeatAll() {
+            if isRepeating {
+                playbackEngine.clearLoop()
+                isRepeating = false
+                return
+            }
+            guard let score,
+                  let bounds = fullScoreLoopBounds(score: score)
+            else { return }
+            playbackEngine.setLoop(
+                from: .item(bounds.first), throughEndOf: bounds.last,
+            )
+            isRepeating = true
+        }
+
+        /// First and last `.chord`-anchored `ScoreItemID` of the whole
+        /// score (voice 0 of staff 0 — the same spine the cursor mapping
+        /// uses). Mirrors Folino's `LoopBounds` so the repro range
+        /// matches the app's `loopAll`.
+        private func fullScoreLoopBounds(
+            score: Score,
+        ) -> (first: ScoreItemID, last: ScoreItemID)? {
+            guard let staff = score.parts.first?.staves.first else { return nil }
+            let measureCount = staff.measures.count
+            guard measureCount > 0 else { return nil }
+            let address = StaffAddress(partIndex: 0, staffIndexInPart: 0)
+
+            func itemID(
+                chord: Chord, measureIndex: Int, elementIndex: Int,
+            ) -> ScoreItemID {
+                if chord.notes.isEmpty {
+                    return .rest(RestID(
+                        staff: address,
+                        measureIndex: measureIndex,
+                        voiceIndex: 0,
+                        elementIndex: elementIndex,
+                    ))
+                }
+                return .note(NoteID(
+                    staff: address,
+                    measureIndex: measureIndex,
+                    voiceIndex: 0,
+                    elementIndex: elementIndex,
+                    noteIndexInChord: 0,
+                ))
+            }
+
+            func firstChordID(inMeasure mi: Int) -> ScoreItemID? {
+                guard let voice = staff.measures[mi].voices.first else { return nil }
+                for (idx, element) in voice.elements.enumerated() {
+                    guard case let .chord(chord) = element else { continue }
+                    return itemID(chord: chord, measureIndex: mi, elementIndex: idx)
+                }
+                return nil
+            }
+
+            func lastChordID(inMeasure mi: Int) -> ScoreItemID? {
+                guard let voice = staff.measures[mi].voices.first else { return nil }
+                var last: ScoreItemID?
+                for (idx, element) in voice.elements.enumerated() {
+                    guard case let .chord(chord) = element else { continue }
+                    last = itemID(chord: chord, measureIndex: mi, elementIndex: idx)
+                }
+                return last
+            }
+
+            var first: ScoreItemID?
+            for mi in 0 ..< measureCount {
+                if let id = firstChordID(inMeasure: mi) { first = id; break }
+            }
+            var last: ScoreItemID?
+            for mi in stride(from: measureCount - 1, through: 0, by: -1) {
+                if let id = lastChordID(inMeasure: mi) { last = id; break }
+            }
+            guard let first, let last else { return nil }
+            return (first, last)
+        }
+
         private func toggleLoopForSelection() {
             if playbackEngine.loopRange != nil {
                 playbackEngine.clearLoop()
@@ -2803,6 +2893,8 @@
             scoreVersion = UUID()
             selection = .none
             pendingHorizontalScroll = nil
+            isRepeating = false
+            playbackEngine.clearLoop()
             playbackEngine.prepareInBackground(score: loaded)
         }
 
