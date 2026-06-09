@@ -18,6 +18,7 @@
         let score: Score?
         @Binding var layoutMode: IOSLayoutMode
         @Binding var staffSize: CGFloat
+        @Binding var transposeSemitones: Int
         @Binding var isMixerPresented: Bool
         @Binding var isImportingFile: Bool
         @Binding var isMarqueeMode: Bool
@@ -131,6 +132,15 @@
                         )
                     }
                     .disabled(staffSize >= 32)
+
+                    Divider()
+
+                    Stepper(
+                        "Transpose: \(transposeSemitones > 0 ? "+" : "")\(transposeSemitones)",
+                        value: $transposeSemitones,
+                        in: -7 ... 7,
+                    )
+                    .disabled(score == nil)
                 } label: {
                     Image(systemName: "ellipsis.circle")
                 }

@@ -21,6 +21,7 @@
         @Binding var isMarqueeMode: Bool
         @Binding var collapseMultiMeasureRests: Bool
         @Binding var showsInvisibleElements: Bool
+        @Binding var transposeSemitones: Int
 
         let onLoadBundled: () -> Void
         let onLoadHarmonyBasic: () -> Void
@@ -157,6 +158,12 @@
                     )
                     .font(.caption2)
                     .foregroundStyle(.secondary)
+                    Stepper(
+                        "Transpose: \(transposeSemitones > 0 ? "+" : "")\(transposeSemitones)",
+                        value: $transposeSemitones,
+                        in: -7 ... 7,
+                    )
+                    .disabled(score == nil)
                 }
                 if layoutMode == .paged {
                     Section("Page") {

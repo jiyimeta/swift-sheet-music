@@ -172,11 +172,21 @@
         /// (= MuseScore's `#808080` on white). When OFF (print default),
         /// they are dropped entirely. Wired into `ScoreViewOptions.showsInvisibleElements`.
         @State private var showsInvisibleElements = false
+        /// Transposition offset in semitones (clamped ±7). Applied to
+        /// the rendered score via `Score.transposed(bySemitones:)` and
+        /// to the audio engine via `PlaybackEngine.setTranspose(semitones:)`.
+        @State private var transposeSemitones = 0
         @State private var showExport = false
         /// Whole-score repeat toggle (mirrors Folino's
         /// `RepeatMode.loopAll`). When on, the engine loops the full
         /// score so the playhead wraps to the start at the end.
         @State private var isRepeating = false
+
+        /// The score handed to the layout engine: the loaded score with
+        /// the active transpose applied, so the engraving reflects it.
+        private func laidOut(_ s: Score) -> Score {
+            s.transposed(bySemitones: transposeSemitones)
+        }
 
         /// systemGap targets MuseScore's `Sid::minSystemDistance` of
         /// 8.5 sp; with our staff-distance pads contributing ~3.5 sp
@@ -217,6 +227,7 @@
                     isMarqueeMode: $isMarqueeMode,
                     collapseMultiMeasureRests: $collapseMultiMeasureRests,
                     showsInvisibleElements: $showsInvisibleElements,
+                    transposeSemitones: $transposeSemitones,
                     onLoadBundled: loadBundled,
                     onLoadHarmonyBasic: loadHarmonyBasic,
                     onOpenFile: showOpenPanel,
@@ -232,7 +243,7 @@
                 )
             } detail: {
                 if let score {
-                    scoreContent(score: score)
+                    scoreContent(score: score.transposed(bySemitones: transposeSemitones))
                         .popover(item: $clefPopover, arrowEdge: .top) { state in
                             ClefPopover(
                                 current: ClefChoice.from(rawType: state.currentRawType),
@@ -271,6 +282,10 @@
                 rebuildLayoutsForOptionsChange()
             }
             .onChange(of: showsInvisibleElements) { _, _ in
+                rebuildLayoutsForOptionsChange()
+            }
+            .onChange(of: transposeSemitones) { _, newValue in
+                playbackEngine.setTranspose(semitones: newValue)
                 rebuildLayoutsForOptionsChange()
             }
             .toolbar {
@@ -2867,14 +2882,14 @@
             // a previous score have no validity here.
             layoutCache = LayoutCache()
             horizontalDoc = LayoutEngine.layout(
-                score: loaded, options: hOpts,
+                score: laidOut(loaded), options: hOpts,
                 availableWidth: LayoutEngine.naturalContentWidth(
-                    score: loaded, options: hOpts,
+                    score: laidOut(loaded), options: hOpts,
                 ),
                 cache: layoutCache,
             )
             horizontalContexts = LayoutEngine.measureContexts(
-                for: loaded,
+                for: laidOut(loaded),
             )
             // Vertical layout still needs the viewport width, so it's
             // built by a .task in the .vertical case.
@@ -2930,10 +2945,10 @@
             let hOpts = horizontalOptions
             let availableWidth = horizontalDoc?.size.width
                 ?? LayoutEngine.naturalContentWidth(
-                    score: score, options: hOpts,
+                    score: laidOut(score), options: hOpts,
                 )
             horizontalDoc = LayoutEngine.layout(
-                score: score, options: hOpts,
+                score: laidOut(score), options: hOpts,
                 availableWidth: availableWidth,
                 cache: layoutCache,
             )
@@ -2959,11 +2974,11 @@
             // saves a full-score width walk.
             let availableWidth = horizontalDoc?.size.width
                 ?? LayoutEngine.naturalContentWidth(
-                    score: edited, options: hOpts,
+                    score: laidOut(edited), options: hOpts,
                 )
             let tLayoutStart = Date()
             horizontalDoc = LayoutEngine.layout(
-                score: edited, options: hOpts,
+                score: laidOut(edited), options: hOpts,
                 availableWidth: availableWidth,
                 cache: layoutCache,
             )

@@ -5,13 +5,14 @@ import SheetMusicAudioCore
 import SheetMusicCore
 import SheetMusicMIDI
 
-/// Audio playback for `Score`s, backed by `AVAudioEngine` and a
-/// single multi-timbral `AVAudioUnitMIDIInstrument` (AUMIDISynth).
+/// Audio playback for `Score`s, backed by `AVAudioEngine` and two
+/// `AVAudioUnitMIDIInstrument` (AUMIDISynth) units: one for all
+/// pitched channels and one for GM channel 9 (percussion).
 ///
 /// Every staff in `prepare(score:)` is addressed by the MIDI channel
 /// the renderer assigns it (`MidiRenderer.staffChannels(score:)`).
 /// The full General MIDI SoundFont returned by `SoundfontResolver`
-/// is loaded once into the shared synth, and every (channel, program)
+/// is loaded once into each unit, and every (channel, program)
 /// combination is pre-loaded into the AU's preset cache so runtime
 /// program changes from the mixer hit the cache instead of triggering
 /// an unreliable on-demand SF2 read.
@@ -22,6 +23,11 @@ import SheetMusicMIDI
 /// which audibly truncates portamento glissandi we render at ±12.
 /// See `MIDISynthBuilder` for the wrapper that builds and configures
 /// the instrument.
+///
+/// Splitting the two units lets whole-score transpose be applied via
+/// global AU coarse tuning on the melodic unit only — AUMIDISynth
+/// tuning is global-per-AU, not per-channel, so a single shared unit
+/// would also detune the drums.
 @MainActor
 @Observable
 public final class PlaybackEngine { // swiftlint:disable:this type_body_length
@@ -33,10 +39,28 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// `engine.attach` / `engine.connect` from a sibling file when
     /// building the master output stage.
     let engine = AVAudioEngine()
-    /// The shared multi-timbral AUMIDISynth. Rebuilt on every
-    /// `prepare(score:)`. `internal` so the mixer / export extensions
-    /// in sibling files can read it directly.
-    var synth: AVAudioUnitMIDIInstrument?
+    /// Pitched-channel synth. Carries A4 calibration AND whole-score
+    /// transpose via its global AudioUnit coarse/fine tuning params.
+    var melodicSynth: AVAudioUnitMIDIInstrument?
+    /// Drum-channel (GM 9) synth. Carries calibration only — never the
+    /// transpose — so transposing pitched content leaves drums at
+    /// concert pitch. Separate unit because AUMIDISynth tuning is
+    /// global-per-AU, not per-channel.
+    var percussionSynth: AVAudioUnitMIDIInstrument?
+
+    /// The synth that owns a given flat staff index: percussion for
+    /// drum staves, melodic otherwise. `internal` so +Mixer can call it.
+    func synth(forStaff idx: Int) -> AVAudioUnitMIDIInstrument? {
+        isDrumStaff(idx) ? percussionSynth : melodicSynth
+    }
+
+    /// Both live synth units in a single array, nil slots compacted out.
+    /// Used wherever we need to iterate over whichever units are currently
+    /// attached — teardown, preview cancellation, etc.
+    private var attachedSynths: [AVAudioUnitMIDIInstrument] {
+        [melodicSynth, percussionSynth].compactMap(\.self)
+    }
+
     /// Renderer-assigned MIDI channel per flat staff index. Used to
     /// address each staff's notes / mixer state on the shared synth.
     private var staffMIDIChannels: [Int: UInt8] = [:]
@@ -65,6 +89,11 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// Current A4-calibration offset in cents (0 = A4 440 Hz). Stored so it survives
     /// synth rebuilds in `prepareSynth`, like `masterGain`.
     public private(set) var masterTuningCents: Double = 0 // swiftlint:disable:this inclusive_language
+
+    /// Whole-score transpose in semitones (`-7…+7`). Applied as MIDI
+    /// coarse tuning to every pitched channel; re-applied after each
+    /// `prepare(score:)` so a score reload preserves it. `0` = concert.
+    public private(set) var transposeSemitones = 0
 
     /// Used to silence pending preview note-offs when the engine is
     /// torn down or a new score is prepared.
@@ -185,8 +214,7 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     public func setMasterTuning(cents: Double) { // swiftlint:disable:this inclusive_language
         guard state != .exporting else { return }
         masterTuningCents = cents
-        guard let synth else { return }
-        Self.applyMasterTuning(to: synth, cents: cents)
+        applyTuning()
     }
 
     /// AUMIDISynth global-scope AudioUnit tuning parameter ids (from its
@@ -262,6 +290,29 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         staffIsDrum[idx] ?? false
     }
 
+    /// Live whole-score transpose in semitones (clamped −7…+7). Global
+    /// coarse tuning on the MELODIC unit only, so pitched content (incl.
+    /// already-sounding notes) shifts zero-artifact and drums stay put.
+    public func setTranspose(semitones: Int) {
+        let clamped = max(-7, min(7, semitones))
+        transposeSemitones = clamped
+        applyTuning()
+    }
+
+    /// Push calibration + transpose onto both units' global AU tuning.
+    /// Melodic = calibration + transpose; percussion = calibration only.
+    private func applyTuning() {
+        if let melodicSynth {
+            Self.applyMasterTuning(
+                to: melodicSynth,
+                cents: masterTuningCents + Double(transposeSemitones) * 100,
+            )
+        }
+        if let percussionSynth {
+            Self.applyMasterTuning(to: percussionSynth, cents: masterTuningCents)
+        }
+    }
+
     /// Re-send program-change on each staff's primary channel using
     /// the program the mixer currently advertises. Called right after
     /// `sequencer.start()` so the SMF's tick-0 programChange events
@@ -270,7 +321,7 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// engine was paused, since the queued event from that picker
     /// click can lose to the SMF on resume.
     func reapplyMixerPrograms() {
-        guard let synth else { return }
+        guard let melodicSynth else { return }
         for channel in mixerChannels {
             guard case let .staff(idx) = channel.id,
                   let program = channel.program,
@@ -280,13 +331,13 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
             // Same dance as `loadProgram`: preload to populate the
             // channel's preset slot, then plain PC to select it.
             MIDISynthBuilder.preloadPreset(
-                into: synth,
+                into: melodicSynth,
                 bankMSB: 0, bankLSB: 0, program: program,
                 onChannel: midiCh,
             )
             let pcStatus = UInt32(0xC0) | UInt32(midiCh & 0x0F)
             _ = MusicDeviceMIDIEvent(
-                synth.audioUnit, pcStatus, UInt32(program), 0, 0,
+                melodicSynth.audioUnit, pcStatus, UInt32(program), 0, 0,
             )
         }
     }
@@ -322,18 +373,18 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// No-op if the engine isn't prepared, or for drum staves (the
     /// program byte is ignored on MIDI channel 9).
     func loadProgram(forStaff idx: Int, program: UInt8) {
-        guard let synth,
+        guard let melodicSynth,
               let midiCh = staffMIDIChannels[idx],
               midiCh != 9
         else { return }
         MIDISynthBuilder.preloadPreset(
-            into: synth,
+            into: melodicSynth,
             bankMSB: 0, bankLSB: 0, program: program,
             onChannel: midiCh,
         )
         let pcStatus = UInt32(0xC0) | UInt32(midiCh & 0x0F)
         _ = MusicDeviceMIDIEvent(
-            synth.audioUnit, pcStatus, UInt32(program), 0, 0,
+            melodicSynth.audioUnit, pcStatus, UInt32(program), 0, 0,
         )
     }
 
@@ -372,12 +423,13 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         // uses a host SF2, and `.defaultGM` (or no provider) falls back to
         // the GM drum-kit (notes 76 / 77). AUMIDISynth loads it unchanged.
         metronome.prepare(soundfontURL: clickResolver.resolvedSoundFontURL())
-        // Tear down the synth from a previous score, if any.
-        if let oldSynth = synth {
-            engine.disconnectNodeOutput(oldSynth)
-            engine.detach(oldSynth)
-            synth = nil
+        // Tear down the synths from a previous score, if any.
+        for old in attachedSynths {
+            engine.disconnectNodeOutput(old)
+            engine.detach(old)
         }
+        melodicSynth = nil
+        percussionSynth = nil
         staffMIDIChannels.removeAll()
         staffIsDrum.removeAll()
 
@@ -423,39 +475,47 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         reapplyMixerPrograms()
     }
 
-    /// Build the shared multi-timbral AUMIDISynth, load the full GM
-    /// SoundFont once, pre-cache every (channel, program) preset, and
-    /// configure per-channel pitch-bend sensitivity to match the
-    /// renderer's ±12-semitone portamento output.
+    /// Build the AUMIDISynth unit(s): always a melodic unit (pitched channels), plus a separate percussion unit (GM
+    /// channel 9) ONLY when the score has a drum part. The percussion unit lets the melodic unit carry a global
+    /// coarse-tuning transpose without re-pitching drums; a drumless score doesn't pay for a second full-SoundFont
+    /// load. Loads the GM SoundFont into each built unit, configures pitch-bend on the melodic unit, and applies the
+    /// current calibration + transpose.
     private func prepareSynth(score: Score) throws {
         let url = resolver.defaultGMSoundfontURL
         let channels = MidiRenderer.staffChannels(score: score)
+        let hasDrums = score.parts.contains { $0.instrument.useDrumset }
 
-        let instrument = MIDISynthBuilder.make()
-        engine.attach(instrument)
-        engine.connect(
-            instrument, to: scoreGainMixer, format: nil,
-        )
+        // Melodic unit — all pitched channels.
+        let melodic = MIDISynthBuilder.make()
+        engine.attach(melodic)
+        engine.connect(melodic, to: scoreGainMixer, format: nil)
         if let url {
-            // Load the SF2 with (0, 0) as the seed preset so the file
-            // is parsed and resident in the AU. Per-channel presets
-            // load on-demand at sequencer start (via the SMF's tick-0
-            // programChange events, which go through the render thread
-            // and trigger AUMIDISynth's load machinery reliably) and
-            // again whenever the user picks a new program (via
-            // `loadProgram` → `preloadPreset`).
             try? MIDISynthBuilder.loadSoundFont(
-                into: instrument, url: url,
-                bankMSB: 0, bankLSB: 0, program: 0,
+                into: melodic, url: url, bankMSB: 0, bankLSB: 0, program: 0,
             )
         }
         for ch: UInt8 in 0 ..< 16 where ch != 9 {
             MIDISynthBuilder.setPitchBendSensitivity(
-                into: instrument, semitones: 12, onChannel: ch,
+                into: melodic, semitones: 12, onChannel: ch,
             )
         }
-        synth = instrument
-        Self.applyMasterTuning(to: instrument, cents: masterTuningCents)
+        melodicSynth = melodic
+
+        // Percussion unit — GM channel 9. Built only when the score has drums (mirrors MetronomeController's
+        // separate sampler). Same SF2, drum bank preloaded on channel 9. No pitch-bend, no transpose.
+        if hasDrums {
+            let percussion = MIDISynthBuilder.make()
+            engine.attach(percussion)
+            engine.connect(percussion, to: scoreGainMixer, format: nil)
+            if let url {
+                try? MIDISynthBuilder.loadSoundFont(
+                    into: percussion, url: url,
+                    bankMSB: 0, bankLSB: 0, program: 0, channel: 9,
+                )
+            }
+            percussionSynth = percussion
+        }
+        applyTuning()
 
         for (idx, entry) in score.allStaves.enumerated() {
             let part = score.part(at: entry.address)
@@ -480,12 +540,15 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// can't outlive the synth it played on.
     private func cancelActivePreview() {
         previewGeneration &+= 1
-        if let synth, let active = activePreview {
+        if let active = activePreview {
             // No note-on follows here, so All Sound Off is safe and also stops a
-            // ringing drum decay.
-            MIDISynthBuilder.sendControlChange(
-                into: synth, controller: 120, value: 0, onChannel: active.channel,
-            )
+            // ringing drum decay. Send to both units — we don't know which unit
+            // the active preview is sounding on without the staff index.
+            for unit in attachedSynths {
+                MIDISynthBuilder.sendControlChange(
+                    into: unit, controller: 120, value: 0, onChannel: active.channel,
+                )
+            }
         }
         activePreview = nil
         previewShouldRepauseEngineOnDrain = false
@@ -502,7 +565,7 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         let flatIdx = score.allStaves.firstIndex(where: {
             $0.address == noteID.staff
         }) ?? -1
-        guard let instrument = synth,
+        guard let instrument = synth(forStaff: flatIdx),
               let midiChannel = staffMIDIChannels[flatIdx]
         else { return }
 
@@ -554,14 +617,15 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         previewQueue.asyncAfter(deadline: .now() + tail) { [weak self] in
             Task { @MainActor [weak self] in
                 guard let self, previewGeneration == generation else { return }
-                if let synth {
+                let endInstrument = synth(forStaff: flatIdx)
+                if let endInstrument {
                     if isDrum {
                         MIDISynthBuilder.sendControlChange(
-                            into: synth, controller: 120, value: 0,
+                            into: endInstrument, controller: 120, value: 0,
                             onChannel: midiChannel,
                         )
                     } else {
-                        synth.stopNote(pitch, onChannel: midiChannel)
+                        endInstrument.stopNote(pitch, onChannel: midiChannel)
                     }
                 }
                 activePreview = nil
@@ -662,10 +726,10 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
             // AU's ±2-semitone default. See
             // `MIDISynthBuilder.setPitchBendSensitivity` for why the
             // C-API path matters.
-            if let synth {
+            if let melodicSynth {
                 for ch: UInt8 in 0 ..< 16 where ch != 9 {
                     MIDISynthBuilder.setPitchBendSensitivity(
-                        into: synth, semitones: 12, onChannel: ch,
+                        into: melodicSynth, semitones: 12, onChannel: ch,
                     )
                 }
             }
@@ -1014,14 +1078,13 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         )
         let bytes = try MidiWriter.write(midi)
         try sequencer.load(from: bytes, options: [])
-        // Every staff track routes to the shared multi-timbral synth;
-        // the renderer's per-track channel byte does the dispatch. The
-        // metronome track (appended last) is picked up by
-        // `metronome.attach(to:)` below.
-        for track in sequencer.tracks {
-            if let synth {
-                track.destinationAudioUnit = synth
-            }
+        // Tracks are emitted one per flat staff in score order; route each
+        // to its owning unit. The trailing metronome track is redirected by
+        // `metronome.attach(to:)`, so skip indices >= staff count.
+        let staffCount = staffIsDrum.count
+        for (trackIdx, track) in sequencer.tracks.enumerated() {
+            guard trackIdx < staffCount else { continue }
+            track.destinationAudioUnit = synth(forStaff: trackIdx)
         }
         metronome.attach(to: sequencer)
         sequencer.rate = pendingRate
@@ -1031,10 +1094,10 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         // matching call in `play(...)` — the redundancy is defensive,
         // since which side wins the race against tick-0 SMF events
         // varies between fresh-build vs. cached-sequencer paths.
-        if let synth {
+        if let melodicSynth {
             for ch: UInt8 in 0 ..< 16 where ch != 9 {
                 MIDISynthBuilder.setPitchBendSensitivity(
-                    into: synth, semitones: 12, onChannel: ch,
+                    into: melodicSynth, semitones: 12, onChannel: ch,
                 )
             }
         }
@@ -1158,11 +1221,12 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         // hard stop entirely and left the graph being mutated under a live
         // render unit. `stop()` is a safe no-op on an already-stopped engine.
         engine.stop()
-        if let synth {
-            engine.disconnectNodeOutput(synth)
-            engine.detach(synth)
-            self.synth = nil
+        for old in attachedSynths {
+            engine.disconnectNodeOutput(old)
+            engine.detach(old)
         }
+        melodicSynth = nil
+        percussionSynth = nil
         staffMIDIChannels.removeAll()
         staffIsDrum.removeAll()
         metronome.teardown()

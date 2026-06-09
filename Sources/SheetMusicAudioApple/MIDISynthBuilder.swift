@@ -205,9 +205,9 @@ enum MIDISynthBuilder {
     }
 
     /// Send a MIDI Control Change to the AU directly via
-    /// `MusicDeviceMIDIEvent`. Used by the shared-synth topology to apply
-    /// mixer state (CC 7 / CC 10) on a specific channel of the shared
-    /// instrument without going through the higher-level
+    /// `MusicDeviceMIDIEvent`. Used by the playback engine to apply
+    /// mixer state (CC 7 / CC 120) on a specific channel of a given
+    /// instrument unit without going through the higher-level
     /// `sendController(...)` API — which queues for the next render
     /// cycle and is therefore racy against AVAudioSequencer's tick-0
     /// events on a freshly-built sequencer.
