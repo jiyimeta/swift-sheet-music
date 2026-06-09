@@ -916,14 +916,29 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// MuseScore-equivalent byte stream — these compensations only
     /// apply to the bytes handed to `AVAudioSequencer`.
     ///
-    /// `programChange` is intentionally *kept* in the SMF. Empirically
-    /// that's the only reliable way to program AUMIDISynth's
-    /// per-channel state for the alternate channel flavours the
-    /// renderer assigns (e.g. strings' arco / pizz). Tradeoff: the
-    /// SMF re-fires those tick-0 program changes on every play /
-    /// seek-to-start, clobbering mixer-driven program overrides —
-    /// `play()` re-applies the mixer state after `sequencer.start()`
-    /// to win the race deterministically.
+    /// The **tick-0 `programChange`** on `mixerManagedChannels` is
+    /// **stripped** — same reasoning as CC 7 below. The renderer bakes
+    /// each staff's initial GM program as a tick-0 program change on the
+    /// staff's primary channel. Every backward seek across / behind
+    /// tick 0 (the loop-wrap rewind in `tickCursor`, a seek-to-start)
+    /// makes AVAudioSequencer chase and re-fire it on the render thread,
+    /// clobbering a mixer-driven program override. Re-applying the mixer
+    /// *after* `sequencer.start()` (what `play()` / `wrapToLoopStart()`
+    /// do via `reapplyMixerPrograms()`) races that chase and loses on
+    /// the wrap — exactly the failure CC 7 hit. Removing the tick-0
+    /// program change for the channels the mixer owns makes
+    /// `reapplyMixerPrograms()` the sole authority on their program
+    /// (it re-asserts the mixer's value — the score's default when no
+    /// override is set — after every start), so there is nothing left to
+    /// chase. Only `tick == 0` is removed: any *later* program change on
+    /// a primary channel (a mid-piece instrument switch) is kept and
+    /// still fires.
+    ///
+    /// `programChange` on **non-managed** channels is left untouched.
+    /// It's the only reliable way to program AUMIDISynth's per-channel
+    /// state for the alternate channel flavours the renderer assigns
+    /// (e.g. strings' arco / pizz), and those channels aren't mixer-
+    /// owned, so no override can race them.
     ///
     /// `CC 7` (Channel Volume) on `mixerManagedChannels` is **stripped**.
     /// The renderer emits the score's baked-in CC 7 only at tick 0; every
@@ -951,6 +966,17 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
                 if case let .controlChange(channel, controller, _)
                     = event.event, controller == 7,
                     mixerManagedChannels.contains(channel)
+                {
+                    continue
+                }
+                // Drop the staff's baked-in initial program on its
+                // primary (mixer-owned) channel so a backward seek can't
+                // chase it and clobber a mixer program override.
+                // `reapplyMixerPrograms()` re-asserts it after every
+                // start. Mid-piece program changes (`tick > 0`) survive.
+                if case let .programChange(channel, _) = event.event,
+                   event.tick == 0,
+                   mixerManagedChannels.contains(channel)
                 {
                     continue
                 }
@@ -1092,16 +1118,16 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         // no-op, but Apple's setter halts before the assignment
         // returns, so we must always re-start here.
         try? sequencer.start()
-        // The backward seek re-fires the SMF's tick-0 programChange via
-        // AVAudioSequencer's controller chase, overwriting any
-        // mixer-driven program override with the score's baked-in
-        // default. Re-assert program selection so the user's program
-        // choice survives every loop iteration, exactly as
-        // `play(from:in:)` does after its own `sequencer.start()`.
-        // (CC 7 volume / mute / solo no longer needs racing here: it is
-        // stripped from the SMF for mixer-managed channels in
-        // `postProcessForMIDISynth`, so the chase can't clobber it.
-        // `applyMixerState()` stays as a cheap belt-and-suspenders.)
+        // Re-assert the mixer's program / volume / mute / solo for this
+        // loop iteration. Both the tick-0 programChange and CC 7 on
+        // mixer-managed channels are stripped from the SMF in
+        // `postProcessForMIDISynth`, so the backward seek's controller
+        // chase has nothing to re-fire on those channels — these calls
+        // are now the *sole* authority for the wrapped iteration (not a
+        // race against the chase). `reapplyMixerPrograms()` re-selects
+        // the staff program (the user's override, or the score default
+        // when none); `applyMixerState()` re-applies volume / mute /
+        // solo.
         reapplyMixerPrograms()
         applyMixerState()
         if let frame = timeline.frame(atTick: loop.startTick) {
