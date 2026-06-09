@@ -215,15 +215,32 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
             )
 
         case let .rest(duration, origin, _, _, hasLegerLine):
+            // Split base duration + dot count, mirroring `encodeChord` and
+            // iOS `ScoreCanvas`. `RestGlyph.codepoint` only understands base
+            // durations; passing a dotted `.fraction(...)` straight through
+            // falls back to a 64th rest. Render the base glyph, then emit the
+            // augmentation dots separately. iOS uses `onStaffLine: true` for
+            // all rest dots, so match that.
+            let (baseDur, dotCount) = DurationInterpretation.split(duration)
             emitCenterAnchoredGlyph(
                 codepoint: RestGlyph.codepoint(
-                    duration: duration, hasLegerLine: hasLegerLine,
+                    duration: baseDur, hasLegerLine: hasLegerLine,
                 ),
                 cxPt: mox + Double(origin.x),
                 cyPt: moy + Double(origin.y),
                 sizePt: glyphSize,
                 into: &out,
             )
+            if dotCount > 0 {
+                emitAugmentationDots(
+                    anchorX: mox + Double(origin.x),
+                    anchorY: moy + Double(origin.y),
+                    count: dotCount,
+                    onStaffLine: true,
+                    sp: ctx.sp,
+                    into: &out,
+                )
+            }
 
         case let .barLine(_, origin):
             // Barline origin sits at the staff middle; strokes extend
