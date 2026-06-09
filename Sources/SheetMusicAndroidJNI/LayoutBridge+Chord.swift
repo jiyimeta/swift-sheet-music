@@ -11,7 +11,9 @@ import SheetMusicLayout
 /// Split out of LayoutBridge+Engraving.swift only to stay under the
 /// per-file length cap; helpers remain internal.
 extension LayoutBridge {
-    // swiftlint:disable:next function_parameter_count
+    // Linear chord-emit orchestration (noteheads, accidentals, dots, stem,
+    // flag); a few lines over the body-length budget after adding accidentals.
+    // swiftlint:disable:next function_parameter_count function_body_length
     static func encodeChord(
         notes: [LayoutChordNote],
         duration: NoteDuration,
@@ -45,6 +47,13 @@ extension LayoutBridge {
                 into: &out,
             )
         }
+        // ── Accidentals ──────────────────────────────────────────────
+        emitAccidentals(
+            notes: notes,
+            measureOriginX: mox, measureOriginY: moy,
+            glyphSize: glyphSize, sp: ctx.sp, mag: mag,
+            into: &out,
+        )
         // ── Augmentation dots ───────────────────────────────────────
         if dotCount > 0 {
             for note in notes {
@@ -125,6 +134,45 @@ extension LayoutBridge {
                 w: 2 * radius * ptToMMScale,
                 h: 2 * radius * ptToMMScale,
             ))
+        }
+    }
+
+    /// Emit the per-note accidental glyphs for a chord. Mirrors Apple's
+    /// `AccidentalRenderer` / `ScoreLayerBuilder.drawAccidental`: a single
+    /// Bravura glyph center-anchored `1.2 sp` left of the notehead, for all
+    /// five accidental kinds (incl. doubleSharp / doubleFlat, which never
+    /// originate from a key signature and so were otherwise missing on
+    /// Android — audio is unaffected, it derives pitch independently of the
+    /// layout). The offset is scaled by `mag` so grace-note accidentals
+    /// stay glued to their reduced notehead.
+    static func emitAccidentals(
+        notes: [LayoutChordNote],
+        measureOriginX mox: Double, measureOriginY moy: Double,
+        glyphSize: Double, sp: Double, mag: Double,
+        into out: inout [DrawCommand],
+    ) {
+        for note in notes {
+            guard let accidental = note.accidental else { continue }
+            emitCenterAnchoredGlyph(
+                codepoint: accidentalCodepoint(accidental),
+                cxPt: mox + Double(note.origin.x) - sp * 1.2 * mag,
+                cyPt: moy + Double(note.origin.y),
+                sizePt: glyphSize,
+                into: &out,
+            )
+        }
+    }
+
+    /// SMuFL codepoint for a note accidental. Mirrors the Apple
+    /// `AccidentalRenderer` glyph table so both platforms agree on which
+    /// Bravura glyph each accidental kind maps to.
+    static func accidentalCodepoint(_ accidental: Accidental) -> UInt32 {
+        switch accidental {
+        case .sharp: SMuFLCodepoint.accidentalSharp
+        case .flat: SMuFLCodepoint.accidentalFlat
+        case .natural: SMuFLCodepoint.accidentalNatural
+        case .doubleSharp: SMuFLCodepoint.accidentalDoubleSharp
+        case .doubleFlat: SMuFLCodepoint.accidentalDoubleFlat
         }
     }
 }
