@@ -1128,6 +1128,79 @@ class AndroidPlaybackEngineTest {
         engine.teardown()
     }
 
+    // T5E — setLoopMeasures / setLoopFullScore
+
+    /**
+     * Bridge whose `frameForCursor` resolves `Beat(m, 0)` to `tick = m * 480` for
+     * `m in 0 until measureCount`, and returns empty bytes for any measure beyond the score
+     * (so the last-measure fallback path in [AndroidPlaybackEngine.setLoopMeasures] is exercised).
+     * `timelineSummary` reports `totalTicks = measureCount * 480`.
+     */
+    private fun measureLoopBridge(measureCount: Int): FakeJniBridge =
+        object : FakeJniBridge(
+            timelineSummaryResult = longArrayOf(measureCount * 480L, 2_000_000L, 480L),
+            staffParamsResult = oneStaffPayload(),
+            renderMidiResult = minimalSmf,
+            metronomeBeatsResult = downbeatOnlyBeats(),
+        ) {
+            override fun frameForCursor(scoreHandle: Long, cursorBytes: ByteArray): ByteArray {
+                val cursor = ScoreCursorCodec.decode(cursorBytes) as? ScoreCursor.Beat
+                    ?: return byteArrayOf()
+                val m = cursor.measureIndex
+                return if (m in 0 until measureCount) {
+                    encodeFrameBytes(tick = m * 480L, timeMicros = m * 480L * 1000L, cursor = cursor)
+                } else {
+                    byteArrayOf()
+                }
+            }
+        }
+
+    @Test
+    fun `setLoopMeasures loops interior measures`() = runTest(testDispatcher) {
+        val engine = newEngineForTests(bridge = measureLoopBridge(measureCount = 4))
+        engine.prepare(scoreHandle = 1L)
+        engine.setLoopMeasures(fromMeasure = 1, toMeasure = 2)
+        val lr = engine.loopRange.value
+        assertNotNull(lr)
+        assertEquals(480L, lr!!.startTick)
+        assertEquals(1440L, lr.endTick)
+        engine.teardown()
+    }
+
+    @Test
+    fun `setLoopMeasures on last measure ends at totalTicks`() = runTest(testDispatcher) {
+        val engine = newEngineForTests(bridge = measureLoopBridge(measureCount = 4))
+        engine.prepare(scoreHandle = 1L)
+        // Beat(4, 0) does not resolve (measures 0..3 exist) → fall back to totalTicks = 1920.
+        engine.setLoopMeasures(fromMeasure = 3, toMeasure = 3)
+        val lr = engine.loopRange.value
+        assertNotNull(lr)
+        assertEquals(1440L, lr!!.startTick)
+        assertEquals(1920L, lr.endTick)
+        engine.teardown()
+    }
+
+    @Test
+    fun `setLoopFullScore loops zero to totalTicks`() = runTest(testDispatcher) {
+        val engine = newEngineForTests(bridge = measureLoopBridge(measureCount = 4))
+        engine.prepare(scoreHandle = 1L)
+        engine.setLoopFullScore()
+        val lr = engine.loopRange.value
+        assertNotNull(lr)
+        assertEquals(0L, lr!!.startTick)
+        assertEquals(1920L, lr.endTick)
+        engine.teardown()
+    }
+
+    @Test
+    fun `setLoopMeasures is no-op when start does not resolve`() = runTest(testDispatcher) {
+        val engine = newEngineForTests(bridge = measureLoopBridge(measureCount = 4))
+        engine.prepare(scoreHandle = 1L)
+        engine.setLoopMeasures(fromMeasure = 9, toMeasure = 9) // start beyond score
+        assertNull(engine.loopRange.value)
+        engine.teardown()
+    }
+
     // T14 — exportAudioFile
 
     @Test(expected = AudioBackendException.NoScorePrepared::class)
