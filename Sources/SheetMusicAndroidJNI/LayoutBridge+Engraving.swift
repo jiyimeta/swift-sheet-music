@@ -151,6 +151,52 @@ extension LayoutBridge {
         ))
     }
 
+    /// Emit a collapsed multi-measure rest: the SMuFL `restHBar` glyph
+    /// (a thick centered bar with vertical end-caps) plus, when
+    /// `count > 0`, the run-length number rendered as centered
+    /// tempo-style text directly above. Mirrors the Apple renderer's
+    /// `drawMultiMeasureRest` (single `restHBar` glyph at native size,
+    /// count centered 2.5 sp above). `count == 0` draws the bar only —
+    /// lower staves in a multi-staff system reuse that so the label
+    /// isn't duplicated per staff.
+    static func emitMultiMeasureRest(
+        count: Int,
+        cxPt: Double,
+        cyPt: Double,
+        sp: Double,
+        glyphSize: Double,
+        into out: inout [DrawCommand],
+    ) {
+        emitCenterAnchoredGlyph(
+            codepoint: SMuFLCodepoint.restHBar,
+            cxPt: cxPt, cyPt: cyPt,
+            sizePt: glyphSize,
+            into: &out,
+        )
+        guard count > 0 else { return }
+        // Apple anchors the count at `(0.5, 0.5)` (typographic frame
+        // center) 2.5 sp above the bar. Canvas.drawText anchors at the
+        // baseline-leading corner, so shift X left by half the advance
+        // and place the baseline at the vertical center plus
+        // `(ascent - descent) / 2`.
+        let label = String(count)
+        let textPt = TextRoleStyle.fontSize(for: .tempo, sp: CGFloat(sp))
+        let font = LayoutFont(face: "Edwin", pointSize: textPt)
+        let advance = Double(FontMetrics.provider.typographicWidth(
+            text: label, font: font,
+        ))
+        let ascent = Double(FontMetrics.provider.ascent(font: font))
+        let descent = Double(FontMetrics.provider.descent(font: font))
+        let centerY = cyPt - sp * 2.5
+        out.append(.text(
+            text: label,
+            x: (cxPt - advance / 2) * ptToMMScale,
+            y: (centerY + (ascent - descent) / 2) * ptToMMScale,
+            size: Double(textPt) * ptToMMScale,
+            fontId: .textRoman,
+        ))
+    }
+
     // swiftlint:disable:next function_parameter_count
     static func encodeTimeSignature(
         numerator: Int,

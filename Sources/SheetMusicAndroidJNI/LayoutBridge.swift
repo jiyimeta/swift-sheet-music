@@ -33,7 +33,7 @@ import SheetMusicLayout
 /// 2. Per `LayoutMeasure`: its elements — clef glyphs, time-sig glyphs,
 ///    note-head glyphs, rest glyphs, and barline strokes. Unknown/unhandled
 ///    element types fall back to a small `fillRect` placeholder.
-public enum LayoutBridge {
+public enum LayoutBridge { // swiftlint:disable:this type_body_length
     // MARK: - Unit conversion
 
     /// Points to millimetres: 1 pt = 25.4 / 72 mm.
@@ -356,8 +356,15 @@ public enum LayoutBridge {
                 into: &out,
             )
 
-        case let .multiMeasureRest(_, origin):
-            placeholderRect(atX: Double(origin.x), atY: Double(origin.y), mox: mox, moy: moy, sp: sp, into: &out)
+        case let .multiMeasureRest(count, origin):
+            emitMultiMeasureRest(
+                count: count,
+                cxPt: mox + Double(origin.x),
+                cyPt: moy + Double(origin.y),
+                sp: sp,
+                glyphSize: glyphSize,
+                into: &out,
+            )
 
         case let .measureNumber(text, origin):
             encodeNotationText(
