@@ -16,3 +16,14 @@ public enum ScoreCursor: Hashable, Sendable {
     case item(ScoreItemID)
     case beat(measureIndex: Int, tickInMeasure: Int)
 }
+
+extension ScoreCursor {
+    /// The measure this cursor points at. Both cases carry this directly: `.beat` stores it as a labeled field;
+    /// `.item` derives it from `ScoreItemID.measureIndex`.
+    public var measureIndex: Int {
+        switch self {
+        case let .beat(measureIndex, _): measureIndex
+        case let .item(id): id.measureIndex
+        }
+    }
+}
