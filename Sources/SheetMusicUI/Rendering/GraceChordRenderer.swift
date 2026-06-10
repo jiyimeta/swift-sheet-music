@@ -70,44 +70,24 @@ extension ScoreLayerBuilder {
         height: CGFloat,
         into parent: CALayer,
     ) {
-        guard let xMin = notes.map(\.origin.x).min(),
-              let xMax = notes.map(\.origin.x).max(),
-              let yTop = notes.map(\.origin.y).min(),
-              let yBot = notes.map(\.origin.y).max()
-        else { return }
-        // Stem geometry — match `ScoreLayerBuilder+Chord.drawStem`
-        // exactly so the slash crosses the rendered stem.
-        let stemAttachDx = scaled.sp * 0.59 - scaled.stemThickness / 2
-        let stemX: CGFloat
-        let stemTipY: CGFloat
-        // Bravura `graceNoteSlash` endpoints in em-units, math y.
-        // First tuple = SW (or NW for stem-down) bottom/top-left
-        // end; second = NE (or SE) top/bottom-right end.
-        let endA: (x: CGFloat, y: CGFloat)
-        let endB: (x: CGFloat, y: CGFloat)
-        switch stem {
-        case .up:
-            stemX = xMax + stemAttachDx
-            stemTipY = yTop - scaled.defaultStemLength
-            // flag8thUp: graceNoteSlashSW / graceNoteSlashNE.
-            endA = (-0.644, -2.456)
-            endB = (1.284, -0.796)
-        case .down:
-            stemX = xMin - stemAttachDx
-            stemTipY = yBot + scaled.defaultStemLength
-            // flag8thDown: graceNoteSlashNW / graceNoteSlashSE.
-            endA = (-0.596, 2.168)
-            endB = (1.328, 0.628)
-        }
-        // Convert anchor (x, math-y) → screen (x, y-down), anchored
-        // at the stem tip and scaled by `scaled.sp` (= 1 em).
-        let startX = stemX + endA.x * scaled.sp
-        let startY = stemTipY - endA.y * scaled.sp
-        let endX = stemX + endB.x * scaled.sp
-        let endY = stemTipY - endB.y * scaled.sp
+        // Slash endpoints come from the shared `GraceSlashGeometry`
+        // (Bravura `graceNoteSlash` anchor table) so this renderer and the
+        // Android bridge draw the identical slash. `scaled` already folds
+        // in `mag`, so the geometry matches the reduced grace stem.
+        guard let slash = GraceSlashGeometry.slash(
+            noteOrigins: notes.map(\.origin),
+            stem: stem,
+            sp: scaled.sp,
+            defaultStemLength: scaled.defaultStemLength,
+            stemThickness: scaled.stemThickness,
+        ) else { return }
         let path = CGMutablePath()
-        path.move(to: CGPoint(x: base.x + startX, y: base.y + startY))
-        path.addLine(to: CGPoint(x: base.x + endX, y: base.y + endY))
+        path.move(to: CGPoint(
+            x: base.x + slash.from.x, y: base.y + slash.from.y,
+        ))
+        path.addLine(to: CGPoint(
+            x: base.x + slash.to.x, y: base.y + slash.to.y,
+        ))
         // Match the rendered grace stem's weight so the slash reads
         // at on-screen DPIs. MuseScore's `stemSlashThickness =
         // 0.125 sp × mag` aliases below one device pixel.

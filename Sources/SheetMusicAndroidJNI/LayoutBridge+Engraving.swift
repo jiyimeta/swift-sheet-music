@@ -111,6 +111,55 @@ extension LayoutBridge {
         }
     }
 
+    /// Emit a dynamic marking. Standard symbol dynamics (p, mf, ff,
+    /// sfz, …) draw as bold Bravura SMuFL glyphs at 4 sp — matching
+    /// Apple's `TextMarkRenderer.drawDynamic` and the shared
+    /// `DynamicSymbolMap`. Free-form text dynamics ("cresc.",
+    /// "espressivo") fall back to the generic Edwin text path.
+    ///
+    /// Apple anchors dynamics at `(0, 0.5)` (leading edge, vertical
+    /// center); `Canvas.drawText` anchors at baseline-leading, so the
+    /// baseline is shifted down by `(ascent − descent) / 2` to center
+    /// the glyph row on `originY`, and the run advances X left-to-right.
+    static func emitDynamic(
+        text: String,
+        originX: Double,
+        originY: Double,
+        sp: Double,
+        into out: inout [DrawCommand],
+    ) {
+        guard let codepoints = DynamicSymbolMap.codepoints(for: text) else {
+            emitText(
+                text: text, style: .dynamics,
+                originX: originX, originY: originY, sp: sp, into: &out,
+            )
+            return
+        }
+        // SMuFL music-font convention: 1 em = 4 sp (MuseScore's
+        // MUSICAL_SYMBOLS_DEFAULT_FONT_SIZE 10 pt × 2 at 5 pt/sp).
+        let glyphSize = sp * 4
+        let font = LayoutFont(
+            face: SMuFLFamily.bravura, pointSize: CGFloat(glyphSize),
+        )
+        let ascent = Double(FontMetrics.provider.ascent(font: font))
+        let descent = Double(FontMetrics.provider.descent(font: font))
+        let baselineY = originY + (ascent - descent) / 2
+        var cursorX = originX
+        for cp in codepoints {
+            out.append(.glyph(
+                codepoint: cp,
+                x: cursorX * ptToMMScale,
+                y: baselineY * ptToMMScale,
+                size: glyphSize * ptToMMScale,
+                fontId: .smufl,
+            ))
+            guard let scalar = UnicodeScalar(cp) else { continue }
+            cursorX += Double(FontMetrics.provider.typographicWidth(
+                text: String(scalar), font: font,
+            ))
+        }
+    }
+
     private static func fontFor(
         run: MusicTextRuns.Run, textPt: CGFloat, glyphPt: CGFloat,
     ) -> LayoutFont {
@@ -270,14 +319,18 @@ extension LayoutBridge {
         sp: Double,
         into out: inout [DrawCommand],
     ) {
-        // Apple's TieRenderer scales the shoulder with sqrt(tieLength)
-        // up to ~2 sp; for the cross-platform helper we use a fixed
-        // 1 sp shoulder. Refinement is a follow-up.
+        // Shoulder height scales with sqrt(tie length) via the shared
+        // `TieArcGeometry.shoulderHeightSp`, so Android matches Apple's
+        // TieRenderer (long ties flatten, short ties stay ~0.3 sp)
+        // instead of the old fixed 1 sp.
+        let tieLengthSp = abs(toX - fromX) / max(sp, .leastNonzeroMagnitude)
         let pts = TieArcGeometry.controlPoints(
             from: CGPoint(x: CGFloat(fromX), y: CGFloat(fromY)),
             to: CGPoint(x: CGFloat(toX), y: CGFloat(toY)),
             above: above,
-            heightSp: 1,
+            heightSp: TieArcGeometry.shoulderHeightSp(
+                tieLengthSp: CGFloat(tieLengthSp),
+            ),
             sp: CGFloat(sp),
         )
         out.append(.moveTo(
@@ -314,10 +367,9 @@ extension LayoutBridge {
             sp: CGFloat(sp),
         )
         let fontSize = Double(TupletBracketGeometry.labelFontSizeSp) * sp
-        // Label — emit as centered Edwin italic. The bridge's wire
-        // format has no italic bit yet; falls back to the default
-        // text style, matching Apple's "looks slightly off but
-        // recognizable" behavior for tuplet digits.
+        // Label — centered Edwin italic, matching Apple's tuplet digits
+        // (`drawTuplet` uses `italic: true`). Emitted via `.italicText`
+        // so the Kotlin renderer slants the glyphs.
         let labelFont = LayoutFont(
             face: "Edwin", pointSize: CGFloat(fontSize),
         )
@@ -331,7 +383,7 @@ extension LayoutBridge {
         // down by half of (ascent − descent) to vertically center the
         // digit on `labelCenter.y`.
         let baselineY = Double(segments.labelCenter.y) + (ascent - descent) / 2
-        out.append(.text(
+        out.append(.italicText(
             text: text,
             x: (Double(segments.labelCenter.x) - labelWidth / 2) * ptToMMScale,
             y: baselineY * ptToMMScale,
@@ -499,18 +551,28 @@ extension LayoutBridge {
             let parts = SpannerGeometry.ottava(
                 from: from, to: to, sp: CGFloat(sp),
             )
-            // No dashed-line opcode in the wire format yet; v1 falls
-            // back to a solid stroke.
             encodeNotationText(
                 text: parts.label, role: .jump,
                 originX: Double(parts.labelOrigin.x),
                 originY: Double(parts.labelOrigin.y),
                 sp: sp, into: &out,
             )
+            // Dashed line — mirror Apple's `StrokeStyle(dash:)`. The
+            // pattern is in layout points (Apple applies it un-scaled),
+            // so convert to mm like every other coordinate. Bracket the
+            // stroke with the state opcode and clear it afterwards.
+            let dashOn = Double(parts.dashPattern.first ?? 3) * ptToMMScale
+            let dashOff = Double(
+                parts.dashPattern.count > 1
+                    ? parts.dashPattern[1]
+                    : (parts.dashPattern.first ?? 3),
+            ) * ptToMMScale
+            out.append(.setDash(onMM: dashOn, offMM: dashOff))
             emitSegment(
                 from: parts.lineStart, to: parts.lineEnd,
                 lineWidth: line, into: &out,
             )
+            out.append(.setDash(onMM: 0, offMM: 0))
 
         case .textLine:
             let parts = SpannerGeometry.textLine(
@@ -571,6 +633,7 @@ extension LayoutBridge {
         fromX: Double, fromY: Double,
         toX: Double, toY: Double,
         wavy: Bool,
+        text: String?,
         sp: Double,
         into out: inout [DrawCommand],
     ) {
@@ -604,6 +667,53 @@ extension LayoutBridge {
             ))
         }
         out.append(.stroke(width: lineWidth * ptToMMScale))
+        encodeGlissandoText(
+            text: text, from: from, length: length, angle: angle,
+            wavy: wavy, sp: sp, into: &out,
+        )
+    }
+
+    /// Centered italic label above the glissando line, rotated to follow
+    /// the line. Mirrors `ScoreLayerBuilder.drawGlissandoText`: Edwin 8 pt
+    /// italic (`TextStyleType.glissando`), bottom-center anchored at the
+    /// line midpoint with its descender clearing the line, and gated to
+    /// the line length so a too-wide label is dropped (`tdraw.cpp:1580`).
+    private static func encodeGlissandoText(
+        text: String?, from: CGPoint, length: CGFloat, angle: CGFloat,
+        wavy: Bool, sp: Double, into out: inout [DrawCommand],
+    ) {
+        guard let text, !text.isEmpty else { return }
+        let fontSize = TextRoleStyle.fontSize(
+            for: .glissando, sp: CGFloat(sp),
+        )
+        let font = LayoutFont(face: "Edwin", pointSize: fontSize)
+        let textWidth = FontMetrics.provider.typographicWidth(
+            text: text, font: font,
+        )
+        // MuseScore drops the label when it can't fit on the line.
+        guard textWidth < length else { return }
+        let descent = FontMetrics.provider.descent(font: font)
+        let anchorLocal = GlissandoGeometry.textAnchorLocal(
+            length: length, wavy: wavy, sp: CGFloat(sp),
+        )
+        let world = GlissandoGeometry.toWorld(
+            local: anchorLocal, from: from, angle: angle,
+        )
+        // Rotate the canvas about the bottom-center anchor, then place the
+        // baseline-leading text so its bottom-center lands on `world`.
+        out.append(.setRotation(
+            radians: Double(angle),
+            pivotX: Double(world.x) * ptToMMScale,
+            pivotY: Double(world.y) * ptToMMScale,
+        ))
+        out.append(.italicText(
+            text: text,
+            x: Double(world.x - textWidth / 2) * ptToMMScale,
+            y: Double(world.y - descent) * ptToMMScale,
+            size: Double(fontSize) * ptToMMScale,
+            fontId: .textRoman,
+        ))
+        out.append(.setRotation(radians: 0, pivotX: 0, pivotY: 0))
     }
 
     // MARK: - Harmony (chord symbol)

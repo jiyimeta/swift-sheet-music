@@ -272,23 +272,32 @@ extension LayoutEngine {
         }
     }
 
-    /// System-local X for a spanner's start edge. When the source
-    /// gives us an in-measure tick (partial-measure spanners — an 8va
-    /// over the last chord, a slur starting mid-measure), look the
-    /// tick up in the per-measure `tickColumns` map so the line
-    /// begins above the actual chord. Otherwise fall back to the
-    /// measure's left edge with the historical 2-sp inset.
+    /// System-local X for a spanner's start edge. Look the start tick
+    /// up in the per-measure `tickColumns` map so the line begins above
+    /// the actual chord — this covers both partial-measure spanners (an
+    /// 8va over the last chord, a slur starting mid-measure) AND the
+    /// downbeat case (`startTick == 0`). The downbeat lookup matters
+    /// when the measure opens with a clef / key / time signature: the
+    /// first chord sits well to the right of the bar line (its column
+    /// already bakes in the header indent via `contentStartX`), so a
+    /// flat `origin.x + 2 sp` would start a hairpin under the clef.
+    /// The 2-sp inset survives as a left floor for measures whose first
+    /// chord sits very close to the bar line (no header) and as the
+    /// fallback when the start tick has no recorded column.
+    ///
+    /// Cross-system continuation edges do NOT come through here — they
+    /// use the system margin directly in `attachSpanners` — so widening
+    /// this lookup can't disturb a continued line's left end.
     static func startX(
         anchor: SpannerAnchor,
         measure: LayoutMeasure,
         metrics: StaffMetrics,
     ) -> CGFloat {
-        if anchor.startTick > 0,
-           let local = measure.tickColumns[anchor.startTick]
-        {
-            return measure.origin.x + local
+        let inset = measure.origin.x + metrics.sp * 2
+        if let local = measure.tickColumns[anchor.startTick] {
+            return max(measure.origin.x + local, inset)
         }
-        return measure.origin.x + metrics.sp * 2
+        return inset
     }
 
     /// System-local X for a spanner's right edge. When `endTick`

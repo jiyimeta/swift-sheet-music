@@ -12,6 +12,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
@@ -113,6 +114,12 @@ private fun DrawScope.drawPage(
     val path = Path()
     var strokeStarted = false
     var currentArgb: Int = android.graphics.Color.BLACK
+    // State commands accumulate here. `dash*` gates the stroke path effect;
+    // `rotationSaveCount` tracks the native-canvas save depth for an active
+    // SetRotation so the paired `SetRotation(0)` can restore it.
+    var dashOnPx = 0f
+    var dashOffPx = 0f
+    var rotationSaveCount = -1
     val glyphPaint = Paint().apply {
         isAntiAlias = true
         color = currentArgb
@@ -141,7 +148,16 @@ private fun DrawScope.drawPage(
             }
             is DrawCommand.Stroke -> {
                 val widthPx = (cmd.width.toFloat() * pxPerMM).coerceAtLeast(1.5f)
-                drawPath(path = path, color = Color(currentArgb), style = Stroke(width = widthPx))
+                val effect = if (dashOnPx > 0f && dashOffPx > 0f) {
+                    PathEffect.dashPathEffect(floatArrayOf(dashOnPx, dashOffPx), 0f)
+                } else {
+                    null
+                }
+                drawPath(
+                    path = path,
+                    color = Color(currentArgb),
+                    style = Stroke(width = widthPx, pathEffect = effect),
+                )
                 path.reset()
                 strokeStarted = false
             }
@@ -205,6 +221,38 @@ private fun DrawScope.drawPage(
             }
             is DrawCommand.SetColor -> {
                 currentArgb = cmd.argb.toInt()
+            }
+            is DrawCommand.SetRotation -> {
+                drawIntoCanvas { canvas ->
+                    val native = canvas.nativeCanvas
+                    if (cmd.radians != 0.0) {
+                        rotationSaveCount = native.save()
+                        native.rotate(
+                            Math.toDegrees(cmd.radians).toFloat(),
+                            cmd.pivotX.toFloat() * pxPerMM,
+                            cmd.pivotY.toFloat() * pxPerMM,
+                        )
+                    } else if (rotationSaveCount >= 0) {
+                        native.restoreToCount(rotationSaveCount)
+                        rotationSaveCount = -1
+                    }
+                }
+            }
+            is DrawCommand.SetDash -> {
+                dashOnPx = cmd.onMM.toFloat() * pxPerMM
+                dashOffPx = cmd.offMM.toFloat() * pxPerMM
+            }
+            is DrawCommand.ItalicText -> {
+                glyphPaint.typeface = if (cmd.fontId == FontID.SMUFL) smufl else text
+                glyphPaint.textSize = cmd.size.toFloat() * pxPerMM
+                glyphPaint.color = currentArgb
+                glyphPaint.textSkewX = -0.25f
+                drawIntoCanvas { canvas ->
+                    canvas.nativeCanvas.drawText(
+                        cmd.text, cmd.x.toFloat() * pxPerMM, cmd.y.toFloat() * pxPerMM, glyphPaint,
+                    )
+                }
+                glyphPaint.textSkewX = 0f
             }
         }
     }
