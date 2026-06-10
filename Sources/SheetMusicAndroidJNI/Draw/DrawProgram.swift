@@ -5,11 +5,11 @@ import Wirelet
 /// boundary. Little-endian throughout. Both the Swift encoder and the Kotlin
 /// decoder must agree on the magic + version; mismatches are fail-fast.
 ///
-/// ### Wire layout (v5)
+/// ### Wire layout (v6)
 ///
 /// ```text
 /// u32 magic       = 0x534D4450 ("SMDP")
-/// u32 version     = 5
+/// u32 version     = 6
 /// i32 pageCount
 /// [page] × pageCount:
 ///     f64 widthMM
@@ -28,14 +28,21 @@ import Wirelet
 /// and `Int32` length prefix. Older decoders reject v4 with
 /// `unsupportedVersion`; v3 readers and v4 readers are not wire-compatible.
 ///
+///
 /// v5 appended `.stretchedGlyph` (discriminator 8) for the system braces
 /// at the left edge of each system — a non-uniformly stretched SMuFL glyph
-/// the uniform `glyph` command can't express. Appending at the tail keeps
-/// the existing discriminators stable, so v4 streams decode unchanged on a
-/// v5 reader; the version field still gates a v4 reader against a v5 stream.
+/// the uniform `glyph` command can't express.
+///
+/// v6 appended three state/style opcodes (`setRotation`, `setDash`,
+/// `italicText`, discriminators 9…11) so the bridge can draw arpeggios,
+/// glissando labels, dashed ottava lines, and italic tuplet / rehearsal
+/// text. Appending at the tail keeps existing discriminators 0…8 stable,
+/// so older streams decode unchanged on a v6 reader; the version field
+/// still gates an older decoder against a newer stream (a new opcode
+/// would otherwise be an unknown discriminator).
 public enum DrawProgram {
     public static let magic: UInt32 = 0x534D_4450 // "SMDP"
-    public static let version: UInt32 = 5
+    public static let version: UInt32 = 6
 
     @WireFormatEnum
     public enum FontID: UInt8, Sendable, CaseIterable, Equatable {
@@ -61,7 +68,7 @@ public struct EncodablePage: Sendable, Equatable {
 }
 
 /// One painter command. The encoded discriminator is the case's
-/// declaration order (`moveTo` = 0 … `stretchedGlyph` = 8). Reorder with
+/// declaration order (`moveTo` = 0 … `italicText` = 11). Reorder with
 /// care: changes here are wire-breaking across the Kotlin boundary. Only
 /// ever *append* new cases at the tail so existing discriminators hold.
 @WireFormatChoice
@@ -109,6 +116,26 @@ public enum DrawCommand: Sendable, Equatable {
         bottomY: Double,
         fontSize: Double,
         xScale: Double,
+        fontId: DrawProgram.FontID,
+    )
+    /// Rotate the canvas by `radians` about the pivot (document mm) for
+    /// every subsequent command, until reset with `radians == 0`. A
+    /// state opcode like `setColor`: emit the non-zero rotation, draw the
+    /// rotated content, then emit `setRotation(0, 0, 0)` to restore.
+    /// Used for arpeggio wiggles (90°) and glissando labels (gliss angle).
+    case setRotation(radians: Double, pivotX: Double, pivotY: Double)
+    /// Dash pattern for subsequent stroked paths, in document mm.
+    /// `(0, 0)` clears it (solid). State opcode; reset after the dashed
+    /// stroke. Used for the ottava line.
+    case setDash(onMM: Double, offMM: Double)
+    /// Italic text run — same payload as `text`, but the renderer slants
+    /// the glyphs. Used for tuplet digits and rehearsal marks, which
+    /// MuseScore sets in italic.
+    case italicText(
+        text: String,
+        x: Double,
+        y: Double,
+        size: Double,
         fontId: DrawProgram.FontID,
     )
 }

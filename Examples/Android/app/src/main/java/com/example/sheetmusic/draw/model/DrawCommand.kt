@@ -51,4 +51,37 @@ sealed class DrawCommand {
         val xScale: Double,
         val fontId: FontID,
     ) : DrawCommand()
+    /**
+     * Rotate the canvas by [radians] about the pivot (document mm) for every
+     * subsequent command, until reset with `radians == 0`. A state command
+     * like [SetColor]: emit the non-zero rotation, draw the rotated content,
+     * then emit `SetRotation(0, 0, 0)` to restore. Arpeggio wiggles (90°)
+     * and glissando labels (gliss angle) use this.
+     */
+    data class SetRotation(
+        val radians: Double,
+        val pivotX: Double,
+        val pivotY: Double,
+    ) : DrawCommand()
+    /**
+     * Dash pattern for subsequent stroked paths, in document mm. `(0, 0)`
+     * clears it (solid). State command; reset after the dashed stroke. The
+     * ottava line uses this.
+     */
+    data class SetDash(
+        val onMM: Double,
+        val offMM: Double,
+    ) : DrawCommand()
+    /**
+     * Italic text run — same payload as [Text], but the renderer slants the
+     * glyphs. Tuplet digits and rehearsal marks, which MuseScore sets in
+     * italic, use this.
+     */
+    data class ItalicText(
+        val text: String,
+        val x: Double,
+        val y: Double,
+        val size: Double,
+        val fontId: FontID,
+    ) : DrawCommand()
 }

@@ -307,7 +307,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                 metrics: ctx, showsInvisible: showsInvisible, into: &out,
             )
 
-        case let .graceChord(notes, duration, stem, stemOrigin, _, _, mag, _):
+        case let .graceChord(notes, duration, stem, stemOrigin, _, hasSlash, mag, _):
             encodeChord(
                 notes: notes, duration: duration, stem: stem,
                 stemOriginY: Double(stemOrigin.y),
@@ -316,6 +316,14 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                 measureOriginX: mox, measureOriginY: moy,
                 metrics: ctx, showsInvisible: showsInvisible, into: &out,
             )
+            // Acciaccatura slash across the (reduced) grace stem.
+            if hasSlash {
+                emitGraceSlash(
+                    notes: notes, stem: stem, mag: Double(mag),
+                    measureOriginX: mox, measureOriginY: moy,
+                    metrics: ctx, into: &out,
+                )
+            }
 
         case let .rest(duration, origin, _, _, hasLegerLine):
             // Split base duration + dot count, mirroring `encodeChord` and
@@ -359,7 +367,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                 width: Double(BarLineGeometry.thinThicknessSp) * sp * ptToMM,
             ))
 
-        case let .beam(fromOrigin, toOrigin, direction, level, _):
+        case let .beam(fromOrigin, toOrigin, direction, level, color):
             // Each beam emit at a given level: shift Y by the level
             // offset so secondaries stack inward from the primary,
             // matching Apple BeamRenderer's geometry.
@@ -376,9 +384,16 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
             let fy = (moy + Double(fromOrigin.y) + centerDy) * ptToMM
             let tx = (mox + Double(toOrigin.x)) * ptToMM
             let ty = (moy + Double(toOrigin.y) + centerDy) * ptToMM
+            // Beams honor the author beam <color> (matches Apple's
+            // BeamRenderer); default ink otherwise.
+            let beamARGB = color.flatMap(LayoutBridge.argb(from:))
+            if let beamARGB { out.append(.setColor(argb: beamARGB)) }
             out.append(.moveTo(x: fx, y: fy))
             out.append(.lineTo(x: tx, y: ty))
             out.append(.stroke(width: thickness * ptToMM))
+            if beamARGB != nil {
+                out.append(.setColor(argb: LayoutBridge.blackARGB))
+            }
 
         case let .textMark(kind, text, origin):
             // Standard dynamics (p, mf, ff, sfz, …) render as bold
@@ -624,16 +639,14 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                 out.append(.stroke(width: thickness * ptToMM))
             }
 
-        case let .glissandoLine(fromOrigin, toOrigin, wavy, _):
-            // Text label is omitted on Android until we can measure
-            // text in the rotated frame; the line itself is the
-            // visually-dominant element of the glissando.
+        case let .glissandoLine(fromOrigin, toOrigin, wavy, text):
             encodeGlissandoLine(
                 fromX: mox + Double(fromOrigin.x),
                 fromY: moy + Double(fromOrigin.y),
                 toX: mox + Double(toOrigin.x),
                 toY: moy + Double(toOrigin.y),
                 wavy: wavy,
+                text: text,
                 sp: sp,
                 into: &out,
             )
@@ -655,12 +668,36 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                 into: &out,
             )
 
-        // Arpeggio defers until a rotation opcode lands in the wire
-        // format — the wiggle glyphs are designed for a horizontal
-        // baseline and need a -90° rotation to read as a vertical
-        // arpeggio.
-        case .arpeggioWiggle:
-            break
+        // Arpeggio — vertical stack of wiggle glyphs to the left of the
+        // chord. The SMuFL glyphs are drawn horizontally in the font, so
+        // each segment is rotated -90° about its anchor (mirrors
+        // `ArpeggioRenderer.drawRotated` / MuseScore's `painter->rotate(-90)`).
+        // The `.setRotation` state opcode rotates the canvas about the
+        // glyph anchor; emit the glyph, then clear the rotation.
+        case let .arpeggioWiggle(top, bottom, subtype):
+            let segments = ArpeggioGeometry.segments(
+                top: CGPoint(x: mox + Double(top.x), y: moy + Double(top.y)),
+                bottom: CGPoint(
+                    x: mox + Double(bottom.x), y: moy + Double(bottom.y),
+                ),
+                subtype: subtype,
+                sp: CGFloat(sp),
+            )
+            for segment in segments {
+                let pivotX = Double(segment.origin.x) * ptToMM
+                let pivotY = Double(segment.origin.y) * ptToMM
+                out.append(.setRotation(
+                    radians: -Double.pi / 2, pivotX: pivotX, pivotY: pivotY,
+                ))
+                out.append(.glyph(
+                    codepoint: segment.codepoint,
+                    x: pivotX,
+                    y: pivotY,
+                    size: glyphSize * ptToMM,
+                    fontId: .smufl,
+                ))
+                out.append(.setRotation(radians: 0, pivotX: 0, pivotY: 0))
+            }
         }
     }
 }

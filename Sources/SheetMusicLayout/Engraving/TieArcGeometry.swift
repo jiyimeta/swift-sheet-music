@@ -18,6 +18,18 @@ public enum TieArcGeometry {
     /// glyph ink.
     public static let defaultHeadClearanceSp: CGFloat = 0.6
 
+    /// Shoulder height (staff-spaces) scaled by the square root of the
+    /// tie's length, so long ties flatten instead of ballooning. From
+    /// MuseScore's `styledef`: `tieMinShoulderHeight = 0.3 sp`,
+    /// `tieMaxShoulderHeight = 2.0 sp`. Shared so the Apple `TieRenderer`
+    /// and the Android `LayoutBridge` use one curve instead of Android's
+    /// old fixed 1 sp.
+    public static func shoulderHeightSp(tieLengthSp: CGFloat) -> CGFloat {
+        let clamped = max(tieLengthSp, 1.0)
+        let raw = 0.3 + 0.3 * (clamped - 1).squareRoot()
+        return min(max(raw, 0.3), 2.0)
+    }
+
     public struct ControlPoints: Equatable, Sendable {
         public let p0: CGPoint
         public let p1: CGPoint

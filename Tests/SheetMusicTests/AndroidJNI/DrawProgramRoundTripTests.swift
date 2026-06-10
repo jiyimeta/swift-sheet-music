@@ -111,6 +111,82 @@ struct DrawProgramRoundTripTests {
     }
 
     @Test
+    func setRotationRoundTrips() throws {
+        let page = EncodablePage(
+            widthMM: 210, heightMM: 297,
+            commands: [
+                .setRotation(radians: -1.5707963, pivotX: 12.5, pivotY: 30),
+                .setRotation(radians: 0, pivotX: 0, pivotY: 0),
+            ],
+        )
+        let encoded = DrawProgramCodec.encode(pages: [page])
+        let decoded = try DrawProgramCodec.decode(encoded)
+
+        #expect(decoded.count == 1)
+        if case let .setRotation(radians, pivotX, pivotY) = decoded[0].commands[0] {
+            #expect(radians == -1.5707963)
+            #expect(pivotX == 12.5)
+            #expect(pivotY == 30)
+        } else {
+            Issue.record("expected setRotation opcode at index 0")
+        }
+        if case let .setRotation(radians, _, _) = decoded[0].commands[1] {
+            #expect(radians == 0)
+        } else {
+            Issue.record("expected setRotation reset at index 1")
+        }
+    }
+
+    @Test
+    func setDashRoundTrips() throws {
+        let page = EncodablePage(
+            widthMM: 210, heightMM: 297,
+            commands: [
+                .setDash(onMM: 1.06, offMM: 1.06),
+                .setDash(onMM: 0, offMM: 0),
+            ],
+        )
+        let encoded = DrawProgramCodec.encode(pages: [page])
+        let decoded = try DrawProgramCodec.decode(encoded)
+
+        #expect(decoded.count == 1)
+        if case let .setDash(onMM, offMM) = decoded[0].commands[0] {
+            #expect(onMM == 1.06)
+            #expect(offMM == 1.06)
+        } else {
+            Issue.record("expected setDash opcode at index 0")
+        }
+    }
+
+    @Test
+    func italicTextRoundTrips() throws {
+        let page = EncodablePage(
+            widthMM: 100, heightMM: 100,
+            commands: [
+                .italicText(
+                    text: "3",
+                    x: 10, y: 20,
+                    size: 9,
+                    fontId: .textRoman,
+                ),
+            ],
+        )
+        let encoded = DrawProgramCodec.encode(pages: [page])
+        let decoded = try DrawProgramCodec.decode(encoded)
+
+        #expect(decoded.count == 1)
+        if case let .italicText(s, x, y, size, fontId) = decoded[0].commands[0] {
+            #expect(s == "3")
+            #expect(x == 10)
+            #expect(y == 20)
+            #expect(size == 9)
+            #expect(fontId == .textRoman)
+        } else {
+            Issue.record("expected italicText opcode at index 0")
+        }
+    }
+
+    @Test
     func corruptMagicRaisesBadMagic() throws {
         // Encode a draw program with a wrong magic value to verify that
         // DrawProgramCodec.decode raises .badMagic. We build the wire struct

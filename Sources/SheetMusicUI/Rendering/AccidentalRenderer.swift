@@ -22,13 +22,9 @@ enum AccidentalRenderer {
     }
 
     private static func glyphFor(_ a: Accidental) -> Character {
-        // Accidental is an enum (see SheetMusicCore/Score/Accidental.swift).
-        switch a {
-        case .sharp: SMuFLGlyph.accidentalSharp
-        case .flat: SMuFLGlyph.accidentalFlat
-        case .natural: SMuFLGlyph.accidentalNatural
-        case .doubleSharp: SMuFLGlyph.accidentalDoubleSharp
-        case .doubleFlat: SMuFLGlyph.accidentalDoubleFlat
-        }
+        // Glyph table is shared with the Android bridge via
+        // `AccidentalGlyph` so the two platforms can't disagree.
+        // swiftlint:disable:next force_unwrapping
+        Character(UnicodeScalar(AccidentalGlyph.codepoint(a))!)
     }
 }

@@ -50,14 +50,16 @@ extension LayoutBridge {
         emitNoteGlyphs(
             visibleNotes, baseDuration: baseDur, dotCount: dotCount,
             glyphSize: glyphSize, metrics: ctx, mag: mag,
-            measureOriginX: mox, measureOriginY: moy, into: &out,
+            measureOriginX: mox, measureOriginY: moy,
+            honorColor: true, into: &out,
         )
         if !invisibleNotes.isEmpty {
             out.append(.setColor(argb: LayoutBridge.invisibleARGB))
             emitNoteGlyphs(
                 invisibleNotes, baseDuration: baseDur, dotCount: dotCount,
                 glyphSize: glyphSize, metrics: ctx, mag: mag,
-                measureOriginX: mox, measureOriginY: moy, into: &out,
+                measureOriginX: mox, measureOriginY: moy,
+                honorColor: false, into: &out,
             )
             out.append(.setColor(argb: LayoutBridge.blackARGB))
         }
@@ -91,31 +93,47 @@ extension LayoutBridge {
         let xStem = Double(geometry.xStem)
         let startY = Double(geometry.startY)
         let endY = Double(geometry.endY)
+        // Stem + flag inherit the chord's notehead color (first colored
+        // note wins) — matches Apple's `ScoreLayerBuilder` `stemColor`.
+        // MuseScore stores `<Stem>/<Hook>` color separately but in practice
+        // it tracks the note.
+        let stemARGB = notes.compactMap(\.color).first
+            .flatMap(LayoutBridge.argb(from:))
+        if let stemARGB { out.append(.setColor(argb: stemARGB)) }
         out.append(.moveTo(x: xStem * ptToMMScale, y: startY * ptToMMScale))
         out.append(.lineTo(x: xStem * ptToMMScale, y: endY * ptToMMScale))
         out.append(.stroke(width: ctx.stemThickness * mag * ptToMMScale))
         // ── Flag (unbeamed only) ─────────────────────────────────────
-        guard !isBeamed,
-              let flagCp = FlagGlyph.codepoint(duration: baseDur, stem: stem)
-        else { return }
-        let tipY = stem == .up ? startY : endY
-        // Apple's StemRenderer draws the flag with `.topLeading` so the
-        // glyph's baseline anchor sits on the stem tip. On Android the
-        // wire format anchors at baseline-leading natively — emit at
-        // (xStem, tipY) directly, without the center-anchor offset.
-        out.append(.glyph(
-            codepoint: flagCp,
-            x: xStem * ptToMMScale,
-            y: tipY * ptToMMScale,
-            size: glyphSize * ptToMMScale,
-            fontId: .smufl,
-        ))
+        if !isBeamed,
+           let flagCp = FlagGlyph.codepoint(duration: baseDur, stem: stem)
+        {
+            let tipY = stem == .up ? startY : endY
+            // Apple's StemRenderer draws the flag with `.topLeading` so the
+            // glyph's baseline anchor sits on the stem tip. On Android the
+            // wire format anchors at baseline-leading natively — emit at
+            // (xStem, tipY) directly, without the center-anchor offset.
+            out.append(.glyph(
+                codepoint: flagCp,
+                x: xStem * ptToMMScale,
+                y: tipY * ptToMMScale,
+                size: glyphSize * ptToMMScale,
+                fontId: .smufl,
+            ))
+        }
+        if stemARGB != nil { out.append(.setColor(argb: LayoutBridge.blackARGB)) }
     }
 
     /// Emit noteheads + accidentals + augmentation dots for a subset of a
-    /// chord's notes in the ambient paint color. Factored so the chord
-    /// encoder can run it once for the visible notes and again (wrapped in
-    /// `invisibleARGB`) for the per-note-invisible ones.
+    /// chord's notes. Factored so the chord encoder can run it once for the
+    /// visible notes (`honorColor: true`) and again, wrapped in
+    /// `invisibleARGB`, for the per-note-invisible ones (`honorColor:
+    /// false`, so the gray override wins over any author `<color>`).
+    ///
+    /// When `honorColor` is set, each note carrying an author color
+    /// (`Note.elementProperties.color`) has its notehead + accidental +
+    /// dots wrapped in a `setColor` / reset-to-black pair — matching the
+    /// Apple `ScoreLayerBuilder` per-note `headColor`. Uncolored notes
+    /// paint in the ambient color.
     static func emitNoteGlyphs(
         _ notes: [LayoutChordNote],
         baseDuration baseDur: NoteDuration,
@@ -125,9 +143,14 @@ extension LayoutBridge {
         mag: Double,
         measureOriginX mox: Double,
         measureOriginY moy: Double,
+        honorColor: Bool,
         into out: inout [DrawCommand],
     ) {
         for note in notes {
+            let argb = honorColor
+                ? note.color.flatMap(LayoutBridge.argb(from:))
+                : nil
+            if let argb { out.append(.setColor(argb: argb)) }
             emitCenterAnchoredGlyph(
                 codepoint: NoteheadGlyph.codepoint(
                     duration: baseDur, headType: note.headType,
@@ -137,23 +160,32 @@ extension LayoutBridge {
                 sizePt: glyphSize,
                 into: &out,
             )
-        }
-        emitAccidentals(
-            notes: notes,
-            measureOriginX: mox, measureOriginY: moy,
-            glyphSize: glyphSize, sp: ctx.sp, mag: mag,
-            into: &out,
-        )
-        guard dotCount > 0 else { return }
-        for note in notes {
-            emitAugmentationDots(
-                anchorX: mox + Double(note.origin.x),
-                anchorY: moy + Double(note.origin.y),
-                count: dotCount,
-                onStaffLine: note.step.isMultiple(of: 2),
-                sp: ctx.sp,
-                into: &out,
-            )
+            // Accidental: a single Bravura glyph center-anchored 1.2 sp left
+            // of the notehead (the offset scaled by `mag` so grace-note
+            // accidentals stay glued to their reduced head). doubleSharp /
+            // doubleFlat are included even though they never come from a key
+            // signature. Glyph table is shared via `AccidentalGlyph` so iOS
+            // and Android can't disagree.
+            if let accidental = note.accidental {
+                emitCenterAnchoredGlyph(
+                    codepoint: AccidentalGlyph.codepoint(accidental),
+                    cxPt: mox + Double(note.origin.x) - ctx.sp * 1.2 * mag,
+                    cyPt: moy + Double(note.origin.y),
+                    sizePt: glyphSize,
+                    into: &out,
+                )
+            }
+            if dotCount > 0 {
+                emitAugmentationDots(
+                    anchorX: mox + Double(note.origin.x),
+                    anchorY: moy + Double(note.origin.y),
+                    count: dotCount,
+                    onStaffLine: note.step.isMultiple(of: 2),
+                    sp: ctx.sp,
+                    into: &out,
+                )
+            }
+            if argb != nil { out.append(.setColor(argb: LayoutBridge.blackARGB)) }
         }
     }
 
@@ -182,42 +214,38 @@ extension LayoutBridge {
         }
     }
 
-    /// Emit the per-note accidental glyphs for a chord. Mirrors Apple's
-    /// `AccidentalRenderer` / `ScoreLayerBuilder.drawAccidental`: a single
-    /// Bravura glyph center-anchored `1.2 sp` left of the notehead, for all
-    /// five accidental kinds (incl. doubleSharp / doubleFlat, which never
-    /// originate from a key signature and so were otherwise missing on
-    /// Android — audio is unaffected, it derives pitch independently of the
-    /// layout). The offset is scaled by `mag` so grace-note accidentals
-    /// stay glued to their reduced notehead.
-    static func emitAccidentals(
+    /// Stroke the acciaccatura stem-slash for a grace chord. Endpoints come
+    /// from the shared `GraceSlashGeometry` (Bravura anchor table) so iOS
+    /// and Android draw the identical slash. All metrics are mag-scaled so
+    /// the slash matches the reduced grace stem.
+    static func emitGraceSlash(
         notes: [LayoutChordNote],
+        stem: StemDirection,
+        mag: Double,
         measureOriginX mox: Double, measureOriginY moy: Double,
-        glyphSize: Double, sp: Double, mag: Double,
+        metrics ctx: MetricsContext,
         into out: inout [DrawCommand],
     ) {
-        for note in notes {
-            guard let accidental = note.accidental else { continue }
-            emitCenterAnchoredGlyph(
-                codepoint: accidentalCodepoint(accidental),
-                cxPt: mox + Double(note.origin.x) - sp * 1.2 * mag,
-                cyPt: moy + Double(note.origin.y),
-                sizePt: glyphSize,
-                into: &out,
-            )
+        let origins = notes.map { CGPoint(
+            x: CGFloat(mox + Double($0.origin.x)),
+            y: CGFloat(moy + Double($0.origin.y)),
+        )
         }
-    }
-
-    /// SMuFL codepoint for a note accidental. Mirrors the Apple
-    /// `AccidentalRenderer` glyph table so both platforms agree on which
-    /// Bravura glyph each accidental kind maps to.
-    static func accidentalCodepoint(_ accidental: Accidental) -> UInt32 {
-        switch accidental {
-        case .sharp: SMuFLCodepoint.accidentalSharp
-        case .flat: SMuFLCodepoint.accidentalFlat
-        case .natural: SMuFLCodepoint.accidentalNatural
-        case .doubleSharp: SMuFLCodepoint.accidentalDoubleSharp
-        case .doubleFlat: SMuFLCodepoint.accidentalDoubleFlat
-        }
+        guard let slash = GraceSlashGeometry.slash(
+            noteOrigins: origins,
+            stem: stem,
+            sp: CGFloat(ctx.sp * mag),
+            defaultStemLength: CGFloat(ctx.defaultStemLength * mag),
+            stemThickness: CGFloat(ctx.stemThickness * mag),
+        ) else { return }
+        out.append(.moveTo(
+            x: Double(slash.from.x) * ptToMMScale,
+            y: Double(slash.from.y) * ptToMMScale,
+        ))
+        out.append(.lineTo(
+            x: Double(slash.to.x) * ptToMMScale,
+            y: Double(slash.to.y) * ptToMMScale,
+        ))
+        out.append(.stroke(width: ctx.stemThickness * mag * ptToMMScale))
     }
 }

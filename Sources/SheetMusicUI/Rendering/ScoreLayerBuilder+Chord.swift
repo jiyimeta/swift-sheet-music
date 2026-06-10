@@ -218,14 +218,10 @@ extension ScoreLayerBuilder {
         metrics: StaffMetrics, height: CGFloat,
         into parent: CALayer,
     ) -> CAShapeLayer? {
-        let glyph: Character
-        switch accidental {
-        case .sharp: glyph = SMuFLGlyph.accidentalSharp
-        case .flat: glyph = SMuFLGlyph.accidentalFlat
-        case .natural: glyph = SMuFLGlyph.accidentalNatural
-        case .doubleSharp: glyph = SMuFLGlyph.accidentalDoubleSharp
-        case .doubleFlat: glyph = SMuFLGlyph.accidentalDoubleFlat
-        }
+        // Shared glyph table (see `AccidentalGlyph`) so this CALayer path,
+        // the SwiftUI `AccidentalRenderer`, and the Android bridge agree.
+        // swiftlint:disable:next force_unwrapping
+        let glyph = Character(UnicodeScalar(AccidentalGlyph.codepoint(accidental))!)
         guard let layer = glyphLayer(
             glyph,
             at: CGPoint(
@@ -250,15 +246,17 @@ extension ScoreLayerBuilder {
         into parent: CALayer,
     ) {
         guard count > 0 else { return }
-        let radius = metrics.sp * 0.22
-        let firstOffset = metrics.sp * 1.15
-        let spacing = metrics.sp * 0.6
-        let y = onStaffLine ? origin.y - metrics.sp / 2 : origin.y
-        for i in 0 ..< count {
-            let x = origin.x + firstOffset + CGFloat(i) * spacing
+        // Dot radius + center positions come from the shared `DotGeometry`
+        // (also used by the Android bridge) so the two stay in lockstep.
+        let radius = metrics.sp * DotGeometry.radiusSp
+        let centers = DotGeometry.centers(
+            after: origin, count: count,
+            onStaffLine: onStaffLine, sp: metrics.sp,
+        )
+        for center in centers {
             let rect = CGRect(
-                x: x - radius,
-                y: y - radius,
+                x: center.x - radius,
+                y: center.y - radius,
                 width: radius * 2,
                 height: radius * 2,
             )
@@ -380,8 +378,11 @@ extension ScoreLayerBuilder {
         // For Bravura's noteheadBlack at `.center`-anchored (glyph
         // width 1.18 sp, so bbox right = 0.59 sp from notehead
         // center), the stem's far edge sits at ±0.59 sp from center,
-        // giving a stem center offset of 0.59 sp - stemWidth/2.
-        let stemAttachDx = metrics.sp * 0.59 - metrics.stemThickness / 2
+        // giving a stem center offset of 0.59 sp - stemWidth/2. The 0.59 sp
+        // half-width lives in the shared `StemGeometry.attachDx` (also used
+        // by the Android bridge) so both renderers track one constant.
+        let stemAttachDx = StemGeometry.attachDx(sp: metrics.sp)
+            - metrics.stemThickness / 2
         let xMin = xs.min() ?? 0
         let xMax = xs.max() ?? 0
         let yTop = ys.min() ?? 0
