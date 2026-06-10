@@ -95,10 +95,20 @@ extension LayoutBridge {
                     : layout.systems[range.lowerBound - 1].origin.y
                     + layout.systems[range.lowerBound - 1].size.height
                 let sub = layout.subdocument(systems: range, yOffset: -pageTop)
+                // `subdocument` drops the title frame; only the first page (at
+                // y = 0) carries it, so re-attach it there. Without this the
+                // title block never renders in `.page` mode — the systems were
+                // already shifted down for it, leaving a blank gap.
+                let pageDoc = range.lowerBound == 0
+                    ? LayoutDocument(
+                        size: sub.size, systems: sub.systems,
+                        metrics: sub.metrics, titleFrame: layout.titleFrame,
+                    )
+                    : sub
                 return EncodablePage(
                     widthMM: pageWidthMM,
                     heightMM: pageHeightMM,
-                    commands: buildCommands(layout: sub),
+                    commands: buildCommands(layout: pageDoc),
                 )
             }
             return (layout, DrawProgramCodec.encode(pages: pages))

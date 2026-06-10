@@ -76,6 +76,14 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
         let staffLineThickness = Double(metrics.staffLineThickness)
         let staffHeight = Double(metrics.staffHeight)
 
+        // ── 0. Title block ──────────────────────────────────────────────────
+        // The leading `<VBox>` (title / subtitle / composer / lyricist) sits at
+        // y = 0 … `titleFrame.height`; the systems below were already shifted
+        // down by that height. Mirrors the Apple `TitleFrameView`.
+        if let titleFrame = layout.titleFrame {
+            appendTitleFrame(titleFrame, into: &out)
+        }
+
         for system in layout.systems {
             let sysOriginX = Double(system.origin.x)
             let sysOriginY = Double(system.origin.y)
