@@ -35,4 +35,20 @@ sealed class DrawCommand {
         val cx2: Double, val cy2: Double,
         val x: Double, val y: Double,
     ) : DrawCommand()
+    /**
+     * A SMuFL glyph stretched non-uniformly to fit a vertical span — the
+     * system brace at a system's left edge. The renderer measures the glyph
+     * at [fontSize], scales Y so its bounding box spans [[topY], [bottomY]],
+     * scales X by [xScale], and positions the box's right edge at
+     * [rightEdgeX]. A plain [Glyph] (uniform size) can't express this.
+     */
+    data class StretchedGlyph(
+        val codepoint: UInt,
+        val rightEdgeX: Double,
+        val topY: Double,
+        val bottomY: Double,
+        val fontSize: Double,
+        val xScale: Double,
+        val fontId: FontID,
+    ) : DrawCommand()
 }

@@ -74,6 +74,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
             stemThickness: Double(metrics.stemThickness),
         )
         let staffLineThickness = Double(metrics.staffLineThickness)
+        let staffHeight = Double(metrics.staffHeight)
 
         for system in layout.systems {
             let sysOriginX = Double(system.origin.x)
@@ -117,6 +118,22 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                         into: &out,
                     )
                 }
+
+                // Markers (measure numbers, coda / segno, …) and jumps
+                // (D.S. / D.C. / Fine, …) live in their own per-measure
+                // arrays, not `elements`. The Apple renderer walks them
+                // separately (see `ScoreCanvasDrawing.drawSystem`); mirror
+                // that so they don't silently vanish on Android.
+                for element in measure.markers + measure.jumps {
+                    encodeElement(
+                        element,
+                        measureOriginX: mox,
+                        measureOriginY: moy,
+                        metrics: context,
+                        showsInvisible: system.showsInvisibleElements,
+                        into: &out,
+                    )
+                }
             }
 
             // ── 3. System spanners ──────────────────────────────────────────
@@ -135,6 +152,19 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                     into: &out,
                 )
             }
+
+            // ── 4. System start: barline + brackets / braces ────────────────
+            // The vertical bar joining all staves at the left edge plus each
+            // `BracketItem`'s brace / bracket — see `LayoutBridge+Brackets`.
+            appendSystemStart(
+                for: system,
+                sysOriginX: sysOriginX,
+                sysOriginY: sysOriginY,
+                sp: context.sp,
+                staffLineThickness: staffLineThickness,
+                staffHeight: staffHeight,
+                into: &out,
+            )
 
             // ── 4. Invisible elements (MuseScore "Show Invisible") ──────────
             appendInvisibleElements(

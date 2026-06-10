@@ -173,6 +173,36 @@ private fun DrawScope.drawPage(
                     )
                 }
             }
+            is DrawCommand.StretchedGlyph -> {
+                glyphPaint.typeface = if (cmd.fontId == FontID.SMUFL) smufl else text
+                glyphPaint.textSize = cmd.fontSize.toFloat() * pxPerMM
+                glyphPaint.color = currentArgb
+                val s = String(intArrayOf(cmd.codepoint.toInt()), 0, 1)
+                val bounds = android.graphics.Rect()
+                glyphPaint.getTextBounds(s, 0, s.length, bounds)
+                if (bounds.width() > 0 && bounds.height() > 0) {
+                    val rightEdgePx = cmd.rightEdgeX.toFloat() * pxPerMM
+                    val topPx = cmd.topY.toFloat() * pxPerMM
+                    val bottomPx = cmd.bottomY.toFloat() * pxPerMM
+                    val xScale = cmd.xScale.toFloat()
+                    val scaleY = (bottomPx - topPx) / bounds.height()
+                    drawIntoCanvas { canvas ->
+                        val native = canvas.nativeCanvas
+                        val save = native.save()
+                        // Place the scaled glyph bbox: right edge at rightEdgePx,
+                        // top at topPx — mirrors iOS smuflGlyphPathStretched.
+                        // translate-then-scale maps a glyph point p to
+                        // (tx + sx*px, ty + sy*py).
+                        native.translate(
+                            rightEdgePx - xScale * bounds.right,
+                            topPx - scaleY * bounds.top,
+                        )
+                        native.scale(xScale, scaleY)
+                        native.drawText(s, 0f, 0f, glyphPaint)
+                        native.restoreToCount(save)
+                    }
+                }
+            }
             is DrawCommand.SetColor -> {
                 currentArgb = cmd.argb.toInt()
             }
