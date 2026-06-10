@@ -239,19 +239,16 @@ To cut a release locally without CI:
 `SheetMusicZip` target (raw DEFLATE through system `libz`). No
 additional setup is required beyond the Phase 1 toolchain.
 
-### Engine extensions (Phase 5, sub-project A)
+### Android playback engine
 
-`AndroidPlaybackEngine` exposes `setLoop(from:to:)`,
-`setLoop(from:throughEndOf:)`, `clearLoop()`, `setRate(_:)`, and
-`setStaffProgram(staffIndex:program:)` — parity with
-`SheetMusicAudioApple.PlaybackEngine`. The Compose demo at
-`Examples/Android/` exposes a rate slider, a GM program picker, and a
-fixed-range loop toggle (measures 2–3) with a multi-system amber
-highlight overlay. Tap-to-pick-A/B spatial selection is a Phase 5.1
-follow-up. Loop wrap is host-driven inside the engine's poll loop
-(FluidSynth's `fluid_player_set_loop` loops the entire SMF only).
-Rate uses `fluid_player_set_tempo` in `FLUID_PLAYER_TEMPO_INTERNAL`
-mode. Program change reuses the existing sfid via `programSelect`.
+`AndroidPlaybackEngine` (Kotlin, `Android/SheetMusicAudioAndroid/`)
+mirrors `SheetMusicAudioApple.PlaybackEngine`: looping by measure range
+or through end-of-score (+ clear), rate, per-staff program change, and
+live master tuning via FluidSynth RPN (used for A4 calibration). Loop
+wrap is host-driven inside the engine's poll loop (FluidSynth's
+`fluid_player_set_loop` loops the entire SMF only). Rate uses
+`fluid_player_set_tempo` in `FLUID_PLAYER_TEMPO_INTERNAL` mode; program
+change reuses the existing sfid via `programSelect`.
 
 GMInstrument is single-sourced from Swift `SheetMusicAudioCore`;
 Kotlin loads the 128-patch table via `nativeGMInstrumentList()` JNI on
@@ -259,19 +256,22 @@ first access (see `Sources/SheetMusicAndroidJNI/Audio/GMInstrumentCodec.swift`).
 The multi-system loop highlight is plumbed through
 `LayoutDocument.loopHighlightRects(fromMeasureIndex:toMeasureExclusive:)`
 + `nativeLoopHighlightRects` JNI + `LoopHighlightOverlay` composable.
-`PlaybackTimeline.frame(forCursor:)` now falls back to a tick-based
+`PlaybackTimeline.frame(forCursor:)` falls back to a tick-based
 lookup for `.beat` cursors whose dedicated frame was dropped by the
-dedup against an item at the same tick (otherwise `setLoop` with beat
-boundaries would silently no-op when an item sits on the downbeat).
+dedup against an item at the same tick (otherwise a loop boundary on a
+downbeat would silently no-op).
 
 ### Android example app
 
 An end-to-end Kotlin Compose demo lives in `Examples/Android/`. It
 parses an `.mscz` from the app's `assets/`, computes layout via the
-JNI bridge (`Sources/SheetMusicAndroidJNI`), and renders pages to a
-Compose `Canvas`. Audio is intentionally not wired (the Play button
-is disabled) — wiring `SheetMusicAudioCore` into the JNI bridge is a
-Phase 4 follow-up.
+JNI bridge (`Sources/SheetMusicAndroidJNI`), renders pages to a
+Compose `Canvas`, and plays back through `sheet-music-audio-android`
+(FluidSynth + Oboe) with mixer and audio-file export — see
+`Examples/Android/app/src/main/java/com/example/sheetmusic/audio/`
+(`EnginePlayer`, `MixerPanel`, `PlaybackService`, `export/`). Audible
+playback requires a General MIDI SoundFont staged into `assets/`
+(quickstart below); without it the Play button stays disabled.
 
 Quickstart (from repo root):
 
