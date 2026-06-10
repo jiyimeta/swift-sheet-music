@@ -565,6 +565,42 @@ class AndroidPlaybackEngine internal constructor(
     }
 
     /**
+     * Loop measures `[fromMeasure, toMeasure]` inclusive. Resolves each measure head to a tick via
+     * the timeline. The loop end is the onset tick of measure `(toMeasure + 1)`; if that beat does
+     * not resolve (i.e. `toMeasure` is the last measure) the end falls back to [totalTicks] so the
+     * final measure loops through its full duration. No-op when [state] is [PlaybackState.EXPORTING],
+     * when no player is prepared, when the start beat doesn't resolve, or when the resolved range is
+     * empty. Mirrors Apple `LivePlaybackController` loop-bounds resolution.
+     */
+    fun setLoopMeasures(fromMeasure: Int, toMeasure: Int) {
+        if (_state.value == PlaybackState.EXPORTING) return
+        if (playerDriver == null) return
+        val fromBytes = jniBridge.frameForCursor(
+            scoreHandle,
+            ScoreCursorCodec.encode(ScoreCursor.Beat(fromMeasure, 0)),
+        )
+        val fromFrame = if (fromBytes.isEmpty()) null else FrameCodec.decode(fromBytes)
+        fromFrame ?: return
+        val endBytes = jniBridge.frameForCursor(
+            scoreHandle,
+            ScoreCursorCodec.encode(ScoreCursor.Beat(toMeasure + 1, 0)),
+        )
+        val endTick = if (endBytes.isEmpty()) totalTicks else FrameCodec.decode(endBytes).tick
+        if (fromFrame.tick >= endTick) return
+        _loopRange.value = LoopRange(startTick = fromFrame.tick, endTick = endTick)
+    }
+
+    /**
+     * Loop the entire prepared score `[0, totalTicks)`. No-op when [state] is
+     * [PlaybackState.EXPORTING], when no player is prepared, or when the timeline is empty.
+     */
+    fun setLoopFullScore() {
+        if (_state.value == PlaybackState.EXPORTING) return
+        if (playerDriver == null || totalTicks <= 0) return
+        _loopRange.value = LoopRange(startTick = 0, endTick = totalTicks)
+    }
+
+    /**
      * Disable looping. The next poll cycle stops snapping the playhead back
      * to startTick, so playback continues past the previous loop end.
      */
