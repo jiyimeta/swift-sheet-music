@@ -125,18 +125,11 @@ enum SMuFLGlyph {
 
     /// Pick the brace SMuFL codepoint and the X-magnification factor
     /// for a given staff span, matching MuseScore's
-    /// `Bracket::computeMagx`. Returns `(codepoint, magx)`.
+    /// `Bracket::computeMagx`. Returns `(codepoint, magx)`. Delegates to
+    /// the cross-platform `BraceMetrics.variant` so the Apple renderer and
+    /// the Android draw-command bridge share one source of truth.
     static func braceVariant(staffCount: Int) -> (UInt16, CGFloat) {
-        let v = max(staffCount, 1)
-        let magx: CGFloat = v == 1
-            ? 1
-            : CGFloat(v) + CGFloat(v - 1) * 1.625
-        switch v {
-        case 1: return (UInt16(SMuFLCodepoint.braceSmall), magx)
-        case 2: return (UInt16(SMuFLCodepoint.brace), magx)
-        case 3: return (UInt16(SMuFLCodepoint.braceLarge), magx)
-        default: return (UInt16(SMuFLCodepoint.braceLarger), magx)
-        }
+        BraceMetrics.variant(staffCount: staffCount)
     }
 
     // MARK: - Keyboard pedal

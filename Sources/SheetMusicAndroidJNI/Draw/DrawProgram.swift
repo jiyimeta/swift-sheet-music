@@ -5,11 +5,11 @@ import Wirelet
 /// boundary. Little-endian throughout. Both the Swift encoder and the Kotlin
 /// decoder must agree on the magic + version; mismatches are fail-fast.
 ///
-/// ### Wire layout (v4)
+/// ### Wire layout (v5)
 ///
 /// ```text
 /// u32 magic       = 0x534D4450 ("SMDP")
-/// u32 version     = 4
+/// u32 version     = 5
 /// i32 pageCount
 /// [page] × pageCount:
 ///     f64 widthMM
@@ -27,9 +27,15 @@ import Wirelet
 /// string length for the macro's declaration-order discriminator (0…7)
 /// and `Int32` length prefix. Older decoders reject v4 with
 /// `unsupportedVersion`; v3 readers and v4 readers are not wire-compatible.
+///
+/// v5 appended `.stretchedGlyph` (discriminator 8) for the system braces
+/// at the left edge of each system — a non-uniformly stretched SMuFL glyph
+/// the uniform `glyph` command can't express. Appending at the tail keeps
+/// the existing discriminators stable, so v4 streams decode unchanged on a
+/// v5 reader; the version field still gates a v4 reader against a v5 stream.
 public enum DrawProgram {
     public static let magic: UInt32 = 0x534D_4450 // "SMDP"
-    public static let version: UInt32 = 4
+    public static let version: UInt32 = 5
 
     @WireFormatEnum
     public enum FontID: UInt8, Sendable, CaseIterable, Equatable {
@@ -55,8 +61,9 @@ public struct EncodablePage: Sendable, Equatable {
 }
 
 /// One painter command. The encoded discriminator is the case's
-/// declaration order (`moveTo` = 0 … `cubicTo` = 7). Reorder with care:
-/// changes here are wire-breaking across the Kotlin boundary.
+/// declaration order (`moveTo` = 0 … `stretchedGlyph` = 8). Reorder with
+/// care: changes here are wire-breaking across the Kotlin boundary. Only
+/// ever *append* new cases at the tail so existing discriminators hold.
 @WireFormatChoice
 public enum DrawCommand: Sendable, Equatable {
     case moveTo(x: Double, y: Double)
@@ -87,6 +94,22 @@ public enum DrawCommand: Sendable, Equatable {
         cx1: Double, cy1: Double,
         cx2: Double, cy2: Double,
         x: Double, y: Double,
+    )
+    /// A SMuFL glyph stretched non-uniformly to fit a vertical span — the
+    /// system brace at a system's left edge. The renderer measures the
+    /// glyph's natural bounding box at `fontSize`, scales Y so the box
+    /// spans `[topY, bottomY]`, scales X by `xScale` (MuseScore's brace
+    /// `magx`), and positions the box's right edge at `rightEdgeX`. This
+    /// mirrors `StaffRenderer.smuflGlyphPathStretched`; the uniform
+    /// `glyph` command can't express the non-uniform stretch a brace needs.
+    case stretchedGlyph(
+        codepoint: UInt32,
+        rightEdgeX: Double,
+        topY: Double,
+        bottomY: Double,
+        fontSize: Double,
+        xScale: Double,
+        fontId: DrawProgram.FontID,
     )
 }
 

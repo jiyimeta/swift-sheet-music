@@ -76,6 +76,41 @@ struct DrawProgramRoundTripTests {
     }
 
     @Test
+    func stretchedGlyphRoundTrips() throws {
+        let page = EncodablePage(
+            widthMM: 210, heightMM: 297,
+            commands: [
+                .stretchedGlyph(
+                    codepoint: 0xE000, // brace
+                    rightEdgeX: 12.5,
+                    topY: 20,
+                    bottomY: 60,
+                    fontSize: 7,
+                    xScale: 3.625,
+                    fontId: .smufl,
+                ),
+            ],
+        )
+        let encoded = DrawProgramCodec.encode(pages: [page])
+        let decoded = try DrawProgramCodec.decode(encoded)
+
+        #expect(decoded.count == 1)
+        if case let .stretchedGlyph(
+            codepoint, rightEdgeX, topY, bottomY, fontSize, xScale, fontId,
+        ) = decoded[0].commands[0] {
+            #expect(codepoint == 0xE000)
+            #expect(rightEdgeX == 12.5)
+            #expect(topY == 20)
+            #expect(bottomY == 60)
+            #expect(fontSize == 7)
+            #expect(xScale == 3.625)
+            #expect(fontId == .smufl)
+        } else {
+            Issue.record("expected stretchedGlyph opcode at index 0")
+        }
+    }
+
+    @Test
     func corruptMagicRaisesBadMagic() throws {
         // Encode a draw program with a wrong magic value to verify that
         // DrawProgramCodec.decode raises .badMagic. We build the wire struct
