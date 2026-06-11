@@ -11,14 +11,20 @@ import SheetMusicLayout
 /// `Data` when the score handle is unknown, the layout document is not
 /// cached, or the cursor bytes fail to decode / resolve.
 public func nativeCursorFrame(scoreHandle: Int64, cursorBytes: Data) -> Data {
-    guard scoreTable.value(for: scoreHandle) != nil,
-          let document = LayoutDocumentCache.value(for: scoreHandle)
+    guard let score = scoreTable.value(for: scoreHandle),
+          let entry = LayoutDocumentCache.entry(for: scoreHandle)
     else { return Data() }
     guard !cursorBytes.isEmpty,
           let cursor = try? ScoreCursorCodec.decode(cursorBytes)
     else { return Data() }
-    guard let score = scoreTable.value(for: scoreHandle) else { return Data() }
-    guard let rect = document.cursorFrame(for: cursor, in: score) else {
+    // The engine emits cursors keyed by full-score staff addresses, but the cached document is laid out
+    // from the filtered score. Translate the cursor into the filtered layout's coordinate space — visible
+    // staves re-stamped to their filtered address, a cursor on a hidden staff to a `.beat` fallback —
+    // before resolving; otherwise a cursor on or after a hidden staff fails the lookup and the playback
+    // cursor flickers in and out. Resolve against the *filtered* score so a `.beat` interpolates X against
+    // the surviving visible columns.
+    let translated = score.translateCursorForHiddenStaves(cursor, hiddenStaves: entry.hiddenStaves) ?? cursor
+    guard let rect = entry.document.cursorFrame(for: translated, in: entry.filteredScore) else {
         return Data()
     }
     // SheetMusicLayout works in typographic points (pt); LayoutBridge

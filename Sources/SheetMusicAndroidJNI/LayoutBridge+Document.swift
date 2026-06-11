@@ -34,16 +34,20 @@ extension LayoutBridge {
     ///   - pageHeightMM: Page height in millimetres (only consumed in `.page`
     ///     mode; a viewport hint otherwise).
     ///   - optionsWire: Decoded display options from the Android Reader.
-    /// - Returns: Tuple of the `LayoutDocument` and the encoded draw-program
-    ///   bytes. In `.page` mode the returned document is the full continuous
-    ///   layout (so cursor-frame lookups resolve against absolute document
-    ///   coordinates); only the encoded pages are sliced.
+    /// - Returns: Tuple of the `LayoutDocument`, the encoded draw-program
+    ///   bytes, and the *filtered* score the layout was built from (clef
+    ///   overrides applied, hidden staves dropped) — its addresses match the
+    ///   document's keys, which the cursor bridge needs to resolve a
+    ///   translated `.beat` cursor against the surviving visible columns. In
+    ///   `.page` mode the returned document is the full continuous layout (so
+    ///   cursor-frame lookups resolve against absolute document coordinates);
+    ///   only the encoded pages are sliced.
     public static func computeWithDocument(
         score: Score,
         pageWidthMM: Double,
         pageHeightMM: Double,
         options optionsWire: LayoutOptionsWire,
-    ) -> (document: LayoutDocument, encoded: Data) {
+    ) -> (document: LayoutDocument, encoded: Data, filteredScore: Score) {
         let mmToPt = 72.0 / 25.4
         let ptToMM = 25.4 / 72.0
         let pageWidthPt = CGFloat(pageWidthMM * mmToPt)
@@ -66,7 +70,7 @@ extension LayoutBridge {
                 heightMM: Double(layout.size.height) * ptToMM,
                 commands: buildCommands(layout: layout),
             )
-            return (layout, DrawProgramCodec.encode(pages: [page]))
+            return (layout, DrawProgramCodec.encode(pages: [page]), prepared)
 
         case .horizontal:
             let opts = scoreViewOptions(from: optionsWire, wrap: false, title: false)
@@ -77,7 +81,7 @@ extension LayoutBridge {
                 heightMM: Double(layout.size.height) * ptToMM,
                 commands: buildCommands(layout: layout),
             )
-            return (layout, DrawProgramCodec.encode(pages: [page]))
+            return (layout, DrawProgramCodec.encode(pages: [page]), prepared)
 
         case .page:
             let opts = scoreViewOptions(from: optionsWire, wrap: true, title: true)
@@ -111,7 +115,7 @@ extension LayoutBridge {
                     commands: buildCommands(layout: pageDoc),
                 )
             }
-            return (layout, DrawProgramCodec.encode(pages: pages))
+            return (layout, DrawProgramCodec.encode(pages: pages), prepared)
         }
     }
 

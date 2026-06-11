@@ -119,7 +119,12 @@ public func nativeComputeLayout(
         pageHeightMM: pageHeightMM,
         options: optionsWire,
     )
-    LayoutDocumentCache.store(handle: scoreHandle, document: result.document)
+    LayoutDocumentCache.store(
+        handle: scoreHandle,
+        document: result.document,
+        filteredScore: result.filteredScore,
+        hiddenStaves: optionsWire.hiddenStaffAddresses,
+    )
     return result.encoded
 }
 
