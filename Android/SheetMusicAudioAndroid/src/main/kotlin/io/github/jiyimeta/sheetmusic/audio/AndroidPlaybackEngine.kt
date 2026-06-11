@@ -324,6 +324,15 @@ class AndroidPlaybackEngine internal constructor(
             engine.setupStaves(staves, soundfontResolver, context)
             if (masterTuningCents != 0.0) engine.setMasterTuning(masterTuningCents)
             this@AndroidPlaybackEngine.fluidSynthEngine = engine
+            // Seed each staff's channel volume into the synth from the score's CC 7. The rendered SMF
+            // no longer carries CC 7 on staff channels (stripped in the shared MidiSynthPostProcess so
+            // the live mixer is the sole authority), so the synth must be told the score's volume here;
+            // otherwise every staff would play at FluidSynth's default. Because no tick-0 CC 7 fires
+            // when the player starts, a volume the user sets *before* the first play now survives —
+            // matching iOS, where applyMixerState owns CC 7 and the SMF's is stripped.
+            staves.forEachIndexed { i, p ->
+                engine.setChannelVolume(i, p.channelVolume.toInt().coerceIn(0, 127) / 127f)
+            }
 
             // Dedicated metronome synth on a separate fluid_synth_t. The
             // click sound comes from the provider: .clickSamples builds an

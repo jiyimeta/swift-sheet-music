@@ -1018,46 +1018,9 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     nonisolated static func postProcessForMIDISynth(
         midi: inout MidiFile, mixerManagedChannels: Set<Int>,
     ) {
-        for trackIdx in midi.tracks.indices {
-            var out: [TimedMidiEvent] = []
-            out.reserveCapacity(midi.tracks[trackIdx].events.count + 8)
-            for event in midi.tracks[trackIdx].events {
-                if case let .controlChange(_, controller, _) = event.event,
-                   controller == 121
-                {
-                    continue
-                }
-                if case let .controlChange(channel, controller, _)
-                    = event.event, controller == 7,
-                    mixerManagedChannels.contains(channel)
-                {
-                    continue
-                }
-                // Drop the staff's baked-in initial program on its
-                // primary (mixer-owned) channel so a backward seek can't
-                // chase it and clobber a mixer program override.
-                // `reapplyMixerPrograms()` re-asserts it after every
-                // start. Mid-piece program changes (`tick > 0`) survive.
-                if case let .programChange(channel, _) = event.event,
-                   event.tick == 0,
-                   mixerManagedChannels.contains(channel)
-                {
-                    continue
-                }
-                out.append(event)
-                if case let .controlChange(channel, controller, _)
-                    = event.event, controller == 6
-                {
-                    out.append(TimedMidiEvent(
-                        tick: event.tick,
-                        event: .controlChange(
-                            channel: channel, controller: 38, value: 0,
-                        ),
-                    ))
-                }
-            }
-            midi.tracks[trackIdx] = MidiTrack(events: out)
-        }
+        // Lifted into shared SheetMusicMIDI so the Android engine gets identical behavior — the
+        // Android FluidSynth path was missing this and re-fired the SMF's CC 7 on first play.
+        MidiSynthPostProcess.apply(midi: &midi, mixerManagedChannels: mixerManagedChannels)
     }
 
     private func buildSequencer(for score: Score) throws {

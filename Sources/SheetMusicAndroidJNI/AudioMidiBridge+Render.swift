@@ -40,6 +40,13 @@ extension AudioMidiBridge {
     static func renderMidi(score: Score) throws -> Data {
         var midi = try MidiRenderer.render(score: score)
         relabelChannelsToTrackIndex(&midi)
+        // Strip the baked-in CC 7 / tick-0 program on each staff's (relabeled) channel so the live
+        // FluidSynth mixer is the sole authority on per-staff volume — otherwise the SMF's tick-0
+        // CC 7 re-fires on the first play and clobbers a volume the user set before playing. The
+        // engine seeds the score's channel volume into the synth at prepare instead. Mirrors the
+        // iOS engine (shared `MidiSynthPostProcess`). One track per staff → channel == trackIdx.
+        let mixerManagedChannels = Set(midi.tracks.indices.map { $0 & 0x0F })
+        MidiSynthPostProcess.apply(midi: &midi, mixerManagedChannels: mixerManagedChannels)
         return try MidiWriter.write(midi)
     }
 }
