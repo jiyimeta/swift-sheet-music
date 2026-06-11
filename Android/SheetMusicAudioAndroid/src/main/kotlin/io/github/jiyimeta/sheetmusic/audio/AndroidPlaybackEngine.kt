@@ -373,12 +373,19 @@ class AndroidPlaybackEngine internal constructor(
 
             this@AndroidPlaybackEngine.scoreHandle = scoreHandle
             _mixerChannels.value = staves.mapIndexed { i, p ->
+                // Seed the slider from the score's authored channel volume (CC7 → 0..1),
+                // matching iOS where the mixer opens at the part's notated volume rather
+                // than a flat 100%. The SMF stream already carries these CC7 values, so
+                // this only aligns the displayed/reset value with what actually plays.
+                val initialVolume = p.channelVolume.toInt().coerceIn(0, 127) / 127f
                 MixerChannel(
                     staffIndex = i,
                     // Shared Swift derivation (track name → instrument long name →
                     // "Staff N"), matching the iOS mixer. Falls back to "Staff N"
                     // if an older bridge sent an empty name.
                     displayName = p.displayName.ifEmpty { "Staff ${i + 1}" },
+                    volume = initialVolume,
+                    defaultVolume = initialVolume,
                     program = if (p.isDrums) null else p.program.toInt(),
                 )
             }
