@@ -221,7 +221,7 @@ let packageDependencies: [Package.Dependency] = [
     .package(url: "https://github.com/swiftlang/swift-subprocess.git", exact: "0.4.0"),
     .package(
         url: "https://github.com/jiyimeta/swift-wirelet.git",
-        exact: "0.3.1",
+        exact: "0.4.0",
     ),
 ]
 
