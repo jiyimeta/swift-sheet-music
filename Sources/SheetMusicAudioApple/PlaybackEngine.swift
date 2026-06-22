@@ -859,6 +859,28 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         return timeline.frame(atTick: tick)?.timeSeconds ?? 0
     }
 
+    /// Like `currentTimeSeconds` but interpolated *within* the current
+    /// timeline frame rather than snapped to the frame's onset, so a
+    /// caller driving a smooth scroll (a moving pitch trail, a
+    /// high-resolution playhead) gets a continuous value instead of one
+    /// that steps once per note/beat. Same tempo-map fidelity and A-B
+    /// loop fold as `currentTimeSeconds`; the only difference is the
+    /// unrounded tick fed to `PlaybackTimeline.seconds(atTick:)`.
+    public var currentTimeSecondsContinuous: TimeInterval {
+        guard let timeline, let sequencer else { return 0 }
+        let rawTick = sequencer.currentPositionInBeats * Double(timeline.division)
+        let tick: Double
+        if let loop = loopRange, rawTick >= Double(loop.endTick) {
+            let len = Double(loop.endTick - loop.startTick)
+            tick = Double(loop.startTick)
+                + (rawTick - Double(loop.startTick))
+                .truncatingRemainder(dividingBy: len)
+        } else {
+            tick = rawTick
+        }
+        return timeline.seconds(atTick: tick)
+    }
+
     /// Total playable duration in seconds for the loaded score.
     /// Zero before `prepare(score:)` runs.
     public var totalTimeSeconds: TimeInterval {

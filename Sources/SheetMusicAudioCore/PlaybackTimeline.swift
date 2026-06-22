@@ -110,6 +110,54 @@ public struct PlaybackTimeline: Sendable, Equatable {
         return frames[best]
     }
 
+    /// Continuous seconds at an arbitrary (possibly fractional) `tick`,
+    /// linearly interpolated between the two bracketing frames. Where
+    /// `frame(atTick:)` snaps to a frame's onset — quantizing to
+    /// note/beat granularity — this returns a smooth value so a caller
+    /// can animate a playhead / scroll continuously instead of stepping
+    /// once per note.
+    ///
+    /// The interpolation is *exact* wherever tempo is constant between
+    /// two consecutive frames, which is the normal case: tempo events
+    /// land on beat ticks and every beat tick is itself a frame, so a
+    /// `<Tempo>` change never falls strictly inside a frame gap. (A
+    /// tempo change placed off every beat and note onset would make that
+    /// one gap linear-approximate rather than exact.)
+    ///
+    /// Clamps below the first frame to its time, and extrapolates past
+    /// the last frame across the final `[lastTick, totalTicks]` →
+    /// `[lastTime, totalSeconds]` segment so the tail of a held final
+    /// note still advances smoothly to the end.
+    public func seconds(atTick t: Double) -> TimeInterval {
+        guard !frames.isEmpty else { return 0 }
+        if t <= Double(frames[0].tick) { return frames[0].timeSeconds }
+        let last = frames[frames.count - 1]
+        if t >= Double(last.tick) {
+            let spanTicks = Double(totalTicks - last.tick)
+            guard spanTicks > 0 else { return last.timeSeconds }
+            let frac = min(max((t - Double(last.tick)) / spanTicks, 0), 1)
+            return last.timeSeconds + frac * (totalSeconds - last.timeSeconds)
+        }
+        // Largest index `best` with frames[best].tick <= t; the bracket
+        // is [best, best + 1] (in-bounds because t < last frame tick).
+        var lo = 0, hi = frames.count - 1, best = 0
+        while lo <= hi {
+            let mid = (lo + hi) / 2
+            if Double(frames[mid].tick) <= t {
+                best = mid
+                lo = mid + 1
+            } else {
+                hi = mid - 1
+            }
+        }
+        let lower = frames[best]
+        let upper = frames[best + 1]
+        let spanTicks = Double(upper.tick - lower.tick)
+        guard spanTicks > 0 else { return lower.timeSeconds }
+        let frac = (t - Double(lower.tick)) / spanTicks
+        return lower.timeSeconds + frac * (upper.timeSeconds - lower.timeSeconds)
+    }
+
     /// Find the frame for `cursor` — the column the user wants to
     /// seek to. For `.item` cursors, tries the exact representative
     /// first, then falls back to "any frame at the same tick", so a
