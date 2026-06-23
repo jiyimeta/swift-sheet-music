@@ -229,4 +229,20 @@ object SheetMusicJNI {
             arena,
         ).toByteArray()
     }
+
+    /**
+     * Advance the cursor [fromCursorBytes] by [beats] quarter-note beats using the shared
+     * `Score.cursor(advancedByBeats:from:)` (deterministic notation math). [fromCursorBytes] and the
+     * result are both `ScoreCursor` wire payloads. Returns [fromCursorBytes] unchanged for an unknown
+     * handle or undecodable input.
+     */
+    fun nativeCursorAdvancedByBeats(scoreHandle: Long, fromCursorBytes: ByteArray, beats: Double): ByteArray {
+        val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
+        return SwiftJavaJNI.nativeCursorAdvancedByBeats(
+            scoreHandle,
+            SwiftData.fromByteArray(fromCursorBytes, arena),
+            beats,
+            arena,
+        ).toByteArray()
+    }
 }
