@@ -4,35 +4,35 @@
 
     struct DynamicSymbolMapTests {
         @Test func mapsSingleLetterDynamics() {
-            #expect(DynamicSymbolMap.glyphs(for: "p") == ["\u{E520}"])
-            #expect(DynamicSymbolMap.glyphs(for: "f") == ["\u{E522}"])
-            #expect(DynamicSymbolMap.glyphs(for: "m") == ["\u{E521}"])
+            #expect(DynamicSymbolMap.codepoints(for: "p") == [0xE520])
+            #expect(DynamicSymbolMap.codepoints(for: "f") == [0xE522])
+            #expect(DynamicSymbolMap.codepoints(for: "m") == [0xE521])
         }
 
         @Test func composesMultiLetterDynamics() {
-            #expect(DynamicSymbolMap.glyphs(for: "mp") == [
-                "\u{E521}", "\u{E520}", // mezzo + piano
+            #expect(DynamicSymbolMap.codepoints(for: "mp") == [
+                0xE521, 0xE520, // mezzo + piano
             ])
-            #expect(DynamicSymbolMap.glyphs(for: "mf") == [
-                "\u{E521}", "\u{E522}", // mezzo + forte
+            #expect(DynamicSymbolMap.codepoints(for: "mf") == [
+                0xE521, 0xE522, // mezzo + forte
             ])
-            #expect(DynamicSymbolMap.glyphs(for: "fff") == [
-                "\u{E522}", "\u{E522}", "\u{E522}",
+            #expect(DynamicSymbolMap.codepoints(for: "fff") == [
+                0xE522, 0xE522, 0xE522,
             ])
-            #expect(DynamicSymbolMap.glyphs(for: "sf") == [
-                "\u{E524}", "\u{E522}", // sforzando + forte
+            #expect(DynamicSymbolMap.codepoints(for: "sf") == [
+                0xE524, 0xE522, // sforzando + forte
             ])
-            #expect(DynamicSymbolMap.glyphs(for: "fp") == [
-                "\u{E522}", "\u{E520}", // forte + piano
+            #expect(DynamicSymbolMap.codepoints(for: "fp") == [
+                0xE522, 0xE520, // forte + piano
             ])
         }
 
         @Test func caseInsensitive() {
-            #expect(DynamicSymbolMap.glyphs(for: "FF") == [
-                "\u{E522}", "\u{E522}",
+            #expect(DynamicSymbolMap.codepoints(for: "FF") == [
+                0xE522, 0xE522,
             ])
-            #expect(DynamicSymbolMap.glyphs(for: "Mp") == [
-                "\u{E521}", "\u{E520}",
+            #expect(DynamicSymbolMap.codepoints(for: "Mp") == [
+                0xE521, 0xE520,
             ])
         }
 
@@ -40,11 +40,11 @@
             // "cresc.", "espressivo", "subito p" etc. shouldn't be
             // shoehorned into glyphs — the renderer falls back to
             // Edwin italic 10pt when this returns nil.
-            #expect(DynamicSymbolMap.glyphs(for: "cresc.") == nil)
-            #expect(DynamicSymbolMap.glyphs(for: "espressivo") == nil)
-            #expect(DynamicSymbolMap.glyphs(for: "subito p") == nil)
-            #expect(DynamicSymbolMap.glyphs(for: "") == nil)
-            #expect(DynamicSymbolMap.glyphs(for: "   ") == nil)
+            #expect(DynamicSymbolMap.codepoints(for: "cresc.") == nil)
+            #expect(DynamicSymbolMap.codepoints(for: "espressivo") == nil)
+            #expect(DynamicSymbolMap.codepoints(for: "subito p") == nil)
+            #expect(DynamicSymbolMap.codepoints(for: "") == nil)
+            #expect(DynamicSymbolMap.codepoints(for: "   ") == nil)
         }
     }
 #endif
