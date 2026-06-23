@@ -42,7 +42,7 @@
 
         private static func layout(_ score: Score) -> LayoutDocument {
             LayoutEngine.layout(
-                score: score, options: .verticalDefault, availableWidth: 1200,
+                score: score, options: ScoreViewOptions(), availableWidth: 1200,
             )
         }
 
