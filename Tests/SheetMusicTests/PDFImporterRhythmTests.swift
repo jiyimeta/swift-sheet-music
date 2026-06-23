@@ -122,9 +122,12 @@
 
         @Test func blackPlusOneFlagIsEighth() {
             let (g, dp) = notehead(x: 100, y: 500)
-            // Stem extends upward from notehead to y=530; flag near top.
+            // Stem extends upward from notehead to y=530. The flag glyph's
+            // ORIGIN sits ~12pt above the notehead in MuseScore's real export
+            // (R7-calibrated `applyFlags` gate is 4…22pt from the notehead,
+            // NOT from the stem end), so the fixture places it at y=512.
             let stems = [stem(x: 100, yMin: 500, yMax: 530)]
-            let f = flag(x: 100, y: 530, kind: .flag8thUp)
+            let f = flag(x: 100, y: 512, kind: .flag8thUp)
             let m = makeMeasure(glyphs: [g, f])
             let rhythm = PDFImporter.decodeRhythm(
                 measure: m, decoded: [dp], paths: stems,
@@ -135,9 +138,13 @@
 
         @Test func blackPlusTwoFlagsIsSixteenth() {
             let (g, dp) = notehead(x: 100, y: 500)
+            // Combined 16th flag glyph (single glyph carrying both beam
+            // levels) at a realistic ~12pt-above-notehead origin; a separate
+            // 8th flag a touch lower, both inside the 4…22pt gate. (R7 stale
+            // fixture used y=528/530 ≈ dy 28-30, outside the real flag band.)
             let stems = [stem(x: 100, yMin: 500, yMax: 530)]
-            let f1 = flag(x: 100, y: 530, kind: .flag8thUp)
-            let f2 = flag(x: 100, y: 528, kind: .flag16thUp)
+            let f1 = flag(x: 100, y: 512, kind: .flag8thUp)
+            let f2 = flag(x: 100, y: 514, kind: .flag16thUp)
             let m = makeMeasure(glyphs: [g, f1, f2])
             let rhythm = PDFImporter.decodeRhythm(
                 measure: m, decoded: [dp], paths: stems,

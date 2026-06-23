@@ -30,12 +30,35 @@ extension PDFImporter {
         guard !measure.staffYLines.isEmpty,
               let anchor = staffAnchor(clef: activeClef, yLines: measure.staffYLines)
         else { return [] }
+        // Percussion staves have no pitched meaning. Map each notehead's
+        // staff position + notehead type to a GM drumset MIDI number and
+        // skip the accidental / key machinery entirely. This keeps drum
+        // noteheads alive as notes (the round-note path would drop them via
+        // the same anchor, but the pitches would be diatonic nonsense; the
+        // drumset mapping is at least conventionally meaningful, and the
+        // harness reports percussion staves separately from pitched ones).
+        if activeClef.concertClefType == "PERCUSSION" {
+            return decodePercussion(measure: measure, anchor: anchor)
+        }
         let sorted = measure.glyphs.sorted { $0.raw.origin.x < $1.raw.origin.x }
-        let locals = pairAccidentals(sorted: sorted, anchor: anchor)
+        let placed = pairAccidentalsPositional(sorted: sorted, anchor: anchor)
+        // Running measure-local accidental state: an accidental applies to
+        // its own note and all SUBSEQUENT same-pitch notes in the measure,
+        // never to PRECEDING ones. (A position-agnostic dict flatted the
+        // whole bar — e.g. a B♭ on beat 3 wrongly dragged a B♮ on beat 1 to
+        // B♭, a recurring A=71/B=70 error on this score.)
+        var activeLocals: [PitchKey: Int] = [:]
+        var nextAcc = 0
         var out: [DecodedPitch] = []
         for g in sorted where isNotehead(g.semantic) {
             let key = pitchKey(noteheadY: g.raw.origin.y, anchor: anchor)
-            let alteration = locals[key]
+            // Promote every accidental whose x is at or before this
+            // notehead into the running state before resolving it.
+            while nextAcc < placed.count, placed[nextAcc].x <= g.raw.origin.x + 0.5 {
+                activeLocals[placed[nextAcc].key] = placed[nextAcc].alt
+                nextAcc += 1
+            }
+            let alteration = activeLocals[key]
                 ?? keyAlteration(step: key.diatonicStep, key: activeKey)
             let midi = midiPitch(
                 step: key.diatonicStep, octave: key.octave, alteration: alteration,
@@ -49,6 +72,75 @@ extension PDFImporter {
             ))
         }
         return out
+    }
+}
+
+// MARK: - Percussion
+
+extension PDFImporter {
+    /// Decode a percussion-staff measure: every notehead survives as a
+    /// note whose MIDI value comes from the standard GM drumset line/space
+    /// convention (see `percussionMidi`). No accidentals / key signatures
+    /// apply on a drum staff, so this path is deliberately minimal.
+    static func decodePercussion(
+        measure: ImportMeasure, anchor: StaffAnchor,
+    ) -> [DecodedPitch] {
+        let sorted = measure.glyphs.sorted { $0.raw.origin.x < $1.raw.origin.x }
+        var out: [DecodedPitch] = []
+        for g in sorted where isNotehead(g.semantic) {
+            let midi = percussionMidi(
+                noteheadY: g.raw.origin.y,
+                isX: isXNotehead(g.semantic),
+                anchor: anchor,
+            )
+            out.append(DecodedPitch(
+                midi: midi,
+                tpc: 22, // neutral TPC (C natural); unused for drum staves
+                noteheadX: g.raw.origin.x,
+                noteheadY: g.raw.origin.y,
+                glyph: g,
+            ))
+        }
+        return out
+    }
+
+    /// Map a percussion notehead to a General-MIDI drumset note (channel-10
+    /// key number), keyed on its vertical staff position and notehead type.
+    ///
+    /// The drum staff uses treble-clef geometry (bottom line = E4). We
+    /// measure the notehead's position as the number of diatonic half-line
+    /// steps above the bottom line (`stepsAbove`, 0 = bottom line) and bin
+    /// it into the conventional drumset rows used by MuseScore / Sibelius:
+    /// X-noteheads = cymbals & hi-hat (upper rows), round noteheads =
+    /// drums (kick / toms / snare). This is a deterministic convention, not
+    /// a per-instrument transcription — exact drum identity per score is a
+    /// follow-up; the goal here is that drum noteheads become NOTES with a
+    /// conventionally meaningful pitch rather than collapsing to rests.
+    static func percussionMidi(
+        noteheadY: CGFloat, isX: Bool, anchor: StaffAnchor,
+    ) -> Int {
+        let halfStep = anchor.lineSpacing / 2
+        let stepsAbove = halfStep > 0
+            ? Int(((noteheadY - anchor.bottomY) / halfStep).rounded())
+            : 0
+        if isX {
+            // Cymbals / hi-hat (X-noteheads), high → low staff position.
+            switch stepsAbove {
+            case ..<7: return 44 // pedal hi-hat (low X, e.g. foot)
+            case 7 ... 9: return 42 // closed hi-hat (top space / above)
+            case 10: return 49 // crash cymbal (above the staff)
+            default: return 51 // ride cymbal (highest)
+            }
+        }
+        // Round noteheads = membranophones, low → high staff position.
+        switch stepsAbove {
+        case ..<2: return 36 // bass / kick drum (bottom space)
+        case 2 ... 3: return 41 // low floor tom
+        case 4 ... 5: return 45 // low tom
+        case 6: return 38 // snare (3rd space ~C5)
+        case 7 ... 8: return 48 // high-mid tom
+        default: return 50 // high tom (top of staff and above)
+        }
     }
 }
 
@@ -75,47 +167,57 @@ extension PDFImporter {
               yLines.count >= 2, topY > bottomY
         else { return nil }
         let lineSpacing = (topY - bottomY) / CGFloat(yLines.count - 1)
-        switch clef.concertClefType {
-        case "G": // treble: bottom line = E4
-            return StaffAnchor(
-                bottomY: bottomY,
-                lineSpacing: lineSpacing,
-                bottomStep: 2,
-                bottomOctave: 4,
-            )
-        case "F": // bass: bottom line = G2
-            return StaffAnchor(
-                bottomY: bottomY,
-                lineSpacing: lineSpacing,
-                bottomStep: 4,
-                bottomOctave: 2,
-            )
-        case "C": // alto C clef: bottom line = F3
-            return StaffAnchor(
-                bottomY: bottomY,
-                lineSpacing: lineSpacing,
-                bottomStep: 3,
-                bottomOctave: 3,
-            )
-        case "PERCUSSION":
-            return nil
-        default:
-            return StaffAnchor(
-                bottomY: bottomY,
-                lineSpacing: lineSpacing,
-                bottomStep: 2,
-                bottomOctave: 4,
-            )
+        // Bottom-staff-line (diatonicStep, scientific octave) per clef.
+        // Octave clefs share their parent's step and shift the octave: G
+        // family = E (step 2), F family = G (step 4). PERCUSSION has no
+        // pitched meaning but gets a treble-like anchor so `decodePitches`
+        // still runs and its noteheads SURVIVE as notes (the percussion
+        // branch remaps them to GM drumset numbers via `percussionMidi`).
+        let (step, octave) = clefBottomLine(clef.concertClefType)
+        return StaffAnchor(
+            bottomY: bottomY,
+            lineSpacing: lineSpacing,
+            bottomStep: step,
+            bottomOctave: octave,
+        )
+    }
+
+    /// Diatonic step (C=0..B=6) and scientific octave of a staff's bottom
+    /// line for a given `concertClefType`. Unknown clefs fall back to
+    /// treble (E4), matching the prior default branch.
+    private static func clefBottomLine(_ type: String) -> (step: Int, octave: Int) {
+        switch type {
+        case "G": (2, 4) // treble: E4
+        case "G8vb": (2, 3) // treble 8vb (vocal tenor): E3
+        case "G8va": (2, 5) // treble 8va: E5
+        case "G15ma": (2, 6) // treble 15ma: E6
+        case "G15mb": (2, 2) // treble 15mb: E2
+        case "F": (4, 2) // bass: G2
+        case "F8va": (4, 3) // bass 8va: G3
+        case "F8vb": (4, 1) // bass 8vb: G1
+        case "F15ma": (4, 4) // bass 15ma: G4
+        case "F15mb": (4, 0) // bass 15mb: G0
+        case "C": (3, 3) // alto C: F3
+        default: (2, 4) // PERCUSSION + unknown → treble E4
         }
     }
 
     static func isNotehead(_ s: SMuFLSemantic) -> Bool {
         switch s {
         case .noteheadBlack, .noteheadHalf,
-             .noteheadWhole, .noteheadDoubleWhole:
+             .noteheadWhole, .noteheadDoubleWhole,
+             .noteheadXBlack, .noteheadXHalf, .noteheadXWhole:
             true
         default:
             false
+        }
+    }
+
+    /// True for the X-style noteheads (cymbals / hi-hat on a drum staff).
+    static func isXNotehead(_ s: SMuFLSemantic) -> Bool {
+        switch s {
+        case .noteheadXBlack, .noteheadXHalf, .noteheadXWhole: true
+        default: false
         }
     }
 
@@ -132,27 +234,62 @@ extension PDFImporter {
         }
     }
 
-    /// Walk the x-sorted glyph list, pair each accidental with the
-    /// next notehead at the same y (within ~2pt), and record local
-    /// alterations keyed by (diatonicStep, octave).
-    static func pairAccidentals(
+    /// One accidental resolved to the pitch it modifies, positioned at the
+    /// accidental glyph's x so the caller can apply standard measure-local
+    /// semantics (effective from this x rightward only).
+    struct PlacedAccidental {
+        var x: CGFloat
+        var key: PitchKey
+        var alt: Int
+    }
+
+    /// Walk the x-sorted glyph list and resolve each accidental to the
+    /// notehead it modifies, returning the alteration positioned at the
+    /// accidental's own x (sorted ascending).
+    ///
+    /// A local accidental sits immediately to the LEFT of its notehead at
+    /// essentially the same y (same staff position). Two precision gates
+    /// matter on the dense Gibbs vocal staves (half-step ≈ 2pt):
+    /// - **x proximity**: the note must be within ~`maxPairDx` to the
+    ///   right. Without this an accidental at the bar's left could bind to
+    ///   a far-right note that merely shares a staff line, flipping that
+    ///   note's alteration spuriously.
+    /// - **nearest y**: pick the y-closest qualifying notehead, not just
+    ///   the first one within tolerance, so an accidental does not bleed
+    ///   onto a neighbor one diatonic step away.
+    static func pairAccidentalsPositional(
         sorted: [ClassifiedGlyph], anchor: StaffAnchor,
-    ) -> [PitchKey: Int] {
-        var locals: [PitchKey: Int] = [:]
+    ) -> [PlacedAccidental] {
+        // Pair within ~3.5 half-steps of x (a local accidental hugs its
+        // note; key-sig accidentals are filtered upstream by readKey but
+        // could still appear here, and the x gate keeps them from binding
+        // to a distant note).
+        let maxPairDx = max(anchor.lineSpacing * 3.5, 14)
+        let yTol = max(anchor.lineSpacing / 2 * 0.9, 1.5)
+        var placed: [PlacedAccidental] = []
         for (i, g) in sorted.enumerated() {
             guard let alt = accidentalAlteration(g.semantic) else { continue }
+            var best: (j: Int, dy: CGFloat)?
             for j in (i + 1) ..< sorted.count {
                 let nh = sorted[j]
-                if isNotehead(nh.semantic),
-                   abs(nh.raw.origin.y - g.raw.origin.y) < 2
-                {
-                    let key = pitchKey(noteheadY: nh.raw.origin.y, anchor: anchor)
-                    locals[key] = alt
-                    break
+                guard isNotehead(nh.semantic) else { continue }
+                let dx = nh.raw.origin.x - g.raw.origin.x
+                if dx > maxPairDx { break } // x-sorted: nothing closer beyond
+                let dy = abs(nh.raw.origin.y - g.raw.origin.y)
+                guard dy <= yTol else { continue }
+                if let current = best {
+                    if dy < current.dy { best = (j, dy) }
+                } else {
+                    best = (j, dy)
                 }
             }
+            if let best {
+                let nh = sorted[best.j]
+                let key = pitchKey(noteheadY: nh.raw.origin.y, anchor: anchor)
+                placed.append(PlacedAccidental(x: g.raw.origin.x, key: key, alt: alt))
+            }
         }
-        return locals
+        return placed.sorted { $0.x < $1.x }
     }
 
     /// y-coordinate → diatonic step + octave. yLines ascending → up

@@ -17,17 +17,25 @@ extension PDFImporter {
     /// than per-Part alignment and matches the plan's plain reading of
     /// "two staves in the same system must produce the same measure
     /// count".
+    /// `ensembleSize` is the document-wide system staff count (number of
+    /// staves per system) derived in `buildScore` by `ensembleStaffCount`.
+    /// When set, the gap-heuristic fallback uses it for outlier-rank system
+    /// breaking (see `clusterIntoSystems`). The spine path, when available,
+    /// still wins. Direct single-page callers (the layout fixtures) pass
+    /// `nil`, preserving the staff-height / median fallbacks.
     static func layoutSystems(
         staves: [Staff],
         paths: [PathSegment],
         classified: [ClassifiedGlyph],
         pageIndex: Int,
+        ensembleSize: Int? = nil,
     ) -> [ImportSystem] {
         let pageStaves = staves
             .filter { $0.pageIndex == pageIndex }
             .sorted { $0.yLines.first ?? 0 > $1.yLines.first ?? 0 }
 
-        let systemGroups = clusterIntoSystems(pageStaves)
+        let systemGroups = spineClusteredSystems(pageStaves, paths: paths, pageIndex: pageIndex)
+            ?? clusterIntoSystems(pageStaves, ensembleSize: ensembleSize)
         return systemGroups.map { staffGroup -> ImportSystem in
             let parts = couplingByBracket(
                 staves: staffGroup, paths: paths, pageIndex: pageIndex,
@@ -38,38 +46,7 @@ extension PDFImporter {
         }
     }
 
-    // MARK: - System clustering
-
-    /// Visually-adjacent staves whose inner y-gap is < 1.5 × staff height
-    /// belong to the same system. Input must already be sorted page top
-    /// → bottom (i.e. by `yLines.first` descending in PDF y-up coords).
-    private static func clusterIntoSystems(_ pageStaves: [Staff]) -> [[Staff]] {
-        var systems: [[Staff]] = []
-        for staff in pageStaves {
-            if let prev = systems.last?.last,
-               innerGap(upper: prev, lower: staff) < 1.5 * staffHeight(prev)
-            {
-                systems[systems.count - 1].append(staff)
-            } else {
-                systems.append([staff])
-            }
-        }
-        return systems
-    }
-
-    /// Inner vertical gap between two staves in PDF y-up coordinates:
-    /// the empty band between the upper staff's lowest line and the
-    /// lower staff's highest line.
-    private static func innerGap(upper: Staff, lower: Staff) -> CGFloat {
-        let upperBottom = upper.yLines.first ?? 0
-        let lowerTop = lower.yLines.last ?? 0
-        return upperBottom - lowerTop
-    }
-
-    private static func staffHeight(_ s: Staff) -> CGFloat {
-        guard let lo = s.yLines.first, let hi = s.yLines.last else { return 0 }
-        return abs(hi - lo)
-    }
+    // MARK: - System / staff geometry helpers
 
     private static func systemYRange(_ group: [Staff]) -> ClosedRange<CGFloat> {
         // group is sorted top→bottom in PDF y-up coords. Top staff has
@@ -81,16 +58,28 @@ extension PDFImporter {
         return lo ... hi
     }
 
-    private static func midline(_ ys: [CGFloat]) -> CGFloat {
+    static func midline(_ ys: [CGFloat]) -> CGFloat {
         ys.isEmpty ? 0 : ys[ys.count / 2]
+    }
+
+    static func staffHeight(_ s: Staff) -> CGFloat {
+        guard let lo = s.yLines.first, let hi = s.yLines.last else { return 0 }
+        return abs(hi - lo)
     }
 
     // MARK: - Bracket coupling
 
-    /// Vertical paths within ~5pt of the system's left x-edge whose
-    /// y-extent covers the midline of two or more staves group those
-    /// staves into a single `ImportPart` (grand staff). Otherwise each
-    /// staff becomes its own part.
+    /// Group the system's staves into parts. A vertical near the left
+    /// x-edge couples the staves it spans into one `ImportPart` — but
+    /// ONLY when it spans **exactly two** staves, i.e. a grand-staff brace
+    /// joining one instrument's two staves (piano / organ / harp).
+    ///
+    /// A vertical that spans three or more staves is a system **group
+    /// bracket** (a square / line bracket grouping several otherwise
+    /// independent single-staff parts — common in vocal / choral
+    /// arrangements). It must NOT collapse those parts into one; doing so
+    /// produced the 5-parts→1 regression. Such group brackets are skipped
+    /// here, leaving each spanned staff its own part.
     private static func couplingByBracket(
         staves: [Staff], paths: [PathSegment], pageIndex: Int,
     ) -> [ImportPart] {
@@ -104,7 +93,10 @@ extension PDFImporter {
         }
         for path in candidates {
             let idxs = bracketCoupledIndices(path: path, staves: staves, coupled: coupled)
-            guard idxs.count >= 2 else { continue }
+            // Exactly two spanned staves → grand-staff brace (couple).
+            // One → a per-staff barline (ignore). Three+ → group bracket
+            // over several single-staff parts (do NOT couple).
+            guard idxs.count == 2 else { continue }
             let group = idxs.map { ImportStaff(staff: staves[$0], measures: []) }
             parts.append(ImportPart(staves: group))
             for i in idxs {
@@ -114,7 +106,12 @@ extension PDFImporter {
         for (i, s) in staves.enumerated() where !coupled[i] {
             parts.append(ImportPart(staves: [ImportStaff(staff: s, measures: [])]))
         }
-        return parts
+        // Emit parts in page top→bottom order (descending PDF y) so the
+        // per-part order is stable across systems for the assembler.
+        return parts.sorted {
+            ($0.staves.first?.staff.yLines.first ?? 0)
+                > ($1.staves.first?.staff.yLines.first ?? 0)
+        }
     }
 
     private static func bracketCoupledIndices(
@@ -149,7 +146,121 @@ extension PDFImporter {
                 )
             }
         }
+        dropContentFreeNarrowCells(&parts)
         return ImportSystem(pageIndex: system.pageIndex, yRange: system.yRange, parts: parts)
+    }
+
+    /// A measure cell carries musical content when it contains at least one
+    /// notehead OR one rest glyph. A cell with neither is not a real measure
+    /// — on this corpus it is the engraving MARGIN sliver a heavily-justified
+    /// final / double barline leaves between itself and the staff's right
+    /// edge (the barline lands ~20-25pt shy of the staff line ends, wider
+    /// than the `minCellWidth` floor, so it survives split coalescing as a
+    /// phantom empty cell). Such a sliver shifts EVERY following measure of
+    /// the score down by one cell, wrecking the positional per-measure
+    /// comparison for the whole tail even though the note decode is correct.
+    private static func measureHasContent(_ measure: ImportMeasure) -> Bool {
+        for g in measure.glyphs {
+            if isNotehead(g.semantic) { return true }
+            if case .rest = g.semantic { return true }
+        }
+        return false
+    }
+
+    /// A spurious empty cell is dropped only when its width is below this
+    /// fraction of the system's MEDIAN measure width. A real measure (even
+    /// an empty-in-this-fixture one) is a full-width cell; the engraving
+    /// margin a heavily-justified final / double barline leaves between
+    /// itself and a staff edge — or a phantom sub-`minCellWidth`-adjacent
+    /// fragment a double barline / repeat dots leaves mid-system — is a thin
+    /// sliver (~20-25pt vs ~100pt+ real measures on the corpus).
+    /// Measure-relative, so it holds across print sizes and fonts (and never
+    /// fires on the synthetic layout fixtures, whose cells are full-width).
+    private static let sliverWidthFraction: CGFloat = 0.5
+
+    /// Drop every CONTENT-FREE NARROW measure cell — leading, internal, or
+    /// trailing — uniformly across all staves of the system, so the
+    /// per-system measure count stays consistent. This generalizes the
+    /// earlier trailing-only sliver drop: a heavily-justified final / double
+    /// barline, a repeat-barline's dot column, or a mid-system section break
+    /// can leave a phantom empty sliver ANYWHERE in the cell list, and any one
+    /// of those shifts every FOLLOWING measure down by one cell, wrecking the
+    /// positional per-measure comparison for the tail even though the note
+    /// decode is correct.
+    ///
+    /// A cell index is droppable iff, across EVERY staff of the system:
+    ///   * it is CONTENT-FREE — no notehead AND no rest glyph in any staff
+    ///     (`measureHasContent` is false everywhere). A legitimately empty
+    ///     whole-rest bar HAS a rest glyph, so it is content-bearing and is
+    ///     never dropped here.
+    ///   * it is NARROW — width < `sliverWidthFraction` × the system's median
+    ///     measure width. A full-width content-free cell (e.g. a real bar a
+    ///     staff happens to leave blank) is NOT a sliver and is kept.
+    /// The system must already carry REAL content somewhere (a wholly
+    /// glyph-free system — the layout-only fixtures that pass `classified: []`,
+    /// or a blank page — is left untouched), and at least one cell per staff
+    /// always remains. Because every staff in a system shares the same split
+    /// (the barline union), a cell's width and index are identical across
+    /// staves, so removing the same index from all of them keeps the count
+    /// uniform.
+    private static func dropContentFreeNarrowCells(_ parts: inout [ImportPart]) {
+        let systemHasContent = parts.contains { part in
+            part.staves.contains { st in st.measures.contains(where: measureHasContent) }
+        }
+        guard systemHasContent else { return }
+        let count = parts.flatMap { $0.staves.map(\.measures.count) }.max() ?? 0
+        guard count >= 2 else { return }
+        let widthGate = medianMeasureWidth(parts) * sliverWidthFraction
+        guard widthGate > 0 else { return }
+        // A cell index is droppable only when EVERY staff that reaches that
+        // index agrees it is both content-free and narrow. Staves with fewer
+        // cells (an under-segmented staff) can't veto, but if NO staff reaches
+        // the index it isn't a real cell anyway.
+        var dropIndices: [Int] = []
+        for i in 0 ..< count {
+            var present = false
+            var allFreeNarrow = true
+            for part in parts {
+                for st in part.staves where i < st.measures.count {
+                    present = true
+                    let cell = st.measures[i]
+                    let w = cell.xRange.upperBound - cell.xRange.lowerBound
+                    if measureHasContent(cell) || w >= widthGate {
+                        allFreeNarrow = false
+                    }
+                }
+            }
+            if present, allFreeNarrow { dropIndices.append(i) }
+        }
+        guard !dropIndices.isEmpty else { return }
+        // Never drop a staff below one remaining cell.
+        let dropSet = Set(dropIndices)
+        for p in parts.indices {
+            for s in parts[p].staves.indices {
+                let kept = parts[p].staves[s].measures.enumerated()
+                    .filter { !dropSet.contains($0.offset) }
+                    .map(\.element)
+                if !kept.isEmpty {
+                    parts[p].staves[s].measures = kept
+                }
+            }
+        }
+    }
+
+    /// Median width of all measure cells in the system (used to size the
+    /// trailing-sliver gate). Zero when the system has no measures.
+    private static func medianMeasureWidth(_ parts: [ImportPart]) -> CGFloat {
+        var widths: [CGFloat] = []
+        for part in parts {
+            for st in part.staves {
+                for m in st.measures {
+                    widths.append(m.xRange.upperBound - m.xRange.lowerBound)
+                }
+            }
+        }
+        guard !widths.isEmpty else { return 0 }
+        widths.sort()
+        return widths[widths.count / 2]
     }
 
     /// Sorted, deduplicated union of barline midXs across every staff in
@@ -172,13 +283,60 @@ extension PDFImporter {
         }
     }
 
+    /// Minimum width for a measure cell. A split that would carve a cell
+    /// narrower than this is a degenerate artifact (a final / double
+    /// barline drawn as two near-coincident verticals at the staff's right
+    /// edge), not a real measure boundary. Real measures on this corpus are
+    /// ≥ 60pt wide; 16pt is a generous floor that never clips a true bar.
+    private static let minCellWidth: CGFloat = 16
+
     /// Per-staff cell boundaries: the union midXs that lie inside the
-    /// staff's xRange, plus the staff xRange endpoints.
+    /// staff's xRange, plus the staff xRange endpoints. Split points closer
+    /// than `minCellWidth` are coalesced so a double / final barline near
+    /// the staff edge can't spawn a 1-3pt phantom measure (observed: the
+    /// closing system split into 4 cells `[273, 228, 3, 1]` instead of 2,
+    /// inflating the total measure count by 2).
     private static func splitPoints(staff: Staff, unionMidXs: [CGFloat]) -> [CGFloat] {
         let lo = staff.xRange.lowerBound
         let hi = staff.xRange.upperBound
         let interior = unionMidXs.filter { $0 > lo && $0 < hi }
-        return dedupSorted([lo] + interior + [hi])
+        let all = dedupSorted([lo] + interior + [hi])
+        return coalesceCloseSplits(all, hi: hi)
+    }
+
+    /// Greedily drop split points that would form a sub-`minCellWidth`
+    /// cell. `lo` is always kept; the staff's right edge `hi` is always the
+    /// final boundary (a near-edge interior split is snapped to it so the
+    /// last real measure extends to the staff end).
+    private static func coalesceCloseSplits(
+        _ sorted: [CGFloat], hi: CGFloat,
+    ) -> [CGFloat] {
+        guard let first = sorted.first else { return sorted }
+        var kept: [CGFloat] = [first]
+        for x in sorted.dropFirst() {
+            if x >= hi {
+                // Ensure hi is the terminal boundary; if the last kept is
+                // within minCellWidth of hi, replace it so we don't leave a
+                // phantom sliver between it and the edge.
+                if let last = kept.last, hi - last < minCellWidth, kept.count > 1 {
+                    kept[kept.count - 1] = hi
+                } else if kept.last != hi {
+                    kept.append(hi)
+                }
+                continue
+            }
+            if let last = kept.last, x - last >= minCellWidth {
+                kept.append(x)
+            }
+        }
+        if kept.last != hi {
+            if let last = kept.last, hi - last < minCellWidth, kept.count > 1 {
+                kept[kept.count - 1] = hi
+            } else {
+                kept.append(hi)
+            }
+        }
+        return kept
     }
 
     private static func makeMeasures(
@@ -205,8 +363,23 @@ extension PDFImporter {
     private static func filterGlyphs(
         classified: [ClassifiedGlyph], staff: Staff, lo: CGFloat, hi: CGFloat,
     ) -> [ClassifiedGlyph] {
-        let yLo = (staff.yLines.first ?? 0) - 30
-        let yHi = (staff.yLines.last ?? 0) + 30
+        // Vertical capture band around the staff. A fixed ±30pt band
+        // bled into the NEIGHBOURING staff on dense vocal scores where
+        // staves sit only ~27pt apart center-to-center — every notehead of
+        // the staff above/below was double-counted and decoded with the
+        // wrong clef anchor (observed: parts 1-4 inflated to 450-566 notes
+        // with impossible pitches up to MIDI 104). Scale the band to the
+        // staff's own line spacing instead: ~3 ledger positions outside
+        // each outer line captures legitimate ledgered notes without
+        // reaching the next staff's lines.
+        let bottom = staff.yLines.first ?? 0
+        let top = staff.yLines.last ?? 0
+        let lineSpacing = staff.yLines.count >= 2
+            ? (top - bottom) / CGFloat(staff.yLines.count - 1)
+            : 5
+        let band = max(lineSpacing * 3, 6)
+        let yLo = bottom - band
+        let yHi = top + band
         return classified.filter {
             $0.raw.pageIndex == staff.pageIndex
                 && lo <= $0.raw.origin.x

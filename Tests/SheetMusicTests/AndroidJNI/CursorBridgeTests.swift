@@ -26,7 +26,10 @@
                 score: score, pageWidthMM: 210, pageHeightMM: 297,
                 options: .verticalDefault,
             )
-            LayoutDocumentCache.store(handle: handle, document: result.document)
+            LayoutDocumentCache.store(
+                handle: handle, document: result.document,
+                filteredScore: result.filteredScore, hiddenStaves: [],
+            )
             defer { LayoutDocumentCache.release(handle) }
 
             let retrieved = LayoutDocumentCache.value(for: handle)
@@ -46,7 +49,10 @@
                 score: score, pageWidthMM: 210, pageHeightMM: 297,
                 options: .verticalDefault,
             )
-            LayoutDocumentCache.store(handle: handle, document: result.document)
+            LayoutDocumentCache.store(
+                handle: handle, document: result.document,
+                filteredScore: result.filteredScore, hiddenStaves: [],
+            )
             LayoutDocumentCache.release(handle)
 
             let retrieved = LayoutDocumentCache.value(for: handle)
@@ -69,7 +75,10 @@
                 score: score, pageWidthMM: 210, pageHeightMM: 297,
                 options: .verticalDefault,
             )
-            LayoutDocumentCache.store(handle: handle, document: result.document)
+            LayoutDocumentCache.store(
+                handle: handle, document: result.document,
+                filteredScore: result.filteredScore, hiddenStaves: [],
+            )
             defer { LayoutDocumentCache.release(handle) }
 
             // Build a ScoreCursor.item pointing at the first note in
@@ -126,7 +135,10 @@
                 score: score, pageWidthMM: 210, pageHeightMM: 297,
                 options: .verticalDefault,
             )
-            LayoutDocumentCache.store(handle: handle, document: result.document)
+            LayoutDocumentCache.store(
+                handle: handle, document: result.document,
+                filteredScore: result.filteredScore, hiddenStaves: [],
+            )
             defer { LayoutDocumentCache.release(handle) }
 
             // Beat cursor at measure 0, tick 0.

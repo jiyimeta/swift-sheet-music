@@ -17,17 +17,35 @@ extension PDFImporter {
         systems: [ImportSystem],
         texts: [TextGlyph],
         classified: [ClassifiedGlyph],
+        paths: [PathSegment],
+        tieMarks: TieMarks = TieMarks(),
+        graceSizeThreshold: CGFloat = 0,
         options: PDFImportOptions,
     ) -> Score {
-        guard let firstSystem = systems.first else {
+        guard !systems.isEmpty else {
             return Score(division: 480, source: .pdf)
         }
-        let shape = partShape(from: firstSystem)
+        // Derive the global part shape from the RICHEST system (max total
+        // staves), not blindly from systems[0]. The first system is often a
+        // title-page system whose staff detection is degenerate (fewer
+        // staves than the body), which would otherwise truncate every later
+        // system's surplus staves in `appendSystem`'s zip. The richest
+        // system is the best single template for the full ensemble.
+        let referenceSystem = systems.max { lhs, rhs in
+            totalStaves(lhs) < totalStaves(rhs)
+        } ?? systems[0]
+        let shape = partShape(from: referenceSystem)
         var stavesContent: [[Measure]] = Array(
             repeating: [], count: shape.totalStaffSlots,
         )
         var state = StaffStateMap()
         let pageBoundaries = systemPageBoundaries(systems)
+        // Pre-pass: resolve the ambiguous E065 (F8va) clef once per staff
+        // SLOT, using the slot's whole-part note content aggregated across
+        // every system, so a low-content system can't flip an octave. Empty
+        // for documents with no F8va clef (the common case). See
+        // `disambiguateF8vaClef`.
+        let f8vaOverrides = resolveF8vaSlots(systems: systems, shape: shape)
 
         for (sysIndex, system) in systems.enumerated() {
             appendSystem(
@@ -37,6 +55,10 @@ extension PDFImporter {
                 isLastSystem: sysIndex == systems.count - 1,
                 shape: shape,
                 texts: texts,
+                paths: paths,
+                tieMarks: tieMarks,
+                graceSizeThreshold: graceSizeThreshold,
+                clefOverrides: f8vaOverrides,
                 stavesContent: &stavesContent,
                 state: &state,
                 options: options,
@@ -50,6 +72,11 @@ extension PDFImporter {
                 assembledParts[partIdx].staves[staffIdx].measures = stavesContent[slot]
             }
         }
+        // Propagate pitch along tie chains: a tied-back note inherits its
+        // source note's pitch (incl. any accidental MuseScore did not redraw
+        // on the continuation). Conservative + monotonic — only a genuine
+        // mismatch is repaired. See PDFImporter+TiePitch.
+        propagateTiePitches(parts: &assembledParts)
         let titleFrame = makeTitleFrame(
             document: document, texts: texts, options: options,
         )
@@ -61,52 +88,16 @@ extension PDFImporter {
         )
     }
 
-    // MARK: - Part shape
-
-    /// Map of `firstSystem.parts[i]` → flat staff-slot indices, plus
-    /// the assembled `Part` list with placeholder instruments.
-    fileprivate struct PartShape {
-        var parts: [Part]
-        var slotsByPartIndex: [Int: [Int]]
-        var totalStaffSlots: Int
-    }
-
-    private static func partShape(from firstSystem: ImportSystem) -> PartShape {
-        var parts: [Part] = []
-        var slotsByPartIndex: [Int: [Int]] = [:]
-        var nextSlot = 0
-        for (partIdx, partProto) in firstSystem.parts.enumerated() {
-            let staffCount = partProto.staves.count
-            let part = Part(
-                id: "P\(partIdx + 1)",
-                trackName: nil,
-                instrument: Instrument(id: "voice"),
-                staves: Array(
-                    repeating: SheetMusicCore.Staff(staffType: "stdNormal", group: "pitched"),
-                    count: staffCount,
-                ),
-            )
-            parts.append(part)
-            var slots: [Int] = []
-            for _ in 0 ..< staffCount {
-                slots.append(nextSlot)
-                nextSlot += 1
-            }
-            slotsByPartIndex[partIdx] = slots
-        }
-        return PartShape(
-            parts: parts,
-            slotsByPartIndex: slotsByPartIndex,
-            totalStaffSlots: nextSlot,
-        )
-    }
-
     // MARK: - System append
+    //
+    // Part-shape derivation (`PartShape`, `partShape(from:)`, `totalStaves`),
+    // the per-system part → global-slot mapping (`partSlotMapping`), and the
+    // F8va clef pre-pass (`resolveF8vaSlots`) live in
+    // PDFImporter+AssembleParts.swift.
 
-    // Append every staff's measures from one system into the running
-    // `stavesContent`. Updates `state` (per-slot clef/key/time) and
-    // applies break flags when `options.preserveBreaks` is on.
-    // swiftlint:disable:next function_parameter_count
+    /// Append every staff's measures from one system into the running
+    /// `stavesContent`. Updates `state` (per-slot clef/key/time) and
+    /// applies break flags when `options.preserveBreaks` is on.
     private static func appendSystem(
         system: ImportSystem,
         sysIndex: Int,
@@ -114,12 +105,28 @@ extension PDFImporter {
         isLastSystem: Bool,
         shape: PartShape,
         texts: [TextGlyph],
+        paths: [PathSegment],
+        tieMarks: TieMarks,
+        graceSizeThreshold: CGFloat,
+        clefOverrides: [Int: Clef],
         stavesContent: inout [[Measure]],
         state: inout StaffStateMap,
         options: PDFImportOptions,
     ) {
+        // Stems / barlines etc. are page-local; pre-filter to this
+        // system's page so a vertical at the same x on another page can't
+        // be mistaken for a stem in `decodeRhythm`'s xRange test.
+        let pagePaths = paths.filter { $0.pageIndex == system.pageIndex }
+        // Map this system's parts → reference part indices by vertical
+        // position. On a full system this is the identity (part i → ref i);
+        // on an UNDER-FULL system (fewer parts than the reference ensemble)
+        // it routes each present part to the reference slot whose vertical
+        // position it matches, so a missing part leaves its slots empty
+        // instead of shifting every part up. See `partSlotMapping`.
+        let refForSystemPart = partSlotMapping(system: system, shape: shape)
         for (partIdx, importPart) in system.parts.enumerated() {
-            guard let slots = shape.slotsByPartIndex[partIdx] else { continue }
+            let refIdx = refForSystemPart[partIdx]
+            guard let slots = shape.slotsByPartIndex[refIdx] else { continue }
             // Defensive: a later system might have extra staves not
             // present in the first system. Ignore the surplus rather
             // than crash.
@@ -129,6 +136,10 @@ extension PDFImporter {
                 let measures = buildMeasures(
                     importStaff: importStaff,
                     texts: texts,
+                    paths: pagePaths,
+                    tieMarks: tieMarks,
+                    graceSizeThreshold: graceSizeThreshold,
+                    clefOverride: clefOverrides[slot],
                     state: &state,
                     slot: slot,
                     location: location,
@@ -162,38 +173,6 @@ extension PDFImporter {
             measures[last].pageBreak = true
         }
     }
-
-    // MARK: - Title frame
-
-    private static func makeTitleFrame(
-        document: PDFDocument,
-        texts: [TextGlyph],
-        options: PDFImportOptions,
-    ) -> ScoreFrame? {
-        let firstPage = document.page(at: 0)
-        let pageSize = firstPage?.bounds(for: .mediaBox).size
-            ?? CGSize(width: 595, height: 842)
-        return extractTitleFrame(
-            texts: texts,
-            pageSize: pageSize,
-            documentAttributes: document.documentAttributes as? [String: Any],
-            options: options,
-        )
-    }
-
-    /// Sort + scan to identify systems whose successor is on a different
-    /// page (or the last system overall). The LAST system is also a page
-    /// boundary because there's no "next page" to migrate to.
-    private static func systemPageBoundaries(_ systems: [ImportSystem]) -> Set<Int> {
-        var boundaries = Set<Int>()
-        for i in 0 ..< systems.count {
-            let isLast = i == systems.count - 1
-            if isLast || systems[i].pageIndex != systems[i + 1].pageIndex {
-                boundaries.insert(i)
-            }
-        }
-        return boundaries
-    }
 }
 
 // MARK: - Measure assembly
@@ -212,25 +191,70 @@ extension PDFImporter {
     fileprivate static func buildMeasures(
         importStaff: ImportStaff,
         texts: [TextGlyph],
+        paths: [PathSegment],
+        tieMarks: TieMarks,
+        graceSizeThreshold: CGFloat,
+        clefOverride: Clef?,
         state: inout StaffStateMap,
         slot: Int,
         location: String,
         options: PDFImportOptions,
     ) -> [Measure] {
-        let events = scoreStateEvents(staff: importStaff, texts: [])
-        var clef = state.clef[slot] ?? Clef(concertClefType: "G")
-        var key = state.key[slot] ?? KeySignature(concertKey: 0)
-        var ts = state.time[slot] ?? TimeSignature(numerator: 4, denominator: 4)
+        var events = scoreStateEvents(staff: importStaff, texts: [])
+        // Apply the whole-part E065 (F8va) clef resolution decided up front by
+        // `resolveF8vaSlots`: rewrite every F8va clef event on this slot to the
+        // resolved clef (plain F). Confined to the F8va case — other clefs are
+        // untouched. See `disambiguateF8vaClef`.
+        if let clefOverride {
+            events = events.map { ev in
+                if case let .clefChange(c, mi) = ev, c.concertClefType == "F8va" {
+                    return .clefChange(clefOverride, atMeasureIndex: mi)
+                }
+                return ev
+            }
+        }
+        let priorClef = state.clef[slot]
+        let priorKey = state.key[slot]
+        let priorTime = state.time[slot]
+        var clef = priorClef ?? Clef(concertClefType: "G")
+        var key = priorKey ?? KeySignature(concertKey: 0)
+        var ts = priorTime ?? TimeSignature(numerator: 4, denominator: 4)
 
         var out: [Measure] = []
         for (mi, importMeasure) in importStaff.measures.enumerated() {
+            let beforeClef = clef
+            let beforeKey = key
+            let beforeTime = ts
             (clef, key, ts) = applyEvents(events, atMeasure: mi, clef: clef, key: key, ts: ts)
+            // Emit clef / key / time as leading VoiceElements when this
+            // measure introduces or CHANGES one relative to the running
+            // state. The very first measure of a part (no prior state)
+            // always emits its initial clef/key/time so consumers reading
+            // B get the opening signatures — matching how A (mscz) carries
+            // them on measure 0.
+            let isFirstMeasureOfPart = priorClef == nil && mi == 0
+            let emitClef = clef.concertClefType != beforeClef.concertClefType
+                || (isFirstMeasureOfPart && clef.concertClefType != "G")
+            let emitKey = key.concertKey != beforeKey.concertKey
+                || (isFirstMeasureOfPart && key.concertKey != 0)
+            let emitTime = (ts.numerator, ts.denominator)
+                != (beforeTime.numerator, beforeTime.denominator)
+                || (
+                    isFirstMeasureOfPart
+                        && (ts.numerator, ts.denominator) != (4, 4)
+                )
             out.append(buildOneMeasure(
                 importMeasure: importMeasure,
                 texts: texts,
+                paths: paths,
+                tieMarks: tieMarks,
+                graceSizeThreshold: graceSizeThreshold,
                 clef: clef,
                 key: key,
                 ts: ts,
+                emitClef: emitClef ? clef : nil,
+                emitKey: emitKey ? key : nil,
+                emitTime: emitTime ? ts : nil,
                 pageIndex: importStaff.staff.pageIndex,
                 measureIndex: mi,
                 location: location,
@@ -274,39 +298,69 @@ extension PDFImporter {
         }
     }
 
-    // Build a single Measure from one ImportMeasure cell, given the
-    // running clef/key/time signature. Pure helper — `state` is updated
-    // by the caller before/after.
-    // swiftlint:disable:next function_parameter_count
+    /// Build a single Measure from one ImportMeasure cell, given the
+    /// running clef/key/time signature. Pure helper — `state` is updated
+    /// by the caller before/after.
     private static func buildOneMeasure(
         importMeasure: ImportMeasure,
         texts: [TextGlyph],
+        paths: [PathSegment],
+        tieMarks: TieMarks,
+        graceSizeThreshold: CGFloat,
         clef: Clef,
         key: KeySignature,
         ts: TimeSignature,
+        emitClef: Clef?,
+        emitKey: KeySignature?,
+        emitTime: TimeSignature?,
         pageIndex: Int,
         measureIndex: Int,
         location: String,
         options: PDFImportOptions,
     ) -> Measure {
         let decoded = decodePitches(measure: importMeasure, activeClef: clef, activeKey: key)
-        let rhythm = decodeRhythm(measure: importMeasure, decoded: decoded, paths: [])
+        let rhythm = decodeRhythm(
+            measure: importMeasure, decoded: decoded, paths: paths, tieMarks: tieMarks,
+            graceSizeThreshold: graceSizeThreshold,
+        )
         let withLyrics = attachLyrics(
             elements: rhythm,
             texts: texts,
             staffYLines: importMeasure.staffYLines,
             pageIndex: pageIndex,
+            xRange: importMeasure.xRange,
+        )
+        // Metric-sum reconciliation (③): repair a voice whose note + rest
+        // durations don't total the bar length by re-valuing exactly one
+        // low-confidence note. Conservative + monotonic — a voice already at
+        // the bar length is untouched. See PDFImporter+RhythmReconcile.
+        let reconciled = reconcileMeasureDurations(
+            elements: withLyrics,
+            timeSignature: ts,
+            diagnostics: options.diagnostics,
+            location: "\(location), measure \(measureIndex)",
         )
         let staffMidY = staffMidline(importMeasure.staffYLines)
         let voices = assignVoices(
-            elements: withLyrics,
+            elements: reconciled,
             measureXRange: importMeasure.xRange,
             timeSignature: ts,
             staffMidY: staffMidY,
             diagnostics: options.diagnostics,
             location: "\(location), measure \(measureIndex)",
         )
-        return Measure(voices: voices.isEmpty ? [Voice(elements: [])] : voices)
+        // Prepend score-state elements (clef → key → time order) into the
+        // first voice so consumers and the per-measure state comparison see
+        // them, mirroring how A (mscz) carries them on the measure.
+        var leading: [VoiceElement] = []
+        if let emitClef { leading.append(.clef(emitClef)) }
+        if let emitKey { leading.append(.keySignature(emitKey)) }
+        if let emitTime { leading.append(.timeSignature(emitTime)) }
+        var finalVoices = voices.isEmpty ? [Voice(elements: [])] : voices
+        if !leading.isEmpty {
+            finalVoices[0] = Voice(elements: leading + finalVoices[0].elements)
+        }
+        return Measure(voices: finalVoices)
     }
 
     private static func staffMidline(_ ys: [CGFloat]) -> CGFloat {
