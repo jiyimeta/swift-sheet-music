@@ -67,7 +67,8 @@ extension PDFImporter {
                 elements.append(makeRest(glyph: g, duration: dur))
                 consumed.insert(i)
             case .noteheadBlack, .noteheadHalf,
-                 .noteheadWhole, .noteheadDoubleWhole:
+                 .noteheadWhole, .noteheadDoubleWhole,
+                 .noteheadXBlack, .noteheadXHalf, .noteheadXWhole:
                 let element = assembleChord(
                     leadIndex: i,
                     glyphs: glyphs,
@@ -257,13 +258,7 @@ extension PDFImporter {
     }
 
     private static func isNoteheadSemantic(_ s: SMuFLSemantic) -> Bool {
-        switch s {
-        case .noteheadBlack, .noteheadHalf,
-             .noteheadWhole, .noteheadDoubleWhole:
-            true
-        default:
-            false
-        }
+        isNotehead(s)
     }
 }
 
@@ -274,9 +269,9 @@ extension PDFImporter {
         for sem: SMuFLSemantic,
     ) -> NoteDuration {
         switch sem {
-        case .noteheadDoubleWhole, .noteheadWhole: .whole
-        case .noteheadHalf: .half
-        case .noteheadBlack: .quarter
+        case .noteheadDoubleWhole, .noteheadWhole, .noteheadXWhole: .whole
+        case .noteheadHalf, .noteheadXHalf: .half
+        case .noteheadBlack, .noteheadXBlack: .quarter
         default: .quarter
         }
     }

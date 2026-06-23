@@ -11,9 +11,16 @@ extension PDFImporter {
         case 0xE047: return .segno
         case 0xE048: return .coda
         case 0xE050: return .clefG
+        case 0xE051: return .clefG15ma // gClef15ma — treble two octaves up
         case 0xE052: return .clefG8vb // gClef8vb — vocal tenor clef
+        case 0xE053: return .clefG8va // gClef8va — treble one octave up
+        case 0xE054: return .clefG15mb // gClef15mb — treble two octaves down
         case 0xE05C: return .clefC
         case 0xE062: return .clefF
+        case 0xE063: return .clefF15mb // fClef15mb — bass two octaves down
+        case 0xE064: return .clefF8vb // fClef8vb — bass one octave down
+        case 0xE065: return .clefF8va // fClef8va — bass one octave up
+        case 0xE066: return .clefF15ma // fClef15ma — bass two octaves up
         case 0xE069: return .clefPercussion
         case 0xE080 ... 0xE089: return .timeSignatureDigit(Int(cp - 0xE080))
         case 0xE08A: return .timeSignatureCommon
@@ -22,6 +29,11 @@ extension PDFImporter {
         case 0xE0A2: return .noteheadWhole
         case 0xE0A3: return .noteheadHalf
         case 0xE0A4: return .noteheadBlack
+        // X-noteheads (drum-staff cymbals / hi-hat). They flow through the
+        // notehead path like normal noteheads (isNotehead / cluster / pitch).
+        case 0xE0A7: return .noteheadXWhole
+        case 0xE0A8: return .noteheadXHalf
+        case 0xE0A9: return .noteheadXBlack
         case 0xE1E7: return .augmentationDot
         case 0xE240: return .flag8thUp
         case 0xE241: return .flag8thDown

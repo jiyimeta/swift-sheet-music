@@ -39,10 +39,18 @@ extension PDFImporter {
             switch glyph.semantic {
             case .clefG: return Clef(concertClefType: "G")
             case .clefG8vb: return Clef(concertClefType: "G8vb")
+            case .clefG8va: return Clef(concertClefType: "G8va")
+            case .clefG15ma: return Clef(concertClefType: "G15ma")
+            case .clefG15mb: return Clef(concertClefType: "G15mb")
             case .clefF: return Clef(concertClefType: "F")
+            case .clefF8va: return Clef(concertClefType: "F8va")
+            case .clefF8vb: return Clef(concertClefType: "F8vb")
+            case .clefF15ma: return Clef(concertClefType: "F15ma")
+            case .clefF15mb: return Clef(concertClefType: "F15mb")
             case .clefC: return Clef(concertClefType: "C")
             case .clefPercussion: return Clef(concertClefType: "PERCUSSION")
-            case .noteheadBlack, .noteheadHalf, .noteheadWhole, .noteheadDoubleWhole:
+            case .noteheadBlack, .noteheadHalf, .noteheadWhole, .noteheadDoubleWhole,
+                 .noteheadXBlack, .noteheadXHalf, .noteheadXWhole:
                 return nil
             default: continue
             }
@@ -77,7 +85,8 @@ extension PDFImporter {
                     // not counted toward sharps/flats — it neither adds nor
                     // removes here; key inference is by net sharps/flats.
                 }
-            case .noteheadBlack, .noteheadHalf, .noteheadWhole, .noteheadDoubleWhole:
+            case .noteheadBlack, .noteheadHalf, .noteheadWhole, .noteheadDoubleWhole,
+                 .noteheadXBlack, .noteheadXHalf, .noteheadXWhole:
                 // Stop at the first notehead — anything after is a note,
                 // not part of the leading key signature.
                 return finalize(sharps: sharps, flats: flats)
@@ -101,7 +110,8 @@ extension PDFImporter {
             let g = sorted[j]
             switch g.semantic {
             case .noteheadBlack, .noteheadHalf,
-                 .noteheadWhole, .noteheadDoubleWhole:
+                 .noteheadWhole, .noteheadDoubleWhole,
+                 .noteheadXBlack, .noteheadXHalf, .noteheadXWhole:
                 let dx = g.raw.origin.x - acc.raw.origin.x
                 let dy = abs(g.raw.origin.y - acc.raw.origin.y)
                 // Local accidental: notehead is just to the right (≤ ~14pt)
@@ -131,7 +141,8 @@ extension PDFImporter {
                 return TimeSignature(numerator: 2, denominator: 2)
             case .timeSignatureDigit:
                 return parseStackedDigits(from: glyphs)
-            case .noteheadBlack, .noteheadHalf, .noteheadWhole, .noteheadDoubleWhole:
+            case .noteheadBlack, .noteheadHalf, .noteheadWhole, .noteheadDoubleWhole,
+                 .noteheadXBlack, .noteheadXHalf, .noteheadXWhole:
                 return nil
             default: continue
             }

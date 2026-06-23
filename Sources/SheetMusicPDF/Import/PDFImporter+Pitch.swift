@@ -30,6 +30,16 @@ extension PDFImporter {
         guard !measure.staffYLines.isEmpty,
               let anchor = staffAnchor(clef: activeClef, yLines: measure.staffYLines)
         else { return [] }
+        // Percussion staves have no pitched meaning. Map each notehead's
+        // staff position + notehead type to a GM drumset MIDI number and
+        // skip the accidental / key machinery entirely. This keeps drum
+        // noteheads alive as notes (the round-note path would drop them via
+        // the same anchor, but the pitches would be diatonic nonsense; the
+        // drumset mapping is at least conventionally meaningful, and the
+        // harness reports percussion staves separately from pitched ones).
+        if activeClef.concertClefType == "PERCUSSION" {
+            return decodePercussion(measure: measure, anchor: anchor)
+        }
         let sorted = measure.glyphs.sorted { $0.raw.origin.x < $1.raw.origin.x }
         let placed = pairAccidentalsPositional(sorted: sorted, anchor: anchor)
         // Running measure-local accidental state: an accidental applies to
@@ -65,6 +75,75 @@ extension PDFImporter {
     }
 }
 
+// MARK: - Percussion
+
+extension PDFImporter {
+    /// Decode a percussion-staff measure: every notehead survives as a
+    /// note whose MIDI value comes from the standard GM drumset line/space
+    /// convention (see `percussionMidi`). No accidentals / key signatures
+    /// apply on a drum staff, so this path is deliberately minimal.
+    static func decodePercussion(
+        measure: ImportMeasure, anchor: StaffAnchor,
+    ) -> [DecodedPitch] {
+        let sorted = measure.glyphs.sorted { $0.raw.origin.x < $1.raw.origin.x }
+        var out: [DecodedPitch] = []
+        for g in sorted where isNotehead(g.semantic) {
+            let midi = percussionMidi(
+                noteheadY: g.raw.origin.y,
+                isX: isXNotehead(g.semantic),
+                anchor: anchor,
+            )
+            out.append(DecodedPitch(
+                midi: midi,
+                tpc: 22, // neutral TPC (C natural); unused for drum staves
+                noteheadX: g.raw.origin.x,
+                noteheadY: g.raw.origin.y,
+                glyph: g,
+            ))
+        }
+        return out
+    }
+
+    /// Map a percussion notehead to a General-MIDI drumset note (channel-10
+    /// key number), keyed on its vertical staff position and notehead type.
+    ///
+    /// The drum staff uses treble-clef geometry (bottom line = E4). We
+    /// measure the notehead's position as the number of diatonic half-line
+    /// steps above the bottom line (`stepsAbove`, 0 = bottom line) and bin
+    /// it into the conventional drumset rows used by MuseScore / Sibelius:
+    /// X-noteheads = cymbals & hi-hat (upper rows), round noteheads =
+    /// drums (kick / toms / snare). This is a deterministic convention, not
+    /// a per-instrument transcription — exact drum identity per score is a
+    /// follow-up; the goal here is that drum noteheads become NOTES with a
+    /// conventionally meaningful pitch rather than collapsing to rests.
+    static func percussionMidi(
+        noteheadY: CGFloat, isX: Bool, anchor: StaffAnchor,
+    ) -> Int {
+        let halfStep = anchor.lineSpacing / 2
+        let stepsAbove = halfStep > 0
+            ? Int(((noteheadY - anchor.bottomY) / halfStep).rounded())
+            : 0
+        if isX {
+            // Cymbals / hi-hat (X-noteheads), high → low staff position.
+            switch stepsAbove {
+            case ..<7: return 44 // pedal hi-hat (low X, e.g. foot)
+            case 7 ... 9: return 42 // closed hi-hat (top space / above)
+            case 10: return 49 // crash cymbal (above the staff)
+            default: return 51 // ride cymbal (highest)
+            }
+        }
+        // Round noteheads = membranophones, low → high staff position.
+        switch stepsAbove {
+        case ..<2: return 36 // bass / kick drum (bottom space)
+        case 2 ... 3: return 41 // low floor tom
+        case 4 ... 5: return 45 // low tom
+        case 6: return 38 // snare (3rd space ~C5)
+        case 7 ... 8: return 48 // high-mid tom
+        default: return 50 // high tom (top of staff and above)
+        }
+    }
+}
+
 // MARK: - Internal helpers
 
 extension PDFImporter {
@@ -88,54 +167,57 @@ extension PDFImporter {
               yLines.count >= 2, topY > bottomY
         else { return nil }
         let lineSpacing = (topY - bottomY) / CGFloat(yLines.count - 1)
-        switch clef.concertClefType {
-        case "G": // treble: bottom line = E4
-            return StaffAnchor(
-                bottomY: bottomY,
-                lineSpacing: lineSpacing,
-                bottomStep: 2,
-                bottomOctave: 4,
-            )
-        case "G8vb": // treble ottava bassa (vocal tenor): bottom line = E3
-            return StaffAnchor(
-                bottomY: bottomY,
-                lineSpacing: lineSpacing,
-                bottomStep: 2,
-                bottomOctave: 3,
-            )
-        case "F": // bass: bottom line = G2
-            return StaffAnchor(
-                bottomY: bottomY,
-                lineSpacing: lineSpacing,
-                bottomStep: 4,
-                bottomOctave: 2,
-            )
-        case "C": // alto C clef: bottom line = F3
-            return StaffAnchor(
-                bottomY: bottomY,
-                lineSpacing: lineSpacing,
-                bottomStep: 3,
-                bottomOctave: 3,
-            )
-        case "PERCUSSION":
-            return nil
-        default:
-            return StaffAnchor(
-                bottomY: bottomY,
-                lineSpacing: lineSpacing,
-                bottomStep: 2,
-                bottomOctave: 4,
-            )
+        // Bottom-staff-line (diatonicStep, scientific octave) per clef.
+        // Octave clefs share their parent's step and shift the octave: G
+        // family = E (step 2), F family = G (step 4). PERCUSSION has no
+        // pitched meaning but gets a treble-like anchor so `decodePitches`
+        // still runs and its noteheads SURVIVE as notes (the percussion
+        // branch remaps them to GM drumset numbers via `percussionMidi`).
+        let (step, octave) = clefBottomLine(clef.concertClefType)
+        return StaffAnchor(
+            bottomY: bottomY,
+            lineSpacing: lineSpacing,
+            bottomStep: step,
+            bottomOctave: octave,
+        )
+    }
+
+    /// Diatonic step (C=0..B=6) and scientific octave of a staff's bottom
+    /// line for a given `concertClefType`. Unknown clefs fall back to
+    /// treble (E4), matching the prior default branch.
+    private static func clefBottomLine(_ type: String) -> (step: Int, octave: Int) {
+        switch type {
+        case "G": (2, 4) // treble: E4
+        case "G8vb": (2, 3) // treble 8vb (vocal tenor): E3
+        case "G8va": (2, 5) // treble 8va: E5
+        case "G15ma": (2, 6) // treble 15ma: E6
+        case "G15mb": (2, 2) // treble 15mb: E2
+        case "F": (4, 2) // bass: G2
+        case "F8va": (4, 3) // bass 8va: G3
+        case "F8vb": (4, 1) // bass 8vb: G1
+        case "F15ma": (4, 4) // bass 15ma: G4
+        case "F15mb": (4, 0) // bass 15mb: G0
+        case "C": (3, 3) // alto C: F3
+        default: (2, 4) // PERCUSSION + unknown → treble E4
         }
     }
 
     static func isNotehead(_ s: SMuFLSemantic) -> Bool {
         switch s {
         case .noteheadBlack, .noteheadHalf,
-             .noteheadWhole, .noteheadDoubleWhole:
+             .noteheadWhole, .noteheadDoubleWhole,
+             .noteheadXBlack, .noteheadXHalf, .noteheadXWhole:
             true
         default:
             false
+        }
+    }
+
+    /// True for the X-style noteheads (cymbals / hi-hat on a drum staff).
+    static func isXNotehead(_ s: SMuFLSemantic) -> Bool {
+        switch s {
+        case .noteheadXBlack, .noteheadXHalf, .noteheadXWhole: true
+        default: false
         }
     }
 

@@ -96,12 +96,21 @@ struct CurveArc: Equatable {
 /// conformance carries through here.
 enum SMuFLSemantic: Equatable {
     case noteheadBlack, noteheadHalf, noteheadWhole, noteheadDoubleWhole
+    /// X-noteheads (U+E0A9 black / U+E0A8 half / U+E0A7 whole). Drawn on
+    /// drum staves for cymbals / hi-hat. Treated as noteheads everywhere
+    /// (clustering, rhythm, pitch) so percussion notes survive as notes.
+    case noteheadXBlack, noteheadXHalf, noteheadXWhole
     case stem, flag8thUp, flag8thDown, flag16thUp, flag16thDown,
          flag32ndUp, flag32ndDown, flag64thUp, flag64thDown
     case augmentationDot
     case rest(NoteDuration)
     case clefG, clefF, clefC, clefPercussion
     case clefG8vb // U+E052 gClef8vb — treble clef sounding an octave lower
+    /// Octave-transposed clefs (U+E051/E053/E054 g-family,
+    /// U+E063/E064/E065/E066 f-family). 8va/8vb = ±1 octave,
+    /// 15ma/15mb = ±2 octaves relative to the plain G / F clef.
+    case clefG8va, clefG15ma, clefG15mb
+    case clefF8va, clefF8vb, clefF15ma, clefF15mb
     case accidentalSharp, accidentalFlat, accidentalNatural,
          accidentalDoubleSharp, accidentalDoubleFlat
     case timeSignatureDigit(Int) // 0-9
