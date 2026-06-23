@@ -40,6 +40,12 @@ extension PDFImporter {
         )
         var state = StaffStateMap()
         let pageBoundaries = systemPageBoundaries(systems)
+        // Pre-pass: resolve the ambiguous E065 (F8va) clef once per staff
+        // SLOT, using the slot's whole-part note content aggregated across
+        // every system, so a low-content system can't flip an octave. Empty
+        // for documents with no F8va clef (the common case). See
+        // `disambiguateF8vaClef`.
+        let f8vaOverrides = resolveF8vaSlots(systems: systems, shape: shape)
 
         for (sysIndex, system) in systems.enumerated() {
             appendSystem(
@@ -52,6 +58,7 @@ extension PDFImporter {
                 paths: paths,
                 tieMarks: tieMarks,
                 graceSizeThreshold: graceSizeThreshold,
+                clefOverrides: f8vaOverrides,
                 stavesContent: &stavesContent,
                 state: &state,
                 options: options,
@@ -83,9 +90,10 @@ extension PDFImporter {
 
     // MARK: - System append
     //
-    // Part-shape derivation (`PartShape`, `partShape(from:)`, `totalStaves`)
-    // and the per-system part → global-slot mapping (`partSlotMapping`) live
-    // in PDFImporter+AssembleParts.swift.
+    // Part-shape derivation (`PartShape`, `partShape(from:)`, `totalStaves`),
+    // the per-system part → global-slot mapping (`partSlotMapping`), and the
+    // F8va clef pre-pass (`resolveF8vaSlots`) live in
+    // PDFImporter+AssembleParts.swift.
 
     /// Append every staff's measures from one system into the running
     /// `stavesContent`. Updates `state` (per-slot clef/key/time) and
@@ -100,6 +108,7 @@ extension PDFImporter {
         paths: [PathSegment],
         tieMarks: TieMarks,
         graceSizeThreshold: CGFloat,
+        clefOverrides: [Int: Clef],
         stavesContent: inout [[Measure]],
         state: inout StaffStateMap,
         options: PDFImportOptions,
@@ -130,6 +139,7 @@ extension PDFImporter {
                     paths: pagePaths,
                     tieMarks: tieMarks,
                     graceSizeThreshold: graceSizeThreshold,
+                    clefOverride: clefOverrides[slot],
                     state: &state,
                     slot: slot,
                     location: location,
@@ -184,12 +194,25 @@ extension PDFImporter {
         paths: [PathSegment],
         tieMarks: TieMarks,
         graceSizeThreshold: CGFloat,
+        clefOverride: Clef?,
         state: inout StaffStateMap,
         slot: Int,
         location: String,
         options: PDFImportOptions,
     ) -> [Measure] {
-        let events = scoreStateEvents(staff: importStaff, texts: [])
+        var events = scoreStateEvents(staff: importStaff, texts: [])
+        // Apply the whole-part E065 (F8va) clef resolution decided up front by
+        // `resolveF8vaSlots`: rewrite every F8va clef event on this slot to the
+        // resolved clef (plain F). Confined to the F8va case — other clefs are
+        // untouched. See `disambiguateF8vaClef`.
+        if let clefOverride {
+            events = events.map { ev in
+                if case let .clefChange(c, mi) = ev, c.concertClefType == "F8va" {
+                    return .clefChange(clefOverride, atMeasureIndex: mi)
+                }
+                return ev
+            }
+        }
         let priorClef = state.clef[slot]
         let priorKey = state.key[slot]
         let priorTime = state.time[slot]

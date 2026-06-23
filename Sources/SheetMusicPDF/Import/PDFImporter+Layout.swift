@@ -146,7 +146,7 @@ extension PDFImporter {
                 )
             }
         }
-        dropTrailingEmptyMeasure(&parts)
+        dropContentFreeNarrowCells(&parts)
         return ImportSystem(pageIndex: system.pageIndex, yRange: system.yRange, parts: parts)
     }
 
@@ -167,60 +167,81 @@ extension PDFImporter {
         return false
     }
 
-    /// A trailing empty cell is dropped only when its width is below this
+    /// A spurious empty cell is dropped only when its width is below this
     /// fraction of the system's MEDIAN measure width. A real measure (even
     /// an empty-in-this-fixture one) is a full-width cell; the engraving
     /// margin a heavily-justified final / double barline leaves between
-    /// itself and the staff edge is a thin sliver (~20-25pt vs ~100pt+ real
-    /// measures on the corpus). Measure-relative, so it holds across print
-    /// sizes and fonts (and never fires on the synthetic layout fixtures,
-    /// whose trailing cells are full-width).
-    private static let trailingSliverWidthFraction: CGFloat = 0.5
+    /// itself and a staff edge — or a phantom sub-`minCellWidth`-adjacent
+    /// fragment a double barline / repeat dots leaves mid-system — is a thin
+    /// sliver (~20-25pt vs ~100pt+ real measures on the corpus).
+    /// Measure-relative, so it holds across print sizes and fonts (and never
+    /// fires on the synthetic layout fixtures, whose cells are full-width).
+    private static let sliverWidthFraction: CGFloat = 0.5
 
-    /// Drop the system's LAST measure cell from every staff when it is an
-    /// empty (no note / rest glyph) trailing-margin SLIVER — content-free AND
-    /// narrow relative to the system's typical measure. Guards:
-    ///   * The system must already carry REAL content (some cell, somewhere,
-    ///     has a note / rest). A wholly glyph-free system — the layout-only
-    ///     fixtures that pass `classified: []`, or a truly blank page — is
-    ///     left untouched.
-    ///   * The trailing cell must be NARROW (< `trailingSliverWidthFraction`
-    ///     of the system's median measure width). A full-width empty trailing
-    ///     measure (a real bar that merely holds a multi-rest) is NOT dropped.
-    ///   * Only the trailing cell of each staff at the system's max count is
-    ///     removed, and only when EVERY such staff agrees it is content-free,
-    ///     preserving the system-wide uniform measure count.
-    ///   * At most TWO passes (a thin + thick final barline can leave two
-    ///     slivers), never below one remaining measure per staff.
-    private static func dropTrailingEmptyMeasure(_ parts: inout [ImportPart]) {
+    /// Drop every CONTENT-FREE NARROW measure cell — leading, internal, or
+    /// trailing — uniformly across all staves of the system, so the
+    /// per-system measure count stays consistent. This generalizes the
+    /// earlier trailing-only sliver drop: a heavily-justified final / double
+    /// barline, a repeat-barline's dot column, or a mid-system section break
+    /// can leave a phantom empty sliver ANYWHERE in the cell list, and any one
+    /// of those shifts every FOLLOWING measure down by one cell, wrecking the
+    /// positional per-measure comparison for the tail even though the note
+    /// decode is correct.
+    ///
+    /// A cell index is droppable iff, across EVERY staff of the system:
+    ///   * it is CONTENT-FREE — no notehead AND no rest glyph in any staff
+    ///     (`measureHasContent` is false everywhere). A legitimately empty
+    ///     whole-rest bar HAS a rest glyph, so it is content-bearing and is
+    ///     never dropped here.
+    ///   * it is NARROW — width < `sliverWidthFraction` × the system's median
+    ///     measure width. A full-width content-free cell (e.g. a real bar a
+    ///     staff happens to leave blank) is NOT a sliver and is kept.
+    /// The system must already carry REAL content somewhere (a wholly
+    /// glyph-free system — the layout-only fixtures that pass `classified: []`,
+    /// or a blank page — is left untouched), and at least one cell per staff
+    /// always remains. Because every staff in a system shares the same split
+    /// (the barline union), a cell's width and index are identical across
+    /// staves, so removing the same index from all of them keeps the count
+    /// uniform.
+    private static func dropContentFreeNarrowCells(_ parts: inout [ImportPart]) {
         let systemHasContent = parts.contains { part in
             part.staves.contains { st in st.measures.contains(where: measureHasContent) }
         }
         guard systemHasContent else { return }
-        for _ in 0 ..< 2 {
-            let count = parts
-                .flatMap { $0.staves.map(\.measures.count) }
-                .max() ?? 0
-            guard count >= 2 else { break }
-            let widthGate = medianMeasureWidth(parts) * trailingSliverWidthFraction
-            var anyTrailing = false
-            var anyContent = false
-            var anyWide = false
+        let count = parts.flatMap { $0.staves.map(\.measures.count) }.max() ?? 0
+        guard count >= 2 else { return }
+        let widthGate = medianMeasureWidth(parts) * sliverWidthFraction
+        guard widthGate > 0 else { return }
+        // A cell index is droppable only when EVERY staff that reaches that
+        // index agrees it is both content-free and narrow. Staves with fewer
+        // cells (an under-segmented staff) can't veto, but if NO staff reaches
+        // the index it isn't a real cell anyway.
+        var dropIndices: [Int] = []
+        for i in 0 ..< count {
+            var present = false
+            var allFreeNarrow = true
             for part in parts {
-                for st in part.staves where st.measures.count == count {
-                    anyTrailing = true
-                    let cell = st.measures[count - 1]
-                    if measureHasContent(cell) { anyContent = true }
+                for st in part.staves where i < st.measures.count {
+                    present = true
+                    let cell = st.measures[i]
                     let w = cell.xRange.upperBound - cell.xRange.lowerBound
-                    if w >= widthGate { anyWide = true }
+                    if measureHasContent(cell) || w >= widthGate {
+                        allFreeNarrow = false
+                    }
                 }
             }
-            guard anyTrailing, !anyContent, !anyWide, widthGate > 0 else { break }
-            for p in parts.indices {
-                for s in parts[p].staves.indices
-                    where parts[p].staves[s].measures.count == count
-                {
-                    parts[p].staves[s].measures.removeLast()
+            if present, allFreeNarrow { dropIndices.append(i) }
+        }
+        guard !dropIndices.isEmpty else { return }
+        // Never drop a staff below one remaining cell.
+        let dropSet = Set(dropIndices)
+        for p in parts.indices {
+            for s in parts[p].staves.indices {
+                let kept = parts[p].staves[s].measures.enumerated()
+                    .filter { !dropSet.contains($0.offset) }
+                    .map(\.element)
+                if !kept.isEmpty {
+                    parts[p].staves[s].measures = kept
                 }
             }
         }

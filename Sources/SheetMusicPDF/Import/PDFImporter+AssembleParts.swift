@@ -135,4 +135,43 @@ extension PDFImporter {
         }
         return mapping
     }
+
+    // MARK: - F8va clef resolution (pre-pass)
+
+    /// For every staff SLOT whose content reads under an ambiguous E065
+    /// (F8va) clef, decide F8va-vs-plain-F ONCE from the slot's whole-part
+    /// note population (aggregated across every system the slot appears in),
+    /// and return only the slots that should be DOWNGRADED to plain F.
+    ///
+    /// Mirrors `appendSystem`'s slot routing (`partSlotMapping` +
+    /// `shape.slotsByPartIndex`) so the aggregation lands in the same slots
+    /// the measures will. Returns an empty map when no slot uses F8va — the
+    /// common case, leaving the assembly path untouched.
+    static func resolveF8vaSlots(
+        systems: [ImportSystem], shape: PartShape,
+    ) -> [Int: Clef] {
+        var pitchesBySlot: [Int: [Int]] = [:]
+        for system in systems {
+            let refForSystemPart = partSlotMapping(system: system, shape: shape)
+            for (partIdx, importPart) in system.parts.enumerated() {
+                let refIdx = refForSystemPart[partIdx]
+                guard let slots = shape.slotsByPartIndex[refIdx] else { continue }
+                for (slot, importStaff) in zip(slots, importPart.staves) {
+                    guard staffInitialClefIsF8va(importStaff) else { continue }
+                    pitchesBySlot[slot, default: []]
+                        .append(contentsOf: f8vaCandidatePitches(staff: importStaff))
+                }
+            }
+        }
+        var overrides: [Int: Clef] = [:]
+        for (slot, pitches) in pitchesBySlot {
+            let resolved = disambiguateF8vaClef(
+                Clef(concertClefType: "F8va"), f8vaPitches: pitches,
+            )
+            if resolved.concertClefType != "F8va" {
+                overrides[slot] = resolved
+            }
+        }
+        return overrides
+    }
 }
