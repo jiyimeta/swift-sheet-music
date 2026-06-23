@@ -47,17 +47,33 @@ extension PDFImporter {
     /// share a midY within ≤0.5pt. A 2pt tolerance safely coalesces the
     /// dashes of one line while keeping adjacent lines distinct even at the
     /// tightest spacing seen.
-    private static let lineMergeTolerance: CGFloat = 2.0
+    static let lineMergeTolerance: CGFloat = 2.0
+
+    /// Width gate for **line clustering** (`> 50pt`). This is intentionally
+    /// CONSERVATIVE: it must admit only full-width staff lines so the
+    /// even-spacing CV test in `pathDetectedStaves` sees an unpolluted line
+    /// sequence. A *heavily-justified final bar* draws its five staff-line
+    /// segments only ~20-30pt wide; admitting those here would not help (they
+    /// belong to a staff already detected from its wider segments) and WOULD
+    /// risk a non-staff decoration of similar width (hairpin, tuplet bracket,
+    /// short rule) landing within `lineMergeTolerance` of a real line and
+    /// dragging that line's averaged midY enough to break the CV test —
+    /// dropping the whole staff (observed on ギブス page 5: a 22pt stroke at
+    /// y≈165 sat 1.7pt from a real line and lost the staff). The narrow
+    /// final-bar segments are instead folded into the OWNING staff's xRange by
+    /// `extendXRangeWithNarrowSegments`, which keys on the staff's own line
+    /// y's so a stray decoration can't corrupt detection. lineWidth is NOT
+    /// gated (see below).
+    ///
+    /// lineWidth is intentionally NOT gated: real MuseScore PDFs report staff
+    /// `w` operands ≥ ~1.8pt (MS3) or ≥ ~1pt (MS4), so any lineWidth threshold
+    /// would either reject genuine staves or admit beams. The CV<0.1 5-window
+    /// in `pathDetectedStaves` does the actual non-staff rejection.
+    static let lineClusterWidthGate: CGFloat = 50
 
     /// Filter horizontal segments on the page and cluster them by midY.
     /// Co-linear dash segments of one staff line coalesce; adjacent staff
     /// lines stay separate (see `lineMergeTolerance`).
-    ///
-    /// Width gate (>50pt) keeps decorative ledger / dot strokes out. lineWidth
-    /// is intentionally NOT gated: real MuseScore PDFs report staff `w`
-    /// operands ≥ ~1.8pt (MS3) or ≥ ~1pt (MS4), so any lineWidth threshold
-    /// would either reject genuine staves or admit beams. The CV<0.1 5-window
-    /// in `pathDetectedStaves` does the actual non-staff rejection.
     private static func clusterHorizontals(
         _ paths: [PathSegment],
         pageIndex: Int,
@@ -65,7 +81,7 @@ extension PDFImporter {
         let horiz = paths.filter {
             $0.pageIndex == pageIndex
                 && $0.kind == .horizontal
-                && $0.rect.width > 50
+                && $0.rect.width > lineClusterWidthGate
         }
         var clusters: [[PathSegment]] = []
         for seg in horiz.sorted(by: { $0.rect.midY < $1.rect.midY }) {
@@ -81,12 +97,24 @@ extension PDFImporter {
     }
 
     /// Slide a 5-window over consecutive y-clusters; CV < 0.1 ⇒ staff.
+    ///
+    /// Line POSITION comes only from the wide (`> lineClusterWidthGate`)
+    /// segments, keeping the CV test robust. After a staff is found, its
+    /// xRange is EXTENDED with any narrow horizontal segment co-linear with
+    /// one of the staff's five lines — this reaches the staff line segments of
+    /// a heavily-justified final bar that the clustering gate (correctly)
+    /// dropped, so the staff's xRange reaches the system's closing barline and
+    /// the final measure cell is created (see F5 / 群青日和 m5).
     private static func pathDetectedStaves(
         clusters: [[PathSegment]],
         paths: [PathSegment],
         pageIndex: Int,
         noteheads: [ClassifiedGlyph],
     ) -> [Staff] {
+        let pageHoriz = paths.filter {
+            $0.pageIndex == pageIndex && $0.kind == .horizontal
+        }
+        let spacing = medianLineSpacing(pageHoriz)
         var staves: [Staff] = []
         let lineYs: [CGFloat] = clusters.map { c in
             c.map(\.rect.midY).reduce(0, +) / CGFloat(c.count)
@@ -98,9 +126,12 @@ extension PDFImporter {
                 let segs = (i ... (i + 4)).flatMap { clusters[$0] }
                 let xMin = segs.map(\.rect.minX).min() ?? 0
                 let xMax = segs.map(\.rect.maxX).max() ?? 0
+                let xRange = extendXRangeWithNarrowSegments(
+                    xMin ... xMax, lineYs: ys, spacing: spacing, pageHoriz: pageHoriz,
+                )
                 staves.append(makeStaff(
                     yLines: ys,
-                    xRange: xMin ... xMax,
+                    xRange: xRange,
                     paths: paths,
                     pageIndex: pageIndex,
                     noteheads: noteheads,
@@ -249,9 +280,23 @@ extension PDFImporter {
             $0.raw.origin.y >= yLo && $0.raw.origin.y <= yHi
         }
 
+        // DEFENSE-IN-DEPTH for a heavily-justified FINAL bar. The staff's
+        // xRange is derived from its surviving staff-line segments (plus the
+        // narrow-segment extension); when the last bar's narrow segments are
+        // missing entirely, or end a hair short of the engraved barline, the
+        // genuine full-height closing barline can sit just OUTSIDE [lo, hi] and
+        // the strict `contains` test drops it → the final measure vanishes.
+        // Pad the membership window by HALF a staff space so a barline within
+        // that slop of either edge is still owned by this staff. The slop is
+        // tiny relative to a measure (≤ ½ space), so it can't pull in a
+        // neighbouring measure's interior barline.
+        let xSlop = spatium * 0.5
+        let xLoPad = xRange.lowerBound - xSlop
+        let xHiPad = xRange.upperBound + xSlop
+
         return paths.filter { p in
             guard p.pageIndex == pageIndex, p.kind == .vertical,
-                  xRange.contains(p.rect.midX)
+                  p.rect.midX >= xLoPad, p.rect.midX <= xHiPad
             else { return false }
             let coverage = p.rect.height
             guard coverage >= staffHeight * 0.85 else { return false }
