@@ -146,7 +146,100 @@ extension PDFImporter {
                 )
             }
         }
+        dropTrailingEmptyMeasure(&parts)
         return ImportSystem(pageIndex: system.pageIndex, yRange: system.yRange, parts: parts)
+    }
+
+    /// A measure cell carries musical content when it contains at least one
+    /// notehead OR one rest glyph. A cell with neither is not a real measure
+    /// — on this corpus it is the engraving MARGIN sliver a heavily-justified
+    /// final / double barline leaves between itself and the staff's right
+    /// edge (the barline lands ~20-25pt shy of the staff line ends, wider
+    /// than the `minCellWidth` floor, so it survives split coalescing as a
+    /// phantom empty cell). Such a sliver shifts EVERY following measure of
+    /// the score down by one cell, wrecking the positional per-measure
+    /// comparison for the whole tail even though the note decode is correct.
+    private static func measureHasContent(_ measure: ImportMeasure) -> Bool {
+        for g in measure.glyphs {
+            if isNotehead(g.semantic) { return true }
+            if case .rest = g.semantic { return true }
+        }
+        return false
+    }
+
+    /// A trailing empty cell is dropped only when its width is below this
+    /// fraction of the system's MEDIAN measure width. A real measure (even
+    /// an empty-in-this-fixture one) is a full-width cell; the engraving
+    /// margin a heavily-justified final / double barline leaves between
+    /// itself and the staff edge is a thin sliver (~20-25pt vs ~100pt+ real
+    /// measures on the corpus). Measure-relative, so it holds across print
+    /// sizes and fonts (and never fires on the synthetic layout fixtures,
+    /// whose trailing cells are full-width).
+    private static let trailingSliverWidthFraction: CGFloat = 0.5
+
+    /// Drop the system's LAST measure cell from every staff when it is an
+    /// empty (no note / rest glyph) trailing-margin SLIVER — content-free AND
+    /// narrow relative to the system's typical measure. Guards:
+    ///   * The system must already carry REAL content (some cell, somewhere,
+    ///     has a note / rest). A wholly glyph-free system — the layout-only
+    ///     fixtures that pass `classified: []`, or a truly blank page — is
+    ///     left untouched.
+    ///   * The trailing cell must be NARROW (< `trailingSliverWidthFraction`
+    ///     of the system's median measure width). A full-width empty trailing
+    ///     measure (a real bar that merely holds a multi-rest) is NOT dropped.
+    ///   * Only the trailing cell of each staff at the system's max count is
+    ///     removed, and only when EVERY such staff agrees it is content-free,
+    ///     preserving the system-wide uniform measure count.
+    ///   * At most TWO passes (a thin + thick final barline can leave two
+    ///     slivers), never below one remaining measure per staff.
+    private static func dropTrailingEmptyMeasure(_ parts: inout [ImportPart]) {
+        let systemHasContent = parts.contains { part in
+            part.staves.contains { st in st.measures.contains(where: measureHasContent) }
+        }
+        guard systemHasContent else { return }
+        for _ in 0 ..< 2 {
+            let count = parts
+                .flatMap { $0.staves.map(\.measures.count) }
+                .max() ?? 0
+            guard count >= 2 else { break }
+            let widthGate = medianMeasureWidth(parts) * trailingSliverWidthFraction
+            var anyTrailing = false
+            var anyContent = false
+            var anyWide = false
+            for part in parts {
+                for st in part.staves where st.measures.count == count {
+                    anyTrailing = true
+                    let cell = st.measures[count - 1]
+                    if measureHasContent(cell) { anyContent = true }
+                    let w = cell.xRange.upperBound - cell.xRange.lowerBound
+                    if w >= widthGate { anyWide = true }
+                }
+            }
+            guard anyTrailing, !anyContent, !anyWide, widthGate > 0 else { break }
+            for p in parts.indices {
+                for s in parts[p].staves.indices
+                    where parts[p].staves[s].measures.count == count
+                {
+                    parts[p].staves[s].measures.removeLast()
+                }
+            }
+        }
+    }
+
+    /// Median width of all measure cells in the system (used to size the
+    /// trailing-sliver gate). Zero when the system has no measures.
+    private static func medianMeasureWidth(_ parts: [ImportPart]) -> CGFloat {
+        var widths: [CGFloat] = []
+        for part in parts {
+            for st in part.staves {
+                for m in st.measures {
+                    widths.append(m.xRange.upperBound - m.xRange.lowerBound)
+                }
+            }
+        }
+        guard !widths.isEmpty else { return 0 }
+        widths.sort()
+        return widths[widths.count / 2]
     }
 
     /// Sorted, deduplicated union of barline midXs across every staff in
