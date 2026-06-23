@@ -39,6 +39,43 @@ struct PathSegment: Equatable {
     var rect: CGRect // collapsed bounding box; horizontal/vertical degenerate rects are 1-D
     var lineWidth: CGFloat
     var pageIndex: Int
+    /// Sloped-beam geometry, set only on `.beam` segments. The axis-aligned
+    /// `rect` inflates a sloped beam's height to ~7pt (the slope spans the
+    /// x-range), which mis-associates interior / neighbour-staff stems; the
+    /// quad keeps the true ~2pt-thick parallelogram so membership can be
+    /// tested against the interpolated top / bottom edge at a stem's own x.
+    var quad: BeamQuad?
+}
+
+/// One beam line captured as a thin sloped parallelogram, preserving its
+/// slope so the rhythm pass can test stem membership against the
+/// interpolated beam edge at the stem's own x (rather than the inflated
+/// axis-aligned bounding box). `topY(x)` / `botY(x)` give the upper /
+/// lower edge y at any x; thickness is ~2pt for a single beam.
+///
+/// MuseScore draws each beam line as a filled 4-corner quad (`m l l l f`).
+/// The four page-space corners are split into a top pair and a bottom pair;
+/// each pair is fit to a line `y = m·x + b`. Page coordinates throughout.
+struct BeamQuad: Equatable {
+    var xRange: ClosedRange<CGFloat>
+    var topSlope: CGFloat
+    var topIntercept: CGFloat
+    var botSlope: CGFloat
+    var botIntercept: CGFloat
+    var pageIndex: Int
+
+    /// Upper-edge y at `x` (clamped to the beam's x-range so a stem just
+    /// outside the drawn span still reads the nearest edge).
+    func topY(at x: CGFloat) -> CGFloat {
+        let xc = min(max(x, xRange.lowerBound), xRange.upperBound)
+        return topSlope * xc + topIntercept
+    }
+
+    /// Lower-edge y at `x` (clamped as in `topY`).
+    func botY(at x: CGFloat) -> CGFloat {
+        let xc = min(max(x, xRange.lowerBound), xRange.upperBound)
+        return botSlope * xc + botIntercept
+    }
 }
 
 /// A filled curved subpath captured from `c`/`v`/`y` Bezier operators —
@@ -160,6 +197,16 @@ struct RhythmElement {
     var y: CGFloat
     var stemDirection: StemDirection?
     var beamGroup: Int?
+    /// Whether this chord's note value was decoded from a WEAK geometric
+    /// signal: a group-size-1 note read via a flag glyph, or a stem whose
+    /// beam level came from interior inheritance rather than a direct
+    /// beam-spanning count. Such notes are the preferred candidates for the
+    /// metric-sum reconciliation pass (PDFImporter+RhythmReconcile), which
+    /// repairs a voice whose durations don't sum to the bar length by
+    /// changing exactly one low-confidence note. High-confidence beamed
+    /// notes are left untouched. Defaults to `false` (rests, whole / half
+    /// notes, and directly-beamed black noteheads).
+    var lowConfidenceDuration = false
 
     var isRest: Bool {
         chord.notes.isEmpty

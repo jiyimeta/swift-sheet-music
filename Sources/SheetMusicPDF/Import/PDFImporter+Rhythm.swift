@@ -53,6 +53,11 @@ extension PDFImporter {
             glyphs: glyphs, threshold: graceSizeThreshold,
         )
 
+        // Beam-group geometry (① + ②): per-stem beam level computed ONCE
+        // over the whole measure so union-find groups and interior
+        // inheritance see every stem. Keyed by the stem's index in `stems`.
+        let levelByStem = computeBeamLevels(stems: stems, beams: beams)
+
         var elements: [RhythmElement] = []
         var consumed = graceIndices
 
@@ -67,7 +72,8 @@ extension PDFImporter {
                     leadIndex: i,
                     glyphs: glyphs,
                     stems: stems,
-                    beams: beams,
+                    levelByStem: levelByStem,
+                    flagBand: yBand,
                     pitchByGlyph: pitchByGlyph,
                     tieMarks: tieMarks,
                     consumed: &consumed,
@@ -106,7 +112,8 @@ extension PDFImporter {
         leadIndex: Int,
         glyphs: [ClassifiedGlyph],
         stems: [PathSegment],
-        beams: [PathSegment],
+        levelByStem: [Int: Int],
+        flagBand: ClosedRange<CGFloat>?,
         pitchByGlyph: [RawGlyph: DecodedPitch],
         tieMarks: TieMarks,
         consumed: inout Set<Int>,
@@ -131,38 +138,34 @@ extension PDFImporter {
         let base = baseDuration(for: lead.semantic)
         // Beam lines take precedence over flags. Only black noteheads
         // (quarter base) are beamable; half / whole notes are never beamed,
-        // so a spurious beam overlap can't shorten them.
+        // so a spurious beam overlap can't shorten them. The level is the
+        // group-aware count computed up front (① + ②): sloped-quad
+        // membership + interior inheritance + owned partial stubs.
         let beamLevels: Int
-        if base == .quarter, let stem = cluster.stem {
-            beamLevels = beamLevelCount(stem: stem, beams: beams)
+        if base == .quarter, let si = cluster.stemIndex {
+            // Direct index lookup — the cluster carries the exact `stems`
+            // index it chose, so two stems sharing an x can't be confused
+            // (an x-only reverse lookup would mis-resolve them).
+            beamLevels = levelByStem[si] ?? 0
         } else {
             beamLevels = 0
         }
         let withBeamsOrFlags: NoteDuration
+        let flagShortened: Bool
         if beamLevels > 0 {
             withBeamsOrFlags = durationForBeamLevels(beamLevels, base: base)
+            flagShortened = false
         } else {
-            let flagged = applyFlags(
+            withBeamsOrFlags = applyFlags(
                 base: base, glyphs: glyphs, stem: cluster.stem, lead: lead,
+                flagBand: flagBand,
             )
-            // Beam-group-membership rescue: a quarter with no own beam and
-            // no flag, but whose stem is strictly interior to a
-            // group-spanning beam, is a beamed eighth whose own stem
-            // vertical was mis-detected off-row. Only fires for an
-            // otherwise-bare black notehead (still `base`), so it can never
-            // contradict a detected flag or shorten a half / whole note.
-            if flagged == base, base == .quarter, let stem = cluster.stem {
-                let rescue = primaryBeamRescueLevel(
-                    stemX: stem.rect.midX,
-                    noteY: lead.raw.origin.y,
-                    beams: beams,
-                )
-                withBeamsOrFlags = rescue > 0
-                    ? durationForBeamLevels(rescue, base: base)
-                    : flagged
-            } else {
-                withBeamsOrFlags = flagged
-            }
+            // A flag actually fired only when the result is shorter than the
+            // base — i.e. this group-size-1 note's value HINGES on a flag
+            // glyph the geometry could have mis-read (the q↔8 ambiguity). An
+            // unbeamed, unflagged base note (plain quarter / half / whole) is
+            // high-confidence in its value and is never a repair candidate.
+            flagShortened = withBeamsOrFlags != base
         }
         let withDots = applyDots(
             duration: withBeamsOrFlags, glyphs: glyphs, lead: lead,
@@ -177,6 +180,7 @@ extension PDFImporter {
             y: lead.raw.origin.y,
             stemDirection: dir,
             beamGroup: nil,
+            lowConfidenceDuration: flagShortened,
         )
     }
 }
@@ -218,6 +222,10 @@ extension PDFImporter {
     fileprivate struct Cluster {
         var indices: [Int]
         var stem: PathSegment?
+        /// Index of `stem` in the measure's `stems` array (nil when no stem).
+        /// Carried so the precomputed `levelByStem` can be read directly,
+        /// without an ambiguous x-only reverse lookup.
+        var stemIndex: Int?
     }
 
     fileprivate static func stemCluster(
@@ -226,9 +234,11 @@ extension PDFImporter {
         stems: [PathSegment],
     ) -> Cluster {
         let lead = glyphs[i]
-        guard let stem = nearestStem(toX: lead.raw.origin.x, stems: stems)
+        guard let chosen = nearestStem(
+            toX: lead.raw.origin.x, noteY: lead.raw.origin.y, stems: stems,
+        )
         else {
-            return Cluster(indices: [i], stem: nil)
+            return Cluster(indices: [i], stem: nil, stemIndex: nil)
         }
         var indices = [i]
         for (j, g) in glyphs.enumerated() where j != i {
@@ -241,23 +251,9 @@ extension PDFImporter {
                 indices.append(j)
             }
         }
-        return Cluster(indices: indices.sorted(), stem: stem)
-    }
-
-    /// The stem abutting a notehead at `x`. A stem sits ~4–6pt to the
-    /// side of the notehead (its right edge for stem-up, left for
-    /// stem-down), so accept the nearest vertical within ~7pt — under
-    /// the ~10pt note-to-note spacing, so it can't grab a neighbour.
-    private static func nearestStem(
-        toX x: CGFloat, stems: [PathSegment],
-    ) -> PathSegment? {
-        let best = stems.min {
-            abs($0.rect.midX - x) < abs($1.rect.midX - x)
-        }
-        guard let stem = best, abs(stem.rect.midX - x) <= 7 else {
-            return nil
-        }
-        return stem
+        return Cluster(
+            indices: indices.sorted(), stem: chosen.stem, stemIndex: chosen.index,
+        )
     }
 
     private static func isNoteheadSemantic(_ s: SMuFLSemantic) -> Bool {
@@ -316,6 +312,7 @@ extension PDFImporter {
         glyphs: [ClassifiedGlyph],
         stem: PathSegment?,
         lead: ClassifiedGlyph,
+        flagBand: ClosedRange<CGFloat>?,
     ) -> NoteDuration {
         guard let stem else { return base }
         let stemX = stem.rect.midX
@@ -325,6 +322,11 @@ extension PDFImporter {
         let near: ClosedRange<CGFloat> = 4 ... 22
         var level = 0
         for g in glyphs {
+            // Staff-scope the flag match: a vertically-aligned adjacent-staff
+            // flag sits at the same x but outside this staff's y-band, so
+            // restricting to the band stops it from being grabbed (fixes the
+            // q→8 over-read).
+            if let flagBand, !flagBand.contains(g.raw.origin.y) { continue }
             guard abs(g.raw.origin.x - stemX) < 5,
                   let lvl = flagLevel(g.semantic) else { continue }
             let dy = g.raw.origin.y - noteY

@@ -25,8 +25,8 @@ not self-reported):
 | Notes / Rests / Chords | **1608 / 316 / 1608 — EXACT** |
 | Grace notes (count + per-part) | **13, [3,5,0,5,0] — EXACT** |
 | Clef / Key / Time signature | **100% / 100% / 100%** (455/455 each) |
-| Pitch (by value) | **99%** (1607/1608; 1 accidental edge case) |
-| Duration (by value) | **94%** (1515/1608) |
+| Pitch (by value) | **100%** (1608/1608) |
+| Duration (by value) | **100%** (1608/1608) |
 | Ties | recall **89%**, precision **100%** |
 | Title / Subtitle | **EXACT** (ギブス / 椎名林檎) |
 | Composer | text exact, inter-word spaces lost |
@@ -36,37 +36,56 @@ This validates the spec's core thesis — *structural extraction from
 MuseScore vector PDFs is viable* — on a real, dense, multi-part score,
 not just a synthetic round-trip.
 
+> **Update (rhythm re-architecture).** Pitch and duration above started
+> at 99% / 94%. A follow-up re-architecture (see below) took **both to
+> 100%** by treating beams as sloped polygons with group-membership
+> inference + a metric-sum reconciliation, and by propagating tie-carried
+> accidentals. Crucially this **disproved an earlier "fundamental
+> information loss" claim** for duration: every duration error was
+> *captured-but-mis-associated* geometry, not absent information — see the
+> corrected section below.
+
 ## What "完全一致" can and cannot reach (proven, not assumed)
 
 The remaining gap was classified by raw content-stream probing
 (independent `CGPDFScanner` dumps), not guessed:
 
-### Fundamental PDF-information-loss (NOT recoverable by any importer)
-- **~50–55 duration notes.** Two causes, both verified at the glyph
-  level: (a) MuseScore draws beam geometry over only *some* stems of a
-  beamed group — interior bare stems carry no beam quad and no flag, so
-  "eighth vs quarter" is simply not encoded over those stems; (b)
-  beam-edge ambiguities where a beam's drawn x-end and an adjacent
-  stem nearly coincide (e.g. beam end 533.1 vs next stem 532.9) and
-  local geometry cannot disambiguate.
-- **Composer inter-word spaces.** MuseScore emits no space glyph, and
-  the word-boundary x-step (~8pt) is indistinguishable from intra-word
-  advances. "Arranged by Kiichi" recovers as "ArrangedbyKiichi".
-- **A floor on exact lyric placement** in genuinely dense passages.
+### Correction — duration was NOT information loss (earlier claim was wrong)
+An earlier draft of this plan labelled ~50–55 duration notes as
+"fundamental PDF-information-loss" (beams allegedly not drawn over interior
+stems). **A forensic re-probe disproved this.** Census over all 9 pages:
+356 filled beam quads captured, **zero dropped**; flags present; every
+duration error was a *value error on an existing slot*. The errors were
+**captured-but-mis-associated geometry**:
+- beams were collapsed to an axis-aligned bbox (a sloped beam inflated it,
+  so the per-stem y-gate fished a ~13pt window an interior/short stem
+  couldn't reach) → `8→q`;
+- vertically-aligned neighbouring staves let a same-x beam/flag be grabbed
+  by the wrong stem → `8→16`, `q→16`, `q→8`;
+- fractional (partial) beams had no ownership model → dotted-family
+  confusion.
+Plus two independent backstops a human uses: **17/17 failing bars violated
+the 4/4 measure sum**, and **x-position is monotonic in duration**.
 
-### Fixable with more work (diminishing returns)
-- **Duration 94% → ~97%** would require a proper **beam-group
-  segmentation model** (cluster stems by row + adjacency + x-gap,
-  resolve each group's subdivision jointly with dotted-eighth hooks and
-  group-boundary gaps). This is a structural change with real
-  regression risk against the by-value metric — every naive window
-  relaxation tried during the spike *worsened* duration (it steals
-  beams from neighbouring groups).
-- **Tie recall 89% → higher** — detect short / sloped tie arcs.
-- **Lyric recall 33% → higher** — a smarter per-cell gate plus
-  melisma / hyphen-continuation handling (capture is already solved at
-  92% precision; the conservative gate trades recall for precision).
-- **Pitch 1/1608** — a single accidental/octave edge case.
+The re-architecture (geometry group-membership + metric-sum reconciliation
++ tie-pitch propagation) recovered **all of it**: duration **94% → 100%
+(1608/1608)** and pitch **99% → 100% (1608/1608)**, both proven monotonic
+(no previously-correct note regressed).
+
+### Still recoverable, not yet done (info is on the page)
+- **Tie recall 89% → higher** — 48 of A's ties undetected (precision is
+  already 100%, no false ties). The tie *arcs* are drawn; needs
+  short/sloped-arc detection. By the same logic as duration, this is
+  mis-/under-detection, not absence.
+- **Lyric recall 33% → higher** — capture is solved (92% precision); a
+  smarter per-cell gate + melisma / hyphen-continuation handling lifts
+  recall.
+
+### Genuinely absent from the PDF (irreducible)
+- **Composer inter-word spaces.** MuseScore emits no space glyph, and the
+  word-boundary x-step (~8pt) is indistinguishable from intra-word
+  advances. "Arranged by Kiichi" recovers as "ArrangedbyKiichi". This is
+  the *only* confirmed genuine information loss found.
 
 ### Out of scope by design (present in the mscz, never in scope for v1)
 Dynamics, slurs, articulations, ornaments, hairpins, pedal, MIDI
@@ -76,11 +95,15 @@ says will not) reconstruct them, so a *full Score model* comparison will
 always differ on these. The convergence above is **musical content**,
 which is the meaningful target for a re-import use case.
 
-**Bottom line:** literal 100% Score-model equality is not attainable from
-a PDF — some rhythm geometry and word-spaces are genuinely absent from
-the rendered stream (proven), and several fields are deliberately out of
-scope. Musical-content parity is reached to 94–100% across every
-dimension, and the residual is now precisely characterized.
+**Bottom line:** on this ground truth, **pitch, duration, and all
+structure (parts/staves/measures/notes/rests/grace/clef/key/time) reach
+100%.** The only non-exact compared dimensions are tie *recall* (89%) and
+lyric *recall* (33%) — both recoverable (the geometry is on the page) and
+not yet done — plus deliberately out-of-scope fields. The single confirmed
+*irreducible* loss is composer word-spaces (no space glyph). "完全一致" on
+musical content is therefore achievable; only out-of-scope fields
+(dynamics/slurs/MIDI/layout) keep a *full Score-model* comparison from
+being byte-identical.
 
 ## What was implemented (on `spike/pdf-import-cmap`, uncommitted)
 
@@ -102,6 +125,20 @@ New files under `Sources/SheetMusicPDF/Import/`:
   size + attachment as `GraceChord` on `Chord.graceNotesBefore`.
 - `PDFImporter+ContentStream+TextShow.swift` — extracted emit helpers
   (file-length cap).
+
+Rhythm re-architecture (the 99/94 → 100/100 follow-up):
+- `PDFImporter+BeamGroups.swift` + `PDFImporter+UnionFind.swift` — sloped
+  `BeamQuad` capture, point-in-band membership at each stem's x, union-find
+  beam groups with interior-inheritance (a grouped stem is ≥ eighth), and
+  partial-beam stub levels. Replaced the per-stem bbox `beamLevelCount` /
+  `primaryBeamRescueLevel`. Flag matching is now staff-y-band-scoped.
+- `PDFImporter+RhythmReconcile.swift` — metric backstop: per voice/measure,
+  if the note+rest durations don't sum to the bar length, repair exactly
+  one low-confidence note (x-onset least-squares as the tie-break); a
+  provable **no-op on metrically-valid measures** (never regresses).
+- `PDFImporter+TiePitch.swift` — a tied-back note adopts its tie source's
+  pitch/tpc (MuseScore omits the carried accidental on the continuation
+  note). Fixed the lone pitch residual.
 
 Modified (14 files): the content-stream walker now extracts per-font
 CMaps and routes SMuFL-PUA scalars to `RawGlyph` (CID→PUA→RawGlyph);

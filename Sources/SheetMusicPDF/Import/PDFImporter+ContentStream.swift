@@ -191,11 +191,13 @@ extension PDFImporter {
                 let w = maxX - minX
                 let h = maxY - minY
                 guard w >= 4, w <= 175, h < 12 else { return false }
+                let quad = PDFImporter.fitBeamQuad(corners: page, pageIndex: pageIndex)
                 paths.append(.init(
                     kind: .beam,
                     rect: CGRect(x: minX, y: minY, width: w, height: h),
                     lineWidth: lineWidth,
                     pageIndex: pageIndex,
+                    quad: quad,
                 ))
                 return true
             }
