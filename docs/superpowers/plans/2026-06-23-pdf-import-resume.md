@@ -224,3 +224,54 @@ real remaining engineering. In priority order:
 - **Decision: target scope** — accept musical-content parity (current
   result) as the v1 bar, or invest in the fixable-but-risky levers
   (task 8) before re-exposing the API.
+
+## Corpus generalization (2026-06-23/24) — the #1 risk, substantially retired
+
+The "heuristic brittleness across PDFs" risk above was attacked directly
+by validating against a **5-score corpus** (`~/Desktop/pdf_test/`, all
+re-exported by **mscore 3.6.2** so each `<name>.pdf` has a matching
+`<name>.mscz` ground truth), spanning **three music fonts** — Leland,
+MScore, and Bravura (some scores mix them):
+
+| Score | font | pitch / **pitchedOnly** | dur | measures | note-recall |
+|---|---|---|---|---|---|
+| ギブス | Leland | 100 / **100** | 100 | 91 ✓ | 100% |
+| 君とParadiso | Leland+Bravura | 83 / **99** | 89 | 112 ✓ | 100% |
+| 群青日和 | Leland+Bravura | 80 / **99** | 90 | 121 ✓ | ~100% |
+| 地球儀 | MScore | 96 / **98** | 96 | 62 ✓ | ~100% |
+| カゲロウ (medley) | MScore | 73 / **78** | 81 | 191 (A 192) | ~100% |
+
+(`pitchedOnly` excludes percussion staves, whose pitch is a GM-drumkey
+approximation; it is the honest "did the pitched content decode" signal.)
+
+From baselines of **1–37 % pitch** on the non-ギブス scores, six monotonic
+rounds (every round held ギブス at 100/100/100, independently verified)
+took the corpus to **note-recall 100 % on all 5, measures exact on 4/5,
+and pitched-content 98–100 % on 4/5.** Commits `5dbcea2`…`17f31ba`.
+
+**The font/codepoint approach generalizes** — all three fonts ToUnicode-map
+to standard SMuFL PUA, so glyph decode was never the bottleneck. Every gap
+was a **geometry/structure heuristic over-fit to ギブス**, fixed
+font-independently (spatium-relative tolerances):
+
+- barline detection (no-notehead-abuts, not stroke-width) + system
+  clustering (ensemble-size rank-break, not a fixed median multiple);
+- percussion-staff recovery (was dropping whole drum staves to rests) +
+  X-noteheads + octave clefs (F8va/F8vb/G8va…) + content-based E065
+  F8va-vs-plain-F disambiguation;
+- narrow / spurious empty measure-cell handling (the dominant "decode
+  error" on dense scores turned out to be a **±1 measure-boundary shift**,
+  not bad decode — boundary-agnostic flat-LCS was 96–100 % throughout);
+- marker-less tuplet inference (the "3" is a vector outline, not a glyph).
+
+**Remaining (genuine hard ceiling / specialized, not brittleness):**
+- カゲロウ is short one measure — a 3-beat incomplete bar the PDF renders
+  with **no detectable barline** (needs metric-driven measure recovery).
+- **Drum-pitch fidelity** — the GM line/space mapping is approximate, not
+  the score's actual drumset; drags *overall* (not pitchedOnly) pitch.
+- Lyric recall and a few per-note beam/accidental edges.
+
+Net: the v1 "MuseScore vector PDF" target is **validated across fonts and
+layouts**, not just one file. The productionization tasks above (esp. the
+redistributable-fixture and public-API ones) are the remaining gate;
+brittleness is no longer the open question it was.
