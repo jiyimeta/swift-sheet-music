@@ -107,15 +107,17 @@ extension PDFImporter {
     /// Map a percussion notehead to a General-MIDI drumset note (channel-10
     /// key number), keyed on its vertical staff position and notehead type.
     ///
-    /// The drum staff uses treble-clef geometry (bottom line = E4). We
-    /// measure the notehead's position as the number of diatonic half-line
-    /// steps above the bottom line (`stepsAbove`, 0 = bottom line) and bin
-    /// it into the conventional drumset rows used by MuseScore / Sibelius:
-    /// X-noteheads = cymbals & hi-hat (upper rows), round noteheads =
-    /// drums (kick / toms / snare). This is a deterministic convention, not
-    /// a per-instrument transcription — exact drum identity per score is a
-    /// follow-up; the goal here is that drum noteheads become NOTES with a
-    /// conventionally meaningful pitch rather than collapsing to rests.
+    /// Mirrors MuseScore 3's **default drumset** — the `<Drum>` line/head
+    /// table MuseScore embeds in every percussion staff's instrument (and
+    /// which is what positions the noteheads in the exported PDF). In that
+    /// table `line` is measured from the TOP staff line downward (top line
+    /// = 0, bottom line = 8); we measure `stepsAbove` from the BOTTOM line
+    /// upward, so `stepsAbove = 8 - line`. The achievable signal from a PDF
+    /// glyph is (staff position, round-vs-cross notehead) only — several GM
+    /// drums can share one `(line, head)` slot, so where a slot is shared we
+    /// pick the musically dominant member, verified against the 3-score
+    /// percussion-corpus confusion tables (snare 38 @ sa5, closed hat 42 @
+    /// sa9, ride 51 @ sa8, etc.).
     static func percussionMidi(
         noteheadY: CGFloat, isX: Bool, anchor: StaffAnchor,
     ) -> Int {
@@ -124,22 +126,26 @@ extension PDFImporter {
             ? Int(((noteheadY - anchor.bottomY) / halfStep).rounded())
             : 0
         if isX {
-            // Cymbals / hi-hat (X-noteheads), high → low staff position.
+            // Cross noteheads: hi-hats / cymbals (upper staff & above) +
+            // side stick (mid staff) + pedal hi-hat (below staff).
             switch stepsAbove {
-            case ..<7: return 44 // pedal hi-hat (low X, e.g. foot)
-            case 7 ... 9: return 42 // closed hi-hat (top space / above)
-            case 10: return 49 // crash cymbal (above the staff)
-            default: return 51 // ride cymbal (highest)
+            case ...0: return 44 // pedal hi-hat (line 9, below the staff)
+            case 1 ... 6: return 37 // side stick (line 3 ≈ sa5)
+            case 7: return 46 // open hi-hat (line 1)
+            case 8: return 51 // ride cymbal 1 (line 0, top line)
+            case 9: return 42 // closed hi-hat (line -1, above top line)
+            case 10: return 49 // crash cymbal 1 (line -2)
+            default: return 55 // splash / china / crash 2 (line ≤ -3)
             }
         }
-        // Round noteheads = membranophones, low → high staff position.
+        // Round noteheads: kick / snare / toms, low → high staff position.
         switch stepsAbove {
-        case ..<2: return 36 // bass / kick drum (bottom space)
-        case 2 ... 3: return 41 // low floor tom
-        case 4 ... 5: return 45 // low tom
-        case 6: return 38 // snare (3rd space ~C5)
-        case 7 ... 8: return 48 // high-mid tom
-        default: return 50 // high tom (top of staff and above)
+        case ...1: return 36 // bass drum 1 (line 7, bottom space)
+        case 2 ... 3: return 43 // floor toms (line 5)
+        case 4 ... 5: return 38 // acoustic snare (line 3, 3rd space ~C5)
+        case 6: return 45 // low tom (line 2)
+        case 7: return 47 // low-mid tom (line 1)
+        default: return 50 // high / hi-mid tom (line 0, top line and above)
         }
     }
 }
