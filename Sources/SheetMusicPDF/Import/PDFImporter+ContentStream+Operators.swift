@@ -47,16 +47,18 @@ enum ContentStreamOperators {
         CGPDFOperatorTableSetCallback(table, "v", op_v)
         CGPDFOperatorTableSetCallback(table, "y", op_y)
 
-        // Painting operators that flush the in-progress path.
-        CGPDFOperatorTableSetCallback(table, "S", op_flush)
-        CGPDFOperatorTableSetCallback(table, "s", op_flush)
-        CGPDFOperatorTableSetCallback(table, "f", op_flush)
-        CGPDFOperatorTableSetCallback(table, "F", op_flush)
-        CGPDFOperatorTableSetCallback(table, "f*", op_flush)
-        CGPDFOperatorTableSetCallback(table, "B", op_flush)
-        CGPDFOperatorTableSetCallback(table, "B*", op_flush)
-        CGPDFOperatorTableSetCallback(table, "b", op_flush)
-        CGPDFOperatorTableSetCallback(table, "b*", op_flush)
+        // Painting operators that flush the in-progress path. Fill (and
+        // fill-and-stroke) variants run beam-quad detection; pure strokes
+        // do not (a beam is always filled).
+        CGPDFOperatorTableSetCallback(table, "S", op_stroke)
+        CGPDFOperatorTableSetCallback(table, "s", op_stroke)
+        CGPDFOperatorTableSetCallback(table, "f", op_fill)
+        CGPDFOperatorTableSetCallback(table, "F", op_fill)
+        CGPDFOperatorTableSetCallback(table, "f*", op_fill)
+        CGPDFOperatorTableSetCallback(table, "B", op_fill)
+        CGPDFOperatorTableSetCallback(table, "B*", op_fill)
+        CGPDFOperatorTableSetCallback(table, "b", op_fill)
+        CGPDFOperatorTableSetCallback(table, "b*", op_fill)
 
         // n: end path without painting; W/W*: clipping markers.
         CGPDFOperatorTableSetCallback(table, "n", op_drop)
@@ -100,7 +102,13 @@ private func op_BT(_: CGPDFScannerRef, _ info: UnsafeMutableRawPointer?) {
 private func op_Tf(_ scanner: CGPDFScannerRef, _ info: UnsafeMutableRawPointer?) {
     guard let s = pageState(info) else { return }
     if let size = popNumber(scanner) { s.fontSize = size }
-    if let name = popName(scanner) { s.fontName = name }
+    if let name = popName(scanner) {
+        s.fontName = name
+        // Select the ToUnicode CMap for this font resource. nil when the
+        // font has no usable /ToUnicode (e.g. ASCII Helvetica fixtures),
+        // which keeps the legacy UTF-8/Latin-1 decode path active.
+        s.activeCMap = s.fontCMaps[name]
+    }
 }
 
 private func op_Tm(_ scanner: CGPDFScannerRef, _ info: UnsafeMutableRawPointer?) {
@@ -129,27 +137,25 @@ private func op_Tstar(_: CGPDFScannerRef, _ info: UnsafeMutableRawPointer?) {
 
 private func op_Tj(_ scanner: CGPDFScannerRef, _ info: UnsafeMutableRawPointer?) {
     guard let s = pageState(info), let str = popString(scanner) else { return }
-    emitText(decodeString(str), state: s)
+    emitShow(str, state: s)
 }
 
 private func op_TJ(_ scanner: CGPDFScannerRef, _ info: UnsafeMutableRawPointer?) {
     guard let s = pageState(info), let arr = popArray(scanner) else { return }
-    var combined = ""
     let count = CGPDFArrayGetCount(arr)
     for i in 0 ..< count {
         var str: CGPDFStringRef?
         if CGPDFArrayGetString(arr, i, &str), let str {
-            combined += decodeString(str)
+            emitShow(str, state: s)
         }
         // Numbers are kerning offsets — ignored for our walker.
     }
-    if !combined.isEmpty { emitText(combined, state: s) }
 }
 
 private func op_quote(_ scanner: CGPDFScannerRef, _ info: UnsafeMutableRawPointer?) {
     guard let s = pageState(info), let str = popString(scanner) else { return }
     s.textMatrix = s.lineMatrix
-    emitText(decodeString(str), state: s)
+    emitShow(str, state: s)
 }
 
 private func op_dquote(_ scanner: CGPDFScannerRef, _ info: UnsafeMutableRawPointer?) {
@@ -157,14 +163,22 @@ private func op_dquote(_ scanner: CGPDFScannerRef, _ info: UnsafeMutableRawPoint
     _ = popNumber(scanner) // word spacing
     _ = popNumber(scanner) // char spacing
     s.textMatrix = s.lineMatrix
-    emitText(decodeString(str), state: s)
+    emitShow(str, state: s)
 }
 
 private func op_m(_ scanner: CGPDFScannerRef, _ info: UnsafeMutableRawPointer?) {
     guard let s = pageState(info),
           let y = popNumber(scanner),
           let x = popNumber(scanner) else { return }
-    s.currentPoint = CGPoint(x: x, y: y)
+    let p = CGPoint(x: x, y: y)
+    s.currentPoint = p
+    // Begin a new subpath polygon. The first `m` of a fresh path captures
+    // the CTM; subsequent `m`s inside the same un-painted path (rare for
+    // beams) just continue accumulating points.
+    if s.pendingPolyPoints.isEmpty {
+        s.pendingPolyCTM = s.ctm
+    }
+    s.pendingPolyPoints.append(p)
 }
 
 private func op_l(_ scanner: CGPDFScannerRef, _ info: UnsafeMutableRawPointer?) {
@@ -176,6 +190,7 @@ private func op_l(_ scanner: CGPDFScannerRef, _ info: UnsafeMutableRawPointer?) 
         s.pendingLines.append((cur, next, s.ctm))
     }
     s.currentPoint = next
+    s.pendingPolyPoints.append(next)
 }
 
 private func op_re(_ scanner: CGPDFScannerRef, _ info: UnsafeMutableRawPointer?) {
@@ -189,30 +204,54 @@ private func op_re(_ scanner: CGPDFScannerRef, _ info: UnsafeMutableRawPointer?)
 
 private func op_c(_ scanner: CGPDFScannerRef, _ info: UnsafeMutableRawPointer?) {
     guard let s = pageState(info) else { return }
+    var nums: [CGFloat] = []
     for _ in 0 ..< 6 {
-        _ = popNumber(scanner)
+        if let n = popNumber(scanner) { nums.append(n) }
     }
-    s.currentPoint = nil
+    // Operands pop in reverse; the cubic's endpoint is the first pair shown
+    // in the stream → the last two values popped (nums[5], nums[4]).
+    captureCurve(s, endX: nums.count == 6 ? nums[5] : nil, endY: nums.count == 6 ? nums[4] : nil)
 }
 
 private func op_v(_ scanner: CGPDFScannerRef, _ info: UnsafeMutableRawPointer?) {
     guard let s = pageState(info) else { return }
+    var nums: [CGFloat] = []
     for _ in 0 ..< 4 {
-        _ = popNumber(scanner)
+        if let n = popNumber(scanner) { nums.append(n) }
     }
-    s.currentPoint = nil
+    captureCurve(s, endX: nums.count == 4 ? nums[3] : nil, endY: nums.count == 4 ? nums[2] : nil)
 }
 
 private func op_y(_ scanner: CGPDFScannerRef, _ info: UnsafeMutableRawPointer?) {
     guard let s = pageState(info) else { return }
+    var nums: [CGFloat] = []
     for _ in 0 ..< 4 {
-        _ = popNumber(scanner)
+        if let n = popNumber(scanner) { nums.append(n) }
     }
-    s.currentPoint = nil
+    captureCurve(s, endX: nums.count == 4 ? nums[3] : nil, endY: nums.count == 4 ? nums[2] : nil)
 }
 
-private func op_flush(_: CGPDFScannerRef, _ info: UnsafeMutableRawPointer?) {
-    pageState(info)?.flushPaintedPath()
+/// Record a Bezier segment: flag the subpath as curved (so it can't be
+/// read as a beam) and append the curve's endpoint to the subpath polygon.
+/// The accumulated curved-subpath vertices are turned into a `CurveArc`
+/// by `flushPaintedPath` on a fill — the candidate geometry for ties.
+private func captureCurve(_ s: State, endX: CGFloat?, endY: CGFloat?) {
+    s.pendingPolyHasCurve = true
+    if let endX, let endY {
+        let end = CGPoint(x: endX, y: endY)
+        s.currentPoint = end
+        s.pendingPolyPoints.append(end)
+    } else {
+        s.currentPoint = nil
+    }
+}
+
+private func op_fill(_: CGPDFScannerRef, _ info: UnsafeMutableRawPointer?) {
+    pageState(info)?.flushPaintedPath(fill: true)
+}
+
+private func op_stroke(_: CGPDFScannerRef, _ info: UnsafeMutableRawPointer?) {
+    pageState(info)?.flushPaintedPath(fill: false)
 }
 
 private func op_drop(_: CGPDFScannerRef, _ info: UnsafeMutableRawPointer?) {
@@ -261,40 +300,4 @@ private func popMatrix(_ scanner: CGPDFScannerRef) -> CGAffineTransform? {
           let b = popNumber(scanner),
           let a = popNumber(scanner) else { return nil }
     return CGAffineTransform(a: a, b: b, c: c, d: d, tx: e, ty: f)
-}
-
-/// Decode a Tj/TJ string operand. Test fixtures use Helvetica with
-/// ASCII bytes — treating them as UTF-8 is correct there. For
-/// CID-encoded SMuFL fonts the upstream pipeline will apply the
-/// `ToUnicodeCMap`; that path is exercised in Task 15's round-trip.
-private func decodeString(_ str: CGPDFStringRef) -> String {
-    let length = CGPDFStringGetLength(str)
-    guard length > 0, let bytes = CGPDFStringGetBytePtr(str) else { return "" }
-    // Test fixtures (Helvetica + ASCII) decode cleanly as UTF-8. Fall back
-    // to a per-byte Latin-1 mapping for SMuFL CID payloads we can't yet
-    // resolve through ToUnicodeCMap — keeps the walker total.
-    let data = Data(bytes: bytes, count: length)
-    if let utf8 = String(bytes: data, encoding: .utf8) { return utf8 }
-    return String(bytes: data, encoding: .isoLatin1) ?? ""
-}
-
-/// Emit a `TextGlyph` for a decoded text run at the current text
-/// origin in page coordinates, then advance the text matrix by an
-/// approximate width so subsequent `Tj`s in the same run land
-/// further right (tests don't pin advance precision).
-private func emitText(_ text: String, state: State) {
-    guard !text.isEmpty else { return }
-    let originUserSpace = CGPoint.zero.applying(state.textMatrix)
-    let originPageSpace = originUserSpace.applying(state.ctm)
-    state.texts.append(TextGlyph(
-        text: text,
-        fontName: state.fontName,
-        fontSize: state.fontSize,
-        origin: originPageSpace,
-        bbox: .zero,
-        pageIndex: state.pageIndex,
-    ))
-    let approxAdvance = state.fontSize * 0.5 * CGFloat(text.count)
-    state.textMatrix = CGAffineTransform(translationX: approxAdvance, y: 0)
-        .concatenating(state.textMatrix)
 }

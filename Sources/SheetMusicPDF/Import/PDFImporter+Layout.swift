@@ -27,7 +27,8 @@ extension PDFImporter {
             .filter { $0.pageIndex == pageIndex }
             .sorted { $0.yLines.first ?? 0 > $1.yLines.first ?? 0 }
 
-        let systemGroups = clusterIntoSystems(pageStaves)
+        let systemGroups = spineClusteredSystems(pageStaves, paths: paths, pageIndex: pageIndex)
+            ?? clusterIntoSystems(pageStaves)
         return systemGroups.map { staffGroup -> ImportSystem in
             let parts = couplingByBracket(
                 staves: staffGroup, paths: paths, pageIndex: pageIndex,
@@ -38,38 +39,7 @@ extension PDFImporter {
         }
     }
 
-    // MARK: - System clustering
-
-    /// Visually-adjacent staves whose inner y-gap is < 1.5 × staff height
-    /// belong to the same system. Input must already be sorted page top
-    /// → bottom (i.e. by `yLines.first` descending in PDF y-up coords).
-    private static func clusterIntoSystems(_ pageStaves: [Staff]) -> [[Staff]] {
-        var systems: [[Staff]] = []
-        for staff in pageStaves {
-            if let prev = systems.last?.last,
-               innerGap(upper: prev, lower: staff) < 1.5 * staffHeight(prev)
-            {
-                systems[systems.count - 1].append(staff)
-            } else {
-                systems.append([staff])
-            }
-        }
-        return systems
-    }
-
-    /// Inner vertical gap between two staves in PDF y-up coordinates:
-    /// the empty band between the upper staff's lowest line and the
-    /// lower staff's highest line.
-    private static func innerGap(upper: Staff, lower: Staff) -> CGFloat {
-        let upperBottom = upper.yLines.first ?? 0
-        let lowerTop = lower.yLines.last ?? 0
-        return upperBottom - lowerTop
-    }
-
-    private static func staffHeight(_ s: Staff) -> CGFloat {
-        guard let lo = s.yLines.first, let hi = s.yLines.last else { return 0 }
-        return abs(hi - lo)
-    }
+    // MARK: - System / staff geometry helpers
 
     private static func systemYRange(_ group: [Staff]) -> ClosedRange<CGFloat> {
         // group is sorted top→bottom in PDF y-up coords. Top staff has
@@ -81,16 +51,28 @@ extension PDFImporter {
         return lo ... hi
     }
 
-    private static func midline(_ ys: [CGFloat]) -> CGFloat {
+    static func midline(_ ys: [CGFloat]) -> CGFloat {
         ys.isEmpty ? 0 : ys[ys.count / 2]
+    }
+
+    static func staffHeight(_ s: Staff) -> CGFloat {
+        guard let lo = s.yLines.first, let hi = s.yLines.last else { return 0 }
+        return abs(hi - lo)
     }
 
     // MARK: - Bracket coupling
 
-    /// Vertical paths within ~5pt of the system's left x-edge whose
-    /// y-extent covers the midline of two or more staves group those
-    /// staves into a single `ImportPart` (grand staff). Otherwise each
-    /// staff becomes its own part.
+    /// Group the system's staves into parts. A vertical near the left
+    /// x-edge couples the staves it spans into one `ImportPart` — but
+    /// ONLY when it spans **exactly two** staves, i.e. a grand-staff brace
+    /// joining one instrument's two staves (piano / organ / harp).
+    ///
+    /// A vertical that spans three or more staves is a system **group
+    /// bracket** (a square / line bracket grouping several otherwise
+    /// independent single-staff parts — common in vocal / choral
+    /// arrangements). It must NOT collapse those parts into one; doing so
+    /// produced the 5-parts→1 regression. Such group brackets are skipped
+    /// here, leaving each spanned staff its own part.
     private static func couplingByBracket(
         staves: [Staff], paths: [PathSegment], pageIndex: Int,
     ) -> [ImportPart] {
@@ -104,7 +86,10 @@ extension PDFImporter {
         }
         for path in candidates {
             let idxs = bracketCoupledIndices(path: path, staves: staves, coupled: coupled)
-            guard idxs.count >= 2 else { continue }
+            // Exactly two spanned staves → grand-staff brace (couple).
+            // One → a per-staff barline (ignore). Three+ → group bracket
+            // over several single-staff parts (do NOT couple).
+            guard idxs.count == 2 else { continue }
             let group = idxs.map { ImportStaff(staff: staves[$0], measures: []) }
             parts.append(ImportPart(staves: group))
             for i in idxs {
@@ -114,7 +99,12 @@ extension PDFImporter {
         for (i, s) in staves.enumerated() where !coupled[i] {
             parts.append(ImportPart(staves: [ImportStaff(staff: s, measures: [])]))
         }
-        return parts
+        // Emit parts in page top→bottom order (descending PDF y) so the
+        // per-part order is stable across systems for the assembler.
+        return parts.sorted {
+            ($0.staves.first?.staff.yLines.first ?? 0)
+                > ($1.staves.first?.staff.yLines.first ?? 0)
+        }
     }
 
     private static func bracketCoupledIndices(
@@ -172,13 +162,60 @@ extension PDFImporter {
         }
     }
 
+    /// Minimum width for a measure cell. A split that would carve a cell
+    /// narrower than this is a degenerate artifact (a final / double
+    /// barline drawn as two near-coincident verticals at the staff's right
+    /// edge), not a real measure boundary. Real measures on this corpus are
+    /// ≥ 60pt wide; 16pt is a generous floor that never clips a true bar.
+    private static let minCellWidth: CGFloat = 16
+
     /// Per-staff cell boundaries: the union midXs that lie inside the
-    /// staff's xRange, plus the staff xRange endpoints.
+    /// staff's xRange, plus the staff xRange endpoints. Split points closer
+    /// than `minCellWidth` are coalesced so a double / final barline near
+    /// the staff edge can't spawn a 1-3pt phantom measure (observed: the
+    /// closing system split into 4 cells `[273, 228, 3, 1]` instead of 2,
+    /// inflating the total measure count by 2).
     private static func splitPoints(staff: Staff, unionMidXs: [CGFloat]) -> [CGFloat] {
         let lo = staff.xRange.lowerBound
         let hi = staff.xRange.upperBound
         let interior = unionMidXs.filter { $0 > lo && $0 < hi }
-        return dedupSorted([lo] + interior + [hi])
+        let all = dedupSorted([lo] + interior + [hi])
+        return coalesceCloseSplits(all, hi: hi)
+    }
+
+    /// Greedily drop split points that would form a sub-`minCellWidth`
+    /// cell. `lo` is always kept; the staff's right edge `hi` is always the
+    /// final boundary (a near-edge interior split is snapped to it so the
+    /// last real measure extends to the staff end).
+    private static func coalesceCloseSplits(
+        _ sorted: [CGFloat], hi: CGFloat,
+    ) -> [CGFloat] {
+        guard let first = sorted.first else { return sorted }
+        var kept: [CGFloat] = [first]
+        for x in sorted.dropFirst() {
+            if x >= hi {
+                // Ensure hi is the terminal boundary; if the last kept is
+                // within minCellWidth of hi, replace it so we don't leave a
+                // phantom sliver between it and the edge.
+                if let last = kept.last, hi - last < minCellWidth, kept.count > 1 {
+                    kept[kept.count - 1] = hi
+                } else if kept.last != hi {
+                    kept.append(hi)
+                }
+                continue
+            }
+            if let last = kept.last, x - last >= minCellWidth {
+                kept.append(x)
+            }
+        }
+        if kept.last != hi {
+            if let last = kept.last, hi - last < minCellWidth, kept.count > 1 {
+                kept[kept.count - 1] = hi
+            } else {
+                kept.append(hi)
+            }
+        }
+        return kept
     }
 
     private static func makeMeasures(
@@ -205,8 +242,23 @@ extension PDFImporter {
     private static func filterGlyphs(
         classified: [ClassifiedGlyph], staff: Staff, lo: CGFloat, hi: CGFloat,
     ) -> [ClassifiedGlyph] {
-        let yLo = (staff.yLines.first ?? 0) - 30
-        let yHi = (staff.yLines.last ?? 0) + 30
+        // Vertical capture band around the staff. A fixed ±30pt band
+        // bled into the NEIGHBOURING staff on dense vocal scores where
+        // staves sit only ~27pt apart center-to-center — every notehead of
+        // the staff above/below was double-counted and decoded with the
+        // wrong clef anchor (observed: parts 1-4 inflated to 450-566 notes
+        // with impossible pitches up to MIDI 104). Scale the band to the
+        // staff's own line spacing instead: ~3 ledger positions outside
+        // each outer line captures legitimate ledgered notes without
+        // reaching the next staff's lines.
+        let bottom = staff.yLines.first ?? 0
+        let top = staff.yLines.last ?? 0
+        let lineSpacing = staff.yLines.count >= 2
+            ? (top - bottom) / CGFloat(staff.yLines.count - 1)
+            : 5
+        let band = max(lineSpacing * 3, 6)
+        let yLo = bottom - band
+        let yHi = top + band
         return classified.filter {
             $0.raw.pageIndex == staff.pageIndex
                 && lo <= $0.raw.origin.x

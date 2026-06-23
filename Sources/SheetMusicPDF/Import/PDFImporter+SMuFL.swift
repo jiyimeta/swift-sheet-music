@@ -11,6 +11,7 @@ extension PDFImporter {
         case 0xE047: return .segno
         case 0xE048: return .coda
         case 0xE050: return .clefG
+        case 0xE052: return .clefG8vb // gClef8vb — vocal tenor clef
         case 0xE05C: return .clefC
         case 0xE062: return .clefF
         case 0xE069: return .clefPercussion

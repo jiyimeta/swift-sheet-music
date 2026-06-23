@@ -31,11 +31,24 @@ extension PDFImporter {
               let anchor = staffAnchor(clef: activeClef, yLines: measure.staffYLines)
         else { return [] }
         let sorted = measure.glyphs.sorted { $0.raw.origin.x < $1.raw.origin.x }
-        let locals = pairAccidentals(sorted: sorted, anchor: anchor)
+        let placed = pairAccidentalsPositional(sorted: sorted, anchor: anchor)
+        // Running measure-local accidental state: an accidental applies to
+        // its own note and all SUBSEQUENT same-pitch notes in the measure,
+        // never to PRECEDING ones. (A position-agnostic dict flatted the
+        // whole bar — e.g. a B♭ on beat 3 wrongly dragged a B♮ on beat 1 to
+        // B♭, a recurring A=71/B=70 error on this score.)
+        var activeLocals: [PitchKey: Int] = [:]
+        var nextAcc = 0
         var out: [DecodedPitch] = []
         for g in sorted where isNotehead(g.semantic) {
             let key = pitchKey(noteheadY: g.raw.origin.y, anchor: anchor)
-            let alteration = locals[key]
+            // Promote every accidental whose x is at or before this
+            // notehead into the running state before resolving it.
+            while nextAcc < placed.count, placed[nextAcc].x <= g.raw.origin.x + 0.5 {
+                activeLocals[placed[nextAcc].key] = placed[nextAcc].alt
+                nextAcc += 1
+            }
+            let alteration = activeLocals[key]
                 ?? keyAlteration(step: key.diatonicStep, key: activeKey)
             let midi = midiPitch(
                 step: key.diatonicStep, octave: key.octave, alteration: alteration,
@@ -82,6 +95,13 @@ extension PDFImporter {
                 lineSpacing: lineSpacing,
                 bottomStep: 2,
                 bottomOctave: 4,
+            )
+        case "G8vb": // treble ottava bassa (vocal tenor): bottom line = E3
+            return StaffAnchor(
+                bottomY: bottomY,
+                lineSpacing: lineSpacing,
+                bottomStep: 2,
+                bottomOctave: 3,
             )
         case "F": // bass: bottom line = G2
             return StaffAnchor(
@@ -132,27 +152,62 @@ extension PDFImporter {
         }
     }
 
-    /// Walk the x-sorted glyph list, pair each accidental with the
-    /// next notehead at the same y (within ~2pt), and record local
-    /// alterations keyed by (diatonicStep, octave).
-    static func pairAccidentals(
+    /// One accidental resolved to the pitch it modifies, positioned at the
+    /// accidental glyph's x so the caller can apply standard measure-local
+    /// semantics (effective from this x rightward only).
+    struct PlacedAccidental {
+        var x: CGFloat
+        var key: PitchKey
+        var alt: Int
+    }
+
+    /// Walk the x-sorted glyph list and resolve each accidental to the
+    /// notehead it modifies, returning the alteration positioned at the
+    /// accidental's own x (sorted ascending).
+    ///
+    /// A local accidental sits immediately to the LEFT of its notehead at
+    /// essentially the same y (same staff position). Two precision gates
+    /// matter on the dense Gibbs vocal staves (half-step ≈ 2pt):
+    /// - **x proximity**: the note must be within ~`maxPairDx` to the
+    ///   right. Without this an accidental at the bar's left could bind to
+    ///   a far-right note that merely shares a staff line, flipping that
+    ///   note's alteration spuriously.
+    /// - **nearest y**: pick the y-closest qualifying notehead, not just
+    ///   the first one within tolerance, so an accidental does not bleed
+    ///   onto a neighbor one diatonic step away.
+    static func pairAccidentalsPositional(
         sorted: [ClassifiedGlyph], anchor: StaffAnchor,
-    ) -> [PitchKey: Int] {
-        var locals: [PitchKey: Int] = [:]
+    ) -> [PlacedAccidental] {
+        // Pair within ~3.5 half-steps of x (a local accidental hugs its
+        // note; key-sig accidentals are filtered upstream by readKey but
+        // could still appear here, and the x gate keeps them from binding
+        // to a distant note).
+        let maxPairDx = max(anchor.lineSpacing * 3.5, 14)
+        let yTol = max(anchor.lineSpacing / 2 * 0.9, 1.5)
+        var placed: [PlacedAccidental] = []
         for (i, g) in sorted.enumerated() {
             guard let alt = accidentalAlteration(g.semantic) else { continue }
+            var best: (j: Int, dy: CGFloat)?
             for j in (i + 1) ..< sorted.count {
                 let nh = sorted[j]
-                if isNotehead(nh.semantic),
-                   abs(nh.raw.origin.y - g.raw.origin.y) < 2
-                {
-                    let key = pitchKey(noteheadY: nh.raw.origin.y, anchor: anchor)
-                    locals[key] = alt
-                    break
+                guard isNotehead(nh.semantic) else { continue }
+                let dx = nh.raw.origin.x - g.raw.origin.x
+                if dx > maxPairDx { break } // x-sorted: nothing closer beyond
+                let dy = abs(nh.raw.origin.y - g.raw.origin.y)
+                guard dy <= yTol else { continue }
+                if let current = best {
+                    if dy < current.dy { best = (j, dy) }
+                } else {
+                    best = (j, dy)
                 }
             }
+            if let best {
+                let nh = sorted[best.j]
+                let key = pitchKey(noteheadY: nh.raw.origin.y, anchor: anchor)
+                placed.append(PlacedAccidental(x: g.raw.origin.x, key: key, alt: alt))
+            }
         }
-        return locals
+        return placed.sorted { $0.x < $1.x }
     }
 
     /// y-coordinate → diatonic step + octave. yLines ascending → up

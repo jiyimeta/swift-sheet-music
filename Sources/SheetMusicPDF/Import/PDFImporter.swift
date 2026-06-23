@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 import PDFKit
 import SheetMusicCore
@@ -73,13 +74,47 @@ enum PDFImporter {
             )
         }
 
+        // Pair tie arcs to noteheads up front (geometry only — two
+        // tied noteheads share a staff line, so same y ⇒ same pitch).
+        // The result is a set of notehead identities carrying a forward
+        // or back tie, consulted while assembling each measure.
+        let tieMarks = detectTies(curves: walked.curves, noteheads: classified)
+
+        // Grace-note size threshold: MuseScore renders grace / cue
+        // noteheads at ~70% of the full notehead size (via a scaled
+        // text / current-transformation matrix; the Tf operand is
+        // uniform). Take the score-wide median full-notehead rendered
+        // size and call anything below 85% of it a grace. 0 disables the
+        // pass (no small noteheads found).
+        let graceSizeThreshold = graceNoteSizeThreshold(classified: classified)
+
         return assembleScore(
             document: document,
             systems: systemsAllPages,
             texts: walked.texts,
             classified: classified,
+            paths: walked.paths,
+            tieMarks: tieMarks,
+            graceSizeThreshold: graceSizeThreshold,
             options: options,
         )
+    }
+
+    /// Grace-note rendered-size threshold from the score-wide notehead
+    /// population. Returns `0.85 × median(noteheadRenderedSize)`, or 0 when
+    /// fewer than a handful of noteheads exist (nothing to compare against)
+    /// or when no glyph carries a usable `renderedSize`. A clean bimodal
+    /// split is expected (full ≈ 100%, grace ≈ 70%), so the exact cut point
+    /// between them is not sensitive.
+    static func graceNoteSizeThreshold(classified: [ClassifiedGlyph]) -> CGFloat {
+        let sizes = classified
+            .filter { isNotehead($0.semantic) && $0.raw.renderedSize > 0 }
+            .map(\.raw.renderedSize)
+            .sorted()
+        guard sizes.count >= 8 else { return 0 }
+        let median = sizes[sizes.count / 2]
+        guard median > 0 else { return 0 }
+        return median * 0.85
     }
 
     /// Emit one `.info` diagnostic per `.unknown` SMuFL codepoint.

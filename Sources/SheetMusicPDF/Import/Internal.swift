@@ -12,19 +12,45 @@ import SheetMusicCore
 struct RawGlyph: Hashable {
     var codepoint: UInt32 // Unicode scalar (often a SMuFL PUA codepoint)
     var fontName: String // PostScript name as reported by PDFKit
-    var fontSize: CGFloat // points
+    var fontSize: CGFloat // points (raw Tf operand — uniform per font)
     var origin: CGPoint
     var advance: CGFloat // horizontal advance to the next glyph in points
     var pageIndex: Int
+    /// Effective page-space rendered size = `fontSize × sqrt(det(textMatrix ×
+    /// ctm))`. MuseScore renders grace / cue noteheads by scaling the text
+    /// or current-transformation matrix rather than changing the `Tf`
+    /// operand (which stays 100 across the whole score), so this is the
+    /// only signal distinguishing a small grace notehead from a full one.
+    var renderedSize: CGFloat = 0
 }
 
 /// One straight or rectangular path segment captured from m/l/re
 /// content-stream operators. Used by staff-line and barline detection.
+///
+/// `.beam` is a filled near-horizontal parallelogram captured from a
+/// `m l l l (h) f` quad — MuseScore renders each beam line that way.
+/// Its `rect` is the page-space bounding box (so x-extent spans the
+/// stems it connects and y-extent straddles the stem ends). The rhythm
+/// pass counts overlapping `.beam` segments per stem to derive
+/// eighth / sixteenth / thirty-second durations.
 struct PathSegment: Equatable {
-    enum Kind { case horizontal, vertical, rectangle }
+    enum Kind { case horizontal, vertical, rectangle, beam }
     var kind: Kind
     var rect: CGRect // collapsed bounding box; horizontal/vertical degenerate rects are 1-D
     var lineWidth: CGFloat
+    var pageIndex: Int
+}
+
+/// A filled curved subpath captured from `c`/`v`/`y` Bezier operators —
+/// the candidate geometry for a tie or slur. `bbox` is the page-space
+/// bounding box; `leftPoint` / `rightPoint` are the extreme on-path
+/// vertices (a tie's two notehead anchors). Ties are short, flat arcs
+/// joining two SAME-pitch noteheads at adjacent x; slurs are longer or
+/// join different pitches. The tie decoder filters on those criteria.
+struct CurveArc: Equatable {
+    var bbox: CGRect
+    var leftPoint: CGPoint
+    var rightPoint: CGPoint
     var pageIndex: Int
 }
 
@@ -38,6 +64,7 @@ enum SMuFLSemantic: Equatable {
     case augmentationDot
     case rest(NoteDuration)
     case clefG, clefF, clefC, clefPercussion
+    case clefG8vb // U+E052 gClef8vb — treble clef sounding an octave lower
     case accidentalSharp, accidentalFlat, accidentalNatural,
          accidentalDoubleSharp, accidentalDoubleFlat
     case timeSignatureDigit(Int) // 0-9

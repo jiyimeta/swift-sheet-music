@@ -38,6 +38,7 @@ extension PDFImporter {
         for glyph in glyphs {
             switch glyph.semantic {
             case .clefG: return Clef(concertClefType: "G")
+            case .clefG8vb: return Clef(concertClefType: "G8vb")
             case .clefF: return Clef(concertClefType: "F")
             case .clefC: return Clef(concertClefType: "C")
             case .clefPercussion: return Clef(concertClefType: "PERCUSSION")
@@ -51,15 +52,31 @@ extension PDFImporter {
 
     // MARK: - Key signature
 
+    /// Read the leading key signature, if any. Only accidentals that
+    /// belong to the key-signature BLOCK count — an accidental tightly
+    /// bound to a following notehead (a local accidental: same y, just to
+    /// the left of the note) is excluded.
+    ///
+    /// Without this exclusion a measure that simply STARTS on a flatted
+    /// melodic note read as a spurious one-flat key change, which then
+    /// flattened every diatonic note for the rest of the measure (observed
+    /// on the Gibbs score: 25 measures flipped A's `key=1` to `B=-1`,
+    /// dragging F♯→F♮, B→B♭ etc. and tanking the per-note pitch metric).
     private static func readKey(from glyphs: [ClassifiedGlyph]) -> KeySignature? {
+        let sorted = glyphs.sorted { $0.raw.origin.x < $1.raw.origin.x }
         var sharps = 0
         var flats = 0
-        for glyph in glyphs {
+        for (i, glyph) in sorted.enumerated() {
             switch glyph.semantic {
             case .accidentalSharp:
-                sharps += 1
-            case .accidentalFlat:
-                flats += 1
+                if !pairsWithFollowingNotehead(at: i, in: sorted) { sharps += 1 }
+            case .accidentalFlat, .accidentalNatural:
+                if !pairsWithFollowingNotehead(at: i, in: sorted) {
+                    if case .accidentalFlat = glyph.semantic { flats += 1 }
+                    // A leading natural in the key block (cancellation) is
+                    // not counted toward sharps/flats — it neither adds nor
+                    // removes here; key inference is by net sharps/flats.
+                }
             case .noteheadBlack, .noteheadHalf, .noteheadWhole, .noteheadDoubleWhole:
                 // Stop at the first notehead — anything after is a note,
                 // not part of the leading key signature.
@@ -68,6 +85,33 @@ extension PDFImporter {
             }
         }
         return finalize(sharps: sharps, flats: flats)
+    }
+
+    /// True when the accidental at `index` is a LOCAL accidental: a
+    /// notehead follows it at (near) the same y and close in x — the
+    /// visual signature of an accidental modifying that single note,
+    /// rather than a key-signature accidental (which sits at a canonical
+    /// staff position with the notes spaced well to its right).
+    private static func pairsWithFollowingNotehead(
+        at index: Int, in sorted: [ClassifiedGlyph],
+    ) -> Bool {
+        let acc = sorted[index]
+        guard index + 1 < sorted.count else { return false }
+        for j in (index + 1) ..< sorted.count {
+            let g = sorted[j]
+            switch g.semantic {
+            case .noteheadBlack, .noteheadHalf,
+                 .noteheadWhole, .noteheadDoubleWhole:
+                let dx = g.raw.origin.x - acc.raw.origin.x
+                let dy = abs(g.raw.origin.y - acc.raw.origin.y)
+                // Local accidental: notehead is just to the right (≤ ~14pt)
+                // at essentially the same y (≤ ~2pt, i.e. same staff line).
+                return dx >= 0 && dx <= 14 && dy <= 2
+            default:
+                continue
+            }
+        }
+        return false
     }
 
     private static func finalize(sharps: Int, flats: Int) -> KeySignature? {

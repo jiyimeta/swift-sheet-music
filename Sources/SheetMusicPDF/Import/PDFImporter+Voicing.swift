@@ -21,18 +21,44 @@ extension PDFImporter {
         location: String = "",
     ) -> [Voice] {
         guard !elements.isEmpty else { return [] }
-        let intervals = elements.map {
-            interval(for: $0, xRange: measureXRange, timeSignature: timeSignature)
+        // A measure is two-voice only when two elements share an x ONSET
+        // — i.e. they begin at (near) the same horizontal position, the
+        // visual signature of two simultaneous voices. A single melodic
+        // line never stacks two onsets at the same x.
+        //
+        // The previous trigger — temporal-interval overlap from estimated
+        // durations — fired spuriously: with beam-based durations not yet
+        // decoded, every beamed run reads as `.quarter`, inflating each
+        // note's estimated width so x-adjacent notes "overlapped" and a
+        // single melodic line scattered across two voices (observed: 116
+        // phantom two-voice measures and 245 measures with an empty voice 0
+        // against a score that is entirely single-voice). Coincident x
+        // onset is the robust, duration-independent signal.
+        if hasCoincidentOnset(elements) {
+            return splitIntoTwoVoices(
+                elements: elements,
+                staffMidY: staffMidY,
+                diagnostics: diagnostics,
+                location: location,
+            )
         }
-        if !anyOverlap(intervals) {
-            return [Voice(elements: elements.map { .chord($0.chord) })]
+        // Single voice: keep every element in x-order in voice 0, matching
+        // A's single-voice indexing.
+        let ordered = elements.sorted { $0.x < $1.x }
+        return [Voice(elements: ordered.map { .chord($0.chord) })]
+    }
+
+    /// True when two distinct elements begin at (near) the same x. A
+    /// notehead and its own chord-mates already collapsed into one
+    /// `RhythmElement` upstream, so two elements at the same x genuinely
+    /// represent two voices sounding together. Tolerance ~half a notehead
+    /// (3pt) absorbs PDF coordinate jitter.
+    private static func hasCoincidentOnset(_ elements: [RhythmElement]) -> Bool {
+        let xs = elements.map(\.x).sorted()
+        for i in 1 ..< xs.count where abs(xs[i] - xs[i - 1]) < 3 {
+            return true
         }
-        return splitIntoTwoVoices(
-            elements: elements,
-            staffMidY: staffMidY,
-            diagnostics: diagnostics,
-            location: location,
-        )
+        return false
     }
 
     private static func splitIntoTwoVoices(
@@ -77,41 +103,9 @@ extension PDFImporter {
     }
 }
 
-// MARK: - Time / overlap helpers
+// MARK: - Voice placement
 
 extension PDFImporter {
-    private static func interval(
-        for element: RhythmElement,
-        xRange: ClosedRange<CGFloat>,
-        timeSignature: TimeSignature,
-    ) -> ClosedRange<CGFloat> {
-        let totalQuarters = quartersOfMeasure(timeSignature: timeSignature)
-        let pxPerQuarter =
-            (xRange.upperBound - xRange.lowerBound) / CGFloat(totalQuarters)
-        let widthPx = CGFloat(quartersOf(element.chord.duration)) * pxPerQuarter
-        return element.x ... (element.x + widthPx)
-    }
-
-    /// True when any two intervals overlap by more than `grace` points
-    /// at both ends. Touching boundaries don't count: PDF coordinates
-    /// have rounding noise, and adjacent quarters often share an x
-    /// boundary by a fraction of a point.
-    private static func anyOverlap(
-        _ intervals: [ClosedRange<CGFloat>],
-    ) -> Bool {
-        let grace: CGFloat = 0.5
-        for i in 0 ..< intervals.count {
-            for j in (i + 1) ..< intervals.count {
-                let a = intervals[i]
-                let b = intervals[j]
-                let lo = max(a.lowerBound, b.lowerBound)
-                let hi = min(a.upperBound, b.upperBound)
-                if hi - lo > grace { return true }
-            }
-        }
-        return false
-    }
-
     private static func voiceFor(
         _ element: RhythmElement, staffMidY: CGFloat,
     ) -> Int {
@@ -123,17 +117,6 @@ extension PDFImporter {
         case .down: return 2
         case .none: return element.y > staffMidY ? 1 : 2
         }
-    }
-
-    private static func quartersOfMeasure(
-        timeSignature ts: TimeSignature,
-    ) -> Double {
-        4.0 * Double(ts.numerator) / Double(ts.denominator)
-    }
-
-    private static func quartersOf(_ d: NoteDuration) -> Double {
-        let f = d.asFraction
-        return 4.0 * Double(f.numerator) / Double(f.denominator)
     }
 }
 

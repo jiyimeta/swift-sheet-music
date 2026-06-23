@@ -6,17 +6,21 @@ import SheetMusicCore
 extension PDFImporter {
     /// Extract a title frame from page-1 top-band text glyphs.
     ///
-    /// Algorithm:
-    ///  1. Filter `texts` to glyphs on page 0 in the top 25% of the
-    ///     page (PDF coordinates are y-up, so top is `y > 0.75 *
-    ///     height`). Empty / whitespace-only glyphs are dropped.
-    ///  2. The largest font size becomes the `.title`.
-    ///  3. The first remaining glyph whose origin is past 60% of the
-    ///     page width becomes the `.composer` (right-aligned heuristic).
-    ///  4. The next-largest remaining glyph becomes the `.subtitle`.
-    ///  5. If `options.useMetadataAsFallback` is true, any role still
-    ///     missing is filled from `PDFDocument.documentAttributes`
-    ///     (Title / Author / Subject keys).
+    /// MuseScore's PDF export emits each title / credit character as its
+    /// own text glyph (one Tj per char, like music glyphs), so a title
+    /// such as "ギブス" arrives as 3 separate `TextGlyph`s. The extractor
+    /// first MERGES adjacent glyphs sharing a y-row + font size into a
+    /// single run (x-adjacency), then maps runs to roles:
+    ///
+    ///  1. Filter to page 0, top of the page (PDF y-up, `y > 0.5 ×
+    ///     height` — wide enough to also reach a sub-title credit block
+    ///     that sits below the masthead). Empty glyphs dropped.
+    ///  2. Merge into runs; the largest-font run is `.title`, the
+    ///     next-largest distinct-row run `.subtitle`.
+    ///  3. The lowest run on the right half (a credit line such as
+    ///     "Arranged by …") is `.composer`.
+    ///  4. If `options.useMetadataAsFallback` is true, any role still
+    ///     missing is filled from `PDFDocument.documentAttributes`.
     ///
     /// Returns `nil` when no candidates are found and metadata is
     /// either disabled or empty.
@@ -28,13 +32,14 @@ extension PDFImporter {
     ) -> ScoreFrame? {
         let topBand = texts.filter {
             $0.pageIndex == 0
-                && $0.origin.y > pageSize.height * 0.75
+                && $0.origin.y > pageSize.height * 0.6
                 && !$0.text.trimmingCharacters(in: .whitespaces).isEmpty
         }
         var frameTexts: [FrameText] = []
         if !topBand.isEmpty {
+            let runs = mergeTextRuns(topBand)
             collectTitleBlock(
-                from: topBand, pageWidth: pageSize.width,
+                from: runs, pageWidth: pageSize.width,
                 into: &frameTexts,
             )
         }
@@ -46,30 +51,85 @@ extension PDFImporter {
             : ScoreFrame(heightSp: 12, texts: frameTexts)
     }
 
+    /// One merged text run: full text plus geometry of its leftmost glyph.
+    struct TextRun {
+        var text: String
+        var x: CGFloat
+        var y: CGFloat
+        var fontSize: CGFloat
+    }
+
+    /// Merge per-character glyphs into runs by y-row + x-adjacency. Two
+    /// glyphs join when they share a baseline (|Δy| ≤ 0.3 × fontSize),
+    /// the same font size (|Δsize| ≤ 1), and the origin x-step is at or
+    /// below `fontSize × 0.45` (above MuseScore's ~0.2 × inter-glyph
+    /// title advance, below a column gap). Returns runs sorted top-down,
+    /// then left-to-right.
+    static func mergeTextRuns(_ glyphs: [TextGlyph]) -> [TextRun] {
+        let sorted = glyphs.sorted {
+            if abs($0.origin.y - $1.origin.y) > 3 { return $0.origin.y > $1.origin.y }
+            return $0.origin.x < $1.origin.x
+        }
+        var runs: [TextRun] = []
+        var curText = ""
+        var curX: CGFloat = 0
+        var curY: CGFloat = 0
+        var curSize: CGFloat = 0
+        var prevX: CGFloat?
+        for g in sorted {
+            let s = g.text.trimmingCharacters(in: .whitespaces)
+            if s.isEmpty { continue }
+            let sameRow = abs(g.origin.y - curY) <= max(g.fontSize, curSize) * 0.3
+            let sameSize = abs(g.fontSize - curSize) <= 1
+            let step = prevX.map { g.origin.x - $0 } ?? .infinity
+            let adjacent = step <= g.fontSize * 0.45 && step >= 0
+            if curText.isEmpty || !(sameRow && sameSize && adjacent) {
+                if !curText.isEmpty {
+                    runs.append(TextRun(text: curText, x: curX, y: curY, fontSize: curSize))
+                }
+                curText = s
+                curX = g.origin.x
+                curY = g.origin.y
+                curSize = g.fontSize
+            } else {
+                curText += s
+            }
+            prevX = g.origin.x
+        }
+        if !curText.isEmpty {
+            runs.append(TextRun(text: curText, x: curX, y: curY, fontSize: curSize))
+        }
+        return runs
+    }
+
     private static func collectTitleBlock(
-        from topBand: [TextGlyph],
+        from runs: [TextRun],
         pageWidth: CGFloat,
         into frameTexts: inout [FrameText],
     ) {
-        let sorted = topBand.sorted { $0.fontSize > $1.fontSize }
-        if let title = sorted.first {
-            frameTexts.append(FrameText(style: .title, text: title.text))
+        guard !runs.isEmpty else { return }
+        let byFont = runs.sorted { $0.fontSize > $1.fontSize }
+        // Title = largest-font run.
+        guard let title = byFont.first else { return }
+        frameTexts.append(FrameText(style: .title, text: title.text))
+        // Subtitle = the next-largest run on a DIFFERENT baseline row than
+        // the title (so a same-row sibling glyph isn't taken as subtitle).
+        // Row tolerance is absolute (~6 pt) because the masthead font can
+        // be very large, which would otherwise swallow a close credit row.
+        let subtitle = byFont.dropFirst().first {
+            abs($0.y - title.y) > 6 && $0.text != title.text
         }
-        let titleText = frameTexts.first?.text
-        if let composer = topBand.first(where: {
-            $0.origin.x > pageWidth * 0.6 && $0.text != titleText
-        }) {
-            frameTexts.append(
-                FrameText(style: .composer, text: composer.text),
-            )
+        if let subtitle {
+            frameTexts.append(FrameText(style: .subtitle, text: subtitle.text))
         }
+        // Composer = the lowest credit run sitting on the right half, not
+        // already used (e.g. "Arranged by Kiichi" under the masthead).
         let used = Set(frameTexts.map(\.text))
-        if let subtitle = sorted.dropFirst().first(where: {
-            !used.contains($0.text)
-        }) {
-            frameTexts.append(
-                FrameText(style: .subtitle, text: subtitle.text),
-            )
+        let composer = runs
+            .filter { !used.contains($0.text) && $0.x > pageWidth * 0.4 }
+            .min { $0.y < $1.y }
+        if let composer {
+            frameTexts.append(FrameText(style: .composer, text: composer.text))
         }
     }
 
