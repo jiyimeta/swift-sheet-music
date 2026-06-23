@@ -81,52 +81,11 @@ extension PDFImporter {
         )
     }
 
-    // MARK: - Part shape
-
-    /// Map of `firstSystem.parts[i]` → flat staff-slot indices, plus
-    /// the assembled `Part` list with placeholder instruments.
-    fileprivate struct PartShape {
-        var parts: [Part]
-        var slotsByPartIndex: [Int: [Int]]
-        var totalStaffSlots: Int
-    }
-
-    /// Total staff count across all parts in a system.
-    private static func totalStaves(_ system: ImportSystem) -> Int {
-        system.parts.reduce(0) { $0 + $1.staves.count }
-    }
-
-    private static func partShape(from firstSystem: ImportSystem) -> PartShape {
-        var parts: [Part] = []
-        var slotsByPartIndex: [Int: [Int]] = [:]
-        var nextSlot = 0
-        for (partIdx, partProto) in firstSystem.parts.enumerated() {
-            let staffCount = partProto.staves.count
-            let part = Part(
-                id: "P\(partIdx + 1)",
-                trackName: nil,
-                instrument: Instrument(id: "voice"),
-                staves: Array(
-                    repeating: SheetMusicCore.Staff(staffType: "stdNormal", group: "pitched"),
-                    count: staffCount,
-                ),
-            )
-            parts.append(part)
-            var slots: [Int] = []
-            for _ in 0 ..< staffCount {
-                slots.append(nextSlot)
-                nextSlot += 1
-            }
-            slotsByPartIndex[partIdx] = slots
-        }
-        return PartShape(
-            parts: parts,
-            slotsByPartIndex: slotsByPartIndex,
-            totalStaffSlots: nextSlot,
-        )
-    }
-
     // MARK: - System append
+    //
+    // Part-shape derivation (`PartShape`, `partShape(from:)`, `totalStaves`)
+    // and the per-system part → global-slot mapping (`partSlotMapping`) live
+    // in PDFImporter+AssembleParts.swift.
 
     /// Append every staff's measures from one system into the running
     /// `stavesContent`. Updates `state` (per-slot clef/key/time) and
@@ -149,8 +108,16 @@ extension PDFImporter {
         // system's page so a vertical at the same x on another page can't
         // be mistaken for a stem in `decodeRhythm`'s xRange test.
         let pagePaths = paths.filter { $0.pageIndex == system.pageIndex }
+        // Map this system's parts → reference part indices by vertical
+        // position. On a full system this is the identity (part i → ref i);
+        // on an UNDER-FULL system (fewer parts than the reference ensemble)
+        // it routes each present part to the reference slot whose vertical
+        // position it matches, so a missing part leaves its slots empty
+        // instead of shifting every part up. See `partSlotMapping`.
+        let refForSystemPart = partSlotMapping(system: system, shape: shape)
         for (partIdx, importPart) in system.parts.enumerated() {
-            guard let slots = shape.slotsByPartIndex[partIdx] else { continue }
+            let refIdx = refForSystemPart[partIdx]
+            guard let slots = shape.slotsByPartIndex[refIdx] else { continue }
             // Defensive: a later system might have extra staves not
             // present in the first system. Ignore the surplus rather
             // than crash.

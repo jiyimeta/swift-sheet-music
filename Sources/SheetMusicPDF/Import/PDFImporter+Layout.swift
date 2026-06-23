@@ -17,18 +17,25 @@ extension PDFImporter {
     /// than per-Part alignment and matches the plan's plain reading of
     /// "two staves in the same system must produce the same measure
     /// count".
+    /// `ensembleSize` is the document-wide system staff count (number of
+    /// staves per system) derived in `buildScore` by `ensembleStaffCount`.
+    /// When set, the gap-heuristic fallback uses it for outlier-rank system
+    /// breaking (see `clusterIntoSystems`). The spine path, when available,
+    /// still wins. Direct single-page callers (the layout fixtures) pass
+    /// `nil`, preserving the staff-height / median fallbacks.
     static func layoutSystems(
         staves: [Staff],
         paths: [PathSegment],
         classified: [ClassifiedGlyph],
         pageIndex: Int,
+        ensembleSize: Int? = nil,
     ) -> [ImportSystem] {
         let pageStaves = staves
             .filter { $0.pageIndex == pageIndex }
             .sorted { $0.yLines.first ?? 0 > $1.yLines.first ?? 0 }
 
         let systemGroups = spineClusteredSystems(pageStaves, paths: paths, pageIndex: pageIndex)
-            ?? clusterIntoSystems(pageStaves)
+            ?? clusterIntoSystems(pageStaves, ensembleSize: ensembleSize)
         return systemGroups.map { staffGroup -> ImportSystem in
             let parts = couplingByBracket(
                 staves: staffGroup, paths: paths, pageIndex: pageIndex,
