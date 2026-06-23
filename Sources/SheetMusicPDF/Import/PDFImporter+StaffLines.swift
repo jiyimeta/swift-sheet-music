@@ -10,15 +10,24 @@ extension PDFImporter {
         pageIndex: Int,
     ) -> [Staff] {
         let clusters = clusterHorizontals(paths, pageIndex: pageIndex)
+        // Notehead origins on this page, used by `barlineCandidates` to
+        // reject note stems by a font-independent geometric test (a stem
+        // always has a notehead within ~one notehead width; a barline does
+        // not). Captured once here and threaded down.
+        let noteheads = classified.filter {
+            $0.raw.pageIndex == pageIndex && isNotehead($0.semantic)
+        }
         var staves = pathDetectedStaves(
             clusters: clusters,
             paths: paths,
             pageIndex: pageIndex,
+            noteheads: noteheads,
         )
         appendGlyphDetectedStaves(
             classified: classified,
             paths: paths,
             pageIndex: pageIndex,
+            noteheads: noteheads,
             into: &staves,
         )
         return staves.sorted { midline($0.yLines) < midline($1.yLines) }
@@ -76,6 +85,7 @@ extension PDFImporter {
         clusters: [[PathSegment]],
         paths: [PathSegment],
         pageIndex: Int,
+        noteheads: [ClassifiedGlyph],
     ) -> [Staff] {
         var staves: [Staff] = []
         let lineYs: [CGFloat] = clusters.map { c in
@@ -93,7 +103,7 @@ extension PDFImporter {
                     xRange: xMin ... xMax,
                     paths: paths,
                     pageIndex: pageIndex,
-                    staffLineWidth: medianLineWidth(segs),
+                    noteheads: noteheads,
                 ))
                 i += 5
             } else {
@@ -101,15 +111,6 @@ extension PDFImporter {
             }
         }
         return staves
-    }
-
-    /// Median lineWidth of a staff's line segments — the reference width
-    /// used to tell a barline (clearly thicker) from a note stem (about
-    /// as thin as a staff line) in `barlineCandidates`.
-    private static func medianLineWidth(_ segs: [PathSegment]) -> CGFloat {
-        let ws = segs.map(\.lineWidth).sorted()
-        guard !ws.isEmpty else { return 0 }
-        return ws[ws.count / 2]
     }
 
     /// Coefficient of variation of pairwise gaps in a y-sequence.
@@ -138,6 +139,7 @@ extension PDFImporter {
         classified: [ClassifiedGlyph],
         paths: [PathSegment],
         pageIndex: Int,
+        noteheads: [ClassifiedGlyph],
         into staves: inout [Staff],
     ) {
         for g in classified where g.raw.pageIndex == pageIndex {
@@ -162,7 +164,7 @@ extension PDFImporter {
                 xRange: xMin ... xMax,
                 paths: paths,
                 pageIndex: pageIndex,
-                staffLineWidth: 0, // unknown for glyph-detected staves
+                noteheads: noteheads,
             ))
         }
     }
@@ -172,7 +174,7 @@ extension PDFImporter {
         xRange: ClosedRange<CGFloat>,
         paths: [PathSegment],
         pageIndex: Int,
-        staffLineWidth: CGFloat,
+        noteheads: [ClassifiedGlyph],
     ) -> Staff {
         Staff(
             pageIndex: pageIndex,
@@ -183,7 +185,7 @@ extension PDFImporter {
                 xRange: xRange,
                 yRange: (yLines.first ?? 0) ... (yLines.last ?? 0),
                 pageIndex: pageIndex,
-                staffLineWidth: staffLineWidth,
+                noteheads: noteheads,
             ),
         )
     }
@@ -193,7 +195,7 @@ extension PDFImporter {
         xRange: ClosedRange<CGFloat>,
         yRange: ClosedRange<CGFloat>,
         pageIndex: Int,
-        staffLineWidth: CGFloat,
+        noteheads: [ClassifiedGlyph],
     ) -> [PathSegment] {
         // A true barline is a stand-alone vertical that SPANS the staff
         // height — from (near) the top line to (near) the bottom line.
@@ -205,35 +207,66 @@ extension PDFImporter {
         // close to both the top and bottom staff lines.
         let staffHeight = yRange.upperBound - yRange.lowerBound
         guard staffHeight > 0 else { return [] }
-        // Tolerance ≈ one inter-line gap (height / 4) — a barline may
-        // overshoot or fall just short of the outer lines.
-        let tol = max(staffHeight / 4, 2)
-        // Stem rejection by stroke width. On dense vocal scores the staff
-        // is short enough that a note stem also covers ≥85% of the staff
-        // height and reaches both outer lines, so geometry alone counts
-        // every stem as a barline (observed: a 4-measure system split into
-        // 14). MuseScore strokes barlines clearly thicker than staff lines
-        // / stems (here ~3.6pt vs ~2.2pt), so require the vertical to be at
-        // least 1.3× the staff line width.
+        // The five staff lines span four inter-line gaps, so one staff space
+        // (spatium) is a quarter of the staff height. All tolerances below
+        // are expressed as multiples of this, NOT absolute points, so the
+        // rule holds across print sizes and music fonts.
+        let spatium = staffHeight / 4
+        // Tolerance ≈ one inter-line gap — a barline may overshoot or fall
+        // just short of the outer lines.
+        let tol = max(spatium, 2)
+
+        // FONT-INDEPENDENT stem rejection. The previous round gated on
+        // stroke width (barline ≥ 1.3× staff-line width), calibrated to one
+        // Leland score where bars were ~3.6pt and stems ~2.2pt. On MScore /
+        // Bravura exports a note stem is strokes about as thick as a
+        // barline, so that gate admitted stems as barlines → nearly every
+        // note's stem became a measure boundary (observed: 君とParadiso
+        // 112→633, 地球儀 62→440, カゲロウ 192→1921).
         //
-        // Gate only when the staff line width is at a real export scale
-        // (> 1pt). Below that the width signal is too quantized to tell a
-        // barline from a stem, and synthetic / hairline fixtures would lose
-        // their lone barline; `staffLineWidth == 0` (glyph fallback)
-        // likewise disables it.
-        let minBarlineWidth = staffLineWidth > 1.0 ? staffLineWidth * 1.3 : 0
+        // The decisive, font-independent signal is the NOTEHEAD: a note stem
+        // ALWAYS abuts its own notehead (within ~one notehead width), while a
+        // real barline never has a notehead that close — the measure's last
+        // note ends with the engraving right-margin before the bar, and the
+        // next measure's first note opens after the bar's left margin. So a
+        // vertical is a STEM (rejected) when a notehead origin lies just to
+        // its LEFT (stem-up attaches at the notehead's right edge) or
+        // essentially overlaps it (stem-down / chord). Empirically across the
+        // corpus, stem noteheads sit ≤ ~1.3 spatium to the left while real
+        // barlines have no notehead within ≥ ~3 spatium on that side; 2.0
+        // spatium is a safe split. A tight right window (0.6 spatium) catches
+        // stem-down / overlapping noteheads without rejecting a barline whose
+        // next-measure note opens ~1.5 spatium to its right.
+        let leftReject = spatium * 2.0
+        let rightReject = spatium * 0.6
+        // Notehead membership is restricted to this staff's own y-band
+        // (≈ 3 ledger positions outside each outer line) so a neighbouring
+        // staff's notes can't veto this staff's barlines.
+        let yBand = spatium * 3
+        let yLo = yRange.lowerBound - yBand
+        let yHi = yRange.upperBound + yBand
+        let staffNoteheads = noteheads.filter {
+            $0.raw.origin.y >= yLo && $0.raw.origin.y <= yHi
+        }
+
         return paths.filter { p in
             guard p.pageIndex == pageIndex, p.kind == .vertical,
                   xRange.contains(p.rect.midX)
             else { return false }
-            guard p.lineWidth >= minBarlineWidth else { return false }
             let coverage = p.rect.height
             guard coverage >= staffHeight * 0.85 else { return false }
             // Endpoints must straddle the staff: top reaches near the upper
             // line, bottom reaches near the lower line.
             let reachesTop = p.rect.maxY >= yRange.upperBound - tol
             let reachesBottom = p.rect.minY <= yRange.lowerBound + tol
-            return reachesTop && reachesBottom
+            guard reachesTop, reachesBottom else { return false }
+            // Reject if a notehead abuts this vertical (⇒ it is a note stem).
+            let x = p.rect.midX
+            let hasAbuttingNotehead = staffNoteheads.contains { g in
+                let d = g.raw.origin.x - x // + ⇒ notehead is right of vertical
+                return d >= -leftReject && d <= rightReject
+            }
+            return !hasAbuttingNotehead
         }
     }
 }
