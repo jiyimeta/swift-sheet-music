@@ -178,8 +178,23 @@ extension PDFImporter {
         }
 
         guard let choice = best else {
-            // INVARIANT 4: no single-note repair reaches the bar length —
-            // leave the measure unchanged.
+            // No single-note straight repair reaches the bar length. Before
+            // giving up, try a TUPLET repair (a contiguous run of equal
+            // beamed notes scaled by 2/3 closes a triplet-shaped overflow).
+            // Strictly metric-gated: fires only when the run's scaling makes
+            // the WHOLE voice sum to the bar exactly, so a score whose voices
+            // already balance (ギブス) never reaches this path.
+            if ProcessInfo.processInfo.environment["PDF_NO_TUPLET"] != "1",
+               tupletRepair(
+                   indices: indices, barLength: barLength,
+                   currentSum: currentSum, elements: &elements,
+                   location: location,
+               )
+            {
+                return
+            }
+            // INVARIANT 4: no single-note repair AND no tuplet repair reaches
+            // the bar length — leave the measure unchanged.
             emitUnreconciledWarning(diagnostics, location: location)
             return
         }
