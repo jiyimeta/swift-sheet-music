@@ -373,5 +373,72 @@
             let ticks = timeline.frames.map(\.tick)
             #expect(ticks == [0, 240, 480, 720, 960, 1200])
         }
+
+        /// `seconds(atTick:)` is the *continuous* counterpart to
+        /// `frame(atTick:)`: where the latter snaps to a note/beat onset,
+        /// this linearly interpolates between the bracketing frames so a
+        /// caller can scroll a playhead smoothly. Expected values are
+        /// derived from the timeline's own frames so the test is robust to
+        /// timing-model tweaks, and the score has no tempo changes — so
+        /// time is linear in tick and the midpoint checks are exact.
+        @Test("seconds(atTick:) interpolates continuous time between frames")
+        func secondsAtTickInterpolatesBetweenFrames() {
+            // 4/4 of four quarter notes at division 480, default 120 bpm:
+            // onset frames at ticks 0/480/960/1440 (0.0/0.5/1.0/1.5 s);
+            // the final quarter rings out to tick 1920 (2.0 s).
+            let quarter = Chord(
+                duration: .quarter, notes: [Note(pitch: 60, tpc: 14)],
+            )
+            let voice = Voice(elements: [
+                .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+                .chord(quarter), .chord(quarter), .chord(quarter), .chord(quarter),
+            ])
+            let staff = Staff(measures: [Measure(voices: [voice])])
+            let part = Part(
+                id: "P1",
+                instrument: Instrument(
+                    id: "i", articulations: [InstrumentArticulation()],
+                ),
+                staves: [staff],
+            )
+            let timeline = PlaybackTimeline(score: Score(division: 480, parts: [part]))
+
+            let frames = timeline.frames
+            #expect(frames.count >= 2)
+            let first = frames[0]
+            let last = frames[frames.count - 1]
+            // The final note rings out past the last onset frame, so the
+            // extrapolation segment [last.tick, totalTicks] is non-empty.
+            #expect(timeline.totalTicks > last.tick)
+
+            // Exact at any frame tick returns that frame's own time.
+            for f in frames {
+                #expect(abs(timeline.seconds(atTick: Double(f.tick)) - f.timeSeconds) < 1e-9)
+            }
+
+            // Midpoint between two consecutive frames is the midpoint in
+            // time (constant tempo ⇒ linear in tick).
+            let a = frames[0], b = frames[1]
+            let midTick = Double(a.tick + b.tick) / 2
+            let midExpected = (a.timeSeconds + b.timeSeconds) / 2
+            #expect(abs(timeline.seconds(atTick: midTick) - midExpected) < 1e-9)
+
+            // Before the first frame clamps to the first frame's time.
+            #expect(timeline.seconds(atTick: Double(first.tick) - 100) == first.timeSeconds)
+
+            // Extrapolation past the last onset frame: at totalTicks it
+            // reaches totalSeconds, and the segment midpoint is half-way.
+            #expect(abs(timeline.seconds(atTick: Double(timeline.totalTicks)) - timeline.totalSeconds) < 1e-9)
+            let tailMid = Double(last.tick + timeline.totalTicks) / 2
+            let tailExpected = last.timeSeconds
+                + 0.5 * (timeline.totalSeconds - last.timeSeconds)
+            #expect(abs(timeline.seconds(atTick: tailMid) - tailExpected) < 1e-9)
+
+            // Far beyond the end clamps (the fraction is capped at 1).
+            #expect(abs(
+                timeline.seconds(atTick: Double(timeline.totalTicks) + 10000)
+                    - timeline.totalSeconds,
+            ) < 1e-9)
+        }
     }
 #endif
