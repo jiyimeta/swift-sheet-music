@@ -100,18 +100,56 @@ extension PDFImporter {
         for g in verseTexts {
             glyphsByNotePos[nearestNotePos(g.origin.x, noteXs), default: []].append(g)
         }
+        // Ordered cells (note position ascending), each x-sorted.
+        var cells = glyphsByNotePos
+            .sorted { $0.key < $1.key }
+            .map { (pos: $0.key, glyphs: $0.value.sorted { $0.origin.x < $1.origin.x }) }
+        reglueSmallKana(&cells)
         var prevSyllabic: Syllabic = .single
-        for (pos, cellGlyphs) in glyphsByNotePos.sorted(by: { $0.key < $1.key }) {
-            let glyphs = cellGlyphs.sorted { $0.origin.x < $1.origin.x }
-            guard let syllable = buildSyllable(glyphs) else { continue }
+        for cell in cells {
+            guard let syllable = buildSyllable(cell.glyphs) else { continue }
             let syllabic = nextSyllabic(
                 previous: prevSyllabic, endsWithHyphen: syllable.hyphen,
             )
-            elements[noteIdxs[pos]].chord.lyrics.append(
+            elements[noteIdxs[cell.pos]].chord.lyrics.append(
                 Lyric(text: syllable.text, syllabic: syllabic, verse: verse),
             )
             prevSyllabic = syllabic
         }
+    }
+
+    /// Hiragana / katakana small (yōon / sokuon) forms and the chōonpu, which
+    /// never begin a syllable — they ride on the base glyph to their left.
+    private static let smallKana: Set<Character> = [
+        "ぁ", "ぃ", "ぅ", "ぇ", "ぉ", "っ", "ゃ", "ゅ", "ょ", "ゎ", "ゕ", "ゖ",
+        "ァ", "ィ", "ゥ", "ェ", "ォ", "ッ", "ャ", "ュ", "ョ", "ヮ", "ヵ", "ヶ",
+        "ー",
+    ]
+
+    /// Re-glue a leading small kana that the note-territory split severed
+    /// from its base. The Voronoi bucketing assigns each glyph independently,
+    /// so a small kana whose x drifts past the midpoint to the next note
+    /// lands at the FRONT of that note's cell, ahead of the cell's own base
+    /// ("ゃ·し" for a "…しゃ | し…" run). When a cell starts with a small kana
+    /// AND still holds a following base glyph, move the leading small kana(s)
+    /// back onto the previous cell. The `glyphs.count >= 2` guard is load
+    /// bearing: a cell that is a small kana ALONE is a genuine mora on its own
+    /// note (a melisma split such as A's "ず·っ·と") and must stay put.
+    private static func reglueSmallKana(
+        _ cells: inout [(pos: Int, glyphs: [TextGlyph])],
+    ) {
+        var glued: [(pos: Int, glyphs: [TextGlyph])] = []
+        for cell in cells {
+            var glyphs = cell.glyphs
+            while glyphs.count >= 2, !glued.isEmpty,
+                  let first = glyphs.first?.text.trimmingCharacters(in: .whitespaces).first,
+                  smallKana.contains(first)
+            {
+                glued[glued.count - 1].glyphs.append(glyphs.removeFirst())
+            }
+            glued.append((cell.pos, glyphs))
+        }
+        cells = glued
     }
 
     /// Index (into the x-sorted note list) of the note nearest `x`.
