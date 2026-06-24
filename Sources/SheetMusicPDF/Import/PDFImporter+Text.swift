@@ -15,11 +15,14 @@ extension PDFImporter {
     ///  1. Filter to page 0, top of the page (PDF y-up, `y > 0.5 ×
     ///     height` — wide enough to also reach a sub-title credit block
     ///     that sits below the masthead). Empty glyphs dropped.
-    ///  2. Merge into runs; the largest-font run is `.title`, the
-    ///     next-largest distinct-row run `.subtitle`.
+    ///  2. Merge into runs; the largest-font run is `.title`.
     ///  3. The lowest run on the right half (a credit line such as
-    ///     "Arranged by …") is `.composer`.
-    ///  4. If `options.useMetadataAsFallback` is true, any role still
+    ///     "Arranged by …") is `.composer` — claimed *before* the subtitle
+    ///     so a lone right-aligned credit isn't first swallowed by the
+    ///     position-agnostic subtitle rule.
+    ///  4. The next-largest distinct-row run not already used is
+    ///     `.subtitle`.
+    ///  5. If `options.useMetadataAsFallback` is true, any role still
     ///     missing is filled from `PDFDocument.documentAttributes`.
     ///
     /// Returns `nil` when no candidates are found and metadata is
@@ -112,24 +115,29 @@ extension PDFImporter {
         // Title = largest-font run.
         guard let title = byFont.first else { return }
         frameTexts.append(FrameText(style: .title, text: title.text))
-        // Subtitle = the next-largest run on a DIFFERENT baseline row than
-        // the title (so a same-row sibling glyph isn't taken as subtitle).
-        // Row tolerance is absolute (~6 pt) because the masthead font can
-        // be very large, which would otherwise swallow a close credit row.
-        let subtitle = byFont.dropFirst().first {
-            abs($0.y - title.y) > 6 && $0.text != title.text
-        }
-        if let subtitle {
-            frameTexts.append(FrameText(style: .subtitle, text: subtitle.text))
-        }
-        // Composer = the lowest credit run sitting on the right half, not
-        // already used (e.g. "Arranged by Kiichi" under the masthead).
-        let used = Set(frameTexts.map(\.text))
+        // Composer = the lowest credit run sitting on the right half, other
+        // than the title (e.g. "Arranged by Kiichi" under the masthead).
+        // Detected BEFORE the subtitle: composer has a horizontal (right-
+        // half) constraint, while the subtitle rule is position-agnostic,
+        // so running subtitle first lets it swallow a lone right-aligned
+        // credit that is really the composer (regression fixed here).
         let composer = runs
-            .filter { !used.contains($0.text) && $0.x > pageWidth * 0.4 }
+            .filter { $0.text != title.text && $0.x > pageWidth * 0.4 }
             .min { $0.y < $1.y }
         if let composer {
             frameTexts.append(FrameText(style: .composer, text: composer.text))
+        }
+        // Subtitle = the next-largest run on a DIFFERENT baseline row than
+        // the title (so a same-row sibling glyph isn't taken as subtitle)
+        // and not already claimed by the composer. Row tolerance is
+        // absolute (~6 pt) because the masthead font can be very large,
+        // which would otherwise swallow a close credit row.
+        let used = Set(frameTexts.map(\.text))
+        let subtitle = byFont.dropFirst().first {
+            abs($0.y - title.y) > 6 && !used.contains($0.text)
+        }
+        if let subtitle {
+            frameTexts.append(FrameText(style: .subtitle, text: subtitle.text))
         }
     }
 
