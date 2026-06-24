@@ -67,8 +67,8 @@
             #expect(cc7Count(in: midi, channel: 1) > 0)
         }
 
-        @Test("leaves non-CC-7 events on managed channels untouched")
-        func keepsOtherEventsOnManagedChannels() throws {
+        @Test("strips the tick-0 program change on managed channels, keeps note-ons")
+        func stripsTick0ProgramChangeOnManagedChannels() throws {
             let voice = Voice(elements: [
                 .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
                 .chord(Chord(duration: .whole, notes: [Note(pitch: 60, tpc: 14)])),
@@ -87,26 +87,39 @@
                 if case .noteOn = event { return true }
                 return false
             }
-            let pcBefore = eventCount(in: midi) { event in
-                if case .programChange = event { return true }
-                return false
-            }
+            // Sanity: the renderer bakes the channel's program into a
+            // tick-0 program change.
+            #expect(tick0ProgramChangeCount(in: midi, channel: 0) > 0)
 
             PlaybackEngine.postProcessForMIDISynth(
                 midi: &midi, mixerManagedChannels: [0],
             )
 
-            // noteOn / programChange on the managed channel are
-            // preserved — only CC 7 is removed.
+            // note-ons on the managed channel survive; only CC 7 and the
+            // tick-0 program change are stripped — the engine re-asserts
+            // the program after every start, so a backward seek can't
+            // chase the SMF's tick-0 program and clobber a mixer override.
             #expect(eventCount(in: midi) { event in
                 if case .noteOn = event { return true }
                 return false
             } == noteOnsBefore)
-            #expect(eventCount(in: midi) { event in
-                if case .programChange = event { return true }
-                return false
-            } == pcBefore)
+            #expect(tick0ProgramChangeCount(in: midi, channel: 0) == 0)
             #expect(cc7Count(in: midi, channel: 0) == 0)
+        }
+
+        /// Count of program-change events at tick 0 on `channel`. Tick is
+        /// not visible to `eventCount`'s `MidiEvent` predicate, so this
+        /// walks the timed events directly.
+        private func tick0ProgramChangeCount(in midi: MidiFile, channel: Int) -> Int {
+            var count = 0
+            for track in midi.tracks {
+                for timed in track.events where timed.tick == 0 {
+                    if case let .programChange(ch, _) = timed.event, ch == channel {
+                        count += 1
+                    }
+                }
+            }
+            return count
         }
 
         private func cc7Count(in midi: MidiFile, channel: Int) -> Int {

@@ -6,6 +6,15 @@
 
     @Suite("LayoutEngine tremolo emission")
     struct TremoloLayoutTests {
+        /// These tests call `LayoutEngine.layout(...)` directly (not via
+        /// UI/PDF), so they must eagerly install the Apple FontMetrics
+        /// provider — otherwise `LayoutEngine.layout`'s DEBUG assert trips on
+        /// the lingering `StubFontMetricsProvider` and crashes the test
+        /// process (SIGTRAP). In a full parallel run another suite usually
+        /// installs it first, masking the gap; in isolation this suite
+        /// crashed deterministically without it.
+        private let _installApple = TestSupport.installApple
+
         /// Build a one-measure score whose single chord (or chord pair) has
         /// the supplied elements.
         private static func score(_ elements: [VoiceElement]) -> Score {

@@ -22,55 +22,57 @@
     /// observable proxy: it is pushed by the *same* `applyMixerState`
     /// call, so asserting it survives the wrap proves the re-assertion
     /// runs for every channel.
-    @Suite("PlaybackEngine loop-wrap mixer re-apply")
-    @MainActor
-    struct PlaybackEngineLoopWrapMixerTests {
-        @Test("loop wrap re-applies live mixer state so per-channel choices survive the rewind")
-        func loopWrapReassertsMixerState() throws {
-            let quarter = Chord(
-                duration: .quarter, notes: [Note(pitch: 60, tpc: 14)],
-            )
-            let voice = Voice(elements: [
-                .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
-                .chord(quarter), .chord(quarter), .chord(quarter), .chord(quarter),
-            ])
-            let part = Part(
-                id: "p",
-                instrument: Instrument(
-                    id: "i",
-                    channels: [InstrumentChannel(program: 0)],
-                ),
-                staves: [Staff(measures: [Measure(voices: [voice])])],
-            )
-            let score = Score(division: 480, parts: [part])
+    extension AudioEngineSerial {
+        @Suite("PlaybackEngine loop-wrap mixer re-apply")
+        @MainActor
+        struct PlaybackEngineLoopWrapMixerTests {
+            @Test("loop wrap re-applies live mixer state so per-channel choices survive the rewind")
+            func loopWrapReassertsMixerState() throws {
+                let quarter = Chord(
+                    duration: .quarter, notes: [Note(pitch: 60, tpc: 14)],
+                )
+                let voice = Voice(elements: [
+                    .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+                    .chord(quarter), .chord(quarter), .chord(quarter), .chord(quarter),
+                ])
+                let part = Part(
+                    id: "p",
+                    instrument: Instrument(
+                        id: "i",
+                        channels: [InstrumentChannel(program: 0)],
+                    ),
+                    staves: [Staff(measures: [Measure(voices: [voice])])],
+                )
+                let score = Score(division: 480, parts: [part])
 
-            let engine = PlaybackEngine(soundfontResolver: NullResolver())
-            try engine.prepare(score: score)
-            // Build the sequencer (and attach the metronome track) the
-            // way a real play does, then halt the cursor timer so the
-            // wrap below is driven deterministically rather than by the
-            // 30 Hz poll.
-            engine.play(in: score)
-            engine.stop()
+                let engine = PlaybackEngine(soundfontResolver: NullResolver())
+                try engine.prepare(score: score)
+                // Build the sequencer (and attach the metronome track) the
+                // way a real play does, then halt the cursor timer so the
+                // wrap below is driven deterministically rather than by the
+                // 30 Hz poll.
+                engine.play(in: score)
+                engine.stop()
 
-            // The user mutes the metronome strip — a per-channel mixer
-            // choice that must outlive a loop wrap. `applyMixerState`
-            // pushes it to the live graph (metronome disabled).
-            engine.setMuted(forChannel: .metronome, to: true)
-            #expect(engine.exportEngineSnapshot().metronomeEnabled == false)
+                // The user mutes the metronome strip — a per-channel mixer
+                // choice that must outlive a loop wrap. `applyMixerState`
+                // pushes it to the live graph (metronome disabled).
+                engine.setMuted(forChannel: .metronome, to: true)
+                #expect(engine.exportEngineSnapshot().metronomeEnabled == false)
 
-            // Simulate the SMF's tick-0 events — re-fired by the
-            // backward seek — clobbering the live state back to the
-            // score default (metronome re-enabled).
-            engine.setMetronomeEnabled(true)
-            #expect(engine.exportEngineSnapshot().metronomeEnabled == true)
+                // Simulate the SMF's tick-0 events — re-fired by the
+                // backward seek — clobbering the live state back to the
+                // score default (metronome re-enabled).
+                engine.setMetronomeEnabled(true)
+                #expect(engine.exportEngineSnapshot().metronomeEnabled == true)
 
-            // Wrap back to the loop start. This is the path the bug
-            // lived in: it must re-assert the live mixer state after the
-            // rewind, restoring the user's muted-metronome choice.
-            engine.wrapToLoopStart(LoopRange(startTick: 0, endTick: 480))
+                // Wrap back to the loop start. This is the path the bug
+                // lived in: it must re-assert the live mixer state after the
+                // rewind, restoring the user's muted-metronome choice.
+                engine.wrapToLoopStart(LoopRange(startTick: 0, endTick: 480))
 
-            #expect(engine.exportEngineSnapshot().metronomeEnabled == false)
+                #expect(engine.exportEngineSnapshot().metronomeEnabled == false)
+            }
         }
     }
 
