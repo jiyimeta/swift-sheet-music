@@ -26,12 +26,22 @@ extension PDFImporter {
     ///    lone hyphen char appended to a run) marks `.begin` /
     ///    `.middle` / `.end`. Underscore-only runs extend the previous
     ///    melisma and are not attached.
+    /// How many staff-line spacings (spatia) below the bottom staff line the
+    /// lyric search band reaches when there is NO staff below to bound it.
+    /// MuseScore engraves lyric rows ≈ 6 spatia below the bottom line (the
+    /// historical `4` was too shallow — most rows fell just past it, dropping
+    /// the bulk of the lyrics). When a staff below exists, `nextStaffTopY`
+    /// bounds the band instead (a staff's lyrics sit entirely in the gap
+    /// above the next staff), and this only caps a runaway inter-system gap.
+    static let lyricBandDepthSpatia: CGFloat = 8
+
     static func attachLyrics(
         elements: [RhythmElement],
         texts: [TextGlyph],
         staffYLines: [CGFloat],
         pageIndex: Int = 0,
         xRange: ClosedRange<CGFloat>? = nil,
+        nextStaffTopY: CGFloat? = nil,
     ) -> [RhythmElement] {
         guard let bottomY = staffYLines.first,
               let topY = staffYLines.last,
@@ -47,6 +57,7 @@ extension PDFImporter {
             lineSpacing: lineSpacing,
             pageIndex: pageIndex,
             xRange: xRange,
+            nextStaffTopY: nextStaffTopY,
         )
         guard !candidates.isEmpty else { return elements }
 
@@ -171,8 +182,18 @@ extension PDFImporter {
         lineSpacing: CGFloat,
         pageIndex: Int,
         xRange: ClosedRange<CGFloat>?,
+        nextStaffTopY: CGFloat?,
     ) -> [TextGlyph] {
-        let lyricWindowLo = bottomY - 4 * lineSpacing
+        // The band reaches `lyricBandDepthSpatia` spatia below the bottom
+        // line, but never PAST the next staff below — a staff's lyrics live
+        // entirely in the gap above the staff under it, so the next staff's
+        // top line is the natural floor. `max(depthFloor, nextTop)` keeps the
+        // depth cap active for a large inter-system gap (don't vacuum a far
+        // staff's text) while letting the next-staff bound win for normal
+        // spacing. Without a staff below (lowest staff of the last system on
+        // a page) the depth cap alone applies.
+        let depthFloor = bottomY - Self.lyricBandDepthSpatia * lineSpacing
+        let lyricWindowLo = nextStaffTopY.map { max(depthFloor, $0) } ?? depthFloor
         let lyricWindowHi = bottomY
         // Constrain to this measure's x cell (padded by half a note step)
         // so a measure only claims the lyrics under its own notes — without
