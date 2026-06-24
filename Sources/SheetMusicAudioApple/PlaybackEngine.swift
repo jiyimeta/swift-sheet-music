@@ -1185,6 +1185,22 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
 
     /// Stop the engine and release samplers. Safe to call multiple
     /// times; subsequent `prepare(score:)` calls will spin it back up.
+    /// Quiesce the render IO thread before this instance — and the
+    /// `AVAudioUnit` nodes it owns — are deallocated. A `PlaybackEngine`
+    /// dropped while its engine is still running would otherwise tear the
+    /// nodes down out from under a live render cycle and fault on the IO
+    /// thread (`EXC_BAD_ACCESS` in `AudioUnitRender`), the same race
+    /// `teardown()` guards against. `teardown()` is `@MainActor`-isolated
+    /// and so unreachable from a `nonisolated deinit`; `isolated deinit`
+    /// would need macOS 15 / iOS 18 (this package deploys to macOS 14 /
+    /// iOS 17). `engine.stop()` alone tears the IO thread down
+    /// synchronously, which is all that's required for a safe
+    /// teardown-on-dealloc, and is a no-op on an already-stopped engine —
+    /// so an explicit `teardown()` first leaves this harmless.
+    deinit {
+        engine.stop()
+    }
+
     public func teardown() {
         stop()
         clearLoop()
