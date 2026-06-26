@@ -33,18 +33,20 @@ extension PDFImporter {
     private static let narrowStaffSegmentSpacingMultiple: CGFloat = 4
 
     /// Upper bound (in staff spaces) on the width of a narrow segment that
-    /// may extend the xRange. A heavily-justified FINAL bar is drawn only a
-    /// few staff spaces wide (≈ 6 — the minimum to show a whole note plus
-    /// engraving margins); anything substantially wider is a *normal* staff
-    /// line whose region was left below the absolute clustering gate only
-    /// because the score's print size is small (its spacing is tight). Such a
-    /// region is real staff WITH content / barlines of its own and must be
-    /// left to the conservative clustering pass — extending into it would
-    /// import a non-final-measure region and inflate the measure count
-    /// (observed: カゲロウ page-16 system-0, where 14-staff-space-wide
-    /// co-linear segments past the closing barline would add a phantom
-    /// measure). 群青日和 m5's segments are ≈ 6 spaces (genuinely short) and
-    /// stay within this bound.
+    /// may extend the xRange **without** a content check. A heavily-justified
+    /// FINAL bar is drawn only a few staff spaces wide (≈ 6 — the minimum to
+    /// show a whole note plus engraving margins), so segments up to this bound
+    /// are accepted as justified-final-bar continuations purely on geometry
+    /// (群青日和 m5's segments are ≈ 6 spaces). A WIDER co-linear contiguous
+    /// segment can also be a real measure the wide-cluster gate dropped — e.g.
+    /// a clef / key-change bar engraved a hair under the absolute clustering
+    /// gate (observed: カゲロウ page-16 system-0, a real ~14-space measure with
+    /// a treble clef + 3-sharp key signature + a notehead/rest in every staff,
+    /// previously discarded here as a presumed phantom). Such wider segments
+    /// are admitted only when `segmentRegionHasContent` confirms a notehead or
+    /// rest sits in the staff band over the segment, distinguishing a real
+    /// dropped measure from a content-free phantom margin past a closing
+    /// barline. See `extendXRangeWithNarrowSegments`.
     private static let narrowStaffSegmentMaxSpacingMultiple: CGFloat = 8
 
     /// Maximum gap (in staff spaces) between the current xRange edge and a
@@ -107,17 +109,29 @@ extension PDFImporter {
         lineYs: [CGFloat],
         spacing: CGFloat,
         pageHoriz: [PathSegment],
+        contentGlyphs: [ClassifiedGlyph] = [],
     ) -> ClosedRange<CGFloat> {
         guard spacing > 0 else { return xRange }
         let widthGate = spacing * narrowStaffSegmentSpacingMultiple
         let widthMax = spacing * narrowStaffSegmentMaxSpacingMultiple
         let gapSlop = spacing * xRangeExtendGapSlop
         // Candidate narrow staff-line segments co-linear with this staff.
+        // A segment qualifies when it is wider than a ledger / dot
+        // (`> widthGate`), still under the absolute line-clustering gate, and
+        // co-linear with one of the staff's own lines. Up to `widthMax` staff
+        // spaces it is accepted on geometry alone (a justified final bar);
+        // wider co-linear segments are accepted only when a notehead / rest
+        // sits over them in the staff band — a real dropped measure (e.g. a
+        // clef / key-change bar), never a content-free phantom margin.
         let candidates = pageHoriz.filter { seg in
-            seg.rect.width > widthGate
-                && seg.rect.width <= widthMax
-                && seg.rect.width <= lineClusterWidthGate
-                && lineYs.contains { abs(seg.rect.midY - $0) < lineMergeTolerance }
+            guard seg.rect.width > widthGate,
+                  seg.rect.width <= lineClusterWidthGate,
+                  lineYs.contains(where: { abs(seg.rect.midY - $0) < lineMergeTolerance })
+            else { return false }
+            if seg.rect.width <= widthMax { return true }
+            return segmentRegionHasContent(
+                seg, lineYs: lineYs, spacing: spacing, content: contentGlyphs,
+            )
         }
         var lo = xRange.lowerBound
         var hi = xRange.upperBound
@@ -139,5 +153,30 @@ extension PDFImporter {
             }
         }
         return lo ... hi
+    }
+
+    /// True when a notehead or rest sits over `seg`'s x-interval within the
+    /// staff's vertical band (the five lines ± ~3 staff spaces, the same band
+    /// the cell glyph filter uses). Used to admit a WIDE co-linear staff-line
+    /// segment past the wide-cluster span only when it carries real musical
+    /// content — i.e. a measure the clustering gate dropped — and to reject a
+    /// content-free phantom margin past a closing barline. Font-independent:
+    /// the band is spatium-relative.
+    private static func segmentRegionHasContent(
+        _ seg: PathSegment,
+        lineYs: [CGFloat],
+        spacing: CGFloat,
+        content: [ClassifiedGlyph],
+    ) -> Bool {
+        guard let lo = lineYs.first, let hi = lineYs.last else { return false }
+        let band = spacing * 3
+        let yLo = lo - band
+        let yHi = hi + band
+        return content.contains { g in
+            g.raw.origin.x >= seg.rect.minX
+                && g.raw.origin.x <= seg.rect.maxX
+                && g.raw.origin.y >= yLo
+                && g.raw.origin.y <= yHi
+        }
     }
 }
