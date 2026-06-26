@@ -16,51 +16,8 @@ import SheetMusicCore
 // tested against the interpolated top / bottom edge at each stem's own x.
 
 extension PDFImporter {
-    // MARK: - Quad fitting (①)
-
-    /// Fit a `BeamQuad` to the four page-space corners of a filled beam
-    /// parallelogram. Splits the corners into a left pair and a right pair
-    /// by x; within each pair the higher-y point is the top edge, the
-    /// lower-y the bottom. Each edge (top / bottom) is the line through its
-    /// left and right endpoints. Page coordinates (PDF origin bottom-left,
-    /// y increases upward).
-    static func fitBeamQuad(corners: [CGPoint], pageIndex: Int) -> BeamQuad? {
-        guard corners.count == 4 else { return nil }
-        let byX = corners.sorted { $0.x < $1.x }
-        // Left pair = first two by x, right pair = last two. (A parallelogram
-        // beam has two corners at each end.)
-        let left = Array(byX[0 ... 1])
-        let right = Array(byX[2 ... 3])
-        let topLeft = left.max { $0.y < $1.y } ?? left[0]
-        let botLeft = left.min { $0.y < $1.y } ?? left[0]
-        let topRight = right.max { $0.y < $1.y } ?? right[0]
-        let botRight = right.min { $0.y < $1.y } ?? right[0]
-        guard let lo = corners.map(\.x).min(),
-              let hi = corners.map(\.x).max(), hi > lo
-        else { return nil }
-        let (topSlope, topIntercept) = lineThrough(topLeft, topRight)
-        let (botSlope, botIntercept) = lineThrough(botLeft, botRight)
-        return BeamQuad(
-            xRange: lo ... hi,
-            topSlope: topSlope, topIntercept: topIntercept,
-            botSlope: botSlope, botIntercept: botIntercept,
-            pageIndex: pageIndex,
-        )
-    }
-
-    /// Slope + intercept of the line through two points. Degenerate
-    /// (coincident x) → flat line at the mean y.
-    private static func lineThrough(
-        _ p0: CGPoint, _ p1: CGPoint,
-    ) -> (slope: CGFloat, intercept: CGFloat) {
-        let dx = p1.x - p0.x
-        guard abs(dx) > 0.001 else { return (0, (p0.y + p1.y) / 2) }
-        let m = (p1.y - p0.y) / dx
-        let b = p0.y - m * p0.x
-        return (m, b)
-    }
-
     // MARK: - Point-in-band membership (②)
+    // (Quad fitting ① lives in PDFImporter+BeamQuad.swift.)
 
     /// The pad (pt) added around a quad's interpolated top / bottom edge
     /// when testing whether a stem end falls inside the ~2pt-thick beam
@@ -99,15 +56,13 @@ extension PDFImporter {
         guard let q = beam.quad else {
             return s.x >= beam.rect.minX - beamEndpointPad
                 && s.x <= beam.rect.maxX + beamEndpointPad
-                && min(abs(s.hiY - beam.rect.midY), abs(s.loY - beam.rect.midY)) <= beamReach
+                && s.beamEndDistance(to: beam.rect.midY) <= beamReach
         }
         guard s.x >= q.xRange.lowerBound - beamEndpointPad,
               s.x <= q.xRange.upperBound + beamEndpointPad
         else { return false }
         let edgeMid = (q.topY(at: s.x) + q.botY(at: s.x)) / 2
-        let dTop = abs(s.hiY - edgeMid)
-        let dBot = abs(s.loY - edgeMid)
-        return min(dTop, dBot) <= beamReach
+        return s.beamEndDistance(to: edgeMid) <= beamReach
     }
 
     /// Looser y-reach (pt) used ONLY for GROUP membership (interior
@@ -146,18 +101,29 @@ extension PDFImporter {
         guard s.x >= lo + beamGroupInteriorMargin,
               s.x <= hi - beamGroupInteriorMargin
         else { return false }
-        return min(abs(s.hiY - edgeMid), abs(s.loY - edgeMid)) <= beamGroupReach
+        return s.beamEndDistance(to: edgeMid) <= beamGroupReach
     }
 
     // MARK: - Beam groups + per-stem level (③)
 
     /// One stem to feed the beam-group solver: its index in the measure's
-    /// `stems` array, its x, and its vertical span.
+    /// `stems` array, its x, its vertical span, and `beamedEndY` — the bare
+    /// end where beams attach (opposite the notehead). Level counting measures
+    /// a beam's distance to THIS end only, so a neighbour-staff beam grazing
+    /// the notehead end isn't miscounted (the 8→16 over-read on tightly-spaced
+    /// systems). `nil` ⇒ unknown; fall back to the nearer-of-both-ends test.
     struct StemInfo {
         var index: Int
         var x: CGFloat
         var loY: CGFloat
         var hiY: CGFloat
+        var beamedEndY: CGFloat?
+
+        /// Distance from `y` (a beam edge) to the stem's beam-attaching end.
+        func beamEndDistance(to y: CGFloat) -> CGFloat {
+            if let beamedEndY { return abs(beamedEndY - y) }
+            return min(abs(hiY - y), abs(loY - y))
+        }
     }
 
     /// Per-stem beam level (number of beam lines stacked over the stem at
@@ -301,10 +267,13 @@ extension PDFImporter {
 
 extension PDFImporter {
     /// Compute the per-stem beam level for every stem in a measure, keyed by
-    /// the stem's index in `stems`. Builds `StemInfo` (x / vertical span) for
-    /// each stem, then defers to `beamLevels`.
+    /// the stem's index in `stems`, deferring to `beamLevels`. `noteheadOrigins`
+    /// fixes each stem's beam-attaching end (the bare end, far from the abutting
+    /// notehead) so a neighbour-staff beam grazing the notehead end isn't
+    /// miscounted (the 8→16 over-read on tightly-spaced systems).
     static func computeBeamLevels(
         stems: [PathSegment], beams: [PathSegment],
+        noteheadOrigins: [CGPoint] = [],
     ) -> [Int: Int] {
         guard !stems.isEmpty, !beams.isEmpty else { return [:] }
         let infos: [StemInfo] = stems.enumerated().map { idx, stem in
@@ -313,9 +282,29 @@ extension PDFImporter {
                 x: stem.rect.midX,
                 loY: stem.rect.minY,
                 hiY: stem.rect.maxY,
+                beamedEndY: beamedEnd(
+                    loY: stem.rect.minY, hiY: stem.rect.maxY,
+                    stemX: stem.rect.midX, noteheads: noteheadOrigins,
+                ),
             )
         }
         return beamLevels(stems: infos, beams: beams)
+    }
+
+    /// The stem end where beams attach: the end farther from the notehead the
+    /// stem abuts (within ~7pt in x, y nearest either stem end). `nil` when no
+    /// notehead abuts the stem.
+    private static func beamedEnd(
+        loY: CGFloat, hiY: CGFloat, stemX: CGFloat, noteheads: [CGPoint],
+    ) -> CGFloat? {
+        var bestY: CGFloat?
+        var bestDist = CGFloat.greatestFiniteMagnitude
+        for nh in noteheads where abs(nh.x - stemX) <= 7 {
+            let d = min(abs(nh.y - loY), abs(nh.y - hiY))
+            if d < bestDist { bestDist = d; bestY = nh.y }
+        }
+        guard let noteY = bestY else { return nil }
+        return abs(hiY - noteY) >= abs(loY - noteY) ? hiY : loY
     }
 
     // MARK: - Stem attachment (notehead → stem)

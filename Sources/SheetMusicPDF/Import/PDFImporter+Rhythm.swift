@@ -56,7 +56,14 @@ extension PDFImporter {
         // Beam-group geometry (① + ②): per-stem beam level computed ONCE
         // over the whole measure so union-find groups and interior
         // inheritance see every stem. Keyed by the stem's index in `stems`.
-        let levelByStem = computeBeamLevels(stems: stems, beams: beams)
+        // The notehead origins identify each stem's beam-attaching end so a
+        // neighbour staff's beam grazing the notehead end isn't miscounted.
+        let noteheadOrigins = glyphs
+            .filter { isNotehead($0.semantic) }
+            .map(\.raw.origin)
+        let levelByStem = computeBeamLevels(
+            stems: stems, beams: beams, noteheadOrigins: noteheadOrigins,
+        )
 
         var elements: [RhythmElement] = []
         var consumed = graceIndices
@@ -244,21 +251,18 @@ extension PDFImporter {
         var indices = [i]
         for (j, g) in glyphs.enumerated() where j != i {
             guard isNoteheadSemantic(g.semantic) else { continue }
-            // Chord noteheads share the lead's x (and thus its stem
-            // offset). Match against the lead's x rather than the stem's
-            // midX so a stem-down note's left-side stem doesn't widen the
-            // window into the neighbour to its right.
+            // Chord noteheads share the lead's x. Match the lead's x (not the
+            // stem midX) so a stem-down note's left-side stem doesn't widen
+            // the window into the neighbour to its right.
             guard abs(g.raw.origin.x - lead.raw.origin.x) <= 2.5 else { continue }
             // …but a shared x is NOT sufficient: a drum downbeat stacks two
-            // VOICES at one x — a crash (stem-up, high above the staff) over
-            // a kick (stem-down) — each on its OWN stem. The old x-only rule
-            // fused them into one chord, so the crash's onset vanished behind
-            // the kick's lead note (the systematic 群青/君と drum loss). Admit
-            // a same-x notehead only when it attaches to the SAME stem as the
-            // lead; route the other to its own stem so the two onsets stay
-            // distinct and split in assignVoices. A genuine single-voice chord
-            // shares one stem, so its mates still cluster. A notehead with no
-            // detected stem (e.g. a whole-note chord-mate) still joins.
+            // VOICES at one x — a crash (stem-up) over a kick (stem-down), each
+            // on its OWN stem — and the old x-only rule fused them into one
+            // chord, hiding the crash onset behind the kick's lead (the 群青/
+            // 君と drum loss). Admit a same-x notehead only when it attaches to
+            // the SAME stem as the lead; the other splits off in assignVoices.
+            // Single-voice chords share one stem (mates still cluster); a
+            // notehead with no detected stem still joins.
             let gStem = nearestStem(
                 toX: g.raw.origin.x, noteY: g.raw.origin.y, stems: stems,
             )
@@ -385,12 +389,10 @@ extension PDFImporter {
             guard case .augmentationDot = g.semantic else { continue }
             let dx = g.raw.origin.x - leadX
             let dy = abs(g.raw.origin.y - leadY)
-            // A note's own dot sits ~7–10pt to its right (measured: owner
-            // dx clusters at 7.1/7.2/9.7/9.8pt). The previous `< 20`pt
-            // window also caught the dot of the FOLLOWING note ~15pt away,
-            // dotting a note that A leaves plain (the phantom `3/32` at the
-            // tail of beamed 16th runs). 12pt keeps every real owner dot
-            // with headroom and rejects the ~15pt neighbour.
+            // A note's own dot sits ~7–10pt to its right (measured). The
+            // previous `< 20`pt window also caught the FOLLOWING note's dot
+            // ~15pt away (a phantom `3/32` at the tail of beamed 16th runs);
+            // 12pt keeps every owner dot and rejects the ~15pt neighbour.
             if dx > 0, dx < 12, dy < 4 { dotCount += 1 }
         }
         return dotCount > 0 ? duration.dotted(dotCount) : duration
