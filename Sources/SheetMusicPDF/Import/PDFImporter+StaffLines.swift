@@ -17,11 +17,23 @@ extension PDFImporter {
         let noteheads = classified.filter {
             $0.raw.pageIndex == pageIndex && isNotehead($0.semantic)
         }
+        // Musical content (noteheads + rests) on this page, used to decide
+        // whether a wide co-linear staff-line segment past the wide-cluster
+        // span is a REAL measure (e.g. a clef / key-change bar the clustering
+        // gate dropped) rather than a content-free phantom margin — see
+        // `extendXRangeWithNarrowSegments`.
+        let contentGlyphs = classified.filter {
+            guard $0.raw.pageIndex == pageIndex else { return false }
+            if isNotehead($0.semantic) { return true }
+            if case .rest = $0.semantic { return true }
+            return false
+        }
         var staves = pathDetectedStaves(
             clusters: clusters,
             paths: paths,
             pageIndex: pageIndex,
             noteheads: noteheads,
+            contentGlyphs: contentGlyphs,
         )
         appendGlyphDetectedStaves(
             classified: classified,
@@ -110,6 +122,7 @@ extension PDFImporter {
         paths: [PathSegment],
         pageIndex: Int,
         noteheads: [ClassifiedGlyph],
+        contentGlyphs: [ClassifiedGlyph],
     ) -> [Staff] {
         let pageHoriz = paths.filter {
             $0.pageIndex == pageIndex && $0.kind == .horizontal
@@ -127,7 +140,8 @@ extension PDFImporter {
                 let xMin = segs.map(\.rect.minX).min() ?? 0
                 let xMax = segs.map(\.rect.maxX).max() ?? 0
                 let xRange = extendXRangeWithNarrowSegments(
-                    xMin ... xMax, lineYs: ys, spacing: spacing, pageHoriz: pageHoriz,
+                    xMin ... xMax, lineYs: ys, spacing: spacing,
+                    pageHoriz: pageHoriz, contentGlyphs: contentGlyphs,
                 )
                 staves.append(makeStaff(
                     yLines: ys,
