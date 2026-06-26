@@ -35,6 +35,15 @@ extension PDFImporter {
             totalStaves(lhs) < totalStaves(rhs)
         } ?? systems[0]
         let shape = partShape(from: referenceSystem)
+        // Strip the arrangers' colon-prefixed StaffText performance notes
+        // ("Lead:…", "Perc.:…") from the text pool up front, so they can't
+        // masquerade as lyric syllables in `attachLyrics`. Page-wide, because
+        // a typed sentence spans several measures' x-cells. See
+        // `removeColonAnnotations`. Uses the reference ensemble's median staff
+        // line-spacing as the row-grouping tolerance.
+        let texts = removeColonAnnotations(
+            texts, lineSpacing: referenceLineSpacing(referenceSystem),
+        )
         var stavesContent: [[Measure]] = Array(
             repeating: [], count: shape.totalStaffSlots,
         )

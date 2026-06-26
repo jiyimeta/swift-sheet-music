@@ -187,6 +187,74 @@ extension PDFImporter {
         return (text, endsWithHyphen)
     }
 
+    /// A colon (ASCII `:` or full-width `：`) never appears inside a real
+    /// `<Lyrics>` syllable in the corpus, but the arrangers' performance
+    /// notes — MuseScore `StaffText` typed as `<label>:<instruction>`
+    /// ("Lead:やりたきゃやる", "Perc.:⾳数減らしめ", "cho:…") — do, and they
+    /// land in the lyric band where they masquerade as syllables and depress
+    /// precision. This removes them from the page-level text pool BEFORE the
+    /// per-measure lyric attachment runs: a colon glyph belongs to a staff-
+    /// text run, so the whole contiguous same-line run that contains it is a
+    /// staff text. It must run page-wide (not per measure) because a typed
+    /// sentence spans several measures' x-cells, and a per-measure pass only
+    /// sees the colon in the fragment that holds it — the continuation
+    /// fragments would survive. Colon-free text (real lyrics, song-section
+    /// titles) is left untouched.
+    static func removeColonAnnotations(
+        _ texts: [TextGlyph], lineSpacing: CGFloat,
+    ) -> [TextGlyph] {
+        guard texts.contains(where: hasColon), lineSpacing > 0 else { return texts }
+        var kept: [TextGlyph] = []
+        for (_, pageTexts) in Dictionary(grouping: texts, by: \.pageIndex) {
+            kept.append(contentsOf: dropAnnotationRuns(pageTexts, lineSpacing: lineSpacing))
+        }
+        return kept
+    }
+
+    private static func hasColon(_ t: TextGlyph) -> Bool {
+        t.text.contains(":") || t.text.contains("：")
+    }
+
+    /// Drop, from a single page's text glyphs, every contiguous same-line
+    /// prose run that contains a colon. See `removeColonAnnotations`.
+    private static func dropAnnotationRuns(
+        _ texts: [TextGlyph], lineSpacing: CGFloat,
+    ) -> [TextGlyph] {
+        guard texts.contains(where: hasColon) else { return texts }
+        // Reading order: top row first (descending y), left→right within a
+        // row (rows separated by > half a line-spacing).
+        let sorted = texts.sorted {
+            abs($0.origin.y - $1.origin.y) > lineSpacing / 2
+                ? $0.origin.y > $1.origin.y
+                : $0.origin.x < $1.origin.x
+        }
+        var keep: [TextGlyph] = []
+        var run: [TextGlyph] = []
+        func flush() {
+            if !run.contains(where: hasColon) { keep.append(contentsOf: run) }
+            run.removeAll(keepingCapacity: true)
+        }
+        for g in sorted {
+            if let last = run.last {
+                // Same text line, and within one prose advance of the previous
+                // glyph: tighter than note spacing, so a real lyric row (whose
+                // syllables sit a full note apart) breaks into its own runs
+                // while a typed sentence stays one run.
+                let sameRow = abs(last.origin.y - g.origin.y) <= lineSpacing / 2
+                let advance = max(last.fontSize, g.fontSize) * 1.3
+                let dx = g.origin.x - last.origin.x
+                if sameRow, dx >= 0, dx <= advance {
+                    run.append(g)
+                    continue
+                }
+            }
+            flush()
+            run.append(g)
+        }
+        flush()
+        return keep
+    }
+
     private static func filterLyricCandidates(
         texts: [TextGlyph],
         bottomY: CGFloat,
