@@ -439,7 +439,13 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
 
         #if os(iOS) || os(tvOS) || os(watchOS)
             let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.playback, mode: .default, options: [])
+            // Best-effort: a host that manages its own session — e.g. a tuner holding `.playAndRecord` with the mic
+            // active for live pitch tracking — can have iOS reject this `.playback` switch with
+            // `AVAudioSessionError.insufficientPriority`. A hard `try` there would throw out of `prepare(score:)`
+            // BEFORE the synths are built (`prepareSynth` below), leaving every voice silent while only the
+            // already-prepared metronome sounds. Treat the session setup as advisory so synth creation always
+            // proceeds; the engine adapts to whatever route the host left active (`connect` uses `format: nil`).
+            try? session.setCategory(.playback, mode: .default, options: [])
             // Request a concrete hardware sample rate before activating.
             // iOS's audio HAL can get its system-wide I/O rate stuck at an
             // odd value (e.g. 24 kHz left over from another app's Bluetooth
@@ -457,7 +463,7 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
             // adapts because every `connect` uses `format: nil`), so a
             // failure here must not abort score preparation.
             try? session.setPreferredSampleRate(48000)
-            try session.setActive(true, options: [])
+            try? session.setActive(true, options: [])
         #endif
 
         try prepareSynth(score: score)
