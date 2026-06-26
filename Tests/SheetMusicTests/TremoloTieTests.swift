@@ -68,7 +68,7 @@ struct TremoloTieTests {
         ])])
         let staff = Staff(measures: [m1, m2, m3])
         let division = 480
-        let (events, _) = try MidiRenderer.renderVoice(
+        let (events, _, _) = try MidiRenderer.renderVoice(
             voiceIndex: 0,
             staff: staff,
             part: Self.makePart(staff: staff),
@@ -105,7 +105,7 @@ struct TremoloTieTests {
         ])])
         let staff = Staff(measures: [m1, m2])
         let division = 480
-        let (events, _) = try MidiRenderer.renderVoice(
+        let (events, _, _) = try MidiRenderer.renderVoice(
             voiceIndex: 0,
             staff: staff,
             part: Self.makePart(staff: staff),

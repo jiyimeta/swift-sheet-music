@@ -34,7 +34,7 @@ struct HairpinRendererIntegrationTests {
             instrument: Instrument(id: "piano", articulations: []),
             staves: [staff],
         )
-        let (events, _) = try MidiRenderer.renderVoice(
+        let (events, _, _) = try MidiRenderer.renderVoice(
             voiceIndex: 0, staff: staff, part: part,
             channel: 0, division: 480,
         )

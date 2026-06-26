@@ -114,6 +114,11 @@ public enum MidiWriter {
             let bytes = Data(text.utf8)
             encoder.append(VariableLengthQuantity.encode(bytes.count))
             encoder.append(bytes)
+        case let .lyric(text):
+            encoder.appendUInt8(0x05)
+            let bytes = Data(text.utf8)
+            encoder.append(VariableLengthQuantity.encode(bytes.count))
+            encoder.append(bytes)
         }
     }
 

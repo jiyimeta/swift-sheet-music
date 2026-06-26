@@ -143,9 +143,10 @@ public enum MidiRenderer {
         events.append(contentsOf: projectedClose)
 
         var voiceEventBuckets: [[TimedMidiEvent]] = []
+        var lyricAnchors: [LyricMidiCodec.Anchor] = []
         let voiceCount = staff.measures.map(\.voices.count).max() ?? 0
         for voiceIndex in 0 ..< voiceCount {
-            let (voiceEvents, _) = try renderVoice(
+            let (voiceEvents, _, anchors) = try renderVoice(
                 voiceIndex: voiceIndex,
                 staff: staff,
                 part: part,
@@ -155,10 +156,13 @@ public enum MidiRenderer {
                 systemElementsByMeasure: systemElementsByMeasure,
             )
             voiceEventBuckets.append(voiceEvents)
+            lyricAnchors.append(contentsOf: anchors)
         }
         // Multi-voice merge resolves same-pitch overlaps (the "muted unison" case).
         let merged = resolveUnisonOverlap(voiceEventBuckets.flatMap(\.self))
         events.append(contentsOf: merged)
+
+        events.append(contentsOf: lyricEvents(from: lyricAnchors))
 
         events.append(contentsOf: projectedOpen)
 
@@ -179,6 +183,18 @@ public enum MidiRenderer {
             .map { TimedMidiEvent(tick: max(0, $0.element.tick), event: $0.element.event) }
 
         return MidiTrack(events: sorted)
+    }
+
+    /// Pack chord lyrics into standard SMF Lyric (0x05) meta events.
+    /// Lyrics from all voices share one per-track stream; in the rare
+    /// case two voices carry lyrics at the same tick the later voice
+    /// wins (multi-voice lyric overlap is out of scope).
+    private static func lyricEvents(
+        from anchors: [LyricMidiCodec.Anchor],
+    ) -> [TimedMidiEvent] {
+        LyricMidiCodec.encode(anchors.sorted { $0.tick < $1.tick }).map { event in
+            TimedMidiEvent(tick: event.tick, event: .meta(.lyric(event.text)))
+        }
     }
 
     /// Project a list of bookend events (originally collected at

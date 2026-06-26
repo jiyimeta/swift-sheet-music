@@ -15,10 +15,14 @@ extension MidiRenderer {
         division: Int,
         swingMap: SwingMap = .empty,
         systemElementsByMeasure: [[PositionedSystemElement]] = [],
-    ) throws -> (events: [TimedMidiEvent], endTick: Int) {
+    ) throws -> (events: [TimedMidiEvent], endTick: Int, lyricAnchors: [LyricMidiCodec.Anchor]) {
         let measureDurations = staff.measures.effectiveMeasureDurations()
         let plan = playbackPlan(for: staff.measures, division: division)
         var events: [TimedMidiEvent] = []
+        // Every non-rest chord's onset tick + its lyrics, in playback
+        // order (repeats re-state lyrics on each take). Encoded into SMF
+        // Lyric meta events by `LyricMidiCodec` at track assembly.
+        var lyricAnchors: [LyricMidiCodec.Anchor] = []
         var velocity = effectiveVelocity(forDynamic: nil, instrument: part.instrument)
         // Tempo in beats-per-second; default is 2 bps (120 BPM = MuseScore's DEFAULT_TEMPO).
         var currentTempoBps = 2.0
@@ -192,6 +196,7 @@ extension MidiRenderer {
                     instrument: part.instrument,
                     division: division,
                     events: &events,
+                    lyricAnchors: &lyricAnchors,
                     hairpinRamps: hairpinRamps,
                     ottavaRanges: ottavaRanges,
                     originalTickDelta: originalTickDelta,
@@ -212,7 +217,7 @@ extension MidiRenderer {
         } else {
             endTick = 0
         }
-        return (events, endTick)
+        return (events, endTick, lyricAnchors)
     }
 
     // swiftlint:disable:next function_parameter_count
@@ -234,6 +239,7 @@ extension MidiRenderer {
         instrument: Instrument,
         division: Int,
         events: inout [TimedMidiEvent],
+        lyricAnchors: inout [LyricMidiCodec.Anchor],
         hairpinRamps: [HairpinRamp],
         ottavaRanges: [OttavaRange],
         originalTickDelta: Int,
@@ -271,6 +277,11 @@ extension MidiRenderer {
                 .resolved(in: measureDuration)
                 .ticks(division: division)
         case let .chord(chord):
+            // Anchor lyrics at the nominal (grid-aligned) onset so the
+            // importer's quantized chord onsets match. Every non-rest
+            // chord is recorded — even lyric-free ones — so melisma
+            // continuations can be placed on the chords they cover.
+            lyricAnchors.append(LyricMidiCodec.Anchor(tick: localTick, lyrics: chord.lyrics))
             let glissandoEndPitch = chord.notes.contains(where: { $0.glissando != nil })
                 ? MidiRenderer.glissandoEndPitch(
                     voiceElements: voiceElements,
