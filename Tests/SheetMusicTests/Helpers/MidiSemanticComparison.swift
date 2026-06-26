@@ -138,6 +138,7 @@ enum MidiSemanticComparison {
         case .tempo: 3
         case .portChange: 4
         case .marker: 5
+        case .lyric: 6
         }
     }
 

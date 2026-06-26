@@ -161,6 +161,13 @@ public enum MidiReader {
             let name = String(decoding: payload, as: UTF8.self)
                 .trimmingCharacters(in: .controlCharacters)
             events.append(TimedMidiEvent(tick: tick, event: .meta(.trackName(name))))
+        case 0x05:
+            // Lyrics are decoded verbatim (no control-character trim) so
+            // empty-string verse sentinels and the "-"/"_" convention
+            // markers survive byte-exact for `LyricMidiCodec`.
+            // swiftlint:disable:next non_optional_string_data_conversion optional_data_string_conversion
+            let text = String(decoding: payload, as: UTF8.self)
+            events.append(TimedMidiEvent(tick: tick, event: .meta(.lyric(text))))
         case 0x06:
             // swiftlint:disable:next non_optional_string_data_conversion optional_data_string_conversion
             let text = String(decoding: payload, as: UTF8.self)

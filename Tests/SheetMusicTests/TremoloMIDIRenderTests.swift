@@ -79,7 +79,7 @@ struct TremoloVoiceRenderTests {
         )
         let measure = Measure(voices: [Voice(elements: [.chord(chord)])])
         let staff = Staff(measures: [measure])
-        let (events, _) = try MidiRenderer.renderVoice(
+        let (events, _, _) = try MidiRenderer.renderVoice(
             voiceIndex: 0,
             staff: staff,
             part: Self.makePart(staff: staff),
@@ -109,7 +109,7 @@ struct TremoloVoiceRenderTests {
             .chord(start), .chord(follower),
         ])])
         let staff = Staff(measures: [measure])
-        let (events, _) = try MidiRenderer.renderVoice(
+        let (events, _, _) = try MidiRenderer.renderVoice(
             voiceIndex: 0,
             staff: staff,
             part: Self.makePart(staff: staff),

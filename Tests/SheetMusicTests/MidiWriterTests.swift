@@ -52,6 +52,38 @@ struct MidiWriterTests {
         #expect(trackBytes[8] == 0x00)
     }
 
+    @Test func writesMetaLyric() throws {
+        let file = MidiFile(division: 480, format: 1, tracks: [
+            MidiTrack(events: [
+                TimedMidiEvent(tick: 0, event: .meta(.lyric("la"))),
+                TimedMidiEvent(tick: 0, event: .endOfTrack),
+            ]),
+        ])
+        let bytes = try MidiWriter.write(file)
+        let trackBytes = Array(bytes.dropFirst(22))
+        // 00 (delta) FF 05 (Lyric) 02 (len) 6C 61 ("la")
+        #expect(Array(trackBytes.prefix(6)) == [0x00, 0xFF, 0x05, 0x02, 0x6C, 0x61])
+    }
+
+    @Test func roundTripsLyricThroughWriterAndReader() throws {
+        let file = MidiFile(division: 480, format: 1, tracks: [
+            MidiTrack(events: [
+                TimedMidiEvent(tick: 0, event: .meta(.lyric("Twin-"))),
+                TimedMidiEvent(tick: 480, event: .meta(.lyric("kle"))),
+                TimedMidiEvent(tick: 480, event: .endOfTrack),
+            ]),
+        ])
+        let bytes = try MidiWriter.write(file)
+        let parsed = try MidiReader.read(bytes)
+        let lyrics = parsed.tracks[0].events.compactMap { ev -> (Int, String)? in
+            if case let .meta(.lyric(text)) = ev.event { return (ev.tick, text) }
+            return nil
+        }
+        #expect(lyrics.count == 2)
+        #expect(lyrics[0] == (0, "Twin-"))
+        #expect(lyrics[1] == (480, "kle"))
+    }
+
     @Test func writesMetaTempoCorrectly() throws {
         let file = MidiFile(division: 480, format: 1, tracks: [
             MidiTrack(events: [

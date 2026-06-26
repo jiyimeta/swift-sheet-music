@@ -49,6 +49,10 @@ extension MidiImporter {
                     division: file.division,
                 )
             }
+            attachLyrics(
+                track: track, measures: measures,
+                into: &scoreMeasures, division: file.division,
+            )
             // Build the Staff directly (replaces separate StaffContent + StaffDeclaration).
             // Tempo is global to the score — only track 0 carries it.
             // Time signature is shared across every staff (bar lines
