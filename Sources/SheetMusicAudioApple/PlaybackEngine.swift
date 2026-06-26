@@ -18,9 +18,13 @@ import SheetMusicMIDI
 /// an unreliable on-demand SF2 read.
 ///
 /// AUMIDISynth (`kAudioUnitSubType_MIDISynth`) is used in preference
-/// to `AVAudioUnitSampler` because AUSampler ignores RPN 0,0 (Pitch
-/// Bend Sensitivity) — its bend range is hard-coded to ±2 semitones,
-/// which audibly truncates portamento glissandi we render at ±12.
+/// to `AVAudioUnitSampler` because it is multi-timbral — one node
+/// drives all 16 channels with per-channel programs, replacing the
+/// pre-swap "one sampler per staff" graph. It is NOT used for pitch
+/// bend: `AVAudioUnitSampler` honors RPN 0,0 and bends ±12 fine; the
+/// original portamento-truncated-to-±2 symptom was an RPN-delivery bug
+/// (the RPN never reached the bending channel), fixed by sending RPN
+/// 0,0 = 12 directly to every channel at setup, not by the swap.
 /// See `MIDISynthBuilder` for the wrapper that builds and configures
 /// the instrument.
 ///

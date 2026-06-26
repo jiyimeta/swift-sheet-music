@@ -4,11 +4,19 @@ import Foundation
 
 /// Factory for `AVAudioUnitMIDIInstrument`s backed by Apple's
 /// `kAudioUnitSubType_MIDISynth` ("AUMIDISynth"). Used in place of
-/// `AVAudioUnitSampler` because AUSampler ignores RPN 0,0 (Pitch
-/// Bend Sensitivity) — its bend range is hard-coded to ±2 semitones,
-/// which truncates portamento glissandi that we render at ±12. The
-/// MIDISynth AU honors the RPN that the renderer emits in each
-/// track header.
+/// `AVAudioUnitSampler` because AUMIDISynth is multi-timbral: one
+/// node addresses 16 MIDI channels, each with its own program, where
+/// `AVAudioUnitSampler` is single-timbral (the pre-swap engine ran one
+/// sampler per staff). The original swap (commit 6565d7e3) was also
+/// motivated by portamento bend truncating to ±2 — but that is NOT a
+/// Sampler limitation: `AVAudioUnitSampler` honors RPN 0,0 (Pitch Bend
+/// Sensitivity) and bends ±12 fine (measured: RPN-present = ±12,
+/// RPN-absent = ±2, same OS). The real cause was the RPN never
+/// reaching the bending channel in time — the renderer emits the RPN
+/// only on each part's top staff and the old engine sent no direct
+/// RPN, so the channel stayed at the GM ±2 default. The fix is
+/// delivering the RPN, not swapping the synth: `setPitchBendSensitivity`
+/// below sends RPN 0,0 = 12 directly to every channel at setup.
 ///
 /// API surface mirrors `AVAudioUnitSampler.loadSoundBankInstrument`
 /// closely enough that call sites swap with minimal churn. Patch
