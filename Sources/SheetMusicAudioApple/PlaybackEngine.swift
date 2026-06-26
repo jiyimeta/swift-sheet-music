@@ -131,6 +131,11 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// — preserving the host's "graph parked until play" behavior.
     private var previewShouldRepauseEngineOnDrain = false
 
+    /// The single active *sustained* preview note (held until `previewNoteOff` / superseded by a new
+    /// `previewNoteOn`), distinct from `activePreview`, which is the fixed-duration `playPreview` note.
+    /// Stores the staff so note-off can re-resolve the right synth + channel. Main-actor isolated.
+    private var activeSustainedPreview: (staff: Int, channel: UInt8, pitch: UInt8)?
+
     /// Sequencer used for full-score playback. Lazily built the
     /// first time `play(...)` is called for a given score.
     private var sequencer: AVAudioSequencer?
@@ -561,6 +566,11 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
             }
         }
         activePreview = nil
+        // Also force-stop a held sustained preview so it can't outlive the synth on teardown / reload.
+        if let sustained = activeSustainedPreview {
+            synth(forStaff: sustained.staff)?.stopNote(sustained.pitch, onChannel: sustained.channel)
+            activeSustainedPreview = nil
+        }
         previewShouldRepauseEngineOnDrain = false
     }
 
@@ -646,6 +656,50 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
                     engine.pause()
                 }
             }
+        }
+    }
+
+    /// Start a *sustained* preview note on `staff`'s own MIDI channel — so it sounds in the
+    /// mixer-selected program and the melodic synth's global tuning (calibration + whole-score
+    /// transpose), exactly like `playPreview`, but held until `previewNoteOff(pitch:)` or a superseding
+    /// `previewNoteOn`. Resumes a host-parked graph and re-parks it on the matching note-off when not
+    /// playing. Intended for use only while stopped/paused (the caller gates this); the held note shares
+    /// the staff's sequencer channel, so it is not meant to overlap live playback.
+    public func previewNoteOn(pitch: UInt8, onStaff flatStaffIndex: Int, velocity: UInt8 = 96) {
+        guard state != .exporting else { return }
+        guard let instrument = synth(forStaff: flatStaffIndex),
+              let midiChannel = staffMIDIChannels[flatStaffIndex]
+        else { return }
+
+        // Cut any prior sustained note first — only one sustained preview is active at a time.
+        if let previous = activeSustainedPreview,
+           let previousInstrument = synth(forStaff: previous.staff) {
+            previousInstrument.stopNote(previous.pitch, onChannel: previous.channel)
+        }
+        activeSustainedPreview = nil
+
+        // A paused `AVAudioEngine` renders nothing; resume it for the preview and let the matching
+        // note-off restore the host-parked state.
+        if !engine.isRunning {
+            try? engine.start()
+            if state != .playing {
+                previewShouldRepauseEngineOnDrain = true
+            }
+        }
+
+        instrument.startNote(pitch, withVelocity: velocity, onChannel: midiChannel)
+        activeSustainedPreview = (flatStaffIndex, midiChannel, pitch)
+    }
+
+    /// Stop the sustained preview note for `pitch` (no-op unless it is the currently held sustained note).
+    public func previewNoteOff(pitch: UInt8) {
+        guard let active = activeSustainedPreview, active.pitch == pitch else { return }
+        synth(forStaff: active.staff)?.stopNote(active.pitch, onChannel: active.channel)
+        activeSustainedPreview = nil
+        // Restore the host-parked graph if this preview resumed it and playback isn't now driving it.
+        if previewShouldRepauseEngineOnDrain, state != .playing, engine.isRunning {
+            previewShouldRepauseEngineOnDrain = false
+            engine.pause()
         }
     }
 
