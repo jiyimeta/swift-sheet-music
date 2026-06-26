@@ -248,9 +248,22 @@ extension PDFImporter {
             // offset). Match against the lead's x rather than the stem's
             // midX so a stem-down note's left-side stem doesn't widen the
             // window into the neighbour to its right.
-            if abs(g.raw.origin.x - lead.raw.origin.x) <= 2.5 {
-                indices.append(j)
-            }
+            guard abs(g.raw.origin.x - lead.raw.origin.x) <= 2.5 else { continue }
+            // …but a shared x is NOT sufficient: a drum downbeat stacks two
+            // VOICES at one x — a crash (stem-up, high above the staff) over
+            // a kick (stem-down) — each on its OWN stem. The old x-only rule
+            // fused them into one chord, so the crash's onset vanished behind
+            // the kick's lead note (the systematic 群青/君と drum loss). Admit
+            // a same-x notehead only when it attaches to the SAME stem as the
+            // lead; route the other to its own stem so the two onsets stay
+            // distinct and split in assignVoices. A genuine single-voice chord
+            // shares one stem, so its mates still cluster. A notehead with no
+            // detected stem (e.g. a whole-note chord-mate) still joins.
+            let gStem = nearestStem(
+                toX: g.raw.origin.x, noteY: g.raw.origin.y, stems: stems,
+            )
+            if let gStem, gStem.index != chosen.index { continue }
+            indices.append(j)
         }
         return Cluster(
             indices: indices.sorted(), stem: chosen.stem, stemIndex: chosen.index,
