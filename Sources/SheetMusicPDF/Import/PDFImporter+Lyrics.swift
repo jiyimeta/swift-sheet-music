@@ -26,12 +26,22 @@ extension PDFImporter {
     ///    lone hyphen char appended to a run) marks `.begin` /
     ///    `.middle` / `.end`. Underscore-only runs extend the previous
     ///    melisma and are not attached.
+    /// How many staff-line spacings (spatia) below the bottom staff line the
+    /// lyric search band reaches when there is NO staff below to bound it.
+    /// MuseScore engraves lyric rows ≈ 6 spatia below the bottom line (the
+    /// historical `4` was too shallow — most rows fell just past it, dropping
+    /// the bulk of the lyrics). When a staff below exists, `nextStaffTopY`
+    /// bounds the band instead (a staff's lyrics sit entirely in the gap
+    /// above the next staff), and this only caps a runaway inter-system gap.
+    static let lyricBandDepthSpatia: CGFloat = 8
+
     static func attachLyrics(
         elements: [RhythmElement],
         texts: [TextGlyph],
         staffYLines: [CGFloat],
         pageIndex: Int = 0,
         xRange: ClosedRange<CGFloat>? = nil,
+        nextStaffTopY: CGFloat? = nil,
     ) -> [RhythmElement] {
         guard let bottomY = staffYLines.first,
               let topY = staffYLines.last,
@@ -47,6 +57,7 @@ extension PDFImporter {
             lineSpacing: lineSpacing,
             pageIndex: pageIndex,
             xRange: xRange,
+            nextStaffTopY: nextStaffTopY,
         )
         guard !candidates.isEmpty else { return elements }
 
@@ -60,109 +71,120 @@ extension PDFImporter {
         return out
     }
 
-    /// Group a verse's per-character glyphs into syllable runs by
-    /// x-adjacency, then attach each run to its nearest non-rest chord.
+    /// Attach a verse's per-character glyphs to notes by x-TERRITORY: each
+    /// non-rest chord owns the x-interval closer to it than to its
+    /// neighbours (a 1-D Voronoi cell), and every glyph inside that interval
+    /// forms that chord's syllable, concatenated in x-order.
     ///
-    /// Run split: a syllable's characters sit tightly (origin step ≈
-    /// 0.1–0.15 × font size, e.g. "w·o·o" at 4–6 pt for 40 pt text); a
-    /// new syllable (a new sung note) starts after a wider step. The
-    /// split threshold is `fontSize × 0.32` — above the intra-syllable
-    /// advance for Latin runs, while leaving mora-spaced kana
-    /// (~0.25–0.3 × size, e.g. ず·っ·と) as separate syllables and keeping
-    /// a small kana glued to its base (しゃ at ~0.2 ×), matching how A
-    /// stores one `<Lyrics>` per sung note. An exact-duplicate run
-    /// snapped onto a chord that already carries it (an over-snap
-    /// artifact) is dropped.
+    /// This replaces an x-gap split threshold (`fontSize × 0.32`), which
+    /// merged adjacent syllables in dense measures — the inter-syllable
+    /// advance there falls below the threshold, so "あ·な·た·は" under four
+    /// close notes collapsed to one token. Grouping against the note grid
+    /// MuseScore itself centres each syllable under is spacing-independent:
+    /// four syllables under four notes stay four, while a 2-glyph kana
+    /// ("しゃ") or a Latin run ("birth") clustered under ONE note stays one.
+    /// Repeated syllables ("woo woo woo") land on distinct notes because each
+    /// glyph falls in its own note's cell. Trailing melisma underscores are
+    /// stripped; an underscore-/hyphen-only cell attaches nothing; a
+    /// surviving trailing hyphen marks begin / middle / end.
     private static func attachVerse(
         verseTexts: [TextGlyph], verse: Int, into elements: inout [RhythmElement],
     ) {
-        // Clean syllable runs (x-sorted by construction).
-        var runs: [(text: String, x: CGFloat, hyphen: Bool)] = []
-        for run in syllableRuns(verseTexts) {
-            var joined = run.text
-            while joined.hasSuffix("_") {
-                joined.removeLast()
-            }
-            guard !joined.isEmpty, joined != "-" else { continue }
-            let endsWithHyphen = joined.hasSuffix("-")
-            let text = endsWithHyphen ? String(joined.dropLast()) : joined
-            guard !text.isEmpty else { continue }
-            runs.append((text, run.x, endsWithHyphen))
-        }
-        guard !runs.isEmpty else { return }
-        // Non-rest chord indices in x-order. Lyrics map one-syllable-per-
-        // note in reading order, so attach runs to chords sequentially
-        // (each run to the nearest not-yet-used chord at/after its x).
-        // This preserves legitimate repeated syllables ("woo woo woo")
-        // that a nearest-only snap would collapse onto one chord.
         let noteIdxs = elements.indices
             .filter { !elements[$0].isRest }
             .sorted { elements[$0].x < elements[$1].x }
         guard !noteIdxs.isEmpty else { return }
+        let noteXs = noteIdxs.map { elements[$0].x }
+        // Bucket each glyph onto the note whose x it is nearest to.
+        var glyphsByNotePos: [Int: [TextGlyph]] = [:]
+        for g in verseTexts {
+            glyphsByNotePos[nearestNotePos(g.origin.x, noteXs), default: []].append(g)
+        }
+        // Ordered cells (note position ascending), each x-sorted.
+        var cells = glyphsByNotePos
+            .sorted { $0.key < $1.key }
+            .map { (pos: $0.key, glyphs: $0.value.sorted { $0.origin.x < $1.origin.x }) }
+        reglueSmallKana(&cells)
         var prevSyllabic: Syllabic = .single
-        var used = Set<Int>()
-        for run in runs {
-            // Nearest unused chord by x.
-            var bestPos: Int?
-            var bestDist = CGFloat.infinity
-            for (pos, idx) in noteIdxs.enumerated() where !used.contains(pos) {
-                let d = abs(elements[idx].x - run.x)
-                if d < bestDist { bestDist = d; bestPos = pos }
-            }
-            guard let bestPos else { continue }
-            used.insert(bestPos)
-            let idx = noteIdxs[bestPos]
+        for cell in cells {
+            guard let syllable = buildSyllable(cell.glyphs) else { continue }
             let syllabic = nextSyllabic(
-                previous: prevSyllabic, endsWithHyphen: run.hyphen,
+                previous: prevSyllabic, endsWithHyphen: syllable.hyphen,
             )
-            elements[idx].chord.lyrics.append(
-                Lyric(text: run.text, syllabic: syllabic, verse: verse),
+            elements[noteIdxs[cell.pos]].chord.lyrics.append(
+                Lyric(text: syllable.text, syllabic: syllabic, verse: verse),
             )
             prevSyllabic = syllabic
         }
     }
 
-    /// One grouped syllable: its concatenated text and its left-edge x
-    /// (used for nearest-note attachment).
-    private struct SyllableRun {
-        var text: String
-        var x: CGFloat
+    /// Hiragana / katakana small (yōon / sokuon) forms and the chōonpu, which
+    /// never begin a syllable — they ride on the base glyph to their left.
+    private static let smallKana: Set<Character> = [
+        "ぁ", "ぃ", "ぅ", "ぇ", "ぉ", "っ", "ゃ", "ゅ", "ょ", "ゎ", "ゕ", "ゖ",
+        "ァ", "ィ", "ゥ", "ェ", "ォ", "ッ", "ャ", "ュ", "ョ", "ヮ", "ヵ", "ヶ",
+        "ー",
+    ]
+
+    /// Re-glue a leading small kana that the note-territory split severed
+    /// from its base. The Voronoi bucketing assigns each glyph independently,
+    /// so a small kana whose x drifts past the midpoint to the next note
+    /// lands at the FRONT of that note's cell, ahead of the cell's own base
+    /// ("ゃ·し" for a "…しゃ | し…" run). When a cell starts with a small kana
+    /// AND still holds a following base glyph, move the leading small kana(s)
+    /// back onto the previous cell. The `glyphs.count >= 2` guard is load
+    /// bearing: a cell that is a small kana ALONE is a genuine mora on its own
+    /// note (a melisma split such as A's "ず·っ·と") and must stay put.
+    private static func reglueSmallKana(
+        _ cells: inout [(pos: Int, glyphs: [TextGlyph])],
+    ) {
+        var glued: [(pos: Int, glyphs: [TextGlyph])] = []
+        for cell in cells {
+            var glyphs = cell.glyphs
+            while glyphs.count >= 2, !glued.isEmpty,
+                  let first = glyphs.first?.text.trimmingCharacters(in: .whitespaces).first,
+                  smallKana.contains(first)
+            {
+                glued[glued.count - 1].glyphs.append(glyphs.removeFirst())
+            }
+            glued.append((cell.pos, glyphs))
+        }
+        cells = glued
     }
 
-    /// Split an x-sorted verse glyph list into syllable runs. A run
-    /// continues while the ORIGIN-to-origin x-step stays at or below the
-    /// intra-syllable advance (`fontSize × 0.32`, above the ~0.1–0.15×
-    /// Latin glyph advance yet below the ~0.4×+ note-to-note step); a
-    /// wider step starts a new syllable. A font-size change also splits
-    /// (a different lyric line / verse share a y-row only by accident).
-    private static func syllableRuns(_ glyphs: [TextGlyph]) -> [SyllableRun] {
-        var runs: [SyllableRun] = []
-        var current = ""
-        var currentX: CGFloat = 0
-        var prevOriginX: CGFloat?
-        var prevSize: CGFloat = 0
-        for g in glyphs {
-            let s = g.text.trimmingCharacters(in: .whitespaces)
-            if s.isEmpty { continue }
-            let threshold = g.fontSize * 0.32
-            let step = prevOriginX.map { g.origin.x - $0 } ?? .infinity
-            let sizeChanged = prevSize > 0 && abs(g.fontSize - prevSize) > 1
-            if current.isEmpty || step > threshold || sizeChanged {
-                if !current.isEmpty {
-                    runs.append(SyllableRun(text: current, x: currentX))
-                }
-                current = s
-                currentX = g.origin.x
-            } else {
-                current += s
+    /// Index (into the x-sorted note list) of the note nearest `x`.
+    private static func nearestNotePos(_ x: CGFloat, _ noteXs: [CGFloat]) -> Int {
+        var best = 0
+        var bestDist = CGFloat.infinity
+        for (i, nx) in noteXs.enumerated() {
+            let d = abs(nx - x)
+            if d < bestDist {
+                bestDist = d
+                best = i
             }
-            prevOriginX = g.origin.x
-            prevSize = g.fontSize
         }
-        if !current.isEmpty {
-            runs.append(SyllableRun(text: current, x: currentX))
+        return best
+    }
+
+    /// Concatenate a note's glyphs (already x-sorted) into one syllable.
+    /// Strips trailing melisma underscores and returns `nil` for an empty or
+    /// underscore-/hyphen-only cell (a melisma extender attaches no
+    /// syllable). A surviving trailing hyphen is reported separately and
+    /// removed from the text.
+    private static func buildSyllable(
+        _ glyphs: [TextGlyph],
+    ) -> (text: String, hyphen: Bool)? {
+        var joined = glyphs
+            .map { $0.text.trimmingCharacters(in: .whitespaces) }
+            .joined()
+        while joined.hasSuffix("_") {
+            joined.removeLast()
         }
-        return runs
+        guard !joined.isEmpty, joined != "-" else { return nil }
+        let endsWithHyphen = joined.hasSuffix("-")
+        let text = endsWithHyphen ? String(joined.dropLast()) : joined
+        guard !text.isEmpty else { return nil }
+        return (text, endsWithHyphen)
     }
 
     private static func filterLyricCandidates(
@@ -171,8 +193,18 @@ extension PDFImporter {
         lineSpacing: CGFloat,
         pageIndex: Int,
         xRange: ClosedRange<CGFloat>?,
+        nextStaffTopY: CGFloat?,
     ) -> [TextGlyph] {
-        let lyricWindowLo = bottomY - 4 * lineSpacing
+        // The band reaches `lyricBandDepthSpatia` spatia below the bottom
+        // line, but never PAST the next staff below — a staff's lyrics live
+        // entirely in the gap above the staff under it, so the next staff's
+        // top line is the natural floor. `max(depthFloor, nextTop)` keeps the
+        // depth cap active for a large inter-system gap (don't vacuum a far
+        // staff's text) while letting the next-staff bound win for normal
+        // spacing. Without a staff below (lowest staff of the last system on
+        // a page) the depth cap alone applies.
+        let depthFloor = bottomY - Self.lyricBandDepthSpatia * lineSpacing
+        let lyricWindowLo = nextStaffTopY.map { max(depthFloor, $0) } ?? depthFloor
         let lyricWindowHi = bottomY
         // Constrain to this measure's x cell (padded by half a note step)
         // so a measure only claims the lyrics under its own notes — without

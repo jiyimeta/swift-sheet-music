@@ -117,6 +117,14 @@ extension PDFImporter {
         // system's page so a vertical at the same x on another page can't
         // be mistaken for a stem in `decodeRhythm`'s xRange test.
         let pagePaths = paths.filter { $0.pageIndex == system.pageIndex }
+        // Top-line y of every staff in this system (PDF y-up: larger y =
+        // higher). Used to bound each staff's lyric band by the staff
+        // directly below it — a staff's lyrics sit in the gap above the next
+        // staff, so that staff's top line is the band floor. See
+        // `attachLyrics`.
+        let systemStaffTops = system.parts
+            .flatMap(\.staves)
+            .map { $0.staff.yLines.last ?? -.greatestFiniteMagnitude }
         // Map this system's parts → reference part indices by vertical
         // position. On a full system this is the identity (part i → ref i);
         // on an UNDER-FULL system (fewer parts than the reference ensemble)
@@ -133,6 +141,14 @@ extension PDFImporter {
             let pairs = zip(slots, importPart.staves)
             for (slot, importStaff) in pairs {
                 let location = "page \(system.pageIndex), system \(sysIndex)"
+                // Nearest staff below this one within the system: the highest
+                // top-line among staves whose top is below this staff's bottom
+                // line. `nil` for the lowest staff (the lyric band then uses
+                // its depth cap alone).
+                let thisBottomY = importStaff.staff.yLines.first ?? 0
+                let nextStaffTopY = systemStaffTops
+                    .filter { $0 < thisBottomY }
+                    .max()
                 let measures = buildMeasures(
                     importStaff: importStaff,
                     texts: texts,
@@ -140,6 +156,7 @@ extension PDFImporter {
                     tieMarks: tieMarks,
                     graceSizeThreshold: graceSizeThreshold,
                     clefOverride: clefOverrides[slot],
+                    nextStaffTopY: nextStaffTopY,
                     state: &state,
                     slot: slot,
                     location: location,
@@ -195,6 +212,7 @@ extension PDFImporter {
         tieMarks: TieMarks,
         graceSizeThreshold: CGFloat,
         clefOverride: Clef?,
+        nextStaffTopY: CGFloat?,
         state: inout StaffStateMap,
         slot: Int,
         location: String,
@@ -257,6 +275,7 @@ extension PDFImporter {
                 emitTime: emitTime ? ts : nil,
                 pageIndex: importStaff.staff.pageIndex,
                 measureIndex: mi,
+                nextStaffTopY: nextStaffTopY,
                 location: location,
                 options: options,
             ))
@@ -315,6 +334,7 @@ extension PDFImporter {
         emitTime: TimeSignature?,
         pageIndex: Int,
         measureIndex: Int,
+        nextStaffTopY: CGFloat?,
         location: String,
         options: PDFImportOptions,
     ) -> Measure {
@@ -329,6 +349,7 @@ extension PDFImporter {
             staffYLines: importMeasure.staffYLines,
             pageIndex: pageIndex,
             xRange: importMeasure.xRange,
+            nextStaffTopY: nextStaffTopY,
         )
         // Metric-sum reconciliation (③): repair a voice whose note + rest
         // durations don't total the bar length by re-valuing exactly one
