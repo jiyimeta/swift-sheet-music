@@ -30,6 +30,23 @@ extension PDFImporter {
         system.parts.reduce(0) { $0 + $1.staves.count }
     }
 
+    /// Median staff line-spacing (one spatium) across a system's staves,
+    /// used as the row-grouping tolerance for `removeColonAnnotations`.
+    /// Falls back to a nominal value when the system has no measurable staff.
+    static func referenceLineSpacing(_ system: ImportSystem) -> CGFloat {
+        let spacings = system.parts
+            .flatMap(\.staves)
+            .compactMap { staff -> CGFloat? in
+                guard let lo = staff.staff.yLines.first,
+                      let hi = staff.staff.yLines.last, hi > lo
+                else { return nil }
+                return (hi - lo) / 4
+            }
+            .sorted()
+        guard !spacings.isEmpty else { return 8 }
+        return spacings[spacings.count / 2]
+    }
+
     /// Representative y of an import part: the top staff-line of its top
     /// staff (largest y in PDF y-up coords). Parts are emitted top→bottom,
     /// so this decreases with part index.
