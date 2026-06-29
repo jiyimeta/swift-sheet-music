@@ -10,7 +10,7 @@ enum NoteheadRenderer {
     static func glyph(
         for duration: NoteDuration,
         headType: String? = nil,
-        stemUp: Bool = false,
+        stemUp: Bool,
     ) -> Character {
         let cp = NoteheadGlyph.codepoint(
             duration: duration, headType: headType, stemUp: stemUp,
@@ -24,7 +24,7 @@ enum NoteheadRenderer {
         at origin: CGPoint,
         duration: NoteDuration,
         headType: String? = nil,
-        stemUp: Bool = false,
+        stemUp: Bool,
         color: Color = .primary,
         metrics: StaffMetrics,
     ) {
