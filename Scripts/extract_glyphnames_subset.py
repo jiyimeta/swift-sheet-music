@@ -10,7 +10,10 @@ def keep(name, code):
             0xE150 <= code <= 0xE1CF or   # note name + shape note heads
             0xE260 <= code <= 0xE2FF or   # accidentals (standard + Stein/AEU/HE/ET/Persian/Wysch/Sagittal/Turkish)
             0xE300 <= code <= 0xE30F or   # some extended accidentals
-            0xEAA0 <= code <= 0xEABF)     # wiggle / vibrato / glissando lines
+            0xEAA0 <= code <= 0xEABF or   # wiggle / vibrato / glissando lines
+            0xECD0 <= code <= 0xECDD or   # shape-note DoubleWhole variants
+            0xEE70 <= code <= 0xEE73 or   # Swiss rudiment noteheads
+            0xEEE0 <= code <= 0xEEFA)     # chromatic / named-note solfège
 subset = {}
 for name, v in data.items():
     code = cp(v["codepoint"])
