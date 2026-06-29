@@ -56,6 +56,7 @@ extension LayoutEngine {
                     mirror: $0.mirror,
                     isInvisible: $0.isInvisible,
                     color: $0.color,
+                    accidentalBracket: $0.accidentalBracket,
                 )
             }
             return .chord(
@@ -194,6 +195,7 @@ extension LayoutEngine {
                     mirror: $0.mirror,
                     isInvisible: $0.isInvisible,
                     color: $0.color,
+                    accidentalBracket: $0.accidentalBracket,
                 )
             }
             return .graceChord(

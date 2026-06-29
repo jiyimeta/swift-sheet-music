@@ -304,6 +304,7 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                     mirror: $0.mirror,
                     isInvisible: $0.isInvisible,
                     color: $0.color,
+                    accidentalBracket: $0.accidentalBracket,
                 )
             }
             // Stem / flag inherit the chord's notehead color (the first
@@ -359,6 +360,7 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                     if let acc = n.accidental {
                         AccidentalRenderer.draw(
                             context: &gray, accidental: acc,
+                            bracket: n.accidentalBracket,
                             origin: visualOrigin, metrics: chordMetrics,
                         )
                     }
@@ -382,6 +384,7 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                     if let acc = n.accidental {
                         AccidentalRenderer.draw(
                             context: &context, accidental: acc,
+                            bracket: n.accidentalBracket,
                             origin: visualOrigin, metrics: chordMetrics,
                         )
                     }

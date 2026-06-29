@@ -658,6 +658,7 @@ extension LayoutEngine {
                             // to decide whether to gray or skip per-note.
                             isInvisible: !note.visible,
                             color: note.elementProperties.color,
+                            accidentalBracket: note.accidentalBracket,
                         )
                     }
                     let stem = forcedStem
@@ -2004,6 +2005,7 @@ extension LayoutEngine {
                 mirror: mirrors[i],
                 isInvisible: n.isInvisible,
                 color: n.color,
+                accidentalBracket: n.accidentalBracket,
             )
         }
     }
@@ -2067,6 +2069,7 @@ extension LayoutEngine {
                 // whether to gray or skip per-note.
                 isInvisible: !note.visible,
                 color: note.elementProperties.color,
+                accidentalBracket: note.accidentalBracket,
             )
         }
     }

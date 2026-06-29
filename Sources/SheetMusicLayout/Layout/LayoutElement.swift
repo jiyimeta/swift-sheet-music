@@ -314,6 +314,11 @@ public struct LayoutChordNote: Sendable, Equatable {
     /// colors separately, but in practice they match the notehead; a
     /// faithful per-sub-element color is a future refinement).
     public let color: ScoreColor?
+    /// Parenthesis / square-bracket enclosure drawn around the accidental.
+    /// `.none` (default) means no enclosure. Carried from
+    /// `Note.accidentalBracket` and consumed by all three render paths
+    /// (CALayer, SwiftUI Canvas, Android bridge) via `AccidentalGlyph.enclosure`.
+    public let accidentalBracket: AccidentalBracket
 
     public init(
         noteID: NoteID,
@@ -327,6 +332,7 @@ public struct LayoutChordNote: Sendable, Equatable {
         mirror: Bool = false,
         isInvisible: Bool = false,
         color: ScoreColor? = nil,
+        accidentalBracket: AccidentalBracket = .none,
     ) {
         self.noteID = noteID
         self.step = step
@@ -339,6 +345,7 @@ public struct LayoutChordNote: Sendable, Equatable {
         self.mirror = mirror
         self.isInvisible = isInvisible
         self.color = color
+        self.accidentalBracket = accidentalBracket
     }
 
     /// Horizontal offset from `origin.x` to the visual center of the
