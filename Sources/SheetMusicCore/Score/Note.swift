@@ -5,6 +5,10 @@ public struct Note: Sendable, Equatable {
     public var pitch: Int // MIDI 0..127
     public var tpc: Int // tonal pitch class
     public var accidental: Accidental?
+    /// Visual bracket drawn around the accidental (parenthesis or square bracket).
+    /// MuseScore stores `<bracket>1</bracket>` (parenthesis) or `<bracket>2</bracket>`
+    /// (bracket) inside the `<Accidental>` element. Absent means `.none`.
+    public var accidentalBracket: AccidentalBracket
     /// Tie continuing forward from this note. `nil` means no tie;
     /// `.some(n)` means a tie numbered `n` (MusicXML `<tie number="N">`;
     /// MSCX ties are positional and default to 1).
@@ -43,6 +47,7 @@ public struct Note: Sendable, Equatable {
         pitch: Int,
         tpc: Int,
         accidental: Accidental? = nil,
+        accidentalBracket: AccidentalBracket = .none,
         tieForward: Int? = nil,
         tieBack: Int? = nil,
         glissando: Glissando? = nil,
@@ -54,6 +59,7 @@ public struct Note: Sendable, Equatable {
         self.pitch = pitch
         self.tpc = tpc
         self.accidental = accidental
+        self.accidentalBracket = accidentalBracket
         self.tieForward = tieForward
         self.tieBack = tieBack
         self.glissando = glissando

@@ -10,10 +10,7 @@ extension Note {
         guard let tpcText = node.first("tpc")?.text, let tpc = Int(tpcText) else {
             throw SheetMusicError.malformedScore(reason: "Note missing <tpc>")
         }
-        var accidental: Accidental?
-        if let subtype = node.first("Accidental")?.first("subtype")?.text {
-            accidental = Accidental(mscxSubtype: subtype)
-        }
+        let (accidental, accidentalBracket) = decodeAccidentalNode(node)
         // MuseScore 5.x encodes ties inside `<Note>` as
         // `<Spanner type="Tie">` with `<next>` (start) or `<prev>` (end).
         // Numbering is positional in MSCX; default to 1 when present.
@@ -56,6 +53,7 @@ extension Note {
             pitch: pitch,
             tpc: tpc,
             accidental: accidental,
+            accidentalBracket: accidentalBracket,
             tieForward: tieForward,
             tieBack: tieBack,
             glissando: glissando,
@@ -65,6 +63,33 @@ extension Note {
         )
         note.elementProperties = ElementProperties(decodingMSCXChildrenOf: node)
         return note
+    }
+
+    /// Decode the `<Accidental>` child of a `<Note>` element.
+    ///
+    /// Returns the decoded `Accidental` case (nil for missing or unknown subtype)
+    /// and the `AccidentalBracket` (`.none` when absent or unrecognized).
+    /// Unknown `<subtype>` values emit `mscx.accidental.unsupportedSubtype`.
+    private static func decodeAccidentalNode(
+        _ node: XMLTreeNode,
+    ) -> (accidental: Accidental?, bracket: AccidentalBracket) {
+        guard let accNode = node.first("Accidental") else { return (nil, .none) }
+        var accidental: Accidental?
+        if let subtype = accNode.first("subtype")?.text {
+            if let decoded = Accidental(mscxSubtype: subtype) {
+                accidental = decoded
+            } else {
+                mscxDecoderWarn(
+                    code: "mscx.accidental.unsupportedSubtype",
+                    message: "Unknown <Accidental><subtype> '\(subtype)' — accidental dropped",
+                )
+            }
+        }
+        var bracket: AccidentalBracket = .none
+        if let text = accNode.first("bracket")?.text, let n = Int(text) {
+            bracket = AccidentalBracket(rawValue: n) ?? .none
+        }
+        return (accidental, bracket)
     }
 
     /// Normalize `<head>` to a MS4 string token.

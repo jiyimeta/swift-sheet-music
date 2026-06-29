@@ -14,6 +14,11 @@ public enum AccidentalGlyph {
         case .natural: SMuFLCodepoint.accidentalNatural
         case .doubleSharp: SMuFLCodepoint.accidentalDoubleSharp
         case .doubleFlat: SMuFLCodepoint.accidentalDoubleFlat
+        default:
+            // TODO: Task 3.4 — full microtonal glyph map.
+            // Fall back to the byName table for now; Task 3.4 will make this
+            // exhaustive with proper layout-level handling.
+            SMuFLCodepoint.byName(accidental.mscxSubtype) ?? SMuFLCodepoint.accidentalNatural
         }
     }
 }
