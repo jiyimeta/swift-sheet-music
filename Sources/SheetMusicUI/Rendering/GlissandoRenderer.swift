@@ -25,21 +25,40 @@ enum GlissandoRenderer {
         local.translateBy(x: from.x, y: from.y)
         local.concatenate(CGAffineTransform(rotationAngle: angle))
 
-        // --- Line ---
-        let points = GlissandoGeometry.linePoints(
-            length: length, wavy: wavy, sp: metrics.sp,
-        )
-        var linePath = Path()
-        if let first = points.first {
-            linePath.move(to: first)
-            for pt in points.dropFirst() {
-                linePath.addLine(to: pt)
+        // --- Line (straight) or glyph run (wavy) ---
+        if wavy {
+            // Repeat wiggleGlissando (U+EAAF) along the line, centred.
+            // Mirrors MuseScore tdraw.cpp:1585-1596.
+            // swiftlint:disable:next force_unwrapping
+            let ch = Character(UnicodeScalar(SMuFLCodepoint.wiggleGlissando)!)
+            let glyphFont = LayoutFont(
+                face: SMuFLFamily.bravura, pointSize: metrics.glyphFontSize,
+            )
+            let advance = FontMetrics.provider.typographicWidth(
+                text: String(ch), font: glyphFont,
+            )
+            let run = GlissandoGeometry.wavyGlyphRun(
+                length: length, advance: advance,
+            )
+            for i in 0 ..< run.count {
+                let x = run.startX + CGFloat(i) * advance
+                // local frame is already rotated; y=0 is centred on the line.
+                local.drawGlyph(
+                    ch,
+                    at: CGPoint(x: x, y: 0),
+                    size: metrics.glyphFontSize,
+                    anchor: .center,
+                )
             }
+        } else {
+            var linePath = Path()
+            linePath.move(to: .zero)
+            linePath.addLine(to: CGPoint(x: length, y: 0))
+            local.stroke(
+                linePath, with: .color(.primary),
+                lineWidth: metrics.sp * GlissandoGeometry.lineThicknessSp,
+            )
         }
-        local.stroke(
-            linePath, with: .color(.primary),
-            lineWidth: metrics.sp * GlissandoGeometry.lineThicknessSp,
-        )
 
         // --- Text label (centered along the line) ---
         // Font defaults via `TextStyleType.glissando` (Edwin 8 pt

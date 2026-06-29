@@ -668,35 +668,78 @@ extension LayoutBridge {
         let length = GlissandoGeometry.length(from: from, to: to)
         guard length > 0.01 else { return }
         let angle = GlissandoGeometry.angle(from: from, to: to)
-        let localPoints = GlissandoGeometry.linePoints(
-            length: length, wavy: wavy, sp: CGFloat(sp),
-        )
-        guard !localPoints.isEmpty else { return }
-        let lineWidth = Double(sp)
-            * Double(GlissandoGeometry.lineThicknessSp)
-        let worldPoints = localPoints.map {
-            GlissandoGeometry.toWorld(
-                local: $0, from: from, angle: angle,
+        if wavy {
+            encodeWavyGlissandoGlyphs(
+                from: from, length: length, angle: angle, sp: sp, into: &out,
             )
-        }
-        // Emit as moveTo + lineTo* + stroke.
-        // swiftlint:disable:next force_unwrapping
-        let first = worldPoints.first!
-        out.append(.moveTo(
-            x: Double(first.x) * ptToMMScale,
-            y: Double(first.y) * ptToMMScale,
-        ))
-        for pt in worldPoints.dropFirst() {
-            out.append(.lineTo(
-                x: Double(pt.x) * ptToMMScale,
-                y: Double(pt.y) * ptToMMScale,
+        } else {
+            // Straight line: build in local frame, transform to world.
+            let lineWidth = Double(sp) * Double(GlissandoGeometry.lineThicknessSp)
+            let worldFrom = GlissandoGeometry.toWorld(
+                local: .zero, from: from, angle: angle,
+            )
+            let worldTo = GlissandoGeometry.toWorld(
+                local: CGPoint(x: length, y: 0), from: from, angle: angle,
+            )
+            out.append(.moveTo(
+                x: Double(worldFrom.x) * ptToMMScale,
+                y: Double(worldFrom.y) * ptToMMScale,
             ))
+            out.append(.lineTo(
+                x: Double(worldTo.x) * ptToMMScale,
+                y: Double(worldTo.y) * ptToMMScale,
+            ))
+            out.append(.stroke(width: lineWidth * ptToMMScale))
         }
-        out.append(.stroke(width: lineWidth * ptToMMScale))
         encodeGlissandoText(
             text: text, from: from, length: length, angle: angle,
             wavy: wavy, sp: sp, into: &out,
         )
+    }
+
+    /// Emit repeated wiggleGlissando (U+EAAF) glyphs centred along the
+    /// glissando line. Each glyph is positioned at its world-space origin
+    /// and rotated to match the line slope via `setRotation`.
+    ///
+    /// C++: tdraw.cpp:1585-1596
+    private static func encodeWavyGlissandoGlyphs(
+        from: CGPoint, length: CGFloat, angle: CGFloat, sp: Double,
+        into out: inout [DrawCommand],
+    ) {
+        let codepoint = SMuFLCodepoint.wiggleGlissando
+        let glyphSize = sp * 4
+        let glyphFont = LayoutFont(
+            face: SMuFLFamily.bravura, pointSize: CGFloat(glyphSize),
+        )
+        // swiftlint:disable:next force_unwrapping
+        let ch = Character(UnicodeScalar(codepoint)!)
+        let advance = CGFloat(FontMetrics.provider.typographicWidth(
+            text: String(ch), font: glyphFont,
+        ))
+        let run = GlissandoGeometry.wavyGlyphRun(length: length, advance: advance)
+        let ascent = Double(FontMetrics.provider.ascent(font: glyphFont))
+        let descent = Double(FontMetrics.provider.descent(font: glyphFont))
+        let dy = (ascent - descent) / 2
+        for i in 0 ..< run.count {
+            let localX = run.startX + CGFloat(i) * advance
+            let world = GlissandoGeometry.toWorld(
+                local: CGPoint(x: localX, y: 0), from: from, angle: angle,
+            )
+            out.append(.setRotation(
+                radians: Double(angle),
+                pivotX: Double(world.x) * ptToMMScale,
+                pivotY: Double(world.y) * ptToMMScale,
+            ))
+            out.append(.glyph(
+                codepoint: codepoint,
+                x: Double(world.x) * ptToMMScale,
+                y: (Double(world.y) + dy) * ptToMMScale,
+                size: glyphSize * ptToMMScale,
+                fontId: .smufl,
+            ))
+        }
+        // Reset canvas rotation after the glyph run (no-op if count==0).
+        out.append(.setRotation(radians: 0, pivotX: 0, pivotY: 0))
     }
 
     /// Centered italic label above the glissando line, rotated to follow

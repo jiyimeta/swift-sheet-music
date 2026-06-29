@@ -21,31 +21,58 @@ extension ScoreLayerBuilder {
         guard length > 0.01 else { return }
         let angle = GlissandoGeometry.angle(from: from, to: to)
 
-        let points = GlissandoGeometry.linePoints(
-            length: length, wavy: wavy, sp: metrics.sp,
-        )
-        let linePath = CGMutablePath()
-        if let first = points.first {
-            linePath.move(to: first)
-            for pt in points.dropFirst() {
-                linePath.addLine(to: pt)
+        if wavy {
+            // Repeat wiggleGlissando (U+EAAF) along the line, centred.
+            // Each glyph is placed at its world position and rotated to
+            // match the glissando slope. Mirrors MuseScore tdraw.cpp:1585-1596.
+            // swiftlint:disable:next force_unwrapping
+            let ch = Character(UnicodeScalar(SMuFLCodepoint.wiggleGlissando)!)
+            let glyphFont = LayoutFont(
+                face: SMuFLFamily.bravura, pointSize: metrics.glyphFontSize,
+            )
+            let advance = FontMetrics.provider.typographicWidth(
+                text: String(ch), font: glyphFont,
+            )
+            let run = GlissandoGeometry.wavyGlyphRun(
+                length: length, advance: advance,
+            )
+            for i in 0 ..< run.count {
+                let localX = run.startX + CGFloat(i) * advance
+                let worldPt = GlissandoGeometry.toWorld(
+                    local: CGPoint(x: localX, y: 0),
+                    from: from, angle: angle,
+                )
+                if let layer = glyphLayer(
+                    ch, at: worldPt,
+                    size: metrics.glyphFontSize,
+                    anchor: CGPoint(x: 0.5, y: 0.5),
+                    rotation: angle,
+                    height: height,
+                ) {
+                    parent.addSublayer(layer)
+                }
             }
-        }
-        // Want: P → rotate(P) → + from.
-        // Matrix: T_from · R.  In CGAffineTransform chained API, each
-        // method post-multiplies its operation onto the receiver, so
-        // the chain must be translate-then-rotate:
-        //   I.translatedBy(from) · R = T_from · R
-        var transform = CGAffineTransform(
-            translationX: from.x, y: from.y,
-        )
-        transform = transform.rotated(by: angle)
-        if let transformed = linePath.copy(using: &transform) {
-            parent.addSublayer(strokeLayer(
-                path: transformed, height: height,
-                lineWidth: metrics.sp
-                    * GlissandoGeometry.lineThicknessSp,
-            ))
+        } else {
+            // Straight line: build in local frame, then transform to world.
+            // Want: P → rotate(P) → + from.
+            // Matrix: T_from · R.  In CGAffineTransform chained API, each
+            // method post-multiplies its operation onto the receiver, so
+            // the chain must be translate-then-rotate:
+            //   I.translatedBy(from) · R = T_from · R
+            let linePath = CGMutablePath()
+            linePath.move(to: .zero)
+            linePath.addLine(to: CGPoint(x: length, y: 0))
+            var transform = CGAffineTransform(
+                translationX: from.x, y: from.y,
+            )
+            transform = transform.rotated(by: angle)
+            if let transformed = linePath.copy(using: &transform) {
+                parent.addSublayer(strokeLayer(
+                    path: transformed, height: height,
+                    lineWidth: metrics.sp
+                        * GlissandoGeometry.lineThicknessSp,
+                ))
+            }
         }
 
         if let text, !text.isEmpty {
