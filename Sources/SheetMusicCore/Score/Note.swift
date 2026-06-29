@@ -18,6 +18,12 @@ public struct Note: Sendable, Equatable {
     /// percussion rim, "triangle-down" for cowbell). When nil, the
     /// standard notehead for the duration is used.
     public var headType: String?
+    /// Whether this note is displayed at a reduced size. MuseScore stores
+    /// `<small>1</small>` on the note element when true; absent means false.
+    /// Chord-level smallness (`<Chord><small>`) is propagated separately
+    /// in layout (Task 2.2) and does not set this flag.
+    /// C++: `Note::isSmall()` / `Note::setSmall()`.
+    public var isSmall: Bool
     /// Whether this note sounds during playback. MuseScore stores a
     /// per-note "play" flag (`<play>0</play>` when false); a muted
     /// note is still engraved but emits no MIDI. C++: `Note::play()`,
@@ -41,6 +47,7 @@ public struct Note: Sendable, Equatable {
         tieBack: Int? = nil,
         glissando: Glissando? = nil,
         headType: String? = nil,
+        isSmall: Bool = false,
         play: Bool = true,
         visible: Bool = true,
     ) {
@@ -51,6 +58,7 @@ public struct Note: Sendable, Equatable {
         self.tieBack = tieBack
         self.glissando = glissando
         self.headType = headType
+        self.isSmall = isSmall
         self.play = play
         elementProperties = ElementProperties(visible: visible)
     }

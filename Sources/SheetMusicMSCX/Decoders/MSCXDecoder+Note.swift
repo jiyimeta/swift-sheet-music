@@ -46,6 +46,9 @@ extension Note {
         if node.children.contains(where: { $0.name == "Tie" }) { tieForward = 1 }
         if node.children.contains(where: { $0.name == "endSpanner" }) { tieBack = 1 }
         let headType = decodeHeadType(node.first("head")?.text)
+        // MuseScore writes `<small>1</small>` on the note when it is
+        // displayed at a reduced size; absent means normal size.
+        let isSmall = node.first("small")?.text == "1"
         // MuseScore writes `<play>0</play>` only when the note is
         // muted; the element is absent (→ true) for normal notes.
         let play = node.first("play")?.text != "0"
@@ -57,6 +60,7 @@ extension Note {
             tieBack: tieBack,
             glissando: glissando,
             headType: headType,
+            isSmall: isSmall,
             play: play,
         )
         note.elementProperties = ElementProperties(decodingMSCXChildrenOf: node)
