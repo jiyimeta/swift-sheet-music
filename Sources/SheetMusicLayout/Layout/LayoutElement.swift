@@ -284,6 +284,7 @@ public enum LayoutElement: Sendable, Equatable {
         case pedal
         case ottava(raw: String)
         case textLine
+        case vibrato(VibratoType)
     }
 }
 

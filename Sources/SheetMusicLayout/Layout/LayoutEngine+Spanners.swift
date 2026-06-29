@@ -21,6 +21,8 @@ extension LayoutEngine {
         /// anchor) when the spanner stops at a measure boundary.
         let endTick: Int
         let voltaEndings: [Int]
+        /// Vibrato subtype. Meaningful only when `kind == .vibrato`.
+        let vibratoType: VibratoType?
     }
 
     /// Per-staff set of measure indices covered by a visible
@@ -105,6 +107,7 @@ extension LayoutEngine {
                                 endMeasure: endMeasure,
                                 endTick: endTick,
                                 voltaEndings: sp.voltaEndings,
+                                vibratoType: sp.vibrato?.type,
                             ))
                         }
                         switch el {
@@ -323,7 +326,7 @@ extension LayoutEngine {
     static func isBelowStaff(kind: Spanner.Kind) -> Bool {
         switch kind {
         case .hairpin, .pedal: true
-        default: false
+        case .volta, .slur, .ottava, .textLine, .glissando, .vibrato, .other: false
         }
     }
 
@@ -489,6 +492,7 @@ extension LayoutEngine {
         case .pedal: return .pedal
         case .ottava: return .ottava(raw: anchor.rawType)
         case .textLine: return .textLine
+        case .vibrato: return .vibrato(anchor.vibratoType ?? .guitarVibrato)
         case .glissando, .other: return .textLine
         }
     }

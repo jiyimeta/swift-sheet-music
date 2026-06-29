@@ -47,6 +47,20 @@ extension Spanner {
             )
         }
 
+        var vibrato: Spanner.VibratoPayload?
+        if kind == .vibrato, let vib = node.first("Vibrato") {
+            let subtypeText = vib.first("subtype")?.text ?? ""
+            if let vibratoType = VibratoType(rawValue: subtypeText) {
+                vibrato = Spanner.VibratoPayload(type: vibratoType)
+            } else {
+                mscxDecoderWarn(
+                    code: "mscx.vibrato.unknownSubtype",
+                    message: "Unknown Vibrato subtype '\(subtypeText)'; defaulting to guitarVibrato",
+                )
+                vibrato = Spanner.VibratoPayload(type: .guitarVibrato)
+            }
+        }
+
         return Spanner(
             kind: kind,
             rawType: raw,
@@ -56,6 +70,7 @@ extension Spanner {
             visible: decodeVisible(node),
             hairpin: hairpin,
             ottava: ottava,
+            vibrato: vibrato,
         )
     }
 

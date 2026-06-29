@@ -13,6 +13,7 @@ public struct Spanner: Sendable, Equatable {
         case ottava = "Ottava"
         case textLine = "TextLine"
         case glissando = "Glissando"
+        case vibrato = "Vibrato"
         case other
     }
 
@@ -42,6 +43,10 @@ public struct Spanner: Sendable, Equatable {
     /// Meaningful only when `kind == .ottava`. Drives MIDI pitch
     /// transposition during playback.
     public var ottava: OttavaPayload?
+    /// MuseScore `<Vibrato><subtype>…</subtype></Vibrato>` payload.
+    /// Meaningful only when `kind == .vibrato`. Controls which SMuFL
+    /// wiggle glyph is repeated along the line during rendering.
+    public var vibrato: VibratoPayload?
 
     public init(
         kind: Kind,
@@ -52,6 +57,7 @@ public struct Spanner: Sendable, Equatable {
         visible: Bool = true,
         hairpin: HairpinPayload? = nil,
         ottava: OttavaPayload? = nil,
+        vibrato: VibratoPayload? = nil,
     ) {
         self.kind = kind
         self.rawType = rawType
@@ -61,6 +67,7 @@ public struct Spanner: Sendable, Equatable {
         elementProperties = ElementProperties(visible: visible)
         self.hairpin = hairpin
         self.ottava = ottava
+        self.vibrato = vibrato
     }
 
     /// MuseScore `<HairPin>` payload needed for MIDI playback.
@@ -159,6 +166,17 @@ public struct Spanner: Sendable, Equatable {
 
         public init(subtype: Subtype) {
             self.subtype = subtype
+        }
+    }
+
+    /// MuseScore `<Vibrato>` payload. The subtype selects which SMuFL
+    /// glyph is repeated along the vibrato marking during rendering.
+    /// C++: `mu::engraving::Vibrato`.
+    public struct VibratoPayload: Sendable, Equatable {
+        public var type: VibratoType
+
+        public init(type: VibratoType) {
+            self.type = type
         }
     }
 }

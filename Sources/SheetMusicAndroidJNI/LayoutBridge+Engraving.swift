@@ -590,6 +590,32 @@ extension LayoutBridge {
                 from: parts.lineStart, to: parts.lineEnd,
                 lineWidth: line, into: &out,
             )
+
+        case let .vibrato(type):
+            let codepoint = SpannerGeometry.vibratoCodepoint(type: type)
+            let glyphFont = LayoutFont(
+                face: SMuFLFamily.bravura, pointSize: CGFloat(glyphSize),
+            )
+            // swiftlint:disable:next force_unwrapping
+            let ch = Character(UnicodeScalar(codepoint)!)
+            let advance = CGFloat(FontMetrics.provider.typographicWidth(
+                text: String(ch), font: glyphFont,
+            ))
+            let run = SpannerGeometry.vibratoGlyphRun(
+                from: from, to: to, type: type, sp: CGFloat(sp), advance: advance,
+            )
+            let ascent = Double(FontMetrics.provider.ascent(font: glyphFont))
+            let descent = Double(FontMetrics.provider.descent(font: glyphFont))
+            let dy = (ascent - descent) / 2
+            for origin in run.origins {
+                out.append(.glyph(
+                    codepoint: codepoint,
+                    x: Double(origin.x) * ptToMMScale,
+                    y: (Double(origin.y) + dy) * ptToMMScale,
+                    size: glyphSize * ptToMMScale,
+                    fontId: .smufl,
+                ))
+            }
         }
     }
 

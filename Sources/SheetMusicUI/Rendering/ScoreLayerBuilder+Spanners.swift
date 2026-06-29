@@ -54,6 +54,11 @@ extension ScoreLayerBuilder {
                 from: from, to: to, text: text,
                 metrics: metrics, height: height, into: parent,
             )
+        case let .vibrato(type):
+            drawVibrato(
+                from: from, to: to, type: type,
+                metrics: metrics, height: height, into: parent,
+            )
         }
     }
 
@@ -188,6 +193,38 @@ extension ScoreLayerBuilder {
             lineWidth: metrics.sp * parts.lineThicknessSp,
             dashPattern: parts.dashPattern.map { NSNumber(value: Double($0)) },
         ))
+    }
+
+    private static func drawVibrato(
+        from: CGPoint, to: CGPoint,
+        type: VibratoType,
+        metrics: StaffMetrics, height: CGFloat,
+        into parent: CALayer,
+    ) {
+        // Compute the typographic advance of one vibrato glyph so
+        // SpannerGeometry can calculate how many copies fit.
+        let codepoint = SpannerGeometry.vibratoCodepoint(type: type)
+        // swiftlint:disable:next force_unwrapping
+        let ch = Character(UnicodeScalar(codepoint)!)
+        let glyphFont = LayoutFont(
+            face: SMuFLFamily.bravura, pointSize: metrics.glyphFontSize,
+        )
+        let advance = FontMetrics.provider.typographicWidth(
+            text: String(ch), font: glyphFont,
+        )
+        let run = SpannerGeometry.vibratoGlyphRun(
+            from: from, to: to, type: type, sp: metrics.sp, advance: advance,
+        )
+        for origin in run.origins {
+            if let layer = glyphLayer(
+                ch, at: origin,
+                size: metrics.glyphFontSize,
+                anchor: CGPoint(x: 0.5, y: 0.5),
+                height: height,
+            ) {
+                parent.addSublayer(layer)
+            }
+        }
     }
 
     private static func drawTextLine(
