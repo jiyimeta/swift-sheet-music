@@ -92,7 +92,7 @@
                 switch el {
                 case let .fermata(_, origin):
                     fermataX = origin.x
-                case let .chord(_, _, _, stemOrigin, _, _, _, _, _, _):
+                case let .chord(_, _, _, stemOrigin, _, _, _, _, _, _, _):
                     chordXs.append(stemOrigin.x)
                 default:
                     break
@@ -206,7 +206,7 @@
                 switch el {
                 case let .fermata(_, origin):
                     fermataOrigin = origin
-                case let .chord(notes, _, _, _, _, _, _, _, _, _):
+                case let .chord(notes, _, _, _, _, _, _, _, _, _, _):
                     noteYs.append(contentsOf: notes.map(\.origin.y))
                 default:
                     break
@@ -331,7 +331,7 @@
                 switch el {
                 case let .fermata(_, origin):
                     fermataY = origin.y
-                case let .chord(_, _, stem, stemOrigin, _, _, _, _, _, _):
+                case let .chord(_, _, stem, stemOrigin, _, _, _, _, _, _, _):
                     // First chord emitted is B4. For stem-up, post-beam
                     // pass writes the beam Y into stemOrigin.y.
                     if !firstChordSeen {
@@ -365,7 +365,7 @@
                 switch el {
                 case let .fermata(_, origin):
                     fermataY = origin.y
-                case let .chord(notes, _, stem, stemOrigin, _, _, _, _, _, _):
+                case let .chord(notes, _, stem, stemOrigin, _, _, _, _, _, _, _):
                     // For stem-up, `LayoutEngine+Extents.chordTopExtent`
                     // treats `min(stemOrigin.y, topNote)` as the chord
                     // top — i.e. `stemOrigin.y` IS the stem-top endpoint

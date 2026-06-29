@@ -41,6 +41,7 @@ extension LayoutEngine {
             vi,
             stemExt,
             stemHidden,
+            mag,
         ):
             let shiftedNotes = notes.map {
                 LayoutChordNote(
@@ -68,6 +69,7 @@ extension LayoutEngine {
                 voiceIndex: vi,
                 stemExtension: stemExt,
                 stemIsInvisible: stemHidden,
+                mag: mag,
             )
         case let .textMark(k, t, p):
             return .textMark(kind: k, text: t, origin: shift(p))

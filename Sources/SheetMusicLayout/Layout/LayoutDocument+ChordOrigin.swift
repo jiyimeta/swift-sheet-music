@@ -20,7 +20,7 @@ extension LayoutDocument {
                 for el in measure.elements {
                     guard case let .chord(
                         notes, _, _, stemOrigin,
-                        _, _, _, voiceIdx, _, _,
+                        _, _, _, voiceIdx, _, _, _,
                     ) = el
                     else { continue }
                     guard voiceIdx == id.voiceIndex,

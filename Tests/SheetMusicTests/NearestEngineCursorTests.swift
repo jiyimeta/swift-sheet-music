@@ -43,7 +43,7 @@
                     let baseX = system.origin.x + measure.origin.x
                     let baseY = system.origin.y + measure.origin.y
                     for element in measure.elements {
-                        guard case let .chord(notes, _, stem, _, _, _, _, _, _, _) = element,
+                        guard case let .chord(notes, _, stem, _, _, _, _, _, _, _, _) = element,
                               let first = notes.first, first.noteID == noteID
                         else { continue }
                         return CGPoint(

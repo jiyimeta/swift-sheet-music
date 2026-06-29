@@ -56,7 +56,7 @@ extension LayoutEngine {
             return [p.y]
         case let .note(_, _, _, _, p, _, _, _):
             return [p.y]
-        case let .chord(notes, _, _, so, _, _, _, _, _, _):
+        case let .chord(notes, _, _, so, _, _, _, _, _, _, _):
             var ys = notes.map(\.origin.y)
             ys.append(so.y)
             return ys

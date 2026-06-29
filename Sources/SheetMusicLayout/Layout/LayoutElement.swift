@@ -62,6 +62,13 @@ public enum LayoutElement: Sendable, Equatable {
         // is independent and carried by `LayoutChordNote.isInvisible`.
         // Beam suppression on hidden-stem chords is a separate concern.
         stemIsInvisible: Bool,
+        // Visual scale factor for small / cue noteheads. 1.0 = normal
+        // size; 0.7 = MuseScore's `Sid::smallNoteMag` default (any note
+        // in the chord has `isSmall == true`). Mirrors the `mag` field
+        // on `.graceChord` and is applied identically: renderers derive
+        // `StaffMetrics(staffSize: metrics.staffHeight * mag)` and size
+        // the notehead glyph (and ledger lines) from the scaled metrics.
+        mag: CGFloat,
     )
     /// A grace note (or grace chord) drawn at reduced size next to
     /// its parent main chord. Carries a `relativeX` offset from the

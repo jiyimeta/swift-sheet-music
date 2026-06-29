@@ -104,7 +104,7 @@
                     let (art, chord) = try #require(Self.soleArtAndChord(doc))
                     guard case let .articulation(_, _, isAbove) = art
                     else { Issue.record("not articulation"); return }
-                    guard case let .chord(_, _, stem, _, _, _, _, _, _, _) = chord
+                    guard case let .chord(_, _, stem, _, _, _, _, _, _, _, _) = chord
                     else { Issue.record("not chord"); return }
                     #expect(isAbove == (stem == .down))
                     sides.insert(isAbove)
@@ -145,7 +145,7 @@
             var artIsAbove: Set<Bool> = []
             var beamed = false
             for el in measure.elements {
-                if case let .chord(_, _, stem, _, _, _, isBeamed, _, _, _) = el {
+                if case let .chord(_, _, stem, _, _, _, isBeamed, _, _, _, _) = el {
                     stemIsDown.insert(stem == .down)
                     beamed = beamed || isBeamed
                 }
@@ -185,7 +185,7 @@
                 let (art, chord) = try #require(Self.soleArtAndChord(doc))
                 guard case .articulation = art
                 else { Issue.record("not articulation"); return }
-                guard case let .chord(notes, _, _, _, _, _, _, _, _, _) = chord
+                guard case let .chord(notes, _, _, _, _, _, _, _, _, _, _) = chord
                 else { Issue.record("not chord"); return }
                 let noteY = try #require(notes.first?.origin.y)
                 let inkY = try #require(Self.renderedInkY(art, sp: doc.metrics.sp))
@@ -264,7 +264,7 @@
             let (art, chord) = try #require(Self.soleArtAndChord(doc))
             guard case let .articulation(_, origin, _) = art
             else { Issue.record("not articulation"); return }
-            guard case let .chord(notes, _, _, _, _, _, _, _, _, _) = chord
+            guard case let .chord(notes, _, _, _, _, _, _, _, _, _, _) = chord
             else { Issue.record("not chord"); return }
             let noteY = try #require(notes.first?.origin.y)
             guard let system = doc.systems.first,

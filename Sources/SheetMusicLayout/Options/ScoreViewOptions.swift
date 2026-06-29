@@ -89,6 +89,10 @@ public struct ScoreViewOptions: Sendable, Equatable {
     /// `Sid::graceNoteMag` default is 0.7; we use 0.6 to stay
     /// closer to the historical "Petrucci" look used in Bravura.
     public var graceNoteMag: CGFloat
+    /// Visual scale factor for small / cue noteheads (`<small>1`
+    /// on a Chord or Note). MuseScore's `Sid::smallNoteMag` default
+    /// is 0.7 (70% of normal notehead size).
+    public var smallNoteMag: CGFloat
     /// Multi-measure rest collapse policy. Default `.disabled` matches
     /// pre-existing behavior — every rest measure renders individually.
     public var multiMeasureRest: MultiMeasureRestPolicy
@@ -131,6 +135,7 @@ public struct ScoreViewOptions: Sendable, Equatable {
         breakPolicy: LayoutBreakPolicy = .honor,
         breakIndicatorVisibility: BreakIndicatorVisibility = .all,
         graceNoteMag: CGFloat = 0.6,
+        smallNoteMag: CGFloat = 0.7,
         multiMeasureRest: MultiMeasureRestPolicy = .disabled,
         showsInvisibleElements: Bool = false,
     ) {
@@ -141,6 +146,7 @@ public struct ScoreViewOptions: Sendable, Equatable {
         self.breakPolicy = breakPolicy
         self.breakIndicatorVisibility = breakIndicatorVisibility
         self.graceNoteMag = graceNoteMag
+        self.smallNoteMag = smallNoteMag
         self.multiMeasureRest = multiMeasureRest
         self.showsInvisibleElements = showsInvisibleElements
     }

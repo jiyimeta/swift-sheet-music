@@ -304,13 +304,13 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
             )
 
         case let .chord(
-            notes, duration, stem, stemOrigin, _, _, isBeamed, _, stemExtension, _,
+            notes, duration, stem, stemOrigin, _, _, isBeamed, _, stemExtension, _, mag,
         ):
             encodeChord(
                 notes: notes, duration: duration, stem: stem,
                 stemOriginY: Double(stemOrigin.y),
                 isBeamed: isBeamed, stemExtension: Double(stemExtension),
-                mag: 1,
+                mag: Double(mag),
                 measureOriginX: mox, measureOriginY: moy,
                 metrics: ctx, showsInvisible: showsInvisible, into: &out,
             )

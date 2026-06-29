@@ -68,14 +68,22 @@ extension ScoreLayerBuilder {
             _,
             stemExt,
             stemHidden,
+            mag,
         ):
+            // Scale metrics for small / cue noteheads (mag < 1.0).
+            // Mirrors `GraceChordRenderer.drawGraceChord`'s pattern:
+            // derive a scaled StaffMetrics from staffHeight * mag so
+            // every glyph dimension shrinks proportionally.
+            let chordMetrics = mag == 1.0
+                ? metrics
+                : StaffMetrics(staffSize: metrics.staffHeight * mag)
             drawChord(
                 notes: notes, duration: dur, stem: stem,
                 stemOrigin: so, isBeamed: beamed,
                 tremoloStemExtension: stemExt,
                 stemIsInvisible: stemHidden,
                 base: base,
-                metrics: metrics, height: height,
+                metrics: chordMetrics, height: height,
                 context: &context, into: parent,
             )
         case let .textMark(.dynamic, text, p):

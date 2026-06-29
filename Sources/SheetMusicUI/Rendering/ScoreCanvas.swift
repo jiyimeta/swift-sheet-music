@@ -282,7 +282,14 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
             _,
             stemExt,
             stemIsInvisible,
+            mag,
         ):
+            // Scale metrics for small / cue noteheads (mag < 1.0).
+            // Mirrors `ScoreLayerBuilder+Element`'s pattern: derive a
+            // scaled StaffMetrics so every glyph dimension shrinks.
+            let chordMetrics = mag == 1.0
+                ? metrics
+                : StaffMetrics(staffSize: metrics.staffHeight * mag)
             let (baseDur, dots) = DurationInterpretation.split(dur)
             let shiftedNotes = notes.map {
                 LayoutChordNote(
@@ -315,7 +322,7 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
             drawLedgerLines(
                 context: &context,
                 notes: visibleLedgerNotes, stem: stem,
-                metrics: metrics,
+                metrics: chordMetrics,
             )
             if !invisibleLedgerNotes.isEmpty, showsInvisibleElements {
                 // MuseScore invisibleColor() = #808080; 50% black on
@@ -325,11 +332,11 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                 drawLedgerLines(
                     context: &gray,
                     notes: invisibleLedgerNotes, stem: stem,
-                    metrics: metrics,
+                    metrics: chordMetrics,
                 )
             }
             for n in shiftedNotes {
-                let mirrorDx = n.mirrorDx(stem: stem, sp: metrics.sp)
+                let mirrorDx = n.mirrorDx(stem: stem, sp: chordMetrics.sp)
                 let visualOrigin = CGPoint(
                     x: n.origin.x + mirrorDx, y: n.origin.y,
                 )
@@ -347,12 +354,12 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                         context: &gray, at: visualOrigin,
                         duration: baseDur, headType: n.headType,
                         stemUp: stem == .up,
-                        metrics: metrics,
+                        metrics: chordMetrics,
                     )
                     if let acc = n.accidental {
                         AccidentalRenderer.draw(
                             context: &gray, accidental: acc,
-                            origin: visualOrigin, metrics: metrics,
+                            origin: visualOrigin, metrics: chordMetrics,
                         )
                     }
                     DotRenderer.draw(
@@ -360,7 +367,7 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                         after: visualOrigin,
                         count: dots,
                         onStaffLine: n.step.isMultiple(of: 2),
-                        metrics: metrics,
+                        metrics: chordMetrics,
                     )
                 } else {
                     let headColor: Color = n.color
@@ -370,12 +377,12 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                         duration: baseDur, headType: n.headType,
                         stemUp: stem == .up,
                         color: headColor,
-                        metrics: metrics,
+                        metrics: chordMetrics,
                     )
                     if let acc = n.accidental {
                         AccidentalRenderer.draw(
                             context: &context, accidental: acc,
-                            origin: visualOrigin, metrics: metrics,
+                            origin: visualOrigin, metrics: chordMetrics,
                         )
                     }
                     DotRenderer.draw(
@@ -384,7 +391,7 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                         count: dots,
                         onStaffLine: n.step.isMultiple(of: 2),
                         color: headColor,
-                        metrics: metrics,
+                        metrics: chordMetrics,
                     )
                 }
             }
@@ -404,7 +411,7 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                         direction: stem, duration: baseDur,
                         isBeamed: isBeamed, beamY: beamY,
                         stemExtension: stemExt, color: stemColor,
-                        metrics: metrics,
+                        metrics: chordMetrics,
                     )
                 }
             } else {
@@ -413,7 +420,7 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                     direction: stem, duration: baseDur,
                     isBeamed: isBeamed, beamY: beamY,
                     stemExtension: stemExt, color: stemColor,
-                    metrics: metrics,
+                    metrics: chordMetrics,
                 )
             }
         case let .textMark(.dynamic, text, p):
