@@ -49,6 +49,7 @@ extension LayoutBridge {
         let invisibleNotes = showsInvisible ? notes.filter(\.isInvisible) : []
         emitNoteGlyphs(
             visibleNotes, baseDuration: baseDur, dotCount: dotCount,
+            stem: stem,
             glyphSize: glyphSize, metrics: ctx, mag: mag,
             measureOriginX: mox, measureOriginY: moy,
             honorColor: true, into: &out,
@@ -57,6 +58,7 @@ extension LayoutBridge {
             out.append(.setColor(argb: LayoutBridge.invisibleARGB))
             emitNoteGlyphs(
                 invisibleNotes, baseDuration: baseDur, dotCount: dotCount,
+                stem: stem,
                 glyphSize: glyphSize, metrics: ctx, mag: mag,
                 measureOriginX: mox, measureOriginY: moy,
                 honorColor: false, into: &out,
@@ -138,6 +140,7 @@ extension LayoutBridge {
         _ notes: [LayoutChordNote],
         baseDuration baseDur: NoteDuration,
         dotCount: Int,
+        stem: StemDirection,
         glyphSize: Double,
         metrics ctx: MetricsContext,
         mag: Double,
@@ -153,7 +156,7 @@ extension LayoutBridge {
             if let argb { out.append(.setColor(argb: argb)) }
             emitCenterAnchoredGlyph(
                 codepoint: NoteheadGlyph.codepoint(
-                    duration: baseDur, headType: note.headType,
+                    duration: baseDur, headType: note.headType, stemUp: stem == .up,
                 ),
                 cxPt: mox + Double(note.origin.x),
                 cyPt: moy + Double(note.origin.y),

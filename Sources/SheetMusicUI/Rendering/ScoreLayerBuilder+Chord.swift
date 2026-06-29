@@ -78,7 +78,7 @@ extension ScoreLayerBuilder {
         }
         for n in shifted {
             let glyph = noteheadGlyph(
-                for: baseDur, headType: n.headType,
+                for: baseDur, headType: n.headType, stemUp: stem == .up,
             )
             // Mirrored seconds: notehead, accidental and dots track
             // the visual center, while ledger lines + stem stay on
@@ -201,10 +201,10 @@ extension ScoreLayerBuilder {
     }
 
     private static func noteheadGlyph(
-        for duration: NoteDuration, headType: String?,
+        for duration: NoteDuration, headType: String?, stemUp: Bool,
     ) -> Character {
         let cp = NoteheadGlyph.codepoint(
-            duration: duration, headType: headType,
+            duration: duration, headType: headType, stemUp: stemUp,
         )
         // swiftlint:disable:next force_unwrapping
         return Character(UnicodeScalar(cp)!)

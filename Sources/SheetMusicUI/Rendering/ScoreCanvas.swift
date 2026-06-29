@@ -346,6 +346,7 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                     NoteheadRenderer.drawHead(
                         context: &gray, at: visualOrigin,
                         duration: baseDur, headType: n.headType,
+                        stemUp: stem == .up,
                         metrics: metrics,
                     )
                     if let acc = n.accidental {
@@ -367,6 +368,7 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                     NoteheadRenderer.drawHead(
                         context: &context, at: visualOrigin,
                         duration: baseDur, headType: n.headType,
+                        stemUp: stem == .up,
                         color: headColor,
                         metrics: metrics,
                     )
