@@ -63,14 +63,25 @@ extension Note {
         return note
     }
 
-    /// Normalize `<head>` to the MS3+ string form. MS2 writes an integer
-    /// (`NoteHead::Group` enum, C++: MuseScore 2 `libmscore/note.h`); the
-    /// renderer (`NoteheadRenderer`) keys off the string names. Returning
-    /// the raw integer would silently fall back to "normal", so the
-    /// drum staff loses cross / diamond / triangle heads.
+    /// Normalize `<head>` to a MS4 string token.
+    ///
+    /// MS2 writes an integer (`NoteHead::Group` enum, C++: MuseScore 2
+    /// `libmscore/note.h`); MS3 and MS4 use string tokens from
+    /// `MSCXDecoder.knownHeadTokens`. Returning the raw integer would
+    /// silently fall back to "normal", losing cross / diamond / triangle
+    /// heads in drum staves.
+    ///
+    /// Unknown integers and unrecognised string tokens (except `"custom"`)
+    /// emit `mscx.note.unsupportedHeadType` via `mscxDecoderWarn` and
+    /// return `nil`, which the renderer treats as "normal".
+    ///
+    /// C++: `NoteHead::Group` (`libmscore/note.h:37-69`),
+    ///      `TConv::fromXml(const AsciiStringView&, NoteHeadGroup)`
+    ///      (`typesconv.cpp:1145`).
     private static func decodeHeadType(_ raw: String?) -> String? {
         guard let raw, !raw.isEmpty else { return nil }
         if let n = Int(raw) {
+            // MS2 integer → MS4 token (Appendix A.4).
             switch n {
             case 0: return "normal"
             case 1: return "cross"
@@ -85,9 +96,23 @@ extension Note {
             case 10: return "la"
             case 11: return "ti"
             case 12: return "sol"
-            case 13: return "alt-brevis"
-            default: return nil
+            case 13: return "altbrevis"
+            default:
+                mscxDecoderWarn(
+                    code: "mscx.note.unsupportedHeadType",
+                    message: "Unknown MS2 <head> integer \(n) — head dropped",
+                )
+                return nil
             }
+        }
+        // MS3 / MS4 string token.
+        if raw == "custom" { return raw }
+        guard MSCXDecoder.knownHeadTokens.contains(raw) else {
+            mscxDecoderWarn(
+                code: "mscx.note.unsupportedHeadType",
+                message: "Unknown <head> token '\(raw)' — head dropped",
+            )
+            return nil
         }
         return raw
     }
