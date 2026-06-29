@@ -193,8 +193,17 @@ extension LayoutBridge {
                     ))
                 }
                 let totalAdv = leftBracketAdv + accAdv + rightBracketAdv
-                // Notehead left edge = center - half-advance (Bravura: 0.59 sp).
-                let noteheadLeftX = mox + Double(note.origin.x) - ctx.sp * 0.59 * mag
+                // Notehead left edge = center - half-advance. Source the
+                // half-advance from `StemGeometry.attachDx` (Bravura
+                // noteheadBlack half-width) so this matches the Apple
+                // render paths exactly even if `attachDx` is retuned. The
+                // `sp * mag` argument mirrors Apple's `metrics.sp` (already
+                // mag-scaled) — `attachDx` is linear in `sp`, so this equals
+                // `attachDx(sp: ctx.sp) * mag`.
+                let noteheadHalfAdv = Double(StemGeometry.attachDx(
+                    sp: CGFloat(ctx.sp * mag),
+                ))
+                let noteheadLeftX = mox + Double(note.origin.x) - noteheadHalfAdv
                 let leftEdgeX = Double(AccidentalPlacement.leftEdgeX(
                     noteheadLeftX: CGFloat(noteheadLeftX),
                     advanceWidth: CGFloat(totalAdv),
