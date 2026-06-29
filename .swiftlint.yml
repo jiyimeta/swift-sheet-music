@@ -239,6 +239,11 @@ excluded:
   - "**/.build"
   - "**/.swiftpm"
   - "Examples/Apple"
+  # Machine-generated SMuFL codepoint tables — do not lint
+  - "Sources/SheetMusicLayout/Engraving/SMuFLCodepoints+Noteheads.swift"
+  - "Sources/SheetMusicLayout/Engraving/SMuFLCodepoints+Accidentals.swift"
+  - "Sources/SheetMusicLayout/Engraving/SMuFLCodepoints+Lines.swift"
+  - "Sources/SheetMusicLayout/Engraving/SMuFLCodepoints+ByName.swift"
 
 line_length:
   warning: 120
