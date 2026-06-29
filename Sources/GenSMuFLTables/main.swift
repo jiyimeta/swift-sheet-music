@@ -86,9 +86,9 @@ for (name, cp) in sortedAll {
 
 byNameLines.append("    ]")
 byNameLines.append("")
-byNameLines.append(
-    "    static func byName(_ name: String) -> UInt32? { glyphCodepoints[name] }",
-)
+byNameLines.append("    static func byName(_ name: String) -> UInt32? {")
+byNameLines.append("        glyphCodepoints[name]")
+byNameLines.append("    }")
 byNameLines.append("}")
 byNameLines.append("")
 let byNameContent = byNameLines.joined(separator: "\n")
