@@ -34,7 +34,7 @@ extension MSCXDecoder {
         // Syllables: Do Di Ra Re Ri Me Mi Fa Fi Se So Le La Li Te Ti Si
         "do-name", "di-name", "ra-name", "re-name", "ri-name",
         "me-name", "mi-name", "fa-name", "fi-name", "se-name",
-        "so-name", "le-name", "la-name", "li-name", "te-name",
+        "sol-name", "le-name", "la-name", "li-name", "te-name",
         "ti-name", "si-name",
         // ── Named-pitch heads (note.cpp:178-200) ─────────────────────────────
         // Pitches A–G (natural / sharp / flat) + H / H-sharp

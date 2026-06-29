@@ -4,7 +4,7 @@ import Foundation
 /// the vibrato marking and maps to the `<Vibrato><subtype>` token in
 /// MuseScore's MSCX format.
 /// C++: `mu::engraving::VibratoType` in `engraving/types/types.h:1172-1178`.
-public enum VibratoType: String, Sendable, Equatable {
+public enum VibratoType: String, Sendable, Equatable, CaseIterable {
     case guitarVibrato
     case guitarVibratoWide
     /// Sawtooth wave. MSCX token `vibratoSawtooth`.
