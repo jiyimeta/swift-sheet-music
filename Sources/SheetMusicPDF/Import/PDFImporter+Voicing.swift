@@ -34,18 +34,67 @@ extension PDFImporter {
         // phantom two-voice measures and 245 measures with an empty voice 0
         // against a score that is entirely single-voice). Coincident x
         // onset is the robust, duration-independent signal.
-        if hasCoincidentOnset(elements) {
-            return splitIntoTwoVoices(
-                elements: elements,
-                staffMidY: staffMidY,
-                diagnostics: diagnostics,
-                location: location,
-            )
+        // Permutation shared with the geometry collector (`voiceAssignment`)
+        // so the side-car's element indices always match the voices built
+        // here. A two-voice measure always emits exactly two voices (the
+        // second may be empty), matching A's indexing.
+        let placements = voiceAssignment(elements: elements, staffMidY: staffMidY)
+        let voiceCount = hasCoincidentOnset(elements) ? 2 : 1
+        var ordered = [[(position: Int, element: RhythmElement)]](
+            repeating: [], count: voiceCount,
+        )
+        for (i, p) in placements.enumerated() {
+            ordered[p.voice].append((p.position, elements[i]))
         }
-        // Single voice: keep every element in x-order in voice 0, matching
-        // A's single-voice indexing.
-        let ordered = elements.sorted { $0.x < $1.x }
-        return [Voice(elements: ordered.map { .chord($0.chord) })]
+        return ordered.map { bucket -> Voice in
+            var elems: [VoiceElement] = []
+            var occupied: Set<RoundedX> = []
+            for (_, u) in bucket.sorted(by: { $0.position < $1.position }) {
+                let key = RoundedX(u.x)
+                if occupied.contains(key) {
+                    emitVoice3Warning(diagnostics, location: location)
+                }
+                elems.append(.chord(u.chord))
+                occupied.insert(key)
+            }
+            return Voice(elements: elems)
+        }
+    }
+
+    /// Pure permutation `assignVoices` applies, exposed so the geometry
+    /// collector can learn each element's final (voiceIndex, position)
+    /// without re-deriving the value path. One entry per input element, in
+    /// INPUT order; uses the same `hasCoincidentOnset` / `voiceFor`
+    /// decisions `assignVoices` uses, so the two never disagree.
+    static func voiceAssignment(
+        elements: [RhythmElement], staffMidY: CGFloat,
+    ) -> [(voice: Int, position: Int)] {
+        guard !elements.isEmpty else { return [] }
+        if hasCoincidentOnset(elements) {
+            var result = [(voice: Int, position: Int)](
+                repeating: (0, 0), count: elements.count,
+            )
+            var counts = [0, 0]
+            for (i, u) in elements.enumerated() {
+                // voiceFor == 1 (stem-up / high) → voice index 0 (v1);
+                // else → voice index 1 (v2). Mirrors the [v1, v2] order.
+                let v = voiceFor(u, staffMidY: staffMidY) == 1 ? 0 : 1
+                result[i] = (v, counts[v])
+                counts[v] += 1
+            }
+            return result
+        }
+        // Single voice: x-sorted into voice 0; position = rank in x.
+        let order = elements.enumerated()
+            .sorted { $0.element.x < $1.element.x }
+            .map(\.offset)
+        var result = [(voice: Int, position: Int)](
+            repeating: (0, 0), count: elements.count,
+        )
+        for (pos, inputIdx) in order.enumerated() {
+            result[inputIdx] = (0, pos)
+        }
+        return result
     }
 
     /// True when two distinct elements begin at (near) the same x. A
@@ -59,36 +108,6 @@ extension PDFImporter {
             return true
         }
         return false
-    }
-
-    private static func splitIntoTwoVoices(
-        elements: [RhythmElement],
-        staffMidY: CGFloat,
-        diagnostics: ((PDFImportDiagnostic) -> Void)?,
-        location: String,
-    ) -> [Voice] {
-        var v1: [VoiceElement] = []
-        var v2: [VoiceElement] = []
-        var v1OccupiedAt: Set<RoundedX> = []
-        var v2OccupiedAt: Set<RoundedX> = []
-        for u in elements {
-            let key = RoundedX(u.x)
-            switch voiceFor(u, staffMidY: staffMidY) {
-            case 1:
-                if v1OccupiedAt.contains(key) {
-                    emitVoice3Warning(diagnostics, location: location)
-                }
-                v1.append(.chord(u.chord))
-                v1OccupiedAt.insert(key)
-            default:
-                if v2OccupiedAt.contains(key) {
-                    emitVoice3Warning(diagnostics, location: location)
-                }
-                v2.append(.chord(u.chord))
-                v2OccupiedAt.insert(key)
-            }
-        }
-        return [Voice(elements: v1), Voice(elements: v2)]
     }
 
     private static func emitVoice3Warning(

@@ -1,3 +1,4 @@
+// swiftlint:disable file_length
 import CoreGraphics
 import Foundation
 import SheetMusicCore
@@ -22,6 +23,10 @@ extension PDFImporter {
         let glyphs = measure.glyphs.sorted {
             $0.raw.origin.x < $1.raw.origin.x
         }
+        // Staff space (sp) for sizing geometry rects; derived from this
+        // staff's five line y-coordinates. Only consumed by the geometry
+        // side-car (noteRects / onsetRect); the value path ignores it.
+        let spatium = staffSpatium(measure.staffYLines)
         // Stems and beams from OTHER staves stack at the same x as this
         // staff's notes (the systems are vertically aligned), so an x-only
         // match grabs a wrong-staff stem and the beam over it never lines
@@ -56,7 +61,14 @@ extension PDFImporter {
         // Beam-group geometry (① + ②): per-stem beam level computed ONCE
         // over the whole measure so union-find groups and interior
         // inheritance see every stem. Keyed by the stem's index in `stems`.
-        let levelByStem = computeBeamLevels(stems: stems, beams: beams)
+        // The notehead origins identify each stem's beam-attaching end so a
+        // neighbour staff's beam grazing the notehead end isn't miscounted.
+        let noteheadOrigins = glyphs
+            .filter { isNotehead($0.semantic) }
+            .map(\.raw.origin)
+        let levelByStem = computeBeamLevels(
+            stems: stems, beams: beams, noteheadOrigins: noteheadOrigins,
+        )
 
         var elements: [RhythmElement] = []
         var consumed = graceIndices
@@ -64,7 +76,7 @@ extension PDFImporter {
         for (i, g) in glyphs.enumerated() where !consumed.contains(i) {
             switch g.semantic {
             case let .rest(dur):
-                elements.append(makeRest(glyph: g, duration: dur))
+                elements.append(makeRest(glyph: g, duration: dur, spatium: spatium))
                 consumed.insert(i)
             case .noteheadBlack, .noteheadHalf,
                  .noteheadWhole, .noteheadDoubleWhole,
@@ -77,6 +89,7 @@ extension PDFImporter {
                     flagBand: yBand,
                     pitchByGlyph: pitchByGlyph,
                     tieMarks: tieMarks,
+                    spatium: spatium,
                     consumed: &consumed,
                 )
                 elements.append(element)
@@ -98,7 +111,7 @@ extension PDFImporter {
 
 extension PDFImporter {
     private static func makeRest(
-        glyph: ClassifiedGlyph, duration: NoteDuration,
+        glyph: ClassifiedGlyph, duration: NoteDuration, spatium: CGFloat,
     ) -> RhythmElement {
         RhythmElement(
             chord: Chord(duration: duration, notes: []),
@@ -106,6 +119,12 @@ extension PDFImporter {
             y: glyph.raw.origin.y,
             stemDirection: nil,
             beamGroup: nil,
+            onsetRect: PDFGeometryRects.glyphBox(
+                origin: glyph.raw.origin,
+                advance: glyph.raw.advance,
+                spatium: spatium,
+                pageIndex: glyph.raw.pageIndex,
+            ),
         )
     }
 
@@ -117,6 +136,7 @@ extension PDFImporter {
         flagBand: ClosedRange<CGFloat>?,
         pitchByGlyph: [RawGlyph: DecodedPitch],
         tieMarks: TieMarks,
+        spatium: CGFloat,
         consumed: inout Set<Int>,
     ) -> RhythmElement {
         let lead = glyphs[leadIndex]
@@ -124,17 +144,33 @@ extension PDFImporter {
             startingAt: leadIndex, in: glyphs, stems: stems,
         )
         consumed.formUnion(cluster.indices)
-        let notes = cluster.indices.compactMap { idx -> Note? in
-            guard let dp = pitchByGlyph[glyphs[idx].raw] else { return nil }
+        // Build notes and their geometry rects in LOCKSTEP, applying the
+        // same pitch-dedup `ChordNotes.init` would — first occurrence of a
+        // pitch wins, order preserved. This keeps `noteRects[k]` aligned
+        // with the final `chord.notes[k]` (i.e. `noteIndexInChord`), which
+        // follows the deduped survivor order, NOT raw `cluster.indices`.
+        var notes: [Note] = []
+        var noteRects: [PDFElementRect] = []
+        var seenPitches = Set<Int>()
+        for idx in cluster.indices {
+            guard let dp = pitchByGlyph[glyphs[idx].raw] else { continue }
             // Stamp ties: a notehead identified as a tie endpoint carries
             // tieForward (earlier note) and / or tieBack (later note).
             let id = NoteheadID(glyphs[idx].raw)
-            return Note(
+            let note = Note(
                 pitch: dp.midi,
                 tpc: dp.tpc,
                 tieForward: tieMarks.forward.contains(id) ? 1 : nil,
                 tieBack: tieMarks.back.contains(id) ? 1 : nil,
             )
+            guard seenPitches.insert(note.pitch).inserted else { continue }
+            notes.append(note)
+            noteRects.append(PDFGeometryRects.glyphBox(
+                origin: glyphs[idx].raw.origin,
+                advance: glyphs[idx].raw.advance,
+                spatium: spatium,
+                pageIndex: glyphs[idx].raw.pageIndex,
+            ))
         }
         let base = baseDuration(for: lead.semantic)
         // Beam lines take precedence over flags. Only black noteheads
@@ -182,7 +218,19 @@ extension PDFImporter {
             stemDirection: dir,
             beamGroup: nil,
             lowConfidenceDuration: flagShortened,
+            noteRects: noteRects,
+            onsetRect: PDFGeometryRects.union(noteRects),
         )
+    }
+
+    /// Staff space (sp) = one inter-line gap, derived from the staff's five
+    /// line y-coordinates (`span / 4`). Falls back to a nominal 8pt when
+    /// fewer than two lines were detected. Geometry-only.
+    static func staffSpatium(_ yLines: [CGFloat]) -> CGFloat {
+        guard let lo = yLines.min(), let hi = yLines.max(), hi > lo else {
+            return 8
+        }
+        return (hi - lo) / 4
     }
 }
 
@@ -244,13 +292,23 @@ extension PDFImporter {
         var indices = [i]
         for (j, g) in glyphs.enumerated() where j != i {
             guard isNoteheadSemantic(g.semantic) else { continue }
-            // Chord noteheads share the lead's x (and thus its stem
-            // offset). Match against the lead's x rather than the stem's
-            // midX so a stem-down note's left-side stem doesn't widen the
-            // window into the neighbour to its right.
-            if abs(g.raw.origin.x - lead.raw.origin.x) <= 2.5 {
-                indices.append(j)
-            }
+            // Chord noteheads share the lead's x. Match the lead's x (not the
+            // stem midX) so a stem-down note's left-side stem doesn't widen
+            // the window into the neighbour to its right.
+            guard abs(g.raw.origin.x - lead.raw.origin.x) <= 2.5 else { continue }
+            // …but a shared x is NOT sufficient: a drum downbeat stacks two
+            // VOICES at one x — a crash (stem-up) over a kick (stem-down), each
+            // on its OWN stem — and the old x-only rule fused them into one
+            // chord, hiding the crash onset behind the kick's lead (the 群青/
+            // 君と drum loss). Admit a same-x notehead only when it attaches to
+            // the SAME stem as the lead; the other splits off in assignVoices.
+            // Single-voice chords share one stem (mates still cluster); a
+            // notehead with no detected stem still joins.
+            let gStem = nearestStem(
+                toX: g.raw.origin.x, noteY: g.raw.origin.y, stems: stems,
+            )
+            if let gStem, gStem.index != chosen.index { continue }
+            indices.append(j)
         }
         return Cluster(
             indices: indices.sorted(), stem: chosen.stem, stemIndex: chosen.index,
@@ -372,12 +430,10 @@ extension PDFImporter {
             guard case .augmentationDot = g.semantic else { continue }
             let dx = g.raw.origin.x - leadX
             let dy = abs(g.raw.origin.y - leadY)
-            // A note's own dot sits ~7–10pt to its right (measured: owner
-            // dx clusters at 7.1/7.2/9.7/9.8pt). The previous `< 20`pt
-            // window also caught the dot of the FOLLOWING note ~15pt away,
-            // dotting a note that A leaves plain (the phantom `3/32` at the
-            // tail of beamed 16th runs). 12pt keeps every real owner dot
-            // with headroom and rejects the ~15pt neighbour.
+            // A note's own dot sits ~7–10pt to its right (measured). The
+            // previous `< 20`pt window also caught the FOLLOWING note's dot
+            // ~15pt away (a phantom `3/32` at the tail of beamed 16th runs);
+            // 12pt keeps every owner dot and rejects the ~15pt neighbour.
             if dx > 0, dx < 12, dy < 4 { dotCount += 1 }
         }
         return dotCount > 0 ? duration.dotted(dotCount) : duration

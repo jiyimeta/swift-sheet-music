@@ -1,5 +1,6 @@
 #if os(macOS)
     import AppKit
+    import PDFKit
     import SheetMusic
     import SheetMusicAudio
     import SheetMusicPDF
@@ -16,6 +17,10 @@
         /// in a horizontal scroll view so you can review what the PDF
         /// will look like before saving.
         case pdf = "PDF"
+        /// The ORIGINAL imported PDF (via `PDFImporter.parseWithGeometry`),
+        /// shown as-is with a playback cursor + click-to-seek driven by the
+        /// geometry side-car. Only available after importing a PDF.
+        case originalPDF = "Original PDF"
     }
 
     /// One cell of a copied range — captures a contiguous slice of a
@@ -157,6 +162,12 @@
         /// makes the pinch crawl.
         @State private var pdfLayout: PDFPreviewLayout?
 
+        /// The original imported PDF document (PDFKit) for `.originalPDF`
+        /// mode, and the geometry side-car linking its glyphs to the loaded
+        /// `score`. Both `nil` until a PDF is imported via the sidebar.
+        @State private var originalPDF: PDFDocument?
+        @State private var originalPDFGeometry: PDFScoreGeometry?
+
         /// Pending programmatic scroll target for the horizontal
         /// `MagnifyingScoreScrollView`, in document coords. The wrapper
         /// animates to it and resets the binding to nil. Set by the
@@ -221,6 +232,7 @@
                     score: score,
                     errorMessage: errorMessage,
                     layoutMode: $layoutMode,
+                    originalPDFAvailable: originalPDF != nil,
                     pageIndex: $pageIndex,
                     totalPages: totalPages,
                     magnification: $magnification,
@@ -231,6 +243,7 @@
                     onLoadBundled: loadBundled,
                     onLoadHarmonyBasic: loadHarmonyBasic,
                     onOpenFile: showOpenPanel,
+                    onImportPDF: showPDFImportPanel,
                     onTogglePlayback: togglePlayback,
                     isRepeating: isRepeating,
                     onToggleRepeat: toggleRepeatAll,
@@ -374,6 +387,37 @@
             guard panel.runModal() == .OK,
                   let url = panel.url else { return }
             openUserURL(url)
+        }
+
+        /// Import a music PDF: reconstruct the `Score` + geometry side-car,
+        /// adopt the score (so playback prepares against it), keep the
+        /// original PDF document for display, and switch to `.originalPDF`.
+        func importOriginalPDF(from url: URL) {
+            do {
+                let data = try Data(contentsOf: url)
+                let result = try PDFImporter.parseWithGeometry(pdfData: data)
+                guard let document = PDFDocument(data: data) else {
+                    errorMessage = "Could not open PDF: \(url.lastPathComponent)"
+                    return
+                }
+                adoptLoadedScore(result.score, sourceName: url.lastPathComponent)
+                originalPDF = document
+                originalPDFGeometry = result.geometry
+                layoutMode = .originalPDF
+            } catch {
+                errorMessage =
+                    "PDF import failed: " + error.localizedDescription
+            }
+        }
+
+        private func showPDFImportPanel() {
+            let panel = NSOpenPanel()
+            panel.allowedContentTypes = [.pdf]
+            panel.allowsMultipleSelection = false
+            panel.canChooseDirectories = false
+            panel.title = "Import Music PDF"
+            guard panel.runModal() == .OK, let url = panel.url else { return }
+            importOriginalPDF(from: url)
         }
 
         private func exportPDF() {
@@ -2664,6 +2708,53 @@
                 )
             case .pdf:
                 pdfPreview(score: score)
+            case .originalPDF:
+                originalPDFContent(score: score)
+            }
+        }
+
+        @ViewBuilder
+        private func originalPDFContent(score: Score) -> some View {
+            if let pdf = originalPDF, let geometry = originalPDFGeometry {
+                OriginalPDFView(
+                    document: pdf,
+                    geometry: geometry,
+                    score: score,
+                    cursor: playbackEngine.currentCursor,
+                    followsCursor: true,
+                    onTap: { item in handleOriginalPDFTap(item) },
+                )
+            } else {
+                ContentUnavailableView(
+                    "No PDF imported",
+                    systemImage: "doc.richtext",
+                    description: Text(
+                        "Import a music PDF from the sidebar to play along on "
+                            + "the original engraving.",
+                    ),
+                )
+            }
+        }
+
+        /// Tap on the original PDF: while playing, seek; while paused, select
+        /// the item and (for a note) preview its pitch. Mirrors `handleTap`.
+        private func handleOriginalPDFTap(_ item: ScoreItemID?) {
+            guard let item, let score else { return }
+            if playbackEngine.state == .playing {
+                playbackEngine.seek(to: .item(item))
+                return
+            }
+            playbackEngine.clearCursor()
+            switch item {
+            case let .note(id):
+                selection = .single(.note(id))
+                playbackEngine.playPreview(noteID: id, in: score)
+            case let .rest(id):
+                selection = .single(.rest(id))
+            case let .tuplet(id):
+                selection = .single(.tuplet(id))
+            case let .clef(anchor):
+                selection = .single(.clef(anchor))
             }
         }
 
@@ -2895,6 +2986,13 @@
             // built by a .task in the .vertical case.
             verticalDoc = nil
             pdfLayout = nil
+            // Drop any prior imported-PDF state; importOriginalPDF re-sets
+            // these (and the mode) right after calling this. Loading a
+            // regular score while in .originalPDF mode falls back to a
+            // layout mode that doesn't need a PDF.
+            originalPDF = nil
+            originalPDFGeometry = nil
+            if layoutMode == .originalPDF { layoutMode = .horizontal }
             score = loaded
             if let inputController {
                 inputController.reset(score: loaded)

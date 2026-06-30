@@ -3,13 +3,17 @@ import Foundation
 import PDFKit
 import SheetMusicCore
 
-/// Internal façade for parsing vector PDFs (MuseScore 3.x/4.x exports)
-/// into `Score`. Currently HELD INTERNAL while the importer is being
-/// reworked — see `docs/superpowers/plans/2026-05-03-pdf-import-paused.md`
-/// for resume instructions and the Phase-2 roadmap. Mirrors `MidiImporter`
-/// shape (caseless enum, sync only).
-enum PDFImporter {
-    static func parse(
+/// Façade for parsing vector PDFs (MuseScore 3.x/4.x exports) into `Score`.
+/// Mirrors `MidiImporter` shape (caseless enum, sync only).
+///
+/// `parse` returns the `Score` alone. `parseWithGeometry` additionally
+/// returns a `PDFScoreGeometry` side-car linking each Score element to its
+/// rectangle in the original PDF — used to draw a playback cursor on, and
+/// hit-test taps against, the displayed source PDF. The geometry collector
+/// is allocated only on the `parseWithGeometry` path; `parse` runs the same
+/// pipeline with no geometry overhead.
+public enum PDFImporter {
+    public static func parse(
         pdfURL: URL,
         options: PDFImportOptions = .init(),
     ) throws -> Score {
@@ -17,10 +21,37 @@ enum PDFImporter {
         return try parse(pdfData: data, options: options)
     }
 
-    static func parse(
+    public static func parse(
         pdfData: Data,
         options: PDFImportOptions = .init(),
     ) throws -> Score {
+        let document = try openDocument(pdfData)
+        return try buildScore(document: document, options: options)
+    }
+
+    /// Parse `pdfData` and also return the geometry side-car.
+    public static func parseWithGeometry(
+        pdfData: Data,
+        options: PDFImportOptions = .init(),
+    ) throws -> (score: Score, geometry: PDFScoreGeometry) {
+        let document = try openDocument(pdfData)
+        let collector = PDFGeometryCollector()
+        let score = try buildScore(
+            document: document, options: options, geometry: collector,
+        )
+        return (score, collector.finalize())
+    }
+
+    /// Parse the PDF at `pdfURL` and also return the geometry side-car.
+    public static func parseWithGeometry(
+        pdfURL: URL,
+        options: PDFImportOptions = .init(),
+    ) throws -> (score: Score, geometry: PDFScoreGeometry) {
+        let data = try Data(contentsOf: pdfURL)
+        return try parseWithGeometry(pdfData: data, options: options)
+    }
+
+    private static func openDocument(_ pdfData: Data) throws -> PDFDocument {
         guard !pdfData.isEmpty else {
             throw SheetMusicError.malformedScore(reason: "PDFImporter: empty data")
         }
@@ -30,7 +61,7 @@ enum PDFImporter {
         guard document.pageCount > 0 else {
             throw SheetMusicError.malformedScore(reason: "PDFImporter: zero pages")
         }
-        return try buildScore(document: document, options: options)
+        return document
     }
 
     /// Run stages 1-12 of the pipeline against `document` and assemble
@@ -39,7 +70,19 @@ enum PDFImporter {
     static func buildScore(
         document: PDFDocument,
         options: PDFImportOptions,
+        geometry: PDFGeometryCollector? = nil,
     ) throws -> Score {
+        // Page sizes (mediaBox) for the geometry side-car's system rects and
+        // display flips. Only computed on the geometry-capture path.
+        if let geometry {
+            var sizes: [Int: CGSize] = [:]
+            for p in 0 ..< document.pageCount {
+                if let page = document.page(at: p) {
+                    sizes[p] = page.bounds(for: .mediaBox).size
+                }
+            }
+            geometry.setPageSizes(sizes)
+        }
         let walked = try ContentStreamWalker(document: document).walk()
         guard !walked.glyphs.isEmpty || !walked.texts.isEmpty || !walked.paths.isEmpty else {
             throw SheetMusicError.malformedScore(
@@ -109,6 +152,7 @@ enum PDFImporter {
             tieMarks: tieMarks,
             graceSizeThreshold: graceSizeThreshold,
             options: options,
+            geometry: geometry,
         )
     }
 

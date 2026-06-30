@@ -1,3 +1,4 @@
+// swiftlint:disable file_length
 import CoreGraphics
 import Foundation
 import PDFKit
@@ -21,6 +22,7 @@ extension PDFImporter {
         tieMarks: TieMarks = TieMarks(),
         graceSizeThreshold: CGFloat = 0,
         options: PDFImportOptions,
+        geometry: PDFGeometryCollector? = nil,
     ) -> Score {
         guard !systems.isEmpty else {
             return Score(division: 480, source: .pdf)
@@ -71,16 +73,24 @@ extension PDFImporter {
                 stavesContent: &stavesContent,
                 state: &state,
                 options: options,
+                geometry: geometry,
             )
         }
 
-        // Distribute measure arrays back into each Part's staves.
+        // Distribute measure arrays back into each Part's staves, and (for
+        // the geometry side-car) build the slot → StaffAddress inverse at
+        // the same point — the only place the mapping is known.
         var assembledParts = shape.parts
+        var slotToStaff: [Int: StaffAddress] = [:]
         for (partIdx, slots) in shape.slotsByPartIndex {
             for (staffIdx, slot) in slots.enumerated() {
                 assembledParts[partIdx].staves[staffIdx].measures = stavesContent[slot]
+                slotToStaff[slot] = StaffAddress(
+                    partIndex: partIdx, staffIndexInPart: staffIdx,
+                )
             }
         }
+        geometry?.setSlotToStaff(slotToStaff)
         // Propagate pitch along tie chains: a tied-back note inherits its
         // source note's pitch (incl. any accidental MuseScore did not redraw
         // on the continuation). Conservative + monotonic — only a genuine
@@ -89,9 +99,17 @@ extension PDFImporter {
         let titleFrame = makeTitleFrame(
             document: document, texts: texts, options: options,
         )
+        // Recover tempo markings ("♩ = NN") from the page text into
+        // system measures so playback uses the engraved BPM, not the 120
+        // default. Mapped to the measure each marking sits above.
+        let measureCount = assembledParts.first?.staves.first?.measures.count ?? 0
+        let systemMeasures = tempoSystemMeasures(
+            systems: systems, texts: texts, measureCount: measureCount,
+        )
         return Score(
             division: 480,
             parts: assembledParts,
+            systemMeasures: systemMeasures,
             titleFrame: titleFrame,
             source: .pdf,
         )
@@ -121,7 +139,11 @@ extension PDFImporter {
         stavesContent: inout [[Measure]],
         state: inout StaffStateMap,
         options: PDFImportOptions,
+        geometry: PDFGeometryCollector?,
     ) {
+        // One system rect per ImportSystem (its y-range × page width), used
+        // to grow a cursor column to full system height and for auto-scroll.
+        geometry?.recordSystem(yRange: system.yRange, pageIndex: system.pageIndex)
         // Stems / barlines etc. are page-local; pre-filter to this
         // system's page so a vertical at the same x on another page can't
         // be mistaken for a stem in `decodeRhythm`'s xRange test.
@@ -158,6 +180,10 @@ extension PDFImporter {
                 let nextStaffTopY = systemStaffTops
                     .filter { $0 < thisBottomY }
                     .max()
+                // Global measure index of this system's first measure on
+                // this slot = the count already appended. The geometry
+                // collector keys on the final (global) measure index.
+                let measureIndexOffset = stavesContent[slot].count
                 let measures = buildMeasures(
                     importStaff: importStaff,
                     texts: texts,
@@ -168,8 +194,10 @@ extension PDFImporter {
                     nextStaffTopY: nextStaffTopY,
                     state: &state,
                     slot: slot,
+                    measureIndexOffset: measureIndexOffset,
                     location: location,
                     options: options,
+                    geometry: geometry,
                 )
                 stavesContent[slot].append(contentsOf: measures)
                 applyBreaks(
@@ -224,8 +252,10 @@ extension PDFImporter {
         nextStaffTopY: CGFloat?,
         state: inout StaffStateMap,
         slot: Int,
+        measureIndexOffset: Int,
         location: String,
         options: PDFImportOptions,
+        geometry: PDFGeometryCollector?,
     ) -> [Measure] {
         var events = scoreStateEvents(staff: importStaff, texts: [])
         // Apply the whole-part E065 (F8va) clef resolution decided up front by
@@ -287,6 +317,9 @@ extension PDFImporter {
                 nextStaffTopY: nextStaffTopY,
                 location: location,
                 options: options,
+                slot: slot,
+                measureIndexOffset: measureIndexOffset,
+                geometry: geometry,
             ))
         }
         state.clef[slot] = clef
@@ -346,6 +379,9 @@ extension PDFImporter {
         nextStaffTopY: CGFloat?,
         location: String,
         options: PDFImportOptions,
+        slot: Int,
+        measureIndexOffset: Int,
+        geometry: PDFGeometryCollector?,
     ) -> Measure {
         let decoded = decodePitches(measure: importMeasure, activeClef: clef, activeKey: key)
         let rhythm = decodeRhythm(
@@ -390,7 +426,58 @@ extension PDFImporter {
         if !leading.isEmpty {
             finalVoices[0] = Voice(elements: leading + finalVoices[0].elements)
         }
+        recordGeometry(
+            geometry,
+            reconciled: reconciled,
+            staffMidY: staffMidY,
+            leadingCount: leading.count,
+            importMeasure: importMeasure,
+            slot: slot,
+            measureIndex: measureIndexOffset + measureIndex,
+            pageIndex: pageIndex,
+        )
         return Measure(voices: finalVoices)
+    }
+
+    /// Record per-element + measure-cell geometry for the side-car, using
+    /// the SAME `voiceAssignment` permutation `assignVoices` built so each
+    /// element's (voiceIndex, elementIndex) matches `finalVoices`. No-op
+    /// when `geometry` is `nil` (the plain `parse` path).
+    private static func recordGeometry(
+        _ geometry: PDFGeometryCollector?,
+        reconciled: [RhythmElement],
+        staffMidY: CGFloat,
+        leadingCount: Int,
+        importMeasure: ImportMeasure,
+        slot: Int,
+        measureIndex: Int,
+        pageIndex: Int,
+    ) {
+        guard let geometry else { return }
+        geometry.recordMeasureCell(
+            slot: slot, measureIndex: measureIndex,
+            xRange: importMeasure.xRange,
+            yLines: importMeasure.staffYLines,
+            pageIndex: pageIndex,
+        )
+        let placements = voiceAssignment(elements: reconciled, staffMidY: staffMidY)
+        for (i, element) in reconciled.enumerated() {
+            guard let onsetRect = element.onsetRect else { continue }
+            let p = placements[i]
+            // Voice 0's chord/rest indices are shifted right by the leading
+            // clef/key/time elements prepended into finalVoices[0].
+            let elementIndex = p.position + (p.voice == 0 ? leadingCount : 0)
+            assert(
+                element.isRest || element.noteRects.count == element.chord.notes.count,
+                "PDF geometry: noteRects/notes misaligned",
+            )
+            geometry.recordItem(
+                slot: slot, measureIndex: measureIndex,
+                voiceIndex: p.voice, elementIndex: elementIndex,
+                isRest: element.isRest, onsetRect: onsetRect,
+                noteRects: element.noteRects,
+            )
+        }
     }
 
     private static func staffMidline(_ ys: [CGFloat]) -> CGFloat {
