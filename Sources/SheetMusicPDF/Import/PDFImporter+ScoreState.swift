@@ -26,9 +26,8 @@ extension PDFImporter {
                 events.append(.timeSignature(timeSig, atMeasureIndex: i))
             }
         }
-        for tempo in extractTempos(texts: texts) {
-            events.append(.tempo(tempo, atMeasureIndex: 0))
-        }
+        // Tempo is a system-level marking → recovered separately into
+        // `Score.systemMeasures`; see PDFImporter+Tempo.
         return events
     }
 
@@ -297,28 +296,4 @@ extension PDFImporter {
         return clusters
     }
 
-    // MARK: - Tempo
-
-    /// Best-effort tempo extraction. Looks for `= NN` anywhere in the
-    /// text and emits `Tempo(beatsPerSecond: NN/60)`. Text-only tempo
-    /// markings without a numeric equation are skipped.
-    private static func extractTempos(texts: [TextGlyph]) -> [Tempo] {
-        var out: [Tempo] = []
-        for text in texts {
-            if let bpm = parseBpm(from: text.text) {
-                out.append(Tempo(beatsPerSecond: Double(bpm) / 60.0))
-            }
-        }
-        return out
-    }
-
-    private static func parseBpm(from text: String) -> Int? {
-        guard let equalsIdx = text.lastIndex(of: "=") else { return nil }
-        let after = text[text.index(after: equalsIdx)...]
-            .trimmingCharacters(in: .whitespaces)
-        let numericPrefix = after.prefix { $0.isNumber }
-        guard !numericPrefix.isEmpty,
-              let bpm = Int(numericPrefix), bpm > 0 else { return nil }
-        return bpm
-    }
 }

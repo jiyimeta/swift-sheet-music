@@ -47,15 +47,53 @@ extension PDFImporter {
         for g in noteheads where isNotehead(g.semantic) {
             byPage[g.raw.pageIndex, default: []].append(g)
         }
+        // Endpoint-pairing tolerances. A tie's gap to its noteheads is a
+        // constant page-point offset PLUS a staff-space-proportional drop,
+        // so neither a pure absolute nor a pure spatium tolerance fits all
+        // staff sizes: a fixed `6pt` was too tight on the large-staff score
+        // (群青, ~5pt/sp ⇒ ties just past the cutoff, recall 35%), while a
+        // pure spatium tolerance is too tight on the small-staff scores
+        // (地球儀, ~3.3pt/sp). `max(floor, sp × spatia)` keeps the proven
+        // generous floor for the observed range and scales up for any
+        // larger staff. See `pageStaffSpace`.
+        let sp = pageStaffSpace(noteheads)
+        let yTol = max(Self.tieYToleranceFloor, sp * Self.tieYToleranceSpatia)
+        let xTol = max(Self.tieXToleranceFloor, sp * Self.tieXToleranceSpatia)
         for arc in curves {
             guard isTieShaped(arc) else { continue }
             guard let page = byPage[arc.pageIndex] else { continue }
-            guard let (left, right) = pairEndpoints(arc: arc, noteheads: page)
-            else { continue }
+            guard let (left, right) = pairEndpoints(
+                arc: arc, noteheads: page, yTol: yTol, xTol: xTol,
+            ) else { continue }
             marks.forward.insert(NoteheadID(left.raw))
             marks.back.insert(NoteheadID(right.raw))
         }
         return marks
+    }
+
+    /// Tie endpoint-pairing tolerances. The floor (page points) covers the
+    /// constant rendering offset that dominates on small staves; the
+    /// spatia term scales the bound up on larger staves. `max(floor, sp ×
+    /// spatia)` so the larger of the two wins. The same-line guard in
+    /// `pairEndpoints` still rejects cross-pitch matches, keeping precision
+    /// at 100% across the corpus.
+    private static let tieYToleranceFloor: CGFloat = 9
+    private static let tieYToleranceSpatia: CGFloat = 1.8
+    private static let tieXToleranceFloor: CGFloat = 10
+    private static let tieXToleranceSpatia: CGFloat = 2.0
+
+    /// Median page-space staff space (one spatium in page points) from the
+    /// full noteheads' `renderedSize` (SMuFL design metric: staff space =
+    /// glyph size / 4). Falls back to a default when no rendered size is
+    /// recorded so the tolerances stay finite.
+    static func pageStaffSpace(_ noteheads: [ClassifiedGlyph]) -> CGFloat {
+        let sizes = noteheads
+            .filter { isNotehead($0.semantic) }
+            .map(\.raw.renderedSize)
+            .filter { $0 > 0 }
+            .sorted()
+        guard !sizes.isEmpty else { return 4 }
+        return sizes[sizes.count / 2] / 4
     }
 
     /// A tie arc is short, nearly horizontal, and not too wide. Ties in
@@ -75,12 +113,12 @@ extension PDFImporter {
     private static func pairEndpoints(
         arc: CurveArc,
         noteheads: [ClassifiedGlyph],
+        yTol: CGFloat,
+        xTol: CGFloat,
     ) -> (left: ClassifiedGlyph, right: ClassifiedGlyph)? {
         // A tie sits just below / above its two noteheads, slightly inset.
         // Search noteheads whose x is near the arc's x-extent and whose y
-        // is within ~1.5 staff steps of the arc.
-        let yTol: CGFloat = 6
-        let xTol: CGFloat = 10
+        // is within ~1.8 staff spaces of the arc's vertical midpoint.
         let arcY = arc.bbox.midY
         let left = nearestNotehead(
             toX: arc.leftPoint.x, nearY: arcY,
