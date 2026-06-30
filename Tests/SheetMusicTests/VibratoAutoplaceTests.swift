@@ -128,6 +128,57 @@
             )
         }
 
+        @Test("High note vibrato Y satisfies clearance formula (anchorY + halfH + 1sp ≤ noteTop)")
+        func highNoteExactClearanceFormula() {
+            guard #available(macOS 15.0, *) else { return }
+            // C6 triggers autoplace (its notehead top sits above the default
+            // vibrato Y = staffOriginY − 1.5 sp).
+            let score = Self.makeScore(notePitch: 84, tpc: 14) // C6
+            let doc = LayoutEngine.layout(
+                score: score, options: .init(), availableWidth: 800,
+            )
+            guard let system = doc.systems.first,
+                  let measure = system.measures.first
+            else {
+                Issue.record("expected system and measure")
+                return
+            }
+            guard let noteTop = measure.chordNorthByTick.values.min() else {
+                Issue.record("expected chordNorthByTick to be populated")
+                return
+            }
+            guard let vibratoY = Self.vibratoY(in: system) else {
+                Issue.record("expected vibrato spannerSegment")
+                return
+            }
+            let sp = system.sp
+
+            // Glyph half-height for the vibrato type used in makeScore.
+            let codepoint = SpannerGeometry.vibratoCodepoint(type: .guitarVibrato)
+            let font = LayoutFont(face: SMuFLFamily.bravura, pointSize: sp * 4)
+            let halfH: CGFloat
+            if let bbox = FontMetrics.provider.glyphPathBoundingBox(
+                font: font, codepoint: UInt16(codepoint),
+            ) {
+                halfH = bbox.height / 2
+            } else {
+                halfH = sp * 0.5
+            }
+
+            // Formula: anchorY + halfH + 1.0*sp ≤ noteTop
+            //   → anchorY = noteTop − 1.0*sp − halfH
+            // C6 is above the default, so autoplace should land exactly on
+            // the clearance value (min of default and clearance = clearance).
+            let expectedY = noteTop - sp - halfH
+            #expect(
+                abs(vibratoY - expectedY) < 0.01,
+                """
+                vibrato anchorY \(vibratoY) should equal clearance formula \
+                \(expectedY) (noteTop=\(noteTop), sp=\(sp), halfH=\(halfH))
+                """,
+            )
+        }
+
         @Test("Vibrato Y for high note is strictly above vibrato Y for low note")
         func highNoteIsAboveLowNote() {
             guard #available(macOS 15.0, *) else { return }

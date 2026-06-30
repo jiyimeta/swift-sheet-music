@@ -517,11 +517,28 @@ extension LayoutEngine {
         // line sits much closer to the staff top than ottava/textLine.
         // Use 1.5 sp clearance (1 sp default + 0.5 sp breathing room).
         // When a chord's north skyline sits above this default, push the
-        // vibrato up so it clears the highest notehead by 1 sp.
-        if case .vibrato = kind {
+        // vibrato up so it clears the highest notehead top.
+        //
+        // `minNorthY` is now the note TOP-EDGE (center − 0.5 sp, see
+        // `buildChordNorthByTick`). The vibrato glyph is drawn centred
+        // on `anchorY` (baseline = anchorY for Bravura's symmetric
+        // ascent/descent), so its INK extends `glyphHalfHeight` below
+        // `anchorY`. Clearance rule:
+        //   anchorY + glyphHalfHeight + minDistance ≤ noteTopEdge
+        //   anchorY ≤ noteTopEdge − minDistance − glyphHalfHeight
+        //           = minNorthY   − 1.0 sp      − glyphHalfHeight
+        //
+        // `glyphHalfHeight` is taken from the actual Bravura glyph bbox
+        // (queried via FontMetrics); for wiggleSawtoothWide the ink
+        // extends ≈ 1.06 sp above and below the baseline. Falls back to
+        // 0.5 sp on the Stub provider (Android / tests without CoreText).
+        // This matches MuseScore's skyline + `vibratoMinDistance = 1 sp`
+        // behaviour (autoplace.cpp, `autoplaceSpannerSegment`).
+        if case let .vibrato(vibratoType) = kind {
             let defaultY = origin.y - metrics.sp * 1.5
             guard let minNorthY else { return defaultY }
-            let clearanceY = minNorthY - metrics.sp * 1.0
+            let halfH = vibratoGlyphHalfHeight(type: vibratoType, sp: metrics.sp)
+            let clearanceY = minNorthY - metrics.sp * 1.0 - halfH
             return min(defaultY, clearanceY)
         }
         return origin.y - metrics.sp * 4
@@ -549,6 +566,31 @@ extension LayoutEngine {
             }
         }
         return minY
+    }
+
+    /// Half-height of a vibrato glyph's ink extent at `sp`, measured from
+    /// the baseline. The glyph is anchored at its baseline (Bravura has
+    /// symmetric ascent/descent so the typographic centre = baseline), so
+    /// the ink extends `halfHeight` both above and below `anchorY`. The
+    /// BOTTOM edge that must clear the note top is `anchorY + halfHeight`.
+    ///
+    /// Uses the real Bravura glyph bbox when CoreText is available;
+    /// falls back to 0.5 sp on the Stub provider (Android / unit tests
+    /// without a real font).
+    private static func vibratoGlyphHalfHeight(
+        type: VibratoType, sp: CGFloat,
+    ) -> CGFloat {
+        let codepoint = SpannerGeometry.vibratoCodepoint(type: type)
+        guard let cp16 = UInt16(exactly: codepoint) else { return sp * 0.5 }
+        let font = LayoutFont(
+            face: SMuFLFamily.bravura, pointSize: sp * 4,
+        )
+        if let bbox = FontMetrics.provider.glyphPathBoundingBox(
+            font: font, codepoint: cp16,
+        ) {
+            return bbox.height / 2
+        }
+        return sp * 0.5
     }
 
     static func layoutKind(

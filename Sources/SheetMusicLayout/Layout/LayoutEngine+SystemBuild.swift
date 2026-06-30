@@ -749,6 +749,7 @@ extension LayoutEngine {
                 invisibleElements: aggregatedInvisible,
                 chordNorthByTick: buildChordNorthByTick(
                     from: aggregated, tickColumns: um.tickCols,
+                    sp: metrics.sp,
                 ),
             ))
             xCursor += w
@@ -821,14 +822,22 @@ extension LayoutEngine {
         )
     }
 
-    /// Build a tick → minimum (highest) notehead Y map for vibrato autoplace.
-    /// Scans `elements` for `.chord` entries, reverse-maps `stemOrigin.x`
-    /// to a tick via `tickColumns`, and records the minimum note `origin.y`
-    /// (smallest = highest in Y-down coords) for each tick. Y values are
-    /// system-level (already translated by the per-staff Y offset). Empty
-    /// when there are no chords or `tickColumns` is empty.
+    /// Build a tick → minimum (highest) notehead TOP-EDGE Y map for vibrato
+    /// autoplace. Scans `elements` for `.chord` entries, reverse-maps
+    /// `stemOrigin.x` to a tick via `tickColumns`, and records the minimum
+    /// note top-edge Y (center − halfNoteheadHeight; smallest = highest in
+    /// Y-down coords) for each tick. Y values are system-level (already
+    /// translated by the per-staff Y offset). Empty when there are no chords
+    /// or `tickColumns` is empty.
+    ///
+    /// **Why top-edge, not center:** MuseScore's skyline north is the
+    /// topmost ink edge of each element. A standard SMuFL notehead is ~1 sp
+    /// tall so its top edge is `center.y − 0.5 sp`. Using the center
+    /// (old behaviour) lost 0.5 sp of vertical clearance, causing the
+    /// vibrato to render too close to high notes.
     private static func buildChordNorthByTick(
         from elements: [LayoutElement], tickColumns: [Int: CGFloat],
+        sp: CGFloat,
     ) -> [Int: CGFloat] {
         guard !tickColumns.isEmpty else { return [:] }
         // Reverse: measure-local X → tick. Two chords at the same X
@@ -838,13 +847,16 @@ extension LayoutEngine {
             tickColumns.map { ($0.value, $0.key) },
             uniquingKeysWith: { _, b in b },
         )
+        let halfNoteheadHeight = sp * 0.5
         var map: [Int: CGFloat] = [:]
         for element in elements {
             guard case let .chord(notes, _, _, stemOrigin, _, _, _, _, _, _, _) = element,
                   !notes.isEmpty,
                   let tick = xToTick[stemOrigin.x]
             else { continue }
-            let topY = notes.map(\.origin.y).min() ?? stemOrigin.y
+            // Note TOP = center.y − halfNoteheadHeight (Y-down: smaller = higher).
+            let centerY = notes.map(\.origin.y).min() ?? stemOrigin.y
+            let topY = centerY - halfNoteheadHeight
             map[tick] = min(map[tick] ?? .greatestFiniteMagnitude, topY)
         }
         return map
