@@ -76,12 +76,14 @@ enum MusicXMLNoteDecoder {
         }
         let accidental = decodeAccidental(node)
         let (tieForward, tieBack) = decodeTies(node)
+        let parentheses = decodeNoteheadParentheses(node)
         let note = Note(
             pitch: midi,
             tpc: tpc,
             accidental: accidental,
             tieForward: tieForward,
             tieBack: tieBack,
+            parentheses: parentheses,
         )
 
         if isChord {
@@ -176,6 +178,14 @@ enum MusicXMLNoteDecoder {
         case "flat-flat": return .doubleFlat
         default: return nil
         }
+    }
+
+    /// MusicXML wraps a notehead in parentheses via `<notehead parentheses="yes">`.
+    /// We only model the both-sides case (MusicXML has no per-side notehead
+    /// parenthesis). Absent element or `parentheses != "yes"` → `.none`.
+    private static func decodeNoteheadParentheses(_ node: XMLTreeNode) -> NoteParentheses {
+        guard let notehead = node.first("notehead") else { return .none }
+        return notehead.attributes["parentheses"] == "yes" ? .both : .none
     }
 
     /// MusicXML encodes arpeggios under `<notations><arpeggiate>`. The optional
