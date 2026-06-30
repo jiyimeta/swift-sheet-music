@@ -1,3 +1,4 @@
+// swiftlint:disable file_length
 import CoreGraphics
 import Foundation
 import SheetMusicCore
@@ -22,6 +23,10 @@ extension PDFImporter {
         let glyphs = measure.glyphs.sorted {
             $0.raw.origin.x < $1.raw.origin.x
         }
+        // Staff space (sp) for sizing geometry rects; derived from this
+        // staff's five line y-coordinates. Only consumed by the geometry
+        // side-car (noteRects / onsetRect); the value path ignores it.
+        let spatium = staffSpatium(measure.staffYLines)
         // Stems and beams from OTHER staves stack at the same x as this
         // staff's notes (the systems are vertically aligned), so an x-only
         // match grabs a wrong-staff stem and the beam over it never lines
@@ -71,7 +76,7 @@ extension PDFImporter {
         for (i, g) in glyphs.enumerated() where !consumed.contains(i) {
             switch g.semantic {
             case let .rest(dur):
-                elements.append(makeRest(glyph: g, duration: dur))
+                elements.append(makeRest(glyph: g, duration: dur, spatium: spatium))
                 consumed.insert(i)
             case .noteheadBlack, .noteheadHalf,
                  .noteheadWhole, .noteheadDoubleWhole,
@@ -84,6 +89,7 @@ extension PDFImporter {
                     flagBand: yBand,
                     pitchByGlyph: pitchByGlyph,
                     tieMarks: tieMarks,
+                    spatium: spatium,
                     consumed: &consumed,
                 )
                 elements.append(element)
@@ -105,7 +111,7 @@ extension PDFImporter {
 
 extension PDFImporter {
     private static func makeRest(
-        glyph: ClassifiedGlyph, duration: NoteDuration,
+        glyph: ClassifiedGlyph, duration: NoteDuration, spatium: CGFloat,
     ) -> RhythmElement {
         RhythmElement(
             chord: Chord(duration: duration, notes: []),
@@ -113,6 +119,12 @@ extension PDFImporter {
             y: glyph.raw.origin.y,
             stemDirection: nil,
             beamGroup: nil,
+            onsetRect: PDFGeometryRects.glyphBox(
+                origin: glyph.raw.origin,
+                advance: glyph.raw.advance,
+                spatium: spatium,
+                pageIndex: glyph.raw.pageIndex,
+            ),
         )
     }
 
@@ -124,6 +136,7 @@ extension PDFImporter {
         flagBand: ClosedRange<CGFloat>?,
         pitchByGlyph: [RawGlyph: DecodedPitch],
         tieMarks: TieMarks,
+        spatium: CGFloat,
         consumed: inout Set<Int>,
     ) -> RhythmElement {
         let lead = glyphs[leadIndex]
@@ -131,17 +144,33 @@ extension PDFImporter {
             startingAt: leadIndex, in: glyphs, stems: stems,
         )
         consumed.formUnion(cluster.indices)
-        let notes = cluster.indices.compactMap { idx -> Note? in
-            guard let dp = pitchByGlyph[glyphs[idx].raw] else { return nil }
+        // Build notes and their geometry rects in LOCKSTEP, applying the
+        // same pitch-dedup `ChordNotes.init` would — first occurrence of a
+        // pitch wins, order preserved. This keeps `noteRects[k]` aligned
+        // with the final `chord.notes[k]` (i.e. `noteIndexInChord`), which
+        // follows the deduped survivor order, NOT raw `cluster.indices`.
+        var notes: [Note] = []
+        var noteRects: [PDFElementRect] = []
+        var seenPitches = Set<Int>()
+        for idx in cluster.indices {
+            guard let dp = pitchByGlyph[glyphs[idx].raw] else { continue }
             // Stamp ties: a notehead identified as a tie endpoint carries
             // tieForward (earlier note) and / or tieBack (later note).
             let id = NoteheadID(glyphs[idx].raw)
-            return Note(
+            let note = Note(
                 pitch: dp.midi,
                 tpc: dp.tpc,
                 tieForward: tieMarks.forward.contains(id) ? 1 : nil,
                 tieBack: tieMarks.back.contains(id) ? 1 : nil,
             )
+            guard seenPitches.insert(note.pitch).inserted else { continue }
+            notes.append(note)
+            noteRects.append(PDFGeometryRects.glyphBox(
+                origin: glyphs[idx].raw.origin,
+                advance: glyphs[idx].raw.advance,
+                spatium: spatium,
+                pageIndex: glyphs[idx].raw.pageIndex,
+            ))
         }
         let base = baseDuration(for: lead.semantic)
         // Beam lines take precedence over flags. Only black noteheads
@@ -189,7 +218,19 @@ extension PDFImporter {
             stemDirection: dir,
             beamGroup: nil,
             lowConfidenceDuration: flagShortened,
+            noteRects: noteRects,
+            onsetRect: PDFGeometryRects.union(noteRects),
         )
+    }
+
+    /// Staff space (sp) = one inter-line gap, derived from the staff's five
+    /// line y-coordinates (`span / 4`). Falls back to a nominal 8pt when
+    /// fewer than two lines were detected. Geometry-only.
+    static func staffSpatium(_ yLines: [CGFloat]) -> CGFloat {
+        guard let lo = yLines.min(), let hi = yLines.max(), hi > lo else {
+            return 8
+        }
+        return (hi - lo) / 4
     }
 }
 

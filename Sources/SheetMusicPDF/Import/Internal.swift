@@ -217,6 +217,16 @@ struct RhythmElement {
     /// notes, and directly-beamed black noteheads).
     var lowConfidenceDuration = false
 
+    /// Per-note rects (PDF page coords, y-up), aligned 1:1 with
+    /// `chord.notes` in deduped survivor order. Populated only on the
+    /// geometry-capture path (`parseWithGeometry`); empty for rests and on
+    /// the plain `parse` path. Purely additive — no value-path code reads
+    /// this, so it cannot affect pitch/duration parity.
+    var noteRects: [PDFElementRect] = []
+    /// Chord union (or rest glyph) rect — the onset column for this element.
+    /// `nil` on the plain `parse` path.
+    var onsetRect: PDFElementRect?
+
     var isRest: Bool {
         chord.notes.isEmpty
     }
