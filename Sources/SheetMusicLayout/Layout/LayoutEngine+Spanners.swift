@@ -180,6 +180,12 @@ extension LayoutEngine {
                     measureRange: startLocal ... endLocal,
                     metrics: metrics,
                     kind: kind,
+                    minNorthY: vibratoMinNorthY(
+                        in: system.measures,
+                        localRange: startLocal ... endLocal,
+                        startTick: anchor.startTick,
+                        endTick: anchor.endTick,
+                    ),
                 )
                 extraPerSystem[startSys].append(.spannerSegment(
                     kind: kind,
@@ -197,12 +203,19 @@ extension LayoutEngine {
                     metrics: metrics,
                 )
                 let toXStart = startSystem.size.width - metrics.sp * 2
+                let startEnd = max(startLocal, startSystem.measures.count - 1)
                 let yStart = anchorY(
                     in: startSystem, belowStaff: belowStaff,
                     staffIndex: anchor.startStaff,
                     measureRange: startLocal ..< startSystem.measures.count,
                     metrics: metrics,
                     kind: kind,
+                    minNorthY: vibratoMinNorthY(
+                        in: startSystem.measures,
+                        localRange: startLocal ... startEnd,
+                        startTick: anchor.startTick,
+                        endTick: 0,
+                    ),
                 )
                 extraPerSystem[startSys].append(.spannerSegment(
                     kind: kind,
@@ -215,12 +228,19 @@ extension LayoutEngine {
                 if endSys > startSys + 1 {
                     for mid in (startSys + 1) ..< endSys {
                         let midSystem = systems[mid]
+                        let midEnd = max(0, midSystem.measures.count - 1)
                         let y = anchorY(
                             in: midSystem, belowStaff: belowStaff,
                             staffIndex: anchor.startStaff,
                             measureRange: 0 ..< midSystem.measures.count,
                             metrics: metrics,
                             kind: kind,
+                            minNorthY: vibratoMinNorthY(
+                                in: midSystem.measures,
+                                localRange: 0 ... midEnd,
+                                startTick: 0,
+                                endTick: 0,
+                            ),
                         )
                         extraPerSystem[mid].append(.spannerSegment(
                             kind: kind,
@@ -250,6 +270,12 @@ extension LayoutEngine {
                     measureRange: 0 ... endLocal,
                     metrics: metrics,
                     kind: kind,
+                    minNorthY: vibratoMinNorthY(
+                        in: endSystem.measures,
+                        localRange: 0 ... endLocal,
+                        startTick: 0,
+                        endTick: anchor.endTick,
+                    ),
                 )
                 extraPerSystem[endSys].append(.spannerSegment(
                     kind: kind,
@@ -454,10 +480,12 @@ extension LayoutEngine {
         measureRange _: R,
         metrics: StaffMetrics,
         kind: LayoutElement.SpannerKind? = nil,
+        minNorthY: CGFloat? = nil,
     ) -> CGFloat where R.Bound == Int {
         anchorY(
             in: system, belowStaff: belowStaff,
             staffIndex: staffIndex, metrics: metrics, kind: kind,
+            minNorthY: minNorthY,
         )
     }
 
@@ -467,6 +495,7 @@ extension LayoutEngine {
         staffIndex: Int,
         metrics: StaffMetrics,
         kind: LayoutElement.SpannerKind? = nil,
+        minNorthY: CGFloat? = nil,
     ) -> CGFloat {
         let origins = system.staffOrigins
         let clamped = max(0, min(staffIndex, origins.count - 1))
@@ -483,10 +512,39 @@ extension LayoutEngine {
         // Vibrato: MuseScore `vibratoPosAbove` default is −1 sp, so the
         // line sits much closer to the staff top than ottava/textLine.
         // Use 1.5 sp clearance (1 sp default + 0.5 sp breathing room).
+        // When a chord's north skyline sits above this default, push the
+        // vibrato up so it clears the highest notehead by 1 sp.
         if case .vibrato = kind {
-            return origin.y - metrics.sp * 1.5
+            let defaultY = origin.y - metrics.sp * 1.5
+            guard let minNorthY else { return defaultY }
+            let clearanceY = minNorthY - metrics.sp * 1.0
+            return min(defaultY, clearanceY)
         }
         return origin.y - metrics.sp * 4
+    }
+
+    /// Minimum (highest) notehead Y across all chords in the given
+    /// local measure range, for vibrato autoplace. Returns nil when
+    /// there are no chords in the range (vibrato stays at default Y).
+    private static func vibratoMinNorthY(
+        in measures: [LayoutMeasure],
+        localRange: ClosedRange<Int>,
+        startTick: Int,
+        endTick: Int,
+    ) -> CGFloat? {
+        var minY: CGFloat?
+        for localIdx in localRange {
+            guard localIdx < measures.count else { break }
+            let m = measures[localIdx]
+            for (tick, northY) in m.chordNorthByTick {
+                // Start measure: only ticks at or after the spanner start
+                if localIdx == localRange.lowerBound, tick < startTick { continue }
+                // End measure: only ticks before endTick (0 = end-of-measure)
+                if localIdx == localRange.upperBound, endTick > 0, tick >= endTick { continue }
+                minY = min(minY ?? .greatestFiniteMagnitude, northY)
+            }
+        }
+        return minY
     }
 
     static func layoutKind(

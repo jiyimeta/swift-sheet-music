@@ -219,7 +219,7 @@ extension ScoreLayerBuilder {
             if let layer = glyphLayer(
                 ch, at: origin,
                 size: metrics.glyphFontSize,
-                anchor: CGPoint(x: 0.5, y: 0.5),
+                anchor: CGPoint(x: 0, y: 0.5),
                 height: height,
             ) {
                 parent.addSublayer(layer)

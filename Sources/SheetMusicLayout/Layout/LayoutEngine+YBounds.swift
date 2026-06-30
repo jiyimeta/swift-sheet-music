@@ -148,6 +148,9 @@ extension LayoutEngine {
             // visible content the renderer draws alongside them.
             invisibleElements: measure.invisibleElements
                 .map { translate(element: $0, dy: dy) },
+            // Shift chord north Y values by the same dy so vibrato
+            // autoplace remains valid after a top-clip correction.
+            chordNorthByTick: measure.chordNorthByTick.mapValues { $0 + dy },
         )
     }
 }

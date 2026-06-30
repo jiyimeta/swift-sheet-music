@@ -189,7 +189,7 @@ enum SpannerRenderer {
             from: from, to: to, type: type, sp: metrics.sp, advance: advance,
         )
         for origin in run.origins {
-            context.drawGlyph(ch, at: origin, size: metrics.glyphFontSize, anchor: .center)
+            context.drawGlyph(ch, at: origin, size: metrics.glyphFontSize, anchor: .leading)
         }
     }
 

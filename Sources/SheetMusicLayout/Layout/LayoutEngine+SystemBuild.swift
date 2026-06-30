@@ -747,6 +747,9 @@ extension LayoutEngine {
                 pageBreak: sourceMeasure?.pageBreak ?? false,
                 tickColumns: um.tickCols,
                 invisibleElements: aggregatedInvisible,
+                chordNorthByTick: buildChordNorthByTick(
+                    from: aggregated, tickColumns: um.tickCols,
+                ),
             ))
             xCursor += w
         }
@@ -816,5 +819,34 @@ extension LayoutEngine {
             sp: metrics.sp,
             showsInvisibleElements: context.options.showsInvisibleElements,
         )
+    }
+
+    /// Build a tick → minimum (highest) notehead Y map for vibrato autoplace.
+    /// Scans `elements` for `.chord` entries, reverse-maps `stemOrigin.x`
+    /// to a tick via `tickColumns`, and records the minimum note `origin.y`
+    /// (smallest = highest in Y-down coords) for each tick. Y values are
+    /// system-level (already translated by the per-staff Y offset). Empty
+    /// when there are no chords or `tickColumns` is empty.
+    private static func buildChordNorthByTick(
+        from elements: [LayoutElement], tickColumns: [Int: CGFloat],
+    ) -> [Int: CGFloat] {
+        guard !tickColumns.isEmpty else { return [:] }
+        // Reverse: measure-local X → tick. Two chords at the same X
+        // (same tick, different voices) both contribute to the same
+        // tick's minimum.
+        let xToTick: [CGFloat: Int] = Dictionary(
+            tickColumns.map { ($0.value, $0.key) },
+            uniquingKeysWith: { _, b in b },
+        )
+        var map: [Int: CGFloat] = [:]
+        for element in elements {
+            guard case let .chord(notes, _, _, stemOrigin, _, _, _, _, _, _, _) = element,
+                  !notes.isEmpty,
+                  let tick = xToTick[stemOrigin.x]
+            else { continue }
+            let topY = notes.map(\.origin.y).min() ?? stemOrigin.y
+            map[tick] = min(map[tick] ?? .greatestFiniteMagnitude, topY)
+        }
+        return map
     }
 }

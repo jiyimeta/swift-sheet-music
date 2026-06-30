@@ -44,6 +44,13 @@ public struct LayoutMeasure: Sendable, Equatable {
     /// at 50 % opacity (MuseScore `#808080` on white). Empty in print
     /// layout. Origins follow the same convention as `elements`.
     public let invisibleElements: [LayoutElement]
+    /// Per-tick minimum (highest) Y of chord noteheads in this measure,
+    /// aggregated across all staves and voices. Y values are system-level
+    /// (Y-down): smaller = higher on screen. Populated by `buildSystem`
+    /// from the placed chord elements so vibrato autoplace can push the
+    /// spanner above high notes. Empty for multi-measure-rest measures
+    /// and measures with no timed chords.
+    public let chordNorthByTick: [Int: CGFloat]
 
     public init(
         measureIndex: Int,
@@ -57,6 +64,7 @@ public struct LayoutMeasure: Sendable, Equatable {
         tickColumns: [Int: CGFloat] = [:],
         multiMeasureRest: Int? = nil,
         invisibleElements: [LayoutElement] = [],
+        chordNorthByTick: [Int: CGFloat] = [:],
     ) {
         self.measureIndex = measureIndex
         self.origin = origin
@@ -69,5 +77,6 @@ public struct LayoutMeasure: Sendable, Equatable {
         self.tickColumns = tickColumns
         self.multiMeasureRest = multiMeasureRest
         self.invisibleElements = invisibleElements
+        self.chordNorthByTick = chordNorthByTick
     }
 }
