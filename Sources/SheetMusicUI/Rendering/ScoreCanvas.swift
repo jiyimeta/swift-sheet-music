@@ -358,6 +358,10 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                         stemUp: stem == .up,
                         metrics: chordMetrics,
                     )
+                    NoteheadParenthesisRenderer.draw(
+                        context: &gray, parentheses: n.parentheses,
+                        origin: visualOrigin, metrics: chordMetrics,
+                    )
                     if let acc = n.accidental {
                         AccidentalRenderer.draw(
                             context: &gray, accidental: acc,
@@ -380,6 +384,11 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                         duration: baseDur, headType: n.headType,
                         stemUp: stem == .up,
                         color: headColor,
+                        metrics: chordMetrics,
+                    )
+                    NoteheadParenthesisRenderer.draw(
+                        context: &context, parentheses: n.parentheses,
+                        origin: visualOrigin, color: headColor,
                         metrics: chordMetrics,
                     )
                     if let acc = n.accidental {
