@@ -29,6 +29,11 @@ public struct Note: Sendable, Equatable {
     /// percussion rim, "triangle-down" for cowbell). When nil, the
     /// standard notehead for the duration is used.
     public var headType: String?
+    /// Round parentheses drawn around this notehead. MuseScore stores
+    /// `<parentheses>both</parentheses>` on the note (4.6), a `<Symbol>`
+    /// pair (≤4.5), or a chord-level `<NoteParenGroup>` (4.7+). Absent
+    /// means `.none`. Display-only; MIDI is unaffected.
+    public var parentheses: NoteParentheses
     /// Whether this note is displayed at a reduced size. MuseScore stores
     /// `<small>1</small>` on the note element when true; absent means false.
     /// Chord-level smallness (`<Chord><small>`) is propagated separately
@@ -60,6 +65,7 @@ public struct Note: Sendable, Equatable {
         tieBack: Int? = nil,
         glissando: Glissando? = nil,
         headType: String? = nil,
+        parentheses: NoteParentheses = .none,
         isSmall: Bool = false,
         play: Bool = true,
         visible: Bool = true,
@@ -73,6 +79,7 @@ public struct Note: Sendable, Equatable {
         self.tieBack = tieBack
         self.glissando = glissando
         self.headType = headType
+        self.parentheses = parentheses
         self.isSmall = isSmall
         self.play = play
         elementProperties = ElementProperties(visible: visible)
