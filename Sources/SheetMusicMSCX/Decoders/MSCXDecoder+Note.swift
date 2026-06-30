@@ -49,6 +49,7 @@ extension Note {
         // MuseScore writes `<play>0</play>` only when the note is
         // muted; the element is absent (→ true) for normal notes.
         let play = node.first("play")?.text != "0"
+        let parentheses = decodeParentheses(node)
         var note = Note(
             pitch: pitch,
             tpc: tpc,
@@ -59,6 +60,7 @@ extension Note {
             tieBack: tieBack,
             glissando: glissando,
             headType: headType,
+            parentheses: parentheses,
             isSmall: isSmall,
             play: play,
         )
@@ -97,6 +99,38 @@ extension Note {
         let role: AccidentalRole = (accNode.first("role")?.text).flatMap(Int.init) == 1
             ? .user : .auto
         return (accidental, bracket, role)
+    }
+
+    /// Decode a notehead parenthesis from a `<Note>` element across the two
+    /// note-level MuseScore representations. Chord-level rep3
+    /// (`<NoteParenGroup>`) is handled in `Chord.decode`.
+    ///
+    /// * rep2 (4.6): `<parentheses>both</parentheses>` text token.
+    /// * rep1 (≤4.5): `<Symbol><name>noteheadParenthesisLeft/Right</name></Symbol>`.
+    ///
+    /// Cosmetic: unknown / absent → `.none` (no throw, no diagnostic).
+    private static func decodeParentheses(_ node: XMLTreeNode) -> NoteParentheses {
+        // rep2: explicit <parentheses> token wins.
+        if let token = node.first("parentheses")?.text {
+            return NoteParentheses(mscxToken: token)
+        }
+        // rep1: SMuFL parenthesis symbols attached to the note.
+        var left = false
+        var right = false
+        for symbol in node.all("Symbol") {
+            switch symbol.first("name")?.text {
+            case "noteheadParenthesisLeft": left = true
+            case "noteheadParenthesisRight": right = true
+            default: continue
+            }
+        }
+        if left, right { return .both }
+        if left { return .left }
+        if right { return .right }
+        // Defensive: 4.6 generic <Parenthesis> children without the
+        // <parentheses> property still mean the note is parenthesized.
+        if node.children.contains(where: { $0.name == "Parenthesis" }) { return .both }
+        return .none
     }
 
     /// Normalize `<head>` to a MS4 string token.
