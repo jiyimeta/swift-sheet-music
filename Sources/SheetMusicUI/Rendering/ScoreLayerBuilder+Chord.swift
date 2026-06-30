@@ -120,6 +120,12 @@ extension ScoreLayerBuilder {
                 noteTarget.addSublayer(layer)
                 context.attach(layer, to: .note(n.noteID))
             }
+            drawNoteheadParentheses(
+                parentheses: n.parentheses,
+                origin: visualOrigin,
+                color: headColor,
+                metrics: metrics, height: height, into: noteTarget,
+            )
             if let acc = n.accidental,
                let accLayer = drawAccidental(
                    accidental: acc, bracket: n.accidentalBracket,
@@ -297,6 +303,47 @@ extension ScoreLayerBuilder {
             ).map { parent.addSublayer($0) }
         }
         return layer
+    }
+
+    // MARK: - Notehead parentheses
+
+    /// Draw round parentheses around a notehead. Glyphs + offsets come from
+    /// the shared `NoteheadParenthesisGlyph` / `NoteheadParenthesisPlacement`
+    /// so this matches the Canvas and Android paths. Parens inherit the
+    /// notehead's font size (so small / cue notes scale automatically) and color.
+    private static func drawNoteheadParentheses(
+        parentheses: NoteParentheses,
+        origin: CGPoint,
+        color: CGColor,
+        metrics: StaffMetrics,
+        height: CGFloat,
+        into parent: CALayer,
+    ) {
+        let (leftCp, rightCp) = NoteheadParenthesisGlyph.glyphs(for: parentheses)
+        let bravuraFont = LayoutFont(
+            face: SMuFLFamily.bravura,
+            pointSize: metrics.glyphFontSize,
+        )
+        if let leftCp, let lSc = UnicodeScalar(leftCp) {
+            let adv = FontMetrics.provider.typographicWidth(text: String(lSc), font: bravuraFont)
+            let x = NoteheadParenthesisPlacement.leftParenCenterX(
+                noteheadCenterX: origin.x, parenAdvance: adv, sp: metrics.sp,
+            )
+            glyphLayer(
+                Character(lSc), at: CGPoint(x: x, y: origin.y),
+                size: metrics.glyphFontSize, color: color, height: height,
+            ).map { parent.addSublayer($0) }
+        }
+        if let rightCp, let rSc = UnicodeScalar(rightCp) {
+            let adv = FontMetrics.provider.typographicWidth(text: String(rSc), font: bravuraFont)
+            let x = NoteheadParenthesisPlacement.rightParenCenterX(
+                noteheadCenterX: origin.x, parenAdvance: adv, sp: metrics.sp,
+            )
+            glyphLayer(
+                Character(rSc), at: CGPoint(x: x, y: origin.y),
+                size: metrics.glyphFontSize, color: color, height: height,
+            ).map { parent.addSublayer($0) }
+        }
     }
 
     // MARK: - Dots
