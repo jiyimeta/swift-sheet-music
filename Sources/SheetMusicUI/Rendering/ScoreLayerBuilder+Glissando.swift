@@ -45,7 +45,7 @@ extension ScoreLayerBuilder {
                 if let layer = glyphLayer(
                     ch, at: worldPt,
                     size: metrics.glyphFontSize,
-                    anchor: CGPoint(x: 0.5, y: 0.5),
+                    anchor: CGPoint(x: 0, y: 0.5),
                     rotation: angle,
                     height: height,
                 ) {

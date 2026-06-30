@@ -179,6 +179,7 @@ extension LayoutEngine {
                     staffIndex: anchor.startStaff,
                     measureRange: startLocal ... endLocal,
                     metrics: metrics,
+                    kind: kind,
                 )
                 extraPerSystem[startSys].append(.spannerSegment(
                     kind: kind,
@@ -201,6 +202,7 @@ extension LayoutEngine {
                     staffIndex: anchor.startStaff,
                     measureRange: startLocal ..< startSystem.measures.count,
                     metrics: metrics,
+                    kind: kind,
                 )
                 extraPerSystem[startSys].append(.spannerSegment(
                     kind: kind,
@@ -218,6 +220,7 @@ extension LayoutEngine {
                             staffIndex: anchor.startStaff,
                             measureRange: 0 ..< midSystem.measures.count,
                             metrics: metrics,
+                            kind: kind,
                         )
                         extraPerSystem[mid].append(.spannerSegment(
                             kind: kind,
@@ -246,6 +249,7 @@ extension LayoutEngine {
                     staffIndex: anchor.endStaff,
                     measureRange: 0 ... endLocal,
                     metrics: metrics,
+                    kind: kind,
                 )
                 extraPerSystem[endSys].append(.spannerSegment(
                     kind: kind,
@@ -449,10 +453,11 @@ extension LayoutEngine {
         staffIndex: Int,
         measureRange _: R,
         metrics: StaffMetrics,
+        kind: LayoutElement.SpannerKind? = nil,
     ) -> CGFloat where R.Bound == Int {
         anchorY(
             in: system, belowStaff: belowStaff,
-            staffIndex: staffIndex, metrics: metrics,
+            staffIndex: staffIndex, metrics: metrics, kind: kind,
         )
     }
 
@@ -461,6 +466,7 @@ extension LayoutEngine {
         belowStaff: Bool,
         staffIndex: Int,
         metrics: StaffMetrics,
+        kind: LayoutElement.SpannerKind? = nil,
     ) -> CGFloat {
         let origins = system.staffOrigins
         let clamped = max(0, min(staffIndex, origins.count - 1))
@@ -473,6 +479,12 @@ extension LayoutEngine {
             // pushes itself further down when a hairpin covers the
             // measure, so we keep the spanner Y at a stable offset.
             return origin.y + metrics.staffHeight + metrics.sp * 3
+        }
+        // Vibrato: MuseScore `vibratoPosAbove` default is −1 sp, so the
+        // line sits much closer to the staff top than ottava/textLine.
+        // Use 1.5 sp clearance (1 sp default + 0.5 sp breathing room).
+        if case .vibrato = kind {
+            return origin.y - metrics.sp * 1.5
         }
         return origin.y - metrics.sp * 4
     }

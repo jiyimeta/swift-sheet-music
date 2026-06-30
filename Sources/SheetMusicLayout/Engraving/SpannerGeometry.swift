@@ -214,7 +214,11 @@ public enum SpannerGeometry {
         let codepoint = vibratoCodepoint(type: type)
         guard advance > 0 else { return (codepoint, []) }
         let width = to.x - from.x
-        let count = max(0, lrint(Double((width - advance) / advance)))
+        // Mirror MuseScore `VibratoSegment::symbolLine(start, fill)`:
+        // always emit the start glyph, then append fill copies.
+        // C++: vibrato.cpp:49-67
+        let fillCount = max(0, lrint(Double((width - advance) / advance)))
+        let count = 1 + fillCount
         let origins = (0 ..< count).map { i in
             CGPoint(x: from.x + CGFloat(i) * advance, y: from.y)
         }

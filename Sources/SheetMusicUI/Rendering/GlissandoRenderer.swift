@@ -47,7 +47,7 @@ enum GlissandoRenderer {
                     ch,
                     at: CGPoint(x: x, y: 0),
                     size: metrics.glyphFontSize,
-                    anchor: .center,
+                    anchor: .leading,
                 )
             }
         } else {
