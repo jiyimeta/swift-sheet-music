@@ -319,6 +319,7 @@ extension ScoreLayerBuilder {
         height: CGFloat,
         into parent: CALayer,
     ) {
+        guard parentheses != .none else { return }
         let (leftCp, rightCp) = NoteheadParenthesisGlyph.glyphs(for: parentheses)
         let bravuraFont = LayoutFont(
             face: SMuFLFamily.bravura,

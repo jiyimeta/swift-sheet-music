@@ -11,7 +11,11 @@
     struct LayoutBridgeNoteParenthesesTests {
         private let _installApple = TestSupport.installApple
 
-        private func glyphCodepoints(parentheses: NoteParentheses) throws -> [UInt32] {
+        /// Returns `(codepoint, x)` for every `.glyph` DrawCommand in the
+        /// rendered score so callers can check both presence and position.
+        private func glyphCodepointXPairs(
+            parentheses: NoteParentheses,
+        ) throws -> [(cp: UInt32, x: Double)] {
             let note = Note(pitch: 60, tpc: 14, parentheses: parentheses)
             let measure = Measure(voices: [Voice(elements: [
                 .chord(Chord(duration: .quarter, notes: [note])),
@@ -27,23 +31,32 @@
                 score: score, pageWidthMM: 210, pageHeightMM: 297,
             )
             let pages = try DrawProgramCodec.decode(encoded)
-            var cps: [UInt32] = []
+            var pairs: [(cp: UInt32, x: Double)] = []
             for page in pages {
                 for cmd in page.commands {
-                    if case let .glyph(cp, _, _, _, _) = cmd { cps.append(cp) }
+                    if case let .glyph(cp, x, _, _, _) = cmd { pairs.append((cp: cp, x: x)) }
                 }
             }
-            return cps
+            return pairs
         }
 
         @Test func bothParenthesesEmitLeftAndRightGlyphs() throws {
-            let cps = try glyphCodepoints(parentheses: .both)
+            let pairs = try glyphCodepointXPairs(parentheses: .both)
+            let cps = pairs.map(\.cp)
             #expect(cps.contains(0xE0F5)) // noteheadParenthesisLeft
             #expect(cps.contains(0xE0F6)) // noteheadParenthesisRight
+            // Position assertion: left paren must sit left of the notehead
+            // (0xE0A4 = noteheadBlack) and the notehead left of the right paren.
+            let leftParenX = try #require(pairs.first(where: { $0.cp == 0xE0F5 })?.x)
+            let headX = try #require(pairs.first(where: { $0.cp == 0xE0A4 })?.x)
+            let rightParenX = try #require(pairs.first(where: { $0.cp == 0xE0F6 })?.x)
+            #expect(leftParenX < headX)
+            #expect(headX < rightParenX)
         }
 
         @Test func noneEmitsNeitherParenthesis() throws {
-            let cps = try glyphCodepoints(parentheses: .none)
+            let pairs = try glyphCodepointXPairs(parentheses: .none)
+            let cps = pairs.map(\.cp)
             #expect(!cps.contains(0xE0F5))
             #expect(!cps.contains(0xE0F6))
         }
