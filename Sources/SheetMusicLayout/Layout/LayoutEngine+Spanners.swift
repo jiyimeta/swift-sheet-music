@@ -348,7 +348,11 @@ extension LayoutEngine {
         if anchor.endTick > 0,
            let local = measure.tickColumns[anchor.endTick]
         {
-            return measure.origin.x + local
+            let baseX = measure.origin.x + local
+            // Mirror MuseScore trill.cpp:333: a vibrato ends 1 sp before its
+            // end note so adjacent partial-measure vibratos keep a 1 sp gap
+            // (otherwise consecutive vibratos touch / visually overlap).
+            return anchor.kind == .vibrato ? baseX - metrics.sp : baseX
         }
         return measure.origin.x + measure.width - metrics.sp * 2
     }
