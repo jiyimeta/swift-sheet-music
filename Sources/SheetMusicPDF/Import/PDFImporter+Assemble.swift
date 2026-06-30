@@ -77,34 +77,31 @@ extension PDFImporter {
             )
         }
 
-        // Distribute measure arrays back into each Part's staves, and (for
-        // the geometry side-car) build the slot → StaffAddress inverse at
-        // the same point — the only place the mapping is known.
+        // Distribute measure arrays back into each Part's staves (and build
+        // the geometry side-car's slot → StaffAddress inverse).
         var assembledParts = shape.parts
-        var slotToStaff: [Int: StaffAddress] = [:]
-        for (partIdx, slots) in shape.slotsByPartIndex {
-            for (staffIdx, slot) in slots.enumerated() {
-                assembledParts[partIdx].staves[staffIdx].measures = stavesContent[slot]
-                slotToStaff[slot] = StaffAddress(
-                    partIndex: partIdx, staffIndexInPart: staffIdx,
-                )
-            }
-        }
-        geometry?.setSlotToStaff(slotToStaff)
+        distributeMeasures(
+            into: &assembledParts, shape: shape,
+            stavesContent: stavesContent, geometry: geometry,
+        )
         // Propagate pitch along tie chains: a tied-back note inherits its
         // source note's pitch (incl. any accidental MuseScore did not redraw
         // on the continuation). Conservative + monotonic — only a genuine
         // mismatch is repaired. See PDFImporter+TiePitch.
         propagateTiePitches(parts: &assembledParts)
+        // Promote per-measure percussion-clef detection to the part / staff /
+        // instrument level so a drum staff reads as a GM drum kit (channel-10
+        // playback, drum-line note positioning). No-op for pitched parts.
+        markPercussionStaves(&assembledParts)
         let titleFrame = makeTitleFrame(
             document: document, texts: texts, options: options,
         )
         // Recover tempo markings ("♩ = NN") from the page text into
         // system measures so playback uses the engraved BPM, not the 120
         // default. Mapped to the measure each marking sits above.
-        let measureCount = assembledParts.first?.staves.first?.measures.count ?? 0
         let systemMeasures = tempoSystemMeasures(
-            systems: systems, texts: texts, measureCount: measureCount,
+            systems: systems, texts: texts,
+            measureCount: assembledParts.first?.staves.first?.measures.count ?? 0,
         )
         return Score(
             division: 480,
@@ -113,6 +110,27 @@ extension PDFImporter {
             titleFrame: titleFrame,
             source: .pdf,
         )
+    }
+
+    /// Distribute each slot's measure array back into its Part's staff, and
+    /// (for the geometry side-car) build the slot → StaffAddress inverse —
+    /// the only place that mapping is known.
+    private static func distributeMeasures(
+        into parts: inout [Part],
+        shape: PartShape,
+        stavesContent: [[Measure]],
+        geometry: PDFGeometryCollector?,
+    ) {
+        var slotToStaff: [Int: StaffAddress] = [:]
+        for (partIdx, slots) in shape.slotsByPartIndex {
+            for (staffIdx, slot) in slots.enumerated() {
+                parts[partIdx].staves[staffIdx].measures = stavesContent[slot]
+                slotToStaff[slot] = StaffAddress(
+                    partIndex: partIdx, staffIndexInPart: staffIdx,
+                )
+            }
+        }
+        geometry?.setSlotToStaff(slotToStaff)
     }
 
     // MARK: - System append
