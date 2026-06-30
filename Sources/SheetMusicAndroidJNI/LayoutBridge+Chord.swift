@@ -163,6 +163,49 @@ extension LayoutBridge {
                 sizePt: glyphSize,
                 into: &out,
             )
+            // Round parentheses around the notehead. Shares glyph + offset
+            // helpers with the Apple paths so all three renderers agree.
+            let (leftParenCp, rightParenCp) = NoteheadParenthesisGlyph.glyphs(
+                for: note.parentheses,
+            )
+            if leftParenCp != nil || rightParenCp != nil {
+                let parenFont = LayoutFont(
+                    face: SMuFLFamily.bravura,
+                    pointSize: CGFloat(glyphSize),
+                )
+                let noteheadCenterX = mox + Double(note.origin.x)
+                let noteheadCenterY = moy + Double(note.origin.y)
+                if let leftParenCp, let lSc = UnicodeScalar(leftParenCp) {
+                    let adv = Double(FontMetrics.provider.typographicWidth(
+                        text: String(lSc), font: parenFont,
+                    ))
+                    let cx = Double(NoteheadParenthesisPlacement.leftParenCenterX(
+                        noteheadCenterX: CGFloat(noteheadCenterX),
+                        parenAdvance: CGFloat(adv),
+                        sp: CGFloat(ctx.sp * mag),
+                    ))
+                    emitCenterAnchoredGlyph(
+                        codepoint: leftParenCp,
+                        cxPt: cx, cyPt: noteheadCenterY,
+                        sizePt: glyphSize, into: &out,
+                    )
+                }
+                if let rightParenCp, let rSc = UnicodeScalar(rightParenCp) {
+                    let adv = Double(FontMetrics.provider.typographicWidth(
+                        text: String(rSc), font: parenFont,
+                    ))
+                    let cx = Double(NoteheadParenthesisPlacement.rightParenCenterX(
+                        noteheadCenterX: CGFloat(noteheadCenterX),
+                        parenAdvance: CGFloat(adv),
+                        sp: CGFloat(ctx.sp * mag),
+                    ))
+                    emitCenterAnchoredGlyph(
+                        codepoint: rightParenCp,
+                        cxPt: cx, cyPt: noteheadCenterY,
+                        sizePt: glyphSize, into: &out,
+                    )
+                }
+            }
             // Accidental + optional bracket enclosure: measured-width placement
             // via `AccidentalPlacement.leftEdgeX` so iOS and Android agree on
             // the offset. Glyph table is shared via `AccidentalGlyph`.

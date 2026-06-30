@@ -12,7 +12,8 @@ extension Chord {
         }
         let dots = Int(node.first("dots")?.text ?? "0") ?? 0
         let duration = baseDuration.dotted(dots)
-        let notes = try decodeNotes(node)
+        var notes = try decodeNotes(node)
+        applyNoteParenGroup(node, to: &notes)
 
         var arpeggio: Arpeggio?
         if let arpeggioNode = node.first("Arpeggio") {
@@ -92,6 +93,21 @@ extension Chord {
         return rawNotes.map { n in
             guard !n.isSmall else { return n }
             var copy = n; copy.isSmall = true; return copy
+        }
+    }
+
+    /// Apply a MuseScore 4.7+ chord-level `<NoteParenGroup>` to the chord's
+    /// decoded notes. The group binds parentheses to notes by 0-based
+    /// `<NoteIdx>` into the chord's note list. MuseScore synthesizes both
+    /// sides on read, so a referenced note is always `.both`. Out-of-range
+    /// indices are skipped (permissive parser).
+    private static func applyNoteParenGroup(_ node: XMLTreeNode, to notes: inout [Note]) {
+        guard let group = node.first("NoteParenGroup"),
+              let notesNode = group.first("Notes")
+        else { return }
+        for idxNode in notesNode.all("NoteIdx") {
+            guard let idx = Int(idxNode.text), notes.indices.contains(idx) else { continue }
+            notes[idx].parentheses = .both
         }
     }
 

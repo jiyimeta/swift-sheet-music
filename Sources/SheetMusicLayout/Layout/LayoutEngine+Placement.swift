@@ -659,6 +659,7 @@ extension LayoutEngine {
                             isInvisible: !note.visible,
                             color: note.elementProperties.color,
                             accidentalBracket: note.accidentalBracket,
+                            parentheses: note.parentheses,
                         )
                     }
                     let stem = forcedStem
@@ -2006,6 +2007,7 @@ extension LayoutEngine {
                 isInvisible: n.isInvisible,
                 color: n.color,
                 accidentalBracket: n.accidentalBracket,
+                parentheses: n.parentheses,
             )
         }
     }
@@ -2070,6 +2072,7 @@ extension LayoutEngine {
                 isInvisible: !note.visible,
                 color: note.elementProperties.color,
                 accidentalBracket: note.accidentalBracket,
+                parentheses: note.parentheses,
             )
         }
     }

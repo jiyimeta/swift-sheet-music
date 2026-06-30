@@ -68,6 +68,7 @@ extension Note {
         if let glissando {
             children.append(glissandoSpanner(glissando))
         }
+        appendParentheses(into: &children, targetVersion: options.targetVersion)
         children.append(XMLTreeNode(name: "pitch", text: String(pitch)))
         children.append(XMLTreeNode(name: "tpc", text: String(tpc)))
         if let headType {
@@ -125,6 +126,39 @@ extension Note {
             name: "fractions",
             text: "\(f.numerator)/\(f.denominator)",
         )
+    }
+
+    /// Append notehead-parenthesis elements in the representation matching
+    /// the target MuseScore version: rep2 (`<parentheses>` + `<Parenthesis>`)
+    /// for `.v4`, rep1 (`<Symbol><name>…</name></Symbol>`) for `.v2`/`.v3`.
+    private func appendParentheses(
+        into children: inout [XMLTreeNode],
+        targetVersion: MSCXVersion,
+    ) {
+        guard parentheses != .none else { return }
+        switch targetVersion {
+        case .v4:
+            children.append(XMLTreeNode(name: "parentheses", text: parentheses.mscxToken))
+            if parentheses.hasLeft {
+                children.append(XMLTreeNode(name: "Parenthesis", children: []))
+            }
+            if parentheses.hasRight {
+                children.append(XMLTreeNode(name: "Parenthesis", children: [
+                    XMLTreeNode(name: "horizontalDirection", text: "right"),
+                ]))
+            }
+        case .v2, .v3:
+            if parentheses.hasLeft {
+                children.append(XMLTreeNode(name: "Symbol", children: [
+                    XMLTreeNode(name: "name", text: "noteheadParenthesisLeft"),
+                ]))
+            }
+            if parentheses.hasRight {
+                children.append(XMLTreeNode(name: "Symbol", children: [
+                    XMLTreeNode(name: "name", text: "noteheadParenthesisRight"),
+                ]))
+            }
+        }
     }
 
     private func glissandoSpanner(_ glissando: Glissando) -> XMLTreeNode {

@@ -57,6 +57,7 @@ extension LayoutEngine {
                     isInvisible: $0.isInvisible,
                     color: $0.color,
                     accidentalBracket: $0.accidentalBracket,
+                    parentheses: $0.parentheses,
                 )
             }
             return .chord(
@@ -196,6 +197,7 @@ extension LayoutEngine {
                     isInvisible: $0.isInvisible,
                     color: $0.color,
                     accidentalBracket: $0.accidentalBracket,
+                    parentheses: $0.parentheses,
                 )
             }
             return .graceChord(
