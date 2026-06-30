@@ -15,6 +15,9 @@
         let score: Score?
         let errorMessage: String?
         @Binding var layoutMode: MacLayoutMode
+        /// Whether an original PDF has been imported (enables the
+        /// `.originalPDF` mode tag).
+        let originalPDFAvailable: Bool
         @Binding var pageIndex: Int
         let totalPages: Int
         @Binding var magnification: CGFloat
@@ -26,6 +29,7 @@
         let onLoadBundled: () -> Void
         let onLoadHarmonyBasic: () -> Void
         let onOpenFile: () -> Void
+        let onImportPDF: () -> Void
         let onTogglePlayback: () -> Void
         let isRepeating: Bool
         let onToggleRepeat: () -> Void
@@ -47,6 +51,7 @@
                 }
                 Section("Open") {
                     Button("Open File…", action: onOpenFile)
+                    Button("Import Music PDF…", action: onImportPDF)
                     Text(sourceName)
                         .font(.caption2)
                         .foregroundStyle(.secondary)
@@ -118,6 +123,10 @@
                             .tag(MacLayoutMode.paged)
                         Label("PDF", systemImage: "doc.text")
                             .tag(MacLayoutMode.pdf)
+                        if originalPDFAvailable {
+                            Label("Original PDF", systemImage: "doc.richtext")
+                                .tag(MacLayoutMode.originalPDF)
+                        }
                     }
                     .pickerStyle(.inline)
                 }
