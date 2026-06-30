@@ -300,7 +300,7 @@ extension LayoutDocument {
         switch id {
         case let .note(target):
             for el in measure.elements {
-                if case let .chord(notes, _, _, _, _, _, _, _, _, _) = el,
+                if case let .chord(notes, _, _, _, _, _, _, _, _, _, _) = el,
                    let n = notes.first(where: {
                        $0.noteID == target
                    })

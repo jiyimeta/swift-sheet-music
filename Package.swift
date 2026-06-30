@@ -20,6 +20,10 @@ var products: [Product] = [
 ]
 
 var targets: [Target] = [
+    .executableTarget(
+        name: "GenSMuFLTables",
+        path: "Sources/GenSMuFLTables",
+    ),
     .target(name: "SheetMusicCore"),
     .target(
         name: "SheetMusicXMLTools",

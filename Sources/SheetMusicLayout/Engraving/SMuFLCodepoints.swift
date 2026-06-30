@@ -29,35 +29,6 @@ public enum SMuFLCodepoint {
     public static let percussionClef: UInt32 = 0xE069
     public static let percussionClef2: UInt32 = 0xE06A
 
-    // MARK: - Noteheads — standard
-
-    public static let noteheadWhole: UInt32 = 0xE0A2
-    public static let noteheadHalf: UInt32 = 0xE0A3
-    public static let noteheadBlack: UInt32 = 0xE0A4
-
-    // MARK: - Noteheads — cross (x)
-
-    /// Per the SMuFL Noteheads range (U+E0A0..U+E0FF), the X family
-    /// lives at U+E0A6..U+E0A9. The earlier `U+E0AA`/`U+E0AB` codepoints
-    /// were actually `noteheadPlusDoubleWhole` / `noteheadPlusWhole`
-    /// (plus-in-a-circle shapes), which is why whole-note crosses
-    /// rendered as "double sharp + 丸".
-    public static let noteheadXDoubleWhole: UInt32 = 0xE0A6
-    public static let noteheadXWhole: UInt32 = 0xE0A7
-    public static let noteheadXHalf: UInt32 = 0xE0A8
-    public static let noteheadXBlack: UInt32 = 0xE0A9
-
-    // MARK: - Noteheads — diamond
-
-    public static let noteheadDiamondWhole: UInt32 = 0xE0D8
-    public static let noteheadDiamondHalf: UInt32 = 0xE0D9
-    public static let noteheadDiamondBlack: UInt32 = 0xE0DB
-
-    // MARK: - Noteheads — triangle
-
-    public static let noteheadTriangleUpBlack: UInt32 = 0xE0BE
-    public static let noteheadTriangleDownBlack: UInt32 = 0xE0C7
-
     // MARK: - Flags
 
     public static let flag8thUp: UInt32 = 0xE240
@@ -91,14 +62,6 @@ public enum SMuFLCodepoint {
     public static let rest16th: UInt32 = 0xE4E7
     public static let rest32nd: UInt32 = 0xE4E8
     public static let rest64th: UInt32 = 0xE4E9
-
-    // MARK: - Accidentals
-
-    public static let accidentalSharp: UInt32 = 0xE262
-    public static let accidentalFlat: UInt32 = 0xE260
-    public static let accidentalNatural: UInt32 = 0xE261
-    public static let accidentalDoubleSharp: UInt32 = 0xE263
-    public static let accidentalDoubleFlat: UInt32 = 0xE264
 
     // MARK: - Time signatures
 

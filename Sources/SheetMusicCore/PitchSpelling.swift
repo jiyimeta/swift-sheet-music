@@ -80,13 +80,7 @@ public enum PitchSpelling {
     }
 
     private static func semitoneShift(of accidental: Accidental?) -> Int {
-        switch accidental {
-        case .doubleFlat: -2
-        case .flat: -1
-        case .none, .natural: 0
-        case .sharp: 1
-        case .doubleSharp: 2
-        }
+        accidental?.semitoneOffset ?? 0
     }
 
     /// Re-spell `note` so it carries the requested `accidental`,

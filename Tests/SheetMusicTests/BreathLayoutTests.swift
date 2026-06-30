@@ -76,7 +76,7 @@
                         switch el {
                         case let .breath(kind, origin):
                             visibleBreaths.append((kind, origin))
-                        case let .chord(_, _, _, stemOrigin, _, _, _, _, _, _):
+                        case let .chord(_, _, _, stemOrigin, _, _, _, _, _, _, _):
                             chordXs.append(stemOrigin.x)
                         default:
                             break

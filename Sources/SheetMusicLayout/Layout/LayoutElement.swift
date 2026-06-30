@@ -62,6 +62,13 @@ public enum LayoutElement: Sendable, Equatable {
         // is independent and carried by `LayoutChordNote.isInvisible`.
         // Beam suppression on hidden-stem chords is a separate concern.
         stemIsInvisible: Bool,
+        // Visual scale factor for small / cue noteheads. 1.0 = normal
+        // size; 0.7 = MuseScore's `Sid::smallNoteMag` default (any note
+        // in the chord has `isSmall == true`). Mirrors the `mag` field
+        // on `.graceChord` and is applied identically: renderers derive
+        // `StaffMetrics(staffSize: metrics.staffHeight * mag)` and size
+        // the notehead glyph (and ledger lines) from the scaled metrics.
+        mag: CGFloat,
     )
     /// A grace note (or grace chord) drawn at reduced size next to
     /// its parent main chord. Carries a `relativeX` offset from the
@@ -277,6 +284,7 @@ public enum LayoutElement: Sendable, Equatable {
         case pedal
         case ottava(raw: String)
         case textLine
+        case vibrato(VibratoType)
     }
 }
 
@@ -307,6 +315,11 @@ public struct LayoutChordNote: Sendable, Equatable {
     /// colors separately, but in practice they match the notehead; a
     /// faithful per-sub-element color is a future refinement).
     public let color: ScoreColor?
+    /// Parenthesis / square-bracket enclosure drawn around the accidental.
+    /// `.none` (default) means no enclosure. Carried from
+    /// `Note.accidentalBracket` and consumed by all three render paths
+    /// (CALayer, SwiftUI Canvas, Android bridge) via `AccidentalGlyph.enclosure`.
+    public let accidentalBracket: AccidentalBracket
 
     public init(
         noteID: NoteID,
@@ -320,6 +333,7 @@ public struct LayoutChordNote: Sendable, Equatable {
         mirror: Bool = false,
         isInvisible: Bool = false,
         color: ScoreColor? = nil,
+        accidentalBracket: AccidentalBracket = .none,
     ) {
         self.noteID = noteID
         self.step = step
@@ -332,6 +346,7 @@ public struct LayoutChordNote: Sendable, Equatable {
         self.mirror = mirror
         self.isInvisible = isInvisible
         self.color = color
+        self.accidentalBracket = accidentalBracket
     }
 
     /// Horizontal offset from `origin.x` to the visual center of the

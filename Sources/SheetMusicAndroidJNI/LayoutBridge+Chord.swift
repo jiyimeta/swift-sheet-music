@@ -49,6 +49,7 @@ extension LayoutBridge {
         let invisibleNotes = showsInvisible ? notes.filter(\.isInvisible) : []
         emitNoteGlyphs(
             visibleNotes, baseDuration: baseDur, dotCount: dotCount,
+            stem: stem,
             glyphSize: glyphSize, metrics: ctx, mag: mag,
             measureOriginX: mox, measureOriginY: moy,
             honorColor: true, into: &out,
@@ -57,6 +58,7 @@ extension LayoutBridge {
             out.append(.setColor(argb: LayoutBridge.invisibleARGB))
             emitNoteGlyphs(
                 invisibleNotes, baseDuration: baseDur, dotCount: dotCount,
+                stem: stem,
                 glyphSize: glyphSize, metrics: ctx, mag: mag,
                 measureOriginX: mox, measureOriginY: moy,
                 honorColor: false, into: &out,
@@ -134,10 +136,11 @@ extension LayoutBridge {
     /// dots wrapped in a `setColor` / reset-to-black pair — matching the
     /// Apple `ScoreLayerBuilder` per-note `headColor`. Uncolored notes
     /// paint in the ambient color.
-    static func emitNoteGlyphs(
+    static func emitNoteGlyphs( // swiftlint:disable:this function_body_length
         _ notes: [LayoutChordNote],
         baseDuration baseDur: NoteDuration,
         dotCount: Int,
+        stem: StemDirection,
         glyphSize: Double,
         metrics ctx: MetricsContext,
         mag: Double,
@@ -153,27 +156,84 @@ extension LayoutBridge {
             if let argb { out.append(.setColor(argb: argb)) }
             emitCenterAnchoredGlyph(
                 codepoint: NoteheadGlyph.codepoint(
-                    duration: baseDur, headType: note.headType,
+                    duration: baseDur, headType: note.headType, stemUp: stem == .up,
                 ),
                 cxPt: mox + Double(note.origin.x),
                 cyPt: moy + Double(note.origin.y),
                 sizePt: glyphSize,
                 into: &out,
             )
-            // Accidental: a single Bravura glyph center-anchored 1.2 sp left
-            // of the notehead (the offset scaled by `mag` so grace-note
-            // accidentals stay glued to their reduced head). doubleSharp /
-            // doubleFlat are included even though they never come from a key
-            // signature. Glyph table is shared via `AccidentalGlyph` so iOS
-            // and Android can't disagree.
+            // Accidental + optional bracket enclosure: measured-width placement
+            // via `AccidentalPlacement.leftEdgeX` so iOS and Android agree on
+            // the offset. Glyph table is shared via `AccidentalGlyph`.
             if let accidental = note.accidental {
+                let accCp = AccidentalGlyph.codepoint(accidental)
+                guard let accSc = UnicodeScalar(accCp) else { continue }
+                let glyphFont = LayoutFont(
+                    face: SMuFLFamily.bravura,
+                    pointSize: CGFloat(glyphSize),
+                )
+                let accAdv = Double(FontMetrics.provider.typographicWidth(
+                    text: String(accSc), font: glyphFont,
+                ))
+                var leftBracketAdv: Double = 0
+                var rightBracketAdv: Double = 0
+                var leftBracketCp: UInt32?
+                var rightBracketCp: UInt32?
+                if let (lCp, rCp) = AccidentalGlyph.enclosure(note.accidentalBracket),
+                   let lSc = UnicodeScalar(lCp), let rSc = UnicodeScalar(rCp)
+                {
+                    leftBracketCp = lCp
+                    rightBracketCp = rCp
+                    leftBracketAdv = Double(FontMetrics.provider.typographicWidth(
+                        text: String(lSc), font: glyphFont,
+                    ))
+                    rightBracketAdv = Double(FontMetrics.provider.typographicWidth(
+                        text: String(rSc), font: glyphFont,
+                    ))
+                }
+                let totalAdv = leftBracketAdv + accAdv + rightBracketAdv
+                // Notehead left edge = center - half-advance. Source the
+                // half-advance from `StemGeometry.attachDx` (Bravura
+                // noteheadBlack half-width) so this matches the Apple
+                // render paths exactly even if `attachDx` is retuned. The
+                // `sp * mag` argument mirrors Apple's `metrics.sp` (already
+                // mag-scaled) — `attachDx` is linear in `sp`, so this equals
+                // `attachDx(sp: ctx.sp) * mag`.
+                let noteheadHalfAdv = Double(StemGeometry.attachDx(
+                    sp: CGFloat(ctx.sp * mag),
+                ))
+                let noteheadLeftX = mox + Double(note.origin.x) - noteheadHalfAdv
+                let leftEdgeX = Double(AccidentalPlacement.leftEdgeX(
+                    noteheadLeftX: CGFloat(noteheadLeftX),
+                    advanceWidth: CGFloat(totalAdv),
+                    sp: CGFloat(ctx.sp * mag),
+                ))
+                if let lCp = leftBracketCp {
+                    emitCenterAnchoredGlyph(
+                        codepoint: lCp,
+                        cxPt: leftEdgeX + leftBracketAdv / 2,
+                        cyPt: moy + Double(note.origin.y),
+                        sizePt: glyphSize,
+                        into: &out,
+                    )
+                }
                 emitCenterAnchoredGlyph(
-                    codepoint: AccidentalGlyph.codepoint(accidental),
-                    cxPt: mox + Double(note.origin.x) - ctx.sp * 1.2 * mag,
+                    codepoint: accCp,
+                    cxPt: leftEdgeX + leftBracketAdv + accAdv / 2,
                     cyPt: moy + Double(note.origin.y),
                     sizePt: glyphSize,
                     into: &out,
                 )
+                if let rCp = rightBracketCp {
+                    emitCenterAnchoredGlyph(
+                        codepoint: rCp,
+                        cxPt: leftEdgeX + leftBracketAdv + accAdv + rightBracketAdv / 2,
+                        cyPt: moy + Double(note.origin.y),
+                        sizePt: glyphSize,
+                        into: &out,
+                    )
+                }
             }
             if dotCount > 0 {
                 emitAugmentationDots(

@@ -56,7 +56,7 @@ extension LayoutEngine {
             return [p.y]
         case let .note(_, _, _, _, p, _, _, _):
             return [p.y]
-        case let .chord(notes, _, _, so, _, _, _, _, _, _):
+        case let .chord(notes, _, _, so, _, _, _, _, _, _, _):
             var ys = notes.map(\.origin.y)
             ys.append(so.y)
             return ys
@@ -148,6 +148,9 @@ extension LayoutEngine {
             // visible content the renderer draws alongside them.
             invisibleElements: measure.invisibleElements
                 .map { translate(element: $0, dy: dy) },
+            // Shift chord north Y values by the same dy so vibrato
+            // autoplace remains valid after a top-clip correction.
+            chordNorthByTick: measure.chordNorthByTick.mapValues { $0 + dy },
         )
     }
 }

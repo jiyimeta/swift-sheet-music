@@ -542,7 +542,7 @@
                 for system in document.systems {
                     for measure in system.measures {
                         for el in measure.elements {
-                            if case let .chord(_, _, _, so, _, _, _, _, _, _) = el {
+                            if case let .chord(_, _, _, so, _, _, _, _, _, _, _) = el {
                                 xs.append(so.x)
                             }
                         }
@@ -614,7 +614,7 @@
                                         + measure.origin.y,
                                 )
                             }
-                            if case let .chord(notes, _, _, _, _, _, _, _, _, _) = el,
+                            if case let .chord(notes, _, _, _, _, _, _, _, _, _, _) = el,
                                noteY == nil,
                                let n = notes.first
                             {

@@ -111,7 +111,7 @@ private func chooseEvent(
     var best: (cursor: ScoreCursor, dx: CGFloat)?
     for element in measure.elements {
         switch element {
-        case let .chord(notes, _, stem, _, _, _, _, _, _, _):
+        case let .chord(notes, _, stem, _, _, _, _, _, _, _, _):
             guard let first = notes.first, first.noteID.staff == staff else { continue }
             let anchorX = baseX + first.origin.x + first.mirrorDx(stem: stem, sp: sp)
             let dx = abs(anchorX - point.x)

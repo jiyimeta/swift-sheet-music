@@ -30,27 +30,31 @@ public enum GlissandoGeometry {
         return atan2(dy, dx)
     }
 
-    /// Polyline points in the LOCAL (rotated) frame. The first point
-    /// is `(0, 0)`; the last point is `(length, 0)` for a straight
-    /// line, or near it for a wavy line. Wavy lines zig-zag between
-    /// `+sp*0.3` and `-sp*0.3` on alternating segments.
-    public static func linePoints(
-        length: CGFloat, wavy: Bool, sp: CGFloat,
-    ) -> [CGPoint] {
-        if wavy {
-            let waveAmp = sp * 0.3
-            let segments = max(3, Int(length / (sp * 0.8)))
-            let segLen = length / CGFloat(segments)
-            var pts: [CGPoint] = [.zero]
-            pts.reserveCapacity(segments + 1)
-            for i in 1 ... segments {
-                let x = segLen * CGFloat(i)
-                let y = i.isMultiple(of: 2) ? waveAmp : -waveAmp
-                pts.append(CGPoint(x: x, y: y))
-            }
-            return pts
-        }
-        return [.zero, CGPoint(x: length, y: 0)]
+    /// Polyline points in the LOCAL (rotated) frame for a straight
+    /// glissando. Returns `[.zero, CGPoint(x: length, y: 0)]`.
+    /// Wavy glissandi use `wavyGlyphRun` instead.
+    public static func linePoints(length: CGFloat) -> [CGPoint] {
+        [.zero, CGPoint(x: length, y: 0)]
+    }
+
+    /// Glyph-run layout for a wavy glissando: how many copies of
+    /// `wiggleGlissando` (U+EAAF) fit along the line and where the
+    /// first copy starts (centred).
+    ///
+    /// - Parameters:
+    ///   - length: Total span of the glissando segment in local pts.
+    ///   - advance: Typographic advance of one `wiggleGlissando` glyph.
+    /// - Returns: `count` copies to draw; `startX` of the first copy
+    ///   in the LOCAL rotated frame (x-axis along the line).
+    ///
+    /// C++: tdraw.cpp:1585-1596
+    public static func wavyGlyphRun(
+        length: CGFloat, advance: CGFloat,
+    ) -> (count: Int, startX: CGFloat) {
+        guard advance > 0 else { return (0, 0) }
+        let count = Int(floor(Double(length / advance)))
+        let startX = (length - CGFloat(count) * advance) / 2
+        return (count, startX)
     }
 
     /// Vertical clearance between the text's descender and the

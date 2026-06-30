@@ -36,15 +36,24 @@ extension Note {
     ) -> XMLTreeNode {
         var children: [XMLTreeNode] = []
         if let accidental {
-            children.append(XMLTreeNode(
-                name: "Accidental",
-                children: [
-                    XMLTreeNode(
-                        name: "subtype",
-                        text: accidental.mscxSubtype,
-                    ),
-                ],
-            ))
+            var accChildren: [XMLTreeNode] = [
+                XMLTreeNode(name: "subtype", text: accidental.mscxSubtype),
+            ]
+            if accidentalBracket != .none {
+                accChildren.append(XMLTreeNode(
+                    name: "bracket",
+                    text: String(accidentalBracket.rawValue),
+                ))
+            }
+            // MuseScore writes `<role>` only for USER accidentals; AUTO
+            // is the default and omitted, so existing output is unchanged.
+            if accidentalRole == .user {
+                accChildren.append(XMLTreeNode(
+                    name: "role",
+                    text: String(accidentalRole.rawValue),
+                ))
+            }
+            children.append(XMLTreeNode(name: "Accidental", children: accChildren))
         }
         if tieForward != nil {
             children.append(tieSpanner(
@@ -166,19 +175,6 @@ extension Glissando.Style {
         case .whiteKeys: "WHITE_KEYS"
         case .blackKeys: "BLACK_KEYS"
         case .portamento: "PORTAMENTO"
-        }
-    }
-}
-
-extension Accidental {
-    /// Mirror of `Accidental.init?(mscxSubtype:)` — exhaustive.
-    var mscxSubtype: String {
-        switch self {
-        case .sharp: "accidentalSharp"
-        case .flat: "accidentalFlat"
-        case .natural: "accidentalNatural"
-        case .doubleSharp: "accidentalDoubleSharp"
-        case .doubleFlat: "accidentalDoubleFlat"
         }
     }
 }

@@ -45,6 +45,7 @@ extension ScoreLayerBuilder {
                 mirror: n.mirror,
                 isInvisible: n.isInvisible,
                 color: n.color,
+                accidentalBracket: n.accidentalBracket,
             )
         }
         // Stem / flag inherit the chord's notehead color (first
@@ -78,7 +79,7 @@ extension ScoreLayerBuilder {
         }
         for n in shifted {
             let glyph = noteheadGlyph(
-                for: baseDur, headType: n.headType,
+                for: baseDur, headType: n.headType, stemUp: stem == .up,
             )
             // Mirrored seconds: notehead, accidental and dots track
             // the visual center, while ledger lines + stem stay on
@@ -120,7 +121,8 @@ extension ScoreLayerBuilder {
             }
             if let acc = n.accidental,
                let accLayer = drawAccidental(
-                   accidental: acc, origin: visualOrigin,
+                   accidental: acc, bracket: n.accidentalBracket,
+                   origin: visualOrigin,
                    metrics: metrics, height: height, into: noteTarget,
                )
             {
@@ -201,10 +203,10 @@ extension ScoreLayerBuilder {
     }
 
     private static func noteheadGlyph(
-        for duration: NoteDuration, headType: String?,
+        for duration: NoteDuration, headType: String?, stemUp: Bool,
     ) -> Character {
         let cp = NoteheadGlyph.codepoint(
-            duration: duration, headType: headType,
+            duration: duration, headType: headType, stemUp: stemUp,
         )
         // swiftlint:disable:next force_unwrapping
         return Character(UnicodeScalar(cp)!)
@@ -213,26 +215,86 @@ extension ScoreLayerBuilder {
     // MARK: - Accidental
 
     @discardableResult
+    // swiftlint:disable:next function_body_length
     private static func drawAccidental(
-        accidental: Accidental, origin: CGPoint,
-        metrics: StaffMetrics, height: CGFloat,
+        accidental: Accidental,
+        bracket: AccidentalBracket,
+        origin: CGPoint,
+        metrics: StaffMetrics,
+        height: CGFloat,
         into parent: CALayer,
     ) -> CAShapeLayer? {
         // Shared glyph table (see `AccidentalGlyph`) so this CALayer path,
         // the SwiftUI `AccidentalRenderer`, and the Android bridge agree.
         // swiftlint:disable:next force_unwrapping
-        let glyph = Character(UnicodeScalar(AccidentalGlyph.codepoint(accidental))!)
+        let accChar = Character(UnicodeScalar(AccidentalGlyph.codepoint(accidental))!)
+        let bravuraFont = LayoutFont(
+            face: SMuFLFamily.bravura,
+            pointSize: metrics.glyphFontSize,
+        )
+        let accAdv = FontMetrics.provider.typographicWidth(
+            text: String(accChar), font: bravuraFont,
+        )
+        // Measure optional bracket enclosure advances.
+        var leftBracketAdv: CGFloat = 0
+        var rightBracketAdv: CGFloat = 0
+        var leftBracketChar: Character?
+        var rightBracketChar: Character?
+        if let (lCp, rCp) = AccidentalGlyph.enclosure(bracket),
+           let lSc = UnicodeScalar(lCp), let rSc = UnicodeScalar(rCp)
+        {
+            leftBracketChar = Character(lSc)
+            rightBracketChar = Character(rSc)
+            leftBracketAdv = FontMetrics.provider.typographicWidth(
+                text: String(lSc), font: bravuraFont,
+            )
+            rightBracketAdv = FontMetrics.provider.typographicWidth(
+                text: String(rSc), font: bravuraFont,
+            )
+        }
+        let totalAdv = leftBracketAdv + accAdv + rightBracketAdv
+        // `AccidentalPlacement.leftEdgeX` gives the typographic left
+        // edge of the group. The notehead left edge = center - half-advance.
+        let noteheadLeftX = origin.x - StemGeometry.attachDx(sp: metrics.sp)
+        let leftEdgeX = AccidentalPlacement.leftEdgeX(
+            noteheadLeftX: noteheadLeftX,
+            advanceWidth: totalAdv,
+            sp: metrics.sp,
+        )
+        // Draw left bracket.
+        if let lChar = leftBracketChar {
+            glyphLayer(
+                lChar,
+                at: CGPoint(
+                    x: leftEdgeX + leftBracketAdv / 2,
+                    y: origin.y,
+                ),
+                size: metrics.glyphFontSize,
+                height: height,
+            ).map { parent.addSublayer($0) }
+        }
+        // Draw accidental — returned as the hit-test representative layer.
+        let accX = leftEdgeX + leftBracketAdv + accAdv / 2
         guard let layer = glyphLayer(
-            glyph,
-            at: CGPoint(
-                x: origin.x - metrics.sp * 1.2,
-                y: origin.y,
-            ),
+            accChar,
+            at: CGPoint(x: accX, y: origin.y),
             size: metrics.glyphFontSize,
             height: height,
         )
         else { return nil }
         parent.addSublayer(layer)
+        // Draw right bracket.
+        if let rChar = rightBracketChar {
+            glyphLayer(
+                rChar,
+                at: CGPoint(
+                    x: leftEdgeX + leftBracketAdv + accAdv + rightBracketAdv / 2,
+                    y: origin.y,
+                ),
+                size: metrics.glyphFontSize,
+                height: height,
+            ).map { parent.addSublayer($0) }
+        }
         return layer
     }
 

@@ -44,6 +44,11 @@ enum SpannerRenderer {
                 context: &context, from: from, to: to,
                 text: text, metrics: metrics,
             )
+        case let .vibrato(type):
+            drawVibrato(
+                context: &context, from: from, to: to,
+                type: type, metrics: metrics,
+            )
         }
     }
 
@@ -161,6 +166,31 @@ enum SpannerRenderer {
                 dash: parts.dashPattern,
             ),
         )
+    }
+
+    private static func drawVibrato(
+        context: inout GraphicsContext,
+        from: CGPoint, to: CGPoint,
+        type: VibratoType,
+        metrics: StaffMetrics,
+    ) {
+        // Compute the typographic advance of one vibrato glyph so
+        // SpannerGeometry can calculate how many copies fit.
+        let codepoint = SpannerGeometry.vibratoCodepoint(type: type)
+        // swiftlint:disable:next force_unwrapping
+        let ch = Character(UnicodeScalar(codepoint)!)
+        let glyphFont = LayoutFont(
+            face: SMuFLFamily.bravura, pointSize: metrics.glyphFontSize,
+        )
+        let advance = FontMetrics.provider.typographicWidth(
+            text: String(ch), font: glyphFont,
+        )
+        let run = SpannerGeometry.vibratoGlyphRun(
+            from: from, to: to, type: type, sp: metrics.sp, advance: advance,
+        )
+        for origin in run.origins {
+            context.drawGlyph(ch, at: origin, size: metrics.glyphFontSize, anchor: .leading)
+        }
     }
 
     private static func drawTextLine(

@@ -12,7 +12,7 @@ extension Chord {
         }
         let dots = Int(node.first("dots")?.text ?? "0") ?? 0
         let duration = baseDuration.dotted(dots)
-        let notes = try node.all("Note").map { try Note.decode($0) }
+        let notes = try decodeNotes(node)
 
         var arpeggio: Arpeggio?
         if let arpeggioNode = node.first("Arpeggio") {
@@ -80,6 +80,19 @@ extension Chord {
         )
         chord.elementProperties = ElementProperties(decodingMSCXChildrenOf: node)
         return chord
+    }
+
+    /// Decode the `<Note>` children of a `<Chord>` node, propagating
+    /// chord-level `<small>1</small>` to every note that isn't already
+    /// small. MuseScore writes `<small>` on the chord element when the
+    /// whole chord is displayed at a reduced size (cue / small noteheads).
+    private static func decodeNotes(_ node: XMLTreeNode) throws -> [Note] {
+        let rawNotes = try node.all("Note").map { try Note.decode($0) }
+        guard node.first("small")?.text == "1" else { return rawNotes }
+        return rawNotes.map { n in
+            guard !n.isSmall else { return n }
+            var copy = n; copy.isSmall = true; return copy
+        }
     }
 
     /// Inspect a `<Chord>` node and return its grace category if any

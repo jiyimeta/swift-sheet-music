@@ -2,42 +2,29 @@ import SheetMusicCore
 
 /// SMuFL codepoint selector for noteheads.
 ///
-/// Picks the glyph from `(duration, headType)`. `headType` is the raw
-/// string MuseScore stores on `Note.headType` ("normal" / nil for the
-/// default, plus "cross", "diamond", "triangle-up", "triangle-down").
-/// Unknown head types fall back to the standard family.
-///
-/// The standard / cross / diamond families have whole / half / black
-/// variants. The triangle families only have a black variant in
-/// Bravura (whole/half are not part of SMuFL), so triangle heads
-/// always use the black glyph regardless of `duration`.
+/// Resolves `(duration, headType, stemUp)` to a SMuFL codepoint by
+/// looking up the head token in `NoteHeadGroup`, then selecting the
+/// appropriate glyph name from the SMuFL table via `NoteHeadGroup.symName`.
+/// Unknown or `nil` head types fall back to the standard notehead family.
 public enum NoteheadGlyph {
     public static func codepoint(
-        duration: NoteDuration, headType: String?,
+        duration: NoteDuration, headType: String?, stemUp: Bool,
     ) -> UInt32 {
-        switch headType {
-        case "cross":
-            switch duration {
-            case .whole: return SMuFLCodepoint.noteheadXWhole
-            case .half: return SMuFLCodepoint.noteheadXHalf
-            default: return SMuFLCodepoint.noteheadXBlack
-            }
-        case "diamond":
-            switch duration {
-            case .whole: return SMuFLCodepoint.noteheadDiamondWhole
-            case .half: return SMuFLCodepoint.noteheadDiamondHalf
-            default: return SMuFLCodepoint.noteheadDiamondBlack
-            }
-        case "triangle-up":
-            return SMuFLCodepoint.noteheadTriangleUpBlack
-        case "triangle-down":
-            return SMuFLCodepoint.noteheadTriangleDownBlack
-        default:
-            switch duration {
-            case .whole: return SMuFLCodepoint.noteheadWhole
-            case .half: return SMuFLCodepoint.noteheadHalf
-            default: return SMuFLCodepoint.noteheadBlack
-            }
+        let kind: NoteHeadKind
+        switch duration {
+        case .whole: kind = .whole
+        case .half: kind = .half
+        default: kind = .quarter
+        }
+        if let token = headType, let group = NoteHeadGroup.from(token: token) {
+            let name = NoteHeadGroup.symName(group: group, kind: kind, stemUp: stemUp)
+            if name != "noSym", let cp = SMuFLCodepoint.byName(name) { return cp }
+        }
+        // Fallback: standard notehead family.
+        switch kind {
+        case .whole: return SMuFLCodepoint.noteheadWhole
+        case .half: return SMuFLCodepoint.noteheadHalf
+        default: return SMuFLCodepoint.noteheadBlack
         }
     }
 }

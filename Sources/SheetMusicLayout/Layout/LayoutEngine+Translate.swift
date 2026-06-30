@@ -41,6 +41,7 @@ extension LayoutEngine {
             vi,
             stemExt,
             stemHidden,
+            mag,
         ):
             let shiftedNotes = notes.map {
                 LayoutChordNote(
@@ -55,6 +56,7 @@ extension LayoutEngine {
                     mirror: $0.mirror,
                     isInvisible: $0.isInvisible,
                     color: $0.color,
+                    accidentalBracket: $0.accidentalBracket,
                 )
             }
             return .chord(
@@ -68,6 +70,7 @@ extension LayoutEngine {
                 voiceIndex: vi,
                 stemExtension: stemExt,
                 stemIsInvisible: stemHidden,
+                mag: mag,
             )
         case let .textMark(k, t, p):
             return .textMark(kind: k, text: t, origin: shift(p))
@@ -192,6 +195,7 @@ extension LayoutEngine {
                     mirror: $0.mirror,
                     isInvisible: $0.isInvisible,
                     color: $0.color,
+                    accidentalBracket: $0.accidentalBracket,
                 )
             }
             return .graceChord(

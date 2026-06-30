@@ -21,6 +21,8 @@ extension LayoutEngine {
         /// anchor) when the spanner stops at a measure boundary.
         let endTick: Int
         let voltaEndings: [Int]
+        /// Vibrato subtype. Meaningful only when `kind == .vibrato`.
+        let vibratoType: VibratoType?
     }
 
     /// Per-staff set of measure indices covered by a visible
@@ -105,6 +107,7 @@ extension LayoutEngine {
                                 endMeasure: endMeasure,
                                 endTick: endTick,
                                 voltaEndings: sp.voltaEndings,
+                                vibratoType: sp.vibrato?.type,
                             ))
                         }
                         switch el {
@@ -176,6 +179,13 @@ extension LayoutEngine {
                     staffIndex: anchor.startStaff,
                     measureRange: startLocal ... endLocal,
                     metrics: metrics,
+                    kind: kind,
+                    minNorthY: vibratoMinNorthY(
+                        in: system.measures,
+                        localRange: startLocal ... endLocal,
+                        startTick: anchor.startTick,
+                        endTick: anchor.endTick,
+                    ),
                 )
                 extraPerSystem[startSys].append(.spannerSegment(
                     kind: kind,
@@ -193,11 +203,19 @@ extension LayoutEngine {
                     metrics: metrics,
                 )
                 let toXStart = startSystem.size.width - metrics.sp * 2
+                let startEnd = max(startLocal, startSystem.measures.count - 1)
                 let yStart = anchorY(
                     in: startSystem, belowStaff: belowStaff,
                     staffIndex: anchor.startStaff,
                     measureRange: startLocal ..< startSystem.measures.count,
                     metrics: metrics,
+                    kind: kind,
+                    minNorthY: vibratoMinNorthY(
+                        in: startSystem.measures,
+                        localRange: startLocal ... startEnd,
+                        startTick: anchor.startTick,
+                        endTick: 0,
+                    ),
                 )
                 extraPerSystem[startSys].append(.spannerSegment(
                     kind: kind,
@@ -210,11 +228,19 @@ extension LayoutEngine {
                 if endSys > startSys + 1 {
                     for mid in (startSys + 1) ..< endSys {
                         let midSystem = systems[mid]
+                        let midEnd = max(0, midSystem.measures.count - 1)
                         let y = anchorY(
                             in: midSystem, belowStaff: belowStaff,
                             staffIndex: anchor.startStaff,
                             measureRange: 0 ..< midSystem.measures.count,
                             metrics: metrics,
+                            kind: kind,
+                            minNorthY: vibratoMinNorthY(
+                                in: midSystem.measures,
+                                localRange: 0 ... midEnd,
+                                startTick: 0,
+                                endTick: 0,
+                            ),
                         )
                         extraPerSystem[mid].append(.spannerSegment(
                             kind: kind,
@@ -243,6 +269,13 @@ extension LayoutEngine {
                     staffIndex: anchor.endStaff,
                     measureRange: 0 ... endLocal,
                     metrics: metrics,
+                    kind: kind,
+                    minNorthY: vibratoMinNorthY(
+                        in: endSystem.measures,
+                        localRange: 0 ... endLocal,
+                        startTick: 0,
+                        endTick: anchor.endTick,
+                    ),
                 )
                 extraPerSystem[endSys].append(.spannerSegment(
                     kind: kind,
@@ -315,7 +348,11 @@ extension LayoutEngine {
         if anchor.endTick > 0,
            let local = measure.tickColumns[anchor.endTick]
         {
-            return measure.origin.x + local
+            let baseX = measure.origin.x + local
+            // Mirror MuseScore trill.cpp:333: a vibrato ends 1 sp before its
+            // end note so adjacent partial-measure vibratos keep a 1 sp gap
+            // (otherwise consecutive vibratos touch / visually overlap).
+            return anchor.kind == .vibrato ? baseX - metrics.sp : baseX
         }
         return measure.origin.x + measure.width - metrics.sp * 2
     }
@@ -323,7 +360,7 @@ extension LayoutEngine {
     static func isBelowStaff(kind: Spanner.Kind) -> Bool {
         switch kind {
         case .hairpin, .pedal: true
-        default: false
+        case .volta, .slur, .ottava, .textLine, .glissando, .vibrato, .other: false
         }
     }
 
@@ -446,10 +483,13 @@ extension LayoutEngine {
         staffIndex: Int,
         measureRange _: R,
         metrics: StaffMetrics,
+        kind: LayoutElement.SpannerKind? = nil,
+        minNorthY: CGFloat? = nil,
     ) -> CGFloat where R.Bound == Int {
         anchorY(
             in: system, belowStaff: belowStaff,
-            staffIndex: staffIndex, metrics: metrics,
+            staffIndex: staffIndex, metrics: metrics, kind: kind,
+            minNorthY: minNorthY,
         )
     }
 
@@ -458,6 +498,8 @@ extension LayoutEngine {
         belowStaff: Bool,
         staffIndex: Int,
         metrics: StaffMetrics,
+        kind: LayoutElement.SpannerKind? = nil,
+        minNorthY: CGFloat? = nil,
     ) -> CGFloat {
         let origins = system.staffOrigins
         let clamped = max(0, min(staffIndex, origins.count - 1))
@@ -471,7 +513,84 @@ extension LayoutEngine {
             // measure, so we keep the spanner Y at a stable offset.
             return origin.y + metrics.staffHeight + metrics.sp * 3
         }
+        // Vibrato: MuseScore `vibratoPosAbove` default is −1 sp, so the
+        // line sits much closer to the staff top than ottava/textLine.
+        // Use 1.5 sp clearance (1 sp default + 0.5 sp breathing room).
+        // When a chord's north skyline sits above this default, push the
+        // vibrato up so it clears the highest notehead top.
+        //
+        // `minNorthY` is now the note TOP-EDGE (center − 0.5 sp, see
+        // `buildChordNorthByTick`). The vibrato glyph is drawn centred
+        // on `anchorY` (baseline = anchorY for Bravura's symmetric
+        // ascent/descent), so its INK extends `glyphHalfHeight` below
+        // `anchorY`. Clearance rule:
+        //   anchorY + glyphHalfHeight + minDistance ≤ noteTopEdge
+        //   anchorY ≤ noteTopEdge − minDistance − glyphHalfHeight
+        //           = minNorthY   − 1.0 sp      − glyphHalfHeight
+        //
+        // `glyphHalfHeight` is taken from the actual Bravura glyph bbox
+        // (queried via FontMetrics); for wiggleSawtoothWide the ink
+        // extends ≈ 1.06 sp above and below the baseline. Falls back to
+        // 0.5 sp on the Stub provider (Android / tests without CoreText).
+        // This matches MuseScore's skyline + `vibratoMinDistance = 1 sp`
+        // behaviour (autoplace.cpp, `autoplaceSpannerSegment`).
+        if case let .vibrato(vibratoType) = kind {
+            let defaultY = origin.y - metrics.sp * 1.5
+            guard let minNorthY else { return defaultY }
+            let halfH = vibratoGlyphHalfHeight(type: vibratoType, sp: metrics.sp)
+            let clearanceY = minNorthY - metrics.sp * 1.0 - halfH
+            return min(defaultY, clearanceY)
+        }
         return origin.y - metrics.sp * 4
+    }
+
+    /// Minimum (highest) notehead Y across all chords in the given
+    /// local measure range, for vibrato autoplace. Returns nil when
+    /// there are no chords in the range (vibrato stays at default Y).
+    private static func vibratoMinNorthY(
+        in measures: [LayoutMeasure],
+        localRange: ClosedRange<Int>,
+        startTick: Int,
+        endTick: Int,
+    ) -> CGFloat? {
+        var minY: CGFloat?
+        for localIdx in localRange {
+            guard localIdx < measures.count else { break }
+            let m = measures[localIdx]
+            for (tick, northY) in m.chordNorthByTick {
+                // Start measure: only ticks at or after the spanner start
+                if localIdx == localRange.lowerBound, tick < startTick { continue }
+                // End measure: only ticks before endTick (0 = end-of-measure)
+                if localIdx == localRange.upperBound, endTick > 0, tick >= endTick { continue }
+                minY = min(minY ?? .greatestFiniteMagnitude, northY)
+            }
+        }
+        return minY
+    }
+
+    /// Half-height of a vibrato glyph's ink extent at `sp`, measured from
+    /// the baseline. The glyph is anchored at its baseline (Bravura has
+    /// symmetric ascent/descent so the typographic centre = baseline), so
+    /// the ink extends `halfHeight` both above and below `anchorY`. The
+    /// BOTTOM edge that must clear the note top is `anchorY + halfHeight`.
+    ///
+    /// Uses the real Bravura glyph bbox when CoreText is available;
+    /// falls back to 0.5 sp on the Stub provider (Android / unit tests
+    /// without a real font).
+    private static func vibratoGlyphHalfHeight(
+        type: VibratoType, sp: CGFloat,
+    ) -> CGFloat {
+        let codepoint = SpannerGeometry.vibratoCodepoint(type: type)
+        guard let cp16 = UInt16(exactly: codepoint) else { return sp * 0.5 }
+        let font = LayoutFont(
+            face: SMuFLFamily.bravura, pointSize: sp * 4,
+        )
+        if let bbox = FontMetrics.provider.glyphPathBoundingBox(
+            font: font, codepoint: cp16,
+        ) {
+            return bbox.height / 2
+        }
+        return sp * 0.5
     }
 
     static func layoutKind(
@@ -489,6 +608,7 @@ extension LayoutEngine {
         case .pedal: return .pedal
         case .ottava: return .ottava(raw: anchor.rawType)
         case .textLine: return .textLine
+        case .vibrato: return .vibrato(anchor.vibratoType ?? .guitarVibrato)
         case .glissando, .other: return .textLine
         }
     }

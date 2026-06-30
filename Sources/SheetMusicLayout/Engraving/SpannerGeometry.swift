@@ -2,6 +2,7 @@
     import CoreGraphics
 #endif
 import Foundation
+import SheetMusicCore
 
 /// Pure geometry for spanner segments — slurs, voltas, hairpins,
 /// pedals, ottavas, and generic text lines. Each spanner kind exposes
@@ -173,6 +174,55 @@ public enum SpannerGeometry {
             lineThicknessSp: lineThicknessSp,
             dashPattern: [3, 3],
         )
+    }
+
+    // MARK: - Vibrato
+
+    /// SMuFL codepoint for the given vibrato subtype.
+    public static func vibratoCodepoint(type: VibratoType) -> UInt32 {
+        switch type {
+        case .guitarVibrato: return SMuFLCodepoint.guitarVibratoStroke
+        case .guitarVibratoWide: return SMuFLCodepoint.guitarWideVibratoStroke
+        case .sawtooth: return SMuFLCodepoint.wiggleSawtooth
+        case .sawtoothWide: return SMuFLCodepoint.wiggleSawtoothWide
+        }
+    }
+
+    /// Glyph run for a vibrato line. Returns the SMuFL codepoint to
+    /// draw and the origins of each glyph copy along the line.
+    ///
+    /// The glyph is repeated as many times as fit between `from` and `to`:
+    ///   count = lrint((width − advance) / advance)
+    /// Each copy is placed at `from.x + i * advance` on the same Y as `from`.
+    ///
+    /// - Parameters:
+    ///   - from: Start point of the vibrato segment (layout Y-down).
+    ///   - to:   End point of the vibrato segment.
+    ///   - type: Vibrato subtype controlling the glyph.
+    ///   - sp:   Staff spatium (unused in current geometry; reserved for
+    ///           future sub-spatium nudges).
+    ///   - advance: Typographic advance of the glyph in layout points.
+    ///
+    /// C++: `vibrato.cpp:49-67`, `tlayout.cpp:6447-6462`.
+    public static func vibratoGlyphRun(
+        from: CGPoint,
+        to: CGPoint,
+        type: VibratoType,
+        sp _: CGFloat,
+        advance: CGFloat,
+    ) -> (codepoint: UInt32, origins: [CGPoint]) {
+        let codepoint = vibratoCodepoint(type: type)
+        guard advance > 0 else { return (codepoint, []) }
+        let width = to.x - from.x
+        // Mirror MuseScore `VibratoSegment::symbolLine(start, fill)`:
+        // always emit the start glyph, then append fill copies.
+        // C++: vibrato.cpp:49-67
+        let fillCount = max(0, lrint(Double((width - advance) / advance)))
+        let count = 1 + fillCount
+        let origins = (0 ..< count).map { i in
+            CGPoint(x: from.x + CGFloat(i) * advance, y: from.y)
+        }
+        return (codepoint, origins)
     }
 
     // MARK: - Text line
