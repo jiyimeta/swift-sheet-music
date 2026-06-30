@@ -34,6 +34,19 @@ extension PDFImporter {
         case 0xE0A7: return .noteheadXWhole
         case 0xE0A8: return .noteheadXHalf
         case 0xE0A9: return .noteheadXBlack
+        // Shape-note / alternate notehead GROUPS an arranger can assign per
+        // note (MuseScore `<head>` overrides). The importer's Note model does
+        // not carry head shape, so each maps to the behaviourally-equivalent
+        // standard notehead — same pitch (staff position) and the same base
+        // duration, so beams / flags resolve length identically. Without this
+        // they fall to `.unknown` and the note is silently dropped (observed
+        // on ロビンソン's beatbox parts: 34 `mi` + `withx` notes lost, e.g. the
+        // 2nd of every beamed pair). `mi` (diamond) prints filled at quarter
+        // base; `withx` prints as a void-with-X glyph even for the 16th / 8th
+        // notes that carry it, so it needs a quarter (beamable) base too — a
+        // half base would freeze it at a half note.
+        case 0xE1B9: return .noteheadBlack // noteShapeDiamondBlack ("mi" head)
+        case 0xE0B7: return .noteheadXBlack // noteheadVoidWithX ("withx" head)
         case 0xE1E7: return .augmentationDot
         case 0xE240: return .flag8thUp
         case 0xE241: return .flag8thDown
