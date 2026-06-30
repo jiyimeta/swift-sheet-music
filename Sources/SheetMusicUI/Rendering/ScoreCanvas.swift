@@ -305,6 +305,7 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                     isInvisible: $0.isInvisible,
                     color: $0.color,
                     accidentalBracket: $0.accidentalBracket,
+                    parentheses: $0.parentheses,
                 )
             }
             // Stem / flag inherit the chord's notehead color (the first

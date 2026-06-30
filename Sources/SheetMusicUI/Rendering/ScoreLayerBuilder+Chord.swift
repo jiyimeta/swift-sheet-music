@@ -46,6 +46,7 @@ extension ScoreLayerBuilder {
                 isInvisible: n.isInvisible,
                 color: n.color,
                 accidentalBracket: n.accidentalBracket,
+                parentheses: n.parentheses,
             )
         }
         // Stem / flag inherit the chord's notehead color (first

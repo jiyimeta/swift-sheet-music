@@ -320,6 +320,10 @@ public struct LayoutChordNote: Sendable, Equatable {
     /// `Note.accidentalBracket` and consumed by all three render paths
     /// (CALayer, SwiftUI Canvas, Android bridge) via `AccidentalGlyph.enclosure`.
     public let accidentalBracket: AccidentalBracket
+    /// Round parentheses drawn around this notehead. `.none` (default) =
+    /// none. Carried from `Note.parentheses` and consumed by all three
+    /// render paths via `NoteheadParenthesisGlyph.glyphs`.
+    public let parentheses: NoteParentheses
 
     public init(
         noteID: NoteID,
@@ -334,6 +338,7 @@ public struct LayoutChordNote: Sendable, Equatable {
         isInvisible: Bool = false,
         color: ScoreColor? = nil,
         accidentalBracket: AccidentalBracket = .none,
+        parentheses: NoteParentheses = .none,
     ) {
         self.noteID = noteID
         self.step = step
@@ -347,6 +352,7 @@ public struct LayoutChordNote: Sendable, Equatable {
         self.isInvisible = isInvisible
         self.color = color
         self.accidentalBracket = accidentalBracket
+        self.parentheses = parentheses
     }
 
     /// Horizontal offset from `origin.x` to the visual center of the
