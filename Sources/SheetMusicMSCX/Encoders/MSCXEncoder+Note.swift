@@ -45,6 +45,14 @@ extension Note {
                     text: String(accidentalBracket.rawValue),
                 ))
             }
+            // MuseScore writes `<role>` only for USER accidentals; AUTO
+            // is the default and omitted, so existing output is unchanged.
+            if accidentalRole == .user {
+                accChildren.append(XMLTreeNode(
+                    name: "role",
+                    text: String(accidentalRole.rawValue),
+                ))
+            }
             children.append(XMLTreeNode(name: "Accidental", children: accChildren))
         }
         if tieForward != nil {

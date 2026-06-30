@@ -10,7 +10,7 @@ extension Note {
         guard let tpcText = node.first("tpc")?.text, let tpc = Int(tpcText) else {
             throw SheetMusicError.malformedScore(reason: "Note missing <tpc>")
         }
-        let (accidental, accidentalBracket) = decodeAccidentalNode(node)
+        let (accidental, accidentalBracket, accidentalRole) = decodeAccidentalNode(node)
         // MuseScore 5.x encodes ties inside `<Note>` as
         // `<Spanner type="Tie">` with `<next>` (start) or `<prev>` (end).
         // Numbering is positional in MSCX; default to 1 when present.
@@ -54,6 +54,7 @@ extension Note {
             tpc: tpc,
             accidental: accidental,
             accidentalBracket: accidentalBracket,
+            accidentalRole: accidentalRole,
             tieForward: tieForward,
             tieBack: tieBack,
             glissando: glissando,
@@ -67,13 +68,15 @@ extension Note {
 
     /// Decode the `<Accidental>` child of a `<Note>` element.
     ///
-    /// Returns the decoded `Accidental` case (nil for missing or unknown subtype)
-    /// and the `AccidentalBracket` (`.none` when absent or unrecognized).
+    /// Returns the decoded `Accidental` case (nil for missing or unknown subtype),
+    /// the `AccidentalBracket` (`.none` when absent or unrecognized), and the
+    /// `AccidentalRole` (`.user` when `<role>1</role>` is present, else `.auto`
+    /// — MuseScore only writes `<role>` for USER accidentals).
     /// Unknown `<subtype>` values emit `mscx.accidental.unsupportedSubtype`.
     private static func decodeAccidentalNode(
         _ node: XMLTreeNode,
-    ) -> (accidental: Accidental?, bracket: AccidentalBracket) {
-        guard let accNode = node.first("Accidental") else { return (nil, .none) }
+    ) -> (accidental: Accidental?, bracket: AccidentalBracket, role: AccidentalRole) {
+        guard let accNode = node.first("Accidental") else { return (nil, .none, .auto) }
         var accidental: Accidental?
         if let subtype = accNode.first("subtype")?.text {
             if let decoded = Accidental(mscxSubtype: subtype) {
@@ -89,7 +92,11 @@ extension Note {
         if let text = accNode.first("bracket")?.text, let n = Int(text) {
             bracket = AccidentalBracket(rawValue: n) ?? .none
         }
-        return (accidental, bracket)
+        // `<role>1</role>` → USER; absent or 0 → AUTO. MuseScore writes
+        // the element only for USER accidentals.
+        let role: AccidentalRole = (accNode.first("role")?.text).flatMap(Int.init) == 1
+            ? .user : .auto
+        return (accidental, bracket, role)
     }
 
     /// Normalize `<head>` to a MS4 string token.

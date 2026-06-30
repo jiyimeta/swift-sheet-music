@@ -9,6 +9,13 @@ public struct Note: Sendable, Equatable {
     /// MuseScore stores `<bracket>1</bracket>` (parenthesis) or `<bracket>2</bracket>`
     /// (bracket) inside the `<Accidental>` element. Absent means `.none`.
     public var accidentalBracket: AccidentalBracket
+    /// Whether this note's accidental was placed automatically by the
+    /// engraver (`.auto`) or forced explicitly by the user (`.user`).
+    /// MuseScore writes `<Accidental><role>1</role>` only for USER
+    /// accidentals; absent means `.auto`. Drives redundant-accidental
+    /// suppression (`Score.suppressingRedundantAccidentals()`): a USER
+    /// accidental is never hidden even when redundant.
+    public var accidentalRole: AccidentalRole
     /// Tie continuing forward from this note. `nil` means no tie;
     /// `.some(n)` means a tie numbered `n` (MusicXML `<tie number="N">`;
     /// MSCX ties are positional and default to 1).
@@ -48,6 +55,7 @@ public struct Note: Sendable, Equatable {
         tpc: Int,
         accidental: Accidental? = nil,
         accidentalBracket: AccidentalBracket = .none,
+        accidentalRole: AccidentalRole = .auto,
         tieForward: Int? = nil,
         tieBack: Int? = nil,
         glissando: Glissando? = nil,
@@ -60,6 +68,7 @@ public struct Note: Sendable, Equatable {
         self.tpc = tpc
         self.accidental = accidental
         self.accidentalBracket = accidentalBracket
+        self.accidentalRole = accidentalRole
         self.tieForward = tieForward
         self.tieBack = tieBack
         self.glissando = glissando

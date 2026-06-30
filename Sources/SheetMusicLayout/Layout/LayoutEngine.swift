@@ -59,6 +59,11 @@ public enum LayoutEngine {
                     + "import SheetMusicUI / SheetMusicPDF (they auto-install).",
             )
         #endif
+        // Hide redundant auto-computed accidentals up front so every
+        // downstream pass (placement, glyph emission, caching) sees the
+        // same engraved set MuseScore would draw. USER accidentals and
+        // any note whose spelling can't be derived are left untouched.
+        let score = score.suppressingRedundantAccidentals()
         let metrics = StaffMetrics(staffSize: options.staffSize)
         let effectiveMelismaTicks = computeEffectiveMelismaTicks(
             score: score, division: score.division,
