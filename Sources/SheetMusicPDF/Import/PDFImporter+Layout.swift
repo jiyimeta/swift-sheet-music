@@ -263,21 +263,11 @@ extension PDFImporter {
         return widths[widths.count / 2]
     }
 
-    /// Sorted, deduplicated union of barline midXs across every staff in
-    /// the system.
-    private static func systemBarlineUnion(_ system: ImportSystem) -> [CGFloat] {
-        var xs: [CGFloat] = []
-        for part in system.parts {
-            for importStaff in part.staves {
-                xs.append(contentsOf: importStaff.staff.barlineCandidates.map(\.rect.midX))
-            }
-        }
-        return dedupSorted(xs)
-    }
-
     /// Sort + 1pt-coalesce — useful for both barline unions and the
-    /// per-staff split list.
-    private static func dedupSorted(_ xs: [CGFloat]) -> [CGFloat] {
+    /// per-staff split list. Internal (not file-private) so the
+    /// barline-consensus helper in `PDFImporter+BarlineConsensus.swift` can
+    /// reuse it.
+    static func dedupSorted(_ xs: [CGFloat]) -> [CGFloat] {
         xs.sorted().reduce(into: [CGFloat]()) { acc, x in
             if acc.last.map({ abs($0 - x) > 1 }) ?? true { acc.append(x) }
         }
