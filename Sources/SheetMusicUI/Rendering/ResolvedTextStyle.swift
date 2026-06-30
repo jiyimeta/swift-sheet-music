@@ -78,17 +78,61 @@ enum ResolvedTextStyle {
         /// Same fallback semantics as `font`: an unregistered face
         /// resolves to the platform default through CoreText's
         /// cascade list.
+        ///
+        /// Cached by (face, size, traits). The renderer reads `ctFont`
+        /// per text run / per element (often inside per-run loops), so
+        /// an uncached `CTFontCreateWithName` re-resolves the family
+        /// name on every draw — the source of the per-page-turn
+        /// main-thread stall and the CoreText "use PostScript names"
+        /// performance notes. The metrics provider already memoizes its
+        /// CTFonts; this mirrors that for the render path.
         var ctFont: CTFont {
-            var traits: CTFontSymbolicTraits = []
-            if isBold { traits.insert(.boldTrait) }
-            if isItalic { traits.insert(.italicTrait) }
-            let base = CTFontCreateWithName(
-                face as CFString, pointSize, nil,
+            TextCTFontCache.shared.font(
+                face: face,
+                pointSize: pointSize,
+                isBold: isBold,
+                isItalic: isItalic,
             )
-            if traits.isEmpty { return base }
-            return CTFontCreateCopyWithSymbolicTraits(
-                base, pointSize, nil, traits, traits,
-            ) ?? base
         }
+    }
+}
+
+/// Process-wide cache of render-path `CTFont`s, keyed by face + size + bold/italic. Mirrors the metrics-path cache in
+/// `AppleFontMetricsProvider`; together they ensure a given face/size font is created by CoreText once, not once per
+/// text element per frame. `@unchecked Sendable` + `NSLock` because `CTFontCreateWithName` for an unregistered family
+/// name can deadlock under concurrent access (same rationale as the metrics provider's lock).
+@available(macOS 15.0, *)
+private final class TextCTFontCache: @unchecked Sendable {
+    static let shared = TextCTFontCache()
+
+    private struct Key: Hashable {
+        let face: String
+        let pointSize: CGFloat
+        let isBold: Bool
+        let isItalic: Bool
+    }
+
+    private let lock = NSLock()
+    private var fonts: [Key: CTFont] = [:]
+
+    func font(
+        face: String,
+        pointSize: CGFloat,
+        isBold: Bool,
+        isItalic: Bool,
+    ) -> CTFont {
+        let key = Key(face: face, pointSize: pointSize, isBold: isBold, isItalic: isItalic)
+        lock.lock()
+        defer { lock.unlock() }
+        if let cached = fonts[key] { return cached }
+        var traits: CTFontSymbolicTraits = []
+        if isBold { traits.insert(.boldTrait) }
+        if isItalic { traits.insert(.italicTrait) }
+        let base = CTFontCreateWithName(face as CFString, pointSize, nil)
+        let resolved: CTFont = traits.isEmpty
+            ? base
+            : (CTFontCreateCopyWithSymbolicTraits(base, pointSize, nil, traits, traits) ?? base)
+        fonts[key] = resolved
+        return resolved
     }
 }
