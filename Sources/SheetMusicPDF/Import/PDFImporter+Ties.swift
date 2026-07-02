@@ -59,17 +59,141 @@ extension PDFImporter {
         let sp = pageStaffSpace(noteheads)
         let yTol = max(Self.tieYToleranceFloor, sp * Self.tieYToleranceSpatia)
         let xTol = max(Self.tieXToleranceFloor, sp * Self.tieXToleranceSpatia)
+        var unpaired: [CurveArc] = []
         for arc in curves {
             guard isTieShaped(arc) else { continue }
             guard let page = byPage[arc.pageIndex] else { continue }
             guard let (left, right) = pairEndpoints(
                 arc: arc, noteheads: page, yTol: yTol, xTol: xTol,
-            ) else { continue }
+            ) else {
+                unpaired.append(arc)
+                continue
+            }
             marks.forward.insert(NoteheadID(left.raw))
             marks.back.insert(NoteheadID(right.raw))
         }
+        // Second pass: tie-shaped arcs the two-anchor pairing could not
+        // consume are cross-system half-ties (see `markHalfTie`).
+        for arc in unpaired {
+            guard let page = byPage[arc.pageIndex] else { continue }
+            markHalfTie(
+                arc: arc, noteheads: page, staffSpace: sp,
+                yTol: yTol, xTol: xTol, into: &marks,
+            )
+        }
         return marks
     }
+
+    /// Recover a CROSS-SYSTEM (broken) tie from a tie-shaped arc that the
+    /// two-anchor pairing dropped. A tie spanning a system break renders
+    /// as TWO half-arcs — a forward stub hanging off the RIGHT of the
+    /// last note of a line and a back stub hanging into the LEFT of the
+    /// first note of the next line — each anchoring to only ONE notehead.
+    ///
+    /// Corpus measurement (6 scores): the un-paired tie-shaped arcs are
+    /// ~100% real cross-system ties, ~0% slurs —
+    /// - arcs whose two endpoints resolve to the SAME notehead (short
+    ///   margin stubs) were 100% cross-system stubs, 0 slurs;
+    /// - arcs where only the LEFT endpoint anchors and no notehead lies
+    ///   to the right were forward hanging ties; the only slur-like
+    ///   exceptions had a DIFFERENT-y notehead just past the arc, which
+    ///   either resolves as a cross-pitch right anchor (rejected below)
+    ///   or trips the nearby-notehead margin guard (`hasNearbyNotehead`).
+    private static func markHalfTie(
+        arc: CurveArc,
+        noteheads: [ClassifiedGlyph],
+        staffSpace: CGFloat,
+        yTol: CGFloat,
+        xTol: CGFloat,
+        into marks: inout TieMarks,
+    ) {
+        let arcY = arc.bbox.midY
+        let leftNH = nearestNotehead(
+            toX: arc.leftPoint.x, nearY: arcY,
+            noteheads: noteheads, xTol: xTol, yTol: yTol,
+        )
+        let rightNH = nearestNotehead(
+            toX: arc.rightPoint.x, nearY: arcY,
+            noteheads: noteheads,
+            xTol: max(xTol, Self.tieRightGapWidthRatio * arc.bbox.width),
+            yTol: yTol,
+        )
+        let guardSpan = Self.halfTieGuardSpanSpatia * staffSpace
+        let guardYBand = Self.halfTieGuardYBandSpatia * staffSpace
+        switch (leftNH, rightNH) {
+        case let (.some(left), .some(right))
+            where NoteheadID(left.raw) == NoteheadID(right.raw):
+            // Same-note margin stub: a half-tie hugging one note. Its
+            // horizontal centre tells which side it hangs off — right of
+            // the note ⇒ forward stub (line end), left ⇒ back stub
+            // (line start).
+            if arc.bbox.midX >= left.raw.origin.x {
+                marks.forward.insert(NoteheadID(left.raw))
+            } else {
+                marks.back.insert(NoteheadID(left.raw))
+            }
+        case let (.some(left), nil):
+            // Forward hanging tie — only when `left` is genuinely the
+            // last note before the margin. ANY notehead just past the
+            // arc (same y ⇒ missed full tie; different y ⇒ slur target,
+            // measured at |dy| ≈ 1.2–2 staff spaces on the corpus slurs)
+            // means this is not a line-end hang, so it must NOT drive a
+            // mark (slur guard).
+            guard !hasNearbyNotehead(
+                in: noteheads, atY: left.raw.origin.y, yBand: guardYBand,
+                xRange: arc.rightPoint.x ... arc.rightPoint.x + guardSpan,
+                excluding: NoteheadID(left.raw),
+            ) else { return }
+            marks.forward.insert(NoteheadID(left.raw))
+        case let (nil, .some(right)):
+            // Back hanging tie into a line start — symmetric guard on the
+            // left margin.
+            guard !hasNearbyNotehead(
+                in: noteheads, atY: right.raw.origin.y, yBand: guardYBand,
+                xRange: arc.leftPoint.x - guardSpan ... arc.leftPoint.x,
+                excluding: NoteheadID(right.raw),
+            ) else { return }
+            marks.back.insert(NoteheadID(right.raw))
+        default:
+            // No anchor, or two DISTINCT anchors the same-line pairing
+            // already rejected (cross-pitch ⇒ slur). Never mark.
+            return
+        }
+    }
+
+    /// Slur guard for one-anchor half-ties: TRUE when any OTHER notehead
+    /// sits within `yBand` of the anchor's `y` in the given x-window. A
+    /// genuine cross-system half-tie hangs into an empty margin, so ANY
+    /// neighbour there — same y (a missed full tie) or nearby different
+    /// y (a slur target; ロビンソン's fp slurs dropped ~2 staff spaces to
+    /// theirs) — means the arc is not a broken tie.
+    private static func hasNearbyNotehead(
+        in noteheads: [ClassifiedGlyph],
+        atY y: CGFloat,
+        yBand: CGFloat,
+        xRange: ClosedRange<CGFloat>,
+        excluding anchor: NoteheadID,
+    ) -> Bool {
+        noteheads.contains { g in
+            NoteheadID(g.raw) != anchor
+                && abs(g.raw.origin.y - y) <= yBand
+                && xRange.contains(g.raw.origin.x)
+        }
+    }
+
+    /// How far past the arc's free end the slur guard scans for a
+    /// neighbour, in staff spaces. The measured slur-like exceptions had
+    /// their far note within ~1.4–2.1 staff spaces of the arc end; 4
+    /// spaces gives comfortable margin while staying inside the margin
+    /// whitespace of a genuine line-end hang.
+    private static let halfTieGuardSpanSpatia: CGFloat = 4
+
+    /// Vertical half-band of the slur guard, in staff spaces. Wide
+    /// enough to see slur targets a few staff steps away from the
+    /// anchor (measured |dy| ≈ 1.2–2 spaces), narrow enough that a
+    /// line-end hang never vetoes on the NEXT system's notes (a full
+    /// system height away) or an adjacent staff of the same system.
+    private static let halfTieGuardYBandSpatia: CGFloat = 3
 
     /// Tie endpoint-pairing tolerances. The floor (page points) covers the
     /// constant rendering offset that dominates on small staves; the
