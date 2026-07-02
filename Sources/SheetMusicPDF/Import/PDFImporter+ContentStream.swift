@@ -218,13 +218,21 @@ extension PDFImporter {
                       let minY = ys.min(), let maxY = ys.max()
                 else { return }
                 let w = maxX - minX
+                let h = maxY - minY
                 // Augmentation dots / noteheads close as ~2pt circles; a tie
-                // or slur arc spans at least ~6pt. Drop sub-6pt curves.
-                guard w >= 6 else { return }
+                // or slur arc spans at least ~6pt. Drop sub-6pt curves —
+                // EXCEPT clearly flat narrow arcs: dense 16th-note ties
+                // render only 3.3–5.9pt wide (height 1.6–2.6pt). Flatness
+                // (height well under width) separates them from round dots
+                // (height ≈ width). Same band as `isTieShaped`
+                // (PDFImporter+Ties.swift).
+                let flatNarrow = w >= PDFImporter.tieNarrowWidthMin
+                    && h <= PDFImporter.tieNarrowFlatnessRatio * w
+                guard w >= 6 || flatNarrow else { return }
                 let left = pts.min { $0.x < $1.x } ?? pts[0]
                 let right = pts.max { $0.x < $1.x } ?? pts[pts.count - 1]
                 curveArcs.append(CurveArc(
-                    bbox: CGRect(x: minX, y: minY, width: w, height: maxY - minY),
+                    bbox: CGRect(x: minX, y: minY, width: w, height: h),
                     leftPoint: left,
                     rightPoint: right,
                     pageIndex: pageIndex,
