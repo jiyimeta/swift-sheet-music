@@ -227,6 +227,19 @@ extension PDFImporter {
         }
     }
 
+    /// True for a combined flag glyph (8th…64th, up or down). A flag carries
+    /// only a note's duration subdivision — never pitch — so it is safe to
+    /// capture from a wider vertical band than pitched glyphs.
+    static func isFlag(_ s: SMuFLSemantic) -> Bool {
+        switch s {
+        case .flag8thUp, .flag8thDown, .flag16thUp, .flag16thDown,
+             .flag32ndUp, .flag32ndDown, .flag64thUp, .flag64thDown:
+            true
+        default:
+            false
+        }
+    }
+
     /// Map an accidental glyph's semantic to a chromatic alteration.
     /// Returns nil for non-accidental glyphs.
     static func accidentalAlteration(_ s: SMuFLSemantic) -> Int? {
