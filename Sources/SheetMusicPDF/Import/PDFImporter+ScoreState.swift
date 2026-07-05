@@ -36,6 +36,21 @@ extension PDFImporter {
             if let timeSig = readTime(from: sorted) {
                 events.append(.timeSignature(timeSig, atMeasureIndex: i))
             }
+            // A clef change engraved at the END of this measure (a trailing
+            // courtesy clef, after all notes/rests) takes effect at the NEXT
+            // measure — MuseScore's before-the-barline semantics. Emit it at
+            // i+1 so a mid-system clef change is caught immediately rather
+            // than a whole system late. Idempotent with the next system's
+            // leading re-read. Also advance `runningClef` so measure i+1's
+            // key ladder (A1) anchors to the clef now in force; a no-op for
+            // same-family changes (カゲロウ G↔G8vb share a ladder shift) but
+            // correct should a bass↔treble change ever coincide with a key.
+            if i + 1 < staff.measures.count,
+               let trailing = readTrailingClef(from: sorted)
+            {
+                events.append(.clefChange(trailing, atMeasureIndex: i + 1))
+                runningClef = trailing
+            }
         }
         // Tempo is a system-level marking → recovered separately into
         // `Score.systemMeasures`; see PDFImporter+Tempo.
@@ -130,28 +145,68 @@ extension PDFImporter {
 
     // MARK: - Clef
 
+    /// The LEADING clef of a measure — the first clef glyph, scanning
+    /// left-to-right, before any notehead. Returns nil once a notehead is
+    /// reached (anything past it belongs to the notes, not the opening clef).
     private static func readClef(from glyphs: [ClassifiedGlyph]) -> Clef? {
         for glyph in glyphs {
-            switch glyph.semantic {
-            case .clefG: return Clef(concertClefType: "G")
-            case .clefG8vb: return Clef(concertClefType: "G8vb")
-            case .clefG8va: return Clef(concertClefType: "G8va")
-            case .clefG15ma: return Clef(concertClefType: "G15ma")
-            case .clefG15mb: return Clef(concertClefType: "G15mb")
-            case .clefF: return Clef(concertClefType: "F")
-            case .clefF8va: return Clef(concertClefType: "F8va")
-            case .clefF8vb: return Clef(concertClefType: "F8vb")
-            case .clefF15ma: return Clef(concertClefType: "F15ma")
-            case .clefF15mb: return Clef(concertClefType: "F15mb")
-            case .clefC: return Clef(concertClefType: "C")
-            case .clefPercussion: return Clef(concertClefType: "PERCUSSION")
-            case .noteheadBlack, .noteheadHalf, .noteheadWhole, .noteheadDoubleWhole,
-                 .noteheadXBlack, .noteheadXHalf, .noteheadXWhole:
-                return nil
-            default: continue
-            }
+            if let clef = clef(for: glyph.semantic) { return clef }
+            if isNotehead(glyph.semantic) { return nil }
         }
         return nil
+    }
+
+    /// A clef glyph engraved AFTER this measure's last notehead / rest — the
+    /// small courtesy clef MuseScore draws just before the barline when the
+    /// clef changes at the FOLLOWING measure boundary. Returns the clef the
+    /// change introduces (the caller applies it at measure `i + 1`), or nil
+    /// when the measure carries no post-content clef.
+    ///
+    /// A mid-system clef change is drawn ONCE, as this trailing glyph in
+    /// measure i's cell — it is NOT re-shown at the start of measure i+1
+    /// (only system-leading clefs are re-shown). Without reading it every
+    /// mid-system clef change was missed until the next system re-showed the
+    /// clef, shifting a run of measures an octave (カゲロウ p0 m68 read G8vb
+    /// where truth is G → the whole cell an octave low). Emitting the change
+    /// at i+1 is idempotent with the next system's leading re-read: both set
+    /// the same clef at the same measure index.
+    private static func readTrailingClef(from sorted: [ClassifiedGlyph]) -> Clef? {
+        // x of the last content glyph (notehead or rest). A clef strictly to
+        // its right is a trailing courtesy clef; a clef to its left is the
+        // measure's own leading clef (handled by `readClef`), not a change.
+        var lastContentX: CGFloat?
+        for g in sorted {
+            let isRest = if case .rest = g.semantic { true } else { false }
+            if isNotehead(g.semantic) || isRest {
+                lastContentX = g.raw.origin.x
+            }
+        }
+        guard let lastContentX else { return nil }
+        for g in sorted where g.raw.origin.x > lastContentX {
+            if let clef = clef(for: g.semantic) { return clef }
+        }
+        return nil
+    }
+
+    /// Map a clef glyph's semantic to its `Clef`. Returns nil for any
+    /// non-clef semantic. Shared by the leading (`readClef`) and trailing
+    /// (`readTrailingClef`) readers.
+    private static func clef(for semantic: SMuFLSemantic) -> Clef? {
+        switch semantic {
+        case .clefG: Clef(concertClefType: "G")
+        case .clefG8vb: Clef(concertClefType: "G8vb")
+        case .clefG8va: Clef(concertClefType: "G8va")
+        case .clefG15ma: Clef(concertClefType: "G15ma")
+        case .clefG15mb: Clef(concertClefType: "G15mb")
+        case .clefF: Clef(concertClefType: "F")
+        case .clefF8va: Clef(concertClefType: "F8va")
+        case .clefF8vb: Clef(concertClefType: "F8vb")
+        case .clefF15ma: Clef(concertClefType: "F15ma")
+        case .clefF15mb: Clef(concertClefType: "F15mb")
+        case .clefC: Clef(concertClefType: "C")
+        case .clefPercussion: Clef(concertClefType: "PERCUSSION")
+        default: nil
+        }
     }
 
     // MARK: - Time signature
