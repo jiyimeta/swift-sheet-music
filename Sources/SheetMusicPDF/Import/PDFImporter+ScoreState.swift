@@ -14,12 +14,23 @@ extension PDFImporter {
         staff: ImportStaff, texts: [TextGlyph],
     ) -> [ScoreStateEvent] {
         var events: [ScoreStateEvent] = []
+        // Running clef across measures: a mid-piece key signature can sit on a
+        // measure that declares no clef of its own, yet the canonical
+        // key-accidental ladder (see `readKey`) is anchored to the clef in
+        // force. Carry the last-seen clef forward so `readKey` always has the
+        // right ladder. (F8va → plain-F downgrade happens later in
+        // `buildMeasures`, but both share a bottom-line step so the ladder is
+        // identical — no interaction.)
+        var runningClef = Clef(concertClefType: "G")
         for (i, measure) in staff.measures.enumerated() {
             let sorted = measure.glyphs.sorted { $0.raw.origin.x < $1.raw.origin.x }
             if let clef = readClef(from: sorted) {
+                runningClef = clef
                 events.append(.clefChange(clef, atMeasureIndex: i))
             }
-            if let key = readKey(from: sorted) {
+            if let key = readKey(
+                sorted: sorted, clef: runningClef, yLines: measure.staffYLines,
+            ) {
                 events.append(.keySignature(key, atMeasureIndex: i))
             }
             if let timeSig = readTime(from: sorted) {
@@ -143,78 +154,6 @@ extension PDFImporter {
         return nil
     }
 
-    // MARK: - Key signature
-
-    /// Read the leading key signature, if any. Only accidentals that
-    /// belong to the key-signature BLOCK count — an accidental tightly
-    /// bound to a following notehead (a local accidental: same y, just to
-    /// the left of the note) is excluded.
-    ///
-    /// Without this exclusion a measure that simply STARTS on a flatted
-    /// melodic note read as a spurious one-flat key change, which then
-    /// flattened every diatonic note for the rest of the measure (observed
-    /// on the Gibbs score: 25 measures flipped A's `key=1` to `B=-1`,
-    /// dragging F♯→F♮, B→B♭ etc. and tanking the per-note pitch metric).
-    private static func readKey(from glyphs: [ClassifiedGlyph]) -> KeySignature? {
-        let sorted = glyphs.sorted { $0.raw.origin.x < $1.raw.origin.x }
-        var sharps = 0
-        var flats = 0
-        for (i, glyph) in sorted.enumerated() {
-            switch glyph.semantic {
-            case .accidentalSharp:
-                if !pairsWithFollowingNotehead(at: i, in: sorted) { sharps += 1 }
-            case .accidentalFlat, .accidentalNatural:
-                if !pairsWithFollowingNotehead(at: i, in: sorted) {
-                    if case .accidentalFlat = glyph.semantic { flats += 1 }
-                    // A leading natural in the key block (cancellation) is
-                    // not counted toward sharps/flats — it neither adds nor
-                    // removes here; key inference is by net sharps/flats.
-                }
-            case .noteheadBlack, .noteheadHalf, .noteheadWhole, .noteheadDoubleWhole,
-                 .noteheadXBlack, .noteheadXHalf, .noteheadXWhole:
-                // Stop at the first notehead — anything after is a note,
-                // not part of the leading key signature.
-                return finalize(sharps: sharps, flats: flats)
-            default: continue
-            }
-        }
-        return finalize(sharps: sharps, flats: flats)
-    }
-
-    /// True when the accidental at `index` is a LOCAL accidental: a
-    /// notehead follows it at (near) the same y and close in x — the
-    /// visual signature of an accidental modifying that single note,
-    /// rather than a key-signature accidental (which sits at a canonical
-    /// staff position with the notes spaced well to its right).
-    private static func pairsWithFollowingNotehead(
-        at index: Int, in sorted: [ClassifiedGlyph],
-    ) -> Bool {
-        let acc = sorted[index]
-        guard index + 1 < sorted.count else { return false }
-        for j in (index + 1) ..< sorted.count {
-            let g = sorted[j]
-            switch g.semantic {
-            case .noteheadBlack, .noteheadHalf,
-                 .noteheadWhole, .noteheadDoubleWhole,
-                 .noteheadXBlack, .noteheadXHalf, .noteheadXWhole:
-                let dx = g.raw.origin.x - acc.raw.origin.x
-                let dy = abs(g.raw.origin.y - acc.raw.origin.y)
-                // Local accidental: notehead is just to the right (≤ ~14pt)
-                // at essentially the same y (≤ ~2pt, i.e. same staff line).
-                return dx >= 0 && dx <= 14 && dy <= 2
-            default:
-                continue
-            }
-        }
-        return false
-    }
-
-    private static func finalize(sharps: Int, flats: Int) -> KeySignature? {
-        if sharps > 0 { return KeySignature(concertKey: sharps) }
-        if flats > 0 { return KeySignature(concertKey: -flats) }
-        return nil
-    }
-
     // MARK: - Time signature
 
     private static func readTime(from glyphs: [ClassifiedGlyph]) -> TimeSignature? {
@@ -295,5 +234,4 @@ extension PDFImporter {
         }
         return clusters
     }
-
 }
