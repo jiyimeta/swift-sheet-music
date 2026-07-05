@@ -38,6 +38,7 @@ extension PDFImporter {
     static func reconcileMeasureDurations(
         elements: [RhythmElement],
         timeSignature: TimeSignature,
+        spatium: CGFloat,
         diagnostics: ((PDFImportDiagnostic) -> Void)? = nil,
         location: String = "",
     ) -> [RhythmElement] {
@@ -59,6 +60,7 @@ extension PDFImporter {
             reconcileVoiceGroup(
                 indices: group,
                 barLength: barLength,
+                spatium: spatium,
                 elements: &repaired,
                 diagnostics: diagnostics,
                 location: location,
@@ -114,6 +116,7 @@ extension PDFImporter {
     private static func reconcileVoiceGroup(
         indices: [Int],
         barLength: Fraction,
+        spatium: CGFloat,
         elements: inout [RhythmElement],
         diagnostics: ((PDFImportDiagnostic) -> Void)?,
         location: String,
@@ -187,8 +190,8 @@ extension PDFImporter {
             if ProcessInfo.processInfo.environment["PDF_NO_TUPLET"] != "1",
                tupletRepair(
                    indices: indices, barLength: barLength,
-                   currentSum: currentSum, elements: &elements,
-                   location: location,
+                   currentSum: currentSum, spatium: spatium,
+                   elements: &elements, location: location,
                )
             {
                 return
