@@ -223,6 +223,7 @@ extension PDFImporter {
             let note = Note(
                 pitch: dp.midi,
                 tpc: dp.tpc,
+                accidental: dp.accidental,
                 tieForward: tieMarks.forward.contains(id) ? 1 : nil,
                 tieBack: tieMarks.back.contains(id) ? 1 : nil,
             )
