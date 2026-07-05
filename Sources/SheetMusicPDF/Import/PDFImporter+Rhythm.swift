@@ -68,6 +68,7 @@ extension PDFImporter {
             .map(\.raw.origin)
         let levelByStem = computeBeamLevels(
             stems: stems, beams: beams, noteheadOrigins: noteheadOrigins,
+            spatium: spatium,
         )
 
         var elements: [RhythmElement] = []
