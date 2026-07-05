@@ -164,6 +164,16 @@ extension PDFImporter {
             else { continue }
             // Don't "repair" to the value the note already has.
             if elements[idx].chord.duration == candidate { continue }
+            // Notehead-shape legality: a FILLED (black) notehead is drawn only
+            // for a quarter or shorter (its longest form, a double-dotted
+            // quarter, is 7/16 < 1/2); a half / whole needs a HOLLOW head. So
+            // never inflate a filled note to a half-or-longer value — that is
+            // geometrically impossible and only ever papers over a drum-staff
+            // voice-assignment error (地球儀 kick q→h). Leave the voice
+            // unbalanced (a diagnostic) rather than fabricate a wrong half.
+            if elements[idx].noteheadIsFilled,
+               candidate.asFraction.numerator * 2 >= candidate.asFraction.denominator
+            { continue }
             let isLow = elements[idx].lowConfidenceDuration
             let spacingErr = onsetFitResidual(
                 candidateIndex: idx, indices: indices,

@@ -179,6 +179,17 @@ extension PDFImporter {
         }
     }
 
+    /// True for a FILLED notehead (black / X-black), drawn for a quarter or
+    /// shorter value. A half / whole / double-whole is HOLLOW. Used by the
+    /// reconciliation pass to reject a geometrically-impossible re-value of a
+    /// filled note to a half-or-longer duration.
+    static func isFilledNotehead(_ s: SMuFLSemantic) -> Bool {
+        switch s {
+        case .noteheadBlack, .noteheadXBlack: true
+        default: false
+        }
+    }
+
     /// True for a combined flag glyph (8th…64th, up or down). A flag carries
     /// only a note's duration subdivision — never pitch — so it is safe to
     /// capture from a wider vertical band than pitched glyphs.

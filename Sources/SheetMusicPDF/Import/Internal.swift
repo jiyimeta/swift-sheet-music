@@ -217,6 +217,18 @@ struct RhythmElement {
     /// notes, and directly-beamed black noteheads).
     var lowConfidenceDuration = false
 
+    /// Whether this chord's lead notehead is FILLED (black / X-black). A
+    /// filled notehead is drawn for a quarter or shorter (quarter, eighth,
+    /// 16th, … — optionally dotted, max a double-dotted quarter = 7/16); a
+    /// half / whole / breve has a HOLLOW head. The metric-sum reconciliation
+    /// pass (PDFImporter+RhythmReconcile) uses this to refuse to inflate a
+    /// filled note to a half-or-longer value — geometrically impossible, so
+    /// such a "repair" only ever papers over a voice-assignment error on a
+    /// drum staff (the 地球儀 kick q→h over-inflation). Defaults to `true`
+    /// (the common black notehead / irrelevant for rests, which are never
+    /// re-valued); set from the lead glyph in `assembleChord`.
+    var noteheadIsFilled = true
+
     /// Per-note rects (PDF page coords, y-up), aligned 1:1 with
     /// `chord.notes` in deduped survivor order. Populated only on the
     /// geometry-capture path (`parseWithGeometry`); empty for rests and on

@@ -195,6 +195,7 @@ extension PDFImporter {
             stemDirection: dir,
             beamGroup: nil,
             lowConfidenceDuration: flagShortened,
+            noteheadIsFilled: isFilledNotehead(lead.semantic),
             noteRects: noteRects,
             onsetRect: PDFGeometryRects.union(noteRects),
         )
