@@ -23,6 +23,13 @@
         @Binding var magnification: CGFloat
         @Binding var isMarqueeMode: Bool
         @Binding var collapseMultiMeasureRests: Bool
+        /// Prepends a metronome pre-roll before playback starts. Verification
+        /// toggle for `PlaybackEngine.play(from:in:countIn:)`.
+        @Binding var isCountInEnabled: Bool
+        /// Whether the metronome sounds during the count-in AND the body of
+        /// playback. Defaults to `false` in `ContentViewMac` so the count-in
+        /// can be verified in isolation, with the body metronome off.
+        @Binding var isMetronomeEnabled: Bool
         @Binding var showsInvisibleElements: Bool
         @Binding var transposeSemitones: Int
 
@@ -93,6 +100,12 @@
                     Text("Space = play / pause")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
+                    Toggle(isOn: $isCountInEnabled) {
+                        Label("Count-in", systemImage: "timer")
+                    }
+                    Toggle(isOn: $isMetronomeEnabled) {
+                        Label("Metronome", systemImage: "metronome")
+                    }
                 }
                 Section("Export") {
                     Button("Save as PDF…", action: onExportPDF)

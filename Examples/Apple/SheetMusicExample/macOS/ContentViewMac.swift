@@ -178,6 +178,12 @@
         /// scroll or click. Toggled from the sidebar.
         @State private var isMarqueeMode = false
         @State private var collapseMultiMeasureRests = false
+        /// Prepends a metronome pre-roll before playback starts. Default
+        /// `true` for easy verification of `PlaybackEngine.play(from:in:countIn:)`.
+        @State private var isCountInEnabled = true
+        /// Whether the metronome sounds (count-in AND body). Default `false`
+        /// so a count-in can be verified in isolation, with the metronome off.
+        @State private var isMetronomeEnabled = false
         /// MuseScore "Show Invisible" toggle. When ON, elements with
         /// `visible == false` are laid out and drawn at 50 % opacity
         /// (= MuseScore's `#808080` on white). When OFF (print default),
@@ -238,6 +244,8 @@
                     magnification: $magnification,
                     isMarqueeMode: $isMarqueeMode,
                     collapseMultiMeasureRests: $collapseMultiMeasureRests,
+                    isCountInEnabled: $isCountInEnabled,
+                    isMetronomeEnabled: $isMetronomeEnabled,
                     showsInvisibleElements: $showsInvisibleElements,
                     transposeSemitones: $transposeSemitones,
                     onLoadBundled: loadBundled,
@@ -296,6 +304,9 @@
             }
             .onChange(of: showsInvisibleElements) { _, _ in
                 rebuildLayoutsForOptionsChange()
+            }
+            .onChange(of: isMetronomeEnabled) { _, newValue in
+                playbackEngine.setMuted(forChannel: .metronome, to: !newValue)
             }
             .onChange(of: transposeSemitones) { _, newValue in
                 playbackEngine.setTranspose(semitones: newValue)
@@ -521,8 +532,13 @@
 
         private func togglePlayback() {
             guard let score else { return }
+            // Re-assert the toggle's value right before starting playback —
+            // `prepare(score:)` rebuilds the mixer channels (incl. the
+            // metronome strip) to their defaults on every score (re)load, so
+            // a stale mixer state could otherwise silently win.
+            playbackEngine.setMuted(forChannel: .metronome, to: !isMetronomeEnabled)
             playbackEngine.togglePlayback(
-                score: score, selection: selection,
+                score: score, selection: selection, countIn: isCountInEnabled,
             )
         }
 

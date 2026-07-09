@@ -45,14 +45,14 @@ extension PlaybackEngine {
     /// it. The cursor is dropped explicitly by tap handling when
     /// the user makes a NEW selection — at that point we fall
     /// through to the selection branch.
-    func togglePlayback(score: Score, selection: ScoreSelection) {
+    func togglePlayback(score: Score, selection: ScoreSelection, countIn: Bool = false) {
         switch state {
         case .playing:
             pause()
         case .paused, .stopped:
             let from: ScoreCursor? = currentCursor
                 ?? selection.playFrom(engine: self).map { .item($0) }
-            play(from: from, in: score)
+            play(from: from, in: score, countIn: countIn)
         case .exporting:
             break // Do not interrupt an in-progress audio export.
         }
