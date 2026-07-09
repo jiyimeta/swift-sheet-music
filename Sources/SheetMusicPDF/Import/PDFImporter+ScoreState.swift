@@ -24,6 +24,11 @@ extension PDFImporter {
         // `buildMeasures`, but both share a bottom-line step so the ladder is
         // identical — no interaction.)
         var runningClef = Clef(concertClefType: "G")
+        // Running key across measures: a mid-score change engraved as a
+        // naturals-only cancellation is only recognizable relative to the
+        // key it cancels, so `readKey` / `readTrailingKey` need the key in
+        // force (see PDFImporter+KeyReader). Starts at C major (0).
+        var runningKey = KeySignature(concertKey: 0)
         for (i, measure) in staff.measures.enumerated() {
             let sorted = measure.glyphs.sorted { $0.raw.origin.x < $1.raw.origin.x }
             if let clef = readClef(from: sorted) {
@@ -32,7 +37,9 @@ extension PDFImporter {
             }
             if let key = readKey(
                 sorted: sorted, clef: runningClef, yLines: measure.staffYLines,
+                runningKey: runningKey,
             ) {
+                runningKey = key
                 events.append(.keySignature(key, atMeasureIndex: i))
             }
             if let timeSig = readTime(from: sorted) {
@@ -69,6 +76,20 @@ extension PDFImporter {
             {
                 events.append(.clefChange(trailing, atMeasureIndex: i + 1))
                 runningClef = trailing
+            }
+            // A to-C key change on the next system's first measure is drawn
+            // as a trailing courtesy cancellation here (naturals only) and —
+            // unlike a clef — is NOT re-shown at the incoming system's start,
+            // so read it now and apply at i+1, mirroring the trailing clef.
+            // We emit even at the last index (i+1 == count): `appendSystem`
+            // folds that boundary event into the key carried to the next
+            // system. Mid-system (i+1 < count) it applies to measure i+1.
+            if let trailingKey = readTrailingKey(
+                sorted: sorted, clef: runningClef,
+                yLines: measure.staffYLines, runningKey: runningKey,
+            ) {
+                runningKey = trailingKey
+                events.append(.keySignature(trailingKey, atMeasureIndex: i + 1))
             }
         }
         // Tempo is a system-level marking → recovered separately into

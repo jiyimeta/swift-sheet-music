@@ -350,6 +350,17 @@ extension PDFImporter {
                 geometry: geometry,
             ))
         }
+        // Fold a boundary event pointing PAST this system's last measure
+        // (index == measure count) into the carried state — a to-C key
+        // cancellation drawn as a trailing courtesy at the end of the
+        // outgoing system, whose change takes effect at the next system's
+        // first measure (which shows nothing for C major). Clefs/keys/times
+        // that ARE re-shown next system just re-sync there; this only
+        // matters for the silent to-C case.
+        (clef, key, ts) = applyEvents(
+            events, atMeasure: importStaff.measures.count,
+            clef: clef, key: key, ts: ts,
+        )
         state.clef[slot] = clef
         state.key[slot] = key
         state.time[slot] = ts

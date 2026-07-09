@@ -44,8 +44,17 @@ extension PDFImporter {
     /// line), so it needs only the clef **family** — supplied via the staff
     /// anchor's `bottomStep`. When no anchor is available (degenerate staff
     /// lines) it falls back to the legacy proximity reader.
+    ///
+    /// `runningKey` is the key currently in force. When the leading region
+    /// carries a NEW sharp/flat block it wins outright (the block gives the
+    /// signature, and any leading naturals ahead of it are just the outgoing
+    /// key's cancellation). When there is NO sharp/flat block, a leading
+    /// naturals block that cancels the running key is a change TO C MAJOR —
+    /// `readNaturalsCancellation` recognizes it (see there for why this is
+    /// the only naturals case the block path can't already handle).
     static func readKey(
         sorted: [ClassifiedGlyph], clef: Clef, yLines: [CGFloat],
+        runningKey: KeySignature,
     ) -> KeySignature? {
         guard let anchor = staffAnchor(clef: clef, yLines: yLines),
               anchor.lineSpacing > 0
@@ -54,11 +63,10 @@ extension PDFImporter {
 
         // Gather the leading accidentals up to (but not including) the first
         // notehead: a notehead ends the leading region — anything after it is
-        // melodic, not part of the key signature. Naturals (alt == 0) are
-        // cancellation marks; they neither add nor remove (key inference is by
-        // net sharps/flats), matching the legacy behaviour.
+        // melodic, not part of the key signature.
         var sharpAccs: [(index: Int, sa: Int, x: CGFloat)] = []
         var flatAccs: [(index: Int, sa: Int, x: CGFloat)] = []
+        var naturalAccs: [(index: Int, sa: Int, x: CGFloat)] = []
         for (i, g) in sorted.enumerated() {
             if isNotehead(g.semantic) { break }
             guard let alt = accidentalAlteration(g.semantic) else { continue }
@@ -67,6 +75,8 @@ extension PDFImporter {
                 sharpAccs.append((i, sa, g.raw.origin.x))
             } else if alt < 0 {
                 flatAccs.append((i, sa, g.raw.origin.x))
+            } else {
+                naturalAccs.append((i, sa, g.raw.origin.x))
             }
         }
 
@@ -81,8 +91,14 @@ extension PDFImporter {
             ladder: trebleFlatLadder.map { $0 + shift },
             lineSpacing: anchor.lineSpacing,
         )
-        // A real key block is one type only. Prefer whichever matched longer.
-        guard max(sharpN, flatN) > 0 else { return nil }
+        // No new sharp/flat block: the only remaining key event is a
+        // naturals-only cancellation of the running key to C major.
+        guard max(sharpN, flatN) > 0 else {
+            return readNaturalsCancellation(
+                naturalAccs: naturalAccs, runningKey: runningKey,
+                anchor: anchor, sorted: sorted,
+            )
+        }
 
         // Safety valve — a **single** ladder[0]-aligned accidental that also
         // HUGS the following notehead (same staff line, immediately left) is a
@@ -101,6 +117,93 @@ extension PDFImporter {
         return sharpN >= flatN
             ? KeySignature(concertKey: sharpN)
             : KeySignature(concertKey: -flatN)
+    }
+
+    /// A mid-score key change to a signature with FEWER accidentals is
+    /// engraved as a **naturals-only cancellation** — one ♮ at each of the
+    /// outgoing key's canonical ladder positions, with no new sharps/flats
+    /// following. `readKey`'s sharp/flat-block path already reads every OTHER
+    /// naturals case correctly (a change to another sharp/flat key shows the
+    /// new block, which the block path counts and returns — the leading
+    /// naturals are ignored harmlessly). The ONE case it can't see is the
+    /// change to C major, where nothing but naturals is drawn: the block
+    /// path finds `sharpN == flatN == 0` and would return nil, leaving the
+    /// outgoing key wrongly in force (チャンカパーナ 3♯→C at m66; SHINY_DAYS
+    /// 3♯→C at m8). MuseScore cancels EXACTLY the running key's accidentals,
+    /// so a naturals block matching the running key's full ladder (`n ==
+    /// |runningKey|`), x-cohesive, is that change → C major.
+    ///
+    /// Guards mirror the block reader: no running accidentals to cancel ⇒
+    /// nothing to do; and a lone natural (running key ±1) that HUGS the
+    /// following note is a local accidental, not a cancellation.
+    private static func readNaturalsCancellation(
+        naturalAccs: [(index: Int, sa: Int, x: CGFloat)],
+        runningKey: KeySignature, anchor: StaffAnchor,
+        sorted: [ClassifiedGlyph],
+    ) -> KeySignature? {
+        let outgoing = runningKey.concertKey
+        guard outgoing != 0, !naturalAccs.isEmpty else { return nil }
+        let shift = 2 - anchor.bottomStep
+        let ladder = (outgoing > 0 ? trebleSharpLadder : trebleFlatLadder)
+            .map { $0 + shift }
+        let n = ladderPrefixCount(
+            naturalAccs.map { (sa: $0.sa, x: $0.x) },
+            ladder: ladder, lineSpacing: anchor.lineSpacing,
+        )
+        // A naturals-only cancellation cancels the WHOLE running key — a
+        // partial naturals block would leave residual accidentals that are
+        // shown as sharps/flats (handled by the block path), never as bare
+        // naturals. Requiring the full count also makes a stray single
+        // courtesy natural (which only reaches count 1 when |runningKey|==1)
+        // fall to the hug guard below rather than firing spuriously.
+        guard n == abs(outgoing) else { return nil }
+        if n == 1, pairsWithFollowingNotehead(at: naturalAccs[0].index, in: sorted) {
+            return nil
+        }
+        return KeySignature(concertKey: 0)
+    }
+
+    /// A naturals-only cancellation engraved as a COURTESY at the END of a
+    /// measure — the ♮ block drawn after the last note, just before the
+    /// barline, when the change to C major falls on the next system's first
+    /// measure (a system-break key change: MuseScore shows the cancellation
+    /// at the end of the outgoing system and nothing at the incoming
+    /// system's start, so the leading reader never sees it —
+    /// チャンカパーナ 3♯→C effective m27, drawn trailing in m26). The caller
+    /// applies the returned key at measure `i + 1`, mirroring
+    /// `readTrailingClef`.
+    ///
+    /// Scoped to naturals only: a courtesy that introduces a NON-C key shows
+    /// that key's sharp/flat block, which the NEXT system's leading measure
+    /// re-shows and `readKey` reads there — so a trailing sharp/flat is left
+    /// alone here (returning nil) to avoid a miscount. `readNaturalsCancellation`
+    /// enforces the full-ladder match.
+    static func readTrailingKey(
+        sorted: [ClassifiedGlyph], clef: Clef, yLines: [CGFloat],
+        runningKey: KeySignature,
+    ) -> KeySignature? {
+        guard runningKey.concertKey != 0,
+              let anchor = staffAnchor(clef: clef, yLines: yLines),
+              anchor.lineSpacing > 0
+        else { return nil }
+        var lastContentX: CGFloat?
+        for g in sorted {
+            let isRest = if case .rest = g.semantic { true } else { false }
+            if isNotehead(g.semantic) || isRest { lastContentX = g.raw.origin.x }
+        }
+        guard let lastContentX else { return nil }
+        let halfStep = anchor.lineSpacing / 2
+        var naturalAccs: [(index: Int, sa: Int, x: CGFloat)] = []
+        for (i, g) in sorted.enumerated() where g.raw.origin.x > lastContentX {
+            guard let alt = accidentalAlteration(g.semantic) else { continue }
+            if alt != 0 { return nil }
+            let sa = Int(((g.raw.origin.y - anchor.bottomY) / halfStep).rounded())
+            naturalAccs.append((i, sa, g.raw.origin.x))
+        }
+        return readNaturalsCancellation(
+            naturalAccs: naturalAccs, runningKey: runningKey,
+            anchor: anchor, sorted: sorted,
+        )
     }
 
     /// Longest prefix of `accs` (x-ordered, single accidental type) that
