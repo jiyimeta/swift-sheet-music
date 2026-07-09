@@ -179,3 +179,69 @@ posture — it is **not committed**. Round baselines live in the session scratch
 `clusters_final.txt`, and `baselines/round-N.tsv` snapshots) as the mechanical diff
 base for every round. Only the aggregate stats and representative names (above) are
 committed. The final frozen baseline committed in R6 is aggregate-only.
+
+## Execution results (2026-07-10)
+
+The cycle ran R0 → R2c (8 rounds). Every round held the three gates (curated 6
+byte-identical, real already-good set no-regression, target cluster moves) and
+preserved determinism. Commits are on `worktree-pdf-import-real-corpus` (not
+merged/pushed). PDFs were exported with the native `mscore` CLI (MS3/MS4
+format-routed), 132/133 names covered.
+
+### Metric progression (132 scored real-corpus scores)
+
+| stage | already-good (po≥95∧dur≥90) | median po | mean po | below-90 po | crashes |
+|---|---|---|---|---|---|
+| baseline (R0-corrected) | 60 | 98 | 72 | 53 | 2 |
+| R2b part-structure | 95 | 99 | 92 | 21 | 0 |
+| R3 hidden-part scoring | 96 | 99 | 92.6 | 20 | 0 |
+| R4 octave + R4b key | 106 | 99 | 94.3 | 12 | 0 |
+| R2c grand-staff coupling (final) | **107** | **99** | **95.2** | **12** | **0** |
+
+Curated 6 byte-identical at every round. Final: dur median 98 / mean 93.2, tie
+median 99 / mean 96.7; true importer content loss (`partLoss>0`) on **1** score.
+
+### Two corrections to the original plan
+1. **R2a (determinism) — unplanned, foundational.** The importer's structure
+   output was per-process nondeterministic (hash-seed-dependent Dictionary/Set
+   iteration): the same PDF scored 96% or 9% across runs. Fixed by deterministic
+   iteration order — nothing measurement-gated could be trusted until then.
+2. **C2 was a ground-truth artifact, not an importer bug.** The plan hypothesized
+   whole parts lost to 1-line percussion staves invisible to `detectStaves`.
+   Verified diagnosis: the "lost" parts are `<show>0</show>` — marked invisible in
+   the source, never engraved in the PDF (ファンファーレ Perc 2157 notes, 365日
+   Lead[0] 594 notes). The importer imports 100% of printed content. Fixed in the
+   harness (R3) by excluding hidden A-parts from scoring. Exactly one genuine
+   reduced-line-staff loss exists corpus-wide (The_Feels, 23 notes), deferred.
+
+### Round ledger (commits)
+- R0 harness hygiene (content part-alignment, `.mscx`, probe dir, holdout) — spec `013a0b76`.
+- R1 crash robustness ("90" → `Fraction(9,0)` guard) + R2a determinism — `9dee19ec`.
+- R2b part-structure (system-barline clustering, `SystemsSpanning.swift`) — `7df2fbfd`.
+- R3 hidden-part scoring (harness, untracked — no Sources change).
+- R4 E065 ottava-clef octave by ensemble voicing — `a8451f79`.
+- R4b naturals-only key-cancellation to C — `00fb6007`.
+- R2c grand-staff coupling by brace glyph U+E000 (separation invariant vs square
+  brackets), extracted to `PDFImporter+Coupling.swift` — this round.
+
+### Remaining below-90 tail (12) — heterogeneous / near-ceiling
+No single mechanism affects ≥3 pieces with a clean shared root; further gains are
+per-score, each a distinct root:
+- **Multi-measure-rest H-bars** — `mimicopy_ラストオーダー`/`mimicopy_ベーコンエピ`
+  collapse 100 measures to ~17–18 because a "N-bar" H-rest (e.g. "83"/"84") is read
+  as one measure; needs an expand-mm-rest mechanism (distinct from R2c coupling).
+- **Grand-staff internal alignment** — `疑事無功_piano` (coupling now correct, one
+  part; but the two braced staves' voices/measures don't interleave, po=7).
+- Per-score singletons: `Girls_Be_Free 4` (part-count 6→5), `Join_Us_ito`,
+  `君がいないから+2`, `つよがるガール_bass` (single-staff), `BGM_20250522`,
+  `mimicopy_恵比寿`, `idea20241203`, `あみまんじゅうの歌`.
+
+### Follow-ups (not done this session)
+- **Multi-measure-rest expansion**: read an "N" H-bar rest as N measures (fixes the
+  mimicopy_ラストオーダー/ベーコンエピ 100→17 collapse).
+- **Grand-staff internal alignment**: brace coupling is correct now (R2c), but the
+  two braced staves' voices/measures still don't interleave (疑事無功_piano po=7).
+- The_Feels 1-line handclap staff detection (option B — Sources, +23 notes, 1 score).
+- Dedicated dur/tie micro-fix (S8 regime) for the ~5 po-OK / dur-below-90 scores.
+- The spike harness (`PDFCorpusGroundTruthSpikeTests.swift`) stays untracked;
+  preserve it (copy) if the worktree is torn down.
