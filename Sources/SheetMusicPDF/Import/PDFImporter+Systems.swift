@@ -62,8 +62,14 @@ extension PDFImporter {
             groups[si, default: []].append(staff)
         }
         // Spines are unsorted; emit groups in page top→bottom order
-        // (descending PDF y) to match the caller's expectation.
-        let ordered = groups.keys.sorted { spines[$0].yHi > spines[$1].yHi }
+        // (descending PDF y) to match the caller's expectation. Ties on yHi
+        // break by x then index — `groups.keys` comes out in hash order, so
+        // a bare yHi sort would leave equal-yHi spines seed-dependent.
+        let ordered = groups.keys.sorted { a, b in
+            if spines[a].yHi != spines[b].yHi { return spines[a].yHi > spines[b].yHi }
+            if spines[a].x != spines[b].x { return spines[a].x < spines[b].x }
+            return a < b
+        }
         return ordered.map { si in
             (groups[si] ?? []).sorted { $0.yLines.first ?? 0 > $1.yLines.first ?? 0 }
         }
@@ -120,7 +126,10 @@ extension PDFImporter {
             byX[Int(v.rect.midX.rounded()), default: []].append(v)
         }
         var out: [VerticalRun] = []
-        for (_, group) in byX {
+        // Emit runs in left→right x order: Dictionary iteration is hash-seed
+        // dependent, and the run order feeds spine selection downstream
+        // (`spineClusteredSystems` picks the FIRST containing spine).
+        for (_, group) in byX.sorted(by: { $0.key < $1.key }) {
             let sorted = group.sorted { $0.rect.minY < $1.rect.minY }
             guard var lo = sorted.first?.rect.minY,
                   var hi = sorted.first?.rect.maxY,

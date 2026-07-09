@@ -258,6 +258,22 @@ extension PDFImporter {
         var time: [Int: TimeSignature] = [:]
     }
 
+    /// Rewrite every F8va clef event to the whole-part resolved clef decided
+    /// by `resolveF8vaSlots` (see `disambiguateF8vaClef`). A nil override or a
+    /// non-F8va clef is left untouched. Extracted from `buildMeasures` to keep
+    /// its body within the function-length limit.
+    fileprivate static func remapF8vaClef(
+        _ events: [ScoreStateEvent], to clefOverride: Clef?,
+    ) -> [ScoreStateEvent] {
+        guard let clefOverride else { return events }
+        return events.map { ev in
+            if case let .clefChange(c, mi) = ev, c.concertClefType == "F8va" {
+                return .clefChange(clefOverride, atMeasureIndex: mi)
+            }
+            return ev
+        }
+    }
+
     /// Walk `importStaff.measures` left-to-right, applying score-state
     /// events from this staff and producing a `Measure` per cell.
     fileprivate static func buildMeasures(
@@ -275,19 +291,13 @@ extension PDFImporter {
         options: PDFImportOptions,
         geometry: PDFGeometryCollector?,
     ) -> [Measure] {
-        var events = scoreStateEvents(staff: importStaff, texts: [])
+        var events = scoreStateEvents(
+            staff: importStaff, texts: [],
+            diagnostics: options.diagnostics, location: location,
+        )
         // Apply the whole-part E065 (F8va) clef resolution decided up front by
-        // `resolveF8vaSlots`: rewrite every F8va clef event on this slot to the
-        // resolved clef (plain F). Confined to the F8va case — other clefs are
-        // untouched. See `disambiguateF8vaClef`.
-        if let clefOverride {
-            events = events.map { ev in
-                if case let .clefChange(c, mi) = ev, c.concertClefType == "F8va" {
-                    return .clefChange(clefOverride, atMeasureIndex: mi)
-                }
-                return ev
-            }
-        }
+        // `resolveF8vaSlots`. Confined to the F8va case. See `remapF8vaClef`.
+        events = remapF8vaClef(events, to: clefOverride)
         let priorClef = state.clef[slot]
         let priorKey = state.key[slot]
         let priorTime = state.time[slot]

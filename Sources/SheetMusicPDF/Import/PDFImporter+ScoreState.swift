@@ -12,6 +12,8 @@ extension PDFImporter {
     /// measure 0 of the staff (best-effort).
     static func scoreStateEvents(
         staff: ImportStaff, texts: [TextGlyph],
+        diagnostics: ((PDFImportDiagnostic) -> Void)? = nil,
+        location: String = "",
     ) -> [ScoreStateEvent] {
         var events: [ScoreStateEvent] = []
         // Running clef across measures: a mid-piece key signature can sit on a
@@ -34,7 +36,24 @@ extension PDFImporter {
                 events.append(.keySignature(key, atMeasureIndex: i))
             }
             if let timeSig = readTime(from: sorted) {
-                events.append(.timeSignature(timeSig, atMeasureIndex: i))
+                // Validate before the signature enters the score state: a PDF
+                // is hostile input, and stray digit glyphs (e.g. a horizontal
+                // "90" from a metronome number engraved with SMuFL time-sig
+                // digits) can decode as nonsense like 9/0. A non-positive
+                // numerator or denominator would crash `Fraction` downstream
+                // (bar-length math) — drop the event so the prevailing time
+                // signature (else the 4/4 default) stays in force, and warn.
+                if timeSig.numerator > 0, timeSig.denominator > 0 {
+                    events.append(.timeSignature(timeSig, atMeasureIndex: i))
+                } else {
+                    diagnostics?(PDFImportDiagnostic(
+                        severity: .warning,
+                        location: "\(location), measure \(i)",
+                        message: "ignoring invalid time signature "
+                            + "\(timeSig.numerator)/\(timeSig.denominator) — "
+                            + "keeping the prevailing time signature",
+                    ))
+                }
             }
             // A clef change engraved at the END of this measure (a trailing
             // courtesy clef, after all notes/rests) takes effect at the NEXT
