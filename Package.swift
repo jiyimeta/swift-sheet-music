@@ -194,6 +194,10 @@ if !isAndroid {
                 "SheetMusicUI",
             ],
         ),
+        .testTarget(
+            name: "SheetMusicAudioAppleTests",
+            dependencies: ["SheetMusicAudioApple"],
+        ),
     ]
 }
 
