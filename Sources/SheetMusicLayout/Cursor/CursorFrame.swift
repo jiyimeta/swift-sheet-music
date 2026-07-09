@@ -15,6 +15,24 @@ extension LayoutDocument {
     ) -> CGRect? {
         switch cursor {
         case let .item(id):
+            // A measure-fill rest (`NoteDuration.measure`) renders
+            // *centered* in the bar, not on its rhythmic onset column
+            // (`LayoutEngine+Placement`'s `isMeasureRest` branch). Parking
+            // the playback cursor on that centered glyph would sit it at
+            // the measure midpoint even though the rest's onset — and the
+            // tick the engine seeks to (`itemTicks[.rest]` = measure start)
+            // — is beat 1. Redirect to the beat-1 column so the visible
+            // cursor matches the audio position (and any beat-1 chord on
+            // another staff). Mirrors the whole-rest skip already applied
+            // in `beatXInMeasure` and `PlaybackTimeline`, closing the same
+            // gap on the `.item` frame path (a tap on the rest glyph).
+            if case let .rest(restID) = id, isMeasureFillRest(restID) {
+                return beatFrame(
+                    measureIndex: restID.measureIndex,
+                    tickInMeasure: 0,
+                    score: score,
+                )
+            }
             return itemFrame(id)
         case let .beat(measureIndex, tickInMeasure):
             return beatFrame(
@@ -23,6 +41,26 @@ extension LayoutDocument {
                 score: score,
             )
         }
+    }
+
+    /// True when `restID` resolves to a measure-fill rest
+    /// (`NoteDuration.measure`) in the laid-out score — the kind
+    /// `LayoutEngine+Placement` centers in the bar. Such a rest's layout
+    /// `origin.x` is the measure midpoint, not its tick-0 column, so the
+    /// playback cursor must not anchor to it directly.
+    private func isMeasureFillRest(_ restID: RestID) -> Bool {
+        for system in systems {
+            for measure in system.measures {
+                for element in measure.elements {
+                    if case let .rest(duration, _, _, rid, _) = element,
+                       rid == restID
+                    {
+                        return duration == .measure
+                    }
+                }
+            }
+        }
+        return false
     }
 
     private func itemFrame(_ id: ScoreItemID) -> CGRect? {
