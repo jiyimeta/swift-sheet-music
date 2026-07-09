@@ -718,13 +718,24 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         guard state != .exporting else { return }
         guard let timeline else { return }
         do {
+            // Nil-cursor parity with `positionForNormalPlay`: while not stopped, a nil cursor means
+            // "resume from the current position"; only when stopped does it mean "from the top". A
+            // count-in play (and any forced rebuild) can't inherit the sequencer's retained beat — the
+            // sequence is re-anchored / freshly built at 0 — so it anchors at the engine's own
+            // `currentCursor`, which survives `pause()` and is nil after `stop()`. Without this, a
+            // resume-with-count-in (a host that passes nil on resume, as the normal path allows) would
+            // restart at m1.
+            let startCursor = Self.effectiveStartCursor(
+                cursor: cursor, isStopped: state == .stopped, currentCursor: currentCursor,
+            )
             let plan = countIn
-                ? CountInBeats.compute(score: score, startCursor: cursor)
+                ? CountInBeats.compute(score: score, startCursor: startCursor)
                 : nil
+            var didRebuildNormal = false
             if let plan {
                 // Count-in sequences are start-specific (the shift depends on
                 // `baseTick`), so they are rebuilt on every count-in play.
-                let baseTick = cursor
+                let baseTick = startCursor
                     .flatMap { timeline.frame(forCursor: $0)?.tick } ?? 0
                 sequenceMap = SequenceMap(
                     preRollTicks: plan.preRollTicks, baseTick: baseTick,
@@ -744,6 +755,7 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
                 try buildSequencer(for: score)
                 sequencerHasPreRoll = false
                 sequencerScore = score
+                didRebuildNormal = true
             }
             guard let sequencer else { return }
             // Resume the audio graph if a previous `pause()` paused it.
@@ -758,11 +770,18 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
                 // stays put until the pre-roll completes and real playback
                 // crosses into the shifted score content.
                 sequencer.currentPositionInBeats = 0
-                currentCursor = cursor
+                currentCursor = startCursor
                     .flatMap { timeline.frame(forCursor: $0)?.cursor }
                     ?? timeline.frame(atTick: sequenceMap.baseTick)?.cursor
             } else {
-                positionForNormalPlay(cursor: cursor, timeline: timeline, sequencer: sequencer)
+                // A forced rebuild (leaving a prior count-in) yields a fresh sequencer parked at beat
+                // 0; feed it the effective resume cursor so a nil cursor doesn't silently restart at
+                // m1. The reuse path keeps passing the raw `cursor` so exact mid-note beat retention
+                // (nil → stay put) is untouched.
+                positionForNormalPlay(
+                    cursor: didRebuildNormal ? startCursor : cursor,
+                    timeline: timeline, sequencer: sequencer,
+                )
             }
             // Re-assert pitch-bend sensitivity NOW that the engine is
             // running, the sequencer is loaded, and tracks are routed
@@ -1166,6 +1185,13 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     }
 
     private func buildSequencer(for score: Score) throws {
+        // Release the previous sequencer before creating its replacement — see the detailed note in
+        // `buildCountInSequencer`. Two `AVAudioSequencer`s on one engine must never overlap, or the
+        // old one's dealloc nulls the new one's engine sequence (every voice → sine seed tone). This
+        // path is reachable with a live old sequencer via a forced rebuild after a count-in play
+        // (`sequencerHasPreRoll`) — e.g. tap-to-seek during a count-in, or count-in toggled off.
+        sequencer?.stop()
+        sequencer = nil
         let sequencer = AVAudioSequencer(audioEngine: engine)
         // SheetMusicMIDI emits 1 track per staff (see
         // `MidiRenderer.render`). We append a metronome track to
@@ -1214,6 +1240,17 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     private func buildCountInSequencer(
         for score: Score, plan: CountInBeats.Result, baseTick: Int,
     ) throws {
+        // Release the previous sequencer BEFORE creating its replacement. Two `AVAudioSequencer`s
+        // bound to one `AVAudioEngine` must never coexist: the engine holds a single `MusicSequence`
+        // slot, and `AVAudioSequencer.dealloc` unconditionally calls `engine.setMusicSequence(nil)`.
+        // If the new sequencer has already claimed that slot at init, the *old* one's dealloc then
+        // detaches the *new* sequence — Core Audio falls the orphaned sequence back onto its bank-less
+        // default monotimbral synth, so every track (notes AND metronome clicks) degrades to the seed
+        // sine tone on the second count-in play. Niling here deallocs the old sequencer while its own
+        // sequence still owns the slot (a clean detach); `MetronomeController` holds its tracks weakly
+        // so the dealloc is prompt. Same hazard, same fix in `buildSequencer`.
+        sequencer?.stop()
+        sequencer = nil
         let sequencer = AVAudioSequencer(audioEngine: engine)
         let assembled = try PreRollSequenceAssembler.assemble(
             rendered: cachedRender(score),
@@ -1264,6 +1301,17 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         guard let scoreTick = sequenceMap.scoreTick(fromSequencer: rawSequencerTick)
         else { return nil }
         return timeline.frame(atTick: scoreTick)?.cursor
+    }
+
+    /// The cursor a `play(from:)` should actually anchor at, resolving the nil-cursor convention the
+    /// same way `positionForNormalPlay` does: an explicit `cursor` always wins; a nil cursor means
+    /// "resume from the current position" while playing/paused, and "from the top" (nil) only when
+    /// stopped. Extracted (and `nonisolated`) so the resume-vs-restart choice is unit-testable without
+    /// an audio graph — the count-in rebuild depends on it to avoid restarting at m1 on resume.
+    nonisolated static func effectiveStartCursor(
+        cursor: ScoreCursor?, isStopped: Bool, currentCursor: ScoreCursor?,
+    ) -> ScoreCursor? {
+        cursor ?? (isStopped ? nil : currentCursor)
     }
 
     private func startCursorTimer() {

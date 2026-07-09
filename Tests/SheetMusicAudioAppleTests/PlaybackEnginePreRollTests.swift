@@ -205,4 +205,34 @@ struct PlaybackEnginePreRollTests {
                 == timeline.frame(atTick: 480)?.cursor,
         )
     }
+
+    // MARK: - Nil-cursor resume semantics (guards the count-in "restart at m1 on resume" bug)
+
+    @Test func effectiveStartCursorResolvesNilAsResumeUnlessStopped() {
+        let explicit = ScoreCursor.beat(measureIndex: 3, tickInMeasure: 0)
+        let current = ScoreCursor.beat(measureIndex: 1, tickInMeasure: 240)
+
+        // An explicit cursor always wins, regardless of state / current position.
+        #expect(PlaybackEngine.effectiveStartCursor(
+            cursor: explicit, isStopped: true, currentCursor: current,
+        ) == explicit)
+        #expect(PlaybackEngine.effectiveStartCursor(
+            cursor: explicit, isStopped: false, currentCursor: nil,
+        ) == explicit)
+
+        // Nil cursor while NOT stopped (paused/playing) → resume from the current position.
+        #expect(PlaybackEngine.effectiveStartCursor(
+            cursor: nil, isStopped: false, currentCursor: current,
+        ) == current)
+
+        // Nil cursor while stopped → from the top (nil → measure 1).
+        #expect(PlaybackEngine.effectiveStartCursor(
+            cursor: nil, isStopped: true, currentCursor: current,
+        ) == nil)
+
+        // Nil cursor, not stopped, but no current position → nil.
+        #expect(PlaybackEngine.effectiveStartCursor(
+            cursor: nil, isStopped: false, currentCursor: nil,
+        ) == nil)
+    }
 }
