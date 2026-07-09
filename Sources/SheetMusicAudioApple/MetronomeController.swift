@@ -27,6 +27,11 @@ final class MetronomeController {
     /// the old sequencer alive; we track its index in `tracks` to
     /// resolve the live track on each toggle.
     private weak var track: AVMusicTrack?
+    /// The sequencer track scheduling the count-in pre-roll clicks, if
+    /// any. Routed to the same `sampler` as `track` but never muted by
+    /// `isEnabled` — the pre-roll must sound even when the in-playback
+    /// metronome toggle is off.
+    private var preRollTrack: AVMusicTrack?
     private var loadedSoundfontURL: URL?
 
     /// User-facing toggle. Defaults to `true` to match MuseScore
@@ -126,11 +131,21 @@ final class MetronomeController {
     func attach(to sequencer: AVAudioSequencer) {
         guard let sampler, let last = sequencer.tracks.last else {
             track = nil
+            preRollTrack = nil
             return
         }
         last.destinationAudioUnit = sampler
         last.isMuted = !isEnabled
         track = last
+    }
+
+    /// Route an additional always-on click track (the count-in pre-roll) to the metronome sampler. Its mute is
+    /// never tied to `isEnabled`, so the count-in sounds even when the metronome toggle is off.
+    func attachPreRoll(track: AVMusicTrack) {
+        guard let sampler else { return }
+        track.destinationAudioUnit = sampler
+        track.isMuted = false
+        preRollTrack = track
     }
 
     func teardown() {
@@ -141,5 +156,6 @@ final class MetronomeController {
         sampler = nil
         loadedSoundfontURL = nil
         track = nil
+        preRollTrack = nil
     }
 }
