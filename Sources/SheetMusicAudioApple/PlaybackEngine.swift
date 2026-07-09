@@ -138,6 +138,28 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// against a different score, the sequencer is torn down so
     /// the next `play` rebuilds it.
     private var sequencerScore: Score?
+    /// Translates the sequencer's raw tick space to the score's. A
+    /// count-in play shifts all score content forward past a pre-roll
+    /// region (`SequenceMap(preRollTicks:baseTick:)`); a normal play
+    /// leaves it `.identity` (pass-through). EVERY raw read/write of
+    /// `sequencer.currentPositionInBeats` is routed through this so the
+    /// cursor, loop-wrap, seek, skip, and time reporting all speak
+    /// score ticks regardless of the pre-roll offset.
+    private var sequenceMap: SequenceMap = .identity
+    /// True when the loaded sequence is a count-in build (shifted +
+    /// pre-roll click track). A normal `play` reuses an existing
+    /// sequencer for the same score, but a count-in sequence is
+    /// start-cursor-specific (the shift depends on `baseTick`), so it
+    /// must be rebuilt every count-in play and must NOT be silently
+    /// reused as a normal sequence — this flag forces a normal rebuild
+    /// after any count-in.
+    private var sequencerHasPreRoll = false
+    /// Cached `MidiRenderer.render(score:)` output (the expensive step),
+    /// keyed by the score it was rendered from. A count-in play
+    /// re-assembles the SMF (shift + pre-roll) on every start; caching
+    /// the render keeps per-play cost at re-assembly + `sequencer.load`
+    /// rather than a full re-render of every note.
+    private var renderedMidiCache: (score: Score, midi: MidiFile)?
     /// Most recent rate set by the host. Stored separately from the
     /// sequencer so the value survives `buildSequencer` rebuilds —
     /// every fresh `AVAudioSequencer` starts at 1.0 and we re-apply
@@ -420,6 +442,9 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         clearLoop()
         sequencer = nil
         sequencerScore = nil
+        sequenceMap = .identity
+        sequencerHasPreRoll = false
+        renderedMidiCache = nil
         timeline = PlaybackTimeline(score: score)
         metronomeBeats = PlaybackTimeline.metronomeBeats(score: score)
         // Resolve the metronome's SoundFont through the click provider:
@@ -680,12 +705,44 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// its matching staff sampler. Subsequent calls just rewind /
     /// re-position the existing sequencer, which keeps re-press of
     /// Space / the play button cheap.
-    public func play(from cursor: ScoreCursor? = nil, in score: Score) {
+    ///
+    /// When `countIn` is true and the score yields a non-degenerate
+    /// count-in schedule, a metronome pre-roll is prepended to the
+    /// sequence: clicks sound for one prepended measure (plus any
+    /// anacrusis / mid-measure lead-in), the cursor is pinned at the
+    /// start position, and real playback begins once the pre-roll
+    /// completes. See `SequenceMap` / `PreRollSequenceAssembler`.
+    public func play(
+        from cursor: ScoreCursor? = nil, in score: Score, countIn: Bool = false,
+    ) {
         guard state != .exporting else { return }
         guard let timeline else { return }
         do {
-            if sequencer == nil || sequencerScore != score {
+            let plan = countIn
+                ? CountInBeats.compute(score: score, startCursor: cursor)
+                : nil
+            if let plan {
+                // Count-in sequences are start-specific (the shift depends on
+                // `baseTick`), so they are rebuilt on every count-in play.
+                let baseTick = cursor
+                    .flatMap { timeline.frame(forCursor: $0)?.tick } ?? 0
+                sequenceMap = SequenceMap(
+                    preRollTicks: plan.preRollTicks, baseTick: baseTick,
+                )
+                try buildCountInSequencer(
+                    for: score, plan: plan, baseTick: baseTick,
+                )
+                sequencerHasPreRoll = true
+                sequencerScore = score
+            } else if sequencer == nil || sequencerScore != score
+                || sequencerHasPreRoll
+            {
+                // Normal build. A prior count-in leaves `sequencerHasPreRoll`
+                // set, forcing a rebuild here so the shifted sequence is never
+                // reused as an un-shifted one.
+                sequenceMap = .identity
                 try buildSequencer(for: score)
+                sequencerHasPreRoll = false
                 sequencerScore = score
             }
             guard let sequencer else { return }
@@ -695,37 +752,17 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
             if !engine.isRunning {
                 try engine.start()
             }
-            // Position by beats. `currentPositionInSeconds` is derived
-            // from beats using the player's current tempo (not the
-            // tempo map), so seeking via seconds on a tempo-curved
-            // score lands at the wrong tick. Beats / ticks bypass that.
-            //
-            // `targetTick == nil` means "resume from the paused
-            // position" — leave the sequencer's beat alone unless a
-            // loop snap forces a move.
-            var targetTick: Int?
-            if let cursor, let frame = timeline.frame(forCursor: cursor) {
-                targetTick = frame.tick
-            } else if state == .stopped {
-                targetTick = 0
-            }
-            if let loop = loopRange {
-                let probeTick = targetTick ?? Int(
-                    (
-                        sequencer.currentPositionInBeats
-                            * Double(timeline.division)
-                    ).rounded(),
-                )
-                if probeTick < loop.startTick
-                    || probeTick >= loop.endTick
-                {
-                    targetTick = loop.startTick
-                }
-            }
-            if let t = targetTick {
-                sequencer.currentPositionInBeats =
-                    Double(t) / Double(timeline.division)
-                currentCursor = timeline.frame(atTick: t)?.cursor
+            if sequencerHasPreRoll {
+                // Start at the pre-roll origin (sequencer tick 0) and pin the
+                // cursor at the start position so it shows immediately — it
+                // stays put until the pre-roll completes and real playback
+                // crosses into the shifted score content.
+                sequencer.currentPositionInBeats = 0
+                currentCursor = cursor
+                    .flatMap { timeline.frame(forCursor: $0)?.cursor }
+                    ?? timeline.frame(atTick: sequenceMap.baseTick)?.cursor
+            } else {
+                positionForNormalPlay(cursor: cursor, timeline: timeline, sequencer: sequencer)
             }
             // Re-assert pitch-bend sensitivity NOW that the engine is
             // running, the sequencer is loaded, and tracks are routed
@@ -761,6 +798,46 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         }
     }
 
+    /// Position the sequencer for a normal (no count-in) play. Runs only with
+    /// `sequenceMap == .identity`, so raw sequencer ticks equal score ticks and
+    /// no translation is needed here. Extracted verbatim from the pre-count-in
+    /// `play` so the normal path is behavior-for-behavior unchanged.
+    private func positionForNormalPlay(
+        cursor: ScoreCursor?, timeline: PlaybackTimeline, sequencer: AVAudioSequencer,
+    ) {
+        // Position by beats. `currentPositionInSeconds` is derived from beats
+        // using the player's current tempo (not the tempo map), so seeking via
+        // seconds on a tempo-curved score lands at the wrong tick. Beats /
+        // ticks bypass that.
+        //
+        // `targetTick == nil` means "resume from the paused position" — leave
+        // the sequencer's beat alone unless a loop snap forces a move.
+        var targetTick: Int?
+        if let cursor, let frame = timeline.frame(forCursor: cursor) {
+            targetTick = frame.tick
+        } else if state == .stopped {
+            targetTick = 0
+        }
+        if let loop = loopRange {
+            let probeTick = targetTick ?? Int(
+                (
+                    sequencer.currentPositionInBeats
+                        * Double(timeline.division)
+                ).rounded(),
+            )
+            if probeTick < loop.startTick
+                || probeTick >= loop.endTick
+            {
+                targetTick = loop.startTick
+            }
+        }
+        if let t = targetTick {
+            sequencer.currentPositionInBeats =
+                Double(t) / Double(timeline.division)
+            currentCursor = timeline.frame(atTick: t)?.cursor
+        }
+    }
+
     /// Reposition the playback cursor without changing play / pause
     /// state. Used for click-to-seek during playback — the user taps
     /// a note and audio jumps to that note while continuing to play.
@@ -775,7 +852,8 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         }
         let tick = snapTickToLoop(frame.tick)
         sequencer.currentPositionInBeats =
-            Double(tick) / Double(timeline.division)
+            Double(sequenceMap.sequencerTick(fromScore: tick))
+            / Double(timeline.division)
         currentCursor = timeline.frame(atTick: tick)?.cursor
     }
 
@@ -855,10 +933,15 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// climbs past the loop end and saturates at score end.
     public var currentTimeSeconds: TimeInterval {
         guard let timeline, let sequencer else { return 0 }
-        let rawTick = Int(
+        let rawSeqTick = Int(
             (sequencer.currentPositionInBeats * Double(timeline.division))
                 .rounded(),
         )
+        // Translate to score ticks; during the pre-roll (`nil`) the cursor is
+        // pinned at the start, so report the start position's time via
+        // `baseTick`.
+        let rawTick = sequenceMap.scoreTick(fromSequencer: rawSeqTick)
+            ?? sequenceMap.baseTick
         let tick: Int
         if let loop = loopRange, rawTick >= loop.endTick {
             let len = loop.endTick - loop.startTick
@@ -878,7 +961,12 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// unrounded tick fed to `PlaybackTimeline.seconds(atTick:)`.
     public var currentTimeSecondsContinuous: TimeInterval {
         guard let timeline, let sequencer else { return 0 }
-        let rawTick = sequencer.currentPositionInBeats * Double(timeline.division)
+        let rawSeqTick = sequencer.currentPositionInBeats * Double(timeline.division)
+        // Translate to score ticks; during the pre-roll clamp to `baseTick`
+        // (the pinned start position). Identity map ⇒ pass-through.
+        let rawTick: Double = rawSeqTick < Double(sequenceMap.preRollTicks)
+            ? Double(sequenceMap.baseTick)
+            : Double(sequenceMap.baseTick) + (rawSeqTick - Double(sequenceMap.preRollTicks))
         let tick: Double
         if let loop = loopRange, rawTick >= Double(loop.endTick) {
             let len = Double(loop.endTick - loop.startTick)
@@ -917,7 +1005,8 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         } else {
             let tick = snapTickToLoop(frame.tick)
             sequencer.currentPositionInBeats =
-                Double(tick) / Double(timeline.division)
+                Double(sequenceMap.sequencerTick(fromScore: tick))
+                / Double(timeline.division)
             currentCursor = timeline.frame(atTick: tick)?.cursor
         }
     }
@@ -1055,6 +1144,27 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         MidiSynthPostProcess.apply(midi: &midi, mixerManagedChannels: mixerManagedChannels)
     }
 
+    /// MIDI channels whose volume / program the live mixer owns (each staff's
+    /// primary channel). Passed to `MidiSynthPostProcess` so those channels'
+    /// tick-0 program / CC 7 are stripped and the mixer stays the sole authority.
+    private var mixerManagedChannels: Set<Int> {
+        Set(staffMIDIChannels.values.map(Int.init))
+    }
+
+    /// `MidiRenderer.render(score:)` behind a one-entry cache keyed by score.
+    /// Rendering every note is the expensive step; a count-in play re-assembles
+    /// the SMF on every start, so caching the render keeps per-play cost at
+    /// re-assembly + `sequencer.load`. Returns a value copy (`MidiFile` is a
+    /// struct), so callers mutate freely without disturbing the cache.
+    private func cachedRender(_ score: Score) throws -> MidiFile {
+        if let cached = renderedMidiCache, cached.score == score {
+            return cached.midi
+        }
+        let midi = try MidiRenderer.render(score: score)
+        renderedMidiCache = (score, midi)
+        return midi
+    }
+
     private func buildSequencer(for score: Score) throws {
         let sequencer = AVAudioSequencer(audioEngine: engine)
         // SheetMusicMIDI emits 1 track per staff (see
@@ -1063,13 +1173,10 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         // public `MidiRenderer.render` / `SheetMusic.exportMIDI`
         // path stays free of metronome events; only this playback
         // pipeline injects them.
-        var midi = try MidiRenderer.render(score: score)
-        midi.tracks.append(metronome.metronomeTrack(
-            beats: metronomeBeats, division: midi.division,
-        ))
-        Self.postProcessForMIDISynth(
-            midi: &midi,
-            mixerManagedChannels: Set(staffMIDIChannels.values.map(Int.init)),
+        let midi = try PreRollSequenceAssembler.assembleNormal(
+            rendered: cachedRender(score),
+            metronomeBeats: metronomeBeats,
+            mixerManagedChannels: mixerManagedChannels,
         )
         let bytes = try MidiWriter.write(midi)
         try sequencer.load(from: bytes, options: [])
@@ -1097,6 +1204,66 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
             }
         }
         self.sequencer = sequencer
+    }
+
+    /// Build the count-in sequencer: the score's rendered content shifted past a
+    /// metronome pre-roll region, a tempo seeded at sequencer tick 0, the
+    /// toggle-gated body metronome (same shift), and a separate always-on
+    /// pre-roll click track. `sequenceMap` (set by the caller) translates every
+    /// later raw-position read/write back into score ticks.
+    private func buildCountInSequencer(
+        for score: Score, plan: CountInBeats.Result, baseTick: Int,
+    ) throws {
+        let sequencer = AVAudioSequencer(audioEngine: engine)
+        let assembled = try PreRollSequenceAssembler.assemble(
+            rendered: cachedRender(score),
+            metronomeBeats: metronomeBeats,
+            mixerManagedChannels: mixerManagedChannels,
+            plan: plan,
+            baseTick: baseTick,
+        )
+        let bytes = try MidiWriter.write(assembled.midi)
+        try sequencer.load(from: bytes, options: [])
+        // Route each staff track to its owning synth. The two trailing tracks
+        // (pre-roll click, then the body metronome as `.last`) are the
+        // metronome's; skip them here.
+        let staffCount = staffIsDrum.count
+        for (trackIdx, track) in sequencer.tracks.enumerated() {
+            guard trackIdx < staffCount else { continue }
+            track.destinationAudioUnit = synth(forStaff: trackIdx)
+        }
+        // Route the body metronome (`.last`, toggle-gated) exactly as normal,
+        // then the always-on pre-roll click track.
+        metronome.attach(to: sequencer)
+        if assembled.preRollTrackIndex < sequencer.tracks.count {
+            metronome.attachPreRoll(
+                track: sequencer.tracks[assembled.preRollTrackIndex],
+            )
+        }
+        sequencer.rate = pendingRate
+        sequencer.prepareToPlay()
+        if let melodicSynth {
+            for ch: UInt8 in 0 ..< 16 where ch != 9 {
+                MIDISynthBuilder.setPitchBendSensitivity(
+                    into: melodicSynth, semitones: 12, onChannel: ch,
+                )
+            }
+        }
+        self.sequencer = sequencer
+    }
+
+    /// Pure core of `tickCursor`'s "raw sequencer tick → cursor" mapping,
+    /// factored (and `static`) so it is unit-testable without a live sequencer
+    /// or audio graph. Returns `nil` while inside the count-in pre-roll — the
+    /// signal for `tickCursor` to keep `currentCursor` pinned at the start —
+    /// and the frame cursor at the mapped score tick otherwise. `nonisolated`
+    /// (it touches no actor state) so it is callable from a synchronous test.
+    nonisolated static func mappedCursor(
+        rawSequencerTick: Int, sequenceMap: SequenceMap, timeline: PlaybackTimeline,
+    ) -> ScoreCursor? {
+        guard let scoreTick = sequenceMap.scoreTick(fromSequencer: rawSequencerTick)
+        else { return nil }
+        return timeline.frame(atTick: scoreTick)?.cursor
     }
 
     private func startCursorTimer() {
@@ -1133,7 +1300,14 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
             state = .stopped
             return
         }
-        let rawTick = Int((beats * Double(timeline.division)).rounded())
+        let rawSeqTick = Int((beats * Double(timeline.division)).rounded())
+        // Translate the raw sequencer tick into a score tick. `nil` means we're
+        // still inside the count-in pre-roll — keep `currentCursor` pinned at
+        // the start position (set at play time) and take no action until real
+        // playback crosses into the shifted score content.
+        guard let tick = sequenceMap.scoreTick(fromSequencer: rawSeqTick) else {
+            return
+        }
         // Manual loop wrap. See `loopRange`'s doc comment for why we
         // can't lean on `AVMusicTrack.loopRange`: it wraps per-track
         // playheads sample-accurately but leaves the SMF master tempo
@@ -1143,11 +1317,10 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         // reruns AVAudioSequencer's tempo-track event scan up to the
         // new position, restoring the tempo trajectory for every
         // iteration.
-        if let loop = loopRange, rawTick >= loop.endTick {
+        if let loop = loopRange, tick >= loop.endTick {
             wrapToLoopStart(loop)
             return
         }
-        let tick = rawTick
         if let frame = timeline.frame(atTick: tick) {
             if frame.cursor != currentCursor {
                 currentCursor = frame.cursor
@@ -1167,8 +1340,14 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// `tickCursor` when the polled position reaches the loop end.
     func wrapToLoopStart(_ loop: LoopRange) {
         guard let sequencer, let timeline else { return }
+        // Seek back in *sequencer* ticks: with a count-in pre-roll the loop
+        // start (a score tick) sits at `preRollTicks + (startTick - baseTick)`.
+        // Because all score content — including the loop — lives at seq tick
+        // >= preRollTicks, the wrap never re-enters the pre-roll, so the
+        // count-in fires once and loops replay only the body.
         let startBeats =
-            Double(loop.startTick) / Double(timeline.division)
+            Double(sequenceMap.sequencerTick(fromScore: loop.startTick))
+            / Double(timeline.division)
         sequencer.currentPositionInBeats = startBeats
         // Writing `currentPositionInBeats` while the sequencer is
         // playing halts it — restart immediately so audio keeps

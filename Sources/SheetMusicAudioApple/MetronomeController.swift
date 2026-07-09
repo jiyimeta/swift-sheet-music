@@ -100,6 +100,17 @@ final class MetronomeController {
     func metronomeTrack(
         beats: [MetronomeBeat], division: Int,
     ) -> MidiTrack {
+        Self.makeMetronomeTrack(beats: beats, division: division)
+    }
+
+    /// Pure builder behind `metronomeTrack(beats:division:)`, factored out (and
+    /// `nonisolated static`) so the count-in sequence assembler
+    /// (`PreRollSequenceAssembler`) can build both the body-metronome and the
+    /// pre-roll click tracks off the main actor / without a live controller —
+    /// which also makes the assembly unit-testable with no audio engine.
+    nonisolated static func makeMetronomeTrack(
+        beats: [MetronomeBeat], division: Int,
+    ) -> MidiTrack {
         var events: [TimedMidiEvent] = []
         events.reserveCapacity(beats.count * 2 + 1)
         let halfBeat = max(1, division / 4)

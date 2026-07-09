@@ -196,7 +196,12 @@ if !isAndroid {
         ),
         .testTarget(
             name: "SheetMusicAudioAppleTests",
-            dependencies: ["SheetMusicAudioApple"],
+            dependencies: [
+                "SheetMusicAudioApple",
+                "SheetMusicAudioCore",
+                "SheetMusicCore",
+                "SheetMusicMIDI",
+            ],
         ),
     ]
 }
