@@ -37,8 +37,9 @@ extension PDFImporter {
         let systemGroups = spineClusteredSystems(pageStaves, paths: paths, pageIndex: pageIndex)
             ?? clusterIntoSystems(pageStaves, ensembleSize: ensembleSize)
         return systemGroups.map { staffGroup -> ImportSystem in
-            let parts = couplingByBracket(
-                staves: staffGroup, paths: paths, pageIndex: pageIndex,
+            let parts = couplingIntoParts(
+                staves: staffGroup, paths: paths, classified: classified,
+                pageIndex: pageIndex,
             )
             let yRange = systemYRange(staffGroup)
             let bare = ImportSystem(pageIndex: pageIndex, yRange: yRange, parts: parts)
@@ -65,66 +66,6 @@ extension PDFImporter {
     static func staffHeight(_ s: Staff) -> CGFloat {
         guard let lo = s.yLines.first, let hi = s.yLines.last else { return 0 }
         return abs(hi - lo)
-    }
-
-    // MARK: - Bracket coupling
-
-    /// Group the system's staves into parts. A vertical near the left
-    /// x-edge couples the staves it spans into one `ImportPart` — but
-    /// ONLY when it spans **exactly two** staves, i.e. a grand-staff brace
-    /// joining one instrument's two staves (piano / organ / harp).
-    ///
-    /// A vertical that spans three or more staves is a system **group
-    /// bracket** (a square / line bracket grouping several otherwise
-    /// independent single-staff parts — common in vocal / choral
-    /// arrangements). It must NOT collapse those parts into one; doing so
-    /// produced the 5-parts→1 regression. Such group brackets are skipped
-    /// here, leaving each spanned staff its own part.
-    private static func couplingByBracket(
-        staves: [Staff], paths: [PathSegment], pageIndex: Int,
-    ) -> [ImportPart] {
-        var coupled = Array(repeating: false, count: staves.count)
-        var parts: [ImportPart] = []
-        let leftX = staves.first?.xRange.lowerBound ?? 0
-        let candidates = paths.filter {
-            $0.pageIndex == pageIndex
-                && $0.kind == .vertical
-                && abs($0.rect.midX - leftX) < 5
-        }
-        for path in candidates {
-            let idxs = bracketCoupledIndices(path: path, staves: staves, coupled: coupled)
-            // Exactly two spanned staves → grand-staff brace (couple).
-            // One → a per-staff barline (ignore). Three+ → group bracket
-            // over several single-staff parts (do NOT couple).
-            guard idxs.count == 2 else { continue }
-            let group = idxs.map { ImportStaff(staff: staves[$0], measures: []) }
-            parts.append(ImportPart(staves: group))
-            for i in idxs {
-                coupled[i] = true
-            }
-        }
-        for (i, s) in staves.enumerated() where !coupled[i] {
-            parts.append(ImportPart(staves: [ImportStaff(staff: s, measures: [])]))
-        }
-        // Emit parts in page top→bottom order (descending PDF y) so the
-        // per-part order is stable across systems for the assembler.
-        return parts.sorted {
-            ($0.staves.first?.staff.yLines.first ?? 0)
-                > ($1.staves.first?.staff.yLines.first ?? 0)
-        }
-    }
-
-    private static func bracketCoupledIndices(
-        path: PathSegment, staves: [Staff], coupled: [Bool],
-    ) -> [Int] {
-        var idxs: [Int] = []
-        for (i, s) in staves.enumerated() where !coupled[i] {
-            let mid = midline(s.yLines)
-            if path.rect.minY <= mid && mid <= path.rect.maxY {
-                idxs.append(i)
-            }
-        }
-        return idxs
     }
 
     // MARK: - Measure splitting
