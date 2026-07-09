@@ -19,23 +19,10 @@ extension PDFImporter {
     // MARK: - Point-in-band membership (②)
     // (Quad fitting ① lives in PDFImporter+BeamQuad.swift.)
 
-    /// The pad (pt) added around a quad's interpolated top / bottom edge
-    /// when testing whether a stem end falls inside the ~2pt-thick beam
-    /// band (used by partial-stub ownership). Wide enough to catch a
-    /// slightly-short / off-row stem, far too narrow to reach a wrong-staff
-    /// stem ~100pt away.
-    static let beamBandPad: CGFloat = 4.0
     /// Slop (pt) on a quad's x-range when testing a stem's x against it
-    /// (used by partial-stub ownership).
+    /// (used by partial-stub ownership). Horizontal (note-spacing) tolerance,
+    /// kept absolute — NOT part of the cross-staff Y leak.
     static let beamXPad: CGFloat = 3.0
-
-    /// Generous reach (pt) for full-beam membership: a stem whose x is
-    /// horizontally spanned by a full beam and whose nearer end sits within
-    /// this distance of the beam's interpolated edge belongs to that beam's
-    /// group at this level. Wider than the strict band (`beamBandPad`) so a
-    /// slightly-short / off-row interior stem is still grouped, yet under the
-    /// ~24pt that would reach a wrong-octave beam on the same staff.
-    static let beamReach: CGFloat = 15.0
 
     /// Tight endpoint pad (pt) for full-beam membership. A beam's x-range
     /// endpoints coincide with its OUTERMOST group stems, so a real member
@@ -45,46 +32,78 @@ extension PDFImporter {
     /// of a quarter after a 16th run being over-read as a sixteenth.
     static let beamEndpointPad: CGFloat = 1.5
 
-    /// Whether a FULL `beam` horizontally spans `stem`'s x AND lies within
-    /// `beamReach` of one of the stem's ends — the membership criterion used
-    /// both for group union-find and for counting stacked beam levels. The
-    /// x-test uses the tight `beamEndpointPad` so a note just before / after
-    /// a group is not pulled in.
-    static func fullBeamSpans(
-        _ beam: PathSegment, stem s: StemInfo,
-    ) -> Bool {
-        guard let q = beam.quad else {
-            return s.x >= beam.rect.minX - beamEndpointPad
-                && s.x <= beam.rect.maxX + beamEndpointPad
-                && s.beamEndDistance(to: beam.rect.midY) <= beamReach
-        }
-        guard s.x >= q.xRange.lowerBound - beamEndpointPad,
-              s.x <= q.xRange.upperBound + beamEndpointPad
-        else { return false }
-        let edgeMid = (q.topY(at: s.x) + q.botY(at: s.x)) / 2
-        return s.beamEndDistance(to: edgeMid) <= beamReach
-    }
-
-    /// Looser y-reach (pt) used ONLY for GROUP membership (interior
-    /// inheritance), not level counting. A stem whose x falls strictly
-    /// inside a full beam's horizontal span is geometrically under that beam
-    /// and belongs to its group even when its measured end band-misses the
-    /// edge by more than `beamReach`. Bounded so a wrong-octave note in the
-    /// same x-span (≈ a 7th / octave away) is not pulled in. Mirrors the old
-    /// `primaryBeamRescueLevel` reach (22) plus a touch of slack.
-    static let beamGroupReach: CGFloat = 24.0
     /// Interior margin (pt) a stem must sit inside a full beam's x-range to
     /// count as an interior group member (so an endpoint stem at the very
     /// edge — possibly the start of a *different* group — is not absorbed).
     static let beamGroupInteriorMargin: CGFloat = 2.0
 
+    /// The three VERTICAL beam reaches, expressed in points but derived from
+    /// the staff's spatium (Fix C): a small drum staff (spatium ~3.3pt) and a
+    /// full vocal staff (spatium ~5pt) need proportional — not absolute —
+    /// windows, else a fixed 15/24/4pt reach on a small staff crosses into a
+    /// vertically-adjacent staff (the カゲロウ / 群青 neighbour-beam leak).
+    ///   * `full`    — full-beam level-counting reach (was 15pt).
+    ///   * `group`   — looser interior-inheritance reach (was 24pt).
+    ///   * `bandPad` — stub-band half-thickness (was 4pt).
+    ///
+    /// The spatium multipliers were fitted on the 6-score corpus: a note's own
+    /// level-determining beams attach within ≤1 spatium of its beamed end,
+    /// while the nearest neighbour-staff leak sits ≥2.55 spatia away (群青;
+    /// カゲロウ ≥3.5). A window in the empty 1–2sp gap separates them cleanly —
+    /// verified BYTE-IDENTICAL on the leak-free scores (ギブス / ロビンソン)
+    /// across the whole 1.7–2.5sp plateau, so `full`=2sp keeps a full spatium
+    /// of margin above own beams while staying below the tightest leak.
+    struct BeamReach {
+        var full: CGFloat
+        var group: CGFloat
+        var bandPad: CGFloat
+
+        /// Level-counting reach, in spatia (was 15pt ≈ 3–4.5sp — too wide on a
+        /// small drum staff, where it crossed into the neighbour).
+        static let fullSpatia: CGFloat = 2.0
+        /// Interior-inheritance reach, in spatia (was 24pt). Kept just under
+        /// the 群青 leak so a leaked beam can't grant a drum stem a group level.
+        static let groupSpatia: CGFloat = 2.5
+        /// Stub-band half-thickness, in spatia (was 4pt).
+        static let bandSpatia: CGFloat = 1.2
+
+        static func forSpatium(_ spatium: CGFloat) -> BeamReach {
+            let sp = spatium > 0 ? spatium : 4
+            return BeamReach(
+                full: fullSpatia * sp,
+                group: groupSpatia * sp,
+                bandPad: bandSpatia * sp,
+            )
+        }
+    }
+
+    /// Whether a FULL `beam` horizontally spans `stem`'s x AND lies within
+    /// `reach.full` of one of the stem's ends — the membership criterion used
+    /// both for group union-find and for counting stacked beam levels. The
+    /// x-test uses the tight `beamEndpointPad` so a note just before / after
+    /// a group is not pulled in.
+    static func fullBeamSpans(
+        _ beam: PathSegment, stem s: StemInfo, reach: BeamReach,
+    ) -> Bool {
+        guard let q = beam.quad else {
+            return s.x >= beam.rect.minX - beamEndpointPad
+                && s.x <= beam.rect.maxX + beamEndpointPad
+                && s.beamEndDistance(to: beam.rect.midY) <= reach.full
+        }
+        guard s.x >= q.xRange.lowerBound - beamEndpointPad,
+              s.x <= q.xRange.upperBound + beamEndpointPad
+        else { return false }
+        let edgeMid = (q.topY(at: s.x) + q.botY(at: s.x)) / 2
+        return s.beamEndDistance(to: edgeMid) <= reach.full
+    }
+
     /// Whether `stem` is an INTERIOR member of a full `beam`'s group: its x
     /// sits strictly inside the beam's horizontal span and one of its ends
-    /// is within `beamGroupReach` of the beam edge. Used to union band-miss
+    /// is within `reach.group` of the beam edge. Used to union band-miss
     /// stems into the group so interior inheritance can floor them at the
     /// primary (eighth) level.
     static func stemInBeamGroup(
-        _ beam: PathSegment, stem s: StemInfo,
+        _ beam: PathSegment, stem s: StemInfo, reach: BeamReach,
     ) -> Bool {
         let lo: CGFloat
         let hi: CGFloat
@@ -101,7 +120,7 @@ extension PDFImporter {
         guard s.x >= lo + beamGroupInteriorMargin,
               s.x <= hi - beamGroupInteriorMargin
         else { return false }
-        return s.beamEndDistance(to: edgeMid) <= beamGroupReach
+        return s.beamEndDistance(to: edgeMid) <= reach.group
     }
 
     // MARK: - Beam groups + per-stem level (③)
@@ -141,8 +160,9 @@ extension PDFImporter {
     /// Groups are union-find components over stems joined by a shared
     /// FULL (group-spanning) beam.
     static func beamLevels(
-        stems: [StemInfo], beams: [PathSegment],
+        stems: [StemInfo], beams: [PathSegment], spatium: CGFloat,
     ) -> [Int: Int] {
+        let reach = BeamReach.forSpatium(spatium)
         let quadBeams = beams.filter { $0.kind == .beam }
         // Classify each beam by the stems it spans, NOT by absolute width:
         // a FULL beam covers ≥ 2 stems (a group-spanning primary or a
@@ -153,7 +173,7 @@ extension PDFImporter {
         var fullBeams: [PathSegment] = []
         var stubBeams: [PathSegment] = []
         for b in quadBeams {
-            let spanned = stems.count(where: { fullBeamSpans(b, stem: $0) })
+            let spanned = stems.count(where: { fullBeamSpans(b, stem: $0, reach: reach) })
             if spanned >= 2 {
                 fullBeams.append(b)
             } else {
@@ -178,11 +198,11 @@ extension PDFImporter {
         var beamGroupMembers: [Int: [Int]] = [:]
         for (bi, beam) in fullBeams.enumerated() {
             for s in stems {
-                if fullBeamSpans(beam, stem: s) {
+                if fullBeamSpans(beam, stem: s, reach: reach) {
                     fullCount[s.index, default: 0] += 1
                     beamMembers[bi, default: []].append(s.index)
                     beamGroupMembers[bi, default: []].append(s.index)
-                } else if stemInBeamGroup(beam, stem: s) {
+                } else if stemInBeamGroup(beam, stem: s, reach: reach) {
                     beamGroupMembers[bi, default: []].append(s.index)
                 }
             }
@@ -207,7 +227,8 @@ extension PDFImporter {
         // stem with one secondary level.
         var stubCount: [Int: Int] = [:]
         for stub in stubBeams {
-            guard let owner = stubOwner(stub, stems: stems) else { continue }
+            guard let owner = stubOwner(stub, stems: stems, reach: reach)
+            else { continue }
             stubCount[owner, default: 0] += 1
         }
 
@@ -234,7 +255,7 @@ extension PDFImporter {
     /// x-ends AND whose beamed end falls in the stub's band there, breaking
     /// ties by proximity. Returns nil if no stem is plausibly attached.
     private static func stubOwner(
-        _ stub: PathSegment, stems: [StemInfo],
+        _ stub: PathSegment, stems: [StemInfo], reach: BeamReach,
     ) -> Int? {
         guard let q = stub.quad else { return nil }
         let lo = q.xRange.lowerBound
@@ -248,8 +269,8 @@ extension PDFImporter {
             guard d <= beamXPad + 2 else { continue }
             // One of the stem's ends must fall within the stub band at the
             // attach x (clamped inside the quad by topY/botY).
-            let bandLo = q.botY(at: s.x) - beamBandPad
-            let bandHi = q.topY(at: s.x) + beamBandPad
+            let bandLo = q.botY(at: s.x) - reach.bandPad
+            let bandHi = q.topY(at: s.x) + reach.bandPad
             let topIn = s.hiY >= bandLo && s.hiY <= bandHi
             let botIn = s.loY >= bandLo && s.loY <= bandHi
             guard topIn || botIn else { continue }
@@ -273,7 +294,7 @@ extension PDFImporter {
     /// miscounted (the 8→16 over-read on tightly-spaced systems).
     static func computeBeamLevels(
         stems: [PathSegment], beams: [PathSegment],
-        noteheadOrigins: [CGPoint] = [],
+        noteheadOrigins: [CGPoint] = [], spatium: CGFloat,
     ) -> [Int: Int] {
         guard !stems.isEmpty, !beams.isEmpty else { return [:] }
         let infos: [StemInfo] = stems.enumerated().map { idx, stem in
@@ -288,7 +309,7 @@ extension PDFImporter {
                 ),
             )
         }
-        return beamLevels(stems: infos, beams: beams)
+        return beamLevels(stems: infos, beams: beams, spatium: spatium)
     }
 
     /// The stem end where beams attach: the end farther from the notehead the
@@ -305,73 +326,5 @@ extension PDFImporter {
         }
         guard let noteY = bestY else { return nil }
         return abs(hiY - noteY) >= abs(loY - noteY) ? hiY : loY
-    }
-
-    // MARK: - Stem attachment (notehead → stem)
-
-    /// Penalty (pt) added when a notehead is on the wrong side of a stem.
-    /// Sized to break a near-tie between an own-stem and a neighbour without
-    /// overriding a clearly-closer stem.
-    static let sideMismatchPenalty: CGFloat = 4.0
-
-    /// The stem abutting a notehead at (`x`, `noteY`), with its index in
-    /// `stems`. A stem sits ~4–6pt to the side of the notehead (its right
-    /// edge for stem-up, left for stem-down), so candidates are verticals
-    /// within ~7pt in x — under the ~10pt note-to-note spacing, so a
-    /// neighbour can't be grabbed.
-    ///
-    /// Among the x-candidates, pick the stem minimizing a COMBINED distance
-    /// (`stemCost`): x-offset + the notehead's distance from the stem's
-    /// vertical span + a wrong-side penalty. A note's own stem abuts its
-    /// notehead — close in x AND starting at the notehead's y, on the
-    /// correct side — so the joint cost robustly resolves the correct stem
-    /// when two stems share (or nearly share) an x: a second voice / octave
-    /// stem at the same x is far in y; a y-coincidental neighbour from
-    /// another voice is farther in x (and on the wrong side). Using x alone
-    /// mis-routed a note to a y-coincidental stem in the wrong beam group
-    /// (interior eighth read as a quarter); using y alone re-routed a note
-    /// off its own (x-abutting) stem onto a y-overlapping neighbour
-    /// (trailing note over-read as a sixteenth).
-    static func nearestStem(
-        toX x: CGFloat, noteY: CGFloat, stems: [PathSegment],
-    ) -> (stem: PathSegment, index: Int)? {
-        let candidates = stems.enumerated().filter {
-            abs($0.element.rect.midX - x) <= 7
-        }
-        guard let best = candidates.min(by: { a, b in
-            stemCost(a.element, x: x, noteY: noteY)
-                < stemCost(b.element, x: x, noteY: noteY)
-        }) else { return nil }
-        return (best.element, best.offset)
-    }
-
-    /// Joint stem-attachment cost: x-offset from the notehead, the
-    /// notehead's y-distance from the stem's vertical span, plus a SIDE
-    /// penalty when the notehead sits on the geometrically wrong side of the
-    /// stem. A stem extends AWAY from its notehead: a stem-up stem (span
-    /// above the notehead) attaches at the notehead's RIGHT (so the notehead
-    /// is to the stem's left, `x < stemX`); a stem-down stem attaches at the
-    /// left. In a dense run, a note's own (correct-side) stem and a
-    /// neighbour's (wrong-side) stem can be near-equal in raw x-distance; the
-    /// side penalty tips the choice to the correct-side stem so a note isn't
-    /// routed onto a neighbour's higher beam level (8 over-read as 16).
-    static func stemCost(
-        _ stem: PathSegment, x: CGFloat, noteY: CGFloat,
-    ) -> CGFloat {
-        let base = abs(stem.rect.midX - x) + stemYDistance(stem, noteY: noteY)
-        let stemUp = stem.rect.midY > noteY
-        // Correct side: stem-up ⇒ notehead left of stem (x < stemX);
-        // stem-down ⇒ notehead right of stem (x > stemX).
-        let onWrongSide = stemUp ? (x > stem.rect.midX) : (x < stem.rect.midX)
-        return base + (onWrongSide ? sideMismatchPenalty : 0)
-    }
-
-    /// Distance from `noteY` to a stem's vertical span (0 when inside).
-    static func stemYDistance(
-        _ stem: PathSegment, noteY: CGFloat,
-    ) -> CGFloat {
-        if noteY < stem.rect.minY { return stem.rect.minY - noteY }
-        if noteY > stem.rect.maxY { return noteY - stem.rect.maxY }
-        return 0
     }
 }

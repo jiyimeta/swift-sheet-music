@@ -68,6 +68,7 @@ extension PDFImporter {
             .map(\.raw.origin)
         let levelByStem = computeBeamLevels(
             stems: stems, beams: beams, noteheadOrigins: noteheadOrigins,
+            spatium: spatium,
         )
 
         var elements: [RhythmElement] = []
@@ -144,34 +145,10 @@ extension PDFImporter {
             startingAt: leadIndex, in: glyphs, stems: stems,
         )
         consumed.formUnion(cluster.indices)
-        // Build notes and their geometry rects in LOCKSTEP, applying the
-        // same pitch-dedup `ChordNotes.init` would — first occurrence of a
-        // pitch wins, order preserved. This keeps `noteRects[k]` aligned
-        // with the final `chord.notes[k]` (i.e. `noteIndexInChord`), which
-        // follows the deduped survivor order, NOT raw `cluster.indices`.
-        var notes: [Note] = []
-        var noteRects: [PDFElementRect] = []
-        var seenPitches = Set<Int>()
-        for idx in cluster.indices {
-            guard let dp = pitchByGlyph[glyphs[idx].raw] else { continue }
-            // Stamp ties: a notehead identified as a tie endpoint carries
-            // tieForward (earlier note) and / or tieBack (later note).
-            let id = NoteheadID(glyphs[idx].raw)
-            let note = Note(
-                pitch: dp.midi,
-                tpc: dp.tpc,
-                tieForward: tieMarks.forward.contains(id) ? 1 : nil,
-                tieBack: tieMarks.back.contains(id) ? 1 : nil,
-            )
-            guard seenPitches.insert(note.pitch).inserted else { continue }
-            notes.append(note)
-            noteRects.append(PDFGeometryRects.glyphBox(
-                origin: glyphs[idx].raw.origin,
-                advance: glyphs[idx].raw.advance,
-                spatium: spatium,
-                pageIndex: glyphs[idx].raw.pageIndex,
-            ))
-        }
+        let (notes, noteRects) = buildChordNotes(
+            clusterIndices: cluster.indices, glyphs: glyphs,
+            pitchByGlyph: pitchByGlyph, tieMarks: tieMarks, spatium: spatium,
+        )
         let base = baseDuration(for: lead.semantic)
         // Beam lines take precedence over flags. Only black noteheads
         // (quarter base) are beamable; half / whole notes are never beamed,
@@ -218,9 +195,49 @@ extension PDFImporter {
             stemDirection: dir,
             beamGroup: nil,
             lowConfidenceDuration: flagShortened,
+            noteheadIsFilled: isFilledNotehead(lead.semantic),
             noteRects: noteRects,
             onsetRect: PDFGeometryRects.union(noteRects),
         )
+    }
+
+    /// Build a chord's deduped notes and their geometry rects in LOCKSTEP,
+    /// applying the same pitch-dedup `ChordNotes.init` would — first
+    /// occurrence of a pitch wins, order preserved. This keeps `noteRects[k]`
+    /// aligned with the final `chord.notes[k]` (i.e. `noteIndexInChord`),
+    /// which follows the deduped survivor order, NOT raw `clusterIndices`. A
+    /// notehead identified as a tie endpoint stamps `tieForward` (earlier
+    /// note) and / or `tieBack` (later note).
+    private static func buildChordNotes(
+        clusterIndices: [Int],
+        glyphs: [ClassifiedGlyph],
+        pitchByGlyph: [RawGlyph: DecodedPitch],
+        tieMarks: TieMarks,
+        spatium: CGFloat,
+    ) -> (notes: [Note], noteRects: [PDFElementRect]) {
+        var notes: [Note] = []
+        var noteRects: [PDFElementRect] = []
+        var seenPitches = Set<Int>()
+        for idx in clusterIndices {
+            guard let dp = pitchByGlyph[glyphs[idx].raw] else { continue }
+            let id = NoteheadID(glyphs[idx].raw)
+            let note = Note(
+                pitch: dp.midi,
+                tpc: dp.tpc,
+                accidental: dp.accidental,
+                tieForward: tieMarks.forward.contains(id) ? 1 : nil,
+                tieBack: tieMarks.back.contains(id) ? 1 : nil,
+            )
+            guard seenPitches.insert(note.pitch).inserted else { continue }
+            notes.append(note)
+            noteRects.append(PDFGeometryRects.glyphBox(
+                origin: glyphs[idx].raw.origin,
+                advance: glyphs[idx].raw.advance,
+                spatium: spatium,
+                pageIndex: glyphs[idx].raw.pageIndex,
+            ))
+        }
+        return (notes, noteRects)
     }
 
     /// Staff space (sp) = one inter-line gap, derived from the staff's five
@@ -257,15 +274,35 @@ extension PDFImporter {
         else { return false }
         let x = path.rect.midX
         let edgeSlop: CGFloat = 4
-        if abs(x - measure.xRange.lowerBound) < edgeSlop
+        let nearEdge = abs(x - measure.xRange.lowerBound) < edgeSlop
             || abs(x - measure.xRange.upperBound) < edgeSlop
-        { return false }
+        // A cell-edge vertical that spans the FULL staff line span is a
+        // barline — reject it. But a bar-FINAL note's stem can also sit within
+        // `edgeSlop` of the edge; such a stem spans only ~an octave and is
+        // OFFSET from the staff (it does not reach both outer lines), so it is
+        // kept rather than swallowed as a barline (ロビンソン 16→q at bar ends).
+        if nearEdge, isFullStaffHeight(path, staffYLines: measure.staffYLines) {
+            return false
+        }
         // A stem abuts a notehead's right edge (stem-up) or left edge
         // (stem-down), offset by roughly the notehead width (~4–6pt here).
         return noteheads.contains { g in
             isNoteheadSemantic(g.semantic)
                 && abs(g.raw.origin.x - x) <= 7
         }
+    }
+
+    /// Whether `path`'s y-span reaches BOTH outer staff lines (within ~1.5pt)
+    /// — the signature of a barline as opposed to a note stem. With no usable
+    /// staff geometry, treats a near-edge vertical as a barline (preserving
+    /// the previous unconditional edge reject).
+    private static func isFullStaffHeight(
+        _ path: PathSegment, staffYLines: [CGFloat],
+    ) -> Bool {
+        guard let lo = staffYLines.min(), let hi = staffYLines.max(), hi > lo
+        else { return true }
+        let tol: CGFloat = 1.5
+        return path.rect.minY <= lo + tol && path.rect.maxY >= hi - tol
     }
 
     fileprivate struct Cluster {
@@ -370,6 +407,14 @@ extension PDFImporter {
         guard let stem else { return base }
         let stemX = stem.rect.midX
         let noteY = lead.raw.origin.y
+        // The stem's bare (flag-attaching) end is the one FARTHER from the
+        // notehead: a stem whose bare end sits above the notehead points up
+        // (takes an up-flag), one whose bare end sits below points down. A
+        // flag must agree with this orientation; a neighbour's flag that lands
+        // in the correct dy window but belongs to an oppositely-stemmed note
+        // is rejected (the 君と kick 8→16 flag theft).
+        let stemPointsUp =
+            abs(stem.rect.maxY - noteY) >= abs(stem.rect.minY - noteY)
         // On-correct-side vertical window from the notehead. Up-flags sit
         // above (positive Δ), down-flags below (negative Δ); |Δ| ≈ 10–14pt.
         let near: ClosedRange<CGFloat> = 4 ... 22
@@ -380,7 +425,11 @@ extension PDFImporter {
             // restricting to the band stops it from being grabbed (fixes the
             // q→8 over-read).
             if let flagBand, !flagBand.contains(g.raw.origin.y) { continue }
-            guard abs(g.raw.origin.x - stemX) < 5,
+            // Tight x-gate: MuseScore anchors a flag glyph at its stem's x, so
+            // a note's own flag sits within ~0.3pt of the stem; the nearest
+            // neighbour flag is ≥ ~5pt away. A ≤2pt window keeps every own flag
+            // and rejects a neighbour's (the 君と cross-note flag theft).
+            guard abs(g.raw.origin.x - stemX) <= 2,
                   let lvl = flagLevel(g.semantic) else { continue }
             let dy = g.raw.origin.y - noteY
             let isUp: Bool
@@ -388,6 +437,8 @@ extension PDFImporter {
             case .flag8thUp, .flag16thUp, .flag32ndUp, .flag64thUp: isUp = true
             default: isUp = false
             }
+            // Flag orientation must match the stem's pointing direction.
+            guard isUp == stemPointsUp else { continue }
             let onSide = isUp ? near.contains(dy) : near.contains(-dy)
             if onSide { level = max(level, lvl) }
         }

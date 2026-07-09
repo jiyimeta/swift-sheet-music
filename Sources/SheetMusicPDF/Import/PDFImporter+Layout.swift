@@ -368,14 +368,23 @@ extension PDFImporter {
             ? (top - bottom) / CGFloat(staff.yLines.count - 1)
             : 5
         let band = max(lineSpacing * 3, 6)
-        let yLo = bottom - band
-        let yHi = top + band
+        // Flag glyphs (E240–E24F) carry NO pitch — they only subdivide a
+        // note's duration — so a wider capture band cannot corrupt pitch.
+        // Drum flags in particular render ~10–13pt (≈0.75 staff-height)
+        // beyond the outer lines, PAST the ±3-line pitch band, and were being
+        // dropped: bare stems then read as quarters (地球儀 drums 16→q:19,
+        // 君と kick 8→q). Admit flags out to ~6 line-spacings (still short of
+        // the ~3-staff-height neighbour spacing); applyFlags' own staff-band
+        // + x-gate contain any bleed this admits.
+        let flagBand = max(lineSpacing * 6, 12)
         return classified.filter {
-            $0.raw.pageIndex == staff.pageIndex
-                && lo <= $0.raw.origin.x
-                && $0.raw.origin.x < hi
-                && yLo <= $0.raw.origin.y
-                && $0.raw.origin.y <= yHi
+            guard $0.raw.pageIndex == staff.pageIndex,
+                  lo <= $0.raw.origin.x,
+                  $0.raw.origin.x < hi
+            else { return false }
+            let reach = isFlag($0.semantic) ? flagBand : band
+            return (bottom - reach) <= $0.raw.origin.y
+                && $0.raw.origin.y <= (top + reach)
         }
     }
 

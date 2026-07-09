@@ -421,6 +421,7 @@ extension PDFImporter {
         let reconciled = reconcileMeasureDurations(
             elements: withLyrics,
             timeSignature: ts,
+            spatium: staffSpatium(importMeasure.staffYLines),
             diagnostics: options.diagnostics,
             location: "\(location), measure \(measureIndex)",
         )

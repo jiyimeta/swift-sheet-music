@@ -10,6 +10,14 @@ extension PDFImporter {
         var noteheadX: CGFloat
         var noteheadY: CGFloat
         var glyph: ClassifiedGlyph
+        /// The accidental glyph paired directly to THIS notehead (its own
+        /// written accidental), or nil when the note carries none. Set only
+        /// when an accidental at this note's pitch sits immediately to its
+        /// left — not one inherited via measure-local carry from an earlier
+        /// same-pitch note. Consumed by the assembled `Note.accidental`, which
+        /// the tie-pitch pass reads as "this note has its own accidental, so a
+        /// tie must not overwrite its pitch" (see PDFImporter+TiePitch).
+        var accidental: Accidental?
 
         static func == (lhs: DecodedPitch, rhs: DecodedPitch) -> Bool {
             lhs.midi == rhs.midi && lhs.tpc == rhs.tpc
@@ -53,100 +61,44 @@ extension PDFImporter {
         for g in sorted where isNotehead(g.semantic) {
             let key = pitchKey(noteheadY: g.raw.origin.y, anchor: anchor)
             // Promote every accidental whose x is at or before this
-            // notehead into the running state before resolving it.
+            // notehead into the running state before resolving it. An
+            // accidental at THIS note's pitch promoted in this batch (i.e.
+            // sitting between the previous notehead and this one) is this
+            // note's OWN written accidental — record its alteration so the
+            // assembled note can carry it.
+            var ownAlteration: Int?
             while nextAcc < placed.count, placed[nextAcc].x <= g.raw.origin.x + 0.5 {
+                if placed[nextAcc].key == key { ownAlteration = placed[nextAcc].alt }
                 activeLocals[placed[nextAcc].key] = placed[nextAcc].alt
                 nextAcc += 1
             }
-            let alteration = activeLocals[key]
-                ?? keyAlteration(step: key.diatonicStep, key: activeKey)
+            let keyAlt = keyAlteration(step: key.diatonicStep, key: activeKey)
+            let alteration = activeLocals[key] ?? keyAlt
             let midi = midiPitch(
                 step: key.diatonicStep, octave: key.octave, alteration: alteration,
             )
+            // A note's own written accidental is pitch EVIDENCE only when it
+            // DEVIATES from the key's default for this step. An accidental that
+            // merely restates the key does not — and a key-signature accidental
+            // geometrically mis-paired to a same-position note (its 3rd flat
+            // hugging a whole note at that line: 群青 p1 m80) always matches the
+            // key alteration, so this test excludes every such mis-pairing while
+            // still catching a real deviation (m84's F♯♯ = +2 vs key +1). Only a
+            // deviating accidental is recorded, so the tie guard fires only on
+            // genuine evidence.
+            let ownAccidental = ownAlteration.flatMap { alt in
+                alt != keyAlt ? writtenAccidental(forAlteration: alt) : nil
+            }
             out.append(DecodedPitch(
                 midi: midi,
                 tpc: tonalPitchClass(step: key.diatonicStep, alteration: alteration),
                 noteheadX: g.raw.origin.x,
                 noteheadY: g.raw.origin.y,
                 glyph: g,
+                accidental: ownAccidental,
             ))
         }
         return out
-    }
-}
-
-// MARK: - Percussion
-
-extension PDFImporter {
-    /// Decode a percussion-staff measure: every notehead survives as a
-    /// note whose MIDI value comes from the standard GM drumset line/space
-    /// convention (see `percussionMidi`). No accidentals / key signatures
-    /// apply on a drum staff, so this path is deliberately minimal.
-    static func decodePercussion(
-        measure: ImportMeasure, anchor: StaffAnchor,
-    ) -> [DecodedPitch] {
-        let sorted = measure.glyphs.sorted { $0.raw.origin.x < $1.raw.origin.x }
-        var out: [DecodedPitch] = []
-        for g in sorted where isNotehead(g.semantic) {
-            let midi = percussionMidi(
-                noteheadY: g.raw.origin.y,
-                isX: isXNotehead(g.semantic),
-                anchor: anchor,
-            )
-            out.append(DecodedPitch(
-                midi: midi,
-                tpc: 22, // neutral TPC (C natural); unused for drum staves
-                noteheadX: g.raw.origin.x,
-                noteheadY: g.raw.origin.y,
-                glyph: g,
-            ))
-        }
-        return out
-    }
-
-    /// Map a percussion notehead to a General-MIDI drumset note (channel-10
-    /// key number), keyed on its vertical staff position and notehead type.
-    ///
-    /// Mirrors MuseScore 3's **default drumset** — the `<Drum>` line/head
-    /// table MuseScore embeds in every percussion staff's instrument (and
-    /// which is what positions the noteheads in the exported PDF). In that
-    /// table `line` is measured from the TOP staff line downward (top line
-    /// = 0, bottom line = 8); we measure `stepsAbove` from the BOTTOM line
-    /// upward, so `stepsAbove = 8 - line`. The achievable signal from a PDF
-    /// glyph is (staff position, round-vs-cross notehead) only — several GM
-    /// drums can share one `(line, head)` slot, so where a slot is shared we
-    /// pick the musically dominant member, verified against the 3-score
-    /// percussion-corpus confusion tables (snare 38 @ sa5, closed hat 42 @
-    /// sa9, ride 51 @ sa8, etc.).
-    static func percussionMidi(
-        noteheadY: CGFloat, isX: Bool, anchor: StaffAnchor,
-    ) -> Int {
-        let halfStep = anchor.lineSpacing / 2
-        let stepsAbove = halfStep > 0
-            ? Int(((noteheadY - anchor.bottomY) / halfStep).rounded())
-            : 0
-        if isX {
-            // Cross noteheads: hi-hats / cymbals (upper staff & above) +
-            // side stick (mid staff) + pedal hi-hat (below staff).
-            switch stepsAbove {
-            case ...0: return 44 // pedal hi-hat (line 9, below the staff)
-            case 1 ... 6: return 37 // side stick (line 3 ≈ sa5)
-            case 7: return 46 // open hi-hat (line 1)
-            case 8: return 51 // ride cymbal 1 (line 0, top line)
-            case 9: return 42 // closed hi-hat (line -1, above top line)
-            case 10: return 49 // crash cymbal 1 (line -2)
-            default: return 55 // splash / china / crash 2 (line ≤ -3)
-            }
-        }
-        // Round noteheads: kick / snare / toms, low → high staff position.
-        switch stepsAbove {
-        case ...1: return 36 // bass drum 1 (line 7, bottom space)
-        case 2 ... 3: return 43 // floor toms (line 5)
-        case 4 ... 5: return 38 // acoustic snare (line 3, 3rd space ~C5)
-        case 6: return 45 // low tom (line 2)
-        case 7: return 47 // low-mid tom (line 1)
-        default: return 50 // high / hi-mid tom (line 0, top line and above)
-        }
     }
 }
 
@@ -227,6 +179,30 @@ extension PDFImporter {
         }
     }
 
+    /// True for a FILLED notehead (black / X-black), drawn for a quarter or
+    /// shorter value. A half / whole / double-whole is HOLLOW. Used by the
+    /// reconciliation pass to reject a geometrically-impossible re-value of a
+    /// filled note to a half-or-longer duration.
+    static func isFilledNotehead(_ s: SMuFLSemantic) -> Bool {
+        switch s {
+        case .noteheadBlack, .noteheadXBlack: true
+        default: false
+        }
+    }
+
+    /// True for a combined flag glyph (8th…64th, up or down). A flag carries
+    /// only a note's duration subdivision — never pitch — so it is safe to
+    /// capture from a wider vertical band than pitched glyphs.
+    static func isFlag(_ s: SMuFLSemantic) -> Bool {
+        switch s {
+        case .flag8thUp, .flag8thDown, .flag16thUp, .flag16thDown,
+             .flag32ndUp, .flag32ndDown, .flag64thUp, .flag64thDown:
+            true
+        default:
+            false
+        }
+    }
+
     /// Map an accidental glyph's semantic to a chromatic alteration.
     /// Returns nil for non-accidental glyphs.
     static func accidentalAlteration(_ s: SMuFLSemantic) -> Int? {
@@ -236,6 +212,20 @@ extension PDFImporter {
         case .accidentalNatural: 0
         case .accidentalDoubleSharp: 2
         case .accidentalDoubleFlat: -2
+        default: nil
+        }
+    }
+
+    /// Inverse of `accidentalAlteration` over the five alterations
+    /// `pairAccidentalsPositional` can produce (±1, ±2, 0). Used to stamp a
+    /// decoded note's own written accidental onto the assembled `Note`.
+    static func writtenAccidental(forAlteration alt: Int) -> Accidental? {
+        switch alt {
+        case 1: .sharp
+        case -1: .flat
+        case 0: .natural
+        case 2: .doubleSharp
+        case -2: .doubleFlat
         default: nil
         }
     }

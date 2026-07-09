@@ -62,17 +62,23 @@ extension PDFImporter {
     /// 2-cluster alternation of a mis-grouped straight run.
     static let tupletMaxInternalSpread: CGFloat = 1.5
 
-    /// Minimum mean internal note-gap (pt) a VOICE-ENDING run must have to be
+    /// Minimum mean internal note-gap a VOICE-ENDING run must have to be
     /// auto-accepted on the metric + uniformity gates alone (it has no
-    /// following note to supply a boundary-gap signal). Below this — very
-    /// tight spacing, e.g. a sixteenth-triplet at ~6pt — the run-end
-    /// auto-accept is unreliable (3 equal tight notes that close the bar by
-    /// coincidence look identical to a real tuplet without a boundary), so we
-    /// instead require a real following-gap. Tuned between the 群青日和
-    /// sextuplets' ~9–14pt (kept) and the カゲロウ sixteenth-triplets' ~6pt
-    /// (which without this gate converted correctly but cost alignment matches
-    /// on a pre-misaligned medley measure).
-    static let tupletRunEndMinGap: CGFloat = 8.0
+    /// following note to supply a boundary-gap signal), expressed in SPATIA.
+    /// Below this — very tight spacing — the run-end auto-accept is unreliable
+    /// (3 equal tight notes that close the bar by coincidence look identical to
+    /// a real tuplet without a boundary), so we instead require a real
+    /// following-gap.
+    ///
+    /// Was an absolute 8pt, which is spatium-DEPENDENT: カゲロウ's real
+    /// sixteenth-triplets (~6pt on its small spatium ≈ 3.3pt → ~1.8sp) were
+    /// wrongly rejected while 群青's sextuplets (~9–14pt on spatium ≈ 5pt →
+    /// ~1.8–2.8sp) passed — the SAME relative spacing treated differently. A
+    /// spatium-relative 1.5sp threshold admits both the カゲロウ triplets and
+    /// the 群青 sextuplets, while still rejecting a genuinely too-tight run
+    /// (< 1.5sp) whose voice-ending auto-accept can't be trusted. Verified
+    /// zero-regression across the 6-score corpus (only カゲロウ dur moved, +6).
+    static let tupletRunEndMinGapSpatia: CGFloat = 1.5
 
     /// Try to repair an unbalanced voice by re-reading one contiguous run of
     /// equal beamed notes as a tuplet. Scans every candidate run; applies the
@@ -99,6 +105,7 @@ extension PDFImporter {
         indices: [Int],
         barLength: Fraction,
         currentSum: Fraction,
+        spatium: CGFloat,
         elements: inout [RhythmElement],
         location: String = "",
     ) -> Bool {
@@ -127,8 +134,9 @@ extension PDFImporter {
             )
             let newSum = currentSum - straightRun + scaledRun
             guard newSum == barLength else { continue }
-            guard runHasTupletSpacing(run: run, ordered: ordered, elements: elements)
-            else { continue }
+            guard runHasTupletSpacing(
+                run: run, ordered: ordered, elements: elements, spatium: spatium,
+            ) else { continue }
             debugTupletFire(
                 spec: spec, base: base, scaled: scaled,
                 run: run, location: location, elements: elements,
@@ -152,7 +160,7 @@ extension PDFImporter {
     ///      on the metric + uniformity gates ONLY when its spacing is wide
     ///      enough (`≥ tupletRunEndMinGap`) for those gates to be trustworthy.
     private static func runHasTupletSpacing(
-        run: [Int], ordered: [Int], elements: [RhythmElement],
+        run: [Int], ordered: [Int], elements: [RhythmElement], spatium: CGFloat,
     ) -> Bool {
         guard run.count >= 2 else { return false }
         let runXs = run.map { elements[$0].x }
@@ -171,7 +179,9 @@ extension PDFImporter {
         let afterPos = lastPos + 1
         // Voice-ending run: accept only if its spacing is wide enough that the
         // metric + uniformity gates are trustworthy without a boundary signal.
-        guard afterPos < ordered.count else { return meanIn >= tupletRunEndMinGap }
+        guard afterPos < ordered.count else {
+            return meanIn >= tupletRunEndMinGapSpatia * spatium
+        }
         let afterGap = elements[ordered[afterPos]].x - (runXs.last ?? 0)
         return afterGap >= tupletBoundaryGapRatio * meanIn
     }

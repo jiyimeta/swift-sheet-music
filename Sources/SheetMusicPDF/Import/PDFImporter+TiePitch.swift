@@ -130,6 +130,18 @@ extension PDFImporter {
         else { return }
         let idx = c.notes.startIndex
         let current = c.notes[idx]
+        // Guard against a false-positive tie (a slur misread as a tie)
+        // clobbering a correctly-decoded pitch. A REAL tie continuation never
+        // redraws an accidental, so a tied-back note that carries its OWN
+        // written accidental (decoded from a paired accidental glyph) already
+        // has the right pitch — adopting the "source" would corrupt it.
+        // Example: 群青 p3 m84's F♯♯3 (55) carries its own double-sharp; a
+        // spurious tie would otherwise overwrite it with the source's 54.
+        // Monotonic: this only BLOCKS adoption when contrary evidence exists;
+        // it never changes a note that would have been left alone. Continuation
+        // notes that genuinely need repair carry NO accidental (that is why the
+        // decoder missed the tied pitch), so ギブス's repairs are unaffected.
+        guard current.accidental == nil else { return }
         guard current.pitch != source.pitch || current.tpc != source.tpc else { return }
         c.notes.updateNote(at: idx) { note in
             note.pitch = source.pitch
