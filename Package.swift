@@ -100,7 +100,7 @@ var targets: [Target] = [
     ),
     .testTarget(
         name: "SheetMusicAudioCoreTests",
-        dependencies: ["SheetMusicAudioCore"],
+        dependencies: ["SheetMusicAudioCore", "SheetMusicCore"],
     ),
     .testTarget(
         name: "SheetMusicTests",
