@@ -97,11 +97,31 @@ extension PDFImporter {
     /// part stays within a normal bass tessitura; a plain-F part forced up an
     /// octave overshoots it), downgrade to plain F.
     ///
-    /// Scoped narrowly: only an F8va clef is ever rewritten, and only when the
-    /// part's note content is decisively high. F8va parts whose content is
-    /// genuinely in the octave-up register (君とParadiso part 4) are left
-    /// untouched. E065 does not appear in the other corpus scores, so this is
-    /// a no-op for them.
+    /// Scoped narrowly: only an F8va clef is ever rewritten. F8va parts whose
+    /// content is genuinely in the octave-up register (君とParadiso part 4)
+    /// are left untouched. E065 does not appear in the other curated corpus
+    /// scores, so this is a no-op for them.
+    ///
+    /// The REAL corpus adds a third — and most common — source of E065: an
+    /// octave-transposing electric bass (sounding −12) whose arranger set the
+    /// written-mode clef to "bass clef 8va alta". The clef's +12 and the
+    /// instrument's −12 cancel, so the staff SOUNDS at the plain-F reading
+    /// (Magnetic_Short / Love Song / チャンカパーナ, each whole-part +12 under
+    /// the kept F8va). Register alone cannot separate that from a genuine
+    /// F8va vocal bass — the two populations are IDENTICAL under the F8va
+    /// anchor (君とParadiso mean 55.5 / p75 58 vs Magnetic_Short 55.7 / 58) —
+    /// so a second, ensemble-level signal decides:
+    ///
+    /// **Ensemble voicing.** System staves are ordered by register, top to
+    /// bottom; the bass staff sounds BELOW the pitched staff above it. Read
+    /// at F8va, a decorative-8 bass line rises INTO the upper neighbor's
+    /// tessitura — the share of its notes at or above the neighbor's 25th
+    /// percentile is large (Magnetic_Short 55%, Love Song 74%, 地球儀 69%),
+    /// while a genuine F8va part still sits clearly below the voice above it
+    /// (君とParadiso 9%, 魅惑のバニラ 25%). The threshold sits at 2/5 —
+    /// midway between the two observed populations, 15 points of margin to
+    /// the nearest member on either side. Overlap ≥ 2/5 ⇒ the "8" is
+    /// decorative → downgrade to plain F.
     ///
     /// `f8vaPitches` is the part's ENTIRE notehead population decoded under the
     /// tentative F8va anchor — aggregated across every system the part spans,
@@ -109,22 +129,38 @@ extension PDFImporter {
     /// happens to hold only the part's lower notes can read below the
     /// threshold and keep F8va while a busier system downgrades, leaving the
     /// staff with mixed octaves. Deciding once from the whole part is stable.
-    static func disambiguateF8vaClef(_ clef: Clef, f8vaPitches pitches: [Int]) -> Clef {
+    /// `upperNeighborPitches` is the same-aggregated own-clef register profile
+    /// of the nearest PITCHED staff slot above (nil when there is none —
+    /// then only the absolute-register test applies).
+    static func disambiguateF8vaClef(
+        _ clef: Clef, f8vaPitches pitches: [Int],
+        upperNeighborPitches: [Int]? = nil,
+    ) -> Clef {
         guard clef.concertClefType == "F8va" else { return clef }
         // Need a few notes to judge a register; otherwise trust the glyph.
         guard pitches.count >= 8 else { return clef }
         let sorted = pitches.sorted()
         let mean = sorted.reduce(0, +) / sorted.count
         let p75 = sorted[sorted.count * 3 / 4]
-        // Under the F8va anchor a genuine F8va part stays within a normal
-        // bass tessitura (君とParadiso part 4: mean 55, p75 58); a plain-F part
-        // mis-anchored an octave up overshoots it (地球儀 part 5: mean 59,
-        // p75 65). Either signal crossing its threshold marks the part as too
-        // high to be a real F8va, so the engraver's "8"-decorated glyph is an
-        // ordinary bass clef → downgrade to plain F. The thresholds sit
-        // between the two observed registers with a margin on both sides.
+        // Absolute register: under the F8va anchor a genuine F8va part stays
+        // within a normal bass tessitura (君とParadiso part 4: mean 55,
+        // p75 58); a plain-F part mis-anchored an octave up overshoots it
+        // (地球儀 part 5: mean 59, p75 65). Either signal crossing its
+        // threshold marks the part as too high to be a real F8va, so the
+        // engraver's "8"-decorated glyph is an ordinary bass clef.
         if mean >= 58 || p75 >= 62 {
             return Clef(concertClefType: "F")
+        }
+        // Ensemble voicing (see the doc comment): a bass line whose F8va
+        // reading seats ≥ 2/5 of its notes at or above the upper pitched
+        // neighbor's tessitura floor (25th percentile) is not the system's
+        // bottom voice under that reading — the "8" is decorative.
+        if let neighbor = upperNeighborPitches, neighbor.count >= 8 {
+            let tessituraFloor = neighbor.sorted()[neighbor.count / 4]
+            let overlapping = sorted.count { $0 >= tessituraFloor }
+            if overlapping * 5 >= sorted.count * 2 {
+                return Clef(concertClefType: "F")
+            }
         }
         return clef
     }
@@ -138,6 +174,36 @@ extension PDFImporter {
         var pitches: [Int] = []
         for measure in staff.measures where !measure.staffYLines.isEmpty {
             guard let anchor = staffAnchor(clef: f8va, yLines: measure.staffYLines)
+            else { continue }
+            for g in measure.glyphs where isNotehead(g.semantic) {
+                let key = pitchKey(noteheadY: g.raw.origin.y, anchor: anchor)
+                pitches.append(midiPitch(
+                    step: key.diatonicStep, octave: key.octave, alteration: 0,
+                ))
+            }
+        }
+        return pitches
+    }
+
+    /// Decode every notehead of `staff` under the staff's OWN running clef
+    /// (leading re-reads only, alteration-free) — the register profile a
+    /// staff slot contributes as the upper-neighbor reference in
+    /// `disambiguateF8vaClef`'s ensemble-voicing test. Returns nil for a
+    /// percussion staff (its notehead positions are drum slots, not a
+    /// register — never a voicing reference).
+    static func registerProfilePitches(staff: ImportStaff) -> [Int]? {
+        var runningClef = Clef(concertClefType: "G")
+        var pitches: [Int] = []
+        for measure in staff.measures {
+            let sorted = measure.glyphs.sorted { $0.raw.origin.x < $1.raw.origin.x }
+            if let clef = readClef(from: sorted) {
+                runningClef = clef
+            }
+            if runningClef.concertClefType == "PERCUSSION" { return nil }
+            guard !measure.staffYLines.isEmpty,
+                  let anchor = staffAnchor(
+                      clef: runningClef, yLines: measure.staffYLines,
+                  )
             else { continue }
             for g in measure.glyphs where isNotehead(g.semantic) {
                 let key = pitchKey(noteheadY: g.raw.origin.y, anchor: anchor)

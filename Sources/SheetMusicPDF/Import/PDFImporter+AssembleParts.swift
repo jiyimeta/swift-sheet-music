@@ -112,6 +112,11 @@ extension PDFImporter {
     /// `shape.slotsByPartIndex`) so the aggregation lands in the same slots
     /// the measures will. Returns an empty map when no slot uses F8va — the
     /// common case, leaving the assembly path untouched.
+    ///
+    /// Alongside each F8va slot's own candidate pitches, the whole-part
+    /// register profile of the nearest PITCHED slot above is aggregated and
+    /// fed to `disambiguateF8vaClef` as the ensemble-voicing reference (see
+    /// its doc comment for the invariant).
     static func resolveF8vaSlots(
         systems: [ImportSystem], shape: PartShape,
     ) -> [Int: Clef] {
@@ -128,15 +133,73 @@ extension PDFImporter {
                 }
             }
         }
+        guard !pitchesBySlot.isEmpty else { return [:] }
+        let reference = collectRegisterProfiles(
+            systems: systems, shape: shape, f8vaSlots: Set(pitchesBySlot.keys),
+        )
         var overrides: [Int: Clef] = [:]
         for (slot, pitches) in pitchesBySlot {
             let resolved = disambiguateF8vaClef(
                 Clef(concertClefType: "F8va"), f8vaPitches: pitches,
+                upperNeighborPitches: upperNeighborProfile(
+                    of: slot,
+                    profiles: reference.profiles,
+                    excludedSlots: reference.excluded,
+                ),
             )
             if resolved.concertClefType != "F8va" {
                 overrides[slot] = resolved
             }
         }
         return overrides
+    }
+
+    /// Whole-part own-clef register profiles for every staff slot that can
+    /// serve as an ensemble-voicing reference. F8va slots themselves are
+    /// excluded up front (an unresolved slot cannot anchor another slot's
+    /// resolution), and a slot that reads as percussion in ANY system is
+    /// excluded from then on (drum-slot positions are not a register).
+    private static func collectRegisterProfiles(
+        systems: [ImportSystem], shape: PartShape, f8vaSlots: Set<Int>,
+    ) -> (profiles: [Int: [Int]], excluded: Set<Int>) {
+        var profiles: [Int: [Int]] = [:]
+        var excluded = f8vaSlots
+        for system in systems {
+            let refForSystemPart = partSlotMapping(system: system, shape: shape)
+            for (partIdx, importPart) in system.parts.enumerated() {
+                let refIdx = refForSystemPart[partIdx]
+                guard let slots = shape.slotsByPartIndex[refIdx] else { continue }
+                for (slot, importStaff) in zip(slots, importPart.staves) {
+                    guard !excluded.contains(slot) else { continue }
+                    guard let pitches = registerProfilePitches(staff: importStaff)
+                    else {
+                        excluded.insert(slot)
+                        profiles[slot] = nil
+                        continue
+                    }
+                    profiles[slot, default: []].append(contentsOf: pitches)
+                }
+            }
+        }
+        return (profiles, excluded)
+    }
+
+    /// The register profile of the nearest pitched staff slot ABOVE `slot`
+    /// (global slots are ordered top-to-bottom). Skips excluded slots
+    /// (percussion / other F8va slots) and slots too sparse to define a
+    /// tessitura; returns nil when no qualifying neighbor exists.
+    private static func upperNeighborProfile(
+        of slot: Int, profiles: [Int: [Int]], excludedSlots: Set<Int>,
+    ) -> [Int]? {
+        var candidate = slot - 1
+        while candidate >= 0 {
+            if !excludedSlots.contains(candidate),
+               let profile = profiles[candidate], profile.count >= 8
+            {
+                return profile
+            }
+            candidate -= 1
+        }
+        return nil
     }
 }
