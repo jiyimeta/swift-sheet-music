@@ -30,8 +30,9 @@ final class MetronomeController {
     /// The sequencer track scheduling the count-in pre-roll clicks, if
     /// any. Routed to the same `sampler` as `track` but never muted by
     /// `isEnabled` — the pre-roll must sound even when the in-playback
-    /// metronome toggle is off.
-    private var preRollTrack: AVMusicTrack?
+    /// metronome toggle is off. Held weakly, like `track`, so the next
+    /// `buildSequencer` rebuild doesn't keep the old sequencer alive.
+    private weak var preRollTrack: AVMusicTrack?
     private var loadedSoundfontURL: URL?
 
     /// User-facing toggle. Defaults to `true` to match MuseScore
