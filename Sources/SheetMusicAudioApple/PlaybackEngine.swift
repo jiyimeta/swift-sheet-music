@@ -870,6 +870,19 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
             return
         }
         let tick = snapTickToLoop(frame.tick)
+        // An active count-in sequence only holds score content from `baseTick` onward — the pre-roll
+        // shift dropped everything earlier. A seek target before `baseTick` is unreachable in this
+        // sequence: `sequencerTick(fromScore:)` maps it into (or before) the pre-roll region, which
+        // would replay the count-in and resume from `baseTick` instead of the target. While playing,
+        // rebuild the plain un-shifted sequence anchored at the target and keep playing — a seek must
+        // never insert a count-in. (Paused seeks are left as-is: the next play rebuilds from the
+        // effective start cursor regardless, so the stale sequencer position is never heard.)
+        if state == .playing, sequencerHasPreRoll, tick < sequenceMap.baseTick,
+           let score = sequencerScore
+        {
+            play(from: cursor, in: score, countIn: false)
+            return
+        }
         sequencer.currentPositionInBeats =
             Double(sequenceMap.sequencerTick(fromScore: tick))
             / Double(timeline.division)
