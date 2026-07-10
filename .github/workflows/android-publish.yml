@@ -84,6 +84,16 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v3
 
+      # swift-java's SwiftKitCore is not on Maven Central; the Android
+      # modules resolve it from Maven local. The runner starts with an empty
+      # ~/.m2, so publish it from the SwiftPM checkout before the Gradle build
+      # (mirrors android-audio.yml).
+      - name: Publish swift-java SwiftKitCore to Maven local
+        run: >-
+          .build/checkouts/swift-java/gradlew
+          -p .build/checkouts/swift-java
+          :SwiftKitCore:publishToMavenLocal
+
       - name: Publish to GitHub Packages
         working-directory: Android
         env:
