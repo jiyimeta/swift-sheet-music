@@ -123,8 +123,9 @@ settings or sources.
 ### Worktree setup — symlink the gitignored `Sounds/`
 
 `Examples/Apple/SheetMusicExample/Sounds/` is **gitignored** — its sole
-content (`MuseScore_General.sf2`, ~215 MB) lives in the main worktree and
-is distributed via GitHub Releases, not git. Secondary worktrees (under
+content (`MuseScore_General.sf2`, ~215 MB) lives in the main worktree.
+It is not committed to git and not distributed from this repo (you supply
+it yourself — see README §"SoundFonts"). Secondary worktrees (under
 `.claude/worktrees/…`) start without the directory, so the Apple example
 app can't find the bundled SoundFont and plays silence.
 

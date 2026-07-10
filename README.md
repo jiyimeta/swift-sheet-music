@@ -60,10 +60,11 @@ See [Android](#android).
 * **`Sounds/MuseScore_General.sf2`** — full GM SoundFont fallback
   for any (bank, program) without a dedicated file.
 
-Both are distributed via GitHub Releases (the SF2 files are too
-large to track in git). The split per-program SF2 set lives at
-[jiyimeta/musescore-general-sf2-split](https://github.com/jiyimeta/musescore-general-sf2-split).
-Download the release archive, unzip into
+These SF2 files are **not distributed by this repository** — they are
+too large to track in git and are not attached to this repo's Releases.
+Obtain the split per-program set from
+[jiyimeta/musescore-general-sf2-split](https://github.com/jiyimeta/musescore-general-sf2-split),
+or supply your own General MIDI SoundFont. Unzip into
 `Examples/Apple/SheetMusicExample/Sounds/`, regenerate the project
 (`xcodegen` from `Examples/Apple/`), and rebuild — the example app picks
 them up automatically.
@@ -94,7 +95,7 @@ Add the package to your `Package.swift`:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/jiyimeta/swift-sheet-music.git", from: "0.1.0"),
+    .package(url: "https://github.com/jiyimeta/swift-sheet-music.git", from: "1.0.0"),
 ]
 ```
 

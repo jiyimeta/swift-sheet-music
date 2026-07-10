@@ -7,7 +7,9 @@ and this project adheres to
 
 ## [Unreleased]
 
-Preparing the first public release. The library already provides:
+## [1.0.0] - 2026-07-10
+
+First public release.
 
 ### Added
 
@@ -30,4 +32,5 @@ Preparing the first public release. The library already provides:
   SDK, plus Kotlin AAR modules for JNI bridging and FluidSynth + Oboe
   playback.
 
-[Unreleased]: https://github.com/jiyimeta/swift-sheet-music/commits/main
+[Unreleased]: https://github.com/jiyimeta/swift-sheet-music/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/jiyimeta/swift-sheet-music/releases/tag/v1.0.0
