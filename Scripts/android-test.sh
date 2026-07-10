@@ -7,15 +7,20 @@
 #   serial: optional adb device serial (use when multiple devices attached)
 #
 # The triple's API-level component (android28) is the lowest level provided
-# by the Swift 6.3.2 official Android SDK (`swift-6.3.2-RELEASE_android`).
-# The bundle name `swift-6.3.2-RELEASE_android` also works as a `--swift-sdk`
+# by the Swift 6.3.3 official Android SDK (`swift-6.3.3-RELEASE_android`).
+# The bundle name `swift-6.3.3-RELEASE_android` also works as a `--swift-sdk`
 # value but lets SwiftPM pick the API level, so we use the triple form for
 # explicitness and to match aarch64/x86_64 selection.
 set -euo pipefail
 
-# Use the open-source swift.org toolchain (the one paired with the Android
-# SDK). Apple's Xcode-shipped swiftc produces incompatible swiftmodules.
-export TOOLCHAINS="${TOOLCHAINS:-org.swift.632202605101a}"
+# Use the open-source swift.org toolchain paired with the Android SDK.
+# Prepend it to PATH so plain `swift` resolves to it (the swiftly shim on
+# some hosts ignores TOOLCHAINS; Apple's Xcode swiftc produces incompatible
+# swiftmodules).
+TOOLCHAIN_BIN="/Library/Developer/Toolchains/swift-6.3.3-RELEASE.xctoolchain/usr/bin"
+if [[ -d "$TOOLCHAIN_BIN" ]]; then
+    export PATH="$TOOLCHAIN_BIN:$PATH"
+fi
 
 cd "$(dirname "$0")/.."
 
@@ -26,7 +31,7 @@ case "$TARGET_SHORT" in
     *) echo "unknown target: $TARGET_SHORT" >&2; exit 2 ;;
 esac
 
-SDK_BUNDLE="$HOME/Library/org.swift.swiftpm/swift-sdks/swift-6.3.2-RELEASE_android.artifactbundle"
+SDK_BUNDLE="$HOME/Library/org.swift.swiftpm/swift-sdks/swift-6.3.3-RELEASE_android.artifactbundle"
 if [[ ! -e "$SDK_BUNDLE/swift-android/ndk-sysroot" ]]; then
     cat >&2 <<EOF
 error: NDK sysroot is not staged.
