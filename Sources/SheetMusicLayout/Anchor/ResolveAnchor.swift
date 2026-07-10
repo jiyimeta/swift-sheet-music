@@ -1,4 +1,4 @@
-import CoreGraphics
+import Foundation
 import SheetMusicCore
 
 /// Continuous musical position resolved from a document-space point — the inverse of `anchorReferencePoint`. Unlike
