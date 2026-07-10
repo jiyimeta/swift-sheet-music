@@ -13,7 +13,7 @@
 #   Scripts/preflight.sh --android    # Android cross-compile + Kotlin tests + AAR
 #
 # Requirements for the Android stage mirror CLAUDE.md "Android build":
-#   - swift.org Swift 6.3.2-RELEASE toolchain (TOOLCHAINS=org.swift.632202605101a)
+#   - swift.org Swift 6.3.3-RELEASE toolchain (prepended to PATH by the scripts)
 #   - Swift Android SDK + NDK sysroot staged
 #   - Java 17 + the WIRELET_PAT / gpr credentials for the wirelet Gradle plugin
 set -euo pipefail
@@ -40,8 +40,8 @@ if [[ "$run_apple" == 1 ]]; then
 fi
 
 if [[ "$run_android" == 1 ]]; then
-    : "${TOOLCHAINS:=org.swift.632202605101a}"
-    export TOOLCHAINS
+    TOOLCHAIN_BIN="/Library/Developer/Toolchains/swift-6.3.3-RELEASE.xctoolchain/usr/bin"
+    [[ -d "$TOOLCHAIN_BIN" ]] && export PATH="$TOOLCHAIN_BIN:$PATH"
 
     step "Android: cross-compile JNI natives + stage bindings"
     "$ROOT/Scripts/android-build-libs.sh"

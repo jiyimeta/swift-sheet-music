@@ -158,53 +158,53 @@ UI / PDF remain Apple-only.
 
 ### Prerequisites
 
-- **Open-source swift.org Swift 6.3.2-RELEASE toolchain on the host**
+- **Open-source swift.org Swift 6.3.3-RELEASE toolchain on the host**
   (not Apple's Xcode-shipped Swift). Install the `.pkg` from
   <https://www.swift.org/install/macos/> (lands at
-  `/Library/Developer/Toolchains/swift-6.3.2-RELEASE.xctoolchain`,
-  bundle id `org.swift.632202605101a`). Export `TOOLCHAINS=org.swift.632202605101a`
-  before any Android `swift build` (or rely on `Scripts/android-test.sh`
-  which exports it for you). The Android SDK's pre-built Foundation
-  swiftmodule is tagged `Swift version 6.3.2 (swift-6.3.2-RELEASE)` and
-  Apple's Xcode-shipped `swiftlang-6.3.2.*` fork rejects it with
-  214 "compiled module was created by an older version of the compiler"
-  errors.
+  `/Library/Developer/Toolchains/swift-6.3.3-RELEASE.xctoolchain`). The
+  Android build scripts (`android-build-libs.sh`, `android-test.sh`,
+  `preflight.sh`) **prepend that toolchain's `usr/bin` to `PATH`** so plain
+  `swift` resolves to it. Prefer PATH over `TOOLCHAINS`: on hosts where
+  `swift` is the swiftly shim, the shim ignores `TOOLCHAINS`. The Android
+  SDK's pre-built Foundation swiftmodule is tagged
+  `Swift version 6.3.3 (swift-6.3.3-RELEASE)` and Apple's Xcode-shipped
+  `swiftlang-6.3.3.*` fork rejects it ("compiled module was created by a
+  different version of the compiler").
 
   ```bash
-  export TOOLCHAINS=org.swift.632202605101a
-  swift --version  # banner should contain "swift-6.3.2-RELEASE"
+  export PATH="/Library/Developer/Toolchains/swift-6.3.3-RELEASE.xctoolchain/usr/bin:$PATH"
+  swift --version  # banner should contain "swift-6.3.3-RELEASE"
   ```
 
 - Swift Android SDK installed. `swift sdk list` should report:
 
   ```
-  swift-6.3.2-RELEASE_android
+  swift-6.3.3-RELEASE_android
   ```
 
-  This bundle exposes triples `{aarch64,x86_64,armv7}-unknown-linux-android{28..36}`.
-  It does **not** include `android24`. The lowest API level supported
-  is `android28`. Install via:
+  The lowest API level supported is `android28`. Install via:
 
   ```bash
   swift sdk install \
-      https://download.swift.org/swift-6.3.2-release/android-sdk/swift-6.3.2-RELEASE/swift-6.3.2-RELEASE_android.artifactbundle.tar.gz \
-      --checksum <SHA256-from-swift.org-release-page>
+      https://download.swift.org/swift-6.3.3-release/android-sdk/swift-6.3.3-RELEASE/swift-6.3.3-RELEASE_android.artifactbundle.tar.gz \
+      --checksum d160cc3206dd1886dae3fef2337af5e25ec034692cd0ec225721c56cc69da7f5
   ```
 
   Re-derive the exact URL and checksum from
-  <https://www.swift.org/install/> → Swift 6.3 → Android if either
-  changes.
+  <https://www.swift.org/install/> → Swift 6.3 → Android (or the
+  "Getting Started with the Swift SDK for Android" guide) if either changes.
 
 - `adb` on `$PATH` and an Android device or emulator (API ≥ 28)
 
 ### One-time NDK sysroot setup
 
-The Swift Android SDK ships a setup script that stages NDK sysroot
-symlinks. Run it once after installing the SDK:
+The Swift 6.3.3 Android SDK requires **NDK LTS r27d or later**
+(`27.3.13750724`). The SDK ships a setup script that stages NDK sysroot
+symlinks; run it once after installing the SDK:
 
 ```bash
-ANDROID_NDK_HOME=~/Library/Android/sdk/ndk/<version> \
-    ~/Library/org.swift.swiftpm/swift-sdks/swift-6.3.2-RELEASE_android.artifactbundle/swift-android/scripts/setup-android-sdk.sh
+ANDROID_NDK_HOME=~/Library/Android/sdk/ndk/27.3.13750724 \
+    ~/Library/org.swift.swiftpm/swift-sdks/swift-6.3.3-RELEASE_android.artifactbundle/swift-android/scripts/setup-android-sdk.sh
 ```
 
 If the `ndk-sysroot` symlink under the artifact bundle is missing, the
@@ -305,7 +305,7 @@ selection:
 
 - **Triple form (preferred):** `aarch64-unknown-linux-android28` or
   `x86_64-unknown-linux-android28`. Used by `Scripts/android-test.sh`.
-- **Bundle form:** `swift-6.3.2-RELEASE_android`. SwiftPM picks the
+- **Bundle form:** `swift-6.3.3-RELEASE_android`. SwiftPM picks the
   triple (observed default: `aarch64-unknown-linux-android29`). Handy
   for ad-hoc commands when you don't care which API level is picked.
 

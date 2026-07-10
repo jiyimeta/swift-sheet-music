@@ -16,7 +16,7 @@ on:
 # cross-compile pipeline, so this runs on macOS (Scripts/android-build-libs.sh
 # hardcodes darwin NDK paths). The chain mirrors android-publish.yml:
 #
-#   1. Host Swift 6.3.2 (org.swift toolchain) + Android Swift SDK + NDK.
+#   1. Host Swift 6.3.3 (org.swift toolchain) + Android Swift SDK + NDK.
 #   2. Scripts/android-build-libs.sh cross-compiles SheetMusicAndroidJNI for
 #      each ABI and stages the swift-java JExtract Java bindings into
 #      SheetMusicAndroid/src/main/java-generated. This also resolves the
@@ -31,7 +31,6 @@ on:
 # download the wirelet Gradle plugin / runtime even when they are public.
 env:
   WIRELET_PAT: ${{ secrets.WIRELET_PAT }}
-  TOOLCHAINS: org.swift.632202605101a
 
 jobs:
   build-and-test:
@@ -46,27 +45,29 @@ jobs:
             url."https://x-access-token:${WIRELET_PAT}@github.com/".insteadOf \
             "git@github.com:"
 
-      - name: Install Swift 6.3.2 toolchain
+      - name: Install Swift 6.3.3 toolchain
         run: |
-          curl -fLO https://download.swift.org/swift-6.3.2-release/xcode/swift-6.3.2-RELEASE/swift-6.3.2-RELEASE-osx.pkg
-          sudo installer -pkg swift-6.3.2-RELEASE-osx.pkg -target /
+          curl -fLO https://download.swift.org/swift-6.3.3-release/xcode/swift-6.3.3-RELEASE/swift-6.3.3-RELEASE-osx.pkg
+          sudo installer -pkg swift-6.3.3-RELEASE-osx.pkg -target /
+          # Prepend the open-source toolchain to PATH for all later steps.
+          echo "/Library/Developer/Toolchains/swift-6.3.3-RELEASE.xctoolchain/usr/bin" >> "$GITHUB_PATH"
           swift --version
 
       - uses: android-actions/setup-android@v3
 
       - name: Install required NDK
-        run: sdkmanager "ndk;27.2.12479018"
+        run: sdkmanager "ndk;27.3.13750724"
 
       - name: Install Swift Android SDK
         env:
-          ANDROID_SDK_CHECKSUM: 939e933549d12d28f2e0bf71019d734d309859e9773c572657ce565a81f85d68
+          ANDROID_SDK_CHECKSUM: d160cc3206dd1886dae3fef2337af5e25ec034692cd0ec225721c56cc69da7f5
         run: |
           swift sdk install \
-              https://download.swift.org/swift-6.3.2-release/android-sdk/swift-6.3.2-RELEASE/swift-6.3.2-RELEASE_android.artifactbundle.tar.gz \
+              https://download.swift.org/swift-6.3.3-release/android-sdk/swift-6.3.3-RELEASE/swift-6.3.3-RELEASE_android.artifactbundle.tar.gz \
               --checksum "$ANDROID_SDK_CHECKSUM"
-          NDK_DIR="$ANDROID_HOME/ndk/27.2.12479018"
+          NDK_DIR="$ANDROID_HOME/ndk/27.3.13750724"
           ANDROID_NDK_HOME="$NDK_DIR" \
-              ~/Library/org.swift.swiftpm/swift-sdks/swift-6.3.2-RELEASE_android.artifactbundle/swift-android/scripts/setup-android-sdk.sh
+              ~/Library/org.swift.swiftpm/swift-sdks/swift-6.3.3-RELEASE_android.artifactbundle/swift-android/scripts/setup-android-sdk.sh
 
       - name: Cross-compile JNI natives + stage swift-java bindings
         run: Scripts/android-build-libs.sh

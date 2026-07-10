@@ -3,15 +3,21 @@
 # (plus Swift runtime stubs) into Android/SheetMusicAndroid/src/main/jniLibs/.
 set -euo pipefail
 
-: "${TOOLCHAINS:=org.swift.632202605101a}"
-export TOOLCHAINS
+# Use the open-source swift.org toolchain paired with the Android SDK.
+# Prepend it to PATH so plain `swift` resolves to it — the swiftly shim on
+# some hosts ignores TOOLCHAINS, and Apple's Xcode swiftc produces
+# incompatible swiftmodules.
+TOOLCHAIN_BIN="/Library/Developer/Toolchains/swift-6.3.3-RELEASE.xctoolchain/usr/bin"
+if [[ -d "$TOOLCHAIN_BIN" ]]; then
+    export PATH="$TOOLCHAIN_BIN:$PATH"
+fi
 export SWIFT_SHEET_MUSIC_ANDROID=1
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd -P)"
 JNI_DIR="$ROOT/Android/SheetMusicAndroid/src/main/jniLibs"
-SDK_BUNDLE="$HOME/Library/org.swift.swiftpm/swift-sdks/swift-6.3.2-RELEASE_android.artifactbundle"
+SDK_BUNDLE="$HOME/Library/org.swift.swiftpm/swift-sdks/swift-6.3.3-RELEASE_android.artifactbundle"
 
-# Actual layout (Swift 6.3.2 Android SDK, verified 2026-05-19):
+# Actual layout (Swift 6.3.3 Android SDK):
 #   $SDK_BUNDLE/swift-android/swift-resources/usr/lib/swift-<arch>/android/libswiftCore.so
 # The plan-assumed path ($SDK_BUNDLE/swift-android/sysroot/usr/lib/<arch>)
 # does not exist in this release; use swift-resources instead.
