@@ -245,3 +245,83 @@ per-score, each a distinct root:
 - Dedicated dur/tie micro-fix (S8 regime) for the ~5 po-OK / dur-below-90 scores.
 - The spike harness (`PDFCorpusGroundTruthSpikeTests.swift`) stays untracked;
   preserve it (copy) if the worktree is torn down.
+
+## Session 2 execution (2026-07-10): R7–R8 + deferred characterization
+
+A second session picked up the follow-ups. Two rounds landed (both hold the
+three gates — curated 6 byte-identical, no regression on the already-good set,
+target cluster moves); the rest were verified to be near-ceiling or
+low-yield/high-risk and deferred by the user.
+
+**Verified correction to the R7 premise.** The original plan expected mm-rest
+expansion to lift `mimicopy_ラストオーダー`/`ベーコンエピ` out of the below-90
+tail. Direct measurement showed the mm-rest is at the END of those scores, so
+the collapsed bars are trailing rests that the harness (which aligns
+`min(measuresA, measuresB)` and counts only chord onsets) never scores —
+expansion is **po/dur-neutral** there. Their real po drivers are a transposing
+instrument (`ラストオーダー`: A.Sax reads +9 written-vs-concert, 1 of 11 parts;
+the other 10 are pos=100%) and grand-staff internal bleed (`ベーコンエピ`
+piano). Lesson (again): verify the mechanism before believing the plan's
+attribution.
+
+### R7 — multi-measure-rest expansion (`455bcf2b`)
+Pre-pass over the `ImportSystem` tree (`PDFImporter+MultiMeasureRest.swift`,
+gated by `PDFImportOptions.expandMultiMeasureRests`, default on). Detects an
+mm-rest column — empty across ALL staves + an above-top-line SMuFL timeSig-digit
+count ≥ 2, by whole-system consensus so staves stay aligned — and expands it
+into N measures (the bar with its count digits stripped, plus N-1 synthetic
+empty cells). Result: 7 scores' measure counts corrected to EXACT (canvas
+37→200, ベーコンエピ 17→100, ラストオーダー 18→100, 革命道中×3 152→241,
+つよがるガール_bass 88→90). `つよがるガール_bass` was a MID-score mm-rest whose
+expansion realigned all following content: po 46→100, dur 58→96, tie 40→100 (a
+genuine below-90 tail reduction the plan hadn't anticipated). End-run mm-rests
+are metric-neutral by construction. Zero regression; curated 6 byte-identical.
+
+### R8 — grand-staff capture-band clamp (`16147128`)
+Clamp each staff's pitch-bearing glyph-capture band at the MIDPOINT to its
+nearest neighbour (`PDFImporter+Layout.swift`, computed per system from all
+staff bands). On a well-spaced ensemble the midpoint is farther than the ±3-line
+band → no-op (curated 6 byte-identical); on a tight grand staff it stops the
+treble from double-capturing bass noteheads. The FLAG band is left unclamped
+(flags carry no pitch and render far from the staff; clamping them dropped
+legitimate drum-flag durations — the first attempt regressed 7 scores' dur
+before that carve-out). Result: `Girls_Be_Free 4` po 33→97, `idea20241203` po
+75→91 / dur 73→87 / tie 88→97 (both leave the tail), 奪い返して×3 pitch 99→100.
+No regression on the already-good set; two within-tail −1/−2 movements
+(`ベーコンエピ`, `Girls` tie) are the midpoint's unavoidable reassignment of
+genuinely ambiguous gap notes.
+
+### Aggregate movement (R6 → R8, 133 scored)
+| metric | R6 baseline | R8 |
+|---|---|---|
+| below-90 pitchedOnly | 12 | **9** |
+| mean pitchedOnly | 95.2 | **96.2** |
+| measures-exact | 122 | **129** |
+| mean dur | 93.2 | 94.1 |
+| curated 6 | byte-identical | byte-identical |
+
+### Deferred / characterized ceilings (verified, not done)
+- **R9 The_Feels 1-line handclap staff** — deferred. Corpus survey: only 3
+  scores carry `<lines>1</lines>` staves; `Chandelier` can't be exported (the
+  one uncrashable PDF), `NOW_ON_AIR`'s reduced part is `<show>0</show>` hidden
+  (partLoss=0), so the entire benefit is +23 notes on `The_Feels`, which is
+  already po=99 (no tail impact). A corpus-wide 1-line detector's regression
+  risk was judged not worth it for one already-good score.
+- **R10 duration tail** — the two large gaps (`どれにしようかな` dur 74,
+  `革命道中`×3 dur 80) are both driven by the DRUM / vocal-percussion staff
+  (every other part is 97–100% dur): over-segmentation (+233 onsets) in one,
+  under- (−290) in the other — no shared mechanism, the X-head/beam drum-rhythm
+  ceiling S8 already flagged. Remaining dur-below-90 scores are marginal
+  (87–89) pitched parts.
+- **Transposing-instrument written→concert conversion** — the real po lever for
+  `ラストオーダー` (and band arrangements generally), but the transposition
+  can't be inferred reliably from a PDF: the key-signature delta fixes the
+  interval only mod 12 (octave ambiguous) and instrument-name text is
+  abbreviated/unreliable. High regression risk (a wrong guess wrecks a whole
+  part) for ~1–2 corpus scores.
+
+### Spike-harness additions (untracked, preserve on teardown)
+`PDFCorpusGroundTruthSpikeTests.swift` gained `mmRestProbe` (dumps H-bar cells:
+glyphs, above-staff count digits, thick bars) and `grandStaffProbe` (per-staff
+note-count distribution A vs B). Both stay untracked with the rest of the spike
+harness; copy them to the surviving worktree if this one is torn down.
