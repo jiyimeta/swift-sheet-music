@@ -62,6 +62,14 @@ Download the release archive, unzip into
 (`xcodegen` from `Examples/Apple/`), and rebuild — the example app picks
 them up automatically.
 
+> **SoundFont licensing.** `MuseScore_General` and `GeneralUser GS` are
+> third-party works by S. Christian Collins, distributed under their own
+> terms — see the
+> [split-set repository](https://github.com/jiyimeta/musescore-general-sf2-split)
+> and [schristiancollins.com](https://schristiancollins.com/generaluser.php).
+> This package bundles no samples of its own; anyone redistributing a
+> SoundFont binary must include its license text and attribution.
+
 > `AVAudioUnitSampler` only reads `.sf2` and `.dls`, **not** `.sf3`
 > (SF3 = SoundFont with OGG-compressed samples, which the system
 > sampler does not decode). If you start from an `.sf3` distribution

@@ -10,9 +10,9 @@ with Apple's `MusicKit` framework.
 Source code license
 -------------------
 
-The Swift source code under `Sources/` (libraries `SheetMusic`,
-`SheetMusicCore`, `SheetMusicMSCX`, `SheetMusicMIDI`) is licensed under
-the MIT License (see LICENSE in the project root).
+All Swift source code under `Sources/` (every `SheetMusic*` library
+product) is licensed under the MIT License (see LICENSE in the project
+root).
 
 The implementation is independently authored. Algorithms (e.g. arpeggio
 note timing, pause-aware tempo map handling, MeasureRepeat group
@@ -45,17 +45,58 @@ the licence of code that depends on this package.
 Third-party Swift dependencies
 ------------------------------
 
-- ZIPFoundation — Apache 2.0 (https://github.com/weichsel/ZIPFoundation)
+Resolved via Swift Package Manager (all Apache-2.0 licensed):
+
+- swift-java — Apache 2.0 (https://github.com/swiftlang/swift-java)
+- swift-subprocess — Apache 2.0 (https://github.com/swiftlang/swift-subprocess)
+- swift-wirelet — Apache 2.0 (https://github.com/jiyimeta/swift-wirelet)
+
+ZIP handling is implemented in-house (`Sources/SheetMusicZip`) over
+Apple's `Compression` framework on Apple platforms and the system
+`zlib` on Linux / Android; no third-party ZIP library is vendored.
+
+Android audio module dependencies
+---------------------------------
+
+The Android playback module (Kotlin, `Android/SheetMusicAudioAndroid/`)
+depends, at build time via Gradle, on:
+
+- FluidSynth — LGPL-2.1 (https://github.com/VolcanoMobile/fluidsynth-android),
+  dynamically linked as `libfluidsynth.so`; not vendored in this
+  repository. Applications redistributing the module must honour
+  LGPL-2.1 §4 (allow replacing the shared library, include the LGPL
+  notice). See `Android/SheetMusicAudioAndroid/README.md`.
+- Oboe — Apache 2.0 (https://github.com/google/oboe)
+
+SoundFonts
+----------
+
+This package ships no audio samples; consumers supply a General MIDI
+SoundFont through the `SoundfontResolver` protocol. The SoundFonts the
+example apps reference are third-party and carry their own licenses:
+
+- MuseScore_General by S. Christian Collins — the split per-program set
+  is hosted at https://github.com/jiyimeta/musescore-general-sf2-split
+- GeneralUser GS by S. Christian Collins —
+  https://schristiancollins.com/generaluser.php
+
+Any redistribution of these SoundFont binaries (for example via GitHub
+Releases) must include their respective license text and attribution.
 
 -----
 
-SheetMusicUI bundles the Bravura SMuFL font
-(`Sources/SheetMusicUI/Fonts/Resources/Bravura.otf`).
+SheetMusicLayoutApple bundles the Bravura SMuFL font
+(`Sources/SheetMusicLayoutApple/Fonts/Resources/Bravura.otf`).
 
 Bravura is © Steinberg Media Technologies GmbH and is licensed under
 the SIL Open Font License, Version 1.1. See
-`Sources/SheetMusicUI/Fonts/Resources/Bravura.LICENSE.txt` for the
-full license text.
+`Sources/SheetMusicLayoutApple/Fonts/Resources/Bravura.LICENSE.txt` for
+the full license text.
 
-Bravura is included in the `SheetMusicUI` library target only; it is
-not a dependency of any other library product in this package.
+Bravura is included in the `SheetMusicLayoutApple` library target only
+(auto-installed by `SheetMusicUI` / `SheetMusicPDF`); it is not a
+dependency of any other library product in this package.
+
+The example apps and the Android modules additionally bundle the Edwin
+text font (© 2021 MuseScore Limited, SIL Open Font License 1.1); each
+copy ships its `Edwin.LICENSE.txt` alongside.
