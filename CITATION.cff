@@ -1,0 +1,20 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it using these metadata."
+title: swift-sheet-music
+abstract: >-
+  A Swift package for parsing, modelling, rendering, and playing back
+  engraved music notation (MuseScore and MusicXML), with Standard MIDI
+  File export and an Android-compatible core.
+type: software
+authors:
+  - family-names: Ito
+    given-names: Kiichi
+repository-code: "https://github.com/jiyimeta/swift-sheet-music"
+license: MIT
+keywords:
+  - music-notation
+  - musescore
+  - musicxml
+  - midi
+  - smufl
+  - swift

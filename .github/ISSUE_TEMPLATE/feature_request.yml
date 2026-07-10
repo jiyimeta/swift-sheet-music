@@ -1,0 +1,27 @@
+name: Feature request
+description: Suggest a notation feature, format coverage, or API addition
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: >-
+        Describe the use case or the notation / format feature that is
+        missing, and why it matters. Concrete input files or references to
+        the MuseScore / MusicXML behaviour help.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What API or behavior would you expect? Optional.
+    validations:
+      required: false
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+    validations:
+      required: false
