@@ -89,17 +89,22 @@ xcodebuild -project Examples/Apple/SheetMusicExample.xcodeproj \
            -destination 'platform=iOS Simulator,name=iPhone 17' build
 ```
 
-## Pre-merge verification (CI is manual-only)
+## Pre-merge verification (CI + local preflight)
 
-GitHub Actions CI is **not** run automatically. The `android-audio.yml`
-workflow runs on a `macos-14` runner whose 10x billing multiplier (at
-~40-75 min wall-clock per run) exhausted this private repo's free-tier
-Actions minutes, so its automatic `push` / `pull_request` triggers were
-removed — it is `workflow_dispatch`-only now. `android-publish.yml` still
-fires on `v*` tags (release publish, infrequent).
+GitHub Actions runs on public runners (free for public repos):
 
-Instead, run the equivalent verification **locally before merging any
-branch into `main`**:
+- `ci.yml` — Apple `swift build` + `swift test`, on every push and pull
+  request to `main`. Needs no secrets, so it also covers fork PRs. This is
+  the primary gate.
+- `android-audio.yml` — Android cross-compile → Kotlin unit tests →
+  `assembleRelease`, on push to `main` and `workflow_dispatch`. Not run on
+  `pull_request` because it needs the `WIRELET_PAT` GitHub Packages token,
+  which forks can't access. ~40-75 min on a `macos-14` runner.
+- `android-publish.yml` — fires on `v*` tags (release publish, infrequent).
+
+`Scripts/preflight.sh` remains the fast **local** gate — run it before
+opening a PR / merging, especially for Android changes (CI only verifies
+those post-merge to `main`):
 
 ```bash
 Scripts/preflight.sh            # full suite: Apple swift test + Android
@@ -107,13 +112,9 @@ Scripts/preflight.sh --apple    # Apple/SwiftPM only (fast iteration)
 Scripts/preflight.sh --android  # Android cross-compile + Kotlin tests + AAR
 ```
 
-This reproduces what CI did (Android cross-compile → Kotlin unit tests →
-`assembleRelease`) **plus** the Apple-side `swift test` that CI never
-covered. A green `Scripts/preflight.sh` is the merge gate. The Android
-stage needs the same toolchain/SDK/NDK + `WIRELET_PAT` setup documented
-under "Android build" below; on a host without that, use `--apple`. If you
-ever want a clean-room CI reproduction, trigger the workflow manually from
-the Actions tab (`gh workflow run "Android audio module"`).
+The Android stage needs the same toolchain/SDK/NDK + `WIRELET_PAT` setup
+documented under "Android build" below; on a host without that, use
+`--apple`.
 
 The example app's `.xcodeproj` is **gitignored**; regenerate from
 `Examples/Apple/project.yml` with `xcodegen` whenever you change project

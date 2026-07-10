@@ -1,5 +1,6 @@
 # swift-sheet-music
 
+[![CI](https://github.com/jiyimeta/swift-sheet-music/actions/workflows/ci.yml/badge.svg)](https://github.com/jiyimeta/swift-sheet-music/actions/workflows/ci.yml)
 [![Swift](https://img.shields.io/badge/Swift-6.2%2B-orange.svg)](https://swift.org)
 [![Platforms](https://img.shields.io/badge/platforms-iOS%20%7C%20macOS%20%7C%20tvOS%20%7C%20watchOS%20%7C%20Android-blue.svg)](#installation)
 [![SwiftPM](https://img.shields.io/badge/SwiftPM-compatible-brightgreen.svg)](#installation)
