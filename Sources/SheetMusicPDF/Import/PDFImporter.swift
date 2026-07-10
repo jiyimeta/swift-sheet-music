@@ -74,15 +74,7 @@ public enum PDFImporter {
     ) throws -> Score {
         // Page sizes (mediaBox) for the geometry side-car's system rects and
         // display flips. Only computed on the geometry-capture path.
-        if let geometry {
-            var sizes: [Int: CGSize] = [:]
-            for p in 0 ..< document.pageCount {
-                if let page = document.page(at: p) {
-                    sizes[p] = page.bounds(for: .mediaBox).size
-                }
-            }
-            geometry.setPageSizes(sizes)
-        }
+        recordPageSizes(document: document, geometry: geometry)
         let walked = try ContentStreamWalker(document: document).walk()
         guard !walked.glyphs.isEmpty || !walked.texts.isEmpty || !walked.paths.isEmpty else {
             throw SheetMusicError.malformedScore(
@@ -129,6 +121,16 @@ public enum PDFImporter {
             )
         }
 
+        // Expand collapsed "N-bar" multi-measure rests (H-bar + count) back
+        // into their N constituent measures so the imported measure count
+        // matches the uncollapsed source. No-op when the document has no
+        // mm-rest H-bars (the common case). See PDFImporter+MultiMeasureRest.
+        if options.expandMultiMeasureRests {
+            systemsAllPages = expandMultiMeasureRests(
+                systemsAllPages, diagnostics: options.diagnostics,
+            )
+        }
+
         // Pair tie arcs to noteheads up front (geometry only — two
         // tied noteheads share a staff line, so same y ⇒ same pitch).
         // The result is a set of notehead identities carrying a forward
@@ -154,6 +156,21 @@ public enum PDFImporter {
             options: options,
             geometry: geometry,
         )
+    }
+
+    /// Record each page's mediaBox size into the geometry side-car. No-op on
+    /// the non-geometry path (the collector is nil).
+    private static func recordPageSizes(
+        document: PDFDocument, geometry: PDFGeometryCollector?,
+    ) {
+        guard let geometry else { return }
+        var sizes: [Int: CGSize] = [:]
+        for p in 0 ..< document.pageCount {
+            if let page = document.page(at: p) {
+                sizes[p] = page.bounds(for: .mediaBox).size
+            }
+        }
+        geometry.setPageSizes(sizes)
     }
 
     /// Document-wide ensemble size: the number of staves in one system,

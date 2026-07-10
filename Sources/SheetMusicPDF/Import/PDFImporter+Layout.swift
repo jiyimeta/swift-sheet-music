@@ -37,8 +37,9 @@ extension PDFImporter {
         let systemGroups = spineClusteredSystems(pageStaves, paths: paths, pageIndex: pageIndex)
             ?? clusterIntoSystems(pageStaves, ensembleSize: ensembleSize)
         return systemGroups.map { staffGroup -> ImportSystem in
-            let parts = couplingByBracket(
-                staves: staffGroup, paths: paths, pageIndex: pageIndex,
+            let parts = couplingIntoParts(
+                staves: staffGroup, paths: paths, classified: classified,
+                pageIndex: pageIndex,
             )
             let yRange = systemYRange(staffGroup)
             let bare = ImportSystem(pageIndex: pageIndex, yRange: yRange, parts: parts)
@@ -67,66 +68,6 @@ extension PDFImporter {
         return abs(hi - lo)
     }
 
-    // MARK: - Bracket coupling
-
-    /// Group the system's staves into parts. A vertical near the left
-    /// x-edge couples the staves it spans into one `ImportPart` — but
-    /// ONLY when it spans **exactly two** staves, i.e. a grand-staff brace
-    /// joining one instrument's two staves (piano / organ / harp).
-    ///
-    /// A vertical that spans three or more staves is a system **group
-    /// bracket** (a square / line bracket grouping several otherwise
-    /// independent single-staff parts — common in vocal / choral
-    /// arrangements). It must NOT collapse those parts into one; doing so
-    /// produced the 5-parts→1 regression. Such group brackets are skipped
-    /// here, leaving each spanned staff its own part.
-    private static func couplingByBracket(
-        staves: [Staff], paths: [PathSegment], pageIndex: Int,
-    ) -> [ImportPart] {
-        var coupled = Array(repeating: false, count: staves.count)
-        var parts: [ImportPart] = []
-        let leftX = staves.first?.xRange.lowerBound ?? 0
-        let candidates = paths.filter {
-            $0.pageIndex == pageIndex
-                && $0.kind == .vertical
-                && abs($0.rect.midX - leftX) < 5
-        }
-        for path in candidates {
-            let idxs = bracketCoupledIndices(path: path, staves: staves, coupled: coupled)
-            // Exactly two spanned staves → grand-staff brace (couple).
-            // One → a per-staff barline (ignore). Three+ → group bracket
-            // over several single-staff parts (do NOT couple).
-            guard idxs.count == 2 else { continue }
-            let group = idxs.map { ImportStaff(staff: staves[$0], measures: []) }
-            parts.append(ImportPart(staves: group))
-            for i in idxs {
-                coupled[i] = true
-            }
-        }
-        for (i, s) in staves.enumerated() where !coupled[i] {
-            parts.append(ImportPart(staves: [ImportStaff(staff: s, measures: [])]))
-        }
-        // Emit parts in page top→bottom order (descending PDF y) so the
-        // per-part order is stable across systems for the assembler.
-        return parts.sorted {
-            ($0.staves.first?.staff.yLines.first ?? 0)
-                > ($1.staves.first?.staff.yLines.first ?? 0)
-        }
-    }
-
-    private static func bracketCoupledIndices(
-        path: PathSegment, staves: [Staff], coupled: [Bool],
-    ) -> [Int] {
-        var idxs: [Int] = []
-        for (i, s) in staves.enumerated() where !coupled[i] {
-            let mid = midline(s.yLines)
-            if path.rect.minY <= mid && mid <= path.rect.maxY {
-                idxs.append(i)
-            }
-        }
-        return idxs
-    }
-
     // MARK: - Measure splitting
 
     /// Decorate `system` with per-staff `[ImportMeasure]`. Uses the
@@ -137,12 +78,26 @@ extension PDFImporter {
     ) -> ImportSystem {
         let unionMidXs = systemBarlineUnion(system)
         var parts = system.parts
+        // Every staff band (outer-line y span) in the system, so each staff's
+        // vertical glyph-capture band can be clamped at the MIDPOINT to its
+        // nearest neighbour. On a tightly-spaced grand staff the fixed
+        // ±3-line band otherwise reaches into the adjacent staff and
+        // double-captures its noteheads (piano bass leaking into the treble).
+        let bands = parts.flatMap { part in
+            part.staves.map {
+                (lo: $0.staff.yLines.min() ?? 0, hi: $0.staff.yLines.max() ?? 0)
+            }
+        }
         for p in 0 ..< parts.count {
             for s in 0 ..< parts[p].staves.count {
                 let staff = parts[p].staves[s].staff
                 let xs = splitPoints(staff: staff, unionMidXs: unionMidXs)
                 parts[p].staves[s].measures = makeMeasures(
                     staff: staff, splitXs: xs, classified: classified,
+                    bandClamp: neighborBandClamp(
+                        top: staff.yLines.max() ?? 0,
+                        bottom: staff.yLines.min() ?? 0, bands: bands,
+                    ),
                 )
             }
         }
@@ -329,8 +284,32 @@ extension PDFImporter {
         return kept
     }
 
+    /// Vertical clamp bounds for a staff's glyph-capture band: the midpoint to
+    /// the nearest staff below (`lower`) and above (`upper`). `±infinity` when
+    /// there is no neighbour on that side. On a well-spaced ensemble the
+    /// midpoint is farther than the ±3-line band, so clamping is a no-op; on a
+    /// tight grand staff it stops the band from crossing into the sibling
+    /// staff and double-capturing its noteheads.
+    static func neighborBandClamp(
+        top: CGFloat, bottom: CGFloat, bands: [(lo: CGFloat, hi: CGFloat)],
+    ) -> (lower: CGFloat, upper: CGFloat) {
+        var lower = -CGFloat.greatestFiniteMagnitude
+        var upper = CGFloat.greatestFiniteMagnitude
+        for b in bands {
+            if b.hi < bottom - 0.5 {
+                lower = max(lower, (bottom + b.hi) / 2)
+            } else if b.lo > top + 0.5 {
+                upper = min(upper, (top + b.lo) / 2)
+            }
+        }
+        return (lower, upper)
+    }
+
     private static func makeMeasures(
         staff: Staff, splitXs: [CGFloat], classified: [ClassifiedGlyph],
+        bandClamp: (lower: CGFloat, upper: CGFloat) = (
+            -CGFloat.greatestFiniteMagnitude, CGFloat.greatestFiniteMagnitude,
+        ),
     ) -> [ImportMeasure] {
         guard splitXs.count >= 2 else { return [] }
         var measures: [ImportMeasure] = []
@@ -338,7 +317,9 @@ extension PDFImporter {
         for i in 0 ... lastIndex {
             let lo = splitXs[i]
             let hi = splitXs[i + 1]
-            let cellGlyphs = filterGlyphs(classified: classified, staff: staff, lo: lo, hi: hi)
+            let cellGlyphs = filterGlyphs(
+                classified: classified, staff: staff, lo: lo, hi: hi, clamp: bandClamp,
+            )
             measures.append(ImportMeasure(
                 xRange: lo ... hi,
                 glyphs: cellGlyphs,
@@ -352,6 +333,9 @@ extension PDFImporter {
 
     private static func filterGlyphs(
         classified: [ClassifiedGlyph], staff: Staff, lo: CGFloat, hi: CGFloat,
+        clamp: (lower: CGFloat, upper: CGFloat) = (
+            -CGFloat.greatestFiniteMagnitude, CGFloat.greatestFiniteMagnitude,
+        ),
     ) -> [ClassifiedGlyph] {
         // Vertical capture band around the staff. A fixed ±30pt band
         // bled into the NEIGHBOURING staff on dense vocal scores where
@@ -382,9 +366,19 @@ extension PDFImporter {
                   lo <= $0.raw.origin.x,
                   $0.raw.origin.x < hi
             else { return false }
-            let reach = isFlag($0.semantic) ? flagBand : band
-            return (bottom - reach) <= $0.raw.origin.y
-                && $0.raw.origin.y <= (top + reach)
+            // Flags carry no pitch (they only subdivide a note's duration) and
+            // render far from the staff, so their wide band must NOT be clamped
+            // — clamping cut legitimate drum flags on tightly-spaced staves and
+            // dropped their duration. Only the pitch-bearing band is clamped at
+            // the midpoint to an adjacent staff, so a tight grand staff's
+            // sibling noteheads aren't double-captured.
+            if isFlag($0.semantic) {
+                return (bottom - flagBand) <= $0.raw.origin.y
+                    && $0.raw.origin.y <= (top + flagBand)
+            }
+            let low = max(bottom - band, clamp.lower)
+            let high = min(top + band, clamp.upper)
+            return low <= $0.raw.origin.y && $0.raw.origin.y <= high
         }
     }
 

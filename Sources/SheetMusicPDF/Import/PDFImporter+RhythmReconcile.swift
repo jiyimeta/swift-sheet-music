@@ -43,6 +43,22 @@ extension PDFImporter {
         location: String = "",
     ) -> [RhythmElement] {
         guard !elements.isEmpty else { return elements }
+        // Defense in depth: a mis-decoded time signature (hostile PDF input)
+        // must never reach `Fraction`, whose initializer traps on a
+        // non-positive denominator. `scoreStateEvents` already validates at
+        // the read point, so this only fires if an invalid signature arrives
+        // via some other path — skip reconciliation (a no-repair pass is
+        // always metrically safe) and warn.
+        guard timeSignature.numerator > 0, timeSignature.denominator > 0 else {
+            diagnostics?(PDFImportDiagnostic(
+                severity: .warning,
+                location: location,
+                message: "skipping duration reconciliation — invalid time "
+                    + "signature \(timeSignature.numerator)/"
+                    + "\(timeSignature.denominator)",
+            ))
+            return elements
+        }
         // Bar length as a fraction OF A WHOLE NOTE: a 4/4 bar is 4/4 = one
         // whole note (1/1), a 7/8 bar is 7/8, a 3/4 bar is 3/4. This matches
         // `NoteDuration.asFraction`, where quarter = 1/4 of a whole note.

@@ -205,7 +205,11 @@ extension PDFImporter {
     ) -> [TextGlyph] {
         guard texts.contains(where: hasColon), lineSpacing > 0 else { return texts }
         var kept: [TextGlyph] = []
-        for (_, pageTexts) in Dictionary(grouping: texts, by: \.pageIndex) {
+        // Concatenate pages in ascending page order — Dictionary(grouping:)
+        // iterates in hash order, which would make the kept pool's
+        // cross-page ordering seed-dependent for downstream consumers.
+        let byPage = Dictionary(grouping: texts, by: \.pageIndex)
+        for (_, pageTexts) in byPage.sorted(by: { $0.key < $1.key }) {
             kept.append(contentsOf: dropAnnotationRuns(pageTexts, lineSpacing: lineSpacing))
         }
         return kept

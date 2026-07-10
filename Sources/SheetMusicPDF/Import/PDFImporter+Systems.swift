@@ -3,13 +3,15 @@ import Foundation
 
 // System clustering: group a page's detected staves into systems.
 //
-// The robust path uses the left **bracket spine** that MuseScore draws
-// down the left edge of every system; it cleanly delimits each system's
-// y-extent even on dense vocal scores where staves within a system can
-// sit nearly as far apart as two adjacent systems (which defeats any
-// fixed `× staffHeight` gap threshold). The inter-staff-gap heuristic
-// remains as a fallback for inputs without a detectable spine (e.g. the
-// synthetic layout fixtures).
+// The robust path (`spineClusteredSystems`, in
+// PDFImporter+SystemsSpanning.swift) uses the staff-spanning verticals
+// MuseScore engraves at each system's left edge — the initial system
+// barline and any bracket / brace line; they cleanly delimit each
+// system's staves even on dense vocal scores where staves within a
+// system can sit nearly as far apart as two adjacent systems (which
+// defeats any fixed `× staffHeight` gap threshold). The inter-staff-gap
+// heuristic in this file remains as a fallback for inputs without any
+// vertical paths (e.g. the synthetic layout fixtures).
 
 extension PDFImporter {
     /// A merged vertical run reconstructed from co-linear `.vertical`
@@ -26,93 +28,12 @@ extension PDFImporter {
         }
     }
 
-    /// Cluster page staves into systems by assigning each staff to the
-    /// **bracket spine** whose y-extent contains it. Returns `nil` only when
-    /// no usable spine is found (so the caller falls back to the gap
-    /// heuristic).
-    ///
-    /// A staff whose midline isn't contained by any spine (with a one-
-    /// staff-height slop) is assigned to the **nearest** spine by y-distance
-    /// rather than aborting the whole page. MuseScore's bracket spine
-    /// sometimes stops just inside the outer staff of a system (observed on
-    /// 君とParadiso, where the topmost staff's midline sits ~30pt above the
-    /// spine's top edge); bailing to the gap heuristic in that case shattered
-    /// each staff into its own one-staff "system", which the assembler then
-    /// stacked sequentially — inflating the measure count ~6×. Nearest-spine
-    /// assignment keeps the correct multi-staff grouping.
-    static func spineClusteredSystems(
-        _ pageStaves: [Staff],
-        paths: [PathSegment],
-        pageIndex: Int,
-    ) -> [[Staff]]? {
-        guard !pageStaves.isEmpty else { return nil }
-        let spines = bracketSpines(paths: paths, pageIndex: pageIndex)
-        guard !spines.isEmpty else { return nil }
-        // Group staves by the spine that vertically contains the staff's
-        // midline; otherwise by the nearest spine.
-        var groups: [Int: [Staff]] = [:]
-        for staff in pageStaves {
-            let mid = midline(staff.yLines)
-            let h = staffHeight(staff)
-            let slop = max(h, 8)
-            let containing = spines.firstIndex {
-                mid >= $0.yLo - slop && mid <= $0.yHi + slop
-            }
-            let si = containing ?? nearestSpineIndex(toMid: mid, spines: spines)
-            groups[si, default: []].append(staff)
-        }
-        // Spines are unsorted; emit groups in page top→bottom order
-        // (descending PDF y) to match the caller's expectation.
-        let ordered = groups.keys.sorted { spines[$0].yHi > spines[$1].yHi }
-        return ordered.map { si in
-            (groups[si] ?? []).sorted { $0.yLines.first ?? 0 > $1.yLines.first ?? 0 }
-        }
-    }
-
-    /// Index of the spine whose y-extent is closest to `mid` (distance 0
-    /// when `mid` is inside the run, else the gap to the nearer edge).
-    private static func nearestSpineIndex(
-        toMid mid: CGFloat, spines: [VerticalRun],
-    ) -> Int {
-        var best = 0
-        var bestDist = CGFloat.greatestFiniteMagnitude
-        for (i, s) in spines.enumerated() {
-            let dist: CGFloat = if mid < s.yLo {
-                s.yLo - mid
-            } else if mid > s.yHi {
-                mid - s.yHi
-            } else {
-                0
-            }
-            if dist < bestDist {
-                bestDist = dist
-                best = i
-            }
-        }
-        return best
-    }
-
-    /// Reconstruct tall, thick vertical "bracket spine" runs from the
-    /// page's `.vertical` path segments. A spine is the system bracket's
-    /// main line: line-width clearly above a hairline (> 4pt) and height
-    /// spanning several staves (> 60pt). Co-linear segments at the same x
-    /// (within 1pt) and contiguous in y (≤ 4pt gap) are merged first so a
-    /// dashed / segment-split spine still reads as one run.
-    private static func bracketSpines(
-        paths: [PathSegment],
-        pageIndex: Int,
-    ) -> [VerticalRun] {
-        let verticals = paths.filter {
-            $0.pageIndex == pageIndex && $0.kind == .vertical && $0.rect.height > 10
-        }
-        let runs = mergeColinearVerticals(verticals)
-        return runs.filter { $0.lineWidth > 4 && $0.height > 60 }
-    }
-
     /// Merge `.vertical` segments sharing an x (rounded to 1pt) and
     /// contiguous in y into single runs. lineWidth becomes the max of the
-    /// merged segments (a spine's thickest segment defines it).
-    private static func mergeColinearVerticals(
+    /// merged segments (a spine's thickest segment defines it). Internal
+    /// (not private) so the staff-spanning clustering in
+    /// `PDFImporter+SystemsSpanning.swift` can reuse it.
+    static func mergeColinearVerticals(
         _ verticals: [PathSegment],
     ) -> [VerticalRun] {
         var byX: [Int: [PathSegment]] = [:]
@@ -120,7 +41,10 @@ extension PDFImporter {
             byX[Int(v.rect.midX.rounded()), default: []].append(v)
         }
         var out: [VerticalRun] = []
-        for (_, group) in byX {
+        // Emit runs in left→right x order: Dictionary iteration is hash-seed
+        // dependent, and the run order feeds spine selection downstream
+        // (`spineClusteredSystems` picks the FIRST containing spine).
+        for (_, group) in byX.sorted(by: { $0.key < $1.key }) {
             let sorted = group.sorted { $0.rect.minY < $1.rect.minY }
             guard var lo = sorted.first?.rect.minY,
                   var hi = sorted.first?.rect.maxY,
