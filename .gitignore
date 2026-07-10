@@ -12,6 +12,11 @@ DerivedData/
 tmp/
 .worktrees/
 /build/
+
+# Internal, point-in-time design records (specs / plans / notes). Kept
+# locally for the maintainer's reference; not part of the public tree.
+# Durable design decisions are distilled into ARCHITECTURE.md.
+docs/superpowers/
 Examples/Apple/build/
 
 # SoundFont samples for the example app — distributed via GitHub

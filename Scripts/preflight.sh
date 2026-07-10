@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Pre-merge verification — run this before merging a branch into main.
 #
-# GitHub Actions CI is manual-only (see .github/workflows/android-audio.yml):
-# the Android job runs on a macos-14 runner whose 10x billing multiplier
-# exhausted the private-repo free-tier minutes. This script reproduces that
-# same verification locally — plus the Apple-side `swift test` that CI never
-# covered — so a green run here is the gate that CI used to be.
+# CI (GitHub Actions, free on public runners): ci.yml runs the Apple
+# build/test on every push + PR; android-audio.yml runs the Android
+# cross-compile on push to main + on demand. This script is the fast
+# LOCAL gate — run it before opening a PR / merging, especially for
+# Android changes, which CI only verifies post-merge to main.
 #
 # Usage:
 #   Scripts/preflight.sh              # full suite (Apple + Android)

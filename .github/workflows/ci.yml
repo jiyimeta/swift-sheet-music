@@ -1,0 +1,36 @@
+name: CI
+
+# Apple-side build + test gate. Runs on every push and pull request,
+# including fork PRs — the SwiftPM dependency graph (swift-java,
+# swift-subprocess, swift-wirelet) resolves over public HTTPS and needs
+# no secrets. The Android cross-compile lives in android-audio.yml, which
+# needs a GitHub Packages token and therefore only runs on push to main.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  apple:
+    name: Build & test (Apple)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Swift version
+        run: swift --version
+
+      - name: Build
+        run: swift build
+
+      - name: Test
+        run: swift test

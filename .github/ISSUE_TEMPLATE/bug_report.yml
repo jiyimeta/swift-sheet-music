@@ -1,0 +1,57 @@
+name: Bug report
+description: Report incorrect behavior (bad parse, wrong render, crash, …)
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. Please fill in as much as you can — a
+        minimal reproducing input file is the single most useful thing.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What did you observe, and what did you expect instead?
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: >-
+        Ideally a short Swift snippet plus a minimal `.mscx` / `.musicxml`
+        / `.mid` file (attach it, or paste a tiny inline example). Make sure
+        you have the right to share any file you attach.
+      placeholder: |
+        let score = try SheetMusic.loadScore(mscxData: data)
+        // …
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Package version / commit
+      placeholder: "1.0.0 or a commit SHA"
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      multiple: true
+      options:
+        - iOS
+        - macOS
+        - tvOS
+        - watchOS
+        - Android
+        - Linux
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Swift / Xcode version, OS version, device or simulator.
+    validations:
+      required: false

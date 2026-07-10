@@ -1,14 +1,15 @@
 name: Android audio module
 
-# Manual-only. Automatic push / pull_request triggers were removed because
-# this job runs on a macos-14 runner (10x billing multiplier) and reproduces
-# the local-dev cross-compile pipeline verbatim — at ~40-75 min wall-clock it
-# exhausted the private-repo free-tier Actions minutes. The same verification
-# now runs locally before merging to main via Scripts/preflight.sh; see
-# CLAUDE.md "Pre-merge verification (CI is manual-only)". Trigger this from the
-# Actions tab (or `gh workflow run "Android audio module"`) only when you want
-# a clean-room CI reproduction.
+# Android cross-compile + Kotlin test + AAR assembly. Runs on push to main
+# and on demand. It is deliberately NOT triggered on pull_request: the job
+# needs a GitHub Packages token (WIRELET_PAT) to download the wirelet
+# Gradle plugin / runtime, and secrets are unavailable to fork PRs on a
+# public repo — a fork PR would always fail here. Apple-side verification
+# (which needs no secrets) covers pull requests via ci.yml, and
+# Scripts/preflight.sh reproduces this Android pipeline locally.
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
 
 # Building the Android audio module reproduces the full local-dev
@@ -24,10 +25,10 @@ on:
 #   4. The wirelet Gradle plugin is fetched from GitHub Packages and runs
 #      `swift run` against .build/checkouts/swift-wirelet to emit Kotlin codecs.
 #
-# A single classic PAT (repo + read:packages) as WIRELET_PAT covers both
-# private swift-wirelet sources: the git insteadOf rewrite clones the SSH-form
-# SwiftPM dependency over HTTPS, and GITHUB_TOKEN authenticates the Gradle
-# plugin download.
+# swift-wirelet itself is a public repo, so its SwiftPM checkout resolves
+# over public HTTPS with no auth. A classic PAT (read:packages) is still
+# needed as WIRELET_PAT because GitHub Packages requires authentication to
+# download the wirelet Gradle plugin / runtime even when they are public.
 env:
   WIRELET_PAT: ${{ secrets.WIRELET_PAT }}
   TOOLCHAINS: org.swift.632202605101a
@@ -39,7 +40,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Authenticate git for the private swift-wirelet dependency
+      - name: Rewrite SSH GitHub URLs to authenticated HTTPS (belt-and-suspenders)
         run: |
           git config --global \
             url."https://x-access-token:${WIRELET_PAT}@github.com/".insteadOf \

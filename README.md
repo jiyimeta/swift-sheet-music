@@ -1,5 +1,11 @@
 # swift-sheet-music
 
+[![CI](https://github.com/jiyimeta/swift-sheet-music/actions/workflows/ci.yml/badge.svg)](https://github.com/jiyimeta/swift-sheet-music/actions/workflows/ci.yml)
+[![Swift](https://img.shields.io/badge/Swift-6.2%2B-orange.svg)](https://swift.org)
+[![Platforms](https://img.shields.io/badge/platforms-iOS%20%7C%20macOS%20%7C%20tvOS%20%7C%20watchOS%20%7C%20Android-blue.svg)](#installation)
+[![SwiftPM](https://img.shields.io/badge/SwiftPM-compatible-brightgreen.svg)](#installation)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 A Swift package for working with engraved music notation: parsing
 MuseScore (`.mscx` / `.mscz`) and MusicXML (`.musicxml` / `.mxl`) score
 files, modelling them as Swift value types, exporting them back to
@@ -54,13 +60,22 @@ See [Android](#android).
 * **`Sounds/MuseScore_General.sf2`** — full GM SoundFont fallback
   for any (bank, program) without a dedicated file.
 
-Both are distributed via GitHub Releases (the SF2 files are too
-large to track in git). The split per-program SF2 set lives at
-[jiyimeta/musescore-general-sf2-split](https://github.com/jiyimeta/musescore-general-sf2-split).
-Download the release archive, unzip into
+These SF2 files are **not distributed by this repository** — they are
+too large to track in git and are not attached to this repo's Releases.
+Obtain the split per-program set from
+[jiyimeta/musescore-general-sf2-split](https://github.com/jiyimeta/musescore-general-sf2-split),
+or supply your own General MIDI SoundFont. Unzip into
 `Examples/Apple/SheetMusicExample/Sounds/`, regenerate the project
 (`xcodegen` from `Examples/Apple/`), and rebuild — the example app picks
 them up automatically.
+
+> **SoundFont licensing.** `MuseScore_General` and `GeneralUser GS` are
+> third-party works by S. Christian Collins, distributed under their own
+> terms — see the
+> [split-set repository](https://github.com/jiyimeta/musescore-general-sf2-split)
+> and [schristiancollins.com](https://schristiancollins.com/generaluser.php).
+> This package bundles no samples of its own; anyone redistributing a
+> SoundFont binary must include its license text and attribution.
 
 > `AVAudioUnitSampler` only reads `.sf2` and `.dls`, **not** `.sf3`
 > (SF3 = SoundFont with OGG-compressed samples, which the system
@@ -73,6 +88,44 @@ engine just stays silent, and you'll see the score without hearing
 it. Library consumers who want a different layout (downloading at
 runtime, bundling a smaller subset, etc.) implement
 `SoundfontResolver` themselves.
+
+## Installation
+
+Add the package to your `Package.swift`:
+
+```swift
+dependencies: [
+    .package(url: "https://github.com/jiyimeta/swift-sheet-music.git", from: "1.0.0"),
+]
+```
+
+then depend on the products you need. Most consumers want the
+`SheetMusic` umbrella (parsing + model + MIDI) and opt into rendering /
+audio / PDF explicitly:
+
+```swift
+.target(
+    name: "YourApp",
+    dependencies: [
+        .product(name: "SheetMusic", package: "swift-sheet-music"),
+        // .product(name: "SheetMusicUI",    package: "swift-sheet-music"),
+        // .product(name: "SheetMusicAudio", package: "swift-sheet-music"),
+        // .product(name: "SheetMusicPDF",   package: "swift-sheet-music"),
+    ]),
+```
+
+In Xcode, use **File ▸ Add Package Dependencies…** and paste the
+repository URL. Requires Swift 6.2+ / Xcode 16+.
+
+### Platform support
+
+| Platform | Minimum | Coverage |
+|---|---|---|
+| iOS | 17 | full — model, formats, MIDI, layout, SwiftUI, audio, PDF |
+| macOS | 14 | full |
+| tvOS | 17 | model, formats, MIDI, layout, SwiftUI, audio (no PDF) |
+| watchOS | 10 | model, formats, MIDI, layout (UI / audio / PDF are iOS / macOS / tvOS only) |
+| Android | API 28 | Foundation-only subset (Core / MSCX / MusicXML / MIDI / Layout / AudioCore) via the Swift Android SDK + Kotlin AAR — see [Android](#android) |
 
 ## Example
 
@@ -251,6 +304,15 @@ Major features supported by the renderer:
 - hairpins (crescendo / decrescendo) as continuous MIDI velocity ramps
 - fermatas, ornaments (trill / mordent / turn), grace notes, tremolo, glissando
 - per-note play flag (muted notes emit no MIDI), MS3 export round-trip
+
+## Contributing
+
+Contributions are welcome. This is a solo-maintained project, so for
+anything substantial please open an issue to discuss it before sending a
+pull request. See [CONTRIBUTING.md](CONTRIBUTING.md) for the development
+setup, coding conventions, and the pre-merge verification workflow, and
+[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for community expectations. High-level
+design rationale lives in [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Licensing
 
