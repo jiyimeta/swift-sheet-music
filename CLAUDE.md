@@ -356,13 +356,14 @@ revision. Any subsequent `swift build` keeps it in sync.
 
 The Maven side (`io.github.jiyimeta:wirelet-runtime`) requires
 `~/.gradle/gradle.properties` to set `gpr.user` + `gpr.key` (a classic
-GitHub PAT with `read:packages` scope on the `jiyimeta/swift-wirelet`
-private repo). Env vars `GITHUB_ACTOR` / `GITHUB_TOKEN` also work if
-preferred.
+GitHub PAT with `read:packages` scope). GitHub Packages requires
+authentication even for public packages, so the PAT is needed to
+download the plugin / runtime. Env vars `GITHUB_ACTOR` / `GITHUB_TOKEN`
+also work if preferred.
 
 To iterate on local wirelet changes, use SwiftPM's built-in override:
 
-    swift package edit Wirelet --path ~/Developer/Personal/swift-packages/swift-wirelet
+    swift package edit Wirelet --path /path/to/your/swift-wirelet
 
 SwiftPM swaps the checkout dir for the edit path, and the Gradle
 plugin's `swiftPackagePath` follows along automatically. Run
