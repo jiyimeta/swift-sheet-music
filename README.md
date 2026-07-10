@@ -254,6 +254,14 @@ artifacts to GitHub Packages:
 | `io.github.jiyimeta:sheet-music-android` | JNI bridge + bundled `libSheetMusicJNI.so`. Score load, layout, draw-program emit. |
 | `io.github.jiyimeta:sheet-music-audio-android` | FluidSynth (via [VolcanoMobile's `.aar`](https://github.com/VolcanoMobile/fluidsynth-android)) + [Oboe](https://github.com/google/oboe) low-latency PCM. Mirrors `PlaybackEngine` API on the Kotlin side. |
 
+The published artifacts are at **v1.0.0**. Consuming them in your own
+Android app needs a `read:packages` PAT and a one-time `swiftkit-core`
+publish to Maven local — see
+[`Android/SheetMusicAndroid/README.md`](Android/SheetMusicAndroid/README.md)
+for the complete `settings.gradle.kts` recipe and packaging config.
+
+The instructions below (`Scripts/android-build-libs.sh` etc.) are for
+**building this repository itself**, not for consuming the published AAR.
 A working Compose demo lives at `Examples/Android/` (Pixel 6 Pro
 API 36 verified). Bootstrap is documented in `CLAUDE.md` —
 the short form:
