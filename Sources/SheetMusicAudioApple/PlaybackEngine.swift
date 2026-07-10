@@ -864,11 +864,7 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// first) or when `cursor` doesn't resolve into the timeline.
     public func seek(to cursor: ScoreCursor) {
         guard state != .exporting else { return }
-        guard let timeline, let sequencer,
-              let frame = timeline.frame(forCursor: cursor)
-        else {
-            return
-        }
+        guard let timeline, let frame = timeline.frame(forCursor: cursor) else { return }
         let tick = snapTickToLoop(frame.tick)
         // An active count-in sequence only holds score content from `baseTick` onward — the pre-roll
         // shift dropped everything earlier. A seek target before `baseTick` is unreachable in this
@@ -877,12 +873,17 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         // rebuild the plain un-shifted sequence anchored at the target and keep playing — a seek must
         // never insert a count-in. (Paused seeks are left as-is: the next play rebuilds from the
         // effective start cursor regardless, so the stale sequencer position is never heard.)
+        //
+        // Crucially, `self.sequencer` is NOT captured in a local before this branch: `play` →
+        // `buildSequencer` stops + nils the old sequencer before creating its replacement, and a
+        // lingering strong ref here would defeat that and reintroduce the two-sequencer overlap.
         if state == .playing, sequencerHasPreRoll, tick < sequenceMap.baseTick,
            let score = sequencerScore
         {
             play(from: cursor, in: score, countIn: false)
             return
         }
+        guard let sequencer else { return }
         sequencer.currentPositionInBeats =
             Double(sequenceMap.sequencerTick(fromScore: tick))
             / Double(timeline.division)
