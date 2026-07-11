@@ -11,10 +11,10 @@ extension PDFImporter {
         case 0xE047: return .segno
         case 0xE048: return .coda
         case 0xE050: return .clefG
-        case 0xE051: return .clefG15ma // gClef15ma — treble two octaves up
+        case 0xE051: return .clefG15mb // gClef15mb — treble two octaves down
         case 0xE052: return .clefG8vb // gClef8vb — vocal tenor clef
         case 0xE053: return .clefG8va // gClef8va — treble one octave up
-        case 0xE054: return .clefG15mb // gClef15mb — treble two octaves down
+        case 0xE054: return .clefG15ma // gClef15ma — treble two octaves up
         case 0xE05C: return .clefC
         case 0xE062: return .clefF
         case 0xE063: return .clefF15mb // fClef15mb — bass two octaves down
