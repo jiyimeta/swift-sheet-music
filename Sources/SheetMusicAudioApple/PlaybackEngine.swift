@@ -449,6 +449,16 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         // them so a stale region from the prior score can't fire on
         // the new one.
         clearLoop()
+        // Quiesce the render IO thread before mutating the audio graph below.
+        // Freeing the sequencer, reloading the metronome's soundbank, and
+        // detaching the previous score's synths all edit graph state the render
+        // thread may still be touching. `stop()` above only *pauses* the engine,
+        // so without a hard stop the detach races the in-flight render cycle and
+        // frees sampler voice memory out from under it — faulting on the IO
+        // thread as `ProcessMono` / `SamplerNote::Render` in Crashlytics, the
+        // same race `teardown()` guards against. `engine.start()` below spins it
+        // back up; `stop()` is a no-op on an already-stopped engine.
+        engine.stop()
         sequencer = nil
         sequencerScore = nil
         sequenceMap = .identity
@@ -1027,10 +1037,13 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// climbs past the loop end and saturates at score end.
     public var currentTimeSeconds: TimeInterval {
         guard let timeline, let sequencer else { return 0 }
-        let rawSeqTick = Int(
-            (sequencer.currentPositionInBeats * Double(timeline.division))
+        // Guard the `Double → Int` conversion: a non-finite / out-of-range
+        // `currentPositionInBeats` (see `tickCursor`) would otherwise trap.
+        // Report 0 for an unusable read rather than crash a lock-screen scrubber.
+        guard let rawSeqTick = Int(
+            exactly: (sequencer.currentPositionInBeats * Double(timeline.division))
                 .rounded(),
-        )
+        ) else { return 0 }
         // Translate to score ticks; during the pre-roll (`nil`) the cursor is
         // pinned at the start, so report the start position's time via
         // `baseTick`.
@@ -1055,6 +1068,9 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// unrounded tick fed to `PlaybackTimeline.seconds(atTick:)`.
     public var currentTimeSecondsContinuous: TimeInterval {
         guard let timeline, let sequencer else { return 0 }
+        // A non-finite `currentPositionInBeats` (see `tickCursor`) would poison
+        // the tick math and any downstream `Int` conversion; report 0 instead.
+        guard sequencer.currentPositionInBeats.isFinite else { return 0 }
         let rawSeqTick = sequencer.currentPositionInBeats * Double(timeline.division)
         // Translate to score ticks; during the pre-roll clamp to `baseTick`
         // (the pinned start position). Identity map ⇒ pass-through.
@@ -1423,7 +1439,15 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
             state = .stopped
             return
         }
-        let rawSeqTick = Int((beats * Double(timeline.division)).rounded())
+        // `currentPositionInBeats` can read back non-finite (NaN / ±∞) or wildly
+        // out of range while the sequencer is between halt/restart transitions
+        // (seek, loop-wrap, or an audio-session interruption tearing the render
+        // graph down under a still-"playing" sequencer). `Int(_:)` traps on such
+        // a value (EXC_BREAKPOINT — surfaced in Crashlytics as
+        // `PlaybackEngine.tickCursor()`); `Int(exactly:)` returns nil instead, so
+        // we skip this poll tick and self-heal on the next one.
+        guard let rawSeqTick = Int(exactly: (beats * Double(timeline.division)).rounded())
+        else { return }
         // Translate the raw sequencer tick into a score tick. `nil` means we're
         // still inside the count-in pre-roll — keep `currentCursor` pinned at
         // the start position (set at play time) and take no action until real
@@ -1516,24 +1540,28 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     public func teardown() {
         stop()
         clearLoop()
-        sequencer = nil
-        sequencerScore = nil
-        // Quiesce the render thread BEFORE detaching any node. `stop()` above
+        // Quiesce the render thread BEFORE mutating the graph. `stop()` above
         // only *pauses* the engine (it calls `engine.pause()`), which leaves
         // AURemoteIO's IO thread and the output unit's render-notify block
-        // live. Detaching / disconnecting the synth or the metronome sampler
-        // out from under a paused-but-not-stopped engine races the in-flight
-        // render cycle and faults on the IO thread — observed in Crashlytics
-        // as EXC_BAD_ACCESS in `_Block_copy` (render-notify) and in
-        // `ProcessMono` / `SamplerNote::Render` (MIDISynth voice render). A
-        // full `engine.stop()` tears the IO thread down synchronously, so the
-        // graph edits below run with no renderer active.
+        // live. Freeing the `AVAudioSequencer` (its `dealloc` detaches the
+        // music sequence from the engine, mutating live sequencing state) or
+        // detaching / disconnecting the synth or the metronome sampler out from
+        // under a paused-but-not-stopped engine races the in-flight render cycle
+        // and faults on the IO thread — observed in Crashlytics as
+        // EXC_BAD_ACCESS in `_Block_copy` (render-notify) and in `ProcessMono` /
+        // `SamplerNote::Render` (MIDISynth voice render). A full `engine.stop()`
+        // tears the IO thread down synchronously, so the graph edits below run
+        // with no renderer active. This MUST precede `sequencer = nil`: the
+        // previous ordering freed the sequencer first and left ~118 users
+        // crashing in the render-notify `_Block_copy` on 1.7.0.
         //
         // `engine.stop()` is unconditional: `pause()` already cleared
         // `isRunning`, so the previous `if engine.isRunning` guard skipped the
         // hard stop entirely and left the graph being mutated under a live
         // render unit. `stop()` is a safe no-op on an already-stopped engine.
         engine.stop()
+        sequencer = nil
+        sequencerScore = nil
         for old in attachedSynths {
             engine.disconnectNodeOutput(old)
             engine.detach(old)
