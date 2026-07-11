@@ -127,6 +127,8 @@ var targets: [Target] = [
             "SheetMusicLayoutApple",
             "SheetMusicUI",
             "SheetMusicAudio",
+            "SheetMusicAudioFluidSynth",
+            "CFluidSynth",
             "SheetMusicPDF",
             .product(name: "Wirelet", package: "swift-wirelet"),
             "SheetMusicXMLTools",
@@ -144,6 +146,10 @@ if !isAndroid {
         .library(name: "SheetMusicUI", targets: ["SheetMusicUI"]),
         .library(name: "SheetMusicAudio", targets: ["SheetMusicAudio"]),
         .library(name: "SheetMusicAudioApple", targets: ["SheetMusicAudioApple"]),
+        // Opt-in, LGPL-2.1 FluidSynth playback backend (Apple-only). Links
+        // Homebrew libfluidsynth via `CFluidSynth`; the MIT core never depends
+        // on it. Consumers pull it only by depending on this product.
+        .library(name: "SheetMusicAudioFluidSynth", targets: ["SheetMusicAudioFluidSynth"]),
         .library(name: "SheetMusicPDF", targets: ["SheetMusicPDF"]),
         .executable(name: "render-previews", targets: ["RenderPreviews"]),
     ]
@@ -174,6 +180,24 @@ if !isAndroid {
             dependencies: [
                 "SheetMusicAudioCore",
                 "SheetMusicAudioApple",
+            ],
+        ),
+        // System module over Homebrew libfluidsynth (LGPL-2.1). Needs
+        // `brew install fluid-synth` + `PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig`
+        // on the build environment (see Sources/CFluidSynth/shim.h).
+        .systemLibrary(
+            name: "CFluidSynth",
+            path: "Sources/CFluidSynth",
+            pkgConfig: "fluidsynth",
+            providers: [.brew(["fluid-synth"])],
+        ),
+        .target(
+            name: "SheetMusicAudioFluidSynth",
+            dependencies: [
+                "CFluidSynth",
+                "SheetMusicCore",
+                "SheetMusicMIDI",
+                "SheetMusicAudioCore",
             ],
         ),
         .target(
