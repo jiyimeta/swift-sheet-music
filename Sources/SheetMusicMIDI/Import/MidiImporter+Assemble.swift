@@ -13,6 +13,14 @@ extension MidiImporter {
     ) -> Score {
         let perTrackMeasures = imports.map { segment(track: $0, timeline: timeline) }
         let measureKeys = perMeasureKeys(file: file, timeline: timeline)
+        // A single SMF track may now yield several slices (one per melodic
+        // channel, plus drums). Where that happens the bare "P<trackIndex>"
+        // id would collide, so suffix it with the channel. Tracks that
+        // produce a single slice keep the plain "P<trackIndex>" id.
+        var slicesPerTrack: [Int: Int] = [:]
+        for track in imports {
+            slicesPerTrack[track.trackIndex, default: 0] += 1
+        }
         var parts: [Part] = []
         var systemMeasures: [SystemMeasure] = Array(
             repeating: SystemMeasure(),
@@ -20,38 +28,9 @@ extension MidiImporter {
         )
         for (trackIdx, measures) in perTrackMeasures.enumerated() {
             let track = imports[trackIdx]
-            let measureVoices: [[Voice]] = measures.map { m in
-                let q = quantize(measure: m, division: file.division, options: options)
-                let key = track.isDrums
-                    ? 0
-                    : (m.measureIndex < measureKeys.count ? measureKeys[m.measureIndex] : 0)
-                if track.isDrums {
-                    return drumVoices(
-                        measure: m, quantized: q,
-                        division: file.division, maxDots: options.maxDots,
-                    )
-                }
-                return [voice(
-                    quantized: q,
-                    measure: m,
-                    division: file.division,
-                    isDrumTrack: false,
-                    concertKey: key,
-                    maxDots: options.maxDots,
-                )]
-            }
-            var scoreMeasures = measureVoices.map { Measure(voices: $0) }
-            if options.detectGlissando, !track.isDrums {
-                attachGlissandos(
-                    measures: measures,
-                    voices: measureVoices.compactMap(\.first),
-                    into: &scoreMeasures,
-                    division: file.division,
-                )
-            }
-            attachLyrics(
-                track: track, measures: measures,
-                into: &scoreMeasures, division: file.division,
+            let scoreMeasures = buildMeasures(
+                for: track, measures: measures,
+                measureKeys: measureKeys, file: file, options: options,
             )
             // Build the Staff directly (replaces separate StaffContent + StaffDeclaration).
             // Tempo is global to the score — only track 0 carries it.
@@ -87,7 +66,10 @@ extension MidiImporter {
                 includeTempo: trackIdx == 0,
                 includeKeySignature: !track.isDrums,
             )
-            parts.append(makePart(for: track, staff: staff))
+            let partID = (slicesPerTrack[track.trackIndex] ?? 1) > 1
+                ? "P\(track.trackIndex)_\(track.channel ?? 0)"
+                : "P\(track.trackIndex)"
+            parts.append(makePart(for: track, staff: staff, id: partID))
         }
         let meta = resolveTitle(file: file, sourceFilename: sourceFilename)
         return Score(
@@ -99,71 +81,51 @@ extension MidiImporter {
         )
     }
 
-    // MARK: - Drum voice splitting
-
-    /// Split a drum measure into voice 0 (hands: cymbals, hi-hat,
-    /// snare, toms) and voice 1 (feet: kick, low floor tom, pedal
-    /// hi-hat) per `gmDrumVoiceIndex`. If voice 1 has no actual
-    /// drum hits, omit it so the layout doesn't draw a redundant
-    /// rest staff.
-    static func drumVoices(
-        measure: ImportMeasure,
-        quantized: QuantizedMeasure,
-        division: Int,
-        maxDots: Int,
-    ) -> [Voice] {
-        let v0Pitches = pitchesInVoice(0, in: measure)
-        let v1Pitches = pitchesInVoice(1, in: measure)
-        var result: [Voice] = []
-        // Voice 0 always emitted (even if empty — keeps clef + rests).
-        result.append(voice(
-            quantized: quantized,
-            measure: filterMeasure(measure, keepingPitches: v0Pitches),
-            division: division,
-            isDrumTrack: true,
-            maxDots: maxDots,
-        ))
-        if !v1Pitches.isEmpty {
-            result.append(voice(
-                quantized: quantized,
-                measure: filterMeasure(measure, keepingPitches: v1Pitches),
-                division: division,
-                isDrumTrack: true,
-                maxDots: maxDots,
-            ))
-        }
-        return result
-    }
-
-    private static func pitchesInVoice(
-        _ voiceIdx: Int, in measure: ImportMeasure,
-    ) -> Set<Int> {
-        var pitches: Set<Int> = []
-        for ev in measure.events {
-            if case let .noteOn(_, p, v) = ev.event, v > 0,
-               gmDrumVoiceIndex(for: p) == voiceIdx
-            {
-                pitches.insert(p)
+    /// Quantize one track's per-measure events into `Measure`s, then
+    /// attach glissandos (pitched only) and lyrics. Drum tracks split
+    /// hands/feet into separate voices; pitched tracks emit a single
+    /// voice per measure keyed to the active concert key signature.
+    private static func buildMeasures(
+        for track: ImportTrack,
+        measures: [ImportMeasure],
+        measureKeys: [Int],
+        file: MidiFile,
+        options: MidiImportOptions,
+    ) -> [Measure] {
+        let measureVoices: [[Voice]] = measures.map { m in
+            let q = quantize(measure: m, division: file.division, options: options)
+            let key = track.isDrums
+                ? 0
+                : (m.measureIndex < measureKeys.count ? measureKeys[m.measureIndex] : 0)
+            if track.isDrums {
+                return drumVoices(
+                    measure: m, quantized: q,
+                    division: file.division, maxDots: options.maxDots,
+                )
             }
+            return [voice(
+                quantized: q,
+                measure: m,
+                division: file.division,
+                isDrumTrack: false,
+                concertKey: key,
+                maxDots: options.maxDots,
+            )]
         }
-        return pitches
-    }
-
-    private static func filterMeasure(
-        _ measure: ImportMeasure, keepingPitches pitches: Set<Int>,
-    ) -> ImportMeasure {
-        var copy = measure
-        copy.events = measure.events.filter { ev in
-            switch ev.event {
-            case let .noteOn(_, p, _), let .noteOff(_, p, _):
-                return pitches.contains(p)
-            default:
-                return true // keep meta / endOfTrack
-            }
+        var scoreMeasures = measureVoices.map { Measure(voices: $0) }
+        if options.detectGlissando, !track.isDrums {
+            attachGlissandos(
+                measures: measures,
+                voices: measureVoices.compactMap(\.first),
+                into: &scoreMeasures,
+                division: file.division,
+            )
         }
-        copy.carryIns = measure.carryIns.filter { pitches.contains($0.pitch) }
-        copy.carryOuts = measure.carryOuts.filter { pitches.contains($0.pitch) }
-        return copy
+        attachLyrics(
+            track: track, measures: measures,
+            into: &scoreMeasures, division: file.division,
+        )
+        return scoreMeasures
     }
 
     // MARK: - Glissando attachment
@@ -251,6 +213,40 @@ extension MidiImporter {
 
     // MARK: - Meta event injection
 
+    /// Conductor-track (track 0) meta events, sorted so that after each
+    /// is `insert(at: 0)`-ed into a measure the final on-staff order is
+    /// `KeySig → TimeSig → Tempo → Chord/Rest`. Because inserting at
+    /// index 0 reverses the visit order, we emit them in the opposite
+    /// order — Tempo (0), then TimeSig (1), then KeySig (2) — breaking
+    /// same-tick ties by that priority and then original position, which
+    /// also keeps metas at later measures correctly ordered.
+    private static func sortedConductorMetas(in file: MidiFile) -> [TimedMidiEvent] {
+        let metaPriority: (TimedMidiEvent) -> Int = { ev in
+            if case let .meta(meta) = ev.event {
+                switch meta {
+                case .tempo: return 0
+                case .timeSignature: return 1
+                case .keySignature: return 2
+                default: return 3
+                }
+            }
+            return 4
+        }
+        return (file.tracks.first?.events ?? [])
+            .filter { if case .meta = $0.event { true } else { false } }
+            .enumerated()
+            .sorted { lhs, rhs in
+                if lhs.element.tick != rhs.element.tick {
+                    return lhs.element.tick < rhs.element.tick
+                }
+                let lp = metaPriority(lhs.element)
+                let rp = metaPriority(rhs.element)
+                if lp != rp { return lp < rp }
+                return lhs.offset < rhs.offset
+            }
+            .map(\.element)
+    }
+
     static func injectMetaEvents(
         file: MidiFile,
         timeline: BarTimeline,
@@ -268,36 +264,9 @@ extension MidiImporter {
         // — worse — let the drum track's spurious (0, 0) override
         // the real initial key on every non-drum staff.
         // The final voice order MuseScore expects at the start of a
-        // measure is `KeySig → TimeSig → Tempo → Chord/Rest`. Each
-        // meta element is `insert(at: 0)`-ed below, which reverses
-        // the visit order — so visit them in the opposite of the
-        // desired final order: Tempo first, then TimeSig, then
-        // KeySig. Sorting by `(tick, reverse-priority)` keeps metas
-        // at later measures ordered correctly too.
-        let metaPriority: (TimedMidiEvent) -> Int = { ev in
-            if case let .meta(meta) = ev.event {
-                switch meta {
-                case .tempo: return 0
-                case .timeSignature: return 1
-                case .keySignature: return 2
-                default: return 3
-                }
-            }
-            return 4
-        }
-        let metas = (file.tracks.first?.events ?? [])
-            .filter { if case .meta = $0.event { true } else { false } }
-            .enumerated()
-            .sorted { lhs, rhs in
-                if lhs.element.tick != rhs.element.tick {
-                    return lhs.element.tick < rhs.element.tick
-                }
-                let lp = metaPriority(lhs.element)
-                let rp = metaPriority(rhs.element)
-                if lp != rp { return lp < rp }
-                return lhs.offset < rhs.offset
-            }
-            .map(\.element)
+        // measure is `KeySig → TimeSig → Tempo → Chord/Rest`; see
+        // `sortedConductorMetas` for how the visit order is reversed.
+        let metas = sortedConductorMetas(in: file)
         for meta in metas {
             let measureIdx = timeline.measureIndex(of: meta.tick)
             guard measureIdx < staff.measures.count else { continue }
@@ -354,7 +323,7 @@ extension MidiImporter {
 
     // MARK: - Part building
 
-    static func makePart(for track: ImportTrack, staff: Staff) -> Part {
+    static func makePart(for track: ImportTrack, staff: Staff, id: String) -> Part {
         let instrument: Instrument
         if track.isDrums {
             instrument = Instrument(
@@ -370,7 +339,7 @@ extension MidiImporter {
             )
         }
         return Part(
-            id: "P\(track.trackIndex)",
+            id: id,
             trackName: track.trackName,
             instrument: instrument,
             staves: [staff],

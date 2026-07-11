@@ -5,6 +5,7 @@ import SheetMusicCore
 /// these from `MidiFile.tracks`; subsequent passes consume them.
 struct ImportTrack {
     var trackIndex: Int // SMF track index this came from
+    var channel: Int? // MIDI channel this slice was peeled from (drums → 9)
     var trackName: String? // first FF 03 within the slice
     var isDrums: Bool // true → channel-10-only slice
     var programChange: Int? // first program change observed
