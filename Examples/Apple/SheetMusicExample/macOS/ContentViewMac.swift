@@ -126,8 +126,15 @@
         /// button label and the playback cursor whenever the engine's
         /// observable `state` / `currentCursor` change.
         @State private var playbackEngine = PlaybackEngine(
-            soundfontResolver: BundledSoundfontResolver(),
+            soundfontResolver: SelectableSoundfontResolver(
+                gmSoundfontURL: SoundfontCatalog.bundledChoices().first?.url,
+            ),
         )
+        /// SoundFonts discovered in the bundled `Sounds/` directory.
+        @State private var soundfontChoices = SoundfontCatalog.bundledChoices()
+        /// File name of the selected SoundFont. Empty until `onAppear`
+        /// picks the first choice. No persistence — resets each launch.
+        @State private var selectedSoundfontID = ""
         /// Bridges the engine to `MPNowPlayingInfoCenter` /
         /// `MPRemoteCommandCenter` so macOS Now Playing widget
         /// (Control Center, menu bar, Touch Bar) drives playback.
@@ -248,6 +255,8 @@
                     isMetronomeEnabled: $isMetronomeEnabled,
                     showsInvisibleElements: $showsInvisibleElements,
                     transposeSemitones: $transposeSemitones,
+                    soundfontChoices: soundfontChoices,
+                    selectedSoundfontID: $selectedSoundfontID,
                     onLoadBundled: loadBundled,
                     onLoadHarmonyBasic: loadHarmonyBasic,
                     onOpenFile: showOpenPanel,
@@ -288,6 +297,9 @@
                 if nowPlaying == nil {
                     nowPlaying = NowPlayingController(engine: playbackEngine)
                 }
+                if selectedSoundfontID.isEmpty {
+                    selectedSoundfontID = soundfontChoices.first?.id ?? ""
+                }
             }
             .onChange(of: score) { _, newScore in
                 nowPlaying?.update(score: newScore)
@@ -311,6 +323,13 @@
             .onChange(of: transposeSemitones) { _, newValue in
                 playbackEngine.setTranspose(semitones: newValue)
                 rebuildLayoutsForOptionsChange()
+            }
+            .onChange(of: selectedSoundfontID) { _, newID in
+                guard let choice = soundfontChoices.first(where: { $0.id == newID })
+                else { return }
+                playbackEngine.reloadSoundfont(
+                    resolver: SelectableSoundfontResolver(gmSoundfontURL: choice.url),
+                )
             }
             .toolbar {
                 ToolbarItem(placement: .navigation) {
