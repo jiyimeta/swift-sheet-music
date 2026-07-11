@@ -559,11 +559,15 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
                 setProgram(forChannel: channel.id, to: program)
             }
         }
-        if let savedCursor {
-            seek(to: savedCursor)
-        }
+        // `prepare(score:)` reset the sequencer, so building it via
+        // `play(from:)` is the only way to re-seat the cursor. Re-pause
+        // immediately when we weren't actively playing, so a paused reload
+        // keeps its place without continuing to sound.
         if wasPlaying {
             play(from: savedCursor, in: score)
+        } else if let savedCursor {
+            play(from: savedCursor, in: score)
+            pause()
         }
     }
 

@@ -74,6 +74,25 @@
                 #expect(engine.exportEngineSnapshot().resolver.defaultGMSoundfontURL == Self.urlA)
                 engine.setStateForExport(.stopped)
             }
+
+            @Test("a paused reload keeps its cursor and paused state")
+            func preservesPausedPosition() throws {
+                let engine = PlaybackEngine(soundfontResolver: FakeResolver(gmURL: nil))
+                let score = Self.singleStaffScore()
+                try engine.prepare(score: score)
+                // Play then pause to produce a real, non-nil paused cursor.
+                engine.play(from: nil, in: score)
+                engine.pause()
+                let before = try #require(engine.currentCursor)
+                #expect(engine.state == .paused)
+
+                engine.reloadSoundfont(resolver: FakeResolver(gmURL: nil))
+
+                // "preserving playback position" must hold for the paused
+                // case too: the cursor and the paused state both survive.
+                #expect(engine.currentCursor == before)
+                #expect(engine.state == .paused)
+            }
         }
     }
 #endif
