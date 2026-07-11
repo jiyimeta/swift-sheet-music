@@ -57,14 +57,20 @@ See [Android](#android).
   `Sounds/000_000.sf2` is bank 0 / program 0 = Acoustic Grand Piano).
   Loaded lazily so iPhone memory stays low — only the patches the
   score actually uses end up resident.
-* **`Sounds/MuseScore_General.sf2`** — full GM SoundFont fallback
-  for any (bank, program) without a dedicated file.
+* **One or more full-GM `.sf2` files** dropped into `Sounds/`. The
+  example app scans that directory at runtime and lists every full-GM
+  font it finds in a picker (iOS: toolbar overflow menu; macOS:
+  sidebar), so you can A/B a heavyweight font against a lighter one.
+  Split files named `BBB_PPP.sf2` are treated as per-program lookups,
+  not picker entries. The display name is derived from the file name
+  (`_`/`-` → space); no specific file is required or hard-coded, and
+  the first font (sorted by file name) is the default.
 
 These SF2 files are **not distributed by this repository** — they are
 too large to track in git and are not attached to this repo's Releases.
 Obtain the split per-program set from
 [jiyimeta/musescore-general-sf2-split](https://github.com/jiyimeta/musescore-general-sf2-split),
-or supply your own General MIDI SoundFont. Unzip into
+or supply your own General MIDI SoundFont(s). Drop them into
 `Examples/Apple/SheetMusicExample/Sounds/`, regenerate the project
 (`xcodegen` from `Examples/Apple/`), and rebuild — the example app picks
 them up automatically.

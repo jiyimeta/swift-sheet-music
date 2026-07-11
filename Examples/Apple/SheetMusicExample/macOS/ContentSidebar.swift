@@ -32,6 +32,8 @@
         @Binding var isMetronomeEnabled: Bool
         @Binding var showsInvisibleElements: Bool
         @Binding var transposeSemitones: Int
+        let soundfontChoices: [SoundfontChoice]
+        @Binding var selectedSoundfontID: String
 
         let onLoadBundled: () -> Void
         let onLoadHarmonyBasic: () -> Void
@@ -105,6 +107,17 @@
                     }
                     Toggle(isOn: $isMetronomeEnabled) {
                         Label("Metronome", systemImage: "metronome")
+                    }
+                }
+                if soundfontChoices.count > 1 {
+                    Section("SoundFont") {
+                        Picker("SoundFont", selection: $selectedSoundfontID) {
+                            ForEach(soundfontChoices) { choice in
+                                Text(choice.displayName).tag(choice.id)
+                            }
+                        }
+                        .pickerStyle(.inline)
+                        .labelsHidden()
                     }
                 }
                 Section("Export") {

@@ -38,13 +38,20 @@
         @State private var horizontalMeasureFrames: [Int: CGRect] = [:]
         /// Audio engine for single-note preview + full-score playback.
         /// Stays silent until the user drops a SoundFont into `Sounds/`
-        /// (see `BundledSoundfontResolver`). Held as `@State` so
+        /// (see `SelectableSoundfontResolver`). Held as `@State` so
         /// SwiftUI re-renders the play/pause button label and the
         /// playback cursor whenever the engine's observable `state` /
         /// `currentCursor` changes.
         @State private var playbackEngine = PlaybackEngine(
-            soundfontResolver: BundledSoundfontResolver(),
+            soundfontResolver: SelectableSoundfontResolver(
+                gmSoundfontURL: SoundfontCatalog.bundledChoices().first?.url,
+            ),
         )
+        /// SoundFonts discovered in the bundled `Sounds/` directory.
+        @State private var soundfontChoices = SoundfontCatalog.bundledChoices()
+        /// File name of the selected SoundFont. Empty until `onAppear`
+        /// picks the first choice. No persistence — resets each launch.
+        @State private var selectedSoundfontID = ""
         /// Bridges the engine to `MPNowPlayingInfoCenter` /
         /// `MPRemoteCommandCenter` so Control Center, the lock-screen
         /// scrubber, headset transport keys, AirPlay, and CarPlay all
@@ -115,6 +122,8 @@
                         isImportingFile: $isImportingFile,
                         isMarqueeMode: $isMarqueeMode,
                         isExportAudioPresented: $isExportAudioPresented,
+                        soundfontChoices: soundfontChoices,
+                        selectedSoundfontID: $selectedSoundfontID,
                         onTogglePlayback: togglePlayback,
                         onExportPDF: exportPDF,
                     )
@@ -125,6 +134,9 @@
                     nowPlaying = NowPlayingController(engine: playbackEngine)
                 }
                 loadBundled()
+                if selectedSoundfontID.isEmpty {
+                    selectedSoundfontID = soundfontChoices.first?.id ?? ""
+                }
             }
             .onChange(of: score) { _, newScore in
                 nowPlaying?.update(score: newScore)
@@ -137,6 +149,13 @@
             }
             .onChange(of: transposeSemitones) { _, newValue in
                 playbackEngine.setTranspose(semitones: newValue)
+            }
+            .onChange(of: selectedSoundfontID) { _, newID in
+                guard let choice = soundfontChoices.first(where: { $0.id == newID })
+                else { return }
+                playbackEngine.reloadSoundfont(
+                    resolver: SelectableSoundfontResolver(gmSoundfontURL: choice.url),
+                )
             }
             .fileImporter(
                 isPresented: $isImportingFile,

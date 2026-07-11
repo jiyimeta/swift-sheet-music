@@ -35,10 +35,17 @@ import SheetMusicMIDI
 @MainActor
 @Observable
 public final class PlaybackEngine { // swiftlint:disable:this type_body_length
-    private let resolver: SoundfontResolver
+    private var resolver: SoundfontResolver
     /// Resolves the metronome's click sound (host WAVs → SF2, host SF2,
     /// or the GM drum-kit fallback). See `MetronomeClickResolver`.
-    private let clickResolver: MetronomeClickResolver
+    private var clickResolver: MetronomeClickResolver
+    /// The metronome click provider captured at `init`, kept so
+    /// `reloadSoundfont` can rebuild `clickResolver` against the new
+    /// SoundFont resolver without the host re-supplying it.
+    private let metronomeClickProvider: MetronomeClickProvider?
+    /// The score last passed to `prepare(score:)`, so `reloadSoundfont`
+    /// can re-prepare in place. `nil` until the first `prepare`.
+    private var loadedScore: Score?
     /// `internal` so `PlaybackEngine+Master` can call
     /// `engine.attach` / `engine.connect` from a sibling file when
     /// building the master output stage.
@@ -208,11 +215,12 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
 
     public init(
         soundfontResolver: SoundfontResolver,
-        metronomeClickProvider: MetronomeClickProvider? = nil,
+        metronomeClickProvider metronomeClickProvider0: MetronomeClickProvider? = nil,
     ) {
         resolver = soundfontResolver
+        metronomeClickProvider = metronomeClickProvider0
         clickResolver = MetronomeClickResolver(
-            provider: metronomeClickProvider,
+            provider: metronomeClickProvider0,
             soundfontResolver: soundfontResolver,
         )
         // The metronome joins the master stage at `sumMixer` (post-gain,
@@ -432,6 +440,7 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         if state == .exporting {
             return
         }
+        loadedScore = score
         // Stop any in-flight playback before tearing down samplers.
         stop()
         // Drop any ringing tap-preview so it can't outlive this synth.
@@ -508,6 +517,58 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         // `sequencer.start()` to win the race against the SMF's tick-0
         // program-change events, so playback behavior is unchanged.
         reapplyMixerPrograms()
+    }
+
+    /// Swap the SoundFont resolver and reload every sampler for the
+    /// currently-loaded score in place, preserving playback position,
+    /// mixer state (volume / mute / solo / program), rate, and tuning.
+    ///
+    /// If no score has been prepared yet, this only replaces the
+    /// resolver; the new one takes effect on the next `prepare(score:)`.
+    ///
+    /// No-op while exporting.
+    public func reloadSoundfont(resolver newResolver: SoundfontResolver) {
+        guard state != .exporting else { return }
+        resolver = newResolver
+        // Rebuild the metronome click resolver so its GM drum-kit fallback
+        // — and therefore the metronome sampler after the re-prepare below —
+        // follows the new SoundFont. A bare re-prepare without this leaves
+        // the metronome bound to the old font (observed in Folino).
+        clickResolver = MetronomeClickResolver(
+            provider: metronomeClickProvider, soundfontResolver: newResolver,
+        )
+        guard let score = loadedScore else { return }
+        // Snapshot the state `prepare(score:)` would otherwise reset.
+        let savedCursor = currentCursor
+        let wasPlaying = state == .playing
+        let savedMixer = mixerChannels
+        do {
+            try prepare(score: score)
+        } catch {
+            return
+        }
+        // `prepare` rebuilds the channel array at the score's defaults;
+        // re-apply the user's mixer state. `rate`, `masterTuningCents`,
+        // and `transposeSemitones` are engine fields re-applied inside
+        // `prepareSynth` / sequencer construction, so they survive.
+        for channel in savedMixer {
+            setVolume(forChannel: channel.id, to: channel.volume)
+            setMuted(forChannel: channel.id, to: channel.isMuted)
+            setSoloed(forChannel: channel.id, to: channel.isSoloed)
+            if let program = channel.program {
+                setProgram(forChannel: channel.id, to: program)
+            }
+        }
+        // `prepare(score:)` reset the sequencer, so building it via
+        // `play(from:)` is the only way to re-seat the cursor. Re-pause
+        // immediately when we weren't actively playing, so a paused reload
+        // keeps its place without continuing to sound.
+        if wasPlaying {
+            play(from: savedCursor, in: score)
+        } else if let savedCursor {
+            play(from: savedCursor, in: score)
+            pause()
+        }
     }
 
     /// Build the AUMIDISynth unit(s): always a melodic unit (pitched channels), plus a separate percussion unit (GM
