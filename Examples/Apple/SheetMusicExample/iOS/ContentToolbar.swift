@@ -23,6 +23,8 @@
         @Binding var isImportingFile: Bool
         @Binding var isMarqueeMode: Bool
         @Binding var isExportAudioPresented: Bool
+        let soundfontChoices: [SoundfontChoice]
+        @Binding var selectedSoundfontID: String
 
         let onTogglePlayback: () -> Void
         let onExportPDF: () -> Void
@@ -134,6 +136,15 @@
                     .disabled(staffSize >= 32)
 
                     Divider()
+
+                    if soundfontChoices.count > 1 {
+                        Divider()
+                        Picker("SoundFont", selection: $selectedSoundfontID) {
+                            ForEach(soundfontChoices) { choice in
+                                Text(choice.displayName).tag(choice.id)
+                            }
+                        }
+                    }
 
                     Stepper(
                         "Transpose: \(transposeSemitones > 0 ? "+" : "")\(transposeSemitones)",
