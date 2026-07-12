@@ -28,13 +28,13 @@ private let smuflPUARange: ClosedRange<UInt32> = 0xE000 ... 0xF8FF
 /// current-text-matrix origin is already the accurate per-glyph origin.
 /// We still advance the text matrix per glyph so any back-to-back codes
 /// in a single run land at successive positions.
-func emitShow(_ str: CGPDFStringRef, state: TextShowState) {
+func emitShow(_ bytes: [UInt8], state: TextShowState) {
     guard let cmap = state.activeCMap, !cmap.isEmpty else {
-        emitText(decodeString(str), state: state)
+        emitText(decodeString(bytes), state: state)
         return
     }
-    let length = CGPDFStringGetLength(str)
-    guard length > 0, let bytes = CGPDFStringGetBytePtr(str) else { return }
+    let length = bytes.count
+    guard length > 0 else { return }
 
     var pendingText = ""
     var i = 0
@@ -115,10 +115,9 @@ private func flushPendingText(_ pending: inout String, state: State) {
 /// Decode a Tj/TJ string operand for fonts WITHOUT a usable CMap. Test
 /// fixtures use Helvetica with ASCII bytes — treating them as UTF-8 is
 /// correct there.
-private func decodeString(_ str: CGPDFStringRef) -> String {
-    let length = CGPDFStringGetLength(str)
-    guard length > 0, let bytes = CGPDFStringGetBytePtr(str) else { return "" }
-    let data = Data(bytes: bytes, count: length)
+private func decodeString(_ bytes: [UInt8]) -> String {
+    guard !bytes.isEmpty else { return "" }
+    let data = Data(bytes)
     if let utf8 = String(bytes: data, encoding: .utf8) { return utf8 }
     return String(bytes: data, encoding: .isoLatin1) ?? ""
 }

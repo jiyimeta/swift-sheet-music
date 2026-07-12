@@ -137,7 +137,7 @@ private func op_Tstar(_: CGPDFScannerRef, _ info: UnsafeMutableRawPointer?) {
 
 private func op_Tj(_ scanner: CGPDFScannerRef, _ info: UnsafeMutableRawPointer?) {
     guard let s = pageState(info), let str = popString(scanner) else { return }
-    emitShow(str, state: s)
+    emitShow(stringBytes(str), state: s)
 }
 
 private func op_TJ(_ scanner: CGPDFScannerRef, _ info: UnsafeMutableRawPointer?) {
@@ -146,7 +146,7 @@ private func op_TJ(_ scanner: CGPDFScannerRef, _ info: UnsafeMutableRawPointer?)
     for i in 0 ..< count {
         var str: CGPDFStringRef?
         if CGPDFArrayGetString(arr, i, &str), let str {
-            emitShow(str, state: s)
+            emitShow(stringBytes(str), state: s)
         }
         // Numbers are kerning offsets — ignored for our walker.
     }
@@ -155,7 +155,7 @@ private func op_TJ(_ scanner: CGPDFScannerRef, _ info: UnsafeMutableRawPointer?)
 private func op_quote(_ scanner: CGPDFScannerRef, _ info: UnsafeMutableRawPointer?) {
     guard let s = pageState(info), let str = popString(scanner) else { return }
     s.textMatrix = s.lineMatrix
-    emitShow(str, state: s)
+    emitShow(stringBytes(str), state: s)
 }
 
 private func op_dquote(_ scanner: CGPDFScannerRef, _ info: UnsafeMutableRawPointer?) {
@@ -163,7 +163,7 @@ private func op_dquote(_ scanner: CGPDFScannerRef, _ info: UnsafeMutableRawPoint
     _ = popNumber(scanner) // word spacing
     _ = popNumber(scanner) // char spacing
     s.textMatrix = s.lineMatrix
-    emitShow(str, state: s)
+    emitShow(stringBytes(str), state: s)
 }
 
 private func op_m(_ scanner: CGPDFScannerRef, _ info: UnsafeMutableRawPointer?) {
@@ -283,6 +283,16 @@ private func popString(_ scanner: CGPDFScannerRef) -> CGPDFStringRef? {
     var str: CGPDFStringRef?
     guard CGPDFScannerPopString(scanner, &str), let str else { return nil }
     return str
+}
+
+/// Copy a `CGPDFStringRef`'s raw bytes into a platform-neutral `[UInt8]`.
+/// The interpreter's text-show core (`emitShow`) consumes bytes, not a
+/// CoreGraphics string handle, so the same core drives the future Android
+/// tokenizer front-end unchanged.
+private func stringBytes(_ str: CGPDFStringRef) -> [UInt8] {
+    let length = CGPDFStringGetLength(str)
+    guard length > 0, let ptr = CGPDFStringGetBytePtr(str) else { return [] }
+    return Array(UnsafeBufferPointer(start: ptr, count: length))
 }
 
 private func popArray(_ scanner: CGPDFScannerRef) -> CGPDFArrayRef? {
