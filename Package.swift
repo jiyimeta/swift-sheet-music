@@ -198,6 +198,9 @@ if !isAndroid {
                 "SheetMusicCore",
                 "SheetMusicMIDI",
                 "SheetMusicAudioCore",
+                // For the `SynthBackend` protocol (MIT). LGPL → MIT dependency
+                // direction; SheetMusicAudioApple never depends back on this.
+                "SheetMusicAudioApple",
             ],
         ),
         .target(

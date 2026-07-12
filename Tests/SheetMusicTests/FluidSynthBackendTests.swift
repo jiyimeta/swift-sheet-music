@@ -16,11 +16,15 @@
             func backendProducesAudioAndAdvancesTransport() throws {
                 let sampleRate = 44100.0
                 let backend = FluidSynthBackend(sampleRate: sampleRate)
-                backend.loadSoundFont(URL(fileURLWithPath: generalUserGSPath))
+                backend.prepare(
+                    soundfontURL: URL(fileURLWithPath: generalUserGSPath),
+                    drumChannels: [],
+                )
                 let score = try SheetMusic.loadScore(
                     msczURL: URL(fileURLWithPath: shinogonoPath),
                 )
-                try backend.loadSequence(MidiRenderer.render(score: score))
+                let midi = try MidiRenderer.render(score: score)
+                backend.loadSequence(midi, division: midi.division)
 
                 let engine = AVAudioEngine()
                 let format = try #require(AVAudioFormat(
@@ -34,7 +38,7 @@
                     .offline, format: format, maximumFrameCount: 4096,
                 )
                 try engine.start()
-                backend.start()
+                backend.play()
 
                 let buf = try #require(AVAudioPCMBuffer(
                     pcmFormat: engine.manualRenderingFormat, frameCapacity: 4096,

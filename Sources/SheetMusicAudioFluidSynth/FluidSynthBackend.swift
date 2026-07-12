@@ -1,26 +1,31 @@
 import AVFoundation
 import Foundation
+import SheetMusicAudioApple
 import SheetMusicMIDI
 
-/// Bridges `FluidSynthEngine` into an `AVAudioEngine` graph: an
-/// `AVAudioSourceNode` pulls stereo float audio from `fluid_synth_write_float`
-/// on the render thread, while transport (`fluid_player`) is driven from the
-/// main actor. This is the Apple analogue of the Android engine's
-/// FluidSynth + Oboe wiring.
+/// `SynthBackend` implementation backed by FluidSynth. An `AVAudioSourceNode`
+/// pulls stereo float audio from `fluid_synth_write_float` on the render thread
+/// while transport (`fluid_player`) is driven from the main actor — the Apple
+/// analogue of the Android engine's FluidSynth + Oboe wiring.
 ///
-/// Phase 1 scope: attach into a graph, load a SoundFont + rendered SMF, start,
-/// and report the transport tick. Full feature parity (loop / seek / rate /
-/// mixer / tuning / export) lands in a later phase behind a shared protocol.
+/// FluidSynth's configurable 256-voice pool and lack of a process-global voice
+/// recycler eliminate the AUMIDISynth stealing pathology. This type lives in the
+/// opt-in, LGPL-2.1 `SheetMusicAudioFluidSynth` product; a host injects it into
+/// `PlaybackEngine`, which never imports it.
 @MainActor
-public final class FluidSynthBackend {
-    /// The synth wrapper. `nonisolated` storage so the `@Sendable` render block
-    /// can call `render(...)` off the main actor (FluidSynth is thread-safe).
+public final class FluidSynthBackend: SynthBackend {
+    /// `nonisolated` so the `@Sendable` render block can call `render(...)` off
+    /// the main actor (FluidSynth is thread-safe via `synth.threadsafe-api`).
     private nonisolated let engine: FluidSynthEngine
 
-    /// Audio source feeding the host graph. Connect this into a mixer.
+    /// Audio source feeding the host graph.
     public let sourceNode: AVAudioSourceNode
 
-    public init(sampleRate: Double) {
+    public var outputNode: AVAudioNode {
+        sourceNode
+    }
+
+    public init(sampleRate: Double = 44100) {
         let engine = FluidSynthEngine(sampleRate: sampleRate)
         self.engine = engine
 
@@ -46,29 +51,77 @@ public final class FluidSynthBackend {
         }
     }
 
-    /// Load (or reload) the full-GM SoundFont. Returns the FluidSynth `sfid`.
-    @discardableResult
-    public func loadSoundFont(_ url: URL) -> Int32 {
-        engine.loadSoundFont(url.path)
+    // MARK: SynthBackend
+
+    public func attach(to engine: AVAudioEngine) {
+        engine.attach(sourceNode)
     }
 
-    /// Load the rendered (and playback-post-processed) SMF into the transport.
-    public func loadSequence(_ midi: MidiFile) throws {
-        try engine.loadSMF([UInt8](MidiWriter.write(midi)))
+    public func prepare(soundfontURL: URL?, drumChannels: Set<UInt8>) {
+        if let soundfontURL {
+            engine.loadSoundFont(soundfontURL.path)
+        }
+        // FluidSynth resolves percussion by channel type, not a bank byte.
+        for ch: UInt8 in 0 ..< 16 {
+            let isDrum = drumChannels.contains(ch)
+            engine.setChannelType(channel: ch, isDrum: isDrum)
+            if !isDrum {
+                // Seed a program so a tap preview before playback sounds
+                // (mirrors the AUMIDISynth path's GM-piano seed). The SMF's
+                // own program changes + the mixer override select the real one.
+                engine.programSelect(channel: ch, bank: 0, program: 0)
+            }
+        }
     }
 
-    /// Begin playing the loaded sequence from its current position.
-    public func start() {
+    public func loadSequence(_ midi: MidiFile, division _: Int) {
+        // FluidSynth's player reads the SMF's own division; `division` is
+        // unused here but part of the seam for backends that need it.
+        guard let bytes = try? MidiWriter.write(midi) else { return }
+        engine.loadSMF([UInt8](bytes))
+    }
+
+    public func play() {
         engine.playerPlay()
     }
 
-    /// Stop the transport (does not tear down the synth).
-    public func stop() {
+    public func pause() {
+        // `fluid_player_stop` halts playback and retains the current tick; the
+        // next `play()` resumes from there. (Refined with explicit seek in the
+        // transport-parity phase if resume-from-position proves unreliable.)
         engine.playerStop()
     }
 
-    /// Current SMF tick — the transport clock a cursor timer polls.
+    public func stop() {
+        engine.playerStop()
+        engine.playerSeek(tick: 0)
+    }
+
+    public func seek(toTick tick: Int) {
+        engine.playerSeek(tick: tick)
+    }
+
     public var currentTick: Int {
         engine.playerCurrentTick
+    }
+
+    public func setProgram(channel: UInt8, program: UInt8) {
+        engine.programSelect(channel: channel, bank: 0, program: program)
+    }
+
+    public func sendVolume(channel: UInt8, cc7: UInt8) {
+        engine.controlChange(channel: channel, controller: 7, value: cc7)
+    }
+
+    public func startNote(channel: UInt8, pitch: UInt8, velocity: UInt8) {
+        engine.noteOn(channel: channel, key: pitch, velocity: velocity)
+    }
+
+    public func stopNote(channel: UInt8, pitch: UInt8) {
+        engine.noteOff(channel: channel, key: pitch)
+    }
+
+    public func teardown() {
+        engine.playerStop()
     }
 }
