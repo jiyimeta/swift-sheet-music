@@ -11,17 +11,16 @@ import SheetMusicCore
 
 extension PDFImporter {
     static func makeTitleFrame(
-        document: PDFDocument,
+        firstPageSize: CGSize?,
+        documentAttributes: [String: Any]?,
         texts: [TextGlyph],
         options: PDFImportOptions,
     ) -> ScoreFrame? {
-        let firstPage = document.page(at: 0)
-        let pageSize = firstPage?.bounds(for: .mediaBox).size
-            ?? CGSize(width: 595, height: 842)
+        let pageSize = firstPageSize ?? CGSize(width: 595, height: 842)
         return extractTitleFrame(
             texts: texts,
             pageSize: pageSize,
-            documentAttributes: document.documentAttributes as? [String: Any],
+            documentAttributes: documentAttributes,
             options: options,
         )
     }

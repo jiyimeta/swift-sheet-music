@@ -26,7 +26,14 @@ public enum PDFImporter {
         options: PDFImportOptions = .init(),
     ) throws -> Score {
         let document = try openDocument(pdfData)
-        return try buildScore(document: document, options: options)
+        let walk = try walkDocument(document)
+        return try buildScore(
+            pageCount: document.pageCount,
+            walked: walk.content,
+            pageSizes: walk.pageSizes,
+            documentAttributes: walk.attributes,
+            options: options,
+        )
     }
 
     /// Parse `pdfData` and also return the geometry side-car.
@@ -36,8 +43,14 @@ public enum PDFImporter {
     ) throws -> (score: Score, geometry: PDFScoreGeometry) {
         let document = try openDocument(pdfData)
         let collector = PDFGeometryCollector()
+        let walk = try walkDocument(document)
         let score = try buildScore(
-            document: document, options: options, geometry: collector,
+            pageCount: document.pageCount,
+            walked: walk.content,
+            pageSizes: walk.pageSizes,
+            documentAttributes: walk.attributes,
+            options: options,
+            geometry: collector,
         )
         return (score, collector.finalize())
     }
@@ -64,18 +77,23 @@ public enum PDFImporter {
         return document
     }
 
-    /// Run stages 1-12 of the pipeline against `document` and assemble
-    /// the resulting `Score`. Throws when the document yields no glyphs
-    /// / paths, or when no staff can be detected on any page.
+    /// Run stages 1-12 of the pipeline over the walked content and assemble
+    /// the resulting `Score`. Foundation-only — the Apple front-end
+    /// (`walkDocument`) produced `walked` / `pageSizes` / `documentAttributes`
+    /// from a `PDFDocument`; Android supplies the same values from its own PDF
+    /// reader. Throws when the content yields no glyphs / paths, or when no
+    /// staff can be detected on any page.
     static func buildScore(
-        document: PDFDocument,
+        pageCount: Int,
+        walked: WalkedContent,
+        pageSizes: [Int: CGSize],
+        documentAttributes: [String: Any]?,
         options: PDFImportOptions,
         geometry: PDFGeometryCollector? = nil,
     ) throws -> Score {
-        // Page sizes (mediaBox) for the geometry side-car's system rects and
-        // display flips. Only computed on the geometry-capture path.
-        recordPageSizes(document: document, geometry: geometry)
-        let walked = try ContentStreamWalker(document: document).walk()
+        // Page sizes (mediaBox) drive the geometry side-car's system rects and
+        // display flips; only consumed on the geometry-capture path.
+        geometry?.setPageSizes(pageSizes)
         guard !walked.glyphs.isEmpty || !walked.texts.isEmpty || !walked.paths.isEmpty else {
             throw SheetMusicError.malformedScore(
                 reason: "PDFImporter: no glyphs/paths found",
@@ -93,7 +111,7 @@ public enum PDFImporter {
         // in isolation, but the ensemble size is a stable structural prior
         // across the whole document. See `ensembleStaffCount`.
         var pageStavesByPage: [[Staff]] = []
-        for page in 0 ..< document.pageCount {
+        for page in 0 ..< pageCount {
             let pagePaths = walked.paths.filter { $0.pageIndex == page }
             let pageClassified = classified.filter { $0.raw.pageIndex == page }
             pageStavesByPage.append(detectStaves(
@@ -105,7 +123,7 @@ public enum PDFImporter {
         let ensembleSize = ensembleStaffCount(pageStavesByPage)
 
         var systemsAllPages: [ImportSystem] = []
-        for page in 0 ..< document.pageCount {
+        for page in 0 ..< pageCount {
             let systems = layoutSystems(
                 staves: pageStavesByPage[page],
                 paths: walked.paths,
@@ -146,7 +164,8 @@ public enum PDFImporter {
         let graceSizeThreshold = graceNoteSizeThreshold(classified: classified)
 
         return assembleScore(
-            document: document,
+            firstPageSize: pageSizes[0],
+            documentAttributes: documentAttributes,
             systems: systemsAllPages,
             texts: walked.texts,
             classified: classified,
@@ -158,19 +177,22 @@ public enum PDFImporter {
         )
     }
 
-    /// Record each page's mediaBox size into the geometry side-car. No-op on
-    /// the non-geometry path (the collector is nil).
-    private static func recordPageSizes(
-        document: PDFDocument, geometry: PDFGeometryCollector?,
-    ) {
-        guard let geometry else { return }
-        var sizes: [Int: CGSize] = [:]
+    /// Apple front-end: walk the document (`CGPDFScanner`) and collect the
+    /// per-page mediaBox sizes + document attributes. The Foundation-only
+    /// `buildScore` consumes these VALUES, never the `PDFDocument`, so the
+    /// decode pipeline stays platform-neutral (Android supplies the same
+    /// `WalkedContent` + page sizes from its own PDF reader).
+    private static func walkDocument(
+        _ document: PDFDocument,
+    ) throws -> (content: WalkedContent, pageSizes: [Int: CGSize], attributes: [String: Any]?) {
+        let content = try ContentStreamWalker(document: document).walk()
+        var pageSizes: [Int: CGSize] = [:]
         for p in 0 ..< document.pageCount {
             if let page = document.page(at: p) {
-                sizes[p] = page.bounds(for: .mediaBox).size
+                pageSizes[p] = page.bounds(for: .mediaBox).size
             }
         }
-        geometry.setPageSizes(sizes)
+        return (content, pageSizes, document.documentAttributes as? [String: Any])
     }
 
     /// Document-wide ensemble size: the number of staves in one system,

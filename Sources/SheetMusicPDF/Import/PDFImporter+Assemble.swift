@@ -14,7 +14,8 @@ extension PDFImporter {
     /// barline subtypes) and tempo events are deferred — Task 15
     /// round-trip work will surface those in the final Score.
     static func assembleScore(
-        document: PDFDocument,
+        firstPageSize: CGSize?,
+        documentAttributes: [String: Any]?,
         systems: [ImportSystem],
         texts: [TextGlyph],
         classified: [ClassifiedGlyph],
@@ -94,7 +95,8 @@ extension PDFImporter {
         // playback, drum-line note positioning). No-op for pitched parts.
         markPercussionStaves(&assembledParts)
         let titleFrame = makeTitleFrame(
-            document: document, texts: texts, options: options,
+            firstPageSize: firstPageSize, documentAttributes: documentAttributes,
+            texts: texts, options: options,
         )
         // Recover tempo markings ("♩ = NN") from the page text into
         // system measures so playback uses the engraved BPM, not the 120

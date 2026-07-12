@@ -4,6 +4,17 @@
 import Foundation
 import SheetMusicCore
 
+/// The primitive streams a content-stream walk yields, in PDF page
+/// coordinates — the platform-neutral hand-off between the byte→token
+/// front-end (Apple `CGPDFScanner` today; Android tokenizer later) and the
+/// Foundation-only decode pipeline (`buildScore`). Aggregated across all pages.
+struct WalkedContent {
+    var glyphs: [RawGlyph]
+    var texts: [TextGlyph]
+    var paths: [PathSegment]
+    var curves: [CurveArc] = []
+}
+
 // Content-stream interpreter core — the per-operator effect on `PageState`,
 // expressed as methods that take ALREADY-PARSED operands (no CoreGraphics
 // scanner handle). The Apple front-end (`PDFImporter+ContentStream+Operators`)

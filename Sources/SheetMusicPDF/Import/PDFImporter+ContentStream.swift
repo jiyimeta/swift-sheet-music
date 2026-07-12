@@ -15,14 +15,7 @@ extension PDFImporter {
     struct ContentStreamWalker {
         let document: PDFDocument
 
-        struct Output {
-            var glyphs: [RawGlyph]
-            var texts: [TextGlyph]
-            var paths: [PathSegment]
-            var curves: [CurveArc] = []
-        }
-
-        func walk() throws -> Output {
+        func walk() throws -> WalkedContent {
             var glyphs: [RawGlyph] = []
             var texts: [TextGlyph] = []
             var paths: [PathSegment] = []
@@ -38,7 +31,7 @@ extension PDFImporter {
                 paths.append(contentsOf: state.paths)
                 curves.append(contentsOf: state.curveArcs)
             }
-            return Output(glyphs: glyphs, texts: texts, paths: paths, curves: curves)
+            return WalkedContent(glyphs: glyphs, texts: texts, paths: paths, curves: curves)
         }
 
         /// Class because we hold it via Unmanaged for the C info pointer.
