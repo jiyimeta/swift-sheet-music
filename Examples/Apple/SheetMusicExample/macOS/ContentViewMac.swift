@@ -3,6 +3,10 @@
     import PDFKit
     import SheetMusic
     import SheetMusicAudio
+
+    // FluidSynth playback backend (LGPL, opt-in): eliminates AUMIDISynth's
+    // voice stealing with lightweight SoundFonts. macOS example only.
+    import SheetMusicAudioFluidSynth
     import SheetMusicPDF
     import SheetMusicUI
     import SwiftUI
@@ -129,6 +133,7 @@
             soundfontResolver: SelectableSoundfontResolver(
                 gmSoundfontURL: SoundfontCatalog.bundledChoices().first?.url,
             ),
+            backend: FluidSynthBackend(),
         )
         /// SoundFonts discovered in the bundled `Sounds/` directory.
         @State private var soundfontChoices = SoundfontCatalog.bundledChoices()
