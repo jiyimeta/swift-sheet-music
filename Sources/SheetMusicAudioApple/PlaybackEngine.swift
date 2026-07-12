@@ -577,7 +577,14 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
             play(from: savedCursor, in: score)
         } else if let savedCursor {
             play(from: savedCursor, in: score)
-            pause()
+            // Only re-pause if `play` actually started. If the sequencer
+            // rebuild failed it left `state == .stopped`; an unconditional
+            // `pause()` here would overwrite that with `.paused`, masking
+            // the resume failure so the host reads a false "paused and
+            // ready" state.
+            if state == .playing {
+                pause()
+            }
         }
     }
 
