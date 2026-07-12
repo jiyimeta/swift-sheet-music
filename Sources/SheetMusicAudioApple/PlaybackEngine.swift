@@ -537,6 +537,18 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// resolver; the new one takes effect on the next `prepare(score:)`.
     ///
     /// No-op while exporting.
+    ///
+    /// Best-effort on failure, with two blind spots the host currently
+    /// cannot observe (a future `prepareWithDiagnostics`-style API should
+    /// surface both, mirroring `MSCXParser.parseWithDiagnostics`):
+    /// - If the re-prepare throws (only `engine.start()` can), the swap is
+    ///   silently abandoned and the engine is left stopped with the mixer
+    ///   reset to the score's defaults.
+    /// - A missing / corrupt SoundFont does NOT fail here: the AU rejects
+    ///   the file inside `prepareSynth`'s `try?`-guarded `loadSoundFont`,
+    ///   so the sampler stays attached but silent and this returns as if
+    ///   the swap succeeded. This is the failure a SoundFont picker most
+    ///   wants to report, yet nothing is thrown or flagged.
     public func reloadSoundfont(resolver newResolver: SoundfontResolver) {
         guard state != .exporting else { return }
         resolver = newResolver
