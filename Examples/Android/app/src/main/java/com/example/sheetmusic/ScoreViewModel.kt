@@ -17,7 +17,10 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.FileNotFoundException
 
-private const val ASSET_NAME = "test.mscz"
+// The example prefers a bundled MuseScore-exported PDF (`test.pdf`) to
+// demonstrate the pure-Swift PDF importer, falling back to `test.mscz`.
+private const val PDF_ASSET_NAME = "test.pdf"
+private const val MSCZ_ASSET_NAME = "test.mscz"
 private const val PAGE_WIDTH_MM = 210.0
 private const val PAGE_HEIGHT_MM = 297.0
 
@@ -50,9 +53,18 @@ class ScoreViewModel(app: Application) : AndroidViewModel(app) {
                 SheetMusicJNI.nativeInstallSMuFLMetrics(table)
             }
 
-            val bytes = try {
+            // Prefer test.pdf (pure-Swift PDF importer) → fall back to test.mscz.
+            val pdfBytes = try {
                 withContext(Dispatchers.IO) {
-                    app.assets.open(ASSET_NAME).use { it.readBytes() }
+                    app.assets.open(PDF_ASSET_NAME).use { it.readBytes() }
+                }
+            } catch (_: FileNotFoundException) {
+                null
+            }
+            val fixtureName = if (pdfBytes != null) PDF_ASSET_NAME else MSCZ_ASSET_NAME
+            val bytes = pdfBytes ?: try {
+                withContext(Dispatchers.IO) {
+                    app.assets.open(MSCZ_ASSET_NAME).use { it.readBytes() }
                 }
             } catch (_: FileNotFoundException) {
                 _state.value = ScoreState.MissingFixture
@@ -60,9 +72,9 @@ class ScoreViewModel(app: Application) : AndroidViewModel(app) {
             }
 
             val h = withContext(Dispatchers.Default) {
-                ScoreHandle.load(bytes)
+                if (pdfBytes != null) ScoreHandle.loadFromPDF(bytes) else ScoreHandle.load(bytes)
             } ?: run {
-                _state.value = ScoreState.ParseError("failed to parse $ASSET_NAME")
+                _state.value = ScoreState.ParseError("failed to parse $fixtureName")
                 return@launch
             }
             handle = h

@@ -21,6 +21,15 @@ object SheetMusicJNI {
         return SwiftJavaJNI.nativeLoadScore(SwiftData.fromByteArray(bytes, arena))
     }
 
+    /**
+     * Parse a MuseScore-exported vector PDF (3.x/4.x) into a score via the
+     * Foundation-only pure-Swift PDF reader. Returns 0 on parse failure.
+     */
+    fun nativeLoadScoreFromPDF(bytes: ByteArray): Long {
+        val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
+        return SwiftJavaJNI.nativeLoadScoreFromPDF(SwiftData.fromByteArray(bytes, arena))
+    }
+
     fun nativeReleaseScore(handle: Long) {
         SwiftJavaJNI.nativeReleaseScore(handle)
     }

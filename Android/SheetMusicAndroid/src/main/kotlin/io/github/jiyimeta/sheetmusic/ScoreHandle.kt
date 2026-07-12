@@ -19,5 +19,11 @@ class ScoreHandle internal constructor(val raw: Long) : AutoCloseable {
             val raw = SheetMusicJNI.nativeLoadScore(bytes)
             return if (raw == 0L) null else ScoreHandle(raw)
         }
+
+        /** Parse a MuseScore-exported PDF. Returns null if parsing failed. */
+        fun loadFromPDF(bytes: ByteArray): ScoreHandle? {
+            val raw = SheetMusicJNI.nativeLoadScoreFromPDF(bytes)
+            return if (raw == 0L) null else ScoreHandle(raw)
+        }
     }
 }
