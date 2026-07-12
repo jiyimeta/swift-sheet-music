@@ -1,6 +1,7 @@
-import CoreGraphics
+#if canImport(CoreGraphics)
+    import CoreGraphics
+#endif
 import Foundation
-import PDFKit
 import SheetMusicCore
 
 /// Façade for parsing vector PDFs (MuseScore 3.x/4.x exports) into `Score`.
@@ -13,69 +14,23 @@ import SheetMusicCore
 /// is allocated only on the `parseWithGeometry` path; `parse` runs the same
 /// pipeline with no geometry overhead.
 public enum PDFImporter {
-    public static func parse(
-        pdfURL: URL,
-        options: PDFImportOptions = .init(),
-    ) throws -> Score {
-        let data = try Data(contentsOf: pdfURL)
-        return try parse(pdfData: data, options: options)
-    }
-
-    public static func parse(
-        pdfData: Data,
-        options: PDFImportOptions = .init(),
-    ) throws -> Score {
-        let document = try openDocument(pdfData)
-        return try buildScore(document: document, options: options)
-    }
-
-    /// Parse `pdfData` and also return the geometry side-car.
-    public static func parseWithGeometry(
-        pdfData: Data,
-        options: PDFImportOptions = .init(),
-    ) throws -> (score: Score, geometry: PDFScoreGeometry) {
-        let document = try openDocument(pdfData)
-        let collector = PDFGeometryCollector()
-        let score = try buildScore(
-            document: document, options: options, geometry: collector,
-        )
-        return (score, collector.finalize())
-    }
-
-    /// Parse the PDF at `pdfURL` and also return the geometry side-car.
-    public static func parseWithGeometry(
-        pdfURL: URL,
-        options: PDFImportOptions = .init(),
-    ) throws -> (score: Score, geometry: PDFScoreGeometry) {
-        let data = try Data(contentsOf: pdfURL)
-        return try parseWithGeometry(pdfData: data, options: options)
-    }
-
-    private static func openDocument(_ pdfData: Data) throws -> PDFDocument {
-        guard !pdfData.isEmpty else {
-            throw SheetMusicError.malformedScore(reason: "PDFImporter: empty data")
-        }
-        guard let document = PDFDocument(data: pdfData) else {
-            throw SheetMusicError.malformedScore(reason: "PDFImporter: not a valid PDF")
-        }
-        guard document.pageCount > 0 else {
-            throw SheetMusicError.malformedScore(reason: "PDFImporter: zero pages")
-        }
-        return document
-    }
-
-    /// Run stages 1-12 of the pipeline against `document` and assemble
-    /// the resulting `Score`. Throws when the document yields no glyphs
-    /// / paths, or when no staff can be detected on any page.
+    /// Run stages 1-12 of the pipeline over the walked content and assemble
+    /// the resulting `Score`. Foundation-only — the Apple front-end
+    /// (`walkDocument`) produced `walked` / `pageSizes` / `documentAttributes`
+    /// from a `PDFDocument`; Android supplies the same values from its own PDF
+    /// reader. Throws when the content yields no glyphs / paths, or when no
+    /// staff can be detected on any page.
     static func buildScore(
-        document: PDFDocument,
+        pageCount: Int,
+        walked: WalkedContent,
+        pageSizes: [Int: CGSize],
+        documentAttributes: [String: Any]?,
         options: PDFImportOptions,
         geometry: PDFGeometryCollector? = nil,
     ) throws -> Score {
-        // Page sizes (mediaBox) for the geometry side-car's system rects and
-        // display flips. Only computed on the geometry-capture path.
-        recordPageSizes(document: document, geometry: geometry)
-        let walked = try ContentStreamWalker(document: document).walk()
+        // Page sizes (mediaBox) drive the geometry side-car's system rects and
+        // display flips; only consumed on the geometry-capture path.
+        geometry?.setPageSizes(pageSizes)
         guard !walked.glyphs.isEmpty || !walked.texts.isEmpty || !walked.paths.isEmpty else {
             throw SheetMusicError.malformedScore(
                 reason: "PDFImporter: no glyphs/paths found",
@@ -93,7 +48,7 @@ public enum PDFImporter {
         // in isolation, but the ensemble size is a stable structural prior
         // across the whole document. See `ensembleStaffCount`.
         var pageStavesByPage: [[Staff]] = []
-        for page in 0 ..< document.pageCount {
+        for page in 0 ..< pageCount {
             let pagePaths = walked.paths.filter { $0.pageIndex == page }
             let pageClassified = classified.filter { $0.raw.pageIndex == page }
             pageStavesByPage.append(detectStaves(
@@ -105,7 +60,7 @@ public enum PDFImporter {
         let ensembleSize = ensembleStaffCount(pageStavesByPage)
 
         var systemsAllPages: [ImportSystem] = []
-        for page in 0 ..< document.pageCount {
+        for page in 0 ..< pageCount {
             let systems = layoutSystems(
                 staves: pageStavesByPage[page],
                 paths: walked.paths,
@@ -146,7 +101,8 @@ public enum PDFImporter {
         let graceSizeThreshold = graceNoteSizeThreshold(classified: classified)
 
         return assembleScore(
-            document: document,
+            firstPageSize: pageSizes[0],
+            documentAttributes: documentAttributes,
             systems: systemsAllPages,
             texts: walked.texts,
             classified: classified,
@@ -156,21 +112,6 @@ public enum PDFImporter {
             options: options,
             geometry: geometry,
         )
-    }
-
-    /// Record each page's mediaBox size into the geometry side-car. No-op on
-    /// the non-geometry path (the collector is nil).
-    private static func recordPageSizes(
-        document: PDFDocument, geometry: PDFGeometryCollector?,
-    ) {
-        guard let geometry else { return }
-        var sizes: [Int: CGSize] = [:]
-        for p in 0 ..< document.pageCount {
-            if let page = document.page(at: p) {
-                sizes[p] = page.bounds(for: .mediaBox).size
-            }
-        }
-        geometry.setPageSizes(sizes)
     }
 
     /// Document-wide ensemble size: the number of staves in one system,
