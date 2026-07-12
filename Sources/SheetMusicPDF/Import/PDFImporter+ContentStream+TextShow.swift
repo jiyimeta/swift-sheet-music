@@ -9,7 +9,7 @@ import SheetMusicCore
 // call `emitShow`, which routes each decoded scalar to a music `RawGlyph`
 // (SMuFL PUA) or a `TextGlyph` text run.
 
-typealias TextShowState = PDFImporter.ContentStreamWalker.PageState
+typealias TextShowState = PDFPageState
 private typealias State = TextShowState
 
 /// SMuFL Private Use Area range. A decoded scalar inside this range is

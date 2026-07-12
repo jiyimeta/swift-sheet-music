@@ -29,7 +29,7 @@ struct WalkedContent {
 //
 // See docs/superpowers/specs/2026-07-12-pdf-import-android-design.md §4, §6.
 
-extension PDFImporter.ContentStreamWalker.PageState {
+extension PDFPageState {
     // MARK: Graphics state
 
     /// `q` — push a copy of the current CTM.

@@ -14,7 +14,7 @@ import SheetMusicCore
 /// a SIL `SendNonSendable` crasher in Swift 6 strict-concurrency mode that
 /// triggers when a method body holds many of these callbacks inline.
 enum ContentStreamOperators {
-    typealias State = PDFImporter.ContentStreamWalker.PageState
+    typealias State = PDFPageState
 
     static func register(on table: CGPDFOperatorTableRef) {
         // Graphics-state stack and CTM.
@@ -69,7 +69,7 @@ enum ContentStreamOperators {
 
 // MARK: - File-scope callbacks
 
-private typealias State = PDFImporter.ContentStreamWalker.PageState
+private typealias State = PDFPageState
 
 private func op_noop(_: CGPDFScannerRef, _: UnsafeMutableRawPointer?) {}
 
