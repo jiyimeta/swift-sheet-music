@@ -28,7 +28,21 @@ public final class FluidSynthBackend: SynthBackend {
     public init(sampleRate: Double = 44100) {
         let engine = FluidSynthEngine(sampleRate: sampleRate)
         self.engine = engine
+        sourceNode = Self.makeSourceNode(engine: engine, sampleRate: sampleRate)
+    }
 
+    /// Build the render source node in a `nonisolated` context so its render
+    /// block does NOT inherit `FluidSynthBackend`'s `@MainActor` isolation.
+    /// A closure created in the `@MainActor init` inherits main-actor isolation
+    /// even when passed to `AVAudioSourceNode`'s `@Sendable` render-block
+    /// parameter, so Swift inserts a main-actor executor assertion that TRAPS
+    /// (EXC_BREAKPOINT) the first time the real audio render thread pulls the
+    /// node. (Offline manual rendering runs the block on the caller's thread, so
+    /// unit tests don't hit it — only a live engine's dedicated render thread
+    /// does.) A `nonisolated static` factory keeps the block isolation-free.
+    private nonisolated static func makeSourceNode(
+        engine: FluidSynthEngine, sampleRate: Double,
+    ) -> AVAudioSourceNode {
         guard let format = AVAudioFormat(
             standardFormatWithSampleRate: sampleRate, channels: 2,
         ) else {
@@ -36,7 +50,7 @@ public final class FluidSynthBackend: SynthBackend {
                 "stereo float32 format unavailable at \(sampleRate) Hz",
             )
         }
-        sourceNode = AVAudioSourceNode(format: format) { _, _, frameCount, abListPtr in
+        return AVAudioSourceNode(format: format) { _, _, frameCount, abListPtr in
             let abl = UnsafeMutableAudioBufferListPointer(abListPtr)
             guard abl.count >= 2,
                   let leftRaw = abl[0].mData,
