@@ -3,7 +3,6 @@ build/
 app/build/
 app/src/main/jniLibs/
 app/src/main/assets/test.mscz
-app/src/main/assets/*.pdf
 app/src/main/assets/*.sf2
 local.properties
 .idea/
