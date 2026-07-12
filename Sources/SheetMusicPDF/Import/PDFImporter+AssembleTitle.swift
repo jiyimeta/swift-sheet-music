@@ -1,6 +1,7 @@
-import CoreGraphics
+#if canImport(CoreGraphics)
+    import CoreGraphics
+#endif
 import Foundation
-import PDFKit
 import SheetMusicCore
 
 // Title-frame + page-boundary helpers split out of PDFImporter+Assemble to

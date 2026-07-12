@@ -1,7 +1,8 @@
 // swiftlint:disable file_length
-import CoreGraphics
+#if canImport(CoreGraphics)
+    import CoreGraphics
+#endif
 import Foundation
-import PDFKit
 import SheetMusicCore
 
 extension PDFImporter {

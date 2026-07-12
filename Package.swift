@@ -77,9 +77,29 @@ var targets: [Target] = [
         dependencies: ["SheetMusicCore"],
     ),
     .target(
+        name: "SheetMusicPDF",
+        dependencies: isAndroid
+            ? ["SheetMusicCore", "SheetMusicLayout"]
+            : ["SheetMusicCore", "SheetMusicLayout", "SheetMusicLayoutApple", "SheetMusicUI"],
+        // Apple-only files (CGPDFScanner walker, PDFDocument entry, PDF export,
+        // SwiftUI/PDFKit views) are excluded from the Android build; Android
+        // parses via the Foundation-only pure-Swift reader.
+        exclude: isAndroid ? [
+            "PageChromeRenderer.swift",
+            "PDFPageLayerView.swift",
+            "PDFPageView.swift",
+            "PDFExporter.swift",
+            "EngravingPage.swift",
+            "Import/PDFImporter+ContentStream.swift",
+            "Import/PDFImporter+ContentStream+Operators.swift",
+            "Import/PDFImporter+AppleEntry.swift",
+        ] : [],
+    ),
+    .target(
         name: "SheetMusicAndroidJNI",
         dependencies: [
             "SheetMusicCore",
+            "SheetMusicPDF",
             "SheetMusicMSCX",
             "SheetMusicMusicXML",
             "SheetMusicLayout",
@@ -174,15 +194,6 @@ if !isAndroid {
             dependencies: [
                 "SheetMusicAudioCore",
                 "SheetMusicAudioApple",
-            ],
-        ),
-        .target(
-            name: "SheetMusicPDF",
-            dependencies: [
-                "SheetMusicCore",
-                "SheetMusicLayout",
-                "SheetMusicLayoutApple",
-                "SheetMusicUI",
             ],
         ),
         .executableTarget(

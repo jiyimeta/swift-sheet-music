@@ -1,6 +1,7 @@
-import CoreGraphics
+#if canImport(CoreGraphics)
+    import CoreGraphics
+#endif
 import Foundation
-import PDFKit
 import SheetMusicCore
 
 // Text-show emission for the content-stream walker. Split out of the

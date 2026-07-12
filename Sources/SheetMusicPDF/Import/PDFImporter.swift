@@ -1,6 +1,7 @@
-import CoreGraphics
+#if canImport(CoreGraphics)
+    import CoreGraphics
+#endif
 import Foundation
-import PDFKit
 import SheetMusicCore
 
 /// Façade for parsing vector PDFs (MuseScore 3.x/4.x exports) into `Score`.
@@ -13,70 +14,6 @@ import SheetMusicCore
 /// is allocated only on the `parseWithGeometry` path; `parse` runs the same
 /// pipeline with no geometry overhead.
 public enum PDFImporter {
-    public static func parse(
-        pdfURL: URL,
-        options: PDFImportOptions = .init(),
-    ) throws -> Score {
-        let data = try Data(contentsOf: pdfURL)
-        return try parse(pdfData: data, options: options)
-    }
-
-    public static func parse(
-        pdfData: Data,
-        options: PDFImportOptions = .init(),
-    ) throws -> Score {
-        let document = try openDocument(pdfData)
-        let walk = try walkDocument(document)
-        return try buildScore(
-            pageCount: document.pageCount,
-            walked: walk.content,
-            pageSizes: walk.pageSizes,
-            documentAttributes: walk.attributes,
-            options: options,
-        )
-    }
-
-    /// Parse `pdfData` and also return the geometry side-car.
-    public static func parseWithGeometry(
-        pdfData: Data,
-        options: PDFImportOptions = .init(),
-    ) throws -> (score: Score, geometry: PDFScoreGeometry) {
-        let document = try openDocument(pdfData)
-        let collector = PDFGeometryCollector()
-        let walk = try walkDocument(document)
-        let score = try buildScore(
-            pageCount: document.pageCount,
-            walked: walk.content,
-            pageSizes: walk.pageSizes,
-            documentAttributes: walk.attributes,
-            options: options,
-            geometry: collector,
-        )
-        return (score, collector.finalize())
-    }
-
-    /// Parse the PDF at `pdfURL` and also return the geometry side-car.
-    public static func parseWithGeometry(
-        pdfURL: URL,
-        options: PDFImportOptions = .init(),
-    ) throws -> (score: Score, geometry: PDFScoreGeometry) {
-        let data = try Data(contentsOf: pdfURL)
-        return try parseWithGeometry(pdfData: data, options: options)
-    }
-
-    private static func openDocument(_ pdfData: Data) throws -> PDFDocument {
-        guard !pdfData.isEmpty else {
-            throw SheetMusicError.malformedScore(reason: "PDFImporter: empty data")
-        }
-        guard let document = PDFDocument(data: pdfData) else {
-            throw SheetMusicError.malformedScore(reason: "PDFImporter: not a valid PDF")
-        }
-        guard document.pageCount > 0 else {
-            throw SheetMusicError.malformedScore(reason: "PDFImporter: zero pages")
-        }
-        return document
-    }
-
     /// Run stages 1-12 of the pipeline over the walked content and assemble
     /// the resulting `Score`. Foundation-only — the Apple front-end
     /// (`walkDocument`) produced `walked` / `pageSizes` / `documentAttributes`
@@ -175,24 +112,6 @@ public enum PDFImporter {
             options: options,
             geometry: geometry,
         )
-    }
-
-    /// Apple front-end: walk the document (`CGPDFScanner`) and collect the
-    /// per-page mediaBox sizes + document attributes. The Foundation-only
-    /// `buildScore` consumes these VALUES, never the `PDFDocument`, so the
-    /// decode pipeline stays platform-neutral (Android supplies the same
-    /// `WalkedContent` + page sizes from its own PDF reader).
-    private static func walkDocument(
-        _ document: PDFDocument,
-    ) throws -> (content: WalkedContent, pageSizes: [Int: CGSize], attributes: [String: Any]?) {
-        let content = try ContentStreamWalker(document: document).walk()
-        var pageSizes: [Int: CGSize] = [:]
-        for p in 0 ..< document.pageCount {
-            if let page = document.page(at: p) {
-                pageSizes[p] = page.bounds(for: .mediaBox).size
-            }
-        }
-        return (content, pageSizes, document.documentAttributes as? [String: Any])
     }
 
     /// Document-wide ensemble size: the number of staves in one system,

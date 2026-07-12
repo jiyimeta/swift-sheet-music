@@ -121,7 +121,10 @@ enum PDFFlate {
                     ret = buffer.withUnsafeMutableBufferPointer { buf -> Int32 in
                         stream.next_out = buf.baseAddress
                         stream.avail_out = UInt32(buf.count)
-                        return inflate(&stream, Z_NO_FLUSH)
+                        // Qualify: `PDFFlate.inflate(_:)` (this enum's own
+                        // static method) otherwise shadows the global zlib
+                        // `inflate` inside this scope.
+                        return zlib.inflate(&stream, Z_NO_FLUSH)
                     }
                     guard ret == Z_OK || ret == Z_STREAM_END else {
                         return nil
