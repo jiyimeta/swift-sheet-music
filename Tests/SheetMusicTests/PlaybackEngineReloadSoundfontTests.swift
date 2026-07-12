@@ -32,6 +32,20 @@
                 return Score(division: 480, parts: [part])
             }
 
+            private static func twoStaffScore() -> Score {
+                let part = Part(
+                    id: "p",
+                    instrument: Instrument(
+                        id: "i", channels: [InstrumentChannel(program: 0)],
+                    ),
+                    staves: [
+                        Staff(measures: [Measure(voices: [])]),
+                        Staff(measures: [Measure(voices: [])]),
+                    ],
+                )
+                return Score(division: 480, parts: [part])
+            }
+
             private static let urlA = URL(fileURLWithPath: "/tmp/font-a.sf2")
             private static let urlB = URL(fileURLWithPath: "/tmp/font-b.sf2")
 
@@ -92,6 +106,61 @@
                 // case too: the cursor and the paused state both survive.
                 #expect(engine.currentCursor == before)
                 #expect(engine.state == .paused)
+            }
+
+            @Test("preserves playback rate across the reload")
+            func preservesRate() throws {
+                let engine = PlaybackEngine(soundfontResolver: FakeResolver(gmURL: nil))
+                try engine.prepare(score: Self.singleStaffScore())
+                engine.setRate(1.5)
+                engine.reloadSoundfont(resolver: FakeResolver(gmURL: nil))
+                #expect(engine.exportEngineSnapshot().rate == 1.5)
+            }
+
+            @Test("preserves master tuning across the reload")
+            func preservesMasterTuning() throws { // swiftlint:disable:this inclusive_language
+                let engine = PlaybackEngine(soundfontResolver: FakeResolver(gmURL: nil))
+                try engine.prepare(score: Self.singleStaffScore())
+                engine.setMasterTuning(cents: -31.77)
+                engine.reloadSoundfont(resolver: FakeResolver(gmURL: nil))
+                #expect(engine.masterTuningCents == -31.77)
+            }
+
+            @Test("preserves whole-score transpose across the reload")
+            func preservesTranspose() throws {
+                let engine = PlaybackEngine(soundfontResolver: FakeResolver(gmURL: nil))
+                try engine.prepare(score: Self.singleStaffScore())
+                engine.setTranspose(semitones: 5)
+                engine.reloadSoundfont(resolver: FakeResolver(gmURL: nil))
+                #expect(engine.transposeSemitones == 5)
+            }
+
+            @Test("preserves solo state on multiple staves across the reload")
+            func preservesMultiSolo() throws {
+                let engine = PlaybackEngine(soundfontResolver: FakeResolver(gmURL: nil))
+                try engine.prepare(score: Self.twoStaffScore())
+                engine.setSoloed(forChannel: .staff(0), to: true)
+                engine.setSoloed(forChannel: .staff(1), to: true)
+                engine.reloadSoundfont(resolver: FakeResolver(gmURL: nil))
+                let staff0 = try #require(engine.mixerChannels.first { $0.id == .staff(0) })
+                let staff1 = try #require(engine.mixerChannels.first { $0.id == .staff(1) })
+                #expect(staff0.isSoloed == true)
+                #expect(staff1.isSoloed == true)
+            }
+
+            @Test("preserves metronome mute and enabled state across the reload")
+            func preservesMetronomeState() throws {
+                let engine = PlaybackEngine(soundfontResolver: FakeResolver(gmURL: nil))
+                try engine.prepare(score: Self.singleStaffScore())
+                // Both differ from their defaults (enabled defaults true,
+                // the metronome strip defaults un-muted), so a reload that
+                // dropped them would flip the assertions.
+                engine.setMetronomeEnabled(false)
+                engine.setMuted(forChannel: .metronome, to: true)
+                engine.reloadSoundfont(resolver: FakeResolver(gmURL: nil))
+                let metronome = try #require(engine.mixerChannels.first { $0.id == .metronome })
+                #expect(metronome.isMuted == true)
+                #expect(engine.exportEngineSnapshot().metronomeEnabled == false)
             }
         }
     }
