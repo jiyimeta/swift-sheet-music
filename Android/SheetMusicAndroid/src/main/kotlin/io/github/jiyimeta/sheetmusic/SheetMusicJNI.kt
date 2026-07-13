@@ -169,6 +169,47 @@ object SheetMusicJNI {
     }
 
     /**
+     * Resolve a freehand-ink point ([xMm], [yMm], document/mm) to a musical
+     * anchor (`ResolvedAnchorWire` bytes) in the cached (filtered) layout of
+     * [scoreHandle] — the inverse of [nativeAnchorReferencePoint]. Empty array on
+     * any miss. Folino's shared anchoring core turns the bytes into a Domain
+     * MusicalAnchor and bakes the stroke; no math happens in Kotlin.
+     */
+    fun nativeResolveAnchor(
+        scoreHandle: Long,
+        xMm: Double,
+        yMm: Double,
+    ): ByteArray {
+        val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
+        return SwiftJavaJNI.nativeResolveAnchor(
+            scoreHandle,
+            xMm,
+            yMm,
+            arena,
+        ).toByteArray()
+    }
+
+    /**
+     * Batched inverse: resolve every anchor identity in [anchorsBytes]
+     * (`[AnchorIdentityWire]`) to its document/mm reference point + staff-space
+     * (`[AnchorRefPointWire]`; `spMm == 0` sentinel per anchor that did not
+     * resolve, so the array stays positionally aligned with the input). One call
+     * resolves a whole annotation layer on the reflow/display path. Empty array
+     * when the layout is not cached.
+     */
+    fun nativeAnchorReferencePoint(
+        scoreHandle: Long,
+        anchorsBytes: ByteArray,
+    ): ByteArray {
+        val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
+        return SwiftJavaJNI.nativeAnchorReferencePoint(
+            scoreHandle,
+            SwiftData.fromByteArray(anchorsBytes, arena),
+            arena,
+        ).toByteArray()
+    }
+
+    /**
      * Resolve the highlight rectangles (mm coordinates) covering a
      * loop region spanning ticks `[fromTick, toTick)`. Returns one
      * rect per intersected system; the rect spans the full staff
