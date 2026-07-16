@@ -64,4 +64,32 @@ struct PlaybackNavigationModelTests {
         let jumpNode = try #require(plainNode.first("Jump"))
         #expect(jumpNode.all("playRepeats").isEmpty)
     }
+
+    // MARK: - Measure.sectionBreak
+
+    @Test func decodesSectionBreakFromLayoutBreak() throws {
+        let xml = """
+        <Measure>
+          <voice></voice>
+          <LayoutBreak>
+            <subtype>section</subtype>
+          </LayoutBreak>
+        </Measure>
+        """
+        let measure = try Measure.decode(XMLTreeParser.parse(Data(xml.utf8)))
+        #expect(measure.sectionBreak == true)
+        #expect(measure.lineBreak == false)
+        #expect(measure.pageBreak == false)
+    }
+
+    @Test func sectionBreakRoundTripsThroughMSCX() throws {
+        let original = Measure(voices: [Voice(elements: [])], sectionBreak: true)
+        let encoded = try original.encode()
+        let reparsed = try XMLTreeParser.parse(XMLTreeSerializer.serialize(encoded))
+        let decoded = try Measure.decode(reparsed)
+        #expect(decoded.sectionBreak == true)
+        // Default-false measures stay LayoutBreak-free.
+        let plainNode = try Measure(voices: [Voice(elements: [])]).encode()
+        #expect(plainNode.all("LayoutBreak").isEmpty)
+    }
 }

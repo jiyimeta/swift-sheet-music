@@ -96,6 +96,12 @@ extension Measure {
                 children: [XMLTreeNode(name: "subtype", text: "page")],
             ))
         }
+        if sectionBreak {
+            children.append(XMLTreeNode(
+                name: "LayoutBreak",
+                children: [XMLTreeNode(name: "subtype", text: "section")],
+            ))
+        }
         var attributes: [String: String] = [:]
         if let actualLength {
             attributes["len"] =
