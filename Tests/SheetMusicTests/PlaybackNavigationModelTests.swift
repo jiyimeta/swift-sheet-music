@@ -165,4 +165,37 @@ struct PlaybackNavigationModelTests {
         #expect(empty.firstEnding == 0)
         #expect(empty.lastEnding == 0)
     }
+
+    // MARK: - MusicXML D.S. al Fine playUntil
+
+    @Test func musicXMLDSAlFineDecodesPlayUntilFine() throws {
+        let xml = """
+        <direction>
+          <direction-type>
+            <words>D.S. al Fine</words>
+          </direction-type>
+          <sound dalsegno="segno" fine="yes"/>
+        </direction>
+        """
+        let node = try XMLTreeParser.parse(Data(xml.utf8))
+        let decoded = MusicXMLJumpDecoder.decode(node)
+        let jump = try #require(decoded.jumps.first)
+        #expect(jump.jumpTo == "segno")
+        #expect(jump.playUntil == "fine")
+        #expect(jump.continueAt.isEmpty)
+    }
+
+    @Test func musicXMLPlainDSStillPlaysUntilEnd() throws {
+        let xml = """
+        <direction>
+          <direction-type>
+            <words>D.S.</words>
+          </direction-type>
+          <sound dalsegno="segno"/>
+        </direction>
+        """
+        let node = try XMLTreeParser.parse(Data(xml.utf8))
+        let decoded = MusicXMLJumpDecoder.decode(node)
+        #expect(decoded.jumps.first?.playUntil == "end")
+    }
 }
