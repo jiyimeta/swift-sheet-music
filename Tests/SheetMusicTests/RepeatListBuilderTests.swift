@@ -110,4 +110,83 @@ struct RepeatListBuilderTests {
             RepeatListElement(kind: .sectionBreak, measureIndex: 3),
         ]])
     }
+
+    // MARK: - findMarker
+
+    /// Section 0: [RS(0), M(segno,1), SB(2)]
+    /// Section 1: [RS(3), M(codab,4), J(5), SB(5)]
+    private static func twoSections() -> [[RepeatListElement]] {
+        [
+            [
+                RepeatListElement(kind: .repeatStart, measureIndex: 0, repeatCount: 1),
+                RepeatListElement(
+                    kind: .marker, measureIndex: 1,
+                    marker: Marker(kind: .segno, label: "segno"),
+                ),
+                RepeatListElement(kind: .sectionBreak, measureIndex: 2),
+            ],
+            [
+                RepeatListElement(kind: .repeatStart, measureIndex: 3, repeatCount: 1),
+                RepeatListElement(
+                    kind: .marker, measureIndex: 4,
+                    marker: Marker(kind: .coda), // effectiveLabel "codab"
+                ),
+                RepeatListElement(
+                    kind: .jump, measureIndex: 5,
+                    jump: Jump(jumpTo: "segno", playUntil: "coda", continueAt: "codab"),
+                ),
+                RepeatListElement(kind: .sectionBreak, measureIndex: 5),
+            ],
+        ]
+    }
+
+    @Test func findMarkerResolvesSpecialLabels() {
+        let sections = Self.twoSections()
+        let reference = RepeatListPosition(section: 1, element: 2)
+        #expect(RepeatListBuilder.findMarker(
+            label: "start", from: reference, in: sections,
+        ) == RepeatListPosition(section: 1, element: 0))
+        #expect(RepeatListBuilder.findMarker(
+            label: "end", from: reference, in: sections,
+        ) == RepeatListPosition(section: 1, element: 3))
+    }
+
+    @Test func findMarkerSearchesBackwardInSectionFirst() {
+        let sections = Self.twoSections()
+        let reference = RepeatListPosition(section: 1, element: 2)
+        // "codab" resolves via the marker's effectiveLabel (unlabeled
+        // `.coda` defaults to "codab" — Task 3).
+        #expect(RepeatListBuilder.findMarker(
+            label: "codab", from: reference, in: sections,
+        ) == RepeatListPosition(section: 1, element: 1))
+    }
+
+    @Test func findMarkerFallsBackToPreviousSections() {
+        let sections = Self.twoSections()
+        let reference = RepeatListPosition(section: 1, element: 2)
+        #expect(RepeatListBuilder.findMarker(
+            label: "segno", from: reference, in: sections,
+        ) == RepeatListPosition(section: 0, element: 1))
+    }
+
+    @Test func findMarkerSearchesForwardThenFollowingSections() {
+        let sections = Self.twoSections()
+        // From section 0's marker, "codab" is only found forward in
+        // the following section.
+        let reference = RepeatListPosition(section: 0, element: 1)
+        #expect(RepeatListBuilder.findMarker(
+            label: "codab", from: reference, in: sections,
+        ) == RepeatListPosition(section: 1, element: 1))
+    }
+
+    @Test func findMarkerReturnsNilForEmptyOrUnknownLabels() {
+        let sections = Self.twoSections()
+        let reference = RepeatListPosition(section: 1, element: 2)
+        #expect(RepeatListBuilder.findMarker(
+            label: "", from: reference, in: sections,
+        ) == nil)
+        #expect(RepeatListBuilder.findMarker(
+            label: "varcoda", from: reference, in: sections,
+        ) == nil)
+    }
 }

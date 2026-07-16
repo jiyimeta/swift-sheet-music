@@ -23,6 +23,76 @@ enum RepeatListBuilder {
         return collector.collect()
     }
 
+    /// Resolve a jump label (`jumpTo` / `playUntil` / `continueAt`)
+    /// to the element it targets. Special labels: `"start"` = current
+    /// section start, `"end"` = current section end (its
+    /// `.sectionBreak` element — never matched by the marker case, so
+    /// a playUntil of "end" simply lets the section run out). Search
+    /// order mirrors RepeatList::findMarker (repeatlist.cpp:691-774):
+    /// current section backward from the reference, current section
+    /// forward, previous sections backward, following sections
+    /// forward. Returns nil for the empty label (an absent
+    /// `continueAt`) and for labels no marker carries.
+    static func findMarker(
+        label: String,
+        from reference: RepeatListPosition,
+        in sections: [[RepeatListElement]],
+    ) -> RepeatListPosition? {
+        guard !label.isEmpty,
+              reference.section < sections.count
+        else { return nil }
+        if label == "start" {
+            return RepeatListPosition(section: reference.section, element: 0)
+        }
+        if label == "end" {
+            return RepeatListPosition(
+                section: reference.section,
+                element: sections[reference.section].count - 1,
+            )
+        }
+        func matches(_ element: RepeatListElement) -> Bool {
+            element.kind == .marker && element.marker?.effectiveLabel == label
+        }
+        // Backward in the current section.
+        let current = sections[reference.section]
+        var i = min(reference.element, current.count)
+        while i > 0 {
+            i -= 1
+            if matches(current[i]) {
+                return RepeatListPosition(section: reference.section, element: i)
+            }
+        }
+        // Forward in the current section.
+        i = reference.element + 1
+        while i < current.count {
+            if matches(current[i]) {
+                return RepeatListPosition(section: reference.section, element: i)
+            }
+            i += 1
+        }
+        // Backward through previous sections.
+        var s = reference.section
+        while s > 0 {
+            s -= 1
+            var j = sections[s].count
+            while j > 0 {
+                j -= 1
+                if matches(sections[s][j]) {
+                    return RepeatListPosition(section: s, element: j)
+                }
+            }
+        }
+        // Forward through following sections.
+        s = reference.section + 1
+        while s < sections.count {
+            for (j, element) in sections[s].enumerated() where matches(element) {
+                return RepeatListPosition(section: s, element: j)
+            }
+            s += 1
+        }
+        return nil
+    }
+
     private struct Collector {
         let navigation: ScoreNavigation
         var sections: [[RepeatListElement]] = []
