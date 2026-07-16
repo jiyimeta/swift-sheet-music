@@ -177,6 +177,7 @@ extension Measure {
             jumpTo: node.first("jumpTo")?.text ?? "",
             playUntil: node.first("playUntil")?.text ?? "",
             continueAt: node.first("continueAt")?.text ?? "",
+            playRepeats: node.first("playRepeats")?.text == "1",
             text: node.first("text")?.text ?? "",
         )
     }
