@@ -26,6 +26,20 @@ public struct Spanner: Sendable, Equatable {
     /// non-nil case is spanners that end mid-measure.
     public var nextFractionsOffset: Fraction?
     public var voltaEndings: [Int] // for Volta: the take-numbers (1, 2, …)
+    /// Smallest volta ending number, or 0 when `voltaEndings` is
+    /// empty. Mirrors `Volta::firstEnding` — the 0 case signals
+    /// "no endings recorded" to jump processing
+    /// (repeatlist.cpp:813-819).
+    public var firstEnding: Int {
+        voltaEndings.min() ?? 0
+    }
+
+    /// Largest volta ending number, or 0 when `voltaEndings` is
+    /// empty. Mirrors `Volta::lastEnding` (repeatlist.cpp:821-828).
+    public var lastEnding: Int {
+        voltaEndings.max() ?? 0
+    }
+
     /// Base element properties shared with every engravable element.
     /// Currently carries only `<visible>`; see `ElementProperties`.
     public var elementProperties: ElementProperties

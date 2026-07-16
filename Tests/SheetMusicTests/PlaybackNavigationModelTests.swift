@@ -151,4 +151,18 @@ struct PlaybackNavigationModelTests {
         let measure = try Measure.decode(XMLTreeParser.parse(Data(xml.utf8)))
         #expect(measure.markers.first?.label == "segno2")
     }
+
+    // MARK: - Spanner volta ending helpers
+
+    @Test func spannerVoltaEndingHelpers() {
+        let volta = Spanner(kind: .volta, rawType: "Volta", voltaEndings: [2, 1, 3])
+        #expect(volta.firstEnding == 1)
+        #expect(volta.lastEnding == 3)
+        // Empty endings report 0 — mirrors Volta::firstEnding /
+        // lastEnding, whose 0 return drives performJump's fallback to
+        // the start-repeat's play count (repeatlist.cpp:813-828).
+        let empty = Spanner(kind: .volta, rawType: "Volta")
+        #expect(empty.firstEnding == 0)
+        #expect(empty.lastEnding == 0)
+    }
 }
