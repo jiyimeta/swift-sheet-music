@@ -167,11 +167,15 @@ extension Measure {
 
     private static func decodeMarker(_ node: XMLTreeNode) -> Marker {
         let markerType = node.first("markerType")?.text ?? ""
-        let label = node.first("label")?.text ?? ""
+        let kind = Marker.Kind(rawValue: markerType) ?? .other
+        let rawLabel = node.first("label")?.text ?? ""
         let text = node.first("text")?.text ?? ""
         return Marker(
-            kind: Marker.Kind(rawValue: markerType) ?? .other,
-            label: label,
+            kind: kind,
+            // MuseScore instantiates markers with the type's default
+            // label (markerTypeTable, marker.cpp:51-62); a file that
+            // omits `<label>` still targets jumps by that default.
+            label: rawLabel.isEmpty ? kind.defaultLabel : rawLabel,
             text: text,
         )
     }
