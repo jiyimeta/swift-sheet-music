@@ -265,7 +265,10 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     private static let coarseTuningParameterID: AudioUnitParameterID = 901
     private static let fineTuningParameterID: AudioUnitParameterID = 902
 
-    private static func applyMasterTuning( // swiftlint:disable:this inclusive_language
+    /// `internal` (not `private`) so `PlaybackEngine+Export` (a
+    /// different file) can reproduce the live engine's transpose +
+    /// master A4 tuning on the offline export synths.
+    static func applyMasterTuning( // swiftlint:disable:this inclusive_language
         to instrument: AVAudioUnitMIDIInstrument, cents: Double,
     ) {
         let split = MasterTuning.split(cents: cents)
@@ -307,6 +310,12 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         /// Resolved metronome SoundFont URL (host click SF2, host SF2, or
         /// GM drum-kit), so the export plays the same click as live.
         let metronomeSoundFontURL: URL?
+        /// Whole-score transpose captured from `PlaybackEngine.transposeSemitones`,
+        /// so the export synths reproduce the live engine's key shift.
+        let transposeSemitones: Int
+        /// A4-calibration offset captured from `PlaybackEngine.masterTuningCents`,
+        /// so the export synths reproduce the live engine's tuning.
+        let masterTuningCents: Double // swiftlint:disable:this inclusive_language
     }
 
     func exportEngineSnapshot() -> ExportEngineSnapshot {
@@ -319,6 +328,8 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
             metronomeBeats: metronomeBeats,
             masterGain: masterGain,
             metronomeSoundFontURL: clickResolver.resolvedSoundFontURL(),
+            transposeSemitones: transposeSemitones,
+            masterTuningCents: masterTuningCents,
         )
     }
 
