@@ -6,6 +6,14 @@ import SheetMusicCore
 /// marker handling lands in `RepeatUnwinder+Jumps.swift`). Swift
 /// reimplementation — studied from, not copied from —
 /// `mu::engraving::RepeatList::unwind` (repeatlist.cpp:835-1117).
+///
+/// This intentionally diverges from the deleted hand-rolled
+/// `playbackPlan` on two exotic shapes — sequential repeat groups with
+/// voltas (the old `take` counter never reset per group, so it could
+/// wrongly skip a volta) and a skipped volta containing an
+/// `endRepeat` (the old walk counted it; this one jumps straight to
+/// `.voltaEnd`) — both now match MuseScore, so don't "restore" the
+/// old behavior (see `PlaybackUnwindTests`).
 struct RepeatUnwinder {
     /// One contiguous run of measure indices played in notated order.
     /// Analog of MuseScore's `RepeatSegment` (repeatlist.cpp:45-135).
