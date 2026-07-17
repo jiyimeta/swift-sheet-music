@@ -220,4 +220,209 @@ struct PlaybackUnwindTests {
         #expect(wrapper == direct)
         #expect(wrapper.map(\.measureIndex) == [0, 1, 2, 1, 3, 4])
     }
+
+    // MARK: - Jumps (hand-derived; shapes cross-checked against
+    // MuseScore repeat_tests.cpp scenarios noted per test)
+
+    @Test func daCapoReplaysFromStartOnceOnly() {
+        // [m0, m1, m2(D.C.)], Jump{start,end}. Derivation: pass 1
+        // plays 0,1,2; at the jump playbackCount(1) >= section
+        // plays(1) → honored, (jump,pc1) recorded; jumpTo "start" =
+        // section start, playUntil "end" = the section-break element
+        // (never marker-matched → section simply runs out);
+        // forceFinalRepeat=true but there are no repeats. Second
+        // arrival at the jump finds (jump,pc1) already taken → play
+        // through to the end. → 0,1,2 | 0,1,2.
+        let dc = Jump(jumpTo: "start", playUntil: "end")
+        let measures = [Self.measure(), Self.measure(), Self.measure(jumps: [dc])]
+        #expect(Self.planIndices(measures) == [0, 1, 2, 0, 1, 2])
+    }
+
+    @Test func daCapoAlFineStopsAtFine() {
+        // MuseScore repeat07 shape. [m0, m1(Fine), m2, m3(D.C. al
+        // Fine)]. Derivation: pass 1 plays 0,1,2,3 (the Fine marker is
+        // not the playUntil target yet — playUntil unset); the jump
+        // resolves playUntil=findMarker("fine")=m1's marker, jumps to
+        // section start with playbackCount=1; on re-reaching the Fine
+        // marker: position == playUntil && playbackCount(1) == section
+        // plays(1) → final playthrough → stop (continueAt empty).
+        // → 0,1,2,3 | 0,1.
+        let fine = Marker(kind: .fine) // effectiveLabel "fine"
+        let dcAlFine = Jump(jumpTo: "start", playUntil: "fine")
+        let measures = [
+            Self.measure(),
+            Self.measure(markers: [fine]),
+            Self.measure(),
+            Self.measure(jumps: [dcAlFine]),
+        ]
+        #expect(Self.planIndices(measures) == [0, 1, 2, 3, 0, 1])
+    }
+
+    @Test func dalSegnoAlFineReplaysFromSegno() {
+        // [m0, m1(Segno), m2(Fine), m3(D.S. al Fine)]. Derivation:
+        // pass 1 plays 0,1,2,3; jump resolves jumpTo=segno(m1),
+        // playUntil=fine(m2); performJump walks section start → segno
+        // (no repeats/voltas passed) → playbackCount=1; replay starts
+        // at m1; at the Fine marker: final playthrough → stop.
+        // → 0,1,2,3 | 1,2.
+        let segno = Marker(kind: .segno) // effectiveLabel "segno"
+        let fine = Marker(kind: .fine)
+        let dsAlFine = Jump(jumpTo: "segno", playUntil: "fine")
+        let measures = [
+            Self.measure(),
+            Self.measure(markers: [segno]),
+            Self.measure(markers: [fine]),
+            Self.measure(jumps: [dsAlFine]),
+        ]
+        #expect(Self.planIndices(measures) == [0, 1, 2, 3, 1, 2])
+    }
+
+    @Test func dalSegnoAlCodaJumpsToCodaAtToCoda() {
+        // [m0, m1(Segno), m2(To Coda), m3(D.S. al Coda), m4(Coda)].
+        // Labels: toCoda.effectiveLabel=="coda" (jump target of
+        // playUntil), coda.effectiveLabel=="codab" (continueAt
+        // destination) — MuseScore's markerTypeTable naming.
+        // Derivation: pass 1 plays 0,1,2,3; the jump resolves
+        // jumpTo=segno(m1), playUntil=toCoda(m2), continueAt=coda(m4);
+        // replay 1,2; at To Coda (final playthrough) continueAt fires:
+        // performJump(withRepeats:true) to the codab marker → play 4.
+        // → 0,1,2,3 | 1,2 | 4.
+        let segno = Marker(kind: .segno)
+        let toCoda = Marker(kind: .toCoda) // label "coda"
+        let coda = Marker(kind: .coda) // label "codab"
+        let dsAlCoda = Jump(jumpTo: "segno", playUntil: "coda", continueAt: "codab")
+        let measures = [
+            Self.measure(),
+            Self.measure(markers: [segno]),
+            Self.measure(markers: [toCoda]),
+            Self.measure(jumps: [dsAlCoda]),
+            Self.measure(markers: [coda]),
+        ]
+        #expect(Self.planIndices(measures) == [0, 1, 2, 3, 1, 2, 4])
+    }
+
+    @Test func jumpOnRepeatedMeasureHonoredOnFinalPassOnly() {
+        // MuseScore repeat16 ("jump in simple repeat",
+        // repeat_tests.cpp:158): m0, m1(Fine), m2, m3(||: + :||x2 +
+        // D.C. al Fine). Derivation: pass 1 plays 0,1,2,3; at the
+        // jump playbackCount(1) < loop plays(2) → NOT honored; the
+        // repeat end rewinds to m3's own start repeat → segment [3];
+        // second arrival: playbackCount(2) ≥ 2 → jump honored →
+        // replay 0,1 up to Fine. Expected (C++ ref "1;2;3;4; 4; 1;2")
+        // → 0,1,2,3 | 3 | 0,1.
+        let fine = Marker(kind: .fine)
+        let dcAlFine = Jump(jumpTo: "start", playUntil: "fine")
+        let measures = [
+            Self.measure(),
+            Self.measure(markers: [fine]),
+            Self.measure(),
+            Self.measure(startRepeat: true, endRepeat: 2, jumps: [dcAlFine]),
+        ]
+        #expect(Self.planIndices(measures) == [0, 1, 2, 3, 3, 0, 1])
+    }
+
+    @Test func dalSegnoIntoThreefoldRepeatForcesFinalPass() {
+        // MuseScore repeat22 ("DS and ||:3x:||",
+        // repeat_tests.cpp:183): m0, m1(Segno), m2(D.S. playUntil
+        // end), m3, m4(||: + :||x3), m5. Derivation: pass 1 plays
+        // 0,1,2; D.S. honored at pc1 → back to segno(m1) with
+        // forceFinalRepeat=true; the un-played repeat end keeps its
+        // hit count (repeat22's own re-arm rule applies only to
+        // ALREADY-hit ends); replay 1,2,3,4 — the x3 repeat loops
+        // twice ([4], [4]) then 5. Expected (C++ "1;2;3; 2;3;4;5; 5;
+        // 5;6") → 0,1,2 | 1,2,3,4 | 4 | 4,5.
+        let segno = Marker(kind: .segno)
+        let ds = Jump(jumpTo: "segno", playUntil: "end")
+        let measures = [
+            Self.measure(),
+            Self.measure(markers: [segno]),
+            Self.measure(jumps: [ds]),
+            Self.measure(),
+            Self.measure(startRepeat: true, endRepeat: 3),
+            Self.measure(),
+        ]
+        #expect(
+            Self.planIndices(measures)
+                == [0, 1, 2, 1, 2, 3, 4, 4, 4, 5],
+        )
+    }
+
+    @Test func voltaBetweenSegnoAndDalSegno() {
+        // MuseScore repeat12 ("volta between segno & DS",
+        // repeat_tests.cpp:132): m0, m1(Segno), m2(||:),
+        // m3(volta1 :||x2), m4(volta2), m5(D.S. playUntil end), m6.
+        // Derivation: 0,1,2,3 (take 1) | rewind → 2 (volta1 skipped
+        // on take 2) | 4,5 (volta2) — D.S. honored at pc2 →
+        // forceFinalRepeat re-arms the repeat end to its full count;
+        // replay from segno: 1, then the start repeat's desired
+        // playbackCount under forceFinalRepeat is the loop's final
+        // pass (2) → run restarts, volta1 skipped again → 2 | 4,5,6.
+        // Expected (C++ "1;2;3;4; 3; 5;6; 2;3; 5;6;7")
+        // → 0,1,2,3 | 2 | 4,5 | 1 | 2 | 4,5,6.
+        let segno = Marker(kind: .segno)
+        let ds = Jump(jumpTo: "segno", playUntil: "end")
+        let measures = [
+            Self.measure(),
+            Self.measure(markers: [segno]),
+            Self.measure(startRepeat: true),
+            Self.measure(endRepeat: 2, volta: [1]),
+            Self.measure(volta: [2]),
+            Self.measure(jumps: [ds]),
+            Self.measure(),
+        ]
+        #expect(
+            Self.planIndices(measures)
+                == [0, 1, 2, 3, 2, 4, 5, 1, 2, 4, 5, 6],
+        )
+    }
+
+    @Test func playRepeatsTrueReplaysRepeatsAfterJump() {
+        // [m0(Segno), m1(||:), m2(:||x2), m3(D.S. playRepeats)].
+        // Derivation: pass 1 plays 0,1,2 | 1,2 (repeat) | 3; jump
+        // honored at pc2 → performJump(withRepeats:true) resets
+        // playbackCount to 1 and the already-hit repeat end is
+        // re-armed to 0 hits (NOT forced final) → the repeat replays
+        // in full → 0,1,2 | 1,2,3; second jump arrival at pc2 is
+        // already taken. → 0,1,2, 1,2,3, 0,1,2, 1,2,3.
+        let segno = Marker(kind: .segno)
+        let ds = Jump(jumpTo: "segno", playUntil: "end", playRepeats: true)
+        let measures = [
+            Self.measure(markers: [segno]),
+            Self.measure(startRepeat: true),
+            Self.measure(endRepeat: 2),
+            Self.measure(jumps: [ds]),
+        ]
+        #expect(
+            Self.planIndices(measures)
+                == [0, 1, 2, 1, 2, 3, 0, 1, 2, 1, 2, 3],
+        )
+    }
+
+    @Test func playRepeatsFalsePlaysFinalPassAfterJump() {
+        // Same score, playRepeats=false (the MuseScore default):
+        // after the jump forceFinalRepeat=true → the start repeat
+        // restarts the run at the loop's final pass (2) and the
+        // re-armed repeat end doesn't loop → the repeated passage
+        // plays ONCE. → 0,1,2, 1,2,3, 0, 1,2,3.
+        let segno = Marker(kind: .segno)
+        let ds = Jump(jumpTo: "segno", playUntil: "end")
+        let measures = [
+            Self.measure(markers: [segno]),
+            Self.measure(startRepeat: true),
+            Self.measure(endRepeat: 2),
+            Self.measure(jumps: [ds]),
+        ]
+        #expect(
+            Self.planIndices(measures)
+                == [0, 1, 2, 1, 2, 3, 0, 1, 2, 3],
+        )
+    }
+
+    @Test func incompleteJumpIsIgnored() {
+        // MuseScore repeat13/26 spirit: a jump whose jumpTo label
+        // resolves nowhere is skipped; playback continues linearly.
+        let broken = Jump(jumpTo: "segno", playUntil: "end")
+        let measures = [Self.measure(), Self.measure(jumps: [broken])]
+        #expect(Self.planIndices(measures) == [0, 1])
+    }
 }

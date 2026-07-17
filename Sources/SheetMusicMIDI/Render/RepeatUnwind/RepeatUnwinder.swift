@@ -156,10 +156,11 @@ struct RepeatUnwinder {
             return true
         case .repeatEnd:
             return processRepeatEnd(element)
-        case .jump, .marker:
-            // Inert until RepeatUnwinder+Jumps lands (nothing sets
-            // playUntil / takes jumps yet).
+        case .jump:
+            processJump(element)
             return true
+        case .marker:
+            return processMarker(element)
         }
     }
 
