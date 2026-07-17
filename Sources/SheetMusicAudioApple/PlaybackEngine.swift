@@ -176,6 +176,14 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// to translate `sequencer.currentPositionInSeconds` into a
     /// `ScoreItemID`.
     private var timeline: PlaybackTimeline?
+    /// Unrolled→notated tick map for the loaded score. The sequencer
+    /// plays `MidiRenderer.render`'s UNROLLED SMF (repeats + jumps
+    /// expanded) while `timeline` frames are in NOTATED ticks; every
+    /// cursor / time READ translates through this map. Scheduling —
+    /// loop wrap, seek, play-from — intentionally stays in
+    /// first-occurrence coordinates (tap-to-seek targets a notated
+    /// tick's first unrolled occurrence).
+    private var unroll: PlaybackUnroll = .identity
     /// Cursor poll timer — fires at ~30 Hz while playing, updates
     /// `currentItem`.
     private var cursorTimer: Timer?
@@ -465,6 +473,7 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         sequencerHasPreRoll = false
         renderedMidiCache = nil
         timeline = PlaybackTimeline(score: score)
+        unroll = MidiRenderer.playbackUnroll(score: score)
         metronomeBeats = PlaybackTimeline.metronomeBeats(score: score)
         // Resolve the metronome's SoundFont through the click provider:
         // `.clickSamples` builds an SF2 from the host's WAVs, `.soundFont`
@@ -1075,7 +1084,9 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         } else {
             tick = rawTick
         }
-        return timeline.frame(atTick: tick)?.timeSeconds ?? 0
+        return timeline.frame(
+            atTick: unroll.notatedTick(fromUnrolled: tick),
+        )?.timeSeconds ?? 0
     }
 
     /// Like `currentTimeSeconds` but interpolated *within* the current
@@ -1105,7 +1116,7 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         } else {
             tick = rawTick
         }
-        return timeline.seconds(atTick: tick)
+        return timeline.seconds(atTick: unroll.notatedTick(fromUnrolled: tick))
     }
 
     /// Total playable duration in seconds for the loaded score.
@@ -1407,10 +1418,13 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// (it touches no actor state) so it is callable from a synchronous test.
     nonisolated static func mappedCursor(
         rawSequencerTick: Int, sequenceMap: SequenceMap, timeline: PlaybackTimeline,
+        unroll: PlaybackUnroll = .identity,
     ) -> ScoreCursor? {
         guard let scoreTick = sequenceMap.scoreTick(fromSequencer: rawSequencerTick)
         else { return nil }
-        return timeline.frame(atTick: scoreTick)?.cursor
+        return timeline.frame(
+            atTick: unroll.notatedTick(fromUnrolled: scoreTick),
+        )?.cursor
     }
 
     /// The cursor a `play(from:)` should actually anchor at, resolving the nil-cursor convention the
@@ -1487,17 +1501,21 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
             wrapToLoopStart(loop)
             return
         }
-        if let frame = timeline.frame(atTick: tick) {
+        // The polled tick is UNROLLED (the SMF's coordinates);
+        // translate to the notated tick before the frame lookup so
+        // the cursor tracks repeats' later passes and jump targets.
+        if let frame = timeline.frame(atTick: unroll.notatedTick(fromUnrolled: tick)) {
             if frame.cursor != currentCursor {
                 currentCursor = frame.cursor
             }
         }
-        // Slack of a tick lets us catch the very last frame even if
-        // the sequencer reports a sample-accurate beats value just
-        // shy of the final onset. Skip while looping — the wrap
-        // branch above already handles the boundary, and a stale
-        // read here mustn't fire `stop()`.
-        if loopRange == nil, tick >= timeline.totalTicks {
+        // End-of-score detection compares against the UNROLLED length
+        // (falling back to the notated length for an identity map).
+        // Skip while looping — the wrap branch above handles the
+        // boundary, and a stale read here mustn't fire `stop()`.
+        if loopRange == nil,
+           tick >= max(unroll.totalUnrolledTicks, timeline.totalTicks)
+        {
             stop()
         }
     }
