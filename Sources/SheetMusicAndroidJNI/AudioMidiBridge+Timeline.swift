@@ -76,6 +76,11 @@ extension AudioMidiBridge {
 
 extension AudioMidiBridge {
     static func frameAtTick(score: Score, tick: Int64) -> Data {
+        // A tick before the sequence start is out of range → no frame.
+        // Guard BEFORE the unroll map, whose `notatedTick(fromUnrolled:)`
+        // clamps negatives to 0 (a valid frame); without this a negative
+        // tick would wrongly resolve to the first frame.
+        guard tick >= 0 else { return Data() }
         let timeline = PlaybackTimeline(score: score)
         // `tick` arrives from the FluidSynth player in UNROLLED SMF
         // coordinates (repeats + jumps expanded), but `timeline` frames
