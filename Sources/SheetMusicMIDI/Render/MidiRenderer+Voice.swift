@@ -58,7 +58,19 @@ extension MidiRenderer {
             }
         }
 
+        // The unrolled `plan` is computed ONCE, score-globally, from
+        // staff 0's measure count (see `render(score:)`), then applied
+        // to every staff. A hand-built `Score` whose non-canonical
+        // staff has FEWER measures than staff 0 would otherwise trap
+        // here indexing `staff.measures[entry.measureIndex]` (directly
+        // in `resolvedVoice`, and via `originalMeasureBase` below).
+        // Well-formed parsed files are always aligned across staves, so
+        // this guard is a no-op in practice; it exists purely to turn a
+        // ragged staff into a silent truncation instead of a crash.
+        var lastProcessedEntry: PlaybackEntry?
         for entry in plan {
+            guard entry.measureIndex < staff.measures.count else { continue }
+            lastProcessedEntry = entry
             // Splice in the source measure's notes if this measure is a
             // measure-repeat. Returns nil only when neither the current
             // measure nor any source measure has this voice — silent skip.
@@ -207,7 +219,10 @@ extension MidiRenderer {
         }
 
         let endTick: Int
-        if let last = plan.last {
+        // Use the last IN-RANGE entry actually processed above (not
+        // `plan.last`, which may reference a measure index this ragged
+        // staff doesn't have — see the bounds guard at the top of the loop).
+        if let last = lastProcessedEntry {
             let lastDuration = last.measureIndex < measureDurations.count
                 ? measureDurations[last.measureIndex]
                 : Fraction(numerator: 4, denominator: 4)
