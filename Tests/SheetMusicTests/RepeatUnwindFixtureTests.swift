@@ -37,32 +37,22 @@ struct RepeatUnwindFixtureTests {
     @Test func repeat52JumpIntoVoltaFinalPlaythrough() throws {
         // MuseScore repeat52 ("Jump into volta \"final\" playthrough"):
         // D.S. (jumpTo: segno, playUntil: end) lands on the segno marker
-        // sitting inside volta1 (endings [1,3]) of a chained ||:x3+x3
-        // loop, while playbackCount(5) < loopPlays(5) is never even
-        // reached before the pre-jump divergence below fires.
+        // inside a chained ||:x3+x3 loop with two voltas ([1,3] and
+        // [2,4]) — the jump lands with an active volta, exercising
+        // `reevaluateVoltasAfterJump`. Pinned to MuseScore's own
+        // repeat_tests.cpp expected order (0-based).
         let expected = [0, 1, 2, 0, 3, 4, 0, 1, 2, 0, 3, 4, 0, 5, 2, 0, 3, 4, 0, 5]
-        let actual = try Self.planIndices(fixture: "repeat52")
-        withKnownIssue("""
-        pre-existing ScoreNavigation.collectVoltas off-by-one (not \
-        reevaluateVoltasAfterJump) — see followup-repeat52-report.md
-        """) {
-            #expect(actual == expected)
-        }
+        #expect(try Self.planIndices(fixture: "repeat52") == expected)
     }
 
     @Test func repeat53JumpIntoVoltaWithRepeats() throws {
-        // MuseScore repeat53 ("Jump into volta with repeats"): same
-        // shape as repeat52, but the segno marker sits on the volta2
-        // measure itself (endings [2,4]) rather than the loop start.
+        // MuseScore repeat53 ("Jump into volta with repeats"): same shape
+        // as repeat52, but the D.S. resumes on volta2 (endings [2,4]),
+        // so the jumped-into passage replays its final repeat. Pinned to
+        // MuseScore's repeat_tests.cpp expected order (0-based).
         let expected = [
             0, 1, 2, 0, 3, 4, 0, 1, 2, 0, 3, 4, 0, 5, 4, 0, 1, 2, 0, 3, 4, 0, 5,
         ]
-        let actual = try Self.planIndices(fixture: "repeat53")
-        withKnownIssue("""
-        pre-existing ScoreNavigation.collectVoltas off-by-one (not \
-        reevaluateVoltasAfterJump) — see followup-repeat52-report.md
-        """) {
-            #expect(actual == expected)
-        }
+        #expect(try Self.planIndices(fixture: "repeat53") == expected)
     }
 }
