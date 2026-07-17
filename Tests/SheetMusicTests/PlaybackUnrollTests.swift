@@ -113,4 +113,37 @@ struct PlaybackUnrollTests {
         #expect(PlaybackUnroll.identity.notatedTick(fromUnrolled: 12.5) == 12.5)
         #expect(PlaybackUnroll.identity.totalUnrolledTicks == 0)
     }
+
+    // MARK: - unrolledTicks(forNotated:) — the inverse projection used to
+    // unroll the BODY metronome track so it doesn't go silent on a
+    // repeat's 2nd pass (or any jump).
+
+    @Test func unrolledTicksMapsRepeatedMeasureToBothOccurrences() {
+        // Same shape as repeatSecondPassMapsBackToNotatedMeasure — plan
+        // [0,1,1,2]: m1 (notated [1920, 3840)) is played twice, so a
+        // notated tick inside it has TWO unrolled occurrences (first pass
+        // at +0, second pass at +2*span).
+        let unroll = MidiRenderer.playbackUnroll(score: Self.score([
+            Self.measure(), Self.measure(startRepeat: true, endRepeat: 2), Self.measure(),
+        ]))
+        #expect(unroll.unrolledTicks(forNotated: 2020) == [2020, 3940])
+    }
+
+    @Test func unrolledTicksMapsSinglePassMeasureToOneOccurrence() {
+        let unroll = MidiRenderer.playbackUnroll(score: Self.score([
+            Self.measure(), Self.measure(startRepeat: true, endRepeat: 2), Self.measure(),
+        ]))
+        // m0 (notated [0, 1920)) is played once — a single occurrence.
+        #expect(unroll.unrolledTicks(forNotated: 100) == [100])
+        // m2 (notated [3840, 5760)) comes after the repeat, at unrolled
+        // [5760, 7680) — also a single occurrence.
+        #expect(unroll.unrolledTicks(forNotated: 3890) == [5810])
+    }
+
+    @Test func unrolledTicksIdentityPassesThrough() {
+        // A plan-less score (`PlaybackUnroll.identity`) has no spans; the
+        // projection must still return the input tick so a beat is never
+        // silently dropped for a score without a computed repeat plan.
+        #expect(PlaybackUnroll.identity.unrolledTicks(forNotated: 1234) == [1234])
+    }
 }

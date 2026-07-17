@@ -1,5 +1,6 @@
 import Foundation
 import SheetMusicCore
+import SheetMusicMIDI
 
 /// One metronome tick — the metric beat at which the click should
 /// sound, with a flag for the strong (downbeat) accent.
@@ -105,5 +106,34 @@ extension PlaybackTimeline {
             }
         }
         return beats
+    }
+
+    /// `metronomeBeats(score:)` (NOTATED ticks) projected onto the
+    /// UNROLLED sequencer timeline (repeats + jumps expanded, the
+    /// coordinate space `MidiRenderer.render(score:)`'s SMF plays in).
+    ///
+    /// Playback drives the BODY metronome from the unrolled SMF, but
+    /// `metronomeBeats(score:)` only knows about NOTATED ticks — so a
+    /// click track built straight from it ends at the notated length and
+    /// goes silent on a repeat's 2nd pass (or any jump) even though the
+    /// score keeps playing. This unrolls each notated beat through
+    /// `PlaybackUnroll.unrolledTicks(forNotated:)` so a beat inside a
+    /// measure played twice sounds twice, once per pass.
+    ///
+    /// `metronomeBeats(score:)` itself stays NOTATED — the count-in
+    /// pre-roll and `AnacrusisTests` depend on notated ticks — this is
+    /// an additive projection for PLAYBACK consumers only.
+    public static func unrolledMetronomeBeats(score: Score) -> [MetronomeBeat] {
+        let notated = metronomeBeats(score: score)
+        let unroll = MidiRenderer.playbackUnroll(score: score)
+        var result: [MetronomeBeat] = []
+        result.reserveCapacity(notated.count)
+        for beat in notated {
+            for tick in unroll.unrolledTicks(forNotated: beat.tick) {
+                result.append(MetronomeBeat(tick: tick, isDownbeat: beat.isDownbeat))
+            }
+        }
+        result.sort { $0.tick < $1.tick }
+        return result
     }
 }

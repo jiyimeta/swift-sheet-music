@@ -35,8 +35,15 @@ extension AudioMidiBridge {
 // MARK: - T17: Metronome beats + staff params
 
 extension AudioMidiBridge {
+    /// UNROLLED (not notated) — the Kotlin poll loop feeds the FluidSynth
+    /// player's UNROLLED tick (repeats + jumps expanded) to
+    /// `MetronomeMixer.updateCurrentTick`. A beat list built from notated
+    /// ticks alone would end at the notated length and go silent on a
+    /// repeat's 2nd pass, even though the score keeps playing. Mirrors
+    /// the Apple engine's `PlaybackTimeline.unrolledMetronomeBeats`
+    /// wiring in `PlaybackEngine.prepare(score:)`.
     static func metronomeBeats(score: Score) -> Data {
-        let beats = PlaybackTimeline.metronomeBeats(score: score)
+        let beats = PlaybackTimeline.unrolledMetronomeBeats(score: score)
         return MetronomeBeatCodec.encodeArray(beats)
     }
 

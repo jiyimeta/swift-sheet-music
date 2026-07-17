@@ -16,6 +16,10 @@ public struct PlaybackUnroll: Sendable, Equatable {
     struct Span: Equatable {
         var unrolledStart: Int
         var notatedStart: Int
+        /// The measure-play's length in ticks (== the notated measure's
+        /// `tickSpan`). Lets `unrolledTicks(forNotated:)` test whether a
+        /// notated tick falls inside `[notatedStart, notatedStart + notatedLength)`.
+        var notatedLength: Int
     }
 
     /// Sorted ascending by `unrolledStart`.
@@ -60,6 +64,35 @@ public struct PlaybackUnroll: Sendable, Equatable {
         let base = notatedTick(fromUnrolled: floorTick)
         return Double(base) + (unrolled - Double(floorTick))
     }
+
+    /// Every unrolled occurrence of a NOTATED tick — the inverse of
+    /// `notatedTick(fromUnrolled:)`, which only returns one (the
+    /// first-occurrence) direction of the map. A tick inside a measure
+    /// that is played twice (a repeat) or replayed by a jump maps to
+    /// TWO OR MORE unrolled ticks, one per pass, sorted ascending
+    /// (`spans` is itself sorted by `unrolledStart`, which for a
+    /// well-formed plan is playback order). Used to project the
+    /// NOTATED body metronome beats (`PlaybackTimeline.metronomeBeats`)
+    /// onto the UNROLLED sequencer timeline so the click track doesn't
+    /// go silent past the first pass.
+    ///
+    /// Returns `[notated]` (identity) for a plan-less score — matching
+    /// `notatedTick(fromUnrolled:)`'s pass-through behavior — so a
+    /// score without a computed repeat plan never silently drops a
+    /// beat. Returns `[]` when `notated` falls inside no span's
+    /// `[notatedStart, notatedStart + notatedLength)` range (e.g. past
+    /// the last notated measure).
+    public func unrolledTicks(forNotated notated: Int) -> [Int] {
+        guard !spans.isEmpty else { return [notated] }
+        var result: [Int] = []
+        for span in spans
+            where notated >= span.notatedStart
+            && notated < span.notatedStart + span.notatedLength
+        {
+            result.append(span.unrolledStart + (notated - span.notatedStart))
+        }
+        return result
+    }
 }
 
 extension MidiRenderer {
@@ -78,14 +111,13 @@ extension MidiRenderer {
         var spans: [PlaybackUnroll.Span] = []
         var total = 0
         for entry in plan {
+            let measureTickSpan = navigation.measures[entry.measureIndex].tickSpan
             spans.append(PlaybackUnroll.Span(
                 unrolledStart: entry.tickOffset,
                 notatedStart: notatedBases[entry.measureIndex],
+                notatedLength: measureTickSpan,
             ))
-            total = max(
-                total,
-                entry.tickOffset + navigation.measures[entry.measureIndex].tickSpan,
-            )
+            total = max(total, entry.tickOffset + measureTickSpan)
         }
         return PlaybackUnroll(spans: spans, totalUnrolledTicks: total)
     }
