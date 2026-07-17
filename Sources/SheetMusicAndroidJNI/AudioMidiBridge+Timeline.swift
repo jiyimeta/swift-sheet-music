@@ -1,6 +1,7 @@
 import Foundation
 import SheetMusicAudioCore
 import SheetMusicCore
+import SheetMusicMIDI
 
 // MARK: - T15: Timeline summary
 
@@ -9,14 +10,24 @@ extension AudioMidiBridge {
         let totalTicks: Int64
         let totalSecondsMicros: Int64
         let division: Int64
+        /// Length of the UNROLLED sequence (repeats + jumps expanded) —
+        /// the tick space the FluidSynth player actually traverses. The
+        /// Kotlin poll loop compares the player's tick against THIS for
+        /// end-of-score, otherwise a repeat's second pass would push the
+        /// unrolled tick past the (shorter) notated `totalTicks` and stop
+        /// playback early. Mirrors the Apple engine's
+        /// `max(unroll.totalUnrolledTicks, timeline.totalTicks)`.
+        let totalUnrolledTicks: Int64
     }
 
     static func timelineSummary(score: Score) -> TimelineSummary {
         let t = PlaybackTimeline(score: score)
+        let unroll = MidiRenderer.playbackUnroll(score: score)
         return TimelineSummary(
             totalTicks: Int64(t.totalTicks),
             totalSecondsMicros: Int64((t.totalSeconds * 1_000_000).rounded()),
             division: Int64(t.division),
+            totalUnrolledTicks: Int64(max(unroll.totalUnrolledTicks, t.totalTicks)),
         )
     }
 }
@@ -59,7 +70,15 @@ extension AudioMidiBridge {
 extension AudioMidiBridge {
     static func frameAtTick(score: Score, tick: Int64) -> Data {
         let timeline = PlaybackTimeline(score: score)
-        guard let frame = timeline.frame(atTick: Int(tick)) else { return Data() }
+        // `tick` arrives from the FluidSynth player in UNROLLED SMF
+        // coordinates (repeats + jumps expanded), but `timeline` frames
+        // are NOTATED. Translate before the lookup so the cursor follows
+        // a repeat's second pass and every jump instead of clamping
+        // forward. Mirrors the Apple engine's read-path translation
+        // (`PlaybackEngine.mappedCursor`).
+        let unroll = MidiRenderer.playbackUnroll(score: score)
+        let notated = unroll.notatedTick(fromUnrolled: Int(tick))
+        guard let frame = timeline.frame(atTick: notated) else { return Data() }
         return FrameCodec.encode(frame)
     }
 
@@ -109,12 +128,17 @@ public func nativeItemEndTick(scoreHandle: Int64, idBytes: Data) -> Int64 {
 
 /// JNI entry point exposed via swift-java for the Kotlin
 /// `SheetMusicAudioJNI.nativeTimelineSummary(...)` call site. Returns
-/// `[totalTicks, totalSecondsMicros, division]`, or an empty array when
-/// the score handle is unknown.
+/// `[totalTicks, totalSecondsMicros, division, totalUnrolledTicks]`, or an
+/// empty array when the score handle is unknown. The trailing
+/// `totalUnrolledTicks` is appended (existing indices unchanged) so the
+/// Kotlin poll loop can detect end-of-score against the unrolled length.
 public func nativeTimelineSummary(scoreHandle: Int64) -> [Int64] {
     guard let score = scoreTable.value(for: scoreHandle) else { return [] }
     let summary = AudioMidiBridge.timelineSummary(score: score)
-    return [summary.totalTicks, summary.totalSecondsMicros, summary.division]
+    return [
+        summary.totalTicks, summary.totalSecondsMicros,
+        summary.division, summary.totalUnrolledTicks,
+    ]
 }
 
 /// JNI entry point exposed via swift-java for the Kotlin

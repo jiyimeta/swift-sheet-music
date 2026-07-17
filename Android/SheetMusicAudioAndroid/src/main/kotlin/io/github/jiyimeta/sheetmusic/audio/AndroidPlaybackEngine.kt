@@ -242,6 +242,15 @@ class AndroidPlaybackEngine internal constructor(
     private val exportMutex = Mutex()
     private var scoreHandle: Long = 0
     private var totalTicks: Long = 0
+    /**
+     * Length of the UNROLLED sequence (repeats + jumps expanded) — the tick
+     * space the FluidSynth player actually traverses. End-of-score detection
+     * in the poll loop compares the player tick against THIS, not the shorter
+     * notated [totalTicks], so a repeat's second pass or a D.C./D.S. jump does
+     * not stop playback early. Falls back to [totalTicks] for an older native
+     * bridge that doesn't report it.
+     */
+    private var unrolledTotalTicks: Long = 0
     /** Ticks-per-beat from the prepared score's timeline; required by export. */
     private var ticksPerBeat: Int = 480
     private var fluidSynthEngine: FluidSynthEngine? = null
@@ -286,6 +295,9 @@ class AndroidPlaybackEngine internal constructor(
             totalTicks = summary[0]
             val totalSecs = summary[1] / 1_000_000.0
             ticksPerBeat = summary[2].toInt()
+            // Native bridge appends the unrolled length as summary[3];
+            // fall back to the notated total for an older bridge.
+            unrolledTotalTicks = if (summary.size > 3) summary[3] else totalTicks
 
             val staffBytes = jniBridge.staffParams(scoreHandle)
             val staves = run {
@@ -980,8 +992,11 @@ class AndroidPlaybackEngine internal constructor(
                     _currentCursor.value = frame.cursor
                     _currentTimeSeconds.value = frame.timeSeconds
                 }
-                // End of score: only stop when no loop is active.
-                if (loop == null && tick >= totalTicks && totalTicks > 0) {
+                // End of score: only stop when no loop is active. Compare
+                // against the UNROLLED length — the player traverses the
+                // repeat/jump-expanded SMF, so `tick` runs past the notated
+                // `totalTicks` mid-piece whenever the score repeats.
+                if (loop == null && tick >= unrolledTotalTicks && unrolledTotalTicks > 0) {
                     stop()
                     break
                 }
