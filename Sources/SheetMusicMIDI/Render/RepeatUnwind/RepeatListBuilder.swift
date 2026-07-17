@@ -220,10 +220,17 @@ enum RepeatListBuilder {
         }
 
         /// Closed-volta end (repeatlist.cpp:637-644). All voltas are
-        /// approximated as closed-hook, so a bracket ending on this
-        /// measure always closes here.
+        /// approximated as closed-hook. A volta closes at its END ANCHOR
+        /// — the measure AFTER its last covered measure (`endMeasure + 1`),
+        /// which is where MuseScore's `Spanner::endMeasure()` /
+        /// `<measures>N</measures>` distance points (`dom/spanner.cpp`,
+        /// `dom/location.cpp`). Closing one measure later than the last
+        /// covered measure is what lets an `endRepeat` sitting on that
+        /// anchor measure fall INSIDE the volta's skip scope (MuseScore
+        /// repeat52/53). Voltas whose anchor is past the last measure are
+        /// closed by `closeSection` instead.
         private mutating func endClosedVolta(at mi: Int) {
-            guard let open = activeVolta, open.endMeasure == mi else { return }
+            guard let open = activeVolta, open.endMeasure + 1 == mi else { return }
             section.append(RepeatListElement(
                 kind: .voltaEnd, measureIndex: mi, volta: open,
             ))

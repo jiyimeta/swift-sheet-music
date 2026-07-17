@@ -474,7 +474,15 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         renderedMidiCache = nil
         timeline = PlaybackTimeline(score: score)
         unroll = MidiRenderer.playbackUnroll(score: score)
-        metronomeBeats = PlaybackTimeline.metronomeBeats(score: score)
+        // UNROLLED (not notated) — playback drives the sequencer's
+        // rendered SMF, which has repeats + jumps expanded. A body
+        // metronome track built from notated ticks alone would end at
+        // the notated length and go silent on a repeat's 2nd pass (or
+        // any jump), even though the score keeps playing. The count-in
+        // pre-roll click track (`CountInBeats.Result.beats`, assembled
+        // separately in `buildCountInSequencer`) is unaffected — it
+        // always plays from a fixed start, once.
+        metronomeBeats = PlaybackTimeline.unrolledMetronomeBeats(score: score)
         // Resolve the metronome's SoundFont through the click provider:
         // `.clickSamples` builds an SF2 from the host's WAVs, `.soundFont`
         // uses a host SF2, and `.defaultGM` (or no provider) falls back to

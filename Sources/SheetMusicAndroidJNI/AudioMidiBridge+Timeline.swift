@@ -35,8 +35,15 @@ extension AudioMidiBridge {
 // MARK: - T17: Metronome beats + staff params
 
 extension AudioMidiBridge {
+    /// UNROLLED (not notated) — the Kotlin poll loop feeds the FluidSynth
+    /// player's UNROLLED tick (repeats + jumps expanded) to
+    /// `MetronomeMixer.updateCurrentTick`. A beat list built from notated
+    /// ticks alone would end at the notated length and go silent on a
+    /// repeat's 2nd pass, even though the score keeps playing. Mirrors
+    /// the Apple engine's `PlaybackTimeline.unrolledMetronomeBeats`
+    /// wiring in `PlaybackEngine.prepare(score:)`.
     static func metronomeBeats(score: Score) -> Data {
-        let beats = PlaybackTimeline.metronomeBeats(score: score)
+        let beats = PlaybackTimeline.unrolledMetronomeBeats(score: score)
         return MetronomeBeatCodec.encodeArray(beats)
     }
 
@@ -69,6 +76,11 @@ extension AudioMidiBridge {
 
 extension AudioMidiBridge {
     static func frameAtTick(score: Score, tick: Int64) -> Data {
+        // A tick before the sequence start is out of range → no frame.
+        // Guard BEFORE the unroll map, whose `notatedTick(fromUnrolled:)`
+        // clamps negatives to 0 (a valid frame); without this a negative
+        // tick would wrongly resolve to the first frame.
+        guard tick >= 0 else { return Data() }
         let timeline = PlaybackTimeline(score: score)
         // `tick` arrives from the FluidSynth player in UNROLLED SMF
         // coordinates (repeats + jumps expanded), but `timeline` frames
