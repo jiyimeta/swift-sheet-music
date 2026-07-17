@@ -6,6 +6,8 @@ fixtures taken from the upstream MuseScore repository:
       src/importexport/midi/tests/midiexport_data/
   - musicxml/ subdirectory:
       src/importexport/musicxml/tests/data/
+  - repeat52.mscx, repeat53.mscx:
+      src/engraving/tests/repeat_data/
 
 They are reproduced here to allow the swift-sheet-music test suite to
 verify equivalence of its MIDI export against MuseScore's own exporter
