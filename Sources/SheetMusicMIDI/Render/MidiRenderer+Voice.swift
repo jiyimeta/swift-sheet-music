@@ -3,21 +3,23 @@ import Foundation
 import SheetMusicCore
 
 extension MidiRenderer {
-    /// Walk one voice across all measures producing notes + tempo/dynamic events.
-    /// Honors `<startRepeat>`/`<endRepeat>` repeat markers (via `playbackPlan`)
-    /// and `<MeasureRepeat>` group replay (via `resolvedVoice`). Volta-aware
-    /// playback filtering is not yet implemented.
+    /// Walk one voice across all measures producing notes +
+    /// tempo/dynamic events. `plan` is the score-global unrolled
+    /// playback order computed once by `render(score:)` — repeats,
+    /// voltas, jumps and markers are already expanded into it.
+    /// `<MeasureRepeat>` group replay still resolves per-staff (via
+    /// `resolvedVoice`).
     static func renderVoice( // swiftlint:disable:this function_body_length cyclomatic_complexity
         voiceIndex: Int,
         staff: Staff,
         part: Part,
         channel: Int,
         division: Int,
+        plan: [PlaybackEntry],
         swingMap: SwingMap = .empty,
         systemElementsByMeasure: [[PositionedSystemElement]] = [],
     ) throws -> (events: [TimedMidiEvent], endTick: Int, lyricAnchors: [LyricMidiCodec.Anchor]) {
         let measureDurations = staff.measures.effectiveMeasureDurations()
-        let plan = playbackPlan(for: staff.measures, division: division)
         var events: [TimedMidiEvent] = []
         // Every non-rest chord's onset tick + its lyrics, in playback
         // order (repeats re-state lyrics on each take). Encoded into SMF

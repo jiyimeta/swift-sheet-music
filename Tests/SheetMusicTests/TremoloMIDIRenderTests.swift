@@ -85,6 +85,7 @@ struct TremoloVoiceRenderTests {
             part: Self.makePart(staff: staff),
             channel: 0,
             division: 480,
+            plan: MidiRenderer.playbackPlan(for: staff.measures, division: 480),
         )
         let noteOns = events.filter {
             if case .noteOn = $0.event { return true }
@@ -115,6 +116,7 @@ struct TremoloVoiceRenderTests {
             part: Self.makePart(staff: staff),
             channel: 0,
             division: 480,
+            plan: MidiRenderer.playbackPlan(for: staff.measures, division: 480),
         )
         let pitchOns = events.compactMap { e -> Int? in
             if case let .noteOn(_, p, _) = e.event { return p }
