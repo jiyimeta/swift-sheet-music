@@ -29,6 +29,14 @@ public struct Measure: Sendable, Equatable {
     /// `engraving/rendering/score/systemlayout.cpp:262` treats
     /// `pageBreak()` as ALSO triggering a line break.
     public var pageBreak: Bool
+    /// `<LayoutBreak><subtype>section</subtype>`. When `true`, this
+    /// measure ends a *section*: playback navigation state (repeat
+    /// unrolling, jump `findMarker` scope) resets at the boundary.
+    /// Mirrors `MeasureBase::sectionBreak()`
+    /// (`engraving/dom/measurebase.h`) as consumed by
+    /// `RepeatList::collectRepeatListElements`
+    /// (`engraving/dom/repeatlist.cpp:647`).
+    public var sectionBreak: Bool
     /// `<Measure len="N/D">` — actual measure length when it differs from
     /// the prevailing time signature. `nil` means "follow the time
     /// signature". Mirrors `Measure::ticks()` vs `nominalTicks()` in
@@ -47,6 +55,7 @@ public struct Measure: Sendable, Equatable {
         jumps: [Jump] = [],
         lineBreak: Bool = false,
         pageBreak: Bool = false,
+        sectionBreak: Bool = false,
         actualLength: Fraction? = nil,
         irregular: Bool = false,
     ) {
@@ -58,6 +67,7 @@ public struct Measure: Sendable, Equatable {
         self.jumps = jumps
         self.lineBreak = lineBreak
         self.pageBreak = pageBreak
+        self.sectionBreak = sectionBreak
         self.actualLength = actualLength
         self.irregular = irregular
     }

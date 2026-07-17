@@ -28,6 +28,16 @@ public enum MidiRenderer {
         let swingMaps = collectSwingMaps(
             score: score, division: score.division,
         )
+        // ONE score-global unroll plan shared by every staff.
+        // Jumps/markers are written only on the top staff (MuseScore
+        // convention), so a per-staff plan would jump on staff 0 and
+        // play linearly on staves 1..n, desyncing the tracks.
+        // Repeats/voltas replicate across staves and measure tick
+        // spans are globally identical, so one plan is consistent
+        // for all. Mirrors RepeatList being a Score-level singleton
+        // in MuseScore (masterscore's repeatList()).
+        let navigation = ScoreNavigation(score: score)
+        let plan = RepeatUnwinder.plan(navigation: navigation)
         for (partIndex, part) in score.parts.enumerated() {
             let channels = channelAssignments[partIndex]
             let primaryChannel = channels.first?.channel ?? partIndex
@@ -43,6 +53,7 @@ public enum MidiRenderer {
                 let track = try renderTrack(
                     staff: staff,
                     part: part,
+                    plan: plan,
                     primaryChannel: primaryChannel,
                     channels: channels,
                     port: port,
@@ -85,6 +96,7 @@ public enum MidiRenderer {
     private static func renderTrack(
         staff: Staff,
         part: Part,
+        plan: [PlaybackEntry],
         primaryChannel: Int,
         channels: [ChannelAssignment],
         port: Int,
@@ -127,7 +139,6 @@ public enum MidiRenderer {
         let bookends = FermataRanges.tempoEvents(
             ranges: fermataRanges, timeline: timeline,
         )
-        let plan = playbackPlan(for: staff.measures, division: division)
         let (measureBases, measureSpans) = measureBaseLayout(
             measures: staff.measures, division: division,
         )
@@ -152,6 +163,7 @@ public enum MidiRenderer {
                 part: part,
                 channel: primaryChannel,
                 division: division,
+                plan: plan,
                 swingMap: swingMap,
                 systemElementsByMeasure: systemElementsByMeasure,
             )

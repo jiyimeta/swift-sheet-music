@@ -66,16 +66,19 @@ extension Measure {
         let systemElements = voiceResults.flatMap(\.systemElements)
         let markers = node.all("Marker").map(decodeMarker)
         let jumps = node.all("Jump").map(decodeJump)
-        // `<LayoutBreak>` declares an explicit system / page break
-        // after this measure. We track `line` (system break) and
-        // `page` (page break, which also implies a system break).
-        // Section breaks aren't yet plumbed through layout.
+        // `<LayoutBreak>` declares an explicit system / page / section
+        // break after this measure. `line` starts a new system, `page`
+        // a new page; `section` additionally bounds playback
+        // navigation (repeat unrolling and jump-target resolution
+        // reset at section boundaries).
         var lineBreak = false
         var pageBreak = false
+        var sectionBreak = false
         for lb in node.all("LayoutBreak") {
             switch lb.first("subtype")?.text {
             case "line": lineBreak = true
             case "page": pageBreak = true
+            case "section": sectionBreak = true
             default: break
             }
         }
@@ -98,6 +101,7 @@ extension Measure {
             jumps: jumps,
             lineBreak: lineBreak,
             pageBreak: pageBreak,
+            sectionBreak: sectionBreak,
             actualLength: actualLength,
             irregular: irregular,
         )
@@ -163,11 +167,15 @@ extension Measure {
 
     private static func decodeMarker(_ node: XMLTreeNode) -> Marker {
         let markerType = node.first("markerType")?.text ?? ""
-        let label = node.first("label")?.text ?? ""
+        let kind = Marker.Kind(rawValue: markerType) ?? .other
+        let rawLabel = node.first("label")?.text ?? ""
         let text = node.first("text")?.text ?? ""
         return Marker(
-            kind: Marker.Kind(rawValue: markerType) ?? .other,
-            label: label,
+            kind: kind,
+            // MuseScore instantiates markers with the type's default
+            // label (markerTypeTable, marker.cpp:51-62); a file that
+            // omits `<label>` still targets jumps by that default.
+            label: rawLabel.isEmpty ? kind.defaultLabel : rawLabel,
             text: text,
         )
     }
@@ -177,6 +185,7 @@ extension Measure {
             jumpTo: node.first("jumpTo")?.text ?? "",
             playUntil: node.first("playUntil")?.text ?? "",
             continueAt: node.first("continueAt")?.text ?? "",
+            playRepeats: node.first("playRepeats")?.text == "1",
             text: node.first("text")?.text ?? "",
         )
     }
