@@ -213,15 +213,15 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// this array and re-render on change.
     public private(set) var mixerChannels: [MixerChannel] = []
 
-    /// When set, an alternate synth + transport backend (e.g. FluidSynth)
+    /// When set, an alternate synth + transport backend (e.g. SwiftySynth)
     /// replaces the built-in AUMIDISynth path. Injected by a host that wants to
     /// avoid AUMIDISynth's voice stealing; `nil` keeps the default AUMIDISynth.
-    /// `internal` so the `+Mixer` / `+FluidBackend` extensions can branch on it.
-    let fluidBackend: (any SynthBackend)?
+    /// `internal` so the `+Mixer` extension can branch on it.
+    let backend: (any SynthBackend)?
 
     /// `true` when playback is delegated to an injected `SynthBackend`.
-    var usingFluidBackend: Bool {
-        fluidBackend != nil
+    var usingBackend: Bool {
+        backend != nil
     }
 
     public init(
@@ -230,7 +230,7 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         backend: (any SynthBackend)? = nil,
     ) {
         resolver = soundfontResolver
-        fluidBackend = backend
+        self.backend = backend
         metronomeClickProvider = metronomeClickProvider0
         clickResolver = MetronomeClickResolver(
             provider: metronomeClickProvider0,
@@ -252,7 +252,7 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         guard state != .exporting else { return }
         pendingRate = rate
         sequencer?.rate = rate
-        fluidBackend?.setRate(rate)
+        backend?.setRate(rate)
     }
 
     /// Retune playback to an A4 reference expressed as a cents offset from 440 Hz
@@ -350,8 +350,8 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// Push calibration + transpose onto both units' global AU tuning.
     /// Melodic = calibration + transpose; percussion = calibration only.
     private func applyTuning() {
-        if let fluidBackend {
-            fluidBackend.setTuning(
+        if let backend {
+            backend.setTuning(
                 cents: masterTuningCents, transposeSemitones: transposeSemitones,
             )
             return
@@ -375,14 +375,14 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// engine was paused, since the queued event from that picker
     /// click can lose to the SMF on resume.
     func reapplyMixerPrograms() {
-        if let fluidBackend {
+        if let backend {
             for channel in mixerChannels {
                 guard case let .staff(idx) = channel.id,
                       let program = channel.program,
                       let midiCh = staffMIDIChannels[idx],
                       midiCh != 9
                 else { continue }
-                fluidBackend.setProgram(channel: midiCh, program: program)
+                backend.setProgram(channel: midiCh, program: program)
             }
             return
         }
@@ -438,9 +438,9 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// No-op if the engine isn't prepared, or for drum staves (the
     /// program byte is ignored on MIDI channel 9).
     func loadProgram(forStaff idx: Int, program: UInt8) {
-        if let fluidBackend {
+        if let backend {
             guard let midiCh = staffMIDIChannels[idx], midiCh != 9 else { return }
-            fluidBackend.setProgram(channel: midiCh, program: program)
+            backend.setProgram(channel: midiCh, program: program)
             return
         }
         guard let melodicSynth,
@@ -626,11 +626,11 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         let url = resolver.defaultGMSoundfontURL
         let channels = MidiRenderer.staffChannels(score: score)
 
-        // FluidSynth path: one persistent source node + SoundFont reload, no
+        // SwiftySynth path: one persistent source node + SoundFont reload, no
         // per-channel AU units. Populate the same staff→channel / drum maps the
         // mixer and cursor rely on, then hand the SoundFont + drum channels to
         // the backend.
-        if let fluidBackend {
+        if let backend {
             var drumChannels: Set<UInt8> = []
             for (idx, entry) in score.allStaves.enumerated() {
                 let part = score.part(at: entry.address)
@@ -644,19 +644,19 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
             }
             // Attach + connect once; the node persists across re-prepares
             // (a `reloadSoundfont` only re-loads the SF2 into it).
-            if fluidBackend.outputNode.engine == nil {
-                fluidBackend.attach(to: engine)
+            if backend.outputNode.engine == nil {
+                backend.attach(to: engine)
                 engine.connect(
-                    fluidBackend.outputNode, to: scoreGainMixer, format: nil,
+                    backend.outputNode, to: scoreGainMixer, format: nil,
                 )
             }
-            fluidBackend.prepare(soundfontURL: url, drumChannels: drumChannels)
+            backend.prepare(soundfontURL: url, drumChannels: drumChannels)
             // The fresh synth resets tuning/rate; push the engine's persisted
             // A4 calibration, transpose, and playback rate back onto it.
-            fluidBackend.setTuning(
+            backend.setTuning(
                 cents: masterTuningCents, transposeSemitones: transposeSemitones,
             )
-            fluidBackend.setRate(pendingRate)
+            backend.setRate(pendingRate)
             return
         }
 
@@ -718,8 +718,8 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     private func cancelActivePreview() {
         previewGeneration &+= 1
         if let active = activePreview {
-            if let fluidBackend {
-                fluidBackend.stopNote(channel: active.channel, pitch: active.pitch)
+            if let backend {
+                backend.stopNote(channel: active.channel, pitch: active.pitch)
             } else {
                 // No note-on follows here, so All Sound Off is safe and also
                 // stops a ringing drum decay. Send to both units — we don't know
@@ -736,32 +736,32 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         previewShouldRepauseEngineOnDrain = false
     }
 
-    /// FluidSynth tap-preview: start the note, schedule its note-off after the
+    /// SwiftySynth tap-preview: start the note, schedule its note-off after the
     /// melodic `duration` (or the longer drum tail), and restore a host-parked
-    /// engine once it drains. Simpler than the AUMIDISynth path — FluidSynth has
+    /// engine once it drains. Simpler than the AUMIDISynth path — SwiftySynth has
     /// none of the CC120 / same-channel note-swallowing quirks.
-    private func fluidPlayPreview(
+    private func backendPlayPreview(
         pitch: UInt8, channel: UInt8, isDrum: Bool,
         duration: TimeInterval, velocity: UInt8,
     ) {
-        guard let fluidBackend else { return }
+        guard let backend else { return }
         previewGeneration &+= 1
         if let previous = activePreview {
-            fluidBackend.stopNote(channel: previous.channel, pitch: previous.pitch)
+            backend.stopNote(channel: previous.channel, pitch: previous.pitch)
         }
         activePreview = nil
         if !engine.isRunning {
             try? engine.start()
             if state != .playing { previewShouldRepauseEngineOnDrain = true }
         }
-        fluidBackend.startNote(channel: channel, pitch: pitch, velocity: velocity)
+        backend.startNote(channel: channel, pitch: pitch, velocity: velocity)
         activePreview = (channel, pitch)
         let tail = isDrum ? drumPreviewTail : duration
         let generation = previewGeneration
         previewQueue.asyncAfter(deadline: .now() + tail) { [weak self] in
             Task { @MainActor [weak self] in
                 guard let self, previewGeneration == generation else { return }
-                self.fluidBackend?.stopNote(channel: channel, pitch: pitch)
+                self.backend?.stopNote(channel: channel, pitch: pitch)
                 activePreview = nil
                 guard previewShouldRepauseEngineOnDrain else { return }
                 previewShouldRepauseEngineOnDrain = false
@@ -783,8 +783,8 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
             $0.address == noteID.staff
         }) ?? -1
         guard let midiChannel = staffMIDIChannels[flatIdx] else { return }
-        if fluidBackend != nil {
-            fluidPlayPreview(
+        if backend != nil {
+            backendPlayPreview(
                 pitch: pitch, channel: midiChannel,
                 isDrum: isDrumStaff(flatIdx),
                 duration: duration, velocity: velocity,
@@ -906,8 +906,8 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     ) {
         guard state != .exporting else { return }
         guard let timeline else { return }
-        if usingFluidBackend {
-            fluidPlay(from: cursor, in: score, timeline: timeline)
+        if usingBackend {
+            backendPlay(from: cursor, in: score, timeline: timeline)
             return
         }
         do {
@@ -1010,15 +1010,15 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         }
     }
 
-    /// FluidSynth playback path — a compact equivalent of the AVAudioSequencer
+    /// SwiftySynth playback path — a compact equivalent of the AVAudioSequencer
     /// build in `play(...)`. Reuses the assembled + post-processed SMF and the
     /// backend-agnostic `PlaybackTimeline`; loop wrap stays host-driven in
     /// `tickCursor`. Count-in and rate scaling are deferred to the
     /// transport-parity phase.
-    private func fluidPlay(
+    private func backendPlay(
         from cursor: ScoreCursor?, in score: Score, timeline: PlaybackTimeline,
     ) {
-        guard let fluidBackend else { return }
+        guard let backend else { return }
         do {
             let startCursor = Self.effectiveStartCursor(
                 cursor: cursor, isStopped: state == .stopped,
@@ -1031,7 +1031,7 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
                     metronomeBeats: metronomeBeats,
                     mixerManagedChannels: mixerManagedChannels,
                 )
-                fluidBackend.loadSequence(midi, timeline: timeline)
+                backend.loadSequence(midi, timeline: timeline)
                 sequencerScore = score
                 sequenceMap = .identity
             }
@@ -1041,16 +1041,16 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
                 .flatMap { timeline.frame(forCursor: $0)?.tick }
             if state == .stopped, targetTick == nil { targetTick = 0 }
             if let loop = loopRange {
-                let probe = targetTick ?? fluidBackend.currentTick
+                let probe = targetTick ?? backend.currentTick
                 if probe < loop.startTick || probe >= loop.endTick {
                     targetTick = loop.startTick
                 }
             }
             if let tick = targetTick {
-                fluidBackend.seek(toTick: tick)
+                backend.seek(toTick: tick)
                 currentCursor = timeline.frame(atTick: tick)?.cursor
             }
-            fluidBackend.play()
+            backend.play()
             reapplyMixerPrograms()
             applyMixerState()
             state = .playing
@@ -1109,8 +1109,8 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         guard state != .exporting else { return }
         guard let timeline, let frame = timeline.frame(forCursor: cursor) else { return }
         let tick = snapTickToLoop(frame.tick)
-        if let fluidBackend {
-            fluidBackend.seek(toTick: tick)
+        if let backend {
+            backend.seek(toTick: tick)
             currentCursor = timeline.frame(atTick: tick)?.cursor
             return
         }
@@ -1223,9 +1223,9 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
 
     public var currentTimeSeconds: TimeInterval {
         guard let timeline else { return 0 }
-        if let fluidBackend {
+        if let backend {
             return timeline.frame(
-                atTick: foldTickForLoop(fluidBackend.currentTick),
+                atTick: foldTickForLoop(backend.currentTick),
             )?.timeSeconds ?? 0
         }
         guard let sequencer else { return 0 }
@@ -1260,10 +1260,10 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// unrounded tick fed to `PlaybackTimeline.seconds(atTick:)`.
     public var currentTimeSecondsContinuous: TimeInterval {
         guard let timeline else { return 0 }
-        if let fluidBackend {
-            // `fluid_player` reports an integer tick; no sub-tick resolution.
+        if let backend {
+            // The backend reports an integer tick; no sub-tick resolution.
             return timeline.seconds(
-                atTick: Double(foldTickForLoop(fluidBackend.currentTick)),
+                atTick: Double(foldTickForLoop(backend.currentTick)),
             )
         }
         guard let sequencer else { return 0 }
@@ -1347,8 +1347,8 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// then snapping back to pause after a single tap.
     public func pause() {
         guard state != .exporting else { return }
-        if let fluidBackend {
-            fluidBackend.pause()
+        if let backend {
+            backend.pause()
         } else {
             sequencer?.stop()
         }
@@ -1364,8 +1364,8 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// from the supplied item).
     public func stop() {
         guard state != .exporting else { return }
-        if let fluidBackend {
-            fluidBackend.stop()
+        if let backend {
+            backend.stop()
         } else {
             sequencer?.stop()
             sequencer?.currentPositionInBeats = 0
@@ -1457,7 +1457,7 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         midi: inout MidiFile, mixerManagedChannels: Set<Int>,
     ) {
         // Lifted into shared SheetMusicMIDI so the Android engine gets identical behavior — the
-        // Android FluidSynth path was missing this and re-fired the SMF's CC 7 on first play.
+        // Android SwiftySynth path was missing this and re-fired the SMF's CC 7 on first play.
         MidiSynthPostProcess.apply(midi: &midi, mixerManagedChannels: mixerManagedChannels)
     }
 
@@ -1633,8 +1633,8 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
 
     private func tickCursor() {
         guard let timeline else { return }
-        if let fluidBackend {
-            fluidTickCursor(backend: fluidBackend, timeline: timeline)
+        if let backend {
+            backendTickCursor(backend: backend, timeline: timeline)
             return
         }
         guard let sequencer else { return }
@@ -1695,11 +1695,11 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         }
     }
 
-    /// FluidSynth cursor poll: `fluid_player`'s tick already lives in score-tick
-    /// space (normal play uses the un-shifted assembled SMF), so no `SequenceMap`
-    /// translation is needed. Same loop-wrap / end-stop decisions as the
-    /// AUMIDISynth `tickCursor`.
-    private func fluidTickCursor(
+    /// Injected-backend cursor poll: the backend's tick already lives in
+    /// score-tick space (normal play uses the un-shifted assembled SMF), so no
+    /// `SequenceMap` translation is needed. Same loop-wrap / end-stop decisions
+    /// as the AUMIDISynth `tickCursor`.
+    private func backendTickCursor(
         backend: any SynthBackend, timeline: PlaybackTimeline,
     ) {
         let tick = backend.currentTick
@@ -1797,11 +1797,11 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         engine.stop()
         sequencer = nil
         sequencerScore = nil
-        if let fluidBackend {
-            fluidBackend.teardown()
-            if fluidBackend.outputNode.engine != nil {
-                engine.disconnectNodeOutput(fluidBackend.outputNode)
-                engine.detach(fluidBackend.outputNode)
+        if let backend {
+            backend.teardown()
+            if backend.outputNode.engine != nil {
+                engine.disconnectNodeOutput(backend.outputNode)
+                engine.detach(backend.outputNode)
             }
         }
         for old in attachedSynths {

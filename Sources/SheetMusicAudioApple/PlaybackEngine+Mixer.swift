@@ -122,8 +122,8 @@ extension PlaybackEngine {
     private func applyStaffGain(at staffIdx: Int, gain: Float) {
         guard let midiCh = midiChannel(forStaff: staffIdx) else { return }
         let cc7 = UInt8(clamping: Int((gain * 127).rounded()))
-        if let fluidBackend {
-            fluidBackend.sendVolume(channel: midiCh, cc7: cc7)
+        if let backend {
+            backend.sendVolume(channel: midiCh, cc7: cc7)
             return
         }
         guard let unit = synth(forStaff: staffIdx) else { return }
