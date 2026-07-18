@@ -30,6 +30,9 @@
         /// playback. Defaults to `false` in `ContentViewMac` so the count-in
         /// can be verified in isolation, with the body metronome off.
         @Binding var isMetronomeEnabled: Bool
+        /// Playback speed multiplier wired to `PlaybackEngine.setRate(_:)`.
+        /// `1.0` is the score's native tempo; the slider spans `0.5…2.0×`.
+        @Binding var playbackRate: Double
         @Binding var showsInvisibleElements: Bool
         @Binding var transposeSemitones: Int
         let soundfontChoices: [SoundfontChoice]
@@ -108,6 +111,21 @@
                     Toggle(isOn: $isMetronomeEnabled) {
                         Label("Metronome", systemImage: "metronome")
                     }
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack {
+                            Label("Speed", systemImage: "speedometer")
+                            Spacer()
+                            Text(String(format: "%.2f×", playbackRate))
+                                .font(.caption2.monospacedDigit())
+                                .foregroundStyle(.secondary)
+                            Button("1×") { playbackRate = 1.0 }
+                                .buttonStyle(.borderless)
+                                .font(.caption2)
+                                .disabled(abs(playbackRate - 1.0) < 0.001)
+                        }
+                        Slider(value: $playbackRate, in: 0.5 ... 2.0, step: 0.05)
+                    }
+                    .disabled(score == nil)
                 }
                 if soundfontChoices.count > 1 {
                     Section("SoundFont") {

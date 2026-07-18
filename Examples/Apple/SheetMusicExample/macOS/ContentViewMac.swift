@@ -205,6 +205,10 @@
         /// the rendered score via `Score.transposed(bySemitones:)` and
         /// to the audio engine via `PlaybackEngine.setTranspose(semitones:)`.
         @State private var transposeSemitones = 0
+        /// Playback speed multiplier (`1.0` = native tempo), applied to the
+        /// audio engine via `PlaybackEngine.setRate(_:)`. Score notation is
+        /// unaffected — only playback speed changes.
+        @State private var playbackRate = 1.0
         @State private var showExport = false
         /// Whole-score repeat toggle (mirrors Folino's
         /// `RepeatMode.loopAll`). When on, the engine loops the full
@@ -258,6 +262,7 @@
                     collapseMultiMeasureRests: $collapseMultiMeasureRests,
                     isCountInEnabled: $isCountInEnabled,
                     isMetronomeEnabled: $isMetronomeEnabled,
+                    playbackRate: $playbackRate,
                     showsInvisibleElements: $showsInvisibleElements,
                     transposeSemitones: $transposeSemitones,
                     soundfontChoices: soundfontChoices,
@@ -328,6 +333,9 @@
             .onChange(of: transposeSemitones) { _, newValue in
                 playbackEngine.setTranspose(semitones: newValue)
                 rebuildLayoutsForOptionsChange()
+            }
+            .onChange(of: playbackRate) { _, newValue in
+                playbackEngine.setRate(Float(newValue))
             }
             .onChange(of: selectedSoundfontID) { _, newID in
                 guard let choice = soundfontChoices.first(where: { $0.id == newID })
