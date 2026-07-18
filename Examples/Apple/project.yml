@@ -59,6 +59,8 @@ targets:
       - package: swift-sheet-music
         product: SheetMusicAudio
       - package: swift-sheet-music
+        product: SheetMusicAudioSwiftySynth
+      - package: swift-sheet-music
         product: SheetMusicPDF
 
   SheetMusicExampleMac:
@@ -95,9 +97,7 @@ targets:
         product: SheetMusicUI
       - package: swift-sheet-music
         product: SheetMusicAudio
-      # macOS-only FluidSynth backend (LGPL, opt-in). Not added to the iOS
-      # target: FluidSynth is linked via the Homebrew macOS system library.
       - package: swift-sheet-music
-        product: SheetMusicAudioFluidSynth
+        product: SheetMusicAudioSwiftySynth
       - package: swift-sheet-music
         product: SheetMusicPDF

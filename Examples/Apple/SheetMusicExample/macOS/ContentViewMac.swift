@@ -4,9 +4,9 @@
     import SheetMusic
     import SheetMusicAudio
 
-    // FluidSynth playback backend (LGPL, opt-in): eliminates AUMIDISynth's
-    // voice stealing with lightweight SoundFonts. macOS example only.
-    import SheetMusicAudioFluidSynth
+    // SwiftySynth playback backend (pure-Swift, MIT): eliminates AUMIDISynth's
+    // voice stealing with lightweight SoundFonts, on iOS and macOS alike.
+    import SheetMusicAudioSwiftySynth
     import SheetMusicPDF
     import SheetMusicUI
     import SwiftUI
@@ -133,7 +133,7 @@
             soundfontResolver: SelectableSoundfontResolver(
                 gmSoundfontURL: SoundfontCatalog.bundledChoices().first?.url,
             ),
-            backend: FluidSynthBackend(),
+            backend: SwiftySynthBackend(),
         )
         /// SoundFonts discovered in the bundled `Sounds/` directory.
         @State private var soundfontChoices = SoundfontCatalog.bundledChoices()

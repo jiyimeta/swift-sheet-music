@@ -3,6 +3,10 @@
 #if !os(macOS)
     import SheetMusic
     import SheetMusicAudio
+
+    // SwiftySynth playback backend (pure-Swift, MIT): fixes AUMIDISynth voice
+    // stealing with lightweight SoundFonts. App-Store clean on iOS.
+    import SheetMusicAudioSwiftySynth
     import SheetMusicPDF
     import SheetMusicUI
     import SwiftUI
@@ -46,6 +50,7 @@
             soundfontResolver: SelectableSoundfontResolver(
                 gmSoundfontURL: SoundfontCatalog.bundledChoices().first?.url,
             ),
+            backend: SwiftySynthBackend(),
         )
         /// SoundFonts discovered in the bundled `Sounds/` directory.
         @State private var soundfontChoices = SoundfontCatalog.bundledChoices()
