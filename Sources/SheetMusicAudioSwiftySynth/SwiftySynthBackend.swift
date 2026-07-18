@@ -35,6 +35,12 @@ public final class SwiftySynthBackend: SynthBackend {
     /// Tick↔seconds for the loaded score (SwiftySynth's clock is seconds).
     private var timeline: PlaybackTimeline?
 
+    // Persisted transport/tuning state, re-applied whenever the synth or
+    // sequence is rebuilt (both reset SwiftySynth's channel/speed state).
+    private var rate: Float = 1
+    private var tuningCents: Double = 0
+    private var transposeSemitones = 0
+
     public let sourceNode: AVAudioSourceNode
     public var outputNode: AVAudioNode {
         sourceNode
@@ -113,6 +119,7 @@ public final class SwiftySynthBackend: SynthBackend {
             shared.sequencer = sequencer
             shared.isPlaying = false
         }
+        applyRateAndTuning()
     }
 
     public func loadSequence(_ midi: SheetMusicMIDI.MidiFile, timeline: PlaybackTimeline) {
@@ -123,6 +130,65 @@ public final class SwiftySynthBackend: SynthBackend {
         lock.withLockUnchecked { shared in
             shared.sequencer?.play(smf, loop: false)
             shared.isPlaying = false
+        }
+        // `sequencer.play` resets the synthesizer, so re-assert rate + tuning.
+        applyRateAndTuning()
+    }
+
+    public func setRate(_ rate: Float) {
+        self.rate = rate
+        lock.withLockUnchecked { $0.sequencer?.speed = max(0.01, Double(rate)) }
+    }
+
+    public func setTuning(cents: Double, transposeSemitones: Int) {
+        tuningCents = cents
+        self.transposeSemitones = transposeSemitones
+        lock.withLockUnchecked { shared in
+            if let synthesizer = shared.synthesizer {
+                Self.applyTuning(
+                    to: synthesizer, cents: cents,
+                    transposeSemitones: transposeSemitones,
+                )
+            }
+        }
+    }
+
+    private func applyRateAndTuning() {
+        lock.withLockUnchecked { shared in
+            shared.sequencer?.speed = max(0.01, Double(rate))
+            if let synthesizer = shared.synthesizer {
+                Self.applyTuning(
+                    to: synthesizer, cents: tuningCents,
+                    transposeSemitones: transposeSemitones,
+                )
+            }
+        }
+    }
+
+    /// Apply whole-score tuning via standard RPN messages: RPN 1 (fine tune) =
+    /// the A4 `cents` offset on every channel; RPN 2 (coarse tune) =
+    /// `transposeSemitones` on pitched channels, neutral on drums (ch 9). Ends
+    /// with an RPN-null deselect so a later data-entry can't clobber the value.
+    private nonisolated static func applyTuning(
+        to synthesizer: Synthesizer, cents: Double, transposeSemitones: Int,
+    ) {
+        let coarse = max(0, min(127, 64 + transposeSemitones))
+        let fine14 = max(0, min(16383, 8192 + Int((cents / 100.0) * 8192.0)))
+        func cc(_ channel: Int, _ controller: Int, _ value: Int) {
+            synthesizer.processMidiMessage(
+                channel: channel, command: 0xB0, data1: controller, data2: value,
+            )
+        }
+        for channel in 0 ..< 16 {
+            // RPN 1: fine tune (cents) — every channel.
+            cc(channel, 101, 0); cc(channel, 100, 1)
+            cc(channel, 6, (fine14 >> 7) & 0x7F)
+            cc(channel, 38, fine14 & 0x7F)
+            // RPN 2: coarse tune (semitones) — pitched channels only.
+            cc(channel, 101, 0); cc(channel, 100, 2)
+            cc(channel, 6, channel == Synthesizer.percussionChannel ? 64 : coarse)
+            // RPN null (deselect).
+            cc(channel, 101, 127); cc(channel, 100, 127)
         }
     }
 

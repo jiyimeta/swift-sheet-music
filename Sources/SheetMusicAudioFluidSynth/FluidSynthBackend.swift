@@ -120,6 +120,15 @@ public final class FluidSynthBackend: SynthBackend {
         engine.playerCurrentTick
     }
 
+    public func setRate(_ rate: Float) {
+        engine.playerSetRate(Double(rate))
+    }
+
+    public func setTuning(cents _: Double, transposeSemitones _: Int) {
+        // Not wired for FluidSynth (this backend is being retired in favor of
+        // the App-Store-clean SwiftySynth backend).
+    }
+
     public func setProgram(channel: UInt8, program: UInt8) {
         engine.programSelect(channel: channel, bank: 0, program: program)
     }

@@ -48,6 +48,14 @@ public protocol SynthBackend: AnyObject {
     func seek(toTick tick: Int)
     var currentTick: Int { get }
 
+    /// Playback speed multiplier (`1.0` = native tempo).
+    func setRate(_ rate: Float)
+
+    /// Whole-score tuning: `cents` is the A4 calibration offset from 440 Hz;
+    /// `transposeSemitones` shifts pitched channels (drums stay at concert
+    /// pitch). Persisted by the backend across sequence reloads.
+    func setTuning(cents: Double, transposeSemitones: Int)
+
     /// Per-channel live control (mixer program / volume, tap preview).
     func setProgram(channel: UInt8, program: UInt8)
     func sendVolume(channel: UInt8, cc7: UInt8)

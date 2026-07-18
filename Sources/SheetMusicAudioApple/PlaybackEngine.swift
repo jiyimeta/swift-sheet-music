@@ -252,6 +252,7 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         guard state != .exporting else { return }
         pendingRate = rate
         sequencer?.rate = rate
+        fluidBackend?.setRate(rate)
     }
 
     /// Retune playback to an A4 reference expressed as a cents offset from 440 Hz
@@ -349,6 +350,12 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// Push calibration + transpose onto both units' global AU tuning.
     /// Melodic = calibration + transpose; percussion = calibration only.
     private func applyTuning() {
+        if let fluidBackend {
+            fluidBackend.setTuning(
+                cents: masterTuningCents, transposeSemitones: transposeSemitones,
+            )
+            return
+        }
         if let melodicSynth {
             Self.applyMasterTuning(
                 to: melodicSynth,
@@ -644,6 +651,12 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
                 )
             }
             fluidBackend.prepare(soundfontURL: url, drumChannels: drumChannels)
+            // The fresh synth resets tuning/rate; push the engine's persisted
+            // A4 calibration, transpose, and playback rate back onto it.
+            fluidBackend.setTuning(
+                cents: masterTuningCents, transposeSemitones: transposeSemitones,
+            )
+            fluidBackend.setRate(pendingRate)
             return
         }
 
