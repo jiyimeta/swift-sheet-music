@@ -127,8 +127,6 @@ var targets: [Target] = [
             "SheetMusicLayoutApple",
             "SheetMusicUI",
             "SheetMusicAudio",
-            "SheetMusicAudioFluidSynth",
-            "CFluidSynth",
             .product(name: "SwiftySynth", package: "swiftysynth"),
             "SheetMusicAudioSwiftySynth",
             "SheetMusicPDF",
@@ -151,7 +149,6 @@ if !isAndroid {
         // Opt-in, LGPL-2.1 FluidSynth playback backend (Apple-only). Links
         // Homebrew libfluidsynth via `CFluidSynth`; the MIT core never depends
         // on it. Consumers pull it only by depending on this product.
-        .library(name: "SheetMusicAudioFluidSynth", targets: ["SheetMusicAudioFluidSynth"]),
         // Pure-Swift, MIT SoundFont2 playback backend (SwiftySynth). Works on
         // iOS + macOS, App-Store clean — the default stealing-free synth.
         .library(name: "SheetMusicAudioSwiftySynth", targets: ["SheetMusicAudioSwiftySynth"]),
@@ -184,27 +181,6 @@ if !isAndroid {
             name: "SheetMusicAudio",
             dependencies: [
                 "SheetMusicAudioCore",
-                "SheetMusicAudioApple",
-            ],
-        ),
-        // System module over Homebrew libfluidsynth (LGPL-2.1). Needs
-        // `brew install fluid-synth` + `PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig`
-        // on the build environment (see Sources/CFluidSynth/shim.h).
-        .systemLibrary(
-            name: "CFluidSynth",
-            path: "Sources/CFluidSynth",
-            pkgConfig: "fluidsynth",
-            providers: [.brew(["fluid-synth"])],
-        ),
-        .target(
-            name: "SheetMusicAudioFluidSynth",
-            dependencies: [
-                "CFluidSynth",
-                "SheetMusicCore",
-                "SheetMusicMIDI",
-                "SheetMusicAudioCore",
-                // For the `SynthBackend` protocol (MIT). LGPL → MIT dependency
-                // direction; SheetMusicAudioApple never depends back on this.
                 "SheetMusicAudioApple",
             ],
         ),

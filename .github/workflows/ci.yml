@@ -26,17 +26,6 @@ jobs:
         with:
           xcode-version: latest-stable
 
-      # The Apple graph includes the opt-in SheetMusicAudioFluidSynth product,
-      # which links Homebrew libfluidsynth (LGPL-2.1) via the CFluidSynth
-      # systemLibrary. `swift build`/`swift test` therefore need fluid-synth on
-      # PATH and its pkg-config `.pc` files discoverable (they land under the
-      # Homebrew prefix, which the default pkg-config search path may miss).
-      - name: Install FluidSynth
-        run: brew install fluid-synth
-
-      - name: Export PKG_CONFIG_PATH
-        run: echo "PKG_CONFIG_PATH=$(brew --prefix)/lib/pkgconfig" >> "$GITHUB_ENV"
-
       - name: Swift version
         run: swift --version
 

@@ -11,16 +11,16 @@ import SheetMusicMIDI
 /// engines — building the synth, loading a SoundFont, per-channel note / CC /
 /// program delivery, and SMF-driven transport — to a `SynthBackend`.
 ///
-/// The default backend is Apple's AUMIDISynth (`AVAudioUnitMIDIInstrument` +
-/// `AVAudioSequencer`), whose code stays inline in `PlaybackEngine`. An
-/// alternate `FluidSynthBackend` (in the opt-in, LGPL `SheetMusicAudioFluidSynth`
-/// product) fixes AUMIDISynth's voice-stealing pathology. The protocol lives in
-/// this MIT module so `PlaybackEngine` never imports the LGPL backend — a host
-/// that wants FluidSynth constructs it and injects it.
+/// The built-in fallback is Apple's AUMIDISynth (`AVAudioUnitMIDIInstrument` +
+/// `AVAudioSequencer`), whose code stays inline in `PlaybackEngine` and is used
+/// when no backend is injected. `SwiftySynthBackend` (in the
+/// `SheetMusicAudioSwiftySynth` product, wrapping the pure-Swift MIT SwiftySynth)
+/// fixes AUMIDISynth's voice-stealing pathology on iOS and macOS — a host
+/// constructs it and injects it.
 ///
 /// All members are `@MainActor`: the host drives transport and mixing from the
 /// main actor; a backend's own audio render thread is its private concern
-/// (e.g. `FluidSynthBackend`'s `AVAudioSourceNode` render block).
+/// (e.g. `SwiftySynthBackend`'s `AVAudioSourceNode` render block).
 @MainActor
 public protocol SynthBackend: AnyObject {
     /// The single audio node the engine connects into its score-gain mixer.

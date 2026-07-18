@@ -1,5 +1,0 @@
-module CFluidSynth [system] {
-    header "shim.h"
-    link "fluidsynth"
-    export *
-}
