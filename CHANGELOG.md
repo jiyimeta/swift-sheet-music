@@ -7,6 +7,17 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-07-19
+
+### Added
+
+- Sustained tap-preview API on `PlaybackEngine`: `previewNoteOn(pitch:onStaff:velocity:)`
+  starts a held preview note (e.g. a bar press-hold) and `previewNoteOff(pitch:)`
+  releases it — distinct from the existing fixed-duration
+  `playPreview(noteID:in:duration:velocity:)`. Works on both the built-in
+  AUMIDISynth path and an injected `SynthBackend` (e.g. SwiftySynth), and
+  correctly interleaves with an in-flight tap preview in either order.
+
 ## [1.1.1] - 2026-07-19
 
 ### Added
@@ -45,6 +56,7 @@ First public release.
   SDK, plus Kotlin AAR modules for JNI bridging and FluidSynth + Oboe
   playback.
 
-[Unreleased]: https://github.com/jiyimeta/swift-sheet-music/compare/v1.1.1...HEAD
+[Unreleased]: https://github.com/jiyimeta/swift-sheet-music/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/jiyimeta/swift-sheet-music/compare/v1.1.1...v1.2.0
 [1.1.1]: https://github.com/jiyimeta/swift-sheet-music/releases/tag/v1.1.1
 [1.0.0]: https://github.com/jiyimeta/swift-sheet-music/releases/tag/v1.0.0
