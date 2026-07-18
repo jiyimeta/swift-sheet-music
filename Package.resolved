@@ -81,6 +81,15 @@
         "revision" : "40519125520fc8892484c784061d1b8b8656d2f8",
         "version" : "0.4.0"
       }
+    },
+    {
+      "identity" : "swiftysynth",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/jiyimeta/swiftysynth.git",
+      "state" : {
+        "branch" : "main",
+        "revision" : "5c6cf1f98558b030bc51026b5e7b6a1814b1ffa1"
+      }
     }
   ],
   "version" : 3
