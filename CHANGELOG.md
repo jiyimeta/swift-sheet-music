@@ -7,6 +7,19 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-07-19
+
+### Added
+
+- Android JNI anchor primitives for freehand annotation: `nativeResolveAnchor`
+  (a document-millimetre point → its `ResolvedAnchor`) and
+  `nativeAnchorReferencePoint` (batched `[AnchorIdentity]` → `[AnchorRefPoint]`,
+  with an `spMm == 0` sentinel per unresolved anchor so the array stays
+  positionally aligned), plus their `SheetMusicJNI` Kotlin facade. Thin,
+  app-agnostic wrappers over the shipped `SheetMusicLayout.resolveAnchor` /
+  `anchorReferencePoint`, mirroring the `nearestCursor` bridge — the affine bake
+  stays in the consumer's shared code.
+
 ## [1.0.0] - 2026-07-10
 
 First public release.
@@ -32,5 +45,6 @@ First public release.
   SDK, plus Kotlin AAR modules for JNI bridging and FluidSynth + Oboe
   playback.
 
-[Unreleased]: https://github.com/jiyimeta/swift-sheet-music/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/jiyimeta/swift-sheet-music/compare/v1.1.1...HEAD
+[1.1.1]: https://github.com/jiyimeta/swift-sheet-music/releases/tag/v1.1.1
 [1.0.0]: https://github.com/jiyimeta/swift-sheet-music/releases/tag/v1.0.0
