@@ -129,6 +129,7 @@ var targets: [Target] = [
             "SheetMusicAudio",
             "SheetMusicAudioFluidSynth",
             "CFluidSynth",
+            .product(name: "SwiftySynth", package: "swiftysynth"),
             "SheetMusicPDF",
             .product(name: "Wirelet", package: "swift-wirelet"),
             "SheetMusicXMLTools",
@@ -262,6 +263,13 @@ let packageDependencies: [Package.Dependency] = [
     .package(
         url: "https://github.com/jiyimeta/swift-wirelet.git",
         exact: "0.4.0",
+    ),
+    // Pure-Swift, MIT SoundFont2 synthesizer (a MeltySynth port). Foundation-only
+    // → works on iOS too, App-Store-clean (unlike FluidSynth's LGPL). Pinned to a
+    // branch during bring-up; switch to an exact tag before merging.
+    .package(
+        url: "https://github.com/jiyimeta/swiftysynth.git",
+        branch: "main",
     ),
 ]
 

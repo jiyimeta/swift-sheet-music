@@ -1,5 +1,5 @@
 {
-  "originHash" : "c4b44f2255fb39cc61d2a4be9b13b9abeb9deabc7284242e62917837d3d21e92",
+  "originHash" : "1e04544858c450410c8dfa17872c12d80a7c445fb18929f4af1a3978654602f0",
   "pins" : [
     {
       "identity" : "swift-argument-parser",
@@ -80,6 +80,15 @@
       "state" : {
         "revision" : "40519125520fc8892484c784061d1b8b8656d2f8",
         "version" : "0.4.0"
+      }
+    },
+    {
+      "identity" : "swiftysynth",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/jiyimeta/swiftysynth.git",
+      "state" : {
+        "branch" : "main",
+        "revision" : "d18589f5296139a794de98fb72a07c3a6e59f649"
       }
     }
   ],
