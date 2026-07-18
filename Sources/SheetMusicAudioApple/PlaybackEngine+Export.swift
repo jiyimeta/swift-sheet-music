@@ -1,3 +1,4 @@
+// swiftlint:disable file_length
 @preconcurrency import AVFoundation
 import Foundation
 import SheetMusicAudioCore
@@ -48,12 +49,18 @@ extension PlaybackEngine {
         let durationSec = max(0, endSec - startSec)
 
         let outputFormat = AudioFileExporter.outputFormat(for: format)
-        let framesToRender = AVAudioFrameCount(
-            (durationSec * outputFormat.sampleRate).rounded(.up),
+        let snapshot = exportEngineSnapshot()
+        // `durationSec` is timeline-seconds at rate 1.0, but the export
+        // sequencer runs at `snapshot.rate` (`sequencer.rate =
+        // snapshot.rate` below), so a rate < 1 (slow-practice export)
+        // needs MORE wall-clock frames, not `durationSec * sampleRate`
+        // worth — otherwise the render loop stops before the slowed
+        // piece has finished sounding.
+        let framesToRender = Self.renderFrameCount(
+            durationSec: durationSec, rate: snapshot.rate, sampleRate: outputFormat.sampleRate,
         )
         let writer = try AudioFileExporter.makeWriter(url: url, format: format)
         let exporter = AudioFileExporter()
-        let snapshot = exportEngineSnapshot()
 
         setStateForExport(.exporting)
         do {
@@ -106,6 +113,20 @@ extension PlaybackEngine {
                 underlying: (error as NSError).localizedDescription,
             )
         }
+    }
+
+    /// Frame count for the offline render loop, rate-corrected: `durationSec`
+    /// is timeline-seconds at rate 1.0, but the export sequencer plays at
+    /// `rate` (`sequencer.rate = snapshot.rate`), so the render actually
+    /// spans `durationSec / rate` wall-clock seconds. `rate` is floored to a
+    /// small positive value so a stray `0` (or negative) can't produce an
+    /// infinite or zero frame count. `internal` (not `private`) so tests can
+    /// exercise the rate-correction math directly.
+    static func renderFrameCount(
+        durationSec: Double, rate: Float, sampleRate: Double,
+    ) -> AVAudioFrameCount {
+        let renderSeconds = durationSec / Double(max(rate, 0.01))
+        return AVAudioFrameCount((renderSeconds * sampleRate).rounded(.up))
     }
 
     /// Build a dedicated `AVAudioEngine` + melodic and percussion
@@ -241,7 +262,7 @@ extension PlaybackEngine {
         let staffIsDrum: [Int: Bool]
     }
 
-    private static func buildScoreSynth(
+    private static func buildScoreSynth( // swiftlint:disable:this function_body_length
         score: Score,
         snapshot: ExportEngineSnapshot,
         resolver: SoundfontResolver,
@@ -311,6 +332,16 @@ extension PlaybackEngine {
                 )
             }
         }
+        // Reproduce the live engine's transpose + master A4 tuning on the offline synths:
+        // melodic = calibration + transpose (semitones→cents), percussion = calibration only.
+        Self.applyMasterTuning(
+            to: melodic,
+            cents: snapshot.masterTuningCents + Double(snapshot.transposeSemitones) * 100,
+        )
+        if let percussion {
+            Self.applyMasterTuning(to: percussion, cents: snapshot.masterTuningCents)
+        }
+
         return ScoreSynth(
             melodic: melodic, percussion: percussion,
             staffChannels: staffChannels, staffIsDrum: staffIsDrum,

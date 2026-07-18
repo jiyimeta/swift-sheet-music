@@ -1,4 +1,6 @@
-import CoreGraphics
+#if canImport(CoreGraphics)
+    import CoreGraphics
+#endif
 import Foundation
 import SheetMusicCore
 
@@ -94,8 +96,10 @@ extension PDFImporter {
             guard dy >= -c.spatium, dy <= c.spatium * 12 else { continue }
             if let b = best {
                 if c.topY > b.topY
-                    || (c.topY == b.topY
-                        && abs(tx - c.xRange.lowerBound) < abs(tx - b.xRange.lowerBound))
+                    || (
+                        c.topY == b.topY
+                            && abs(tx - c.xRange.lowerBound) < abs(tx - b.xRange.lowerBound)
+                    )
                 {
                     best = c
                 }

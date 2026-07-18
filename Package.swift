@@ -77,9 +77,29 @@ var targets: [Target] = [
         dependencies: ["SheetMusicCore"],
     ),
     .target(
+        name: "SheetMusicPDF",
+        dependencies: isAndroid
+            ? ["SheetMusicCore", "SheetMusicLayout"]
+            : ["SheetMusicCore", "SheetMusicLayout", "SheetMusicLayoutApple", "SheetMusicUI"],
+        // Apple-only files (CGPDFScanner walker, PDFDocument entry, PDF export,
+        // SwiftUI/PDFKit views) are excluded from the Android build; Android
+        // parses via the Foundation-only pure-Swift reader.
+        exclude: isAndroid ? [
+            "PageChromeRenderer.swift",
+            "PDFPageLayerView.swift",
+            "PDFPageView.swift",
+            "PDFExporter.swift",
+            "EngravingPage.swift",
+            "Import/PDFImporter+ContentStream.swift",
+            "Import/PDFImporter+ContentStream+Operators.swift",
+            "Import/PDFImporter+AppleEntry.swift",
+        ] : [],
+    ),
+    .target(
         name: "SheetMusicAndroidJNI",
         dependencies: [
             "SheetMusicCore",
+            "SheetMusicPDF",
             "SheetMusicMSCX",
             "SheetMusicMusicXML",
             "SheetMusicLayout",
@@ -146,9 +166,6 @@ if !isAndroid {
         .library(name: "SheetMusicUI", targets: ["SheetMusicUI"]),
         .library(name: "SheetMusicAudio", targets: ["SheetMusicAudio"]),
         .library(name: "SheetMusicAudioApple", targets: ["SheetMusicAudioApple"]),
-        // Opt-in, LGPL-2.1 FluidSynth playback backend (Apple-only). Links
-        // Homebrew libfluidsynth via `CFluidSynth`; the MIT core never depends
-        // on it. Consumers pull it only by depending on this product.
         // Pure-Swift, MIT SoundFont2 playback backend (SwiftySynth). Works on
         // iOS + macOS, App-Store clean — the default stealing-free synth.
         .library(name: "SheetMusicAudioSwiftySynth", targets: ["SheetMusicAudioSwiftySynth"]),
@@ -192,15 +209,6 @@ if !isAndroid {
                 "SheetMusicMIDI",
                 "SheetMusicAudioCore",
                 "SheetMusicAudioApple",
-            ],
-        ),
-        .target(
-            name: "SheetMusicPDF",
-            dependencies: [
-                "SheetMusicCore",
-                "SheetMusicLayout",
-                "SheetMusicLayoutApple",
-                "SheetMusicUI",
             ],
         ),
         .executableTarget(

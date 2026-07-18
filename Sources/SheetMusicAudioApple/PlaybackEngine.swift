@@ -176,6 +176,14 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// to translate `sequencer.currentPositionInSeconds` into a
     /// `ScoreItemID`.
     private var timeline: PlaybackTimeline?
+    /// Unrolled→notated tick map for the loaded score. The sequencer
+    /// plays `MidiRenderer.render`'s UNROLLED SMF (repeats + jumps
+    /// expanded) while `timeline` frames are in NOTATED ticks; every
+    /// cursor / time READ translates through this map. Scheduling —
+    /// loop wrap, seek, play-from — intentionally stays in
+    /// first-occurrence coordinates (tap-to-seek targets a notated
+    /// tick's first unrolled occurrence).
+    private var unroll: PlaybackUnroll = .identity
     /// Cursor poll timer — fires at ~30 Hz while playing, updates
     /// `currentItem`.
     private var cursorTimer: Timer?
@@ -271,7 +279,10 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     private static let coarseTuningParameterID: AudioUnitParameterID = 901
     private static let fineTuningParameterID: AudioUnitParameterID = 902
 
-    private static func applyMasterTuning( // swiftlint:disable:this inclusive_language
+    /// `internal` (not `private`) so `PlaybackEngine+Export` (a
+    /// different file) can reproduce the live engine's transpose +
+    /// master A4 tuning on the offline export synths.
+    static func applyMasterTuning( // swiftlint:disable:this inclusive_language
         to instrument: AVAudioUnitMIDIInstrument, cents: Double,
     ) {
         let split = MasterTuning.split(cents: cents)
@@ -313,6 +324,12 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         /// Resolved metronome SoundFont URL (host click SF2, host SF2, or
         /// GM drum-kit), so the export plays the same click as live.
         let metronomeSoundFontURL: URL?
+        /// Whole-score transpose captured from `PlaybackEngine.transposeSemitones`,
+        /// so the export synths reproduce the live engine's key shift.
+        let transposeSemitones: Int
+        /// A4-calibration offset captured from `PlaybackEngine.masterTuningCents`,
+        /// so the export synths reproduce the live engine's tuning.
+        let masterTuningCents: Double // swiftlint:disable:this inclusive_language
     }
 
     func exportEngineSnapshot() -> ExportEngineSnapshot {
@@ -325,6 +342,8 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
             metronomeBeats: metronomeBeats,
             masterGain: masterGain,
             metronomeSoundFontURL: clickResolver.resolvedSoundFontURL(),
+            transposeSemitones: transposeSemitones,
+            masterTuningCents: masterTuningCents,
         )
     }
 
@@ -501,7 +520,16 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         sequencerHasPreRoll = false
         renderedMidiCache = nil
         timeline = PlaybackTimeline(score: score)
-        metronomeBeats = PlaybackTimeline.metronomeBeats(score: score)
+        unroll = MidiRenderer.playbackUnroll(score: score)
+        // UNROLLED (not notated) — playback drives the sequencer's
+        // rendered SMF, which has repeats + jumps expanded. A body
+        // metronome track built from notated ticks alone would end at
+        // the notated length and go silent on a repeat's 2nd pass (or
+        // any jump), even though the score keeps playing. The count-in
+        // pre-roll click track (`CountInBeats.Result.beats`, assembled
+        // separately in `buildCountInSequencer`) is unaffected — it
+        // always plays from a fixed start, once.
+        metronomeBeats = PlaybackTimeline.unrolledMetronomeBeats(score: score)
         // Resolve the metronome's SoundFont through the click provider:
         // `.clickSamples` builds an SF2 from the host's WAVs, `.soundFont`
         // uses a host SF2, and `.defaultGM` (or no provider) falls back to
@@ -573,6 +601,18 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// resolver; the new one takes effect on the next `prepare(score:)`.
     ///
     /// No-op while exporting.
+    ///
+    /// Best-effort on failure, with two blind spots the host currently
+    /// cannot observe (a future `prepareWithDiagnostics`-style API should
+    /// surface both, mirroring `MSCXParser.parseWithDiagnostics`):
+    /// - If the re-prepare throws (only `engine.start()` can), the swap is
+    ///   silently abandoned and the engine is left stopped with the mixer
+    ///   reset to the score's defaults.
+    /// - A missing / corrupt SoundFont does NOT fail here: the AU rejects
+    ///   the file inside `prepareSynth`'s `try?`-guarded `loadSoundFont`,
+    ///   so the sampler stays attached but silent and this returns as if
+    ///   the swap succeeded. This is the failure a SoundFont picker most
+    ///   wants to report, yet nothing is thrown or flagged.
     public func reloadSoundfont(resolver newResolver: SoundfontResolver) {
         guard state != .exporting else { return }
         resolver = newResolver
@@ -613,7 +653,14 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
             play(from: savedCursor, in: score)
         } else if let savedCursor {
             play(from: savedCursor, in: score)
-            pause()
+            // Only re-pause if `play` actually started. If the sequencer
+            // rebuild failed it left `state == .stopped`; an unconditional
+            // `pause()` here would overwrite that with `.paused`, masking
+            // the resume failure so the host reads a false "paused and
+            // ready" state.
+            if state == .playing {
+                pause()
+            }
         }
     }
 
@@ -1248,7 +1295,9 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         } else {
             tick = rawTick
         }
-        return timeline.frame(atTick: tick)?.timeSeconds ?? 0
+        return timeline.frame(
+            atTick: unroll.notatedTick(fromUnrolled: tick),
+        )?.timeSeconds ?? 0
     }
 
     /// Like `currentTimeSeconds` but interpolated *within* the current
@@ -1285,7 +1334,7 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         } else {
             tick = rawTick
         }
-        return timeline.seconds(atTick: tick)
+        return timeline.seconds(atTick: unroll.notatedTick(fromUnrolled: tick))
     }
 
     /// Total playable duration in seconds for the loaded score.
@@ -1595,10 +1644,13 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// (it touches no actor state) so it is callable from a synchronous test.
     nonisolated static func mappedCursor(
         rawSequencerTick: Int, sequenceMap: SequenceMap, timeline: PlaybackTimeline,
+        unroll: PlaybackUnroll = .identity,
     ) -> ScoreCursor? {
         guard let scoreTick = sequenceMap.scoreTick(fromSequencer: rawSequencerTick)
         else { return nil }
-        return timeline.frame(atTick: scoreTick)?.cursor
+        return timeline.frame(
+            atTick: unroll.notatedTick(fromUnrolled: scoreTick),
+        )?.cursor
     }
 
     /// The cursor a `play(from:)` should actually anchor at, resolving the nil-cursor convention the
@@ -1680,17 +1732,21 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
             wrapToLoopStart(loop)
             return
         }
-        if let frame = timeline.frame(atTick: tick) {
+        // The polled tick is UNROLLED (the SMF's coordinates);
+        // translate to the notated tick before the frame lookup so
+        // the cursor tracks repeats' later passes and jump targets.
+        if let frame = timeline.frame(atTick: unroll.notatedTick(fromUnrolled: tick)) {
             if frame.cursor != currentCursor {
                 currentCursor = frame.cursor
             }
         }
-        // Slack of a tick lets us catch the very last frame even if
-        // the sequencer reports a sample-accurate beats value just
-        // shy of the final onset. Skip while looping — the wrap
-        // branch above already handles the boundary, and a stale
-        // read here mustn't fire `stop()`.
-        if loopRange == nil, tick >= timeline.totalTicks {
+        // End-of-score detection compares against the UNROLLED length
+        // (falling back to the notated length for an identity map).
+        // Skip while looping — the wrap branch above handles the
+        // boundary, and a stale read here mustn't fire `stop()`.
+        if loopRange == nil,
+           tick >= max(unroll.totalUnrolledTicks, timeline.totalTicks)
+        {
             stop()
         }
     }

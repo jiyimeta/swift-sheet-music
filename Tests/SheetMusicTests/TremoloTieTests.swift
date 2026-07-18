@@ -74,6 +74,7 @@ struct TremoloTieTests {
             part: Self.makePart(staff: staff),
             channel: 0,
             division: division,
+            plan: MidiRenderer.playbackPlan(for: staff.measures, division: division),
         )
         let intervals = Self.soundingIntervals(events)[pitch] ?? []
         // The last sounding interval is m3's quarter note. It must end at
@@ -111,6 +112,7 @@ struct TremoloTieTests {
             part: Self.makePart(staff: staff),
             channel: 0,
             division: division,
+            plan: MidiRenderer.playbackPlan(for: staff.measures, division: division),
         )
         let intervals = Self.soundingIntervals(events)[pitch] ?? []
         // The last tremolo stroke's note-off is suppressed, so the final

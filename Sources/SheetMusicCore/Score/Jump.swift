@@ -9,6 +9,11 @@ public struct Jump: Sendable, Equatable {
     public var playUntil: String
     /// MuseScore `<continueAt>` text (empty when jump ends the piece).
     public var continueAt: String
+    /// MuseScore `<playRepeats>` — when true, repeats are taken again
+    /// after the jump ("Play repeats" checkbox). MuseScore default is
+    /// false (`Jump::Jump`, jump.cpp:73): after a jump each repeated
+    /// passage plays its final pass only.
+    public var playRepeats: Bool
     /// User-facing display text ("D.C. al Fine", "D.S. al Coda", …).
     public var text: String
 
@@ -16,11 +21,13 @@ public struct Jump: Sendable, Equatable {
         jumpTo: String,
         playUntil: String,
         continueAt: String = "",
+        playRepeats: Bool = false,
         text: String = "",
     ) {
         self.jumpTo = jumpTo
         self.playUntil = playUntil
         self.continueAt = continueAt
+        self.playRepeats = playRepeats
         self.text = text
     }
 }

@@ -37,6 +37,7 @@ struct HairpinRendererIntegrationTests {
         let (events, _, _) = try MidiRenderer.renderVoice(
             voiceIndex: 0, staff: staff, part: part,
             channel: 0, division: 480,
+            plan: MidiRenderer.playbackPlan(for: staff.measures, division: 480),
         )
         let velocities: [Int] = events.compactMap {
             if case let .noteOn(_, _, v) = $0.event { return v } else { return nil }

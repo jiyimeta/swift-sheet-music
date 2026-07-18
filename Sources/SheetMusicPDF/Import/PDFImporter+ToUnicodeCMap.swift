@@ -1,6 +1,7 @@
-import CoreGraphics
+#if canImport(CoreGraphics)
+    import CoreGraphics
+#endif
 import Foundation
-import PDFKit
 
 extension PDFImporter {
     /// CID → Unicode lookup parsed from a Type0 font's `/ToUnicode`

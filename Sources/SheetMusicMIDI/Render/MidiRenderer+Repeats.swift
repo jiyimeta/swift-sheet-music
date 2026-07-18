@@ -7,103 +7,23 @@ extension MidiRenderer {
     /// (i.e., immediately after a loop-back). The renderer uses this to re-emit
     /// timeSig and reset tempo to default — matching MuseScore's behavior of
     /// restarting state at every section boundary.
-    struct PlaybackEntry {
+    struct PlaybackEntry: Equatable {
         var measureIndex: Int
         var tickOffset: Int
         var isIterationStart: Bool
     }
 
-    /// Build the unrolled playback sequence honoring `<startRepeat>` / `<endRepeat>`
-    /// markers and Volta filtering.
-    ///
-    /// Algorithm:
-    ///   - Walk measures left-to-right. Track a `take` counter (1-indexed) that
-    ///     increments every time an endRepeat sends us back to the loop start.
-    ///   - A measure inside a Volta is played only when `take` matches one of the
-    ///     volta's `endings` numbers. Measures with no Volta always play.
-    ///   - Each endRepeat with count N triggers a loop-back the first N−1 times we
-    ///     reach it (per-position counter). The loop target is the most recent
-    ///     `<startRepeat>` (or measure 0 if none).
+    /// Build the unrolled playback sequence for ONE staff's measures,
+    /// honoring `<startRepeat>` / `<endRepeat>` and volta filtering.
+    /// Retained as the single-staff entry point: it delegates to
+    /// `RepeatUnwinder` with jumps / markers / section breaks
+    /// stripped, because those elements live only on the top staff
+    /// and must be handled by the score-global plan
+    /// (`MidiRenderer.render(score:)`), never per staff.
     static func playbackPlan(for measures: [Measure], division: Int) -> [PlaybackEntry] {
-        let measureVoltas = computeMeasureVoltas(measures)
-        let measureDurations = measures.effectiveMeasureDurations()
-        var plan: [PlaybackEntry] = []
-        var tick = 0
-        var segmentStart = 0
-        var endRepeatHits: [Int: Int] = [:]
-        var take = 1
-        var index = 0
-        // The next measure to be appended marks the start of a new iteration
-        // when this is true (set after a loop-back).
-        var nextIsIterationStart = false
-        // Safety belt — pathological scores shouldn't loop forever.
-        var iterations = 0
-        let maxIterations = (measures.count + 1) * 16
-
-        while index < measures.count, iterations < maxIterations {
-            iterations += 1
-            let measure = measures[index]
-            if measure.startRepeat {
-                segmentStart = index
-            }
-
-            let inThisTake: Bool
-            if let endings = measureVoltas[index] {
-                inThisTake = endings.contains(take)
-            } else {
-                inThisTake = true
-            }
-            if inThisTake {
-                plan.append(PlaybackEntry(
-                    measureIndex: index,
-                    tickOffset: tick,
-                    isIterationStart: nextIsIterationStart,
-                ))
-                let mDuration = index < measureDurations.count
-                    ? measureDurations[index]
-                    : Fraction(numerator: 4, denominator: 4)
-                tick += measureTicks(
-                    measure: measure, division: division,
-                    measureDuration: mDuration,
-                )
-                nextIsIterationStart = false
-            }
-
-            if let count = measure.endRepeatCount, count > 1 {
-                let hits = (endRepeatHits[index] ?? 0) + 1
-                endRepeatHits[index] = hits
-                if hits < count {
-                    take += 1
-                    index = segmentStart
-                    nextIsIterationStart = true
-                    continue
-                }
-            }
-            index += 1
-        }
-        return plan
-    }
-
-    /// Map each measure index to the volta endings (`[Int]`) that apply to it,
-    /// or absent if no volta covers it. mscx encodes volta extent as
-    /// `<next><location><measures>N</measures>` meaning "ends N measures away";
-    /// the volta covers the current measure plus N − 1 additional measures
-    /// (so N=1 covers just the anchor measure).
-    private static func computeMeasureVoltas(_ measures: [Measure]) -> [Int: [Int]] {
-        var result: [Int: [Int]] = [:]
-        for (i, measure) in measures.enumerated() {
-            for voice in measure.voices {
-                for element in voice.elements {
-                    guard case let .spanner(spanner) = element else { continue }
-                    guard spanner.kind == .volta, !spanner.voltaEndings.isEmpty else { continue }
-                    let measuresCovered = max(1, spanner.nextMeasuresOffset)
-                    for k in 0 ..< measuresCovered where i + k < measures.count {
-                        result[i + k] = spanner.voltaEndings
-                    }
-                }
-            }
-        }
-        return result
+        RepeatUnwinder.plan(
+            navigation: ScoreNavigation(staffMeasures: measures, division: division),
+        )
     }
 
     /// Reference duration of a measure in ticks. Uses voice 0; falls back to 4/4

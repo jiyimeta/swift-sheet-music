@@ -1,6 +1,7 @@
-import CoreGraphics
+#if canImport(CoreGraphics)
+    import CoreGraphics
+#endif
 import Foundation
-import PDFKit
 import SheetMusicCore
 
 // Internal types shared across `PDFImporter+<Stage>` extensions. All

@@ -96,6 +96,12 @@ extension Measure {
                 children: [XMLTreeNode(name: "subtype", text: "page")],
             ))
         }
+        if sectionBreak {
+            children.append(XMLTreeNode(
+                name: "LayoutBreak",
+                children: [XMLTreeNode(name: "subtype", text: "section")],
+            ))
+        }
         var attributes: [String: String] = [:]
         if let actualLength {
             attributes["len"] =
@@ -143,16 +149,19 @@ extension Marker {
 
 extension Jump {
     /// Build a `<Jump>` element matching the decoder in
-    /// `MSCXDecoder+Measure.swift`.
+    /// `MSCXDecoder+Measure.swift`. `<playRepeats>` is emitted only
+    /// when true (the non-default), keeping existing fixtures
+    /// byte-stable.
     func encode() -> XMLTreeNode {
-        XMLTreeNode(
-            name: "Jump",
-            children: [
-                XMLTreeNode(name: "jumpTo", text: jumpTo),
-                XMLTreeNode(name: "playUntil", text: playUntil),
-                XMLTreeNode(name: "continueAt", text: continueAt),
-                XMLTreeNode(name: "text", text: text),
-            ],
-        )
+        var children: [XMLTreeNode] = [
+            XMLTreeNode(name: "jumpTo", text: jumpTo),
+            XMLTreeNode(name: "playUntil", text: playUntil),
+            XMLTreeNode(name: "continueAt", text: continueAt),
+        ]
+        if playRepeats {
+            children.append(XMLTreeNode(name: "playRepeats", text: "1"))
+        }
+        children.append(XMLTreeNode(name: "text", text: text))
+        return XMLTreeNode(name: "Jump", children: children)
     }
 }

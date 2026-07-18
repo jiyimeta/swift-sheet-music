@@ -850,6 +850,70 @@ class AndroidPlaybackEngineTest {
         }
     }
 
+    // End-of-score against the UNROLLED length (repeats / jumps)
+
+    @Test
+    fun `poll job does not stop early when unrolled length exceeds notated total`() =
+        runTest(testDispatcher) {
+            // Notated total 960, but the repeat/jump-expanded SMF the player
+            // traverses runs to 1920 (summary[3]). A player tick of 1000 is
+            // past the notated total yet still mid-piece — playback must NOT
+            // stop. Under the old `tick >= totalTicks` check it stopped here.
+            val cursor = ScoreCursor.Beat(0, 0)
+            val frameBytes = encodeFrameBytes(0L, 0L, cursor)
+            val bridge = FakeJniBridge(
+                timelineSummaryResult = longArrayOf(960L, 2_000_000L, 480L, 1920L),
+                staffParamsResult = oneStaffPayload(),
+                metronomeBeatsResult = downbeatOnlyBeats(),
+                renderMidiResult = minimalSmf,
+                frameAtTickResult = frameBytes,
+            )
+            val bindings = RecordingBindings()
+            val engine = newEngineForTests(bridge = bridge, playerBindings = bindings)
+            try {
+                engine.prepare(1L)
+                engine.play()
+                // Set after play() so a seek-to-start during play can't reset it.
+                bindings.tickToReturn = 1000L
+                advanceTimeBy(100) // several poll iterations past the notated total
+                assertEquals(
+                    "playback must continue past the notated total during a repeat",
+                    PlaybackState.PLAYING,
+                    engine.state.value,
+                )
+            } finally {
+                engine.teardown()
+            }
+        }
+
+    @Test
+    fun `poll job stops at the unrolled end of score`() = runTest(testDispatcher) {
+        val cursor = ScoreCursor.Beat(0, 0)
+        val frameBytes = encodeFrameBytes(0L, 0L, cursor)
+        val bridge = FakeJniBridge(
+            timelineSummaryResult = longArrayOf(960L, 2_000_000L, 480L, 1920L),
+            staffParamsResult = oneStaffPayload(),
+            metronomeBeatsResult = downbeatOnlyBeats(),
+            renderMidiResult = minimalSmf,
+            frameAtTickResult = frameBytes,
+        )
+        val bindings = RecordingBindings()
+        val engine = newEngineForTests(bridge = bridge, playerBindings = bindings)
+        try {
+            engine.prepare(1L)
+            engine.play()
+            bindings.tickToReturn = 1920L // reached the unrolled end
+            advanceTimeBy(100)
+            assertEquals(
+                "playback stops when the player reaches the unrolled end",
+                PlaybackState.STOPPED,
+                engine.state.value,
+            )
+        } finally {
+            engine.teardown()
+        }
+    }
+
     // T44 — setRate / currentRate
 
     @Test

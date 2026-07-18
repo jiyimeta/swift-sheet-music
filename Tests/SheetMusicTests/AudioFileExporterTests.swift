@@ -319,6 +319,51 @@
                 #expect(regionFrames > 0)
             }
 
+            @Test("Rate 0.5 renders a file approximately twice as long as rate 1.0")
+            func rateHalvesRenderedDuration() async throws {
+                let score = try loadMidi01()
+
+                // Rate 1.0 (the engine's default) full-range export.
+                let engineA = PlaybackEngine(soundfontResolver: SilentResolver())
+                try engineA.prepare(score: score)
+                let urlA = FileManager.default.temporaryDirectory
+                    .appendingPathComponent("smexp-\(UUID().uuidString).wav")
+                defer { try? FileManager.default.removeItem(at: urlA) }
+                try await engineA.exportAudioFile(
+                    to: urlA, score: score, format: .wav(),
+                )
+                let framesA = try AVAudioFile(forReading: urlA).length
+
+                // Rate 0.5 (half-speed / slow-practice) full-range export, on a
+                // fresh engine so the two exports don't share any mutable state.
+                let engineB = PlaybackEngine(soundfontResolver: SilentResolver())
+                try engineB.prepare(score: score)
+                engineB.setRate(0.5)
+                let urlB = FileManager.default.temporaryDirectory
+                    .appendingPathComponent("smexp-\(UUID().uuidString).wav")
+                defer { try? FileManager.default.removeItem(at: urlB) }
+                try await engineB.exportAudioFile(
+                    to: urlB, score: score, format: .wav(),
+                )
+                let framesB = try AVAudioFile(forReading: urlB).length
+
+                // Guards the call-site wiring in `exportAudioFile` that feeds
+                // `snapshot.rate` into `renderFrameCount`: rate 0.5 halves
+                // playback speed, so the same content takes ~2x as long to
+                // render. A regression to a hardcoded rate 1.0 (or the
+                // `exportEngineSnapshot()` capture moving back below the
+                // frame-count computation) would leave this ratio at ~1.0
+                // instead of ~2.0 while every other export test still passes —
+                // `PlaybackEngineRenderFrameCountTests` alone can't catch that,
+                // since it tests the helper's math, not this call site.
+                #expect(framesA > 0)
+                let ratio = Double(framesB) / Double(framesA)
+                #expect(
+                    ratio > 1.9 && ratio < 2.1,
+                    "expected ~2.0x, got \(ratio) (A=\(framesA) B=\(framesB))",
+                )
+            }
+
             @Test("Throws .noScorePrepared when prepare wasn't called")
             func errorNoScorePrepared() async throws {
                 let score = try loadMidi01()

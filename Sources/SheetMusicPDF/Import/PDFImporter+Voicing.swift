@@ -1,4 +1,6 @@
-import CoreGraphics
+#if canImport(CoreGraphics)
+    import CoreGraphics
+#endif
 import Foundation
 import SheetMusicCore
 
@@ -85,6 +87,7 @@ extension PDFImporter {
             return result
         }
         // Single voice: x-sorted into voice 0; position = rank in x.
+        // swiftlint:disable:next unused_enumerated
         let order = elements.enumerated()
             .sorted { $0.element.x < $1.element.x }
             .map(\.offset)

@@ -70,7 +70,7 @@ enum MusicXMLJumpDecoder {
         if let segno = sound.attributes["dalsegno"] {
             return Jump(
                 jumpTo: segno,
-                playUntil: sound.attributes["tocoda"] ?? (sound.attributes["fine"] != nil ? "end" : "end"),
+                playUntil: sound.attributes["tocoda"] ?? (sound.attributes["fine"] != nil ? "fine" : "end"),
                 continueAt: sound.attributes["coda"] ?? "",
                 text: words.isEmpty ? "D.S." : words,
             )
