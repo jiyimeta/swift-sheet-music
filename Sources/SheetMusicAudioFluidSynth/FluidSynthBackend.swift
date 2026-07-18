@@ -1,6 +1,7 @@
 import AVFoundation
 import Foundation
 import SheetMusicAudioApple
+import SheetMusicAudioCore
 import SheetMusicMIDI
 
 /// `SynthBackend` implementation backed by FluidSynth. An `AVAudioSourceNode`
@@ -88,7 +89,7 @@ public final class FluidSynthBackend: SynthBackend {
         }
     }
 
-    public func loadSequence(_ midi: MidiFile, division _: Int) {
+    public func loadSequence(_ midi: MidiFile, timeline _: PlaybackTimeline) {
         // FluidSynth's player reads the SMF's own division; `division` is
         // unused here but part of the seam for backends that need it.
         guard let bytes = try? MidiWriter.write(midi) else { return }

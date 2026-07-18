@@ -2,6 +2,7 @@
     import AVFoundation
     import Foundation
     import SheetMusic
+    import SheetMusicAudioCore
     @testable import SheetMusicAudioFluidSynth
     import SheetMusicMIDI
     import Testing
@@ -24,7 +25,7 @@
                     msczURL: URL(fileURLWithPath: shinogonoPath),
                 )
                 let midi = try MidiRenderer.render(score: score)
-                backend.loadSequence(midi, division: midi.division)
+                backend.loadSequence(midi, timeline: PlaybackTimeline(score: score))
 
                 let engine = AVAudioEngine()
                 let format = try #require(AVAudioFormat(
@@ -78,7 +79,7 @@
                     msczURL: URL(fileURLWithPath: shinogonoPath),
                 )
                 let midi = try MidiRenderer.render(score: score)
-                backend.loadSequence(midi, division: midi.division)
+                backend.loadSequence(midi, timeline: PlaybackTimeline(score: score))
 
                 let engine = AVAudioEngine()
                 let format = try #require(AVAudioFormat(

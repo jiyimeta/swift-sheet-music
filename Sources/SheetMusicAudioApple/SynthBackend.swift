@@ -1,5 +1,6 @@
 import AVFoundation
 import Foundation
+import SheetMusicAudioCore
 import SheetMusicMIDI
 
 /// Pluggable synth + transport backend for `PlaybackEngine`.
@@ -35,7 +36,9 @@ public protocol SynthBackend: AnyObject {
     func prepare(soundfontURL: URL?, drumChannels: Set<UInt8>)
 
     /// Load the rendered, playback-post-processed SMF into the transport.
-    func loadSequence(_ midi: MidiFile, division: Int)
+    /// `timeline` provides tick↔seconds for backends whose transport clock is
+    /// time-based (e.g. SwiftySynth) rather than tick-based.
+    func loadSequence(_ midi: MidiFile, timeline: PlaybackTimeline)
 
     /// Transport control. `currentTick` is the SMF-tick clock the cursor timer
     /// polls; `seek` and loop-wrap both move the transport in tick space.

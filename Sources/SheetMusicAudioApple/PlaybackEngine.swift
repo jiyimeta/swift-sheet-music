@@ -1018,7 +1018,7 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
                     metronomeBeats: metronomeBeats,
                     mixerManagedChannels: mixerManagedChannels,
                 )
-                fluidBackend.loadSequence(midi, division: midi.division)
+                fluidBackend.loadSequence(midi, timeline: timeline)
                 sequencerScore = score
                 sequenceMap = .identity
             }

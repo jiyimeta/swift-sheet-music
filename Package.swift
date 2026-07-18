@@ -130,6 +130,7 @@ var targets: [Target] = [
             "SheetMusicAudioFluidSynth",
             "CFluidSynth",
             .product(name: "SwiftySynth", package: "swiftysynth"),
+            "SheetMusicAudioSwiftySynth",
             "SheetMusicPDF",
             .product(name: "Wirelet", package: "swift-wirelet"),
             "SheetMusicXMLTools",
@@ -151,6 +152,9 @@ if !isAndroid {
         // Homebrew libfluidsynth via `CFluidSynth`; the MIT core never depends
         // on it. Consumers pull it only by depending on this product.
         .library(name: "SheetMusicAudioFluidSynth", targets: ["SheetMusicAudioFluidSynth"]),
+        // Pure-Swift, MIT SoundFont2 playback backend (SwiftySynth). Works on
+        // iOS + macOS, App-Store clean — the default stealing-free synth.
+        .library(name: "SheetMusicAudioSwiftySynth", targets: ["SheetMusicAudioSwiftySynth"]),
         .library(name: "SheetMusicPDF", targets: ["SheetMusicPDF"]),
         .executable(name: "render-previews", targets: ["RenderPreviews"]),
     ]
@@ -201,6 +205,16 @@ if !isAndroid {
                 "SheetMusicAudioCore",
                 // For the `SynthBackend` protocol (MIT). LGPL → MIT dependency
                 // direction; SheetMusicAudioApple never depends back on this.
+                "SheetMusicAudioApple",
+            ],
+        ),
+        .target(
+            name: "SheetMusicAudioSwiftySynth",
+            dependencies: [
+                .product(name: "SwiftySynth", package: "swiftysynth"),
+                "SheetMusicCore",
+                "SheetMusicMIDI",
+                "SheetMusicAudioCore",
                 "SheetMusicAudioApple",
             ],
         ),
