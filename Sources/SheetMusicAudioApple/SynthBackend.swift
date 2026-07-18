@@ -40,6 +40,17 @@ public protocol SynthBackend: AnyObject {
     /// time-based (e.g. SwiftySynth) rather than tick-based.
     func loadSequence(_ midi: MidiFile, timeline: PlaybackTimeline)
 
+    /// Load the metronome-only SMF (click track + the score's tempo map) onto
+    /// the backend's separate metronome transport, kept in lockstep with the
+    /// score. Muting it (`setMetronomeMuted`) is then a live flag flip — no
+    /// score-SMF reload, so a toggle never resets the score synth's voices.
+    func loadMetronomeSequence(_ midi: MidiFile)
+
+    /// Silence / restore the metronome without reloading anything. The
+    /// metronome transport keeps advancing while muted so an un-mute lands on
+    /// the beat.
+    func setMetronomeMuted(_ muted: Bool)
+
     /// Transport control. `currentTick` is the SMF-tick clock the cursor timer
     /// polls; `seek` and loop-wrap both move the transport in tick space.
     func play()
@@ -47,6 +58,13 @@ public protocol SynthBackend: AnyObject {
     func stop()
     func seek(toTick tick: Int)
     var currentTick: Int { get }
+
+    /// Raw transport position in seconds on the backend's own clock, before
+    /// any score-tick mapping. `currentTick` is the identity-mapped
+    /// convenience (position → timeline tick); the engine reads this raw value
+    /// directly when it must account for a count-in pre-roll offset the
+    /// backend's loaded SMF carries but the backend itself doesn't know about.
+    var currentPositionSeconds: TimeInterval { get }
 
     /// Playback speed multiplier (`1.0` = native tempo).
     func setRate(_ rate: Float)

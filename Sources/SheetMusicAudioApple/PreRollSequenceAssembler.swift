@@ -96,6 +96,67 @@ enum PreRollSequenceAssembler {
         )
     }
 
+    /// A metronome-ONLY sequence — the score's tempo / time-signature map plus
+    /// the click track — for a backend that plays the metronome on a separate
+    /// synth so it can be muted live without touching the score transport. The
+    /// tempo map is copied verbatim from `rendered` so the metronome sequencer's
+    /// seconds clock matches the score's tick-for-tick and the two stay in sync.
+    ///
+    /// When `plan` is non-nil (a count-in), the clicks and the tempo map are
+    /// shifted exactly as `assemble` shifts the score — content at `baseTick`
+    /// moves to `plan.preRollTicks`, with a governing tempo seeded at tick 0 —
+    /// so the body metronome lines up with the delayed score. The always-on
+    /// pre-roll click itself lives in the score SMF (see `assemble`), not here.
+    static func metronomeOnly(
+        rendered: MidiFile,
+        metronomeBeats: [MetronomeBeat],
+        plan: CountInBeats.Result? = nil,
+        baseTick: Int = 0,
+    ) -> MidiFile {
+        let division = rendered.division
+        var conductor: [TimedMidiEvent] = []
+        for track in rendered.tracks {
+            for event in track.events {
+                guard case let .meta(meta) = event.event else { continue }
+                switch meta {
+                case .tempo, .timeSignature:
+                    conductor.append(event)
+                default:
+                    break
+                }
+            }
+        }
+        conductor.sort { $0.tick < $1.tick }
+
+        var beats = metronomeBeats
+        if let plan {
+            let shift = plan.preRollTicks - baseTick
+            conductor = conductor
+                .filter { $0.tick >= baseTick }
+                .map { TimedMidiEvent(tick: $0.tick + shift, event: $0.event) }
+            conductor.insert(
+                TimedMidiEvent(
+                    tick: 0,
+                    event: .meta(.tempo(
+                        microsecondsPerQuarter: 60_000_000 / Int(plan.quarterBpm.rounded()),
+                    )),
+                ),
+                at: 0,
+            )
+            beats = metronomeBeats
+                .filter { $0.tick >= baseTick }
+                .map { MetronomeBeat(tick: $0.tick + shift, isDownbeat: $0.isDownbeat) }
+        }
+
+        let clickTrack = MetronomeController.makeMetronomeTrack(
+            beats: beats, division: division,
+        )
+        return MidiFile(
+            division: division,
+            tracks: [MidiTrack(events: conductor), clickTrack],
+        )
+    }
+
     /// Drop every event before `dropBelow`, then advance the rest by `by` ticks. Event payloads are untouched —
     /// only their absolute ticks move — so a note whose on/off straddle `dropBelow` would be split; the caller's
     /// `baseTick` is a measure/beat boundary, so in practice both ends of a note fall on one side.

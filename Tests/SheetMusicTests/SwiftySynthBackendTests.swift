@@ -2,6 +2,7 @@
     import AVFoundation
     import Foundation
     import SheetMusic
+    @testable import SheetMusicAudioApple
     import SheetMusicAudioCore
     @testable import SheetMusicAudioSwiftySynth
     import SheetMusicMIDI
@@ -93,6 +94,74 @@
                 let (backend, _) = try makePrepared()
                 backend.seek(toTick: 3840)
                 #expect(backend.currentTick > 2000)
+            }
+
+            /// The metronome plays on its own transport, mixed into the score's
+            /// output, and `setMetronomeMuted` silences it WITHOUT reloading the
+            /// score SMF. A silent score (tempo only) isolates the click track:
+            /// unmuted renders audibly, muted renders pure silence.
+            private func peakRenderingMetronome(muted: Bool) throws -> Float {
+                let sampleRate = 44100.0
+                let backend = SwiftySynthBackend(sampleRate: sampleRate)
+                backend.prepare(
+                    soundfontURL: URL(fileURLWithPath: swiftySynthSoundfontPath),
+                    drumChannels: [],
+                )
+                // Silent score (a lone tempo event) so only the metronome sounds.
+                let tempoOnly = SheetMusicMIDI.MidiFile(division: 480, tracks: [
+                    MidiTrack(events: [TimedMidiEvent(
+                        tick: 0,
+                        event: .meta(.tempo(microsecondsPerQuarter: 500_000)),
+                    )]),
+                ])
+                let score = try SheetMusic.loadScore(
+                    msczURL: URL(fileURLWithPath: swiftySynthShinogonoPath),
+                )
+                backend.loadSequence(tempoOnly, timeline: PlaybackTimeline(score: score))
+                let beats = [
+                    MetronomeBeat(tick: 0, isDownbeat: true),
+                    MetronomeBeat(tick: 480, isDownbeat: false),
+                    MetronomeBeat(tick: 960, isDownbeat: false),
+                ]
+                backend.loadMetronomeSequence(
+                    PreRollSequenceAssembler.metronomeOnly(
+                        rendered: tempoOnly, metronomeBeats: beats,
+                    ),
+                )
+                backend.setMetronomeMuted(muted)
+
+                let engine = AVAudioEngine()
+                guard let format = AVAudioFormat(
+                    standardFormatWithSampleRate: sampleRate, channels: 2,
+                ) else { throw AVError(.unknown) }
+                engine.attach(backend.sourceNode)
+                engine.connect(backend.sourceNode, to: engine.mainMixerNode, format: format)
+                try engine.enableManualRenderingMode(
+                    .offline, format: format, maximumFrameCount: 4096,
+                )
+                try engine.start()
+                backend.play()
+
+                let buf = try #require(AVAudioPCMBuffer(
+                    pcmFormat: engine.manualRenderingFormat, frameCapacity: 4096,
+                ))
+                var peak: Float = 0
+                for _ in 0 ..< Int(1.5 * sampleRate / 4096) {
+                    _ = try engine.renderOffline(4096, to: buf)
+                    if let ch = buf.floatChannelData {
+                        for i in 0 ..< Int(buf.frameLength) {
+                            peak = max(peak, abs(ch[0][i]))
+                        }
+                    }
+                }
+                engine.stop()
+                return peak
+            }
+
+            @Test(.enabled(if: swiftySynthAssetsAvailable))
+            func metronomeMixesInAndMutesLive() throws {
+                #expect(try peakRenderingMetronome(muted: false) > 0.001)
+                #expect(try peakRenderingMetronome(muted: true) == 0)
             }
         }
     }

@@ -145,6 +145,15 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// against a different score, the sequencer is torn down so
     /// the next `play` rebuilds it.
     private var sequencerScore: Score?
+    /// Backend count-in pre-roll length in seconds. `> 0` means the loaded
+    /// backend SMF is a count-in build whose score content is delayed by this
+    /// much; `backendTickCursor` subtracts it (and pins the cursor while still
+    /// inside it). `0` means a normal (un-shifted) build. Unused on the
+    /// AUMIDISynth path, which drives its pre-roll through `SequenceMap`.
+    private var backendPreRollSeconds: TimeInterval = 0
+    /// Score tick the backend count-in resumes real playback at (the start
+    /// position); the post-pre-roll cursor offsets from here.
+    private var backendCountInBaseTick = 0
     /// Translates the sequencer's raw tick space to the score's. A
     /// count-in play shifts all score content forward past a pre-roll
     /// region (`SequenceMap(preRollTicks:baseTick:)`); a normal play
@@ -428,6 +437,11 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
 
     func setMetronomeEnabled(_ enabled: Bool) {
         metronome.isEnabled = enabled
+        // The injected backend plays the metronome on a separate synth that is
+        // always in lockstep with the score, so enabling / disabling it is a
+        // live mute — no SMF reload, so a mid-playback toggle never resets the
+        // score synth (which would cut every sounding voice).
+        backend?.setMetronomeMuted(!enabled)
     }
 
     func setMetronomeVolume(_ volume: Float) {
@@ -954,7 +968,9 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         guard state != .exporting else { return }
         guard let timeline else { return }
         if usingBackend {
-            backendPlay(from: cursor, in: score, timeline: timeline)
+            backendPlay(
+                from: cursor, in: score, countIn: countIn, timeline: timeline,
+            )
             return
         }
         do {
@@ -1060,10 +1076,17 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// SwiftySynth playback path — a compact equivalent of the AVAudioSequencer
     /// build in `play(...)`. Reuses the assembled + post-processed SMF and the
     /// backend-agnostic `PlaybackTimeline`; loop wrap stays host-driven in
-    /// `tickCursor`. Count-in and rate scaling are deferred to the
-    /// transport-parity phase.
+    /// `backendTickCursor`.
+    ///
+    /// Count-in: when requested (and no loop is active — a loop's per-wrap seek
+    /// can't re-enter a shifted pre-roll SMF), the score is delayed behind an
+    /// always-on click track baked into the SMF. The backend clock stays in
+    /// seconds, so `backendPreRollSeconds` / `backendCountInBaseTick` let
+    /// `backendTickCursor` pin the cursor through the pre-roll and offset the
+    /// body — the seconds-space analogue of the AUMIDISynth `SequenceMap`.
     private func backendPlay(
-        from cursor: ScoreCursor?, in score: Score, timeline: PlaybackTimeline,
+        from cursor: ScoreCursor?, in score: Score, countIn: Bool,
+        timeline: PlaybackTimeline,
     ) {
         guard let backend else { return }
         do {
@@ -1071,17 +1094,33 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
                 cursor: cursor, isStopped: state == .stopped,
                 currentCursor: currentCursor,
             )
-            // (Re)load the transport only when the score changed.
-            if sequencerScore != score {
-                let midi = try PreRollSequenceAssembler.assembleNormal(
-                    rendered: cachedRender(score),
-                    metronomeBeats: metronomeBeats,
-                    mixerManagedChannels: mixerManagedChannels,
+            let baseTick = startCursor
+                .flatMap { timeline.frame(forCursor: $0)?.tick } ?? 0
+            // Count-in only without an active loop: a loop wrap seeks in score
+            // ticks, which a pre-roll-shifted SMF would misplace.
+            let plan = (countIn && loopRange == nil)
+                ? CountInBeats.compute(score: score, startCursor: startCursor)
+                : nil
+            let rendered = try cachedRender(score)
+
+            if let plan {
+                try startBackendCountIn(
+                    backend: backend, score: score, plan: plan,
+                    baseTick: baseTick, rendered: rendered, timeline: timeline,
                 )
-                backend.loadSequence(midi, timeline: timeline)
-                sequencerScore = score
-                sequenceMap = .identity
+                return
             }
+
+            // Normal (un-shifted) build. Reload the score + metronome transports
+            // when the score changed or a prior count-in left a shifted SMF
+            // loaded.
+            if sequencerScore != score || sequenceMap != .identity {
+                loadBackendNormalSequence(
+                    backend: backend, score: score,
+                    rendered: rendered, timeline: timeline,
+                )
+            }
+            backend.setMetronomeMuted(!metronome.isEnabled)
             if !engine.isRunning { try engine.start() }
             // Resolve the start tick (loop-clamped), seek, and pin the cursor.
             var targetTick = startCursor
@@ -1105,6 +1144,71 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         } catch {
             state = .stopped
         }
+    }
+
+    /// Load the normal (un-shifted) score + metronome transports for a backend
+    /// play. The body metronome always plays on the SEPARATE metronome
+    /// transport, never baked into the score SMF — that is what lets
+    /// `setMetronomeMuted` toggle it live without a reload.
+    private func loadBackendNormalSequence(
+        backend: any SynthBackend, score: Score,
+        rendered: MidiFile, timeline: PlaybackTimeline,
+    ) {
+        backend.loadSequence(
+            PreRollSequenceAssembler.assembleNormal(
+                rendered: rendered, metronomeBeats: [],
+                mixerManagedChannels: mixerManagedChannels,
+            ),
+            timeline: timeline,
+        )
+        backend.loadMetronomeSequence(
+            PreRollSequenceAssembler.metronomeOnly(
+                rendered: rendered, metronomeBeats: metronomeBeats,
+            ),
+        )
+        sequencerScore = score
+        sequenceMap = .identity
+        backendPreRollSeconds = 0
+    }
+
+    /// Load + start a count-in playback: the shifted score SMF (carrying the
+    /// always-on pre-roll click) on the score transport and the shifted body
+    /// metronome on the metronome transport. Both start at sequencer tick 0;
+    /// the cursor stays pinned at `baseTick` until the pre-roll elapses (see
+    /// `backendTickCursor`, which reads the seconds-space offset below).
+    private func startBackendCountIn(
+        backend: any SynthBackend, score: Score, plan: CountInBeats.Result,
+        baseTick: Int, rendered: MidiFile, timeline: PlaybackTimeline,
+    ) throws {
+        backend.loadSequence(
+            PreRollSequenceAssembler.assemble(
+                rendered: rendered, metronomeBeats: [],
+                mixerManagedChannels: mixerManagedChannels,
+                plan: plan, baseTick: baseTick,
+            ).midi,
+            timeline: timeline,
+        )
+        backend.loadMetronomeSequence(
+            PreRollSequenceAssembler.metronomeOnly(
+                rendered: rendered, metronomeBeats: metronomeBeats,
+                plan: plan, baseTick: baseTick,
+            ),
+        )
+        sequencerScore = score
+        sequenceMap = SequenceMap(preRollTicks: plan.preRollTicks, baseTick: baseTick)
+        backendCountInBaseTick = baseTick
+        backendPreRollSeconds = Double(plan.preRollTicks)
+            * (60.0 / plan.quarterBpm) / Double(timeline.division)
+        backend.setMetronomeMuted(!metronome.isEnabled)
+        // `loadSequence` positions the transport at 0 (the pre-roll start), so
+        // no seek is needed. Pin the cursor at the start position.
+        currentCursor = timeline.frame(atTick: baseTick)?.cursor
+        if !engine.isRunning { try engine.start() }
+        backend.play()
+        reapplyMixerPrograms()
+        applyMixerState()
+        state = .playing
+        startCursorTimer()
     }
 
     /// Position the sequencer for a normal (no count-in) play. Runs only with
@@ -1157,6 +1261,37 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         guard let timeline, let frame = timeline.frame(forCursor: cursor) else { return }
         let tick = snapTickToLoop(frame.tick)
         if let backend {
+            // A click-to-seek must never keep a count-in pre-roll loaded: its
+            // score SMF is shifted, so a plain score-tick seek would misplace.
+            // Drop to the normal build (score + separate metronome transport)
+            // anchored at the target, preserving the play/pause state (a seek
+            // never inserts — or removes — playback).
+            if backendPreRollSeconds > 0, let score = sequencerScore,
+               let rendered = try? cachedRender(score)
+            {
+                let wasPlaying = state == .playing
+                backend.loadSequence(
+                    PreRollSequenceAssembler.assembleNormal(
+                        rendered: rendered, metronomeBeats: [],
+                        mixerManagedChannels: mixerManagedChannels,
+                    ),
+                    timeline: timeline,
+                )
+                backend.loadMetronomeSequence(
+                    PreRollSequenceAssembler.metronomeOnly(
+                        rendered: rendered, metronomeBeats: metronomeBeats,
+                    ),
+                )
+                sequenceMap = .identity
+                backendPreRollSeconds = 0
+                backend.setMetronomeMuted(!metronome.isEnabled)
+                backend.seek(toTick: tick)
+                reapplyMixerPrograms()
+                applyMixerState()
+                currentCursor = timeline.frame(atTick: tick)?.cursor
+                if wasPlaying { backend.play() }
+                return
+            }
             backend.seek(toTick: tick)
             currentCursor = timeline.frame(atTick: tick)?.cursor
             return
@@ -1758,7 +1893,21 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     private func backendTickCursor(
         backend: any SynthBackend, timeline: PlaybackTimeline,
     ) {
-        let tick = backend.currentTick
+        let tick: Int
+        if backendPreRollSeconds > 0 {
+            // Count-in: the loaded SMF is shifted, so map the backend's raw
+            // seconds through the pre-roll. While still inside the pre-roll,
+            // keep the cursor pinned at the start (set at play time) and take
+            // no action; once the body starts, offset from the start tick's
+            // own time so the score-tick lookup stays exact.
+            let bodySeconds = backend.currentPositionSeconds - backendPreRollSeconds
+            if bodySeconds < 0 { return }
+            let baseSeconds = timeline.seconds(atTick: Double(backendCountInBaseTick))
+            tick = timeline.frame(atTime: baseSeconds + bodySeconds)?.tick
+                ?? backendCountInBaseTick
+        } else {
+            tick = backend.currentTick
+        }
         if let loop = loopRange, tick >= loop.endTick {
             backend.seek(toTick: loop.startTick)
             reapplyMixerPrograms()

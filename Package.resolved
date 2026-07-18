@@ -1,5 +1,5 @@
 {
-  "originHash" : "215064d1c3e703db2043c0ac2c989471cf7efdbb55f4d45f4d00d6f935127962",
+  "originHash" : "d17809b2d31490271d2ee04ed77c2e172475169b44b327ec8c882258826faa8c",
   "pins" : [
     {
       "identity" : "swift-argument-parser",
@@ -87,8 +87,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/jiyimeta/swiftysynth.git",
       "state" : {
-        "branch" : "main",
-        "revision" : "5c6cf1f98558b030bc51026b5e7b6a1814b1ffa1"
+        "revision" : "5928f6096998f2de840cd4edcf29af19343e540a",
+        "version" : "0.1.0"
       }
     }
   ],
