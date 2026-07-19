@@ -7,6 +7,30 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [1.2.2] - 2026-07-20
+
+### Fixed
+
+- Single-note audition through an injected `SynthBackend` (e.g. SwiftySynth)
+  now sounds at the correct instrument and volume. A preview drives the synth
+  directly rather than through the sequencer, so — unlike playback — it never
+  received the mixer's program / channel volume: the async SoundFont load
+  leaves the synth's channels at General-MIDI defaults at `prepare` time, and
+  a prior playback's sequencer resets them too, so an audition sounded on
+  program 0 (piano) at the default volume (near-inaudible for many parts).
+  `playPreview` / `previewNoteOn` now re-assert the staff channel's program +
+  volume immediately before each note-on.
+- An injected-backend audition no longer clicks off its release tail, and a
+  prior audition's tail no longer bleeds into the next one. Parking the audio
+  engine right after the preview's note-off froze a software synth's render
+  thread mid-release; the park is now deferred until the release tail has
+  rendered out (a newer preview cancels the pending park). The AUMIDISynth
+  path was unaffected and is unchanged.
+
+### Changed
+
+- Bumped the SwiftySynth dependency 0.1.1 → 0.1.2.
+
 ## [1.2.1] - 2026-07-19
 
 ### Fixed
