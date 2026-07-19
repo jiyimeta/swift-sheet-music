@@ -257,8 +257,10 @@ extension LayoutEngine {
     /// first measure of `system`. Used as MuseScore's
     /// `firstNoteRestSegmentX` analogue when laying out the END
     /// segment of a tie at a system head: anchoring there keeps the
-    /// arc clear of the synthesised clef and key signature.
-    private static func firstContentX(in system: LayoutSystem) -> CGFloat {
+    /// arc clear of the synthesised clef and key signature. Shared
+    /// (not `private`) with `LayoutEngine+Glissandi.swift`, which
+    /// anchors its cross-system END segment the same way.
+    static func firstContentX(in system: LayoutSystem) -> CGFloat {
         guard let firstMeasure = system.measures.first else { return 0 }
         var firstX: CGFloat = .infinity
         for el in firstMeasure.elements {

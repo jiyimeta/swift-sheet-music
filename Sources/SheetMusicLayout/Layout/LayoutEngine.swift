@@ -16,6 +16,8 @@ import SheetMusicCore
 /// - `LayoutEngine+Beaming.swift`     — `beamGroups` + helpers.
 /// - `LayoutEngine+Spanners.swift`    — anchor collect + attach pass.
 /// - `LayoutEngine+Ties.swift`        — tie pair resolve + attach.
+/// - `LayoutEngine+Glissandi.swift`   — glissando pair resolve + attach
+///   (same post-pass shape as ties; handles cross-measure/cross-system).
 /// - `LayoutEngine+Packing.swift`     — `packSystems`, stretch, default
 ///   clef resolution.
 /// - `LayoutEngine+SystemBuild.swift` — per-system `buildSystem` pass.
@@ -137,9 +139,20 @@ public enum LayoutEngine {
         let systemsWithTies = attachTies(
             to: systemsWithSpanners, pairs: ties, metrics: metrics,
         )
+        // Glissandi are resolved last (spanners → ties → glissandi) in
+        // a post-pass that mirrors ties — it can pair a glissando with
+        // its target chord even across a measure/system boundary,
+        // unlike the old placement-time pairing that only looked
+        // within the current measure. Note origins are read from
+        // `firstPass` (final at this point in the pipeline; ties
+        // attach new spanners, not new note origins).
+        let glissPairs = resolveGlissandi(for: firstPass, score: score)
+        let systemsWithGliss = attachGlissandi(
+            to: systemsWithTies, pairs: glissPairs, metrics: metrics,
+        )
         return LayoutDocument(
             size: firstPass.size,
-            systems: systemsWithTies,
+            systems: systemsWithGliss,
             metrics: metrics,
             titleFrame: titleFrame,
         )

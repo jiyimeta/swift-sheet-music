@@ -1346,54 +1346,16 @@ extension LayoutEngine {
                 }
             }
 
-            // Glissando emission pass: pair each glissando-bearing note
-            // with the corresponding note (same index) in the next chord
-            // of the same voice. Uses actual note origins (not stemOrigin)
-            // so the line slopes between the two different pitches.
-            let chordVoiceIndices = voiceChordOutIndex.keys.sorted()
-            for (pairIdx, voiceIdx) in chordVoiceIndices.enumerated() {
-                guard voiceIdx < voice.elements.count,
-                      case let .chord(chord) = voice.elements[voiceIdx]
-                else { continue }
-                guard let glissNoteIdx = chord.notes
-                    .firstIndex(where: { $0.glissando != nil }),
-                    let gliss = chord.notes[glissNoteIdx].glissando
-                else { continue }
-                let nextPairIdx = pairIdx + 1
-                guard nextPairIdx < chordVoiceIndices.count else { continue }
-                let nextVoiceIdx = chordVoiceIndices[nextPairIdx]
-                guard let fromOutIdx = voiceChordOutIndex[voiceIdx],
-                      let toOutIdx = voiceChordOutIndex[nextVoiceIdx]
-                else { continue }
-                guard case let .chord(fromNotes, _, _, _, _, _, _, _, _, _, _) =
-                    out[fromOutIdx],
-                    case let .chord(toNotes, _, _, _, _, _, _, _, _, _, _) =
-                    out[toOutIdx]
-                else { continue }
-                guard let fromFallback = fromNotes.last,
-                      let toFallback = toNotes.last
-                else { continue }
-                let fromNote = glissNoteIdx < fromNotes.count
-                    ? fromNotes[glissNoteIdx]
-                    : fromFallback
-                let toNote = glissNoteIdx < toNotes.count
-                    ? toNotes[glissNoteIdx]
-                    : toFallback
-                // Offset x inward so the line starts past the from-
-                // notehead and ends before the to-notehead.
-                out.append(.glissandoLine(
-                    fromOrigin: CGPoint(
-                        x: fromNote.origin.x + metrics.sp * 0.8,
-                        y: fromNote.origin.y,
-                    ),
-                    toOrigin: CGPoint(
-                        x: toNote.origin.x - metrics.sp * 0.8,
-                        y: toNote.origin.y,
-                    ),
-                    wavy: gliss.visualType == .wavy,
-                    text: gliss.text,
-                ))
-            }
+            // Glissando emission used to happen here, pairing each
+            // glissando-bearing note with the next chord in the SAME
+            // measure/voice — a glissando on the last chord of a
+            // measure had no "next chord" left to pair with and was
+            // silently dropped. Glissandi are now resolved in a
+            // document-wide post-pass (mirroring ties) that can look
+            // past measure/system boundaries — see
+            // `LayoutEngine.resolveGlissandi` / `.attachGlissandi` in
+            // `LayoutEngine+Glissandi.swift`, hooked in from
+            // `LayoutEngine.layout(...)`.
 
             // Beaming pass for this voice.
             let groups = beamGroups(
