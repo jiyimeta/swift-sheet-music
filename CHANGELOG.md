@@ -7,7 +7,21 @@ and this project adheres to
 
 ## [Unreleased]
 
-## [1.2.0] - 2026-07-19
+## [1.2.1] - 2026-07-19
+
+### Fixed
+
+- Glissandi that cross a measure boundary are now drawn. A glissando on the
+  last chord of a measure — whose target is the first note of the next
+  measure — was silently dropped, because line emission ran per-measure and
+  only paired a note with the next chord *within the same measure*. Glissando
+  geometry now resolves in a post-pass (mirroring tie resolution), pairing a
+  note with the next chord of its voice across measure — and system —
+  boundaries.
+- Glissandi that cross a system break render as two legible segments: a
+  labelled departure stub at the source note and an arrival stub reaching the
+  target note, each held to a bounded staff-relative (pitch-space) slope
+  clamped to ±1.5 sp so the line can never plunge across neighbouring staves.
 
 ### Added
 
@@ -69,7 +83,8 @@ First public release.
   SDK, plus Kotlin AAR modules for JNI bridging and FluidSynth + Oboe
   playback.
 
-[Unreleased]: https://github.com/jiyimeta/swift-sheet-music/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/jiyimeta/swift-sheet-music/compare/v1.2.1...HEAD
+[1.2.1]: https://github.com/jiyimeta/swift-sheet-music/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/jiyimeta/swift-sheet-music/compare/v1.1.1...v1.2.0
 [1.1.1]: https://github.com/jiyimeta/swift-sheet-music/releases/tag/v1.1.1
 [1.0.0]: https://github.com/jiyimeta/swift-sheet-music/releases/tag/v1.0.0
