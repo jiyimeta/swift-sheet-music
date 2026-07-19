@@ -136,6 +136,13 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// drained. Melodic previews use the caller's `duration` (0.5 s); drums ring
     /// longer because a cymbal's musical value is its decay. By-ear tunable.
     private let drumPreviewTail: TimeInterval = 2.0
+    /// After a tap-preview's note-off, how long to keep the graph running so the
+    /// note's release tail renders out before the engine is parked. Parking the
+    /// engine mid-release freezes the software synth's render thread, which both
+    /// cuts the tail with a click and leaves a frozen tail that resumes audibly on
+    /// the next preview's engine restart (SwiftySynth backend only — the AU
+    /// instrument path released cleanly through an engine pause). By-ear tunable.
+    private let previewReleaseTail: TimeInterval = 0.8
     /// True when a preview resumed an audio graph the host had paused.
     /// Tells the drain to restore that paused state once previews drain
     /// — preserving the host's "graph parked until play" behavior.
@@ -888,8 +895,20 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
                 // obligation now (see `previewNoteOff`) — leave the flag set
                 // and don't pause out from under the still-ringing hold.
                 guard previewShouldRepauseEngineOnDrain, activeSustainedPreview == nil else { return }
-                previewShouldRepauseEngineOnDrain = false
-                if state != .playing, engine.isRunning { engine.pause() }
+                // Defer the park until the note-off release has rendered out. Parking
+                // the engine right after `stopNote` freezes the software synth's render
+                // thread mid-release, clicking off the tail and leaving it frozen to
+                // resume on the next preview's `engine.start()`. A newer preview bumps
+                // `previewGeneration`, cancelling this park and keeping the graph
+                // running for the next note.
+                previewQueue.asyncAfter(deadline: .now() + previewReleaseTail) { [weak self] in
+                    Task { @MainActor [weak self] in
+                        guard let self, previewGeneration == generation else { return }
+                        guard previewShouldRepauseEngineOnDrain, activeSustainedPreview == nil else { return }
+                        previewShouldRepauseEngineOnDrain = false
+                        if state != .playing, engine.isRunning { engine.pause() }
+                    }
+                }
             }
         }
     }
@@ -908,6 +927,11 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         }) ?? -1
         guard let midiChannel = staffMIDIChannels[flatIdx] else { return }
         if backend != nil {
+            // Re-assert this staff's program + volume on the backend synth before the
+            // note-on: a prior playback's sequencer resets the synth's channel state
+            // to GM defaults, so without this the audition sounds on program 0 (piano)
+            // at the default volume. See `reassertBackendChannelState`.
+            reassertBackendChannelState(forStaff: flatIdx)
             backendPlayPreview(
                 pitch: pitch, channel: midiChannel,
                 isDrum: isDrumStaff(flatIdx),
@@ -1030,6 +1054,9 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         }
 
         if let backend {
+            // Re-assert program + volume first — a prior playback reset the synth's
+            // channel state to GM defaults (see `reassertBackendChannelState`).
+            reassertBackendChannelState(forStaff: flatStaffIndex)
             backend.startNote(channel: midiChannel, pitch: pitch, velocity: velocity)
         } else if let instrument {
             instrument.startNote(pitch, withVelocity: velocity, onChannel: midiChannel)

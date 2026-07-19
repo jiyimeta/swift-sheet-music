@@ -119,6 +119,30 @@ extension PlaybackEngine {
         }
     }
 
+    /// Re-assert a single staff channel's mixer program + volume on the injected
+    /// backend synth, for use immediately before a tap / hold preview's note-on.
+    /// Playback streams the SMF's programChange plus the mixer's CC 7 through the
+    /// sequencer, but a preview drives the synth directly — and a prior playback's
+    /// sequencer resets the synth's channels back to GM defaults, so without this a
+    /// post-playback audition would sound on program 0 (piano) at the default
+    /// volume. No-op unless a backend is injected (the AU path resolves per-staff
+    /// instruments itself and needs no direct re-assert).
+    func reassertBackendChannelState(forStaff staffIdx: Int) {
+        guard let backend,
+              let midiCh = midiChannel(forStaff: staffIdx),
+              let mixerCh = mixerChannels.first(where: { $0.id == .staff(staffIdx) })
+        else { return }
+        if let program = mixerCh.program, midiCh != 9 {
+            backend.setProgram(channel: midiCh, program: program)
+        }
+        let anySoloed = mixerChannels.contains(where: \.isSoloed)
+        let effectivelyMuted = mixerCh.isMuted || (anySoloed && !mixerCh.isSoloed)
+        let gain: Float = effectivelyMuted ? 0 : mixerCh.volume
+        backend.sendVolume(
+            channel: midiCh, cc7: UInt8(clamping: Int((gain * 127).rounded())),
+        )
+    }
+
     private func applyStaffGain(at staffIdx: Int, gain: Float) {
         guard let midiCh = midiChannel(forStaff: staffIdx) else { return }
         let cc7 = UInt8(clamping: Int((gain * 127).rounded()))

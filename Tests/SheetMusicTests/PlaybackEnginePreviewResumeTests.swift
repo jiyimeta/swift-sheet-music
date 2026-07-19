@@ -33,12 +33,33 @@
                 case off(channel: UInt8, pitch: UInt8)
             }
 
+            private struct ProgramCall: Equatable {
+                let channel: UInt8
+                let program: UInt8
+            }
+
+            private struct VolumeCall: Equatable {
+                let channel: UInt8
+                let cc7: UInt8
+            }
+
             @MainActor
             private final class FakeBackend: SynthBackend {
                 private(set) var events: [NoteEvent] = []
+                private(set) var programCalls: [ProgramCall] = []
+                private(set) var volumeCalls: [VolumeCall] = []
                 let outputNode: AVAudioNode = AVAudioMixerNode()
                 private(set) var currentTick = 0
                 let currentPositionSeconds: TimeInterval = 0
+
+                /// Clear everything recorded so far — used to ignore the program /
+                /// volume the `prepare` / mixer-setup phase emits, so a test can
+                /// assert only on what a subsequent preview re-applies.
+                func resetRecording() {
+                    events.removeAll()
+                    programCalls.removeAll()
+                    volumeCalls.removeAll()
+                }
 
                 func attach(to engine: AVAudioEngine) {
                     engine.attach(outputNode)
@@ -57,8 +78,13 @@
 
                 func setRate(_: Float) {}
                 func setTuning(cents _: Double, transposeSemitones _: Int) {}
-                func setProgram(channel _: UInt8, program _: UInt8) {}
-                func sendVolume(channel _: UInt8, cc7 _: UInt8) {}
+                func setProgram(channel: UInt8, program: UInt8) {
+                    programCalls.append(ProgramCall(channel: channel, program: program))
+                }
+
+                func sendVolume(channel: UInt8, cc7: UInt8) {
+                    volumeCalls.append(VolumeCall(channel: channel, cc7: cc7))
+                }
 
                 func startNote(channel: UInt8, pitch: UInt8, velocity: UInt8) {
                     events.append(.on(channel: channel, pitch: pitch, velocity: velocity))
@@ -91,7 +117,7 @@
                 )
             }
 
-            @Test("preview resumes a host-paused engine, then restores the paused state")
+            @Test("preview resumes a host-paused engine, then restores the paused state after the release tail")
             func previewResumesThenRestores() async throws {
                 let engine = PlaybackEngine(soundfontResolver: NullResolver())
                 let score = makeSingleNoteScore()
@@ -102,9 +128,60 @@
                 engine.playPreview(noteID: firstNoteID, in: score, duration: 0.05)
                 #expect(engine.engine.isRunning == true) // resumed so the note can actually sound
 
-                try await Task.sleep(for: .milliseconds(250)) // let the note-off + drain fire
+                // The park is deferred past the note-off so the release tail renders out
+                // (pausing mid-release would click and freeze the tail), so shortly after
+                // the note-off the engine is still running...
+                try await Task.sleep(for: .milliseconds(250))
+                #expect(engine.engine.isRunning == true)
+
+                // ...and only restored to the host's paused state once the release tail elapses.
+                try await Task.sleep(for: .milliseconds(1000))
                 #expect(engine.engine.isRunning == false) // restored to the host's paused state
                 #expect(engine.state == .paused) // transport state untouched
+            }
+
+            @Test("a tap preview re-asserts the staff's mixer program + volume before the note-on")
+            func tapPreviewReassertsChannelStateBeforeNote() throws {
+                let backend = FakeBackend()
+                let engine = PlaybackEngine(soundfontResolver: NullResolver(), backend: backend)
+                let score = makeSingleNoteScore()
+                try engine.prepare(score: score)
+                let channel = try #require(engine.midiChannel(forStaff: 0))
+
+                // A prior playback resets the synth's channels to GM defaults, so an
+                // audition — which drives the synth directly, not via the sequencer —
+                // must re-push the mixer's program + volume before sounding. Choose
+                // non-default values, then drop the calls `prepare` / the setters emit.
+                engine.setProgram(forChannel: .staff(0), to: 42)
+                engine.setVolume(forChannel: .staff(0), to: 0.5)
+                backend.resetRecording()
+
+                engine.playPreview(noteID: firstNoteID, in: score, duration: 0.05)
+
+                #expect(backend.programCalls == [ProgramCall(channel: channel, program: 42)])
+                #expect(backend.volumeCalls == [VolumeCall(channel: channel, cc7: 64)]) // round(0.5 * 127)
+                #expect(backend.events.first == .on(channel: channel, pitch: 60, velocity: 96))
+            }
+
+            @Test("previewNoteOn re-asserts the staff's mixer program + volume before the held note")
+            func sustainedPreviewReassertsChannelStateBeforeNote() throws {
+                let backend = FakeBackend()
+                let engine = PlaybackEngine(soundfontResolver: NullResolver(), backend: backend)
+                let score = makeSingleNoteScore()
+                try engine.prepare(score: score)
+                let channel = try #require(engine.midiChannel(forStaff: 0))
+
+                engine.setProgram(forChannel: .staff(0), to: 42)
+                engine.setVolume(forChannel: .staff(0), to: 0.5)
+                backend.resetRecording()
+
+                engine.previewNoteOn(pitch: 60, onStaff: 0)
+
+                #expect(backend.programCalls == [ProgramCall(channel: channel, program: 42)])
+                #expect(backend.volumeCalls == [VolumeCall(channel: channel, cc7: 64)])
+                #expect(backend.events == [.on(channel: channel, pitch: 60, velocity: 96)])
+
+                engine.previewNoteOff(pitch: 60) // clean up
             }
 
             @Test("preview does not pause an actively-playing engine")
