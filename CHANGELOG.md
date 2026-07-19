@@ -17,6 +17,19 @@ and this project adheres to
   `playPreview(noteID:in:duration:velocity:)`. Works on both the built-in
   AUMIDISynth path and an injected `SynthBackend` (e.g. SwiftySynth), and
   correctly interleaves with an in-flight tap preview in either order.
+- Asynchronous SoundFont loading in `SwiftySynthBackend`: `prepare(soundfontURL:)`
+  now reads + parses the SoundFont (tens to hundreds of MB) off the main actor
+  instead of freezing the UI. `SynthBackend` gained `isReady` / `onReadyChanged`
+  (with a synchronous-backend default), and `PlaybackEngine` surfaces
+  `isPreparingSoundfont` and defers a play requested mid-load until the synth is
+  ready. A superseding reload / teardown cancels the prior in-flight load. The
+  AUMIDISynth path stays synchronous and always ready.
+
+### Changed
+
+- Bumped the `swiftysynth` dependency to 0.1.1, which bulk-copies the SoundFont
+  sample chunk (per-sample read loop → single `memcpy`) — orders of magnitude
+  faster to load a large font, especially in unoptimized debug builds.
 
 ## [1.1.1] - 2026-07-19
 

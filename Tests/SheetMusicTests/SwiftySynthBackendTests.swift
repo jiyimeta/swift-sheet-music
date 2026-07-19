@@ -22,13 +22,26 @@
     extension AudioEngineSerial {
         @MainActor
         struct SwiftySynthBackendTests {
-            private func makePrepared() throws -> (SwiftySynthBackend, AVAudioEngine) {
+            /// `prepare` now loads the SoundFont off the main actor, so the backend
+            /// isn't playable synchronously — poll `isReady` before driving the
+            /// transport (`loadSequence` / `seek` no-op onto a nil sequencer while
+            /// loading). The GeneralUser-GS test font loads well within this budget.
+            private func awaitReady(_ backend: SwiftySynthBackend) async throws {
+                for _ in 0 ..< 250 {
+                    if backend.isReady { return }
+                    try await Task.sleep(for: .milliseconds(20))
+                }
+                Issue.record("SwiftySynthBackend never became ready")
+            }
+
+            private func makePrepared() async throws -> (SwiftySynthBackend, AVAudioEngine) {
                 let sampleRate = 44100.0
                 let backend = SwiftySynthBackend(sampleRate: sampleRate)
                 backend.prepare(
                     soundfontURL: URL(fileURLWithPath: swiftySynthSoundfontPath),
                     drumChannels: [],
                 )
+                try await awaitReady(backend)
                 let score = try SheetMusic.loadScore(
                     msczURL: URL(fileURLWithPath: swiftySynthShinogonoPath),
                 )
@@ -46,8 +59,8 @@
 
             /// Offline render: the transport advances and audio is produced.
             @Test(.enabled(if: swiftySynthAssetsAvailable))
-            func offlineRenderAdvancesAndProducesAudio() throws {
-                let (backend, engine) = try makePrepared()
+            func offlineRenderAdvancesAndProducesAudio() async throws {
+                let (backend, engine) = try await makePrepared()
                 let format = engine.mainMixerNode.outputFormat(forBus: 0)
                 try engine.enableManualRenderingMode(
                     .offline, format: format, maximumFrameCount: 4096,
@@ -79,7 +92,7 @@
             /// (EXC_BREAKPOINT). Guards that regression — must not crash.
             @Test(.enabled(if: swiftySynthAssetsAvailable))
             func playsOnRealRenderThreadWithoutIsolationTrap() async throws {
-                let (backend, engine) = try makePrepared()
+                let (backend, engine) = try await makePrepared()
                 try engine.start()
                 backend.play()
                 try await Task.sleep(for: .milliseconds(200))
@@ -90,8 +103,8 @@
             /// `seek(toTick:)` repositions the transport; `currentTick` reads it
             /// back near the target (seconds↔tick rounding tolerance).
             @Test(.enabled(if: swiftySynthAssetsAvailable))
-            func seekRepositionsTheTransport() throws {
-                let (backend, _) = try makePrepared()
+            func seekRepositionsTheTransport() async throws {
+                let (backend, _) = try await makePrepared()
                 backend.seek(toTick: 3840)
                 #expect(backend.currentTick > 2000)
             }
@@ -100,13 +113,14 @@
             /// output, and `setMetronomeMuted` silences it WITHOUT reloading the
             /// score SMF. A silent score (tempo only) isolates the click track:
             /// unmuted renders audibly, muted renders pure silence.
-            private func peakRenderingMetronome(muted: Bool) throws -> Float {
+            private func peakRenderingMetronome(muted: Bool) async throws -> Float {
                 let sampleRate = 44100.0
                 let backend = SwiftySynthBackend(sampleRate: sampleRate)
                 backend.prepare(
                     soundfontURL: URL(fileURLWithPath: swiftySynthSoundfontPath),
                     drumChannels: [],
                 )
+                try await awaitReady(backend)
                 // Silent score (a lone tempo event) so only the metronome sounds.
                 let tempoOnly = SheetMusicMIDI.MidiFile(division: 480, tracks: [
                     MidiTrack(events: [TimedMidiEvent(
@@ -159,9 +173,9 @@
             }
 
             @Test(.enabled(if: swiftySynthAssetsAvailable))
-            func metronomeMixesInAndMutesLive() throws {
-                #expect(try peakRenderingMetronome(muted: false) > 0.001)
-                #expect(try peakRenderingMetronome(muted: true) == 0)
+            func metronomeMixesInAndMutesLive() async throws {
+                #expect(try await peakRenderingMetronome(muted: false) > 0.001)
+                #expect(try await peakRenderingMetronome(muted: true) == 0)
             }
         }
     }

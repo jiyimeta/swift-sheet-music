@@ -1,3 +1,6 @@
+// swiftlint:disable file_length
+// The async-load + full transport/mixer surface makes this backend inherently
+// large; its render factory already lives in `SwiftySynthBackend+Render.swift`.
 import AVFoundation
 import Foundation
 import os
@@ -60,6 +63,34 @@ public final class SwiftySynthBackend: SynthBackend {
     private var tuningCents: Double = 0
     private var transposeSemitones = 0
 
+    // MARK: Off-main SoundFont load
+
+    /// Bumped on every `prepare` (and `teardown`). A background load applies its
+    /// result only if the generation still matches, so a superseded reload — or a
+    /// teardown — can't clobber the current synth with a stale one.
+    private var loadGeneration = 0
+
+    /// `false` while a background SoundFont load kicked by `prepare` is in flight.
+    /// The engine reads this to defer a play until the synth is ready.
+    public private(set) var isReady = true
+
+    /// Fired on the main actor whenever `isReady` flips (see `SynthBackend`).
+    public var onReadyChanged: (@MainActor (Bool) -> Void)?
+
+    /// The in-flight background load, cancelled by a superseding `prepare` /
+    /// `teardown` so a rapid SoundFont swap doesn't run two full ~200 MB loads at
+    /// once (transient-memory / jetsam pressure on constrained devices).
+    private var loadTask: Task<Void, Never>?
+
+    /// The freshly-built synths handed back from the background load. Non-`Sendable`
+    /// SwiftySynth types cross the actor boundary here, but safely: they are built
+    /// inside the detached task and never touched until this hand-off installs them
+    /// under `lock`, so the transfer is a move, not sharing.
+    private struct LoadedSynths: @unchecked Sendable {
+        let score: (synth: Synthesizer, sequencer: MidiFileSequencer)?
+        let metronome: (synth: Synthesizer, sequencer: MidiFileSequencer)?
+    }
+
     public let sourceNode: AVAudioSourceNode
     public var outputNode: AVAudioNode {
         sourceNode
@@ -86,29 +117,85 @@ public final class SwiftySynthBackend: SynthBackend {
         // it adds almost no per-block DSP, which matters on CPU-tight
         // lightweight SoundFonts where the constant cost of an always-on
         // effects chain could otherwise miss the render deadline.
-        let soundFont: SoundFont? = soundfontURL
-            .flatMap { try? Data(contentsOf: $0) }
-            .flatMap { try? SoundFont(data: $0) }
-        let score = Self.makeSynth(
-            soundFont: soundFont, sampleRate: sampleRate,
-            maximumPolyphony: 256, enableReverbAndChorus: true,
-        )
-        let metronome = Self.makeSynth(
-            soundFont: soundFont, sampleRate: sampleRate,
-            maximumPolyphony: 8, enableReverbAndChorus: false,
-        )
+        //
+        // The SoundFont read + parse + synth build runs OFF the main actor: a
+        // General-MIDI font is tens of MB (the high-quality one is ~200 MB), and
+        // doing that work synchronously on the main actor froze the UI for
+        // seconds. While the load is in flight `isReady` is false, the render
+        // block emits silence (its `shared.synthesizer` is nil), and the engine
+        // defers any play; the freshly-built synths are swapped in under `lock`
+        // the moment they land (`applyLoaded`).
+        loadGeneration += 1
+        let generation = loadGeneration
+        setReady(false)
+        loadTask?.cancel()
+        // Drop the old synth so the render block goes silent until the new one lands.
         lock.withLockUnchecked { shared in
-            shared.synthesizer = score?.synth
-            shared.sequencer = score?.sequencer
-            shared.metronomeSynthesizer = metronome?.synth
-            shared.metronomeSequencer = metronome?.sequencer
             shared.isPlaying = false
+            shared.synthesizer = nil
+            shared.sequencer = nil
+            shared.metronomeSynthesizer = nil
+            shared.metronomeSequencer = nil
             if shared.scratchL.count != Self.scratchCapacity {
                 shared.scratchL = [Float](repeating: 0, count: Self.scratchCapacity)
                 shared.scratchR = [Float](repeating: 0, count: Self.scratchCapacity)
             }
         }
+        let sampleRate = sampleRate
+        // `Task.detached` guarantees the heavy read/parse/build runs off the main
+        // actor regardless of the caller-isolation default; cheap `isCancelled`
+        // checkpoints bracket the expensive work so a superseded swap bails before
+        // building the ~200 MB synth pair. The build hands the (non-Sendable)
+        // synths back to the main actor via `install`, boxed as `LoadedSynths`.
+        loadTask = Task.detached(priority: .userInitiated) { [weak self] in
+            if Task.isCancelled { return }
+            let soundFont = soundfontURL
+                .flatMap { try? Data(contentsOf: $0, options: .mappedIfSafe) }
+                .flatMap { try? SoundFont(data: $0) }
+            if Task.isCancelled { return }
+            let loaded = LoadedSynths(
+                score: Self.makeSynth(
+                    soundFont: soundFont, sampleRate: sampleRate,
+                    maximumPolyphony: 256, enableReverbAndChorus: true,
+                ),
+                metronome: Self.makeSynth(
+                    soundFont: soundFont, sampleRate: sampleRate,
+                    maximumPolyphony: 8, enableReverbAndChorus: false,
+                ),
+            )
+            await self?.install(loaded, generation: generation)
+        }
+    }
+
+    /// Main-actor hand-off from the background load: install the built synths
+    /// unless a newer `prepare` / `teardown` (or this task's own cancellation) has
+    /// superseded this generation.
+    private func install(_ loaded: LoadedSynths, generation: Int) {
+        guard !Task.isCancelled, loadGeneration == generation else { return }
+        applyLoaded(loaded)
+    }
+
+    /// Install a completed background load and re-assert the persisted rate /
+    /// tuning (a fresh synth resets both), then flip `isReady` so the engine can
+    /// run any play it deferred while the SoundFont was loading.
+    private func applyLoaded(_ loaded: LoadedSynths) {
+        lock.withLockUnchecked { shared in
+            shared.synthesizer = loaded.score?.synth
+            shared.sequencer = loaded.score?.sequencer
+            shared.metronomeSynthesizer = loaded.metronome?.synth
+            shared.metronomeSequencer = loaded.metronome?.sequencer
+        }
         applyRateAndTuning()
+        setReady(true)
+    }
+
+    /// Set `isReady` and notify the host. Fires unconditionally (not guarded on a
+    /// value change) so a `prepare` right after a `teardown` — which left
+    /// `isReady` false without notifying — still signals "preparing"; a redundant
+    /// same-value notification is harmless (the engine's handler is idempotent).
+    private func setReady(_ ready: Bool) {
+        isReady = ready
+        onReadyChanged?(ready)
     }
 
     /// Build a `Synthesizer` + its `MidiFileSequencer` from an already-loaded
@@ -311,6 +398,14 @@ public final class SwiftySynthBackend: SynthBackend {
     }
 
     public func teardown() {
+        // Supersede + cancel any in-flight load so it can't install a synth
+        // post-teardown, and mark not-ready WITHOUT notifying — the engine clears
+        // its own `isPreparingSoundfont` in its `teardown`. Setting `isReady`
+        // false here also stops `play()` from driving a dead (nil-synth) transport
+        // after teardown; it defers instead until the next `prepare`.
+        loadGeneration += 1
+        loadTask?.cancel()
+        isReady = false
         lock.withLockUnchecked { shared in
             shared.isPlaying = false
             shared.sequencer?.stop()

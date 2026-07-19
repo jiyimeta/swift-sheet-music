@@ -264,7 +264,7 @@ let packageDependencies: [Package.Dependency] = [
     ),
     .package(
         url: "https://github.com/jiyimeta/swiftysynth.git",
-        exact: "0.1.0",
+        exact: "0.1.1",
     ),
 ]
 

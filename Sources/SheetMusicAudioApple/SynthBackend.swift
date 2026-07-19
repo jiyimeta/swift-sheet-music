@@ -33,7 +33,32 @@ public protocol SynthBackend: AnyObject {
     /// `soundfontURL`. `drumChannels` are the renderer-assigned MIDI channels
     /// that should render as percussion. Called from `prepare(score:)` and
     /// again from `reloadSoundfont(...)` (with a new URL).
+    ///
+    /// May load the SoundFont asynchronously (off the main actor) — a large
+    /// General-MIDI font is tens of MB and parsing it on the main actor would
+    /// freeze the UI. A backend that loads asynchronously reports `isReady ==
+    /// false` until the synth lands and flips `onReadyChanged`; a backend that
+    /// loads synchronously stays `isReady == true` throughout.
+    ///
+    /// Contract while `isReady == false`: transport / program / note / tuning
+    /// commands (`loadSequence`, `seek`, `setProgram`, `startNote`, …) may be
+    /// silently dropped because the synth doesn't exist yet. The engine honors
+    /// this by deferring play until ready and re-asserting mixer + tuning state on
+    /// the next `backendPlay`; a direct caller must await readiness before driving
+    /// the transport.
     func prepare(soundfontURL: URL?, drumChannels: Set<UInt8>)
+
+    /// `false` while an asynchronous SoundFont load kicked by `prepare` is still
+    /// in flight; `true` once the synth is playable. A synchronously-loading
+    /// backend is always `true`. The engine reads this to defer a play requested
+    /// mid-load until the synth is ready, and surfaces it as
+    /// `PlaybackEngine.isPreparingSoundfont`.
+    var isReady: Bool { get }
+
+    /// Fired on the main actor whenever `isReady` flips. The engine installs a
+    /// handler that updates `isPreparingSoundfont` and starts any play that was
+    /// deferred while the SoundFont was loading.
+    var onReadyChanged: (@MainActor (Bool) -> Void)? { get set }
 
     /// Load the rendered, playback-post-processed SMF into the transport.
     /// `timeline` provides tick↔seconds for backends whose transport clock is
@@ -82,4 +107,20 @@ public protocol SynthBackend: AnyObject {
 
     /// Tear down synth + transport before the engine is released.
     func teardown()
+}
+
+extension SynthBackend {
+    /// Default for a backend that loads its SoundFont synchronously: it's always
+    /// ready, so the engine never defers a play for it and never observes a
+    /// readiness transition. A backend that loads asynchronously (e.g.
+    /// `SwiftySynthBackend`) overrides both with stored properties. This keeps
+    /// simple / fake backends source-compatible without boilerplate.
+    public var isReady: Bool {
+        true
+    }
+
+    public var onReadyChanged: (@MainActor (Bool) -> Void)? {
+        get { nil }
+        set { _ = newValue } // synchronous backend never fires readiness changes
+    }
 }

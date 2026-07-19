@@ -244,6 +244,17 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         backend != nil
     }
 
+    /// `true` while the injected backend loads its SoundFont asynchronously (see
+    /// `SynthBackend.isReady`). A host observes this to show a "preparing" state;
+    /// a play requested during this window is deferred (`pendingBackendPlay`) and
+    /// starts automatically once loading finishes. Always `false` on the
+    /// AUMIDISynth path, which loads synchronously.
+    public private(set) var isPreparingSoundfont = false
+
+    /// A play requested while the backend was still loading its SoundFont,
+    /// replayed the moment the backend reports ready.
+    private var pendingBackendPlay: (cursor: ScoreCursor?, score: Score, countIn: Bool)?
+
     public init(
         soundfontResolver: SoundfontResolver,
         metronomeClickProvider metronomeClickProvider0: MetronomeClickProvider? = nil,
@@ -669,14 +680,24 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         if wasPlaying {
             play(from: savedCursor, in: score)
         } else if let savedCursor {
-            play(from: savedCursor, in: score)
-            // Only re-pause if `play` actually started. If the sequencer
-            // rebuild failed it left `state == .stopped`; an unconditional
-            // `pause()` here would overwrite that with `.paused`, masking
-            // the resume failure so the host reads a false "paused and
-            // ready" state.
-            if state == .playing {
-                pause()
+            // With an async-loading backend the play-then-pause dance is unsafe:
+            // `play` would DEFER (the SoundFont isn't ready), leaving `state ==
+            // .stopped`, so the `if state == .playing` re-pause never fires and the
+            // deferred play later starts audibly — a paused reload spontaneously
+            // resuming. Just keep the position; the next real play resumes from
+            // `currentCursor` once the synth is ready.
+            if usingBackend, backend?.isReady == false {
+                currentCursor = savedCursor
+            } else {
+                play(from: savedCursor, in: score)
+                // Only re-pause if `play` actually started. If the sequencer
+                // rebuild failed it left `state == .stopped`; an unconditional
+                // `pause()` here would overwrite that with `.paused`, masking
+                // the resume failure so the host reads a false "paused and
+                // ready" state.
+                if state == .playing {
+                    pause()
+                }
             }
         }
     }
@@ -713,6 +734,10 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
                 engine.connect(
                     backend.outputNode, to: scoreGainMixer, format: nil,
                 )
+                // Surface async-load progress and run any deferred play on ready.
+                backend.onReadyChanged = { [weak self] ready in
+                    self?.handleBackendReady(ready)
+                }
             }
             backend.prepare(soundfontURL: url, drumChannels: drumChannels)
             // The fresh synth resets tuning/rate; push the engine's persisted
@@ -1072,6 +1097,12 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         guard state != .exporting else { return }
         guard let timeline else { return }
         if usingBackend {
+            if let backend, !backend.isReady {
+                // SoundFont still loading — remember the request and start it the
+                // moment the synth lands (see `handleBackendReady`).
+                pendingBackendPlay = (cursor, score, countIn)
+                return
+            }
             backendPlay(
                 from: cursor, in: score, countIn: countIn, timeline: timeline,
             )
@@ -1175,6 +1206,15 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
             // and let the host surface the error if it cares.
             state = .stopped
         }
+    }
+
+    /// Backend async-load readiness changed. Mirror it into `isPreparingSoundfont`
+    /// and, once ready, start any play deferred while the SoundFont was loading.
+    private func handleBackendReady(_ ready: Bool) {
+        isPreparingSoundfont = !ready
+        guard ready, let pending = pendingBackendPlay else { return }
+        pendingBackendPlay = nil
+        play(from: pending.cursor, in: pending.score, countIn: pending.countIn)
     }
 
     /// SwiftySynth playback path — a compact equivalent of the AVAudioSequencer
@@ -1363,6 +1403,9 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     public func seek(to cursor: ScoreCursor) {
         guard state != .exporting else { return }
         guard let timeline, let frame = timeline.frame(forCursor: cursor) else { return }
+        // Keep a play that's waiting on the SoundFont load anchored at the latest
+        // seek, so the deferred play doesn't start at a now-stale cursor.
+        if pendingBackendPlay != nil { pendingBackendPlay?.cursor = cursor }
         let tick = snapTickToLoop(frame.tick)
         if let backend {
             // A click-to-seek must never keep a count-in pre-roll loaded: its
@@ -1635,6 +1678,8 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// then snapping back to pause after a single tap.
     public func pause() {
         guard state != .exporting else { return }
+        // Abandon a play that was waiting on the SoundFont load — the user paused.
+        pendingBackendPlay = nil
         if let backend {
             backend.pause()
         } else {
@@ -1652,6 +1697,8 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// from the supplied item).
     public func stop() {
         guard state != .exporting else { return }
+        // Abandon a play that was waiting on the SoundFont load — the user stopped.
+        pendingBackendPlay = nil
         if let backend {
             backend.stop()
         } else {
@@ -2108,6 +2155,9 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         sequencerScore = nil
         if let backend {
             backend.teardown()
+            // Teardown supersedes any in-flight SoundFont load; clear the
+            // "preparing" flag so it can't stay stuck true after release.
+            isPreparingSoundfont = false
             if backend.outputNode.engine != nil {
                 engine.disconnectNodeOutput(backend.outputNode)
                 engine.detach(backend.outputNode)
