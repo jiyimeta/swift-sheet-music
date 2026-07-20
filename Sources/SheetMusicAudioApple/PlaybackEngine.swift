@@ -1575,20 +1575,19 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// scrubber via `MPNowPlayingInfoPropertyElapsedPlaybackTime` —
     /// see the wrapped, audible position rather than a value that
     /// climbs past the loop end and saturates at score end.
-    /// Fold a raw transport tick into the active A-B loop region — the same
-    /// modulo fold `currentTimeSeconds` / `tickCursor` apply. Pass-through when
-    /// no loop is set.
-    private func foldTickForLoop(_ rawTick: Int) -> Int {
-        guard let loop = loopRange, rawTick >= loop.endTick else { return rawTick }
-        let len = loop.endTick - loop.startTick
-        return loop.startTick + (rawTick - loop.startTick) % len
-    }
-
+    ///
+    /// The AUMIDISynth branch folds inline below; the backend branch folds in seconds via
+    /// `foldSecondsForLoop`, since its clock is time-based.
     public var currentTimeSeconds: TimeInterval {
         guard let timeline else { return 0 }
         if let backend {
+            // Snapped to the frame's onset, matching the AUMIDISynth branch below. The
+            // position comes from the transport's own seconds clock rather than
+            // `backend.currentTick`: that tick is a notated `frame(atTime:)` lookup of an
+            // UNROLLED position, so it both runs ahead on a repeat score and saturates on the
+            // last frame at the end of the piece — freezing the host's scrubber.
             return timeline.frame(
-                atTick: foldTickForLoop(backend.currentTick),
+                atTime: backendNotatedSeconds(backend, timeline: timeline),
             )?.timeSeconds ?? 0
         }
         guard let sequencer else { return 0 }
@@ -1626,10 +1625,10 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     public var currentTimeSecondsContinuous: TimeInterval {
         guard let timeline else { return 0 }
         if let backend {
-            // The backend reports an integer tick; no sub-tick resolution.
-            return timeline.seconds(
-                atTick: Double(foldTickForLoop(backend.currentTick)),
-            )
+            // The transport's seconds clock is already continuous, so this needs no frame
+            // lookup at all — reading it through `backend.currentTick` was what quantized it
+            // to note onsets (and made it unroll-blind and saturating along the way).
+            return backendNotatedSeconds(backend, timeline: timeline)
         }
         guard let sequencer else { return 0 }
         // A non-finite `currentPositionInBeats` (see `tickCursor`) would poison
@@ -2077,6 +2076,46 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// score-tick space (normal play uses the un-shifted assembled SMF), so no
     /// `SequenceMap` translation is needed. Same loop-wrap / end-stop decisions
     /// as the AUMIDISynth `tickCursor`.
+    /// The backend transport's position on the UNROLLED sequence's seconds clock — the one
+    /// coordinate space every backend read starts from. `nil` while a count-in pre-roll is
+    /// still sounding, i.e. before the body has begun.
+    ///
+    /// With a pre-roll the loaded SMF is the unrolled render shifted by `preRollTicks`, so the
+    /// body's elapsed time has to be re-anchored at the play's start position — and in
+    /// UNROLLED coordinates, which is why the notated start time is projected through
+    /// `unrolledSeconds(fromNotated:)` first rather than added to notated seconds directly.
+    private func backendUnrolledSeconds(
+        _ backend: any SynthBackend, timeline: PlaybackTimeline,
+    ) -> TimeInterval? {
+        guard backendPreRollSeconds > 0 else { return backend.currentPositionSeconds }
+        let bodySeconds = backend.currentPositionSeconds - backendPreRollSeconds
+        guard bodySeconds >= 0 else { return nil }
+        let baseNotated = timeline.seconds(atTick: Double(backendCountInBaseTick))
+        return unrolledTimeMap.unrolledSeconds(fromNotated: baseNotated) + bodySeconds
+    }
+
+    /// Fold a NOTATED time into the active A-B loop region — the seconds counterpart of
+    /// `foldTickForLoop`, for readers whose clock is time-based. Pass-through with no loop.
+    private func foldSecondsForLoop(_ seconds: TimeInterval) -> TimeInterval {
+        guard let loop = loopRange, let timeline else { return seconds }
+        let start = timeline.seconds(atTick: Double(loop.startTick))
+        let end = timeline.seconds(atTick: Double(loop.endTick))
+        guard end > start, seconds >= end else { return seconds }
+        return start + (seconds - start).truncatingRemainder(dividingBy: end - start)
+    }
+
+    /// The backend transport's position expressed in NOTATED timeline seconds, loop-folded —
+    /// what every host-facing elapsed-time reader wants. Zero while a pre-roll is sounding, so
+    /// a scrubber sits at the start rather than jumping.
+    private func backendNotatedSeconds(
+        _ backend: any SynthBackend, timeline: PlaybackTimeline,
+    ) -> TimeInterval {
+        guard let unrolled = backendUnrolledSeconds(backend, timeline: timeline) else {
+            return timeline.seconds(atTick: Double(backendCountInBaseTick))
+        }
+        return foldSecondsForLoop(unrolledTimeMap.notatedSeconds(fromUnrolled: unrolled))
+    }
+
     private func backendTickCursor(
         backend: any SynthBackend, timeline: PlaybackTimeline,
     ) {
@@ -2087,17 +2126,10 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         // `totalTicks` are offsets), which is why comparing against the tick never fired:
         // playback stayed `.playing` with the cursor parked on the last note, and a
         // whole-score repeat never wrapped.
-        let scoreSeconds: TimeInterval
-        if backendPreRollSeconds > 0 {
-            // Count-in: the loaded SMF is shifted, so map the backend's raw seconds
-            // through the pre-roll. While still inside the pre-roll, keep the cursor
-            // pinned at the start (set at play time) and take no action; once the body
-            // starts, offset from the start tick's own time so the lookup stays exact.
-            let bodySeconds = backend.currentPositionSeconds - backendPreRollSeconds
-            if bodySeconds < 0 { return }
-            scoreSeconds = timeline.seconds(atTick: Double(backendCountInBaseTick)) + bodySeconds
-        } else {
-            scoreSeconds = backend.currentPositionSeconds
+        guard let scoreSeconds = backendUnrolledSeconds(backend, timeline: timeline) else {
+            // Still inside a count-in pre-roll — the cursor stays pinned at the start
+            // position (set at play time) and nothing is decided yet.
+            return
         }
         // `seconds(atTick:)` extrapolates across the final `[lastTick, totalTicks]` →
         // `[lastTime, totalSeconds]` segment, so an offset-valued `endTick` maps to a

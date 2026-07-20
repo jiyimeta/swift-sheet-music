@@ -96,4 +96,30 @@ public struct UnrolledTimeMap: Sendable {
         let offset = unrolledSeconds - unrolledStartSeconds[best]
         return notatedStartSeconds[best] + offset
     }
+
+    /// The unrolled time of a notated position's FIRST occurrence — the inverse direction,
+    /// restricted the same way `PlaybackUnroll` restricts scheduling ("loop wrap, seek,
+    /// play-from stay in first-occurrence coordinates"). A notated instant inside a repeated
+    /// measure has one unrolled time per pass; this returns the earliest.
+    ///
+    /// Needed to anchor a count-in: the pre-roll-shifted SMF is still the unrolled render, so
+    /// converting the play's notated start tick into unrolled time is what lets elapsed body
+    /// seconds be added in the right coordinate space. Falls back to the input when no span
+    /// covers it (identity map, or a position past the last measure-play).
+    public func unrolledSeconds(fromNotated notatedSeconds: TimeInterval) -> TimeInterval {
+        guard !spans.isEmpty else { return notatedSeconds }
+        if notatedSeconds <= 0 { return 0 }
+        for index in spans.indices {
+            let start = notatedStartSeconds[index]
+            let end = index + 1 < spans.count
+                // A span's notated end is its own start plus its duration; derive it from the
+                // unrolled axis, which was built from exactly those durations.
+                ? start + (unrolledStartSeconds[index + 1] - unrolledStartSeconds[index])
+                : .infinity
+            if notatedSeconds >= start, notatedSeconds < end {
+                return unrolledStartSeconds[index] + (notatedSeconds - start)
+            }
+        }
+        return notatedSeconds
+    }
 }
