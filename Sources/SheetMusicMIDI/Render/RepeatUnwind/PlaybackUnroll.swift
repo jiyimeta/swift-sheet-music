@@ -13,17 +13,25 @@ import SheetMusicCore
 public struct PlaybackUnroll: Sendable, Equatable {
     /// One measure-play: `[unrolledStart, unrolledStart + span)` in
     /// the SMF maps to `notatedStart + offset` in the score.
-    struct Span: Equatable {
-        var unrolledStart: Int
-        var notatedStart: Int
+    ///
+    /// Public so a caller holding a NOTATED tick↔seconds clock (i.e. a
+    /// `PlaybackTimeline`) can integrate the measure-plays into an
+    /// unrolled SECONDS axis — the projection a time-based transport
+    /// needs to map its own position back onto notated frames. The tick
+    /// map here is slope-1 per span, but the seconds map is not: a
+    /// repeated measure re-runs its own tempo, so the durations have to
+    /// be accumulated span by span.
+    public struct Span: Equatable, Sendable {
+        public var unrolledStart: Int
+        public var notatedStart: Int
         /// The measure-play's length in ticks (== the notated measure's
         /// `tickSpan`). Lets `unrolledTicks(forNotated:)` test whether a
         /// notated tick falls inside `[notatedStart, notatedStart + notatedLength)`.
-        var notatedLength: Int
+        public var notatedLength: Int
     }
 
-    /// Sorted ascending by `unrolledStart`.
-    let spans: [Span]
+    /// Sorted ascending by `unrolledStart`. Empty for `identity`.
+    public let spans: [Span]
     /// Total length of the unrolled sequence in ticks (end of the
     /// last measure-play). 0 for `identity`.
     public let totalUnrolledTicks: Int

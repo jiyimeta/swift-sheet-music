@@ -203,6 +203,11 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// first-occurrence coordinates (tap-to-seek targets a notated
     /// tick's first unrolled occurrence).
     private var unroll: PlaybackUnroll = .identity
+    /// Unrolled-transport seconds → notated-timeline seconds, rebuilt with `unroll` in
+    /// `prepare`. Only the injected-backend path needs it: that backend's clock is seconds on
+    /// the unrolled SMF, whereas the AUMIDISynth path polls unrolled TICKS and can use
+    /// `unroll.notatedTick(fromUnrolled:)` directly.
+    private var unrolledTimeMap: UnrolledTimeMap = .identity
     /// Cursor poll timer — fires at ~30 Hz while playing, updates
     /// `currentItem`.
     private var cursorTimer: Timer?
@@ -554,8 +559,10 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         sequenceMap = .identity
         sequencerHasPreRoll = false
         renderedMidiCache = nil
-        timeline = PlaybackTimeline(score: score)
+        let preparedTimeline = PlaybackTimeline(score: score)
+        timeline = preparedTimeline
         unroll = MidiRenderer.playbackUnroll(score: score)
+        unrolledTimeMap = UnrolledTimeMap(unroll: unroll, timeline: preparedTimeline)
         // UNROLLED (not notated) — playback drives the sequencer's
         // rendered SMF, which has repeats + jumps expanded. A body
         // metronome track built from notated ticks alone would end at
@@ -2104,7 +2111,13 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
             currentCursor = timeline.frame(atTick: loop.startTick)?.cursor
             return
         }
-        if let frame = timeline.frame(atTime: scoreSeconds), frame.cursor != currentCursor {
+        // Project the transport's UNROLLED seconds onto the notated timeline before the frame
+        // lookup — the seconds-space counterpart of the AUMIDISynth path's
+        // `unroll.notatedTick(fromUnrolled:)`. Without it, a score with a repeat runs the
+        // cursor a full measure-play ahead from the second pass on, then saturates on the last
+        // frame once the unrolled position passes the notated duration.
+        let notatedSeconds = unrolledTimeMap.notatedSeconds(fromUnrolled: scoreSeconds)
+        if let frame = timeline.frame(atTime: notatedSeconds), frame.cursor != currentCursor {
             currentCursor = frame.cursor
         }
         // End of score: ask the TRANSPORT, not the timeline. The loaded SMF is the
