@@ -369,6 +369,20 @@ public final class SwiftySynthBackend: SynthBackend {
         return timeline.frame(atTime: currentPositionSeconds)?.tick ?? 0
     }
 
+    /// Forwarded straight from the transport: `MidiFileSequencer.isAtEnd` is
+    /// `msgIndex == messages.count`, i.e. every message of the loaded SMF —
+    /// including the end-of-track event the renderer emits one tick past the
+    /// final note-off — has been dispatched.
+    ///
+    /// `false` when no sequence is loaded rather than the sequencer's own `true`:
+    /// "we can't tell" must not read as "the piece is over", or the engine would
+    /// stop a playback that never started. Note `stop()` here seeks the sequencer
+    /// to zero instead of releasing its `MidiFile`, so this flips back to `false`
+    /// after an end-of-score stop and the next `play` is not misread as finished.
+    public var isAtEnd: Bool {
+        lock.withLockUnchecked { $0.sequencer?.isAtEnd ?? false }
+    }
+
     public func setProgram(channel: UInt8, program: UInt8) {
         lock.withLockUnchecked {
             $0.synthesizer?.processMidiMessage(

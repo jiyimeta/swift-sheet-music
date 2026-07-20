@@ -1996,7 +1996,9 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         cursorTimer = nil
     }
 
-    private func tickCursor() {
+    /// Internal rather than private so tests can drive a single poll deterministically instead
+    /// of waiting on the 30 Hz timer (same reason `wrapToLoopStart` is internal).
+    func tickCursor() {
         guard let timeline else { return }
         if let backend {
             backendTickCursor(backend: backend, timeline: timeline)
@@ -2071,32 +2073,47 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     private func backendTickCursor(
         backend: any SynthBackend, timeline: PlaybackTimeline,
     ) {
-        let tick: Int
+        // Work in score-space SECONDS, not in a polled tick. `backend.currentTick` is a
+        // `frame(atTime:)` lookup, and `frames` carries note ONSETS only while
+        // `frame(atTime:)` clamps to the last one — so the tick saturates at the final
+        // onset. Both boundaries below sit strictly past it (`itemEndTicks` and
+        // `totalTicks` are offsets), which is why comparing against the tick never fired:
+        // playback stayed `.playing` with the cursor parked on the last note, and a
+        // whole-score repeat never wrapped.
+        let scoreSeconds: TimeInterval
         if backendPreRollSeconds > 0 {
-            // Count-in: the loaded SMF is shifted, so map the backend's raw
-            // seconds through the pre-roll. While still inside the pre-roll,
-            // keep the cursor pinned at the start (set at play time) and take
-            // no action; once the body starts, offset from the start tick's
-            // own time so the score-tick lookup stays exact.
+            // Count-in: the loaded SMF is shifted, so map the backend's raw seconds
+            // through the pre-roll. While still inside the pre-roll, keep the cursor
+            // pinned at the start (set at play time) and take no action; once the body
+            // starts, offset from the start tick's own time so the lookup stays exact.
             let bodySeconds = backend.currentPositionSeconds - backendPreRollSeconds
             if bodySeconds < 0 { return }
-            let baseSeconds = timeline.seconds(atTick: Double(backendCountInBaseTick))
-            tick = timeline.frame(atTime: baseSeconds + bodySeconds)?.tick
-                ?? backendCountInBaseTick
+            scoreSeconds = timeline.seconds(atTick: Double(backendCountInBaseTick)) + bodySeconds
         } else {
-            tick = backend.currentTick
+            scoreSeconds = backend.currentPositionSeconds
         }
-        if let loop = loopRange, tick >= loop.endTick {
+        // `seconds(atTick:)` extrapolates across the final `[lastTick, totalTicks]` →
+        // `[lastTime, totalSeconds]` segment, so an offset-valued `endTick` maps to a
+        // reachable time even though it has no frame of its own.
+        if let loop = loopRange,
+           scoreSeconds >= timeline.seconds(atTick: Double(loop.endTick))
+        {
             backend.seek(toTick: loop.startTick)
             reapplyMixerPrograms()
             applyMixerState()
             currentCursor = timeline.frame(atTick: loop.startTick)?.cursor
             return
         }
-        if let frame = timeline.frame(atTick: tick), frame.cursor != currentCursor {
+        if let frame = timeline.frame(atTime: scoreSeconds), frame.cursor != currentCursor {
             currentCursor = frame.cursor
         }
-        if loopRange == nil, tick >= timeline.totalTicks {
+        // End of score: ask the TRANSPORT, not the timeline. The loaded SMF is the
+        // unrolled render (repeats / jumps expanded) and may carry a count-in shift on
+        // top, while the timeline is notated and un-shifted — so any timeline-space end
+        // comparison is wrong on exactly the scores that have repeats. `isAtEnd` answers
+        // in the SMF's own coordinates and needs no reconstruction. (The AUMIDISynth path
+        // gets the same guarantee from its `!sequencer.isPlaying` check.)
+        if loopRange == nil, backend.isAtEnd {
             stop()
         }
     }

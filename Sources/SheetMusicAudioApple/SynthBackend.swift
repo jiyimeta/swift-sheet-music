@@ -91,6 +91,22 @@ public protocol SynthBackend: AnyObject {
     /// backend's loaded SMF carries but the backend itself doesn't know about.
     var currentPositionSeconds: TimeInterval { get }
 
+    /// Whether the transport has dispatched every message of the loaded SMF —
+    /// the backend's own "the piece is over" signal, in the SMF's coordinates.
+    ///
+    /// This is what the engine stops on, deliberately in preference to comparing
+    /// a polled position against `PlaybackTimeline`. The loaded SMF is the
+    /// UNROLLED render (repeats / jumps expanded) and may additionally carry a
+    /// count-in pre-roll shift, while the timeline is notated and un-shifted — so
+    /// any timeline-space end comparison has to reconstruct both offsets and gets
+    /// it wrong on exactly the scores where it matters. The transport already
+    /// knows, in its own coordinates, whether it ran out of messages.
+    ///
+    /// Index-based, so release tails may still be sounding when it flips, and it
+    /// reads `true` before the first `play` / after a transport reset — the engine
+    /// only consults it while `.playing`, which it cannot be before a `play`.
+    var isAtEnd: Bool { get }
+
     /// Playback speed multiplier (`1.0` = native tempo).
     func setRate(_ rate: Float)
 
@@ -122,5 +138,14 @@ extension SynthBackend {
     public var onReadyChanged: (@MainActor (Bool) -> Void)? {
         get { nil }
         set { _ = newValue } // synchronous backend never fires readiness changes
+    }
+
+    /// Default for a backend with no end-of-sequence signal of its own: never
+    /// reports the end, so the engine simply doesn't auto-stop it. Chosen over
+    /// `true` because a wrong `true` would stop playback the moment it started,
+    /// whereas a wrong `false` only leaves the host to stop it explicitly. Any
+    /// backend driving a finite SMF should override this.
+    public var isAtEnd: Bool {
+        false
     }
 }
