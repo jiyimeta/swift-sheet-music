@@ -212,6 +212,17 @@ public final class SwiftySynthBackend: SynthBackend {
               ),
               let synth = try? Synthesizer(soundFont: soundFont, settings: settings)
         else { return nil }
+        // SwiftySynth inherits MeltySynth's C# field initializer of 0.5 here, which is a
+        // porting artifact rather than a considered default — it costs a flat 6 dB against
+        // the host's own gain stage for no reason. The engine already owns level control
+        // (`scoreGainMixer` / `setMasterGain`), so the synth should hand back unity and let
+        // that stage decide. Measured: 0.5 → 1.0 recovers exactly 6.02 dB on a single voice.
+        //
+        // This does NOT close the whole gap against the old AUMIDISynth path, which measured
+        // ~20 dB louder — but that path peaked at +2.17 dBFS on ONE note, i.e. it was clipping
+        // and leaning on the master limiter. Matching it would mean reproducing distortion, so
+        // the rest is deliberately left to the host's master volume.
+        synth.masterVolume = 1.0
         return (synth, MidiFileSequencer(synthesizer: synth))
     }
 
