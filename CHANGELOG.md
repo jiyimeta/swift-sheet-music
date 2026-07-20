@@ -7,6 +7,19 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [1.2.4] - 2026-07-20
+
+### Changed
+
+- `PlaybackEngine.setMasterGain(_:)` no longer caps the gain at 3.0. Negative
+  values are still clamped to zero; there is no upper bound. The ceiling was a
+  product decision in the wrong layer: how loud playback should be depends on
+  the synth backend's output level and on what the host is trying to sound
+  like, neither of which the engine can judge. A host calibrating a quiet
+  backend against a louder reference can legitimately need more than 3×, and
+  the cap left it with no recourse. The downstream peak limiter still prevents
+  hard clipping, so the host owns the loudness/limiting trade-off.
+
 ## [1.2.3] - 2026-07-20
 
 Fixes four defects in the injected-`SynthBackend` playback path introduced in

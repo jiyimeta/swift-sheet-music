@@ -23,7 +23,7 @@
                 #expect(engine.scoreGainMixerOutputVolume == 1.0)
             }
 
-            @Test("setMasterGain clamps to 0...3 and reaches the node")
+            @Test("setMasterGain clamps negatives to zero and reaches the node")
             func clampsAndApplies() {
                 let engine = PlaybackEngine(soundfontResolver: NullResolver())
 
@@ -31,13 +31,25 @@
                 #expect(engine.masterGain == 1.5)
                 #expect(engine.scoreGainMixerOutputVolume == 1.5)
 
-                engine.setMasterGain(5) // above ceiling
-                #expect(engine.masterGain == 3.0)
-                #expect(engine.scoreGainMixerOutputVolume == 3.0)
-
                 engine.setMasterGain(-1) // below floor
                 #expect(engine.masterGain == 0.0)
                 #expect(engine.scoreGainMixerOutputVolume == 0.0)
+            }
+
+            /// There is deliberately no ceiling: a host calibrating a quiet backend against a
+            /// louder reference can need well past the old 3.0 limit, and that judgement is the
+            /// host's to make, not this engine's.
+            @Test("setMasterGain has no upper limit")
+            func acceptsGainAboveTheOldCeiling() {
+                let engine = PlaybackEngine(soundfontResolver: NullResolver())
+
+                engine.setMasterGain(5)
+                #expect(engine.masterGain == 5.0)
+                #expect(engine.scoreGainMixerOutputVolume == 5.0)
+
+                engine.setMasterGain(12)
+                #expect(engine.masterGain == 12.0)
+                #expect(engine.scoreGainMixerOutputVolume == 12.0)
             }
 
             @Test("master gain persists across prepare(score:)")
