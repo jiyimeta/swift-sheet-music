@@ -7,6 +7,47 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [1.2.3] - 2026-07-20
+
+Fixes four defects in the injected-`SynthBackend` playback path introduced in
+1.2.0, when live playback moved from AUMIDISynth to SwiftySynth. Hosts on the
+built-in AUMIDISynth path were not affected by any of them.
+
+### Fixed
+
+- Playback now stops when it reaches the end of the score, and a whole-score
+  repeat now loops. The cursor poll compared a frame-snapped tick against
+  offset-valued boundaries: `SwiftySynthBackend.currentTick` is a
+  `PlaybackTimeline.frame(atTime:)` lookup, `frames` carries note onsets only,
+  and `frame(atTime:)` clamps to the last one — so the polled tick saturated at
+  the final onset while both boundaries (`totalTicks` and the loop end from
+  `itemEndTicks`) sit strictly past it. Neither was ever reached, so the engine
+  stayed `.playing` forever with the cursor parked on the last note, and a loop
+  covering the whole score never wrapped. End-of-score detection now asks the
+  transport (`SynthBackend.isAtEnd`) instead of comparing against the timeline,
+  and the loop wrap compares in score-space seconds.
+- The playback cursor now tracks the audio on scores with repeats or jumps.
+  The transport plays the unrolled render (repeats expanded) but its position
+  was looked up directly in the notated timeline, so from the second
+  measure-play onward the cursor ran a full measure-play ahead, then froze on
+  the last frame once the unrolled position passed the notated duration.
+- `currentTimeSeconds` / `currentTimeSecondsContinuous` — what a host publishes
+  as elapsed playback time — carried the same drift and freeze, and
+  `currentTimeSecondsContinuous` was additionally quantized to note onsets
+  despite documenting itself as interpolating within a frame. All three backend
+  reads now share one derivation from the transport's own clock.
+- Playback through the SwiftySynth backend is 6 dB louder.
+  `Synthesizer.masterVolume` was left at MeltySynth's C# default of 0.5, so
+  every voice was attenuated before the engine's own gain stage. It now runs at
+  unity and lets `setMasterGain` own the level.
+
+### Added
+
+- `SynthBackend.isAtEnd`, the transport's own end-of-sequence signal, with a
+  default of `false` for backends that cannot report one.
+- `PlaybackUnroll.Span` and `.spans` are now public, so an unrolled↔notated
+  seconds projection can be built from another module.
+
 ## [1.2.2] - 2026-07-20
 
 ### Fixed
