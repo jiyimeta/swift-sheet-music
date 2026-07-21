@@ -1661,15 +1661,27 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// Skip playback forward (`seconds > 0`) or backward
     /// (`seconds < 0`) relative to the current position, clamped to
     /// `[0, totalTimeSeconds]`. Preserves play / pause state — when
-    /// playing, restarts the sequencer at the new position so audio
+    /// playing, restarts the transport at the new position so audio
     /// keeps flowing; when paused, just moves the cursor and the next
-    /// `play()` resumes from there. No-op when no sequencer is built.
+    /// `play()` resumes from there. No-op before the transport is built.
     public func skip(by seconds: TimeInterval) {
         guard state != .exporting else { return }
-        guard let timeline, let sequencer else { return }
+        guard let timeline else { return }
         let now = currentTimeSeconds
         let target = max(0, min(timeline.totalSeconds, now + seconds))
         guard let frame = timeline.frame(atTime: target) else { return }
+        // Injected-backend path: the AUMIDISynth `sequencer` is never built (see `play`), so a
+        // `guard let sequencer` above would make every skip a silent no-op — the host's seek bar,
+        // the lock-screen scrubber (`changePlaybackPositionCommand`), and the ±N-second skip all
+        // dead. Route the resolved frame through `seek(to:)`, which owns the backend transport move
+        // (playing → keeps flowing from the new position; paused → the next `play` resumes there)
+        // plus the count-in pre-roll drop, loop snap, and `currentCursor` update — exactly as
+        // click-to-seek does.
+        if usingBackend {
+            seek(to: frame.cursor)
+            return
+        }
+        guard let sequencer else { return }
         if state == .playing, let score = sequencerScore {
             // Mirror `play(from:in:)` semantics — writing
             // `currentPositionInBeats` while the sequencer is running
