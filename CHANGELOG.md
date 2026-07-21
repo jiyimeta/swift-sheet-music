@@ -7,6 +7,23 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [1.2.5] - 2026-07-22
+
+Fixes another defect in the injected-`SynthBackend` playback path introduced in
+1.2.0, when live playback moved from AUMIDISynth to SwiftySynth. Hosts on the
+built-in AUMIDISynth path were not affected.
+
+### Fixed
+
+- `PlaybackEngine.skip(by:)` now works on the injected `SynthBackend` path. It
+  guarded on the AUMIDISynth `sequencer`, which is never built when a backend is
+  injected (`play` returns early into `backendPlay`), so every relative seek was
+  a silent no-op — a host's seek bar, the lock-screen scrubber
+  (`changePlaybackPositionCommand`), and the ±N-second skip buttons were all
+  dead. `skip(by:)` now routes its resolved target frame through `seek(to:)` when
+  a backend is injected, reusing the same count-in pre-roll drop, loop snap, and
+  `currentCursor` update as an absolute seek.
+
 ## [1.2.4] - 2026-07-20
 
 ### Changed
