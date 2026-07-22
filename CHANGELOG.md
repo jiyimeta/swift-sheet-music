@@ -7,6 +7,19 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [1.2.6] - 2026-07-22
+
+### Fixed
+
+- Staves voiced through SF2 note-on modulators — most visibly
+  MuseScore_General's Acoustic Grand Piano — no longer render near-silent on the
+  SwiftySynth backend. Bumps swiftysynth 0.1.2 → 0.2.0 and enables
+  `SynthesizerSettings.enableModulators`, so the synth applies each region's
+  note-on velocity/key modulators (attenuation, filter cutoff/Q, pitch/LFO/
+  envelope depths, tune, reverb/chorus sends) once at note start. swiftysynth's
+  MeltySynth port had discarded these, collapsing the piano's velocity-crossfade
+  layering; the ON-path loudness now matches FluidSynth 3.5.5 within ~0.2 dB.
+
 ## [1.2.5] - 2026-07-22
 
 Fixes another defect in the injected-`SynthBackend` playback path introduced in
