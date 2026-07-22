@@ -205,10 +205,14 @@ public final class SwiftySynthBackend: SynthBackend {
         maximumPolyphony: Int, enableReverbAndChorus: Bool,
     ) -> (synth: Synthesizer, sequencer: MidiFileSequencer)? {
         guard let soundFont,
+              // Enable SF2 note-on modulators (swiftysynth 0.2.0+): fonts that voice a
+              // preset via velocity→attenuation/filter modulators (e.g. MuseScore_General's
+              // Acoustic Grand Piano) render at their intended level instead of near-silent.
               let settings = try? SynthesizerSettings(
                   sampleRate: Int(sampleRate),
                   maximumPolyphony: maximumPolyphony,
                   enableReverbAndChorus: enableReverbAndChorus,
+                  enableModulators: true,
               ),
               let synth = try? Synthesizer(soundFont: soundFont, settings: settings)
         else { return nil }
