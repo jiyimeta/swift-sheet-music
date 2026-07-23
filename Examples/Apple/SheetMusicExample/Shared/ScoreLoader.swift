@@ -9,16 +9,17 @@ import SheetMusicAudio
 /// centralises that bookkeeping along with the format switch
 /// over `ScoreFileType`.
 enum ScoreLoader {
-    /// Read the bundled `test.mscx` shipped with the example. The
-    /// file is registered as a resource by the Xcode target — if
-    /// it goes missing the build is broken, so we raise a clear
-    /// error instead of silently leaving the UI empty.
+    /// Load the startup score. Prefers a user-supplied `test.mscx`
+    /// dropped into `SheetMusicExample/` (untracked — bring your own,
+    /// like the Android example's `test.mscz`), and falls back to the
+    /// bundled `harmony-basic.mscx` fixture so a fresh clone renders
+    /// a score instead of an error screen.
     static func loadBundled() throws -> Score {
         guard let url = Bundle.main.url(
             forResource: "test", withExtension: "mscx",
         )
         else {
-            throw LoadError.bundledMissing
+            return try loadHarmonyBasic()
         }
         let data = try Data(contentsOf: url)
         return try SheetMusic.loadScore(mscxData: data)
@@ -78,7 +79,7 @@ enum ScoreLoader {
         var errorDescription: String? {
             switch self {
             case .bundledMissing:
-                return "Bundled test.mscx not found."
+                return "Bundled harmony-basic.mscx fixture not found."
             case let .unsupported(name):
                 return "Unsupported file: \(name)"
             }
