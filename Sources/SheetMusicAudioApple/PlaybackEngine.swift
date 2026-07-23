@@ -2164,13 +2164,23 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         if let frame = timeline.frame(atTime: notatedSeconds), frame.cursor != currentCursor {
             currentCursor = frame.cursor
         }
-        // End of score: ask the TRANSPORT, not the timeline. The loaded SMF is the
-        // unrolled render (repeats / jumps expanded) and may carry a count-in shift on
-        // top, while the timeline is notated and un-shifted — so any timeline-space end
-        // comparison is wrong on exactly the scores that have repeats. `isAtEnd` answers
-        // in the SMF's own coordinates and needs no reconstruction. (The AUMIDISynth path
-        // gets the same guarantee from its `!sequencer.isPlaying` check.)
-        if loopRange == nil, backend.isAtEnd {
+        // End of score: ask the TRANSPORT (`isAtEnd` — every SMF message dispatched)
+        // AND the clock. The loaded SMF is the unrolled render (repeats / jumps
+        // expanded) and may carry a count-in shift on top, while the timeline is
+        // notated and un-shifted — so a timeline-space-only end comparison is wrong on
+        // exactly the scores that have repeats; `isAtEnd` answers in the SMF's own
+        // coordinates. But `isAtEnd` alone is also wrong: the renderer places EoT one
+        // tick past the last *event* (MuseScore convention), so a score whose tail —
+        // or entirety — is rests exhausts its messages long before its notated end
+        // (an all-rest score at tick ~1), and playback would stop ~one poll tick
+        // after `play`. The sequencer's block clock keeps advancing after the last
+        // message, so requiring the projected notated position to reach
+        // `totalSeconds` plays the silent tail out. (The AUMIDISynth path gets the
+        // same behavior from its position-vs-`totalUnrolledTicks` check —
+        // `AVAudioSequencer`'s beat clock likewise runs past the end of its data.)
+        if loopRange == nil, backend.isAtEnd,
+           notatedSeconds >= timeline.totalSeconds
+        {
             stop()
         }
     }
