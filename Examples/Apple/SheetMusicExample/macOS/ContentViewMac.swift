@@ -201,6 +201,11 @@
         /// (= MuseScore's `#808080` on white). When OFF (print default),
         /// they are dropped entirely. Wired into `ScoreViewOptions.showsInvisibleElements`.
         @State private var showsInvisibleElements = false
+        /// When ON (default), parts the file authored as hidden via
+        /// `<Part><show>0</show>` are dropped from the rendered score, the
+        /// way a host (Folino) filters authored-hidden staves. Toggling it OFF
+        /// draws every staff so you can A/B what `<show>` is hiding.
+        @State private var honorAuthoredHiding = true
         /// Transposition offset in semitones (clamped ±7). Applied to
         /// the rendered score via `Score.transposed(bySemitones:)` and
         /// to the audio engine via `PlaybackEngine.setTranspose(semitones:)`.
@@ -216,9 +221,38 @@
         @State private var isRepeating = false
 
         /// The score handed to the layout engine: the loaded score with
-        /// the active transpose applied, so the engraving reflects it.
+        /// the active transpose applied, so the engraving reflects it. When
+        /// `honorAuthoredHiding` is on, parts the file marked
+        /// `<Part><show>0</show>` are filtered out first — the same
+        /// `Score.filtered(hidingStaves:)` transform a host applies to honor
+        /// authored visibility.
         private func laidOut(_ s: Score) -> Score {
-            s.transposed(bySemitones: transposeSemitones)
+            let transposed = s.transposed(bySemitones: transposeSemitones)
+            guard honorAuthoredHiding else { return transposed }
+            let hidden = Self.authoredHiddenStaves(of: s)
+            return hidden.isEmpty
+                ? transposed
+                : transposed.filtered(hidingStaves: hidden)
+        }
+
+        /// Staff addresses of every part the file authored as hidden
+        /// (`Part.isVisibleInScore == false`, i.e. `<Part><show>0</show>`).
+        /// `<show>` is a per-part flag, so a hidden part contributes all of
+        /// its staves. Part indices are unaffected by transpose, so this can
+        /// be computed from the pre-transpose score.
+        private static func authoredHiddenStaves(of score: Score) -> Set<StaffAddress> {
+            var hidden: Set<StaffAddress> = []
+            for (partIndex, part) in score.parts.enumerated()
+                where !part.isVisibleInScore
+            {
+                for staffIndexInPart in part.staves.indices {
+                    hidden.insert(StaffAddress(
+                        partIndex: partIndex,
+                        staffIndexInPart: staffIndexInPart,
+                    ))
+                }
+            }
+            return hidden
         }
 
         /// systemGap targets MuseScore's `Sid::minSystemDistance` of
@@ -264,6 +298,7 @@
                     isMetronomeEnabled: $isMetronomeEnabled,
                     playbackRate: $playbackRate,
                     showsInvisibleElements: $showsInvisibleElements,
+                    honorAuthoredHiding: $honorAuthoredHiding,
                     transposeSemitones: $transposeSemitones,
                     soundfontChoices: soundfontChoices,
                     selectedSoundfontID: $selectedSoundfontID,
@@ -283,7 +318,7 @@
                 )
             } detail: {
                 if let score {
-                    scoreContent(score: score.transposed(bySemitones: transposeSemitones))
+                    scoreContent(score: laidOut(score))
                         .popover(item: $clefPopover, arrowEdge: .top) { state in
                             ClefPopover(
                                 current: ClefChoice.from(rawType: state.currentRawType),
@@ -325,6 +360,9 @@
                 rebuildLayoutsForOptionsChange()
             }
             .onChange(of: showsInvisibleElements) { _, _ in
+                rebuildLayoutsForOptionsChange()
+            }
+            .onChange(of: honorAuthoredHiding) { _, _ in
                 rebuildLayoutsForOptionsChange()
             }
             .onChange(of: isMetronomeEnabled) { _, newValue in

@@ -34,6 +34,7 @@
         /// `1.0` is the score's native tempo; the slider spans `0.5…2.0×`.
         @Binding var playbackRate: Double
         @Binding var showsInvisibleElements: Bool
+        @Binding var honorAuthoredHiding: Bool
         @Binding var transposeSemitones: Int
         let soundfontChoices: [SoundfontChoice]
         @Binding var selectedSoundfontID: String
@@ -208,6 +209,18 @@
                     .disabled(score == nil)
                     Text(
                         "Draws elements with `visible == false` at 50 % opacity (MuseScore #808080 on white). Off = print behaviour (hidden entirely).",
+                    )
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    Toggle(isOn: $honorAuthoredHiding) {
+                        Label(
+                            "Honor authored <show>",
+                            systemImage: "eye.slash",
+                        )
+                    }
+                    .disabled(score == nil)
+                    Text(
+                        "Hides parts the file marked `<Part><show>0</show>` (MuseScore's \"hide instrument in score\"). Off = draw every staff. This mirrors how a host filters authored-hidden staves.",
                     )
                     .font(.caption2)
                     .foregroundStyle(.secondary)
