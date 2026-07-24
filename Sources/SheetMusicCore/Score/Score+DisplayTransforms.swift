@@ -206,45 +206,73 @@ extension Score {
     /// staves before the layout engine sees them.
     public func filtered(hidingStaves addresses: Set<StaffAddress>) -> Score {
         guard !addresses.isEmpty else { return self }
-        var copy = self
-        var newParts: [Part] = []
+
+        // Brackets span the GLOBAL staff order (`parts.flatMap(\.staves)`), not
+        // a single part — MuseScore routinely groups several single-staff parts
+        // under one bracket. So both survival and span must be computed over the
+        // flattened sequence; a per-part span calculation collapses such
+        // cross-part brackets down to just their anchor staff.
+        var originalAddresses: [StaffAddress] = []
         for (partIndex, part) in parts.enumerated() {
-            let keep: [Bool] = part.staves.indices.map { staffIndex in
-                !addresses.contains(StaffAddress(
+            for staffIndex in part.staves.indices {
+                originalAddresses.append(StaffAddress(
                     partIndex: partIndex, staffIndexInPart: staffIndex,
                 ))
             }
-            guard keep.contains(true) else { continue }
+        }
+        func isKept(_ address: StaffAddress) -> Bool {
+            !addresses.contains(address)
+        }
 
+        // Rebuild parts with hidden staves removed (dropping now-empty parts)
+        // and brackets stripped, recording where each surviving staff landed so
+        // brackets can be re-attached by global index afterwards.
+        var newParts: [Part] = []
+        var newLocation: [StaffAddress: (part: Int, staff: Int)] = [:]
+        for (partIndex, part) in parts.enumerated() {
             var keptStaves: [Staff] = []
-            var newIndexFor: [Int: Int] = [:]
-            for (origIndex, staff) in part.staves.enumerated() where keep[origIndex] {
-                newIndexFor[origIndex] = keptStaves.count
+            for (staffIndex, staff) in part.staves.enumerated() {
+                let address = StaffAddress(
+                    partIndex: partIndex, staffIndexInPart: staffIndex,
+                )
+                guard isKept(address) else { continue }
+                newLocation[address] = (newParts.count, keptStaves.count)
                 var stripped = staff
                 stripped.brackets = []
                 keptStaves.append(stripped)
             }
-
-            for (origIndex, staff) in part.staves.enumerated() {
-                for bracket in staff.brackets {
-                    let endOriginal = min(
-                        origIndex + bracket.span - 1,
-                        part.staves.count - 1,
-                    )
-                    let surviving = (origIndex ... endOriginal).filter { keep[$0] }
-                    guard let firstOriginal = surviving.first,
-                          let anchor = newIndexFor[firstOriginal]
-                    else { continue }
-                    var rebased = bracket
-                    rebased.span = surviving.count
-                    keptStaves[anchor].brackets.append(rebased)
-                }
-            }
-
+            guard !keptStaves.isEmpty else { continue }
             var newPart = part
             newPart.staves = keptStaves
             newParts.append(newPart)
         }
+
+        // Re-anchor / re-span each bracket over the surviving global staves. A
+        // bracket at global index `g` with span `s` covers g … g+s-1; it
+        // re-anchors on the first surviving staff in that window (which may live
+        // in a different part than the original anchor) and its span becomes the
+        // number of survivors in the window. A window with no survivor drops the
+        // bracket entirely.
+        for (globalIndex, address) in originalAddresses.enumerated() {
+            let staff = parts[address.partIndex].staves[address.staffIndexInPart]
+            for bracket in staff.brackets {
+                let endIndex = min(
+                    globalIndex + bracket.span - 1,
+                    originalAddresses.count - 1,
+                )
+                let surviving = (globalIndex ... endIndex)
+                    .filter { isKept(originalAddresses[$0]) }
+                guard let anchorGlobal = surviving.first,
+                      let location = newLocation[originalAddresses[anchorGlobal]]
+                else { continue }
+                var rebased = bracket
+                rebased.span = surviving.count
+                newParts[location.part].staves[location.staff]
+                    .brackets.append(rebased)
+            }
+        }
+
+        var copy = self
         copy.parts = newParts
         return copy
     }

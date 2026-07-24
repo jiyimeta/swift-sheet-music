@@ -37,6 +37,23 @@ struct ScoreDisplayTransformsTests {
         ])
     }
 
+    /// Four single-staff parts. Part 0's staff carries a normal bracket
+    /// spanning the first THREE staves — i.e. across parts 0, 1 and 2 — the way
+    /// MuseScore groups several single-staff instruments under one section
+    /// bracket. Part 3 sits outside the bracket. (This is the a-cappella shape:
+    /// Lead / Top / 2nd / 3rd / Bass under one bracket, drums outside.)
+    private func makeScoreWithCrossPartBracket() -> Score {
+        let inst = Self.instrument(id: "voice")
+        var lead = Staff(measures: [])
+        lead.brackets = [BracketItem(type: .normal, span: 3)]
+        return Score(division: 480, parts: [
+            Part(id: "p0", instrument: inst, staves: [lead]),
+            Part(id: "p1", instrument: inst, staves: [Staff(measures: [])]),
+            Part(id: "p2", instrument: inst, staves: [Staff(measures: [])]),
+            Part(id: "p3", instrument: inst, staves: [Staff(measures: [])]),
+        ])
+    }
+
     /// Score where a staff's first measure/voice/element is an explicit Clef.
     private func makeScoreWithExplicitClef(clefType: String) -> Score {
         let inst = Self.instrument(id: "inst")
@@ -120,6 +137,50 @@ struct ScoreDisplayTransformsTests {
         let brackets = filtered.parts[0].staves[0].brackets
         #expect(brackets.count == 1)
         #expect(brackets[0].span == 1)
+    }
+
+    @Test func filterHidingStaffBelowCrossPartBracketPreservesSpan() {
+        let score = makeScoreWithCrossPartBracket()
+        // Hide part 3 — it sits below the bracket's 3-staff span, so the bracket
+        // grouping parts 0–2 must be left untouched (span stays 3).
+        let filtered = score.filtered(hidingStaves: [
+            StaffAddress(partIndex: 3, staffIndexInPart: 0),
+        ])
+        #expect(filtered.parts.count == 3)
+        let brackets = filtered.parts[0].staves[0].brackets
+        #expect(brackets.count == 1)
+        #expect(brackets[0].span == 3)
+    }
+
+    @Test func filterHidingInteriorStaffOfCrossPartBracketShrinksSpan() {
+        let score = makeScoreWithCrossPartBracket()
+        // Hide part 1 (interior of the span). The bracket shrinks 3 → 2 and
+        // stays anchored on part 0's staff.
+        let filtered = score.filtered(hidingStaves: [
+            StaffAddress(partIndex: 1, staffIndexInPart: 0),
+        ])
+        #expect(filtered.parts.count == 3)
+        let brackets = filtered.parts[0].staves[0].brackets
+        #expect(brackets.count == 1)
+        #expect(brackets[0].span == 2)
+    }
+
+    @Test func filterReanchorsCrossPartBracketOntoNextPartWhenAnchorHidden() {
+        let score = makeScoreWithCrossPartBracket()
+        // Hide part 0 (the bracket's anchor). The bracket must re-anchor on the
+        // next surviving staff in its span — former part 1, now parts[0] — with
+        // span shrunk 3 → 2, rather than vanishing.
+        let filtered = score.filtered(hidingStaves: [
+            StaffAddress(partIndex: 0, staffIndexInPart: 0),
+        ])
+        #expect(filtered.parts.count == 3)
+        let brackets = filtered.parts[0].staves[0].brackets
+        #expect(brackets.count == 1)
+        #expect(brackets[0].span == 2)
+        // Re-anchoring must preserve the bracket's style, not just its span.
+        #expect(brackets[0].type == .normal)
+        #expect(brackets[0].column == 0)
+        #expect(brackets[0].visible == true)
     }
 
     // MARK: - applying(clefOverrides:)
