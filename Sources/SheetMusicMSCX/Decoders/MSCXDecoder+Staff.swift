@@ -110,6 +110,8 @@ struct MSCXStaffPairing {
     var trackName: String?
     var instrument: Instrument
     var declared: [(mscxID: String?, staff: Staff)]
+    /// MuseScore `<Part><show>` — false when `<show>0</show>` hid the part.
+    var isVisibleInScore: Bool
 }
 
 /// Result of part assembly: the wired-up `[Part]` plus the
@@ -188,6 +190,7 @@ func assembleParts( // swiftlint:disable:this function_body_length
             trackName: dp.trackName,
             instrument: dp.instrument,
             staves: assembled,
+            isVisibleInScore: dp.isVisibleInScore,
         ))
     }
 
@@ -200,7 +203,7 @@ func assembleParts( // swiftlint:disable:this function_body_length
     }
 
     let measureCount = perStaffSystemElements
-        .map { $0.perMeasure.count }
+        .map(\.perMeasure.count)
         .max() ?? 0
     var systemMeasures = Array(
         repeating: SystemMeasure(),

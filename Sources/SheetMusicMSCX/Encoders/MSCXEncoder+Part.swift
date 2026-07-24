@@ -24,6 +24,13 @@ extension Part {
         for (staff, id) in zip(staves, staffIDs) {
             children.append(staff.encodeDeclaration(staffID: id, options: options))
         }
+        // Round-trip MuseScore's `<Part><show>`: only a hidden part carries the
+        // element (`<show>0</show>`), matching MuseScore, which omits it when the
+        // part is visible (the default). Emitted after the `<Staff>` declarations
+        // and before `<trackName>` to mirror MuseScore's child order.
+        if !isVisibleInScore {
+            children.append(XMLTreeNode(name: "show", text: "0"))
+        }
         if let trackName {
             children.append(XMLTreeNode(name: "trackName", text: trackName))
         }

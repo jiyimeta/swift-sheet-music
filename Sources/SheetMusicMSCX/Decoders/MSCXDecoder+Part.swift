@@ -19,11 +19,19 @@ extension Part {
             throw SheetMusicError.malformedScore(reason: "Part missing <Instrument>")
         }
         let instrument = try Instrument.decode(instrNode)
+        // MuseScore `<Part><show>` — instrument visibility in the main score.
+        // `<show>0</show>` hides every staff of this part; absent or any other
+        // value (`1`) is visible. It sits as a direct child of `<Part>` in both
+        // MS3 (id-less `<Part>`, `<Staff id="N">`) and MS4 (`<Part id="N">`,
+        // id-less `<Staff>`), so this single read covers both shapes. `.text`
+        // is already whitespace-trimmed by the XML parser.
+        let isVisibleInScore = node.first("show")?.text != "0"
         return MSCXStaffPairing(
             partID: id,
             trackName: node.first("trackName")?.text,
             instrument: instrument,
             declared: declared,
+            isVisibleInScore: isVisibleInScore,
         )
     }
 }
