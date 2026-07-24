@@ -7,6 +7,34 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-07-25
+
+### Added
+
+- `Part.isVisibleInScore` — MuseScore's `<Part><show>` "hide instrument
+  in the main score" flag is now decoded and modelled. It is read
+  identically from MuseScore 3 (id-less `<Part>`, `<Staff id="N">`) and
+  MuseScore 4 (`<Part id="N">`, id-less `<Staff>`) files, where `<show>`
+  sits at the same position as a direct child of `<Part>`; absent or
+  `<show>1</show>` decodes as visible. The encoder round-trips it,
+  emitting `<show>0</show>` only for hidden parts (matching MuseScore,
+  which omits it when visible). The flag is display-only: hosts drive
+  the actual hiding through `Score.filtered(hidingStaves:)`, so the part
+  stays in the model and in playback and a reader can reveal it.
+
+### Fixed
+
+- `Score.filtered(hidingStaves:)` mishandled brackets that span several
+  single-staff parts (e.g. a five-part vocal group under one section
+  bracket). It re-spanned brackets within a single part, clamping the
+  span to that part's staff count — so hiding a staff below the group
+  collapsed the whole bracket onto its anchor staff, and hiding the
+  anchor's part dropped the bracket entirely. Bracket survival, span,
+  and anchor are now recomputed over the global (flattened) staff order,
+  so a cross-part bracket contracts correctly around hidden staves and
+  re-anchors onto the first surviving staff when its own anchor is
+  hidden. Staff- and part-dropping semantics are unchanged.
+
 ## [1.3.0] - 2026-07-24
 
 ### Added
