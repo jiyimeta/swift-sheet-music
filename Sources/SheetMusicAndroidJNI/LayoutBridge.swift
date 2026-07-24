@@ -553,6 +553,16 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                 into: &out,
             )
 
+        case let .chordLine(shape, origin, thickness):
+            encodeChordLine(
+                shape: shape,
+                originXPt: mox + Double(origin.x),
+                originYPt: moy + Double(origin.y),
+                thicknessPt: Double(thickness),
+                glyphSizePt: glyphSize,
+                into: &out,
+            )
+
         case let .tieArc(fromOrigin, toOrigin, above):
             encodeTieArc(
                 fromX: mox + Double(fromOrigin.x),

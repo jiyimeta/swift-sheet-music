@@ -112,6 +112,12 @@ extension LayoutEngine {
                 bottom: shift(bot),
                 subtype: subtype,
             )
+        case let .chordLine(shape, origin, thickness):
+            // The shape payload is origin-relative, so only the origin
+            // moves.
+            return .chordLine(
+                shape: shape, origin: shift(origin), thickness: thickness,
+            )
         case let .tremoloBars(anchor, barCount):
             let shifted: TremoloAnchor
             switch anchor {

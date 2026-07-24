@@ -30,6 +30,10 @@ public struct Chord: Sendable, Equatable {
     /// pair; the follower is identified by adjacency in the voice's
     /// element list.
     public var tremolo: Tremolo?
+    /// Jazz/brass inflection lines (fall / doit / plop / scoop) hanging
+    /// off this chord. A chord may carry several — e.g. a scoop into
+    /// the note and a fall out of it. C++: `Chord::_chordLines`.
+    public var chordLines: [ChordLine]
     /// Base element properties shared with every engravable element.
     /// Currently carries only `<visible>`; see `ElementProperties`.
     public var elementProperties: ElementProperties
@@ -59,6 +63,7 @@ public struct Chord: Sendable, Equatable {
         graceNotesAfter: [GraceChord] = [],
         articulations: [ChordArticulation] = [],
         tremolo: Tremolo? = nil,
+        chordLines: [ChordLine] = [],
         visible: Bool = true,
         stemVisible: Bool = true,
     ) {
@@ -70,6 +75,7 @@ public struct Chord: Sendable, Equatable {
         self.graceNotesAfter = graceNotesAfter
         self.articulations = articulations
         self.tremolo = tremolo
+        self.chordLines = chordLines
         self.stemVisible = stemVisible
         elementProperties = ElementProperties(visible: visible)
     }

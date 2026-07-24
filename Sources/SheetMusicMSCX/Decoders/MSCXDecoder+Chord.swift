@@ -24,32 +24,6 @@ extension Chord {
             arpeggio?.elementProperties = ElementProperties(decodingMSCXChildrenOf: arpeggioNode)
         }
 
-        // <Lyrics><text>syllable</text></Lyrics> — one per verse line.
-        // Verse number comes from <no> (0-indexed); absent = verse 0.
-        // <syllabic> places the syllable in a hyphenated word;
-        // <ticks> sizes melismas.
-        var lyricsMap: [Int: Lyric] = [:]
-        for lyricsNode in node.all("Lyrics") {
-            let verse = Int(lyricsNode.first("no")?.text ?? "0") ?? 0
-            let text = lyricsNode.first("text")?.text ?? ""
-            let syllabic = (lyricsNode.first("syllabic")?.text)
-                .flatMap(Syllabic.init(mscxValue:)) ?? .single
-            let ticks = Int(lyricsNode.first("ticks")?.text ?? "0") ?? 0
-            var lyric = Lyric(
-                text: text, syllabic: syllabic, ticks: ticks,
-                verse: verse,
-                properties: TextProperties.decode(lyricsNode),
-            )
-            lyric.elementProperties = ElementProperties(decodingMSCXChildrenOf: lyricsNode)
-            lyricsMap[verse] = lyric
-        }
-        let maxVerse = lyricsMap.keys.max() ?? -1
-        let lyrics: [Lyric] = maxVerse >= 0
-            ? (0 ... maxVerse).map { i in
-                lyricsMap[i] ?? Lyric(text: "", verse: i)
-            }
-            : []
-
         let articulations = node.all("Articulation").map { artNode -> ChordArticulation in
             let subtype = artNode.first("subtype")?.text ?? ""
             return ChordArticulation.fromSubtypeXML(subtype)
@@ -74,13 +48,45 @@ extension Chord {
 
         var chord = Chord(
             duration: duration, notes: ChordNotes(notes),
-            arpeggio: arpeggio, lyrics: lyrics,
+            arpeggio: arpeggio, lyrics: decodeLyrics(node),
             articulations: articulations,
             tremolo: tremolo,
+            chordLines: ChordLine.decodeAll(inChord: node),
             stemVisible: stemVisible,
         )
         chord.elementProperties = ElementProperties(decodingMSCXChildrenOf: node)
         return chord
+    }
+
+    /// Decode the `<Lyrics>` children of a `<Chord>` node — one per
+    /// verse line. Verse number comes from `<no>` (0-indexed); absent =
+    /// verse 0. `<syllabic>` places the syllable in a hyphenated word;
+    /// `<ticks>` sizes melismas.
+    ///
+    /// Gaps in the verse numbering are padded with empty placeholders so
+    /// the returned array is indexable by verse; the encoder skips those
+    /// again on write.
+    private static func decodeLyrics(_ node: XMLTreeNode) -> [Lyric] {
+        var lyricsMap: [Int: Lyric] = [:]
+        for lyricsNode in node.all("Lyrics") {
+            let verse = Int(lyricsNode.first("no")?.text ?? "0") ?? 0
+            let text = lyricsNode.first("text")?.text ?? ""
+            let syllabic = (lyricsNode.first("syllabic")?.text)
+                .flatMap(Syllabic.init(mscxValue:)) ?? .single
+            let ticks = Int(lyricsNode.first("ticks")?.text ?? "0") ?? 0
+            var lyric = Lyric(
+                text: text, syllabic: syllabic, ticks: ticks,
+                verse: verse,
+                properties: TextProperties.decode(lyricsNode),
+            )
+            lyric.elementProperties = ElementProperties(decodingMSCXChildrenOf: lyricsNode)
+            lyricsMap[verse] = lyric
+        }
+        let maxVerse = lyricsMap.keys.max() ?? -1
+        guard maxVerse >= 0 else { return [] }
+        return (0 ... maxVerse).map { i in
+            lyricsMap[i] ?? Lyric(text: "", verse: i)
+        }
     }
 
     /// Decode the `<Note>` children of a `<Chord>` node, propagating

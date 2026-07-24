@@ -40,6 +40,15 @@ extension Chord {
         //   engraving/dom/chord.cpp Chord::write — durationType →
         //   StemDirection → ChordLine / Articulation / Tremolo →
         //   Lyrics → Note.
+        // Chord-level `<ChordLine>`s lead the cluster; the ones bound to
+        // a specific note (`noteIndex != nil`) are written inside that
+        // `<Note>` instead — see the `chordLines:` argument below. A
+        // `noteIndex` pointing past the note list (possible when
+        // `ChordNotes` deduped a repeated pitch after decode) demotes to
+        // the chord-level form rather than dropping the element.
+        for line in chordLines where !notes.indices.contains(line.noteIndex ?? -1) {
+            children.append(line.encode(options: options))
+        }
         for art in articulations {
             children.append(art.encode(options: options))
         }
@@ -71,12 +80,13 @@ extension Chord {
         for lyric in lyrics where !lyric.text.isEmpty {
             children.append(lyric.encode(options: options))
         }
-        for note in notes {
+        for (noteIndex, note) in notes.enumerated() {
             children.append(note.encode(
                 tieForwardLocation: tieForwardLocation,
                 tieBackLocation: tieBackLocation,
                 options: options,
                 drumDefaultHead: isPercussionV3 ? "normal" : nil,
+                chordLines: chordLines.filter { $0.noteIndex == noteIndex },
             ))
         }
         children.append(contentsOf: elementProperties.mscxChildren())

@@ -186,6 +186,8 @@ extension SMuFLCodepoint {
         "accidentalWyschnegradsky8TwelfthsSharp": 0xE427,
         "accidentalWyschnegradsky9TwelfthsFlat": 0xE433,
         "accidentalWyschnegradsky9TwelfthsSharp": 0xE428,
+        "brassFallRoughShort": 0xE5DD,
+        "brassLiftShort": 0xE5D1,
         "guitarVibratoStroke": 0xEAB2,
         "guitarWideVibratoStroke": 0xEAB3,
         "noteABlack": 0xE197,

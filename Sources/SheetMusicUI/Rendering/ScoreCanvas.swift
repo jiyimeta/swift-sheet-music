@@ -516,6 +516,12 @@ public enum ScoreCanvasDrawing { // swiftlint:disable:this type_body_length
                 from: shift(from), to: shift(to),
                 wavy: wavy, text: text, metrics: metrics,
             )
+        case let .chordLine(shape, origin, thickness):
+            ChordLineRenderer.draw(
+                context: &context,
+                shape: shape, origin: shift(origin),
+                thickness: thickness, metrics: metrics,
+            )
         case let .tupletLabel(
             from,
             to,

@@ -799,6 +799,23 @@ extension LayoutEngine {
                             voiceIndex: voiceIdx,
                         ))
                     }
+                    // Jazz/brass inflection lines (fall / doit / plop /
+                    // scoop). C++: `TLayout::layoutChordLine`.
+                    let chordLineParts = Self.chordLineElements(
+                        for: chord.chordLines,
+                        chordNotes: chordNotes,
+                        chordX: chordX,
+                        dots: DurationInterpretation.split(chord.duration).dots,
+                        stem: stem,
+                        staffMidY: staffMidY,
+                        // The chord's own magnification — C++:
+                        // `chord()->intrinsicMag()`. NOT `mag`, which is
+                        // the enclosing grace-note scale (0.6).
+                        mag: chordMag,
+                        metrics: metrics,
+                    )
+                    out.append(contentsOf: chordLineParts.visible)
+                    invisibleOut.append(contentsOf: chordLineParts.invisible)
                     if let arp = chord.arpeggio,
                        arp.visible || options.showsInvisibleElements
                     {

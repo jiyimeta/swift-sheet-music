@@ -259,7 +259,9 @@ extension LayoutEngine {
         struct TimedElement {
             let startTick: Int
             let endTick: Int
-            let weight: CGFloat
+            /// Mutable so a chord line pointing LEFT can widen the gap
+            /// that was already recorded for the PREVIOUS element.
+            var weight: CGFloat
         }
         // Effective measure duration — used to resolve any `.measure`
         // rest via `NoteDuration.resolved(in:)`. Defensive: no decoder
@@ -287,6 +289,9 @@ extension LayoutEngine {
                 // the next timed element's weight so the chord segment
                 // reserves enough room for the chord symbol.
                 var pendingHarmonyWidth: CGFloat = 0
+                // Previous notes-bearing chord, for the backward reach of
+                // a left-pointing chord line (plop / scoop).
+                var previousChord: Chord?
                 for (idx, el) in voice.elements.enumerated() {
                     switch el {
                     case let .chord(c) where !c.notes.isEmpty:
@@ -308,6 +313,25 @@ extension LayoutEngine {
                         )
                         let graceBudget = LayoutEngine.graceWidth(sp: metrics.sp)
                             * CGFloat(c.graceNotesAfter.count + nextBeforeCount)
+                        // Jazz inflection lines are part of the chord's
+                        // shape upstream, so they widen the neighbouring
+                        // gaps — a left-pointing scoop/plop reaches back
+                        // into the gap already recorded for the previous
+                        // element.
+                        let inflection = chordLineSpacing(
+                            c.chordLines,
+                            anchorSteps: spacingSteps(of: c),
+                            previousSteps: previousChord.map(spacingSteps(of:)),
+                            nextSteps: nextSpacingChord(
+                                in: voice.elements, after: idx,
+                            ).map(spacingSteps(of:)),
+                            metrics: metrics,
+                        )
+                        if inflection.leftward > 0, let last = elements.indices.last {
+                            elements[last].weight = max(
+                                elements[last].weight, inflection.leftward,
+                            )
+                        }
                         let baseWeight = max(
                             durationWidth(c.duration, metrics: metrics) + graceBudget,
                             lyricsPairWidth(
@@ -315,6 +339,7 @@ extension LayoutEngine {
                                 nextLyrics: nextLyrics,
                                 metrics: metrics,
                             ),
+                            inflection.rightward,
                         )
                         let w = max(baseWeight, pendingHarmonyWidth)
                         pendingHarmonyWidth = 0
@@ -322,6 +347,7 @@ extension LayoutEngine {
                         elements.append(TimedElement(
                             startTick: tick, endTick: end, weight: w,
                         ))
+                        previousChord = c
                         allTicks.insert(tick)
                         tick = end
                     case let .chord(r):
@@ -544,6 +570,127 @@ extension LayoutEngine {
             maxVoiceWidth = max(maxVoiceWidth, w)
         }
         return leftPadding + maxVoiceWidth + rightPadding
+    }
+
+    /// Anchor-to-anchor room a chord's jazz inflection lines demand from
+    /// their neighbours.
+    ///
+    /// A `ChordLine` is part of the chord's shape upstream — it is added
+    /// by `ChordLayout::fillShape`'s `item->el()` loop
+    /// (`rendering/score/chordlayout.cpp`), so `HorizontalSpacing` has
+    /// to clear it. But upstream only *sometimes* charges for it:
+    ///
+    ///  * `doComputeKerningType` returns `KerningType::KERNING` for a
+    ///    chord line against anything but a barline. Plain `KERNING`
+    ///    hits the `default: break` arm of `minHorizontalDistance`'s
+    ///    switch, contributing **nothing** — the line is free to tuck in
+    ///    beside the neighbour.
+    ///  * That only changes when the two shape rectangles **vertically
+    ///    intersect**, in which case the earlier branch applies the full
+    ///    `r1.right() − r2.left() + padding` clearance.
+    ///  * Against a barline the kerning type is `ALLOW_COLLISION`, so a
+    ///    line on the last chord of a measure costs nothing at all.
+    ///
+    /// So the reservation is conditional on vertical overlap with the
+    /// neighbouring chord, and absent at a barline. `neighbourSteps` is
+    /// nil when there is no neighbouring chord on that side.
+    ///
+    /// Magnitude, with MuseScore's defaults
+    /// (`paddingTable[CHORDLINE][*] = 0.35 sp`, Bravura notehead
+    /// half-width 0.59 sp):
+    ///
+    ///     0.59 + 0.33 (horOffset) + 1.2 (reach) + 0.08 (half stroke)
+    ///          + 0.59 + 0.35 (padding)  =  3.14 sp
+    ///
+    /// We land on the same figure via the shared `noteheadHalfExtent`
+    /// (0.7 sp) plus `minNoteDistance`-equivalent slack.
+    ///
+    /// Measured at full size: this pass has no access to
+    /// `ScoreViewOptions.smallNoteMag`, and over-reserving for a
+    /// cue-sized chord only ever leaves a little extra air.
+    static func chordLineSpacing(
+        _ lines: [ChordLine],
+        anchorSteps: [Int],
+        previousSteps: [Int]?,
+        nextSteps: [Int]?,
+        metrics: StaffMetrics,
+    ) -> (leftward: CGFloat, rightward: CGFloat) {
+        guard !lines.isEmpty else { return (0, 0) }
+        let halfHead = noteheadHalfExtent(sp: metrics.sp)
+        let reach = halfHead
+            + ChordLineGeometry.horizontalOffsetSp * metrics.sp
+            + ChordLineGeometry.horizontalLengthSp * metrics.sp
+            + ChordLineGeometry.thickness(sp: metrics.sp)
+            + halfHead
+        var leftward: CGFloat = 0
+        var rightward: CGFloat = 0
+        for line in lines where line.visible {
+            let neighbour = line.isToTheLeft ? previousSteps : nextSteps
+            // No neighbouring chord on that side means the line faces a
+            // barline, which upstream lets it collide with outright.
+            guard let neighbour, !neighbour.isEmpty,
+                  chordLineOverlapsNeighbour(
+                      line, anchorSteps: anchorSteps, neighbourSteps: neighbour,
+                  )
+            else { continue }
+            if line.isToTheLeft {
+                leftward = max(leftward, reach)
+            } else {
+                rightward = max(rightward, reach)
+            }
+        }
+        return (leftward, rightward)
+    }
+
+    /// Whether a chord line's vertical band intersects the neighbouring
+    /// chord's noteheads — the `intersects(ay1, ay2, by1, by2, …)` test
+    /// in `HorizontalSpacing::minHorizontalDistance`.
+    ///
+    /// Bands are in staff spaces relative to the anchor note's centre,
+    /// y growing downward. Only noteheads are considered: the neighbour's
+    /// stem is either on its far side (stem up, drawn at the notehead's
+    /// right) or exactly at its notehead's left edge (stem down), so the
+    /// notehead is always the binding rectangle.
+    static func chordLineOverlapsNeighbour(
+        _ line: ChordLine, anchorSteps: [Int], neighbourSteps: [Int],
+    ) -> Bool {
+        // The anchor is the chord's up-note (largest step = highest).
+        guard let anchor = anchorSteps.max() else { return false }
+        let offset = ChordLineGeometry.verticalOffsetSp
+        let length = ChordLineGeometry.verticalLengthSp
+        let lineTop = line.isBelow ? offset : -(offset + length)
+        let lineBottom = line.isBelow ? offset + length : -offset
+
+        // Staff steps grow upward; screen y grows downward, and one step
+        // is half a staff space.
+        let deltas = neighbourSteps.map { -0.5 * CGFloat($0 - anchor) }
+        guard let top = deltas.min(), let bottom = deltas.max() else {
+            return false
+        }
+        return lineBottom > top - 0.5 && lineTop < bottom + 0.5
+    }
+
+    /// Staff steps of a chord's notes. The clef cancels out because only
+    /// differences between chords are ever compared, so a fixed treble
+    /// reference is safe here.
+    static func spacingSteps(of chord: Chord) -> [Int] {
+        chord.notes.map {
+            PitchStaffPosition.step(
+                midiPitch: $0.pitch, tpc: $0.tpc, clef: .treble,
+            ).step
+        }
+    }
+
+    /// The next notes-bearing chord in a voice, or nil at a barline.
+    static func nextSpacingChord(
+        in elements: [VoiceElement], after index: Int,
+    ) -> Chord? {
+        for element in elements[(index + 1)...] {
+            if case let .chord(chord) = element, !chord.notes.isEmpty {
+                return chord
+            }
+        }
+        return nil
     }
 
     static func durationWidth(

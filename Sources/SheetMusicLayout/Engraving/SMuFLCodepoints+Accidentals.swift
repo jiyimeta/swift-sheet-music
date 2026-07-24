@@ -184,4 +184,6 @@ extension SMuFLCodepoint {
     public static let accidentalWyschnegradsky8TwelfthsSharp: UInt32 = 0xE427
     public static let accidentalWyschnegradsky9TwelfthsFlat: UInt32 = 0xE433
     public static let accidentalWyschnegradsky9TwelfthsSharp: UInt32 = 0xE428
+    public static let brassFallRoughShort: UInt32 = 0xE5DD
+    public static let brassLiftShort: UInt32 = 0xE5D1
 }

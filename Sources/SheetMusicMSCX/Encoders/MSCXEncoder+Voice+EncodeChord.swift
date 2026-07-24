@@ -33,6 +33,7 @@ extension Voice {
             lyrics: chord.lyrics,
             articulations: chord.articulations,
             tremolo: chord.tremolo,
+            chordLines: chord.chordLines,
         )
         let tieForward = forwardTieLocation(
             chord: chord,

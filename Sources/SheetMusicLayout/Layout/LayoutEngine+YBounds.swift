@@ -76,6 +76,18 @@ extension LayoutEngine {
             return [from.y, to.y]
         case let .arpeggioWiggle(top, bot, _):
             return [top.y, bot.y]
+        case let .chordLine(shape, origin, _):
+            switch shape {
+            case let .path(segments):
+                // The path can run a full spatium above / below its
+                // origin, so both extremes must reach the bbox.
+                let box = ChordLineGeometry.boundingBox(of: segments)
+                return [origin.y + box.minY, origin.y + box.maxY]
+            case .glyph:
+                // Centre-anchored; the generic glyphPad in
+                // `elementYBounds` covers the ink extent.
+                return [origin.y]
+            }
         case let .tremoloBars(anchor, _):
             switch anchor {
             case let .single(c): return [c.y]

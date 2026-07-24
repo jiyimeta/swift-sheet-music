@@ -231,6 +231,16 @@ public enum LayoutElement: Sendable, Equatable {
         bottom: CGPoint,
         subtype: String?,
     )
+    /// Jazz/brass inflection line hanging off a chord — fall, doit,
+    /// plop, or scoop (plus their "slide" and "rough" palette
+    /// variants). `origin` is the attachment point next to the
+    /// notehead in measure-local coords; the `shape` payload is
+    /// expressed relative to it. See `ChordLineGeometry`.
+    case chordLine(
+        shape: ChordLineShape,
+        origin: CGPoint,
+        thickness: CGFloat,
+    )
     /// Beamed-stem tremolo bars. Bar count comes from
     /// `Tremolo.Subtype.rawValue` (1, 2, 3, or 4). Slant is fixed at +12°
     /// for v1 (a flat slant matches the MuseScore default sufficiently

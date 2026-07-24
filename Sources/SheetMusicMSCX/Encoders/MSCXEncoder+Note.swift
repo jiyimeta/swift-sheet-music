@@ -28,11 +28,17 @@ extension Note {
     /// accidental / optional headType, plus `<Spanner type="Tie">`
     /// markers for `tieForward` / `tieBack` and a
     /// `<Spanner type="Glissando">` block when `glissando` is set.
+    /// `chordLines` are the owning chord's `ChordLine`s whose
+    /// `noteIndex` points at *this* note. MuseScore nests those inside
+    /// the `<Note>` (`TWrite::write(const Note*, …)` walks
+    /// `chord()->el()` for chord lines matching the note); chord-level
+    /// ones stay under `<Chord>`.
     func encode(
         tieForwardLocation: TieLocation? = nil,
         tieBackLocation: TieLocation? = nil,
         options: MSCXEncoderOptions = .init(),
         drumDefaultHead: String? = nil,
+        chordLines: [ChordLine] = [],
     ) -> XMLTreeNode {
         var children: [XMLTreeNode] = []
         if let accidental {
@@ -81,6 +87,9 @@ extension Note {
         // `<head>`. C++: `TWrite::write(const Note*, …)`.
         if !play {
             children.append(XMLTreeNode(name: "play", text: "0"))
+        }
+        for chordLine in chordLines {
+            children.append(chordLine.encode(options: options))
         }
         children.append(contentsOf: elementProperties.mscxChildren())
         return XMLTreeNode(name: "Note", children: children)

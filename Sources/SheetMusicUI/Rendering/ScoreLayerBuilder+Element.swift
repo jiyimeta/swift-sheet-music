@@ -244,6 +244,12 @@ extension ScoreLayerBuilder {
                 text: text,
                 metrics: metrics, height: height, into: parent,
             )
+        case let .chordLine(shape, origin, thickness):
+            drawChordLine(
+                shape: shape, origin: shift(origin),
+                thickness: thickness,
+                metrics: metrics, height: height, into: parent,
+            )
         case let .tupletLabel(
             from, to, text, bracket, above,
             tid,
