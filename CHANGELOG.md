@@ -7,6 +7,33 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-07-24
+
+### Added
+
+- Fall, doit, plop and scoop — MuseScore's `<ChordLine>` — are now
+  imported, laid out, drawn and exported. They previously vanished on
+  import: the element was not modelled anywhere, so the MSCX decoder's
+  permissive skip dropped it silently and nothing downstream could draw
+  it. Covers all twelve palette variants (the default curved shapes, the
+  straight "slide in/out" forms, and the wavy "rough" forms, which use
+  the SMuFL `brassFallRoughShort` / `brassLiftShort` glyphs), on the
+  SwiftUI Canvas renderer, the CALayer renderer and the Android draw
+  program. `Chord.chordLines` carries them; both the `<Chord>`-level and
+  `<Note>`-nested MSCX forms round-trip, including a user-dragged
+  `<Path>`. Geometry is ported from MuseScore 4's
+  `TLayout::layoutChordLine` and verified against its own PDF output.
+  MIDI is deliberately unaffected — MuseScore's SMF export ignores chord
+  lines too.
+- Chord lines take part in horizontal spacing, mirroring upstream: a
+  line widens the gap to its neighbour only when the two shapes
+  vertically intersect, and never against a barline.
+
+### Fixed
+
+- `MSCXEncoder`'s chord rebuild in `encodeChord` no longer drops
+  chord-attached fields it does not name explicitly.
+
 ## [1.2.6] - 2026-07-22
 
 ### Fixed
