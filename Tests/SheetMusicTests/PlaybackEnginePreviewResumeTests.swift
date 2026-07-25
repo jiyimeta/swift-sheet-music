@@ -117,9 +117,14 @@
                 )
             }
 
-            @Test("preview resumes a host-paused engine, then restores the paused state after the release tail")
+            /// The release-tail deferral is a BACKEND-path behavior (`backendPlayPreview`
+            /// schedules the park `previewReleaseTail` after the note-off), so this test
+            /// must inject a backend. The AU instrument path deliberately has no deferral
+            /// — it releases cleanly through an engine pause (see `previewReleaseTail`'s
+            /// doc comment) — and is covered by the immediate-repark test below.
+            @Test("preview resumes a host-paused engine, then restores the paused state after the release tail (backend path)")
             func previewResumesThenRestores() async throws {
-                let engine = PlaybackEngine(soundfontResolver: NullResolver())
+                let engine = PlaybackEngine(soundfontResolver: NullResolver(), backend: FakeBackend())
                 let score = makeSingleNoteScore()
                 try engine.prepare(score: score)
                 engine.pause() // host parks the graph (folino does this right after load)
@@ -136,6 +141,26 @@
 
                 // ...and only restored to the host's paused state once the release tail elapses.
                 try await Task.sleep(for: .milliseconds(1000))
+                #expect(engine.engine.isRunning == false) // restored to the host's paused state
+                #expect(engine.state == .paused) // transport state untouched
+            }
+
+            /// The AU instrument path parks the engine at the preview's end with no
+            /// release-tail deferral — the AU path released cleanly through an engine
+            /// pause, so deferring there would only delay the host's parked state.
+            @Test("preview resumes a host-paused engine and re-parks it right after the preview ends (AU path)")
+            func previewResumesThenReparksImmediatelyOnAUPath() async throws {
+                let engine = PlaybackEngine(soundfontResolver: NullResolver())
+                let score = makeSingleNoteScore()
+                try engine.prepare(score: score)
+                engine.pause() // host parks the graph
+                #expect(engine.engine.isRunning == false)
+
+                engine.playPreview(noteID: firstNoteID, in: score, duration: 0.05)
+                #expect(engine.engine.isRunning == true) // resumed so the note can actually sound
+
+                // The drain fires at +duration and re-parks immediately — no deferral here.
+                try await Task.sleep(for: .milliseconds(250))
                 #expect(engine.engine.isRunning == false) // restored to the host's paused state
                 #expect(engine.state == .paused) // transport state untouched
             }
