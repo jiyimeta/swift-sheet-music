@@ -2,9 +2,9 @@ package io.github.jiyimeta.sheetmusic.compose.render
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
@@ -30,8 +30,13 @@ import io.github.jiyimeta.sheetmusic.compose.draw.model.EncodablePage
  *
  * A second benefit falls out of the same structure: siblings the host stacks over the score (a playback
  * cursor, ink overlays) no longer share a layer with it, so their updates stop re-recording the score's
- * commands. Hosts should therefore NOT wrap this in a `graphicsLayer` of their own — that would collapse
- * the bands back into one layer and undo both effects.
+ * commands.
+ *
+ * Every band is sized from [pxPerMM] alone, never from the incoming constraints, so a host is free to let
+ * the surface around them grow and shrink — during a pinch, say — without resizing a single band and
+ * forcing it to re-record. A host wrapping this in its own `graphicsLayer` is fine and is the intended
+ * way to zoom: the band layers nest inside that one rather than collapsing into it, so a pinch can scale
+ * the already-recorded bands and re-rasterise once, when the gesture ends, instead of every frame.
  *
  * For a paginated layout, where a page is about a screenful already, [ScorePage] is the right call.
  *
@@ -65,6 +70,11 @@ fun BandedScorePage(
     }
     val bands = cache.bands
 
+    // Width comes from the page, not from `fillMaxWidth`. A band that sized itself to the incoming
+    // constraints would re-measure — and therefore re-record — whenever the surface around it changed
+    // width, which is exactly what a host does on every frame of a pinch.
+    val widthPx = (page.widthMM * pxPerMM).toFloat()
+
     Box(modifier) {
         bands.forEachIndexed { index, band ->
             key(index) {
@@ -72,7 +82,7 @@ fun BandedScorePage(
                 val heightPx = (band.heightMM * pxPerMM).toFloat()
                 Canvas(
                     Modifier
-                        .fillMaxWidth()
+                        .width(with(density) { widthPx.toDp() })
                         .height(with(density) { heightPx.toDp() })
                         .offset(y = with(density) { topPx.toDp() })
                         .graphicsLayer(),
