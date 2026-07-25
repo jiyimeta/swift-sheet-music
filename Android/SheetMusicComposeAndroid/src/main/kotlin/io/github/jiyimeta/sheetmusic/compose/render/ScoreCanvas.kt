@@ -110,6 +110,17 @@ private fun DrawScope.drawPage(
     pxPerMM: Float,
     smufl: android.graphics.Typeface,
     text: android.graphics.Typeface,
+) = drawCommands(page.commands, pxPerMM, smufl, text)
+
+/**
+ * Paint one command run. Split out of [drawPage] so a band ([ScoreBand]) — a self-contained slice of a
+ * page's commands, still in page coordinates — can be drawn by the same renderer under a translate.
+ */
+internal fun DrawScope.drawCommands(
+    commands: List<DrawCommand>,
+    pxPerMM: Float,
+    smufl: android.graphics.Typeface,
+    text: android.graphics.Typeface,
 ) {
     val path = Path()
     var strokeStarted = false
@@ -124,7 +135,7 @@ private fun DrawScope.drawPage(
         isAntiAlias = true
         color = currentArgb
     }
-    for (cmd in page.commands) {
+    for (cmd in commands) {
         when (cmd) {
             is DrawCommand.MoveTo -> {
                 val x = cmd.x.toFloat() * pxPerMM

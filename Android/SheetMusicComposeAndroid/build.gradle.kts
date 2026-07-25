@@ -41,6 +41,7 @@ dependencies {
     // ScoreCursor / LoopRange model types referenced by the overlays + their
     // wirelet codecs (ScoreCursorCodec) live in the audio module.
     api(project(":SheetMusicAudioAndroid"))
+    testImplementation("junit:junit:4.13.2")
 }
 
 val packageRoot: File = rootProject.projectDir.resolve("..").canonicalFile
