@@ -13,6 +13,10 @@ public struct PartsStavesWire {
 public struct PartWire {
     public var name: String
     public var staves: [StaffWire]
+    /// MuseScore `<Part><show>` — 0 when the file authored this part as hidden
+    /// (`<show>0</show>`), 1 when shown. The Android Reader seeds authored-hidden
+    /// parts' staves into its hidden-staff set, mirroring iOS.
+    public var isVisibleInScore: UInt8 // 0/1
 }
 
 /// Descriptor for one staff in the display inspector.
@@ -35,6 +39,7 @@ extension PartsStavesWire {
                     let address = StaffAddress(partIndex: partIndex, staffIndexInPart: staffIndex)
                     return StaffWire(defaultClefRawType: score.authoredClef(at: address) ?? "")
                 },
+                isVisibleInScore: part.isVisibleInScore ? 1 : 0,
             )
         }
     }
