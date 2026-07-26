@@ -37,11 +37,20 @@ public struct PDFImportOptions {
     /// left `.unknown` and lyric recall collapsed to 0%. It stays off until
     /// Task 14 has both a measured threshold and a per-font gate.
     public var enableShapeMatching = false
-    /// TESTING ONLY. Suppress Tier 1 (SMuFL codepoint) classification so the
-    /// shape-matching tier can be measured against Tier 1's known-correct
-    /// answer. Never set this in production; it degrades every SMuFL PDF.
-    public var disableSMuFLCodepointTier = false
-    /// TESTING ONLY. Anchors the music/text routing decision in `emitShow`
+    /// TESTING ONLY, INTERNAL. Suppress Tier 1 (SMuFL codepoint)
+    /// classification so the shape-matching tier can be measured against
+    /// Tier 1's known-correct answer. Never set this in production; it
+    /// degrades every SMuFL PDF.
+    ///
+    /// Not `public`: its only caller is the measurement harness, which
+    /// already reaches internals through `@testable import SheetMusicPDF`.
+    /// A public symbol cannot be withdrawn without a breaking change, and
+    /// the package is past 1.0 — so a knob that exists to break the
+    /// importer on purpose stays inside the module. Same for
+    /// `anchorMusicGlyphsToPUARange` and `bypassMusicFontGateForTesting`
+    /// below.
+    var disableSMuFLCodepointTier = false
+    /// TESTING ONLY, INTERNAL. Anchors the music/text routing decision in `emitShow`
     /// to whether the raw decoded codepoint falls in the SMuFL PUA range,
     /// ignoring which (if any) tier supplied the glyph's `SMuFLSemantic`.
     ///
@@ -56,8 +65,8 @@ public struct PDFImportOptions {
     /// Tier 1 is enabled (Tier 1 only ever answers PUA-range codepoints), so
     /// this only ever changes behavior in combination with
     /// `disableSMuFLCodepointTier`. Never set this in production.
-    public var anchorMusicGlyphsToPUARange = false
-    /// TESTING ONLY. Skips the per-font music-font gate
+    var anchorMusicGlyphsToPUARange = false
+    /// TESTING ONLY, INTERNAL. Skips the per-font music-font gate
     /// (`GlyphClassifier.isLikelyMusicFont`) so `enableShapeMatching` behaves
     /// exactly as it did before Task 14 added that gate — Tier 4 answers for
     /// every embedded font's glyphs, not just the ones the gate accepts.
@@ -73,7 +82,7 @@ public struct PDFImportOptions {
     /// test) would entangle two different measurements. The gate is a
     /// PRODUCTION safeguard; this flag keeps it out of that measurement.
     /// Never set this in production.
-    public var bypassMusicFontGateForTesting = false
+    var bypassMusicFontGateForTesting = false
     /// TESTING ONLY, INTERNAL. Overrides `GlyphClassifier`'s default
     /// per-font music-font gate knobs (see its `default*` constants) for
     /// every `GlyphClassifier` this parse creates. Not `public` — reached
