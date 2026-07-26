@@ -136,14 +136,4 @@ enum LayoutElementShape {
             )
         })
     }
-
-    /// Temporary stub — Task 5 replaces this with the autoplaced text /
-    /// spanner shapes (dynamics, lyrics, tempo, harmony, staff/system
-    /// text, hairpins, pedal, ottava, text lines, volta, rehearsal
-    /// marks, markers, jumps, measure numbers).
-    static func autoplacedRects(
-        for _: LayoutElement, kind _: ShapeItemKind, metrics _: StaffMetrics,
-    ) -> [CGRect] {
-        []
-    }
 }

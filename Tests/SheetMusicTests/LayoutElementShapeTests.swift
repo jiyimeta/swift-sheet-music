@@ -165,4 +165,137 @@
             #expect(r.rect.width == 500)
         }
     }
+
+    @Suite("LayoutElementShape autoplaced elements")
+    struct LayoutElementAutoplacedShapeTests {
+        private let _installApple = TestSupport.installApple
+        private let metrics = StaffMetrics(staffSize: 28) // sp = 7
+
+        /// A long rehearsal mark must produce a WIDER rect than a short
+        /// one — the character-count estimate this replaces got CJK and
+        /// wide labels badly wrong.
+        @Test func rehearsalMarkWidthTracksMeasuredText() throws {
+            func width(_ text: String) throws -> CGFloat {
+                let el = LayoutElement.rehearsalMark(
+                    text: text, origin: CGPoint(x: 0, y: 0),
+                    frame: .rectangle, color: nil,
+                )
+                let shape = try #require(LayoutElementShape.shape(
+                    for: el, id: 0, xOffset: 0, metrics: metrics,
+                ))
+                return try #require(shape.bbox).width
+            }
+            #expect(try width("A") < width("Chorus 1"))
+            #expect(try width("A") > 0)
+        }
+
+        /// The frame padding is included, so a framed mark is wider and
+        /// taller than an unframed one with the same text.
+        @Test func rehearsalMarkFrameAddsPadding() throws {
+            func box(_ frame: RehearsalMark.FrameKind) throws -> CGRect {
+                let el = LayoutElement.rehearsalMark(
+                    text: "A", origin: CGPoint(x: 0, y: 0),
+                    frame: frame, color: nil,
+                )
+                let shape = try #require(LayoutElementShape.shape(
+                    for: el, id: 0, xOffset: 0, metrics: metrics,
+                ))
+                return try #require(shape.bbox)
+            }
+            let plain = try box(.none)
+            let framed = try box(.rectangle)
+            #expect(framed.width > plain.width)
+            #expect(framed.height > plain.height)
+        }
+
+        /// `.bottomLeading` anchor: the rect sits ABOVE origin.y and
+        /// starts AT origin.x.
+        @Test func bottomLeadingAnchorPlacesRectAboveOrigin() throws {
+            let el = LayoutElement.staffText(
+                text: "dolce", origin: CGPoint(x: 30, y: 10),
+                color: nil, isSystemText: false,
+            )
+            let shape = try #require(LayoutElementShape.shape(
+                for: el, id: 0, xOffset: 0, metrics: metrics,
+            ))
+            let box = try #require(shape.bbox)
+            #expect(abs(box.maxY - 10) < 0.01)
+            #expect(abs(box.minX - 30) < 0.01)
+        }
+
+        /// `.center` anchor (lyrics): the rect straddles origin on both
+        /// axes.
+        @Test func centerAnchorStraddlesOrigin() throws {
+            let el = LayoutElement.textMark(
+                kind: .lyrics(color: nil), text: "sing",
+                origin: CGPoint(x: 50, y: 60),
+            )
+            let shape = try #require(LayoutElementShape.shape(
+                for: el, id: 0, xOffset: 0, metrics: metrics,
+            ))
+            let box = try #require(shape.bbox)
+            #expect(box.minX < 50 && box.maxX > 50)
+            #expect(box.minY < 60 && box.maxY > 60)
+        }
+
+        /// `.leadingCenter` anchor (tempo): starts at origin.x,
+        /// straddles origin.y, and the Bravura beat glyph counts
+        /// toward the width.
+        @Test func tempoRectUsesMixedRunWidths() throws {
+            let el = LayoutElement.textMark(
+                kind: .tempo, text: "\u{E1D5} = 120",
+                origin: CGPoint(x: 20, y: -14),
+            )
+            let shape = try #require(LayoutElementShape.shape(
+                for: el, id: 0, xOffset: 0, metrics: metrics,
+            ))
+            let box = try #require(shape.bbox)
+            #expect(abs(box.minX - 20) < 0.01)
+            #expect(box.minY < -14 && box.maxY > -14)
+            #expect(box.width > metrics.sp * 3)
+        }
+
+        @Test func harmonyRectUsesItsPrecomputedWidth() throws {
+            let harmony = Harmony(name: "C", rootTpc: 14)
+            let lh = LayoutHarmony(
+                harmony: harmony, anchorX: 40, y: -18,
+                runs: [], width: 33,
+            )
+            let shape = try #require(LayoutElementShape.shape(
+                for: .harmony(lh), id: 0, xOffset: 0, metrics: metrics,
+            ))
+            let box = try #require(shape.bbox)
+            #expect(abs(box.width - 33) < 0.01)
+            #expect(abs(box.minX - 40) < 0.01)
+        }
+
+        @Test func melismaAndHyphenAreThinSpans() throws {
+            let melisma = LayoutElement.lyricsMelisma(
+                fromOrigin: CGPoint(x: 10, y: 70),
+                toOrigin: CGPoint(x: 90, y: 70),
+            )
+            let shape = try #require(LayoutElementShape.shape(
+                for: melisma, id: 0, xOffset: 0, metrics: metrics,
+            ))
+            let box = try #require(shape.bbox)
+            #expect(box.width == 80)
+            #expect(box.height > 0 && box.height < metrics.sp)
+        }
+
+        @Test func hairpinSpanCoversBothEndpoints() throws {
+            let hairpin = LayoutElement.spannerSegment(
+                kind: .hairpinOpen,
+                fromOrigin: CGPoint(x: 10, y: 60),
+                toOrigin: CGPoint(x: 100, y: 60),
+                continuesLeft: false, continuesRight: false, text: "",
+            )
+            let shape = try #require(LayoutElementShape.shape(
+                for: hairpin, id: 0, xOffset: 5, metrics: metrics,
+            ))
+            let box = try #require(shape.bbox)
+            #expect(box.minX == 15)
+            #expect(box.maxX == 105)
+            #expect(box.height > 0)
+        }
+    }
 #endif
