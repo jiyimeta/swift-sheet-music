@@ -295,4 +295,59 @@ object SheetMusicJNI {
             arena,
         ).toByteArray()
     }
+
+    /**
+     * Parse a MuseScore-exported vector PDF into a score plus its geometry side-car. Returns a
+     * `PdfParseResultWire` payload. Empty array on empty input or parse failure. Decode via
+     * [PdfParseResultWireCodec]; the caller must release BOTH handles it carries — `nativeReleaseScore`
+     * and [nativeReleasePdfGeometry].
+     */
+    fun nativeLoadScoreWithGeometryFromPDF(bytes: ByteArray): ByteArray {
+        val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
+        return SwiftJavaJNI.nativeLoadScoreWithGeometryFromPDF(
+            SwiftData.fromByteArray(bytes, arena),
+            arena,
+        ).toByteArray()
+    }
+
+    /**
+     * Full-height cursor bar for the cursor [cursorBytes] (a `ScoreCursor` wire payload) on the original
+     * PDF page identified by [geometryHandle], in top-left page space. Returns a `PdfRectWire` payload.
+     * Empty array when the handle is unknown, the cursor doesn't decode, or the column can't be located.
+     */
+    fun nativePdfCursorRect(geometryHandle: Long, cursorBytes: ByteArray): ByteArray {
+        val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
+        return SwiftJavaJNI.nativePdfCursorRect(
+            geometryHandle,
+            SwiftData.fromByteArray(cursorBytes, arena),
+            arena,
+        ).toByteArray()
+    }
+
+    /**
+     * Resolve a tap at ([x], [y]) in top-left page space on [pageIndex] of [geometryHandle] to a
+     * `ScoreCursor` wire payload the playback bridges accept. Empty array when the handle is unknown or
+     * nothing musical is near the tap.
+     */
+    fun nativePdfHitTest(geometryHandle: Long, pageIndex: Int, x: Double, y: Double): ByteArray {
+        val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
+        return SwiftJavaJNI.nativePdfHitTest(geometryHandle, pageIndex, x, y, arena).toByteArray()
+    }
+
+    /**
+     * MediaBox sizes indexed positionally by page for [geometryHandle]. Returns a `PdfPageSizesWire`
+     * payload. Empty array for an unknown handle. Decode via [PdfPageSizesWireCodec].
+     */
+    fun nativePdfPageSizes(geometryHandle: Long): ByteArray {
+        val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
+        return SwiftJavaJNI.nativePdfPageSizes(geometryHandle, arena).toByteArray()
+    }
+
+    /**
+     * Release a PDF geometry handle obtained from [nativeLoadScoreWithGeometryFromPDF]. Unknown
+     * handles are a no-op.
+     */
+    fun nativeReleasePdfGeometry(handle: Long) {
+        SwiftJavaJNI.nativeReleasePdfGeometry(handle)
+    }
 }
