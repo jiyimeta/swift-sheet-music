@@ -108,33 +108,14 @@ final class MetronomeController {
     /// (`PreRollSequenceAssembler`) can build both the body-metronome and the
     /// pre-roll click tracks off the main actor / without a live controller —
     /// which also makes the assembly unit-testable with no audio engine.
+    ///
+    /// The click patch itself is shared with the Android engine
+    /// (`MetronomeSequenceBuilder`), so both platforms click on the same notes
+    /// at the same velocities.
     nonisolated static func makeMetronomeTrack(
         beats: [MetronomeBeat], division: Int,
     ) -> MidiTrack {
-        var events: [TimedMidiEvent] = []
-        events.reserveCapacity(beats.count * 2 + 1)
-        let halfBeat = max(1, division / 4)
-        for beat in beats {
-            let pitch = beat.isDownbeat ? 76 : 77
-            let velocity = beat.isDownbeat ? 100 : 80
-            events.append(TimedMidiEvent(
-                tick: beat.tick,
-                event: .noteOn(
-                    channel: 9, pitch: pitch, velocity: velocity,
-                ),
-            ))
-            events.append(TimedMidiEvent(
-                tick: beat.tick + halfBeat,
-                event: .noteOff(
-                    channel: 9, pitch: pitch, velocity: 0,
-                ),
-            ))
-        }
-        let lastTick = events.map(\.tick).max() ?? 0
-        events.append(TimedMidiEvent(
-            tick: lastTick + 1, event: .endOfTrack,
-        ))
-        return MidiTrack(events: events)
+        MetronomeSequenceBuilder.clickTrack(beats: beats, division: division)
     }
 
     /// Hook the freshly built sequencer up: route the last track
