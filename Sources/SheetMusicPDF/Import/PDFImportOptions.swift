@@ -41,6 +41,22 @@ public struct PDFImportOptions {
     /// shape-matching tier can be measured against Tier 1's known-correct
     /// answer. Never set this in production; it degrades every SMuFL PDF.
     public var disableSMuFLCodepointTier = false
+    /// TESTING ONLY. Anchors the music/text routing decision in `emitShow`
+    /// to whether the raw decoded codepoint falls in the SMuFL PUA range,
+    /// ignoring which (if any) tier supplied the glyph's `SMuFLSemantic`.
+    ///
+    /// Exists so the Tier-1 ablation (toggling `disableSMuFLCodepointTier`)
+    /// promotes the IDENTICAL set of codepoints to `ClassifiedGlyph` in both
+    /// the truth and probe runs — only the assigned semantic may differ,
+    /// making `truth.count == probe.count` hold by construction. Without
+    /// this, Tier 4 (with Tier 1 disabled) also shape-matches non-music
+    /// glyph outlines — lyric / title text from an unrelated embedded font
+    /// — and wrongly promotes them into the music stream, desynchronizing
+    /// any positional comparison against Tier 1's answer. A no-op whenever
+    /// Tier 1 is enabled (Tier 1 only ever answers PUA-range codepoints), so
+    /// this only ever changes behavior in combination with
+    /// `disableSMuFLCodepointTier`. Never set this in production.
+    public var anchorMusicGlyphsToPUARange = false
     public var diagnostics: (@Sendable (PDFImportDiagnostic) -> Void)?
 
     public init() {}

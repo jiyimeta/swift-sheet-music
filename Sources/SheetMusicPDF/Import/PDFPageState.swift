@@ -29,6 +29,10 @@ final class PDFPageState {
     /// The CMap selected by the most recent `Tf` (nil for fonts without a
     /// usable `/ToUnicode`, e.g. the ASCII test fixtures).
     var activeCMap: PDFImporter.ToUnicodeCMap?
+    /// TESTING ONLY. See `PDFImportOptions.anchorMusicGlyphsToPUARange`.
+    /// Set once per page by the front-end walker from that option; consulted
+    /// by `emitShow` when deciding whether a decoded scalar is music or text.
+    var anchorMusicToPUARange = false
     #if canImport(CoreGraphics)
         /// Per-page registry of glyph classifiers keyed by font RESOURCE
         /// NAME, filled by the front-end alongside `fontCMaps`.

@@ -69,8 +69,15 @@ func emitShow(_ bytes: [UInt8], state: TextShowState) {
         #else
             let semantic = PDFImporter.smuflSemantic(codepoint: first.value)
         #endif
+        // TESTING ONLY: `anchorMusicToPUARange` (see
+        // `PDFImportOptions.anchorMusicGlyphsToPUARange`) forces this
+        // decision to depend solely on the raw codepoint, ignoring what the
+        // classifier answered, so the Tier-1 ablation promotes the same
+        // codepoint set regardless of which tier supplied the semantic.
         let isMusic: Bool
-        if case .unknown = semantic {
+        if state.anchorMusicToPUARange {
+            isMusic = smuflPUARange.contains(first.value)
+        } else if case .unknown = semantic {
             isMusic = smuflPUARange.contains(first.value)
         } else {
             isMusic = true

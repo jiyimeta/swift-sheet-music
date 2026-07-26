@@ -27,6 +27,7 @@ extension PDFImporter {
         let walk = try walkDocument(
             document, enableShapeMatching: options.enableShapeMatching,
             disableSMuFLCodepointTier: options.disableSMuFLCodepointTier,
+            anchorMusicGlyphsToPUARange: options.anchorMusicGlyphsToPUARange,
         )
         return try buildScore(
             pageCount: document.pageCount,
@@ -47,6 +48,7 @@ extension PDFImporter {
         let walk = try walkDocument(
             document, enableShapeMatching: options.enableShapeMatching,
             disableSMuFLCodepointTier: options.disableSMuFLCodepointTier,
+            anchorMusicGlyphsToPUARange: options.anchorMusicGlyphsToPUARange,
         )
         let score = try buildScore(
             pageCount: document.pageCount,
@@ -92,10 +94,12 @@ extension PDFImporter {
         _ document: PDFDocument,
         enableShapeMatching: Bool = false,
         disableSMuFLCodepointTier: Bool = false,
+        anchorMusicGlyphsToPUARange: Bool = false,
     ) throws -> (content: WalkedContent, pageSizes: [Int: CGSize], attributes: [String: Any]?) {
         let content = try ContentStreamWalker(
             document: document, enableShapeMatching: enableShapeMatching,
             disableSMuFLCodepointTier: disableSMuFLCodepointTier,
+            anchorMusicToPUARange: anchorMusicGlyphsToPUARange,
         ).walk()
         var pageSizes: [Int: CGSize] = [:]
         for p in 0 ..< document.pageCount {

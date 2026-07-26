@@ -22,6 +22,10 @@ extension PDFImporter {
         /// forwarded to every page's `GlyphClassifier`s. TESTING ONLY —
         /// default false.
         var disableSMuFLCodepointTier = false
+        /// Threaded from `PDFImportOptions.anchorMusicGlyphsToPUARange`;
+        /// forwarded to every page's `PDFPageState`. TESTING ONLY — default
+        /// false.
+        var anchorMusicToPUARange = false
 
         func walk() throws -> WalkedContent {
             var glyphs: [ClassifiedGlyph] = []
@@ -33,6 +37,7 @@ extension PDFImporter {
                       let cgPage = page.pageRef
                 else { continue }
                 let state = PDFPageState(pageIndex: pageIndex)
+                state.anchorMusicToPUARange = anchorMusicToPUARange
                 walkPage(cgPage: cgPage, state: state)
                 glyphs.append(contentsOf: state.glyphs)
                 texts.append(contentsOf: state.texts)
