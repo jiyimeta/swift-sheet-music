@@ -163,6 +163,9 @@ extension LayoutEngine {
             // Shift chord north Y values by the same dy so vibrato
             // autoplace remains valid after a top-clip correction.
             chordNorthByTick: measure.chordNorthByTick.mapValues { $0 + dy },
+            // Dynamic extents are horizontal only — a vertical shift
+            // leaves them valid as-is.
+            dynamicExtents: measure.dynamicExtents,
         )
     }
 }

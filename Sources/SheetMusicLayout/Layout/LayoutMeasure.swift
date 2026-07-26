@@ -51,6 +51,37 @@ public struct LayoutMeasure: Sendable, Equatable {
     /// spanner above high notes. Empty for multi-measure-rest measures
     /// and measures with no timed chords.
     public let chordNorthByTick: [Int: CGFloat]
+    /// Horizontal ink extent of every dynamic placed in this measure,
+    /// tagged with the staff it belongs to and the tick it is anchored
+    /// at. Populated by `buildSystem` while the per-staff element
+    /// buffers are still separate — that is the only point where both
+    /// facts are known, since `elements` aggregates every staff and a
+    /// `LayoutElement` carries no tick.
+    ///
+    /// Consumed by `LayoutEngine.attachSpanners` to reserve room
+    /// between a hairpin and the dynamic at its own start / end tick
+    /// (MuseScore `TLayout::manageHairpinSnapping`). Empty when the
+    /// measure has no dynamics.
+    public let dynamicExtents: [DynamicExtent]
+
+    /// One dynamic's horizontal ink span, in measure-local X.
+    public struct DynamicExtent: Sendable, Equatable {
+        /// Index into `LayoutSystem.staffOrigins`.
+        public let staffIndex: Int
+        /// Tick within the measure the dynamic is anchored at.
+        public let tick: Int
+        public let minX: CGFloat
+        public let maxX: CGFloat
+
+        public init(
+            staffIndex: Int, tick: Int, minX: CGFloat, maxX: CGFloat,
+        ) {
+            self.staffIndex = staffIndex
+            self.tick = tick
+            self.minX = minX
+            self.maxX = maxX
+        }
+    }
 
     public init(
         measureIndex: Int,
@@ -65,6 +96,7 @@ public struct LayoutMeasure: Sendable, Equatable {
         multiMeasureRest: Int? = nil,
         invisibleElements: [LayoutElement] = [],
         chordNorthByTick: [Int: CGFloat] = [:],
+        dynamicExtents: [DynamicExtent] = [],
     ) {
         self.measureIndex = measureIndex
         self.origin = origin
@@ -78,5 +110,6 @@ public struct LayoutMeasure: Sendable, Equatable {
         self.multiMeasureRest = multiMeasureRest
         self.invisibleElements = invisibleElements
         self.chordNorthByTick = chordNorthByTick
+        self.dynamicExtents = dynamicExtents
     }
 }
