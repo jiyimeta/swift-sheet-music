@@ -149,8 +149,8 @@
             func numberLabel(at index: Int) -> String? {
                 guard let m = measures.first(where: { $0.measureIndex == index })
                 else { return nil }
-                for marker in m.markers {
-                    if case let .measureNumber(text, _) = marker { return text }
+                for element in m.elements {
+                    if case let .measureNumber(text, _) = element { return text }
                 }
                 return nil
             }

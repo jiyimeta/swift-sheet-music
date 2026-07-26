@@ -271,6 +271,29 @@ extension LayoutEngine {
                     perStaffInvisible[staffIdx] = invisibleEls
                 }
             }
+            // Measure number at every system head — TOP STAFF ONLY.
+            // Engraving convention places a single number above the
+            // topmost staff at the start of each system. Irregular
+            // measures (anacrusis) suppress the label.
+            //
+            // Emitted HERE rather than in pass 2 so the element sits in
+            // the per-staff buffer the skyline autoplace pass operates
+            // on. Staff-local Y: the staff top is at `sp * 2`, so
+            // `sp * 2 - sp * 1.5` reproduces pass 2's
+            // `staffOrigins[0].y - sp * 1.5` after translation.
+            if untranslated.isEmpty, !staves.isEmpty,
+               let displayed = context.score.displayedMeasureNumber(
+                   at: measureIdx,
+               )
+            {
+                perStaff[0, default: []].append(.measureNumber(
+                    text: "\(displayed)",
+                    origin: CGPoint(
+                        x: -metrics.sp * 0.5,
+                        y: metrics.sp * 0.5,
+                    ),
+                ))
+            }
             let staff0Measure: Measure? = measureIdx
                 < (staves.first?.measures.count ?? 0)
                 ? staves.first?.measures[measureIdx]
@@ -582,7 +605,7 @@ extension LayoutEngine {
         // --- Pass 2: translate elements with adjusted origins ---
         var layoutMeasures: [LayoutMeasure] = []
         var xCursor: CGFloat = partLabelWidth
-        for (j, um) in untranslated.enumerated() {
+        for um in untranslated {
             if let runLen = um.multiMeasureRestCount {
                 // Determine barline subtype from the last source measure of
                 // the run. All staves agree on barline subtype (rule 1 of
@@ -707,24 +730,6 @@ extension LayoutEngine {
                         ),
                     ))
                 }
-            }
-            // Measure number at every system head — TOP STAFF
-            // ONLY. Engraving convention places a single number
-            // above the topmost staff at the start of each system.
-            // Irregular measures (anacrusis) suppress the label.
-            if j == 0, !staves.isEmpty,
-               let displayed = context.score.displayedMeasureNumber(
-                   at: measureIdx,
-               )
-            {
-                let staffTopY = staffOrigins[0].y
-                markers.append(.measureNumber(
-                    text: "\(displayed)",
-                    origin: CGPoint(
-                        x: -metrics.sp * 0.5,
-                        y: staffTopY - metrics.sp * 1.5,
-                    ),
-                ))
             }
             // Surface the source measure's break flags so the
             // pagination phase (page break → close page) and the
