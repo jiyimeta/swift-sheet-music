@@ -36,26 +36,35 @@
             let doc = try #require(PDFDocument(url: p))
             let cgPage = try #require(doc.page(at: 0)?.pageRef)
             let fonts = PDFImporter.extractEmbeddedFonts(cgPage: cgPage)
-            let candidates = fonts.values.compactMap { f -> CTFont? in
-                guard let program = f.program, let kind = f.programKind
-                else { return nil }
-                return makeCTFont(program: program, kind: kind)
-            }
-            #expect(!candidates.isEmpty)
-            // Every usable font must yield at least one non-empty outline.
-            let font = try #require(candidates.first)
+            // Target the SMuFL music font DETERMINISTICALLY — Dictionary
+            // iteration order is unspecified, and this spike's entire point is
+            // Leland specifically, not "some font or other". Subset-embedded
+            // fonts are commonly renamed "ABCDEF+Leland"; match the suffix
+            // after any "+" so that convention doesn't break the lookup.
+            let leland = try #require(fonts.values.first { f in
+                let base = f.baseFont.split(separator: "+").last.map(String.init)
+                    ?? f.baseFont
+                return base == "Leland"
+            })
+            let program = try #require(leland.program)
+            let kind = try #require(leland.programKind)
+            let font = try #require(makeCTFont(program: program, kind: kind))
+
             let count = CTFontGetGlyphCount(font)
             #expect(count > 0)
-            var found = false
-            for g in 1 ..< min(count, 200) {
+            var nonEmptyOutlines = 0
+            for g in 1 ..< count {
                 if let path = CTFontCreatePathForGlyph(font, CGGlyph(g), nil),
                    !path.isEmpty
                 {
-                    found = true
-                    break
+                    nonEmptyOutlines += 1
                 }
             }
-            #expect(found)
+            // Not merely "at least one" — the subset must be substantially
+            // usable, or the outline-based classifier in Tasks 9-12 has
+            // nothing to work with. (Observed on this anchor: 24 of 25
+            // glyphs, i.e. every glyph but .notdef.)
+            #expect(nonEmptyOutlines >= 10)
         }
     }
 #endif
