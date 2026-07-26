@@ -95,6 +95,7 @@ var targets: [Target] = [
             "Import/PDFImporter+AppleEntry.swift",
             "Import/FontCascade/PDFFontProgram.swift",
             "Import/FontCascade/GlyphBitmap.swift",
+            "Import/FontCascade/ShapeDescriptor.swift",
         ] : [],
     ),
     .target(
