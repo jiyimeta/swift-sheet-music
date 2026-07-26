@@ -50,13 +50,22 @@ class PdfScoreHandle internal constructor(
         }
     }
 
+    protected fun finalize() { close() }
+
     companion object {
         /** Returns null when the bytes are not a parseable PDF or nothing decoded. */
         fun load(bytes: ByteArray): PdfScoreHandle? {
             val blob = SheetMusicJNI.nativeLoadScoreWithGeometryFromPDF(bytes)
             if (blob.isEmpty()) return null
             val wire = PdfParseResultWireCodec.decode(blob)
-            if (wire.scoreHandle == 0L || wire.geometryHandle == 0L) return null
+            if (wire.scoreHandle == 0L || wire.geometryHandle == 0L) {
+                // Defensive: Swift only inserts both handles after a successful parse, so this pair is
+                // never actually asymmetric today. Release whichever handle IS non-zero anyway, so a
+                // future asymmetric result can't leak it.
+                if (wire.scoreHandle != 0L) SheetMusicJNI.nativeReleaseScore(wire.scoreHandle)
+                if (wire.geometryHandle != 0L) SheetMusicJNI.nativeReleasePdfGeometry(wire.geometryHandle)
+                return null
+            }
             return PdfScoreHandle(
                 score = ScoreHandle(wire.scoreHandle),
                 geometryHandle = wire.geometryHandle,

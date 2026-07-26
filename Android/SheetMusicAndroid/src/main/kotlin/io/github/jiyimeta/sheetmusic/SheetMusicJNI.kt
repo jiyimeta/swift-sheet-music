@@ -90,7 +90,7 @@ object SheetMusicJNI {
     /**
      * Parts/staves descriptor for the Reader display inspector's Parts section:
      * per part a name + each staff's default clef rawType. Empty array for an
-     * unknown handle. Decode via the generated PartsStavesWireCodec.
+     * unknown handle. Decode via the generated [PartsStavesWireCodec].
      */
     fun nativePartsStaves(handle: Long): ByteArray {
         val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
@@ -299,7 +299,7 @@ object SheetMusicJNI {
     /**
      * Parse a MuseScore-exported vector PDF into a score plus its geometry side-car. Returns a
      * `PdfParseResultWire` payload. Empty array on empty input or parse failure. Decode via
-     * [PdfParseResultWireCodec]; the caller must release BOTH handles it carries — `nativeReleaseScore`
+     * [PdfParseResultWireCodec]; the caller must release BOTH handles it carries — [nativeReleaseScore]
      * and [nativeReleasePdfGeometry].
      */
     fun nativeLoadScoreWithGeometryFromPDF(bytes: ByteArray): ByteArray {
