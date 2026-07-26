@@ -99,6 +99,8 @@ var targets: [Target] = [
             "Import/FontCascade/BravuraExemplars.swift",
             "Import/FontCascade/GlyphClassifier.swift",
             "Import/FontCascade/GlyphClassifier+MusicFontGate.swift",
+            "Import/FontCascade/GlyphClassifier+GlyphIDResolve.swift",
+            "Import/FontCascade/SimpleFontEncoding.swift",
         ] : [],
     ),
     .target(

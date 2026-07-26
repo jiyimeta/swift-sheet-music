@@ -128,6 +128,14 @@
         /// environment-dependent. Returns nil (callers skip gracefully) if
         /// the resource can't be found in this process's loaded bundles.
         private static func loadBravuraOTFData() -> Data? {
+            // Touching `BravuraFont.register` is what loads the
+            // `SheetMusicLayoutApple` resource bundle into this process — a
+            // bare dependency does not. Without it this search finds nothing
+            // unless some other test in this run happened to register the
+            // font first, so every caller's `guard … else { return }` would
+            // pass vacuously depending on scheduling order (measured: the
+            // whole file passes empty when run under a narrow `--filter`).
+            if #available(macOS 15.0, *) { _ = BravuraFont.register }
             for bundle in Bundle.allBundles + Bundle.allFrameworks {
                 if let url = bundle.url(forResource: "Bravura", withExtension: "otf")
                     ?? bundle.url(

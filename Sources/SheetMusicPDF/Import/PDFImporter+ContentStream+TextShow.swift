@@ -154,16 +154,12 @@ private func isMusicGlyph(
     /// legacy-music-font case (Maestro, Opus, Sonata) P1 targets. A simple
     /// font uses 1-byte codes, not Identity-H's 2.
     ///
-    /// The byte is a CHARACTER CODE in the font's own encoding, which is the
-    /// key Tier 2 looks up in `/Encoding /Differences`. It is NOT in general
-    /// the glyph ID Tier 4 needs: measured on real Finale output, a subsetted
-    /// simple font's content-stream bytes are its PRE-subset character codes
-    /// (207, 35, 98, 46, …), outside the compacted glyph-ID range, and
-    /// `CTFontCreatePathForGlyph` returns nil for every one of them. Passing
-    /// the byte as the glyph ID below is therefore a placeholder that only
-    /// happens to hold for an identity-encoded font; reaching a subsetted
-    /// font's outline needs code → glyph ID resolved through the font's own
-    /// encoding (not yet implemented — Tier 4 is off by default meanwhile).
+    /// The byte is a CHARACTER CODE in the font's own encoding: the key Tier
+    /// 2 looks up in `/Encoding /Differences`, and — after being decoded
+    /// through the declared base encoding and the embedded font's own cmap
+    /// (`resolveGlyphID`) — the route to the glyph ID Tier 4 needs. It is
+    /// NOT itself a glyph ID; treating it as one is what left real Finale
+    /// output with zero notes.
     ///
     /// NO corpus coverage: every corpus PDF is MuseScore output with a
     /// proper CMap, so this path is exercised only by unit tests and by the
@@ -175,7 +171,8 @@ private func isMusicGlyph(
         for byte in bytes {
             let code = UInt32(byte)
             let semantic = classifier.classify(
-                codepoint: code, characterCode: code, glyphID: CGGlyph(byte),
+                codepoint: code, characterCode: code,
+                glyphID: classifier.resolveGlyphID(code: code),
             )
             if case .unknown = semantic {
                 pending.append(Unicode.Scalar(byte), startingAt: currentOrigin(state: state))

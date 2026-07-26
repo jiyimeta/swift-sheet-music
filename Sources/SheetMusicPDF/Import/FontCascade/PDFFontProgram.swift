@@ -11,6 +11,12 @@ extension PDFImporter {
         /// Code → glyph name, from `/Encoding /Differences`. Empty when the
         /// font uses a base encoding with no overrides.
         var differences: [UInt32: String] = [:]
+        /// The `/Encoding` base encoding this font declares — the PDF name
+        /// (`MacRomanEncoding`, `WinAnsiEncoding`, `MacExpertEncoding`,
+        /// `StandardEncoding`), or "" when the font declares none and its
+        /// built-in encoding governs. `/Encoding` may be the name itself or
+        /// a dictionary whose `/BaseEncoding` carries it; both land here.
+        var baseEncoding = ""
         /// The embedded font program, when the producer included one.
         var program: Data?
         var programKind: ProgramKind?
@@ -53,6 +59,7 @@ extension PDFImporter {
             out.baseFont = String(cString: baseFont)
         }
         out.differences = readDifferences(fontDict)
+        out.baseEncoding = readBaseEncoding(fontDict)
 
         // Descriptor: direct for simple fonts, via DescendantFonts for Type0.
         var descriptor: CGPDFDictionaryRef?
@@ -83,6 +90,22 @@ extension PDFImporter {
             break
         }
         return out
+    }
+
+    /// `/Encoding` → base encoding name. `/Encoding` is either the name
+    /// directly (`/Encoding /WinAnsiEncoding`) or a dictionary that may carry
+    /// `/BaseEncoding` alongside `/Differences`. Returns "" for neither.
+    static func readBaseEncoding(_ fontDict: CGPDFDictionaryRef) -> String {
+        var name: UnsafePointer<Int8>?
+        if CGPDFDictionaryGetName(fontDict, "Encoding", &name), let name {
+            return String(cString: name)
+        }
+        var encoding: CGPDFDictionaryRef?
+        guard CGPDFDictionaryGetDictionary(fontDict, "Encoding", &encoding),
+              let encoding,
+              CGPDFDictionaryGetName(encoding, "BaseEncoding", &name),
+              let name else { return "" }
+        return String(cString: name)
     }
 
     /// `/Encoding /Differences` → code → glyph name. The array alternates

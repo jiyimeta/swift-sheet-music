@@ -19,7 +19,10 @@ import Foundation
 /// One instance per font resource; exemplar and outline work is cached, so a
 /// document with tens of distinct glyphs pays the cost once per glyph.
 final class GlyphClassifier {
-    private let font: PDFImporter.EmbeddedFont?
+    /// Internal, not private, because `resolveGlyphID` lives in
+    /// `GlyphClassifier+GlyphIDResolve.swift` (this file is at the 400-line
+    /// cap) and needs both this and `ctFont`.
+    let font: PDFImporter.EmbeddedFont?
     /// The CALLER's request to enable Tier 4 (outline shape matching).
     /// **Default false** — see `PDFImportOptions.enableShapeMatching`. Even
     /// when true, `effectiveShapeMatching` still gates Tier 4 off per-font
@@ -48,7 +51,7 @@ final class GlyphClassifier {
     private let musicFontGateBound: Double
     private let musicFontGateFraction: Double
     private let musicFontGateSampleSize: Int
-    private lazy var ctFont: CTFont? = {
+    lazy var ctFont: CTFont? = {
         guard let program = font?.program else { return nil }
         return makeCTFont(program: program)
     }()
@@ -80,6 +83,9 @@ final class GlyphClassifier {
     }
 
     private var cache: [CacheKey: SMuFLSemantic] = [:]
+    /// Character code → resolved glyph ID, including the negative answer —
+    /// see `resolveGlyphID`, which walks several cmap strategies per miss.
+    var glyphIDCache: [UInt32: CGGlyph?] = [:]
 
     /// Tier-4 acceptance threshold. A nearest neighbor farther than this is
     /// reported `.unknown` rather than guessed. Measured against the Tier-1
