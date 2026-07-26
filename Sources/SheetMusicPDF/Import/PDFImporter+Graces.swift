@@ -40,12 +40,12 @@ extension PDFImporter {
     static func buildGraceChords(
         indices: Set<Int>,
         glyphs: [ClassifiedGlyph],
-        pitchByGlyph: [RawGlyph: DecodedPitch],
+        pitchByGlyph: [ClassifiedGlyph: DecodedPitch],
         tieMarks: TieMarks,
     ) -> [(x: CGFloat, grace: GraceChord)] {
         var graces: [(x: CGFloat, grace: GraceChord)] = []
         for i in indices.sorted() {
-            guard let dp = pitchByGlyph[glyphs[i].raw] else { continue }
+            guard let dp = pitchByGlyph[glyphs[i]] else { continue }
             let g = glyphs[i]
             let id = NoteheadID(g.raw)
             let note = Note(

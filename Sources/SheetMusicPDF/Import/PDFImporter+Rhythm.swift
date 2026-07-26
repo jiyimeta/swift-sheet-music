@@ -18,9 +18,9 @@ extension PDFImporter {
         tieMarks: TieMarks = TieMarks(),
         graceSizeThreshold: CGFloat = 0,
     ) -> [RhythmElement] {
-        var pitchByGlyph: [RawGlyph: DecodedPitch] = [:]
+        var pitchByGlyph: [ClassifiedGlyph: DecodedPitch] = [:]
         for dp in decoded {
-            pitchByGlyph[dp.glyph.raw] = dp
+            pitchByGlyph[dp.glyph] = dp
         }
         let glyphs = measure.glyphs.sorted {
             $0.raw.origin.x < $1.raw.origin.x
@@ -137,7 +137,7 @@ extension PDFImporter {
         stems: [PathSegment],
         levelByStem: [Int: Int],
         flagBand: ClosedRange<CGFloat>?,
-        pitchByGlyph: [RawGlyph: DecodedPitch],
+        pitchByGlyph: [ClassifiedGlyph: DecodedPitch],
         tieMarks: TieMarks,
         spatium: CGFloat,
         consumed: inout Set<Int>,
@@ -213,7 +213,7 @@ extension PDFImporter {
     private static func buildChordNotes(
         clusterIndices: [Int],
         glyphs: [ClassifiedGlyph],
-        pitchByGlyph: [RawGlyph: DecodedPitch],
+        pitchByGlyph: [ClassifiedGlyph: DecodedPitch],
         tieMarks: TieMarks,
         spatium: CGFloat,
     ) -> (notes: [Note], noteRects: [PDFElementRect]) {
@@ -221,7 +221,7 @@ extension PDFImporter {
         var noteRects: [PDFElementRect] = []
         var seenPitches = Set<Int>()
         for idx in clusterIndices {
-            guard let dp = pitchByGlyph[glyphs[idx].raw] else { continue }
+            guard let dp = pitchByGlyph[glyphs[idx]] else { continue }
             let id = NoteheadID(glyphs[idx].raw)
             let note = Note(
                 pitch: dp.midi,

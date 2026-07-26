@@ -8,21 +8,73 @@ import SheetMusicCore
 // declarations here are deliberately `internal` (default visibility) —
 // only the `PDFImporter` façade and `PDFImportOptions` are public.
 
+/// The front-end contract: everything `buildScore` needs to know about a
+/// glyph's placement, independent of how the glyph was recognized.
+///
+/// A vector front-end fills this from the PDF text matrix; a raster (OMR)
+/// front-end fills it from a detected component's bounding box. Hashable so
+/// passes can key side tables by glyph identity.
+struct GlyphGeometry: Hashable {
+    /// Text origin in PDF page coordinates (origin = bottom-left).
+    var origin: CGPoint
+    /// Horizontal advance to the next glyph, in points. A raster front-end
+    /// supplies the component's bounding-box width.
+    var advance: CGFloat
+    /// Effective page-space rendered size. Separates a grace / cue notehead
+    /// (~70%) from a full one. A raster front-end supplies bounding-box height
+    /// relative to staff spacing.
+    var renderedSize: CGFloat = 0
+    var pageIndex: Int
+    /// VECTOR-ONLY. The PDF text-space font size. Read solely by the
+    /// `staff5Lines` path in `PDFImporter+StaffLines.swift` (MuseScore drawing
+    /// a whole staff as one glyph). A raster front-end detects staff lines
+    /// directly, never reaches that path, and may leave this 0.
+    var fontSize: CGFloat = 0
+}
+
 /// Raw glyph captured from one Tj / TJ operator. Position is the
 /// text origin in PDF page coordinates (origin = bottom-left).
 struct RawGlyph: Hashable {
     var codepoint: UInt32 // Unicode scalar (often a SMuFL PUA codepoint)
     var fontName: String // PostScript name as reported by PDFKit
-    var fontSize: CGFloat // points (raw Tf operand — uniform per font)
-    var origin: CGPoint
-    var advance: CGFloat // horizontal advance to the next glyph in points
-    var pageIndex: Int
-    /// Effective page-space rendered size = `fontSize × sqrt(det(textMatrix ×
-    /// ctm))`. MuseScore renders grace / cue noteheads by scaling the text
-    /// or current-transformation matrix rather than changing the `Tf`
-    /// operand (which stays 100 across the whole score), so this is the
-    /// only signal distinguishing a small grace notehead from a full one.
-    var renderedSize: CGFloat = 0
+    var geometry: GlyphGeometry
+
+    init(
+        codepoint: UInt32,
+        fontName: String,
+        fontSize: CGFloat,
+        origin: CGPoint,
+        advance: CGFloat,
+        pageIndex: Int,
+        renderedSize: CGFloat = 0,
+    ) {
+        self.codepoint = codepoint
+        self.fontName = fontName
+        geometry = GlyphGeometry(
+            origin: origin, advance: advance, renderedSize: renderedSize,
+            pageIndex: pageIndex, fontSize: fontSize,
+        )
+    }
+
+    var fontSize: CGFloat {
+        geometry.fontSize
+    }
+
+    var origin: CGPoint {
+        geometry.origin
+    }
+
+    var advance: CGFloat {
+        geometry.advance
+    }
+
+    var pageIndex: Int {
+        geometry.pageIndex
+    }
+
+    var renderedSize: CGFloat {
+        geometry.renderedSize
+    }
 }
 
 /// One straight or rectangular path segment captured from m/l/re
@@ -129,7 +181,7 @@ enum SMuFLSemantic: Equatable, Hashable {
 }
 
 /// A glyph with its semantic. Stage [3] output.
-struct ClassifiedGlyph {
+struct ClassifiedGlyph: Hashable {
     var raw: RawGlyph
     var semantic: SMuFLSemantic
 }
