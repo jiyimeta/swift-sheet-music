@@ -29,10 +29,25 @@
 
         /// Draw glyphs and path segments on a fresh A4 page.
         /// Returns PDF data.
+        ///
+        /// - Parameter dropToUnicodeCMaps: blank every `/ToUnicode N 0 R`
+        ///   entry in the finished file. **Required for any fixture whose
+        ///   music glyphs must actually be CLASSIFIED** — see
+        ///   `strippingToUnicodeCMaps` for why.
         static func build(
             size: CGSize = CGSize(width: 595, height: 842),
             glyphs: [GlyphPlacement] = [],
             paths: [PathPlacement] = [],
+            dropToUnicodeCMaps: Bool = false,
+        ) -> Data {
+            let data = draw(size: size, glyphs: glyphs, paths: paths)
+            return dropToUnicodeCMaps ? strippingToUnicodeCMaps(from: data).data : data
+        }
+
+        private static func draw(
+            size: CGSize,
+            glyphs: [GlyphPlacement],
+            paths: [PathPlacement],
         ) -> Data {
             let pdfData = NSMutableData()
             var mediaBox = CGRect(origin: .zero, size: size)
@@ -73,6 +88,43 @@
             ctx.endPDFPage()
             ctx.closePDF()
             return pdfData as Data
+        }
+
+        /// Blank every `/ToUnicode N 0 R` entry, padding with spaces so all
+        /// byte offsets in the xref table stay valid. Returns the patched
+        /// data and how many entries were blanked.
+        ///
+        /// CoreGraphics embeds a music face as a SIMPLE font carrying
+        /// `/Encoding /Differences [ 33 /uniE0A4 … ]` — precisely Tier 2's
+        /// key space — but it also writes a `/ToUnicode` CMap mapping those
+        /// codes to unrelated Latin scalars (a notehead decodes as "K").
+        /// The importer routes any resource that has a CMap down the CMap
+        /// path, which by design never consults `/Differences` because the
+        /// two key spaces do not coincide (see `GlyphClassifier.classify`'s
+        /// `characterCode` parameter). So with the CMap present, notation
+        /// glyphs decode to junk text and NO tier classifies them —
+        /// measured: 0 classified glyphs, 0 chords. Dropping the CMap puts
+        /// the resource on the simple-font path where the `uniXXXX` names
+        /// resolve — measured on the same fixture: 9 classified glyphs, 8
+        /// chords, 8 lyrics.
+        ///
+        /// This is a property of CoreGraphics' PDF writer, not of the
+        /// importer: a real MuseScore PDF carries a `/ToUnicode` that maps
+        /// to the SMuFL PUA codepoints, so its music glyphs classify
+        /// through Tier 1 on the CMap path. A CoreGraphics fixture cannot
+        /// reproduce that mapping, so it exercises Tier 2 instead.
+        static func strippingToUnicodeCMaps(from data: Data) -> (data: Data, blanked: Int) {
+            guard var text = String(data: data, encoding: .isoLatin1) else { return (data, 0) }
+            var blanked = 0
+            while let entry = text.range(
+                of: #"/ToUnicode\s+\d+\s+\d+\s+R"#, options: .regularExpression,
+            ) {
+                text.replaceSubrange(
+                    entry, with: String(repeating: " ", count: text[entry].count),
+                )
+                blanked += 1
+            }
+            return (text.data(using: .isoLatin1) ?? data, blanked)
         }
     }
 #endif
