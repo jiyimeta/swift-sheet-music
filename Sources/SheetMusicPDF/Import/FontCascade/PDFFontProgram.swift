@@ -94,17 +94,38 @@ extension PDFImporter {
         var diffs: CGPDFArrayRef?
         guard CGPDFDictionaryGetArray(encoding, "Differences", &diffs),
               let diffs else { return [:] }
-        var out: [UInt32: String] = [:]
-        var code: CGPDFInteger = 0
+        var tokens: [(code: Int?, name: String?)] = []
         for i in 0 ..< CGPDFArrayGetCount(diffs) {
             var intValue: CGPDFInteger = 0
             if CGPDFArrayGetInteger(diffs, i, &intValue) {
-                code = intValue
+                tokens.append((code: Int(intValue), name: nil))
                 continue
             }
             var name: UnsafePointer<Int8>?
             if CGPDFArrayGetName(diffs, i, &name), let name {
-                out[UInt32(code)] = String(cString: name)
+                tokens.append((code: nil, name: String(cString: name)))
+            }
+        }
+        return parseDifferencesTokens(tokens)
+    }
+
+    /// Pure alternating start-code / name-run walk over `/Differences`
+    /// tokens, extracted from `readDifferences` so the off-by-one-prone
+    /// code-increment continuation (and the negative-start-code guard
+    /// below) can be unit tested without a `CGPDFDictionaryRef`. A negative
+    /// start-code is malformed input; per this project's permissive-parser
+    /// policy it is skipped rather than trapping the `UInt32(code)` cast.
+    static func parseDifferencesTokens(_ tokens: [(code: Int?, name: String?)]) -> [UInt32: String] {
+        var out: [UInt32: String] = [:]
+        var code = 0
+        for token in tokens {
+            if let intValue = token.code {
+                guard intValue >= 0 else { continue }
+                code = intValue
+                continue
+            }
+            if let name = token.name {
+                out[UInt32(code)] = name
                 code += 1
             }
         }
