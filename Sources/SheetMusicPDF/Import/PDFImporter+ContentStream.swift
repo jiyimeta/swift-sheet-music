@@ -30,6 +30,15 @@ extension PDFImporter {
         /// forwarded to every page's `GlyphClassifier`s. TESTING ONLY —
         /// default false.
         var bypassMusicFontGate = false
+        /// Threaded from `PDFImportOptions.musicFontGateBound` /
+        /// `.musicFontGateFraction` / `.shapeAcceptanceThreshold`; forwarded
+        /// to every page's `GlyphClassifier`s as instance configuration
+        /// (not shared mutable state — see `GlyphClassifier`'s `default*`
+        /// constants). Default to those same constants so callers that
+        /// don't override anything get production behavior.
+        var musicFontGateBound = GlyphClassifier.defaultMusicFontGateBound
+        var musicFontGateFraction = GlyphClassifier.defaultMusicFontGateFraction
+        var shapeAcceptanceThreshold = GlyphClassifier.defaultShapeAcceptanceThreshold
 
         func walk() throws -> WalkedContent {
             var glyphs: [ClassifiedGlyph] = []
@@ -63,6 +72,9 @@ extension PDFImporter {
                     font: $0, enableShapeMatching: enableShapeMatching,
                     disableSMuFLTier: disableSMuFLCodepointTier,
                     bypassMusicFontGate: bypassMusicFontGate,
+                    shapeAcceptanceThreshold: shapeAcceptanceThreshold,
+                    musicFontGateBound: musicFontGateBound,
+                    musicFontGateFraction: musicFontGateFraction,
                 )
             }
             guard let table = CGPDFOperatorTableCreate() else { return }

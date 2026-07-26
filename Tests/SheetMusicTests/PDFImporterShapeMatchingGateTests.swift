@@ -153,25 +153,25 @@
         /// lyric font's outlines to Bravura exemplars and lyric count
         /// collapses to exactly 0 — byte-for-byte reproducing Task 12's
         /// original finding on this PDF.
+        ///
+        /// The overrides are threaded through `PDFImportOptions`'
+        /// internal-only gate knobs rather than mutated on a shared
+        /// `GlyphClassifier` static — Swift Testing runs suites in
+        /// parallel, and a `static var` here previously let this test
+        /// intermittently pollute `GlyphClassifierTests` running
+        /// concurrently in another suite (Task 15 final review, C1).
+        /// Per-`PDFImporter.parse` instance configuration makes that
+        /// interference impossible by construction.
         @Test func noGateAtPlaceholderThresholdReproducesTask12Collapse() throws {
             let path = Self.corpusPath
             guard FileManager.default.fileExists(atPath: path) else { return }
             let data = try Data(contentsOf: URL(fileURLWithPath: path))
 
-            let savedFraction = GlyphClassifier.musicFontGateFraction
-            let savedBound = GlyphClassifier.musicFontGateBound
-            let savedAccept = GlyphClassifier.shapeAcceptanceThreshold
-            GlyphClassifier.musicFontGateFraction = 0
-            GlyphClassifier.musicFontGateBound = 1.0
-            GlyphClassifier.shapeAcceptanceThreshold = 0.45
-            defer {
-                GlyphClassifier.musicFontGateFraction = savedFraction
-                GlyphClassifier.musicFontGateBound = savedBound
-                GlyphClassifier.shapeAcceptanceThreshold = savedAccept
-            }
-
             var options = PDFImportOptions()
             options.enableShapeMatching = true
+            options.musicFontGateFraction = 0
+            options.musicFontGateBound = 1.0
+            options.shapeAcceptanceThreshold = 0.45
             let score = try PDFImporter.parse(pdfData: data, options: options)
 
             let lyricCount = score.parts

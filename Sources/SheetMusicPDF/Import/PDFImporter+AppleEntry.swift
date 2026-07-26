@@ -29,6 +29,9 @@ extension PDFImporter {
             disableSMuFLCodepointTier: options.disableSMuFLCodepointTier,
             anchorMusicGlyphsToPUARange: options.anchorMusicGlyphsToPUARange,
             bypassMusicFontGate: options.bypassMusicFontGateForTesting,
+            musicFontGateBound: options.musicFontGateBound,
+            musicFontGateFraction: options.musicFontGateFraction,
+            shapeAcceptanceThreshold: options.shapeAcceptanceThreshold,
         )
         return try buildScore(
             pageCount: document.pageCount,
@@ -51,6 +54,9 @@ extension PDFImporter {
             disableSMuFLCodepointTier: options.disableSMuFLCodepointTier,
             anchorMusicGlyphsToPUARange: options.anchorMusicGlyphsToPUARange,
             bypassMusicFontGate: options.bypassMusicFontGateForTesting,
+            musicFontGateBound: options.musicFontGateBound,
+            musicFontGateFraction: options.musicFontGateFraction,
+            shapeAcceptanceThreshold: options.shapeAcceptanceThreshold,
         )
         let score = try buildScore(
             pageCount: document.pageCount,
@@ -98,12 +104,18 @@ extension PDFImporter {
         disableSMuFLCodepointTier: Bool = false,
         anchorMusicGlyphsToPUARange: Bool = false,
         bypassMusicFontGate: Bool = false,
+        musicFontGateBound: Double = GlyphClassifier.defaultMusicFontGateBound,
+        musicFontGateFraction: Double = GlyphClassifier.defaultMusicFontGateFraction,
+        shapeAcceptanceThreshold: Double = GlyphClassifier.defaultShapeAcceptanceThreshold,
     ) throws -> (content: WalkedContent, pageSizes: [Int: CGSize], attributes: [String: Any]?) {
         let content = try ContentStreamWalker(
             document: document, enableShapeMatching: enableShapeMatching,
             disableSMuFLCodepointTier: disableSMuFLCodepointTier,
             anchorMusicToPUARange: anchorMusicGlyphsToPUARange,
             bypassMusicFontGate: bypassMusicFontGate,
+            musicFontGateBound: musicFontGateBound,
+            musicFontGateFraction: musicFontGateFraction,
+            shapeAcceptanceThreshold: shapeAcceptanceThreshold,
         ).walk()
         var pageSizes: [Int: CGSize] = [:]
         for p in 0 ..< document.pageCount {

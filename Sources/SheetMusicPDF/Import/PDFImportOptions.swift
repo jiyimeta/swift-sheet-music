@@ -74,6 +74,26 @@ public struct PDFImportOptions {
     /// PRODUCTION safeguard; this flag keeps it out of that measurement.
     /// Never set this in production.
     public var bypassMusicFontGateForTesting = false
+    /// TESTING ONLY, INTERNAL. Overrides `GlyphClassifier`'s default
+    /// per-font music-font gate knobs (see its `default*` constants) for
+    /// every `GlyphClassifier` this parse creates. Not `public` — reached
+    /// only from within `SheetMusicPDF` or via `@testable import` — because
+    /// these are instance configuration on an internal type, not a stable
+    /// public knob. Exists so a test that must go through the real
+    /// `PDFImporter.parse(pdfData:options:)` entry point (rather than
+    /// constructing a `GlyphClassifier` directly) can loosen or tighten the
+    /// gate without mutating shared process-global state — see
+    /// `PDFImporterShapeMatchingGateTests.
+    /// noGateAtPlaceholderThresholdReproducesTask12Collapse`.
+    ///
+    /// The literal defaults below MUST track `GlyphClassifier`'s
+    /// `default*` constants — duplicated rather than referenced because
+    /// `GlyphClassifier` is CoreText-backed and excluded from the Android
+    /// build (see `Package.swift`), while this file (and the rest of
+    /// `PDFImportOptions`) is not.
+    var musicFontGateBound = 0.10
+    var musicFontGateFraction = 0.5
+    var shapeAcceptanceThreshold = 0.15
     public var diagnostics: (@Sendable (PDFImportDiagnostic) -> Void)?
 
     public init() {}

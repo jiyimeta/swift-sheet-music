@@ -3,6 +3,7 @@
     import CoreText
     import Foundation
     @testable import SheetMusicCore
+    import SheetMusicLayoutApple
     @testable import SheetMusicPDF
     import Testing
 
@@ -122,6 +123,32 @@
             // once Tier 4 is explicitly turned on.
             let enabled = GlyphClassifier(font: font, enableShapeMatching: true)
             #expect(enabled.classify(codepoint: 0x41, glyphID: noteheadGlyphID) == .noteheadBlack)
+        }
+
+        // MARK: Music-font gate (`isLikelyMusicFont`, Task 15 final review C2)
+
+        /// Direct coverage for `isLikelyMusicFont` — it had NONE before this
+        /// round, which is exactly how the bug it guards against shipped: a
+        /// FULL (unsubsetted) music font sampled mostly exotic, non-
+        /// exemplar-shaped glyphs under the old evenly-strided-glyph-ID
+        /// population and scored 0.20, well under the 0.5 acceptance
+        /// fraction — rejecting Bravura, the very font its own exemplars
+        /// are rendered from. No corpus dependency (registers the bundled
+        /// Bravura.otf via `BravuraFont`, the SAME mechanism
+        /// `BravuraExemplars` itself uses to build its reference
+        /// descriptors), so this runs in CI.
+        @Test func isLikelyMusicFontAcceptsTheBundledBravuraFont() {
+            guard #available(macOS 15.0, *), BravuraFont.register else { return }
+            let ctFont = CTFontCreateWithName(BravuraFont.familyName as CFString, 1000, nil)
+            #expect(GlyphClassifier.isLikelyMusicFont(ctFont: ctFont))
+        }
+
+        /// The companion negative: an ordinary system text font must stay
+        /// REJECTED — proving `isLikelyMusicFontAcceptsTheBundledBravuraFont`
+        /// isn't passing merely because the gate now accepts everything.
+        @Test func isLikelyMusicFontRejectsASystemTextFont() {
+            let ctFont = CTFontCreateWithName("Helvetica" as CFString, 1000, nil)
+            #expect(!GlyphClassifier.isLikelyMusicFont(ctFont: ctFont))
         }
     }
 #endif

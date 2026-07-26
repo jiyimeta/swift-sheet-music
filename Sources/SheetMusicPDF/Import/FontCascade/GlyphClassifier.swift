@@ -36,6 +36,18 @@ final class GlyphClassifier {
     /// decides Tier 4 eligibility. See
     /// `PDFImportOptions.bypassMusicFontGateForTesting`.
     private let bypassMusicFontGate: Bool
+    /// Per-instance copies of the gate knobs below — see their `default*`
+    /// constants for the production values and rationale. Instance
+    /// (rather than shared mutable `static var`) so a test can override one
+    /// classifier's gate behavior without any risk of a concurrently
+    /// running suite's `GlyphClassifier` observing the mutation — Swift
+    /// Testing runs suites in parallel by default, and a `static var` here
+    /// previously let `PDFImporterShapeMatchingGateTests` intermittently
+    /// pollute `GlyphClassifierTests` (Task 15 final review, C1).
+    private let shapeAcceptanceThreshold: Double
+    private let musicFontGateBound: Double
+    private let musicFontGateFraction: Double
+    private let musicFontGateSampleSize: Int
     private lazy var ctFont: CTFont? = {
         guard let program = font?.program, let kind = font?.programKind
         else { return nil }
@@ -50,7 +62,10 @@ final class GlyphClassifier {
     private lazy var effectiveShapeMatching: Bool = {
         guard enableShapeMatching, let ctFont else { return false }
         if bypassMusicFontGate { return true }
-        return Self.isLikelyMusicFont(ctFont: ctFont)
+        return Self.isLikelyMusicFont(
+            ctFont: ctFont, sampleSize: musicFontGateSampleSize,
+            bound: musicFontGateBound, fraction: musicFontGateFraction,
+        )
     }()
 
     private var cache: [UInt32: SMuFLSemantic] = [:]
@@ -59,7 +74,7 @@ final class GlyphClassifier {
     /// reported `.unknown` rather than guessed. Measured against the Task 13
     /// ablation (Task 14): 0.15. Inert while `enableShapeMatching` is false
     /// (the default) or the per-font gate declines this font.
-    nonisolated(unsafe) static var shapeAcceptanceThreshold = 0.15
+    static let defaultShapeAcceptanceThreshold = 0.15
 
     /// Per-glyph distance bound for the music-font gate's SAMPLING pass
     /// (`isLikelyMusicFont`) — deliberately TIGHTER than
@@ -73,24 +88,33 @@ final class GlyphClassifier {
     /// real music faces (Leland, MScore) sample 72-88% of their glyphs
     /// within bound, while every text face (Edwin, FreeSerif, Hiragino*,
     /// LucidaGrande, Helvetica) samples 27% or less — a wide, clean margin.
-    nonisolated(unsafe) static var musicFontGateBound = 0.10
+    static let defaultMusicFontGateBound = 0.10
     /// Fraction of the sample that must clear `musicFontGateBound` for the
     /// font to be treated as a music font. 0.5 sits in the middle of the
     /// measured gap (music fonts >= 0.72, text fonts <= 0.27).
-    nonisolated(unsafe) static var musicFontGateFraction = 0.5
-    /// Glyphs sampled per font when evaluating the gate. Evenly spread
-    /// across the font's glyph-ID range (not the first N — subsetted PDF
-    /// fonts often front-load Latin/ASCII glyph IDs even in a music face).
-    nonisolated(unsafe) static var musicFontGateSampleSize = 40
+    static let defaultMusicFontGateFraction = 0.5
+    /// Glyphs sampled per font when evaluating the gate's raw-glyph-ID
+    /// FALLBACK population (see `isLikelyMusicFont`). Evenly spread across
+    /// the font's glyph-ID range (not the first N — subsetted PDF fonts
+    /// often front-load Latin/ASCII glyph IDs even in a music face).
+    static let defaultMusicFontGateSampleSize = 40
 
     init(
         font: PDFImporter.EmbeddedFont?, enableShapeMatching: Bool = false,
         disableSMuFLTier: Bool = false, bypassMusicFontGate: Bool = false,
+        shapeAcceptanceThreshold: Double = GlyphClassifier.defaultShapeAcceptanceThreshold,
+        musicFontGateBound: Double = GlyphClassifier.defaultMusicFontGateBound,
+        musicFontGateFraction: Double = GlyphClassifier.defaultMusicFontGateFraction,
+        musicFontGateSampleSize: Int = GlyphClassifier.defaultMusicFontGateSampleSize,
     ) {
         self.font = font
         self.enableShapeMatching = enableShapeMatching
         self.disableSMuFLTier = disableSMuFLTier
         self.bypassMusicFontGate = bypassMusicFontGate
+        self.shapeAcceptanceThreshold = shapeAcceptanceThreshold
+        self.musicFontGateBound = musicFontGateBound
+        self.musicFontGateFraction = musicFontGateFraction
+        self.musicFontGateSampleSize = musicFontGateSampleSize
     }
 
     /// True when this font can be classified without a `/ToUnicode` CMap.
@@ -155,7 +179,7 @@ final class GlyphClassifier {
                 best = e.semantic
             }
         }
-        guard bestDistance <= Self.shapeAcceptanceThreshold else { return nil }
+        guard bestDistance <= shapeAcceptanceThreshold else { return nil }
         return best
     }
 
@@ -196,11 +220,98 @@ final class GlyphClassifier {
     /// Hiragino) outlines to Bravura exemplars just as readily as a real
     /// music font's outlines, leaving 0 of 4254 glyphs `.unknown` on
     /// ギブス.pdf and collapsing lyric recall from 92% to 0%.
-    static func isLikelyMusicFont(ctFont: CTFont) -> Bool {
+    ///
+    /// TWO populations are tried, in order:
+    ///
+    /// 1. `cmapReachableExemplarVerdict` — the 60 exemplar codepoints
+    ///    (`BravuraExemplars.codepoints`), looked up in `ctFont`'s OWN
+    ///    cmap. This is the population that actually separates a full or
+    ///    lightly-subsetted SMuFL font from a full text font: a real SMuFL
+    ///    face declares Unicode mappings for its PUA notation codepoints and
+    ///    those glyphs are shaped like Bravura's by construction, while an
+    ///    ordinary text font has no cmap entries in that range AT ALL (this
+    ///    is required — 5 full system faces measured zero reachable
+    ///    exemplar codepoints: Helvetica, Hiragino Sans, Times New Roman,
+    ///    Courier New, Arial). Task 15's final review caught the bug this
+    ///    replaces: the OLD single population (below) strided evenly across
+    ///    a FULL font's entire glyph-ID range, so a full, unsubsetted SMuFL
+    ///    font — the bundled Bravura.otf itself — sampled mostly exotic,
+    ///    non-exemplar-shaped glyphs (ornaments, obscure figured-bass
+    ///    marks, …) and scored 0.20, well under the 0.5 acceptance
+    ///    fraction. Reading the exemplar codepoints back through the font's
+    ///    cmap instead of striding blind fixes that: full Bravura scores a
+    ///    clean 1.0 (all 60 resolve, all within bound).
+    /// 2. Falls back to the raw-glyph-ID stride sample (unchanged from
+    ///    before this fix) when fewer than `cmapExemplarMinimum` codepoints
+    ///    resolve. This is the population every corpus PDF's embedded music
+    ///    font (Leland, MScore, subsetted Bravura, Finale's Kousaku) still
+    ///    needs: Task 8 proved a font subsetted into a PDF does NOT
+    ///    preserve its original Unicode cmap, so `cmapReachableExemplarVerdict`
+    ///    always returns nil for them (measured: 0 of 60 codepoints
+    ///    resolve on every embedded font across the real corpus, music or
+    ///    text) and this fallback is what Task 14 actually calibrated.
+    static func isLikelyMusicFont(
+        ctFont: CTFont,
+        sampleSize: Int = defaultMusicFontGateSampleSize,
+        bound: Double = defaultMusicFontGateBound,
+        fraction: Double = defaultMusicFontGateFraction,
+    ) -> Bool {
+        if let verdict = cmapReachableExemplarVerdict(ctFont: ctFont, bound: bound, fraction: fraction) {
+            return verdict
+        }
+        return isLikelyMusicFontByRawGlyphIDs(
+            ctFont: ctFont, sampleSize: sampleSize, bound: bound, fraction: fraction,
+        )
+    }
+
+    /// Minimum number of the 60 exemplar codepoints (`BravuraExemplars.
+    /// codepoints`) that must resolve through `ctFont`'s own cmap before
+    /// that population is trusted over the raw-glyph-ID fallback. Guards
+    /// against a coincidental cmap hit on a handful of PUA codepoints in an
+    /// unrelated font (icon fonts are known to squat on Private Use Area
+    /// codepoints too) being read as "this is a music font" from too small
+    /// a sample. Every real case measured is bimodal, not borderline: 0
+    /// reachable (every subsetted PDF font and every full text font tried)
+    /// or 60 (the full bundled Bravura.otf) — this threshold sits well
+    /// clear of both.
+    private static let cmapExemplarMinimum = 10
+
+    /// The cmap-reachable-exemplar population (see `isLikelyMusicFont`'s
+    /// doc comment). Returns nil — "no verdict, consult the fallback" —
+    /// when fewer than `cmapExemplarMinimum` of the 60 exemplar codepoints
+    /// resolve to a real outline through `ctFont`'s own cmap.
+    private static func cmapReachableExemplarVerdict(
+        ctFont: CTFont, bound: Double, fraction: Double,
+    ) -> Bool? {
+        var sampled = 0
+        var hits = 0
+        for codepoint in BravuraExemplars.codepoints {
+            guard let scalar = Unicode.Scalar(codepoint) else { continue }
+            var units = Array(String(scalar).utf16)
+            var glyphs = [CGGlyph](repeating: 0, count: units.count)
+            guard CTFontGetGlyphsForCharacters(ctFont, &units, &glyphs, units.count),
+                  let gid = glyphs.first, gid != 0,
+                  let hit = gateSampleHit(ctFont: ctFont, gid: gid, bound: bound)
+            else { continue }
+            sampled += 1
+            if hit { hits += 1 }
+        }
+        guard sampled >= cmapExemplarMinimum else { return nil }
+        return Double(hits) / Double(sampled) >= fraction
+    }
+
+    /// The pre-Task-15 population: `sampleSize` glyph IDs evenly strided
+    /// across the font's own glyph-ID range, starting at 1 (gid 0 is
+    /// `.notdef` in every font). Reached by RAW GLYPH ID because a
+    /// subsetted PDF font's cmap does not survive subsetting (Task 8) —
+    /// this is the population that still has to serve every embedded music
+    /// font in the real corpus.
+    private static func isLikelyMusicFontByRawGlyphIDs(
+        ctFont: CTFont, sampleSize: Int, bound: Double, fraction: Double,
+    ) -> Bool {
         let glyphCount = Int(CTFontGetGlyphCount(ctFont))
-        // gid 0 is `.notdef` in every font; start sampling at 1.
         guard glyphCount > 1 else { return false }
-        let sampleTarget = min(glyphCount - 1, musicFontGateSampleSize)
+        let sampleTarget = min(glyphCount - 1, sampleSize)
         guard sampleTarget > 0 else { return false }
         let stride = max(1, (glyphCount - 1) / sampleTarget)
         var sampled = 0
@@ -208,19 +319,29 @@ final class GlyphClassifier {
         var gid = 1
         while gid < glyphCount, sampled < sampleTarget {
             defer { gid += stride }
-            guard let path = CTFontCreatePathForGlyph(ctFont, CGGlyph(gid), nil),
-                  !path.isEmpty else { continue }
+            guard let hit = gateSampleHit(ctFont: ctFont, gid: CGGlyph(gid), bound: bound)
+            else { continue }
             sampled += 1
-            let descriptor = makeDescriptor(path: path)
-            var best = Double.infinity
-            for e in BravuraExemplars.all {
-                let d = descriptor.distance(to: e.descriptor)
-                if d < best { best = d }
-            }
-            if best <= musicFontGateBound { hits += 1 }
+            if hit { hits += 1 }
         }
         guard sampled > 0 else { return false }
-        return Double(hits) / Double(sampled) >= musicFontGateFraction
+        return Double(hits) / Double(sampled) >= fraction
+    }
+
+    /// Shared per-glyph gate primitive for both populations above: true /
+    /// false is "sampled, and within / outside `bound` of some exemplar";
+    /// nil is "not sampled" (glyph ID has no outline — `.notdef` or a blank
+    /// glyph — so it doesn't count toward the sample size either way).
+    private static func gateSampleHit(ctFont: CTFont, gid: CGGlyph, bound: Double) -> Bool? {
+        guard let path = CTFontCreatePathForGlyph(ctFont, gid, nil), !path.isEmpty
+        else { return nil }
+        let descriptor = makeDescriptor(path: path)
+        var best = Double.infinity
+        for e in BravuraExemplars.all {
+            let d = descriptor.distance(to: e.descriptor)
+            if d < best { best = d }
+        }
+        return best <= bound
     }
 
     /// Outlines are reached by RAW GLYPH ID only.
