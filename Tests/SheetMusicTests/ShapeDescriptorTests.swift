@@ -4,26 +4,31 @@
     @testable import SheetMusicPDF
     import Testing
 
+    #if os(macOS)
+        import CoreText
+        import SheetMusicLayoutApple
+    #endif
+
     @MainActor struct ShapeDescriptorTests {
-        /// N horizontal bars stacked vertically within a FIXED overall
-        /// bounding box (width 60, height 60) — a stand-in for the N flags of
-        /// a rest or a beamed flag glyph. The envelope is held constant
-        /// across `n` because real rest/flag families (rest8th…rest64th,
-        /// flag8thUp…flag64thUp) keep roughly the same overall glyph size —
-        /// only the internal flag count grows. A stand-in whose bbox instead
-        /// grows with `n` (an earlier version of this helper did) defeats the
-        /// whole premise of `nearerForSameFamilyThanAcrossFamilies`: bitmap
-        /// L1 distance is then dominated by the differing envelope rather
-        /// than the differing stroke count, and same-family pairs measure
-        /// FARTHER apart than cross-family pairs. See task-10-report.md for
-        /// the measured before/after distances.
+        /// N horizontal bars stacked vertically — a stand-in for the N flags
+        /// of a rest or a beamed flag glyph. Growing the bounding box by
+        /// 20pt per bar is a reasonable proxy for how the box actually grows
+        /// in Bravura's real rest family (rest8th height 425 -> rest64th
+        /// height 1183 across 4 steps, ratio ~2.8, ~1.6 per step). This
+        /// helper is coverage for `verticalProjectionPeaks` only —
+        /// `nearerForSameFamilyThanAcrossFamilies` below uses REAL Bravura
+        /// outlines rather than this stand-in, because a synthetic
+        /// same-family/cross-family distance comparison turned out NOT to be
+        /// trustworthy evidence about the descriptor (see task-10-report.md
+        /// for the retraction: an earlier version of this file used a
+        /// fixed-envelope variant of `bars(_:)` that forced aspectRatio to
+        /// exactly 1.0 for every family member, which is not representative
+        /// of real notation glyphs and was itself measured against real
+        /// Bravura outlines to be false).
         private func bars(_ n: Int) -> CGPath {
             let path = CGMutablePath()
-            let totalHeight: CGFloat = 60
-            let unit = totalHeight / CGFloat(2 * n - 1)
             for i in 0 ..< n {
-                let y = CGFloat(i) * 2 * unit
-                path.addRect(CGRect(x: 0, y: y, width: 60, height: unit))
+                path.addRect(CGRect(x: 0, y: CGFloat(i) * 20, width: 60, height: 8))
             }
             return path
         }
@@ -39,15 +44,6 @@
             #expect(a.distance(to: b) == 0)
         }
 
-        @Test func nearerForSameFamilyThanAcrossFamilies() {
-            let twoBars = makeDescriptor(path: bars(2))
-            let threeBars = makeDescriptor(path: bars(3))
-            let disc = CGMutablePath()
-            disc.addEllipse(in: CGRect(x: 0, y: 0, width: 40, height: 30))
-            let notehead = makeDescriptor(path: disc)
-            #expect(twoBars.distance(to: threeBars) < twoBars.distance(to: notehead))
-        }
-
         @Test func scaleInvariant() {
             let small = CGMutablePath()
             small.addEllipse(in: CGRect(x: 0, y: 0, width: 10, height: 8))
@@ -58,5 +54,51 @@
                     .distance(to: makeDescriptor(path: large)) < 0.05,
             )
         }
+
+        #if os(macOS)
+            /// Rasterize a real Bravura SMuFL glyph outline via the same
+            /// CTFont path the codebase already uses for glyph metrics
+            /// (`AppleFontMetricsProvider.glyphPathBoundingBox`). Returns nil
+            /// if the font can't be registered/resolved in this environment
+            /// so the caller can skip gracefully instead of failing CI.
+            private func bravuraGlyphPath(
+                codepoint: UInt16, size: CGFloat = 1000,
+            ) -> CGPath? {
+                guard #available(macOS 15.0, *), BravuraFont.register else { return nil }
+                let ctFont = CTFontCreateWithName(
+                    BravuraFont.familyName as CFString, size, nil,
+                )
+                var unichars: [UniChar] = [codepoint]
+                var glyphs: [CGGlyph] = [0]
+                guard CTFontGetGlyphsForCharacters(ctFont, &unichars, &glyphs, 1),
+                      glyphs[0] != 0
+                else { return nil }
+                return CTFontCreatePathForGlyph(ctFont, glyphs[0], nil)
+            }
+
+            /// Validates the descriptor's core design claim — same-family
+            /// glyphs measure nearer than cross-family ones — against REAL
+            /// glyph outlines: Bravura rest8th (U+E4E6) vs rest16th (U+E4E7),
+            /// same family and differing only in flag count, vs
+            /// noteheadBlack (U+E0A4), an unrelated glyph family. Skips if
+            /// Bravura can't be resolved in this environment. See
+            /// task-10-report.md for the measured distances — this replaces
+            /// an earlier synthetic-fixture version of this test that was
+            /// found (by a reviewer measuring real Bravura outlines) not to
+            /// be representative.
+            @Test func nearerForSameFamilyThanAcrossFamilies() {
+                guard
+                    let rest8thPath = bravuraGlyphPath(codepoint: 0xE4E6),
+                    let rest16thPath = bravuraGlyphPath(codepoint: 0xE4E7),
+                    let noteheadPath = bravuraGlyphPath(codepoint: 0xE0A4)
+                else { return }
+                let rest8th = makeDescriptor(path: rest8thPath)
+                let rest16th = makeDescriptor(path: rest16thPath)
+                let notehead = makeDescriptor(path: noteheadPath)
+                let sameFamily = rest8th.distance(to: rest16th)
+                let crossFamily = rest8th.distance(to: notehead)
+                #expect(sameFamily < crossFamily)
+            }
+        #endif
     }
 #endif
