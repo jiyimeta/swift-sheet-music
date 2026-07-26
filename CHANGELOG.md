@@ -7,6 +7,47 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-07-27
+
+### Added
+
+- The PDF importer's geometry side-car is now available on Android, so a
+  host can draw a playback cursor on the original imported PDF and
+  resolve taps on it back to score positions. Previously only the Apple
+  front-end could produce it: `parseWithGeometry` lived in the
+  PDFKit-gated entry point, and Android could only ask for a bare
+  `Score`.
+  - `PDFImporter.parseUsingSwiftReader(pdfData:options:)`,
+    `parseWithGeometryUsingSwiftReader(pdfData:options:)` and
+    `summaryUsingSwiftReader(pdfData:)` are the Foundation-only entry
+    points driven by the pure-Swift PDF reader. They are compiled on
+    **both** platforms — Android uses them as its only front-end, and on
+    Apple they stay reachable so the test suite exercises the exact code
+    Android runs. `PDFImporter+AndroidEntry` is now a thin re-export of
+    them.
+  - `PDFDocumentSummary` (page count + `/Title`) reads a PDF's metadata
+    without decoding any notation, so a library can name an imported
+    file without paying for a parse.
+  - JNI: `nativeLoadScoreWithGeometryFromPDF`, `nativePdfCursorRect`,
+    `nativePdfHitTest`, `nativePdfPageSizes` and
+    `nativeReleasePdfGeometry`, with `PdfRectWire`, `PdfPageSizesWire`,
+    `PdfDiagnosticWire` and `PdfParseResultWire` as their wire types.
+    The geometry stays behind an opaque handle — only a rectangle or a
+    cursor ever crosses the boundary, so cursor lookup and hit-testing
+    are not re-implemented per platform. Every rectangle leaving and
+    every point arriving is converted between PDF user space (y-up) and
+    top-left page space on the Swift side, so a caller works in one
+    convention.
+  - Kotlin: `PdfScoreHandle` (score handle + geometry handle +
+    importer diagnostics, releasing both on `close()`) and
+    `PdfDiagnostic`.
+
+### Fixed
+
+- `LayoutOptionsWire`'s `transposeSemitones` field, added in 1.4.0, left
+  two test call sites constructing the old memberwise initializer, which
+  broke the `SheetMusicTests` target's compile.
+
 ## [1.4.0] - 2026-07-25
 
 ### Added
