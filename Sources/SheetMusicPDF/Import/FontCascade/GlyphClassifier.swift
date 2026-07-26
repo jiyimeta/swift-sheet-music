@@ -46,7 +46,7 @@ final class GlyphClassifier {
     /// reported `.unknown` rather than guessed. STARTING VALUE — replace with
     /// the figure measured by the Task 13 ablation and record it here.
     /// Inert while `enableShapeMatching` is false (the default).
-    nonisolated(unsafe) static var shapeAcceptanceThreshold = 0.20
+    nonisolated(unsafe) static var shapeAcceptanceThreshold = 0.15
 
     init(
         font: PDFImporter.EmbeddedFont?, enableShapeMatching: Bool = false,
