@@ -4,12 +4,27 @@
 import Foundation
 import SheetMusicCore
 
-/// The primitive streams a content-stream walk yields, in PDF page
-/// coordinates — the platform-neutral hand-off between the byte→token
-/// front-end (Apple `CGPDFScanner` today; Android tokenizer later) and the
-/// Foundation-only decode pipeline (`buildScore`). Aggregated across all pages.
+/// The front-end contract. Every source format produces this; `buildScore`
+/// consumes nothing else.
+///
+/// Implementations today: the Apple `CGPDFScanner` walker
+/// (`PDFImporter+ContentStream`) and the Foundation-only pure-Swift reader
+/// (`PDFImporter+SwiftReader`). A raster / OMR front-end fills the same four
+/// streams: staff lines and stems become `.horizontal` / `.vertical`
+/// `PathSegment`s, beams become `.beam` segments with a fitted `BeamQuad`,
+/// ties and slurs become `CurveArc`s, recognized symbols become
+/// `ClassifiedGlyph`s, and text runs become `TextGlyph`s.
+///
+/// CONTRACT RULE — determinism. A front-end, and every pass it feeds, must not
+/// depend on `Dictionary` / `Set` iteration order; traverse in geometric or
+/// sorted order. Swift randomizes hash seeds per process, and an
+/// order-dependent pass once made the same PDF score 96% or 9% across runs.
+/// Nothing measurement-gated is trustworthy until this holds.
+///
+/// Coordinates are PDF page space (origin = bottom-left), aggregated across
+/// all pages; `pageIndex` on each element selects the page.
 struct WalkedContent {
-    var glyphs: [RawGlyph]
+    var glyphs: [ClassifiedGlyph]
     var texts: [TextGlyph]
     var paths: [PathSegment]
     var curves: [CurveArc] = []
@@ -70,6 +85,9 @@ extension PDFPageState {
             // nil when the font has no usable /ToUnicode (e.g. ASCII Helvetica
             // fixtures), which keeps the legacy UTF-8/Latin-1 decode active.
             activeCMap = fontCMaps[name]
+            #if canImport(CoreGraphics)
+                activeClassifier = classifiers[name]
+            #endif
         }
     }
 

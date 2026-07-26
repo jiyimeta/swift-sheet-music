@@ -17,13 +17,11 @@
 
         private func classified(
             _ semantic: SMuFLSemantic, x: CGFloat, y: CGFloat,
-            codepoint: UInt32 = 0xE0A4,
         ) -> ClassifiedGlyph {
             ClassifiedGlyph(
-                raw: RawGlyph(
-                    codepoint: codepoint, fontName: "Bravura",
-                    fontSize: 20, origin: CGPoint(x: x, y: y),
-                    advance: 5, pageIndex: 0,
+                geometry: GlyphGeometry(
+                    origin: CGPoint(x: x, y: y), advance: 5,
+                    pageIndex: 0, fontSize: 20,
                 ),
                 semantic: semantic,
             )

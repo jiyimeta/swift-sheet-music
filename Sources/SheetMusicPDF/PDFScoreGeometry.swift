@@ -7,7 +7,7 @@ import SheetMusicCore
 /// A rectangle in one PDF page's coordinate space.
 ///
 /// Coordinates are **PDF user space: y-up, origin bottom-left** — the same
-/// space `RawGlyph.origin` lives in during import, and the same space
+/// space `GlyphGeometry.origin` lives in during import, and the same space
 /// PDFKit's `PDFPage.bounds(for:)` / `PDFView.convert(_:from:)` use, so a
 /// PDFKit overlay needs no flip. For a top-left view (UIKit / AppKit
 /// flipped layer) use `flipped(pageHeight:)`.

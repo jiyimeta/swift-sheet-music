@@ -29,6 +29,19 @@ final class PDFPageState {
     /// The CMap selected by the most recent `Tf` (nil for fonts without a
     /// usable `/ToUnicode`, e.g. the ASCII test fixtures).
     var activeCMap: PDFImporter.ToUnicodeCMap?
+    /// TESTING ONLY. See `PDFImportOptions.anchorMusicGlyphsToPUARange`.
+    /// Set once per page by the front-end walker from that option; consulted
+    /// by `emitShow` when deciding whether a decoded scalar is music or text.
+    var anchorMusicToPUARange = false
+    #if canImport(CoreGraphics)
+        /// Per-page registry of glyph classifiers keyed by font RESOURCE
+        /// NAME, filled by the front-end alongside `fontCMaps`.
+        /// `GlyphClassifier` is CoreText-based (Apple-only), so this
+        /// registry does not exist on Android.
+        var classifiers: [String: GlyphClassifier] = [:]
+        /// The classifier selected by the most recent `Tf`.
+        var activeClassifier: GlyphClassifier?
+    #endif
     /// Current subpath: starts at last `m`, accumulates points from `l`.
     /// `currentPoint` follows the latest `m` or `l`.
     var currentPoint: CGPoint?
@@ -48,7 +61,7 @@ final class PDFPageState {
     var pendingPolyCTM: CGAffineTransform = .identity
     var pendingPolyHasCurve = false
     // Outputs.
-    var glyphs: [RawGlyph] = []
+    var glyphs: [ClassifiedGlyph] = []
     var texts: [TextGlyph] = []
     var paths: [PathSegment] = []
     var curveArcs: [CurveArc] = []

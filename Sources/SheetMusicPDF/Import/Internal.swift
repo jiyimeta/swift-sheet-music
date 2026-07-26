@@ -8,21 +8,28 @@ import SheetMusicCore
 // declarations here are deliberately `internal` (default visibility) —
 // only the `PDFImporter` façade and `PDFImportOptions` are public.
 
-/// Raw glyph captured from one Tj / TJ operator. Position is the
-/// text origin in PDF page coordinates (origin = bottom-left).
-struct RawGlyph: Hashable {
-    var codepoint: UInt32 // Unicode scalar (often a SMuFL PUA codepoint)
-    var fontName: String // PostScript name as reported by PDFKit
-    var fontSize: CGFloat // points (raw Tf operand — uniform per font)
+/// The front-end contract: everything `buildScore` needs to know about a
+/// glyph's placement, independent of how the glyph was recognized.
+///
+/// A vector front-end fills this from the PDF text matrix; a raster (OMR)
+/// front-end fills it from a detected component's bounding box. Hashable so
+/// passes can key side tables by glyph identity.
+struct GlyphGeometry: Hashable {
+    /// Text origin in PDF page coordinates (origin = bottom-left).
     var origin: CGPoint
-    var advance: CGFloat // horizontal advance to the next glyph in points
-    var pageIndex: Int
-    /// Effective page-space rendered size = `fontSize × sqrt(det(textMatrix ×
-    /// ctm))`. MuseScore renders grace / cue noteheads by scaling the text
-    /// or current-transformation matrix rather than changing the `Tf`
-    /// operand (which stays 100 across the whole score), so this is the
-    /// only signal distinguishing a small grace notehead from a full one.
+    /// Horizontal advance to the next glyph, in points. A raster front-end
+    /// supplies the component's bounding-box width.
+    var advance: CGFloat
+    /// Effective page-space rendered size. Separates a grace / cue notehead
+    /// (~70%) from a full one. A raster front-end supplies bounding-box height
+    /// relative to staff spacing.
     var renderedSize: CGFloat = 0
+    var pageIndex: Int
+    /// VECTOR-ONLY. The PDF text-space font size. Read solely by the
+    /// `staff5Lines` path in `PDFImporter+StaffLines.swift` (MuseScore drawing
+    /// a whole staff as one glyph). A raster front-end detects staff lines
+    /// directly, never reaches that path, and may leave this 0.
+    var fontSize: CGFloat = 0
 }
 
 /// One straight or rectangular path segment captured from m/l/re
@@ -92,10 +99,14 @@ struct CurveArc: Equatable {
     var pageIndex: Int
 }
 
-/// Semantic interpretation of a `RawGlyph` (PDFImporter+SMuFL).
+/// Semantic interpretation of a glyph (PDFImporter+SMuFL).
 /// `NoteDuration` and `UInt32` are `Equatable`, so synthesized
 /// conformance carries through here.
-enum SMuFLSemantic: Equatable {
+enum SMuFLSemantic: Equatable, Hashable {
+    /// SMuFL `brace` U+E000 — the curly brace engraved at the left margin of
+    /// every system for a grand-staff instrument. The decisive, font-
+    /// independent grand-staff coupling signal (see PDFImporter+Coupling).
+    case brace
     case noteheadBlack, noteheadHalf, noteheadWhole, noteheadDoubleWhole
     /// X-noteheads (U+E0A9 black / U+E0A8 half / U+E0A7 whole). Drawn on
     /// drum staves for cymbals / hi-hat. Treated as noteheads everywhere
@@ -124,9 +135,10 @@ enum SMuFLSemantic: Equatable {
     case unknown(UInt32) // emits info-diagnostic
 }
 
-/// A glyph with its semantic. Stage [3] output.
-struct ClassifiedGlyph {
-    var raw: RawGlyph
+/// A glyph with its semantic. Stage [3] output — the unit every front-end
+/// produces and the whole decode pipeline consumes.
+struct ClassifiedGlyph: Hashable {
+    var geometry: GlyphGeometry
     var semantic: SMuFLSemantic
 }
 

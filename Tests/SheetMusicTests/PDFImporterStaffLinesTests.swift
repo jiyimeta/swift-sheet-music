@@ -21,13 +21,9 @@
 
         @Test func detectsStaff5LinesGlyphPath() {
             let glyph = ClassifiedGlyph(
-                raw: RawGlyph(
-                    codepoint: 0xE003,
-                    fontName: "Bravura",
-                    fontSize: 24,
-                    origin: CGPoint(x: 50, y: 100),
-                    advance: 450,
-                    pageIndex: 0,
+                geometry: GlyphGeometry(
+                    origin: CGPoint(x: 50, y: 100), advance: 450,
+                    pageIndex: 0, fontSize: 24,
                 ),
                 semantic: .staff5Lines,
             )
@@ -42,13 +38,9 @@
         @Test func deduplicatesGlyphAndPathDetections() {
             let paths = horizontals(at: [100, 110, 120, 130, 140], xRange: 50 ... 500)
             let glyph = ClassifiedGlyph(
-                raw: RawGlyph(
-                    codepoint: 0xE003,
-                    fontName: "Bravura",
-                    fontSize: 24,
-                    origin: CGPoint(x: 50, y: 120),
-                    advance: 450,
-                    pageIndex: 0,
+                geometry: GlyphGeometry(
+                    origin: CGPoint(x: 50, y: 120), advance: 450,
+                    pageIndex: 0, fontSize: 24,
                 ),
                 semantic: .staff5Lines,
             )
