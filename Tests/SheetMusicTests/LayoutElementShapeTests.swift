@@ -143,7 +143,18 @@
             #expect(box.maxY > -5)
         }
 
-        @Test func fermataShapeHasPositiveArea() throws {
+        /// `smuflGlyphRect` feeds `.articulation` / `.fermata` /
+        /// `.breath` into the BASE skyline, which every above-staff
+        /// annotation clears. A vertical error there moves annotations
+        /// CONSISTENTLY, so the corpus collision detector reports zero
+        /// — and it does not even see these kinds, because it filters
+        /// on `AutoplaceRules.isAutoplaced`. The band must therefore be
+        /// pinned here, against the same runtime metrics the renderer
+        /// positions the glyph with. A positive-area assertion alone
+        /// cannot tell ink-on-baseline from ink-centred-on-origin,
+        /// which is exactly the bug `smuflRunRect` / `tempoRect`
+        /// carried through nine tasks before it was caught.
+        @Test func fermataShapeInkMatchesGlyphMetrics() throws {
             let fermata = LayoutElement.fermata(
                 subtype: "fermataAbove", origin: CGPoint(x: 40, y: 0),
             )
@@ -153,6 +164,18 @@
             let box = try #require(shape.bbox)
             #expect(box.width > 0)
             #expect(box.height > 0)
+            // Origin is (40, 0), so the band is the raw offsets × sp.
+            let offsets = FermataGlyphMetrics.above
+            let expectedTop = offsets.topOffset * metrics.sp
+            let expectedBottom = offsets.bottomOffset * metrics.sp
+            #expect(
+                abs(box.minY - expectedTop) < 0.5,
+                "ink top \(box.minY), expected \(expectedTop)",
+            )
+            #expect(
+                abs(box.maxY - expectedBottom) < 0.5,
+                "ink bottom \(box.maxY), expected \(expectedBottom)",
+            )
         }
 
         @Test func staffRectSpansTheStaffHeight() {

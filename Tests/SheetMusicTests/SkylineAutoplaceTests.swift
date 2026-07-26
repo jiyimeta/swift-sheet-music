@@ -425,20 +425,22 @@
         /// rule in verse 1's group — the rule then takes verse 1's `dy`
         /// and detaches from the syllables it underlines. Verse 1 is
         /// pushed down here (its box collides with verse 0's), so the
-        /// two `dy`s differ and the offset stays diagnostic.
+        /// two `dy`s differ and the offset stays diagnostic — asserted
+        /// explicitly below rather than left to the reader.
         @available(macOS 15.0, iOS 16.0, *)
         @Test func melismaStaysWithItsOwnVerseRow() throws {
             let doc = SkylineFixtures.layout(
                 SkylineFixtures.twoVerseMelismaScore(),
             )
             let system = try #require(doc.systems.first)
-            var verse0Y = CGFloat.infinity
+            var rows: [CGFloat] = []
             var melismaY: CGFloat?
             for measure in system.measures {
                 for el in measure.elements {
                     switch el {
                     case let .textMark(.lyrics, _, p):
-                        verse0Y = min(verse0Y, p.y)
+                        let y = (p.y * 100).rounded() / 100
+                        if !rows.contains(y) { rows.append(y) }
                     case let .lyricsMelisma(from, _):
                         melismaY = from.y
                     default:
@@ -446,7 +448,21 @@
                     }
                 }
             }
-            #expect(verse0Y.isFinite, "fixture emitted no lyric text")
+            rows.sort()
+            #expect(rows.count == 2, "fixture emitted \(rows.count) rows")
+            let verse0Y = try #require(rows.first)
+            let verse1Y = try #require(rows.dropFirst().first)
+            // Self-guard: the assertion below is only diagnostic while
+            // the two verses take DIFFERENT `dy`s. Verse rows are
+            // pitched 1.7 sp apart at emission, so verse 1 having been
+            // pushed further than that is what proves the buckets are
+            // distinct. Were a style change to shrink verse 0's box
+            // below a collision, both `dy`s would be 0 and the test
+            // would pass under either bucketing.
+            #expect(
+                verse1Y > verse0Y + system.sp * 1.7,
+                "verse 1 not pushed: rows \(verse0Y) / \(verse1Y)",
+            )
             let rule = try #require(
                 melismaY, "fixture emitted no melisma rule",
             )

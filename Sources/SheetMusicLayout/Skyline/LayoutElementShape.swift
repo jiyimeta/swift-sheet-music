@@ -88,6 +88,18 @@ public enum LayoutElementShape {
     /// the anchor puts the typographic centre at `center.y`, so the
     /// baseline sits `(ascent − descent) / 2` below it, and the glyph
     /// path bbox is measured relative to that baseline.
+    ///
+    /// `baselineFromCenter` evaluates to exactly 0 on Bravura, whose
+    /// ascent and descent are equal (8.048 each at pointSize 4), so
+    /// for the fonts we ship the baseline IS the anchor. It is kept
+    /// because the derivation — not the number — is what makes this
+    /// rect agree with the renderer, and a non-symmetric SMuFL face
+    /// would need it. Consequence for testing: no assertion can catch
+    /// this term being dropped, so
+    /// `fermataShapeInkMatchesGlyphMetrics` pins the band against
+    /// `FermataGlyphMetrics` instead, which catches every error that
+    /// actually moves ink (centring on the origin, using the em box,
+    /// using `ascent` as the baseline).
     static func smuflGlyphRect(
         codepoint: UInt32, center: CGPoint, sp: CGFloat,
     ) -> CGRect {
