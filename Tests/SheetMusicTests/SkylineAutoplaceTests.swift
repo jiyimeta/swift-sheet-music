@@ -360,8 +360,8 @@
         /// the page while doing it.
         ///
         /// Found by the Task-10 corpus scan: the dynamics shape was
-        /// Bravura's em box (16 sp at the 4 sp dynamics size) instead
-        /// of the ~1.1 sp of `mf` ink, so every dynamic claimed 8 sp
+        /// Bravura's em box (16.1 sp at the 4 sp dynamics size) instead
+        /// of the 2.4 sp of `mf` ink, so every dynamic claimed 8 sp
         /// of skyline below its own origin and the lyric row — the
         /// next below-staff category — cleared all of it.
         @available(macOS 15.0, iOS 16.0, *)
@@ -389,11 +389,26 @@
             let lyr = try #require(
                 shapes.first { $0.kind == .lyrics }?.shape.bbox,
             )
-            // Dynamic ink (2.4 sp) + 0.5 sp clearance + the lyric's
-            // own 2 sp box leaves the row about 5 sp below the staff;
-            // the 16.1 sp em box put it past 17 sp.
+            let dyn = try #require(
+                shapes.first { $0.kind == .dynamics }?.shape.bbox,
+            )
+            // Assert the relation the pass actually guarantees — the
+            // lyric row clears the dynamic by exactly its own
+            // `minDistance` — rather than a measured constant with
+            // sp-scale slack in it. A shape that over-claims skyline
+            // (the em box did, by 13.7 sp) still satisfies the
+            // clearance, so ALSO pin where the row lands: 5.1 sp below
+            // the staff with the correct ink, 18.8 sp with the em box
+            // (both measured on this fixture).
+            let clearance = AutoplaceRules.minDistance(
+                for: .lyrics, sp: system.sp,
+            )
             #expect(
-                lyr.maxY - staffBottom < system.sp * 7,
+                abs((lyr.minY - dyn.maxY) - clearance) < 0.01,
+                "gap \(lyr.minY - dyn.maxY) pt vs minDistance \(clearance)",
+            )
+            #expect(
+                abs((lyr.maxY - staffBottom) - system.sp * 5.13) < 1.0,
                 "lyric row \(lyr.maxY - staffBottom) pt below the staff",
             )
         }

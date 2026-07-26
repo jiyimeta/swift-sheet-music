@@ -291,16 +291,27 @@
             // Ink (≈ 2.4 sp), not the 16.1 sp em box.
             #expect(box.height > metrics.sp * 0.5)
             #expect(box.height < metrics.sp * 4)
-            // A `.leadingCenter` anchor on a face whose ascent equals
-            // its descent puts the baseline exactly on origin.y.
-            // Bravura's calligraphic `f` reaches 0.6 sp below it.
-            #expect(box.minY < 40)
-            #expect(box.maxY < 40 + metrics.sp)
+            // Pin the POSITION, not just the height: a band of the
+            // right size measured off the wrong baseline would pass a
+            // height-only check. A `.leadingCenter` anchor on a face
+            // whose ascent equals its descent puts the baseline exactly
+            // on origin.y, and `mf` inks 1.8 sp above it, with
+            // Bravura's calligraphic `f` reaching 0.6 sp below.
+            #expect(abs(box.minY - (40 - metrics.sp * 1.8)) < 0.5)
+            #expect(abs(box.maxY - (40 + metrics.sp * 0.61)) < 0.5)
         }
 
         /// Tempo mixes an Edwin run with a Bravura beat glyph, so the
         /// same em-box trap applies to its glyph half: the union must
         /// use the glyph's measured ink, not Bravura's 4 em line box.
+        ///
+        /// And it must place that ink the way `ScoreLayerBuilder` draws
+        /// it — `bravuraInkCenteredLayer` centres the glyph's INK on
+        /// `origin.y`. Offsetting it by the Edwin run's baseline (which
+        /// sits 3.98 pt below `origin.y` at this size) instead put the
+        /// band 0.57 sp off, more than the pass's whole 0.5 sp
+        /// `minVerticalDistance` budget — and a height-only assertion
+        /// could not see it. Hence the explicit min/max Y below.
         @Test func tempoRectDoesNotInheritTheBravuraEmBox() throws {
             let el = LayoutElement.textMark(
                 kind: .tempo, text: "\u{E1D5} = 120",
@@ -315,6 +326,11 @@
             #expect(box.height > metrics.sp * 2)
             // …but nowhere near Bravura's 4 em (≈ 9.7 sp here).
             #expect(box.height < metrics.sp * 5)
+            // Both the Edwin box and the glyph ink are centred on
+            // `origin.y`, so their union is too — exactly.
+            #expect(abs((box.minY + box.maxY) / 2 - -14) < 0.01)
+            #expect(abs(box.minY - (-14 - metrics.sp * 1.22)) < 0.5)
+            #expect(abs(box.maxY - (-14 + metrics.sp * 1.22)) < 0.5)
         }
 
         @Test func melismaAndHyphenAreThinSpans() throws {

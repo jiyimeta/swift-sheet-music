@@ -241,8 +241,17 @@ extension LayoutElementShape {
     /// Ink rect of a SMuFL glyph run drawn with a `.leadingCenter`
     /// anchor at `origin`: the typographic width (advances are right),
     /// but the glyph paths' vertical extent (the em box is not).
-    /// Falls back to the em box when no glyph path is measurable —
-    /// Android's stub provider, which has no glyph outlines.
+    ///
+    /// Falls back to the em box only when *no* glyph in the run has a
+    /// measurable path — an unmapped codepoint, not a platform. Both
+    /// Android providers return a box: `StubFontMetricsProvider` a fixed
+    /// `pointSize × 0.7·pointSize` rect, and the JNI
+    /// `SMuFLMetricsTable` provider genuine Bravura bboxes. What Android
+    /// *does* get wrong is the baseline, not the extent: both providers
+    /// take `ascent`/`descent` from the stub (0.85 / 0.25 em), so
+    /// `baselineY` returns `originY + 0.3 · pointSize` and the ink band
+    /// sits ~1.2 sp lower than on Apple. That is the spec's declared
+    /// "Android text metrics out of scope" boundary.
     private static func smuflRunRect(
         glyphs: String, font: LayoutFont, origin: CGPoint,
     ) -> CGRect {
@@ -266,7 +275,15 @@ extension LayoutElementShape {
     }
 
     /// Tempo is a mixed Bravura + Edwin run list; sum the run widths
-    /// the way `TextMarkRenderer.drawTempo` advances its cursor.
+    /// the way the renderers advance their cursor.
+    ///
+    /// Mirrors `ScoreLayerBuilder+Element`'s CALayer tempo path — the
+    /// one `ScoreView` actually renders through — which draws the beat
+    /// glyph via `bravuraInkCenteredLayer`, i.e. with the glyph's **ink
+    /// box centred on `origin.y`**. It deliberately does *not* mirror
+    /// `TextMarkRenderer.drawTempo`, whose Canvas path anchors every run
+    /// `.leading` on `origin.y`; the two renderers disagree on the beat
+    /// glyph's Y and the CALayer one is production.
     private static func tempoRect(
         text: String, origin: CGPoint, metrics: StaffMetrics,
     ) -> CGRect {
@@ -275,8 +292,9 @@ extension LayoutElementShape {
             face: SMuFLFamily.bravura, pointSize: textFont.pointSize,
         )
         let provider = FontMetrics.provider
+        let runs = MusicTextRuns.runs(in: text)
         var width: CGFloat = 0
-        for run in MusicTextRuns.runs(in: text) {
+        for run in runs {
             let f = run.kind == .musicSymbol ? glyphFont : textFont
             width += provider.typographicWidth(text: run.text, font: f)
         }
@@ -284,22 +302,24 @@ extension LayoutElementShape {
         // text half of the run keeps it. The Bravura half must NOT —
         // its em box is 4 em (see `smuflRunInkExtent`), which at the
         // tempo size is 68 pt of skyline against ~14 pt of metronome
-        // glyph. Union the text box with the glyphs' measured ink.
+        // glyph. Union the text box with the glyphs' measured ink,
+        // centred on `origin.y` exactly as the CALayer renderer draws
+        // it. Offsetting the ink by the *Edwin* baseline (as an earlier
+        // revision did) drops the band ~0.57 sp — more than the pass's
+        // whole 0.5 sp `minVerticalDistance` budget.
         let textHeight = provider.ascent(font: textFont)
             + provider.descent(font: textFont)
         var top = origin.y - textHeight / 2
         var bottom = origin.y + textHeight / 2
-        let glyphs = MusicTextRuns.runs(in: text)
+        let glyphs = runs
             .filter { $0.kind == .musicSymbol }
             .map(\.text).joined()
         if let ink = smuflRunInkExtent(
             glyphs: glyphs, pointSize: glyphFont.pointSize,
         ) {
-            let baseline = baselineY(
-                font: textFont, originY: origin.y, anchor: .center,
-            )
-            top = min(top, baseline + ink.top)
-            bottom = max(bottom, baseline + ink.bottom)
+            let inkHeight = max(0, ink.bottom - ink.top)
+            top = min(top, origin.y - inkHeight / 2)
+            bottom = max(bottom, origin.y + inkHeight / 2)
         }
         return CGRect(
             x: origin.x, y: top,
