@@ -6,6 +6,7 @@ extension PDFImporter {
     /// → `.unknown(codepoint)` so callers can emit a diagnostic.
     static func smuflSemantic(codepoint cp: UInt32) -> SMuFLSemantic {
         switch cp {
+        case 0xE000: return .brace
         case 0xE003: return .staff5Lines
         case 0xE043: return .repeatBarlineDots
         case 0xE047: return .segno

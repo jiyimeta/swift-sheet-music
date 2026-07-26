@@ -95,7 +95,11 @@ struct CurveArc: Equatable {
 /// Semantic interpretation of a `RawGlyph` (PDFImporter+SMuFL).
 /// `NoteDuration` and `UInt32` are `Equatable`, so synthesized
 /// conformance carries through here.
-enum SMuFLSemantic: Equatable {
+enum SMuFLSemantic: Equatable, Hashable {
+    /// SMuFL `brace` U+E000 — the curly brace engraved at the left margin of
+    /// every system for a grand-staff instrument. The decisive, font-
+    /// independent grand-staff coupling signal (see PDFImporter+Coupling).
+    case brace
     case noteheadBlack, noteheadHalf, noteheadWhole, noteheadDoubleWhole
     /// X-noteheads (U+E0A9 black / U+E0A8 half / U+E0A7 whole). Drawn on
     /// drum staves for cymbals / hi-hat. Treated as noteheads everywhere
