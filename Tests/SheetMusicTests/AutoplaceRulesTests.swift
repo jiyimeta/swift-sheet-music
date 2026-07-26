@@ -105,5 +105,22 @@
             #expect(AutoplaceRules.defaultSide(for: .ottava) == nil)
             #expect(AutoplaceRules.defaultSide(for: .textLine) == nil)
         }
+
+        /// Coverage invariant: every autoplaced kind must resolve to a
+        /// side — either a fixed one from the table, or one of the two
+        /// kinds the pass derives from the element's own Y. Without
+        /// this, a new kind added to one switch and not the other would
+        /// compile and silently mis-place.
+        @Test func everyAutoplacedKindResolvesToASide() {
+            for kind in ShapeItemKind.allCases
+                where AutoplaceRules.isAutoplaced(kind)
+            {
+                #expect(
+                    AutoplaceRules.defaultSide(for: kind) != nil
+                        || kind == .ottava || kind == .textLine,
+                    "\(kind) is autoplaced but has no side rule",
+                )
+            }
+        }
     }
 #endif

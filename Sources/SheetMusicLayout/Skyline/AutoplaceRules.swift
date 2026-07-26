@@ -64,7 +64,10 @@ public enum AutoplaceRules {
 
     /// True for the kinds the skyline pass is allowed to move.
     public static func isAutoplaced(_ kind: ShapeItemKind) -> Bool {
-        defaultSideIsKnownAutoplaced(kind)
+        if defaultSide(for: kind) != nil { return true }
+        // Kinds MuseScore places on either side — the pass derives
+        // their side from the element's own Y.
+        return kind == .ottava || kind == .textLine
     }
 
     /// Side of the staff `kind` is pushed toward, or `nil` when the
@@ -82,20 +85,6 @@ public enum AutoplaceRules {
             .above
         default:
             nil
-        }
-    }
-
-    private static func defaultSideIsKnownAutoplaced(
-        _ kind: ShapeItemKind,
-    ) -> Bool {
-        switch kind {
-        case .dynamics, .lyrics, .lyricsMelisma, .lyricHyphen,
-             .hairpin, .pedal, .tempo, .measureNumber, .harmony,
-             .staffText, .systemText, .rehearsalMark, .marker, .jump,
-             .volta, .ottava, .textLine:
-            true
-        default:
-            false
         }
     }
 }
