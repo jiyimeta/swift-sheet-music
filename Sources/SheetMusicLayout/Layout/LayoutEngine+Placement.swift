@@ -1596,6 +1596,21 @@ extension LayoutEngine {
                 }
 
                 // --- Phase 5: emit per-level beam runs ---
+                //
+                // `<Beam><visible>0</visible>` hides the BARS only. The
+                // group's stems keep the lengths Phase 4 gave them and
+                // still carry no flag glyphs, because the chords remain
+                // beamed — MuseScore hides the beam element, it does not
+                // unbeam the group. The flag lives on the group's
+                // leading chord; see `Chord.beamVisible`.
+                let leadIndex = group.memberIndices.first
+                let beamIsVisible = leadIndex.map { idx -> Bool in
+                    if case let .chord(c) = voice.elements[idx] {
+                        return c.beamVisible
+                    }
+                    return true
+                } ?? true
+                guard beamIsVisible else { continue }
                 let maxLvl = memberLevels.max() ?? 0
                 guard maxLvl >= 1 else { continue }
                 let beamColor = memberColors.first

@@ -408,6 +408,16 @@ extension LayoutEngine {
                             )
                         }
                         tick += extraTicks
+                    case let .locationShift(delta):
+                        // A voice that starts part-way through the
+                        // measure (`<location><fractions>3/4`) — this
+                        // MUST advance the cursor by the same amount
+                        // `placeMeasureElements` does, or the columns
+                        // this function emits are keyed by ticks the
+                        // placement walker never asks for. It then
+                        // falls back to the header X and stacks the
+                        // whole voice at the measure's left edge.
+                        tick += delta.ticks(division: division)
                     default:
                         break
                     }

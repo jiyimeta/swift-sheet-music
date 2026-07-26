@@ -115,6 +115,16 @@ extension LayoutEngine {
                             tick += c.duration
                                 .resolved(in: measureDuration)
                                 .ticks(division: score.division)
+                        case let .locationShift(delta):
+                            // `startX` looks this tick up in
+                            // `LayoutMeasure.tickColumns`, so the cursor
+                            // has to advance exactly as
+                            // `placeMeasureElements` and
+                            // `aggregatedTickWeights` do. Without it a
+                            // spanner in a voice that starts part-way
+                            // through the measure anchors at the wrong
+                            // column.
+                            tick += delta.ticks(division: score.division)
                         default: break
                         }
                     }
