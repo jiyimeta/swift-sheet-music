@@ -7,6 +7,84 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-07-27
+
+### Added
+
+- The PDF importer's geometry side-car is now available on Android, so a
+  host can draw a playback cursor on the original imported PDF and
+  resolve taps on it back to score positions. Previously only the Apple
+  front-end could produce it: `parseWithGeometry` lived in the
+  PDFKit-gated entry point, and Android could only ask for a bare
+  `Score`.
+  - `PDFImporter.parseUsingSwiftReader(pdfData:options:)`,
+    `parseWithGeometryUsingSwiftReader(pdfData:options:)` and
+    `summaryUsingSwiftReader(pdfData:)` are the Foundation-only entry
+    points driven by the pure-Swift PDF reader. They are compiled on
+    **both** platforms — Android uses them as its only front-end, and on
+    Apple they stay reachable so the test suite exercises the exact code
+    Android runs. `PDFImporter+AndroidEntry` is now a thin re-export of
+    them.
+  - `PDFDocumentSummary` (page count + `/Title`) reads a PDF's metadata
+    without decoding any notation, so a library can name an imported
+    file without paying for a parse.
+  - JNI: `nativeLoadScoreWithGeometryFromPDF`, `nativePdfCursorRect`,
+    `nativePdfHitTest`, `nativePdfPageSizes` and
+    `nativeReleasePdfGeometry`, with `PdfRectWire`, `PdfPageSizesWire`,
+    `PdfDiagnosticWire` and `PdfParseResultWire` as their wire types.
+    The geometry stays behind an opaque handle — only a rectangle or a
+    cursor ever crosses the boundary, so cursor lookup and hit-testing
+    are not re-implemented per platform. Every rectangle leaving and
+    every point arriving is converted between PDF user space (y-up) and
+    top-left page space on the Swift side, so a caller works in one
+    convention.
+  - Kotlin: `PdfScoreHandle` (score handle + geometry handle +
+    importer diagnostics, releasing both on `close()`) and
+    `PdfDiagnostic`.
+
+- A tiered glyph-classification cascade for PDF import. The importer no
+  longer depends on a PDF naming its glyphs the way MuseScore's Bravura
+  export does: it extracts the embedded font program and encoding from
+  the font dictionary, resolves a simple font's character codes to real
+  glyph IDs, and classifies through a glyph-name table before falling
+  back to shape matching against rasterized Bravura exemplars. Tier 4
+  (shape matching) is **off by default** behind
+  `PDFImportOptions.enableShapeMatching`; a per-font music-font gate
+  keeps it from firing on text fonts. `RawGlyph` is replaced by the
+  format-neutral `GlyphGeometry`, and glyphs are classified at front-end
+  emission rather than downstream.
+
+- MuseScore's skyline autoplace, ported as a system layout pass.
+  `LayoutShape`, `Skyline` (north/south lines with a staff-line filter)
+  and `AutoplaceRules` (distance and ignore tables) replace the four
+  per-measure autoplace approximations, and autoplaced element shapes are
+  now measured from font metrics.
+
+- Android: transposed notation and playback, with drum staves exposed to
+  hosts; count-in (pre-roll) before playback; and the metronome's MIDI is
+  now shared, with Android's click rendered from it rather than from a
+  parallel implementation.
+
+- A corpus annotation-collision detector under `Tools`, which walks
+  system spanners and uses true 2D AABB overlap.
+
+### Fixed
+
+- Layout: a hairpin no longer collides with the dynamic at its own
+  start/end tick; a hidden mid-measure voice no longer draws a full-width
+  bar; melismas bucket by their own row offset rather than raw Y; SMuFL
+  runs are measured by glyph ink rather than the Bravura em box; the
+  tempo beat glyph's ink is centred on its origin as `ScoreLayerBuilder`
+  draws it; and grace chords are no longer double-shifted.
+
+- PDF import: Tier 2 no longer reads ordinary digits as time-signature
+  digits; the classifier cache is keyed by glyph ID as well as codepoint;
+  a simple-font text run is placed at its start rather than its end; and
+  `GlyphClassifier` gate races and full-Bravura rejection are fixed.
+
+- Android: count-in sounds with the metronome switched off, and the
+  metronome plays off a transport instead of firing clicks directly.
+
 ## [1.4.0] - 2026-07-25
 
 ### Added
@@ -246,8 +324,15 @@ First public release.
   SDK, plus Kotlin AAR modules for JNI bridging and FluidSynth + Oboe
   playback.
 
-[Unreleased]: https://github.com/jiyimeta/swift-sheet-music/compare/v1.2.1...HEAD
+[Unreleased]: https://github.com/jiyimeta/swift-sheet-music/compare/1.5.0...HEAD
+[1.5.0]: https://github.com/jiyimeta/swift-sheet-music/compare/1.4.0...1.5.0
+[1.4.0]: https://github.com/jiyimeta/swift-sheet-music/compare/1.3.0...1.4.0
+[1.3.0]: https://github.com/jiyimeta/swift-sheet-music/compare/1.2.6...1.3.0
+[1.2.6]: https://github.com/jiyimeta/swift-sheet-music/compare/1.2.5...1.2.6
+[1.2.5]: https://github.com/jiyimeta/swift-sheet-music/compare/1.2.4...1.2.5
+[1.2.4]: https://github.com/jiyimeta/swift-sheet-music/compare/1.2.3...1.2.4
+[1.2.3]: https://github.com/jiyimeta/swift-sheet-music/compare/v1.2.2...1.2.3
+[1.2.2]: https://github.com/jiyimeta/swift-sheet-music/compare/v1.2.1...v1.2.2
 [1.2.1]: https://github.com/jiyimeta/swift-sheet-music/compare/v1.2.0...v1.2.1
-[1.2.0]: https://github.com/jiyimeta/swift-sheet-music/compare/v1.1.1...v1.2.0
 [1.1.1]: https://github.com/jiyimeta/swift-sheet-music/releases/tag/v1.1.1
 [1.0.0]: https://github.com/jiyimeta/swift-sheet-music/releases/tag/v1.0.0
