@@ -106,6 +106,27 @@
             #expect(box.minY <= 2.9)
         }
 
+        /// `relativeX` is already baked into a grace chord's note and
+        /// stem origins, so the shape must sit at those coordinates —
+        /// not at a further offset from them.
+        @Test func graceChordShapeDoesNotReapplyRelativeX() throws {
+            let relativeX: CGFloat = -10.5
+            let grace = LayoutElement.graceChord(
+                notes: [note(step: 0, y: 14)], duration: .eighth,
+                stem: .up, stemOrigin: CGPoint(x: 40, y: 14),
+                relativeX: relativeX, hasSlash: false, mag: 0.7,
+                voiceIndex: 0,
+            )
+            let shape = try #require(LayoutElementShape.shape(
+                for: grace, id: 0, xOffset: 0, metrics: metrics,
+            ))
+            let box = try #require(shape.bbox)
+            // Notehead is 1.18 sp × mag wide, centered on x = 40.
+            let halfWidth = metrics.sp * 1.18 * 0.7 / 2
+            #expect(abs(box.minX - (40 - halfWidth)) < 0.01)
+            #expect(abs(box.maxX - (40 + halfWidth)) < 0.01)
+        }
+
         @Test func beamShapeSpansBothEndpoints() throws {
             let beam = LayoutElement.beam(
                 fromOrigin: CGPoint(x: 10, y: -5),
