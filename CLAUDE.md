@@ -239,7 +239,11 @@ To cut a release locally without CI:
 
 `.mscz` and `.mxl` are fully supported on Android via the in-house
 `SheetMusicZip` target (raw DEFLATE through system `libz`). No
-additional setup is required beyond the Phase 1 toolchain.
+additional setup is required beyond the Phase 1 toolchain. PDF import
+also yields a geometry side-car (`nativeLoadScoreWithGeometryFromPDF` /
+`nativePdfCursorRect` / `nativePdfHitTest`), so a consumer can draw a
+playback cursor on the original PDF and resolve taps back to score
+positions.
 
 ### Android playback engine
 
@@ -513,3 +517,11 @@ MuseScore repository root.
   `SWIFT_SHEET_MUSIC_ANDROID` at evaluation time. After editing
   `Package.swift`, re-run `swift package describe` both with and
   without the env var set to confirm both shapes still resolve.
+- **wirelet `schemaPaths` scans exactly one directory**: each module's
+  `wirelet { sources { register("main") { schemaPaths.from(...) } } }`
+  block (e.g. `Android/SheetMusicAndroid/build.gradle.kts`, which
+  points at `Sources/SheetMusicAndroidJNI/Metadata`) generates Kotlin
+  codecs only for `@WireFormat` types physically located under that
+  path. A type declared outside it produces no codec and no error or
+  warning — the build just silently omits it. Keep every `@WireFormat`
+  type under the registered scan directory.
