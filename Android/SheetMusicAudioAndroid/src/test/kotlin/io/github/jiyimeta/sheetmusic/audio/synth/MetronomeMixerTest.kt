@@ -2,7 +2,7 @@ package io.github.jiyimeta.sheetmusic.audio.synth
 
 import android.content.Context
 import android.net.Uri
-import io.github.jiyimeta.sheetmusic.audio.model.MetronomeBeat
+import io.github.jiyimeta.sheetmusic.audio.fakes.FakePlayerDriver
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -11,8 +11,9 @@ import org.junit.Test
 /**
  * Pure-Kotlin unit tests for [MetronomeMixer].
  *
- * All tests use [FakeMetronomeSynth], which records noteOn/noteOff/setGain
- * calls without touching any Android runtime APIs.
+ * The clicks themselves live on the mixer's own [PlayerDriver] (a MIDI transport), so what there is to
+ * assert here is that the transport is driven in lockstep with the score's — plus the count-in click,
+ * which is the one thing still fired by hand because it happens before either transport starts.
  */
 class MetronomeMixerTest {
 
@@ -27,6 +28,8 @@ class MetronomeMixerTest {
         val noteOns = mutableListOf<NoteOnCall>()
         val noteOffs = mutableListOf<NoteOffCall>()
         val gainValues = mutableListOf<Float>()
+        val allNotesOffChannels = mutableListOf<Int>()
+        var closed = false
 
         override val nativeHandle: Long = 0L
 
@@ -42,169 +45,112 @@ class MetronomeMixerTest {
         override fun noteOff(channel: Int, pitch: Int) {
             noteOffs += NoteOffCall(channel, pitch)
         }
-        override fun allNotesOff(channel: Int) {}
+        override fun allNotesOff(channel: Int) { allNotesOffChannels += channel }
         override fun handleMidiEvent(rawEvent: Long) {}
         override fun writeFloat(frameCount: Int, left: FloatArray, right: FloatArray): Int = 0
-        override fun close() {}
+        override fun close() { closed = true }
     }
 
     // -----------------------------------------------------------------------
-    // Helpers
+    // Transport
     // -----------------------------------------------------------------------
 
-    private fun downbeat(tick: Long) = MetronomeBeat(tick = tick, isDownbeat = true)
-    private fun upbeat(tick: Long) = MetronomeBeat(tick = tick, isDownbeat = false)
-
-    // -----------------------------------------------------------------------
-    // Tests
-    // -----------------------------------------------------------------------
-
-    @Test fun updateCurrentTick_firesBeatsInRange() {
-        val fake = FakeMetronomeSynth()
-        val mixer = MetronomeMixer(
-            synth = fake,
-            beats = listOf(downbeat(0), upbeat(480)),
-        )
-        mixer.isEnabled = true
-
-        // First update: tick advances from -1 to 480 — should fire both beats.
-        mixer.updateCurrentTick(480)
-
-        assertEquals("two noteOn calls expected", 2, fake.noteOns.size)
-        assertEquals("two noteOff calls expected", 2, fake.noteOffs.size)
-    }
-
-    @Test fun updateCurrentTick_firesEachBeatOnce() {
-        val fake = FakeMetronomeSynth()
-        val mixer = MetronomeMixer(
-            synth = fake,
-            beats = listOf(downbeat(0), upbeat(480)),
-        )
-        mixer.isEnabled = true
-
-        mixer.updateCurrentTick(0)   // fires beat at tick 0
-        mixer.updateCurrentTick(480) // fires beat at tick 480
-
-        assertEquals("each beat fires exactly once", 2, fake.noteOns.size)
-    }
-
-    @Test fun updateCurrentTick_doesNotFireWhenDisabled() {
-        val fake = FakeMetronomeSynth()
-        val mixer = MetronomeMixer(
-            synth = fake,
-            beats = listOf(downbeat(0), upbeat(480)),
-        )
-        mixer.isEnabled = false
-
-        mixer.updateCurrentTick(480)
-
-        assertEquals("no noteOn when disabled", 0, fake.noteOns.size)
-        assertEquals("no noteOff when disabled", 0, fake.noteOffs.size)
-    }
-
-    @Test fun downbeat_usesHigherPitchAndHigherVelocity() {
-        val fake = FakeMetronomeSynth()
-        val mixer = MetronomeMixer(
-            synth = fake,
-            beats = listOf(downbeat(0)),
-        )
-        mixer.isEnabled = true
-
-        mixer.updateCurrentTick(0)
-
-        val noteOn = fake.noteOns.first()
-        assertEquals("downbeat pitch should be 76", 76, noteOn.pitch)
-        assertEquals("downbeat velocity should be 96", 96, noteOn.velocity)
-        assertEquals("percussion channel should be 9", 9, noteOn.channel)
-    }
-
-    @Test fun upbeat_usesLowerPitchAndLowerVelocity() {
-        val fake = FakeMetronomeSynth()
-        val mixer = MetronomeMixer(
-            synth = fake,
-            beats = listOf(upbeat(0)),
-        )
-        mixer.isEnabled = true
-
-        mixer.updateCurrentTick(0)
-
-        val noteOn = fake.noteOns.first()
-        assertEquals("upbeat pitch should be 77", 77, noteOn.pitch)
-        assertEquals("upbeat velocity should be 72", 72, noteOn.velocity)
-        assertEquals("percussion channel should be 9", 9, noteOn.channel)
-    }
-
-    @Test fun noteOff_isAlwaysPairedWithNoteOn() {
-        val fake = FakeMetronomeSynth()
-        val mixer = MetronomeMixer(
-            synth = fake,
-            beats = listOf(downbeat(0), upbeat(240), downbeat(480)),
-        )
-        mixer.isEnabled = true
-
-        mixer.updateCurrentTick(480)
-
-        assertEquals(fake.noteOns.size, fake.noteOffs.size)
-        // Each noteOff pitch matches its noteOn pitch.
-        for (i in fake.noteOns.indices) {
-            assertEquals(fake.noteOns[i].pitch, fake.noteOffs[i].pitch)
+    /**
+     * A click transport with a sequence loaded, which is how the engine hands one to the mixer. A
+     * [PlayerDriver] only acquires its native handle in `load`, and no-ops every call until it has one.
+     */
+    private fun mixerWithSequence(
+        synth: SynthDriver = FakeMetronomeSynth(),
+    ): Pair<MetronomeMixer, FakePlayerDriver.RecordingBindings> {
+        val bindings = FakePlayerDriver.RecordingBindings()
+        val mixer = MetronomeMixer(synth) { smf ->
+            PlayerDriver(0L, bindings).takeIf { it.load(smf) == 0 }
         }
+        mixer.loadSequence(byteArrayOf(1, 2, 3))
+        return mixer to bindings
     }
 
-    @Test fun volume_setter_callsSetGainOnSynth() {
-        val fake = FakeMetronomeSynth()
-        val mixer = MetronomeMixer(synth = fake, beats = emptyList())
+    @Test fun start_seeksTheClickTransportToTheScoreTickBeforePlaying() {
+        val (mixer, bindings) = mixerWithSequence()
 
-        mixer.volume = 0.5f
+        mixer.start(tick = 1920L)
 
-        assertTrue("setGain should be called with 0.5", fake.gainValues.contains(0.5f))
+        assertEquals("the click transport starts from the score's tick", listOf(1920L), bindings.seekTicks)
+        assertEquals(1, bindings.playCalls.size)
     }
 
-    @Test fun updateCurrentTick_doesNotFireFutureBeats() {
-        val fake = FakeMetronomeSynth()
-        val mixer = MetronomeMixer(
-            synth = fake,
-            beats = listOf(downbeat(480), upbeat(960)),
-        )
-        mixer.isEnabled = true
+    @Test fun seekTick_movesTheClickTransportAndSilencesTheRingingClick() {
+        val synth = FakeMetronomeSynth()
+        val (mixer, bindings) = mixerWithSequence(synth)
 
-        // Advance only to 240 — neither beat should fire.
-        mixer.updateCurrentTick(240)
+        mixer.seekTick(960L)
 
-        assertEquals("no beats should fire before their tick", 0, fake.noteOns.size)
+        assertEquals(listOf(960L), bindings.seekTicks)
+        assertEquals("channel 9 is the GM percussion channel", listOf(9), synth.allNotesOffChannels)
     }
 
-    @Test fun updateCurrentTick_doesNotRepeatPastBeats() {
-        val fake = FakeMetronomeSynth()
-        val mixer = MetronomeMixer(
-            synth = fake,
-            beats = listOf(downbeat(0)),
-        )
-        mixer.isEnabled = true
+    @Test fun setTempo_scalesTheClickTransport() {
+        val (mixer, bindings) = mixerWithSequence()
 
-        mixer.updateCurrentTick(0)   // fires tick 0 beat
-        mixer.updateCurrentTick(10)  // tick 0 already passed — should NOT re-fire
+        mixer.setTempo(1.5)
 
-        assertEquals("beat should fire exactly once", 1, fake.noteOns.size)
+        // type 0 = FLUID_PLAYER_TEMPO_INTERNAL, the same scale the score player is given.
+        assertEquals(listOf(0 to 1.5), bindings.setTempoCalls)
     }
 
-    @Test fun fireCountInClick_soundsWithTheMetronomeOff() {
-        val fake = FakeMetronomeSynth()
-        val mixer = MetronomeMixer(synth = fake, beats = emptyList())
-        // Metronome off — the user wants a count-in but no click through the piece.
-        mixer.isEnabled = false
-        mixer.isCountingIn = true
+    @Test fun loadSequence_reappliesTheRateToTheNewTransport() {
+        val (mixer, bindings) = mixerWithSequence()
+        mixer.setTempo(0.5)
+        bindings.setTempoCalls.clear()
 
-        mixer.fireCountInClick(isDownbeat = true)
+        // The count-in swaps in its own sequence mid-flight; a fresh transport starts at 1.0, so the
+        // count would run at the notated tempo while the music it leads into runs at the set rate.
+        mixer.loadSequence(byteArrayOf(4, 5, 6))
 
-        assertEquals("the count-in click must still fire", 1, fake.noteOns.size)
-        // Firing is only half of it: the render loop drops the metronome's output entirely unless the
-        // mixer reports itself audible, which is what made the click inaudible with the metronome off.
-        assertTrue("the mix path must be open during a count-in", mixer.isAudible)
+        assertEquals(listOf(0 to 0.5), bindings.setTempoCalls)
     }
+
+    @Test fun resyncTo_putsAFrozenTransportBackOnTheBeat() {
+        val (mixer, bindings) = mixerWithSequence()
+
+        // While inaudible the metronome synth is not rendered, so its transport stopped advancing at
+        // whatever tick it was switched off; becoming audible again has to re-place it.
+        mixer.resyncTo(4800L)
+
+        assertEquals(listOf(4800L), bindings.seekTicks)
+    }
+
+    @Test fun transportCallsNoOpWithoutASequence() {
+        // An older native library returns no metronome SMF; the mixer then has no transport and the
+        // metronome is simply silent rather than crashing on every transport call.
+        val mixer = MetronomeMixer(FakeMetronomeSynth()) { null }
+        mixer.loadSequence(byteArrayOf())
+
+        mixer.start(0L)
+        mixer.seekTick(480L)
+        mixer.setTempo(2.0)
+        mixer.resyncTo(960L)
+        mixer.stop()
+        assertEquals(0L, mixer.currentTick)
+        mixer.close()
+    }
+
+    @Test fun close_releasesBothTheTransportAndTheSynth() {
+        val synth = FakeMetronomeSynth()
+        val (mixer, bindings) = mixerWithSequence(synth)
+
+        mixer.close()
+
+        assertTrue("the click transport must be released", bindings.closeCalled)
+        assertTrue("the metronome synth must be released", synth.closed)
+    }
+
+    // -----------------------------------------------------------------------
+    // Audibility
+    // -----------------------------------------------------------------------
 
     @Test fun isAudible_isFalseOnlyWhenNeitherMetronomeNorCountInWantsSound() {
-        val mixer = MetronomeMixer(synth = FakeMetronomeSynth(), beats = emptyList())
+        val (mixer, _) = mixerWithSequence()
 
         assertFalse(mixer.isAudible)
 
@@ -217,5 +163,14 @@ class MetronomeMixerTest {
 
         mixer.isCountingIn = false
         assertFalse(mixer.isAudible)
+    }
+
+    @Test fun volume_setter_callsSetGainOnSynth() {
+        val synth = FakeMetronomeSynth()
+        val (mixer, _) = mixerWithSequence(synth)
+
+        mixer.volume = 0.5f
+
+        assertTrue("setGain should be called with 0.5", synth.gainValues.contains(0.5f))
     }
 }

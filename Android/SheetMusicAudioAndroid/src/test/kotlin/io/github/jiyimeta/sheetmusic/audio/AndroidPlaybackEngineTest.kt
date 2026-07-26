@@ -12,7 +12,6 @@ import io.github.jiyimeta.sheetmusic.audio.fakes.FakePlayerDriver
 import io.github.jiyimeta.sheetmusic.audio.fakes.FakeSynthDriver
 import io.github.jiyimeta.sheetmusic.audio.model.AudioExportRange
 import io.github.jiyimeta.sheetmusic.audio.model.AudioFileFormat
-import io.github.jiyimeta.sheetmusic.audio.model.MetronomeBeat
 import io.github.jiyimeta.sheetmusic.audio.model.NoteID
 import io.github.jiyimeta.sheetmusic.audio.model.PlaybackState
 import io.github.jiyimeta.sheetmusic.audio.model.ScoreCursor
@@ -22,7 +21,6 @@ import io.github.jiyimeta.sheetmusic.audio.model.StaffParams
 import io.github.jiyimeta.wirelet.BinaryWriter
 import io.github.jiyimeta.sheetmusic.audio.model.Frame
 import io.github.jiyimeta.sheetmusic.audio.serialization.FrameCodec
-import io.github.jiyimeta.sheetmusic.audio.serialization.MetronomeBeatCodec
 import io.github.jiyimeta.sheetmusic.audio.serialization.NoteIDCodec
 import io.github.jiyimeta.sheetmusic.audio.serialization.ScoreCursorCodec
 import io.github.jiyimeta.sheetmusic.audio.serialization.ScoreItemIDCodec
@@ -73,14 +71,6 @@ private fun encodeStaffParamsArray(params: List<StaffParams>): ByteArray {
     return w.toByteArray()
 }
 
-private fun encodeMetronomeBeatArray(beats: List<MetronomeBeat>): ByteArray {
-    val w = BinaryWriter()
-    w.writeLengthPrefixed {
-        for (b in beats) writeLengthPrefixed { MetronomeBeatCodec.encodePayload(b, this) }
-    }
-    return w.toByteArray()
-}
-
 private fun twoStavesPayload(): ByteArray = encodeStaffParamsArray(
     listOf(
         StaffParams(0, 0, 0, false, 1L),
@@ -90,10 +80,6 @@ private fun twoStavesPayload(): ByteArray = encodeStaffParamsArray(
 
 private fun oneStaffPayload(): ByteArray = encodeStaffParamsArray(
     listOf(StaffParams(0, 0, 0, false, 1L)),
-)
-
-private fun downbeatOnlyBeats(): ByteArray = encodeMetronomeBeatArray(
-    listOf(MetronomeBeat(tick = 0, isDownbeat = true)),
 )
 
 /** A minimal 14-byte SMF with zero tracks — non-empty so prepare() won't throw. */
@@ -237,7 +223,6 @@ class AndroidPlaybackEngineTest {
         val bridge = FakeJniBridge(
             timelineSummaryResult = longArrayOf(960L, 2_000_000L, 480L),
             staffParamsResult = twoStavesPayload(),
-            metronomeBeatsResult = downbeatOnlyBeats(),
             renderMidiResult = minimalSmf,
         )
         val engine = newEngineForTests(bridge = bridge)
@@ -252,7 +237,6 @@ class AndroidPlaybackEngineTest {
         val bridge = FakeJniBridge(
             timelineSummaryResult = longArrayOf(480L, 3_500_000L, 480L),
             staffParamsResult = oneStaffPayload(),
-            metronomeBeatsResult = downbeatOnlyBeats(),
             renderMidiResult = minimalSmf,
         )
         val engine = newEngineForTests(bridge = bridge)
@@ -265,7 +249,6 @@ class AndroidPlaybackEngineTest {
         val bridge = FakeJniBridge(
             timelineSummaryResult = longArrayOf(960L, 2_000_000L, 480L),
             staffParamsResult = encodeStaffParamsArray(emptyList()),
-            metronomeBeatsResult = downbeatOnlyBeats(),
             renderMidiResult = minimalSmf,
         )
         val engine = newEngineForTests(bridge = bridge)
@@ -277,7 +260,6 @@ class AndroidPlaybackEngineTest {
         val bridge = FakeJniBridge(
             timelineSummaryResult = longArrayOf(960L, 2_000_000L, 480L),
             staffParamsResult = oneStaffPayload(),
-            metronomeBeatsResult = downbeatOnlyBeats(),
             renderMidiResult = byteArrayOf(), // empty → throws
         )
         val engine = newEngineForTests(bridge = bridge)
@@ -291,7 +273,6 @@ class AndroidPlaybackEngineTest {
             staffParamsResult = encodeStaffParamsArray(
                 (0..16).map { StaffParams(it, 0, 0, false, it.toLong()) },
             ),
-            metronomeBeatsResult = downbeatOnlyBeats(),
             renderMidiResult = minimalSmf,
         )
         val engine = newEngineForTests(bridge = bridge)
@@ -303,7 +284,6 @@ class AndroidPlaybackEngineTest {
         val bridge = FakeJniBridge(
             timelineSummaryResult = longArrayOf(960L, 2_000_000L, 480L),
             staffParamsResult = oneStaffPayload(),
-            metronomeBeatsResult = downbeatOnlyBeats(),
             renderMidiResult = minimalSmf,
         ).apply {
             buildClickSoundFontResult = byteArrayOf(1, 2, 3)
@@ -395,7 +375,6 @@ class AndroidPlaybackEngineTest {
         val bridge = FakeJniBridge(
             timelineSummaryResult = longArrayOf(960L, 2_000_000L, 480L),
             staffParamsResult = oneStaffPayload(),
-            metronomeBeatsResult = downbeatOnlyBeats(),
             renderMidiResult = minimalSmf,
             frameForCursorResult = frameBytes,
         )
@@ -414,7 +393,6 @@ class AndroidPlaybackEngineTest {
         val bridge = FakeJniBridge(
             timelineSummaryResult = longArrayOf(960L, 2_000_000L, 480L),
             staffParamsResult = oneStaffPayload(),
-            metronomeBeatsResult = downbeatOnlyBeats(),
             renderMidiResult = minimalSmf,
             frameForCursorResult = frameBytes,
         )
@@ -433,7 +411,6 @@ class AndroidPlaybackEngineTest {
         val bridge = FakeJniBridge(
             timelineSummaryResult = longArrayOf(960L, 2_000_000L, 480L),
             staffParamsResult = oneStaffPayload(),
-            metronomeBeatsResult = downbeatOnlyBeats(),
             renderMidiResult = minimalSmf,
             frameAtTickResult = frameBytes,
         )
@@ -453,7 +430,6 @@ class AndroidPlaybackEngineTest {
         val bridge = FakeJniBridge(
             timelineSummaryResult = longArrayOf(960L, 2_000_000L, 480L),
             staffParamsResult = oneStaffPayload(),
-            metronomeBeatsResult = downbeatOnlyBeats(),
             renderMidiResult = minimalSmf,
             frameAtTickResult = frameBytes,
         )
@@ -473,7 +449,6 @@ class AndroidPlaybackEngineTest {
         val bridge = FakeJniBridge(
             timelineSummaryResult = longArrayOf(960L, 2_000_000L, 480L),
             staffParamsResult = oneStaffPayload(),
-            metronomeBeatsResult = downbeatOnlyBeats(),
             renderMidiResult = minimalSmf,
             frameAtTickResult = frameBytes,
         )
@@ -490,7 +465,6 @@ class AndroidPlaybackEngineTest {
         val bridge = FakeJniBridge(
             timelineSummaryResult = longArrayOf(960L, 2_000_000L, 480L),
             staffParamsResult = oneStaffPayload(),
-            metronomeBeatsResult = downbeatOnlyBeats(),
             renderMidiResult = minimalSmf,
             frameAtTickResult = frameBytes,
         )
@@ -507,7 +481,6 @@ class AndroidPlaybackEngineTest {
         val bridge = FakeJniBridge(
             timelineSummaryResult = longArrayOf(960L, 2_000_000L, 480L),
             staffParamsResult = oneStaffPayload(),
-            metronomeBeatsResult = downbeatOnlyBeats(),
             renderMidiResult = minimalSmf,
             earliestOfResult = byteArrayOf(),
         )
@@ -525,7 +498,6 @@ class AndroidPlaybackEngineTest {
         val bridge = FakeJniBridge(
             timelineSummaryResult = longArrayOf(960L, 2_000_000L, 480L),
             staffParamsResult = oneStaffPayload(),
-            metronomeBeatsResult = downbeatOnlyBeats(),
             renderMidiResult = minimalSmf,
             earliestOfResult = encoded,
         )
@@ -541,7 +513,6 @@ class AndroidPlaybackEngineTest {
         val bridge = FakeJniBridge(
             timelineSummaryResult = longArrayOf(960L, 2_000_000L, 480L),
             staffParamsResult = oneStaffPayload(),
-            metronomeBeatsResult = downbeatOnlyBeats(),
             renderMidiResult = minimalSmf,
             pitchAndStaffOfNoteResult = -1L,
         )
@@ -564,7 +535,6 @@ class AndroidPlaybackEngineTest {
     private fun previewBridge(): FakeJniBridge = FakeJniBridge(
         timelineSummaryResult = longArrayOf(960L, 2_000_000L, 480L),
         staffParamsResult = oneStaffPayload(),
-        metronomeBeatsResult = downbeatOnlyBeats(),
         renderMidiResult = minimalSmf,
         // Valid packed value: pitch 67 in high 32 bits, staffIndex 0 in low.
         pitchAndStaffOfNoteResult = (67L shl 32) or 0L,
@@ -782,18 +752,186 @@ class AndroidPlaybackEngineTest {
         // No exception = pass; MetronomeMixer.volume setter calls synth.setGain.
     }
 
+    // The metronome's own transport. The clicks are MIDI events on a second player, so what makes them
+    // land on the beat is that every transport call the score player gets, the click player gets too.
+
+    /**
+     * An engine whose metronome has its own SMF — and therefore its own player, whose calls land in the
+     * returned [RecordingBindings] rather than the score player's. The two are told apart by creation
+     * order: `prepare` builds the metronome's player first (right after loading its SoundFont), then the
+     * score's.
+     */
+    private suspend fun engineWithMetronomeTransport(
+        scoreBindings: RecordingBindings = RecordingBindings(),
+        metronomeBindings: RecordingBindings = RecordingBindings(),
+        frameForCursor: ByteArray = byteArrayOf(),
+    ): AndroidPlaybackEngine {
+        val bridge = FakeJniBridge(
+            timelineSummaryResult = longArrayOf(960L, 2_000_000L, 480L),
+            staffParamsResult = oneStaffPayload(),
+            renderMidiResult = minimalSmf,
+            renderMetronomeMidiResult = minimalSmf,
+            frameForCursorResult = frameForCursor,
+        )
+        // Staff synth first, then the metronome's — the handle tells their players apart, which matters
+        // because a count-in swaps the click sequence and so builds more than one click player.
+        var synthsBuilt = 0
+        val engine = AndroidPlaybackEngine(
+            context = null,
+            soundfontResolver = StubSoundfontResolver(),
+            metronomeClickProvider = null,
+            jniBridge = bridge,
+            synthFactory = { _ -> FakeSynthDriver(synthsBuilt++) },
+            playerFactory = { synthHandle ->
+                PlayerDriver(0L, if (synthHandle == 1L) metronomeBindings else scoreBindings)
+            },
+            oboeFactory = { FakeOboeStream.create() },
+            pollDispatcher = kotlinx.coroutines.test.UnconfinedTestDispatcher(testScheduler),
+        ).also { managedEngines += it }
+        engine.prepare(1L)
+        return engine
+    }
+
+    @Test
+    fun `play starts the click transport from the score's tick`() = runTest(testDispatcher) {
+        val metronome = RecordingBindings()
+        val engine = engineWithMetronomeTransport(metronomeBindings = metronome)
+
+        engine.play()
+
+        assertEquals("the click transport must be started too", 1, metronome.playCalls.size)
+        assertEquals(
+            "and placed where the score player is",
+            listOf(0L),
+            metronome.seekTicks,
+        )
+        engine.pause()
+    }
+
+    @Test
+    fun `pause stops the click transport with the score's`() = runTest(testDispatcher) {
+        val metronome = RecordingBindings()
+        val engine = engineWithMetronomeTransport(metronomeBindings = metronome)
+
+        engine.play()
+        engine.pause()
+
+        assertEquals(1, metronome.stopCalls.size)
+    }
+
+    @Test
+    fun `seek moves the click transport to the same tick`() = runTest(testDispatcher) {
+        val cursor = ScoreCursor.Beat(measureIndex = 0, tickInMeasure = 0)
+        val metronome = RecordingBindings()
+        val engine = engineWithMetronomeTransport(
+            metronomeBindings = metronome,
+            frameForCursor = encodeFrameBytes(tick = 240L, timeMicros = 250_000L, cursor = cursor),
+        )
+        metronome.seekTicks.clear()
+
+        engine.seek(cursor)
+
+        // Without this the clicks would keep playing from the old position — the class of bug that made
+        // the metronome go silent, or fire late, after a seek.
+        assertEquals(listOf(240L), metronome.seekTicks)
+    }
+
+    @Test
+    fun `setRate scales the click transport by the same factor`() = runTest(testDispatcher) {
+        val metronome = RecordingBindings()
+        val engine = engineWithMetronomeTransport(metronomeBindings = metronome)
+        metronome.setTempoCalls.clear()
+
+        engine.setRate(1.5f)
+
+        assertEquals(listOf(0 to 1.5), metronome.setTempoCalls)
+    }
+
+    @Test
+    fun `enabling the metronome mid-playback re-places it on the beat`() = runTest(testDispatcher) {
+        val score = RecordingBindings()
+        val metronome = RecordingBindings()
+        val engine = engineWithMetronomeTransport(
+            scoreBindings = score,
+            metronomeBindings = metronome,
+        )
+        engine.play()
+        // The score player has moved on while the metronome was switched off — and while it was off its
+        // synth was not rendered, so its own transport is still sitting back at the start.
+        score.tickToReturn = 3840L
+        metronome.seekTicks.clear()
+
+        engine.setMetronomeEnabled(true)
+
+        assertEquals(listOf(3840L), metronome.seekTicks)
+        engine.pause()
+    }
+
+    @Test
+    fun `prepare survives a bridge that returns no metronome sequence`() = runTest(testDispatcher) {
+        // An older native library has no `nativeRenderMetronomeMidi`; the engine must still play, just
+        // without a metronome, rather than failing to prepare.
+        val bindings = RecordingBindings()
+        val engine = preparedEngine(playerBindings = bindings)
+
+        engine.play()
+
+        assertEquals("only the score player exists", 1, bindings.playCalls.size)
+        engine.pause()
+    }
+
     // Count-in (pre-roll)
 
-    /** A two-click, one-second pre-roll: clicks at 0.0s and 0.5s, music starting at 1.0s. */
+    /** A two-click, one-second pre-roll: clicks at 0.0s and 0.5s, music starting at 1.0s / tick 960. */
     private fun twoClickCountIn(): ByteArray = CountInWireCodec.encode(
         CountInWire(
             totalSeconds = 1.0,
+            preRollTicks = 960,
             beats = listOf(
                 CountInBeatWire(offsetSeconds = 0.0, isDownbeat = true),
                 CountInBeatWire(offsetSeconds = 0.5, isDownbeat = false),
             ),
         ),
     )
+
+    /**
+     * An engine that can actually count in: it needs a count-in schedule AND a click sequence to play
+     * it from. [metronomeBindings] records the click transport's calls; advancing its reported tick to
+     * `preRollTicks` is what hands playback over to the score.
+     */
+    private suspend fun countingInEngine(
+        scoreBindings: RecordingBindings,
+        metronomeBindings: RecordingBindings,
+        frameForCursor: ByteArray = byteArrayOf(),
+    ): AndroidPlaybackEngine {
+        val bridge = FakeJniBridge(
+            timelineSummaryResult = longArrayOf(960L, 2_000_000L, 480L),
+            staffParamsResult = oneStaffPayload(),
+            renderMidiResult = minimalSmf,
+            renderMetronomeMidiResult = minimalSmf,
+            renderCountInMetronomeMidiResult = minimalSmf,
+            countInResult = twoClickCountIn(),
+            frameForCursorResult = frameForCursor,
+        )
+        // Staff synth first, then the metronome's — the handle tells their players apart, which matters
+        // because a count-in swaps the click sequence and so builds more than one click player.
+        var synthsBuilt = 0
+        val engine = AndroidPlaybackEngine(
+            context = null,
+            soundfontResolver = StubSoundfontResolver(),
+            metronomeClickProvider = null,
+            jniBridge = bridge,
+            synthFactory = { _ -> FakeSynthDriver(synthsBuilt++) },
+            playerFactory = { synthHandle ->
+                PlayerDriver(0L, if (synthHandle == 1L) metronomeBindings else scoreBindings)
+            },
+            oboeFactory = { FakeOboeStream.create() },
+            pollDispatcher = kotlinx.coroutines.test.UnconfinedTestDispatcher(testScheduler),
+        ).also { managedEngines += it }
+        engine.prepare(1L)
+        engine.countInEnabled = true
+        return engine
+    }
 
     @Test
     fun `play starts the player immediately when count-in is off`() = runTest(testDispatcher) {
@@ -806,52 +944,131 @@ class AndroidPlaybackEngineTest {
     }
 
     @Test
-    fun `play defers the player until the whole pre-roll has elapsed`() = runTest(testDispatcher) {
-        val bindings = RecordingBindings()
-        val engine = preparedEngine(playerBindings = bindings, countIn = twoClickCountIn())
-        engine.countInEnabled = true
+    fun `the count-in plays off the click transport, not a wall-clock wait`() = runTest(testDispatcher) {
+        val score = RecordingBindings()
+        val metronome = RecordingBindings()
+        val engine = countingInEngine(scoreBindings = score, metronomeBindings = metronome)
+
         engine.play()
 
         // The transport reads as playing straight away — the count-in IS the start of playback — but the
         // score itself must not have begun.
         assertEquals(PlaybackState.PLAYING, engine.state.value)
-        assertEquals(0, bindings.playCalls.size)
+        assertEquals(0, score.playCalls.size)
+        // The count runs as a sequence on the click transport, started at its head. That is what makes
+        // the clicks evenly spaced: they are events at ticks, not notes fired by a coroutine that wakes
+        // up whenever the dispatcher gets round to it.
+        assertEquals(1, metronome.playCalls.size)
+        assertEquals(listOf(0L), metronome.seekTicks)
 
-        // Past the last CLICK but not the end of the pre-roll region: still silent. This is the case a
-        // naive "wait for the last beat" implementation gets wrong — the final click has to sound for
-        // its full length before beat 1 lands.
-        advanceTimeBy(600)
-        assertEquals(0, bindings.playCalls.size)
+        engine.pause()
+    }
 
-        advanceTimeBy(500)
+    @Test
+    fun `the score starts when the click transport reaches the end of the pre-roll`() =
+        runTest(testDispatcher) {
+            val score = RecordingBindings()
+            val metronome = RecordingBindings()
+            val engine = countingInEngine(scoreBindings = score, metronomeBindings = metronome)
+            engine.play()
+
+            // Still inside the pre-roll region: the music waits on the transport's tick, not on wall
+            // time — this is well past the 1 s the pre-roll's own schedule claims to last.
+            metronome.tickToReturn = 959
+            advanceTimeBy(2_000)
+            assertEquals(0, score.playCalls.size)
+
+            metronome.tickToReturn = 960
+            advanceTimeBy(10)
+            testScheduler.runCurrent()
+            assertEquals(1, score.playCalls.size)
+
+            // The handover started the poll job — an unbounded delay loop on the test scheduler. Stop
+            // it, or runTest never sees the scheduler go idle.
+            engine.pause()
+        }
+
+    @Test
+    fun `a click transport that never advances still lets playback start`() = runTest(testDispatcher) {
+        val score = RecordingBindings()
+        val metronome = RecordingBindings()
+        val engine = countingInEngine(scoreBindings = score, metronomeBindings = metronome)
+        engine.play()
+
+        // The transport is stuck at 0 — an output stream that failed to start, a sequence the player
+        // rejected. Better to begin late than never: the wait is bounded.
+        advanceTimeBy(10_000)
         testScheduler.runCurrent()
-        assertEquals(1, bindings.playCalls.size)
+        assertEquals(1, score.playCalls.size)
+        engine.pause()
+    }
 
-        // The pre-roll handed off to the player, which starts the poll job — an unbounded delay loop on
-        // the test scheduler. Stop it, or runTest never sees the scheduler go idle.
+    @Test
+    fun `the count-in inherits the playback rate`() = runTest(testDispatcher) {
+        val score = RecordingBindings()
+        val metronome = RecordingBindings()
+        val engine = countingInEngine(scoreBindings = score, metronomeBindings = metronome)
+        engine.setRate(2.0f)
+        metronome.setTempoCalls.clear()
+
+        engine.play()
+
+        // The count-in sequence is loaded fresh for this play, so the rate has to be re-applied to it —
+        // otherwise the count would be at the notated tempo while the music it leads into is at 2×.
+        assertEquals(listOf(0 to 2.0), metronome.setTempoCalls)
         engine.pause()
     }
 
     @Test
     fun `pause during the count-in cancels it and the player never starts`() = runTest(testDispatcher) {
-        val bindings = RecordingBindings()
-        val engine = preparedEngine(playerBindings = bindings, countIn = twoClickCountIn())
-        engine.countInEnabled = true
+        val score = RecordingBindings()
+        val metronome = RecordingBindings()
+        val engine = countingInEngine(scoreBindings = score, metronomeBindings = metronome)
         engine.play()
         engine.pause()
 
-        // Well past when the pre-roll would have fired the player.
+        // Well past when the pre-roll would have handed over.
+        metronome.tickToReturn = 100_000
         advanceTimeBy(5_000)
-        assertEquals(0, bindings.playCalls.size)
+        assertEquals(0, score.playCalls.size)
         assertEquals(PlaybackState.PAUSED, engine.state.value)
+    }
+
+    @Test
+    fun `a seek leaves the count-in sequence behind`() = runTest(testDispatcher) {
+        val cursor = ScoreCursor.Beat(measureIndex = 0, tickInMeasure = 0)
+        val score = RecordingBindings()
+        val metronome = RecordingBindings()
+        val engine = countingInEngine(
+            scoreBindings = score,
+            metronomeBindings = metronome,
+            frameForCursor = encodeFrameBytes(tick = 0L, timeMicros = 0L, cursor = cursor),
+        )
+        engine.play()
+        metronome.loadCalls.clear()
+        metronome.seekTicks.clear()
+
+        engine.seek(cursor)
+
+        // The count-in sequence only carries clicks from the tick it was built for, and its body is
+        // shifted behind the pre-roll. Seeking has to put the plain sequence back — and seek the click
+        // transport to the score's own tick, with no pre-roll offset left on it.
+        assertEquals("the body sequence is reloaded", 1, metronome.loadCalls.size)
+        assertEquals(listOf(0L), metronome.seekTicks)
+
+        // Leave nothing running: the count-in job (and the poll job it hands over to) are unbounded
+        // delay loops on the test scheduler, and runTest drains until idle.
+        engine.pause()
     }
 
     @Test
     fun `an empty schedule falls through to starting immediately`() = runTest(testDispatcher) {
         val bindings = RecordingBindings()
-        // totalSeconds == 0 is how the bridge reports "no count-in for this position" (a score with no
+        // An empty schedule is how the bridge reports "no count-in for this position" (a score with no
         // usable tempo or division) — the setting being on must not strand playback.
-        val empty = CountInWireCodec.encode(CountInWire(totalSeconds = 0.0, beats = emptyList()))
+        val empty = CountInWireCodec.encode(
+            CountInWire(totalSeconds = 0.0, preRollTicks = 0, beats = emptyList()),
+        )
         val engine = preparedEngine(playerBindings = bindings, countIn = empty)
         engine.countInEnabled = true
         engine.play()
@@ -883,7 +1100,6 @@ class AndroidPlaybackEngineTest {
         val bridge = FakeJniBridge(
             timelineSummaryResult = longArrayOf(960L, 2_000_000L, 480L),
             staffParamsResult = oneStaffPayload(),
-            metronomeBeatsResult = downbeatOnlyBeats(),
             renderMidiResult = minimalSmf,
             frameAtTickResult = frameBytes,
         )
@@ -908,7 +1124,6 @@ class AndroidPlaybackEngineTest {
         val bridge = FakeJniBridge(
             timelineSummaryResult = longArrayOf(960L, 2_000_000L, 480L),
             staffParamsResult = oneStaffPayload(),
-            metronomeBeatsResult = downbeatOnlyBeats(),
             renderMidiResult = minimalSmf,
             frameAtTickResult = frameBytes,
         )
@@ -944,8 +1159,7 @@ class AndroidPlaybackEngineTest {
             val bridge = FakeJniBridge(
                 timelineSummaryResult = longArrayOf(960L, 2_000_000L, 480L, 1920L),
                 staffParamsResult = oneStaffPayload(),
-                metronomeBeatsResult = downbeatOnlyBeats(),
-                renderMidiResult = minimalSmf,
+                    renderMidiResult = minimalSmf,
                 frameAtTickResult = frameBytes,
             )
             val bindings = RecordingBindings()
@@ -973,7 +1187,6 @@ class AndroidPlaybackEngineTest {
         val bridge = FakeJniBridge(
             timelineSummaryResult = longArrayOf(960L, 2_000_000L, 480L, 1920L),
             staffParamsResult = oneStaffPayload(),
-            metronomeBeatsResult = downbeatOnlyBeats(),
             renderMidiResult = minimalSmf,
             frameAtTickResult = frameBytes,
         )
@@ -1002,7 +1215,6 @@ class AndroidPlaybackEngineTest {
         val bridge = FakeJniBridge(
             staffParamsResult = oneStaffPayload(),
             renderMidiResult = minimalSmf,
-            metronomeBeatsResult = downbeatOnlyBeats(),
         )
         val engine = newEngineForTests(bridge = bridge, playerBindings = bindings)
         engine.prepare(scoreHandle = 1L)
@@ -1022,7 +1234,6 @@ class AndroidPlaybackEngineTest {
         val bridge = FakeJniBridge(
             staffParamsResult = oneStaffPayload(),
             renderMidiResult = minimalSmf,
-            metronomeBeatsResult = downbeatOnlyBeats(),
         )
         val engine = newEngineForTests(bridge = bridge, playerBindings = bindings)
 
@@ -1044,7 +1255,6 @@ class AndroidPlaybackEngineTest {
         val bridge = FakeJniBridge(
             staffParamsResult = oneStaffPayload(),
             renderMidiResult = minimalSmf,
-            metronomeBeatsResult = downbeatOnlyBeats(),
         )
         val engine = newEngineForTests(bridge = bridge, playerBindings = bindings)
         engine.prepare(scoreHandle = 1L)
@@ -1065,7 +1275,6 @@ class AndroidPlaybackEngineTest {
         val bridge = FakeJniBridge(
             staffParamsResult = payload,
             renderMidiResult = minimalSmf,
-            metronomeBeatsResult = downbeatOnlyBeats(),
         )
         val engine = newEngineForTests(bridge = bridge)
         engine.prepare(scoreHandle = 1L)
@@ -1085,7 +1294,6 @@ class AndroidPlaybackEngineTest {
         val bridge = FakeJniBridge(
             staffParamsResult = payload,
             renderMidiResult = minimalSmf,
-            metronomeBeatsResult = downbeatOnlyBeats(),
         )
         val engine = newEngineForTests(bridge = bridge)
         engine.prepare(scoreHandle = 1L)
@@ -1103,7 +1311,6 @@ class AndroidPlaybackEngineTest {
         val bridge = FakeJniBridge(
             staffParamsResult = payload,
             renderMidiResult = minimalSmf,
-            metronomeBeatsResult = downbeatOnlyBeats(),
         )
         val synthDrivers = mutableListOf<FakeSynthDriver>()
         val engine = newEngineForTests(bridge = bridge, fakeSynthDrivers = synthDrivers)
@@ -1149,7 +1356,6 @@ class AndroidPlaybackEngineTest {
         val bridge = object : FakeJniBridge(
             staffParamsResult = oneStaffPayload(),
             renderMidiResult = minimalSmf,
-            metronomeBeatsResult = downbeatOnlyBeats(),
         ) {
             override fun frameForCursor(scoreHandle: Long, cursorBytes: ByteArray): ByteArray {
                 val out = frames[nextIdx % frames.size]; nextIdx++
@@ -1173,7 +1379,6 @@ class AndroidPlaybackEngineTest {
         val bridge = FakeJniBridge(
             staffParamsResult = oneStaffPayload(),
             renderMidiResult = minimalSmf,
-            metronomeBeatsResult = downbeatOnlyBeats(),
             frameForCursorResult = frame100,
         )
         val engine = newEngineForTests(bridge = bridge)
@@ -1192,7 +1397,6 @@ class AndroidPlaybackEngineTest {
         val bridge = object : FakeJniBridge(
             staffParamsResult = oneStaffPayload(),
             renderMidiResult = minimalSmf,
-            metronomeBeatsResult = downbeatOnlyBeats(),
         ) {
             override fun frameForCursor(scoreHandle: Long, cursorBytes: ByteArray): ByteArray {
                 val out = frames[nextIdx % frames.size]; nextIdx++
@@ -1214,7 +1418,6 @@ class AndroidPlaybackEngineTest {
         val bridge = FakeJniBridge(
             staffParamsResult = oneStaffPayload(),
             renderMidiResult = minimalSmf,
-            metronomeBeatsResult = downbeatOnlyBeats(),
             frameForCursorResult = frame100,
             itemEndTickResult = 300L,
         )
@@ -1238,7 +1441,6 @@ class AndroidPlaybackEngineTest {
         val bridge = FakeJniBridge(
             staffParamsResult = oneStaffPayload(),
             renderMidiResult = minimalSmf,
-            metronomeBeatsResult = downbeatOnlyBeats(),
             frameForCursorResult = frame100,
             itemEndTickResult = -1L,
         )
@@ -1259,7 +1461,6 @@ class AndroidPlaybackEngineTest {
         val bridge = FakeJniBridge(
             staffParamsResult = oneStaffPayload(),
             renderMidiResult = minimalSmf,
-            metronomeBeatsResult = downbeatOnlyBeats(),
             frameForCursorResult = frame100,
             itemEndTickResult = 300L,
         )
@@ -1289,7 +1490,6 @@ class AndroidPlaybackEngineTest {
             timelineSummaryResult = longArrayOf(measureCount * 480L, 2_000_000L, 480L),
             staffParamsResult = oneStaffPayload(),
             renderMidiResult = minimalSmf,
-            metronomeBeatsResult = downbeatOnlyBeats(),
         ) {
             override fun frameForCursor(scoreHandle: Long, cursorBytes: ByteArray): ByteArray {
                 val cursor = ScoreCursorCodec.decode(cursorBytes) as? ScoreCursor.Beat
@@ -1372,7 +1572,6 @@ class AndroidPlaybackEngineTest {
         val bridge = FakeJniBridge(
             timelineSummaryResult = longArrayOf(960L, 2_000_000L, 480L),
             staffParamsResult = oneStaffPayload(),
-            metronomeBeatsResult = downbeatOnlyBeats(),
             renderMidiResult = minimalSmf,
             resolveExportTickRangeResult = longArrayOf(0L, 0L),
         )
@@ -1416,7 +1615,6 @@ class AndroidPlaybackEngineTest {
         val bridge = FakeJniBridge(
             timelineSummaryResult = longArrayOf(960L, 2_000_000L, 480L),
             staffParamsResult = oneStaffPayload(),
-            metronomeBeatsResult = downbeatOnlyBeats(),
             renderMidiResult = minimalSmf,
             resolveExportTickRangeResult = longArrayOf(-1L, -1L),
         )
@@ -1451,7 +1649,6 @@ class AndroidPlaybackEngineTest {
             staffParamsResult = encodeStaffParamsArray(
                 (0 until staffCount).map { StaffParams(it, 0, 0, false, it.toLong()) },
             ),
-            metronomeBeatsResult = downbeatOnlyBeats(),
             countInResult = countIn,
             renderMidiResult = minimalSmf,
         )

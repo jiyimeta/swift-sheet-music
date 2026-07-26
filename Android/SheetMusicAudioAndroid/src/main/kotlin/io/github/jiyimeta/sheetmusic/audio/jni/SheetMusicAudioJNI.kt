@@ -36,6 +36,25 @@ internal object SheetMusicAudioJNI {
         return SwiftJavaJNI.nativeRenderMidi(scoreHandle, arena).toByteArray()
     }
 
+    fun nativeRenderMetronomeMidi(scoreHandle: Long): ByteArray {
+        val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
+        return SwiftJavaJNI.nativeRenderMetronomeMidi(scoreHandle, arena).toByteArray()
+    }
+
+    fun nativeRenderCountInMetronomeMidi(
+        scoreHandle: Long,
+        cursorBytes: ByteArray,
+        baseTick: Long,
+    ): ByteArray {
+        val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
+        return SwiftJavaJNI.nativeRenderCountInMetronomeMidi(
+            scoreHandle,
+            SwiftData.fromByteArray(cursorBytes, arena),
+            baseTick,
+            arena,
+        ).toByteArray()
+    }
+
     fun nativeTimelineSummary(scoreHandle: Long): LongArray =
         SwiftJavaJNI.nativeTimelineSummary(scoreHandle)
 
@@ -51,11 +70,6 @@ internal object SheetMusicAudioJNI {
             SwiftData.fromByteArray(cursorBytes, arena),
             arena,
         ).toByteArray()
-    }
-
-    fun nativeMetronomeBeats(scoreHandle: Long): ByteArray {
-        val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
-        return SwiftJavaJNI.nativeMetronomeBeats(scoreHandle, arena).toByteArray()
     }
 
     /**
