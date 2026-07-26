@@ -36,9 +36,7 @@ public enum PDFImporter {
                 reason: "PDFImporter: no glyphs/paths found",
             )
         }
-        let classified = walked.glyphs.map {
-            ClassifiedGlyph(raw: $0, semantic: smuflSemantic(codepoint: $0.codepoint))
-        }
+        let classified = walked.glyphs
         emitUnknownGlyphDiagnostics(classified, options: options)
 
         // Detect every page's staves first so the system clusterer can use a

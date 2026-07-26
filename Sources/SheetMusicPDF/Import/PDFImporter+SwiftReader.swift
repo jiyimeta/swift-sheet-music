@@ -21,7 +21,7 @@ extension PDFImporter {
         pdfData: Data,
     ) -> (content: WalkedContent, pageCount: Int, pageSizes: [Int: CGSize], attributes: [String: Any]?)? {
         guard let doc = PDFReaderDocument(data: pdfData) else { return nil }
-        var glyphs: [RawGlyph] = []
+        var glyphs: [ClassifiedGlyph] = []
         var texts: [TextGlyph] = []
         var paths: [PathSegment] = []
         var curves: [CurveArc] = []

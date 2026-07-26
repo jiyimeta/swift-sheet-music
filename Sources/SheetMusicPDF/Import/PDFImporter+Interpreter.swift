@@ -9,7 +9,7 @@ import SheetMusicCore
 /// front-end (Apple `CGPDFScanner` today; Android tokenizer later) and the
 /// Foundation-only decode pipeline (`buildScore`). Aggregated across all pages.
 struct WalkedContent {
-    var glyphs: [RawGlyph]
+    var glyphs: [ClassifiedGlyph]
     var texts: [TextGlyph]
     var paths: [PathSegment]
     var curves: [CurveArc] = []

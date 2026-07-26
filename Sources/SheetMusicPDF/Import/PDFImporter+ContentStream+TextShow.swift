@@ -52,7 +52,7 @@ func emitShow(_ bytes: [UInt8], state: TextShowState) {
             flushPendingText(&pendingText, state: state)
             let origin = currentOrigin(state: state)
             let advance = glyphAdvance(state: state)
-            state.glyphs.append(RawGlyph(
+            let raw = RawGlyph(
                 codepoint: first.value,
                 fontName: state.fontName,
                 fontSize: state.fontSize,
@@ -60,6 +60,10 @@ func emitShow(_ bytes: [UInt8], state: TextShowState) {
                 advance: advance,
                 pageIndex: state.pageIndex,
                 renderedSize: renderedSize(state: state),
+            )
+            state.glyphs.append(ClassifiedGlyph(
+                raw: raw,
+                semantic: PDFImporter.smuflSemantic(codepoint: first.value),
             ))
             advanceTextMatrix(state: state, glyphCount: 1)
         } else {

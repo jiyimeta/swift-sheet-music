@@ -81,5 +81,17 @@
                 Issue.record("expected .unknown")
             }
         }
+
+        @Test func pageStateAccumulatesClassifiedGlyphs() {
+            let state = PDFPageState(pageIndex: 0)
+            state.glyphs.append(ClassifiedGlyph(
+                raw: RawGlyph(
+                    codepoint: 0xE0A4, fontName: "Bravura", fontSize: 20,
+                    origin: .zero, advance: 5, pageIndex: 0,
+                ),
+                semantic: .noteheadBlack,
+            ))
+            #expect(state.glyphs.first?.semantic == .noteheadBlack)
+        }
     }
 #endif

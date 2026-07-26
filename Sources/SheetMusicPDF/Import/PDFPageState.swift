@@ -48,7 +48,7 @@ final class PDFPageState {
     var pendingPolyCTM: CGAffineTransform = .identity
     var pendingPolyHasCurve = false
     // Outputs.
-    var glyphs: [RawGlyph] = []
+    var glyphs: [ClassifiedGlyph] = []
     var texts: [TextGlyph] = []
     var paths: [PathSegment] = []
     var curveArcs: [CurveArc] = []

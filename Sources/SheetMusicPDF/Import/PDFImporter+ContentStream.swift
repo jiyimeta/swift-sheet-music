@@ -16,7 +16,7 @@ extension PDFImporter {
         let document: PDFDocument
 
         func walk() throws -> WalkedContent {
-            var glyphs: [RawGlyph] = []
+            var glyphs: [ClassifiedGlyph] = []
             var texts: [TextGlyph] = []
             var paths: [PathSegment] = []
             var curves: [CurveArc] = []
