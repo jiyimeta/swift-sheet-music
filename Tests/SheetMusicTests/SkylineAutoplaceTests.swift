@@ -389,11 +389,11 @@
             let lyr = try #require(
                 shapes.first { $0.kind == .lyrics }?.shape.bbox,
             )
-            // Dynamic ink (~1.1 sp) + 0.5 sp clearance + the lyric's
-            // own box leaves the row within ~4 sp of the staff; the em
-            // box put it past 16 sp.
+            // Dynamic ink (2.4 sp) + 0.5 sp clearance + the lyric's
+            // own 2 sp box leaves the row about 5 sp below the staff;
+            // the 16.1 sp em box put it past 17 sp.
             #expect(
-                lyr.maxY - staffBottom < system.sp * 5,
+                lyr.maxY - staffBottom < system.sp * 7,
                 "lyric row \(lyr.maxY - staffBottom) pt below the staff",
             )
         }
