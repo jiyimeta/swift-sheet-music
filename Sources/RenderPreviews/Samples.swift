@@ -966,7 +966,7 @@
         /// chord-aware harmony auto-placement the chord symbols sit at
         /// their default `harmonyPlacementAbove` (-2.5 sp) and overlap
         /// the topmost noteheads. This sample is the visual gauge for
-        /// the `autoPlaceHarmony` pass.
+        /// the `SkylineAutoplacePass`.
         static var harmonyHighChord: Score {
             // Treble-clef pitches well above the top line:
             //   E5 (top space), C6 (2 ledger lines), F6 (3 ledger lines).
@@ -1000,7 +1000,7 @@
         /// shoulder; without tie-aware skyline the harmony auto-placer
         /// puts the symbol just above the notehead and the tie cuts
         /// through the chord text. Visual gauge for the tie-aware
-        /// path inside `chordTopExtent`.
+        /// path inside `LayoutElementShape.aboveTieApexY`.
         static var harmonyHighChordTied: Score {
             let f6Tied = Note(pitch: 89, tpc: 13, tieForward: 1)
             let f6Land = Note(pitch: 89, tpc: 13, tieBack: 1)

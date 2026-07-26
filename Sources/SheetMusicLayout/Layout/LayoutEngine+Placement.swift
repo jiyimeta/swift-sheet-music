@@ -1220,14 +1220,7 @@ extension LayoutEngine {
                     // belonging to the next chord (similar to how an
                     // accidental sits left of its notehead). Glyph's
                     // right edge sits a small gap before the next
-                    // chord's X; fallback to "just past preceding chord"
-                    // when no following chord exists.
-                    let prevChordX = lastChordOrRestX(in: out)
-                        ?? (
-                            inHeader
-                                ? headerSchedule.contentStartX
-                                : timedX(atTick: tickCursor)
-                        )
+                    // chord's X.
                     // Account for THIS breath's own glyph reservation
                     // + pause when looking ahead — the next chord's
                     // `tickColumns` entry was built by the spacing
@@ -1825,16 +1818,6 @@ extension LayoutEngine {
                 out: &out,
             )
         }
-        // Auto-place staff text: shift it above any chord stem /
-        // beam in this measure. MuseScore does this in its skyline-
-        // based autoplace step (`Autoplace::autoplaceStaffText`);
-        // we approximate by bumping every staff text in the measure
-        // by the same amount so the layout stays simple while the
-        // visual outcome — text never overlaps a stem or beam —
-        // matches.
-        autoPlaceStaffText(
-            in: &out, staffMidY: staffMidY, metrics: metrics,
-        )
         // Inject system-level elements (tempo / rehearsal mark /
         // system or staff text / swing) lifted to score level. Each
         // element renders at the X column matching its
@@ -1913,26 +1896,6 @@ extension LayoutEngine {
                 }
             }
         }
-        // Same chord-clearance pass for chord symbols. Without this,
-        // a chord whose noteheads or beam reach above the harmony's
-        // default Y (`staffTop - 2.5 sp`) collides with the symbol —
-        // common when the staff carries notes more than one ledger
-        // line above the top staff line.
-        autoPlaceHarmony(
-            in: &out, staffMidY: staffMidY, metrics: metrics,
-        )
-        // Same chord-clearance pass for tempo text. MuseScore lifts
-        // TempoText above the segment skyline so its metronome glyph
-        // never overlaps a high chord — common in vocal parts that
-        // sit a ledger line or more above the staff (e.g. G8vb clef
-        // soprano parts).
-        autoPlaceTempo(
-            in: &out, staffMidY: staffMidY, metrics: metrics,
-        )
-        // After per-element auto-place, resolve same-tick collisions
-        // among above-staff text marks (tempo / staff text / system
-        // text / rehearsal mark) by stacking them upward.
-        autoStackAboveStaffMarks(in: &out, metrics: metrics)
         return (out, invisibleOut, currentClef, currentKey)
     }
 

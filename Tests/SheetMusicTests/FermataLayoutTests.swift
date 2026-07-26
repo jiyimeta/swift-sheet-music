@@ -366,10 +366,10 @@
                 case let .fermata(_, origin):
                     fermataY = origin.y
                 case let .chord(notes, _, stem, stemOrigin, _, _, _, _, _, _, _):
-                    // For stem-up, `LayoutEngine+Extents.chordTopExtent`
-                    // treats `min(stemOrigin.y, topNote)` as the chord
-                    // top — i.e. `stemOrigin.y` IS the stem-top endpoint
-                    // for stem-up. Use it directly.
+                    // For stem-up, the chord's top is
+                    // `min(stemOrigin.y, topNote)` — i.e. `stemOrigin.y`
+                    // IS the stem-top endpoint for stem-up. Use it
+                    // directly.
                     if stem == .up {
                         stemTopY = stemOrigin.y
                     } else if let highest = notes.map(\.origin.y).min() {
