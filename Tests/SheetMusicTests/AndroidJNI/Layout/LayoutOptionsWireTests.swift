@@ -15,7 +15,7 @@
                 showsInvisibleElements: 1,
                 hiddenStaves: [HiddenStaffWire(partIndex: 1, staffIndexInPart: 0)],
                 clefOverrides: [ClefOverrideWire(partIndex: 0, staffIndexInPart: 1, rawType: "F8va")],
-                transposeSemitones: 0,
+                transposeSemitones: -3,
             )
             let decoded = try LayoutOptionsCodec.decode(wire.encodeToData())
             #expect(decoded.staffSize == 18.5)
@@ -23,6 +23,7 @@
             #expect(decoded.showsInvisibleElements == 1)
             #expect(decoded.hiddenStaffAddresses == [StaffAddress(partIndex: 1, staffIndexInPart: 0)])
             #expect(decoded.clefOverrideMap == [StaffAddress(partIndex: 0, staffIndexInPart: 1): "F8va"])
+            #expect(decoded.transposeDelta == -3)
         }
 
         @Test func emptyCollectionsRoundTrip() throws {

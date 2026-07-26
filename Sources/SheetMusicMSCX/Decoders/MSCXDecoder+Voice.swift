@@ -77,6 +77,16 @@ extension Voice {
         // immediately before the next voice element so downstream
         // consumers (dynamic placement, …) keep seeing it.
         var pendingShift = Fraction(numerator: 0, denominator: 1)
+        // `<Beam>` sits in the voice stream immediately before the group
+        // it governs. MuseScore attaches the beam it just read to the
+        // FIRST following ChordRest and clears the pending reference
+        // (`rw/read410/measureread.cpp:263`), so we mirror that: the
+        // flag lands on the next chord/rest and resets to the default.
+        var pendingBeamVisible = true
+        func takePendingBeamVisible() -> Bool {
+            defer { pendingBeamVisible = true }
+            return pendingBeamVisible
+        }
         func tupletFractions() -> [Fraction] {
             tupletStack.map(\.ratio)
         }
@@ -134,6 +144,7 @@ extension Voice {
                     chord.graceNotesBefore = pendingGracesBefore
                     pendingGracesBefore.removeAll(keepingCapacity: true)
                 }
+                chord.beamVisible = takePendingBeamVisible()
                 appendVoiceElement(.chord(chord))
                 // `.measure` chords carry no intrinsic duration; the
                 // measure-rest fills the bar by definition, so any
@@ -149,6 +160,7 @@ extension Voice {
                 rest.duration = scaled(
                     rest.duration, by: tupletFractions(),
                 )
+                rest.beamVisible = takePendingBeamVisible()
                 appendVoiceElement(.chord(rest))
                 if case .measure = rest.duration {
                     // A measure rest's `NoteDuration` is the bare
@@ -171,6 +183,13 @@ extension Voice {
                 } else {
                     cursor += rest.duration.asFraction
                 }
+            case "Beam":
+                // Only `<visible>` is modelled; `<StemDirection>` and
+                // custom beam fragments are dropped (they change how a
+                // beam looks, not whether it exists). Consumed by the
+                // next chord / rest — see `pendingBeamVisible`.
+                pendingBeamVisible =
+                    (child.first("visible")?.text ?? "1") != "0"
             case "Tuplet":
                 if let ratio = tupletRatio(from: child) {
                     tupletStack.append(OpenTuplet(

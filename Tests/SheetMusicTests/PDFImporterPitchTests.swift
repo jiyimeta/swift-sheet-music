@@ -26,9 +26,9 @@
             semantic: SMuFLSemantic = .noteheadBlack,
         ) -> ClassifiedGlyph {
             ClassifiedGlyph(
-                raw: RawGlyph(
-                    codepoint: 0xE0A4, fontName: "Bravura", fontSize: 20,
-                    origin: CGPoint(x: x, y: y), advance: 5, pageIndex: 0,
+                geometry: GlyphGeometry(
+                    origin: CGPoint(x: x, y: y), advance: 5,
+                    pageIndex: 0, fontSize: 20,
                 ),
                 semantic: semantic,
             )
@@ -38,9 +38,9 @@
             x: CGFloat, y: CGFloat, kind: SMuFLSemantic,
         ) -> ClassifiedGlyph {
             ClassifiedGlyph(
-                raw: RawGlyph(
-                    codepoint: 0, fontName: "Bravura", fontSize: 20,
-                    origin: CGPoint(x: x, y: y), advance: 5, pageIndex: 0,
+                geometry: GlyphGeometry(
+                    origin: CGPoint(x: x, y: y), advance: 5,
+                    pageIndex: 0, fontSize: 20,
                 ),
                 semantic: kind,
             )

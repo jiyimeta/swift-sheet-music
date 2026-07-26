@@ -7,22 +7,22 @@ import SheetMusicCore
 // Text-show emission for the content-stream walker. Split out of the
 // operator-callback file so neither exceeds the 400-line file cap. The
 // `Tj` / `TJ` / `'` / `"` callbacks (in PDFImporter+ContentStream+Operators)
-// call `emitShow`, which routes each decoded scalar to a music `RawGlyph`
-// (SMuFL PUA) or a `TextGlyph` text run.
+// call `emitShow`, which routes each decoded scalar to a music
+// `ClassifiedGlyph` (SMuFL PUA) or a `TextGlyph` text run.
 
 typealias TextShowState = PDFPageState
 private typealias State = TextShowState
 
 /// SMuFL Private Use Area range. A decoded scalar inside this range is
-/// a music glyph (Leland / LelandText) → RawGlyph; otherwise it's
+/// a music glyph (Leland / LelandText) → ClassifiedGlyph; otherwise it's
 /// ordinary text → TextGlyph.
 private let smuflPUARange: ClosedRange<UInt32> = 0xE000 ... 0xF8FF
 
 /// Emit a show-string operand. When an active ToUnicode CMap is present
 /// (Type0 / Identity-H fonts), iterate the operand in 2-byte CID codes,
 /// map each through the CMap, and route the decoded scalar(s): PUA
-/// scalars become a `RawGlyph` at the current per-glyph origin; non-PUA
-/// scalars accumulate into a `TextGlyph` text run.
+/// scalars become a `ClassifiedGlyph` at the current per-glyph origin;
+/// non-PUA scalars accumulate into a `TextGlyph` text run.
 ///
 /// MuseScore positions each music glyph with its own `Tm`/`cm` (observed
 /// in ギブス.pdf: one BT/ET block per glyph, `Td [0 0]`), so the
@@ -31,6 +31,12 @@ private let smuflPUARange: ClosedRange<UInt32> = 0xE000 ... 0xF8FF
 /// in a single run land at successive positions.
 func emitShow(_ bytes: [UInt8], state: TextShowState) {
     guard let cmap = state.activeCMap, !cmap.isEmpty else {
+        #if canImport(CoreGraphics)
+            if let classifier = state.activeClassifier, classifier.canClassifyWithoutCMap {
+                emitShowSimpleFont(bytes, state: state, classifier: classifier)
+                return
+            }
+        #endif
         emitText(decodeString(bytes), state: state)
         return
     }
@@ -48,18 +54,20 @@ func emitShow(_ bytes: [UInt8], state: TextShowState) {
             advanceTextMatrix(state: state, glyphCount: 1)
             continue
         }
-        if smuflPUARange.contains(first.value) {
+        let semantic = classifyCID(cid, codepoint: first.value, state: state)
+        if isMusicGlyph(semantic: semantic, codepoint: first.value, state: state) {
             flushPendingText(&pendingText, state: state)
             let origin = currentOrigin(state: state)
             let advance = glyphAdvance(state: state)
-            state.glyphs.append(RawGlyph(
-                codepoint: first.value,
-                fontName: state.fontName,
-                fontSize: state.fontSize,
-                origin: origin,
-                advance: advance,
-                pageIndex: state.pageIndex,
-                renderedSize: renderedSize(state: state),
+            state.glyphs.append(ClassifiedGlyph(
+                geometry: GlyphGeometry(
+                    origin: origin,
+                    advance: advance,
+                    renderedSize: renderedSize(state: state),
+                    pageIndex: state.pageIndex,
+                    fontSize: state.fontSize,
+                ),
+                semantic: semantic,
             ))
             advanceTextMatrix(state: state, glyphCount: 1)
         } else {
@@ -72,6 +80,130 @@ func emitShow(_ bytes: [UInt8], state: TextShowState) {
     // Odd trailing byte (shouldn't happen for Identity-H) — ignore.
     flushPendingText(&pendingText, state: state)
 }
+
+/// Resolve one CMap-decoded CID to a semantic.
+///
+/// Tier 1 (SMuFL PUA codepoint) answers every glyph in every MuseScore /
+/// Dorico / Finale 27+ PDF. For a non-SMuFL-encoded producer (Finale
+/// Maestro, Sibelius Opus, …) `activeClassifier` widens this with Tier 2
+/// (glyph name) / Tier 4 (outline shape).
+///
+/// `characterCode: nil` — a CID is not a character code in a simple font's
+/// own encoding, so `/Differences` (Tier 2's key space) must not be indexed
+/// with it.
+private func classifyCID(
+    _ cid: UInt32, codepoint: UInt32, state: State,
+) -> SMuFLSemantic {
+    #if canImport(CoreGraphics)
+        state.activeClassifier.map {
+            $0.classify(
+                codepoint: codepoint, characterCode: nil,
+                glyphID: CGGlyph(truncatingIfNeeded: cid),
+            )
+        } ?? PDFImporter.smuflSemantic(codepoint: codepoint)
+    #else
+        PDFImporter.smuflSemantic(codepoint: codepoint)
+    #endif
+}
+
+/// Route a decoded scalar to the music stream or the text stream.
+///
+/// A non-PUA scalar becomes music ONLY when a tier positively identifies
+/// it; a PUA scalar no tier recognizes still becomes an `.unknown` music
+/// glyph exactly as before, so the diagnostic path for MuseScore's own
+/// byte-identical output is unchanged.
+///
+/// TESTING ONLY: `anchorMusicToPUARange` (see
+/// `PDFImportOptions.anchorMusicGlyphsToPUARange`) forces this decision to
+/// depend solely on the raw codepoint, ignoring what the classifier
+/// answered, so the Tier-1 ablation promotes the same codepoint set
+/// regardless of which tier supplied the semantic.
+private func isMusicGlyph(
+    semantic: SMuFLSemantic, codepoint: UInt32, state: State,
+) -> Bool {
+    if state.anchorMusicToPUARange { return smuflPUARange.contains(codepoint) }
+    if case .unknown = semantic { return smuflPUARange.contains(codepoint) }
+    return true
+}
+
+#if canImport(CoreGraphics)
+    /// A text run accumulating inside one show-string operand, carrying the
+    /// text origin as of the moment its FIRST code was appended.
+    ///
+    /// The origin has to be captured up front because the loop advances the
+    /// text matrix per code: reading `currentOrigin` at flush time would
+    /// place the whole run at the position AFTER its last code. A legacy
+    /// simple font puts a whole word or line in one `Tj`, so that error is
+    /// the run's full width — enough to break lyric-to-note attachment.
+    private struct PendingTextRun {
+        private(set) var text = ""
+        private(set) var origin: CGPoint = .zero
+
+        var isEmpty: Bool {
+            text.isEmpty
+        }
+
+        mutating func append(_ scalar: Unicode.Scalar, startingAt start: CGPoint) {
+            if text.isEmpty { origin = start }
+            text.unicodeScalars.append(scalar)
+        }
+    }
+
+    /// Emit a show-string operand for a simple font with NO usable
+    /// `/ToUnicode` but a usable embedded program or `/Differences` — the
+    /// legacy-music-font case (Maestro, Opus, Sonata) P1 targets. A simple
+    /// font uses 1-byte codes, not Identity-H's 2.
+    ///
+    /// The byte is a CHARACTER CODE in the font's own encoding: the key Tier
+    /// 2 looks up in `/Encoding /Differences`, and — after being decoded
+    /// through the declared base encoding and the embedded font's own cmap
+    /// (`resolveGlyphID`) — the route to the glyph ID Tier 4 needs. It is
+    /// NOT itself a glyph ID; treating it as one is what left real Finale
+    /// output with zero notes.
+    ///
+    /// NO corpus coverage: every corpus PDF is MuseScore output with a
+    /// proper CMap, so this path is exercised only by unit tests and by the
+    /// real-file acceptance check.
+    private func emitShowSimpleFont(
+        _ bytes: [UInt8], state: State, classifier: GlyphClassifier,
+    ) {
+        var pending = PendingTextRun()
+        for byte in bytes {
+            let code = UInt32(byte)
+            let semantic = classifier.classify(
+                codepoint: code, characterCode: code,
+                glyphID: classifier.resolveGlyphID(code: code),
+            )
+            if case .unknown = semantic {
+                pending.append(Unicode.Scalar(byte), startingAt: currentOrigin(state: state))
+                advanceTextMatrix(state: state, glyphCount: 1)
+                continue
+            }
+            flushPendingRun(&pending, state: state)
+            let origin = currentOrigin(state: state)
+            let advance = glyphAdvance(state: state)
+            state.glyphs.append(ClassifiedGlyph(
+                geometry: GlyphGeometry(
+                    origin: origin,
+                    advance: advance,
+                    renderedSize: renderedSize(state: state),
+                    pageIndex: state.pageIndex,
+                    fontSize: state.fontSize,
+                ),
+                semantic: semantic,
+            ))
+            advanceTextMatrix(state: state, glyphCount: 1)
+        }
+        flushPendingRun(&pending, state: state)
+    }
+
+    /// Emit an accumulated run at the origin it STARTED at, then reset.
+    private func flushPendingRun(_ run: inout PendingTextRun, state: State) {
+        guard !run.isEmpty else { return }
+        emitTextGlyph(run.text, at: run.origin, state: state)
+        run = PendingTextRun()
+    }
+#endif
 
 /// Page-space origin of the current text position.
 private func currentOrigin(state: State) -> CGPoint {
@@ -107,9 +239,19 @@ private func advanceTextMatrix(state: State, glyphCount: Int) {
 }
 
 /// Emit the accumulated non-PUA text as a `TextGlyph` and reset.
+///
+/// Emits at the text position as of the FLUSH, not as of the run's first
+/// code — behavior this branch inherited and left alone. It is only ever
+/// wrong by the run's own width, and for the CMap path that width is
+/// small: MuseScore emits one BT/ET block per glyph, so a run here is
+/// usually a single code. The whole downstream lyric geometry was
+/// calibrated against these positions across nine sessions, so moving them
+/// is a measured experiment in its own right, not a drive-by fix. The
+/// simple-font path, where a run really is a whole word, captures its
+/// start origin instead — see `PendingTextRun`.
 private func flushPendingText(_ pending: inout String, state: State) {
     guard !pending.isEmpty else { return }
-    emitTextGlyph(pending, state: state)
+    emitTextGlyph(pending, at: currentOrigin(state: state), state: state)
     pending = ""
 }
 
@@ -129,21 +271,20 @@ private func decodeString(_ bytes: [UInt8]) -> String {
 /// further right (tests don't pin advance precision).
 private func emitText(_ text: String, state: State) {
     guard !text.isEmpty else { return }
-    emitTextGlyph(text, state: state)
+    emitTextGlyph(text, at: currentOrigin(state: state), state: state)
     let approxAdvance = state.fontSize * 0.5 * CGFloat(text.count)
     state.textMatrix = CGAffineTransform(translationX: approxAdvance, y: 0)
         .concatenating(state.textMatrix)
 }
 
-/// Append a `TextGlyph` at the current text origin (no advance — the
+/// Append a `TextGlyph` at `origin` in page coordinates (no advance — the
 /// caller decides whether/how to advance the text matrix).
-private func emitTextGlyph(_ text: String, state: State) {
-    let originPageSpace = currentOrigin(state: state)
+private func emitTextGlyph(_ text: String, at origin: CGPoint, state: State) {
     state.texts.append(TextGlyph(
         text: text,
         fontName: state.fontName,
         fontSize: state.fontSize,
-        origin: originPageSpace,
+        origin: origin,
         bbox: .zero,
         pageIndex: state.pageIndex,
     ))

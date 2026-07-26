@@ -720,6 +720,7 @@ extension LayoutEngine {
             var aggregatedInvisible: [LayoutElement] = []
             var markers: [LayoutElement] = []
             var jumps: [LayoutElement] = []
+            var dynamicExtents: [LayoutMeasure.DynamicExtent] = []
             for staffIdx in staves.indices {
                 // Placement emits positions relative to "staff top
                 // at sp*2" (see `staffMidY` inside
@@ -728,6 +729,13 @@ extension LayoutEngine {
                 let yOffset = staffOrigins[staffIdx].y
                     - metrics.sp * 2
                 if let els = um.perStaffElements[staffIdx] {
+                    // Record dynamic spans BEFORE aggregation — after
+                    // it, the staff each dynamic belongs to is gone.
+                    // Only X is read, and `translate` moves Y only.
+                    dynamicExtents.append(contentsOf: collectDynamicExtents(
+                        in: els, staffIndex: staffIdx,
+                        tickColumns: um.tickCols, metrics: metrics,
+                    ))
                     aggregated.append(contentsOf: els.map {
                         translate(element: $0, dy: yOffset)
                     })
@@ -794,6 +802,7 @@ extension LayoutEngine {
                     from: aggregated, tickColumns: um.tickCols,
                     sp: metrics.sp,
                 ),
+                dynamicExtents: dynamicExtents,
             ))
             xCursor += w
         }
@@ -878,6 +887,60 @@ extension LayoutEngine {
     /// tall so its top edge is `center.y − 0.5 sp`. Using the center
     /// (old behaviour) lost 0.5 sp of vertical clearance, causing the
     /// vibrato to render too close to high notes.
+    /// Measure-local ink spans of the dynamics in one staff's element
+    /// buffer, each tagged with the tick it is anchored at.
+    ///
+    /// The tick is recovered from the X the dynamic was placed at.
+    /// `placeMeasureElements` anchors a dynamic at `timedX(tick) − sp`
+    /// (the 1 sp left shift that keeps the label off the notehead), so
+    /// the anchor column is `origin.x + sp` and an exact hit in
+    /// `tickColumns` is the normal case. A dynamic that precedes the
+    /// measure's first timed element is placed off the header's
+    /// `contentStartX` instead, landing left of every column — it
+    /// belongs to the first tick at or after its anchor.
+    private static func collectDynamicExtents(
+        in elements: [LayoutElement],
+        staffIndex: Int,
+        tickColumns: [Int: CGFloat],
+        metrics: StaffMetrics,
+    ) -> [LayoutMeasure.DynamicExtent] {
+        guard !tickColumns.isEmpty else { return [] }
+        var out: [LayoutMeasure.DynamicExtent] = []
+        for element in elements {
+            guard case let .textMark(kind, _, origin) = element,
+                  kind == .dynamic,
+                  let tick = dynamicTick(
+                      anchorX: origin.x + metrics.sp,
+                      tickColumns: tickColumns,
+                  ),
+                  let shape = LayoutElementShape.shape(
+                      for: element, id: 0, xOffset: 0, metrics: metrics,
+                  ),
+                  let minX = shape.rects.map(\.rect.minX).min(),
+                  let maxX = shape.rects.map(\.rect.maxX).max()
+            else { continue }
+            out.append(LayoutMeasure.DynamicExtent(
+                staffIndex: staffIndex, tick: tick,
+                minX: minX, maxX: maxX,
+            ))
+        }
+        return out
+    }
+
+    private static func dynamicTick(
+        anchorX: CGFloat, tickColumns: [Int: CGFloat],
+    ) -> Int? {
+        for (tick, columnX) in tickColumns
+            where abs(columnX - anchorX) < 0.01
+        {
+            return tick
+        }
+        return tickColumns
+            .filter { $0.value >= anchorX }
+            .min { $0.value < $1.value }?
+            .key
+    }
+
     private static func buildChordNorthByTick(
         from elements: [LayoutElement], tickColumns: [Int: CGFloat],
         sp: CGFloat,

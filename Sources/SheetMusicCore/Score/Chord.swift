@@ -49,10 +49,28 @@ public struct Chord: Sendable, Equatable {
     /// MuseScore `<Stem><visible>0</visible></Stem>` inside `<Chord>`.
     /// Default `true`. When false, the stem (and flag) glyphs are
     /// suppressed; the noteheads are NOT affected and continue to be
-    /// governed by per-note `Note.visible` / `Chord.visible`. Beam
-    /// suppression (`<Beam><visible>`) is a separate concern not yet
-    /// parsed.
+    /// governed by per-note `Note.visible` / `Chord.visible`.
     public var stemVisible: Bool
+
+    /// Visibility of the beam of the group this chord *leads*.
+    /// MuseScore `<Beam><visible>0</visible></Beam>`, which appears as a
+    /// SIBLING of `<Chord>` in the voice stream, immediately before the
+    /// group it applies to.
+    ///
+    /// The flag lives on the leading chord because that is where
+    /// MuseScore puts it: its reader attaches the `<Beam>` object it
+    /// just read to the FIRST following ChordRest and then clears the
+    /// pending reference (`rw/read410/measureread.cpp:263` —
+    /// `startingBeam->add(chord); startingBeam = nullptr;`). The beam
+    /// then owns the whole group, so one flag governs every member.
+    ///
+    /// Default `true`. When false the beam BARS are not drawn; the
+    /// chords are still beamed logically, so no flag glyphs appear
+    /// either. Independent of `stemVisible` and of note visibility —
+    /// MuseScore never derives a beam's visibility from its chords.
+    /// The `<Beam>` element's other payloads (`<StemDirection>`, custom
+    /// beam fragments) are not modelled.
+    public var beamVisible: Bool
 
     public init(
         duration: NoteDuration,
@@ -66,6 +84,7 @@ public struct Chord: Sendable, Equatable {
         chordLines: [ChordLine] = [],
         visible: Bool = true,
         stemVisible: Bool = true,
+        beamVisible: Bool = true,
     ) {
         self.duration = duration
         self.notes = notes
@@ -77,6 +96,7 @@ public struct Chord: Sendable, Equatable {
         self.tremolo = tremolo
         self.chordLines = chordLines
         self.stemVisible = stemVisible
+        self.beamVisible = beamVisible
         elementProperties = ElementProperties(visible: visible)
     }
 }

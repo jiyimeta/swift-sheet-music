@@ -56,6 +56,12 @@ extension LayoutEngine {
                     beatLevelSets[beat, default: Set()].insert(level)
                 }
                 scanTick += c.duration.resolved(in: measureDuration).ticks(division: division)
+            case let .locationShift(delta):
+                // Same cursor rule as `placeMeasureElements` — a voice
+                // starting part-way through the measure must land on
+                // the real beats, or every beat-boundary decision
+                // below is taken against the wrong beat index.
+                scanTick += delta.ticks(division: division)
             // Empty chord = rest, picked up by the .chord case above
             // since c.notes.isEmpty contributes 0 elements to beam
             // groups but still advances scanTick.
@@ -135,6 +141,8 @@ extension LayoutEngine {
                 currentIndices.append(i)
                 currentLevel = max(currentLevel, level)
                 tick += c.duration.resolved(in: measureDuration).ticks(division: division)
+            case let .locationShift(delta):
+                tick += delta.ticks(division: division)
             default:
                 if case .barLine = el { flush() }
             }

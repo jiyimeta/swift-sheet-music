@@ -17,9 +17,9 @@
             x: CGFloat, y: CGFloat, midi: Int,
         ) -> (ClassifiedGlyph, PDFImporter.DecodedPitch) {
             let g = ClassifiedGlyph(
-                raw: RawGlyph(
-                    codepoint: 0xE0A4, fontName: "Bravura", fontSize: 20,
-                    origin: CGPoint(x: x, y: y), advance: 6, pageIndex: 0,
+                geometry: GlyphGeometry(
+                    origin: CGPoint(x: x, y: y), advance: 6,
+                    pageIndex: 0, fontSize: 20,
                 ),
                 semantic: .noteheadBlack,
             )
@@ -75,9 +75,9 @@
 
         @Test func restCapturesOnsetRectAndNoNoteRects() {
             let restGlyph = ClassifiedGlyph(
-                raw: RawGlyph(
-                    codepoint: 0xE4E5, fontName: "Bravura", fontSize: 20,
-                    origin: CGPoint(x: 200, y: 500), advance: 6, pageIndex: 0,
+                geometry: GlyphGeometry(
+                    origin: CGPoint(x: 200, y: 500), advance: 6,
+                    pageIndex: 0, fontSize: 20,
                 ),
                 semantic: .rest(.quarter),
             )

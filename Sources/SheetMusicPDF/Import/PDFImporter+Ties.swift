@@ -20,16 +20,16 @@ import SheetMusicCore
 extension PDFImporter {
     /// Stable identity of a notehead by its page + rounded origin. Two
     /// passes (tie detection here, note construction in assembly) derive
-    /// the same key from the same `RawGlyph`, so they line up.
+    /// the same key from the same `GlyphGeometry`.
     struct NoteheadID: Hashable {
         var page: Int
         var x: Int
         var y: Int
 
-        init(_ raw: RawGlyph) {
-            page = raw.pageIndex
-            x = Int(raw.origin.x.rounded())
-            y = Int(raw.origin.y.rounded())
+        init(_ geometry: GlyphGeometry) {
+            page = geometry.pageIndex
+            x = Int(geometry.origin.x.rounded())
+            y = Int(geometry.origin.y.rounded())
         }
     }
 
@@ -47,7 +47,7 @@ extension PDFImporter {
         // Index noteheads by page for a quick local search.
         var byPage: [Int: [ClassifiedGlyph]] = [:]
         for g in noteheads where isNotehead(g.semantic) {
-            byPage[g.raw.pageIndex, default: []].append(g)
+            byPage[g.geometry.pageIndex, default: []].append(g)
         }
         // Endpoint-pairing tolerances. A tie's gap to its noteheads is a
         // constant page-point offset PLUS a staff-space-proportional drop,
@@ -71,8 +71,8 @@ extension PDFImporter {
                 unpaired.append(arc)
                 continue
             }
-            marks.forward.insert(NoteheadID(left.raw))
-            marks.back.insert(NoteheadID(right.raw))
+            marks.forward.insert(NoteheadID(left.geometry))
+            marks.back.insert(NoteheadID(right.geometry))
         }
         // Second pass: tie-shaped arcs the two-anchor pairing could not
         // consume are cross-system half-ties (see `markHalfTie`).
@@ -124,15 +124,15 @@ extension PDFImporter {
         let guardYBand = Self.halfTieGuardYBandSpatia * staffSpace
         switch (leftNH, rightNH) {
         case let (.some(left), .some(right))
-            where NoteheadID(left.raw) == NoteheadID(right.raw):
+            where NoteheadID(left.geometry) == NoteheadID(right.geometry):
             // Same-note margin stub: a half-tie hugging one note. Its
             // horizontal centre tells which side it hangs off — right of
             // the note ⇒ forward stub (line end), left ⇒ back stub
             // (line start).
-            if arc.bbox.midX >= left.raw.origin.x {
-                marks.forward.insert(NoteheadID(left.raw))
+            if arc.bbox.midX >= left.geometry.origin.x {
+                marks.forward.insert(NoteheadID(left.geometry))
             } else {
-                marks.back.insert(NoteheadID(left.raw))
+                marks.back.insert(NoteheadID(left.geometry))
             }
         case let (.some(left), nil):
             // Forward hanging tie — only when `left` is genuinely the
@@ -142,20 +142,20 @@ extension PDFImporter {
             // means this is not a line-end hang, so it must NOT drive a
             // mark (slur guard).
             guard !hasNearbyNotehead(
-                in: noteheads, atY: left.raw.origin.y, yBand: guardYBand,
+                in: noteheads, atY: left.geometry.origin.y, yBand: guardYBand,
                 xRange: arc.rightPoint.x ... arc.rightPoint.x + guardSpan,
-                excluding: NoteheadID(left.raw),
+                excluding: NoteheadID(left.geometry),
             ) else { return }
-            marks.forward.insert(NoteheadID(left.raw))
+            marks.forward.insert(NoteheadID(left.geometry))
         case let (nil, .some(right)):
             // Back hanging tie into a line start — symmetric guard on the
             // left margin.
             guard !hasNearbyNotehead(
-                in: noteheads, atY: right.raw.origin.y, yBand: guardYBand,
+                in: noteheads, atY: right.geometry.origin.y, yBand: guardYBand,
                 xRange: arc.leftPoint.x - guardSpan ... arc.leftPoint.x,
-                excluding: NoteheadID(right.raw),
+                excluding: NoteheadID(right.geometry),
             ) else { return }
-            marks.back.insert(NoteheadID(right.raw))
+            marks.back.insert(NoteheadID(right.geometry))
         default:
             // No anchor, or two DISTINCT anchors the same-line pairing
             // already rejected (cross-pitch ⇒ slur). Never mark.
@@ -177,9 +177,9 @@ extension PDFImporter {
         excluding anchor: NoteheadID,
     ) -> Bool {
         noteheads.contains { g in
-            NoteheadID(g.raw) != anchor
-                && abs(g.raw.origin.y - y) <= yBand
-                && xRange.contains(g.raw.origin.x)
+            NoteheadID(g.geometry) != anchor
+                && abs(g.geometry.origin.y - y) <= yBand
+                && xRange.contains(g.geometry.origin.x)
         }
     }
 
@@ -243,7 +243,7 @@ extension PDFImporter {
     static func pageStaffSpace(_ noteheads: [ClassifiedGlyph]) -> CGFloat {
         let sizes = noteheads
             .filter { isNotehead($0.semantic) }
-            .map(\.raw.renderedSize)
+            .map(\.geometry.renderedSize)
             .filter { $0 > 0 }
             .sorted()
         guard !sizes.isEmpty else { return 4 }
@@ -298,8 +298,8 @@ extension PDFImporter {
         guard let left, let right else { return nil }
         // Must be two DISTINCT noteheads on the SAME line, left before
         // right. Same line ⇒ |dy| ≤ ~1pt (a tie joins identical pitches).
-        guard left.raw.origin.x < right.raw.origin.x,
-              abs(left.raw.origin.y - right.raw.origin.y) <= 2
+        guard left.geometry.origin.x < right.geometry.origin.x,
+              abs(left.geometry.origin.y - right.geometry.origin.y) <= 2
         else { return nil }
         return (left, right)
     }
@@ -313,9 +313,9 @@ extension PDFImporter {
     ) -> ClassifiedGlyph? {
         var best: (g: ClassifiedGlyph, d: CGFloat)?
         for g in noteheads {
-            let dx = abs(g.raw.origin.x - x)
+            let dx = abs(g.geometry.origin.x - x)
             guard dx <= xTol else { continue }
-            let dy = abs(g.raw.origin.y - y)
+            let dy = abs(g.geometry.origin.y - y)
             guard dy <= yTol else { continue }
             let d = dx + dy
             if let cur = best {

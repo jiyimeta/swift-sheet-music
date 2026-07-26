@@ -16,19 +16,19 @@ extension PDFImporter {
     static func decodePercussion(
         measure: ImportMeasure, anchor: StaffAnchor,
     ) -> [DecodedPitch] {
-        let sorted = measure.glyphs.sorted { $0.raw.origin.x < $1.raw.origin.x }
+        let sorted = measure.glyphs.sorted { $0.geometry.origin.x < $1.geometry.origin.x }
         var out: [DecodedPitch] = []
         for g in sorted where isNotehead(g.semantic) {
             let midi = percussionMidi(
-                noteheadY: g.raw.origin.y,
+                noteheadY: g.geometry.origin.y,
                 isX: isXNotehead(g.semantic),
                 anchor: anchor,
             )
             out.append(DecodedPitch(
                 midi: midi,
                 tpc: 22, // neutral TPC (C natural); unused for drum staves
-                noteheadX: g.raw.origin.x,
-                noteheadY: g.raw.origin.y,
+                noteheadX: g.geometry.origin.x,
+                noteheadY: g.geometry.origin.y,
                 glyph: g,
             ))
         }

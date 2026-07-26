@@ -36,9 +36,7 @@ public enum PDFImporter {
                 reason: "PDFImporter: no glyphs/paths found",
             )
         }
-        let classified = walked.glyphs.map {
-            ClassifiedGlyph(raw: $0, semantic: smuflSemantic(codepoint: $0.codepoint))
-        }
+        let classified = walked.glyphs
         emitUnknownGlyphDiagnostics(classified, options: options)
 
         // Detect every page's staves first so the system clusterer can use a
@@ -50,7 +48,7 @@ public enum PDFImporter {
         var pageStavesByPage: [[Staff]] = []
         for page in 0 ..< pageCount {
             let pagePaths = walked.paths.filter { $0.pageIndex == page }
-            let pageClassified = classified.filter { $0.raw.pageIndex == page }
+            let pageClassified = classified.filter { $0.geometry.pageIndex == page }
             pageStavesByPage.append(detectStaves(
                 paths: pagePaths,
                 classified: pageClassified,
@@ -150,8 +148,8 @@ public enum PDFImporter {
     /// between them is not sensitive.
     static func graceNoteSizeThreshold(classified: [ClassifiedGlyph]) -> CGFloat {
         let sizes = classified
-            .filter { isNotehead($0.semantic) && $0.raw.renderedSize > 0 }
-            .map(\.raw.renderedSize)
+            .filter { isNotehead($0.semantic) && $0.geometry.renderedSize > 0 }
+            .map(\.geometry.renderedSize)
             .sorted()
         guard sizes.count >= 8 else { return 0 }
         let median = sizes[sizes.count / 2]
@@ -169,7 +167,7 @@ public enum PDFImporter {
             if case let .unknown(cp) = g.semantic {
                 cb(PDFImportDiagnostic(
                     severity: .info,
-                    location: "page \(g.raw.pageIndex)",
+                    location: "page \(g.geometry.pageIndex)",
                     message: "Unknown SMuFL codepoint U+\(String(cp, radix: 16, uppercase: true))",
                 ))
             }
