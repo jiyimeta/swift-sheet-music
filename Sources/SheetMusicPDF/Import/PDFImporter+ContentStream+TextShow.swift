@@ -54,35 +54,8 @@ func emitShow(_ bytes: [UInt8], state: TextShowState) {
             advanceTextMatrix(state: state, glyphCount: 1)
             continue
         }
-        // Tier 1 (SMuFL PUA codepoint) answers every glyph in every
-        // MuseScore / Dorico / Finale 27+ PDF. For a non-SMuFL-encoded
-        // producer (Finale Maestro, Sibelius Opus, …) `activeClassifier`
-        // widens this with Tier 2 (glyph name) / Tier 4 (outline shape). A
-        // non-PUA scalar becomes music ONLY when a tier positively
-        // identifies it; a PUA scalar no tier recognizes still becomes an
-        // `.unknown` music glyph exactly as before, so the diagnostic path
-        // for MuseScore's own byte-identical output is unchanged.
-        #if canImport(CoreGraphics)
-            let semantic = state.activeClassifier
-                .map { $0.classify(codepoint: first.value, glyphID: CGGlyph(truncatingIfNeeded: cid)) }
-                ?? PDFImporter.smuflSemantic(codepoint: first.value)
-        #else
-            let semantic = PDFImporter.smuflSemantic(codepoint: first.value)
-        #endif
-        // TESTING ONLY: `anchorMusicToPUARange` (see
-        // `PDFImportOptions.anchorMusicGlyphsToPUARange`) forces this
-        // decision to depend solely on the raw codepoint, ignoring what the
-        // classifier answered, so the Tier-1 ablation promotes the same
-        // codepoint set regardless of which tier supplied the semantic.
-        let isMusic: Bool
-        if state.anchorMusicToPUARange {
-            isMusic = smuflPUARange.contains(first.value)
-        } else if case .unknown = semantic {
-            isMusic = smuflPUARange.contains(first.value)
-        } else {
-            isMusic = true
-        }
-        if isMusic {
+        let semantic = classifyCID(cid, codepoint: first.value, state: state)
+        if isMusicGlyph(semantic: semantic, codepoint: first.value, state: state) {
             flushPendingText(&pendingText, state: state)
             let origin = currentOrigin(state: state)
             let advance = glyphAdvance(state: state)
@@ -106,6 +79,51 @@ func emitShow(_ bytes: [UInt8], state: TextShowState) {
     }
     // Odd trailing byte (shouldn't happen for Identity-H) — ignore.
     flushPendingText(&pendingText, state: state)
+}
+
+/// Resolve one CMap-decoded CID to a semantic.
+///
+/// Tier 1 (SMuFL PUA codepoint) answers every glyph in every MuseScore /
+/// Dorico / Finale 27+ PDF. For a non-SMuFL-encoded producer (Finale
+/// Maestro, Sibelius Opus, …) `activeClassifier` widens this with Tier 2
+/// (glyph name) / Tier 4 (outline shape).
+///
+/// `characterCode: nil` — a CID is not a character code in a simple font's
+/// own encoding, so `/Differences` (Tier 2's key space) must not be indexed
+/// with it.
+private func classifyCID(
+    _ cid: UInt32, codepoint: UInt32, state: State,
+) -> SMuFLSemantic {
+    #if canImport(CoreGraphics)
+        state.activeClassifier.map {
+            $0.classify(
+                codepoint: codepoint, characterCode: nil,
+                glyphID: CGGlyph(truncatingIfNeeded: cid),
+            )
+        } ?? PDFImporter.smuflSemantic(codepoint: codepoint)
+    #else
+        PDFImporter.smuflSemantic(codepoint: codepoint)
+    #endif
+}
+
+/// Route a decoded scalar to the music stream or the text stream.
+///
+/// A non-PUA scalar becomes music ONLY when a tier positively identifies
+/// it; a PUA scalar no tier recognizes still becomes an `.unknown` music
+/// glyph exactly as before, so the diagnostic path for MuseScore's own
+/// byte-identical output is unchanged.
+///
+/// TESTING ONLY: `anchorMusicToPUARange` (see
+/// `PDFImportOptions.anchorMusicGlyphsToPUARange`) forces this decision to
+/// depend solely on the raw codepoint, ignoring what the classifier
+/// answered, so the Tier-1 ablation promotes the same codepoint set
+/// regardless of which tier supplied the semantic.
+private func isMusicGlyph(
+    semantic: SMuFLSemantic, codepoint: UInt32, state: State,
+) -> Bool {
+    if state.anchorMusicToPUARange { return smuflPUARange.contains(codepoint) }
+    if case .unknown = semantic { return smuflPUARange.contains(codepoint) }
+    return true
 }
 
 #if canImport(CoreGraphics)
@@ -156,7 +174,9 @@ func emitShow(_ bytes: [UInt8], state: TextShowState) {
         var pending = PendingTextRun()
         for byte in bytes {
             let code = UInt32(byte)
-            let semantic = classifier.classify(codepoint: code, glyphID: CGGlyph(byte))
+            let semantic = classifier.classify(
+                codepoint: code, characterCode: code, glyphID: CGGlyph(byte),
+            )
             if case .unknown = semantic {
                 pending.append(Unicode.Scalar(byte), startingAt: currentOrigin(state: state))
                 advanceTextMatrix(state: state, glyphCount: 1)

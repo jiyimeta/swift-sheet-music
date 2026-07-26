@@ -10,8 +10,8 @@
     @MainActor struct GlyphClassifierTests {
         @Test func tier1SMuFLCodepointWinsWhenPresent() {
             let c = GlyphClassifier(font: nil)
-            #expect(c.classify(codepoint: 0xE0A4, glyphID: nil) == .noteheadBlack)
-            #expect(c.classify(codepoint: 0xE050, glyphID: nil) == .clefG)
+            #expect(c.classify(codepoint: 0xE0A4, characterCode: 0xE0A4, glyphID: nil) == .noteheadBlack)
+            #expect(c.classify(codepoint: 0xE050, characterCode: 0xE050, glyphID: nil) == .clefG)
         }
 
         @Test func tier2GlyphNameResolvesNonSMuFLCodepoint() {
@@ -20,13 +20,13 @@
             font.differences = [0x6E: "quarterrest", 0x77: "sharp"]
             let c = GlyphClassifier(font: font)
             // 0x6E is not a SMuFL PUA codepoint, so Tier 1 cannot fire.
-            #expect(c.classify(codepoint: 0x6E, glyphID: nil) == .rest(.quarter))
-            #expect(c.classify(codepoint: 0x77, glyphID: nil) == .accidentalSharp)
+            #expect(c.classify(codepoint: 0x6E, characterCode: 0x6E, glyphID: nil) == .rest(.quarter))
+            #expect(c.classify(codepoint: 0x77, characterCode: 0x77, glyphID: nil) == .accidentalSharp)
         }
 
         @Test func unresolvableCodepointStaysUnknown() {
             let c = GlyphClassifier(font: nil)
-            #expect(c.classify(codepoint: 0x41, glyphID: nil) == .unknown(0x41))
+            #expect(c.classify(codepoint: 0x41, characterCode: 0x41, glyphID: nil) == .unknown(0x41))
         }
 
         @Test func tier1IsUnaffectedByAnEmbeddedFont() {
@@ -34,7 +34,7 @@
             font.differences = [0xE0A4: "quarterrest"] // deliberately wrong
             let c = GlyphClassifier(font: font)
             // Tier 1 must win — a SMuFL codepoint is authoritative.
-            #expect(c.classify(codepoint: 0xE0A4, glyphID: nil) == .noteheadBlack)
+            #expect(c.classify(codepoint: 0xE0A4, characterCode: 0xE0A4, glyphID: nil) == .noteheadBlack)
         }
 
         @Test func canClassifyWithoutCMapWhenDifferencesPresent() {
@@ -53,6 +53,66 @@
             let font = PDFImporter.EmbeddedFont()
             let c = GlyphClassifier(font: font)
             #expect(!c.canClassifyWithoutCMap)
+        }
+
+        // MARK: Tier 2 text-ambiguous names (AGL digit words)
+
+        /// `/Differences [48 /zero /one /two …]` is the ORDINARY way any
+        /// producer — TeX, Word, Finale, Sibelius — names the digits of a
+        /// re-encoded TEXT font. Tier 2 must not read those as time-signature
+        /// digits: doing so invents a time signature, invents a
+        /// multi-measure-rest count, and drops the digits out of the title /
+        /// lyric text they belong to.
+        @Test func bareDigitNamesInATextFontStayUnknown() {
+            var font = PDFImporter.EmbeddedFont()
+            font.baseFont = "ABCDEF+TimesNewRoman"
+            font.differences = [
+                0x30: "zero", 0x31: "one", 0x32: "two", 0x33: "three",
+                0x41: "A", 0x61: "a", 0x20: "space",
+            ]
+            let c = GlyphClassifier(font: font)
+            #expect(c.classify(codepoint: 0x32, characterCode: 0x32, glyphID: nil) == .unknown(0x32))
+            #expect(c.classify(codepoint: 0x34, characterCode: 0x34, glyphID: nil) == .unknown(0x34))
+        }
+
+        /// The same bare digit name IS a time-signature digit once the font
+        /// identifies itself as a music font by naming a glyph only a music
+        /// font has. This is what keeps a legacy music face (whose digits
+        /// really are `/zero`…`/nine`) working.
+        @Test func bareDigitNamesResolveInAFontThatAlsoNamesMusicGlyphs() {
+            var font = PDFImporter.EmbeddedFont()
+            font.baseFont = "ABCDEF+Maestro"
+            font.differences = [
+                0x30: "zero", 0x34: "four", 0x51: "noteheadBlack", 0x6E: "quarterrest",
+            ]
+            let c = GlyphClassifier(font: font)
+            #expect(
+                c.classify(codepoint: 0x34, characterCode: 0x34, glyphID: nil)
+                    == .timeSignatureDigit(4),
+            )
+        }
+
+        /// `timeSig4` is unambiguous — no text font names a glyph that — so
+        /// it never needs the music-font evidence.
+        @Test func smuflTimeSigDigitNamesResolveUnconditionally() {
+            var font = PDFImporter.EmbeddedFont()
+            font.differences = [0x34: "timeSig4"]
+            let c = GlyphClassifier(font: font)
+            #expect(
+                c.classify(codepoint: 0x34, characterCode: 0x34, glyphID: nil)
+                    == .timeSignatureDigit(4),
+            )
+        }
+
+        /// `/Differences` is keyed by CHARACTER CODE. The CMap path has a
+        /// Unicode scalar, not a character code, so it must not index the
+        /// map at all — the two only ever coincide over ASCII, which is
+        /// exactly where a spurious hit does the most damage.
+        @Test func differencesAreNotConsultedWithoutACharacterCode() {
+            var font = PDFImporter.EmbeddedFont()
+            font.differences = [0x6E: "quarterrest"]
+            let c = GlyphClassifier(font: font)
+            #expect(c.classify(codepoint: 0x6E, characterCode: nil, glyphID: nil) == .unknown(0x6E))
         }
 
         // MARK: Tier 4 gate (`enableShapeMatching`, default off)
@@ -117,12 +177,12 @@
             // reading the real noteheadBlack outline by raw glyph ID, could
             // ever resolve it.
             let disabled = GlyphClassifier(font: font)
-            #expect(disabled.classify(codepoint: 0x41, glyphID: noteheadGlyphID) == .unknown(0x41))
+            #expect(disabled.classify(codepoint: 0x41, characterCode: 0x41, glyphID: noteheadGlyphID) == .unknown(0x41))
 
             // Prove the setup isn't vacuous: the same font/glyph DOES resolve
             // once Tier 4 is explicitly turned on.
             let enabled = GlyphClassifier(font: font, enableShapeMatching: true)
-            #expect(enabled.classify(codepoint: 0x41, glyphID: noteheadGlyphID) == .noteheadBlack)
+            #expect(enabled.classify(codepoint: 0x41, characterCode: 0x41, glyphID: noteheadGlyphID) == .noteheadBlack)
         }
 
         /// Two DIFFERENT glyph IDs presented under the SAME codepoint must
@@ -153,8 +213,8 @@
 
             // Codepoint 0x41 reaches neither Tier 1 nor Tier 2, so both
             // answers come from Tier 4 — i.e. from the glyph ID alone.
-            #expect(c.classify(codepoint: 0x41, glyphID: notehead) == .noteheadBlack)
-            #expect(c.classify(codepoint: 0x41, glyphID: clef) == .clefG)
+            #expect(c.classify(codepoint: 0x41, characterCode: 0x41, glyphID: notehead) == .noteheadBlack)
+            #expect(c.classify(codepoint: 0x41, characterCode: 0x41, glyphID: clef) == .clefG)
         }
 
         /// The cache must still serve a repeat of the same (codepoint, glyph
@@ -172,8 +232,8 @@
             font.program = bravuraData
             font.programKind = .cff
             let c = GlyphClassifier(font: font, enableShapeMatching: true)
-            let first = c.classify(codepoint: 0x41, glyphID: glyphs[0])
-            #expect(c.classify(codepoint: 0x41, glyphID: glyphs[0]) == first)
+            let first = c.classify(codepoint: 0x41, characterCode: 0x41, glyphID: glyphs[0])
+            #expect(c.classify(codepoint: 0x41, characterCode: 0x41, glyphID: glyphs[0]) == first)
         }
 
         // MARK: Music-font gate (`isLikelyMusicFont`, Task 15 final review C2)

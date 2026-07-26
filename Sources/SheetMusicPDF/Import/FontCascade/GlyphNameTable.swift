@@ -10,8 +10,17 @@ import SheetMusicCore
 ///
 /// Returns nil for an unrecognized name so `GlyphClassifier` falls through to
 /// Tier 4 shape matching rather than guessing.
+///
+/// A few names are shared with ORDINARY TEXT — see `textAmbiguousTable` — and
+/// are only consulted when the caller has independent evidence that the font
+/// is a music font.
 enum GlyphNameTable {
-    static func semantic(glyphName raw: String) -> SMuFLSemantic? {
+    /// - Parameter allowingTextAmbiguousNames: consult `textAmbiguousTable`
+    ///   too. Pass true only for a font already known to be a music font;
+    ///   see that table's doc comment.
+    static func semantic(
+        glyphName raw: String, allowingTextAmbiguousNames: Bool = false,
+    ) -> SMuFLSemantic? {
         guard !raw.isEmpty else { return nil }
         // "uniE0A4" / "uE0A4" carry the codepoint directly.
         if let cp = codepointFromUniName(raw) {
@@ -20,7 +29,8 @@ enum GlyphNameTable {
             return s
         }
         let key = raw.lowercased()
-        return table[key]
+        if let hit = table[key] { return hit }
+        return allowingTextAmbiguousNames ? textAmbiguousTable[key] : nil
     }
 
     /// "uniE0A4" / "uE0A4" → 0xE0A4.
@@ -92,27 +102,48 @@ enum GlyphNameTable {
         "halfnotehead": .noteheadHalf, "wholenotehead": .noteheadWhole,
         "dot": .augmentationDot,
     ]
-        .merging(timeSignatureDigitNames) { a, _ in a }
+        .merging(smuflTimeSignatureDigitNames) { a, _ in a }
 
-    /// "zero"…"nine" and "timeSig0"…"timeSig9".
-    private static let timeSignatureDigitNames: [String: SMuFLSemantic] = {
-        let words = [
-            "zero",
-            "one",
-            "two",
-            "three",
-            "four",
-            "five",
-            "six",
-            "seven",
-            "eight",
-            "nine",
-        ]
+    /// Names a MUSIC font may use that an ordinary TEXT font uses too.
+    ///
+    /// `zero`…`nine` are the Adobe Glyph List's standard names for the ASCII
+    /// digits, so `/Encoding /Differences [48 /zero /one /two …]` is how TeX,
+    /// Word, Finale and Sibelius all re-encode the digits of a plain text
+    /// font. Read unconditionally they would turn every such digit into a
+    /// `.timeSignatureDigit`, which invents time signatures, invents
+    /// multi-measure-rest counts (`mmRestCount` reads exactly these), and
+    /// deletes the digits from the title / lyric text they belong to.
+    ///
+    /// No corpus PDF can catch this: every corpus font's `/Differences` is
+    /// empty. `GlyphClassifier` decides when to consult this table — see
+    /// `acceptsTextAmbiguousNames`.
+    private static let textAmbiguousTable: [String: SMuFLSemantic] = {
         var out: [String: SMuFLSemantic] = [:]
-        for (i, w) in words.enumerated() {
-            out[w] = .timeSignatureDigit(i)
+        for (i, word) in aglDigitNames.enumerated() {
+            out[word] = .timeSignatureDigit(i)
+        }
+        return out
+    }()
+
+    /// Adobe Glyph List names for the ASCII digits, index = value.
+    private static let aglDigitNames = [
+        "zero", "one", "two", "three", "four",
+        "five", "six", "seven", "eight", "nine",
+    ]
+
+    /// "timeSig0"…"timeSig9" — SMuFL's own names, which no text font uses.
+    private static let smuflTimeSignatureDigitNames: [String: SMuFLSemantic] = {
+        var out: [String: SMuFLSemantic] = [:]
+        for i in 0 ... 9 {
             out["timesig\(i)"] = .timeSignatureDigit(i)
         }
         return out
     }()
+
+    /// True when `name` identifies a glyph ONLY a music font has — i.e. it
+    /// resolves without needing `textAmbiguousTable`. `GlyphClassifier` uses
+    /// this to decide whether a font's own encoding vouches for it.
+    static func isUnambiguousMusicName(_ name: String) -> Bool {
+        semantic(glyphName: name, allowingTextAmbiguousNames: false) != nil
+    }
 }

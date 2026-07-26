@@ -68,14 +68,15 @@ final class GlyphClassifier {
         )
     }()
 
-    /// Cache key. BOTH components are part of it because the tiers disagree
-    /// about what the answer depends on: Tier 1 / Tier 2 read only the
-    /// codepoint, Tier 4 reads only the glyph ID's outline. A subsetted font
-    /// routinely decodes several CIDs to one Unicode scalar — unmapped CIDs
-    /// collapse onto a single scalar — so keying by codepoint alone would
-    /// hand every one of them the first CID's outline verdict.
+    /// Cache key. EVERY component is part of it because the tiers disagree
+    /// about what the answer depends on: Tier 1 reads only the codepoint,
+    /// Tier 2 only the character code, Tier 4 only the glyph ID's outline. A
+    /// subsetted font routinely decodes several CIDs to one Unicode scalar —
+    /// unmapped CIDs collapse onto a single scalar — so keying by codepoint
+    /// alone would hand every one of them the first CID's outline verdict.
     private struct CacheKey: Hashable {
         var codepoint: UInt32
+        var characterCode: UInt32?
         var glyphID: CGGlyph?
     }
 
@@ -128,27 +129,85 @@ final class GlyphClassifier {
         self.musicFontGateSampleSize = musicFontGateSampleSize
     }
 
+    /// Whether Tier 2 may read this font's TEXT-AMBIGUOUS glyph names — the
+    /// AGL digit words `zero`…`nine`; see `GlyphNameTable.textAmbiguousTable`.
+    /// Requires positive evidence that this resource is a music font, because
+    /// those names are how EVERY producer re-encodes an ordinary text font's
+    /// digits, and reading them as time-signature digits invents time
+    /// signatures and mm-rest counts out of body text.
+    ///
+    /// Two independent kinds of evidence, cheapest first:
+    ///
+    /// 1. The font's own `/Differences` names a glyph only a music font has
+    ///    (a notehead, a clef, a rest, …). This costs nothing, needs no
+    ///    embedded program, and covers the legacy faces this tier exists for
+    ///    — Maestro, Opus and Sonata all name their full notation repertoire.
+    /// 2. Otherwise, the Tier-4 per-font music-font gate, when Tier 4 is on
+    ///    and accepts this font. Deliberately NOT consulted when Tier 4 is
+    ///    off: that gate rasterizes a 40-glyph sample against 60 exemplars,
+    ///    and paying that on every `/Differences` text font of every ordinary
+    ///    PDF would be a real cost on the default path, to rescue only the
+    ///    narrow case of a music resource whose encoding names digits and
+    ///    NOTHING else — which Tier 2 alone could not usefully decode anyway.
+    private lazy var acceptsTextAmbiguousNames: Bool = {
+        if let font, font.differences.values.contains(
+            where: GlyphNameTable.isUnambiguousMusicName,
+        ) {
+            // Order-independent: an any-match over a Dictionary's values is
+            // a set predicate, so this respects the determinism contract
+            // even though `differences` has no defined iteration order.
+            return true
+        }
+        return effectiveShapeMatching
+    }()
+
     /// True when this font can be classified without a `/ToUnicode` CMap.
-    /// With Tier 4 off (the default), only a non-empty `/Differences` map
-    /// (Tier 2) qualifies — a CMap-less font with nothing but an embedded
-    /// program has no tier available to consult, so walking it byte-by-byte
-    /// in the no-CMap path (`emitShowSimpleFont`) would be pure overhead.
-    /// With Tier 4 on, a usable embedded font program also qualifies.
+    /// With Tier 4 off (the default), only a `/Differences` map naming at
+    /// least one glyph Tier 2 can actually resolve qualifies — a CMap-less
+    /// font with nothing but an embedded program has no tier available to
+    /// consult, so walking it byte-by-byte in the no-CMap path
+    /// (`emitShowSimpleFont`) would be pure overhead. With Tier 4 on, a
+    /// usable embedded font program also qualifies.
+    ///
+    /// "Names something resolvable", not merely "has a `/Differences`":
+    /// re-encoding an ordinary TEXT font through `/Differences` is completely
+    /// routine, and such a font has nothing for any tier to say. Sending it
+    /// down the byte path would only swap its whole-run string decoding for a
+    /// byte-at-a-time one, for no classification gain.
     var canClassifyWithoutCMap: Bool {
-        if let font, !font.differences.isEmpty { return true }
+        if let font, font.differences.values.contains(where: { name in
+            GlyphNameTable.semantic(
+                glyphName: name, allowingTextAmbiguousNames: acceptsTextAmbiguousNames,
+            ) != nil
+        }) { return true }
         return effectiveShapeMatching && ctFont != nil
     }
 
-    func classify(codepoint: UInt32, glyphID: CGGlyph?) -> SMuFLSemantic {
-        let key = CacheKey(codepoint: codepoint, glyphID: glyphID)
+    /// - Parameters:
+    ///   - codepoint: the Unicode scalar this glyph decoded to — Tier 1's key.
+    ///   - characterCode: the raw code the content stream showed, in the
+    ///     font's OWN encoding — Tier 2's key into `/Encoding /Differences`.
+    ///     Pass nil unless the caller really has a character code: on the
+    ///     CMap path the number in hand is a Unicode scalar, and the two key
+    ///     spaces coincide only over ASCII, where a spurious `/Differences`
+    ///     hit does the most damage (digits, punctuation).
+    ///   - glyphID: the glyph ID in the embedded program — Tier 4's key.
+    func classify(
+        codepoint: UInt32, characterCode: UInt32?, glyphID: CGGlyph?,
+    ) -> SMuFLSemantic {
+        let key = CacheKey(
+            codepoint: codepoint, characterCode: characterCode, glyphID: glyphID,
+        )
         if let hit = cache[key] { return hit }
-        let result = uncachedClassify(codepoint: codepoint, glyphID: glyphID)
+        let result = uncachedClassify(
+            codepoint: codepoint, characterCode: characterCode, glyphID: glyphID,
+        )
         cache[key] = result
         return result
     }
 
     private func uncachedClassify(
-        codepoint: UInt32, glyphID: CGGlyph?,
+        codepoint: UInt32, characterCode: UInt32?, glyphID: CGGlyph?,
     ) -> SMuFLSemantic {
         // Tier 1 — SMuFL PUA codepoint.
         if !disableSMuFLTier {
@@ -157,8 +216,10 @@ final class GlyphClassifier {
         }
 
         // Tier 2 — glyph name.
-        if let name = font?.differences[codepoint],
-           let tier2 = GlyphNameTable.semantic(glyphName: name)
+        if let characterCode, let name = font?.differences[characterCode],
+           let tier2 = GlyphNameTable.semantic(
+               glyphName: name, allowingTextAmbiguousNames: acceptsTextAmbiguousNames,
+           )
         {
             return tier2
         }
@@ -213,148 +274,6 @@ final class GlyphClassifier {
     static let tier4AmbiguousRests: Set<SMuFLSemantic> = [
         .rest(.whole), .rest(.half),
     ]
-
-    /// Decides whether `ctFont` is plausibly a MUSIC font — i.e. whether
-    /// Tier 4 should be allowed to answer for ANY of its glyphs — by
-    /// sampling its glyph population rather than consulting a font-name
-    /// allowlist.
-    ///
-    /// A name list is brittle: it drifts across vendors (Bravura, Leland,
-    /// MScore, Emmentaler, Petaluma, …) and versions, and a subsetted PDF
-    /// font's `/BaseFont` name is frequently mangled by the subsetting
-    /// prefix or missing entirely. A population statistic generalizes: a
-    /// real music font's glyphs are, in bulk, outline-shaped like Bravura's
-    /// (noteheads, stems, clefs, rests, …); a text font's are not, no
-    /// matter what it happens to be named.
-    ///
-    /// Guards exactly the failure Task 12 measured: at the placeholder
-    /// threshold with NO gate, Tier 4 matched a CJK lyric font's (e.g.
-    /// Hiragino) outlines to Bravura exemplars just as readily as a real
-    /// music font's outlines, leaving 0 of 4254 glyphs `.unknown` on
-    /// ギブス.pdf and collapsing lyric recall from 92% to 0%.
-    ///
-    /// TWO populations are tried, in order:
-    ///
-    /// 1. `cmapReachableExemplarVerdict` — the 60 exemplar codepoints
-    ///    (`BravuraExemplars.codepoints`), looked up in `ctFont`'s OWN
-    ///    cmap. This is the population that actually separates a full or
-    ///    lightly-subsetted SMuFL font from a full text font: a real SMuFL
-    ///    face declares Unicode mappings for its PUA notation codepoints and
-    ///    those glyphs are shaped like Bravura's by construction, while an
-    ///    ordinary text font has no cmap entries in that range AT ALL (this
-    ///    is required — 5 full system faces measured zero reachable
-    ///    exemplar codepoints: Helvetica, Hiragino Sans, Times New Roman,
-    ///    Courier New, Arial). Task 15's final review caught the bug this
-    ///    replaces: the OLD single population (below) strided evenly across
-    ///    a FULL font's entire glyph-ID range, so a full, unsubsetted SMuFL
-    ///    font — the bundled Bravura.otf itself — sampled mostly exotic,
-    ///    non-exemplar-shaped glyphs (ornaments, obscure figured-bass
-    ///    marks, …) and scored 0.20, well under the 0.5 acceptance
-    ///    fraction. Reading the exemplar codepoints back through the font's
-    ///    cmap instead of striding blind fixes that: full Bravura scores a
-    ///    clean 1.0 (all 60 resolve, all within bound).
-    /// 2. Falls back to the raw-glyph-ID stride sample (unchanged from
-    ///    before this fix) when fewer than `cmapExemplarMinimum` codepoints
-    ///    resolve. This is the population every corpus PDF's embedded music
-    ///    font (Leland, MScore, subsetted Bravura, Finale's Kousaku) still
-    ///    needs: Task 8 proved a font subsetted into a PDF does NOT
-    ///    preserve its original Unicode cmap, so `cmapReachableExemplarVerdict`
-    ///    always returns nil for them (measured: 0 of 60 codepoints
-    ///    resolve on every embedded font across the real corpus, music or
-    ///    text) and this fallback is what Task 14 actually calibrated.
-    static func isLikelyMusicFont(
-        ctFont: CTFont,
-        sampleSize: Int = defaultMusicFontGateSampleSize,
-        bound: Double = defaultMusicFontGateBound,
-        fraction: Double = defaultMusicFontGateFraction,
-    ) -> Bool {
-        if let verdict = cmapReachableExemplarVerdict(ctFont: ctFont, bound: bound, fraction: fraction) {
-            return verdict
-        }
-        return isLikelyMusicFontByRawGlyphIDs(
-            ctFont: ctFont, sampleSize: sampleSize, bound: bound, fraction: fraction,
-        )
-    }
-
-    /// Minimum number of the 60 exemplar codepoints (`BravuraExemplars.
-    /// codepoints`) that must resolve through `ctFont`'s own cmap before
-    /// that population is trusted over the raw-glyph-ID fallback. Guards
-    /// against a coincidental cmap hit on a handful of PUA codepoints in an
-    /// unrelated font (icon fonts are known to squat on Private Use Area
-    /// codepoints too) being read as "this is a music font" from too small
-    /// a sample. Every real case measured is bimodal, not borderline: 0
-    /// reachable (every subsetted PDF font and every full text font tried)
-    /// or 60 (the full bundled Bravura.otf) — this threshold sits well
-    /// clear of both.
-    private static let cmapExemplarMinimum = 10
-
-    /// The cmap-reachable-exemplar population (see `isLikelyMusicFont`'s
-    /// doc comment). Returns nil — "no verdict, consult the fallback" —
-    /// when fewer than `cmapExemplarMinimum` of the 60 exemplar codepoints
-    /// resolve to a real outline through `ctFont`'s own cmap.
-    private static func cmapReachableExemplarVerdict(
-        ctFont: CTFont, bound: Double, fraction: Double,
-    ) -> Bool? {
-        var sampled = 0
-        var hits = 0
-        for codepoint in BravuraExemplars.codepoints {
-            guard let scalar = Unicode.Scalar(codepoint) else { continue }
-            var units = Array(String(scalar).utf16)
-            var glyphs = [CGGlyph](repeating: 0, count: units.count)
-            guard CTFontGetGlyphsForCharacters(ctFont, &units, &glyphs, units.count),
-                  let gid = glyphs.first, gid != 0,
-                  let hit = gateSampleHit(ctFont: ctFont, gid: gid, bound: bound)
-            else { continue }
-            sampled += 1
-            if hit { hits += 1 }
-        }
-        guard sampled >= cmapExemplarMinimum else { return nil }
-        return Double(hits) / Double(sampled) >= fraction
-    }
-
-    /// The pre-Task-15 population: `sampleSize` glyph IDs evenly strided
-    /// across the font's own glyph-ID range, starting at 1 (gid 0 is
-    /// `.notdef` in every font). Reached by RAW GLYPH ID because a
-    /// subsetted PDF font's cmap does not survive subsetting (Task 8) —
-    /// this is the population that still has to serve every embedded music
-    /// font in the real corpus.
-    private static func isLikelyMusicFontByRawGlyphIDs(
-        ctFont: CTFont, sampleSize: Int, bound: Double, fraction: Double,
-    ) -> Bool {
-        let glyphCount = Int(CTFontGetGlyphCount(ctFont))
-        guard glyphCount > 1 else { return false }
-        let sampleTarget = min(glyphCount - 1, sampleSize)
-        guard sampleTarget > 0 else { return false }
-        let stride = max(1, (glyphCount - 1) / sampleTarget)
-        var sampled = 0
-        var hits = 0
-        var gid = 1
-        while gid < glyphCount, sampled < sampleTarget {
-            defer { gid += stride }
-            guard let hit = gateSampleHit(ctFont: ctFont, gid: CGGlyph(gid), bound: bound)
-            else { continue }
-            sampled += 1
-            if hit { hits += 1 }
-        }
-        guard sampled > 0 else { return false }
-        return Double(hits) / Double(sampled) >= fraction
-    }
-
-    /// Shared per-glyph gate primitive for both populations above: true /
-    /// false is "sampled, and within / outside `bound` of some exemplar";
-    /// nil is "not sampled" (glyph ID has no outline — `.notdef` or a blank
-    /// glyph — so it doesn't count toward the sample size either way).
-    private static func gateSampleHit(ctFont: CTFont, gid: CGGlyph, bound: Double) -> Bool? {
-        guard let path = CTFontCreatePathForGlyph(ctFont, gid, nil), !path.isEmpty
-        else { return nil }
-        let descriptor = makeDescriptor(path: path)
-        var best = Double.infinity
-        for e in BravuraExemplars.all {
-            let d = descriptor.distance(to: e.descriptor)
-            if d < best { best = d }
-        }
-        return best <= bound
-    }
 
     /// Outlines are reached by RAW GLYPH ID only.
     ///

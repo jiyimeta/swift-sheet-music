@@ -64,6 +64,23 @@
             #expect(abs(state.texts[1].origin.x - 10) < 0.001)
         }
 
+        /// The damage I2 describes, end to end: a re-encoded TEXT font whose
+        /// `/Differences` names its digits the AGL way must keep "2024" as
+        /// TEXT. Promoted to music it would become four time-signature digits
+        /// — a fabricated time signature and a fabricated mm-rest count — and
+        /// vanish from the title it belongs to.
+        @Test func digitsOfATextFontStayText() {
+            let state = PDFPageState(pageIndex: 0)
+            state.fontSize = 10
+            state.activeClassifier = classifier(differences: [
+                0x30: "zero", 0x31: "one", 0x32: "two", 0x34: "four",
+                0x41: "A", 0x20: "space",
+            ])
+            emitShow([0x32, 0x30, 0x32, 0x34], state: state)
+            #expect(state.glyphs.isEmpty)
+            #expect(state.texts.map(\.text) == ["2024"])
+        }
+
         @Test func musicGlyphOriginIsUnaffected() {
             let state = pageState()
             emitShow([0x41, 0x51], state: state)
