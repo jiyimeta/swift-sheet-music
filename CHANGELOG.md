@@ -42,11 +42,48 @@ and this project adheres to
     importer diagnostics, releasing both on `close()`) and
     `PdfDiagnostic`.
 
+- A tiered glyph-classification cascade for PDF import. The importer no
+  longer depends on a PDF naming its glyphs the way MuseScore's Bravura
+  export does: it extracts the embedded font program and encoding from
+  the font dictionary, resolves a simple font's character codes to real
+  glyph IDs, and classifies through a glyph-name table before falling
+  back to shape matching against rasterized Bravura exemplars. Tier 4
+  (shape matching) is **off by default** behind
+  `PDFImportOptions.enableShapeMatching`; a per-font music-font gate
+  keeps it from firing on text fonts. `RawGlyph` is replaced by the
+  format-neutral `GlyphGeometry`, and glyphs are classified at front-end
+  emission rather than downstream.
+
+- MuseScore's skyline autoplace, ported as a system layout pass.
+  `LayoutShape`, `Skyline` (north/south lines with a staff-line filter)
+  and `AutoplaceRules` (distance and ignore tables) replace the four
+  per-measure autoplace approximations, and autoplaced element shapes are
+  now measured from font metrics.
+
+- Android: transposed notation and playback, with drum staves exposed to
+  hosts; count-in (pre-roll) before playback; and the metronome's MIDI is
+  now shared, with Android's click rendered from it rather than from a
+  parallel implementation.
+
+- A corpus annotation-collision detector under `Tools`, which walks
+  system spanners and uses true 2D AABB overlap.
+
 ### Fixed
 
-- `LayoutOptionsWire`'s `transposeSemitones` field, added in 1.4.0, left
-  two test call sites constructing the old memberwise initializer, which
-  broke the `SheetMusicTests` target's compile.
+- Layout: a hairpin no longer collides with the dynamic at its own
+  start/end tick; a hidden mid-measure voice no longer draws a full-width
+  bar; melismas bucket by their own row offset rather than raw Y; SMuFL
+  runs are measured by glyph ink rather than the Bravura em box; the
+  tempo beat glyph's ink is centred on its origin as `ScoreLayerBuilder`
+  draws it; and grace chords are no longer double-shifted.
+
+- PDF import: Tier 2 no longer reads ordinary digits as time-signature
+  digits; the classifier cache is keyed by glyph ID as well as codepoint;
+  a simple-font text run is placed at its start rather than its end; and
+  `GlyphClassifier` gate races and full-Bravura rejection are fixed.
+
+- Android: count-in sounds with the metronome switched off, and the
+  metronome plays off a transport instead of firing clicks directly.
 
 ## [1.4.0] - 2026-07-25
 
