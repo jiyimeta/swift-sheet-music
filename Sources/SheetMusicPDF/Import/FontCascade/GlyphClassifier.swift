@@ -30,6 +30,10 @@ final class GlyphClassifier {
     /// off until Task 14 has both a measured threshold and a per-font gate
     /// deciding whether a font is plausibly a music font in the first place.
     private let enableShapeMatching: Bool
+    /// TESTING ONLY. Suppresses Tier 1 (SMuFL codepoint) so the cascade falls
+    /// through to Tier 2 / Tier 4 for measurement against Tier 1's
+    /// known-correct answer. See `PDFImportOptions.disableSMuFLCodepointTier`.
+    private let disableSMuFLTier: Bool
     private lazy var ctFont: CTFont? = {
         guard let program = font?.program, let kind = font?.programKind
         else { return nil }
@@ -44,9 +48,13 @@ final class GlyphClassifier {
     /// Inert while `enableShapeMatching` is false (the default).
     nonisolated(unsafe) static var shapeAcceptanceThreshold = 0.45
 
-    init(font: PDFImporter.EmbeddedFont?, enableShapeMatching: Bool = false) {
+    init(
+        font: PDFImporter.EmbeddedFont?, enableShapeMatching: Bool = false,
+        disableSMuFLTier: Bool = false,
+    ) {
         self.font = font
         self.enableShapeMatching = enableShapeMatching
+        self.disableSMuFLTier = disableSMuFLTier
     }
 
     /// True when this font can be classified without a `/ToUnicode` CMap.
@@ -71,8 +79,10 @@ final class GlyphClassifier {
         codepoint: UInt32, glyphID: CGGlyph?,
     ) -> SMuFLSemantic {
         // Tier 1 — SMuFL PUA codepoint.
-        let tier1 = PDFImporter.smuflSemantic(codepoint: codepoint)
-        if case .unknown = tier1 {} else { return tier1 }
+        if !disableSMuFLTier {
+            let tier1 = PDFImporter.smuflSemantic(codepoint: codepoint)
+            if case .unknown = tier1 {} else { return tier1 }
+        }
 
         // Tier 2 — glyph name.
         if let name = font?.differences[codepoint],

@@ -18,6 +18,10 @@ extension PDFImporter {
         /// every page's `GlyphClassifier`s. Default false so existing call
         /// sites that don't pass it keep today's Tier-1-only behavior.
         var enableShapeMatching = false
+        /// Threaded from `PDFImportOptions.disableSMuFLCodepointTier`;
+        /// forwarded to every page's `GlyphClassifier`s. TESTING ONLY —
+        /// default false.
+        var disableSMuFLCodepointTier = false
 
         func walk() throws -> WalkedContent {
             var glyphs: [ClassifiedGlyph] = []
@@ -46,7 +50,10 @@ extension PDFImporter {
             state.fontCMaps = PDFImporter.extractFontCMaps(cgPage: cgPage)
             let embedded = PDFImporter.extractEmbeddedFonts(cgPage: cgPage)
             state.classifiers = embedded.mapValues {
-                GlyphClassifier(font: $0, enableShapeMatching: enableShapeMatching)
+                GlyphClassifier(
+                    font: $0, enableShapeMatching: enableShapeMatching,
+                    disableSMuFLTier: disableSMuFLCodepointTier,
+                )
             }
             guard let table = CGPDFOperatorTableCreate() else { return }
             defer { CGPDFOperatorTableRelease(table) }

@@ -37,6 +37,10 @@ public struct PDFImportOptions {
     /// left `.unknown` and lyric recall collapsed to 0%. It stays off until
     /// Task 14 has both a measured threshold and a per-font gate.
     public var enableShapeMatching = false
+    /// TESTING ONLY. Suppress Tier 1 (SMuFL codepoint) classification so the
+    /// shape-matching tier can be measured against Tier 1's known-correct
+    /// answer. Never set this in production; it degrades every SMuFL PDF.
+    public var disableSMuFLCodepointTier = false
     public var diagnostics: (@Sendable (PDFImportDiagnostic) -> Void)?
 
     public init() {}

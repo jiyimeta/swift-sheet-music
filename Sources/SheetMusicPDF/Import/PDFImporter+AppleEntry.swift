@@ -24,7 +24,10 @@ extension PDFImporter {
         options: PDFImportOptions = .init(),
     ) throws -> Score {
         let document = try openDocument(pdfData)
-        let walk = try walkDocument(document, enableShapeMatching: options.enableShapeMatching)
+        let walk = try walkDocument(
+            document, enableShapeMatching: options.enableShapeMatching,
+            disableSMuFLCodepointTier: options.disableSMuFLCodepointTier,
+        )
         return try buildScore(
             pageCount: document.pageCount,
             walked: walk.content,
@@ -41,7 +44,10 @@ extension PDFImporter {
     ) throws -> (score: Score, geometry: PDFScoreGeometry) {
         let document = try openDocument(pdfData)
         let collector = PDFGeometryCollector()
-        let walk = try walkDocument(document, enableShapeMatching: options.enableShapeMatching)
+        let walk = try walkDocument(
+            document, enableShapeMatching: options.enableShapeMatching,
+            disableSMuFLCodepointTier: options.disableSMuFLCodepointTier,
+        )
         let score = try buildScore(
             pageCount: document.pageCount,
             walked: walk.content,
@@ -85,9 +91,11 @@ extension PDFImporter {
     static func walkDocument(
         _ document: PDFDocument,
         enableShapeMatching: Bool = false,
+        disableSMuFLCodepointTier: Bool = false,
     ) throws -> (content: WalkedContent, pageSizes: [Int: CGSize], attributes: [String: Any]?) {
         let content = try ContentStreamWalker(
             document: document, enableShapeMatching: enableShapeMatching,
+            disableSMuFLCodepointTier: disableSMuFLCodepointTier,
         ).walk()
         var pageSizes: [Int: CGSize] = [:]
         for p in 0 ..< document.pageCount {
