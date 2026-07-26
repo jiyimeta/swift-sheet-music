@@ -101,5 +101,90 @@
                 .reduce(0) { $0 + $1.lyrics.count }
             #expect(lyricCount > 0)
         }
+
+        /// With `enableShapeMatching` turned ON, the per-font music-font gate
+        /// (`GlyphClassifier.isLikelyMusicFont`, Task 14) must keep lyrics
+        /// intact: Tier 4 should only ever answer for the actual music-
+        /// notation font's glyphs (Leland here), never for the CJK lyric
+        /// font's (Hiragino) or the Latin text font's (Edwin) outlines —
+        /// even though the global flag no longer distinguishes them.
+        ///
+        /// Task 12 measured what happens WITHOUT a gate: at the placeholder
+        /// threshold, lyric recall collapsed from 92% to 0% and 0 of 4254
+        /// glyphs on this PDF were left `.unknown`. This test does not
+        /// assert anything about Tier 4's classification ACCURACY — that is
+        /// `tier4Ablation`'s job — only that non-music fonts stay excluded
+        /// once the global switch is flipped on. Measured with the gate on
+        /// (Task 14): 779 lyrics attach, identical to the default-off parse
+        /// of this same PDF — the gate loses nothing on the real corpus.
+        @Test func shapeMatchingWithGateDoesNotCollapseLyrics() throws {
+            let path = Self.corpusPath
+            guard FileManager.default.fileExists(atPath: path) else { return }
+            let data = try Data(contentsOf: URL(fileURLWithPath: path))
+
+            var options = PDFImportOptions()
+            options.enableShapeMatching = true
+            let score = try PDFImporter.parse(pdfData: data, options: options)
+
+            let lyricCount = score.parts
+                .flatMap(\.staves)
+                .flatMap(\.measures)
+                .flatMap(\.voices)
+                .flatMap(\.elements)
+                .compactMap { element -> Chord? in
+                    if case let .chord(chord) = element { return chord }
+                    return nil
+                }
+                .reduce(0) { $0 + $1.lyrics.count }
+            // A healthy population, not merely > 0 — a handful surviving by
+            // accident wouldn't distinguish "the gate works" from "the gate
+            // is a no-op that happens to miss a few glyphs". The DEFAULT
+            // (enableShapeMatching: false) parse of this same PDF attaches
+            // 779 lyric syllables; requiring most of that population to
+            // survive with the gate ON is a real assertion.
+            #expect(lyricCount > 200)
+        }
+
+        /// Proves `shapeMatchingWithGateDoesNotCollapseLyrics` is a genuine
+        /// regression catch, not a tautology: with the gate forced open
+        /// (`musicFontGateFraction = 0` accepts every font regardless of its
+        /// sampled distances) AND `shapeAcceptanceThreshold` restored to the
+        /// pre-Task-14 placeholder (0.45), Tier 4 again matches the CJK
+        /// lyric font's outlines to Bravura exemplars and lyric count
+        /// collapses to exactly 0 — byte-for-byte reproducing Task 12's
+        /// original finding on this PDF.
+        @Test func noGateAtPlaceholderThresholdReproducesTask12Collapse() throws {
+            let path = Self.corpusPath
+            guard FileManager.default.fileExists(atPath: path) else { return }
+            let data = try Data(contentsOf: URL(fileURLWithPath: path))
+
+            let savedFraction = GlyphClassifier.musicFontGateFraction
+            let savedBound = GlyphClassifier.musicFontGateBound
+            let savedAccept = GlyphClassifier.shapeAcceptanceThreshold
+            GlyphClassifier.musicFontGateFraction = 0
+            GlyphClassifier.musicFontGateBound = 1.0
+            GlyphClassifier.shapeAcceptanceThreshold = 0.45
+            defer {
+                GlyphClassifier.musicFontGateFraction = savedFraction
+                GlyphClassifier.musicFontGateBound = savedBound
+                GlyphClassifier.shapeAcceptanceThreshold = savedAccept
+            }
+
+            var options = PDFImportOptions()
+            options.enableShapeMatching = true
+            let score = try PDFImporter.parse(pdfData: data, options: options)
+
+            let lyricCount = score.parts
+                .flatMap(\.staves)
+                .flatMap(\.measures)
+                .flatMap(\.voices)
+                .flatMap(\.elements)
+                .compactMap { element -> Chord? in
+                    if case let .chord(chord) = element { return chord }
+                    return nil
+                }
+                .reduce(0) { $0 + $1.lyrics.count }
+            #expect(lyricCount == 0)
+        }
     }
 #endif

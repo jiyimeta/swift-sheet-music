@@ -26,6 +26,10 @@ extension PDFImporter {
         /// forwarded to every page's `PDFPageState`. TESTING ONLY — default
         /// false.
         var anchorMusicToPUARange = false
+        /// Threaded from `PDFImportOptions.bypassMusicFontGateForTesting`;
+        /// forwarded to every page's `GlyphClassifier`s. TESTING ONLY —
+        /// default false.
+        var bypassMusicFontGate = false
 
         func walk() throws -> WalkedContent {
             var glyphs: [ClassifiedGlyph] = []
@@ -58,6 +62,7 @@ extension PDFImporter {
                 GlyphClassifier(
                     font: $0, enableShapeMatching: enableShapeMatching,
                     disableSMuFLTier: disableSMuFLCodepointTier,
+                    bypassMusicFontGate: bypassMusicFontGate,
                 )
             }
             guard let table = CGPDFOperatorTableCreate() else { return }

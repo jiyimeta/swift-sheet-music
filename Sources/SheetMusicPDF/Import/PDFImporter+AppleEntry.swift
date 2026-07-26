@@ -28,6 +28,7 @@ extension PDFImporter {
             document, enableShapeMatching: options.enableShapeMatching,
             disableSMuFLCodepointTier: options.disableSMuFLCodepointTier,
             anchorMusicGlyphsToPUARange: options.anchorMusicGlyphsToPUARange,
+            bypassMusicFontGate: options.bypassMusicFontGateForTesting,
         )
         return try buildScore(
             pageCount: document.pageCount,
@@ -49,6 +50,7 @@ extension PDFImporter {
             document, enableShapeMatching: options.enableShapeMatching,
             disableSMuFLCodepointTier: options.disableSMuFLCodepointTier,
             anchorMusicGlyphsToPUARange: options.anchorMusicGlyphsToPUARange,
+            bypassMusicFontGate: options.bypassMusicFontGateForTesting,
         )
         let score = try buildScore(
             pageCount: document.pageCount,
@@ -95,11 +97,13 @@ extension PDFImporter {
         enableShapeMatching: Bool = false,
         disableSMuFLCodepointTier: Bool = false,
         anchorMusicGlyphsToPUARange: Bool = false,
+        bypassMusicFontGate: Bool = false,
     ) throws -> (content: WalkedContent, pageSizes: [Int: CGSize], attributes: [String: Any]?) {
         let content = try ContentStreamWalker(
             document: document, enableShapeMatching: enableShapeMatching,
             disableSMuFLCodepointTier: disableSMuFLCodepointTier,
             anchorMusicToPUARange: anchorMusicGlyphsToPUARange,
+            bypassMusicFontGate: bypassMusicFontGate,
         ).walk()
         var pageSizes: [Int: CGSize] = [:]
         for p in 0 ..< document.pageCount {

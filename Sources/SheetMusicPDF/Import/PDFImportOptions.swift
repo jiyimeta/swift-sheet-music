@@ -57,6 +57,23 @@ public struct PDFImportOptions {
     /// this only ever changes behavior in combination with
     /// `disableSMuFLCodepointTier`. Never set this in production.
     public var anchorMusicGlyphsToPUARange = false
+    /// TESTING ONLY. Skips the per-font music-font gate
+    /// (`GlyphClassifier.isLikelyMusicFont`) so `enableShapeMatching` behaves
+    /// exactly as it did before Task 14 added that gate — Tier 4 answers for
+    /// every embedded font's glyphs, not just the ones the gate accepts.
+    ///
+    /// Exists so the Tier-4 ablation (`tier4Ablation`) keeps measuring Tier
+    /// 4's raw per-glyph classification accuracy against Tier 1's
+    /// known-correct answer, independent of font-level eligibility — the
+    /// ablation already anchors to the PUA range (see
+    /// `anchorMusicGlyphsToPUARange`), so it doesn't need the gate for
+    /// correctness, and letting the gate filter individual font resources
+    /// mid-ablation (measured: it wrongly declines a real 3-glyph "Bravura"
+    /// resource in ロビンソン.pdf — too small a sample to pass the fraction
+    /// test) would entangle two different measurements. The gate is a
+    /// PRODUCTION safeguard; this flag keeps it out of that measurement.
+    /// Never set this in production.
+    public var bypassMusicFontGateForTesting = false
     public var diagnostics: (@Sendable (PDFImportDiagnostic) -> Void)?
 
     public init() {}
