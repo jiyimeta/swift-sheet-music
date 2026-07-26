@@ -6,10 +6,6 @@ import Foundation
 extension PDFImporter {
     // MARK: - Grand-staff (brace) coupling
 
-    /// SMuFL `brace` — the curly brace MuseScore engraves at the left
-    /// margin of every system for a grand-staff instrument.
-    private static let braceCodepoint: UInt32 = 0xE000
-
     /// Group a system's staves into parts.
     ///
     /// MuseScore engraves a grand-staff instrument (piano / organ / harp)
@@ -84,7 +80,7 @@ extension PDFImporter {
     /// pair (2,3) ⇒ anchors 1 and 3). A **square group bracket** over N
     /// independent single-staff parts — which some fonts emit as a stack
     /// of per-staff brace-piece glyphs (observed: 革命前夜, a 6-vocal a
-    /// cappella whose bracket walked as 0xE000 at staff bottoms 1…5) —
+    /// cappella whose bracket classified as `.brace` at staff bottoms 1…5) —
     /// yields anchors at ADJACENT indices, which is impossible for
     /// non-overlapping grand staves. When any two anchors are adjacent the
     /// whole set is a bracket artifact, so no coupling is applied and each
@@ -95,7 +91,7 @@ extension PDFImporter {
     ) {
         let leftX = staves.first?.xRange.lowerBound ?? 0
         let braces = pageGlyphs.filter {
-            $0.raw.codepoint == braceCodepoint && $0.raw.origin.x < leftX
+            $0.semantic == .brace && $0.raw.origin.x < leftX
         }
         // Anchor every brace to its nearest staff bottom (within ½ staff).
         var anchors = Set<Int>()
