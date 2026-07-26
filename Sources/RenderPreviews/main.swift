@@ -27,9 +27,32 @@
         exit(1)
     }
 
+    /// Routes to a single-purpose dev-tool mode when its trigger env var
+    /// is set. Returns `true` when a tool ran, so the caller can return
+    /// immediately instead of falling into the default sample-render loop.
+    @available(macOS 15.0, *)
+    @MainActor
+    func routeToDevTool() throws -> Bool {
+        // Corpus annotation-collision detector (SM_COLLIDE_DIR=… swift run
+        // render-previews), the BEFORE/AFTER measurement tool for the
+        // skyline autoplace pass.
+        if CollisionReport.isRequested {
+            try CollisionReport.run()
+            return true
+        }
+        // Ad-hoc single-score render (SM_SCORE=… swift run render-previews),
+        // used to eyeball layout against MuseScore's own PDF output.
+        if AdHocRender.isRequested {
+            try AdHocRender.run()
+            return true
+        }
+        return false
+    }
+
     @available(macOS 15.0, *)
     @MainActor
     func run() throws {
+        if try routeToDevTool() { return }
         let args = CommandLine.arguments
         let outputDir: URL = args.count > 1
             ? URL(fileURLWithPath: args[1], isDirectory: true)
@@ -159,11 +182,12 @@
     func renderScoreToPNG(
         _ score: Score, to url: URL, scale: CGFloat,
         options: ScoreViewOptions? = nil,
+        availableWidth: CGFloat? = nil,
     ) throws {
         let opts = options ?? ScoreViewOptions(
             staffSize: 28, systemGap: 40, wrapToViewWidth: false,
         )
-        let naturalWidth = LayoutEngine.naturalContentWidth(
+        let naturalWidth = availableWidth ?? LayoutEngine.naturalContentWidth(
             score: score, options: opts,
         )
         let doc = LayoutEngine.layout(

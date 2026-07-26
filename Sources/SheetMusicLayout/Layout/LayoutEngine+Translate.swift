@@ -216,7 +216,13 @@ extension LayoutEngine {
                 mag: mag,
                 voiceIndex: vi,
             )
-        case .note, .marker, .jump, .measureNumber, .staffName,
+        case let .measureNumber(text, p):
+            // Emitted into the pass-1 per-staff buffer (staff 0 only)
+            // in staff-local coords (staff top at sp * 2), same
+            // convention as `.staffText` / `.rehearsalMark` above —
+            // shift onto the system's actual top-staff y.
+            return .measureNumber(text: text, origin: shift(p))
+        case .note, .marker, .jump, .staffName,
              .spannerSegment, .tieArc:
             return element
         }
