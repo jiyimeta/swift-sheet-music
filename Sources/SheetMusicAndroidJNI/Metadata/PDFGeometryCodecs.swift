@@ -27,6 +27,12 @@ public struct PdfRectWire: Equatable {
 /// MediaBox sizes as the importer saw them, indexed positionally by page. The caller scales geometry
 /// rects by (rendered page width in px / `widths[page]`), so a renderer that disagrees about the box
 /// can be detected rather than silently mis-placing the cursor.
+///
+/// Two cases mean "unknown — do not scale, use the geometry rect as-is": a page whose size the importer
+/// never recorded encodes as `0` at that index (scaling by it would divide by zero); and, because a
+/// trailing run of unrecorded pages is simply not appended, `widths`/`heights` can be SHORTER than the
+/// document's actual rendered page count, so a page index at or past `widths.count` also means unknown
+/// rather than an error. A caller must check both before indexing or dividing.
 @WireFormat
 public struct PdfPageSizesWire: Equatable {
     public let widths: [Double]
@@ -67,9 +73,9 @@ public struct PdfParseResultWire: Equatable {
     }
 }
 
-public enum PDFGeometryCodecs {
+enum PDFGeometryCodecs {
     /// Encode `rect` with its y flipped into top-left page space of `pageHeight`.
-    public static func encodeTopLeft(_ rect: PDFElementRect, pageHeight: Double) -> Data {
+    static func encodeTopLeft(_ rect: PDFElementRect, pageHeight: Double) -> Data {
         let flipped = rect.flipped(pageHeight: CGFloat(pageHeight))
         return PdfRectWire(
             pageIndex: Int32(flipped.pageIndex),

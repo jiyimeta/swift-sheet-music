@@ -100,8 +100,15 @@
             #expect(try ScoreCursorCodec.decode(hit) == .item(synthetic.itemID))
         }
 
-        /// A tap far from every rect on the page must miss cleanly instead of falling back to something.
-        @Test func hitTestReturnsEmptyFarFromAnything() {
+        /// A tap outside every measure cell must miss cleanly instead of falling back to something.
+        ///
+        /// Despite the name this predecessor test had, it does not exercise `nearestNote`/`nearestRest`'s
+        /// distance-tolerance branch: `makeSyntheticGeometry()` leaves `noteRects` empty and its one
+        /// `itemRects` entry is a `.note`, not a `.rest`, so both loops have zero candidates to measure a
+        /// distance to and return `nil` unconditionally, regardless of the tap point or `tolerance`. What
+        /// this actually covers is `leadingItemOfMeasure`'s cell-containment check declining a point
+        /// outside every `measureRects` cell.
+        @Test func hitTestReturnsEmptyOutsideEveryMeasureCell() {
             let synthetic = Self.makeSyntheticGeometry()
             defer { pdfGeometryTable.release(synthetic.handle) }
             let hit = nativePdfHitTest(geometryHandle: synthetic.handle, pageIndex: 0, x: 590, y: 10)
