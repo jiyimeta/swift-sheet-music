@@ -102,6 +102,23 @@ class AndroidPlaybackEngine internal constructor(
         /** Returns the rendered SMF bytes for [scoreHandle]. */
         fun renderMidi(scoreHandle: Long): ByteArray
 
+        /**
+         * Returns the metronome's own SMF — the score's tempo map plus the click track — for the second
+         * player the metronome runs on. Empty when the score has no beats or the native bridge predates
+         * this entry point; the engine then plays without a metronome.
+         */
+        fun renderMetronomeMidi(scoreHandle: Long): ByteArray
+
+        /**
+         * The same sequence with a count-in region in front, for playback starting at [cursorBytes]
+         * (whose tick is [baseTick]). Empty when the position has no count-in.
+         */
+        fun renderCountInMetronomeMidi(
+            scoreHandle: Long,
+            cursorBytes: ByteArray,
+            baseTick: Long,
+        ): ByteArray
+
         /** Returns [totalTicks, totalMicros, ticksPerBeat] as a [LongArray]. */
         fun timelineSummary(scoreHandle: Long): LongArray
 
@@ -110,9 +127,6 @@ class AndroidPlaybackEngine internal constructor(
 
         /** Returns a serialized [Frame] for the frame matching [cursorBytes]. */
         fun frameForCursor(scoreHandle: Long, cursorBytes: ByteArray): ByteArray
-
-        /** Returns a serialized metronome-beat array. */
-        fun metronomeBeats(scoreHandle: Long): ByteArray
 
         /** Returns a serialized `CountInWire` for a pre-roll starting at [cursorBytes]. */
         fun countIn(scoreHandle: Long, cursorBytes: ByteArray): ByteArray
@@ -146,14 +160,23 @@ class AndroidPlaybackEngine internal constructor(
     }
 
     companion object {
+        /**
+         * How often the count-in checks whether the click transport has reached the pre-roll's end.
+         * Only the single handover to the score rides on this; the clicks are placed by the sequence.
+         */
+        private const val COUNT_IN_HANDOVER_POLL_MILLIS = 2L
+
         /** Production bridge backed by [SheetMusicAudioJNI]. */
         val defaultBridge: JniBridge = object : JniBridge {
             override fun renderMidi(h: Long) = SheetMusicAudioJNI.nativeRenderMidi(h)
+            override fun renderMetronomeMidi(h: Long) =
+                SheetMusicAudioJNI.nativeRenderMetronomeMidi(h)
+            override fun renderCountInMetronomeMidi(h: Long, c: ByteArray, baseTick: Long) =
+                SheetMusicAudioJNI.nativeRenderCountInMetronomeMidi(h, c, baseTick)
             override fun timelineSummary(h: Long) = SheetMusicAudioJNI.nativeTimelineSummary(h)
             override fun frameAtTick(h: Long, t: Long) = SheetMusicAudioJNI.nativeFrameAtTick(h, t)
             override fun frameForCursor(h: Long, c: ByteArray) =
                 SheetMusicAudioJNI.nativeFrameForCursor(h, c)
-            override fun metronomeBeats(h: Long) = SheetMusicAudioJNI.nativeMetronomeBeats(h)
             override fun countIn(h: Long, c: ByteArray) = SheetMusicAudioJNI.nativeCountIn(h, c)
             override fun staffParams(h: Long) = SheetMusicAudioJNI.nativeStaffParams(h)
             override fun pitchAndStaffOfNote(h: Long, n: ByteArray) =
@@ -271,6 +294,27 @@ class AndroidPlaybackEngine internal constructor(
     private val pollScope by lazy { CoroutineScope(SupervisorJob() + pollDispatcher) }
     private val previewScope by lazy { CoroutineScope(SupervisorJob() + pollDispatcher) }
 
+    /**
+     * Where the score transport will resume from — the tick the metronome's transport has to be started
+     * at so the two run together.
+     *
+     * Not read from the player: `fluid_player_seek` only records the request and applies it inside the
+     * player's render callback, so `currentTick` still reports the pre-seek position until playback is
+     * actually running again. Every path that repositions a stopped player updates this instead: seek,
+     * skip, stop, the loop wrap, and pause (which captures the live tick while it is still accurate).
+     */
+    @Volatile private var scoreTickIntent: Long = 0L
+
+    /**
+     * How far the click transport runs ahead of the score's, in ticks: the length of the count-in
+     * region currently sitting at the head of its sequence, or 0 when it is playing the plain body
+     * sequence. Every seek of the metronome adds it.
+     */
+    @Volatile private var metronomeTickOffset: Long = 0L
+
+    /** The plain (count-in-free) click sequence, kept so a count-in play can be undone. */
+    private var bodyMetronomeSmf: ByteArray = ByteArray(0)
+
     @Volatile private var masterVolume: Float = 1.0f
     @Volatile private var pendingRate: Float = 1.0f
     @Volatile private var masterTuningCents: Double = 0.0
@@ -331,17 +375,7 @@ class AndroidPlaybackEngine internal constructor(
             if (staves.isEmpty()) throw AudioBackendException.EmptyScore()
             if (staves.size > 16) throw AudioBackendException.TooManyStaves(staves.size)
 
-            val beatBytes = jniBridge.metronomeBeats(scoreHandle)
-            val beats = run {
-                val r = BinaryReader(beatBytes)
-                val out = ArrayList<io.github.jiyimeta.sheetmusic.audio.model.MetronomeBeat>()
-                r.readLengthPrefixed { inner ->
-                    while (inner.remaining > 0) {
-                        out.add(inner.readLengthPrefixed { MetronomeBeatCodec.decodePayload(it) })
-                    }
-                }
-                out
-            }
+            val metronomeSmfBytes = jniBridge.renderMetronomeMidi(scoreHandle)
 
             val smfBytes = jniBridge.renderMidi(scoreHandle)
             if (smfBytes.isEmpty()) throw AudioBackendException.InvalidScoreHandle()
@@ -374,7 +408,17 @@ class AndroidPlaybackEngine internal constructor(
             MetronomeSf2Loader.load(
                 metronomeSynth, clickResolver.resolve(), soundfontResolver, context,
             )
-            metronomeMixer = MetronomeMixer(metronomeSynth, beats)
+            // Its own player, over the metronome-only SMF. Scheduling the clicks on a transport (rather
+            // than firing them by hand) is what keeps them on the beat; see [MetronomeMixer].
+            bodyMetronomeSmf = metronomeSmfBytes
+            metronomeTickOffset = 0L
+            metronomeMixer = MetronomeMixer(metronomeSynth) { smf ->
+                val p = playerFactory(metronomeSynth.nativeHandle)
+                if (p.load(smf) == 0) p else { p.close(); null }
+            }.also {
+                it.loadSequence(metronomeSmfBytes)
+                it.setTempo(pendingRate.toDouble())
+            }
 
             // PlayerDriver wired to the real fluid_synth_t handle.
             // fluid_player's default routing uses event.channel directly —
@@ -438,6 +482,8 @@ class AndroidPlaybackEngine internal constructor(
             _currentTimeSeconds.value = 0.0
             _currentCursor.value = null
             _currentRate.value = pendingRate
+            // Freshly loaded players sit at tick 0.
+            scoreTickIntent = 0L
             _state.value = PlaybackState.PREPARED
         }
     }
@@ -454,11 +500,17 @@ class AndroidPlaybackEngine internal constructor(
         if (from != null) seek(from)
         // A play() while a pre-roll is already counting restarts it rather than stacking a second one.
         cancelCountIn()
+        // Any shift a previous count-in left on the click transport belongs to that play's start
+        // position, not this one's.
+        restoreBodyMetronomeSequence()
         oboeStream?.play()
 
-        val schedule = countInScheduleForCurrentPosition()
-        if (schedule == null) {
+        val countIn = beginCountInOrNull()
+        if (countIn == null) {
             player.play()
+            // The click transport starts from the same tick as the score's, and from here on the two
+            // advance together — each is driven by its own synth's rendering, off the same tempo map.
+            metronomeMixer?.start(scoreTickIntent)
             _state.value = PlaybackState.PLAYING
             startPollJob()
             return
@@ -466,23 +518,33 @@ class AndroidPlaybackEngine internal constructor(
 
         // The state flips to PLAYING for the whole count-in: the transport is "running" from the
         // reader's point of view, and pause() during the clicks has to be able to cancel it. The score
-        // itself only starts once the pre-roll has been waited out (see [countInJob]).
+        // itself only starts once the pre-roll has played out (see [countInJob]).
         _state.value = PlaybackState.PLAYING
-        // Open the metronome's mix path for the pre-roll. Firing a click is not enough on its own: the
-        // render loop skips the metronome synth entirely while it is inaudible, so with the metronome
-        // switched off the count-in would play into a buffer nobody sums.
-        metronomeMixer?.isCountingIn = true
+        // Open the metronome's mix path for the pre-roll. Loading the clicks is not enough on its own:
+        // the render loop skips the metronome synth entirely while it is inaudible, so with the
+        // metronome switched off the count-in would play into a buffer nobody sums — and, because the
+        // transport only advances while it is rendered, would not play at all.
+        val mixer = metronomeMixer
+        mixer?.isCountingIn = true
+        mixer?.start(0L)
         countInJob = pollScope.launch {
             try {
-                var elapsed = 0.0
-                for (beat in schedule.beats) {
-                    delay(secondsToMillis(beat.offsetSeconds - elapsed))
-                    elapsed = beat.offsetSeconds
-                    metronomeMixer?.fireCountInClick(beat.isDownbeat)
+                // The clicks are events in the click transport's own sequence, so their spacing is the
+                // audio clock's, not this loop's. All this waits for is the handover: the pre-roll's
+                // last tick, at which the music takes over. Polling tightly keeps that one event close
+                // — the beats themselves no longer care how promptly we wake up.
+                //
+                // Bounded by wall time as well, so a transport that never advances (an output stream
+                // that failed to start, a sequence the player rejected) leaves the user with playback
+                // that begins late rather than playback that never begins.
+                var waited = 0L
+                val deadline = countIn.timeoutMillis
+                while ((mixer?.currentTick ?: Long.MAX_VALUE) < countIn.preRollTicks &&
+                    waited < deadline
+                ) {
+                    delay(COUNT_IN_HANDOVER_POLL_MILLIS)
+                    waited += COUNT_IN_HANDOVER_POLL_MILLIS
                 }
-                // Wait out the REST of the pre-roll region, not just up to the last click: the final
-                // beat still has to sound for its full length before beat 1 of the music lands.
-                delay(secondsToMillis(schedule.totalSeconds - elapsed))
                 countInJob = null
                 player.play()
                 startPollJob()
@@ -495,23 +557,50 @@ class AndroidPlaybackEngine internal constructor(
     }
 
     /**
-     * The pre-roll schedule to run before this `play()`, or null when there should be none — the
-     * setting is off, no score is loaded, or the shared computation produced an empty schedule (a score
-     * with no usable tempo or division).
+     * Loads the count-in's click sequence and returns the tick at which the music takes over, or null
+     * when this play should start immediately (the setting is off, no score, no click transport, or the
+     * position has no count-in).
+     *
+     * The pre-roll is a region at the head of the METRONOME's sequence, with the body's clicks shifted
+     * behind it; the score's own sequence is untouched and simply starts late. That leaves the click
+     * transport running [metronomeTickOffset] ticks ahead of the score's for the rest of this play.
      */
-    private fun countInScheduleForCurrentPosition(): CountInWire? {
+    private fun beginCountInOrNull(): CountInHandover? {
         if (!countInEnabled) return null
-        val handle = scoreHandle ?: return null
+        val mixer = metronomeMixer ?: return null
+        val handle = scoreHandle.takeIf { it != 0L } ?: return null
         val cursor = _currentCursor.value ?: ScoreCursor.Beat(measureIndex = 0, tickInMeasure = 0)
-        val decoded = runCatching {
-            CountInWireCodec.decode(jniBridge.countIn(handle, ScoreCursorCodec.encode(cursor)))
+        val cursorBytes = ScoreCursorCodec.encode(cursor)
+        val schedule = runCatching {
+            CountInWireCodec.decode(jniBridge.countIn(handle, cursorBytes))
         }.getOrNull() ?: return null
-        return decoded.takeIf { it.totalSeconds > 0.0 && it.beats.isNotEmpty() }
+        if (schedule.preRollTicks <= 0 || schedule.beats.isEmpty()) return null
+        val smf = jniBridge.renderCountInMetronomeMidi(handle, cursorBytes, scoreTickIntent)
+        if (smf.isEmpty()) return null
+        mixer.loadSequence(smf)
+        metronomeTickOffset = schedule.preRollTicks.toLong()
+        val rate = pendingRate.toDouble().coerceAtLeast(0.01)
+        return CountInHandover(
+            preRollTicks = metronomeTickOffset,
+            // Twice the pre-roll's own length plus a second: long enough never to cut a healthy count-in
+            // short, short enough that a stalled transport doesn't strand playback.
+            timeoutMillis = ((schedule.totalSeconds / rate) * 2000.0).toLong() + 1000L,
+        )
     }
 
-    /** Rounds a (non-negative) second offset to whole milliseconds for [delay]; clamps negatives to 0. */
-    private fun secondsToMillis(seconds: Double): Long =
-        (seconds * 1000.0).coerceAtLeast(0.0).toLong()
+    /** What the count-in's job waits for: the click transport's tick, with a wall-clock backstop. */
+    private data class CountInHandover(val preRollTicks: Long, val timeoutMillis: Long)
+
+    /**
+     * Puts the click transport back on the plain body sequence, undoing a count-in's shift. Called
+     * before anything that repositions playback, because the count-in sequence drops everything before
+     * the tick it was built for — seeking back into that region would leave the metronome silent.
+     */
+    private fun restoreBodyMetronomeSequence() {
+        if (metronomeTickOffset == 0L) return
+        metronomeTickOffset = 0L
+        metronomeMixer?.loadSequence(bodyMetronomeSmf)
+    }
 
     /**
      * Cancels an in-flight count-in. Called from `play` (restart), `pause`, `stop` and `seek`: in every
@@ -539,8 +628,14 @@ class AndroidPlaybackEngine internal constructor(
      */
     fun pause() {
         if (_state.value == PlaybackState.EXPORTING) return
+        // Capture the position while the player's own tick is still live — after this it stops advancing
+        // and a later seek would not be reflected in it, so this is what the next play() resumes from.
+        // Only once the score has actually started: pausing mid-count-in must keep the start position
+        // the pre-roll was counting into, which the not-yet-started player does not know.
+        if (countInJob == null) playerDriver?.let { scoreTickIntent = it.currentTick }
         cancelCountIn()
         playerDriver?.stop()
+        metronomeMixer?.stop()
         oboeStream?.stop()
         stopPollJob()
         _state.value = PlaybackState.PAUSED
@@ -555,6 +650,10 @@ class AndroidPlaybackEngine internal constructor(
         cancelCountIn()
         playerDriver?.stop()
         playerDriver?.seekTick(0L)
+        scoreTickIntent = 0L
+        metronomeMixer?.stop()
+        restoreBodyMetronomeSequence()
+        metronomeMixer?.seekTick(0L)
         fluidSynthEngine?.allNotesOff()
         oboeStream?.stop()
         stopPollJob()
@@ -576,6 +675,8 @@ class AndroidPlaybackEngine internal constructor(
         if (_state.value == PlaybackState.EXPORTING) return
         pendingRate = rate
         playerDriver?.setTempo(rate.toDouble())
+        // Same scale on the click transport, or the metronome would drift away from the music.
+        metronomeMixer?.setTempo(rate.toDouble())
         _currentRate.value = rate
     }
 
@@ -595,6 +696,11 @@ class AndroidPlaybackEngine internal constructor(
         val snapped = snapTickToLoop(frame.tick)
         fluidSynthEngine?.allNotesOff()
         player.seekTick(snapped)
+        scoreTickIntent = snapped
+        // The count-in sequence only covers the region from the tick it was built for; leave it before
+        // repositioning so a seek can't land somewhere it has no clicks.
+        restoreBodyMetronomeSequence()
+        repositionMetronome(snapped)
         _currentCursor.value = to
         _currentTimeSeconds.value = frame.timeSeconds
     }
@@ -618,6 +724,11 @@ class AndroidPlaybackEngine internal constructor(
         val snapped = snapTickToLoop(frame.tick)
         fluidSynthEngine?.allNotesOff()
         player.seekTick(snapped)
+        scoreTickIntent = snapped
+        // The count-in sequence only covers the region from the tick it was built for; leave it before
+        // repositioning so a seek can't land somewhere it has no clicks.
+        restoreBodyMetronomeSequence()
+        repositionMetronome(snapped)
         _currentCursor.value = frame.cursor
         _currentTimeSeconds.value = frame.timeSeconds
     }
@@ -726,6 +837,24 @@ class AndroidPlaybackEngine internal constructor(
     fun clearLoop() {
         if (_state.value == PlaybackState.EXPORTING) return
         _loopRange.value = null
+    }
+
+    /**
+     * Moves the metronome's transport to [tick], restarting it when the score is running.
+     *
+     * The restart matters at the end of the click track: the metronome sequence ends one tick after the
+     * last click, so a loop whose region reaches the end of the score leaves the click transport finished
+     * — and a finished `fluid_player` ignores a bare seek. Re-playing it revives it on the wrap. While
+     * paused or stopped the seek alone is what we want; starting it there would click over the silence.
+     */
+    private fun repositionMetronome(tick: Long) {
+        val mixer = metronomeMixer ?: return
+        val metronomeTick = tick + metronomeTickOffset
+        if (_state.value == PlaybackState.PLAYING && countInJob == null) {
+            mixer.start(metronomeTick)
+        } else {
+            mixer.seekTick(metronomeTick)
+        }
     }
 
     /** Clamp [tick] into the active loop, or return it unchanged. */
@@ -899,9 +1028,25 @@ class AndroidPlaybackEngine internal constructor(
 
     // ── Metronome ────────────────────────────────────────────────────
 
-    /** Enables or disables metronome click output. */
+    /**
+     * Enables or disables metronome click output.
+     *
+     * Switching it back on mid-playback re-seeks the click transport to the score's position: while
+     * inaudible the metronome synth is not rendered, so its transport was frozen wherever it was switched
+     * off. Mirrors the Apple backend's `setMetronomeMuted`.
+     */
     fun setMetronomeEnabled(enabled: Boolean) {
-        metronomeMixer?.isEnabled = enabled
+        val mixer = metronomeMixer ?: return
+        val wasAudible = mixer.isAudible
+        mixer.isEnabled = enabled
+        if (enabled && !wasAudible) {
+            // Mid-playback the player's own tick is the live one; stopped or paused (or still counting
+            // in, where the player has not started yet) it is stale, and the intent is what play() will
+            // start both transports from anyway.
+            val playing = _state.value == PlaybackState.PLAYING && countInJob == null
+            val scoreTick = if (playing) playerDriver?.currentTick ?: scoreTickIntent else scoreTickIntent
+            mixer.resyncTo(scoreTick + metronomeTickOffset)
+        }
     }
 
     /** Sets metronome click volume (range 0..1). */
@@ -1000,22 +1145,11 @@ class AndroidPlaybackEngine internal constructor(
         // Capture a snapshot of live engine state before flipping the
         // state machine — these reads must not race with the EXPORTING
         // transition (live mutators already no-op once we set EXPORTING).
-        val beatBytes = jniBridge.metronomeBeats(scoreHandle)
-        val beats = run {
-            val r = BinaryReader(beatBytes)
-            val out = ArrayList<io.github.jiyimeta.sheetmusic.audio.model.MetronomeBeat>()
-            r.readLengthPrefixed { inner ->
-                while (inner.remaining > 0) {
-                    out.add(inner.readLengthPrefixed { MetronomeBeatCodec.decodePayload(it) })
-                }
-            }
-            out
-        }
         val snapshot = ExportEngineSnapshot(
             mixerChannels = _mixerChannels.value,
             metronomeEnabled = metronomeMixer?.isEnabled ?: false,
             metronomeVolume = metronomeMixer?.volume ?: 1f,
-            metronomeBeats = beats,
+            metronomeSmfBytes = jniBridge.renderMetronomeMidi(scoreHandle),
             rate = _currentRate.value,
             metronomeResolution = clickResolver.resolve(),
         )
@@ -1083,6 +1217,7 @@ class AndroidPlaybackEngine internal constructor(
         playerDriver = null
         fluidSynthEngine?.teardown()
         fluidSynthEngine = null
+        metronomeMixer?.close()
         metronomeMixer = null
         _state.value = PlaybackState.STOPPED
     }
@@ -1102,9 +1237,10 @@ class AndroidPlaybackEngine internal constructor(
                 if (loop != null && tick >= loop.endTick) {
                     fluidSynthEngine?.allNotesOff()
                     player.seekTick(loop.startTick)
+                    scoreTickIntent = loop.startTick
+                    repositionMetronome(loop.startTick)
                     tick = loop.startTick
                 }
-                metronomeMixer?.updateCurrentTick(tick)
 
                 val frameBytes = jniBridge.frameAtTick(scoreHandle, tick)
                 val frame = if (frameBytes.isEmpty()) null else FrameCodec.decode(frameBytes)
@@ -1191,6 +1327,7 @@ class AndroidPlaybackEngine internal constructor(
         playerDriver = null
         fluidSynthEngine?.teardown()
         fluidSynthEngine = null
+        metronomeMixer?.close()
         metronomeMixer = null
     }
 }

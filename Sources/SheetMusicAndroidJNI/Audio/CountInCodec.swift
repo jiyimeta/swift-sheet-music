@@ -18,11 +18,12 @@ public enum CountInCodec {
     /// host reads that as "no count-in" and starts immediately.
     public static func wire(from result: CountInBeats.Result, division: Int) -> CountInWire {
         guard division > 0, result.quarterBpm > 0 else {
-            return CountInWire(totalSeconds: 0, beats: [])
+            return CountInWire(totalSeconds: 0, preRollTicks: 0, beats: [])
         }
         let secondsPerTick = 60.0 / (result.quarterBpm * Double(division))
         return CountInWire(
             totalSeconds: Double(result.preRollTicks) * secondsPerTick,
+            preRollTicks: Int32(clamping: result.preRollTicks),
             beats: result.beats.map {
                 CountInBeatWire(
                     offsetSeconds: Double($0.tick) * secondsPerTick,

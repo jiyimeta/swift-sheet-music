@@ -14,7 +14,7 @@ import SheetMusicCore
 /// division, no tempo) all encode an EMPTY schedule rather than raw `Data()`, so the Kotlin decoder can
 /// run unconditionally and simply reads "no count-in — start now".
 public func nativeCountIn(scoreHandle: Int64, fromCursorBytes: Data) -> Data {
-    let empty = CountInCodec.encode(CountInWire(totalSeconds: 0, beats: []))
+    let empty = CountInCodec.encode(CountInWire(totalSeconds: 0, preRollTicks: 0, beats: []))
     guard let score = scoreTable.value(for: scoreHandle) else { return empty }
     // A missing / undecodable cursor means "from the top", which is what CountInBeats does with nil.
     let cursor = try? ScoreCursorCodec.decode(fromCursorBytes)

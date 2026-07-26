@@ -39,7 +39,7 @@ class AudioExporterTest {
         ),
         metronomeEnabled = false,
         metronomeVolume = 1.0f,
-        metronomeBeats = emptyList(),
+        metronomeSmfBytes = byteArrayOf(),
         rate = 1.0f,
         metronomeResolution = AndroidMetronomeClickResolver.Resolution.DefaultGm,
     )

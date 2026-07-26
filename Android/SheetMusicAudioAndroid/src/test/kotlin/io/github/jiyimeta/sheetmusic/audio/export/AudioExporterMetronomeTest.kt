@@ -6,25 +6,20 @@ import io.github.jiyimeta.sheetmusic.audio.export.fakes.FakeAudioFileEncoder
 import io.github.jiyimeta.sheetmusic.audio.fakes.FakePlayerDriver
 import io.github.jiyimeta.sheetmusic.audio.fakes.FakeSynthDriver
 import io.github.jiyimeta.sheetmusic.audio.model.AudioFileFormat
-import io.github.jiyimeta.sheetmusic.audio.model.MetronomeBeat
 import io.github.jiyimeta.sheetmusic.audio.model.MixerChannel
 import io.github.jiyimeta.sheetmusic.audio.model.StaffParams
 import io.github.jiyimeta.sheetmusic.audio.synth.AndroidMetronomeClickResolver
+import io.github.jiyimeta.sheetmusic.audio.synth.PlayerDriver
 import io.github.jiyimeta.sheetmusic.audio.synth.SynthDriver
 import kotlinx.coroutines.test.runTest
-import org.junit.Assert.assertFalse
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * TDD tests verifying that [AudioExporter] mixes a metronome synth into the
- * offline render when [ExportEngineSnapshot.metronomeEnabled] is true, and
- * skips it when false.
- *
- * Uses the same fakes as [AudioExporterTest]: [FakeSynthDriver] (records all
- * [SynthDriver] calls including noteOn), [FakePlayerDriver.create] (real
- * [io.github.jiyimeta.sheetmusic.audio.synth.PlayerDriver] backed by
- * [FakePlayerDriver.RecordingBindings]), and [FakeAudioFileEncoder].
+ * [AudioExporter] renders the metronome the same way live playback does: a second synth loaded with the
+ * click SoundFont, driven by a second player over the metronome's own SMF. The offline render therefore
+ * places clicks on exactly the ticks the user heard, rather than quantized to the export block size.
  */
 class AudioExporterMetronomeTest {
 
@@ -41,138 +36,101 @@ class AudioExporterMetronomeTest {
         StaffParams(staffIndex = 0, bankLSB = 0, program = 0, isDrums = false, partAddressHash = 0L),
     )
 
-    // One downbeat at tick 0 — fires on the very first updateCurrentTick call.
-    private val singleDownbeat = listOf(MetronomeBeat(tick = 0L, isDownbeat = true))
+    private val metronomeSmf = byteArrayOf(1, 2, 3, 4)
+
+    private fun snapshot(metronomeEnabled: Boolean, smf: ByteArray = metronomeSmf) = ExportEngineSnapshot(
+        mixerChannels = listOf(MixerChannel(staffIndex = 0, displayName = "Staff 1", program = 0)),
+        metronomeEnabled = metronomeEnabled,
+        metronomeVolume = 1.0f,
+        metronomeSmfBytes = smf,
+        rate = 1.0f,
+        metronomeResolution = AndroidMetronomeClickResolver.Resolution.DefaultGm,
+    )
+
+    /**
+     * Runs an export whose score synth advances the score player on every `writeFloat`, and hands the
+     * metronome its own player so the two transports' calls can be told apart.
+     *
+     * @return the synths that were created, and the metronome player's recorded calls.
+     */
+    private suspend fun runExport(
+        snapshot: ExportEngineSnapshot,
+    ): Pair<List<FakeSynthDriver>, FakePlayerDriver.RecordingBindings> {
+        val createdSynths = mutableListOf<FakeSynthDriver>()
+        val (scorePlayer, scoreBindings) = FakePlayerDriver.create()
+        val metronomeBindings = FakePlayerDriver.RecordingBindings()
+        var playersBuilt = 0
+
+        val synthFactory: (Int) -> SynthDriver = { _ ->
+            FakeSynthDriver(createdSynths.size).also { synth ->
+                // Score synth (index 0): advance the player tick on every writeFloat so the render loop
+                // terminates. The metronome synth is a passive recorder.
+                if (createdSynths.isEmpty()) synth.onWriteFloat = { scoreBindings.tickToReturn += 240 }
+                createdSynths += synth
+            }
+        }
+
+        AudioExporter(
+            resolver = StubSoundfontResolver(),
+            context = null,
+            synthFactory = synthFactory,
+            playerFactory = { _ ->
+                if (playersBuilt++ == 0) scorePlayer else PlayerDriver(0L, metronomeBindings)
+            },
+            encoderFactory = { _, _, _ -> FakeAudioFileEncoder() },
+        ).run(
+            outputFd = null,
+            smfBytes = ByteArray(16),
+            staffParams = staffParams,
+            snapshot = snapshot,
+            startTick = 0L,
+            endTick = 960L,
+            ticksPerBeat = 480,
+            format = AudioFileFormat.Wav(),
+            sampleRate = 48000,
+            progress = null,
+        )
+        return createdSynths to metronomeBindings
+    }
 
     // ── Tests ────────────────────────────────────────────────────────────────
 
     @Test
-    fun exportFiresMetronomeNotesWhenEnabled() = runTest {
-        val createdSynths = mutableListOf<FakeSynthDriver>()
+    fun exportDrivesTheMetronomeTransportWhenEnabled() = runTest {
+        val (synths, metronome) = runExport(snapshot(metronomeEnabled = true))
 
-        // synthFactory: create a fresh FakeSynthDriver each time (index 0 = score, 1 = metronome).
-        // The render loop needs the score synth's writeFloat to advance the player tick
-        // (same wiring as AudioExporterTest.makeDrivers). The metronome synth is a
-        // passive recorder — its writeFloat is a no-op and that is fine.
-        val (player, bindings) = FakePlayerDriver.create()
-
-        val synthFactory: (Int) -> SynthDriver = { _ ->
-            FakeSynthDriver(createdSynths.size).also { synth ->
-                if (createdSynths.isEmpty()) {
-                    // Score synth (index 0): advance player tick on every writeFloat.
-                    synth.onWriteFloat = { bindings.tickToReturn += 240 }
-                }
-                // sfidToReturn = 0 (default) → loadSoundFont succeeds (sfid >= 0).
-                createdSynths += synth
-            }
-        }
-
-        val encoder = FakeAudioFileEncoder()
-        val snapshot = ExportEngineSnapshot(
-            mixerChannels = listOf(MixerChannel(staffIndex = 0, displayName = "Staff 1", program = 0)),
-            metronomeEnabled = true,
-            metronomeVolume = 1.0f,
-            metronomeBeats = singleDownbeat,
-            rate = 1.0f,
-            metronomeResolution = AndroidMetronomeClickResolver.Resolution.DefaultGm,
-        )
-
-        AudioExporter(
-            resolver = StubSoundfontResolver(),
-            context = null,
-            synthFactory = synthFactory,
-            playerFactory = { _ -> player },
-            encoderFactory = { _, _, _ -> encoder },
-        ).run(
-            outputFd = null,
-            smfBytes = ByteArray(16),
-            staffParams = staffParams,
-            snapshot = snapshot,
-            startTick = 0L,
-            endTick = 960L,
-            ticksPerBeat = 480,
-            format = AudioFileFormat.Wav(),
-            sampleRate = 48000,
-            progress = null,
-        )
-
-        assertTrue(
-            "exportFiresMetronomeNotesWhenEnabled: two synths should be created (score + metronome)",
-            createdSynths.size >= 2,
-        )
-
-        val metronomeSynth = createdSynths[1]
-        val channel9NoteOns = metronomeSynth.calls.filter { it.startsWith("noteOn(9,") }
-        assertTrue(
-            "exportFiresMetronomeNotesWhenEnabled: metronome synth should receive at least one noteOn on channel 9; calls=${metronomeSynth.calls}",
-            channel9NoteOns.isNotEmpty(),
-        )
+        assertTrue("a second synth is created for the click SoundFont", synths.size >= 2)
+        assertEquals("the metronome SMF is loaded", 1, metronome.loadCalls.size)
+        assertTrue(metronome.loadCalls[0].contentEquals(metronomeSmf))
+        assertEquals("and its transport is started", 1, metronome.playCalls.size)
     }
 
     @Test
-    fun exportSkipsMetronomeWhenDisabled() = runTest {
-        val createdSynths = mutableListOf<FakeSynthDriver>()
+    fun theMetronomeStartsFromTheExportsStartTick() = runTest {
+        val (_, metronome) = runExport(snapshot(metronomeEnabled = true))
 
-        val (player, bindings) = FakePlayerDriver.create()
+        // Both transports are placed at startTick and then advanced by identical frame counts, which is
+        // what makes an exported region's clicks line up with its notes.
+        assertEquals(listOf(0L), metronome.seekTicks)
+    }
 
-        val synthFactory: (Int) -> SynthDriver = { _ ->
-            FakeSynthDriver(createdSynths.size).also { synth ->
-                if (createdSynths.isEmpty()) {
-                    synth.onWriteFloat = { bindings.tickToReturn += 240 }
-                }
-                createdSynths += synth
-            }
-        }
+    @Test
+    fun exportSkipsTheMetronomeWhenDisabled() = runTest {
+        val (synths, metronome) = runExport(snapshot(metronomeEnabled = false))
 
-        val encoder = FakeAudioFileEncoder()
-        val snapshot = ExportEngineSnapshot(
-            mixerChannels = listOf(MixerChannel(staffIndex = 0, displayName = "Staff 1", program = 0)),
-            metronomeEnabled = false,
-            metronomeVolume = 1.0f,
-            metronomeBeats = singleDownbeat,
-            rate = 1.0f,
-            metronomeResolution = AndroidMetronomeClickResolver.Resolution.DefaultGm,
+        assertEquals("no click synth is built at all", 1, synths.size)
+        assertTrue("and no click transport", metronome.playCalls.isEmpty())
+    }
+
+    @Test
+    fun exportSkipsTheMetronomeWhenTheScoreHasNoClickSequence() = runTest {
+        // An older native bridge (or a score with no beats) yields no metronome SMF; the export must
+        // still run, just without clicks.
+        val (synths, metronome) = runExport(
+            snapshot(metronomeEnabled = true, smf = byteArrayOf()),
         )
 
-        AudioExporter(
-            resolver = StubSoundfontResolver(),
-            context = null,
-            synthFactory = synthFactory,
-            playerFactory = { _ -> player },
-            encoderFactory = { _, _, _ -> encoder },
-        ).run(
-            outputFd = null,
-            smfBytes = ByteArray(16),
-            staffParams = staffParams,
-            snapshot = snapshot,
-            startTick = 0L,
-            endTick = 960L,
-            ticksPerBeat = 480,
-            format = AudioFileFormat.Wav(),
-            sampleRate = 48000,
-            progress = null,
-        )
-
-        // When disabled, no second synth should be created at all.
-        val scoreSynth = createdSynths[0]
-        val metronomeChannel9NoteOns = if (createdSynths.size >= 2) {
-            createdSynths[1].calls.filter { it.startsWith("noteOn(9,") }
-        } else {
-            emptyList()
-        }
-
-        val noMetronomeSynth = createdSynths.size == 1
-        val noChannel9NoteOns = metronomeChannel9NoteOns.isEmpty()
-
-        assertTrue(
-            "exportSkipsMetronomeWhenDisabled: either no second synth was created OR it received no noteOn on channel 9; createdSynths.size=${createdSynths.size}, channel9NoteOns=$metronomeChannel9NoteOns",
-            noMetronomeSynth || noChannel9NoteOns,
-        )
-
-        // The score synth should never receive channel 9 noteOn from the metronome.
-        assertFalse(
-            "exportSkipsMetronomeWhenDisabled: score synth should not receive metronome noteOn(9,...)",
-            scoreSynth.calls.any { it.startsWith("noteOn(9,") },
-        )
+        assertEquals(1, synths.size)
+        assertTrue(metronome.playCalls.isEmpty())
     }
 }

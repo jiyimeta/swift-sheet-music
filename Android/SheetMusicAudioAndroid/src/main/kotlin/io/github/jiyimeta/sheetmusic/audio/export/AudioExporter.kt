@@ -50,26 +50,35 @@ internal class AudioExporter(
         val synth = synthFactory(sampleRate)
         val player = playerFactory(synth.nativeHandle)
         val encoder = encoderFactory(format, sampleRate, outputFd)
-        val metronomeSynth = if (snapshot.metronomeEnabled && snapshot.metronomeBeats.isNotEmpty()) {
-            synthFactory(sampleRate).also { ms ->
+        val metronomeMixer =
+            if (snapshot.metronomeEnabled && snapshot.metronomeSmfBytes.isNotEmpty()) {
+                val ms = synthFactory(sampleRate)
                 MetronomeSf2Loader.load(ms, snapshot.metronomeResolution, resolver, context)
                 ms.setGain(snapshot.metronomeVolume)
+                val mixer = MetronomeMixer(ms) { smf ->
+                    val mp = playerFactory(ms.nativeHandle)
+                    if (mp.load(smf) == 0) mp else { mp.close(); null }
+                }
+                mixer.loadSequence(snapshot.metronomeSmfBytes)
+                mixer.also { it.isEnabled = true }
+            } else {
+                null
             }
-        } else {
-            null
-        }
-        val metronomeMixer = metronomeSynth?.let { ms ->
-            MetronomeMixer(ms, snapshot.metronomeBeats).also { it.isEnabled = true }
-        }
         var lastProgressEmitMs = 0L
         try {
             applyStaffProgramsAndMixer(synth, staffParams, snapshot)
             if (player.load(smfBytes) != 0) {
                 throw AudioBackendException.EngineSetupFailed("player.load returned non-zero")
             }
-            if (snapshot.rate != 1.0f) player.setTempo(snapshot.rate.toDouble())
+            if (snapshot.rate != 1.0f) {
+                player.setTempo(snapshot.rate.toDouble())
+                metronomeMixer?.setTempo(snapshot.rate.toDouble())
+            }
             player.seekTick(startTick)
             player.play()
+            // Both transports start from the same tick and are then advanced by the same frame counts
+            // below, so the offline render places clicks exactly where live playback does.
+            metronomeMixer?.start(startTick)
 
             val left = FloatArray(BUFFER_FRAMES)
             val right = FloatArray(BUFFER_FRAMES)
@@ -82,7 +91,6 @@ internal class AudioExporter(
                 val frames = BUFFER_FRAMES
                 synth.writeFloat(frames, left, right)
                 metronomeMixer?.let { mm ->
-                    mm.updateCurrentTick(player.currentTick)
                     val mLeft = FloatArray(frames)
                     val mRight = FloatArray(frames)
                     mm.synth.writeFloat(frames, mLeft, mRight)
@@ -110,7 +118,7 @@ internal class AudioExporter(
             // (e.g. EngineSetupFailed) propagates without being masked.
             try { player.close() } catch (_: Throwable) {}
             try { synth.close() } catch (_: Throwable) {}
-            try { metronomeSynth?.close() } catch (_: Throwable) {}
+            try { metronomeMixer?.close() } catch (_: Throwable) {}
             try { encoder.close() } catch (_: Throwable) {}
         }
     }

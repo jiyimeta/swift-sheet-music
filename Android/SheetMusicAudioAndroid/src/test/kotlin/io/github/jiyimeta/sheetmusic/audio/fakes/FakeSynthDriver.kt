@@ -15,7 +15,9 @@ internal class FakeSynthDriver(val id: Int = 0) : SynthDriver {
     /** Per-channel type: false = melodic, true = drum. */
     val channelTypes = BooleanArray(16) { false }
 
-    override val nativeHandle: Long = 0L
+    // Distinct per instance, like the real thing: callers that build one player per synth (the score's
+    // and the metronome's) tell them apart by the handle they were handed.
+    override val nativeHandle: Long = id.toLong()
 
     override fun loadSoundFont(uri: Uri?, context: Context?): Int {
         calls += "loadSoundFont"

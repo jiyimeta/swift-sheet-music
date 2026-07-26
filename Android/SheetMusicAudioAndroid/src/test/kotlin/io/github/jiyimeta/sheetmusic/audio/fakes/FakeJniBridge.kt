@@ -11,10 +11,12 @@ import io.github.jiyimeta.sheetmusic.audio.AndroidPlaybackEngine
  */
 internal open class FakeJniBridge(
     var renderMidiResult: ByteArray = byteArrayOf(),
+    var renderMetronomeMidiResult: ByteArray = byteArrayOf(),
+    /** Empty by default — "this position has no count-in", so play starts the score immediately. */
+    var renderCountInMetronomeMidiResult: ByteArray = byteArrayOf(),
     var timelineSummaryResult: LongArray = longArrayOf(960L, 2_000_000L, 480L),
     var frameAtTickResult: ByteArray = byteArrayOf(),
     var frameForCursorResult: ByteArray = byteArrayOf(),
-    var metronomeBeatsResult: ByteArray = byteArrayOf(),
     /** Empty by default — an undecodable payload, which the engine reads as "no count-in". */
     var countInResult: ByteArray = byteArrayOf(),
     var staffParamsResult: ByteArray = byteArrayOf(),
@@ -30,6 +32,12 @@ internal open class FakeJniBridge(
     val earliestOfCalls = mutableListOf<ByteArray>()
 
     override fun renderMidi(scoreHandle: Long): ByteArray = renderMidiResult
+    override fun renderMetronomeMidi(scoreHandle: Long): ByteArray = renderMetronomeMidiResult
+    override fun renderCountInMetronomeMidi(
+        scoreHandle: Long,
+        cursorBytes: ByteArray,
+        baseTick: Long,
+    ): ByteArray = renderCountInMetronomeMidiResult
     override fun timelineSummary(scoreHandle: Long): LongArray = timelineSummaryResult
     override fun frameAtTick(scoreHandle: Long, tick: Long): ByteArray {
         frameAtTickCalls += tick
@@ -39,7 +47,6 @@ internal open class FakeJniBridge(
         frameForCursorCalls += cursorBytes
         return frameForCursorResult
     }
-    override fun metronomeBeats(scoreHandle: Long): ByteArray = metronomeBeatsResult
     override fun countIn(scoreHandle: Long, cursorBytes: ByteArray): ByteArray = countInResult
     override fun staffParams(scoreHandle: Long): ByteArray = staffParamsResult
     override fun pitchAndStaffOfNote(scoreHandle: Long, noteIdBytes: ByteArray): Long {
