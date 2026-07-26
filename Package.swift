@@ -97,6 +97,7 @@ var targets: [Target] = [
             "Import/FontCascade/GlyphBitmap.swift",
             "Import/FontCascade/ShapeDescriptor.swift",
             "Import/FontCascade/BravuraExemplars.swift",
+            "Import/FontCascade/GlyphClassifier.swift",
         ] : [],
     ),
     .target(

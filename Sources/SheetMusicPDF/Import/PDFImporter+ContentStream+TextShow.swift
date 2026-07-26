@@ -31,6 +31,12 @@ private let smuflPUARange: ClosedRange<UInt32> = 0xE000 ... 0xF8FF
 /// in a single run land at successive positions.
 func emitShow(_ bytes: [UInt8], state: TextShowState) {
     guard let cmap = state.activeCMap, !cmap.isEmpty else {
+        #if canImport(CoreGraphics)
+            if let classifier = state.activeClassifier, classifier.canClassifyWithoutCMap {
+                emitShowSimpleFont(bytes, state: state, classifier: classifier)
+                return
+            }
+        #endif
         emitText(decodeString(bytes), state: state)
         return
     }
@@ -48,7 +54,28 @@ func emitShow(_ bytes: [UInt8], state: TextShowState) {
             advanceTextMatrix(state: state, glyphCount: 1)
             continue
         }
-        if smuflPUARange.contains(first.value) {
+        // Tier 1 (SMuFL PUA codepoint) answers every glyph in every
+        // MuseScore / Dorico / Finale 27+ PDF. For a non-SMuFL-encoded
+        // producer (Finale Maestro, Sibelius Opus, …) `activeClassifier`
+        // widens this with Tier 2 (glyph name) / Tier 4 (outline shape). A
+        // non-PUA scalar becomes music ONLY when a tier positively
+        // identifies it; a PUA scalar no tier recognizes still becomes an
+        // `.unknown` music glyph exactly as before, so the diagnostic path
+        // for MuseScore's own byte-identical output is unchanged.
+        #if canImport(CoreGraphics)
+            let semantic = state.activeClassifier
+                .map { $0.classify(codepoint: first.value, glyphID: CGGlyph(truncatingIfNeeded: cid)) }
+                ?? PDFImporter.smuflSemantic(codepoint: first.value)
+        #else
+            let semantic = PDFImporter.smuflSemantic(codepoint: first.value)
+        #endif
+        let isMusic: Bool
+        if case .unknown = semantic {
+            isMusic = smuflPUARange.contains(first.value)
+        } else {
+            isMusic = true
+        }
+        if isMusic {
             flushPendingText(&pendingText, state: state)
             let origin = currentOrigin(state: state)
             let advance = glyphAdvance(state: state)
@@ -60,7 +87,7 @@ func emitShow(_ bytes: [UInt8], state: TextShowState) {
                     pageIndex: state.pageIndex,
                     fontSize: state.fontSize,
                 ),
-                semantic: PDFImporter.smuflSemantic(codepoint: first.value),
+                semantic: semantic,
             ))
             advanceTextMatrix(state: state, glyphCount: 1)
         } else {
@@ -73,6 +100,50 @@ func emitShow(_ bytes: [UInt8], state: TextShowState) {
     // Odd trailing byte (shouldn't happen for Identity-H) — ignore.
     flushPendingText(&pendingText, state: state)
 }
+
+#if canImport(CoreGraphics)
+    /// Emit a show-string operand for a simple font with NO usable
+    /// `/ToUnicode` but a usable embedded program or `/Differences` — the
+    /// legacy-music-font case (Maestro, Opus, Sonata) P1 targets. A simple
+    /// font uses 1-byte codes (not Identity-H's 2), and the byte code IS the
+    /// index into the font's own encoding: Tier 2 consults
+    /// `/Encoding /Differences[code]`, Tier 4 reads
+    /// `CTFontCreatePathForGlyph(font, CGGlyph(code))` — so passing the byte
+    /// as both codepoint and glyph ID is correct.
+    ///
+    /// NO corpus coverage: every corpus PDF is MuseScore output with a
+    /// proper CMap, so this path is exercised only by synthetic unit tests
+    /// and the real-file acceptance check in Task 15.
+    private func emitShowSimpleFont(
+        _ bytes: [UInt8], state: State, classifier: GlyphClassifier,
+    ) {
+        var pendingText = ""
+        for byte in bytes {
+            let code = UInt32(byte)
+            let semantic = classifier.classify(codepoint: code, glyphID: CGGlyph(byte))
+            if case .unknown = semantic {
+                pendingText.unicodeScalars.append(Unicode.Scalar(byte))
+                advanceTextMatrix(state: state, glyphCount: 1)
+                continue
+            }
+            flushPendingText(&pendingText, state: state)
+            let origin = currentOrigin(state: state)
+            let advance = glyphAdvance(state: state)
+            state.glyphs.append(ClassifiedGlyph(
+                geometry: GlyphGeometry(
+                    origin: origin,
+                    advance: advance,
+                    renderedSize: renderedSize(state: state),
+                    pageIndex: state.pageIndex,
+                    fontSize: state.fontSize,
+                ),
+                semantic: semantic,
+            ))
+            advanceTextMatrix(state: state, glyphCount: 1)
+        }
+        flushPendingText(&pendingText, state: state)
+    }
+#endif
 
 /// Page-space origin of the current text position.
 private func currentOrigin(state: State) -> CGPoint {

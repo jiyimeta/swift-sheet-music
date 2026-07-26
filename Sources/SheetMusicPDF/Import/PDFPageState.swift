@@ -29,6 +29,15 @@ final class PDFPageState {
     /// The CMap selected by the most recent `Tf` (nil for fonts without a
     /// usable `/ToUnicode`, e.g. the ASCII test fixtures).
     var activeCMap: PDFImporter.ToUnicodeCMap?
+    #if canImport(CoreGraphics)
+        /// Per-page registry of glyph classifiers keyed by font RESOURCE
+        /// NAME, filled by the front-end alongside `fontCMaps`.
+        /// `GlyphClassifier` is CoreText-based (Apple-only), so this
+        /// registry does not exist on Android.
+        var classifiers: [String: GlyphClassifier] = [:]
+        /// The classifier selected by the most recent `Tf`.
+        var activeClassifier: GlyphClassifier?
+    #endif
     /// Current subpath: starts at last `m`, accumulates points from `l`.
     /// `currentPoint` follows the latest `m` or `l`.
     var currentPoint: CGPoint?

@@ -27,6 +27,16 @@ public struct PDFImportOptions {
     /// score's measure count matches the uncollapsed source. Enabled by
     /// default; disable to keep each mm-rest as the single bar MuseScore drew.
     public var expandMultiMeasureRests = true
+    /// Enable Tier 4 (outline shape matching) in the glyph classification
+    /// cascade. **Default OFF.**
+    ///
+    /// Tier 4's acceptance threshold cannot be chosen without the measurement
+    /// Task 13's ablation produces. Enabled at the placeholder threshold it
+    /// matches essentially every glyph outline — including Latin text and CJK
+    /// lyrics — to some Bravura exemplar: on ギブス.pdf, 0 of 4254 glyphs were
+    /// left `.unknown` and lyric recall collapsed to 0%. It stays off until
+    /// Task 14 has both a measured threshold and a per-font gate.
+    public var enableShapeMatching = false
     public var diagnostics: (@Sendable (PDFImportDiagnostic) -> Void)?
 
     public init() {}

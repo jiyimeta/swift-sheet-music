@@ -14,6 +14,10 @@ extension PDFImporter {
     /// `CGPDFScanner`'s opaque `info` pointer via `Unmanaged`.
     struct ContentStreamWalker {
         let document: PDFDocument
+        /// Threaded from `PDFImportOptions.enableShapeMatching`; forwarded to
+        /// every page's `GlyphClassifier`s. Default false so existing call
+        /// sites that don't pass it keep today's Tier-1-only behavior.
+        var enableShapeMatching = false
 
         func walk() throws -> WalkedContent {
             var glyphs: [ClassifiedGlyph] = []
@@ -40,6 +44,10 @@ extension PDFImporter {
             // CMap now and stash it on PageState keyed by resource name so
             // op_Tf can select the active CMap.
             state.fontCMaps = PDFImporter.extractFontCMaps(cgPage: cgPage)
+            let embedded = PDFImporter.extractEmbeddedFonts(cgPage: cgPage)
+            state.classifiers = embedded.mapValues {
+                GlyphClassifier(font: $0, enableShapeMatching: enableShapeMatching)
+            }
             guard let table = CGPDFOperatorTableCreate() else { return }
             defer { CGPDFOperatorTableRelease(table) }
             ContentStreamOperators.register(on: table)
