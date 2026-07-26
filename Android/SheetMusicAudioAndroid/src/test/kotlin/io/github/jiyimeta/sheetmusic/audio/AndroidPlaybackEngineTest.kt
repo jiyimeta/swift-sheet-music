@@ -1,6 +1,9 @@
 package io.github.jiyimeta.sheetmusic.audio
 
 import android.net.Uri
+import io.github.jiyimeta.sheetmusic.CountInBeatWire
+import io.github.jiyimeta.sheetmusic.CountInWire
+import io.github.jiyimeta.sheetmusic.CountInWireCodec
 import io.github.jiyimeta.sheetmusic.audio.export.AudioExporter
 import io.github.jiyimeta.sheetmusic.audio.export.fakes.FakeAudioFileEncoder
 import io.github.jiyimeta.sheetmusic.audio.fakes.FakeJniBridge
@@ -779,6 +782,83 @@ class AndroidPlaybackEngineTest {
         // No exception = pass; MetronomeMixer.volume setter calls synth.setGain.
     }
 
+    // Count-in (pre-roll)
+
+    /** A two-click, one-second pre-roll: clicks at 0.0s and 0.5s, music starting at 1.0s. */
+    private fun twoClickCountIn(): ByteArray = CountInWireCodec.encode(
+        CountInWire(
+            totalSeconds = 1.0,
+            beats = listOf(
+                CountInBeatWire(offsetSeconds = 0.0, isDownbeat = true),
+                CountInBeatWire(offsetSeconds = 0.5, isDownbeat = false),
+            ),
+        ),
+    )
+
+    @Test
+    fun `play starts the player immediately when count-in is off`() = runTest(testDispatcher) {
+        val bindings = RecordingBindings()
+        val engine = preparedEngine(playerBindings = bindings, countIn = twoClickCountIn())
+        engine.play()
+        // countInEnabled defaults to false, so the schedule is never even requested.
+        assertEquals(1, bindings.playCalls.size)
+        engine.pause()
+    }
+
+    @Test
+    fun `play defers the player until the whole pre-roll has elapsed`() = runTest(testDispatcher) {
+        val bindings = RecordingBindings()
+        val engine = preparedEngine(playerBindings = bindings, countIn = twoClickCountIn())
+        engine.countInEnabled = true
+        engine.play()
+
+        // The transport reads as playing straight away — the count-in IS the start of playback — but the
+        // score itself must not have begun.
+        assertEquals(PlaybackState.PLAYING, engine.state.value)
+        assertEquals(0, bindings.playCalls.size)
+
+        // Past the last CLICK but not the end of the pre-roll region: still silent. This is the case a
+        // naive "wait for the last beat" implementation gets wrong — the final click has to sound for
+        // its full length before beat 1 lands.
+        advanceTimeBy(600)
+        assertEquals(0, bindings.playCalls.size)
+
+        advanceTimeBy(500)
+        testScheduler.runCurrent()
+        assertEquals(1, bindings.playCalls.size)
+
+        // The pre-roll handed off to the player, which starts the poll job — an unbounded delay loop on
+        // the test scheduler. Stop it, or runTest never sees the scheduler go idle.
+        engine.pause()
+    }
+
+    @Test
+    fun `pause during the count-in cancels it and the player never starts`() = runTest(testDispatcher) {
+        val bindings = RecordingBindings()
+        val engine = preparedEngine(playerBindings = bindings, countIn = twoClickCountIn())
+        engine.countInEnabled = true
+        engine.play()
+        engine.pause()
+
+        // Well past when the pre-roll would have fired the player.
+        advanceTimeBy(5_000)
+        assertEquals(0, bindings.playCalls.size)
+        assertEquals(PlaybackState.PAUSED, engine.state.value)
+    }
+
+    @Test
+    fun `an empty schedule falls through to starting immediately`() = runTest(testDispatcher) {
+        val bindings = RecordingBindings()
+        // totalSeconds == 0 is how the bridge reports "no count-in for this position" (a score with no
+        // usable tempo or division) — the setting being on must not strand playback.
+        val empty = CountInWireCodec.encode(CountInWire(totalSeconds = 0.0, beats = emptyList()))
+        val engine = preparedEngine(playerBindings = bindings, countIn = empty)
+        engine.countInEnabled = true
+        engine.play()
+        assertEquals(1, bindings.playCalls.size)
+        engine.pause()
+    }
+
     // T43 — poll job + teardown
 
     @Test
@@ -1363,6 +1443,8 @@ class AndroidPlaybackEngineTest {
         staffCount: Int = 1,
         playerBindings: RecordingBindings = RecordingBindings(),
         fakeSynthDrivers: MutableList<FakeSynthDriver> = mutableListOf(),
+        /** Encoded `CountInWire` the bridge returns; empty = undecodable = "no count-in". */
+        countIn: ByteArray = byteArrayOf(),
     ): AndroidPlaybackEngine {
         val bridge = FakeJniBridge(
             timelineSummaryResult = longArrayOf(960L, 2_000_000L, 480L),
@@ -1370,6 +1452,7 @@ class AndroidPlaybackEngineTest {
                 (0 until staffCount).map { StaffParams(it, 0, 0, false, it.toLong()) },
             ),
             metronomeBeatsResult = downbeatOnlyBeats(),
+            countInResult = countIn,
             renderMidiResult = minimalSmf,
         )
         return tracked(

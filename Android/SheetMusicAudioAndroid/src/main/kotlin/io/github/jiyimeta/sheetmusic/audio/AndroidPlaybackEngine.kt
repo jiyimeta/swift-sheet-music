@@ -2,6 +2,8 @@ package io.github.jiyimeta.sheetmusic.audio
 
 import android.content.Context
 import android.os.ParcelFileDescriptor
+import io.github.jiyimeta.sheetmusic.CountInWire
+import io.github.jiyimeta.sheetmusic.CountInWireCodec
 import io.github.jiyimeta.sheetmusic.audio.export.AudioExporter
 import io.github.jiyimeta.sheetmusic.audio.export.ExportEngineSnapshot
 import io.github.jiyimeta.sheetmusic.audio.jni.SheetMusicAudioJNI
@@ -112,6 +114,9 @@ class AndroidPlaybackEngine internal constructor(
         /** Returns a serialized metronome-beat array. */
         fun metronomeBeats(scoreHandle: Long): ByteArray
 
+        /** Returns a serialized `CountInWire` for a pre-roll starting at [cursorBytes]. */
+        fun countIn(scoreHandle: Long, cursorBytes: ByteArray): ByteArray
+
         /** Returns a serialized staff-params array. */
         fun staffParams(scoreHandle: Long): ByteArray
 
@@ -149,6 +154,7 @@ class AndroidPlaybackEngine internal constructor(
             override fun frameForCursor(h: Long, c: ByteArray) =
                 SheetMusicAudioJNI.nativeFrameForCursor(h, c)
             override fun metronomeBeats(h: Long) = SheetMusicAudioJNI.nativeMetronomeBeats(h)
+            override fun countIn(h: Long, c: ByteArray) = SheetMusicAudioJNI.nativeCountIn(h, c)
             override fun staffParams(h: Long) = SheetMusicAudioJNI.nativeStaffParams(h)
             override fun pitchAndStaffOfNote(h: Long, n: ByteArray) =
                 SheetMusicAudioJNI.nativePitchAndStaffOfNote(h, n)
@@ -271,6 +277,15 @@ class AndroidPlaybackEngine internal constructor(
 
     /** Live whole-score transpose (−7…+7). Combined with [masterTuningCents] by `applyTuning`. */
     @Volatile private var transposeSemitones: Int = 0
+
+    /**
+     * Whether `play()` first counts in a measure of clicks. Off by default, and persists across
+     * prepare so the host only has to push the user's setting once.
+     */
+    @Volatile var countInEnabled: Boolean = false
+
+    /** The in-flight pre-roll, if any. Non-null only between `play()` and the score actually starting. */
+    private var countInJob: Job? = null
 
     /**
      * Count of in-flight previews that started the Oboe output stream while the
@@ -437,10 +452,65 @@ class AndroidPlaybackEngine internal constructor(
         if (_state.value == PlaybackState.EXPORTING) return
         val player = playerDriver ?: return
         if (from != null) seek(from)
+        // A play() while a pre-roll is already counting restarts it rather than stacking a second one.
+        cancelCountIn()
         oboeStream?.play()
-        player.play()
+
+        val schedule = countInScheduleForCurrentPosition()
+        if (schedule == null) {
+            player.play()
+            _state.value = PlaybackState.PLAYING
+            startPollJob()
+            return
+        }
+
+        // The state flips to PLAYING for the whole count-in: the transport is "running" from the
+        // reader's point of view, and pause() during the clicks has to be able to cancel it. The score
+        // itself only starts once the pre-roll has been waited out (see [countInJob]).
         _state.value = PlaybackState.PLAYING
-        startPollJob()
+        countInJob = pollScope.launch {
+            var elapsed = 0.0
+            for (beat in schedule.beats) {
+                delay(secondsToMillis(beat.offsetSeconds - elapsed))
+                elapsed = beat.offsetSeconds
+                metronomeMixer?.fireCountInClick(beat.isDownbeat)
+            }
+            // Wait out the REST of the pre-roll region, not just up to the last click: the final beat
+            // still has to sound for its full length before beat 1 of the music lands.
+            delay(secondsToMillis(schedule.totalSeconds - elapsed))
+            countInJob = null
+            player.play()
+            startPollJob()
+        }
+    }
+
+    /**
+     * The pre-roll schedule to run before this `play()`, or null when there should be none — the
+     * setting is off, no score is loaded, or the shared computation produced an empty schedule (a score
+     * with no usable tempo or division).
+     */
+    private fun countInScheduleForCurrentPosition(): CountInWire? {
+        if (!countInEnabled) return null
+        val handle = scoreHandle ?: return null
+        val cursor = _currentCursor.value ?: ScoreCursor.Beat(measureIndex = 0, tickInMeasure = 0)
+        val decoded = runCatching {
+            CountInWireCodec.decode(jniBridge.countIn(handle, ScoreCursorCodec.encode(cursor)))
+        }.getOrNull() ?: return null
+        return decoded.takeIf { it.totalSeconds > 0.0 && it.beats.isNotEmpty() }
+    }
+
+    /** Rounds a (non-negative) second offset to whole milliseconds for [delay]; clamps negatives to 0. */
+    private fun secondsToMillis(seconds: Double): Long =
+        (seconds * 1000.0).coerceAtLeast(0.0).toLong()
+
+    /**
+     * Cancels an in-flight count-in. Called from `play` (restart), `pause`, `stop` and `seek`: in every
+     * one of those the position or the transport state is changing out from under the pre-roll, and a
+     * surviving job would start the player after the user had already stopped it.
+     */
+    private fun cancelCountIn() {
+        countInJob?.cancel()
+        countInJob = null
     }
 
     /**
@@ -459,6 +529,7 @@ class AndroidPlaybackEngine internal constructor(
      */
     fun pause() {
         if (_state.value == PlaybackState.EXPORTING) return
+        cancelCountIn()
         playerDriver?.stop()
         oboeStream?.stop()
         stopPollJob()
@@ -471,6 +542,7 @@ class AndroidPlaybackEngine internal constructor(
      */
     fun stop() {
         if (_state.value == PlaybackState.EXPORTING) return
+        cancelCountIn()
         playerDriver?.stop()
         playerDriver?.seekTick(0L)
         fluidSynthEngine?.allNotesOff()

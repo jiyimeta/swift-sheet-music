@@ -15,6 +15,8 @@ internal open class FakeJniBridge(
     var frameAtTickResult: ByteArray = byteArrayOf(),
     var frameForCursorResult: ByteArray = byteArrayOf(),
     var metronomeBeatsResult: ByteArray = byteArrayOf(),
+    /** Empty by default — an undecodable payload, which the engine reads as "no count-in". */
+    var countInResult: ByteArray = byteArrayOf(),
     var staffParamsResult: ByteArray = byteArrayOf(),
     var pitchAndStaffOfNoteResult: Long = -1L,
     var earliestOfResult: ByteArray = byteArrayOf(),
@@ -38,6 +40,7 @@ internal open class FakeJniBridge(
         return frameForCursorResult
     }
     override fun metronomeBeats(scoreHandle: Long): ByteArray = metronomeBeatsResult
+    override fun countIn(scoreHandle: Long, cursorBytes: ByteArray): ByteArray = countInResult
     override fun staffParams(scoreHandle: Long): ByteArray = staffParamsResult
     override fun pitchAndStaffOfNote(scoreHandle: Long, noteIdBytes: ByteArray): Long {
         pitchAndStaffCalls += noteIdBytes

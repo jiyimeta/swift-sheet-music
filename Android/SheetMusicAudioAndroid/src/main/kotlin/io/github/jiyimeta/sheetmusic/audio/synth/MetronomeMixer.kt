@@ -72,6 +72,20 @@ internal class MetronomeMixer(
         lastTick = tick
     }
 
+    /**
+     * Fires one count-in click immediately, bypassing [updateCurrentTick]'s beat-crossing logic.
+     *
+     * The pre-roll happens BEFORE the MIDI player starts, so there is no player tick to drive the
+     * scheduler with — the engine walks the count-in schedule on its own clock and calls this per beat.
+     *
+     * Deliberately ignores [isEnabled]: that flag is the user's *metronome* setting (click along with
+     * the music), whereas a count-in is its own setting. Someone who wants a count-in but no metronome
+     * through the piece must still hear the count.
+     */
+    fun fireCountInClick(isDownbeat: Boolean) {
+        fire(MetronomeBeat(tick = 0, isDownbeat = isDownbeat))
+    }
+
     private fun fire(b: MetronomeBeat) {
         val pitch = if (b.isDownbeat) downbeatPitch else upbeatPitch
         val velocity = if (b.isDownbeat) 96 else 72
