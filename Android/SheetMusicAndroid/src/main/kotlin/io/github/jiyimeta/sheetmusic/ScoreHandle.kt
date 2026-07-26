@@ -1,6 +1,5 @@
 package io.github.jiyimeta.sheetmusic
 
-import io.github.jiyimeta.wirelet.WireFormatException
 
 /** Auto-releasing wrapper around a native score handle. */
 class ScoreHandle internal constructor(val raw: Long) : AutoCloseable {
@@ -67,13 +66,18 @@ class PdfScoreHandle internal constructor(
             if (blob.isEmpty()) return null
             val wire = try {
                 PdfParseResultWireCodec.decode(blob)
-            } catch (e: WireFormatException) {
+            } catch (e: Exception) {
                 // A malformed blob means version skew between this Kotlin codec and the Swift side that
                 // produced it. Whatever handles Swift allocated before encoding are still live on the
                 // native side, but their values never made it into `wire` — we cannot recover or release
                 // them, so this leaks both the score and geometry handles until process exit. That is a
                 // strictly better failure than trusting a partially-decoded value and releasing (or
                 // operating on) a handle we only half-read.
+                //
+                // Caught as `Exception`, not `WireFormatException`: a truncated blob bottoms out in
+                // `BinaryReader.readU8`, which throws `BinaryReader.UnderflowException` — a SIBLING of
+                // `WireFormatException`, not a subtype — so the narrower catch would let exactly the
+                // skew case this guard exists for escape uncaught.
                 return null
             }
             if (wire.scoreHandle == 0L || wire.geometryHandle == 0L) {
