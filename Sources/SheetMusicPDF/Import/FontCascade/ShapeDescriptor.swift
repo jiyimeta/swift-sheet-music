@@ -44,10 +44,10 @@ struct ShapeDescriptor: Hashable {
     // Weights sum to 1.0 so the result stays comparable across rounds.
     // Starting values from the design brief; Task 14 tunes these against a
     // real ablation measurement.
-    private static let bitmapWeight = 0.55
+    private static let bitmapWeight = 0.70
     private static let aspectWeight = 0.15
     private static let densityWeight = 0.10
-    private static let peakWeight = 0.20
+    private static let peakWeight = 0.05
 }
 
 /// Build a descriptor from a glyph outline.
