@@ -119,7 +119,11 @@
 
             @Test("preview resumes a host-paused engine, then restores the paused state after the release tail")
             func previewResumesThenRestores() async throws {
-                let engine = PlaybackEngine(soundfontResolver: NullResolver())
+                // Deferring the park past the release tail is the BACKEND path's behavior — the AU
+                // instrument path released cleanly through an engine pause and still parks as soon as
+                // the note ends (see `previewReleaseTail`). Give the engine a backend, or this asserts
+                // the deferral against the path that deliberately doesn't have it.
+                let engine = PlaybackEngine(soundfontResolver: NullResolver(), backend: FakeBackend())
                 let score = makeSingleNoteScore()
                 try engine.prepare(score: score)
                 engine.pause() // host parks the graph (folino does this right after load)
