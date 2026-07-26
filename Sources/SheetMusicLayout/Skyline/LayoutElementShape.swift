@@ -11,12 +11,12 @@ import SheetMusicCore
 ///
 /// All rects are produced in MEASURE-LOCAL coordinates and shifted by
 /// `xOffset` (the measure's accumulated `xCursor`) in `shape`.
-enum LayoutElementShape {
+public enum LayoutElementShape {
     /// Category of `element`, or `nil` when it must not participate in
     /// the skyline at all: `.staffName` lives in the gutter, and slurs
     /// / vibrato already have dedicated placement passes that consult
     /// chord extents directly.
-    static func kind(of element: LayoutElement) -> ShapeItemKind? {
+    public static func kind(of element: LayoutElement) -> ShapeItemKind? {
         switch element {
         case .staffName: nil
         case .chord: .chord
@@ -116,7 +116,7 @@ enum LayoutElementShape {
 
     /// Full shape of `element` in SYSTEM-X / staff-local-Y coordinates.
     /// `nil` when the element is excluded from the skyline.
-    static func shape(
+    public static func shape(
         for element: LayoutElement, id: Int,
         xOffset: CGFloat, metrics: StaffMetrics,
     ) -> LayoutShape? {
