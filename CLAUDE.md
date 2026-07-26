@@ -340,6 +340,9 @@ Tests that import any Apple framework (`SwiftUI`, `AVFoundation`,
 `SheetMusicUI`, `SheetMusicAudio`, `SheetMusicPDF`) must be wrapped in
 `#if !os(Android)` ... `#endif`. Run `Scripts/gate-android-tests.sh`
 after creating new test files to apply this guard automatically.
+Review its diff before committing — the script's heuristic over-wraps
+Android-compatible files, so revert any guard it adds outside the files
+you just created.
 
 ### Wirelet bootstrap (Android only)
 
