@@ -16,7 +16,11 @@ public enum ShapeItemKind: Sendable, Equatable, CaseIterable {
     case beam
     case rest
     case note
-    case accidental
+    // No `accidental` case: `chordRects` tags an accidental's rect with
+    // the OWNING CHORD's `ShapeItem`, because MuseScore's ignore rules
+    // and `minDistance` treat an accidental as part of its chord. A
+    // separate case would be unreachable from `kind(of:)` yet still
+    // iterated by every `allCases` walk.
     case articulation
     case fermata
     case breath

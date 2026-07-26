@@ -100,7 +100,15 @@ extension LayoutElementShape {
 }
 
 extension LayoutElementShape {
-    /// Noteheads + stem + accidentals + above/below tie arcs.
+    /// Noteheads + stem + accidentals + above/below tie arcs. Every
+    /// rect here is tagged with the chord's own `ShapeItem` by
+    /// `LayoutElementShape.shape`, so an accidental is part of its
+    /// chord for the ignore rules — there is no `.accidental` kind.
+    ///
+    /// Ledger lines and flags are deliberately absent: a ledger line
+    /// only adds horizontal width at a notehead's own Y (already inside
+    /// the notehead rect for skyline purposes), and a flag extends
+    /// sideways from the stem tip rather than beyond it.
     static func chordRects(
         notes: [LayoutChordNote], stem: StemDirection,
         stemOrigin: CGPoint, stemExtension: CGFloat,
@@ -238,6 +246,17 @@ extension LayoutElementShape {
     /// Clef / key / time / bar line / measure repeat / multi-measure
     /// rest — all live inside or across the staff, so `Skyline.add`'s
     /// filter usually drops them. A coarse rect is sufficient.
+    ///
+    /// **The clef's `sp * 3` half-height is load-bearing for measure
+    /// numbers.** A G clef reaches well above the staff, so this rect
+    /// is the only north-side obstacle in most first measures. Its top
+    /// lands at `staffTop − 1 sp`, and a measure number's `maxY` sits
+    /// at exactly `staffTop − 1.5 sp`, giving `overlap` = `−0.5 sp` =
+    /// `−minDistance` — so `overlap > -minDistance` is false by exactly
+    /// zero margin and the number keeps its emitted Y. Replacing this
+    /// approximation with the clef's real ink (which is taller) would
+    /// raise EVERY measure number in EVERY score. Change it only
+    /// together with the measure-number default position.
     static func staffInternalRects(
         element: LayoutElement, kind: ShapeItemKind,
         metrics: StaffMetrics,

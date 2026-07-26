@@ -16,6 +16,22 @@
     ///
     /// No score path is hardcoded and no result is committed — the
     /// corpus is the author's private library.
+    ///
+    /// **Reach.** The count is a lower bound, not a proof of absence.
+    /// Two whole classes of pair are invisible to it:
+    ///
+    /// - **Base-skyline kinds** (chords, articulations, fermatas,
+    ///   breaths, clefs …) are filtered out by `isAutoplaced`, so a
+    ///   vertical error in one of their shapes — which moves every
+    ///   annotation that clears it, CONSISTENTLY — reports zero
+    ///   collisions. `LayoutElementShapeTests` pins those bands
+    ///   positionally for that reason.
+    /// - **Spanner segments** never appear at all: this walks
+    ///   `measure.elements + markers + jumps`, while hairpins, pedals,
+    ///   voltas, ottavas and text lines are synthesized into
+    ///   `LayoutSystem.spanners` by `LayoutEngine+Spanners`. So
+    ///   `dynamics × hairpin` and every other spanner pair is outside
+    ///   the metric.
     @available(macOS 15.0, *)
     @MainActor
     enum CollisionReport {
@@ -95,8 +111,7 @@
                     }
                 }
                 found.append(contentsOf: pairwise(
-                    shapes, file: url.lastPathComponent,
-                    system: sysIdx, metrics: metrics,
+                    shapes, file: url.lastPathComponent, system: sysIdx,
                 ))
             }
             return found
@@ -104,7 +119,7 @@
 
         private static func pairwise(
             _ shapes: [(LayoutShape, ShapeItemKind)],
-            file: String, system: Int, metrics: StaffMetrics,
+            file: String, system: Int,
         ) -> [Collision] {
             var found: [Collision] = []
             for i in shapes.indices {
