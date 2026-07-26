@@ -269,6 +269,9 @@ class AndroidPlaybackEngine internal constructor(
     @Volatile private var pendingRate: Float = 1.0f
     @Volatile private var masterTuningCents: Double = 0.0
 
+    /** Live whole-score transpose (−7…+7). Combined with [masterTuningCents] by `applyTuning`. */
+    @Volatile private var transposeSemitones: Int = 0
+
     /**
      * Count of in-flight previews that started the Oboe output stream while the
      * engine was idle/paused. The last one to drain restores the stream to its
@@ -334,7 +337,9 @@ class AndroidPlaybackEngine internal constructor(
             // Single fluid_synth_t — channels 0..N-1 map to staves 0..N-1.
             val engine = FluidSynthEngine(synthFactory)
             engine.setupStaves(staves, soundfontResolver, context)
-            if (masterTuningCents != 0.0) engine.setMasterTuning(masterTuningCents)
+            // Re-apply the combined calibration + transpose offset: a fresh synth starts at concert
+            // pitch, so a score opened while either is non-zero would otherwise play untransposed.
+            if (effectiveTuningCents != 0.0) engine.setMasterTuning(effectiveTuningCents)
             this@AndroidPlaybackEngine.fluidSynthEngine = engine
             // Seed each staff's channel volume into the synth from the score's CC 7. The rendered SMF
             // no longer carries CC 7 on staff channels (stripped in the shared MidiSynthPostProcess so
@@ -407,7 +412,11 @@ class AndroidPlaybackEngine internal constructor(
                     displayName = p.displayName.ifEmpty { "Staff ${i + 1}" },
                     volume = initialVolume,
                     defaultVolume = initialVolume,
-                    program = if (p.isDrums) null else p.program.toInt(),
+                    // Drum staves carry their program too — there it is the percussion-bank kit
+                    // number, which a host needs in order to show the kit picker. `isDrums` is
+                    // what distinguishes the two catalogs now.
+                    program = p.program.toInt(),
+                    isDrums = p.isDrums,
                 )
             }
             _totalTimeSeconds.value = totalSecs
@@ -750,13 +759,13 @@ class AndroidPlaybackEngine internal constructor(
     }
 
     /**
-     * Swaps the GM program (sound) for staff [staffIndex].
+     * Swaps the program (sound) for staff [staffIndex].
      * The change is applied immediately to the synth and to the
      * mixer state. No-op when [state] is [PlaybackState.EXPORTING].
-     * Drum staves have `MixerChannel.program == null` and the program-picker
-     * UI hides those rows, so users don't reach this branch with a drum staff;
-     * programmatic callers behave like [FluidSynthEngine.setStaffProgram]
-     * which selects a drum-kit variation within bank 128.
+     *
+     * Works for drum staves as well as melodic ones: [FluidSynthEngine.setStaffProgram] keeps the
+     * staff on its own bank, so on a percussion staff this selects a kit within bank 128 rather than
+     * a melodic patch. Hosts pick which catalog to offer from `MixerChannel.isDrums`.
      */
     fun setStaffProgram(staffIndex: Int, program: Int) {
         if (_state.value == PlaybackState.EXPORTING) return
@@ -771,8 +780,40 @@ class AndroidPlaybackEngine internal constructor(
     fun setMasterTuning(cents: Double) {
         if (_state.value == PlaybackState.EXPORTING) return
         masterTuningCents = cents
-        fluidSynthEngine?.setMasterTuning(cents)
+        applyTuning()
     }
+
+    /**
+     * Live whole-score transpose in [semitones], clamped to −7…+7. Persists across prepare.
+     * No-op when [state] is [PlaybackState.EXPORTING].
+     *
+     * Implemented as a tuning shift, not a re-render: [FluidSynthEngine.setMasterTuning] retunes the
+     * melodic channels only and leaves drum channels at concert pitch, which is exactly the semantics
+     * the Apple `PlaybackEngine.setTranspose` has (global coarse tuning on the melodic unit). Notes
+     * already sounding shift with it, and no MIDI is re-sequenced.
+     *
+     * The NOTATION half is separate: the host passes the same semitone count in `LayoutOptionsWire`,
+     * and the layout bridge re-spells the score. Both halves must be driven, or the score will look
+     * transposed while sounding at concert pitch (or the reverse).
+     */
+    fun setTranspose(semitones: Int) {
+        if (_state.value == PlaybackState.EXPORTING) return
+        transposeSemitones = semitones.coerceIn(-7, 7)
+        applyTuning()
+    }
+
+    /**
+     * Push calibration + transpose onto the melodic channels as one combined offset. Mirrors the Apple
+     * engine's `applyTuning`: melodic = calibration + transpose, percussion = calibration only (the
+     * drum exclusion lives inside [FluidSynthEngine.setMasterTuning]).
+     */
+    private fun applyTuning() {
+        fluidSynthEngine?.setMasterTuning(effectiveTuningCents)
+    }
+
+    /** Combined melodic-channel offset from A4=440: calibration plus the transpose, 100 cents per semitone. */
+    private val effectiveTuningCents: Double
+        get() = masterTuningCents + transposeSemitones * 100.0
 
     // ── Metronome ────────────────────────────────────────────────────
 

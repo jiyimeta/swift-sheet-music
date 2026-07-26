@@ -995,9 +995,12 @@ class AndroidPlaybackEngineTest {
     }
 
     @Test
-    fun `prepare sets null program for drum staff`() = runTest(testDispatcher) {
+    // A drum staff keeps its program — on the percussion bank that number is the KIT, which a host
+    // needs to render the kit picker. `isDrums` (not a null program) is what marks the staff as
+    // percussion now.
+    fun `prepare keeps the kit program for a drum staff and flags it`() = runTest(testDispatcher) {
         val payload = encodeStaffParamsArray(
-            listOf(StaffParams(0, 0, 0, isDrums = true, partAddressHash = 1L)),
+            listOf(StaffParams(0, 0, 5, isDrums = true, partAddressHash = 1L)),
         )
         val bridge = FakeJniBridge(
             staffParamsResult = payload,
@@ -1007,7 +1010,8 @@ class AndroidPlaybackEngineTest {
         val engine = newEngineForTests(bridge = bridge)
         engine.prepare(scoreHandle = 1L)
 
-        assertNull(engine.mixerChannels.value[0].program)
+        assertEquals(5, engine.mixerChannels.value[0].program)
+        assertTrue(engine.mixerChannels.value[0].isDrums)
         engine.teardown()
     }
 
