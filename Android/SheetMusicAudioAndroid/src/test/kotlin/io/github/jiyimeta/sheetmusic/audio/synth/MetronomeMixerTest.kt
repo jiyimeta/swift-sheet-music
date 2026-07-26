@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import io.github.jiyimeta.sheetmusic.audio.model.MetronomeBeat
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -185,5 +186,36 @@ class MetronomeMixerTest {
         mixer.updateCurrentTick(10)  // tick 0 already passed — should NOT re-fire
 
         assertEquals("beat should fire exactly once", 1, fake.noteOns.size)
+    }
+
+    @Test fun fireCountInClick_soundsWithTheMetronomeOff() {
+        val fake = FakeMetronomeSynth()
+        val mixer = MetronomeMixer(synth = fake, beats = emptyList())
+        // Metronome off — the user wants a count-in but no click through the piece.
+        mixer.isEnabled = false
+        mixer.isCountingIn = true
+
+        mixer.fireCountInClick(isDownbeat = true)
+
+        assertEquals("the count-in click must still fire", 1, fake.noteOns.size)
+        // Firing is only half of it: the render loop drops the metronome's output entirely unless the
+        // mixer reports itself audible, which is what made the click inaudible with the metronome off.
+        assertTrue("the mix path must be open during a count-in", mixer.isAudible)
+    }
+
+    @Test fun isAudible_isFalseOnlyWhenNeitherMetronomeNorCountInWantsSound() {
+        val mixer = MetronomeMixer(synth = FakeMetronomeSynth(), beats = emptyList())
+
+        assertFalse(mixer.isAudible)
+
+        mixer.isEnabled = true
+        assertTrue(mixer.isAudible)
+
+        mixer.isEnabled = false
+        mixer.isCountingIn = true
+        assertTrue(mixer.isAudible)
+
+        mixer.isCountingIn = false
+        assertFalse(mixer.isAudible)
     }
 }

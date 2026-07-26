@@ -29,8 +29,27 @@ internal class MetronomeMixer(
     val synth: SynthDriver,
     private val beats: List<MetronomeBeat>,
 ) {
-    /** Whether the metronome click is audible. Defaults to false. */
+    /** Whether the metronome clicks along with the music. Defaults to false. */
     var isEnabled: Boolean = false
+
+    /**
+     * Raised by the engine for the duration of a count-in, so the pre-roll is heard even with
+     * [isEnabled] off — wanting a count-in but no click through the piece is a normal combination.
+     *
+     * `@Volatile` because the audio callback reads it (via [isAudible]) on a different thread from the
+     * one that raises and lowers it.
+     */
+    @Volatile
+    var isCountingIn: Boolean = false
+
+    /**
+     * Whether this mixer's synth output should be folded into the master buffer at all.
+     *
+     * The render loop skips the mix entirely when false, so anything fired while this is false is
+     * silently discarded no matter what the synth did — which is exactly how a count-in with the
+     * metronome switched off went inaudible.
+     */
+    val isAudible: Boolean get() = isEnabled || isCountingIn
 
     /**
      * Output volume of the metronome synth (range 0..1).
@@ -70,6 +89,20 @@ internal class MetronomeMixer(
             if (b.tick in (lastTick + 1)..tick) fire(b)
         }
         lastTick = tick
+    }
+
+    /**
+     * Fires one count-in click immediately, bypassing [updateCurrentTick]'s beat-crossing logic.
+     *
+     * The pre-roll happens BEFORE the MIDI player starts, so there is no player tick to drive the
+     * scheduler with — the engine walks the count-in schedule on its own clock and calls this per beat.
+     *
+     * Deliberately ignores [isEnabled]: that flag is the user's *metronome* setting (click along with
+     * the music), whereas a count-in is its own setting. Someone who wants a count-in but no metronome
+     * through the piece must still hear the count.
+     */
+    fun fireCountInClick(isDownbeat: Boolean) {
+        fire(MetronomeBeat(tick = 0, isDownbeat = isDownbeat))
     }
 
     private fun fire(b: MetronomeBeat) {

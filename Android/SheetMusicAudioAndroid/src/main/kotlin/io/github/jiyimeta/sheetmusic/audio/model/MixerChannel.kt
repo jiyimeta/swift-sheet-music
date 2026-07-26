@@ -18,9 +18,21 @@ data class MixerChannel(
     val isSoloed: Boolean = false,
     val effectiveMute: Boolean = false,
     /**
-     * GM program (0..127) driving this staff's sampler, or `null` for
-     * drum staves and for staves whose program is not selectable from
-     * UI. Mirrors Apple `MixerChannel.program: UInt8?`.
+     * Program (0..127) driving this staff's sampler, or `null` when the score
+     * carries none. Mirrors Apple `MixerChannel.program: UInt8?`.
+     *
+     * Populated for drum staves too — there it is the percussion-bank (128) KIT
+     * number, not a melodic patch. Use [isDrums] to tell the two apart; a host
+     * that treats `program == null` as "this is a drum staff" is reading a
+     * signal that no longer exists.
      */
     val program: Int? = null,
+    /**
+     * True when this staff plays on the percussion bank (the part's instrument
+     * declares `useDrumset`). Mirrors the `isDrums` the staff-params wire has
+     * always carried; surfaced here so a host can offer the drum-kit catalog
+     * instead of the melodic GM one — and so it can tell "drums" apart from
+     * "no program", which the old `program == null` encoding conflated.
+     */
+    val isDrums: Boolean = false,
 )

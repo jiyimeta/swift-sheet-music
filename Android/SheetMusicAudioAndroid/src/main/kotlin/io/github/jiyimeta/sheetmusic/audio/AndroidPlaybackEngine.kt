@@ -2,6 +2,8 @@ package io.github.jiyimeta.sheetmusic.audio
 
 import android.content.Context
 import android.os.ParcelFileDescriptor
+import io.github.jiyimeta.sheetmusic.CountInWire
+import io.github.jiyimeta.sheetmusic.CountInWireCodec
 import io.github.jiyimeta.sheetmusic.audio.export.AudioExporter
 import io.github.jiyimeta.sheetmusic.audio.export.ExportEngineSnapshot
 import io.github.jiyimeta.sheetmusic.audio.jni.SheetMusicAudioJNI
@@ -112,6 +114,9 @@ class AndroidPlaybackEngine internal constructor(
         /** Returns a serialized metronome-beat array. */
         fun metronomeBeats(scoreHandle: Long): ByteArray
 
+        /** Returns a serialized `CountInWire` for a pre-roll starting at [cursorBytes]. */
+        fun countIn(scoreHandle: Long, cursorBytes: ByteArray): ByteArray
+
         /** Returns a serialized staff-params array. */
         fun staffParams(scoreHandle: Long): ByteArray
 
@@ -149,6 +154,7 @@ class AndroidPlaybackEngine internal constructor(
             override fun frameForCursor(h: Long, c: ByteArray) =
                 SheetMusicAudioJNI.nativeFrameForCursor(h, c)
             override fun metronomeBeats(h: Long) = SheetMusicAudioJNI.nativeMetronomeBeats(h)
+            override fun countIn(h: Long, c: ByteArray) = SheetMusicAudioJNI.nativeCountIn(h, c)
             override fun staffParams(h: Long) = SheetMusicAudioJNI.nativeStaffParams(h)
             override fun pitchAndStaffOfNote(h: Long, n: ByteArray) =
                 SheetMusicAudioJNI.nativePitchAndStaffOfNote(h, n)
@@ -269,6 +275,18 @@ class AndroidPlaybackEngine internal constructor(
     @Volatile private var pendingRate: Float = 1.0f
     @Volatile private var masterTuningCents: Double = 0.0
 
+    /** Live whole-score transpose (−7…+7). Combined with [masterTuningCents] by `applyTuning`. */
+    @Volatile private var transposeSemitones: Int = 0
+
+    /**
+     * Whether `play()` first counts in a measure of clicks. Off by default, and persists across
+     * prepare so the host only has to push the user's setting once.
+     */
+    @Volatile var countInEnabled: Boolean = false
+
+    /** The in-flight pre-roll, if any. Non-null only between `play()` and the score actually starting. */
+    private var countInJob: Job? = null
+
     /**
      * Count of in-flight previews that started the Oboe output stream while the
      * engine was idle/paused. The last one to drain restores the stream to its
@@ -334,7 +352,9 @@ class AndroidPlaybackEngine internal constructor(
             // Single fluid_synth_t — channels 0..N-1 map to staves 0..N-1.
             val engine = FluidSynthEngine(synthFactory)
             engine.setupStaves(staves, soundfontResolver, context)
-            if (masterTuningCents != 0.0) engine.setMasterTuning(masterTuningCents)
+            // Re-apply the combined calibration + transpose offset: a fresh synth starts at concert
+            // pitch, so a score opened while either is non-zero would otherwise play untransposed.
+            if (effectiveTuningCents != 0.0) engine.setMasterTuning(effectiveTuningCents)
             this@AndroidPlaybackEngine.fluidSynthEngine = engine
             // Seed each staff's channel volume into the synth from the score's CC 7. The rendered SMF
             // no longer carries CC 7 on staff channels (stripped in the shared MidiSynthPostProcess so
@@ -380,7 +400,7 @@ class AndroidPlaybackEngine internal constructor(
                 }
                 eng.writeFloat(frameCount, left, right)
                 val mm = this@AndroidPlaybackEngine.metronomeMixer
-                if (mm != null && mm.isEnabled) {
+                if (mm != null && mm.isAudible) {
                     val mLeft = FloatArray(frameCount)
                     val mRight = FloatArray(frameCount)
                     mm.synth.writeFloat(frameCount, mLeft, mRight)
@@ -407,7 +427,11 @@ class AndroidPlaybackEngine internal constructor(
                     displayName = p.displayName.ifEmpty { "Staff ${i + 1}" },
                     volume = initialVolume,
                     defaultVolume = initialVolume,
-                    program = if (p.isDrums) null else p.program.toInt(),
+                    // Drum staves carry their program too — there it is the percussion-bank kit
+                    // number, which a host needs in order to show the kit picker. `isDrums` is
+                    // what distinguishes the two catalogs now.
+                    program = p.program.toInt(),
+                    isDrums = p.isDrums,
                 )
             }
             _totalTimeSeconds.value = totalSecs
@@ -428,10 +452,75 @@ class AndroidPlaybackEngine internal constructor(
         if (_state.value == PlaybackState.EXPORTING) return
         val player = playerDriver ?: return
         if (from != null) seek(from)
+        // A play() while a pre-roll is already counting restarts it rather than stacking a second one.
+        cancelCountIn()
         oboeStream?.play()
-        player.play()
+
+        val schedule = countInScheduleForCurrentPosition()
+        if (schedule == null) {
+            player.play()
+            _state.value = PlaybackState.PLAYING
+            startPollJob()
+            return
+        }
+
+        // The state flips to PLAYING for the whole count-in: the transport is "running" from the
+        // reader's point of view, and pause() during the clicks has to be able to cancel it. The score
+        // itself only starts once the pre-roll has been waited out (see [countInJob]).
         _state.value = PlaybackState.PLAYING
-        startPollJob()
+        // Open the metronome's mix path for the pre-roll. Firing a click is not enough on its own: the
+        // render loop skips the metronome synth entirely while it is inaudible, so with the metronome
+        // switched off the count-in would play into a buffer nobody sums.
+        metronomeMixer?.isCountingIn = true
+        countInJob = pollScope.launch {
+            try {
+                var elapsed = 0.0
+                for (beat in schedule.beats) {
+                    delay(secondsToMillis(beat.offsetSeconds - elapsed))
+                    elapsed = beat.offsetSeconds
+                    metronomeMixer?.fireCountInClick(beat.isDownbeat)
+                }
+                // Wait out the REST of the pre-roll region, not just up to the last click: the final
+                // beat still has to sound for its full length before beat 1 of the music lands.
+                delay(secondsToMillis(schedule.totalSeconds - elapsed))
+                countInJob = null
+                player.play()
+                startPollJob()
+            } finally {
+                // `finally`, so a cancelled pre-roll (pause / stop / seek / restart) also closes the mix
+                // path instead of leaving the metronome permanently audible.
+                metronomeMixer?.isCountingIn = false
+            }
+        }
+    }
+
+    /**
+     * The pre-roll schedule to run before this `play()`, or null when there should be none — the
+     * setting is off, no score is loaded, or the shared computation produced an empty schedule (a score
+     * with no usable tempo or division).
+     */
+    private fun countInScheduleForCurrentPosition(): CountInWire? {
+        if (!countInEnabled) return null
+        val handle = scoreHandle ?: return null
+        val cursor = _currentCursor.value ?: ScoreCursor.Beat(measureIndex = 0, tickInMeasure = 0)
+        val decoded = runCatching {
+            CountInWireCodec.decode(jniBridge.countIn(handle, ScoreCursorCodec.encode(cursor)))
+        }.getOrNull() ?: return null
+        return decoded.takeIf { it.totalSeconds > 0.0 && it.beats.isNotEmpty() }
+    }
+
+    /** Rounds a (non-negative) second offset to whole milliseconds for [delay]; clamps negatives to 0. */
+    private fun secondsToMillis(seconds: Double): Long =
+        (seconds * 1000.0).coerceAtLeast(0.0).toLong()
+
+    /**
+     * Cancels an in-flight count-in. Called from `play` (restart), `pause`, `stop` and `seek`: in every
+     * one of those the position or the transport state is changing out from under the pre-roll, and a
+     * surviving job would start the player after the user had already stopped it.
+     */
+    private fun cancelCountIn() {
+        countInJob?.cancel()
+        countInJob = null
     }
 
     /**
@@ -450,6 +539,7 @@ class AndroidPlaybackEngine internal constructor(
      */
     fun pause() {
         if (_state.value == PlaybackState.EXPORTING) return
+        cancelCountIn()
         playerDriver?.stop()
         oboeStream?.stop()
         stopPollJob()
@@ -462,6 +552,7 @@ class AndroidPlaybackEngine internal constructor(
      */
     fun stop() {
         if (_state.value == PlaybackState.EXPORTING) return
+        cancelCountIn()
         playerDriver?.stop()
         playerDriver?.seekTick(0L)
         fluidSynthEngine?.allNotesOff()
@@ -750,13 +841,13 @@ class AndroidPlaybackEngine internal constructor(
     }
 
     /**
-     * Swaps the GM program (sound) for staff [staffIndex].
+     * Swaps the program (sound) for staff [staffIndex].
      * The change is applied immediately to the synth and to the
      * mixer state. No-op when [state] is [PlaybackState.EXPORTING].
-     * Drum staves have `MixerChannel.program == null` and the program-picker
-     * UI hides those rows, so users don't reach this branch with a drum staff;
-     * programmatic callers behave like [FluidSynthEngine.setStaffProgram]
-     * which selects a drum-kit variation within bank 128.
+     *
+     * Works for drum staves as well as melodic ones: [FluidSynthEngine.setStaffProgram] keeps the
+     * staff on its own bank, so on a percussion staff this selects a kit within bank 128 rather than
+     * a melodic patch. Hosts pick which catalog to offer from `MixerChannel.isDrums`.
      */
     fun setStaffProgram(staffIndex: Int, program: Int) {
         if (_state.value == PlaybackState.EXPORTING) return
@@ -771,8 +862,40 @@ class AndroidPlaybackEngine internal constructor(
     fun setMasterTuning(cents: Double) {
         if (_state.value == PlaybackState.EXPORTING) return
         masterTuningCents = cents
-        fluidSynthEngine?.setMasterTuning(cents)
+        applyTuning()
     }
+
+    /**
+     * Live whole-score transpose in [semitones], clamped to −7…+7. Persists across prepare.
+     * No-op when [state] is [PlaybackState.EXPORTING].
+     *
+     * Implemented as a tuning shift, not a re-render: [FluidSynthEngine.setMasterTuning] retunes the
+     * melodic channels only and leaves drum channels at concert pitch, which is exactly the semantics
+     * the Apple `PlaybackEngine.setTranspose` has (global coarse tuning on the melodic unit). Notes
+     * already sounding shift with it, and no MIDI is re-sequenced.
+     *
+     * The NOTATION half is separate: the host passes the same semitone count in `LayoutOptionsWire`,
+     * and the layout bridge re-spells the score. Both halves must be driven, or the score will look
+     * transposed while sounding at concert pitch (or the reverse).
+     */
+    fun setTranspose(semitones: Int) {
+        if (_state.value == PlaybackState.EXPORTING) return
+        transposeSemitones = semitones.coerceIn(-7, 7)
+        applyTuning()
+    }
+
+    /**
+     * Push calibration + transpose onto the melodic channels as one combined offset. Mirrors the Apple
+     * engine's `applyTuning`: melodic = calibration + transpose, percussion = calibration only (the
+     * drum exclusion lives inside [FluidSynthEngine.setMasterTuning]).
+     */
+    private fun applyTuning() {
+        fluidSynthEngine?.setMasterTuning(effectiveTuningCents)
+    }
+
+    /** Combined melodic-channel offset from A4=440: calibration plus the transpose, 100 cents per semitone. */
+    private val effectiveTuningCents: Double
+        get() = masterTuningCents + transposeSemitones * 100.0
 
     // ── Metronome ────────────────────────────────────────────────────
 

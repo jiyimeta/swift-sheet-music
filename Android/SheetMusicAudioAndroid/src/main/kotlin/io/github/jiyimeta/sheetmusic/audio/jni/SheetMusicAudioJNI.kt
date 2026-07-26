@@ -58,6 +58,21 @@ internal object SheetMusicAudioJNI {
         return SwiftJavaJNI.nativeMetronomeBeats(scoreHandle, arena).toByteArray()
     }
 
+    /**
+     * Count-in ("pre-roll") schedule for playback starting at [fromCursorBytes], from the shared
+     * `CountInBeats` — the same computation the Apple engine's pre-roll sequence is built from. Click
+     * offsets arrive already converted to SECONDS so no tempo math is redone here. Decodes to
+     * `CountInWire`; an empty schedule (`totalSeconds == 0`) means "no count-in — start immediately".
+     */
+    fun nativeCountIn(scoreHandle: Long, fromCursorBytes: ByteArray): ByteArray {
+        val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
+        return SwiftJavaJNI.nativeCountIn(
+            scoreHandle,
+            SwiftData.fromByteArray(fromCursorBytes, arena),
+            arena,
+        ).toByteArray()
+    }
+
     fun nativeStaffParams(scoreHandle: Long): ByteArray {
         val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
         return SwiftJavaJNI.nativeStaffParams(scoreHandle, arena).toByteArray()

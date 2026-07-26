@@ -54,9 +54,13 @@ extension LayoutBridge {
         let pageHeightPt = CGFloat(pageHeightMM * mmToPt)
 
         // Clef overrides BEFORE hiding staves (override map keyed on the
-        // pre-filter address).
+        // pre-filter address). Transposition sits between the two, matching the
+        // Apple Reader's `recomputeVisibleScore`: it re-spells pitches without
+        // touching note IDs or ticks, so the cursor bridge's lookups against the
+        // resulting document are unaffected either way.
         let prepared = score
             .applying(clefOverrides: optionsWire.clefOverrideMap)
+            .transposed(bySemitones: optionsWire.transposeDelta)
             .filtered(hidingStaves: optionsWire.hiddenStaffAddresses)
 
         let breakPolicy: LayoutBreakPolicy = optionsWire.honorLayoutBreaks == 1 ? .honor : .ignoreAll
