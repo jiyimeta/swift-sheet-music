@@ -125,6 +125,57 @@
             #expect(enabled.classify(codepoint: 0x41, glyphID: noteheadGlyphID) == .noteheadBlack)
         }
 
+        /// Two DIFFERENT glyph IDs presented under the SAME codepoint must
+        /// classify independently. A subsetted font routinely decodes several
+        /// CIDs to one Unicode scalar (unmapped CIDs collapse onto a single
+        /// scalar, and `.notdef`-adjacent codes share one), so a
+        /// codepoint-only cache would answer the second glyph with the
+        /// first's outline verdict — for Tier 4, whose answer depends on
+        /// nothing BUT the outline, that is simply the wrong semantic.
+        @Test func shapeMatchingDistinguishesTwoGlyphIDsUnderOneCodepoint() {
+            guard let bravuraData = Self.loadBravuraOTFData(),
+                  let ctFont = makeCTFont(program: bravuraData, kind: .cff)
+            else { return }
+            func glyphID(_ codepoint: UniChar) -> CGGlyph? {
+                var unichars: [UniChar] = [codepoint]
+                var glyphs: [CGGlyph] = [0]
+                guard CTFontGetGlyphsForCharacters(ctFont, &unichars, &glyphs, 1),
+                      glyphs[0] != 0 else { return nil }
+                return glyphs[0]
+            }
+            guard let notehead = glyphID(0xE0A4), let clef = glyphID(0xE050)
+            else { return }
+
+            var font = PDFImporter.EmbeddedFont()
+            font.program = bravuraData
+            font.programKind = .cff
+            let c = GlyphClassifier(font: font, enableShapeMatching: true)
+
+            // Codepoint 0x41 reaches neither Tier 1 nor Tier 2, so both
+            // answers come from Tier 4 — i.e. from the glyph ID alone.
+            #expect(c.classify(codepoint: 0x41, glyphID: notehead) == .noteheadBlack)
+            #expect(c.classify(codepoint: 0x41, glyphID: clef) == .clefG)
+        }
+
+        /// The cache must still serve a repeat of the same (codepoint, glyph
+        /// ID) pair — the whole reason it exists.
+        @Test func repeatedGlyphIDUnderOneCodepointStaysStable() {
+            guard let bravuraData = Self.loadBravuraOTFData(),
+                  let ctFont = makeCTFont(program: bravuraData, kind: .cff)
+            else { return }
+            var unichars: [UniChar] = [0xE0A4]
+            var glyphs: [CGGlyph] = [0]
+            guard CTFontGetGlyphsForCharacters(ctFont, &unichars, &glyphs, 1),
+                  glyphs[0] != 0 else { return }
+
+            var font = PDFImporter.EmbeddedFont()
+            font.program = bravuraData
+            font.programKind = .cff
+            let c = GlyphClassifier(font: font, enableShapeMatching: true)
+            let first = c.classify(codepoint: 0x41, glyphID: glyphs[0])
+            #expect(c.classify(codepoint: 0x41, glyphID: glyphs[0]) == first)
+        }
+
         // MARK: Music-font gate (`isLikelyMusicFont`, Task 15 final review C2)
 
         /// Direct coverage for `isLikelyMusicFont` — it had NONE before this

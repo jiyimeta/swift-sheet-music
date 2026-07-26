@@ -68,7 +68,18 @@ final class GlyphClassifier {
         )
     }()
 
-    private var cache: [UInt32: SMuFLSemantic] = [:]
+    /// Cache key. BOTH components are part of it because the tiers disagree
+    /// about what the answer depends on: Tier 1 / Tier 2 read only the
+    /// codepoint, Tier 4 reads only the glyph ID's outline. A subsetted font
+    /// routinely decodes several CIDs to one Unicode scalar — unmapped CIDs
+    /// collapse onto a single scalar — so keying by codepoint alone would
+    /// hand every one of them the first CID's outline verdict.
+    private struct CacheKey: Hashable {
+        var codepoint: UInt32
+        var glyphID: CGGlyph?
+    }
+
+    private var cache: [CacheKey: SMuFLSemantic] = [:]
 
     /// Tier-4 acceptance threshold. A nearest neighbor farther than this is
     /// reported `.unknown` rather than guessed. Measured against the Task 13
@@ -129,9 +140,10 @@ final class GlyphClassifier {
     }
 
     func classify(codepoint: UInt32, glyphID: CGGlyph?) -> SMuFLSemantic {
-        if let hit = cache[codepoint] { return hit }
+        let key = CacheKey(codepoint: codepoint, glyphID: glyphID)
+        if let hit = cache[key] { return hit }
         let result = uncachedClassify(codepoint: codepoint, glyphID: glyphID)
-        cache[codepoint] = result
+        cache[key] = result
         return result
     }
 
