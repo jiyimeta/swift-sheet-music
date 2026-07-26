@@ -2,7 +2,7 @@
 # Run the annotation-collision detector over a directory of MuseScore
 # files. The directory is an argument — no corpus path is committed.
 #
-#   Scripts/collision-report.sh ~/Documents/MuseScore3/スコア [limit]
+#   Scripts/collision-report.sh ~/Music/scores [limit]
 set -euo pipefail
 
 if [ $# -lt 1 ]; then

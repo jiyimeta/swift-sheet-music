@@ -115,11 +115,7 @@
                           let ib = sb.rects.first?.item,
                           !AutoplaceRules.shouldIgnoreEachOther(ia, ib)
                     else { continue }
-                    let d = max(
-                        sa.minVerticalDistance(sb, minHorizontalClearance: 0),
-                        sb.minVerticalDistance(sa, minHorizontalClearance: 0),
-                    )
-                    guard d.isFinite, d > 0.5 else { continue }
+                    guard let d = overlapDepth(sa, sb) else { continue }
                     found.append(Collision(
                         file: file, system: system, staff: 0,
                         a: "\(ka)", b: "\(kb)", overlap: d,
@@ -127,6 +123,31 @@
                 }
             }
             return found
+        }
+
+        /// True 2D overlap between two shapes, in points, or `nil` when
+        /// they do not intersect. `minVerticalDistance` is deliberately
+        /// NOT used here: it answers "how far must I push this away,"
+        /// is directional, and counts merely-touching rects as fully
+        /// overlapping. Collision detection needs shared area.
+        private static func overlapDepth(
+            _ a: LayoutShape, _ b: LayoutShape,
+        ) -> CGFloat? {
+            // Sub-point slivers are rounding, not visible overlap.
+            let epsilon: CGFloat = 0.5
+            var deepest: CGFloat?
+            for ra in a.rects {
+                for rb in b.rects {
+                    let overlapX = min(ra.rect.maxX, rb.rect.maxX)
+                        - max(ra.rect.minX, rb.rect.minX)
+                    let overlapY = min(ra.rect.maxY, rb.rect.maxY)
+                        - max(ra.rect.minY, rb.rect.minY)
+                    guard overlapX > epsilon, overlapY > epsilon
+                    else { continue }
+                    deepest = max(deepest ?? overlapY, overlapY)
+                }
+            }
+            return deepest
         }
 
         private static func report(
