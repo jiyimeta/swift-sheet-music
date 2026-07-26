@@ -5,6 +5,9 @@ import SheetMusicPDF
 // PDF import JNI entry point. Imports SheetMusicPDF (the Foundation-only
 // Android subset: pure-Swift PDF reader → decode pipeline) — NOT SheetMusicLayout,
 // to avoid the CGFloat clash the other bridges anchor around.
+//
+// For a parse that also returns a geometry side-car for cursor drawing and tap hit-testing on the
+// original PDF, see `nativeLoadScoreWithGeometryFromPDF` in `PDFGeometryBridge.swift`.
 
 /// JNI entry point exposed via swift-java for the Kotlin
 /// `SheetMusicJNI.nativeLoadScoreFromPDF(...)` call site. Parses a
