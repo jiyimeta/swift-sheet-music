@@ -269,6 +269,54 @@
             #expect(abs(box.minX - 40) < 0.01)
         }
 
+        /// A dynamic's rect is its GLYPH INK, never Bravura's em box.
+        ///
+        /// Bravura reserves 2 em of ascent and 2 em of descent so that
+        /// staff-relative glyphs fit inside one line box, so at the
+        /// 4 sp dynamics size the em box is 16.1 sp tall against the
+        /// 2.4 sp `mf` actually inks. The corpus scan caught it:
+        /// a single `mf` claimed 8 sp of skyline above AND below its
+        /// own origin and collided with the neighbouring staff's text.
+        @Test func dynamicRectIsGlyphInkNotTheBravuraEmBox() throws {
+            let el = LayoutElement.textMark(
+                kind: .dynamic, text: "mf",
+                origin: CGPoint(x: 10, y: 40),
+            )
+            let shape = try #require(LayoutElementShape.shape(
+                for: el, id: 0, xOffset: 0, metrics: metrics,
+            ))
+            let box = try #require(shape.bbox)
+            #expect(abs(box.minX - 10) < 0.01)
+            #expect(box.width > 0)
+            // Ink (≈ 2.4 sp), not the 16.1 sp em box.
+            #expect(box.height > metrics.sp * 0.5)
+            #expect(box.height < metrics.sp * 4)
+            // A `.leadingCenter` anchor on a face whose ascent equals
+            // its descent puts the baseline exactly on origin.y.
+            // Bravura's calligraphic `f` reaches 0.6 sp below it.
+            #expect(box.minY < 40)
+            #expect(box.maxY < 40 + metrics.sp)
+        }
+
+        /// Tempo mixes an Edwin run with a Bravura beat glyph, so the
+        /// same em-box trap applies to its glyph half: the union must
+        /// use the glyph's measured ink, not Bravura's 4 em line box.
+        @Test func tempoRectDoesNotInheritTheBravuraEmBox() throws {
+            let el = LayoutElement.textMark(
+                kind: .tempo, text: "\u{E1D5} = 120",
+                origin: CGPoint(x: 20, y: -14),
+            )
+            let shape = try #require(LayoutElementShape.shape(
+                for: el, id: 0, xOffset: 0, metrics: metrics,
+            ))
+            let box = try #require(shape.bbox)
+            // The beat glyph reaches below the Edwin run's own
+            // descent, so the union is taller than the text box…
+            #expect(box.height > metrics.sp * 2)
+            // …but nowhere near Bravura's 4 em (≈ 9.7 sp here).
+            #expect(box.height < metrics.sp * 5)
+        }
+
         @Test func melismaAndHyphenAreThinSpans() throws {
             let melisma = LayoutElement.lyricsMelisma(
                 fromOrigin: CGPoint(x: 10, y: 70),

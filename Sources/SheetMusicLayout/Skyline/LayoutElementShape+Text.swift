@@ -46,6 +46,58 @@ extension LayoutElementShape {
         }
     }
 
+    /// Vertical ink extent of a SMuFL glyph run, in points relative to
+    /// the run's baseline: `(top, bottom)` in layout (Y-down) space,
+    /// or `nil` when no glyph in the run has a measurable path.
+    ///
+    /// A `textRect` on a SMuFL face is catastrophically wrong for the
+    /// skyline: Bravura's typographic ascent and descent are each 2 em
+    /// so that staff-relative glyphs fit inside a single line box, so
+    /// its em box is 4 em tall — 112 pt at the 4 sp dynamics size,
+    /// against ~8 pt of actual `mf` ink. Measuring the glyph paths
+    /// instead keeps a dynamic from occupying 16 sp of skyline.
+    ///
+    /// Probing at `pointSize` 4 makes 1 em = 4 pt, so a bbox unit is
+    /// one staff space; scale by `pointSize / 4` to reach the run's
+    /// own size. Mirrors `smuflGlyphRect`'s convention.
+    static func smuflRunInkExtent(
+        glyphs: String, pointSize: CGFloat,
+    ) -> (top: CGFloat, bottom: CGFloat)? {
+        let provider = FontMetrics.provider
+        let em = LayoutFont(face: SMuFLFamily.bravura, pointSize: 4)
+        var minY = CGFloat.infinity
+        var maxY = -CGFloat.infinity
+        for scalar in glyphs.unicodeScalars {
+            guard let bbox = provider.glyphPathBoundingBox(
+                font: em,
+                codepoint: UInt16(truncatingIfNeeded: scalar.value),
+            ), bbox.height > 0 else { continue }
+            minY = min(minY, bbox.minY)
+            maxY = max(maxY, bbox.maxY)
+        }
+        guard minY.isFinite, maxY > minY else { return nil }
+        let scale = pointSize / 4
+        // Font Y is up from the baseline, layout Y is down.
+        return (top: -maxY * scale, bottom: -minY * scale)
+    }
+
+    /// Baseline Y of a run typeset in `font` and positioned by
+    /// `anchor` at `origin`. Mirrors `textRect`'s box placement.
+    static func baselineY(
+        font: LayoutFont, originY: CGFloat,
+        anchor: TextAnchorConvention,
+    ) -> CGFloat {
+        let provider = FontMetrics.provider
+        let ascent = provider.ascent(font: font)
+        let descent = provider.descent(font: font)
+        switch anchor {
+        case .leadingCenter, .center:
+            return originY + (ascent - descent) / 2
+        case .bottomLeading:
+            return originY - descent
+        }
+    }
+
     /// Font used to render each autoplaced text kind, matching the
     /// renderers' `ResolvedTextStyle` / `NotationTextStyle` choices.
     static func font(
@@ -171,9 +223,8 @@ extension LayoutElementShape {
                     face: SMuFLFamily.bravura,
                     pointSize: metrics.sp * 4,
                 )
-                return textRect(
-                    text: glyphs, font: f,
-                    origin: origin, anchor: .leadingCenter,
+                return smuflRunRect(
+                    glyphs: glyphs, font: f, origin: origin,
                 )
             }
             return textRect(
@@ -185,6 +236,33 @@ extension LayoutElementShape {
                 text: text, origin: origin, metrics: metrics,
             )
         }
+    }
+
+    /// Ink rect of a SMuFL glyph run drawn with a `.leadingCenter`
+    /// anchor at `origin`: the typographic width (advances are right),
+    /// but the glyph paths' vertical extent (the em box is not).
+    /// Falls back to the em box when no glyph path is measurable —
+    /// Android's stub provider, which has no glyph outlines.
+    private static func smuflRunRect(
+        glyphs: String, font: LayoutFont, origin: CGPoint,
+    ) -> CGRect {
+        let width = FontMetrics.provider
+            .typographicWidth(text: glyphs, font: font)
+        guard let ink = smuflRunInkExtent(
+            glyphs: glyphs, pointSize: font.pointSize,
+        ) else {
+            return textRect(
+                text: glyphs, font: font,
+                origin: origin, anchor: .leadingCenter,
+            )
+        }
+        let baseline = baselineY(
+            font: font, originY: origin.y, anchor: .leadingCenter,
+        )
+        return CGRect(
+            x: origin.x, y: baseline + ink.top,
+            width: width, height: max(0, ink.bottom - ink.top),
+        )
     }
 
     /// Tempo is a mixed Bravura + Edwin run list; sum the run widths
@@ -202,17 +280,30 @@ extension LayoutElementShape {
             let f = run.kind == .musicSymbol ? glyphFont : textFont
             width += provider.typographicWidth(text: run.text, font: f)
         }
-        // The metronome glyph's descender reaches below the text's own
-        // descent, so take the taller of the two boxes.
-        let height = max(
-            provider.ascent(font: textFont)
-                + provider.descent(font: textFont),
-            provider.ascent(font: glyphFont)
-                + provider.descent(font: glyphFont),
-        )
+        // Edwin's em box is a fair stand-in for its own ink, so the
+        // text half of the run keeps it. The Bravura half must NOT —
+        // its em box is 4 em (see `smuflRunInkExtent`), which at the
+        // tempo size is 68 pt of skyline against ~14 pt of metronome
+        // glyph. Union the text box with the glyphs' measured ink.
+        let textHeight = provider.ascent(font: textFont)
+            + provider.descent(font: textFont)
+        var top = origin.y - textHeight / 2
+        var bottom = origin.y + textHeight / 2
+        let glyphs = MusicTextRuns.runs(in: text)
+            .filter { $0.kind == .musicSymbol }
+            .map(\.text).joined()
+        if let ink = smuflRunInkExtent(
+            glyphs: glyphs, pointSize: glyphFont.pointSize,
+        ) {
+            let baseline = baselineY(
+                font: textFont, originY: origin.y, anchor: .center,
+            )
+            top = min(top, baseline + ink.top)
+            bottom = max(bottom, baseline + ink.bottom)
+        }
         return CGRect(
-            x: origin.x, y: origin.y - height / 2,
-            width: width, height: height,
+            x: origin.x, y: top,
+            width: width, height: max(0, bottom - top),
         )
     }
 

@@ -356,6 +356,48 @@
             #expect(dyn.midY < lyr.midY)
         }
 
+        /// …and the dynamic must not shove the lyric row halfway down
+        /// the page while doing it.
+        ///
+        /// Found by the Task-10 corpus scan: the dynamics shape was
+        /// Bravura's em box (16 sp at the 4 sp dynamics size) instead
+        /// of the ~1.1 sp of `mf` ink, so every dynamic claimed 8 sp
+        /// of skyline below its own origin and the lyric row — the
+        /// next below-staff category — cleared all of it.
+        @available(macOS 15.0, iOS 16.0, *)
+        @Test func dynamicsDoNotShoveLyricsDownAnEmBox() throws {
+            let note = Note(pitch: 71, tpc: 17)
+            var chord = Chord(
+                duration: .quarter, notes: ChordNotes([note]),
+            )
+            chord.lyrics = [Lyric(text: "sing", verse: 0)]
+            let voice = Voice(elements: [
+                .clef(Clef(concertClefType: "G")),
+                .timeSignature(
+                    TimeSignature(numerator: 4, denominator: 4),
+                ),
+                .dynamic(Dynamic(subtype: "mf", velocity: 80)),
+                .chord(chord),
+            ])
+            let doc = SkylineFixtures.layout(SkylineFixtures.score(
+                measures: [Measure(voices: [voice])],
+            ))
+            let system = try #require(doc.systems.first)
+            let staffBottom = try #require(system.staffOrigins.first).y
+                + system.sp * 4
+            let shapes = SkylineFixtures.autoplacedShapes(doc)
+            let lyr = try #require(
+                shapes.first { $0.kind == .lyrics }?.shape.bbox,
+            )
+            // Dynamic ink (~1.1 sp) + 0.5 sp clearance + the lyric's
+            // own box leaves the row within ~4 sp of the staff; the em
+            // box put it past 16 sp.
+            #expect(
+                lyr.maxY - staffBottom < system.sp * 5,
+                "lyric row \(lyr.maxY - staffBottom) pt below the staff",
+            )
+        }
+
         /// A melisma rule belongs to the verse row it underlines, even
         /// in a multi-verse system where the row below is nearer in
         /// raw Y.
