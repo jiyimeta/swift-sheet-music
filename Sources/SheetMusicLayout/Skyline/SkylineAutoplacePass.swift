@@ -136,6 +136,7 @@ enum SkylineAutoplacePass {
             guard !addresses.isEmpty else { continue }
             let groups = group(
                 addresses, by: category.grouping, in: measures,
+                sp: metrics.sp,
             )
             for members in groups {
                 apply(
@@ -165,7 +166,7 @@ extension SkylineAutoplacePass {
 
     private static func group(
         _ addresses: [Address], by grouping: Grouping,
-        in measures: [[LayoutElement]],
+        in measures: [[LayoutElement]], sp: CGFloat,
     ) -> [[Address]] {
         switch grouping {
         case .individual:
@@ -173,17 +174,21 @@ extension SkylineAutoplacePass {
         case .wholeStaff:
             return [addresses]
         case .lyricVerses:
-            return lyricVerseGroups(addresses, in: measures)
+            return lyricVerseGroups(addresses, in: measures, sp: sp)
         }
     }
 
     /// Bucket lyric-family elements into verse rows. `LayoutElement`
     /// carries no verse index, but the system-wide lyric-Y alignment
     /// that runs immediately before this pass has already snapped every
-    /// syllable of one verse to a single Y, so distinct Y values ARE
-    /// the verse rows. Melismas and hyphens join the nearest row.
+    /// syllable of one verse to a single Y, so distinct `.textMark`
+    /// Y values ARE the verse rows. Melismas and hyphens join the row
+    /// whose EXPECTED position for their kind they sit closest to —
+    /// see `rowOffset(for:sp:)`; a raw-Y comparison would put every
+    /// melisma one row too low.
     private static func lyricVerseGroups(
         _ addresses: [Address], in measures: [[LayoutElement]],
+        sp: CGFloat,
     ) -> [[Address]] {
         var rows: [CGFloat] = []
         for a in addresses {
@@ -193,14 +198,23 @@ extension SkylineAutoplacePass {
             if !rows.contains(y) { rows.append(y) }
         }
         rows.sort()
+        // Degenerate case: a system whose lyric family is nothing but
+        // melismas / hyphens — a melisma continuing across a system
+        // break with no syllable of its own in this system — has no
+        // row anchor to bucket against, so every verse shares one
+        // `dy`. Over-constraining (one verse's clash pushes the
+        // others) is the safe direction: it never lets a rule land on
+        // top of something, it only leaves extra air.
         guard !rows.isEmpty else { return [addresses] }
         var buckets = [[Address]](repeating: [], count: rows.count)
         for a in addresses {
-            let y = elementY(measures[a.measure][a.index])
+            let element = measures[a.measure][a.index]
+            let y = elementY(element)
+            let offset = rowOffset(for: element, sp: sp)
             var best = 0
             var bestDelta = CGFloat.infinity
             for (i, row) in rows.enumerated() {
-                let delta = abs(row - y)
+                let delta = abs(row + offset - y)
                 if delta < bestDelta {
                     bestDelta = delta
                     best = i
@@ -221,6 +235,35 @@ extension SkylineAutoplacePass {
         default:
             return LayoutEngine.elementYPoints(element).first ?? 0
         }
+    }
+
+    /// Where `element` is emitted RELATIVE to its own verse row's Y,
+    /// so the nearest-row search in `lyricVerseGroups` compares like
+    /// with like.
+    ///
+    /// Lyric text is `.center`-anchored exactly on the row Y, and a
+    /// hyphen is drawn at the lyric text's midline and carried along
+    /// by `shiftLyricTextY`, so both offsets are zero. A melisma rule
+    /// instead sits at the row's UNDERLINE level,
+    /// `LayoutEngine.melismaLineYOffset` = 0.9 sp below it (see
+    /// `LayoutEngine+Lyrics.emitMelismaContinuation`).
+    ///
+    /// Verse rows are pitched 1.7 sp apart, so comparing a melisma's
+    /// raw Y against the rowYs measures 0.9 sp to its own row versus
+    /// 1.7 − 0.9 = 0.8 sp to the row below — systematically picking
+    /// the WRONG row. `setMelismaAbsoluteY` snaps every melisma in the
+    /// system to verse 0's underline, so before this offset was
+    /// applied every melisma in a 2+-verse system landed in verse 1's
+    /// bucket: the rule detached from the syllables it underlines, and
+    /// its own clearance requirement pushed verse 1 down for a clash
+    /// that belonged to verse 0.
+    private static func rowOffset(
+        for element: LayoutElement, sp: CGFloat,
+    ) -> CGFloat {
+        if case .lyricsMelisma = element {
+            return LayoutEngine.melismaLineYOffset(sp: sp)
+        }
+        return 0
     }
 
     /// Compute one `dy` for the group (max over its members), apply it

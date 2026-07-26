@@ -35,13 +35,15 @@
 
         /// `quarterMeasure` plus a chord symbol on the downbeat.
         /// `Harmony` is a `VoiceElement`, not a `Measure` property.
-        static func harmonyMeasure(name: String = "C") -> Measure {
+        static func harmonyMeasure(
+            name: String = "C", offsetX: Double = 0,
+        ) -> Measure {
             Measure(voices: [Voice(elements: [
                 .clef(Clef(concertClefType: "G")),
                 .timeSignature(
                     TimeSignature(numerator: 4, denominator: 4),
                 ),
-                .harmony(Harmony(name: name)),
+                .harmony(Harmony(name: name, offsetX: offsetX)),
                 .chord(Chord(
                     duration: .quarter,
                     notes: ChordNotes([Note(pitch: 71, tpc: 17)]),
@@ -61,6 +63,33 @@
                     duration: .quarter, notes: ChordNotes([]),
                 )),
             ])])
+        }
+
+        /// Two quarter chords carrying two verses, where verse 0's
+        /// syllable is held across both notes so a melisma rule is
+        /// emitted at verse 0's underline level.
+        static func twoVerseMelismaScore() -> Score {
+            var held = Chord(
+                duration: .quarter,
+                notes: ChordNotes([Note(pitch: 71, tpc: 17)]),
+            )
+            held.lyrics = [
+                Lyric(text: "aah", ticks: 960, verse: 0),
+                Lyric(text: "two", verse: 1),
+            ]
+            var second = Chord(
+                duration: .quarter,
+                notes: ChordNotes([Note(pitch: 71, tpc: 17)]),
+            )
+            second.lyrics = [Lyric(text: "verse", verse: 1)]
+            return score(measures: [Measure(voices: [Voice(elements: [
+                .clef(Clef(concertClefType: "G")),
+                .timeSignature(
+                    TimeSignature(numerator: 4, denominator: 4),
+                ),
+                .chord(held),
+                .chord(second),
+            ])])])
         }
 
         @available(macOS 15.0, iOS 16.0, *)
@@ -224,10 +253,21 @@
             let d = try #require(SkylineFixtures.overlap(
                 .rehearsalMark, .measureNumber, in: doc,
             ))
+            // `-infinity` would mean the pair never shares a horizontal
+            // band, which makes `d <= 0` vacuously true.
+            #expect(d.isFinite, "no horizontal interaction to test")
             #expect(d <= 0, "overlap of \(d) pt")
         }
 
         /// Tempo × measure number.
+        ///
+        /// Tempo is emitted at the first chord's tick column — past the
+        /// clef and time signature — while the measure number sits at
+        /// `x = −0.5 sp`, so at their default X they never share a
+        /// horizontal band and the assertion would be vacuous. The
+        /// `offsetX` reproduces the author `<offset>` that puts a tempo
+        /// mark back over the system head, which is how the pair
+        /// actually collides in the corpus.
         @available(macOS 15.0, iOS 16.0, *)
         @Test func tempoClearsMeasureNumber() throws {
             let score = SkylineFixtures.score(
@@ -235,7 +275,9 @@
                 systemMeasures: [SystemMeasure(elements: [
                     PositionedSystemElement(
                         position: .start,
-                        element: .tempo(Tempo(beatsPerSecond: 2)),
+                        element: .tempo(
+                            Tempo(beatsPerSecond: 2, offsetX: -9),
+                        ),
                     ),
                 ])],
             )
@@ -243,14 +285,22 @@
             let d = try #require(SkylineFixtures.overlap(
                 .tempo, .measureNumber, in: doc,
             ))
+            #expect(d.isFinite, "no horizontal interaction to test")
             #expect(d <= 0, "overlap of \(d) pt")
         }
 
         /// Harmony × rehearsal mark.
+        ///
+        /// Same reasoning as `tempoClearsMeasureNumber`: a chord symbol
+        /// anchored on the first chord starts to the right of a
+        /// measure-left rehearsal mark, so the `offsetX` reproduces the
+        /// author offset that makes the two share a horizontal band.
         @available(macOS 15.0, iOS 16.0, *)
         @Test func harmonyClearsRehearsalMark() throws {
             let score = SkylineFixtures.score(
-                measures: [SkylineFixtures.harmonyMeasure()],
+                measures: [
+                    SkylineFixtures.harmonyMeasure(offsetX: -5),
+                ],
                 systemMeasures: [SystemMeasure(elements: [
                     PositionedSystemElement(
                         position: .start,
@@ -264,6 +314,7 @@
             let d = try #require(SkylineFixtures.overlap(
                 .harmony, .rehearsalMark, in: doc,
             ))
+            #expect(d.isFinite, "no horizontal interaction to test")
             #expect(d <= 0, "overlap of \(d) pt")
         }
 
@@ -292,6 +343,7 @@
             let d = try #require(SkylineFixtures.overlap(
                 .lyrics, .dynamics, in: doc,
             ))
+            #expect(d.isFinite, "no horizontal interaction to test")
             #expect(d <= 0, "overlap of \(d) pt")
             // MuseScore's ordering: dynamics closer to the staff.
             let shapes = SkylineFixtures.autoplacedShapes(doc)
@@ -302,6 +354,51 @@
                 shapes.first { $0.kind == .lyrics }?.shape.bbox,
             )
             #expect(dyn.midY < lyr.midY)
+        }
+
+        /// A melisma rule belongs to the verse row it underlines, even
+        /// in a multi-verse system where the row below is nearer in
+        /// raw Y.
+        ///
+        /// The rule is emitted at `verse0Y + melismaLineYOffset`
+        /// (0.9 sp), verse rows are 1.7 sp apart, and
+        /// `setMelismaAbsoluteY` snaps EVERY melisma in the system to
+        /// verse 0's underline. A nearest-row search on raw Y measures
+        /// 0.9 sp to verse 0 but only 0.8 sp to verse 1, so it puts the
+        /// rule in verse 1's group — the rule then takes verse 1's `dy`
+        /// and detaches from the syllables it underlines. Verse 1 is
+        /// pushed down here (its box collides with verse 0's), so the
+        /// two `dy`s differ and the offset stays diagnostic.
+        @available(macOS 15.0, iOS 16.0, *)
+        @Test func melismaStaysWithItsOwnVerseRow() throws {
+            let doc = SkylineFixtures.layout(
+                SkylineFixtures.twoVerseMelismaScore(),
+            )
+            let system = try #require(doc.systems.first)
+            var verse0Y = CGFloat.infinity
+            var melismaY: CGFloat?
+            for measure in system.measures {
+                for el in measure.elements {
+                    switch el {
+                    case let .textMark(.lyrics, _, p):
+                        verse0Y = min(verse0Y, p.y)
+                    case let .lyricsMelisma(from, _):
+                        melismaY = from.y
+                    default:
+                        break
+                    }
+                }
+            }
+            #expect(verse0Y.isFinite, "fixture emitted no lyric text")
+            let rule = try #require(
+                melismaY, "fixture emitted no melisma rule",
+            )
+            // The rule must still sit exactly one underline offset
+            // below verse 0's row after autoplace.
+            #expect(
+                abs(rule - (verse0Y + system.sp * 0.9)) < 0.01,
+                "rule at \(rule), verse 0 row at \(verse0Y)",
+            )
         }
 
         /// The pass only ever pushes AWAY from the staff: with nothing
