@@ -15,6 +15,7 @@
                 showsInvisibleElements: 1,
                 hiddenStaves: [HiddenStaffWire(partIndex: 1, staffIndexInPart: 0)],
                 clefOverrides: [ClefOverrideWire(partIndex: 0, staffIndexInPart: 1, rawType: "F8va")],
+                transposeSemitones: 0,
             )
             let decoded = try LayoutOptionsCodec.decode(wire.encodeToData())
             #expect(decoded.staffSize == 18.5)
@@ -33,6 +34,7 @@
                 showsInvisibleElements: 0,
                 hiddenStaves: [],
                 clefOverrides: [],
+                transposeSemitones: 0,
             )
             let decoded = try LayoutOptionsCodec.decode(wire.encodeToData())
             #expect(decoded.mode == .vertical)
@@ -50,6 +52,7 @@
                 showsInvisibleElements: 0,
                 hiddenStaves: [],
                 clefOverrides: [],
+                transposeSemitones: 0,
             )
             let decoded = try LayoutOptionsCodec.decode(wire.encodeToData())
             #expect(decoded.mode == .horizontal)
