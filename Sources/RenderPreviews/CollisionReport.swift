@@ -13,6 +13,10 @@
     ///
     ///   SM_COLLIDE_DIR — directory to scan (required to activate)
     ///   SM_COLLIDE_LIMIT — max files to process (default: all)
+    ///   SM_COLLIDE_LIST — max individual collisions to list (default 50)
+    ///   SM_COLLIDE_SPANNERS — also pair `system.spanners` against the
+    ///     per-measure elements (off by default so the historical
+    ///     annotation-only count stays comparable across runs)
     ///
     /// No score path is hardcoded and no result is committed — the
     /// corpus is the author's private library.
@@ -26,12 +30,13 @@
     ///   annotation that clears it, CONSISTENTLY — reports zero
     ///   collisions. `LayoutElementShapeTests` pins those bands
     ///   positionally for that reason.
-    /// - **Spanner segments** never appear at all: this walks
+    /// - **Spanner segments** are off by default: the walk covers
     ///   `measure.elements + markers + jumps`, while hairpins, pedals,
     ///   voltas, ottavas and text lines are synthesized into
-    ///   `LayoutSystem.spanners` by `LayoutEngine+Spanners`. So
-    ///   `dynamics × hairpin` and every other spanner pair is outside
-    ///   the metric.
+    ///   `LayoutSystem.spanners` by `LayoutEngine+Spanners`. Set
+    ///   `SM_COLLIDE_SPANNERS=1` to fold them in — they are reported
+    ///   under the same pair histogram, so the total is no longer
+    ///   comparable with a run that leaves the flag off.
     @available(macOS 15.0, *)
     @MainActor
     enum CollisionReport {
@@ -46,6 +51,11 @@
             let a: String
             let b: String
             let overlap: CGFloat
+        }
+
+        /// Whether `system.spanners` participates. Off by default.
+        private static var includesSpanners: Bool {
+            ProcessInfo.processInfo.environment["SM_COLLIDE_SPANNERS"] != nil
         }
 
         static func run() throws {
@@ -110,6 +120,21 @@
                         shapes.append((shape, kind))
                     }
                 }
+                if includesSpanners {
+                    // Spanner origins are already system-local, so no
+                    // per-measure `xOffset` applies here.
+                    for el in system.spanners {
+                        guard let kind = LayoutElementShape.kind(of: el),
+                              AutoplaceRules.isAutoplaced(kind),
+                              let shape = LayoutElementShape.shape(
+                                  for: el, id: id, xOffset: 0,
+                                  metrics: metrics,
+                              )
+                        else { continue }
+                        id += 1
+                        shapes.append((shape, kind))
+                    }
+                }
                 found.append(contentsOf: pairwise(
                     shapes, file: url.lastPathComponent, system: sysIdx,
                 ))
@@ -128,7 +153,7 @@
                     let (sb, kb) = shapes[j]
                     guard let ia = sa.rects.first?.item,
                           let ib = sb.rects.first?.item,
-                          !AutoplaceRules.shouldIgnoreEachOther(ia, ib)
+                          !ignoreForReporting(ia, ib)
                     else { continue }
                     guard let d = overlapDepth(sa, sb) else { continue }
                     found.append(Collision(
@@ -138,6 +163,22 @@
                 }
             }
             return found
+        }
+
+        /// Reporting policy, which is deliberately NOT the autoplace
+        /// policy. `AutoplaceRules.shouldIgnoreEachOther` exempts
+        /// `dynamics × hairpin` because the pass must not push them
+        /// apart VERTICALLY — MuseScore snaps them into one chain and
+        /// resolves the clash horizontally instead. That exemption says
+        /// nothing about whether ink ends up on top of ink, so for
+        /// detection the pair stays in.
+        private static func ignoreForReporting(
+            _ a: ShapeItem, _ b: ShapeItem,
+        ) -> Bool {
+            if Set([a.kind, b.kind]) == Set([ShapeItemKind.dynamics, .hairpin]) {
+                return a.id == b.id
+            }
+            return AutoplaceRules.shouldIgnoreEachOther(a, b)
         }
 
         /// True 2D overlap between two shapes, in points, or `nil` when
@@ -178,7 +219,9 @@
             for (pair, count) in byPair.sorted(by: { $0.value > $1.value }) {
                 print("  \(count)\t\(pair)")
             }
-            for c in all.prefix(50) {
+            let listLimit = ProcessInfo.processInfo
+                .environment["SM_COLLIDE_LIST"].flatMap { Int($0) } ?? 50
+            for c in all.prefix(listLimit) {
                 print(
                     "\(c.file):\(c.system):\(c.staff) — "
                         + "\(c.a) x \(c.b) (\(String(format: "%.1f", c.overlap)) pt)",
