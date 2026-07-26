@@ -400,7 +400,7 @@ class AndroidPlaybackEngine internal constructor(
                 }
                 eng.writeFloat(frameCount, left, right)
                 val mm = this@AndroidPlaybackEngine.metronomeMixer
-                if (mm != null && mm.isEnabled) {
+                if (mm != null && mm.isAudible) {
                     val mLeft = FloatArray(frameCount)
                     val mRight = FloatArray(frameCount)
                     mm.synth.writeFloat(frameCount, mLeft, mRight)
@@ -468,19 +468,29 @@ class AndroidPlaybackEngine internal constructor(
         // reader's point of view, and pause() during the clicks has to be able to cancel it. The score
         // itself only starts once the pre-roll has been waited out (see [countInJob]).
         _state.value = PlaybackState.PLAYING
+        // Open the metronome's mix path for the pre-roll. Firing a click is not enough on its own: the
+        // render loop skips the metronome synth entirely while it is inaudible, so with the metronome
+        // switched off the count-in would play into a buffer nobody sums.
+        metronomeMixer?.isCountingIn = true
         countInJob = pollScope.launch {
-            var elapsed = 0.0
-            for (beat in schedule.beats) {
-                delay(secondsToMillis(beat.offsetSeconds - elapsed))
-                elapsed = beat.offsetSeconds
-                metronomeMixer?.fireCountInClick(beat.isDownbeat)
+            try {
+                var elapsed = 0.0
+                for (beat in schedule.beats) {
+                    delay(secondsToMillis(beat.offsetSeconds - elapsed))
+                    elapsed = beat.offsetSeconds
+                    metronomeMixer?.fireCountInClick(beat.isDownbeat)
+                }
+                // Wait out the REST of the pre-roll region, not just up to the last click: the final
+                // beat still has to sound for its full length before beat 1 of the music lands.
+                delay(secondsToMillis(schedule.totalSeconds - elapsed))
+                countInJob = null
+                player.play()
+                startPollJob()
+            } finally {
+                // `finally`, so a cancelled pre-roll (pause / stop / seek / restart) also closes the mix
+                // path instead of leaving the metronome permanently audible.
+                metronomeMixer?.isCountingIn = false
             }
-            // Wait out the REST of the pre-roll region, not just up to the last click: the final beat
-            // still has to sound for its full length before beat 1 of the music lands.
-            delay(secondsToMillis(schedule.totalSeconds - elapsed))
-            countInJob = null
-            player.play()
-            startPollJob()
         }
     }
 
