@@ -65,30 +65,53 @@
             #expect(a.first?.yLines == b.first?.yLines)
             #expect(a.first?.xRange == b.first?.xRange)
 
-            // As of this writing, glyph order structurally CANNOT reach
-            // `detectStaves`'s output: every consumer of `classified` —
-            // `staffNoteheads.contains` in the stem veto
-            // (PDFImporter+StaffLines.swift:326-329) and `content.contains`
-            // in `segmentRegionHasContent`
-            // (PDFImporter+StaffLinesNarrow.swift:177-182) — is a pure
-            // existential predicate (an OR-reduction with no accumulation,
-            // no `first`/`min` tie-break). `contains(where:)` has the same
-            // truth table for an `Array` or a `Set` regardless of order or
-            // duplication, so swapping either container for a `Set` would
-            // NOT be caught here.
+            // `detectStaves` has THREE consumers of `classified`, and they do
+            // NOT all behave the same way:
+            //   1. `staffNoteheads.contains { … }` in the stem veto
+            //      (PDFImporter+StaffLines.swift:326-329) — existential,
+            //      order- and duplication-invariant.
+            //   2. `content.contains { … }` in `segmentRegionHasContent`
+            //      (PDFImporter+StaffLinesNarrow.swift:177-182) — same shape,
+            //      also invariant.
+            //   3. `appendGlyphDetectedStaves` (PDFImporter+StaffLines.swift
+            //      :185-217), called directly from `detectStaves` with the
+            //      RAW `classified` array — an ORDERED ACCUMULATION with
+            //      early-skip: it walks `.staff5Lines` glyphs in array order
+            //      and appends a synthesized `Staff` only if its y-band does
+            //      not already overlap one already appended. Which glyph
+            //      "wins" an overlapping pair depends on iteration order, and
+            //      that result propagates into `yLines` / `xRange` and
+            //      downstream `barlineCandidates`. This is genuinely
+            //      order-SENSITIVE, not invariant — do not read the first two
+            //      call sites as representative of all three.
             //
-            // What this assertion DOES guard against: a FUTURE change that
-            // makes glyph consumption order-SENSITIVE — e.g. accumulating
-            // `classified` into an array whose order reaches the output, or
-            // replacing a `contains` with `first(where:)` / `min(by:)`
-            // whose tie-break depends on input order. If that happens, this
-            // reversed-order comparison starts failing.
+            // So glyph order CAN reach `detectStaves`'s output in general.
+            // Determinism holds today NOT because the code is order-
+            // invariant, but because `WalkedContent.glyphs` is itself built
+            // deterministically: `ContentStreamWalker.walk()`
+            // (PDFImporter+ContentStream.swift:19-34) appends in page order,
+            // then content-stream order within a page — no `Dictionary`, no
+            // `Set`, no sort anywhere upstream. The input ordering is
+            // load-bearing, which is exactly why the front-end contract
+            // (`PDFImporter+Interpreter.swift`'s `WalkedContent` doc comment)
+            // states the "no Dictionary / Set iteration order" rule as a
+            // hard requirement rather than an implementation detail.
             //
-            // The `!isEmpty` guard stays regardless: without it, a future
-            // regression that broke barline detection entirely (dropping
-            // the fixture's one candidate) would still satisfy `[] == []`
-            // and this test would advertise a guarantee — on the ONE output
-            // glyph data touches at all — that it no longer provides.
+            // THIS FIXTURE covers only paths 1 and 2: it has no
+            // `.staff5Lines` glyphs, so `appendGlyphDetectedStaves`'s loop
+            // `continue`s immediately every iteration and never exercises
+            // its order-sensitive accumulation. The reversed-order
+            // comparison below therefore does NOT demonstrate that
+            // `detectStaves` is order-independent in general — only that
+            // paths 1 and 2 are, for this fixture's shape. A future fixture
+            // (or test) that adds overlapping `.staff5Lines` glyphs would be
+            // needed to pin path 3's behavior.
+            //
+            // The `!isEmpty` guard stays regardless of the above: without
+            // it, a future regression that broke barline detection entirely
+            // (dropping the fixture's one candidate) would still satisfy
+            // `[] == []`, and this test would advertise a guarantee it no
+            // longer provides even for the two paths it does cover.
             let aBarlines = (a.first?.barlineCandidates ?? [])
                 .sorted { $0.rect.minX < $1.rect.minX }
             let bBarlines = (b.first?.barlineCandidates ?? [])
