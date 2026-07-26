@@ -14,9 +14,34 @@ extension PDFImporter {
     /// `CGPDFScanner`'s opaque `info` pointer via `Unmanaged`.
     struct ContentStreamWalker {
         let document: PDFDocument
+        /// Threaded from `PDFImportOptions.enableShapeMatching`; forwarded to
+        /// every page's `GlyphClassifier`s. Default false so existing call
+        /// sites that don't pass it keep today's Tier-1-only behavior.
+        var enableShapeMatching = false
+        /// Threaded from `PDFImportOptions.disableSMuFLCodepointTier`;
+        /// forwarded to every page's `GlyphClassifier`s. TESTING ONLY —
+        /// default false.
+        var disableSMuFLCodepointTier = false
+        /// Threaded from `PDFImportOptions.anchorMusicGlyphsToPUARange`;
+        /// forwarded to every page's `PDFPageState`. TESTING ONLY — default
+        /// false.
+        var anchorMusicToPUARange = false
+        /// Threaded from `PDFImportOptions.bypassMusicFontGateForTesting`;
+        /// forwarded to every page's `GlyphClassifier`s. TESTING ONLY —
+        /// default false.
+        var bypassMusicFontGate = false
+        /// Threaded from `PDFImportOptions.musicFontGateBound` /
+        /// `.musicFontGateFraction` / `.shapeAcceptanceThreshold`; forwarded
+        /// to every page's `GlyphClassifier`s as instance configuration
+        /// (not shared mutable state — see `GlyphClassifier`'s `default*`
+        /// constants). Default to those same constants so callers that
+        /// don't override anything get production behavior.
+        var musicFontGateBound = GlyphClassifier.defaultMusicFontGateBound
+        var musicFontGateFraction = GlyphClassifier.defaultMusicFontGateFraction
+        var shapeAcceptanceThreshold = GlyphClassifier.defaultShapeAcceptanceThreshold
 
         func walk() throws -> WalkedContent {
-            var glyphs: [RawGlyph] = []
+            var glyphs: [ClassifiedGlyph] = []
             var texts: [TextGlyph] = []
             var paths: [PathSegment] = []
             var curves: [CurveArc] = []
@@ -25,6 +50,7 @@ extension PDFImporter {
                       let cgPage = page.pageRef
                 else { continue }
                 let state = PDFPageState(pageIndex: pageIndex)
+                state.anchorMusicToPUARange = anchorMusicToPUARange
                 walkPage(cgPage: cgPage, state: state)
                 glyphs.append(contentsOf: state.glyphs)
                 texts.append(contentsOf: state.texts)
@@ -40,6 +66,17 @@ extension PDFImporter {
             // CMap now and stash it on PageState keyed by resource name so
             // op_Tf can select the active CMap.
             state.fontCMaps = PDFImporter.extractFontCMaps(cgPage: cgPage)
+            let embedded = PDFImporter.extractEmbeddedFonts(cgPage: cgPage)
+            state.classifiers = embedded.mapValues {
+                GlyphClassifier(
+                    font: $0, enableShapeMatching: enableShapeMatching,
+                    disableSMuFLTier: disableSMuFLCodepointTier,
+                    bypassMusicFontGate: bypassMusicFontGate,
+                    shapeAcceptanceThreshold: shapeAcceptanceThreshold,
+                    musicFontGateBound: musicFontGateBound,
+                    musicFontGateFraction: musicFontGateFraction,
+                )
+            }
             guard let table = CGPDFOperatorTableCreate() else { return }
             defer { CGPDFOperatorTableRelease(table) }
             ContentStreamOperators.register(on: table)

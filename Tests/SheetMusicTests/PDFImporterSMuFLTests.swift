@@ -4,7 +4,25 @@
     @testable import SheetMusicPDF
     import Testing
 
-    struct PDFImporterSMuFLTests {
+    @MainActor struct PDFImporterSMuFLTests {
+        @Test func mapsBraceCodepointToBraceSemantic() {
+            #expect(PDFImporter.smuflSemantic(codepoint: 0xE000) == .brace)
+        }
+
+        @Test func semanticIsHashableAndDistinguishesCases() {
+            let set: Set<SMuFLSemantic> = [
+                .brace, .noteheadBlack, .rest(.quarter), .rest(.eighth),
+                .unknown(0xE999),
+            ]
+            #expect(set.count == 5)
+            #expect(set.contains(.rest(.quarter)))
+            #expect(!set.contains(.rest(.half)))
+        }
+
+        @Test func unknownCodepointStillFallsThrough() {
+            #expect(PDFImporter.smuflSemantic(codepoint: 0xE999) == .unknown(0xE999))
+        }
+
         @Test func classifiesNoteheads() {
             #expect(PDFImporter.smuflSemantic(codepoint: 0xE0A4) == .noteheadBlack)
             #expect(PDFImporter.smuflSemantic(codepoint: 0xE0A3) == .noteheadHalf)
@@ -62,6 +80,18 @@
             } else {
                 Issue.record("expected .unknown")
             }
+        }
+
+        @Test func pageStateAccumulatesClassifiedGlyphs() {
+            let state = PDFPageState(pageIndex: 0)
+            state.glyphs.append(ClassifiedGlyph(
+                geometry: GlyphGeometry(
+                    origin: .zero, advance: 5,
+                    pageIndex: 0, fontSize: 20,
+                ),
+                semantic: .noteheadBlack,
+            ))
+            #expect(state.glyphs.first?.semantic == .noteheadBlack)
         }
     }
 #endif

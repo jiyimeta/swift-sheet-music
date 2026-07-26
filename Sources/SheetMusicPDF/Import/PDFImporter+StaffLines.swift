@@ -17,7 +17,7 @@ extension PDFImporter {
         // always has a notehead within ~one notehead width; a barline does
         // not). Captured once here and threaded down.
         let noteheads = classified.filter {
-            $0.raw.pageIndex == pageIndex && isNotehead($0.semantic)
+            $0.geometry.pageIndex == pageIndex && isNotehead($0.semantic)
         }
         // Musical content (noteheads + rests) on this page, used to decide
         // whether a wide co-linear staff-line segment past the wide-cluster
@@ -25,7 +25,7 @@ extension PDFImporter {
         // gate dropped) rather than a content-free phantom margin — see
         // `extendXRangeWithNarrowSegments`.
         let contentGlyphs = classified.filter {
-            guard $0.raw.pageIndex == pageIndex else { return false }
+            guard $0.geometry.pageIndex == pageIndex else { return false }
             if isNotehead($0.semantic) { return true }
             if case .rest = $0.semantic { return true }
             return false
@@ -189,10 +189,10 @@ extension PDFImporter {
         noteheads: [ClassifiedGlyph],
         into staves: inout [Staff],
     ) {
-        for g in classified where g.raw.pageIndex == pageIndex {
+        for g in classified where g.geometry.pageIndex == pageIndex {
             guard case .staff5Lines = g.semantic else { continue }
-            let yMid = g.raw.origin.y
-            let lineSpacing = g.raw.fontSize / 4 // SMuFL design metric
+            let yMid = g.geometry.origin.y
+            let lineSpacing = g.geometry.fontSize / 4 // SMuFL design metric
             let ys = (0 ..< 5).map { yMid - lineSpacing * 2 + lineSpacing * CGFloat($0) }
             // Skip if this glyph's y-band overlaps any path-detected staff
             // (with a one-line-spacing slop for baseline/midline drift).
@@ -204,8 +204,8 @@ extension PDFImporter {
                 return gLo <= sHi && sLo <= gHi
             }
             if overlaps { continue }
-            let xMin = g.raw.origin.x
-            let xMax = g.raw.origin.x + g.raw.advance
+            let xMin = g.geometry.origin.x
+            let xMax = g.geometry.origin.x + g.geometry.advance
             staves.append(makeStaff(
                 yLines: ys,
                 xRange: xMin ... xMax,
@@ -293,7 +293,7 @@ extension PDFImporter {
         let yLo = yRange.lowerBound - yBand
         let yHi = yRange.upperBound + yBand
         let staffNoteheads = noteheads.filter {
-            $0.raw.origin.y >= yLo && $0.raw.origin.y <= yHi
+            $0.geometry.origin.y >= yLo && $0.geometry.origin.y <= yHi
         }
 
         // DEFENSE-IN-DEPTH for a heavily-justified FINAL bar. The staff's
@@ -324,7 +324,7 @@ extension PDFImporter {
             // Reject if a notehead abuts this vertical (⇒ it is a note stem).
             let x = p.rect.midX
             let hasAbuttingNotehead = staffNoteheads.contains { g in
-                let d = g.raw.origin.x - x // + ⇒ notehead is right of vertical
+                let d = g.geometry.origin.x - x // + ⇒ notehead is right of vertical
                 return d >= -leftReject && d <= rightReject
             }
             return !hasAbuttingNotehead

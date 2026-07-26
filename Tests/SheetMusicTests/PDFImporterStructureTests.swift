@@ -32,10 +32,9 @@
 
         private func dotsGlyph(at point: CGPoint) -> ClassifiedGlyph {
             ClassifiedGlyph(
-                raw: RawGlyph(
-                    codepoint: 0xE043, fontName: "Bravura",
-                    fontSize: 20, origin: point,
-                    advance: 5, pageIndex: 0,
+                geometry: GlyphGeometry(
+                    origin: point, advance: 5,
+                    pageIndex: 0, fontSize: 20,
                 ),
                 semantic: .repeatBarlineDots,
             )

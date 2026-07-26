@@ -72,13 +72,13 @@ extension PDFImporter {
         for (i, g) in sorted.enumerated() {
             if isNotehead(g.semantic) { break }
             guard let alt = accidentalAlteration(g.semantic) else { continue }
-            let sa = Int(((g.raw.origin.y - anchor.bottomY) / halfStep).rounded())
+            let sa = Int(((g.geometry.origin.y - anchor.bottomY) / halfStep).rounded())
             if alt > 0 {
-                sharpAccs.append((i, sa, g.raw.origin.x))
+                sharpAccs.append((i, sa, g.geometry.origin.x))
             } else if alt < 0 {
-                flatAccs.append((i, sa, g.raw.origin.x))
+                flatAccs.append((i, sa, g.geometry.origin.x))
             } else {
-                naturalAccs.append((i, sa, g.raw.origin.x))
+                naturalAccs.append((i, sa, g.geometry.origin.x))
             }
         }
 
@@ -191,16 +191,16 @@ extension PDFImporter {
         var lastContentX: CGFloat?
         for g in sorted {
             let isRest = if case .rest = g.semantic { true } else { false }
-            if isNotehead(g.semantic) || isRest { lastContentX = g.raw.origin.x }
+            if isNotehead(g.semantic) || isRest { lastContentX = g.geometry.origin.x }
         }
         guard let lastContentX else { return nil }
         let halfStep = anchor.lineSpacing / 2
         var naturalAccs: [(index: Int, sa: Int, x: CGFloat)] = []
-        for (i, g) in sorted.enumerated() where g.raw.origin.x > lastContentX {
+        for (i, g) in sorted.enumerated() where g.geometry.origin.x > lastContentX {
             guard let alt = accidentalAlteration(g.semantic) else { continue }
             if alt != 0 { return nil }
-            let sa = Int(((g.raw.origin.y - anchor.bottomY) / halfStep).rounded())
-            naturalAccs.append((i, sa, g.raw.origin.x))
+            let sa = Int(((g.geometry.origin.y - anchor.bottomY) / halfStep).rounded())
+            naturalAccs.append((i, sa, g.geometry.origin.x))
         }
         return readNaturalsCancellation(
             naturalAccs: naturalAccs, runningKey: runningKey,
@@ -268,8 +268,8 @@ extension PDFImporter {
             case .noteheadBlack, .noteheadHalf,
                  .noteheadWhole, .noteheadDoubleWhole,
                  .noteheadXBlack, .noteheadXHalf, .noteheadXWhole:
-                let dx = g.raw.origin.x - acc.raw.origin.x
-                let dy = abs(g.raw.origin.y - acc.raw.origin.y)
+                let dx = g.geometry.origin.x - acc.geometry.origin.x
+                let dy = abs(g.geometry.origin.y - acc.geometry.origin.y)
                 // Local accidental: notehead is just to the right (≤ ~14pt)
                 // at essentially the same y (≤ ~2pt, i.e. same staff line).
                 return dx >= 0 && dx <= 14 && dy <= 2

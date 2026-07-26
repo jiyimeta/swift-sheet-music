@@ -96,7 +96,7 @@ extension PDFImporter {
             // on the staff (a genuine courtesy signature) intact.
             let cutoff = staffTopLine(cell.staffYLines) + countDigitMargin(cell.staffYLines)
             bar.glyphs = cell.glyphs.filter { g in
-                if case .timeSignatureDigit = g.semantic, g.raw.origin.y > cutoff {
+                if case .timeSignatureDigit = g.semantic, g.geometry.origin.y > cutoff {
                     return false
                 }
                 return true
@@ -126,8 +126,8 @@ extension PDFImporter {
         let cutoff = staffTopLine(lines) + countDigitMargin(lines)
         let digits = cell.glyphs.compactMap { g -> (x: CGFloat, d: Int)? in
             guard case let .timeSignatureDigit(d) = g.semantic,
-                  g.raw.origin.y > cutoff else { return nil }
-            return (g.raw.origin.x, d)
+                  g.geometry.origin.y > cutoff else { return nil }
+            return (g.geometry.origin.x, d)
         }
         guard !digits.isEmpty, digits.count <= 4 else { return nil }
         var value = 0

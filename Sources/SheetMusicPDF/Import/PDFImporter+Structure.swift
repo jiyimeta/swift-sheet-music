@@ -47,7 +47,7 @@ extension PDFImporter {
     ) -> Int {
         glyphs.count(where: { glyph in
             guard glyph.semantic == .repeatBarlineDots else { return false }
-            let dx = glyph.raw.origin.x - primaryX
+            let dx = glyph.geometry.origin.x - primaryX
             return switch side {
             case .left: dx < 0 && dx >= -10
             case .right: dx > 0 && dx <= 10

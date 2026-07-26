@@ -7,7 +7,7 @@ import SheetMusicCore
 // Grace-note detection + attachment for the rhythm pass. MuseScore renders
 // grace / cue noteheads through a down-scaled text / current-transformation
 // matrix (~70% of the full notehead size) while keeping the `Tf` operand
-// uniform — so the `RawGlyph.renderedSize` (the combined-matrix scale,
+// uniform — so the `GlyphGeometry.renderedSize` (the combined-matrix scale,
 // captured in PDFImporter+ContentStream+TextShow) is the only signal that
 // separates a grace notehead from a full one.
 //
@@ -26,8 +26,8 @@ extension PDFImporter {
         var out = Set<Int>()
         for (i, g) in glyphs.enumerated()
             where isNotehead(g.semantic)
-            && g.raw.renderedSize > 0
-            && g.raw.renderedSize < threshold
+            && g.geometry.renderedSize > 0
+            && g.geometry.renderedSize < threshold
         {
             out.insert(i)
         }
@@ -40,14 +40,14 @@ extension PDFImporter {
     static func buildGraceChords(
         indices: Set<Int>,
         glyphs: [ClassifiedGlyph],
-        pitchByGlyph: [RawGlyph: DecodedPitch],
+        pitchByGlyph: [ClassifiedGlyph: DecodedPitch],
         tieMarks: TieMarks,
     ) -> [(x: CGFloat, grace: GraceChord)] {
         var graces: [(x: CGFloat, grace: GraceChord)] = []
         for i in indices.sorted() {
-            guard let dp = pitchByGlyph[glyphs[i].raw] else { continue }
+            guard let dp = pitchByGlyph[glyphs[i]] else { continue }
             let g = glyphs[i]
-            let id = NoteheadID(g.raw)
+            let id = NoteheadID(g.geometry)
             let note = Note(
                 pitch: dp.midi,
                 tpc: dp.tpc,
@@ -59,7 +59,7 @@ extension PDFImporter {
                 duration: .eighth,
                 notes: ChordNotes([note]),
             )
-            graces.append((x: g.raw.origin.x, grace: grace))
+            graces.append((x: g.geometry.origin.x, grace: grace))
         }
         return graces
     }

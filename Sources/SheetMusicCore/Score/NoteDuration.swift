@@ -8,7 +8,7 @@ import Foundation
 /// `resolved(in:)` against the measure's effective duration before
 /// asking for ticks or a Fraction. Mirrors MuseScore's
 /// `DurationType::V_MEASURE` and MusicXML's `<rest measure="yes"/>`.
-public enum NoteDuration: Sendable, Equatable {
+public enum NoteDuration: Sendable, Equatable, Hashable {
     case whole
     case half
     case quarter

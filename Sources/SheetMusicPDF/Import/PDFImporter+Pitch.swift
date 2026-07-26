@@ -25,7 +25,7 @@ extension PDFImporter {
             lhs.midi == rhs.midi && lhs.tpc == rhs.tpc
                 && lhs.noteheadX == rhs.noteheadX
                 && lhs.noteheadY == rhs.noteheadY
-                && lhs.glyph.raw == rhs.glyph.raw
+                && lhs.glyph.geometry == rhs.glyph.geometry
         }
     }
 
@@ -50,7 +50,7 @@ extension PDFImporter {
         if activeClef.concertClefType == "PERCUSSION" {
             return decodePercussion(measure: measure, anchor: anchor)
         }
-        let sorted = measure.glyphs.sorted { $0.raw.origin.x < $1.raw.origin.x }
+        let sorted = measure.glyphs.sorted { $0.geometry.origin.x < $1.geometry.origin.x }
         let placed = pairAccidentalsPositional(sorted: sorted, anchor: anchor)
         // Running measure-local accidental state: an accidental applies to
         // its own note and all SUBSEQUENT same-pitch notes in the measure,
@@ -61,7 +61,7 @@ extension PDFImporter {
         var nextAcc = 0
         var out: [DecodedPitch] = []
         for g in sorted where isNotehead(g.semantic) {
-            let key = pitchKey(noteheadY: g.raw.origin.y, anchor: anchor)
+            let key = pitchKey(noteheadY: g.geometry.origin.y, anchor: anchor)
             // Promote every accidental whose x is at or before this
             // notehead into the running state before resolving it. An
             // accidental at THIS note's pitch promoted in this batch (i.e.
@@ -69,7 +69,7 @@ extension PDFImporter {
             // note's OWN written accidental — record its alteration so the
             // assembled note can carry it.
             var ownAlteration: Int?
-            while nextAcc < placed.count, placed[nextAcc].x <= g.raw.origin.x + 0.5 {
+            while nextAcc < placed.count, placed[nextAcc].x <= g.geometry.origin.x + 0.5 {
                 if placed[nextAcc].key == key { ownAlteration = placed[nextAcc].alt }
                 activeLocals[placed[nextAcc].key] = placed[nextAcc].alt
                 nextAcc += 1
@@ -94,8 +94,8 @@ extension PDFImporter {
             out.append(DecodedPitch(
                 midi: midi,
                 tpc: tonalPitchClass(step: key.diatonicStep, alteration: alteration),
-                noteheadX: g.raw.origin.x,
-                noteheadY: g.raw.origin.y,
+                noteheadX: g.geometry.origin.x,
+                noteheadY: g.geometry.origin.y,
                 glyph: g,
                 accidental: ownAccidental,
             ))
@@ -271,9 +271,9 @@ extension PDFImporter {
             for j in (i + 1) ..< sorted.count {
                 let nh = sorted[j]
                 guard isNotehead(nh.semantic) else { continue }
-                let dx = nh.raw.origin.x - g.raw.origin.x
+                let dx = nh.geometry.origin.x - g.geometry.origin.x
                 if dx > maxPairDx { break } // x-sorted: nothing closer beyond
-                let dy = abs(nh.raw.origin.y - g.raw.origin.y)
+                let dy = abs(nh.geometry.origin.y - g.geometry.origin.y)
                 guard dy <= yTol else { continue }
                 if let current = best {
                     if dy < current.dy { best = (j, dy) }
@@ -283,8 +283,8 @@ extension PDFImporter {
             }
             if let best {
                 let nh = sorted[best.j]
-                let key = pitchKey(noteheadY: nh.raw.origin.y, anchor: anchor)
-                placed.append(PlacedAccidental(x: g.raw.origin.x, key: key, alt: alt))
+                let key = pitchKey(noteheadY: nh.geometry.origin.y, anchor: anchor)
+                placed.append(PlacedAccidental(x: g.geometry.origin.x, key: key, alt: alt))
             }
         }
         return placed.sorted { $0.x < $1.x }

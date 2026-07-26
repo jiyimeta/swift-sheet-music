@@ -79,13 +79,9 @@
         @Test func glyphsAreAssignedToTheirMeasureCell() {
             let s = staff(yMid: 500, xRange: 50 ... 550, barlineXs: [200, 400, 550])
             let g = ClassifiedGlyph(
-                raw: RawGlyph(
-                    codepoint: 0xE0A4,
-                    fontName: "Bravura",
-                    fontSize: 20,
-                    origin: CGPoint(x: 250, y: 500),
-                    advance: 5,
-                    pageIndex: 0,
+                geometry: GlyphGeometry(
+                    origin: CGPoint(x: 250, y: 500), advance: 5,
+                    pageIndex: 0, fontSize: 20,
                 ),
                 semantic: .noteheadBlack,
             )

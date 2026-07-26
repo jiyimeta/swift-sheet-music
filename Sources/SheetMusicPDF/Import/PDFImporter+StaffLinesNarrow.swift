@@ -175,10 +175,10 @@ extension PDFImporter {
         let yLo = lo - band
         let yHi = hi + band
         return content.contains { g in
-            g.raw.origin.x >= seg.rect.minX
-                && g.raw.origin.x <= seg.rect.maxX
-                && g.raw.origin.y >= yLo
-                && g.raw.origin.y <= yHi
+            g.geometry.origin.x >= seg.rect.minX
+                && g.geometry.origin.x <= seg.rect.maxX
+                && g.geometry.origin.y >= yLo
+                && g.geometry.origin.y <= yHi
         }
     }
 }

@@ -25,14 +25,13 @@
             }
         }
 
-        private static func makeRawGlyph(codepoint: UInt32) -> RawGlyph {
-            RawGlyph(
-                codepoint: codepoint,
-                fontName: "Bravura",
-                fontSize: 20,
-                origin: CGPoint(x: 100, y: 700),
-                advance: 5,
-                pageIndex: 0,
+        private static func makeGlyph(_ semantic: SMuFLSemantic) -> ClassifiedGlyph {
+            ClassifiedGlyph(
+                geometry: GlyphGeometry(
+                    origin: CGPoint(x: 100, y: 700), advance: 5,
+                    pageIndex: 0, fontSize: 20,
+                ),
+                semantic: semantic,
             )
         }
 
@@ -40,10 +39,7 @@
             let sink = DiagnosticSink()
             var opts = PDFImportOptions()
             opts.diagnostics = { d in sink.append(d) }
-            let glyph = ClassifiedGlyph(
-                raw: Self.makeRawGlyph(codepoint: 0xE999),
-                semantic: .unknown(0xE999),
-            )
+            let glyph = Self.makeGlyph(.unknown(0xE999))
             PDFImporter.emitUnknownGlyphDiagnostics([glyph], options: opts)
             let captured = sink.snapshot
             #expect(captured.count == 1)
@@ -54,10 +50,7 @@
         @Test func nilCallbackIsSilent() {
             var opts = PDFImportOptions()
             opts.diagnostics = nil
-            let glyph = ClassifiedGlyph(
-                raw: Self.makeRawGlyph(codepoint: 0xE999),
-                semantic: .unknown(0xE999),
-            )
+            let glyph = Self.makeGlyph(.unknown(0xE999))
             // Must not crash; no observable side-effect.
             PDFImporter.emitUnknownGlyphDiagnostics([glyph], options: opts)
         }
@@ -66,10 +59,7 @@
             let sink = DiagnosticSink()
             var opts = PDFImportOptions()
             opts.diagnostics = { d in sink.append(d) }
-            let glyph = ClassifiedGlyph(
-                raw: Self.makeRawGlyph(codepoint: 0xE0A4),
-                semantic: .noteheadBlack,
-            )
+            let glyph = Self.makeGlyph(.noteheadBlack)
             PDFImporter.emitUnknownGlyphDiagnostics([glyph], options: opts)
             #expect(sink.snapshot.isEmpty)
         }
