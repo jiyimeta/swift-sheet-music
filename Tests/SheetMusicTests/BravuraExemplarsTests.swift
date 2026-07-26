@@ -5,6 +5,31 @@
     import Testing
 
     @MainActor struct BravuraExemplarsTests {
+        /// Pairs whose Bravura outlines are IDENTICAL after normalization, so
+        /// no shape-only descriptor can separate them. Measured 2026-07-26.
+        ///
+        /// `rest(.whole)` (U+E4E3) and `rest(.half)` (U+E4E4) are the same
+        /// rectangle in Bravura; they differ only in vertical position
+        /// relative to the staff — whole hangs below the 4th line, half sits
+        /// on the 3rd. `normalizedBitmap` centres the bounding box and
+        /// therefore discards exactly that difference. Resolving them
+        /// requires staff-relative geometry, which Tier 4 does not see.
+        ///
+        /// A pair NOT in this set that collides is a real, unexpected
+        /// regression and must still fail the build.
+        private static let knownShapeCollisions: Set<Set<String>> = [
+            [
+                String(describing: SMuFLSemantic.rest(.whole)),
+                String(describing: SMuFLSemantic.rest(.half)),
+            ],
+        ]
+
+        private static func isKnownCollision(
+            _ a: SMuFLSemantic, _ b: SMuFLSemantic,
+        ) -> Bool {
+            knownShapeCollisions.contains([String(describing: a), String(describing: b)])
+        }
+
         @Test func buildsExemplarForEveryClassifiableSemantic() {
             let all = BravuraExemplars.all
             #expect(all.count >= 40)
@@ -23,9 +48,17 @@
 
         @Test func exemplarsAreMutuallyDistinct() {
             let all = BravuraExemplars.all
-            // No two DIFFERENT semantics may produce an identical descriptor.
+            // No two DIFFERENT semantics may produce an identical descriptor,
+            // except the documented shape-only collisions in
+            // `knownShapeCollisions` — those are a measured, real finding
+            // (translation-invariant normalization discards staff-relative
+            // position), not a bug. Anything NOT in that allowlist must
+            // still fail here.
             for i in 0 ..< all.count {
                 for j in (i + 1) ..< all.count where all[i].semantic != all[j].semantic {
+                    guard !Self.isKnownCollision(all[i].semantic, all[j].semantic) else {
+                        continue
+                    }
                     #expect(all[i].descriptor != all[j].descriptor)
                 }
             }
@@ -43,7 +76,7 @@
         /// table exists to quantify across the whole label set.
         @Test func reportsNearestOtherExemplarMargins() {
             let all = BravuraExemplars.all
-            var rows: [(String, String, Double)] = []
+            var rows: [(e: SMuFLSemantic, nearest: SMuFLSemantic, d: Double)] = []
             for e in all {
                 var nearestOther: (semantic: SMuFLSemantic, d: Double)?
                 for c in all where c.semantic != e.semantic {
@@ -53,18 +86,26 @@
                     }
                 }
                 guard let n = nearestOther else { continue }
-                rows.append(("\(e.semantic)", "\(n.semantic)", n.d))
-                // Self must still be strictly nearest than any other.
-                #expect(n.d > 0, "\(e.semantic) collides exactly with \(n.semantic)")
+                rows.append((e.semantic, n.semantic, n.d))
             }
-            // Print the full table, tightest first — this is Task 14's baseline.
-            for r in rows.sorted(by: { $0.2 < $1.2 }) {
+            // Print the full table, tightest first — this is Task 14's
+            // baseline. Unconditional: printed regardless of the assertions
+            // below, so the measurement is always available even if a new
+            // collision trips the checks.
+            for r in rows.sorted(by: { $0.d < $1.d }) {
                 print(String(
                     format: "[margin] %-28@ nearest-other %-28@ %.4f",
-                    r.0 as NSString,
-                    r.1 as NSString,
-                    r.2,
+                    "\(r.e)" as NSString,
+                    "\(r.nearest)" as NSString,
+                    r.d,
                 ))
+            }
+            // Self must still be strictly nearest than any other, except for
+            // the documented shape-only collisions in `knownShapeCollisions`
+            // (margin 0 there is a real, unfixable finding, not a bug). A
+            // NEW zero-margin pair not in that allowlist must still fail.
+            for r in rows where !Self.isKnownCollision(r.e, r.nearest) {
+                #expect(r.d > 0, "\(r.e) collides exactly with \(r.nearest)")
             }
         }
     }
