@@ -109,31 +109,60 @@ func emitShow(_ bytes: [UInt8], state: TextShowState) {
 }
 
 #if canImport(CoreGraphics)
+    /// A text run accumulating inside one show-string operand, carrying the
+    /// text origin as of the moment its FIRST code was appended.
+    ///
+    /// The origin has to be captured up front because the loop advances the
+    /// text matrix per code: reading `currentOrigin` at flush time would
+    /// place the whole run at the position AFTER its last code. A legacy
+    /// simple font puts a whole word or line in one `Tj`, so that error is
+    /// the run's full width — enough to break lyric-to-note attachment.
+    private struct PendingTextRun {
+        private(set) var text = ""
+        private(set) var origin: CGPoint = .zero
+
+        var isEmpty: Bool {
+            text.isEmpty
+        }
+
+        mutating func append(_ scalar: Unicode.Scalar, startingAt start: CGPoint) {
+            if text.isEmpty { origin = start }
+            text.unicodeScalars.append(scalar)
+        }
+    }
+
     /// Emit a show-string operand for a simple font with NO usable
     /// `/ToUnicode` but a usable embedded program or `/Differences` — the
     /// legacy-music-font case (Maestro, Opus, Sonata) P1 targets. A simple
-    /// font uses 1-byte codes (not Identity-H's 2), and the byte code IS the
-    /// index into the font's own encoding: Tier 2 consults
-    /// `/Encoding /Differences[code]`, Tier 4 reads
-    /// `CTFontCreatePathForGlyph(font, CGGlyph(code))` — so passing the byte
-    /// as both codepoint and glyph ID is correct.
+    /// font uses 1-byte codes, not Identity-H's 2.
+    ///
+    /// The byte is a CHARACTER CODE in the font's own encoding, which is the
+    /// key Tier 2 looks up in `/Encoding /Differences`. It is NOT in general
+    /// the glyph ID Tier 4 needs: measured on real Finale output, a subsetted
+    /// simple font's content-stream bytes are its PRE-subset character codes
+    /// (207, 35, 98, 46, …), outside the compacted glyph-ID range, and
+    /// `CTFontCreatePathForGlyph` returns nil for every one of them. Passing
+    /// the byte as the glyph ID below is therefore a placeholder that only
+    /// happens to hold for an identity-encoded font; reaching a subsetted
+    /// font's outline needs code → glyph ID resolved through the font's own
+    /// encoding (not yet implemented — Tier 4 is off by default meanwhile).
     ///
     /// NO corpus coverage: every corpus PDF is MuseScore output with a
-    /// proper CMap, so this path is exercised only by synthetic unit tests
-    /// and the real-file acceptance check in Task 15.
+    /// proper CMap, so this path is exercised only by unit tests and by the
+    /// real-file acceptance check.
     private func emitShowSimpleFont(
         _ bytes: [UInt8], state: State, classifier: GlyphClassifier,
     ) {
-        var pendingText = ""
+        var pending = PendingTextRun()
         for byte in bytes {
             let code = UInt32(byte)
             let semantic = classifier.classify(codepoint: code, glyphID: CGGlyph(byte))
             if case .unknown = semantic {
-                pendingText.unicodeScalars.append(Unicode.Scalar(byte))
+                pending.append(Unicode.Scalar(byte), startingAt: currentOrigin(state: state))
                 advanceTextMatrix(state: state, glyphCount: 1)
                 continue
             }
-            flushPendingText(&pendingText, state: state)
+            flushPendingRun(&pending, state: state)
             let origin = currentOrigin(state: state)
             let advance = glyphAdvance(state: state)
             state.glyphs.append(ClassifiedGlyph(
@@ -148,7 +177,14 @@ func emitShow(_ bytes: [UInt8], state: TextShowState) {
             ))
             advanceTextMatrix(state: state, glyphCount: 1)
         }
-        flushPendingText(&pendingText, state: state)
+        flushPendingRun(&pending, state: state)
+    }
+
+    /// Emit an accumulated run at the origin it STARTED at, then reset.
+    private func flushPendingRun(_ run: inout PendingTextRun, state: State) {
+        guard !run.isEmpty else { return }
+        emitTextGlyph(run.text, at: run.origin, state: state)
+        run = PendingTextRun()
     }
 #endif
 
@@ -186,9 +222,19 @@ private func advanceTextMatrix(state: State, glyphCount: Int) {
 }
 
 /// Emit the accumulated non-PUA text as a `TextGlyph` and reset.
+///
+/// Emits at the text position as of the FLUSH, not as of the run's first
+/// code — behavior this branch inherited and left alone. It is only ever
+/// wrong by the run's own width, and for the CMap path that width is
+/// small: MuseScore emits one BT/ET block per glyph, so a run here is
+/// usually a single code. The whole downstream lyric geometry was
+/// calibrated against these positions across nine sessions, so moving them
+/// is a measured experiment in its own right, not a drive-by fix. The
+/// simple-font path, where a run really is a whole word, captures its
+/// start origin instead — see `PendingTextRun`.
 private func flushPendingText(_ pending: inout String, state: State) {
     guard !pending.isEmpty else { return }
-    emitTextGlyph(pending, state: state)
+    emitTextGlyph(pending, at: currentOrigin(state: state), state: state)
     pending = ""
 }
 
@@ -208,21 +254,20 @@ private func decodeString(_ bytes: [UInt8]) -> String {
 /// further right (tests don't pin advance precision).
 private func emitText(_ text: String, state: State) {
     guard !text.isEmpty else { return }
-    emitTextGlyph(text, state: state)
+    emitTextGlyph(text, at: currentOrigin(state: state), state: state)
     let approxAdvance = state.fontSize * 0.5 * CGFloat(text.count)
     state.textMatrix = CGAffineTransform(translationX: approxAdvance, y: 0)
         .concatenating(state.textMatrix)
 }
 
-/// Append a `TextGlyph` at the current text origin (no advance — the
+/// Append a `TextGlyph` at `origin` in page coordinates (no advance — the
 /// caller decides whether/how to advance the text matrix).
-private func emitTextGlyph(_ text: String, state: State) {
-    let originPageSpace = currentOrigin(state: state)
+private func emitTextGlyph(_ text: String, at origin: CGPoint, state: State) {
     state.texts.append(TextGlyph(
         text: text,
         fontName: state.fontName,
         fontSize: state.fontSize,
-        origin: originPageSpace,
+        origin: origin,
         bbox: .zero,
         pageIndex: state.pageIndex,
     ))
