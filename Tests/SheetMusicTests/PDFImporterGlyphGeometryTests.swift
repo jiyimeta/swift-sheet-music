@@ -28,20 +28,8 @@
                 origin: CGPoint(x: 10, y: 20), advance: 5,
                 renderedSize: 12, pageIndex: 0, fontSize: 20,
             )
-            let head = ClassifiedGlyph(
-                raw: RawGlyph(
-                    codepoint: 0xE0A4, fontName: "Bravura", fontSize: 20,
-                    origin: geo.origin, advance: 5, pageIndex: 0,
-                ),
-                semantic: .noteheadBlack,
-            )
-            let rest = ClassifiedGlyph(
-                raw: RawGlyph(
-                    codepoint: 0xE4E5, fontName: "Bravura", fontSize: 20,
-                    origin: geo.origin, advance: 5, pageIndex: 0,
-                ),
-                semantic: .rest(.quarter),
-            )
+            let head = ClassifiedGlyph(geometry: geo, semantic: .noteheadBlack)
+            let rest = ClassifiedGlyph(geometry: geo, semantic: .rest(.quarter))
             // Same geometry, different semantic ⇒ distinct keys.
             #expect(Set([head, rest]).count == 2)
         }

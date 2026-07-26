@@ -32,51 +32,6 @@ struct GlyphGeometry: Hashable {
     var fontSize: CGFloat = 0
 }
 
-/// Raw glyph captured from one Tj / TJ operator. Position is the
-/// text origin in PDF page coordinates (origin = bottom-left).
-struct RawGlyph: Hashable {
-    var codepoint: UInt32 // Unicode scalar (often a SMuFL PUA codepoint)
-    var fontName: String // PostScript name as reported by PDFKit
-    var geometry: GlyphGeometry
-
-    init(
-        codepoint: UInt32,
-        fontName: String,
-        fontSize: CGFloat,
-        origin: CGPoint,
-        advance: CGFloat,
-        pageIndex: Int,
-        renderedSize: CGFloat = 0,
-    ) {
-        self.codepoint = codepoint
-        self.fontName = fontName
-        geometry = GlyphGeometry(
-            origin: origin, advance: advance, renderedSize: renderedSize,
-            pageIndex: pageIndex, fontSize: fontSize,
-        )
-    }
-
-    var fontSize: CGFloat {
-        geometry.fontSize
-    }
-
-    var origin: CGPoint {
-        geometry.origin
-    }
-
-    var advance: CGFloat {
-        geometry.advance
-    }
-
-    var pageIndex: Int {
-        geometry.pageIndex
-    }
-
-    var renderedSize: CGFloat {
-        geometry.renderedSize
-    }
-}
-
 /// One straight or rectangular path segment captured from m/l/re
 /// content-stream operators. Used by staff-line and barline detection.
 ///
@@ -144,7 +99,7 @@ struct CurveArc: Equatable {
     var pageIndex: Int
 }
 
-/// Semantic interpretation of a `RawGlyph` (PDFImporter+SMuFL).
+/// Semantic interpretation of a glyph (PDFImporter+SMuFL).
 /// `NoteDuration` and `UInt32` are `Equatable`, so synthesized
 /// conformance carries through here.
 enum SMuFLSemantic: Equatable, Hashable {
@@ -180,9 +135,10 @@ enum SMuFLSemantic: Equatable, Hashable {
     case unknown(UInt32) // emits info-diagnostic
 }
 
-/// A glyph with its semantic. Stage [3] output.
+/// A glyph with its semantic. Stage [3] output — the unit every front-end
+/// produces and the whole decode pipeline consumes.
 struct ClassifiedGlyph: Hashable {
-    var raw: RawGlyph
+    var geometry: GlyphGeometry
     var semantic: SMuFLSemantic
 }
 

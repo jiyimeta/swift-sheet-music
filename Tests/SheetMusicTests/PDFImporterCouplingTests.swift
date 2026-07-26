@@ -16,14 +16,13 @@
             )
         }
 
-        /// A brace glyph carrying ONLY the semantic — codepoint 0, to prove
-        /// coupling no longer depends on the raw codepoint.
+        /// A brace glyph carrying ONLY the semantic, to prove coupling no
+        /// longer depends on any raw codepoint / font name.
         private func brace(baselineY: CGFloat) -> ClassifiedGlyph {
             ClassifiedGlyph(
-                raw: RawGlyph(
-                    codepoint: 0, fontName: "Anything", fontSize: 20,
+                geometry: GlyphGeometry(
                     origin: CGPoint(x: 90, y: baselineY), advance: 5,
-                    pageIndex: 0,
+                    pageIndex: 0, fontSize: 20,
                 ),
                 semantic: .brace,
             )
@@ -49,9 +48,9 @@
             let lower = staff(bottomY: 100)
             // A non-brace glyph in the same place must not couple.
             let notABrace = ClassifiedGlyph(
-                raw: RawGlyph(
-                    codepoint: 0xE000, fontName: "Anything", fontSize: 20,
-                    origin: CGPoint(x: 90, y: 100), advance: 5, pageIndex: 0,
+                geometry: GlyphGeometry(
+                    origin: CGPoint(x: 90, y: 100), advance: 5,
+                    pageIndex: 0, fontSize: 20,
                 ),
                 semantic: .noteheadBlack,
             )

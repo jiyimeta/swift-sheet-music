@@ -14,9 +14,9 @@
             midi: Int = 71,
         ) -> (ClassifiedGlyph, PDFImporter.DecodedPitch) {
             let g = ClassifiedGlyph(
-                raw: RawGlyph(
-                    codepoint: 0xE0A4, fontName: "Bravura", fontSize: 20,
-                    origin: CGPoint(x: x, y: y), advance: 5, pageIndex: 0,
+                geometry: GlyphGeometry(
+                    origin: CGPoint(x: x, y: y), advance: 5,
+                    pageIndex: 0, fontSize: 20,
                 ),
                 semantic: kind,
             )
@@ -40,9 +40,9 @@
             x: CGFloat, y: CGFloat, kind: SMuFLSemantic,
         ) -> ClassifiedGlyph {
             ClassifiedGlyph(
-                raw: RawGlyph(
-                    codepoint: 0, fontName: "Bravura", fontSize: 20,
-                    origin: CGPoint(x: x, y: y), advance: 5, pageIndex: 0,
+                geometry: GlyphGeometry(
+                    origin: CGPoint(x: x, y: y), advance: 5,
+                    pageIndex: 0, fontSize: 20,
                 ),
                 semantic: kind,
             )
@@ -50,9 +50,9 @@
 
         private func dot(x: CGFloat, y: CGFloat) -> ClassifiedGlyph {
             ClassifiedGlyph(
-                raw: RawGlyph(
-                    codepoint: 0xE1E7, fontName: "Bravura", fontSize: 20,
-                    origin: CGPoint(x: x, y: y), advance: 5, pageIndex: 0,
+                geometry: GlyphGeometry(
+                    origin: CGPoint(x: x, y: y), advance: 5,
+                    pageIndex: 0, fontSize: 20,
                 ),
                 semantic: .augmentationDot,
             )
@@ -62,9 +62,9 @@
             x: CGFloat, y: CGFloat = 500, duration: NoteDuration,
         ) -> ClassifiedGlyph {
             ClassifiedGlyph(
-                raw: RawGlyph(
-                    codepoint: 0xE4E5, fontName: "Bravura", fontSize: 20,
-                    origin: CGPoint(x: x, y: y), advance: 5, pageIndex: 0,
+                geometry: GlyphGeometry(
+                    origin: CGPoint(x: x, y: y), advance: 5,
+                    pageIndex: 0, fontSize: 20,
                 ),
                 semantic: .rest(duration),
             )

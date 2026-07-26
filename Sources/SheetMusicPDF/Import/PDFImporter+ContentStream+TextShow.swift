@@ -7,22 +7,22 @@ import SheetMusicCore
 // Text-show emission for the content-stream walker. Split out of the
 // operator-callback file so neither exceeds the 400-line file cap. The
 // `Tj` / `TJ` / `'` / `"` callbacks (in PDFImporter+ContentStream+Operators)
-// call `emitShow`, which routes each decoded scalar to a music `RawGlyph`
-// (SMuFL PUA) or a `TextGlyph` text run.
+// call `emitShow`, which routes each decoded scalar to a music
+// `ClassifiedGlyph` (SMuFL PUA) or a `TextGlyph` text run.
 
 typealias TextShowState = PDFPageState
 private typealias State = TextShowState
 
 /// SMuFL Private Use Area range. A decoded scalar inside this range is
-/// a music glyph (Leland / LelandText) → RawGlyph; otherwise it's
+/// a music glyph (Leland / LelandText) → ClassifiedGlyph; otherwise it's
 /// ordinary text → TextGlyph.
 private let smuflPUARange: ClosedRange<UInt32> = 0xE000 ... 0xF8FF
 
 /// Emit a show-string operand. When an active ToUnicode CMap is present
 /// (Type0 / Identity-H fonts), iterate the operand in 2-byte CID codes,
 /// map each through the CMap, and route the decoded scalar(s): PUA
-/// scalars become a `RawGlyph` at the current per-glyph origin; non-PUA
-/// scalars accumulate into a `TextGlyph` text run.
+/// scalars become a `ClassifiedGlyph` at the current per-glyph origin;
+/// non-PUA scalars accumulate into a `TextGlyph` text run.
 ///
 /// MuseScore positions each music glyph with its own `Tm`/`cm` (observed
 /// in ギブス.pdf: one BT/ET block per glyph, `Td [0 0]`), so the
@@ -52,17 +52,14 @@ func emitShow(_ bytes: [UInt8], state: TextShowState) {
             flushPendingText(&pendingText, state: state)
             let origin = currentOrigin(state: state)
             let advance = glyphAdvance(state: state)
-            let raw = RawGlyph(
-                codepoint: first.value,
-                fontName: state.fontName,
-                fontSize: state.fontSize,
-                origin: origin,
-                advance: advance,
-                pageIndex: state.pageIndex,
-                renderedSize: renderedSize(state: state),
-            )
             state.glyphs.append(ClassifiedGlyph(
-                raw: raw,
+                geometry: GlyphGeometry(
+                    origin: origin,
+                    advance: advance,
+                    renderedSize: renderedSize(state: state),
+                    pageIndex: state.pageIndex,
+                    fontSize: state.fontSize,
+                ),
                 semantic: PDFImporter.smuflSemantic(codepoint: first.value),
             ))
             advanceTextMatrix(state: state, glyphCount: 1)

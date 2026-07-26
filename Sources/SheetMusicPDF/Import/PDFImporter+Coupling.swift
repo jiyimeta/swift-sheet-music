@@ -35,7 +35,7 @@ extension PDFImporter {
         staves: [Staff], paths: [PathSegment], classified: [ClassifiedGlyph],
         pageIndex: Int,
     ) -> [ImportPart] {
-        let pageGlyphs = classified.filter { $0.raw.pageIndex == pageIndex }
+        let pageGlyphs = classified.filter { $0.geometry.pageIndex == pageIndex }
         var coupled = Array(repeating: false, count: staves.count)
         var parts: [ImportPart] = []
         if pageGlyphs.isEmpty {
@@ -91,12 +91,12 @@ extension PDFImporter {
     ) {
         let leftX = staves.first?.xRange.lowerBound ?? 0
         let braces = pageGlyphs.filter {
-            $0.semantic == .brace && $0.raw.origin.x < leftX
+            $0.semantic == .brace && $0.geometry.origin.x < leftX
         }
         // Anchor every brace to its nearest staff bottom (within ½ staff).
         var anchors = Set<Int>()
         for brace in braces {
-            let baseline = brace.raw.origin.y
+            let baseline = brace.geometry.origin.y
             var best: (idx: Int, dist: CGFloat)?
             for (i, s) in staves.enumerated() {
                 let dist = abs((s.yLines.first ?? 0) - baseline)

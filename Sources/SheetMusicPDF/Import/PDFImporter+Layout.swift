@@ -364,9 +364,9 @@ extension PDFImporter {
         // + x-gate contain any bleed this admits.
         let flagBand = max(lineSpacing * 6, 12)
         return classified.filter {
-            guard $0.raw.pageIndex == staff.pageIndex,
-                  lo <= $0.raw.origin.x,
-                  $0.raw.origin.x < hi
+            guard $0.geometry.pageIndex == staff.pageIndex,
+                  lo <= $0.geometry.origin.x,
+                  $0.geometry.origin.x < hi
             else { return false }
             // Flags carry no pitch (they only subdivide a note's duration) and
             // render far from the staff, so their wide band must NOT be clamped
@@ -375,12 +375,12 @@ extension PDFImporter {
             // the midpoint to an adjacent staff, so a tight grand staff's
             // sibling noteheads aren't double-captured.
             if isFlag($0.semantic) {
-                return (bottom - flagBand) <= $0.raw.origin.y
-                    && $0.raw.origin.y <= (top + flagBand)
+                return (bottom - flagBand) <= $0.geometry.origin.y
+                    && $0.geometry.origin.y <= (top + flagBand)
             }
             let low = max(bottom - band, clamp.lower)
             let high = min(top + band, clamp.upper)
-            return low <= $0.raw.origin.y && $0.raw.origin.y <= high
+            return low <= $0.geometry.origin.y && $0.geometry.origin.y <= high
         }
     }
 

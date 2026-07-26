@@ -23,7 +23,7 @@ extension PDFImporter {
             pitchByGlyph[dp.glyph] = dp
         }
         let glyphs = measure.glyphs.sorted {
-            $0.raw.origin.x < $1.raw.origin.x
+            $0.geometry.origin.x < $1.geometry.origin.x
         }
         // Staff space (sp) for sizing geometry rects; derived from this
         // staff's five line y-coordinates. Only consumed by the geometry
@@ -67,7 +67,7 @@ extension PDFImporter {
         // neighbour staff's beam grazing the notehead end isn't miscounted.
         let noteheadOrigins = glyphs
             .filter { isNotehead($0.semantic) }
-            .map(\.raw.origin)
+            .map(\.geometry.origin)
         let levelByStem = computeBeamLevels(
             stems: stems, beams: beams, noteheadOrigins: noteheadOrigins,
             spatium: spatium,
@@ -118,15 +118,15 @@ extension PDFImporter {
     ) -> RhythmElement {
         RhythmElement(
             chord: Chord(duration: duration, notes: []),
-            x: glyph.raw.origin.x,
-            y: glyph.raw.origin.y,
+            x: glyph.geometry.origin.x,
+            y: glyph.geometry.origin.y,
             stemDirection: nil,
             beamGroup: nil,
             onsetRect: PDFGeometryRects.glyphBox(
-                origin: glyph.raw.origin,
-                advance: glyph.raw.advance,
+                origin: glyph.geometry.origin,
+                advance: glyph.geometry.advance,
                 spatium: spatium,
-                pageIndex: glyph.raw.pageIndex,
+                pageIndex: glyph.geometry.pageIndex,
             ),
         )
     }
@@ -187,13 +187,13 @@ extension PDFImporter {
             duration: withBeamsOrFlags, glyphs: glyphs, lead: lead,
         )
         let dir = cluster.stem.map { stem in
-            stem.rect.midY > lead.raw.origin.y
+            stem.rect.midY > lead.geometry.origin.y
                 ? StemDirection.up : .down
         }
         return RhythmElement(
             chord: Chord(duration: withDots, notes: ChordNotes(notes)),
-            x: lead.raw.origin.x,
-            y: lead.raw.origin.y,
+            x: lead.geometry.origin.x,
+            y: lead.geometry.origin.y,
             stemDirection: dir,
             beamGroup: nil,
             lowConfidenceDuration: flagShortened,
@@ -222,7 +222,7 @@ extension PDFImporter {
         var seenPitches = Set<Int>()
         for idx in clusterIndices {
             guard let dp = pitchByGlyph[glyphs[idx]] else { continue }
-            let id = NoteheadID(glyphs[idx].raw)
+            let id = NoteheadID(glyphs[idx].geometry)
             let note = Note(
                 pitch: dp.midi,
                 tpc: dp.tpc,
@@ -233,10 +233,10 @@ extension PDFImporter {
             guard seenPitches.insert(note.pitch).inserted else { continue }
             notes.append(note)
             noteRects.append(PDFGeometryRects.glyphBox(
-                origin: glyphs[idx].raw.origin,
-                advance: glyphs[idx].raw.advance,
+                origin: glyphs[idx].geometry.origin,
+                advance: glyphs[idx].geometry.advance,
                 spatium: spatium,
-                pageIndex: glyphs[idx].raw.pageIndex,
+                pageIndex: glyphs[idx].geometry.pageIndex,
             ))
         }
         return (notes, noteRects)
@@ -290,7 +290,7 @@ extension PDFImporter {
         // (stem-down), offset by roughly the notehead width (~4–6pt here).
         return noteheads.contains { g in
             isNoteheadSemantic(g.semantic)
-                && abs(g.raw.origin.x - x) <= 7
+                && abs(g.geometry.origin.x - x) <= 7
         }
     }
 
@@ -323,7 +323,7 @@ extension PDFImporter {
     ) -> Cluster {
         let lead = glyphs[i]
         guard let chosen = nearestStem(
-            toX: lead.raw.origin.x, noteY: lead.raw.origin.y, stems: stems,
+            toX: lead.geometry.origin.x, noteY: lead.geometry.origin.y, stems: stems,
         )
         else {
             return Cluster(indices: [i], stem: nil, stemIndex: nil)
@@ -334,7 +334,7 @@ extension PDFImporter {
             // Chord noteheads share the lead's x. Match the lead's x (not the
             // stem midX) so a stem-down note's left-side stem doesn't widen
             // the window into the neighbour to its right.
-            guard abs(g.raw.origin.x - lead.raw.origin.x) <= 2.5 else { continue }
+            guard abs(g.geometry.origin.x - lead.geometry.origin.x) <= 2.5 else { continue }
             // …but a shared x is NOT sufficient: a drum downbeat stacks two
             // VOICES at one x — a crash (stem-up) over a kick (stem-down), each
             // on its OWN stem — and the old x-only rule fused them into one
@@ -344,7 +344,7 @@ extension PDFImporter {
             // Single-voice chords share one stem (mates still cluster); a
             // notehead with no detected stem still joins.
             let gStem = nearestStem(
-                toX: g.raw.origin.x, noteY: g.raw.origin.y, stems: stems,
+                toX: g.geometry.origin.x, noteY: g.geometry.origin.y, stems: stems,
             )
             if let gStem, gStem.index != chosen.index { continue }
             indices.append(j)
@@ -408,7 +408,7 @@ extension PDFImporter {
     ) -> NoteDuration {
         guard let stem else { return base }
         let stemX = stem.rect.midX
-        let noteY = lead.raw.origin.y
+        let noteY = lead.geometry.origin.y
         // The stem's bare (flag-attaching) end is the one FARTHER from the
         // notehead: a stem whose bare end sits above the notehead points up
         // (takes an up-flag), one whose bare end sits below points down. A
@@ -426,14 +426,14 @@ extension PDFImporter {
             // flag sits at the same x but outside this staff's y-band, so
             // restricting to the band stops it from being grabbed (fixes the
             // q→8 over-read).
-            if let flagBand, !flagBand.contains(g.raw.origin.y) { continue }
+            if let flagBand, !flagBand.contains(g.geometry.origin.y) { continue }
             // Tight x-gate: MuseScore anchors a flag glyph at its stem's x, so
             // a note's own flag sits within ~0.3pt of the stem; the nearest
             // neighbour flag is ≥ ~5pt away. A ≤2pt window keeps every own flag
             // and rejects a neighbour's (the 君と cross-note flag theft).
-            guard abs(g.raw.origin.x - stemX) <= 2,
+            guard abs(g.geometry.origin.x - stemX) <= 2,
                   let lvl = flagLevel(g.semantic) else { continue }
-            let dy = g.raw.origin.y - noteY
+            let dy = g.geometry.origin.y - noteY
             let isUp: Bool
             switch g.semantic {
             case .flag8thUp, .flag16thUp, .flag32ndUp, .flag64thUp: isUp = true
@@ -477,12 +477,12 @@ extension PDFImporter {
         lead: ClassifiedGlyph,
     ) -> NoteDuration {
         var dotCount = 0
-        let leadX = lead.raw.origin.x
-        let leadY = lead.raw.origin.y
+        let leadX = lead.geometry.origin.x
+        let leadY = lead.geometry.origin.y
         for g in glyphs {
             guard case .augmentationDot = g.semantic else { continue }
-            let dx = g.raw.origin.x - leadX
-            let dy = abs(g.raw.origin.y - leadY)
+            let dx = g.geometry.origin.x - leadX
+            let dy = abs(g.geometry.origin.y - leadY)
             // A note's own dot sits ~7–10pt to its right (measured). The
             // previous `< 20`pt window also caught the FOLLOWING note's dot
             // ~15pt away (a phantom `3/32` at the tail of beamed 16th runs);

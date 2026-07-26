@@ -32,7 +32,7 @@ extension PDFImporter {
         // force (see PDFImporter+KeyReader). Starts at C major (0).
         var runningKey = KeySignature(concertKey: 0)
         for (i, measure) in staff.measures.enumerated() {
-            let sorted = measure.glyphs.sorted { $0.raw.origin.x < $1.raw.origin.x }
+            let sorted = measure.glyphs.sorted { $0.geometry.origin.x < $1.geometry.origin.x }
             if let clef = readClef(from: sorted) {
                 runningClef = clef
                 events.append(.clefChange(clef, atMeasureIndex: i))
@@ -199,7 +199,7 @@ extension PDFImporter {
             guard let anchor = staffAnchor(clef: f8va, yLines: measure.staffYLines)
             else { continue }
             for g in measure.glyphs where isNotehead(g.semantic) {
-                let key = pitchKey(noteheadY: g.raw.origin.y, anchor: anchor)
+                let key = pitchKey(noteheadY: g.geometry.origin.y, anchor: anchor)
                 pitches.append(midiPitch(
                     step: key.diatonicStep, octave: key.octave, alteration: 0,
                 ))
@@ -218,7 +218,7 @@ extension PDFImporter {
         var runningClef = Clef(concertClefType: "G")
         var pitches: [Int] = []
         for measure in staff.measures {
-            let sorted = measure.glyphs.sorted { $0.raw.origin.x < $1.raw.origin.x }
+            let sorted = measure.glyphs.sorted { $0.geometry.origin.x < $1.geometry.origin.x }
             if let clef = readClef(from: sorted) {
                 runningClef = clef
             }
@@ -229,7 +229,7 @@ extension PDFImporter {
                   )
             else { continue }
             for g in measure.glyphs where isNotehead(g.semantic) {
-                let key = pitchKey(noteheadY: g.raw.origin.y, anchor: anchor)
+                let key = pitchKey(noteheadY: g.geometry.origin.y, anchor: anchor)
                 pitches.append(midiPitch(
                     step: key.diatonicStep, octave: key.octave, alteration: 0,
                 ))
@@ -243,7 +243,7 @@ extension PDFImporter {
     /// whole-part F8va-vs-plain-F content decision.
     static func staffInitialClefIsF8va(_ staff: ImportStaff) -> Bool {
         for measure in staff.measures {
-            let sorted = measure.glyphs.sorted { $0.raw.origin.x < $1.raw.origin.x }
+            let sorted = measure.glyphs.sorted { $0.geometry.origin.x < $1.geometry.origin.x }
             if let clef = readClef(from: sorted) {
                 return clef.concertClefType == "F8va"
             }
@@ -286,11 +286,11 @@ extension PDFImporter {
         for g in sorted {
             let isRest = if case .rest = g.semantic { true } else { false }
             if isNotehead(g.semantic) || isRest {
-                lastContentX = g.raw.origin.x
+                lastContentX = g.geometry.origin.x
             }
         }
         guard let lastContentX else { return nil }
-        for g in sorted where g.raw.origin.x > lastContentX {
+        for g in sorted where g.geometry.origin.x > lastContentX {
             if let clef = clef(for: g.semantic) { return clef }
         }
         return nil
@@ -375,7 +375,7 @@ extension PDFImporter {
     ) -> [DigitGlyph] {
         glyphs.compactMap { g in
             if case let .timeSignatureDigit(n) = g.semantic {
-                return DigitGlyph(x: g.raw.origin.x, y: g.raw.origin.y, n: n)
+                return DigitGlyph(x: g.geometry.origin.x, y: g.geometry.origin.y, n: n)
             }
             return nil
         }

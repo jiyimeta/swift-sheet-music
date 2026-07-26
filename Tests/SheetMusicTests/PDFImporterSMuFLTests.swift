@@ -85,9 +85,9 @@
         @Test func pageStateAccumulatesClassifiedGlyphs() {
             let state = PDFPageState(pageIndex: 0)
             state.glyphs.append(ClassifiedGlyph(
-                raw: RawGlyph(
-                    codepoint: 0xE0A4, fontName: "Bravura", fontSize: 20,
-                    origin: .zero, advance: 5, pageIndex: 0,
+                geometry: GlyphGeometry(
+                    origin: .zero, advance: 5,
+                    pageIndex: 0, fontSize: 20,
                 ),
                 semantic: .noteheadBlack,
             ))

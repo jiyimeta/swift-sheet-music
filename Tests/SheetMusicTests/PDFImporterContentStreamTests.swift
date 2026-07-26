@@ -18,7 +18,7 @@
             let doc = try #require(PDFDocument(data: data))
             let walker = PDFImporter.ContentStreamWalker(document: doc)
             let out = try walker.walk()
-            // Either captured as RawGlyph (SMuFL-style) or TextGlyph (Unicode).
+            // Either captured as ClassifiedGlyph (SMuFL-style) or TextGlyph (Unicode).
             // Helvetica + ASCII should land in `texts`.
             #expect(out.texts.contains { $0.text.contains("A") })
             // Walker must record page index 0.
