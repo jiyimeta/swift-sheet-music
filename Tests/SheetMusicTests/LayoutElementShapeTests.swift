@@ -1,0 +1,147 @@
+#if !os(Android)
+    import CoreGraphics
+    import SheetMusicCore
+    @testable import SheetMusicLayout
+    import Testing
+
+    @Suite("LayoutElementShape base skyline")
+    struct LayoutElementShapeTests {
+        private let _installApple = TestSupport.installApple
+        private let metrics = StaffMetrics(staffSize: 28) // sp = 7
+
+        private func note(step: Int, y: CGFloat) -> LayoutChordNote {
+            LayoutChordNote(
+                noteID: NoteID(
+                    staff: StaffAddress(partIndex: 0, staffIndexInPart: 0),
+                    measureIndex: 0, voiceIndex: 0,
+                    elementIndex: 0, noteIndexInChord: 0,
+                ),
+                step: step, accidental: nil,
+                origin: CGPoint(x: 40, y: y),
+                tieForward: nil, tieBack: nil, hasGlissando: false,
+            )
+        }
+
+        @Test func kindMapsChordAndExcludesStaffName() {
+            let chord = LayoutElement.chord(
+                notes: [note(step: 0, y: 14)], duration: .quarter,
+                stem: .up, stemOrigin: CGPoint(x: 40, y: 14),
+                hasArpeggio: false, arpeggioRawType: nil,
+                isBeamed: false, voiceIndex: 0, stemExtension: 0,
+                stemIsInvisible: false, mag: 1,
+            )
+            #expect(LayoutElementShape.kind(of: chord) == .chord)
+            #expect(LayoutElementShape.kind(of: .staffName(
+                text: "Vln", origin: .zero,
+            )) == nil)
+            #expect(LayoutElementShape.kind(of: .spannerSegment(
+                kind: .slur, fromOrigin: .zero, toOrigin: .zero,
+                continuesLeft: false, continuesRight: false, text: "",
+            )) == nil)
+            #expect(LayoutElementShape.kind(of: .spannerSegment(
+                kind: .vibrato(.guitarVibrato),
+                fromOrigin: .zero, toOrigin: .zero,
+                continuesLeft: false, continuesRight: false, text: "",
+            )) == nil)
+        }
+
+        /// A stem-up chord's shape must reach from the stem tip
+        /// (3.5 sp above the lowest notehead) down past the notehead.
+        @Test func stemUpChordShapeCoversStemTip() throws {
+            let chord = LayoutElement.chord(
+                notes: [note(step: 0, y: 14)], duration: .quarter,
+                stem: .up, stemOrigin: CGPoint(x: 40, y: 14),
+                hasArpeggio: false, arpeggioRawType: nil,
+                isBeamed: false, voiceIndex: 0, stemExtension: 0,
+                stemIsInvisible: false, mag: 1,
+            )
+            let shape = try #require(LayoutElementShape.shape(
+                for: chord, id: 0, xOffset: 100, metrics: metrics,
+            ))
+            let box = try #require(shape.bbox)
+            // Stem tip: 14 − 3.5 sp = 14 − 24.5 = −10.5.
+            #expect(abs(box.minY - -10.5) < 0.01)
+            // Notehead bottom: 14 + 0.5 sp = 17.5.
+            #expect(box.maxY >= 17.5)
+            // xOffset applied.
+            #expect(box.minX > 100)
+        }
+
+        /// Stem-down mirrors it.
+        @Test func stemDownChordShapeCoversStemTip() throws {
+            let chord = LayoutElement.chord(
+                notes: [note(step: 0, y: 14)], duration: .quarter,
+                stem: .down, stemOrigin: CGPoint(x: 40, y: 14),
+                hasArpeggio: false, arpeggioRawType: nil,
+                isBeamed: false, voiceIndex: 0, stemExtension: 0,
+                stemIsInvisible: false, mag: 1,
+            )
+            let shape = try #require(LayoutElementShape.shape(
+                for: chord, id: 0, xOffset: 0, metrics: metrics,
+            ))
+            let box = try #require(shape.bbox)
+            #expect(abs(box.maxY - 38.5) < 0.01) // 14 + 24.5
+        }
+
+        /// An above-arcing tie extends the shape past the notehead.
+        @Test func aboveTieExtendsChordShapeUpward() throws {
+            var tied = note(step: 0, y: 14)
+            tied = LayoutChordNote(
+                noteID: tied.noteID, step: 0, accidental: nil,
+                origin: tied.origin, tieForward: 1, tieBack: nil,
+                hasGlissando: false,
+            )
+            let chord = LayoutElement.chord(
+                notes: [tied], duration: .quarter,
+                stem: .down, stemOrigin: CGPoint(x: 40, y: 14),
+                hasArpeggio: false, arpeggioRawType: nil,
+                isBeamed: false, voiceIndex: 0, stemExtension: 0,
+                stemIsInvisible: false, mag: 1,
+            )
+            let shape = try #require(LayoutElementShape.shape(
+                for: chord, id: 0, xOffset: 0, metrics: metrics,
+            ))
+            let box = try #require(shape.bbox)
+            // Tie apex: 14 − 1.6 sp = 14 − 11.2 = 2.8.
+            #expect(box.minY <= 2.9)
+        }
+
+        @Test func beamShapeSpansBothEndpoints() throws {
+            let beam = LayoutElement.beam(
+                fromOrigin: CGPoint(x: 10, y: -5),
+                toOrigin: CGPoint(x: 60, y: -12),
+                direction: .up, level: 1,
+            )
+            let shape = try #require(LayoutElementShape.shape(
+                for: beam, id: 0, xOffset: 0, metrics: metrics,
+            ))
+            let box = try #require(shape.bbox)
+            #expect(box.minX == 10)
+            #expect(box.maxX == 60)
+            #expect(box.minY < -12)
+            #expect(box.maxY > -5)
+        }
+
+        @Test func fermataShapeHasPositiveArea() throws {
+            let fermata = LayoutElement.fermata(
+                subtype: "fermataAbove", origin: CGPoint(x: 40, y: 0),
+            )
+            let shape = try #require(LayoutElementShape.shape(
+                for: fermata, id: 0, xOffset: 0, metrics: metrics,
+            ))
+            let box = try #require(shape.bbox)
+            #expect(box.width > 0)
+            #expect(box.height > 0)
+        }
+
+        @Test func staffRectSpansTheStaffHeight() {
+            let r = LayoutElementShape.staffRect(
+                xMin: 0, xMax: 500, staffMidY: 28, metrics: metrics,
+            )
+            #expect(r.item.kind == .staff)
+            #expect(r.rect.minY == 14) // staffMidY − 2 sp
+            #expect(r.rect.maxY == 42) // staffMidY + 2 sp
+            #expect(r.rect.width == 500)
+        }
+    }
+#endif
