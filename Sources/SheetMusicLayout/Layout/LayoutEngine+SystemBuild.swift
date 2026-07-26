@@ -389,6 +389,44 @@ extension LayoutEngine {
             }
         }
 
+        // --- Skyline autoplace ---
+        //
+        // One pass per staff over the whole system, in MuseScore's
+        // `layoutSystemElements` order. Runs after the lyric-Y
+        // alignment above (so verse rows are already uniform) and
+        // before the Y-bounds computation below (so `staffTopPads` /
+        // `staffBottomPads` measure the POST-autoplace extents).
+        // Horizontal coordinates are measure-local here, so the pass
+        // receives each measure's accumulated system X.
+        do {
+            var xCursor: CGFloat = partLabelWidth
+            var xOffsets: [CGFloat] = []
+            for um in untranslated {
+                xOffsets.append(xCursor)
+                xCursor += um.width
+            }
+            let staffMidYLocal = metrics.sp * 2 + metrics.staffHeight / 2
+            for staffIdx in 0 ..< staves.count {
+                var perStaff: [[LayoutElement]] = untranslated.map {
+                    $0.perStaffElements[staffIdx] ?? []
+                }
+                SkylineAutoplacePass.run(
+                    measures: &perStaff,
+                    xOffsets: xOffsets,
+                    systemRightX: xCursor,
+                    staffMidY: staffMidYLocal,
+                    metrics: metrics,
+                )
+                for (mIdx, els) in perStaff.enumerated()
+                    where untranslated[mIdx]
+                    .perStaffElements[staffIdx] != nil
+                {
+                    untranslated[mIdx]
+                        .perStaffElements[staffIdx] = els
+                }
+            }
+        }
+
         // --- Per-staff Y bounds from the untranslated elements ---
         //
         // Mirrors MuseScore's "skyline" — the highest and lowest
