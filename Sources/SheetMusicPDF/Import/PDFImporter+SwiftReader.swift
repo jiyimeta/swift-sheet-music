@@ -7,10 +7,17 @@ import SheetMusicCore
 // Foundation-only PDF front-end: the Android counterpart of the Apple
 // `CGPDFScanner` walker. Parses `pdfData` with the pure-Swift `PDFReaderDocument`,
 // tokenizes each page's content stream, and drives the SAME shared interpreter
-// (`PDFPageState` + the `op*()` methods) the Apple front-end drives — so both
-// platforms produce identical `WalkedContent`.
+// (`PDFPageState` + the `op*()` methods) the Apple front-end drives.
 //
-// See docs/superpowers/specs/2026-07-12-pdf-import-android-design.md §4, §6.
+// The two front-ends produce identical `WalkedContent` for a PDF whose fonts
+// carry a usable `/ToUnicode` CMap — every MuseScore / Dorico / Finale 27+
+// export, i.e. the whole corpus. They no longer do so in general: glyph
+// classification moved into the front-end, and its tiered `GlyphClassifier` is
+// CoreText-backed and excluded from the Android build (see `Package.swift`), so
+// Android runs Tier 1 (SMuFL PUA codepoint) alone. A legacy-music-font PDF that
+// Tier 2 / Tier 4 would decode on Apple therefore decodes to fewer classified
+// glyphs on Android. Closing that gap needs an Android outline/name back-end,
+// not a change here.
 
 extension PDFImporter {
     /// Walk `pdfData` with the pure-Swift reader and return the same tuple the

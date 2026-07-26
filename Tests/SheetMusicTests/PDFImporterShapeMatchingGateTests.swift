@@ -50,6 +50,18 @@
                 .appendingPathComponent("Desktop/pdf_test/ギブス.pdf").path
         }
 
+        /// Tier 4 can only answer where the bundled Bravura exemplars built,
+        /// and those reach the face through `BravuraFont`, which needs macOS
+        /// 15 while this package deploys to macOS 14. With no exemplars Tier
+        /// 4 answers nothing, which makes a Tier-4-ON assertion either
+        /// vacuous or — for the collapse reproduction below — actively
+        /// wrong, since the collapse it reproduces IS Tier 4 answering. Skip
+        /// on such a host rather than report a red build for an API it
+        /// cannot have; CI runs macOS 15.
+        private static var tier4Available: Bool {
+            !BravuraExemplars.all.isEmpty
+        }
+
         /// With `enableShapeMatching` left at its default (false), parsing a
         /// real MuseScore PDF through `PDFImporter.parse(pdfData:options:)`
         /// must leave a healthy population of `.unknown`-SMuFL-codepoint
@@ -119,7 +131,8 @@
         /// of this same PDF — the gate loses nothing on the real corpus.
         @Test func shapeMatchingWithGateDoesNotCollapseLyrics() throws {
             let path = Self.corpusPath
-            guard FileManager.default.fileExists(atPath: path) else { return }
+            guard FileManager.default.fileExists(atPath: path), Self.tier4Available
+            else { return }
             let data = try Data(contentsOf: URL(fileURLWithPath: path))
 
             var options = PDFImportOptions()
@@ -164,7 +177,8 @@
         /// interference impossible by construction.
         @Test func noGateAtPlaceholderThresholdReproducesTask12Collapse() throws {
             let path = Self.corpusPath
-            guard FileManager.default.fileExists(atPath: path) else { return }
+            guard FileManager.default.fileExists(atPath: path), Self.tier4Available
+            else { return }
             let data = try Data(contentsOf: URL(fileURLWithPath: path))
 
             var options = PDFImportOptions()

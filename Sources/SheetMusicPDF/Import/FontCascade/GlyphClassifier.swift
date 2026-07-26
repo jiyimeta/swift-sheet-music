@@ -43,15 +43,14 @@ final class GlyphClassifier {
     /// running suite's `GlyphClassifier` observing the mutation — Swift
     /// Testing runs suites in parallel by default, and a `static var` here
     /// previously let `PDFImporterShapeMatchingGateTests` intermittently
-    /// pollute `GlyphClassifierTests` (Task 15 final review, C1).
+    /// pollute `GlyphClassifierTests`.
     private let shapeAcceptanceThreshold: Double
     private let musicFontGateBound: Double
     private let musicFontGateFraction: Double
     private let musicFontGateSampleSize: Int
     private lazy var ctFont: CTFont? = {
-        guard let program = font?.program, let kind = font?.programKind
-        else { return nil }
-        return makeCTFont(program: program, kind: kind)
+        guard let program = font?.program else { return nil }
+        return makeCTFont(program: program)
     }()
 
     /// `enableShapeMatching` narrowed by the per-font music-font gate — the
@@ -83,15 +82,15 @@ final class GlyphClassifier {
     private var cache: [CacheKey: SMuFLSemantic] = [:]
 
     /// Tier-4 acceptance threshold. A nearest neighbor farther than this is
-    /// reported `.unknown` rather than guessed. Measured against the Task 13
-    /// ablation (Task 14): 0.15. Inert while `enableShapeMatching` is false
+    /// reported `.unknown` rather than guessed. Measured against the Tier-1
+    /// ablation over the real corpus: 0.15. Inert while `enableShapeMatching` is false
     /// (the default) or the per-font gate declines this font.
     static let defaultShapeAcceptanceThreshold = 0.15
 
     /// Per-glyph distance bound for the music-font gate's SAMPLING pass
     /// (`isLikelyMusicFont`) — deliberately TIGHTER than
-    /// `shapeAcceptanceThreshold` (0.30 was tried first and rejected; see
-    /// task-14-report.md). At 0.15-0.30, ordinary TEXT glyphs (Latin
+    /// `shapeAcceptanceThreshold` (0.30 was tried first and rejected).
+    /// At 0.15-0.30, ordinary TEXT glyphs (Latin
     /// letters, CJK ideographs) land close enough to SOME Bravura exemplar
     /// by sheer silhouette coincidence — after bbox-fit normalization, a
     /// dense round CJK character or a bold Latin letterform is "just a dark
@@ -252,11 +251,25 @@ final class GlyphClassifier {
                 best = e.semantic
             }
         }
-        guard bestDistance <= shapeAcceptanceThreshold else { return nil }
-        return best
+        guard bestDistance <= shapeAcceptanceThreshold, let best else { return nil }
+        return Self.disambiguate(best)
     }
 
-    /// Semantics Tier 4 CANNOT distinguish, measured against Bravura in Task 11.
+    /// Resolve a nearest-neighbor answer that Tier 4 cannot actually have
+    /// decided — see `tier4AmbiguousRests`.
+    ///
+    /// Without this the whole-vs-half verdict falls out of which exemplar
+    /// `BravuraExemplars.codepoints` happens to list first, because their
+    /// descriptors are byte-identical and the scan keeps the first strict
+    /// minimum. Reordering that list would silently flip every whole rest in
+    /// every imported score to a half rest; stating the choice here makes it
+    /// a decision instead of an accident.
+    static func disambiguate(_ semantic: SMuFLSemantic) -> SMuFLSemantic {
+        tier4AmbiguousRests.contains(semantic) ? .rest(.whole) : semantic
+    }
+
+    /// Semantics Tier 4 CANNOT distinguish, measured against real Bravura
+    /// outlines.
     ///
     /// `restWhole` (U+E4E3) and `restHalf` (U+E4E4) are the same 282×144
     /// rectangle in Bravura, differing only by a 133-unit vertical offset
@@ -271,13 +284,14 @@ final class GlyphClassifier {
     /// The existing metric-sum reconciliation cannot repair either case — it
     /// never re-values rests — so the choice is between a visible error and a
     /// structural one. Whole rests (empty bars) are also the commoner glyph.
+    /// `disambiguate` applies that decision; this set is what it consults.
     static let tier4AmbiguousRests: Set<SMuFLSemantic> = [
         .rest(.whole), .rest(.half),
     ]
 
     /// Outlines are reached by RAW GLYPH ID only.
     ///
-    /// Task 8 proved that a font subsetted into a PDF does NOT preserve its
+    /// A font subsetted into a PDF is measured NOT to preserve its
     /// original Unicode cmap or `post` names: on the embedded Leland subset a
     /// U+E0A4 lookup FAILED and names came back as synthetic `gid0`…`gid24`.
     /// So `CTFontGetGlyphsForCharacters` cannot be used as a fallback here —

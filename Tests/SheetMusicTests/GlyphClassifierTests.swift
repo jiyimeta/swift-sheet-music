@@ -160,7 +160,7 @@
         /// change from silently flipping Tier 4 on by default.
         @Test func shapeMatchingDisabledLeavesAGlyphOnlyTier4CouldResolveUnknown() {
             guard let bravuraData = Self.loadBravuraOTFData() else { return }
-            guard let ctFont = makeCTFont(program: bravuraData, kind: .cff) else { return }
+            guard let ctFont = makeCTFont(program: bravuraData) else { return }
             var unichars: [UniChar] = [0xE0A4] // noteheadBlack
             var glyphs: [CGGlyph] = [0]
             guard CTFontGetGlyphsForCharacters(ctFont, &unichars, &glyphs, 1),
@@ -194,7 +194,7 @@
         /// nothing BUT the outline, that is simply the wrong semantic.
         @Test func shapeMatchingDistinguishesTwoGlyphIDsUnderOneCodepoint() {
             guard let bravuraData = Self.loadBravuraOTFData(),
-                  let ctFont = makeCTFont(program: bravuraData, kind: .cff)
+                  let ctFont = makeCTFont(program: bravuraData)
             else { return }
             func glyphID(_ codepoint: UniChar) -> CGGlyph? {
                 var unichars: [UniChar] = [codepoint]
@@ -221,7 +221,7 @@
         /// ID) pair — the whole reason it exists.
         @Test func repeatedGlyphIDUnderOneCodepointStaysStable() {
             guard let bravuraData = Self.loadBravuraOTFData(),
-                  let ctFont = makeCTFont(program: bravuraData, kind: .cff)
+                  let ctFont = makeCTFont(program: bravuraData)
             else { return }
             var unichars: [UniChar] = [0xE0A4]
             var glyphs: [CGGlyph] = [0]
@@ -234,6 +234,41 @@
             let c = GlyphClassifier(font: font, enableShapeMatching: true)
             let first = c.classify(codepoint: 0x41, characterCode: 0x41, glyphID: glyphs[0])
             #expect(c.classify(codepoint: 0x41, characterCode: 0x41, glyphID: glyphs[0]) == first)
+        }
+
+        /// Tier 4 cannot tell `restWhole` from `restHalf` — the two are the
+        /// same rectangle in Bravura and normalize to byte-identical
+        /// descriptors. The documented decision is to answer `.rest(.whole)`
+        /// rather than drop the glyph, and it must not depend on which of the
+        /// two `BravuraExemplars.codepoints` happens to list first.
+        @Test func ambiguousRestPairAlwaysResolvesToWhole() {
+            #expect(GlyphClassifier.disambiguate(.rest(.half)) == .rest(.whole))
+            #expect(GlyphClassifier.disambiguate(.rest(.whole)) == .rest(.whole))
+            // Every other semantic passes through untouched.
+            #expect(GlyphClassifier.disambiguate(.rest(.quarter)) == .rest(.quarter))
+            #expect(GlyphClassifier.disambiguate(.noteheadBlack) == .noteheadBlack)
+        }
+
+        /// The end-to-end form of the same decision: a real Bravura
+        /// `restHalf` outline, reached by glyph ID with Tier 4 on, comes back
+        /// as `.rest(.whole)`.
+        @Test func aHalfRestOutlineClassifiesAsAWholeRest() {
+            guard let bravuraData = Self.loadBravuraOTFData(),
+                  let ctFont = makeCTFont(program: bravuraData)
+            else { return }
+            var unichars: [UniChar] = [0xE4E4] // restHalf
+            var glyphs: [CGGlyph] = [0]
+            guard CTFontGetGlyphsForCharacters(ctFont, &unichars, &glyphs, 1),
+                  glyphs[0] != 0 else { return }
+
+            var font = PDFImporter.EmbeddedFont()
+            font.program = bravuraData
+            font.programKind = .cff
+            let c = GlyphClassifier(font: font, enableShapeMatching: true)
+            #expect(
+                c.classify(codepoint: 0x41, characterCode: 0x41, glyphID: glyphs[0])
+                    == .rest(.whole),
+            )
         }
 
         // MARK: Music-font gate (`isLikelyMusicFont`, Task 15 final review C2)

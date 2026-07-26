@@ -30,12 +30,15 @@ public struct PDFImportOptions {
     /// Enable Tier 4 (outline shape matching) in the glyph classification
     /// cascade. **Default OFF.**
     ///
-    /// Tier 4's acceptance threshold cannot be chosen without the measurement
-    /// Task 13's ablation produces. Enabled at the placeholder threshold it
-    /// matches essentially every glyph outline — including Latin text and CJK
-    /// lyrics — to some Bravura exemplar: on ギブス.pdf, 0 of 4254 glyphs were
-    /// left `.unknown` and lyric recall collapsed to 0%. It stays off until
-    /// Task 14 has both a measured threshold and a per-font gate.
+    /// Tier 4's acceptance threshold cannot be chosen without measuring it
+    /// against Tier 1's known-correct answer. At the original placeholder
+    /// threshold, with no per-font gate, it matched essentially every glyph
+    /// outline — including Latin text and CJK lyrics — to some Bravura
+    /// exemplar: on ギブス.pdf, 0 of 4254 glyphs were left `.unknown` and
+    /// lyric recall collapsed to 0%. Both the measured threshold and the
+    /// gate now exist, but flipping this default is its own decision, to be
+    /// made on a measurement of unknown-font accuracy (last measured: 63.3%
+    /// against a Bravura-only exemplar set — short of useful).
     public var enableShapeMatching = false
     /// TESTING ONLY, INTERNAL. Suppress Tier 1 (SMuFL codepoint)
     /// classification so the shape-matching tier can be measured against
@@ -68,7 +71,7 @@ public struct PDFImportOptions {
     var anchorMusicGlyphsToPUARange = false
     /// TESTING ONLY, INTERNAL. Skips the per-font music-font gate
     /// (`GlyphClassifier.isLikelyMusicFont`) so `enableShapeMatching` behaves
-    /// exactly as it did before Task 14 added that gate — Tier 4 answers for
+    /// exactly as it did before that gate existed — Tier 4 answers for
     /// every embedded font's glyphs, not just the ones the gate accepts.
     ///
     /// Exists so the Tier-4 ablation (`tier4Ablation`) keeps measuring Tier
@@ -92,8 +95,8 @@ public struct PDFImportOptions {
     /// `PDFImporter.parse(pdfData:options:)` entry point (rather than
     /// constructing a `GlyphClassifier` directly) can loosen or tighten the
     /// gate without mutating shared process-global state — see
-    /// `PDFImporterShapeMatchingGateTests.
-    /// noGateAtPlaceholderThresholdReproducesTask12Collapse`.
+    /// `PDFImporterShapeMatchingGateTests`'
+    /// `noGateAtPlaceholderThresholdReproducesTask12Collapse`.
     ///
     /// The literal defaults below MUST track `GlyphClassifier`'s
     /// `default*` constants — duplicated rather than referenced because

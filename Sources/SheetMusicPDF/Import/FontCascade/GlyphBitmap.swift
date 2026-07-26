@@ -56,14 +56,14 @@ func normalizedBitmap(path: CGPath, size: Int = GlyphBitmap.size) -> GlyphBitmap
 /// Build a `CTFont` from an embedded font program so its glyph outlines can be
 /// read with `CTFontCreatePathForGlyph`. Returns nil for a program CoreGraphics
 /// cannot parse (bare CFF without an OpenType wrapper, damaged subsets).
-func makeCTFont(
-    program: Data, kind: PDFImporter.EmbeddedFont.ProgramKind, size: CGFloat = 1000,
-) -> CTFont? {
+///
+/// There is deliberately no `kind` parameter: `CGFont` sniffs the format from
+/// the bytes, so `/FontFile`, `/FontFile2` and `/FontFile3` all arrive here the
+/// same way. `EmbeddedFont.programKind` still records which key the program
+/// came from, for diagnostics. If some kind ever proves to need different
+/// handling, branch on it then — with a measurement, not speculatively.
+func makeCTFont(program: Data, size: CGFloat = 1000) -> CTFont? {
     guard let provider = CGDataProvider(data: program as CFData),
           let cgFont = CGFont(provider) else { return nil }
-    // `kind` is carried for diagnostics only — CGFont sniffs the format
-    // itself. Task 8's spike records which kinds actually parse; if a kind
-    // proves unsupported, branch here then, not speculatively now.
-    _ = kind
     return CTFontCreateWithGraphicsFont(cgFont, size, nil, nil)
 }

@@ -47,8 +47,8 @@
                 return base == "Leland"
             })
             let program = try #require(leland.program)
-            let kind = try #require(leland.programKind)
-            let font = try #require(makeCTFont(program: program, kind: kind))
+            _ = try #require(leland.programKind)
+            let font = try #require(makeCTFont(program: program))
 
             let count = CTFontGetGlyphCount(font)
             #expect(count > 0)

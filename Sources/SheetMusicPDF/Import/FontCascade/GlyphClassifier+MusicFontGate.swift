@@ -23,9 +23,9 @@ extension GlyphClassifier {
     /// (noteheads, stems, clefs, rests, …); a text font's are not, no
     /// matter what it happens to be named.
     ///
-    /// Guards exactly the failure Task 12 measured: at the placeholder
-    /// threshold with NO gate, Tier 4 matched a CJK lyric font's (e.g.
-    /// Hiragino) outlines to Bravura exemplars just as readily as a real
+    /// Guards exactly the failure measured before the gate existed: at the
+    /// placeholder threshold with NO gate, Tier 4 matched a CJK lyric font's
+    /// (e.g. Hiragino) outlines to Bravura exemplars just as readily as a real
     /// music font's outlines, leaving 0 of 4254 glyphs `.unknown` on
     /// ギブス.pdf and collapsing lyric recall from 92% to 0%.
     ///
@@ -40,8 +40,8 @@ extension GlyphClassifier {
     ///    ordinary text font has no cmap entries in that range AT ALL (this
     ///    is required — 5 full system faces measured zero reachable
     ///    exemplar codepoints: Helvetica, Hiragino Sans, Times New Roman,
-    ///    Courier New, Arial). Task 15's final review caught the bug this
-    ///    replaces: the OLD single population (below) strided evenly across
+    ///    Courier New, Arial). Review caught the bug this replaces: the OLD
+    ///    single population (below) strided evenly across
     ///    a FULL font's entire glyph-ID range, so a full, unsubsetted SMuFL
     ///    font — the bundled Bravura.otf itself — sampled mostly exotic,
     ///    non-exemplar-shaped glyphs (ornaments, obscure figured-bass
@@ -53,11 +53,11 @@ extension GlyphClassifier {
     ///    before this fix) when fewer than `cmapExemplarMinimum` codepoints
     ///    resolve. This is the population every corpus PDF's embedded music
     ///    font (Leland, MScore, subsetted Bravura, Finale's Kousaku) still
-    ///    needs: Task 8 proved a font subsetted into a PDF does NOT
+    ///    needs: a font subsetted into a PDF is measured NOT to
     ///    preserve its original Unicode cmap, so `cmapReachableExemplarVerdict`
     ///    always returns nil for them (measured: 0 of 60 codepoints
     ///    resolve on every embedded font across the real corpus, music or
-    ///    text) and this fallback is what Task 14 actually calibrated.
+    ///    text) and this fallback is what the weights were calibrated on.
     static func isLikelyMusicFont(
         ctFont: CTFont,
         sampleSize: Int = defaultMusicFontGateSampleSize,
@@ -111,7 +111,7 @@ extension GlyphClassifier {
     /// The pre-Task-15 population: `sampleSize` glyph IDs evenly strided
     /// across the font's own glyph-ID range, starting at 1 (gid 0 is
     /// `.notdef` in every font). Reached by RAW GLYPH ID because a
-    /// subsetted PDF font's cmap does not survive subsetting (Task 8) —
+    /// subsetted PDF font's cmap does not survive subsetting (measured) —
     /// this is the population that still has to serve every embedded music
     /// font in the real corpus.
     private static func isLikelyMusicFontByRawGlyphIDs(
