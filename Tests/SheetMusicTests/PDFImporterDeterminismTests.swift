@@ -24,7 +24,7 @@
         }
 
         @Test func staffDetectionIsOrderIndependent() {
-            let paths = (0 ..< 5).map { i in
+            let staffLines = (0 ..< 5).map { i in
                 PathSegment(
                     kind: .horizontal,
                     rect: CGRect(
@@ -36,6 +36,19 @@
                     lineWidth: 0.5, pageIndex: 0,
                 )
             }
+            // A genuine barline candidate: a vertical spanning well past both
+            // outer staff lines (y 100...140), sitting at x=400 — far enough
+            // (>1.3 spatium) from every notehead below that `barlineCandidates`
+            // does not veto it as a note stem. This is the ONE staff-detection
+            // output glyph order can leak into (via the notehead-abutment
+            // test), so it must be non-empty for the reversed-order comparison
+            // below to actually exercise that path.
+            let barline = PathSegment(
+                kind: .vertical,
+                rect: CGRect(x: 400, y: 95, width: 0, height: 50),
+                lineWidth: 1.0, pageIndex: 0,
+            )
+            let paths = staffLines + [barline]
             let glyphs = [
                 glyph(x: 150, y: 120, .noteheadBlack),
                 glyph(x: 200, y: 130, .noteheadBlack),
@@ -51,6 +64,17 @@
             #expect(a.count == b.count)
             #expect(a.first?.yLines == b.first?.yLines)
             #expect(a.first?.xRange == b.first?.xRange)
+
+            // Pin the ONE output glyph order can leak into. Must be
+            // non-empty, or this comparison is vacuous — a regression that
+            // routed `noteheads` through a `Set` before the abutment test
+            // would still produce `[] == []` and pass silently.
+            let aBarlines = (a.first?.barlineCandidates ?? [])
+                .sorted { $0.rect.minX < $1.rect.minX }
+            let bBarlines = (b.first?.barlineCandidates ?? [])
+                .sorted { $0.rect.minX < $1.rect.minX }
+            #expect(!aBarlines.isEmpty)
+            #expect(aBarlines == bBarlines)
         }
     }
 #endif
