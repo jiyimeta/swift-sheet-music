@@ -44,7 +44,6 @@ extension LayoutEngine {
         context.cache?.systemHits = 0
         context.cache?.systemMisses = 0
         context.cache?.tickAggregateHits = 0
-        context.cache?.tickAggregateMisses = 0
         let sp = context.metrics.sp
         let division = context.score.division
         // Per-measure minimum width via the same cross-staff
@@ -71,10 +70,12 @@ extension LayoutEngine {
             let measuresAt = staves.map { staff in
                 i < staff.measures.count ? staff.measures[i] : nil
             }
+            let durationAt = measureDuration(measureDurations, at: i)
             if let prior = priorEntries[i],
                prior.sp == sp,
                prior.division == division,
-               prior.measures == measuresAt
+               prior.measures == measuresAt,
+               prior.measureDuration == durationAt
             {
                 // Cache hit: copy the prior entry forward, then apply
                 // the collapsed-run override so subsequent reads see
@@ -87,6 +88,7 @@ extension LayoutEngine {
                         measures: prior.measures,
                         sp: prior.sp,
                         division: prior.division,
+                        measureDuration: prior.measureDuration,
                         minWidth: overridden,
                         tickAggregate: prior.tickAggregate,
                         placements: prior.placements,
@@ -111,13 +113,14 @@ extension LayoutEngine {
                 metrics: context.metrics,
                 headerSchedule: baseHeader,
                 division: division,
-                measureDuration: measureDuration(measureDurations, at: i),
+                measureDuration: durationAt,
             )
             let overridden = collapsedOverride(for: i, baseline: result.width)
             context.cache?.entries[i] = LayoutCache.Entry(
                 measures: measuresAt,
                 sp: sp,
                 division: division,
+                measureDuration: durationAt,
                 minWidth: overridden,
                 tickAggregate: result.aggregate,
                 placements: [:],

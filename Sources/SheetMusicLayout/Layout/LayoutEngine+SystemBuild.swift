@@ -141,15 +141,23 @@ extension LayoutEngine {
                 activeKeys: keys,
             )
             // Reuse the aggregate `crossStaffMinimumMeasureWidth`
-            // already computed for this measure during `packSystems`
-            // (same inputs: measures / sp / division) instead of
-            // recomputing `aggregatedTickWeights` a second time.
+            // already computed for this measure during `packSystems`'s
+            // width pass instead of recomputing `aggregatedTickWeights`
+            // a second time. Key: `measures`, `sp`, `division`, AND
+            // `measureDuration` — see `LayoutCache.Entry.measureDuration`'s
+            // doc for why the prevailing (carried-forward) duration must
+            // be part of the predicate, not just the measure's own
+            // (unchanged) content.
+            //
+            // This lookup is a MISS only when `context.cache` itself is
+            // nil (caching disabled): `packSystems`'s width pass always
+            // populates `entries[measureIdx]` — hit or miss — for every
+            // index in `0 ..< measureCount` before any system is built,
+            // so a real cache always finds an entry here.
             let cachedAggregate = context.cache?
                 .entries[measureIdx]?.tickAggregate
             if cachedAggregate != nil {
                 context.cache?.tickAggregateHits += 1
-            } else {
-                context.cache?.tickAggregateMisses += 1
             }
             let aggregate = cachedAggregate ?? aggregatedTickWeights(
                 staves: staves,

@@ -178,7 +178,11 @@
         /// ever miss when `context.cache` itself is nil (caching
         /// disabled). Confirmed with a temporary debug print during
         /// development: `cachedAggregate` was already `true` for all 8
-        /// measures on the very first call.
+        /// measures on the very first call. Because a real miss is
+        /// therefore unreachable, `LayoutCache.tickAggregateMisses` was
+        /// removed entirely in review fix round 1 (Finding 4) rather
+        /// than kept as permanently-dead-in-production instrumentation
+        /// — this test now asserts only `tickAggregateHits`.
         @Test("warm relayout reuses the cached tick aggregate")
         func warmRelayoutReusesAggregate() {
             guard #available(macOS 15.0, *) else { return }
@@ -212,7 +216,6 @@
             // measure's aggregate already sitting in the cache, since
             // `minWidths` populated it moments earlier in the same
             // `packSystems` call.
-            #expect(cache.tickAggregateMisses == 0)
             #expect(cache.tickAggregateHits == measures.count)
 
             // Second call: bump `availableWidth` so the SYSTEM-level
@@ -230,8 +233,109 @@
                 score: score, options: opts,
                 availableWidth: width + 50, cache: cache,
             )
-            #expect(cache.tickAggregateMisses == 0)
             #expect(cache.tickAggregateHits == measures.count)
+        }
+
+        /// Finding 1 regression test (fix round 1): `measureDuration`
+        /// must be part of `LayoutCache.Entry`'s cache-hit predicate,
+        /// not just `measures` / `sp` / `division`. Reproduces the
+        /// review's exact scenario:
+        ///
+        ///   - Measure 0 declares the time signature (edited between
+        ///     the two layout calls).
+        ///   - Measure 1 is untouched across both calls and holds a
+        ///     `.measure`-duration (full-bar) rest in voice 1 alongside
+        ///     four quarters in voice 0. `NoteDuration.resolved(in:)`
+        ///     resolves that rest against the PREVAILING duration, so
+        ///     its tick span — and therefore `gapWeights` /
+        ///     `totalWeight` / every tick's x — differs between 4/4 and
+        ///     2/4 even though measure 1's own `Measure` value never
+        ///     changes.
+        ///
+        /// Without `measureDuration` in the predicate, measure 1 is a
+        /// per-measure cache HIT on the second call (its `Measure`
+        /// value is byte-identical), so the STALE tick columns from
+        /// the first call would be served straight into placement.
+        /// This test lays out once under 4/4, edits ONLY measure 0's
+        /// time signature to 2/4, lays out again with the SAME cache,
+        /// and asserts measure 1's tick columns changed.
+        ///
+        /// Verified load-bearing: reverting the `measureDuration` field
+        /// (i.e. dropping it from `Entry` and the hit predicate) makes
+        /// this test FAIL — see the fix-round report for the exact
+        /// command and output.
+        @Test("editing an earlier measure's time signature invalidates a later measure's cached tick columns")
+        func earlierTimeSignatureEditInvalidatesLaterMeasureAggregate() throws {
+            guard #available(macOS 15.0, *) else { return }
+            let c4 = Note(pitch: 60, tpc: 14)
+            let quarter = VoiceElement.chord(
+                Chord(duration: .quarter, notes: [c4]),
+            )
+            let fullBarRest = VoiceElement.chord(
+                Chord(duration: .measure, notes: []),
+            )
+
+            func makeScore(timeSig: TimeSignature) -> Score {
+                let measure0 = Measure(voices: [Voice(elements: [
+                    .timeSignature(timeSig),
+                    quarter, quarter, quarter, quarter,
+                ])])
+                // Measure 1 is IDENTICAL across both scores: voice 0 has
+                // four quarters (so there are multiple ticks to compare),
+                // voice 1 holds a single full-bar rest whose resolved
+                // duration depends entirely on the PREVAILING time
+                // signature carried forward from measure 0.
+                let measure1 = Measure(voices: [
+                    Voice(elements: [quarter, quarter, quarter, quarter]),
+                    Voice(elements: [fullBarRest]),
+                ])
+                return Score(
+                    division: 480,
+                    parts: [Part(
+                        id: "P0",
+                        instrument: Instrument(id: "x"),
+                        staves: [Staff(measures: [measure0, measure1])],
+                    )],
+                )
+            }
+
+            let scoreV1 = makeScore(
+                timeSig: TimeSignature(numerator: 4, denominator: 4),
+            )
+            let opts = ScoreViewOptions(wrapToViewWidth: false)
+            let width = LayoutEngine.naturalContentWidth(
+                score: scoreV1, options: opts,
+            )
+            let cache = LayoutCache()
+            let doc1 = LayoutEngine.layout(
+                score: scoreV1, options: opts,
+                availableWidth: width, cache: cache,
+            )
+            let cols1 = try #require(
+                doc1.systems.first?.measures.dropFirst().first?.tickColumns,
+            )
+
+            // Edit ONLY measure 0's time signature. Measure 1's `Measure`
+            // value is untouched — same `Voice` / `VoiceElement` values —
+            // so a predicate that ignores `measureDuration` would treat
+            // it as an unconditional per-measure cache HIT.
+            let scoreV2 = makeScore(
+                timeSig: TimeSignature(numerator: 2, denominator: 4),
+            )
+            let doc2 = LayoutEngine.layout(
+                score: scoreV2, options: opts,
+                availableWidth: width, cache: cache,
+            )
+            let cols2 = try #require(
+                doc2.systems.first?.measures.dropFirst().first?.tickColumns,
+            )
+
+            let message = "measure 1's tick columns must change when the "
+                + "prevailing time signature carried into it changes, even "
+                + "though measure 1's own content is untouched — got "
+                + "identical columns both times (\(cols1)), meaning a "
+                + "stale cached aggregate was served"
+            #expect(cols1 != cols2, "\(message)")
         }
     }
 #endif

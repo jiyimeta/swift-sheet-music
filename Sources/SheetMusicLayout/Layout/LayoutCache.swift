@@ -44,25 +44,42 @@ public final class LayoutCache: @unchecked Sendable {
     var systemHits = 0
     var systemMisses = 0
     var tickAggregateHits = 0
-    var tickAggregateMisses = 0
 
     /// One measure's cached inputs and outputs. The width portion is
     /// consumed by `packSystems`; the per-staff `placements`
     /// portion by `buildSystem`.
     struct Entry {
-        // --- Inputs that determine `crossStaffMinimumMeasureWidth` ---
+        // --- Inputs that determine `crossStaffMinimumMeasureWidth`
+        // AND `aggregatedTickWeights` ---
         let measures: [Measure?] // one per staff (nil if absent)
         let sp: CGFloat
         let division: Int
+        /// The effective duration `measureDuration(context
+        /// .measureDurations, at: measureIdx)` resolved to for this
+        /// measure at the time this entry was built. NOT derivable
+        /// from `measures` alone: it is the PREVAILING time signature
+        /// carried forward across a staff's entire measure list up to
+        /// this index (see `Score+EffectiveMeasureDurations.swift`),
+        /// so it can change when an EARLIER measure's `<TimeSignature>`
+        /// is edited even though `measures[measureIdx]` itself is
+        /// unchanged. Both `minWidth` and `tickAggregate` are derived
+        /// from it (`NoteDuration.resolved(in:)` resolves any
+        /// `.measure`-duration chord/rest against it, which changes
+        /// tick-column x-positions), so it must be part of the
+        /// cache-hit predicate — omitting it would silently serve a
+        /// stale aggregate for an unrelated, unedited measure whose
+        /// prevailing duration just changed underneath it.
+        let measureDuration: Fraction
 
         /// --- Output of crossStaffMinimumMeasureWidth ---
         let minWidth: CGFloat
 
         /// --- Output of aggregatedTickWeights, shared between the
         /// width pass (`packSystems`) and the placement pass
-        /// (`buildSystem`). Same key as `minWidth`: this function's
-        /// inputs are exactly (`measures`, `sp`, `division`).
-        let tickAggregate: LayoutEngine.TickAggregate?
+        /// (`buildSystem`). Key: `measures`, `sp`, `division`, AND
+        /// `measureDuration` (see that field's doc for why the last
+        /// one is required).
+        let tickAggregate: LayoutEngine.TickAggregate
 
         /// --- Per-staff placement results ---
         var placements: [Int: StaffPlacement]
