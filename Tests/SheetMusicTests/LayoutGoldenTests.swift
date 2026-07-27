@@ -105,51 +105,89 @@
         ) -> String {
             var s = "\(label)\tsize=\(f(doc.size.width))x\(f(doc.size.height))"
                 + "\tsystems=\(doc.systems.count)\n"
+            s += metricsLine(doc.metrics)
             if let title = doc.titleFrame {
                 s += "  title \(String(describing: title))\n"
             }
             for (i, sys) in doc.systems.enumerated() {
-                s += "  sys[\(i)] origin=\(f(sys.origin.x)),\(f(sys.origin.y))"
-                    + " size=\(f(sys.size.width))x\(f(sys.size.height))\n"
-                for o in sys.staffOrigins {
-                    s += "    staffOrigin \(f(o.x)),\(f(o.y))\n"
-                }
-                for l in sys.partLabels {
-                    s += "    label \(String(describing: l))\n"
-                }
-                for b in sys.brackets {
-                    s += "    bracket \(String(describing: b))\n"
-                }
-                for el in sys.spanners {
-                    s += "    spanner \(String(describing: el))\n"
-                }
-                for el in sys.invisibleSpanners {
-                    s += "    invSpanner \(String(describing: el))\n"
-                }
-                for m in sys.measures {
-                    s += "    m[\(m.measureIndex)] origin="
-                        + "\(f(m.origin.x)),\(f(m.origin.y))"
-                        + " w=\(f(m.width)) mmr=\(String(describing: m.multiMeasureRest))\n"
-                    for el in m.elements {
-                        s += "      el \(String(describing: el))\n"
-                    }
-                    for el in m.markers {
-                        s += "      mk \(String(describing: el))\n"
-                    }
-                    for el in m.jumps {
-                        s += "      jp \(String(describing: el))\n"
-                    }
-                    for el in m.invisibleElements {
-                        s += "      iv \(String(describing: el))\n"
-                    }
-                }
+                s += digest(ofSystem: sys, index: i)
             }
             return s
         }
 
-        /// Fixed precision so tiny float formatting differences can't
-        /// masquerade as layout changes — and so a real 0.001 pt shift
-        /// still shows up.
+        /// `StaffMetrics`' stored properties, through `f()`. Every other
+        /// `StaffMetrics` property (glyph size, stem thickness, spacing…)
+        /// is a pure function of `sp`, so `sp` changing is what a
+        /// renderer's mis-sizing would show up as here.
+        private func metricsLine(_ metrics: StaffMetrics) -> String {
+            "  metrics staffHeight=\(f(metrics.staffHeight))"
+                + " sp=\(f(metrics.sp))\n"
+        }
+
+        private func digest(ofSystem sys: LayoutSystem, index i: Int) -> String {
+            var s = "  sys[\(i)] origin=\(f(sys.origin.x)),\(f(sys.origin.y))"
+                + " size=\(f(sys.size.width))x\(f(sys.size.height))"
+                + " sp=\(f(sys.sp))\n"
+            for (idx, o) in sys.staffOrigins.enumerated() {
+                let addr = idx < sys.staffAddresses.count
+                    ? String(describing: sys.staffAddresses[idx])
+                    : "MISSING"
+                s += "    staffOrigin \(f(o.x)),\(f(o.y)) addr=\(addr)\n"
+            }
+            for l in sys.partLabels {
+                s += "    label \(String(describing: l))\n"
+            }
+            for b in sys.brackets {
+                s += "    bracket \(String(describing: b))\n"
+            }
+            for el in sys.spanners {
+                s += "    spanner \(String(describing: el))\n"
+            }
+            for el in sys.invisibleSpanners {
+                s += "    invSpanner \(String(describing: el))\n"
+            }
+            for m in sys.measures {
+                s += digest(ofMeasure: m)
+            }
+            return s
+        }
+
+        private func digest(ofMeasure m: LayoutMeasure) -> String {
+            var s = "    m[\(m.measureIndex)] origin="
+                + "\(f(m.origin.x)),\(f(m.origin.y))"
+                + " w=\(f(m.width)) mmr=\(String(describing: m.multiMeasureRest))"
+                + " lineBreak=\(m.lineBreak) pageBreak=\(m.pageBreak)\n"
+            for el in m.elements {
+                s += "      el \(String(describing: el))\n"
+            }
+            for el in m.markers {
+                s += "      mk \(String(describing: el))\n"
+            }
+            for el in m.jumps {
+                s += "      jp \(String(describing: el))\n"
+            }
+            for el in m.invisibleElements {
+                s += "      iv \(String(describing: el))\n"
+            }
+            return s
+        }
+
+        /// Normalizes the destructured system/measure geometry (origins,
+        /// sizes, `sp`) to 4 decimal places so float-formatting noise
+        /// can't masquerade as a layout change, while a real 0.001 pt
+        /// shift still shows up.
+        ///
+        /// This is deliberately NOT applied inside `LayoutElement` /
+        /// `LayoutBracket` / `LayoutPartLabel` / `LayoutTitleFrame`
+        /// payloads — those are compared via `String(describing:)` at
+        /// full precision instead. Reproducing `f()`'s clamp there would
+        /// need a hand-written serializer per case, and the raw
+        /// `String(describing:)` form is strictly stricter: it catches
+        /// everything a clamped form would plus sub-0.0001 bit-level
+        /// differences. That bias is correct for this harness — a
+        /// legitimate refactor that shifts a float by less than 4
+        /// decimal places inside an element payload will fail this test
+        /// and must be investigated, not rounded away.
         private func f(_ v: CGFloat) -> String {
             String(format: "%.4f", v)
         }
