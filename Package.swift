@@ -17,6 +17,11 @@ var products: [Product] = [
     .library(name: "SheetMusicMIDI", targets: ["SheetMusicMIDI"]),
     .library(name: "SheetMusicLayout", targets: ["SheetMusicLayout"]),
     .library(name: "SheetMusicAudioCore", targets: ["SheetMusicAudioCore"]),
+    // Exported on Android too: the target's Android shape excludes every Apple-only file (the CGPDFScanner
+    // walker, the PDFKit entry, PDF export, the SwiftUI views) and depends only on Core + Layout, so a
+    // cross-compiling consumer can use the importer — `PDFImporter.parseUsingSwiftReader`,
+    // `parseWithGeometryUsingSwiftReader`, `summaryUsingSwiftReader` — without dragging Apple frameworks in.
+    .library(name: "SheetMusicPDF", targets: ["SheetMusicPDF"]),
 ]
 
 var targets: [Target] = [
@@ -177,7 +182,6 @@ if !isAndroid {
         // Pure-Swift, MIT SoundFont2 playback backend (SwiftySynth). Works on
         // iOS + macOS, App-Store clean — the default stealing-free synth.
         .library(name: "SheetMusicAudioSwiftySynth", targets: ["SheetMusicAudioSwiftySynth"]),
-        .library(name: "SheetMusicPDF", targets: ["SheetMusicPDF"]),
         .executable(name: "render-previews", targets: ["RenderPreviews"]),
     ]
     targets += [
