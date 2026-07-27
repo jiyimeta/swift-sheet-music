@@ -1600,8 +1600,16 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         guard let sequencer else { return 0 }
         // A non-finite `currentPositionInBeats` (see `tickCursor`) would poison
         // the tick math and any downstream `Int` conversion; report 0 instead.
-        guard sequencer.currentPositionInBeats.isFinite else { return 0 }
-        let rawSeqTick = sequencer.currentPositionInBeats * Double(timeline.division)
+        let beats = sequencer.currentPositionInBeats
+        guard beats.isFinite else { return 0 }
+        return timelineSeconds(forBeats: beats, timeline: timeline)
+    }
+
+    /// Timeline-space seconds for a raw sequencer beat position: pre-roll clamp, A-B loop fold, unroll
+    /// translation, tempo-map lookup. Extracted so `currentTimeSecondsContinuous` and `timedPosition`
+    /// cannot drift apart — the whole value of the pairing is that both components describe the same beat.
+    private func timelineSeconds(forBeats beats: Double, timeline: PlaybackTimeline) -> TimeInterval {
+        let rawSeqTick = beats * Double(timeline.division)
         // Translate to score ticks; during the pre-roll clamp to `baseTick`
         // (the pinned start position). Identity map ⇒ pass-through.
         let rawTick: Double = rawSeqTick < Double(sequenceMap.preRollTicks)
@@ -1617,6 +1625,36 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
             tick = rawTick
         }
         return timeline.seconds(atTick: unroll.notatedTick(fromUnrolled: tick))
+    }
+
+    /// Current playback position paired with the host-clock instant that position is (or was) rendered at.
+    ///
+    /// Both components describe the SAME beat: the beat is read once, and its host time comes from
+    /// `AVAudioSequencer.hostTimeForBeats:`, which translates through the sequence's own tempo map from the
+    /// player's starting beat and time. There is therefore no interval between two reads to be wrong about —
+    /// unlike sampling a node's `lastRenderTime` next to a separately-read position, which admits up to one
+    /// IO buffer (~23 ms) of unknown error. A host needing to align an independently captured recording
+    /// against this playback (VocalTuner's recorded takes) can project the score's time-0 instant onto the
+    /// shared host clock from a single read of this property.
+    ///
+    /// `nil` when the sequencer has not been built, is not playing, or `hostTimeForBeats:` refuses the beat
+    /// (documented: it errors when the player is stopped or the beat precedes the player's starting beat).
+    /// Also `nil` on an injected `SynthBackend` transport, which has no equivalent pairing yet — its
+    /// `AVAudioSourceNode` render block could provide one, but that is a separate change.
+    public var timedPosition: (timeSeconds: TimeInterval, hostSeconds: TimeInterval)? {
+        guard backend == nil, let timeline, let sequencer, sequencer.isPlaying else { return nil }
+        let beats = sequencer.currentPositionInBeats
+        guard beats.isFinite else { return nil }
+        // `hostTime(forBeats:error:)` returns a non-optional `UInt64`, so Swift does not
+        // auto-bridge the trailing `NSErrorPointer` into `throws` here (that bridging only
+        // applies when the return type can itself represent failure, e.g. `Bool` or `Optional`).
+        var hostTimeError: NSError?
+        let hostTime = sequencer.hostTime(forBeats: beats, error: &hostTimeError)
+        guard hostTimeError == nil else { return nil }
+        return (
+            timelineSeconds(forBeats: beats, timeline: timeline),
+            AVAudioTime.seconds(forHostTime: hostTime),
+        )
     }
 
     /// Total playable duration in seconds for the loaded score.
