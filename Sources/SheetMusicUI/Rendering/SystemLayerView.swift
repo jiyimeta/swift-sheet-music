@@ -26,6 +26,15 @@ import SwiftUI
 /// overlay layer that is cleared and rebuilt on each selection
 /// change. This keeps click-to-recolor work O(|previous ∪ new|)
 /// instead of O(score size).
+///
+/// **Incremental measure updates.** When the system geometry and every
+/// system-level furniture field are unchanged (`MeasureLayerDiffPlanner
+/// .systemFrameIsUnchanged`), `configure` diffs the individual measures
+/// instead of rebuilding the whole layer tree — see
+/// `SystemLayerView+MeasureDiff.swift` for `applyMeasureDiff`, which
+/// rebuilds only the measures whose drawn content actually changed and
+/// merely repositions the containers of measures that only slid
+/// sideways.
 @available(macOS 15.0, *)
 struct SystemLayerView: View {
     let system: LayoutSystem
@@ -63,8 +72,8 @@ struct SystemLayerView: View {
         let metrics: StaffMetrics
         let selection: SelectionRenderState
 
-        func makeNSView(context: Context) -> _LayerSystemHostView {
-            let view = _LayerSystemHostView()
+        func makeNSView(context: Context) -> LayerSystemHostView {
+            let view = LayerSystemHostView()
             view.configure(
                 system: system, metrics: metrics, selection: selection,
             )
@@ -72,7 +81,7 @@ struct SystemLayerView: View {
         }
 
         func updateNSView(
-            _ nsView: _LayerSystemHostView, context: Context,
+            _ nsView: LayerSystemHostView, context: Context,
         ) {
             nsView.configure(
                 system: system, metrics: metrics, selection: selection,
@@ -80,8 +89,12 @@ struct SystemLayerView: View {
         }
     }
 
+    /// NOTE: Not `private` — `SystemLayerView+MeasureDiff.swift` extends
+    /// this type with `applyMeasureDiff`, which needs internal (not
+    /// file-scoped) access to it and to its stored properties below.
+    /// Still invisible outside this module; nothing else references it.
     @available(macOS 15.0, *)
-    private final class _LayerSystemHostView: NSView {
+    final class LayerSystemHostView: NSView {
         // NOTE: We deliberately do NOT override `isFlipped` here.
         //
         // When a layer-backed NSView is `isFlipped = true`, AppKit
@@ -96,12 +109,14 @@ struct SystemLayerView: View {
         // view out correctly because the NSView's own frame is set from
         // the outside via SwiftUI's `.frame(…)` modifier.
 
-        private var lastSystem: LayoutSystem?
-        private var lastMetrics: StaffMetrics?
-        private var lastSelection: SelectionRenderState = .empty
-        private var baseLayer: CALayer?
-        private var overlayLayer: CALayer?
-        private var itemLayers: [ScoreItemID: [CAShapeLayer]] = [:]
+        var lastSystem: LayoutSystem?
+        var lastMetrics: StaffMetrics?
+        var lastSelection: SelectionRenderState = .empty
+        var baseLayer: CALayer?
+        var overlayLayer: CALayer?
+        var itemLayers: [ScoreItemID: [CAShapeLayer]] = [:]
+        var measureContainers: [Int: CALayer] = [:]
+        var measureItems: [Int: [ScoreItemID: [CAShapeLayer]]] = [:]
 
         override init(frame frameRect: NSRect) {
             super.init(frame: frameRect)
@@ -121,37 +136,52 @@ struct SystemLayerView: View {
             selection: SelectionRenderState,
         ) {
             guard let hostLayer = layer else { return }
-            let systemChanged = lastSystem != system || lastMetrics != metrics
-            if systemChanged {
-                hostLayer.sublayers?.forEach { $0.removeFromSuperlayer() }
-                let result = ScoreLayerBuilder.buildSystemWithItems(
-                    system, metrics: metrics,
-                )
-                hostLayer.addSublayer(result.root)
-
-                let overlay = CALayer()
-                overlay.frame = result.root.frame
-                overlay.masksToBounds = false
-                hostLayer.addSublayer(overlay)
-
-                baseLayer = result.root
-                overlayLayer = overlay
-                itemLayers = result.items
-                lastSystem = system
-                lastMetrics = metrics
-                // Re-apply the selection from a clean slate — the new
-                // layers all start at `inkColor`.
-                lastSelection = .empty
-                setFrameSize(NSSize(
-                    width: system.size.width,
-                    height: system.size.height + 1,
-                ))
+            if let previous = lastSystem, lastMetrics == metrics,
+               MeasureLayerDiffPlanner.systemFrameIsUnchanged(previous, system)
+            {
+                // Same system geometry and same system-level furniture:
+                // touch only the measures that actually changed.
+                applyMeasureDiff(previous: previous, system: system, metrics: metrics)
+            } else if lastSystem != system || lastMetrics != metrics {
+                rebuildAll(system: system, metrics: metrics, into: hostLayer)
             }
             applySelection(system: system, metrics: metrics, selection: selection)
             lastSelection = selection
+            lastSystem = system
+            lastMetrics = metrics
         }
 
-        private func applySelection(
+        func rebuildAll(
+            system: LayoutSystem,
+            metrics: StaffMetrics,
+            into hostLayer: CALayer,
+        ) {
+            hostLayer.sublayers?.forEach { $0.removeFromSuperlayer() }
+            let result = ScoreLayerBuilder.buildSystemWithItems(
+                system, metrics: metrics,
+            )
+            hostLayer.addSublayer(result.root)
+
+            let overlay = CALayer()
+            overlay.frame = result.root.frame
+            overlay.masksToBounds = false
+            hostLayer.addSublayer(overlay)
+
+            baseLayer = result.root
+            overlayLayer = overlay
+            itemLayers = result.items
+            measureContainers = result.measureContainers
+            measureItems = result.measureItems
+            // Re-apply the selection from a clean slate — the new
+            // layers all start at `inkColor`.
+            lastSelection = .empty
+            setFrameSize(NSSize(
+                width: system.size.width,
+                height: system.size.height + 1,
+            ))
+        }
+
+        func applySelection(
             system: LayoutSystem,
             metrics: StaffMetrics,
             selection: SelectionRenderState,
@@ -179,8 +209,8 @@ struct SystemLayerView: View {
         let metrics: StaffMetrics
         let selection: SelectionRenderState
 
-        func makeUIView(context: Context) -> _LayerSystemHostView {
-            let view = _LayerSystemHostView()
+        func makeUIView(context: Context) -> LayerSystemHostView {
+            let view = LayerSystemHostView()
             view.configure(
                 system: system, metrics: metrics, selection: selection,
             )
@@ -188,7 +218,7 @@ struct SystemLayerView: View {
         }
 
         func updateUIView(
-            _ uiView: _LayerSystemHostView, context: Context,
+            _ uiView: LayerSystemHostView, context: Context,
         ) {
             uiView.configure(
                 system: system, metrics: metrics, selection: selection,
@@ -196,13 +226,18 @@ struct SystemLayerView: View {
         }
     }
 
-    private final class _LayerSystemHostView: UIView {
-        private var lastSystem: LayoutSystem?
-        private var lastMetrics: StaffMetrics?
-        private var lastSelection: SelectionRenderState = .empty
-        private var baseLayer: CALayer?
-        private var overlayLayer: CALayer?
-        private var itemLayers: [ScoreItemID: [CAShapeLayer]] = [:]
+    /// NOTE: Not `private` — see the matching note on the macOS
+    /// `LayerSystemHostView` above; `SystemLayerView+MeasureDiff.swift`
+    /// extends this type from another file in the same module.
+    final class LayerSystemHostView: UIView {
+        var lastSystem: LayoutSystem?
+        var lastMetrics: StaffMetrics?
+        var lastSelection: SelectionRenderState = .empty
+        var baseLayer: CALayer?
+        var overlayLayer: CALayer?
+        var itemLayers: [ScoreItemID: [CAShapeLayer]] = [:]
+        var measureContainers: [Int: CALayer] = [:]
+        var measureItems: [Int: [ScoreItemID: [CAShapeLayer]]] = [:]
 
         override init(frame: CGRect) {
             super.init(frame: frame)
@@ -219,38 +254,56 @@ struct SystemLayerView: View {
             metrics: StaffMetrics,
             selection: SelectionRenderState,
         ) {
-            let systemChanged = lastSystem != system || lastMetrics != metrics
-            if systemChanged {
-                layer.sublayers?.forEach { $0.removeFromSuperlayer() }
-                let result = ScoreLayerBuilder.buildSystemWithItems(
-                    system, metrics: metrics,
-                )
-                layer.addSublayer(result.root)
-
-                let overlay = CALayer()
-                overlay.frame = result.root.frame
-                overlay.masksToBounds = false
-                layer.addSublayer(overlay)
-
-                baseLayer = result.root
-                overlayLayer = overlay
-                itemLayers = result.items
-                lastSystem = system
-                lastMetrics = metrics
-                lastSelection = .empty
-                frame = CGRect(
-                    origin: frame.origin,
-                    size: CGSize(
-                        width: system.size.width,
-                        height: system.size.height + 1,
-                    ),
-                )
+            let hostLayer = layer
+            if let previous = lastSystem, lastMetrics == metrics,
+               MeasureLayerDiffPlanner.systemFrameIsUnchanged(previous, system)
+            {
+                // Same system geometry and same system-level furniture:
+                // touch only the measures that actually changed.
+                applyMeasureDiff(previous: previous, system: system, metrics: metrics)
+            } else if lastSystem != system || lastMetrics != metrics {
+                rebuildAll(system: system, metrics: metrics, into: hostLayer)
             }
             applySelection(system: system, metrics: metrics, selection: selection)
             lastSelection = selection
+            lastSystem = system
+            lastMetrics = metrics
         }
 
-        private func applySelection(
+        func rebuildAll(
+            system: LayoutSystem,
+            metrics: StaffMetrics,
+            into hostLayer: CALayer,
+        ) {
+            hostLayer.sublayers?.forEach { $0.removeFromSuperlayer() }
+            let result = ScoreLayerBuilder.buildSystemWithItems(
+                system, metrics: metrics,
+            )
+            hostLayer.addSublayer(result.root)
+
+            let overlay = CALayer()
+            overlay.frame = result.root.frame
+            overlay.masksToBounds = false
+            hostLayer.addSublayer(overlay)
+
+            baseLayer = result.root
+            overlayLayer = overlay
+            itemLayers = result.items
+            measureContainers = result.measureContainers
+            measureItems = result.measureItems
+            // Re-apply the selection from a clean slate — the new
+            // layers all start at `inkColor`.
+            lastSelection = .empty
+            frame = CGRect(
+                origin: frame.origin,
+                size: CGSize(
+                    width: system.size.width,
+                    height: system.size.height + 1,
+                ),
+            )
+        }
+
+        func applySelection(
             system: LayoutSystem,
             metrics: StaffMetrics,
             selection: SelectionRenderState,
