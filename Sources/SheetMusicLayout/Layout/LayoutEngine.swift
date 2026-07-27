@@ -77,6 +77,20 @@ public enum LayoutEngine {
         let multiMeasureRestPlan = MultiMeasureRestPlanner.plan(
             for: score, policy: options.multiMeasureRest,
         )
+        // Computed ONCE per layout call, not per system / per measure:
+        // `packSystems` and `buildSystem` used to each re-derive their
+        // own copy (the former across every measure, the latter across
+        // every system), which is exactly the O(n²) pattern this table
+        // exists to avoid. Built from `score` — the accidental-
+        // suppressed copy above — so staff shape matches what
+        // `packSystems` / `buildSystem` see.
+        let staves = score.allStaves.map(\.staff)
+        let measureDurations = effectiveMeasureDurationsAcrossStaves(
+            staves: staves,
+        )
+        let staffMeasureDurations: [[Fraction]] = staves.map {
+            $0.measures.effectiveMeasureDurations()
+        }
         let context = RenderContext(
             score: score,
             options: options,
@@ -87,6 +101,8 @@ public enum LayoutEngine {
             cache: cache,
             belowStaffSpannerCoverage: belowStaffSpannerCoverage(score: score),
             multiMeasureRestPlan: multiMeasureRestPlan,
+            measureDurations: measureDurations,
+            staffMeasureDurations: staffMeasureDurations,
         )
         let packedSystems = packSystems(context: context)
         // Title block at the top of the document. Built first so we
@@ -400,5 +416,20 @@ public enum LayoutEngine {
         /// renders individually). Tasks 6 and 7 read this to override
         /// per-measure widths and emit a single H-bar measure per run.
         let multiMeasureRestPlan: MultiMeasureRestPlan
+        /// Cross-staff effective duration of every measure index
+        /// (`LayoutEngine.effectiveMeasureDurationsAcrossStaves`),
+        /// computed once at layout entry. `packSystems` and
+        /// `buildSystem` both read this instead of re-deriving it —
+        /// `buildSystem` in particular runs once PER SYSTEM, so
+        /// recomputing there would still be Θ(systems · staves ·
+        /// measures) despite looking like a per-call hoist.
+        let measureDurations: [Fraction]
+        /// Per-staff effective measure durations
+        /// (`staffMeasureDurations[staffIdx][measureIdx]`), computed
+        /// once at layout entry for the same reason as
+        /// `measureDurations`. Used where a single staff's own
+        /// prevailing time signature is wanted (e.g. `placeMeasureElements`
+        /// inputs), as opposed to the cross-staff merge.
+        let staffMeasureDurations: [[Fraction]]
     }
 }

@@ -86,20 +86,18 @@ extension LayoutEngine {
             /// the source-measure count covered by the run.
             let multiMeasureRestCount: Int?
         }
-        // Pre-compute effective measure durations once per staff so
-        // `placeMeasureElements` receives the prevailing time signature
-        // (carried forward across measures that contain no explicit
-        // `<TimeSignature>` element) rather than deriving a local-scan-
-        // only fallback. Indexed as `staffMeasureDurations[staffIdx]`.
-        let staffMeasureDurations: [[Fraction]] = staves.map {
-            $0.measures.effectiveMeasureDurations()
-        }
-        // Cross-staff duration table for `tickColumns`, computed once
-        // per system build rather than re-derived per measure (see
-        // `effectiveMeasureDurationsAcrossStaves`).
-        let sharedMeasureDurations = effectiveMeasureDurationsAcrossStaves(
-            staves: staves,
-        )
+        // Per-staff effective measure durations so `placeMeasureElements`
+        // receives the prevailing time signature (carried forward across
+        // measures that contain no explicit `<TimeSignature>` element)
+        // rather than deriving a local-scan-only fallback. Indexed as
+        // `staffMeasureDurations[staffIdx]`. Read from the context — it
+        // is built once at layout entry (see `LayoutEngine.layout`), NOT
+        // once per system: `buildSystem` runs once per system, so
+        // recomputing here would still be Θ(systems · staves · measures).
+        let staffMeasureDurations = context.staffMeasureDurations
+        // Cross-staff duration table for `tickColumns`, same
+        // once-per-layout-call sourcing as `staffMeasureDurations` above.
+        let sharedMeasureDurations = context.measureDurations
         var untranslated: [UntranslatedMeasure] = []
         var clefs = activeClefs
         var keys = activeKeys
@@ -191,12 +189,9 @@ extension LayoutEngine {
                             ($0.originalStaff ?? canonicalStaff) == address
                         }
                         : []
-                let measDuration: Fraction = {
-                    let durations = staffMeasureDurations[staffIdx]
-                    return measureIdx < durations.count
-                        ? durations[measureIdx]
-                        : Fraction(numerator: 4, denominator: 4)
-                }()
+                let measDuration = measureDuration(
+                    staffMeasureDurations[staffIdx], at: measureIdx,
+                )
                 let placementInputs = LayoutCache.PlacementInputs(
                     measure: m,
                     width: w,

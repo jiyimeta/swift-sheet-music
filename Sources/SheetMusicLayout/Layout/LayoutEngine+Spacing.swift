@@ -162,6 +162,15 @@ extension LayoutEngine {
     ///    have different element counts.
     ///
     /// Returns an empty map when the measure has no timed content.
+    ///
+    /// - Parameter measureDuration: The effective duration of
+    ///   `measureIdx` — the value at that index in the cross-staff
+    ///   `effectiveMeasureDurationsAcrossStaves` table. Used to resolve
+    ///   any `.measure`-duration element via `NoteDuration.resolved(in:)`.
+    ///   `.measure` durations ARE produced today — by
+    ///   `MSCXDecoder+MeasureRepeat.swift`, `MSCXDecoder+Voice.swift`,
+    ///   and `MusicXMLDecoder+Note.swift` — so this must be the real
+    ///   per-measure value, not a hardcoded 4/4.
     static func tickColumns(
         staves: [Staff],
         measureIdx: Int,
@@ -222,6 +231,12 @@ extension LayoutEngine {
     /// Lead's quarter rest into two gaps, each charged the floor
     /// minimum). Using THIS function for layout's per-measure width
     /// keeps the spacing engine and the placement engine in sync.
+    ///
+    /// - Parameter measureDuration: The effective duration of
+    ///   `measureIdx` — the value at that index in the cross-staff
+    ///   `effectiveMeasureDurationsAcrossStaves` table. See
+    ///   `tickColumns`' matching parameter doc for why this must be the
+    ///   real per-measure value.
     static func crossStaffMinimumMeasureWidth(
         staves: [Staff],
         measureIdx: Int,
@@ -245,14 +260,22 @@ extension LayoutEngine {
             + contentWidth + trailingGap
     }
 
-    /// Effective duration of every measure index across `staves`,
-    /// computed once per layout call.
+    /// Effective duration of every measure index across `staves`.
     ///
     /// Reproduces the derivation `aggregatedTickWeights` used to do
     /// inline: for each index, read from the FIRST staff whose measure
     /// list covers that index. Staves of unequal length therefore behave
     /// exactly as before. Doing it inline was O(measures²) — the inline
     /// version walked a whole staff per measure.
+    ///
+    /// This function itself is still O(measures) per call, so call it
+    /// ONCE per layout and thread the result through — do not call it
+    /// per-measure or per-system. `LayoutEngine.layout(score:options:
+    /// availableWidth:cache:)` computes it once into
+    /// `RenderContext.measureDurations`; `packSystems` and `buildSystem`
+    /// read that field rather than calling this again. The only other
+    /// caller is `naturalContentWidth`, a standalone static with no
+    /// `RenderContext`, which computes its own copy once for itself.
     static func effectiveMeasureDurationsAcrossStaves(
         staves: [Staff],
     ) -> [Fraction] {
@@ -288,6 +311,15 @@ extension LayoutEngine {
     /// so the placement never has to squeeze). Keeping a single
     /// algorithm avoids the bug where the two diverged and the
     /// minimum width undersized the layout.
+    ///
+    /// - Parameter measureDuration: The effective duration of
+    ///   `measureIdx`, passed in by the caller from the cross-staff
+    ///   `effectiveMeasureDurationsAcrossStaves` table rather than
+    ///   re-derived here. Used to resolve any `.measure`-duration chord
+    ///   or rest via `NoteDuration.resolved(in:)` — `.measure` durations
+    ///   ARE produced today (`MSCXDecoder+MeasureRepeat.swift`,
+    ///   `MSCXDecoder+Voice.swift`, `MusicXMLDecoder+Note.swift`), so
+    ///   this can't be a fixed constant.
     static func aggregatedTickWeights( // swiftlint:disable:this function_body_length
         staves: [Staff],
         measureIdx: Int,
