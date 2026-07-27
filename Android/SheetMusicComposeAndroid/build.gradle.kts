@@ -34,7 +34,7 @@ version = (project.findProperty("version") as String?)
     ?: "0.0.0-SNAPSHOT"
 
 dependencies {
-    val composeBom = platform("androidx.compose:compose-bom:2024.09.02")
+    val composeBom = platform("androidx.compose:compose-bom:2026.06.01")
     api(composeBom)
     api("androidx.compose.ui:ui")
     api("androidx.compose.foundation:foundation")
