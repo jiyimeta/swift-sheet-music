@@ -167,9 +167,15 @@ The "3-5 ms is below user-perceivable lag" conclusion above does
 by walking the *whole* staff's measure list on every call, so its
 cost scaled with the square of the score's measure count. At 112
 measures that term is invisible next to everything else; on a
-synthetic 1300-measure × 6-staff score it was **~90 % of a one-note
-edit's layout time** (346 ms of a 356 ms horizontal-mode edit,
-before the fix).
+synthetic 1300-measure × 6-staff score it was **~97 % of a one-note
+edit's layout time** before the fix.
+
+That 97 % comes from a pass-by-pass profile taken with a temporary
+`Date()`-based trace probe compiled into the pass-1 inner loop. The
+probe's own overhead inflates every absolute millisecond it reports,
+so those numbers are deliberately not quoted here: the **ratio** is
+the finding, not the milliseconds. The absolute before/after figures
+in the table below come from clean, unprobed runs instead.
 
 A second, structural factor compounds the first: horizontal mode
 (`ScoreViewOptions(wrapToViewWidth: false)`) packs the *entire*
@@ -181,66 +187,80 @@ Vertical mode (158 systems on the same score) looked fine because
 only the one edited system misses the per-system cache; the other
 157 are served from it.
 
-Same benchmark, same machine, serialized, Release config
-(`swift test -c release`), on the synthetic 1300-measure × 6-staff
-score built by
-`Tests/SheetMusicTests/NoteInputPipelineBenchmark.swift`:
+#### Measurements
+
+Conditions, once, for every number below: Release config
+(`swift test -c release`), the `NoteInputPipelineBenchmark` suite
+(`.serialized`), one machine, nothing else running, the two runs taken
+sequentially — never concurrently. The score is the synthetic
+1300-measure × 6-staff corpus built by
+`Tests/SheetMusicTests/NoteInputPipelineBenchmark.swift`; horizontal
+mode packs it into 1 `LayoutSystem`, vertical mode into 158.
+
+BEFORE is the merge base (`a3fa6600`), with the benchmark file copied
+back onto it and minimally adapted to the pre-change APIs. AFTER is
+this branch's tip.
 
 ```
-                          BEFORE          AFTER Phase 1     AFTER Phase 2
-                          (pre-Task-2)    (post-Task-4)     (post-Task-8)
-horizontal edit layout        221.2 ms        52.6 ms            24.5 ms
-  of which packSystems        238.5 ms        42.0 ms            19.5 ms
-horizontal cold layout        428.7 ms       100.0 ms            42.7 ms
-vertical edit layout           19.1 ms        17.0 ms             8.2 ms
-vertical cold layout          677.4 ms        80.1 ms            39.8 ms
+                                            BEFORE      AFTER
+                                          (a3fa6600)  (branch tip)
+LayoutEngine.layout
+  horizontal, cold                          335.0 ms     38.5 ms
+  horizontal, warm (all cache hits)           8.8 ms      6.8 ms
+  horizontal, 1-measure edit                 167.6 ms     22.1 ms
+    of which packSystems                     157.9 ms     21.3 ms
+  vertical, cold                             427.4 ms     35.8 ms
+  vertical, 1-measure edit                    10.3 ms      7.2 ms
 
-ScoreLayerBuilder.buildSystemWithItems (full, horizontal):
-  162.6 ms before -> 113.7 ms after Phase 1 -> 41.7 ms after Phase 2
+CALayer build
+  buildSystemWithItems (whole horizontal
+    score, 1 system of 1300 measures)         48.1 ms     37.1 ms
+  rebuild ALL 158 vertical systems' layers     45.1 ms     46.1 ms
+  rebuild ONE vertical system's layers          0.3 ms      0.4 ms
 ```
 
-Phase 1 (Tasks 1-4, the `aggregatedTickWeights` fix plus the
-per-measure/per-system caches above) is what drove most of that
-table. Phase 2 (Tasks 5-8) targeted something the table above can't
-show: `buildSystemWithItems` always rebuilds *every* measure's
-`CALayer` tree, so it stays an `O(measures)` full rebuild no matter
-how cheap the layout pass gets — for a one-note edit on a
-1300-measure horizontal score that is still a 41.7 ms full rebuild
-for one changed measure. Phase 2 added `MeasureLayerDiffPlanner`
-(`Sources/SheetMusicUI/Rendering/MeasureLayerDiffPlanner.swift`), a
+Phase 1 (Tasks 1-4: the `aggregatedTickWeights` fix plus the
+per-measure / per-system caches above) is what the `LayoutEngine
+.layout` rows measure — a 7.6× cut on a horizontal one-measure edit
+and ~9-12× on the cold paths.
+
+Phase 2 (Tasks 5-8) does **not** show up in the CALayer-build rows,
+and that is expected rather than disappointing: it did not make
+`buildSystemWithItems` faster (48.1 → 37.1 ms is a modest change, and
+rebuilding all 158 vertical systems is flat at ~45 ms across both
+sides). What Phase 2 changed is that an edit no longer *calls*
+`buildSystemWithItems` at all. `MeasureLayerDiffPlanner`
+(`Sources/SheetMusicUI/Rendering/MeasureLayerDiffPlanner.swift`) is a
 pure function of the previous and new `LayoutSystem` that decides,
 per measure, whether to reposition an unchanged container or rebuild
-it, and `SystemLayerView+MeasureDiff.swift`, which applies that plan
-by rebuilding only the flagged `CALayer` subtrees via
-`ScoreLayerBuilder.buildMeasure`. Measuring that actual path (plan +
-selective rebuild) instead of the always-full `buildSystemWithItems`
-is the honest comparison for what an editor's per-keystroke update
-now costs:
+it; `SystemLayerView+MeasureDiff.swift` applies that plan by
+rebuilding only the flagged `CALayer` subtrees via
+`ScoreLayerBuilder.buildMeasure`. That path exists only on the AFTER
+side, so it has no BEFORE counterpart to compare against — the
+honest comparison is against the full rebuild it replaces, on the
+same run:
 
 ```
-MeasureLayerDiffPlanner.plan                    1.5 ms
-rebuild only measures the plan flags             0.2 ms   (1 of 1300 measures rebuilt)
-                                                 ------
-                                                  1.7 ms   vs. 41.7 ms for a full rebuild
+AFTER only (no BEFORE counterpart — the API did not exist)
+MeasureLayerDiffPlanner.plan                      1.3 ms
+rebuild only measures the plan flags              0.2 ms  (1 of 1300)
+                                                  ------
+                                                   1.5 ms
+  vs. 37.1 ms to rebuild the whole horizontal system
 ```
 
-Vertical mode already benefited from the per-system cache scoping a
-one-note edit to a single `LayoutSystem` out of 158: rebuilding that
-one system's layers in full costs 0.4 ms, versus 52.1 ms to rebuild
-all 158 (measured directly by `verticalPipeline`, not via the diff
-planner). Horizontal mode has no such luxury — the whole score is
-one system — which is exactly why the diff planner's per-measure
-scoping matters there specifically: it is what gets a horizontal
-edit from "rebuild the one giant system" (41.7 ms) down to "rebuild
-the one measure that changed" (1.7 ms), the same order of magnitude
-vertical mode already got for free from per-system caching alone.
+Vertical mode already got the equivalent scoping for free from the
+per-system cache: a one-note edit dirties 1 `LayoutSystem` out of
+158, and rebuilding that one system's layers costs 0.4 ms against
+46.1 ms for all 158. Horizontal mode has no such luxury — the whole
+score is one system — which is exactly why the per-measure diff
+matters there specifically.
 
 Conclusion for future work: engine-level layout cost (the
-`LayoutEngine.layout` numbers in the table above) is now small
-enough that it is very unlikely to be the bottleneck in an
-interactive editor. The place worth watching next
-is the `CALayer` build/apply path measured here, and — per the
-caveat above — the end-to-end pipeline captured by
+`LayoutEngine.layout` rows above) is now small enough that it is
+very unlikely to be the bottleneck in an interactive editor. The
+place worth watching next is the `CALayer` build/apply path measured
+here, and the end-to-end pipeline captured by
 `example(macOS): instrument edit pipeline timing`, which is the only
 place rendering / scroll-view overhead is visible.
 
