@@ -136,16 +136,31 @@ struct SystemLayerView: View {
             selection: SelectionRenderState,
         ) {
             guard let hostLayer = layer else { return }
-            if let previous = lastSystem, lastMetrics == metrics,
-               MeasureLayerDiffPlanner.systemFrameIsUnchanged(previous, system)
-            {
-                // Same system geometry and same system-level furniture:
-                // touch only the measures that actually changed.
-                applyMeasureDiff(previous: previous, system: system, metrics: metrics)
-            } else if lastSystem != system || lastMetrics != metrics {
-                rebuildAll(system: system, metrics: metrics, into: hostLayer)
+            // Pure selection-only change (every click / marquee drag):
+            // skip the diff/rebuild machinery entirely rather than
+            // walking every measure just to conclude nothing moved
+            // (Task 8 review finding 6).
+            if lastSystem != system || lastMetrics != metrics {
+                if let previous = lastSystem, lastMetrics == metrics,
+                   MeasureLayerDiffPlanner.systemFrameIsUnchanged(previous, system)
+                {
+                    // Same system geometry and same system-level
+                    // furniture: touch only the measures that actually
+                    // changed.
+                    applyMeasureDiff(previous: previous, system: system, metrics: metrics)
+                } else {
+                    rebuildAll(system: system, metrics: metrics, into: hostLayer)
+                }
             }
+            // Disable implicit animation here too: a just-rebuilt
+            // measure's freshly-created layers must not cross-fade from
+            // `inkColor` when `applySelection` tints them a moment
+            // later in a separate transaction (Task 8 review, the
+            // "cannot verify" follow-up).
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
             applySelection(system: system, metrics: metrics, selection: selection)
+            CATransaction.commit()
             lastSelection = selection
             lastSystem = system
             lastMetrics = metrics
@@ -173,7 +188,9 @@ struct SystemLayerView: View {
             measureContainers = result.measureContainers
             measureItems = result.measureItems
             // Re-apply the selection from a clean slate — the new
-            // layers all start at `inkColor`.
+            // layers all start at `inkColor`. (Diffed rebuilds inside
+            // `applyMeasureDiff` deliberately do NOT do this — see the
+            // doc comment on `MeasureDiffHosting.applyMeasureDiff`.)
             lastSelection = .empty
             setFrameSize(NSSize(
                 width: system.size.width,
@@ -255,16 +272,31 @@ struct SystemLayerView: View {
             selection: SelectionRenderState,
         ) {
             let hostLayer = layer
-            if let previous = lastSystem, lastMetrics == metrics,
-               MeasureLayerDiffPlanner.systemFrameIsUnchanged(previous, system)
-            {
-                // Same system geometry and same system-level furniture:
-                // touch only the measures that actually changed.
-                applyMeasureDiff(previous: previous, system: system, metrics: metrics)
-            } else if lastSystem != system || lastMetrics != metrics {
-                rebuildAll(system: system, metrics: metrics, into: hostLayer)
+            // Pure selection-only change (every click / marquee drag):
+            // skip the diff/rebuild machinery entirely rather than
+            // walking every measure just to conclude nothing moved
+            // (Task 8 review finding 6).
+            if lastSystem != system || lastMetrics != metrics {
+                if let previous = lastSystem, lastMetrics == metrics,
+                   MeasureLayerDiffPlanner.systemFrameIsUnchanged(previous, system)
+                {
+                    // Same system geometry and same system-level
+                    // furniture: touch only the measures that actually
+                    // changed.
+                    applyMeasureDiff(previous: previous, system: system, metrics: metrics)
+                } else {
+                    rebuildAll(system: system, metrics: metrics, into: hostLayer)
+                }
             }
+            // Disable implicit animation here too: a just-rebuilt
+            // measure's freshly-created layers must not cross-fade from
+            // `inkColor` when `applySelection` tints them a moment
+            // later in a separate transaction (Task 8 review, the
+            // "cannot verify" follow-up).
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
             applySelection(system: system, metrics: metrics, selection: selection)
+            CATransaction.commit()
             lastSelection = selection
             lastSystem = system
             lastMetrics = metrics
@@ -292,7 +324,9 @@ struct SystemLayerView: View {
             measureContainers = result.measureContainers
             measureItems = result.measureItems
             // Re-apply the selection from a clean slate — the new
-            // layers all start at `inkColor`.
+            // layers all start at `inkColor`. (Diffed rebuilds inside
+            // `applyMeasureDiff` deliberately do NOT do this — see the
+            // doc comment on `MeasureDiffHosting.applyMeasureDiff`.)
             lastSelection = .empty
             frame = CGRect(
                 origin: frame.origin,

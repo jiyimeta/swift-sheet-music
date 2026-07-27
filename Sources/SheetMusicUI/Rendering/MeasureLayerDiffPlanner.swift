@@ -39,8 +39,13 @@ enum MeasureLayerDiffPlanner {
         /// `LayoutMeasure.measureIndex`.
         var updates: [Int: Action]
         /// `measureIndex` values present in `previous` but absent from
-        /// the new system — their containers must be removed.
-        var removed: [Int]
+        /// the new system — their containers must be removed. A `Set`
+        /// (not an `Array`) because it's built from a dictionary's
+        /// `keys`, whose iteration order isn't guaranteed — an `Array`
+        /// here would make `Plan` equality (and any future ordered
+        /// consumer) nondeterministic across runs (Task 8 review
+        /// finding 7).
+        var removed: Set<Int>
     }
 
     /// Computes the plan for moving from `previous` to `system`.
@@ -69,7 +74,7 @@ enum MeasureLayerDiffPlanner {
                 updates[measure.measureIndex] = .rebuild
             }
         }
-        let removed = previousByIndex.keys.filter { !liveIndices.contains($0) }
+        let removed = Set(previousByIndex.keys).subtracting(liveIndices)
         return Plan(updates: updates, removed: removed)
     }
 
@@ -81,6 +86,19 @@ enum MeasureLayerDiffPlanner {
     /// are drawn into one shared system-level 50%-opacity layer (not a
     /// per-measure container), so overlapping hidden elements composite
     /// correctly — a change there needs the full rebuild path.
+    ///
+    /// Also compares `BarLineGeometry.staffLineEndX(for:)`: `drawStaves`
+    /// (via `StaffRenderer.endX(for:)`) clips the five staff lines to
+    /// that X, which is derived from the LAST measure's `origin.x` and
+    /// its trailing barline's subtype (`LayoutSystem.trailingBarLine`)
+    /// — a system-level draw input that lives outside every measure
+    /// container, same trap category as `invisibleElements`. Reachable
+    /// in `wrapToViewWidth` mode: `size` stays equal across an edit that
+    /// only changes the last measure's barline subtype (e.g. it becomes
+    /// the new last measure and gains an `end` barline), which would
+    /// otherwise pass this predicate, diff only that measure, and leave
+    /// the staff lines up to ~0.5 sp short of the new barline glyph
+    /// (Task 8 review finding 3).
     static func systemFrameIsUnchanged(
         _ a: LayoutSystem, _ b: LayoutSystem,
     ) -> Bool {
@@ -96,5 +114,7 @@ enum MeasureLayerDiffPlanner {
             && a.showsInvisibleElements == b.showsInvisibleElements
             && a.measures.map(\.invisibleElements)
             == b.measures.map(\.invisibleElements)
+            && BarLineGeometry.staffLineEndX(for: a)
+            == BarLineGeometry.staffLineEndX(for: b)
     }
 }
