@@ -124,9 +124,7 @@ public enum ScoreLayerBuilder {
             root.addSublayer(built.container)
             containers[measure.measureIndex] = built.container
             perMeasureItems[measure.measureIndex] = built.items
-            for (id, layers) in built.items {
-                allItems[id, default: []].append(contentsOf: layers)
-            }
+            allItems.merge(built.items) { $0 + $1 }
         }
         return (containers, perMeasureItems, allItems)
     }
@@ -151,9 +149,7 @@ public enum ScoreLayerBuilder {
                 context: &ctx, into: root,
             )
         }
-        for (id, layers) in ctx.items {
-            allItems[id, default: []].append(contentsOf: layers)
-        }
+        allItems.merge(ctx.items) { $0 + $1 }
 
         // Routed-to-invisible chord/note glyphs already sit under a
         // 50% group opacity layer (see drawInvisibleElements); flip
@@ -165,9 +161,7 @@ public enum ScoreLayerBuilder {
             system: system, metrics: metrics,
             height: height, context: &invisibleCtx, root: root,
         )
-        for (id, layers) in invisibleCtx.items {
-            allItems[id, default: []].append(contentsOf: layers)
-        }
+        allItems.merge(invisibleCtx.items) { $0 + $1 }
 
         return SystemLayers(
             root: root,

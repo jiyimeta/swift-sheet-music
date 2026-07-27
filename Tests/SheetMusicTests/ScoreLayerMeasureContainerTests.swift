@@ -36,12 +36,20 @@
                 system, metrics: metrics,
             )
             #expect(built.measureContainers.count == system.measures.count)
+            let systemSize = CGSize(
+                width: system.size.width, height: system.size.height + 1,
+            )
             for m in system.measures {
                 let container = try #require(
                     built.measureContainers[m.measureIndex],
                 )
                 #expect(container.position.x == m.origin.x)
+                #expect(container.position.y == 0)
                 #expect(container.anchorPoint == CGPoint(x: 0, y: 0))
+                #expect(
+                    container.bounds
+                        == CGRect(origin: .zero, size: systemSize),
+                )
                 #expect(container.superlayer === built.root)
             }
         }
@@ -53,6 +61,7 @@
             let built = ScoreLayerBuilder.buildSystemWithItems(
                 system, metrics: metrics,
             )
+            #expect(!built.items.isEmpty)
             for (_, perMeasure) in built.measureItems {
                 for (id, layers) in perMeasure {
                     let merged = try #require(built.items[id])

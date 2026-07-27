@@ -113,14 +113,27 @@ public struct LayoutMeasure: Sendable, Equatable {
         self.dynamicExtents = dynamicExtents
     }
 
-    /// Whether `other` would draw identically to this measure once
-    /// translated to its own `origin.x`.
+    /// Whether `other` would draw identically to this measure's CALayer /
+    /// canvas content once translated to its own `origin.x`.
     ///
-    /// Compares everything a renderer reads except the horizontal
-    /// origin: a measure that only slid sideways (because an earlier
-    /// measure changed width) can have its layer container repositioned
-    /// instead of rebuilt. `origin.y` IS compared — it participates in
-    /// the per-element Y flip.
+    /// Compares everything the CALayer and canvas renderers read to build
+    /// a measure's visible content, except the horizontal origin: a
+    /// measure that only slid sideways (because an earlier measure changed
+    /// width) can have its layer container repositioned instead of
+    /// rebuilt. `origin.y` IS compared — it participates in the
+    /// per-element Y flip.
+    ///
+    /// Deliberately excludes fields that either aren't renderer content or
+    /// are already folded into the fields above by the time a renderer
+    /// sees the measure:
+    /// - `lineBreak` / `pageBreak` drive `BreakIndicatorOverlay`, a
+    ///   separate SwiftUI overlay recomputed from the `LayoutSystem` on
+    ///   every body evaluation — it never reads the layer tree this
+    ///   predicate gates.
+    /// - `tickColumns`, `chordNorthByTick`, and `dynamicExtents` are
+    ///   consumed only by `SheetMusicLayout`'s own spanner-anchoring and
+    ///   autoplace passes, upstream of this measure; any effect they have
+    ///   on what gets drawn is already baked into `elements` by this point.
     ///
     /// Cost is O(1) when the two values share array storage (the common
     /// case when the layout cache carried a measure forward) and O(content)
