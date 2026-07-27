@@ -7,6 +7,20 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [1.5.1] - 2026-07-27
+
+### Fixed
+
+- `SheetMusicPDF` is now exported as a library product on Android as well
+  as Apple. 1.5.0 made the importer buildable for Android but left the
+  product inside the Apple-only block, so a cross-compiling consumer got
+  *"product 'SheetMusicPDF' … not found in package 'swift-sheet-music'"*
+  and could not reach `parseUsingSwiftReader`,
+  `parseWithGeometryUsingSwiftReader` or `summaryUsingSwiftReader` at all.
+  The target's Android shape already excludes every Apple-only file and
+  depends only on Core + Layout, so exporting it pulls in no Apple
+  framework.
+
 ## [1.5.0] - 2026-07-27
 
 ### Added
@@ -324,7 +338,8 @@ First public release.
   SDK, plus Kotlin AAR modules for JNI bridging and FluidSynth + Oboe
   playback.
 
-[Unreleased]: https://github.com/jiyimeta/swift-sheet-music/compare/1.5.0...HEAD
+[Unreleased]: https://github.com/jiyimeta/swift-sheet-music/compare/1.5.1...HEAD
+[1.5.1]: https://github.com/jiyimeta/swift-sheet-music/compare/1.5.0...1.5.1
 [1.5.0]: https://github.com/jiyimeta/swift-sheet-music/compare/1.4.0...1.5.0
 [1.4.0]: https://github.com/jiyimeta/swift-sheet-music/compare/1.3.0...1.4.0
 [1.3.0]: https://github.com/jiyimeta/swift-sheet-music/compare/1.2.6...1.3.0
