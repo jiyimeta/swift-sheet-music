@@ -140,6 +140,16 @@ extension LayoutEngine {
         return total
     }
 
+    /// Result of `aggregatedTickWeights`. A named type (rather than a
+    /// tuple) so `LayoutCache` can store it between the width pass and
+    /// the placement pass.
+    struct TickAggregate: Equatable {
+        let sortedTicks: [Int]
+        let gapWeights: [CGFloat]
+        let totalWeight: CGFloat
+        let measureEnd: Int
+    }
+
     /// Shared x-coordinate for every unique tick in a measure, computed
     /// across all voices of all staves.  Mirrors MuseScore's segment
     /// concept: notes at the same tick share one horizontal position
@@ -163,28 +173,18 @@ extension LayoutEngine {
     ///
     /// Returns an empty map when the measure has no timed content.
     ///
-    /// - Parameter measureDuration: The effective duration of
-    ///   `measureIdx` — the value at that index in the cross-staff
-    ///   `effectiveMeasureDurationsAcrossStaves` table. Used to resolve
-    ///   any `.measure`-duration element via `NoteDuration.resolved(in:)`.
-    ///   `.measure` durations ARE produced today — by
-    ///   `MSCXDecoder+MeasureRepeat.swift`, `MSCXDecoder+Voice.swift`,
-    ///   and `MusicXMLDecoder+Note.swift` — so this must be the real
-    ///   per-measure value, not a hardcoded 4/4.
+    /// Core: place tick columns from an already-computed aggregate.
+    /// Shared by `packSystems` (via `crossStaffMinimumMeasureWidth`,
+    /// which computes the same aggregate for the measure's minimum
+    /// width) and `buildSystem`, so the two passes place identical
+    /// segment weights without recomputing `aggregatedTickWeights`
+    /// twice per measure.
     static func tickColumns(
-        staves: [Staff],
-        measureIdx: Int,
+        aggregate agg: TickAggregate,
         metrics: StaffMetrics,
         headerSchedule: HeaderSchedule,
         width: CGFloat,
-        division: Int,
-        measureDuration: Fraction,
     ) -> [Int: CGFloat] {
-        let agg = aggregatedTickWeights(
-            staves: staves, measureIdx: measureIdx,
-            metrics: metrics, division: division,
-            measureDuration: measureDuration,
-        )
         guard !agg.sortedTicks.isEmpty else { return [:] }
 
         // Trailing slack between the last note's tick and the right
@@ -219,6 +219,37 @@ extension LayoutEngine {
         return tickToX
     }
 
+    /// Convenience for callers with no cached aggregate.
+    ///
+    /// - Parameter measureDuration: The effective duration of
+    ///   `measureIdx` — the value at that index in the cross-staff
+    ///   `effectiveMeasureDurationsAcrossStaves` table. Used to resolve
+    ///   any `.measure`-duration element via `NoteDuration.resolved(in:)`.
+    ///   `.measure` durations ARE produced today — by
+    ///   `MSCXDecoder+MeasureRepeat.swift`, `MSCXDecoder+Voice.swift`,
+    ///   and `MusicXMLDecoder+Note.swift` — so this must be the real
+    ///   per-measure value, not a hardcoded 4/4.
+    static func tickColumns(
+        staves: [Staff],
+        measureIdx: Int,
+        metrics: StaffMetrics,
+        headerSchedule: HeaderSchedule,
+        width: CGFloat,
+        division: Int,
+        measureDuration: Fraction,
+    ) -> [Int: CGFloat] {
+        tickColumns(
+            aggregate: aggregatedTickWeights(
+                staves: staves, measureIdx: measureIdx,
+                metrics: metrics, division: division,
+                measureDuration: measureDuration,
+            ),
+            metrics: metrics,
+            headerSchedule: headerSchedule,
+            width: width,
+        )
+    }
+
     /// Cross-staff aggregated minimum measure width — the smallest
     /// `width` for which `tickColumns` can place every chord/rest
     /// without squeezing any segment below its declared weight.
@@ -245,6 +276,26 @@ extension LayoutEngine {
         division: Int,
         measureDuration: Fraction,
     ) -> CGFloat {
+        crossStaffMinimumMeasureWidthWithAggregate(
+            staves: staves, measureIdx: measureIdx,
+            metrics: metrics, headerSchedule: headerSchedule,
+            division: division, measureDuration: measureDuration,
+        ).width
+    }
+
+    /// Variant of `crossStaffMinimumMeasureWidth` that also hands back
+    /// the `TickAggregate` it computed, so `packSystems` can store it
+    /// in the per-measure cache for `buildSystem`'s `tickColumns` to
+    /// reuse instead of recomputing `aggregatedTickWeights` a second
+    /// time for the same measure.
+    static func crossStaffMinimumMeasureWidthWithAggregate(
+        staves: [Staff],
+        measureIdx: Int,
+        metrics: StaffMetrics,
+        headerSchedule: HeaderSchedule,
+        division: Int,
+        measureDuration: Fraction,
+    ) -> (width: CGFloat, aggregate: TickAggregate) {
         let agg = aggregatedTickWeights(
             staves: staves, measureIdx: measureIdx,
             metrics: metrics, division: division,
@@ -256,8 +307,9 @@ extension LayoutEngine {
         let contentWidth = max(metrics.sp * 4, agg.totalWeight)
         // baseX = contentStartX + sp; the rightmost tick lands at
         // baseX + contentWidth; trailing barline / gap follows.
-        return headerSchedule.contentStartX + metrics.sp
+        let width = headerSchedule.contentStartX + metrics.sp
             + contentWidth + trailingGap
+        return (width, agg)
     }
 
     /// Effective duration of every measure index across `staves`.
@@ -326,12 +378,7 @@ extension LayoutEngine {
         metrics: StaffMetrics,
         division: Int,
         measureDuration: Fraction,
-    ) -> (
-        sortedTicks: [Int],
-        gapWeights: [CGFloat],
-        totalWeight: CGFloat,
-        measureEnd: Int,
-    ) {
+    ) -> TickAggregate {
         struct TimedElement {
             let startTick: Int
             let endTick: Int
@@ -493,7 +540,10 @@ extension LayoutEngine {
         }
 
         guard !allTicks.isEmpty else {
-            return ([], [], 0, 0)
+            return TickAggregate(
+                sortedTicks: [], gapWeights: [],
+                totalWeight: 0, measureEnd: 0,
+            )
         }
         let sortedTicks = allTicks.sorted()
 
@@ -526,7 +576,10 @@ extension LayoutEngine {
         }
 
         let totalWeight = gapWeights.reduce(0, +)
-        return (sortedTicks, gapWeights, totalWeight, measureEnd)
+        return TickAggregate(
+            sortedTicks: sortedTicks, gapWeights: gapWeights,
+            totalWeight: totalWeight, measureEnd: measureEnd,
+        )
     }
 
     /// Extra width the FIRST measure of a system needs beyond its

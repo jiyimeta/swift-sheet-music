@@ -160,5 +160,78 @@
                 #expect(new == Fraction(numerator: 4, denominator: 4))
             }
         }
+
+        /// `buildSystem` must not recompute the tick aggregation for a
+        /// measure `packSystems`'s width pass (`minWidths`) already
+        /// computed: it always runs first within the same `packSystems`
+        /// call, so `buildSystem`'s lookup is a hit for every measure it
+        /// touches, even on the very first (cold-cache) layout call.
+        ///
+        /// Deviation from the plan's literal test: the plan expected
+        /// `tickAggregateMisses > 0` after the FIRST call, on the
+        /// assumption that a fresh cache means "miss". But `minWidths`
+        /// unconditionally populates `entries[i].tickAggregate` for
+        /// EVERY measure index — on a per-measure cache MISS via a
+        /// fresh `crossStaffMinimumMeasureWidthWithAggregate` call, on a
+        /// HIT by carrying `prior.tickAggregate` forward — before
+        /// `buildSystem` ever runs. So `buildSystem`'s lookup can only
+        /// ever miss when `context.cache` itself is nil (caching
+        /// disabled). Confirmed with a temporary debug print during
+        /// development: `cachedAggregate` was already `true` for all 8
+        /// measures on the very first call.
+        @Test("warm relayout reuses the cached tick aggregate")
+        func warmRelayoutReusesAggregate() {
+            guard #available(macOS 15.0, *) else { return }
+            let c4 = Note(pitch: 60, tpc: 14)
+            let quarter = VoiceElement.chord(
+                Chord(duration: .quarter, notes: [c4]),
+            )
+            let measures = (0 ..< 8).map { _ in
+                Measure(voices: [Voice(elements: [
+                    quarter, quarter, quarter, quarter,
+                ])])
+            }
+            let score = Score(
+                division: 480,
+                parts: [Part(
+                    id: "P0",
+                    instrument: Instrument(id: "x"),
+                    staves: [Staff(measures: measures)],
+                )],
+            )
+            let opts = ScoreViewOptions(wrapToViewWidth: false)
+            let width = LayoutEngine.naturalContentWidth(
+                score: score, options: opts,
+            )
+            let cache = LayoutCache()
+            _ = LayoutEngine.layout(
+                score: score, options: opts,
+                availableWidth: width, cache: cache,
+            )
+            // First (cold) call: `buildSystem` still finds every
+            // measure's aggregate already sitting in the cache, since
+            // `minWidths` populated it moments earlier in the same
+            // `packSystems` call.
+            #expect(cache.tickAggregateMisses == 0)
+            #expect(cache.tickAggregateHits == measures.count)
+
+            // Second call: bump `availableWidth` so the SYSTEM-level
+            // cache (`LayoutCache.SystemEntry`, keyed in part on
+            // `availableWidth`) misses and `buildSystem` runs again —
+            // an unchanged `availableWidth` would hit the system cache
+            // and skip `buildSystem` entirely, which would trivially
+            // (and uninterestingly) leave the tick-aggregate counters
+            // at zero without ever exercising the per-measure reuse
+            // this test targets. The measures themselves are untouched,
+            // so `minWidths` treats every one as a per-measure cache
+            // HIT and carries `prior.tickAggregate` forward — which is
+            // exactly what `buildSystem` must find without recomputing.
+            _ = LayoutEngine.layout(
+                score: score, options: opts,
+                availableWidth: width + 50, cache: cache,
+            )
+            #expect(cache.tickAggregateMisses == 0)
+            #expect(cache.tickAggregateHits == measures.count)
+        }
     }
 #endif

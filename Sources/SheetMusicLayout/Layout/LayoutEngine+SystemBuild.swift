@@ -140,16 +140,31 @@ extension LayoutEngine {
                 synthesizeKeySigForAllStaves: synthesizeKeySigHere,
                 activeKeys: keys,
             )
-            let tickCols = tickColumns(
+            // Reuse the aggregate `crossStaffMinimumMeasureWidth`
+            // already computed for this measure during `packSystems`
+            // (same inputs: measures / sp / division) instead of
+            // recomputing `aggregatedTickWeights` a second time.
+            let cachedAggregate = context.cache?
+                .entries[measureIdx]?.tickAggregate
+            if cachedAggregate != nil {
+                context.cache?.tickAggregateHits += 1
+            } else {
+                context.cache?.tickAggregateMisses += 1
+            }
+            let aggregate = cachedAggregate ?? aggregatedTickWeights(
                 staves: staves,
                 measureIdx: measureIdx,
                 metrics: metrics,
-                headerSchedule: schedule,
-                width: w,
                 division: context.score.division,
                 measureDuration: measureDuration(
                     sharedMeasureDurations, at: measureIdx,
                 ),
+            )
+            let tickCols = tickColumns(
+                aggregate: aggregate,
+                metrics: metrics,
+                headerSchedule: schedule,
+                width: w,
             )
             var perStaff: [Int: [LayoutElement]] = [:]
             var perStaffInvisible: [Int: [LayoutElement]] = [:]

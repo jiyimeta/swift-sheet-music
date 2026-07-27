@@ -43,6 +43,8 @@ extension LayoutEngine {
         context.cache?.placementMisses = 0
         context.cache?.systemHits = 0
         context.cache?.systemMisses = 0
+        context.cache?.tickAggregateHits = 0
+        context.cache?.tickAggregateMisses = 0
         let sp = context.metrics.sp
         let division = context.score.division
         // Per-measure minimum width via the same cross-staff
@@ -86,6 +88,7 @@ extension LayoutEngine {
                         sp: prior.sp,
                         division: prior.division,
                         minWidth: overridden,
+                        tickAggregate: prior.tickAggregate,
                         placements: prior.placements,
                     )
                 } else {
@@ -102,7 +105,7 @@ extension LayoutEngine {
                 synthesizeClefForAllStaves: false,
                 synthesizeKeySigForAllStaves: false,
             )
-            let w = crossStaffMinimumMeasureWidth(
+            let result = crossStaffMinimumMeasureWidthWithAggregate(
                 staves: staves,
                 measureIdx: i,
                 metrics: context.metrics,
@@ -110,12 +113,13 @@ extension LayoutEngine {
                 division: division,
                 measureDuration: measureDuration(measureDurations, at: i),
             )
-            let overridden = collapsedOverride(for: i, baseline: w)
+            let overridden = collapsedOverride(for: i, baseline: result.width)
             context.cache?.entries[i] = LayoutCache.Entry(
                 measures: measuresAt,
                 sp: sp,
                 division: division,
                 minWidth: overridden,
+                tickAggregate: result.aggregate,
                 placements: [:],
             )
             return overridden

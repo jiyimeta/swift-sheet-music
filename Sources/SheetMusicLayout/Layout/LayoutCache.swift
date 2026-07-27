@@ -43,6 +43,8 @@ public final class LayoutCache: @unchecked Sendable {
     var placementMisses = 0
     var systemHits = 0
     var systemMisses = 0
+    var tickAggregateHits = 0
+    var tickAggregateMisses = 0
 
     /// One measure's cached inputs and outputs. The width portion is
     /// consumed by `packSystems`; the per-staff `placements`
@@ -55,6 +57,12 @@ public final class LayoutCache: @unchecked Sendable {
 
         /// --- Output of crossStaffMinimumMeasureWidth ---
         let minWidth: CGFloat
+
+        /// --- Output of aggregatedTickWeights, shared between the
+        /// width pass (`packSystems`) and the placement pass
+        /// (`buildSystem`). Same key as `minWidth`: this function's
+        /// inputs are exactly (`measures`, `sp`, `division`).
+        let tickAggregate: LayoutEngine.TickAggregate?
 
         /// --- Per-staff placement results ---
         var placements: [Int: StaffPlacement]
