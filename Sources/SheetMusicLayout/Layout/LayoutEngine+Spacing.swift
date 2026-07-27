@@ -118,6 +118,7 @@ extension LayoutEngine {
             return partLabelWidth + metrics.sp * 8
         }
         var total: CGFloat = partLabelWidth
+        let durations = effectiveMeasureDurationsAcrossStaves(staves: staves)
         for i in 0 ..< measureCount {
             let baseHeader = computeHeaderSchedule(
                 measureIdx: i,
@@ -132,6 +133,7 @@ extension LayoutEngine {
                 metrics: metrics,
                 headerSchedule: baseHeader,
                 division: score.division,
+                measureDuration: measureDuration(durations, at: i),
             )
             total += w
         }
@@ -167,10 +169,12 @@ extension LayoutEngine {
         headerSchedule: HeaderSchedule,
         width: CGFloat,
         division: Int,
+        measureDuration: Fraction,
     ) -> [Int: CGFloat] {
         let agg = aggregatedTickWeights(
             staves: staves, measureIdx: measureIdx,
             metrics: metrics, division: division,
+            measureDuration: measureDuration,
         )
         guard !agg.sortedTicks.isEmpty else { return [:] }
 
@@ -224,10 +228,12 @@ extension LayoutEngine {
         metrics: StaffMetrics,
         headerSchedule: HeaderSchedule,
         division: Int,
+        measureDuration: Fraction,
     ) -> CGFloat {
         let agg = aggregatedTickWeights(
             staves: staves, measureIdx: measureIdx,
             metrics: metrics, division: division,
+            measureDuration: measureDuration,
         )
         // Must match `tickColumns`' trailingGap so the spacing engine
         // and the placement engine size every measure identically.
@@ -237,6 +243,43 @@ extension LayoutEngine {
         // baseX + contentWidth; trailing barline / gap follows.
         return headerSchedule.contentStartX + metrics.sp
             + contentWidth + trailingGap
+    }
+
+    /// Effective duration of every measure index across `staves`,
+    /// computed once per layout call.
+    ///
+    /// Reproduces the derivation `aggregatedTickWeights` used to do
+    /// inline: for each index, read from the FIRST staff whose measure
+    /// list covers that index. Staves of unequal length therefore behave
+    /// exactly as before. Doing it inline was O(measures²) — the inline
+    /// version walked a whole staff per measure.
+    static func effectiveMeasureDurationsAcrossStaves(
+        staves: [Staff],
+    ) -> [Fraction] {
+        let perStaff = staves.map { $0.measures.effectiveMeasureDurations() }
+        let measureCount = perStaff.map(\.count).max() ?? 0
+        var out: [Fraction] = []
+        out.reserveCapacity(measureCount)
+        for i in 0 ..< measureCount {
+            var value = Fraction(numerator: 4, denominator: 4)
+            for durations in perStaff where i < durations.count {
+                value = durations[i]
+                break
+            }
+            out.append(value)
+        }
+        return out
+    }
+
+    /// Safe read from a table produced by
+    /// `effectiveMeasureDurationsAcrossStaves`. Out-of-range indices fall
+    /// back to 4/4, matching the old inline default.
+    static func measureDuration(
+        _ table: [Fraction], at index: Int,
+    ) -> Fraction {
+        index >= 0 && index < table.count
+            ? table[index]
+            : Fraction(numerator: 4, denominator: 4)
     }
 
     /// Per-segment aggregation primitive shared by `tickColumns` (uses
@@ -250,6 +293,7 @@ extension LayoutEngine {
         measureIdx: Int,
         metrics: StaffMetrics,
         division: Int,
+        measureDuration: Fraction,
     ) -> (
         sortedTicks: [Int],
         gapWeights: [CGFloat],
@@ -263,19 +307,6 @@ extension LayoutEngine {
             /// that was already recorded for the PREVIOUS element.
             var weight: CGFloat
         }
-        // Effective measure duration — used to resolve any `.measure`
-        // rest via `NoteDuration.resolved(in:)`. Defensive: no decoder
-        // produces `.measure` yet. Derive from the first staff that
-        // covers this measure index; time signatures are score-wide.
-        let measureDuration: Fraction = {
-            guard let staff = staves.first(where: { measureIdx < $0.measures.count }) else {
-                return Fraction(numerator: 4, denominator: 4)
-            }
-            let durations = staff.measures.effectiveMeasureDurations()
-            return measureIdx < durations.count
-                ? durations[measureIdx]
-                : Fraction(numerator: 4, denominator: 4)
-        }()
         var voiceElements: [[TimedElement]] = []
         var allTicks: Set<Int> = []
         var measureEnd = 0

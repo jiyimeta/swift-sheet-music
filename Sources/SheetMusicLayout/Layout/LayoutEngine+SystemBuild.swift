@@ -94,6 +94,12 @@ extension LayoutEngine {
         let staffMeasureDurations: [[Fraction]] = staves.map {
             $0.measures.effectiveMeasureDurations()
         }
+        // Cross-staff duration table for `tickColumns`, computed once
+        // per system build rather than re-derived per measure (see
+        // `effectiveMeasureDurationsAcrossStaves`).
+        let sharedMeasureDurations = effectiveMeasureDurationsAcrossStaves(
+            staves: staves,
+        )
         var untranslated: [UntranslatedMeasure] = []
         var clefs = activeClefs
         var keys = activeKeys
@@ -143,6 +149,9 @@ extension LayoutEngine {
                 headerSchedule: schedule,
                 width: w,
                 division: context.score.division,
+                measureDuration: measureDuration(
+                    sharedMeasureDurations, at: measureIdx,
+                ),
             )
             var perStaff: [Int: [LayoutElement]] = [:]
             var perStaffInvisible: [Int: [LayoutElement]] = [:]

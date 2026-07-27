@@ -52,6 +52,9 @@ extension LayoutEngine {
         // staves subdivide a long element — see
         // `crossStaffMinimumMeasureWidth`.)
         let plan = context.multiMeasureRestPlan
+        let measureDurations = effectiveMeasureDurationsAcrossStaves(
+            staves: staves,
+        )
         func collapsedOverride(for i: Int, baseline: CGFloat) -> CGFloat {
             if plan.runLength(startingAt: i) != nil {
                 return collapsedRunWidth(staffSpace: sp)
@@ -104,6 +107,7 @@ extension LayoutEngine {
                 metrics: context.metrics,
                 headerSchedule: baseHeader,
                 division: division,
+                measureDuration: measureDuration(measureDurations, at: i),
             )
             let overridden = collapsedOverride(for: i, baseline: w)
             context.cache?.entries[i] = LayoutCache.Entry(

@@ -453,6 +453,7 @@
                 headerSchedule: schedule,
                 width: 400,
                 division: 480,
+                measureDuration: Fraction(numerator: 4, denominator: 4),
             )
 
             // Each 8th is 240 ticks at division 480, so ticks are
