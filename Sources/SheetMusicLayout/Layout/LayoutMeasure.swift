@@ -113,15 +113,26 @@ public struct LayoutMeasure: Sendable, Equatable {
         self.dynamicExtents = dynamicExtents
     }
 
-    /// Whether `other` would draw identically to this measure's CALayer /
-    /// canvas content once translated to its own `origin.x`.
+    /// Whether `other` would draw identically to this measure's per-measure
+    /// `CALayer` container content once translated to its own `origin.x`.
     ///
-    /// Compares everything the CALayer and canvas renderers read to build
+    /// Compares everything `SheetMusicUI`'s CALayer renderer reads to build
     /// a measure's visible content, except the horizontal origin: a
     /// measure that only slid sideways (because an earlier measure changed
     /// width) can have its layer container repositioned instead of
     /// rebuilt. `origin.y` IS compared — it participates in the
     /// per-element Y flip.
+    ///
+    /// Scoped to the CALayer path on purpose. `ScoreCanvas`, the SwiftUI
+    /// `Canvas` renderer, redraws whole systems from scratch on every body
+    /// evaluation and never consults this predicate; the sole caller is
+    /// `MeasureLayerDiffPlanner.plan`.
+    ///
+    /// Also note what this predicate does NOT cover: hidden elements are
+    /// drawn into a shared, system-level layer at absolute system X, so
+    /// `invisibleElements` being equal here is not sufficient for a
+    /// measure that moved. `MeasureLayerDiffPlanner.systemFrameIsUnchanged`
+    /// carries that extra `origin.x` requirement.
     ///
     /// Deliberately excludes fields that either aren't renderer content or
     /// are already folded into the fields above by the time a renderer
@@ -139,6 +150,13 @@ public struct LayoutMeasure: Sendable, Equatable {
     /// case when the layout cache carried a measure forward) and O(content)
     /// otherwise. Correct either way.
     public func hasSameRenderContent(as other: LayoutMeasure) -> Bool {
+        // Defensive, not load-bearing: the only caller
+        // (`MeasureLayerDiffPlanner.plan`) looks `other` up BY
+        // `measureIndex`, so this conjunct is always true there. It is
+        // kept because the method is public API — a caller that pairs
+        // measures some other way (by position in `LayoutSystem.measures`,
+        // say) must not be told two different measures render alike. One
+        // `Int` comparison is a negligible price for that.
         measureIndex == other.measureIndex
             && origin.y == other.origin.y
             && width == other.width

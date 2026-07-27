@@ -131,6 +131,19 @@
                 return rebuilt
             }
             print("    measures rebuilt: \(rebuilt) of \(newSystem.measures.count)")
+            // Self-verify, or the headline number is meaningless: the
+            // edit touches exactly one measure, so the plan must flag
+            // exactly one. A change that silently made this benchmark
+            // rebuild ZERO measures would otherwise just report a
+            // wonderful time.
+            #expect(
+                rebuilt == 1,
+                Comment(
+                    rawValue: "expected the 1-note edit to flag exactly one "
+                        + "measure for rebuild, got \(rebuilt) of "
+                        + "\(newSystem.measures.count)",
+                ),
+            )
         }
 
         /// Split the 1-measure-edit relayout in horizontal mode into

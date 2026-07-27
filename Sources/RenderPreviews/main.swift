@@ -101,9 +101,18 @@
             print("wrote \(url.path)")
         }
 
-        // Multi-measure rest with collapse enabled — separate from the
-        // default-options samples loop because the option drives the
-        // visual difference.
+        try renderOptionDrivenSamples(outputDir: outputDir)
+        try renderRealWorldCheck(outputDir: outputDir)
+        try renderBreathFixture(outputDir: outputDir)
+    }
+
+    /// Samples that live outside the default-options loop because a
+    /// non-default `ScoreViewOptions` value is exactly what they exist
+    /// to show.
+    @available(macOS 15.0, *)
+    @MainActor
+    func renderOptionDrivenSamples(outputDir: URL) throws {
+        // Multi-measure rest with collapse enabled.
         let mmRestOpts = ScoreViewOptions(
             staffSize: 28, systemGap: 40, wrapToViewWidth: false,
             multiMeasureRest: .collapse(minimumMeasures: 2),
@@ -117,8 +126,22 @@
         )
         print("wrote \(mmRestURL.path)")
 
-        try renderRealWorldCheck(outputDir: outputDir)
-        try renderBreathFixture(outputDir: outputDir)
+        // Hidden elements at 50 % opacity. This is the ONLY rasterized
+        // coverage of `ScoreLayerBuilder.drawInvisibleElements`, the
+        // shared system-level layer that hidden elements composite into
+        // (see `Samples.hiddenElements`).
+        let invisibleOpts = ScoreViewOptions(
+            staffSize: 28, systemGap: 40, wrapToViewWidth: false,
+            showsInvisibleElements: true,
+        )
+        let invisibleURL = outputDir.appendingPathComponent(
+            "29-hidden-elements.png",
+        )
+        try renderScoreToPNG(
+            Samples.hiddenElements, to: invisibleURL, scale: 2,
+            options: invisibleOpts,
+        )
+        print("wrote \(invisibleURL.path)")
     }
 
     /// Render the unpacked `test_breath.mscx` fixture if present.

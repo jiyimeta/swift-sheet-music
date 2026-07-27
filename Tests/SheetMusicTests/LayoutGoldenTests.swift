@@ -1,4 +1,5 @@
 #if os(macOS)
+    import CryptoKit
     import Foundation
     import SheetMusicCore
     @testable import SheetMusicLayout
@@ -8,16 +9,37 @@
     /// Golden digest of layout output across every committed fixture.
     /// Gated by `SM_LAYOUT_GOLDEN=1`.
     ///
-    /// Always writes `.build/layout-golden.txt`. When
-    /// `.build/layout-golden-baseline.txt` exists it also ASSERTS that
-    /// the digest still matches it, so a refactor that changes rendering
-    /// fails the test rather than requiring a manual `diff`. Delete the
-    /// baseline to re-record.
+    /// Always writes `.build/layout-golden.txt`, then verifies it two
+    /// ways:
+    ///
+    /// * Against `.build/layout-golden-baseline.txt` when that file is
+    ///   present — a full-text comparison, so a failure names the first
+    ///   differing line. The baseline is gitignored; delete it to
+    ///   re-record.
+    /// * Against `expectedDigestSHA256` otherwise. That constant is
+    ///   committed, so the gate is real for CI and for a contributor who
+    ///   has never recorded a baseline (whole-branch review finding 4:
+    ///   before this, a missing baseline made the whole suite silently
+    ///   return after "recorded only", leaving the branch's headline
+    ///   evidence unreproducible by anyone but its author). The failure
+    ///   is less readable than the full-text diff, which is why the
+    ///   baseline path is kept and preferred.
+    ///
+    /// Re-recording is therefore a TWO-step operation: delete the
+    /// baseline, re-run to write it, and update `expectedDigestSHA256`
+    /// from the hash this test prints.
     @Suite("LayoutGolden", .serialized, .enabled(
         if: ProcessInfo.processInfo.environment["SM_LAYOUT_GOLDEN"] == "1",
     ))
     struct LayoutGoldenTests {
         private let _installApple = TestSupport.installApple
+
+        /// SHA-256 of the full digest text, committed so the gate can
+        /// fire without a local `.build/layout-golden-baseline.txt`.
+        /// Regenerate whenever the digest legitimately changes — the
+        /// test prints the actual hash on mismatch.
+        private static let expectedDigestSHA256 =
+            "3a9e7eba2587b0e2f7fed3ac4f7ddf7468ae2e925ed656ab51f13799bbe72c1a"
 
         @Test("write digest")
         func writeDigest() throws {
@@ -64,19 +86,51 @@
             try verifyAgainstBaseline(out)
         }
 
+        /// SHA-256 of `text`, lowercase hex.
+        private func sha256(_ text: String) -> String {
+            SHA256.hash(data: Data(text.utf8))
+                .map { String(format: "%02x", $0) }
+                .joined()
+        }
+
         /// Compares `out` against `.build/layout-golden-baseline.txt` if
         /// present, recording a detailed first-diff on mismatch. Split out
         /// of `writeDigest` to keep that function under the lint length cap.
         private func verifyAgainstBaseline(_ out: String) throws {
+            let hash = sha256(out)
+            print("layout-golden sha256: \(hash)")
             let baseline = URL(
                 fileURLWithPath: ".build/layout-golden-baseline.txt",
             )
             guard let expected = try? String(
                 contentsOf: baseline, encoding: .utf8,
             ) else {
-                print("no baseline at \(baseline.path) — recorded only")
+                // No local baseline — fall back to the committed hash so
+                // the gate still fires (review finding 4). Delete the
+                // baseline and re-run to get the readable diff back.
+                print("no baseline at \(baseline.path) — checking committed hash")
+                #expect(
+                    hash == Self.expectedDigestSHA256,
+                    Comment(
+                        rawValue: "layout digest changed: sha256 \(hash) != "
+                            + "committed \(Self.expectedDigestSHA256). If this "
+                            + "is intended, update expectedDigestSHA256 in "
+                            + "LayoutGoldenTests.swift.",
+                    ),
+                )
                 return
             }
+            // The committed hash must stay in sync with the recorded
+            // baseline, or the no-baseline path above would gate on a
+            // stale value that nobody ever sees fail locally.
+            #expect(
+                sha256(expected) == Self.expectedDigestSHA256,
+                Comment(
+                    rawValue: "expectedDigestSHA256 is stale relative to "
+                        + "\(baseline.path): baseline hashes to "
+                        + "\(sha256(expected)).",
+                ),
+            )
             if out != expected {
                 let got = out.split(
                     separator: "\n", omittingEmptySubsequences: false,
@@ -125,9 +179,14 @@
         }
 
         private func digest(ofSystem sys: LayoutSystem, index i: Int) -> String {
+            // `showsInvisibleElements` is not just a renderer hint: it is
+            // an input to `MeasureLayerDiffPlanner.systemFrameIsUnchanged`,
+            // i.e. it decides whether an edit takes the incremental
+            // measure diff or a full system rebuild. Digest it.
             var s = "  sys[\(i)] origin=\(f(sys.origin.x)),\(f(sys.origin.y))"
                 + " size=\(f(sys.size.width))x\(f(sys.size.height))"
-                + " sp=\(f(sys.sp))\n"
+                + " sp=\(f(sys.sp))"
+                + " showsInvisible=\(sys.showsInvisibleElements)\n"
             for (idx, o) in sys.staffOrigins.enumerated() {
                 let addr = idx < sys.staffAddresses.count
                     ? String(describing: sys.staffAddresses[idx])

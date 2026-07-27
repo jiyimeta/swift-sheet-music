@@ -98,6 +98,12 @@
             )
         }
 
+        /// NOTE: since measures render into their own container layers, a
+        /// collected layer's `path` is in its OWN measure's container
+        /// coordinates — the measure's `origin.x` lives on the container's
+        /// `position`, not in the path. `boundingBoxOfPath` values taken
+        /// from this list are therefore only comparable to each other
+        /// within a single measure.
         private func collectAllLayers(_ root: CALayer) -> [CALayer] {
             var all: [CALayer] = [root]
             for child in root.sublayers ?? [] {

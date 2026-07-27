@@ -156,6 +156,11 @@
             return path.boundingBoxOfPath
         }
 
+        /// NOTE: since measures render into their own container layers,
+        /// a collected box is in its OWN measure's container coordinates —
+        /// the measure's `origin.x` lives on the container's `position`,
+        /// not in the path. Boxes are therefore only comparable to each
+        /// other within a single measure.
         @MainActor
         private static func collectShapeBoxes(
             _ layer: CALayer, into boxes: inout [CGRect],

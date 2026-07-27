@@ -59,6 +59,7 @@
         /// measure via the diff path (not a full system rebuild).
         private func mutatingMeasure(
             in system: LayoutSystem, at index: Int,
+            token: String = "diffprobe",
         ) throws -> LayoutSystem {
             let original = try #require(
                 system.measures.first { $0.measureIndex == index },
@@ -72,7 +73,7 @@
                 origin: original.origin,
                 width: original.width,
                 elements: original.elements
-                    + [.barLine(subtype: "diffprobe", origin: .zero)],
+                    + [.barLine(subtype: token, origin: .zero)],
                 markers: original.markers,
                 jumps: original.jumps,
                 lineBreak: original.lineBreak,
@@ -214,6 +215,116 @@
                 root.sublayers?.firstIndex { $0 === newContainer },
             )
             #expect(newPosition == originalPosition)
+        }
+
+        /// Returns a copy of `system` with every measure's `origin.x`
+        /// shifted right by `dx`, and nothing else touched — so every
+        /// measure's content is unchanged and the planner emits
+        /// `.reposition(newOriginX:)` for all of them.
+        private func shiftingAllMeasures(
+            in system: LayoutSystem, by dx: CGFloat,
+        ) -> LayoutSystem {
+            let measures = system.measures.map { m in
+                LayoutMeasure(
+                    measureIndex: m.measureIndex,
+                    origin: CGPoint(x: m.origin.x + dx, y: m.origin.y),
+                    width: m.width, elements: m.elements,
+                    markers: m.markers, jumps: m.jumps,
+                    lineBreak: m.lineBreak, pageBreak: m.pageBreak,
+                    tickColumns: m.tickColumns,
+                    multiMeasureRest: m.multiMeasureRest,
+                    invisibleElements: m.invisibleElements,
+                    chordNorthByTick: m.chordNorthByTick,
+                    dynamicExtents: m.dynamicExtents,
+                )
+            }
+            return LayoutSystem(
+                origin: system.origin, size: system.size,
+                measures: measures,
+                staffOrigins: system.staffOrigins,
+                staffAddresses: system.staffAddresses,
+                partLabels: system.partLabels,
+                brackets: system.brackets,
+                spanners: system.spanners,
+                sp: system.sp,
+                invisibleSpanners: system.invisibleSpanners,
+                showsInvisibleElements: system.showsInvisibleElements,
+            )
+        }
+
+        /// The `.reposition` branch is the most-executed one in
+        /// `applyMeasureDiff` (every measure a one-note edit did NOT touch
+        /// takes it), and until now nothing asserted it actually writes
+        /// the new X. A regression that dropped the
+        /// `container.position = …` write would leave every unchanged
+        /// measure drawn at its pre-edit X while the edited one moved.
+        @Test("a repositioned measure's container is moved to the new origin.x")
+        func repositionWritesTheNewOriginX() throws {
+            guard #available(macOS 15.0, *) else { return }
+            let (system, metrics) = try firstSystem()
+            let built = ScoreLayerBuilder.buildSystemWithItems(system, metrics: metrics)
+
+            let mock = MockHost()
+            mock.baseLayer = built.root
+            mock.itemLayers = built.items
+            mock.measureContainers = built.measureContainers
+            mock.measureItems = built.measureItems
+
+            let dx: CGFloat = 37
+            let shifted = shiftingAllMeasures(in: system, by: dx)
+            let containersBefore = mock.measureContainers
+
+            mock.applyMeasureDiff(previous: system, system: shifted, metrics: metrics)
+
+            for m in shifted.measures {
+                let container = try #require(mock.measureContainers[m.measureIndex])
+                #expect(
+                    container === containersBefore[m.measureIndex],
+                    "measure \(m.measureIndex) was rebuilt, not repositioned",
+                )
+                #expect(container.position.x == m.origin.x)
+                #expect(container.position.y == 0)
+            }
+        }
+
+        /// `applyMeasureDiff` appends a rebuilt measure's fresh layers
+        /// into the flat `itemLayers` map, so the removal half
+        /// (`removeMeasureLayer`) has to detach the stale ones first.
+        /// If it ever stops doing that, the arrays grow on every
+        /// keystroke — a slow leak that also makes
+        /// `ScoreLayerBuilder.applySelection` re-tint dead layers.
+        @Test("repeated rebuilds of one measure do not accumulate itemLayers")
+        func repeatedRebuildDoesNotAccumulateItemLayers() throws {
+            guard #available(macOS 15.0, *) else { return }
+            let (system, metrics) = try firstSystem()
+            let built = ScoreLayerBuilder.buildSystemWithItems(system, metrics: metrics)
+            let rebuildIndex = try #require(
+                built.measureItems.first { !$0.value.isEmpty }?.key,
+            )
+
+            let mock = MockHost()
+            mock.baseLayer = built.root
+            mock.itemLayers = built.items
+            mock.measureContainers = built.measureContainers
+            mock.measureItems = built.measureItems
+
+            let first = try mutatingMeasure(in: system, at: rebuildIndex, token: "p1")
+            mock.applyMeasureDiff(previous: system, system: first, metrics: metrics)
+            let countsAfterFirst = mock.itemLayers.mapValues(\.count)
+
+            // Rebuild the SAME measure again, from the state the first
+            // diff left behind.
+            let second = try mutatingMeasure(in: system, at: rebuildIndex, token: "p2")
+            mock.applyMeasureDiff(previous: first, system: second, metrics: metrics)
+
+            #expect(mock.itemLayers.mapValues(\.count) == countsAfterFirst)
+            for (id, layers) in mock.itemLayers {
+                let unique = Set(layers.map(ObjectIdentifier.init))
+                #expect(
+                    unique.count == layers.count,
+                    "duplicate layer references accumulated for \(id)",
+                )
+            }
         }
     }
 #endif

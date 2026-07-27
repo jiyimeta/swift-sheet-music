@@ -155,6 +155,76 @@
             #expect(!MeasureLayerDiffPlanner.systemFrameIsUnchanged(previous, next))
         }
 
+        @Test("a pure origin.x shift forces a full rebuild when hidden elements are present")
+        func systemFrameCatchesShiftUnderInvisibleElements() {
+            // Whole-branch review finding 1.
+            // `ScoreLayerBuilder.drawInvisibleElements` draws each
+            // measure's hidden elements into ONE shared system-level
+            // layer at `base.x == measure.origin.x` — absolute system X.
+            // `invisibleElements` is measure-relative and
+            // `hasSameRenderContent` ignores `origin.x`, so measure 1
+            // below would take `.reposition`: its container slides while
+            // its hidden ink stays stranded at the old X. The gate must
+            // demand the full rebuild path instead.
+            //
+            // The measure that moves is the MIDDLE one, deliberately: the
+            // LAST measure's X also feeds `BarLineGeometry.staffLineEndX`,
+            // so moving that one would be caught by the `staffLineEndX`
+            // conjunct too and this case would not isolate the fix.
+            let hidden: [LayoutElement] = [
+                .barLine(subtype: "hidden", origin: .zero),
+            ]
+            func middle(originX: CGFloat) -> LayoutMeasure {
+                LayoutMeasure(
+                    measureIndex: 1, origin: CGPoint(x: originX, y: 0),
+                    width: 100, elements: [],
+                    invisibleElements: hidden,
+                )
+            }
+            let previous = system(measures: [
+                measure(index: 0, originX: 0),
+                middle(originX: 100),
+                measure(index: 2, originX: 200),
+            ])
+            let next = system(measures: [
+                measure(index: 0, originX: 0),
+                middle(originX: 120),
+                measure(index: 2, originX: 200),
+            ])
+
+            // The per-measure planner alone is happy to just slide it —
+            // which is exactly why the system-level gate has to catch it.
+            let plan = MeasureLayerDiffPlanner.plan(previous: previous, system: next)
+            #expect(plan.updates[1] == .reposition(newOriginX: 120))
+
+            #expect(!MeasureLayerDiffPlanner.systemFrameIsUnchanged(previous, next))
+        }
+
+        @Test("a pure origin.x shift still diffs when no hidden elements are present")
+        func systemFrameAllowsShiftWithoutInvisibleElements() {
+            // The common case (`showsInvisibleElements` off ⇒ every
+            // `invisibleElements` empty) must NOT be pessimized into a
+            // full rebuild by the fix above: a measure sliding sideways
+            // with no shared invisible layer to strand is still just a
+            // container reposition. Same shape as the case above (middle
+            // measure moves, so `staffLineEndX` is untouched), only
+            // without the hidden elements.
+            let previous = system(measures: [
+                measure(index: 0, originX: 0),
+                measure(index: 1, originX: 100),
+                measure(index: 2, originX: 200),
+            ])
+            let next = system(measures: [
+                measure(index: 0, originX: 0),
+                measure(index: 1, originX: 120),
+                measure(index: 2, originX: 200),
+            ])
+
+            #expect(MeasureLayerDiffPlanner.systemFrameIsUnchanged(previous, next))
+            let plan = MeasureLayerDiffPlanner.plan(previous: previous, system: next)
+            #expect(plan.updates[1] == .reposition(newOriginX: 120))
+        }
+
         @Test("systemFrameIsUnchanged is false when a system-level field changes")
         func systemFrameCatchesSystemLevelChange() {
             let previous = system(measures: [measure(index: 0, originX: 0)])
@@ -202,8 +272,9 @@
         /// conjunct from the predicate (e.g. dropping
         /// `&& a.spanners == b.spanners`) fails exactly the
         /// corresponding case instead of leaving the suite silently
-        /// green — before this, only 2 of the then-11 (now 12, with
-        /// `staffLineEndX`) conjuncts had any pinning test at all
+        /// green — before this, only 2 of the then-11 (now 13, with
+        /// `staffLineEndX` and the hidden-element `origin.x` guard)
+        /// conjuncts had any pinning test at all
         /// (Task 8 review finding 4). Verified load-bearing by
         /// temporarily deleting each conjunct in turn during review and
         /// confirming only its own case failed; see the fix-round
@@ -211,7 +282,8 @@
         enum FrameConjunct: String, CaseIterable, CustomStringConvertible {
             case size, origin, staffOrigins, staffAddresses, partLabels,
                  brackets, spanners, invisibleSpanners, sp,
-                 showsInvisibleElements, invisibleElements, trailingBarLine
+                 showsInvisibleElements, invisibleElements, trailingBarLine,
+                 measureOriginXUnderInvisible
 
             var description: String {
                 rawValue
@@ -354,6 +426,22 @@
                 rebuild(base, showsInvisibleElements: !base.showsInvisibleElements)
             case .invisibleElements, .trailingBarLine:
                 mutateLastMeasure(base, field)
+            case .measureOriginXUnderInvisible:
+                // Slide the FIRST measure, not the last: `fullSystem()`'s
+                // last measure is what `BarLineGeometry.staffLineEndX`
+                // is derived from, so moving that one would also trip the
+                // `trailingBarLine` conjunct and stop isolating this one.
+                // The system has hidden content (measure 1's
+                // `invisibleElements`), so the shared invisible layer is
+                // live and a slide must force a full rebuild.
+                rebuild(base, measures: withMutatedMeasure(base, at: 0) { m in
+                    LayoutMeasure(
+                        measureIndex: m.measureIndex,
+                        origin: CGPoint(x: m.origin.x + 5, y: m.origin.y),
+                        width: m.width, elements: m.elements,
+                        invisibleElements: m.invisibleElements,
+                    )
+                })
             }
         }
 

@@ -1053,6 +1053,54 @@
             )
         }
 
+        // MARK: - 29 hidden elements (rendered with showsInvisibleElements)
+
+        /// Three measures whose hidden (`visible == false`) elements are
+        /// spread across measures 2 and 3, so the shared system-level
+        /// 50 %-opacity layer carries real ink at more than one X.
+        ///
+        /// Rendered by `main.swift` with
+        /// `ScoreViewOptions(showsInvisibleElements: true)`. That is the
+        /// point of the sample: hidden elements do NOT live in a measure's
+        /// own container layer — `ScoreLayerBuilder.drawInvisibleElements`
+        /// draws all of them into one shared layer at absolute system X —
+        /// and until this sample existed no rasterized fixture covered
+        /// that compositing path at all. That blind spot is what let the
+        /// whole-branch review's finding 1 (a measure sliding sideways
+        /// stranding its hidden ink at the old X) slip past the PNG
+        /// identity proof.
+        static var hiddenElements: Score {
+            let c4 = Note(pitch: 60, tpc: 14)
+            let e4 = Note(pitch: 64, tpc: 18)
+            let g4 = Note(pitch: 67, tpc: 15)
+            func quarter(_ n: Note, visible: Bool = true) -> VoiceElement {
+                .chord(Chord(duration: .quarter, notes: [n], visible: visible))
+            }
+            // All visible — a baseline measure to the left of the hidden ink.
+            let m1 = Measure(voices: [Voice(elements: [
+                .clef(Clef(concertClefType: "G")),
+                .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+                .dynamic(Dynamic(subtype: "mf", velocity: 80)),
+                quarter(c4), quarter(e4), quarter(g4), quarter(e4),
+            ])])
+            // Hidden dynamic + two hidden noteheads among visible ones.
+            let m2 = Measure(voices: [Voice(elements: [
+                .dynamic(Dynamic(subtype: "f", velocity: 100, visible: false)),
+                quarter(c4), quarter(e4, visible: false),
+                quarter(g4), quarter(e4, visible: false),
+            ])])
+            // Hidden key signature + a fully hidden bar of music.
+            let m3 = Measure(voices: [Voice(elements: [
+                .keySignature(KeySignature(concertKey: 2, visible: false)),
+                quarter(g4, visible: false), quarter(e4, visible: false),
+                quarter(c4), quarter(c4),
+            ])])
+            return Score(
+                division: 480,
+                parts: [treblePart(measures: [m1, m2, m3])],
+            )
+        }
+
         // MARK: - helpers
 
         private static func treblePart(measures: [Measure] = []) -> Part {

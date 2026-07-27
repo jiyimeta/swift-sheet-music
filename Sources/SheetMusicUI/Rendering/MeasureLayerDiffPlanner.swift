@@ -85,7 +85,10 @@ enum MeasureLayerDiffPlanner {
     /// Deliberately includes each measure's `invisibleElements`: those
     /// are drawn into one shared system-level 50%-opacity layer (not a
     /// per-measure container), so overlapping hidden elements composite
-    /// correctly — a change there needs the full rebuild path.
+    /// correctly — a change there needs the full rebuild path. Because
+    /// that shared layer positions each measure's hidden elements at
+    /// ABSOLUTE system X, the check also has to cover a pure horizontal
+    /// shift; see `invisibleLayerIsUnchanged`.
     ///
     /// Also compares `BarLineGeometry.staffLineEndX(for:)`: `drawStaves`
     /// (via `StaffRenderer.endX(for:)`) clips the five staff lines to
@@ -112,9 +115,50 @@ enum MeasureLayerDiffPlanner {
             && a.invisibleSpanners == b.invisibleSpanners
             && a.sp == b.sp
             && a.showsInvisibleElements == b.showsInvisibleElements
-            && a.measures.map(\.invisibleElements)
-            == b.measures.map(\.invisibleElements)
+            && invisibleLayerIsUnchanged(a, b)
             && BarLineGeometry.staffLineEndX(for: a)
             == BarLineGeometry.staffLineEndX(for: b)
+    }
+
+    /// True when the shared system-level invisible-elements layer would
+    /// draw identically for `a` and `b`.
+    ///
+    /// Two separate reasons it can differ, and the second is the subtle
+    /// one:
+    ///
+    /// 1. The hidden elements themselves changed. `invisibleElements` is
+    ///    measure-relative, so comparing the per-measure arrays covers
+    ///    that.
+    /// 2. A measure merely SLID SIDEWAYS.
+    ///    `ScoreLayerBuilder.drawInvisibleElements` draws every measure's
+    ///    hidden elements into one shared 50 %-opacity layer at
+    ///    `base = (measure.origin.x, measure.origin.y)` — absolute system
+    ///    X, not a per-measure container. But `invisibleElements` is
+    ///    measure-relative and `LayoutMeasure.hasSameRenderContent`
+    ///    deliberately ignores `origin.x`, so a measure that only moved
+    ///    horizontally takes `.reposition`: its own container slides while
+    ///    its contribution to the shared invisible layer stays at the old
+    ///    X. Reachable in `wrapToViewWidth` mode with
+    ///    `showsInvisibleElements` on — `stretchWidths` can redistribute
+    ///    space after an edit so that `size`, `staffOrigins`, `spanners`
+    ///    and `staffLineEndX` all stay equal while the middle measures
+    ///    move.
+    ///
+    /// The `origin.x` requirement is scoped to systems that actually have
+    /// hidden measure content, so the common case (`showsInvisibleElements`
+    /// off ⇒ every `invisibleElements` empty) keeps taking the cheap
+    /// measure-level diff. `invisibleSpanners` need no such guard: they are
+    /// drawn at `base == .zero`, so a measure sliding cannot strand them.
+    private static func invisibleLayerIsUnchanged(
+        _ a: LayoutSystem, _ b: LayoutSystem,
+    ) -> Bool {
+        guard a.measures.map(\.invisibleElements)
+            == b.measures.map(\.invisibleElements)
+        else { return false }
+        let hasHiddenMeasureContent = a.measures.contains {
+            !$0.invisibleElements.isEmpty
+        }
+        guard hasHiddenMeasureContent else { return true }
+        return a.measures.map(\.origin.x) == b.measures.map(\.origin.x)
     }
 }
