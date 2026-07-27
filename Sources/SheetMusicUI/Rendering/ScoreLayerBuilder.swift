@@ -54,10 +54,25 @@ public enum ScoreLayerBuilder {
         buildSystemWithItems(system, metrics: metrics).root
     }
 
-    /// Builds the base layer tree and returns both the root CALayer
-    /// and a dictionary mapping each selectable `ScoreItemID` to the
-    /// CAShapeLayers that must be re-tinted when the selection
-    /// changes.
+    /// A built system's layer tree, split so a host view can rebuild
+    /// individual measures.
+    ///
+    /// `measureContainers` are keyed by `LayoutMeasure.measureIndex`.
+    /// Each has `anchorPoint == .zero`, `bounds` spanning the whole
+    /// system, and `position.x == measure.origin.x`, so its children can
+    /// be drawn in system coordinates with the X offset excluded — which
+    /// is what lets a pure horizontal shift become a `position` write.
+    struct SystemLayers {
+        let root: CALayer
+        let measureContainers: [Int: CALayer]
+        let measureItems: [Int: [ScoreItemID: [CAShapeLayer]]]
+        let items: [ScoreItemID: [CAShapeLayer]]
+    }
+
+    /// Builds the base layer tree and returns the root CALayer, the
+    /// per-measure container layers, and dictionaries mapping each
+    /// selectable `ScoreItemID` to the CAShapeLayers that must be
+    /// re-tinted when the selection changes.
     ///
     /// The tree is always drawn in `inkColor` — selection coloring
     /// is applied afterwards via `applySelection(...)` so that a
@@ -65,13 +80,11 @@ public enum ScoreLayerBuilder {
     static func buildSystemWithItems(
         _ system: LayoutSystem,
         metrics: StaffMetrics,
-    ) -> (root: CALayer, items: [ScoreItemID: [CAShapeLayer]]) {
+    ) -> SystemLayers {
         let root = CALayer()
         let height = system.size.height + 1
-        root.frame = CGRect(
-            origin: .zero,
-            size: CGSize(width: system.size.width, height: height),
-        )
+        let systemSize = CGSize(width: system.size.width, height: height)
+        root.frame = CGRect(origin: .zero, size: systemSize)
         root.masksToBounds = false
         root.backgroundColor = CGColor(gray: 1, alpha: 1)
 
@@ -80,43 +93,82 @@ public enum ScoreLayerBuilder {
         drawBrackets(system: system, metrics: metrics, height: height, into: root)
         drawPartLabels(system: system, metrics: metrics, height: height, into: root)
 
+        let (containers, perMeasureItems, allItems) = buildMeasureContainers(
+            system, metrics: metrics, systemSize: systemSize, into: root,
+        )
+
+        return buildSystemSpannersAndInvisibles(
+            system, metrics: metrics, height: height, root: root,
+            containers: containers, perMeasureItems: perMeasureItems,
+            allItems: allItems,
+        )
+    }
+
+    /// Builds one container per measure and merges their item maps.
+    private static func buildMeasureContainers(
+        _ system: LayoutSystem, metrics: StaffMetrics,
+        systemSize: CGSize, into root: CALayer,
+    ) -> (
+        containers: [Int: CALayer],
+        perMeasureItems: [Int: [ScoreItemID: [CAShapeLayer]]],
+        allItems: [ScoreItemID: [CAShapeLayer]],
+    ) {
+        var containers: [Int: CALayer] = [:]
+        var perMeasureItems: [Int: [ScoreItemID: [CAShapeLayer]]] = [:]
+        var allItems: [ScoreItemID: [CAShapeLayer]] = [:]
+        for measure in system.measures {
+            let built = buildMeasure(
+                measure, metrics: metrics, systemSize: systemSize,
+                showsInvisibleElements: system.showsInvisibleElements,
+            )
+            root.addSublayer(built.container)
+            containers[measure.measureIndex] = built.container
+            perMeasureItems[measure.measureIndex] = built.items
+            allItems.merge(built.items) { $0 + $1 }
+        }
+        return (containers, perMeasureItems, allItems)
+    }
+
+    /// Draws system-level spanners and the shared invisible-elements
+    /// group directly onto `root` (unaffected by the per-measure
+    /// container split), then assembles the final `SystemLayers`.
+    private static func buildSystemSpannersAndInvisibles(
+        _ system: LayoutSystem, metrics: StaffMetrics, height: CGFloat,
+        root: CALayer, containers: [Int: CALayer],
+        perMeasureItems: [Int: [ScoreItemID: [CAShapeLayer]]],
+        allItems: [ScoreItemID: [CAShapeLayer]],
+    ) -> SystemLayers {
+        var allItems = allItems
+
+        // System-level spanners draw after every measure, as before.
         var ctx = BuildContext()
         ctx.showsInvisibleElements = system.showsInvisibleElements
-        drawVisibleElements(
-            system: system, metrics: metrics,
-            height: height, context: &ctx, into: root,
-        )
+        for el in system.spanners {
+            drawElement(
+                el, base: .zero, metrics: metrics, height: height,
+                context: &ctx, into: root,
+            )
+        }
+        allItems.merge(ctx.items) { $0 + $1 }
+
         // Routed-to-invisible chord/note glyphs already sit under a
         // 50% group opacity layer (see drawInvisibleElements); flip
         // the flag so per-note dispatch grays those noteheads rather
         // than skipping them.
-        ctx.showsInvisibleElements = true
+        var invisibleCtx = BuildContext()
+        invisibleCtx.showsInvisibleElements = true
         drawInvisibleElements(
             system: system, metrics: metrics,
-            height: height, context: &ctx, root: root,
+            height: height, context: &invisibleCtx, root: root,
         )
-        return (root, ctx.items)
-    }
+        allItems.merge(invisibleCtx.items) { $0 + $1 }
 
-    private static func drawVisibleElements(
-        system: LayoutSystem, metrics: StaffMetrics,
-        height: CGFloat, context ctx: inout BuildContext, into parent: CALayer,
-    ) {
-        for measure in system.measures {
-            let base = CGPoint(x: measure.origin.x, y: measure.origin.y)
-            for element in measure.elements {
-                drawElement(element, base: base, metrics: metrics, height: height, context: &ctx, into: parent)
-            }
-            for el in measure.markers {
-                drawElement(el, base: base, metrics: metrics, height: height, context: &ctx, into: parent)
-            }
-            for el in measure.jumps {
-                drawElement(el, base: base, metrics: metrics, height: height, context: &ctx, into: parent)
-            }
-        }
-        for el in system.spanners {
-            drawElement(el, base: .zero, metrics: metrics, height: height, context: &ctx, into: parent)
-        }
+        return SystemLayers(
+            root: root,
+            measureContainers: containers,
+            measureItems: perMeasureItems,
+            items: allItems,
+        )
     }
 
     /// Builds invisible elements into a half-opacity sublayer.
