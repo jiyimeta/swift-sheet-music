@@ -67,4 +67,41 @@ struct EffectiveMeasureDurationsTests {
             Fraction(numerator: 4, denominator: 4),
         ])
     }
+
+    // MARK: - Direct [Measure] API (pins behavior ahead of the
+    // flatMap → nested-loop refactor in Score+EffectiveMeasureDurations.swift)
+
+    @Test("time signature carries forward; actualLength wins")
+    func carriesForward() {
+        let c4 = Note(pitch: 60, tpc: 14)
+        let chord = VoiceElement.chord(Chord(duration: .quarter, notes: [c4]))
+        let m0 = Measure(voices: [Voice(elements: [
+            .timeSignature(TimeSignature(numerator: 3, denominator: 4)),
+            chord,
+        ])])
+        let m1 = Measure(voices: [Voice(elements: [chord])])
+        let m2 = Measure(
+            voices: [Voice(elements: [chord])],
+            actualLength: Fraction(numerator: 1, denominator: 4),
+        )
+        let m3 = Measure(voices: [Voice(elements: [
+            .timeSignature(TimeSignature(numerator: 6, denominator: 8)),
+            chord,
+        ])])
+        let m4 = Measure(voices: [Voice(elements: [chord])])
+
+        let durations = [m0, m1, m2, m3, m4].effectiveMeasureDurations()
+
+        #expect(durations.count == 5)
+        #expect(durations[0] == Fraction(numerator: 3, denominator: 4))
+        #expect(durations[1] == Fraction(numerator: 3, denominator: 4))
+        #expect(durations[2] == Fraction(numerator: 1, denominator: 4))
+        #expect(durations[3] == Fraction(numerator: 6, denominator: 8))
+        #expect(durations[4] == Fraction(numerator: 6, denominator: 8))
+    }
+
+    @Test("empty input yields empty output")
+    func empty() {
+        #expect([Measure]().effectiveMeasureDurations().isEmpty)
+    }
 }

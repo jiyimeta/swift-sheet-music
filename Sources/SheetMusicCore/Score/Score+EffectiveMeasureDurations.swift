@@ -13,16 +13,21 @@ extension [Measure] {
         var result: [Fraction] = []
         result.reserveCapacity(count)
         for measure in self {
-            for el in measure.voices.flatMap(\.elements) {
-                if case let .timeSignature(ts) = el {
-                    prevailing = Fraction(
-                        numerator: ts.numerator,
-                        denominator: ts.denominator,
-                    )
-                    // The first time signature in a measure governs
-                    // that measure; later ones (rare) still carry
-                    // forward to subsequent measures.
-                    break
+            // Nested loops rather than `voices.flatMap(\.elements)`:
+            // the flatMap allocated a fresh array for every measure,
+            // and this function is called on whole-staff measure lists.
+            outer: for voice in measure.voices {
+                for el in voice.elements {
+                    if case let .timeSignature(ts) = el {
+                        prevailing = Fraction(
+                            numerator: ts.numerator,
+                            denominator: ts.denominator,
+                        )
+                        // The first time signature in a measure governs
+                        // that measure; later ones (rare) still carry
+                        // forward to subsequent measures.
+                        break outer
+                    }
                 }
             }
             result.append(measure.actualLength ?? prevailing)
