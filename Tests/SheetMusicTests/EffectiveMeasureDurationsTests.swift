@@ -104,4 +104,32 @@ struct EffectiveMeasureDurationsTests {
     func empty() {
         #expect([Measure]().effectiveMeasureDurations().isEmpty)
     }
+
+    /// Pins the `break outer` label in the nested-loop scan: the FIRST
+    /// voice's time signature governs the measure, even though a
+    /// LATER voice in the same measure also carries one. A plain
+    /// `break` (exiting only the inner `elements` loop) would keep
+    /// scanning into voice 1 and let its time signature win instead —
+    /// both here and in the following measure's carried-forward value.
+    @Test("first voice's time signature governs the measure and carries forward, not a later voice's")
+    func firstVoiceTimeSignatureGovernsAndCarriesForward() {
+        let c4 = Note(pitch: 60, tpc: 14)
+        let chord = VoiceElement.chord(Chord(duration: .quarter, notes: [c4]))
+        let multiVoiceMeasure = Measure(voices: [
+            Voice(elements: [
+                .timeSignature(TimeSignature(numerator: 3, denominator: 4)),
+                chord,
+            ]),
+            Voice(elements: [
+                .timeSignature(TimeSignature(numerator: 5, denominator: 8)),
+                chord,
+            ]),
+        ])
+        let following = Measure(voices: [Voice(elements: [chord])])
+
+        let durations = [multiVoiceMeasure, following].effectiveMeasureDurations()
+
+        #expect(durations[0] == Fraction(numerator: 3, denominator: 4))
+        #expect(durations[1] == Fraction(numerator: 3, denominator: 4))
+    }
 }
