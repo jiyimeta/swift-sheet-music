@@ -8,13 +8,16 @@ import SheetMusicCore
 // reconciliation pass (PDFImporter+RhythmReconcile). Split out of that
 // file to keep each under the SwiftLint length cap.
 //
-// Why a separate pass: MuseScore's PDF export draws the tuplet NUMBER
-// ("3") as VECTOR PATH OUTLINES, not as a Tf-shown text/SMuFL glyph
-// (verified across the corpus — no tuplet-digit codepoint, no text "3"
-// appears in the walked glyph stream). So the importer cannot detect a
-// tuplet from its number glyph. Instead we infer a tuplet from rhythm:
-// a contiguous run of equal beamed notes whose straight-read duration
-// over-fills the bar, but whose 2/3-scaled (compressed) reading makes
+// Why a separate pass: this is the FALLBACK for tuplets whose engraved
+// mark could not be read. `PDFImporter+TupletMark` handles the normal
+// case — MuseScore does emit the tuplet number as ordinary text and its
+// bracket as ordinary paths, contrary to what this comment used to claim
+// (measured 2026-07-28: `pdftotext` recovers all 8 tuplet numbers in
+// Now_is_the_time.pdf, and the bracket arms and hooks appear as
+// `.horizontal` / `.vertical` segments). This pass stays for documents
+// where the number is missing, suppressed, or unreadable: it infers a
+// tuplet from rhythm alone — a contiguous run of equal beamed notes whose
+// straight reading over-fills the bar but whose 2/3-scaled reading makes
 // the voice sum EXACTLY to the bar length and shows the tight-spacing
 // boundary signature of a real tuplet.
 //

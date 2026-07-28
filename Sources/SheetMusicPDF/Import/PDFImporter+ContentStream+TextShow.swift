@@ -43,7 +43,7 @@ func emitShow(_ bytes: [UInt8], state: TextShowState) {
     let length = bytes.count
     guard length > 0 else { return }
 
-    var pendingText = ""
+    var pending = PendingTextRun()
     var i = 0
     // Identity-H: 2 bytes per CID.
     while i + 1 < length {
@@ -56,7 +56,7 @@ func emitShow(_ bytes: [UInt8], state: TextShowState) {
         }
         let semantic = classifyCID(cid, codepoint: first.value, state: state)
         if isMusicGlyph(semantic: semantic, codepoint: first.value, state: state) {
-            flushPendingText(&pendingText, state: state)
+            flushPendingRun(&pending, state: state)
             let origin = currentOrigin(state: state)
             let advance = glyphAdvance(state: state)
             state.glyphs.append(ClassifiedGlyph(
@@ -71,14 +71,17 @@ func emitShow(_ bytes: [UInt8], state: TextShowState) {
             ))
             advanceTextMatrix(state: state, glyphCount: 1)
         } else {
+            // Capture the origin BEFORE this code's advance, so the run is
+            // recorded where its ink starts rather than one advance past it.
+            let start = currentOrigin(state: state)
             for s in scalars {
-                pendingText.unicodeScalars.append(s)
+                pending.append(s, startingAt: start)
             }
             advanceTextMatrix(state: state, glyphCount: 1)
         }
     }
     // Odd trailing byte (shouldn't happen for Identity-H) — ignore.
-    flushPendingText(&pendingText, state: state)
+    flushPendingRun(&pending, state: state)
 }
 
 /// Resolve one CMap-decoded CID to a semantic.
@@ -126,29 +129,51 @@ private func isMusicGlyph(
     return true
 }
 
-#if canImport(CoreGraphics)
-    /// A text run accumulating inside one show-string operand, carrying the
-    /// text origin as of the moment its FIRST code was appended.
-    ///
-    /// The origin has to be captured up front because the loop advances the
-    /// text matrix per code: reading `currentOrigin` at flush time would
-    /// place the whole run at the position AFTER its last code. A legacy
-    /// simple font puts a whole word or line in one `Tj`, so that error is
-    /// the run's full width — enough to break lyric-to-note attachment.
-    private struct PendingTextRun {
-        private(set) var text = ""
-        private(set) var origin: CGPoint = .zero
+/// A text run accumulating inside one show-string operand, carrying the
+/// text origin as of the moment its FIRST code was appended.
+///
+/// The origin has to be captured up front because both show loops advance
+/// the text matrix per code: reading `currentOrigin` at flush time would
+/// place the whole run at the position AFTER its last code.
+///
+/// Used by BOTH show paths. The simple-font path has always used it — a
+/// legacy font puts a whole word in one `Tj`, so flush-time origins were
+/// off by the run's full width. The Type0 / CMap path used to read the
+/// origin at flush time on the argument that MuseScore emits one BT/ET
+/// block per glyph, making a run one code and the error "small". It is not
+/// negligible: one approximate advance is `fontSize * 0.5 * ctmScale`,
+/// which is 3.0pt on 君とParadiso — enough to push a tuplet digit's left
+/// edge past the right arm of its own bracket (the arm gate missed by
+/// exactly 1.10pt) and to bias the digit's centre off a 10.6pt beam.
+private struct PendingTextRun {
+    private(set) var text = ""
+    private(set) var origin: CGPoint = .zero
 
-        var isEmpty: Bool {
-            text.isEmpty
-        }
-
-        mutating func append(_ decoded: String, startingAt start: CGPoint) {
-            if text.isEmpty { origin = start }
-            text += decoded
-        }
+    var isEmpty: Bool {
+        text.isEmpty
     }
 
+    /// The simple-font path decodes a byte through the font's own encoding,
+    /// which can yield more than one scalar.
+    mutating func append(_ decoded: String, startingAt start: CGPoint) {
+        if text.isEmpty { origin = start }
+        text += decoded
+    }
+
+    mutating func append(_ scalar: Unicode.Scalar, startingAt start: CGPoint) {
+        if text.isEmpty { origin = start }
+        text.unicodeScalars.append(scalar)
+    }
+}
+
+/// Emit an accumulated run at the origin it STARTED at, then reset.
+private func flushPendingRun(_ run: inout PendingTextRun, state: State) {
+    guard !run.isEmpty else { return }
+    emitTextGlyph(run.text, at: run.origin, state: state)
+    run = PendingTextRun()
+}
+
+#if canImport(CoreGraphics)
     /// Emit a show-string operand for a simple font with NO usable
     /// `/ToUnicode` but a usable embedded program or `/Differences` — the
     /// legacy-music-font case (Maestro, Opus, Sonata) P1 targets. A simple
@@ -200,13 +225,6 @@ private func isMusicGlyph(
         }
         flushPendingRun(&pending, state: state)
     }
-
-    /// Emit an accumulated run at the origin it STARTED at, then reset.
-    private func flushPendingRun(_ run: inout PendingTextRun, state: State) {
-        guard !run.isEmpty else { return }
-        emitTextGlyph(run.text, at: run.origin, state: state)
-        run = PendingTextRun()
-    }
 #endif
 
 /// Page-space origin of the current text position.
@@ -240,23 +258,6 @@ private func advanceTextMatrix(state: State, glyphCount: Int) {
     let approxAdvance = state.fontSize * 0.5 * CGFloat(glyphCount)
     state.textMatrix = CGAffineTransform(translationX: approxAdvance, y: 0)
         .concatenating(state.textMatrix)
-}
-
-/// Emit the accumulated non-PUA text as a `TextGlyph` and reset.
-///
-/// Emits at the text position as of the FLUSH, not as of the run's first
-/// code — behavior this branch inherited and left alone. It is only ever
-/// wrong by the run's own width, and for the CMap path that width is
-/// small: MuseScore emits one BT/ET block per glyph, so a run here is
-/// usually a single code. The whole downstream lyric geometry was
-/// calibrated against these positions across nine sessions, so moving them
-/// is a measured experiment in its own right, not a drive-by fix. The
-/// simple-font path, where a run really is a whole word, captures its
-/// start origin instead — see `PendingTextRun`.
-private func flushPendingText(_ pending: inout String, state: State) {
-    guard !pending.isEmpty else { return }
-    emitTextGlyph(pending, at: currentOrigin(state: state), state: state)
-    pending = ""
 }
 
 /// Decode a Tj/TJ string operand for fonts WITHOUT a usable CMap.
@@ -297,6 +298,7 @@ private func emitTextGlyph(_ text: String, at origin: CGPoint, state: State) {
         text: text,
         fontName: state.fontName,
         fontSize: state.fontSize,
+        renderedSize: renderedSize(state: state),
         origin: origin,
         bbox: .zero,
         pageIndex: state.pageIndex,

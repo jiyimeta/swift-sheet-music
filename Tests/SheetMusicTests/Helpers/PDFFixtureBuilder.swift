@@ -20,6 +20,16 @@
                 case horizontal(width: CGFloat)
                 case vertical(height: CGFloat)
                 case rect(size: CGSize)
+                /// A FILLED four-corner slab, drawn `m l l l h f` — the shape
+                /// MuseScore uses for every beam line and the only one the
+                /// content-stream walker captures as `PathSegment.Kind.beam`
+                /// (see `PDFPageState.emitBeamIfQuad`). `.rect` will not do:
+                /// it STROKES its outline and is captured as `.rectangle`.
+                ///
+                /// `slope` raises the right end by that many points, so a
+                /// fixture can model a sloped beam and exercise `BeamQuad`'s
+                /// interpolated edges rather than only the flat case.
+                case beam(width: CGFloat, thickness: CGFloat, slope: CGFloat = 0)
             }
 
             var origin: CGPoint
@@ -72,6 +82,15 @@
                     ctx.strokePath()
                 case let .rect(s):
                     ctx.stroke(CGRect(origin: path.origin, size: s))
+                case let .beam(w, t, slope):
+                    ctx.move(to: path.origin)
+                    ctx.addLine(to: CGPoint(x: path.origin.x + w, y: path.origin.y + slope))
+                    ctx.addLine(to: CGPoint(
+                        x: path.origin.x + w, y: path.origin.y + slope + t,
+                    ))
+                    ctx.addLine(to: CGPoint(x: path.origin.x, y: path.origin.y + t))
+                    ctx.closePath()
+                    ctx.fillPath()
                 }
             }
 

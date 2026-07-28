@@ -160,7 +160,14 @@ extension PDFImporter {
 
         // Candidate note indices: every note-bearing chord (rests are never
         // re-valued).
-        let noteIndices = indices.filter { !elements[$0].isRest }
+        //
+        // A tuplet member's value came from the engraved tuplet mark —
+        // direct evidence, not a geometric guess — so it is a FIXED POINT
+        // here. Re-valuing one would undo `applyTupletMarks` and, worse,
+        // hide the neighbouring error the repair actually exists to fix.
+        let noteIndices = indices.filter {
+            !elements[$0].isRest && !elements[$0].inTuplet
+        }
         guard !noteIndices.isEmpty else {
             emitUnreconciledWarning(diagnostics, location: location)
             return
@@ -317,82 +324,12 @@ extension PDFImporter {
     /// `.measure` this pass produces (`normalizeMeasureRest`) short-circuits
     /// its voice group before any sum is taken, so `.measure` is not expected
     /// here; it falls back to a whole note rather than trap on `asFraction`.
-    private static func elementFraction(_ element: RhythmElement) -> Fraction {
+    /// Not `private`: the x-onset fit in PDFImporter+RhythmReconcileFit
+    /// needs it to build each element's proposed onset.
+    static func elementFraction(_ element: RhythmElement) -> Fraction {
         switch element.chord.duration {
         case .measure: return Fraction(numerator: 1, denominator: 1)
         default: return element.chord.duration.asFraction
         }
-    }
-
-    // MARK: - x-onset geometry fit (primary repair discriminator)
-
-    /// How well the voice's CUMULATIVE time-onsets line up with the glyphs'
-    /// actual x-positions when the note at `candidateIndex` is re-valued to
-    /// `candidate`. Lower = better fit.
-    ///
-    /// Engraving spaces notes left-to-right roughly proportional to their
-    /// onset time, so a note's x-position is a near-linear function of its
-    /// cumulative time onset (`x ≈ a·t + b`). We compute every element's
-    /// cumulative onset under the PROPOSED durations (current durations with
-    /// the one candidate substituted), fit that `(t, x)` cloud to a line by
-    /// least squares, and return the normalized root-mean-square residual.
-    /// The repair that makes a squeezed note occupy its true (wider) onset
-    /// gap minimizes the residual, so this isolates the note B under-read.
-    ///
-    /// Normalized by the x-span so the residual is a unitless fraction
-    /// comparable across measures. Degenerate geometry (fewer than 3 onsets
-    /// or zero span) returns 0 — geometry can't decide, so the secondary
-    /// confidence tie-break takes over.
-    private static func onsetFitResidual(
-        candidateIndex: Int,
-        indices: [Int],
-        candidate: NoteDuration,
-        elements: [RhythmElement],
-    ) -> CGFloat {
-        // Elements in x-order, each carrying (x, proposed duration fraction).
-        let ordered = indices.sorted { elements[$0].x < elements[$1].x }
-        guard ordered.count >= 3 else { return 0 }
-        var ts: [CGFloat] = []
-        var xs: [CGFloat] = []
-        var cumulative = CGFloat(0)
-        for i in ordered {
-            ts.append(cumulative)
-            xs.append(elements[i].x)
-            let f = (i == candidateIndex)
-                ? candidate.asFraction
-                : elementFraction(elements[i])
-            cumulative += CGFloat(f.numerator) / CGFloat(f.denominator)
-        }
-        let xSpan = (xs.max() ?? 0) - (xs.min() ?? 0)
-        guard xSpan > 0 else { return 0 }
-        let (slope, intercept) = leastSquares(ts: ts, xs: xs)
-        var sumSq = CGFloat(0)
-        for k in xs.indices {
-            let predicted = slope * ts[k] + intercept
-            let r = xs[k] - predicted
-            sumSq += r * r
-        }
-        let rms = (sumSq / CGFloat(xs.count)).squareRoot()
-        return rms / xSpan
-    }
-
-    /// Ordinary least-squares fit `x = slope·t + intercept`. Degenerate
-    /// (zero t-variance) → flat line at mean x.
-    private static func leastSquares(
-        ts: [CGFloat], xs: [CGFloat],
-    ) -> (slope: CGFloat, intercept: CGFloat) {
-        let n = CGFloat(ts.count)
-        let meanT = ts.reduce(0, +) / n
-        let meanX = xs.reduce(0, +) / n
-        var num = CGFloat(0)
-        var den = CGFloat(0)
-        for k in ts.indices {
-            let dt = ts[k] - meanT
-            num += dt * (xs[k] - meanX)
-            den += dt * dt
-        }
-        guard den > 0 else { return (0, meanX) }
-        let slope = num / den
-        return (slope, meanX - slope * meanT)
     }
 }

@@ -37,6 +37,10 @@ extension PDFImporter {
     /// above the next staff), and this only caps a runaway inter-system gap.
     static let lyricBandDepthSpatia: CGFloat = 8
 
+    /// `excludingOrigins`: text-glyph origins already claimed by another
+    /// pass (e.g. a tuplet-number digit) and therefore ineligible to also
+    /// become a lyric syllable. Compared with a small tolerance rather than
+    /// `==` since origins may be re-derived rather than reused by identity.
     static func attachLyrics(
         elements: [RhythmElement],
         texts: [TextGlyph],
@@ -44,6 +48,7 @@ extension PDFImporter {
         pageIndex: Int = 0,
         xRange: ClosedRange<CGFloat>? = nil,
         nextStaffTopY: CGFloat? = nil,
+        excludingOrigins: [CGPoint] = [],
     ) -> [RhythmElement] {
         guard let bottomY = staffYLines.first,
               let topY = staffYLines.last,
@@ -60,6 +65,7 @@ extension PDFImporter {
             pageIndex: pageIndex,
             xRange: xRange,
             nextStaffTopY: nextStaffTopY,
+            excludingOrigins: excludingOrigins,
         )
         guard !candidates.isEmpty else { return elements }
 
@@ -68,7 +74,10 @@ extension PDFImporter {
         var out = elements
         for (verseIndex, verseTexts) in verses.enumerated() {
             let sorted = verseTexts.sorted { $0.origin.x < $1.origin.x }
-            attachVerse(verseTexts: sorted, verse: verseIndex, into: &out)
+            attachVerse(
+                verseTexts: sorted, verse: verseIndex,
+                spatium: lineSpacing, into: &out,
+            )
         }
         return out
     }
@@ -90,17 +99,24 @@ extension PDFImporter {
     /// stripped; an underscore-/hyphen-only cell attaches nothing; a
     /// surviving trailing hyphen marks begin / middle / end.
     private static func attachVerse(
-        verseTexts: [TextGlyph], verse: Int, into elements: inout [RhythmElement],
+        verseTexts: [TextGlyph], verse: Int, spatium: CGFloat,
+        into elements: inout [RhythmElement],
     ) {
         let noteIdxs = elements.indices
             .filter { !elements[$0].isRest }
             .sorted { elements[$0].x < elements[$1].x }
         guard !noteIdxs.isEmpty else { return }
-        let noteXs = noteIdxs.map { elements[$0].x }
-        // Bucket each glyph onto the note whose x it is nearest to.
+        // Both sides of this comparison must be the same landmark.
+        // `RhythmElement.x` is the notehead's ORIGIN (its left edge), so the
+        // note grid is shifted to notehead CENTRES to match the syllable
+        // centres. Comparing a syllable centre against a notehead left edge
+        // is the mistake that re-creates the pre-fix rightward bias.
+        let half = noteheadWidthSpatia * spatium / 2
+        let noteXs = noteIdxs.map { elements[$0].x + half }
+        // Bucket each glyph onto the note whose CENTRE its CENTRE is nearest.
         var glyphsByNotePos: [Int: [TextGlyph]] = [:]
         for g in verseTexts {
-            glyphsByNotePos[nearestNotePos(g.origin.x, noteXs), default: []].append(g)
+            glyphsByNotePos[nearestNotePos(centerX(g), noteXs), default: []].append(g)
         }
         // Ordered cells (note position ascending), each x-sorted.
         var cells = glyphsByNotePos
@@ -152,20 +168,6 @@ extension PDFImporter {
             glued.append((cell.pos, glyphs))
         }
         cells = glued
-    }
-
-    /// Index (into the x-sorted note list) of the note nearest `x`.
-    private static func nearestNotePos(_ x: CGFloat, _ noteXs: [CGFloat]) -> Int {
-        var best = 0
-        var bestDist = CGFloat.infinity
-        for (i, nx) in noteXs.enumerated() {
-            let d = abs(nx - x)
-            if d < bestDist {
-                bestDist = d
-                best = i
-            }
-        }
-        return best
     }
 
     /// Concatenate a note's glyphs (already x-sorted) into one syllable.
@@ -268,6 +270,7 @@ extension PDFImporter {
         pageIndex: Int,
         xRange: ClosedRange<CGFloat>?,
         nextStaffTopY: CGFloat?,
+        excludingOrigins: [CGPoint] = [],
     ) -> [TextGlyph] {
         // The band reaches `lyricBandDepthSpatia` spatia below the bottom
         // line, but never PAST the next staff below — a staff's lyrics live
@@ -292,16 +295,29 @@ extension PDFImporter {
         // only claims syllables under its own notes: far higher placement
         // precision (~92%) at the cost of a more conservative count, since
         // syllables landing in inter-cell gaps are dropped.
+        // The cell gate compares the syllable's CENTRE, exactly as the
+        // nearest-note snap in `attachVerse` does. Both are asking "which
+        // measure / note does this syllable belong to", so they must use
+        // the same landmark: gating on the left edge while snapping on the
+        // centre lets a syllable be admitted by one cell and then attached
+        // by a comparison that thinks it sits ~half a glyph further right.
+        // With the walker recording true left edges, a left-edge gate
+        // admits syllables from the NEXT measure into this one, which is
+        // the over-production measured on 旅路 (countB 1328 vs countA 1214).
         let xPad: CGFloat = 6
         let xLo = xRange.map { $0.lowerBound - xPad } ?? -.infinity
         let xHi = xRange.map { $0.upperBound + xPad } ?? .infinity
         return texts.filter { t in
-            t.pageIndex == pageIndex
+            let cx = centerX(t)
+            return t.pageIndex == pageIndex
                 && lyricWindowLo <= t.origin.y
                 && t.origin.y <= lyricWindowHi
-                && t.origin.x >= xLo
-                && t.origin.x <= xHi
+                && cx >= xLo
+                && cx <= xHi
                 && !t.text.trimmingCharacters(in: .whitespaces).isEmpty
+                && !excludingOrigins.contains {
+                    abs($0.x - t.origin.x) < 0.01 && abs($0.y - t.origin.y) < 0.01
+                }
         }
     }
 
