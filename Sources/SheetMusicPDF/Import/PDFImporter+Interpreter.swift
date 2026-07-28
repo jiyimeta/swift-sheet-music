@@ -85,6 +85,7 @@ extension PDFPageState {
             // nil when the font has no usable /ToUnicode (e.g. ASCII Helvetica
             // fixtures), which keeps the legacy UTF-8/Latin-1 decode active.
             activeCMap = fontCMaps[name]
+            activeSimpleFontDecoder = simpleFontDecoders[name]
             #if canImport(CoreGraphics)
                 activeClassifier = classifiers[name]
             #endif

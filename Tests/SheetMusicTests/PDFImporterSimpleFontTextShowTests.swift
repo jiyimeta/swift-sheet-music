@@ -81,6 +81,42 @@
             #expect(state.texts.map(\.text) == ["2024"])
         }
 
+        /// A byte no tier classifies is TEXT, and a simple font's text bytes
+        /// are character codes in its own encoding — not Latin-1. The real
+        /// Finale files declare `MacRomanEncoding`, where 0xD5 is `’`.
+        @Test func unclassifiedBytesDecodeThroughTheDeclaredEncoding() {
+            let state = pageState()
+            state.activeSimpleFontDecoder = SimpleFontTextDecoder(
+                differences: [:], baseEncoding: "MacRomanEncoding",
+            )
+            emitShow([0xD5], state: state)
+            #expect(state.texts.map(\.text) == ["\u{2019}"])
+        }
+
+        /// The same font seen WITHOUT a classifier — Tier 4 off, nothing in
+        /// `/Differences` — takes the whole-run path, which must honor the
+        /// declared encoding too. This is the path the real Finale text
+        /// fonts actually take.
+        @Test func aFontWithoutAClassifierStillDecodesThroughItsEncoding() {
+            let state = PDFPageState(pageIndex: 0)
+            state.fontSize = 10
+            state.activeSimpleFontDecoder = SimpleFontTextDecoder(
+                differences: [:], baseEncoding: "MacRomanEncoding",
+            )
+            emitShow([0x41, 0xD5, 0x42], state: state)
+            #expect(state.texts.map(\.text) == ["A\u{2019}B"])
+        }
+
+        /// A font that declares no usable encoding keeps the legacy whole-run
+        /// decode — UTF-8 first. The ASCII test fixtures and every Identity-H
+        /// font depend on it.
+        @Test func aFontWithNoDeclaredEncodingKeepsTheLegacyDecode() {
+            let state = PDFPageState(pageIndex: 0)
+            state.fontSize = 10
+            emitShow([0xC3, 0xA9], state: state)
+            #expect(state.texts.map(\.text) == ["\u{00E9}"])
+        }
+
         @Test func musicGlyphOriginIsUnaffected() {
             let state = pageState()
             emitShow([0x41, 0x51], state: state)

@@ -37,7 +37,7 @@ func emitShow(_ bytes: [UInt8], state: TextShowState) {
                 return
             }
         #endif
-        emitText(decodeString(bytes), state: state)
+        emitText(decodeString(bytes, state: state), state: state)
         return
     }
     let length = bytes.count
@@ -143,9 +143,9 @@ private func isMusicGlyph(
             text.isEmpty
         }
 
-        mutating func append(_ scalar: Unicode.Scalar, startingAt start: CGPoint) {
+        mutating func append(_ decoded: String, startingAt start: CGPoint) {
             if text.isEmpty { origin = start }
-            text.unicodeScalars.append(scalar)
+            text += decoded
         }
     }
 
@@ -175,7 +175,11 @@ private func isMusicGlyph(
                 glyphID: classifier.resolveGlyphID(code: code),
             )
             if case .unknown = semantic {
-                pending.append(Unicode.Scalar(byte), startingAt: currentOrigin(state: state))
+                // Not music, so it is text — and a simple font's text bytes
+                // are character codes in its own encoding, not Latin-1.
+                let decoded = state.activeSimpleFontDecoder?.text(code: code)
+                    ?? String(Unicode.Scalar(byte))
+                pending.append(decoded, startingAt: currentOrigin(state: state))
                 advanceTextMatrix(state: state, glyphCount: 1)
                 continue
             }
@@ -255,11 +259,20 @@ private func flushPendingText(_ pending: inout String, state: State) {
     pending = ""
 }
 
-/// Decode a Tj/TJ string operand for fonts WITHOUT a usable CMap. Test
+/// Decode a Tj/TJ string operand for fonts WITHOUT a usable CMap.
+///
+/// A simple font that declares `/Differences` or a base encoding is decoded
+/// through it — its bytes are character codes in that encoding, and reading
+/// them as anything else is what turned real Finale text into mojibake above
+/// 0x7F (see `SimpleFontTextDecoder`).
+///
+/// Anything else keeps the legacy reading: UTF-8 first, Latin-1 second. Test
 /// fixtures use Helvetica with ASCII bytes — treating them as UTF-8 is
-/// correct there.
-private func decodeString(_ bytes: [UInt8]) -> String {
+/// correct there — and a Type0 font declaring `Identity-H` shows 2-byte
+/// codes this must not walk one byte at a time.
+private func decodeString(_ bytes: [UInt8], state: State) -> String {
     guard !bytes.isEmpty else { return "" }
+    if let decoder = state.activeSimpleFontDecoder { return decoder.decode(bytes) }
     let data = Data(bytes)
     if let utf8 = String(bytes: data, encoding: .utf8) { return utf8 }
     return String(bytes: data, encoding: .isoLatin1) ?? ""

@@ -27,6 +27,32 @@ MuseScore is a trademark of Muse Group. Use of the name in this project's
 documentation and code identifiers is nominative (to indicate file format
 and behavioral compatibility) and does not imply affiliation.
 
+Adobe Glyph List data
+---------------------
+
+`Sources/SheetMusicPDF/Import/FontCascade/AdobeGlyphList+Table.swift`
+embeds a glyph-name → Unicode table derived from Adobe's
+`glyphlist.txt` (Adobe Glyph List 2.0):
+
+    Copyright 2002, 2010, 2015 Adobe Systems Incorporated.
+    Licensed under the Apache License, Version 2.0 (the "License"); you
+    may not use this file except in compliance with the License. You may
+    obtain a copy of the License at
+    http://www.apache.org/licenses/LICENSE-2.0.html
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+    implied. See the License for the specific language governing
+    permissions and limitations under the License.
+
+Source: <https://github.com/adobe-type-tools/agl-aglfn>. MODIFICATION:
+the table was narrowed to the 448 single-scalar names whose codepoint a
+1-byte simple font can reach (Latin U+0020–U+017F, punctuation and
+currency U+2000–U+20BF, U+2122, and the Latin ligatures U+FB00–U+FB06)
+and re-packed as whitespace-separated `name HEX` pairs. It is used to
+decode a PDF simple font's `/Encoding /Differences` glyph names to text.
+
 Test fixtures
 -------------
 

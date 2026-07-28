@@ -29,6 +29,14 @@ final class PDFPageState {
     /// The CMap selected by the most recent `Tf` (nil for fonts without a
     /// usable `/ToUnicode`, e.g. the ASCII test fixtures).
     var activeCMap: PDFImporter.ToUnicodeCMap?
+    /// Per-page registry of simple-font TEXT decoders keyed by font RESOURCE
+    /// NAME, filled by the front-end alongside `fontCMaps`. A font that
+    /// declares neither `/Differences` nor a modeled base encoding has no
+    /// entry — see `SimpleFontTextDecoder.init?`.
+    var simpleFontDecoders: [String: SimpleFontTextDecoder] = [:]
+    /// The decoder selected by the most recent `Tf` (nil for a font with
+    /// nothing declared, which keeps the legacy whole-run decode).
+    var activeSimpleFontDecoder: SimpleFontTextDecoder?
     /// TESTING ONLY. See `PDFImportOptions.anchorMusicGlyphsToPUARange`.
     /// Set once per page by the front-end walker from that option; consulted
     /// by `emitShow` when deciding whether a decoded scalar is music or text.

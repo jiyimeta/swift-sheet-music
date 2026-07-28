@@ -165,6 +165,92 @@
             #expect(rhythm.first?.chord.duration == NoteDuration.quarter.dotted(1))
         }
 
+        /// The proportions MuseScore actually engraves an augmentation dot
+        /// at, measured over the curated corpus (dotGeometryProbe): the dot
+        /// origin sits 0.83–1.22 notehead-advances to the RIGHT and within
+        /// 0.25 advances vertically. The 0.9 median is well inside the old
+        /// absolute window too — this pins that tightening the window for
+        /// staccato (below) does not start dropping real dots.
+        @Test func dotAtEngravedProportionsStillDots() {
+            let (g, dp) = notehead(x: 100, y: 500)
+            let stems = [stem(x: 100, yMin: 500, yMax: 530)]
+            // advance 5 ⇒ dx 0.90 adv, dy 0.25 adv.
+            let d = dot(x: 104.5, y: 501.25)
+            let m = makeMeasure(glyphs: [g, d])
+            let rhythm = PDFImporter.decodeRhythm(
+                measure: m, decoded: [dp], paths: stems,
+            )
+            #expect(rhythm.count == 1)
+            #expect(rhythm.first?.chord.duration == NoteDuration.quarter.dotted(1))
+        }
+
+        /// A STACCATO dot is centred over its notehead, not placed to the
+        /// right of it: measured at 0.23–0.25 advances horizontally and
+        /// 0.40–0.67 vertically, against 0.83+ / ≤0.25 for a real dot.
+        ///
+        /// Tier 1 has no semantic for `articStaccatoAbove/Below`, so a
+        /// staccato only reaches here as `.augmentationDot` when Tier 4
+        /// shape-matching names the round blob — the two glyphs are the
+        /// same circle and no classifier can separate them. Rejecting it
+        /// is the placement's job, and the old absolute window (dx < 12pt,
+        /// dy < 4pt, no lower bound on dx) let it through: 131 staccato
+        /// glyphs across the curated corpus, +77 phantom dotted chords on
+        /// 君とParadiso alone — each one a note played 1.5× too long.
+        @Test func staccatoAboveNoteheadIsNotAnAugmentationDot() {
+            let (g, dp) = notehead(x: 100, y: 500)
+            let stems = [stem(x: 100, yMin: 500, yMax: 530)]
+            // advance 5 ⇒ dx 0.25 adv, dy 0.50 adv — mid-corpus staccato.
+            let d = dot(x: 101.25, y: 502.5)
+            let m = makeMeasure(glyphs: [g, d])
+            let rhythm = PDFImporter.decodeRhythm(
+                measure: m, decoded: [dp], paths: stems,
+            )
+            #expect(rhythm.count == 1)
+            #expect(rhythm.first?.chord.duration == .quarter)
+        }
+
+        /// The same rejection below the notehead (stem-up notes take
+        /// `articStaccatoBelow`, U+E4A3 — the more common of the pair in
+        /// the corpus, 96 of 131).
+        @Test func staccatoBelowNoteheadIsNotAnAugmentationDot() {
+            let (g, dp) = notehead(x: 100, y: 500)
+            let stems = [stem(x: 100, yMin: 500, yMax: 530)]
+            let d = dot(x: 101.25, y: 497.5)
+            let m = makeMeasure(glyphs: [g, d])
+            let rhythm = PDFImporter.decodeRhythm(
+                measure: m, decoded: [dp], paths: stems,
+            )
+            #expect(rhythm.count == 1)
+            #expect(rhythm.first?.chord.duration == .quarter)
+        }
+
+        /// The residual staccato the dx floor alone cannot reject: the dot
+        /// belongs to the SECOND notehead (it is centred over it) but sits
+        /// at a perfectly dot-like offset from the FIRST one, so the first
+        /// note claims it. 12 of the corpus's 131 staccato glyphs land here
+        /// (all in 君とParadiso). The owner test — "some notehead has this
+        /// dot centred over it, at staccato height" — rejects all 12 and
+        /// fires on none of the ~1080 real dots.
+        @Test func staccatoCentredOnALaterNoteheadIsNotTheEarlierNotesDot() {
+            let (g1, dp1) = notehead(x: 100, y: 500, midi: 71)
+            let (g2, dp2) = notehead(x: 108, y: 500, midi: 72)
+            let stems = [
+                stem(x: 100, yMin: 500, yMax: 530),
+                stem(x: 108, yMin: 500, yMax: 530),
+            ]
+            // g2's staccato: 0.25 advances right of g2, 0.5 above it — but
+            // 1.85 advances right of g1 and only 2.5pt up, i.e. inside g1's
+            // dot window.
+            let d = dot(x: 109.25, y: 502.5)
+            let m = makeMeasure(glyphs: [g1, g2, d])
+            let rhythm = PDFImporter.decodeRhythm(
+                measure: m, decoded: [dp1, dp2], paths: stems,
+            )
+            #expect(rhythm.count == 2)
+            #expect(rhythm[0].chord.duration == .quarter)
+            #expect(rhythm[1].chord.duration == .quarter)
+        }
+
         @Test func twoNoteheadsOneStemFormOneChord() {
             let (g1, dp1) = notehead(x: 100, y: 495, midi: 67)
             let (g2, dp2) = notehead(x: 100, y: 505, midi: 74)

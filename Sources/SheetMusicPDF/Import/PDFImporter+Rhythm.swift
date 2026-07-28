@@ -479,6 +479,26 @@ extension PDFImporter {
         var dotCount = 0
         let leadX = lead.geometry.origin.x
         let leadY = lead.geometry.origin.y
+        // Staff-size-relative floor on dx, expressed in the lead notehead's
+        // own advance width — the one length in scope that tracks the staff
+        // size (a medley's reduced staves engrave the same proportions at
+        // ~60% of the pt distances). Measured over the curated corpus, a
+        // real augmentation dot sits 0.83–1.22 advances to the RIGHT of the
+        // notehead, while a STACCATO dot is centred over it at 0.23–0.25 —
+        // a 3.3× gap with nothing in between. `articStaccatoAbove/Below`
+        // has no Tier-1 semantic, so Tier 4 shape-matching names that
+        // identical circle `augmentationDot` (131 glyphs across the corpus)
+        // and only the placement can reject it.
+        //
+        // dy stays an absolute 4pt: the same measurement puts real dots
+        // within 0.25 advances vertically and staccato at 0.40+, but
+        // converting the dy bound to 0.33 advances as well cost dur% on two
+        // real-corpus scores (W●RK 89→88, うちで踊ろう 93→92) — their dots
+        // sit between 3pt and 4pt off on small staves. The dx floor alone
+        // rejects every staccato this note owns, so the dy bound buys
+        // nothing here.
+        let advance = lead.geometry.advance
+        let minDX = advance > 0 ? advance * 0.5 : 0
         for g in glyphs {
             guard case .augmentationDot = g.semantic else { continue }
             let dx = g.geometry.origin.x - leadX
@@ -487,8 +507,34 @@ extension PDFImporter {
             // previous `< 20`pt window also caught the FOLLOWING note's dot
             // ~15pt away (a phantom `3/32` at the tail of beamed 16th runs);
             // 12pt keeps every owner dot and rejects the ~15pt neighbour.
-            if dx > 0, dx < 12, dy < 4 { dotCount += 1 }
+            guard dx > minDX, dx < 12, dy < 4 else { continue }
+            // A LATER note's staccato can still fall in this note's window
+            // (12 of the corpus's 131, all in 君とParadiso). It belongs to
+            // whichever notehead it is centred over, so hand it back.
+            if isStaccatoOfSomeNotehead(g, in: glyphs) { continue }
+            dotCount += 1
         }
         return dotCount > 0 ? duration.dotted(dotCount) : duration
+    }
+
+    /// Is this dot glyph really some notehead's STACCATO — i.e. centred
+    /// over a notehead rather than placed to its right?
+    ///
+    /// Measured over the curated corpus (`dotGeometryProbe`), in units of
+    /// the notehead's own advance width: a staccato sits 0.23–0.25 across
+    /// and 0.40–0.67 above / below its owner, an augmentation dot 0.83–1.22
+    /// across and within 0.25 vertically. The boxes are disjoint, and this
+    /// test fires on 0 of the ~1080 real dots in the corpus.
+    private static func isStaccatoOfSomeNotehead(
+        _ dot: ClassifiedGlyph, in glyphs: [ClassifiedGlyph],
+    ) -> Bool {
+        for g in glyphs where isNotehead(g.semantic) {
+            let advance = g.geometry.advance
+            guard advance > 0 else { continue }
+            let dx = (dot.geometry.origin.x - g.geometry.origin.x) / advance
+            let dy = abs(dot.geometry.origin.y - g.geometry.origin.y) / advance
+            if dx > 0, dx < 0.4, dy > 0.32, dy < 0.9 { return true }
+        }
+        return false
     }
 }
