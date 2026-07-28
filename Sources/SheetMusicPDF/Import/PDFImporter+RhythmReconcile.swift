@@ -149,7 +149,14 @@ extension PDFImporter {
 
         // Candidate note indices: every note-bearing chord (rests are never
         // re-valued).
-        let noteIndices = indices.filter { !elements[$0].isRest }
+        //
+        // A tuplet member's value came from the engraved tuplet mark —
+        // direct evidence, not a geometric guess — so it is a FIXED POINT
+        // here. Re-valuing one would undo `applyTupletMarks` and, worse,
+        // hide the neighbouring error the repair actually exists to fix.
+        let noteIndices = indices.filter {
+            !elements[$0].isRest && !elements[$0].inTuplet
+        }
         guard !noteIndices.isEmpty else {
             emitUnreconciledWarning(diagnostics, location: location)
             return

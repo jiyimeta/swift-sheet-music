@@ -186,5 +186,50 @@
             #expect(out[3].chord.duration == twelfth)
             #expect(out[1 ... 3].allSatisfy { $0.inTuplet == true })
         }
+
+        /// 君とParadiso p0 m0's real overflow (half + straight quarter +
+        /// straight eighth = 7/8 against a 3/4 bar) is already fully
+        /// resolved by `applyTupletMarks` alone: once the quarter/eighth
+        /// are rescaled to 1/6 + 1/12, the voice sums to exactly 3/4 and
+        /// `reconcileMeasureDurations` returns at INVARIANT 1 (line ~148)
+        /// without ever reaching the candidate-index loop this task
+        /// guards. So that exact bar cannot exercise the guard, and is not
+        /// a useful regression case for it.
+        ///
+        /// This constructs the case that DOES exercise it: a residual
+        /// error elsewhere in the same voice leaves the bar unbalanced
+        /// even after scaling, AND — the part that makes the guard's
+        /// absence actually observable — the tuplet member's own
+        /// single-note repair target happens to also be a legal
+        /// `NoteDuration` (`.half`), the same value the true fix wants for
+        /// the neighbour. Both notes' noteheads are marked hollow so the
+        /// unrelated notehead-shape guard (`RhythmReconcile.swift`, "never
+        /// inflate a filled note to a half-or-longer value") doesn't
+        /// separately block either candidate and confound this test with a
+        /// different guard. The tuplet member is marked low-confidence so
+        /// the *existing* tie-break (spacing-residual tie → prefer
+        /// low-confidence) deterministically prefers it over the neighbour
+        /// pre-fix — reproducing the failure mode this task closes: the
+        /// pass "repairs" evidence-backed tuplet data instead of the note
+        /// that is actually wrong.
+        @Test func reconciliationRepairsTheNeighbourNotTheTupletMember() {
+            var elements = [
+                Self.note(.quarter, x: 100),
+                Self.note(.fraction(Fraction(numerator: 1, denominator: 4)), x: 110),
+            ]
+            elements[0].noteheadIsFilled = false
+            elements[1].inTuplet = true
+            elements[1].noteheadIsFilled = false
+            elements[1].lowConfidenceDuration = true
+            let out = PDFImporter.reconcileMeasureDurations(
+                elements: elements,
+                timeSignature: TimeSignature(numerator: 3, denominator: 4),
+                spatium: 3.35,
+            )
+            #expect(out[0].chord.duration == .half)
+            #expect(out[1].chord.duration == .fraction(
+                Fraction(numerator: 1, denominator: 4),
+            ))
+        }
     }
 #endif
