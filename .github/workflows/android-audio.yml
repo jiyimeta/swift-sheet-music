@@ -53,7 +53,7 @@ jobs:
           echo "/Library/Developer/Toolchains/swift-6.3.3-RELEASE.xctoolchain/usr/bin" >> "$GITHUB_PATH"
           swift --version
 
-      - uses: android-actions/setup-android@v3
+      - uses: android-actions/setup-android@v4
 
       - name: Install required NDK
         run: sdkmanager "ndk;27.3.13750724"
