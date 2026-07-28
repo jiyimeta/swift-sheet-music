@@ -101,14 +101,14 @@ jobs:
 
       - name: Upload test reports on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: kotlin-test-reports
           path: |
             Android/SheetMusicAudioAndroid/build/reports/tests/
 
       - name: Upload AAR artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: SheetMusicAudioAndroid-aar
           path: Android/SheetMusicAudioAndroid/build/outputs/aar/*.aar
