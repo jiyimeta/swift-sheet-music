@@ -49,7 +49,11 @@ class PdfScoreHandle internal constructor(
     val geometryHandle: Long,
     val diagnostics: List<PdfDiagnostic>,
     /**
-     * How many chord/rest elements the importer reconstructed, across every staff and voice.
+     * How many chords carrying at least one note the importer reconstructed, across every staff and voice.
+     *
+     * Rests and non-sounding elements (clef, key, time) are excluded: the importer emits those from a
+     * state machine that never inspects a notehead, so counting them would report a page whose clefs
+     * classified but whose noteheads did not as playable.
      *
      * A PDF outside the importer's scope — a Chrome "print to PDF", a scan — still yields staff lines and
      * measure cells, so `load` returns a non-null handle wrapping a structurally valid, completely empty
