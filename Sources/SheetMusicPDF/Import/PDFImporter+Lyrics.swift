@@ -295,15 +295,25 @@ extension PDFImporter {
         // only claims syllables under its own notes: far higher placement
         // precision (~92%) at the cost of a more conservative count, since
         // syllables landing in inter-cell gaps are dropped.
+        // The cell gate compares the syllable's CENTRE, exactly as the
+        // nearest-note snap in `attachVerse` does. Both are asking "which
+        // measure / note does this syllable belong to", so they must use
+        // the same landmark: gating on the left edge while snapping on the
+        // centre lets a syllable be admitted by one cell and then attached
+        // by a comparison that thinks it sits ~half a glyph further right.
+        // With the walker recording true left edges, a left-edge gate
+        // admits syllables from the NEXT measure into this one, which is
+        // the over-production measured on 旅路 (countB 1328 vs countA 1214).
         let xPad: CGFloat = 6
         let xLo = xRange.map { $0.lowerBound - xPad } ?? -.infinity
         let xHi = xRange.map { $0.upperBound + xPad } ?? .infinity
         return texts.filter { t in
-            t.pageIndex == pageIndex
+            let cx = centerX(t)
+            return t.pageIndex == pageIndex
                 && lyricWindowLo <= t.origin.y
                 && t.origin.y <= lyricWindowHi
-                && t.origin.x >= xLo
-                && t.origin.x <= xHi
+                && cx >= xLo
+                && cx <= xHi
                 && !t.text.trimmingCharacters(in: .whitespaces).isEmpty
                 && !excludingOrigins.contains {
                     abs($0.x - t.origin.x) < 0.01 && abs($0.y - t.origin.y) < 0.01

@@ -111,6 +111,40 @@
             #expect(PDFImporter.centerX(noSize) == 295.14)
         }
 
+        // MARK: - Measure-cell gate
+
+        /// The cell gate must admit on the same landmark the snap compares:
+        /// the syllable's CENTRE. Cell 100...200 is padded by 6, so the
+        /// admitted window is 94...206. A full-width kana at left edge 90
+        /// has its centre at 95 — inside the window, even though its left
+        /// edge is outside. Gating on the left edge drops it.
+        @Test func syllableAdmittedWhenItsCentreIsInsideTheCell() {
+            let elements = [chordElement(x: 100)]
+            let texts = [sizedGlyph("あ", x: 90, y: 480, em: 10)]
+            let out = PDFImporter.attachLyrics(
+                elements: elements, texts: texts,
+                staffYLines: staffYLines, pageIndex: 0,
+                xRange: 100 ... 200,
+            )
+            #expect(out[0].chord.lyrics == [Lyric(text: "あ", syllabic: .single)])
+        }
+
+        /// The mirror case, and the one that caused the over-production on
+        /// 旅路 (countB 1328 vs countA 1214): a kana at left edge 204 is
+        /// inside the 206 bound by its left edge but its centre is at 209,
+        /// past the cell. It belongs to the NEXT measure and must not be
+        /// claimed by this one.
+        @Test func syllableRejectedWhenItsCentreIsPastTheCell() {
+            let elements = [chordElement(x: 200)]
+            let texts = [sizedGlyph("あ", x: 204, y: 480, em: 10)]
+            let out = PDFImporter.attachLyrics(
+                elements: elements, texts: texts,
+                staffYLines: staffYLines, pageIndex: 0,
+                xRange: 100 ... 200,
+            )
+            #expect(out[0].chord.lyrics.isEmpty)
+        }
+
         // MARK: - Tests
 
         @Test func singleSyllableAttachesToNearestNote() {
