@@ -74,7 +74,10 @@ extension PDFImporter {
         var out = elements
         for (verseIndex, verseTexts) in verses.enumerated() {
             let sorted = verseTexts.sorted { $0.origin.x < $1.origin.x }
-            attachVerse(verseTexts: sorted, verse: verseIndex, into: &out)
+            attachVerse(
+                verseTexts: sorted, verse: verseIndex,
+                spatium: lineSpacing, into: &out,
+            )
         }
         return out
     }
@@ -96,17 +99,24 @@ extension PDFImporter {
     /// stripped; an underscore-/hyphen-only cell attaches nothing; a
     /// surviving trailing hyphen marks begin / middle / end.
     private static func attachVerse(
-        verseTexts: [TextGlyph], verse: Int, into elements: inout [RhythmElement],
+        verseTexts: [TextGlyph], verse: Int, spatium: CGFloat,
+        into elements: inout [RhythmElement],
     ) {
         let noteIdxs = elements.indices
             .filter { !elements[$0].isRest }
             .sorted { elements[$0].x < elements[$1].x }
         guard !noteIdxs.isEmpty else { return }
-        let noteXs = noteIdxs.map { elements[$0].x }
-        // Bucket each glyph onto the note whose x it is nearest to.
+        // Both sides of this comparison must be the same landmark.
+        // `RhythmElement.x` is the notehead's ORIGIN (its left edge), so the
+        // note grid is shifted to notehead CENTRES to match the syllable
+        // centres. Comparing a syllable centre against a notehead left edge
+        // is the mistake that re-creates the pre-fix rightward bias.
+        let half = noteheadWidthSpatia * spatium / 2
+        let noteXs = noteIdxs.map { elements[$0].x + half }
+        // Bucket each glyph onto the note whose CENTRE its CENTRE is nearest.
         var glyphsByNotePos: [Int: [TextGlyph]] = [:]
         for g in verseTexts {
-            glyphsByNotePos[nearestNotePos(g.origin.x, noteXs), default: []].append(g)
+            glyphsByNotePos[nearestNotePos(centerX(g), noteXs), default: []].append(g)
         }
         // Ordered cells (note position ascending), each x-sorted.
         var cells = glyphsByNotePos
@@ -158,20 +168,6 @@ extension PDFImporter {
             glued.append((cell.pos, glyphs))
         }
         cells = glued
-    }
-
-    /// Index (into the x-sorted note list) of the note nearest `x`.
-    private static func nearestNotePos(_ x: CGFloat, _ noteXs: [CGFloat]) -> Int {
-        var best = 0
-        var bestDist = CGFloat.infinity
-        for (i, nx) in noteXs.enumerated() {
-            let d = abs(nx - x)
-            if d < bestDist {
-                bestDist = d
-                best = i
-            }
-        }
-        return best
     }
 
     /// Concatenate a note's glyphs (already x-sorted) into one syllable.
