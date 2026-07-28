@@ -167,8 +167,35 @@
             #expect(marks.isEmpty)
         }
 
-        /// A page number lives in the page margin, far outside the staff
-        /// band, so it never even reaches the anchor search.
+        /// A digit sitting just outside the mark band in y, but still
+        /// within `beamWindow`'s own y-tolerance and in x over the
+        /// secondary beam, is rejected by the mark-band gate ALONE — the
+        /// anchor search never runs. This is the load-bearing counterpart
+        /// to `pageNumberInTheMarginIsRejected`, which sits far enough
+        /// away that either gate would reject it on its own.
+        ///
+        /// spatium = (119.2 - 107.9) / 4 = 2.825; band = 3 * 2.825 =
+        /// 8.475, so the band's outer edge is 119.2 + 8.475 = 127.675.
+        /// beamWindow's own y-tolerance is 3 * 2.825 = 8.475 around the
+        /// secondary beam's midY (122.8), i.e. up to 131.275. A digit at
+        /// y = 128.5 clears the beam tolerance but sits 0.825 past the
+        /// band's edge.
+        @Test func digitOutsideTheMarkBandIsRejectedByTheBandGateAlone() {
+            let marks = PDFImporter.detectTupletMarks(
+                texts: [Self.digit("3", x: 461.16, y: 128.5)],
+                paths: Self.drumBeams,
+                staffYLines: Self.drumYLines,
+                xRange: Self.drumCellX,
+                pageIndex: 0,
+            )
+            #expect(marks.isEmpty)
+        }
+
+        /// A page number lives in the page margin, far outside both the
+        /// mark band and `beamWindow`'s own y-tolerance around any beam —
+        /// an end-to-end guard confirming a page number never becomes a
+        /// tuplet mark, redundantly protected by two independent gates
+        /// rather than isolating either one.
         @Test func pageNumberInTheMarginIsRejected() {
             let marks = PDFImporter.detectTupletMarks(
                 texts: [Self.digit(
