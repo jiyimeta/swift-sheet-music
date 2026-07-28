@@ -7,7 +7,29 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-07-29
+
 ### Added
+
+- Tuplet marks are read from PDF. The importer detects a bracketed mark
+  from its number and arms, anchors a beamed mark to its narrowest beam,
+  and scales the members inside a detected mark's span — read before
+  lyrics and before metric reconciliation, so a tuplet member is never
+  re-valued afterwards and its digits are not mistaken for a lyric.
+
+- `PlaybackEngine.timedPosition` pairs the current playback position with
+  the host-clock instant it corresponds to, in a single read. Sampling a
+  node's `lastRenderTime` next to a separately-read position admits up to
+  one IO buffer (~23 ms) of unknown error; this has no interval between
+  two reads to be wrong about, so a host aligning an independently
+  captured recording against playback can project the score's time-0
+  instant onto the shared host clock exactly. `nil` — never a wrong
+  number — whenever a pairing is unavailable.
+
+- `LayoutMeasure.hasSameRenderContent(as:)` reports whether two layout
+  measures would draw identically once placed, ignoring their horizontal
+  origin. A renderer that caches per-measure drawing uses it to decide
+  between reusing, repositioning, and rebuilding.
 
 - `PdfParseResultWire.playableElementCount` — how many chord/rest elements
   the PDF importer actually reconstructed, across every staff and voice.
@@ -58,12 +80,31 @@ and this project adheres to
   Android artifact was published for 1.2.3 through 1.5.1. The workflow
   now matches both spellings.
 
-### Added
+- PDF import accuracy, across several passes:
+  - Text from a simple font is decoded through the font's own encoding
+    rather than assumed Latin-1, and a CMap text run's origin is recorded
+    at its start instead of one advance past it.
+  - Lyrics snap by comparing syllable and notehead **centres**, and the
+    candidate gate now uses the same centre the snap does, so the two
+    can no longer disagree.
+  - A staccato dot is no longer read as an augmentation dot; a lone whole
+    rest is read as a measure rest rather than a whole note; fractional
+    beams narrower than 4 pt are accepted; and the leading key/time
+    region ends at content rather than at the first notehead.
+  - Tier 4 shape matching measures a glyph against the staff, not just
+    its own silhouette.
 
-- `LayoutMeasure.hasSameRenderContent(as:)` reports whether two layout
-  measures would draw identically once placed, ignoring their horizontal
-  origin. A renderer that caches per-measure drawing uses it to decide
-  between reusing, repositioning, and rebuilding.
+- `AVAudioSequencer.hostTimeForBeats:error:` raises an Objective-C
+  exception — rather than populating its `NSError **` — in a window right
+  at playback start, where `isPlaying` reports `true` before the
+  underlying `MusicPlayer` is actually playing. Swift cannot catch an
+  NSException and no pre-call guard closes the race, since `isPlaying` is
+  itself the check that lies. The call now goes through a small
+  Objective-C shim that folds the raising path and the documented
+  error-pointer path into one failure result.
+
+- The playback cursor skipped a centered rest based on a tick count; it
+  now keys on `.measure` duration, which is what actually centers it.
 
 ## [1.5.1] - 2026-07-27
 
