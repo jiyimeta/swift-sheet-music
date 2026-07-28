@@ -1,5 +1,5 @@
 {
-  "originHash" : "6d22ec57360492c628fcc91b97719eef3163093b05339a14f603053f5ba61771",
+  "originHash" : "afa97cbebd74a3a8b4abc01b36cd8815ddc484944d7547ee0648662f9ffcb88e",
   "pins" : [
     {
       "identity" : "swift-argument-parser",
@@ -24,8 +24,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/swiftlang/swift-java.git",
       "state" : {
-        "revision" : "bb53878752dfcd0c3ee7bd630661ddb348d9b939",
-        "version" : "0.4.0"
+        "revision" : "3555583ad6ed9cc14461087b4b088dcdcf510cf0",
+        "version" : "0.4.2"
       }
     },
     {
