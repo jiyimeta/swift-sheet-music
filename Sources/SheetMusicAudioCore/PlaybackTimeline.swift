@@ -373,10 +373,10 @@ extension PlaybackTimeline {
                                 + rest.duration
                                 .resolved(in: measureDuration)
                                 .ticks(division: division)
-                            // Whole-note rests render *centered* in the
+                            // MEASURE rests render *centered* in the
                             // measure, not at the rhythmic onset
                             // column (`LayoutEngine+Placement.swift`'s
-                            // `isWholeRest` branch). Letting one win
+                            // `isMeasureRest` branch). Letting one win
                             // the cursor-frame slot would park the
                             // cursor halfway through the bar while
                             // audio is still on beat 1 — visible as
@@ -388,12 +388,19 @@ extension PlaybackTimeline {
                             // onset on another staff (or a `.beat`
                             // entry for that tick), both of which sit
                             // on the correct rhythmic column.
+                            //
+                            // Keyed on the DURATION CASE, not the tick
+                            // count: a measure rest spans 4·division
+                            // ticks only in common time, so the old
+                            // `restTicks >= 4 * division` test let a
+                            // SHORT bar's centered rest through (a 2/4
+                            // empty bar parked the cursor mid-bar on
+                            // beat 1). A typed `.whole` rest sits on
+                            // its start beat and is not skipped.
                             let restTicks = rest.duration
                                 .resolved(in: measureDuration)
                                 .ticks(division: division)
-                            let isWholeNoteRest =
-                                restTicks >= 4 * division
-                            if !isWholeNoteRest {
+                            if !el.isMeasureRest {
                                 pending.append(.init(
                                     tick: tick,
                                     sortKey: (staffIdx, voiceIdx),

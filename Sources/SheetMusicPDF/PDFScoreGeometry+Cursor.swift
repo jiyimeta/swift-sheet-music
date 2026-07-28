@@ -89,10 +89,21 @@ extension PDFScoreGeometry {
                         )
                         let restTicks = rest.duration.resolved(in: md)
                             .ticks(division: division)
-                        // Whole-note rests render centered, not at their
-                        // tick column — skip as an anchor (mirrors
-                        // PlaybackTimeline / CursorFrame).
-                        if restTicks < 4 * division, ticksToX[t] == nil,
+                        // MEASURE rests render centered in the bar, not at
+                        // their tick column, so their x would anchor tick 0
+                        // mid-bar — skip as an anchor (mirrors
+                        // PlaybackTimeline / CursorFrame, and the
+                        // `isMeasureRest` branch of LayoutEngine+Placement
+                        // that centers them in the first place). Keyed on the
+                        // DURATION CASE, not on the tick count: a measure
+                        // rest is only 4·division ticks long in common time,
+                        // so a tick threshold silently let every short bar's
+                        // centered rest through (a 2/4 bar claimed tick 0 at
+                        // its center, sending the cursor backwards to the
+                        // real beat-2 column). A typed `.whole` rest is NOT
+                        // skipped — it sits on its start beat and is a valid
+                        // anchor.
+                        if !el.isMeasureRest, ticksToX[t] == nil,
                            let r = itemRects[.rest(rid)]
                         {
                             ticksToX[t] = r.rect.midX
