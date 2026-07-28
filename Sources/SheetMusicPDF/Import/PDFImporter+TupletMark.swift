@@ -80,8 +80,16 @@ extension PDFImporter {
     /// workaround for a known defect, not a stylistic preference — when
     /// `bbox` is fixed, this should go away.
     ///
-    /// Built from `origin.x` (the pen position = the glyph's left edge) and
-    /// `renderedSize`, NOT `fontSize`: `fontSize` is the raw text-space `Tf`
+    /// Built from `origin.x` and `renderedSize`.
+    ///
+    /// `origin.x` is the pen position at the START of the glyph's run, i.e.
+    /// the left edge of its ink. That is only true because the Type0 / CMap
+    /// show loop captures the origin before advancing the text matrix; it
+    /// previously recorded the position AFTER the run, putting every digit
+    /// one approximate advance (3.0pt on 君とParadiso) to the right and
+    /// defeating both anchor tests. See `PendingTextRun`.
+    ///
+    /// The size comes from `renderedSize`, NOT `fontSize`: `fontSize` is the raw text-space `Tf`
     /// operand with the CTM unapplied, and the CTM is not constant even
     /// within this corpus (0.2 for five curated scores, 0.06 for ロビンソン),
     /// so a `fontSize`-derived width would be 3.3x too wide on that score.
