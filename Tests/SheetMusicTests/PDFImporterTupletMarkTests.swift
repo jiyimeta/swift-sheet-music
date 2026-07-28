@@ -23,16 +23,34 @@
             )
         }
 
+        /// A digit in the shape the REAL content-stream walker emits.
+        ///
+        /// Two things here are deliberately faithful to production rather
+        /// than convenient:
+        ///
+        /// - `bbox` is `.zero`. `emitTextGlyph` hardcodes that and nothing
+        ///   fills it in later, so a fixture carrying a real rect would let
+        ///   a detector that reads `bbox` pass here while never matching
+        ///   anything on a real file — which is exactly what happened.
+        /// - `fontSize` is the raw text-space `Tf` operand, so it is set to
+        ///   `em / ctmScale`, NOT to `em`. Anything geometric must come from
+        ///   `renderedSize`; a detector that reaches for `fontSize` will be
+        ///   wrong by the CTM and these fixtures will show it.
+        ///
+        /// `em` is the page-space em. The digit's width is derived from it
+        /// by the detector (`em * tupletDigitWidthPerEm`), matching the
+        /// `pdftotext -bbox` ground truth: a 6.0pt em gives 3.306pt of ink.
         static func digit(
             _ text: String, x: CGFloat, y: CGFloat,
-            width: CGFloat = 3.3, height: CGFloat = 6.0,
+            em: CGFloat = 6.0, ctmScale: CGFloat = 0.2,
         ) -> TextGlyph {
             TextGlyph(
                 text: text,
                 fontName: "FreeSerif",
-                fontSize: height,
+                fontSize: em / ctmScale,
+                renderedSize: em,
                 origin: CGPoint(x: x, y: y),
-                bbox: CGRect(x: x, y: y, width: width, height: height),
+                bbox: .zero,
                 pageIndex: 0,
             )
         }
@@ -157,7 +175,7 @@
         @Test func measureNumberAtTheSystemEdgeIsRejected() {
             let marks = PDFImporter.detectTupletMarks(
                 texts: [Self.digit(
-                    "3", x: 452.0, y: 126.1, width: 4.4, height: 8.0,
+                    "3", x: 452.0, y: 126.1, em: 8.0,
                 )],
                 paths: Self.drumBeams,
                 staffYLines: Self.drumYLines,
@@ -199,7 +217,7 @@
         @Test func pageNumberInTheMarginIsRejected() {
             let marks = PDFImporter.detectTupletMarks(
                 texts: [Self.digit(
-                    "3", x: 460.0, y: 42.2, width: 6.3, height: 11.0,
+                    "3", x: 460.0, y: 42.2, em: 11.0,
                 )],
                 paths: Self.drumBeams,
                 staffYLines: Self.drumYLines,
@@ -207,6 +225,95 @@
                 pageIndex: 0,
             )
             #expect(marks.isEmpty)
+        }
+
+        /// THE REGRESSION GUARD. A glyph carrying `bbox: .zero` — byte for
+        /// byte what `emitTextGlyph` actually produces — must still be
+        /// found.
+        ///
+        /// This is the test whose absence let sixteen green unit tests
+        /// coexist with a detector that never fired once on a real file.
+        /// Every fixture here used to hand the detector a fully populated
+        /// `bbox`, so `beamWindow` reading `bbox.midX` looked correct; in
+        /// production that read returned 0, every digit's x collapsed to the
+        /// page origin, no beam ever contained it, and the pass silently did
+        /// nothing across a 135-score corpus.
+        ///
+        /// Constructed inline rather than through `digit(...)` on purpose:
+        /// if someone later "helpfully" gives the shared helper a real bbox
+        /// again, this test must keep testing the production shape.
+        @Test func digitWithAZeroBBoxIsStillDetected() {
+            let glyph = TextGlyph(
+                text: "3",
+                fontName: "FreeSerif",
+                fontSize: 30, // raw Tf; page-space em = 30 * 0.2 = 6.0
+                renderedSize: 6.0,
+                origin: CGPoint(x: 461.16, y: 126.1),
+                bbox: .zero, // exactly what emitTextGlyph writes
+                pageIndex: 0,
+            )
+            #expect(glyph.bbox == .zero)
+            let marks = PDFImporter.detectTupletMarks(
+                texts: [glyph],
+                paths: Self.drumBeams,
+                staffYLines: Self.drumYLines,
+                xRange: Self.drumCellX,
+                pageIndex: 0,
+            )
+            #expect(marks.count == 1)
+            #expect(marks.first?.anchor == .beam)
+            #expect(marks.first?.actual == 3)
+            // The digit's centre must land inside the secondary beam, which
+            // is only possible if the extent came from origin.x + a real
+            // width rather than from the empty bbox.
+            let centre = try? #require(marks.first?.digitCenterX)
+            #expect((centre ?? 0) > 461.16)
+            #expect(abs((marks.first?.xRange.upperBound ?? 0) - 467.9) < 0.01)
+        }
+
+        /// The same physical digit engraved through a different CTM must
+        /// detect identically.
+        ///
+        /// ロビンソン draws its digits at `Tf` 89 under a 0.06 CTM where the
+        /// other five curated scores use `Tf` 30-40 under a 0.2 one — same
+        /// ink on the page, raw `fontSize` 3.3x apart. A width derived from
+        /// `fontSize` would be 3.3x too wide there; one derived from
+        /// `renderedSize` is identical. This pins that the detector reads
+        /// the page-space size and not the raw operand.
+        @Test func detectionIsIndependentOfTheContentStreamCTM() {
+            let museScoreLike = PDFImporter.detectTupletMarks(
+                texts: [Self.digit("3", x: 461.16, y: 126.1, em: 6.0, ctmScale: 0.2)],
+                paths: Self.drumBeams,
+                staffYLines: Self.drumYLines,
+                xRange: Self.drumCellX,
+                pageIndex: 0,
+            )
+            let robinsonLike = PDFImporter.detectTupletMarks(
+                texts: [Self.digit("3", x: 461.16, y: 126.1, em: 6.0, ctmScale: 0.06)],
+                paths: Self.drumBeams,
+                staffYLines: Self.drumYLines,
+                xRange: Self.drumCellX,
+                pageIndex: 0,
+            )
+            #expect(museScoreLike.count == 1)
+            #expect(robinsonLike == museScoreLike)
+        }
+
+        /// The extent must reproduce the `pdftotext -bbox` ground truth the
+        /// width factor was derived from.
+        @Test func digitExtentMatchesTheMeasuredGroundTruth() {
+            // 君とParadiso tuplet "3": em 6.000, measured ink width 3.306.
+            let kimi = Self.digit("3", x: 100, y: 0, em: 6.0)
+            let kimiWidth = PDFImporter.digitExtent(kimi).upperBound
+                - PDFImporter.digitExtent(kimi).lowerBound
+            #expect(abs(kimiWidth - 3.306) < 0.005)
+            // Now_is_the_time tuplet "3": em 5.200, measured ink width 2.865.
+            let now = Self.digit("3", x: 100, y: 0, em: 5.2)
+            let nowWidth = PDFImporter.digitExtent(now).upperBound
+                - PDFImporter.digitExtent(now).lowerBound
+            #expect(abs(nowWidth - 2.865) < 0.005)
+            // The extent starts at the pen position, not centred on it.
+            #expect(PDFImporter.digitExtent(kimi).lowerBound == 100)
         }
 
         /// A digit belonging to another page must not be claimed.

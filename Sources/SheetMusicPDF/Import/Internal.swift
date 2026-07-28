@@ -147,8 +147,28 @@ struct ClassifiedGlyph: Hashable {
 struct TextGlyph {
     var text: String
     var fontName: String
+    /// The RAW `Tf` operand, in TEXT space — the CTM has NOT been applied.
+    /// Two scores at the same physical size can carry wildly different
+    /// values (ギブス draws its digits at `Tf` 40 under a 0.2 CTM;
+    /// ロビンソン at `Tf` 89 under a 0.06 one), so this is NOT comparable
+    /// across scores and NOT a page-space length. Use `renderedSize` for
+    /// anything geometric. Kept as-is because the lyric row/run grouping in
+    /// PDFImporter+Lyrics and +Text is calibrated against these raw values.
     var fontSize: CGFloat
+    /// Page-space em size — `fontSize` with the text-matrix × CTM scale
+    /// applied, the same quantity `GlyphGeometry.renderedSize` carries for
+    /// music glyphs. This is the one font metric here that is directly
+    /// comparable to page coordinates.
+    var renderedSize: CGFloat = 0
     var origin: CGPoint
+    /// NEVER POPULATED. The only construction site
+    /// (`PDFImporter+ContentStream+TextShow.swift`, `emitTextGlyph`) hardcodes
+    /// `.zero`, and nothing assigns it afterwards, so every reader silently
+    /// gets an empty rect at the page origin. Do not build on it. Existing
+    /// readers that are degraded by this and awaiting the fix:
+    /// `PDFImporter+Structure.swift` lines 118, 178, 274 and 286
+    /// (rehearsal-mark / volta detection). Deferred deliberately — turning it
+    /// on changes those detectors' output and needs its own corpus gate.
     var bbox: CGRect
     var pageIndex: Int
 }

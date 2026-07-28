@@ -49,6 +49,53 @@ extension PDFImporter {
     /// How far from the digit's y (in spatia) a bracket's arms may sit.
     static let tupletBracketDigitYTolSpatia: CGFloat = 1.5
 
+    /// Width of one engraved digit as a fraction of the page-space em.
+    ///
+    /// MEASURED, not guessed. Ground truth from `pdftotext -bbox`, against
+    /// the em this importer records as `TextGlyph.renderedSize`:
+    ///
+    /// | glyph                        | em     | ink width | ratio  |
+    /// |------------------------------|--------|-----------|--------|
+    /// | 君とParadiso tuplet "3" (F9)  | 6.000  | 3.306     | 0.5510 |
+    /// | Now_is_the_time tuplet "3"(F9)| 5.200  | 2.865     | 0.5510 |
+    /// | 君とParadiso page no. "3"(F13)| 11.000 | 6.259     | 0.5690 |
+    ///
+    /// The two tuplet digits agree to four decimals, so 0.551 is the digit
+    /// advance of the numeral face MuseScore engraves tuplets in. The page
+    /// number is a different face and 3% wider — well inside the slack both
+    /// anchor tests carry, so one constant covers both.
+    static let tupletDigitWidthPerEm: CGFloat = 0.551
+
+    /// The digit's horizontal extent in PAGE space.
+    ///
+    /// WHY THIS EXISTS: `TextGlyph.bbox` is `.zero` at its only construction
+    /// site (`PDFImporter+ContentStream+TextShow.swift`, `emitTextGlyph`) and
+    /// is never assigned, so reading it yields an empty rect at the page
+    /// origin — which silently pinned every digit's x to 0 and stopped this
+    /// detector from ever matching a beam or a bracket. The other readers
+    /// still living with that defect are `PDFImporter+Structure.swift` lines
+    /// 118, 178, 274 and 286 (rehearsal-mark / volta detection); populating
+    /// `bbox` properly is deferred to its own branch because it changes those
+    /// detectors' output and needs its own corpus gate. This helper is the
+    /// workaround for a known defect, not a stylistic preference — when
+    /// `bbox` is fixed, this should go away.
+    ///
+    /// Built from `origin.x` (the pen position = the glyph's left edge) and
+    /// `renderedSize`, NOT `fontSize`: `fontSize` is the raw text-space `Tf`
+    /// operand with the CTM unapplied, and the CTM is not constant even
+    /// within this corpus (0.2 for five curated scores, 0.06 for ロビンソン),
+    /// so a `fontSize`-derived width would be 3.3x too wide on that score.
+    static func digitExtent(_ glyph: TextGlyph) -> ClosedRange<CGFloat> {
+        let width = glyph.renderedSize * tupletDigitWidthPerEm
+        return glyph.origin.x ... (glyph.origin.x + max(width, 0))
+    }
+
+    /// Horizontal centre of `glyph`'s ink, in page space. See `digitExtent`.
+    static func digitCenterX(_ glyph: TextGlyph) -> CGFloat {
+        let extent = digitExtent(glyph)
+        return (extent.lowerBound + extent.upperBound) / 2
+    }
+
     /// The ratio a tuplet digit names, or nil for digits we do not handle.
     static func tupletRatio(forDigit text: String) -> (normal: Int, actual: Int)? {
         switch text.trimmingCharacters(in: .whitespacesAndNewlines) {
@@ -91,7 +138,7 @@ extension PDFImporter {
             marks.append(TupletMark(
                 xRange: span,
                 normal: ratio.normal, actual: ratio.actual,
-                digitCenterX: glyph.bbox.midX,
+                digitCenterX: digitCenterX(glyph),
                 digitOrigin: glyph.origin,
                 anchor: anchor,
             ))
@@ -119,11 +166,12 @@ extension PDFImporter {
                 && $0.rect.width <= tupletBracketArmMaxSpatia * spatium
                 && $0.rect.width >= 0.5 * spatium
         }
+        let extent = digitExtent(digit)
         guard let left = arms
-            .filter({ $0.rect.maxX <= digit.bbox.minX + 0.5 })
+            .filter({ $0.rect.maxX <= extent.lowerBound + 0.5 })
             .max(by: { $0.rect.maxX < $1.rect.maxX }),
             let right = arms
-                .filter({ $0.rect.minX >= digit.bbox.maxX - 0.5 })
+                .filter({ $0.rect.minX >= extent.upperBound - 0.5 })
                 .min(by: { $0.rect.minX < $1.rect.minX }),
                 abs(left.rect.midY - right.rect.midY)
                 <= tupletBracketArmYTolSpatia * spatium
@@ -166,7 +214,7 @@ extension PDFImporter {
         digit: TextGlyph, paths: [PathSegment],
         spatium: CGFloat, pageIndex: Int,
     ) -> ClosedRange<CGFloat>? {
-        let digitX = digit.bbox.midX
+        let digitX = digitCenterX(digit)
         let digitY = digit.origin.y
         let candidates = paths.filter { p in
             guard p.kind == .beam, p.pageIndex == pageIndex else { return false }

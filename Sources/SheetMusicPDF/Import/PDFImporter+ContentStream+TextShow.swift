@@ -284,6 +284,7 @@ private func emitTextGlyph(_ text: String, at origin: CGPoint, state: State) {
         text: text,
         fontName: state.fontName,
         fontSize: state.fontSize,
+        renderedSize: renderedSize(state: state),
         origin: origin,
         bbox: .zero,
         pageIndex: state.pageIndex,
