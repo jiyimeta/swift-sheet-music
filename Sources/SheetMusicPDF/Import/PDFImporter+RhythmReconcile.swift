@@ -18,10 +18,17 @@ import SheetMusicCore
 // ONE low-confidence note can be re-valued to close the gap, we apply that
 // single repair.
 //
+// The pass also normalizes the one rest reading the geometry layer cannot
+// make on its own: a voice drawn as a lone whole-rest glyph is a MEASURE
+// rest, whose length is the bar's, not a whole note's (see
+// `normalizeMeasureRest`).
+//
 // Invariants (the reason this pass is safe to run over an
 // already-99.9%-correct decode):
 //   * A voice that ALREADY sums to the bar length is never touched — so
-//     every metrically-valid (correct) note stays byte-identical.
+//     every metrically-valid (correct) note stays byte-identical. (The
+//     measure-rest normalization above is the one exception, and it only
+//     ever rewrites a lone whole REST, never a note.)
 //   * At most ONE note per voice is ever changed; rest counts and note
 //     counts are never altered, and nothing is fabricated.
 //   * A LOW-CONFIDENCE note (group-size-1 read via a flag) is preferred
@@ -140,6 +147,10 @@ extension PDFImporter {
         location: String,
     ) {
         guard !indices.isEmpty else { return }
+        // A voice drawn as nothing but one whole-rest glyph is a MEASURE
+        // rest, not a literal whole note — resolve it against the bar
+        // before any metric arithmetic looks at it.
+        if normalizeMeasureRest(indices: indices, elements: &elements) { return }
         let currentSum = indices.reduce(Fraction(numerator: 0, denominator: 1)) {
             $0 + elementFraction(elements[$1])
         }
@@ -302,11 +313,10 @@ extension PDFImporter {
 
     // MARK: - Fraction helpers
 
-    /// A rhythm element's duration as a fraction of a whole note. A
-    /// `.measure` rest (whole-measure marker) resolves to the bar length is
-    /// NOT expected here — the importer emits typed rests — so `.measure`
-    /// falls back to a whole note to avoid a trap; it never appears in this
-    /// corpus.
+    /// A rhythm element's duration as a fraction of a whole note. The only
+    /// `.measure` this pass produces (`normalizeMeasureRest`) short-circuits
+    /// its voice group before any sum is taken, so `.measure` is not expected
+    /// here; it falls back to a whole note rather than trap on `asFraction`.
     private static func elementFraction(_ element: RhythmElement) -> Fraction {
         switch element.chord.duration {
         case .measure: return Fraction(numerator: 1, denominator: 1)
