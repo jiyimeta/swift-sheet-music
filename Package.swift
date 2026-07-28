@@ -203,11 +203,16 @@ if !isAndroid {
             ],
         ),
         .target(
+            name: "CSequencerHostTime",
+            path: "Sources/CSequencerHostTime",
+        ),
+        .target(
             name: "SheetMusicAudioApple",
             dependencies: [
                 "SheetMusicCore",
                 "SheetMusicMIDI",
                 "SheetMusicAudioCore",
+                "CSequencerHostTime",
             ],
         ),
         .target(
