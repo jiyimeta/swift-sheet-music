@@ -48,6 +48,16 @@ class PdfScoreHandle internal constructor(
     val score: ScoreHandle,
     val geometryHandle: Long,
     val diagnostics: List<PdfDiagnostic>,
+    /**
+     * How many chord/rest elements the importer reconstructed, across every staff and voice.
+     *
+     * A PDF outside the importer's scope — a Chrome "print to PDF", a scan — still yields staff lines and
+     * measure cells, so `load` returns a non-null handle wrapping a structurally valid, completely empty
+     * score. A host that treats "load returned something" as "this is playable" then offers a transport
+     * that runs a second and plays silence. This is the fact that tells the two apart; what count is worth
+     * playing is the host's call, not this library's.
+     */
+    val playableElementCount: Int,
 ) : AutoCloseable {
     private var closed = false
 
@@ -94,6 +104,7 @@ class PdfScoreHandle internal constructor(
                 diagnostics = wire.diagnostics.map {
                     PdfDiagnostic(isWarning = it.severity == 1, location = it.location, message = it.message)
                 },
+                playableElementCount = wire.playableElementCount,
             )
         }
     }
