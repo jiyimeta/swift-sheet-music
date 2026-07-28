@@ -242,6 +242,14 @@ struct RhythmElement {
     /// re-valued); set from the lead glyph in `assembleChord`.
     var noteheadIsFilled = true
 
+    /// Whether this element's duration was set from an engraved tuplet
+    /// mark (`PDFImporter+TupletApply`). Such a value comes from direct
+    /// evidence — the number and its bracket or beam — so the metric-sum
+    /// reconciliation pass must treat it as a fixed point and never pick it
+    /// as its single-note repair target. Without this, reconciliation
+    /// "repairs" a freshly-scaled 1/6 straight back out again.
+    var inTuplet = false
+
     /// Per-note rects (PDF page coords, y-up), aligned 1:1 with
     /// `chord.notes` in deduped survivor order. Populated only on the
     /// geometry-capture path (`parseWithGeometry`); empty for rests and on
