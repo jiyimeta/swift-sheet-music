@@ -258,42 +258,24 @@ final class GlyphClassifier {
             }
         }
         guard bestDistance <= shapeAcceptanceThreshold, let best else { return nil }
-        return Self.disambiguate(best)
+        return best
     }
 
-    /// Resolve a nearest-neighbor answer that Tier 4 cannot actually have
-    /// decided — see `tier4AmbiguousRests`.
-    ///
-    /// Without this the whole-vs-half verdict falls out of which exemplar
-    /// `BravuraExemplars.codepoints` happens to list first, because their
-    /// descriptors are byte-identical and the scan keeps the first strict
-    /// minimum. Reordering that list would silently flip every whole rest in
-    /// every imported score to a half rest; stating the choice here makes it
-    /// a decision instead of an accident.
-    static func disambiguate(_ semantic: SMuFLSemantic) -> SMuFLSemantic {
-        tier4AmbiguousRests.contains(semantic) ? .rest(.whole) : semantic
-    }
-
-    /// Semantics Tier 4 CANNOT distinguish, measured against real Bravura
-    /// outlines.
-    ///
-    /// `restWhole` (U+E4E3) and `restHalf` (U+E4E4) are the same 282×144
-    /// rectangle in Bravura, differing only by a 133-unit vertical offset
-    /// (raw bboxes `(0, -135, 282, 144)` vs `(0, -2, 282, 144)`); after
-    /// `normalizedBitmap` centres the bounding box their descriptors are
-    /// byte-identical, margin 0.0000. Which one a glyph is depends on its
-    /// position relative to the staff — information Tier 4 never sees.
-    ///
-    /// DECISION: guess `.rest(.whole)` rather than decline. Declining would
-    /// drop the glyph entirely, losing the rest and shifting every later
-    /// element in the bar; a wrong-duration rest is visible and correctable.
-    /// The existing metric-sum reconciliation cannot repair either case — it
-    /// never re-values rests — so the choice is between a visible error and a
-    /// structural one. Whole rests (empty bars) are also the commoner glyph.
-    /// `disambiguate` applies that decision; this set is what it consults.
-    static let tier4AmbiguousRests: Set<SMuFLSemantic> = [
-        .rest(.whole), .rest(.half),
-    ]
+    // A `disambiguate(_:)` hook used to sit here, forcing every whole/half
+    // rest verdict to `.rest(.whole)`. `restWhole` (U+E4E3) and `restHalf`
+    // (U+E4E4) are the same 282×144 rectangle in Bravura, differing only by a
+    // 133-unit vertical offset, and `normalizedBitmap` centres the bounding
+    // box — so their descriptors were byte-identical, margin 0.0000, and the
+    // verdict fell out of exemplar ORDER. Guessing `.whole` was the
+    // low-regret choice at the time.
+    //
+    // `ShapeDescriptor.emBottom` removed the ambiguity: the whole rest hangs
+    // BELOW its line and the half rest sits ABOVE it, which is a 0.5-space
+    // difference every SMuFL font agrees on (Bravura -0.54/-0.01, Leland
+    // -0.52/-0.02, MScore -0.62/0.00). Measured on the corpus, dropping the
+    // forced guess raised Tier-4 glyph agreement on every score with no
+    // regression (98.2→98.9, 98.1→98.6, 99.1→99.7, 98.1→99.0, 96.5→98.1,
+    // 99.3→99.6) and left every score-level pitch% / dur% unchanged.
 
     /// Outlines are reached by RAW GLYPH ID only.
     ///

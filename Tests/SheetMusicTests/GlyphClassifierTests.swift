@@ -244,30 +244,22 @@
             #expect(c.classify(codepoint: 0x41, characterCode: 0x41, glyphID: glyphs[0]) == first)
         }
 
-        /// Tier 4 cannot tell `restWhole` from `restHalf` — the two are the
-        /// same rectangle in Bravura and normalize to byte-identical
-        /// descriptors. The documented decision is to answer `.rest(.whole)`
-        /// rather than drop the glyph, and it must not depend on which of the
-        /// two `BravuraExemplars.codepoints` happens to list first.
-        @Test func ambiguousRestPairAlwaysResolvesToWhole() {
-            #expect(GlyphClassifier.disambiguate(.rest(.half)) == .rest(.whole))
-            #expect(GlyphClassifier.disambiguate(.rest(.whole)) == .rest(.whole))
-            // Every other semantic passes through untouched.
-            #expect(GlyphClassifier.disambiguate(.rest(.quarter)) == .rest(.quarter))
-            #expect(GlyphClassifier.disambiguate(.noteheadBlack) == .noteheadBlack)
-        }
-
-        /// The end-to-end form of the same decision: a real Bravura
-        /// `restHalf` outline, reached by glyph ID with Tier 4 on, comes back
-        /// as `.rest(.whole)`.
-        @Test func aHalfRestOutlineClassifiesAsAWholeRest() {
+        /// The whole/half rest pair used to be Tier 4's one UNRESOLVABLE
+        /// collision: the same rectangle in Bravura, byte-identical after
+        /// normalization, answered `.rest(.whole)` by a documented guess.
+        ///
+        /// `ShapeDescriptor.emBottom` resolves it — the whole rest hangs below
+        /// its line, the half rest sits above it, a 0.5-space difference every
+        /// SMuFL font agrees on. A real Bravura `restHalf` outline must now
+        /// come back as a HALF rest, and its sibling as a whole rest.
+        @Test func aHalfRestOutlineClassifiesAsAHalfRest() {
             guard let bravuraData = Self.loadBravuraOTFData(),
                   let ctFont = makeCTFont(program: bravuraData)
             else { return }
-            var unichars: [UniChar] = [0xE4E4] // restHalf
-            var glyphs: [CGGlyph] = [0]
-            guard CTFontGetGlyphsForCharacters(ctFont, &unichars, &glyphs, 1),
-                  glyphs[0] != 0 else { return }
+            var unichars: [UniChar] = [0xE4E4, 0xE4E3] // restHalf, restWhole
+            var glyphs: [CGGlyph] = [0, 0]
+            guard CTFontGetGlyphsForCharacters(ctFont, &unichars, &glyphs, 2),
+                  glyphs[0] != 0, glyphs[1] != 0 else { return }
 
             var font = PDFImporter.EmbeddedFont()
             font.program = bravuraData
@@ -275,6 +267,12 @@
             let c = GlyphClassifier(font: font, enableShapeMatching: true)
             #expect(
                 c.classify(codepoint: 0x41, characterCode: 0x41, glyphID: glyphs[0])
+                    == .rest(.half),
+            )
+            // The sibling must not have moved with it — an exemplar-order
+            // artifact would answer the same semantic for both.
+            #expect(
+                c.classify(codepoint: 0x42, characterCode: 0x42, glyphID: glyphs[1])
                     == .rest(.whole),
             )
         }
