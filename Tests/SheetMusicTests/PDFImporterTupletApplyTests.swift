@@ -231,5 +231,37 @@
                 Fraction(numerator: 1, denominator: 4),
             ))
         }
+
+        /// Now_is_the_time: a tuplet number drawn above a LOWER staff's
+        /// beam falls inside the UPPER staff's lyric band, where it was
+        /// being attached as the syllable "3" (measured: 9 spurious lyric
+        /// tokens on part 4). Once a mark claims the digit it must be
+        /// excluded from the lyric pool.
+        @Test func aClaimedTupletDigitIsNotAlsoALyric() {
+            let staffYLines: [CGFloat] = [498.3, 501.6, 505.0, 508.3, 511.7]
+            let elements = [Self.note(.quarter, x: 120)]
+            let digit = TextGlyph(
+                text: "3",
+                fontName: "FreeSerif",
+                fontSize: 6,
+                origin: CGPoint(x: 119, y: 492.0),
+                bbox: CGRect(x: 119, y: 492.0, width: 3.3, height: 6.0),
+                pageIndex: 0,
+            )
+            let kept = PDFImporter.attachLyrics(
+                elements: elements, texts: [digit],
+                staffYLines: staffYLines, pageIndex: 0,
+                xRange: 100 ... 200,
+            )
+            #expect(kept[0].chord.lyrics.count == 1)
+
+            let dropped = PDFImporter.attachLyrics(
+                elements: elements, texts: [digit],
+                staffYLines: staffYLines, pageIndex: 0,
+                xRange: 100 ... 200,
+                excludingOrigins: [digit.origin],
+            )
+            #expect(dropped[0].chord.lyrics.isEmpty)
+        }
     }
 #endif

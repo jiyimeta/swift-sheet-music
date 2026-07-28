@@ -37,6 +37,10 @@ extension PDFImporter {
     /// above the next staff), and this only caps a runaway inter-system gap.
     static let lyricBandDepthSpatia: CGFloat = 8
 
+    /// `excludingOrigins`: text-glyph origins already claimed by another
+    /// pass (e.g. a tuplet-number digit) and therefore ineligible to also
+    /// become a lyric syllable. Compared with a small tolerance rather than
+    /// `==` since origins may be re-derived rather than reused by identity.
     static func attachLyrics(
         elements: [RhythmElement],
         texts: [TextGlyph],
@@ -44,6 +48,7 @@ extension PDFImporter {
         pageIndex: Int = 0,
         xRange: ClosedRange<CGFloat>? = nil,
         nextStaffTopY: CGFloat? = nil,
+        excludingOrigins: [CGPoint] = [],
     ) -> [RhythmElement] {
         guard let bottomY = staffYLines.first,
               let topY = staffYLines.last,
@@ -60,6 +65,7 @@ extension PDFImporter {
             pageIndex: pageIndex,
             xRange: xRange,
             nextStaffTopY: nextStaffTopY,
+            excludingOrigins: excludingOrigins,
         )
         guard !candidates.isEmpty else { return elements }
 
@@ -268,6 +274,7 @@ extension PDFImporter {
         pageIndex: Int,
         xRange: ClosedRange<CGFloat>?,
         nextStaffTopY: CGFloat?,
+        excludingOrigins: [CGPoint] = [],
     ) -> [TextGlyph] {
         // The band reaches `lyricBandDepthSpatia` spatia below the bottom
         // line, but never PAST the next staff below — a staff's lyrics live
@@ -302,6 +309,9 @@ extension PDFImporter {
                 && t.origin.x >= xLo
                 && t.origin.x <= xHi
                 && !t.text.trimmingCharacters(in: .whitespaces).isEmpty
+                && !excludingOrigins.contains {
+                    abs($0.x - t.origin.x) < 0.01 && abs($0.y - t.origin.y) < 0.01
+                }
         }
     }
 
