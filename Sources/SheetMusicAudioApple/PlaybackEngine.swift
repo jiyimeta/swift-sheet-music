@@ -1,5 +1,6 @@
 // swiftlint:disable file_length
 @preconcurrency import AVFoundation
+import CSequencerHostTime
 import Foundation
 import SheetMusicAudioCore
 import SheetMusicCore
@@ -1641,16 +1642,24 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// (documented: it errors when the player is stopped or the beat precedes the player's starting beat).
     /// Also `nil` on an injected `SynthBackend` transport, which has no equivalent pairing yet — its
     /// `AVAudioSourceNode` render block could provide one, but that is a separate change.
+    ///
+    /// There is a second, undocumented failure mode: right at score-playback start,
+    /// `AVAudioSequencer.isPlaying` can report `true` while the underlying `MusicPlayer` has not yet
+    /// reached a playing state, and `hostTimeForBeats:error:` RAISES an Objective-C exception in that
+    /// window instead of populating its `NSError **` (`error -10852`,
+    /// `kAudioToolboxErr_InvalidPlayerState` — see `CSequencerHostTime.h` for the device syslog
+    /// evidence). Swift cannot catch an NSException, and no pre-call guard can close the race either:
+    /// `isPlaying` is itself the check that lies, and the player's state can change between any check
+    /// and the call. The call is therefore routed through `SSMSequencerHostTimeForBeats`, a small
+    /// Objective-C shim that wraps it in `@try`/`@catch` and folds both the raising path and the
+    /// documented error-pointer path into a single failure result — so this property keeps its
+    /// contract of returning `nil`, never a wrong number, whenever a pairing is unavailable.
     public var timedPosition: (timeSeconds: TimeInterval, hostSeconds: TimeInterval)? {
         guard backend == nil, let timeline, let sequencer, sequencer.isPlaying else { return nil }
         let beats = sequencer.currentPositionInBeats
         guard beats.isFinite else { return nil }
-        // `hostTime(forBeats:error:)` returns a non-optional `UInt64`, so Swift does not
-        // auto-bridge the trailing `NSErrorPointer` into `throws` here (that bridging only
-        // applies when the return type can itself represent failure, e.g. `Bool` or `Optional`).
-        var hostTimeError: NSError?
-        let hostTime = sequencer.hostTime(forBeats: beats, error: &hostTimeError)
-        guard hostTimeError == nil else { return nil }
+        var hostTime: UInt64 = 0
+        guard SSMSequencerHostTimeForBeats(sequencer, beats, &hostTime) else { return nil }
         return (
             timelineSeconds(forBeats: beats, timeline: timeline),
             AVAudioTime.seconds(forHostTime: hostTime),
