@@ -187,6 +187,60 @@
             #expect(out[1 ... 3].allSatisfy { $0.inTuplet == true })
         }
 
+        /// Pins `windowIndices`' `.down` branch: unlike a stem-up (or
+        /// direction-unknown) note, a stem-down note's `RhythmElement.x` is
+        /// already at its own stem — the notehead sits to the stem's
+        /// RIGHT — so it gets no leftward slack in either widened or
+        /// strict membership tests. A stem-down distractor sits only
+        /// 0.25sp left of `xRange.lowerBound` — well inside the 1.25sp
+        /// slack `windowIndices` grants a stem-up note — and must still be
+        /// excluded.
+        ///
+        /// The distractor is a DOTTED eighth (3/16), not a plain sixteenth
+        /// like the other distractor fixtures, so that if it were wrongly
+        /// swept into the widened window, the 4-element sum (3 straight
+        /// eighths + one dotted eighth = 9/16) would ITSELF scale to a
+        /// clean value (9/16 × 2/3 = 3/8, a dotted quarter) and pass the
+        /// clean-sum gate on the first try — meaning `applyBracket` would
+        /// never reach its strict-window retry, which (independent of the
+        /// `.down` branch) would have excluded the distractor anyway since
+        /// its retry slack is always 0. A plain-sixteenth distractor does
+        /// NOT have this property (its 4-note sum lands on the same
+        /// unclean 1/6 as `unscalableRunIsLeftAlone`) and so is rescued by
+        /// that retry regardless of whether the `.down` branch exists — it
+        /// would NOT catch a regression here.
+        ///
+        /// Proven load-bearing: with the `.down` branch deleted (folding
+        /// it into the general slack-on-lower-bound-only case), this test
+        /// goes red — the distractor is wrongly admitted, scaled from a
+        /// dotted eighth to a plain eighth, and marked `inTuplet`. The
+        /// other stem-down fixtures in this file
+        /// (`bracketRetriesWithTheStrictWindowWhenSlackOverreaches`'s
+        /// members, `restInsideABracketIsAMember`'s notes) never place a
+        /// stem-down element outside the strict span, so they stay green
+        /// even with the branch deleted.
+        @Test func stemDownDistractorJustOutsideTheSpanGetsNoSlack() {
+            let dottedEighth = NoteDuration.eighth.dotted(1)
+            let distractor = Self.note(dottedEighth, x: 199, stemDirection: .down)
+            let members = [202.0, 206.0, 210.0].map {
+                Self.note(.eighth, x: CGFloat($0), stemDirection: .down)
+            }
+            let out = PDFImporter.applyTupletMarks(
+                elements: [distractor] + members,
+                marks: [Self.mark(200 ... 212)],
+                spatium: 4,
+            )
+            #expect(out[0].chord.duration == dottedEighth)
+            #expect(out[0].inTuplet == false)
+            let twelfth = NoteDuration.fraction(
+                Fraction(numerator: 1, denominator: 12),
+            )
+            #expect(out[1].chord.duration == twelfth)
+            #expect(out[2].chord.duration == twelfth)
+            #expect(out[3].chord.duration == twelfth)
+            #expect(out[1 ... 3].allSatisfy { $0.inTuplet == true })
+        }
+
         /// 君とParadiso p0 m0's real overflow (half + straight quarter +
         /// straight eighth = 7/8 against a 3/4 bar) is already fully
         /// resolved by `applyTupletMarks` alone: once the quarter/eighth
@@ -245,7 +299,13 @@
                 fontName: "FreeSerif",
                 fontSize: 6,
                 origin: CGPoint(x: 119, y: 492.0),
-                bbox: CGRect(x: 119, y: 492.0, width: 3.3, height: 6.0),
+                // `.zero`, matching production: `TextGlyph.bbox` is never
+                // populated by the content-stream walker (see its doc
+                // comment in Internal.swift), and `attachLyrics` never reads
+                // it — a hand-set bbox here would exercise a shape no real
+                // parse ever produces without changing what this test
+                // covers.
+                bbox: .zero,
                 pageIndex: 0,
             )
             let kept = PDFImporter.attachLyrics(

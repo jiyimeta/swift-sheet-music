@@ -32,6 +32,14 @@ extension PDFImporter {
     /// direction-aware per element in `windowIndices`, never uniformly:
     /// too generous a reach here can swallow a whole unrelated neighbour
     /// (MuseScore's tightest successive-notehead distance is ~1.43 sp).
+    ///
+    /// `1.25` vs. the 1.18sp notehead width above: the extra 0.07sp is
+    /// headroom, not a separate measurement — chosen as a loose bound
+    /// rounded up from the notehead figure, not derived from a corpus fit.
+    /// `distractorJustOutsideSlackStaysUnscaled` /
+    /// `bracketRetriesWithTheStrictWindowWhenSlackOverreaches` in
+    /// `PDFImporterTupletApplyTests.swift` pin this exact value as
+    /// load-bearing (proven by deliberately mutating it to 2 and back).
     static let tupletWindowSlackSpatia: CGFloat = 1.25
 
     /// Apply every mark, scaling its members' durations and flagging them

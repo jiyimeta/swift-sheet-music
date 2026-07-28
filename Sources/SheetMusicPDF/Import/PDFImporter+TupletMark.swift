@@ -36,17 +36,42 @@ extension PDFImporter {
     }
 
     /// How far outside the staff (in spatia) a tuplet number may sit.
+    ///
+    /// Measured: `君とParadiso` p0 m0's bracket sits at y 518.7, 7.0pt
+    /// (2.09sp at that page's spatium 3.35) above the staff's top line
+    /// (511.7). `3` gives ~0.9sp of headroom over that one measurement —
+    /// a deliberately loose bound (design doc: "~3sp"), not a tight fit to
+    /// it; there is no corpus survey behind the exact value 3.
     static let tupletMarkBandSpatia: CGFloat = 3
 
     /// Widest a bracket arm may be, in spatia. A staff line spans the whole
     /// measure cell; an arm is a short stub.
+    ///
+    /// Measured: `君とParadiso` p0 m0's two arms are 10.9pt each (178.2–189.1,
+    /// 195.5–206.4), ≈3.25sp at spatium 3.35. `12` is a chosen ceiling with
+    /// roughly 4x headroom over that one measurement, not a derived or
+    /// corpus-fit bound — its job is only to keep a full staff line
+    /// (which spans the whole measure cell) from being mistaken for an arm.
     static let tupletBracketArmMaxSpatia: CGFloat = 12
 
     /// How far apart (in spatia) the two arms' y may be and still count as
     /// one bracket.
+    ///
+    /// Measured: `君とParadiso` p0 m0's two arms sit at the SAME y (both
+    /// 518.7 — zero measured difference). `0.3` is chosen headroom for
+    /// engraving / PDF-writer noise on a value that was observed to be
+    /// exactly 0 in the one example measured, not a corpus-derived
+    /// tolerance.
     static let tupletBracketArmYTolSpatia: CGFloat = 0.3
 
     /// How far from the digit's y (in spatia) a bracket's arms may sit.
+    ///
+    /// Chosen as a loose bound, not measured: the design doc records the
+    /// digit's own bbox height (6.0pt, ≈1.8sp at `君とParadiso`'s spatium
+    /// 3.35) but no measured digit-y-to-arm-y offset for any corpus
+    /// example. `1.5` was picked to comfortably clear a digit vertically
+    /// centred on the arm within its own height, with no tighter
+    /// measurement behind the exact value.
     static let tupletBracketDigitYTolSpatia: CGFloat = 1.5
 
     /// Width of one engraved digit as a fraction of the page-space em.
@@ -206,6 +231,13 @@ extension PDFImporter {
 
     /// How far (in spatia) a beam's y may be from the digit's y and still
     /// count as the beam that number labels.
+    ///
+    /// Chosen as a loose bound, not measured: the design doc's one worked
+    /// beam example (`Now_is_the_time` p4 m91) documents the beam's x-span
+    /// and the digit's x-centre in detail but not a measured digit-y-to-
+    /// beam-y offset. `3` mirrors `tupletMarkBandSpatia`'s magnitude
+    /// (same "outside the staff, but not far outside" shape of tolerance)
+    /// rather than being fit to a specific measurement.
     static let tupletBeamDigitYTolSpatia: CGFloat = 3
 
     /// The NARROWEST beam whose x-range contains the digit's x, as a search

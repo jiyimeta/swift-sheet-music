@@ -29,7 +29,15 @@
         /// The fixture draws its noteheads with the bundled Bravura, which
         /// reaches CoreText through `BravuraFont` and so needs macOS 15 while
         /// this package deploys to macOS 14. CI runs macOS 15.
-        private static var bravuraAvailable: Bool {
+        ///
+        /// `nonisolated` (rather than inheriting the enclosing type's
+        /// `@MainActor`) so it can be read from a `.enabled(if:)` trait,
+        /// which is evaluated outside the struct's isolation. Feeding it to
+        /// `.enabled(if:)` — instead of a `guard ... else { return }` at the
+        /// top of every test — makes a macOS 14 host report these as
+        /// explicitly SKIPPED rather than silently PASSED with zero
+        /// assertions run.
+        private nonisolated static var bravuraAvailable: Bool {
             guard #available(macOS 15.0, *) else { return false }
             return BravuraFont.register
         }
@@ -262,8 +270,8 @@
         /// `digitExtent` can use. `fontSize` here is 1.0 — CoreGraphics emits
         /// `Tf 1` and carries the real scale in the text matrix — so a
         /// `fontSize`-derived digit width would be 6x too narrow.
-        @Test func fixtureEngravesWhatTheDetectorNeeds() throws {
-            guard Self.bravuraAvailable else { return }
+        @Test(.enabled(if: Self.bravuraAvailable))
+        func fixtureEngravesWhatTheDetectorNeeds() throws {
             let walked = try PDFImporter.ContentStreamWalker(
                 document: PDFImporter.openDocument(Self.fixture()),
             ).walk()
@@ -273,14 +281,32 @@
             let digits = walked.texts.filter { $0.text == "3" }
             #expect(digits.count == 2)
             #expect(digits.allSatisfy { $0.renderedSize == 6 })
-            #expect(digits.allSatisfy { $0.bbox == .zero })
+            // `TextGlyph.bbox` is never populated by the content-stream
+            // walker in production (it always comes back `.zero`); fixing
+            // that is deliberately deferred to its own branch. Assert the
+            // POST-FIX shape (a populated bbox) rather than today's `.zero`,
+            // wrapped in `withKnownIssue`: `withKnownIssue` treats the body
+            // NOT recording an issue as itself a failure, so asserting
+            // today's `.zero` value directly would fail immediately (the
+            // body never records an issue because it's already true) rather
+            // than staying green until the fix lands. With the assertion
+            // inverted, today it fails inside the block (bbox IS `.zero`,
+            // not populated) — caught and reported as a known issue, test
+            // green — and the day `bbox` is populated, the block stops
+            // failing, `withKnownIssue` reports "Known issue was not
+            // recorded", and that self-explanatory message is what reads as
+            // the known issue being resolved, rather than an ordinary
+            // opaque `#expect` regression.
+            withKnownIssue("TextGlyph.bbox is not populated by the content-stream walker yet") {
+                #expect(digits.allSatisfy { $0.bbox != .zero })
+            }
         }
 
         /// Both marks come back with their true tuplet durations: three
         /// sixteenth-triplet notes at 1/24 from the BEAM anchor, and a
         /// quarter + eighth at 1/6 and 1/12 from the BRACKET anchor.
-        @Test func bothTupletsRecoverTheirTrueDurations() throws {
-            guard Self.bravuraAvailable else { return }
+        @Test(.enabled(if: Self.bravuraAvailable))
+        func bothTupletsRecoverTheirTrueDurations() throws {
             let score = try Self.parse(Self.fixture(), named: "synthetic-tuplet.pdf")
             let durations = Self.chords(of: score).map(\.duration)
             #expect(durations.count(where: { $0 == Self.fraction(1, 24) }) == 3)
@@ -292,8 +318,8 @@
         /// The bracket path in particular: a triplet quarter + eighth cannot be
         /// beamed, so the bracket is the only anchor available and
         /// `applyTupletMarks` must treat its span as authoritative.
-        @Test func theBracketedPairIsScaledFromItsBracket() throws {
-            guard Self.bravuraAvailable else { return }
+        @Test(.enabled(if: Self.bravuraAvailable))
+        func theBracketedPairIsScaledFromItsBracket() throws {
             let score = try Self.parse(
                 Self.fixture(), named: "synthetic-tuplet-bracket.pdf",
             )
@@ -308,8 +334,8 @@
         /// band next to five real syllables. The syllable count is asserted
         /// alongside so a fixture that stopped producing lyrics at all could
         /// not pass this as an absence.
-        @Test func theTupletNumberInTheLyricBandIsNotSung() throws {
-            guard Self.bravuraAvailable else { return }
+        @Test(.enabled(if: Self.bravuraAvailable))
+        func theTupletNumberInTheLyricBandIsNotSung() throws {
             let score = try Self.parse(
                 Self.lyricBandFixture(), named: "synthetic-tuplet-lyrics.pdf",
             )
