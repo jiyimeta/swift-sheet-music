@@ -430,6 +430,18 @@ extension PDFImporter {
             measure: importMeasure, decoded: decoded, paths: paths, tieMarks: tieMarks,
             graceSizeThreshold: graceSizeThreshold,
         )
+        // Tuplet marks (the engraved number, plus its bracket when one is
+        // drawn) are read BEFORE lyrics so a claimed digit cannot also
+        // become a syllable, and before reconciliation so the metric repair
+        // sees the true tuplet values and spends its one change on the
+        // neighbouring note instead. See PDFImporter+TupletMark.
+        let tupletMarks = detectTupletMarks(
+            texts: texts,
+            paths: paths,
+            staffYLines: importMeasure.staffYLines,
+            xRange: importMeasure.xRange,
+            pageIndex: pageIndex,
+        )
         let withLyrics = attachLyrics(
             elements: rhythm,
             texts: texts,
@@ -437,13 +449,19 @@ extension PDFImporter {
             pageIndex: pageIndex,
             xRange: importMeasure.xRange,
             nextStaffTopY: nextStaffTopY,
+            excludingOrigins: tupletMarks.map(\.digitOrigin),
+        )
+        let withTuplets = applyTupletMarks(
+            elements: withLyrics,
+            marks: tupletMarks,
+            spatium: staffSpatium(importMeasure.staffYLines),
         )
         // Metric-sum reconciliation (③): repair a voice whose note + rest
         // durations don't total the bar length by re-valuing exactly one
         // low-confidence note. Conservative + monotonic — a voice already at
         // the bar length is untouched. See PDFImporter+RhythmReconcile.
         let reconciled = reconcileMeasureDurations(
-            elements: withLyrics,
+            elements: withTuplets,
             timeSignature: ts,
             spatium: staffSpatium(importMeasure.staffYLines),
             diagnostics: options.diagnostics,
@@ -458,28 +476,42 @@ extension PDFImporter {
             diagnostics: options.diagnostics,
             location: "\(location), measure \(measureIndex)",
         )
-        // Prepend score-state elements (clef → key → time order) into the
-        // first voice so consumers and the per-measure state comparison see
-        // them, mirroring how A (mscz) carries them on the measure.
-        var leading: [VoiceElement] = []
-        if let emitClef { leading.append(.clef(emitClef)) }
-        if let emitKey { leading.append(.keySignature(emitKey)) }
-        if let emitTime { leading.append(.timeSignature(emitTime)) }
-        var finalVoices = voices.isEmpty ? [Voice(elements: [])] : voices
-        if !leading.isEmpty {
-            finalVoices[0] = Voice(elements: leading + finalVoices[0].elements)
-        }
+        let (finalVoices, leadingCount) = prependingScoreState(
+            voices, clef: emitClef, key: emitKey, time: emitTime,
+        )
         recordGeometry(
             geometry,
             reconciled: reconciled,
             staffMidY: staffMidY,
-            leadingCount: leading.count,
+            leadingCount: leadingCount,
             importMeasure: importMeasure,
             slot: slot,
             measureIndex: measureIndexOffset + measureIndex,
             pageIndex: pageIndex,
         )
         return Measure(voices: finalVoices)
+    }
+
+    /// Prepend the score-state elements (clef → key → time order) into the
+    /// first voice so consumers and the per-measure state comparison see
+    /// them, mirroring how A (mscz) carries them on the measure. Also
+    /// reports how many were prepended, which the geometry side-car needs
+    /// to keep its element indices aligned with the returned voices.
+    private static func prependingScoreState(
+        _ voices: [Voice],
+        clef: Clef?,
+        key: KeySignature?,
+        time: TimeSignature?,
+    ) -> (voices: [Voice], leadingCount: Int) {
+        var leading: [VoiceElement] = []
+        if let clef { leading.append(.clef(clef)) }
+        if let key { leading.append(.keySignature(key)) }
+        if let time { leading.append(.timeSignature(time)) }
+        var out = voices.isEmpty ? [Voice(elements: [])] : voices
+        if !leading.isEmpty {
+            out[0] = Voice(elements: leading + out[0].elements)
+        }
+        return (out, leading.count)
     }
 
     /// Record per-element + measure-cell geometry for the side-car, using
