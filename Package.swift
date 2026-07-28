@@ -105,7 +105,11 @@ var targets: [Target] = [
             "Import/FontCascade/GlyphClassifier.swift",
             "Import/FontCascade/GlyphClassifier+MusicFontGate.swift",
             "Import/FontCascade/GlyphClassifier+GlyphIDResolve.swift",
-            "Import/FontCascade/SimpleFontEncoding.swift",
+            // NOTE: SimpleFontEncoding / SimpleFontTextDecoder / AdobeGlyphList
+            // are Foundation-only and stay in the Android build — the shared
+            // `PDFPageState` holds the decoder registry, and the Android
+            // front-end can start filling it once its reader parses
+            // `/Encoding`. Until then the registry is simply empty there.
         ] : [],
     ),
     .target(

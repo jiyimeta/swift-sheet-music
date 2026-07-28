@@ -27,6 +27,14 @@ enum SimpleFontEncoding {
     /// font's own cmap.
     static let fallbackEncodings: [String] = ["MacRomanEncoding", "WinAnsiEncoding"]
 
+    /// Whether `baseEncoding` is one this models — i.e. whether `scalar` can
+    /// answer anything at all for it. `SimpleFontTextDecoder` asks before
+    /// engaging, so a font declaring `Identity-H` (2-byte codes) or nothing
+    /// keeps the caller's whole-run decode.
+    static func models(baseEncoding: String) -> Bool {
+        stringEncoding(for: baseEncoding) != nil
+    }
+
     private static func stringEncoding(for baseEncoding: String) -> String.Encoding? {
         switch baseEncoding {
         case "MacRomanEncoding": .macOSRoman

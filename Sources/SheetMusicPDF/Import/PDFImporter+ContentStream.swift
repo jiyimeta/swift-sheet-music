@@ -67,6 +67,11 @@ extension PDFImporter {
             // op_Tf can select the active CMap.
             state.fontCMaps = PDFImporter.extractFontCMaps(cgPage: cgPage)
             let embedded = PDFImporter.extractEmbeddedFonts(cgPage: cgPage)
+            state.simpleFontDecoders = embedded.compactMapValues {
+                SimpleFontTextDecoder(
+                    differences: $0.differences, baseEncoding: $0.baseEncoding,
+                )
+            }
             state.classifiers = embedded.mapValues {
                 GlyphClassifier(
                     font: $0, enableShapeMatching: enableShapeMatching,
