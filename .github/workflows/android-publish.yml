@@ -86,7 +86,7 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - uses: gradle/actions/setup-gradle@v3
+      - uses: gradle/actions/setup-gradle@v6
 
       # swift-java's SwiftKitCore is not on Maven Central; the Android
       # modules resolve it from Maven local. The runner starts with an empty
