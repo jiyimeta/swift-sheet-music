@@ -153,12 +153,24 @@ final class PDFPageState {
     ///
     /// MuseScore draws each beam line as `m l l l (h) f` — four distinct
     /// corners. After dropping the duplicate close point we expect exactly
-    /// four unique vertices forming a near-horizontal slab: width 4–175pt
-    /// (one stem-to-stem span; partial beams are the short end) and
-    /// bounding-box height < 12pt (a single beam is ~2pt thick; the slope of
-    /// a sloped beam pushes the bbox height up to ~8pt but never near a
+    /// four unique vertices forming a near-horizontal slab: width 2–175pt
+    /// (one stem-to-stem span; fractional / partial beams are the short end)
+    /// and bounding-box height < 12pt (a single beam is ~2pt thick; the slope
+    /// of a sloped beam pushes the bbox height up to ~8pt but never near a
     /// notehead's). The page-space bounding box becomes the segment rect so
     /// the rhythm pass can overlap-test it against stems.
+    ///
+    /// The lower bound is 2pt, not the 4pt it started at, because a
+    /// fractional beam is ~1.25 SPACES wide — an absolute floor is really a
+    /// staff-size threshold in disguise. A six-staff page engraves at ~2.85pt
+    /// per space, putting its fractional beams at ~3.6pt, under the old
+    /// floor; the quad then fell through to the per-edge capture below, its
+    /// two short edges became phantom `.vertical` "stems" sitting exactly
+    /// where `stubOwner` looks for the stub's owner, and every
+    /// dotted-eighth + sixteenth pair lost the sixteenth's secondary beam
+    /// (read as an eighth). Nothing downstream trusts a beam on width alone —
+    /// `beamLevels` still requires it to attach to a stem and overlap that
+    /// stem's band — so the floor only has to clear sub-2pt noise.
     func emitBeamIfQuad() -> Bool {
         guard !pendingPolyHasCurve else { return false }
         let pts = uniquePolyVertices()
@@ -171,7 +183,7 @@ final class PDFPageState {
         else { return false }
         let w = maxX - minX
         let h = maxY - minY
-        guard w >= 4, w <= 175, h < 12 else { return false }
+        guard w >= 2, w <= 175, h < 12 else { return false }
         let quad = PDFImporter.fitBeamQuad(corners: page, pageIndex: pageIndex)
         paths.append(.init(
             kind: .beam,
