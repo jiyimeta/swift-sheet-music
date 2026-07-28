@@ -101,5 +101,99 @@
             )
             #expect(five.isEmpty)
         }
+
+        static let drumYLines: [CGFloat] = [107.9, 110.7, 113.5, 116.4, 119.2]
+        static let drumCellX: ClosedRange<CGFloat> = 450.0 ... 552.8
+
+        static func beam(
+            xLo: CGFloat, xHi: CGFloat, yLo: CGFloat, yHi: CGFloat,
+        ) -> PathSegment {
+            PathSegment(
+                kind: .beam,
+                rect: CGRect(x: xLo, y: yLo, width: xHi - xLo, height: yHi - yLo),
+                lineWidth: 1,
+                pageIndex: 0,
+                quad: BeamQuad(
+                    xRange: xLo ... xHi,
+                    topSlope: 0, topIntercept: yHi,
+                    botSlope: 0, botIntercept: yLo,
+                    pageIndex: 0,
+                ),
+            )
+        }
+
+        static var drumStaffLines: [PathSegment] {
+            drumYLines.map { seg(.horizontal, x: 450.3, y: $0, w: 102.5) }
+        }
+
+        /// Primary beam over five stems plus the secondary over the
+        /// triplet's three. The number must pick the NARROWER one.
+        static var drumBeams: [PathSegment] {
+            drumStaffLines + [
+                beam(xLo: 457.3, xHi: 480.1, yLo: 124.2, yHi: 125.6),
+                beam(xLo: 457.3, xHi: 467.9, yLo: 122.1, yHi: 123.5),
+                beam(xLo: 472.8, xHi: 480.1, yLo: 122.1, yHi: 123.5),
+            ]
+        }
+
+        @Test func beamAnchorPicksTheNarrowestBeamOverTheDigit() {
+            let marks = PDFImporter.detectTupletMarks(
+                texts: [Self.digit("3", x: 461.16, y: 126.1)],
+                paths: Self.drumBeams,
+                staffYLines: Self.drumYLines,
+                xRange: Self.drumCellX,
+                pageIndex: 0,
+            )
+            #expect(marks.count == 1)
+            #expect(marks.first?.anchor == .beam)
+            let span = try? #require(marks.first?.xRange)
+            // The 457.3..467.9 secondary, not the 457.3..480.1 primary.
+            #expect(abs((span?.upperBound ?? 0) - 467.9) < 0.01)
+        }
+
+        /// A measure number sits at the system's left edge with no beam or
+        /// bracket beneath it. Measured on 君とParadiso: 8pt tall at
+        /// x ≈ 46–56, versus a 6pt tuplet number over its beam.
+        @Test func measureNumberAtTheSystemEdgeIsRejected() {
+            let marks = PDFImporter.detectTupletMarks(
+                texts: [Self.digit(
+                    "3", x: 452.0, y: 126.1, width: 4.4, height: 8.0,
+                )],
+                paths: Self.drumBeams,
+                staffYLines: Self.drumYLines,
+                xRange: Self.drumCellX,
+                pageIndex: 0,
+            )
+            #expect(marks.isEmpty)
+        }
+
+        /// A page number lives in the page margin, far outside the staff
+        /// band, so it never even reaches the anchor search.
+        @Test func pageNumberInTheMarginIsRejected() {
+            let marks = PDFImporter.detectTupletMarks(
+                texts: [Self.digit(
+                    "3", x: 460.0, y: 42.2, width: 6.3, height: 11.0,
+                )],
+                paths: Self.drumBeams,
+                staffYLines: Self.drumYLines,
+                xRange: Self.drumCellX,
+                pageIndex: 0,
+            )
+            #expect(marks.isEmpty)
+        }
+
+        /// A digit belonging to another page must not be claimed.
+        @Test func digitOnAnotherPageIsIgnored() {
+            var other = Self.digit("3", x: 461.16, y: 126.1)
+            other.pageIndex = 1
+            let marks = PDFImporter.detectTupletMarks(
+                texts: [other],
+                paths: Self.drumBeams,
+                staffYLines: Self.drumYLines,
+                xRange: Self.drumCellX,
+                pageIndex: 0,
+            )
+            #expect(marks.isEmpty)
+        }
     }
 #endif

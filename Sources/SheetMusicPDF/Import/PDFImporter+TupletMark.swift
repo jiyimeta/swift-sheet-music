@@ -81,7 +81,11 @@ extension PDFImporter {
             guard (y > topY && y <= topY + band)
                 || (y < bottomY && y >= bottomY - band) else { continue }
             guard xRange.contains(glyph.origin.x) else { continue }
-            guard let span = bracketSpan(
+            let bracket = bracketSpan(
+                digit: glyph, paths: paths, spatium: spatium, pageIndex: pageIndex,
+            )
+            let anchor: TupletMark.Anchor = bracket == nil ? .beam : .bracket
+            guard let span = bracket ?? beamWindow(
                 digit: glyph, paths: paths, spatium: spatium, pageIndex: pageIndex,
             ) else { continue }
             marks.append(TupletMark(
@@ -89,7 +93,7 @@ extension PDFImporter {
                 normal: ratio.normal, actual: ratio.actual,
                 digitCenterX: glyph.bbox.midX,
                 digitOrigin: glyph.origin,
-                anchor: .bracket,
+                anchor: anchor,
             ))
         }
         return marks.sorted { $0.xRange.lowerBound < $1.xRange.lowerBound }
@@ -142,6 +146,38 @@ extension PDFImporter {
             )
         else { return nil }
         return lo ... hi
+    }
+
+    /// How far (in spatia) a beam's y may be from the digit's y and still
+    /// count as the beam that number labels.
+    static let tupletBeamDigitYTolSpatia: CGFloat = 3
+
+    /// The NARROWEST beam whose x-range contains the digit's x, as a search
+    /// window for the member run.
+    ///
+    /// Narrowest, not nearest: a primary beam routinely spans more notes
+    /// than the tuplet inside it. Measured on Now_is_the_time p4 m91, the
+    /// primary runs 457.3..480.1 over five stems while the secondary runs
+    /// 457.3..467.9 over exactly the triplet's three; taking the primary
+    /// would let `applyTupletMarks` choose a three-note run straddling the
+    /// tuplet's edge. The window is only a bound — the run inside it is
+    /// chosen by the clean-sum gate plus the digit's own centre.
+    private static func beamWindow(
+        digit: TextGlyph, paths: [PathSegment],
+        spatium: CGFloat, pageIndex: Int,
+    ) -> ClosedRange<CGFloat>? {
+        let digitX = digit.bbox.midX
+        let digitY = digit.origin.y
+        let candidates = paths.filter { p in
+            guard p.kind == .beam, p.pageIndex == pageIndex else { return false }
+            let span = p.quad?.xRange ?? (p.rect.minX ... p.rect.maxX)
+            guard span.contains(digitX) else { return false }
+            return abs(p.rect.midY - digitY)
+                <= tupletBeamDigitYTolSpatia * spatium
+        }
+        return candidates
+            .map { $0.quad?.xRange ?? ($0.rect.minX ... $0.rect.maxX) }
+            .min { ($0.upperBound - $0.lowerBound) < ($1.upperBound - $1.lowerBound) }
     }
 
     /// Whether a short vertical hook stands at `x` next to the arm's y.
