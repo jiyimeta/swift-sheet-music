@@ -3,11 +3,15 @@ name: Publish Android modules to GitHub Packages
 on:
   push:
     tags:
-      - 'v*'
+      # Both spellings: releases up to 1.2.2 were tagged `v1.2.2`, and
+      # from 1.2.3 onward the prefix was dropped. Matching only 'v*' meant
+      # eight releases (1.2.3 through 1.5.1) never published an AAR.
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+      - '[0-9]+.[0-9]+.[0-9]+'
   workflow_dispatch:
     inputs:
       version:
-        description: 'Override version (defaults to the tag without leading v)'
+        description: 'Override version (defaults to the tag, minus any leading v)'
         required: false
 
 permissions:
@@ -34,7 +38,7 @@ jobs:
             version="${REF_NAME#v}"
           else
             echo "::error::No tag ref and no inputs.version provided." \
-                 "Run this workflow only on a v* tag or via workflow_dispatch with an explicit version." >&2
+                 "Run this workflow only on a release tag or via workflow_dispatch with an explicit version." >&2
             exit 1
           fi
           # Reject anything that doesn't look like a Maven/Semver version.

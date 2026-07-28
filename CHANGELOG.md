@@ -7,6 +7,54 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-07-28
+
+### Changed
+
+- Note entry on a large score is roughly 9× faster end to end. On a
+  1300-measure × 6-staff score in horizontal (no-wrap) layout, a
+  one-note edit went from ~216 ms to ~24 ms per keystroke in a Release
+  build; a cold layout of the same score went from 335 ms to 38 ms
+  horizontally and from 427 ms to 36 ms vertically. Two independent
+  causes:
+  - `LayoutEngine`'s spacing pass was O(measures²).
+    `aggregatedTickWeights` re-derived one measure's effective duration
+    by walking its staff's entire measure list, once per measure — 97 %
+    of a one-note edit's layout time on a 1300-measure score. The
+    durations are now computed once per layout call and carried on the
+    render context. The per-measure `LayoutCache` entry additionally
+    shares one tick aggregation between the width pass and the placement
+    pass instead of computing it twice.
+  - Editing one note rebuilt the entire `CALayer` tree. Each measure's
+    layers now live in their own container layer, and `ScoreView`
+    rebuilds only the measures whose drawn content changed, repositioning
+    the ones that merely shifted horizontally. An edit no longer calls
+    the full system builder at all.
+
+  Rendered output is unchanged: a layout digest over every bundled
+  fixture and the rendered reference images are both byte-identical
+  across the change.
+
+### Fixed
+
+- The per-measure layout cache could serve stale note positions. Its key
+  covered a measure's own content but not the prevailing measure
+  duration, which carries forward from earlier measures — so editing a
+  time signature could leave a later measure containing a full-bar rest
+  laid out against the old bar length.
+
+- The Android AAR is published again. `android-publish.yml` triggered
+  only on `v*` tags, but the tag prefix was dropped after 1.2.2, so no
+  Android artifact was published for 1.2.3 through 1.5.1. The workflow
+  now matches both spellings.
+
+### Added
+
+- `LayoutMeasure.hasSameRenderContent(as:)` reports whether two layout
+  measures would draw identically once placed, ignoring their horizontal
+  origin. A renderer that caches per-measure drawing uses it to decide
+  between reusing, repositioning, and rebuilding.
+
 ## [1.5.1] - 2026-07-27
 
 ### Fixed
