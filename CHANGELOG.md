@@ -7,6 +7,18 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- `PdfParseResultWire.playableElementCount` — how many chord/rest elements
+  the PDF importer actually reconstructed, across every staff and voice.
+  A PDF outside the importer's scope (a Chrome "print to PDF", a scan)
+  still yields staff lines and measure cells, so the resulting `Score` is
+  structurally valid and completely empty; a host that only checked "did
+  the parse throw" would show the reader a playable transport that runs
+  one second and plays silence. The count is reported as a fact, not a
+  verdict — the host decides what is worth playing. Additive and
+  defaulted, so existing construction sites are unaffected.
+
 ### Changed
 
 - Note entry on a large score is roughly 9× faster end to end. On a
@@ -384,7 +396,8 @@ First public release.
   SDK, plus Kotlin AAR modules for JNI bridging and FluidSynth + Oboe
   playback.
 
-[Unreleased]: https://github.com/jiyimeta/swift-sheet-music/compare/1.5.1...HEAD
+[Unreleased]: https://github.com/jiyimeta/swift-sheet-music/compare/1.6.0...HEAD
+[1.6.0]: https://github.com/jiyimeta/swift-sheet-music/compare/1.5.1...1.6.0
 [1.5.1]: https://github.com/jiyimeta/swift-sheet-music/compare/1.5.0...1.5.1
 [1.5.0]: https://github.com/jiyimeta/swift-sheet-music/compare/1.4.0...1.5.0
 [1.4.0]: https://github.com/jiyimeta/swift-sheet-music/compare/1.3.0...1.4.0

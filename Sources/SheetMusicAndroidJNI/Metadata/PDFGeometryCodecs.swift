@@ -65,11 +65,24 @@ public struct PdfParseResultWire: Equatable {
     public let scoreHandle: Int64
     public let geometryHandle: Int64
     public let diagnostics: [PdfDiagnosticWire]
+    /// Number of chord/rest elements the importer actually reconstructed, across every staff and voice.
+    ///
+    /// Reported as a plain fact, not a verdict: a PDF outside the importer's scope (a Chrome "print to PDF",
+    /// a scan) still yields staff lines and measure cells, so a caller that only checks "did the parse throw"
+    /// sees a structurally valid `Score` with nothing in it and offers the user a silent transport. The
+    /// consumer decides what count is worth playing — this side only counts.
+    public let playableElementCount: Int32
 
-    public init(scoreHandle: Int64, geometryHandle: Int64, diagnostics: [PdfDiagnosticWire]) {
+    public init(
+        scoreHandle: Int64,
+        geometryHandle: Int64,
+        diagnostics: [PdfDiagnosticWire],
+        playableElementCount: Int32 = 0,
+    ) {
         self.scoreHandle = scoreHandle
         self.geometryHandle = geometryHandle
         self.diagnostics = diagnostics
+        self.playableElementCount = playableElementCount
     }
 }
 

@@ -41,6 +41,7 @@ public func nativeLoadScoreWithGeometryFromPDF(bytes: Data) -> Data {
             scoreHandle: scoreHandle,
             geometryHandle: geometryHandle,
             diagnostics: collector.snapshot(),
+            playableElementCount: Int32(clamping: playableElementCount(of: score)),
         ).encodeToData()
     } catch {
         return Data()
@@ -88,6 +89,23 @@ public func nativePdfPageSizes(geometryHandle: Int64) -> Data {
 /// Release a geometry handle. Unknown handles are a no-op.
 public func nativeReleasePdfGeometry(handle: Int64) {
     pdfGeometryTable.release(handle)
+}
+
+/// Count the chord/rest elements the importer reconstructed, across every staff and voice.
+///
+/// A PDF the importer cannot read — a Chrome "print to PDF", a scan — still yields staff lines and measure
+/// cells, so the resulting `Score` is structurally valid and empty. This is the fact a host needs to tell
+/// that apart from a real parse; the host, not this function, decides what count is worth playing.
+func playableElementCount(of score: Score) -> Int {
+    var count = 0
+    for (_, staff) in score.allStaves {
+        for measure in staff.measures {
+            for voice in measure.voices {
+                count += voice.elements.count
+            }
+        }
+    }
+    return count
 }
 
 /// Thread-safe sink for the importer's `@Sendable` diagnostics callback, mapping to the wire type.

@@ -33,6 +33,25 @@
             #expect(nativeLoadScoreWithGeometryFromPDF(bytes: Data("nope".utf8)).isEmpty)
         }
 
+        /// A structurally-valid-but-empty parse must be distinguishable from a real one. The fixture decodes
+        /// no notes (its 1-byte simple font is the pre-existing `emitShow` gap), which is exactly the shape a
+        /// Chrome "print to PDF" produces: staff lines and measure cells, zero elements. A host that only
+        /// checks "did the parse throw" would offer the user a silent transport.
+        @Test func parseResultReportsHowManyElementsWereReconstructed() throws {
+            guard #available(macOS 15.0, iOS 16.0, *) else { return }
+            let result = try PdfParseResultWire(decoding: nativeLoadScoreWithGeometryFromPDF(bytes: Self.fixtureData()))
+            defer {
+                nativeReleasePdfGeometry(handle: result.geometryHandle)
+                nativeReleaseScore(handle: result.scoreHandle)
+            }
+            #expect(result.playableElementCount == 0)
+        }
+
+        /// The counter's floor: a score with no staves reports nothing rather than trapping.
+        @Test func playableElementCountIsZeroForAnEmptyScore() {
+            #expect(playableElementCount(of: Score(division: 480, parts: [])) == 0)
+        }
+
         @Test func pageSizesMatchTheDocument() throws {
             guard #available(macOS 15.0, iOS 16.0, *) else { return }
             let result = try PdfParseResultWire(decoding: nativeLoadScoreWithGeometryFromPDF(bytes: Self.fixtureData()))
