@@ -52,6 +52,38 @@
             #expect(playableElementCount(of: Score(division: 480, parts: [])) == 0)
         }
 
+        /// Only sounding content counts. The importer emits clef / key / time elements from a state machine
+        /// that never inspects a notehead, so counting `voice.elements` wholesale would report a page whose
+        /// clef classified but whose noteheads did not as playable — putting a host back on "enabled
+        /// transport, one second, silence". Rests are excluded for the same reason.
+        @Test func onlyNoteBearingChordsAreCounted() {
+            let clefOnly = Self.score(elements: [.clef(Clef(concertClefType: "F"))])
+            #expect(playableElementCount(of: clefOnly) == 0)
+
+            let restOnly = Self.score(elements: [.chord(Chord(duration: .whole, notes: []))])
+            #expect(playableElementCount(of: restOnly) == 0)
+
+            let withNote = Self.score(elements: [
+                .clef(Clef(concertClefType: "G")),
+                .chord(Chord(duration: .quarter, notes: [Note(pitch: 60, tpc: 14)])),
+            ])
+            #expect(playableElementCount(of: withNote) == 1)
+        }
+
+        /// One staff, one measure, one voice holding `elements`.
+        private static func score(elements: [VoiceElement]) -> Score {
+            Score(
+                division: 480,
+                parts: [
+                    Part(
+                        id: "P1",
+                        instrument: Instrument(id: "piano", articulations: []),
+                        staves: [Staff(measures: [Measure(voices: [Voice(elements: elements)])])],
+                    ),
+                ],
+            )
+        }
+
         @Test func pageSizesMatchTheDocument() throws {
             guard #available(macOS 15.0, iOS 16.0, *) else { return }
             let result = try PdfParseResultWire(decoding: nativeLoadScoreWithGeometryFromPDF(bytes: Self.fixtureData()))

@@ -91,17 +91,26 @@ public func nativeReleasePdfGeometry(handle: Int64) {
     pdfGeometryTable.release(handle)
 }
 
-/// Count the chord/rest elements the importer reconstructed, across every staff and voice.
+/// Count the elements the importer reconstructed that could actually sound: chords carrying at least one
+/// note, across every staff and voice.
 ///
 /// A PDF the importer cannot read — a Chrome "print to PDF", a scan — still yields staff lines and measure
 /// cells, so the resulting `Score` is structurally valid and empty. This is the fact a host needs to tell
 /// that apart from a real parse; the host, not this function, decides what count is worth playing.
+///
+/// Counting `voice.elements` wholesale would be wrong, and quietly so: a voice also carries clef, key and
+/// time-signature elements, and the importer emits those from a state machine that never inspects a
+/// notehead. A page whose clef classifies but whose noteheads do not would then report a non-zero count and
+/// put the host right back on "playable transport, one second, silence" — the exact symptom this count
+/// exists to prevent. Rests are excluded for the same reason: an all-rest decode has nothing to sound.
 func playableElementCount(of score: Score) -> Int {
     var count = 0
     for (_, staff) in score.allStaves {
         for measure in staff.measures {
             for voice in measure.voices {
-                count += voice.elements.count
+                for element in voice.elements {
+                    if case let .chord(chord) = element, !chord.notes.isEmpty { count += 1 }
+                }
             }
         }
     }
