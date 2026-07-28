@@ -8,6 +8,7 @@
     struct PDFImporterTupletApplyTests {
         static func note(
             _ duration: NoteDuration, x: CGFloat, pitch: Int = 60,
+            stemDirection: StemDirection? = nil,
         ) -> RhythmElement {
             RhythmElement(
                 chord: Chord(
@@ -15,6 +16,7 @@
                     notes: [Note(pitch: pitch, tpc: 14)],
                 ),
                 x: x, y: 0,
+                stemDirection: stemDirection,
             )
         }
 
@@ -123,6 +125,66 @@
             #expect(out[2].chord.duration == twentyFourth)
             #expect(out[3].chord.duration == .sixteenth)
             #expect(out[4].chord.duration == .sixteenth)
+        }
+
+        /// Pins `tupletWindowSlackSpatia` from above: a dotted-16th
+        /// distractor sits 5.3sp before a bracketed 16th-triplet — just
+        /// OUTSIDE the 1.25sp slack (deficit 5.3 > 5.0 at spatium 4), so it
+        /// must stay excluded and unscaled. This is also the false-
+        /// positive shape the reviewer flagged: were the distractor swept
+        /// in, 3/32 + 3/16 = 9/32, ×2/3 = 3/16 (a clean dotted eighth) —
+        /// the clean-sum gate would NOT catch the over-reach, only the
+        /// slack's magnitude does.
+        @Test func distractorJustOutsideSlackStaysUnscaled() {
+            let dottedSixteenth = NoteDuration.sixteenth.dotted(1)
+            let distractor = Self.note(
+                dottedSixteenth, x: 194.7, stemDirection: .up,
+            )
+            let members = [202.0, 206.0, 210.0].map {
+                Self.note(.sixteenth, x: CGFloat($0), stemDirection: .up)
+            }
+            let out = PDFImporter.applyTupletMarks(
+                elements: [distractor] + members,
+                marks: [Self.mark(200 ... 212)],
+                spatium: 4,
+            )
+            #expect(out[0].chord.duration == dottedSixteenth)
+            #expect(out[0].inTuplet == false)
+            let twentyFourth = NoteDuration.fraction(
+                Fraction(numerator: 1, denominator: 24),
+            )
+            #expect(out[1].chord.duration == twentyFourth)
+            #expect(out[2].chord.duration == twentyFourth)
+            #expect(out[3].chord.duration == twentyFourth)
+            #expect(out[1 ... 3].allSatisfy { $0.inTuplet == true })
+        }
+
+        /// A straight eighth sits 1sp (< the 1.25sp slack) before a
+        /// bracketed eighth-triplet. The widened window legitimately pulls
+        /// it in (deficit 4 < slack 5 at spatium 4), but the 4-note sum
+        /// (1/2 × 2/3 = 1/3) fails the clean-sum gate — unlike the
+        /// previous test, there is no coincidental clean value. `.bracket`
+        /// must retry with the strict window and recover the authoritative
+        /// 3-note triplet rather than dropping the mark entirely.
+        @Test func bracketRetriesWithTheStrictWindowWhenSlackOverreaches() {
+            let distractor = Self.note(.eighth, x: 296, stemDirection: .up)
+            let members = [302.0, 308.0, 314.0].map {
+                Self.note(.eighth, x: CGFloat($0), stemDirection: .down)
+            }
+            let out = PDFImporter.applyTupletMarks(
+                elements: [distractor] + members,
+                marks: [Self.mark(300 ... 320)],
+                spatium: 4,
+            )
+            #expect(out[0].chord.duration == .eighth)
+            #expect(out[0].inTuplet == false)
+            let twelfth = NoteDuration.fraction(
+                Fraction(numerator: 1, denominator: 12),
+            )
+            #expect(out[1].chord.duration == twelfth)
+            #expect(out[2].chord.duration == twelfth)
+            #expect(out[3].chord.duration == twelfth)
+            #expect(out[1 ... 3].allSatisfy { $0.inTuplet == true })
         }
     }
 #endif
