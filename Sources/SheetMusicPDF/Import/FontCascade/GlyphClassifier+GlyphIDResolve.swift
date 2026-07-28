@@ -33,9 +33,25 @@ extension GlyphClassifier {
     ///   in-range code lands on SOME glyph, so it converts "this code is not
     ///   in the subset" into a confident wrong answer. Measured doing exactly
     ///   that — code 0x41 against Bravura, which has no `A`, came back as
-    ///   glyph 65, an unrelated outline Tier 4 would then have named. Add it
-    ///   back only for a real file that needs it, and only gated on that
-    ///   font's cmap being unusable.
+    ///   glyph 65, an unrelated outline Tier 4 would then have named.
+    ///
+    ///   IMPLEMENTED, MEASURED AND REJECTED a second time (2026-07-28), this
+    ///   time gated exactly as an earlier revision of this comment proposed:
+    ///   allowed only for a font whose cmap answers NO code at all. The file
+    ///   that motivated it, `TheHomeForYou_standard_A4.pdf` (printed through a
+    ///   Windows PostScript driver; CFF subsets `TT9DDo00`… with no
+    ///   `/Encoding`, no `/Differences`, no `/ToUnicode` and no usable cmap),
+    ///   went from 0 notes to 340 — but the classification was fabricated:
+    ///   1836 accidental flats out of 3401 glyphs, 615 clefs in 113 measures,
+    ///   and NO black noteheads at all. A CFF subset re-indexes its glyphs, so
+    ///   identity lands on real outlines that belong to other characters, and
+    ///   Tier 4 names them confidently. The gate cannot fix that; identity is
+    ///   wrong for this font class, not merely risky.
+    ///
+    ///   The correct route for such a font is its CFF's own built-in Encoding
+    ///   (code → glyph index, in the font program's Top DICT), which CoreText
+    ///   does not expose — it would have to be parsed out of `font.program`.
+    ///   That, not identity, is what a future round should try.
     func resolveGlyphID(code: UInt32) -> CGGlyph? {
         if let hit = glyphIDCache[code] { return hit }
         let resolved = uncachedResolveGlyphID(code: code)

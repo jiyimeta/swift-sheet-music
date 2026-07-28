@@ -99,6 +99,31 @@
                 let crossFamily = rest8th.distance(to: notehead)
                 #expect(sameFamily < crossFamily)
             }
+
+            /// The em-relative features are STAFF-relative by the SMuFL spec
+            /// (em square == staff height == four spaces), which is what makes
+            /// them hold across font designs where the raster silhouette does
+            /// not. Pins the reference values the cascade relies on: a plain G
+            /// clef is ~7 spaces tall, the same clef with an octave digit ~7.9,
+            /// and the whole/half rest pair differs ONLY in where its box sits
+            /// relative to the baseline.
+            @Test func emFeaturesMeasureTheGlyphAgainstTheStaff() {
+                guard let clefG = bravuraGlyphPath(codepoint: 0xE050),
+                      let clefG8vb = bravuraGlyphPath(codepoint: 0xE052),
+                      let restWhole = bravuraGlyphPath(codepoint: 0xE4E3),
+                      let restHalf = bravuraGlyphPath(codepoint: 0xE4E4)
+                else { return }
+                let g = makeDescriptor(path: clefG)
+                let g8vb = makeDescriptor(path: clefG8vb)
+                #expect(abs(g.emHeight - 7.0) < 0.2)
+                #expect(g8vb.emHeight - g.emHeight > 0.5)
+                #expect(g.emBottom - g8vb.emBottom > 0.5) // the digit hangs below
+
+                let whole = makeDescriptor(path: restWhole)
+                let half = makeDescriptor(path: restHalf)
+                #expect(abs(whole.emHeight - half.emHeight) < 0.05) // same box
+                #expect(half.emBottom - whole.emBottom > 0.4) // different place
+            }
         #endif
     }
 #endif
