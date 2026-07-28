@@ -7,8 +7,6 @@ and this project adheres to
 
 ## [Unreleased]
 
-## [1.6.0] - 2026-07-28
-
 ### Changed
 
 - Note entry on a large score is roughly 9× faster end to end. On a
