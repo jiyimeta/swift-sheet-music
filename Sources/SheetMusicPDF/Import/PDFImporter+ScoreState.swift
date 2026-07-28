@@ -251,6 +251,31 @@ extension PDFImporter {
         return false
     }
 
+    // MARK: - Leading-region boundary
+
+    /// True for a glyph that is measure CONTENT — a notehead or a rest.
+    ///
+    /// Engraving order inside a measure is clef → key → time → content, so the
+    /// first content glyph ends the LEADING region: any clef / key / time
+    /// glyph past it is a courtesy signature announcing the NEXT measure's
+    /// change, not this measure's own.
+    ///
+    /// The leading readers used to end that region at the first NOTEHEAD.
+    /// That silently failed for a measure holding no noteheads at all — an
+    /// empty bar drawn as a single rest. The scan then ran to the end of the
+    /// cell and read the trailing courtesy signature as the measure's own, one
+    /// measure early. `Now_is_the_time_ms3.pdf` is exactly that case: the top
+    /// staff's bar 3 is empty and ends a system whose next system opens a 2/4
+    /// + 2-flat change, so its courtesy landed on bar 3, while every other
+    /// staff — which has notes there, so a notehead stopped the scan — took
+    /// the change at bar 4. The staves then disagreed about that bar's length
+    /// and playback desynced.
+    static func isLeadingRegionTerminator(_ semantic: SMuFLSemantic) -> Bool {
+        if isNotehead(semantic) { return true }
+        if case .rest = semantic { return true }
+        return false
+    }
+
     // MARK: - Clef
 
     /// The LEADING clef of a measure — the first clef glyph, scanning
@@ -259,6 +284,14 @@ extension PDFImporter {
     private static func readClef(from glyphs: [ClassifiedGlyph]) -> Clef? {
         for glyph in glyphs {
             if let clef = clef(for: glyph.semantic) { return clef }
+            // NOTE: deliberately a NOTEHEAD boundary, not the
+            // `isLeadingRegionTerminator` (notehead-or-rest) one the key /
+            // time readers use. Clefs already have a dedicated courtesy path
+            // (`readTrailingClef`, applied at i + 1), and narrowing this scan
+            // to stop at a rest measured WORSE on the corpus (カゲロウ's clef
+            // running-match 1339 → 1338/1536): a clef drawn after a rest in a
+            // rest-only measure is more often that measure's own late-drawn
+            // clef than a courtesy for the next one. Left as-is on evidence.
             if isNotehead(glyph.semantic) { return nil }
         }
         return nil
@@ -317,84 +350,6 @@ extension PDFImporter {
         }
     }
 
-    // MARK: - Time signature
-
-    private static func readTime(from glyphs: [ClassifiedGlyph]) -> TimeSignature? {
-        for glyph in glyphs {
-            switch glyph.semantic {
-            case .timeSignatureCommon:
-                return TimeSignature(numerator: 4, denominator: 4)
-            case .timeSignatureCutTime:
-                return TimeSignature(numerator: 2, denominator: 2)
-            case .timeSignatureDigit:
-                return parseStackedDigits(from: glyphs)
-            case .noteheadBlack, .noteheadHalf, .noteheadWhole, .noteheadDoubleWhole,
-                 .noteheadXBlack, .noteheadXHalf, .noteheadXWhole:
-                return nil
-            default: continue
-            }
-        }
-        return nil
-    }
-
-    /// Group digit glyphs by x-cluster (within 3pt). Within a cluster
-    /// the higher-y glyph is the numerator and the lower-y glyph is
-    /// the denominator. Side-by-side digits (two distinct x-clusters)
-    /// are read as `num / denom`.
-    private static func parseStackedDigits(
-        from glyphs: [ClassifiedGlyph],
-    ) -> TimeSignature? {
-        let digits = collectDigits(from: glyphs)
-        guard !digits.isEmpty else { return nil }
-        let clusters = clusterDigitsByX(digits)
-        let firstCluster = clusters[0]
-        if firstCluster.count >= 2 {
-            let sortedByY = firstCluster.sorted { $0.y > $1.y }
-            return TimeSignature(
-                numerator: sortedByY[0].n,
-                denominator: sortedByY[1].n,
-            )
-        }
-        if clusters.count >= 2 {
-            return TimeSignature(
-                numerator: firstCluster[0].n,
-                denominator: clusters[1][0].n,
-            )
-        }
-        return TimeSignature(numerator: firstCluster[0].n, denominator: 4)
-    }
-
-    private struct DigitGlyph {
-        var x: CGFloat
-        var y: CGFloat
-        var n: Int
-    }
-
-    private static func collectDigits(
-        from glyphs: [ClassifiedGlyph],
-    ) -> [DigitGlyph] {
-        glyphs.compactMap { g in
-            if case let .timeSignatureDigit(n) = g.semantic {
-                return DigitGlyph(x: g.geometry.origin.x, y: g.geometry.origin.y, n: n)
-            }
-            return nil
-        }
-    }
-
-    private static func clusterDigitsByX(
-        _ digits: [DigitGlyph],
-    ) -> [[DigitGlyph]] {
-        let sorted = digits.sorted { $0.x < $1.x }
-        var clusters: [[DigitGlyph]] = []
-        for digit in sorted {
-            if let lastDigit = clusters.last?.last,
-               abs(digit.x - lastDigit.x) < 3
-            {
-                clusters[clusters.count - 1].append(digit)
-            } else {
-                clusters.append([digit])
-            }
-        }
-        return clusters
-    }
+    // Time-signature reading lives in PDFImporter+TimeReader (split for the
+    // SwiftLint length cap), key-signature reading in PDFImporter+KeyReader.
 }

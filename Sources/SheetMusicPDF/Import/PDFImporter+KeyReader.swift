@@ -64,13 +64,16 @@ extension PDFImporter {
         let halfStep = anchor.lineSpacing / 2
 
         // Gather the leading accidentals up to (but not including) the first
-        // notehead: a notehead ends the leading region — anything after it is
-        // melodic, not part of the key signature.
+        // CONTENT glyph — a notehead or a rest. Content ends the leading
+        // region: anything after it is melodic, or the trailing courtesy
+        // cancellation `readTrailingKey` applies at i + 1. Stopping at a
+        // notehead alone let a rest-only measure swallow that courtesy as its
+        // own key — see `isLeadingRegionTerminator`.
         var sharpAccs: [(index: Int, sa: Int, x: CGFloat)] = []
         var flatAccs: [(index: Int, sa: Int, x: CGFloat)] = []
         var naturalAccs: [(index: Int, sa: Int, x: CGFloat)] = []
         for (i, g) in sorted.enumerated() {
-            if isNotehead(g.semantic) { break }
+            if isLeadingRegionTerminator(g.semantic) { break }
             guard let alt = accidentalAlteration(g.semantic) else { continue }
             let sa = Int(((g.geometry.origin.y - anchor.bottomY) / halfStep).rounded())
             if alt > 0 {
@@ -236,6 +239,12 @@ extension PDFImporter {
         var sharps = 0
         var flats = 0
         for (i, glyph) in sorted.enumerated() {
+            // Content (notehead OR rest) ends the leading region — same
+            // boundary the anchored path uses. See
+            // `isLeadingRegionTerminator`.
+            if isLeadingRegionTerminator(glyph.semantic) {
+                return finalize(sharps: sharps, flats: flats)
+            }
             switch glyph.semantic {
             case .accidentalSharp:
                 if !pairsWithFollowingNotehead(at: i, in: sorted) { sharps += 1 }
@@ -243,9 +252,6 @@ extension PDFImporter {
                 if !pairsWithFollowingNotehead(at: i, in: sorted) {
                     if case .accidentalFlat = glyph.semantic { flats += 1 }
                 }
-            case .noteheadBlack, .noteheadHalf, .noteheadWhole, .noteheadDoubleWhole,
-                 .noteheadXBlack, .noteheadXHalf, .noteheadXWhole:
-                return finalize(sharps: sharps, flats: flats)
             default: continue
             }
         }

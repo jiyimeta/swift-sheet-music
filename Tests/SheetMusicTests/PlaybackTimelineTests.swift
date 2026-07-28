@@ -286,14 +286,19 @@
         /// engraver renders that rest *centered* in the bar (not at the
         /// rhythmic onset column), so a `.item(.rest)` cursor on it
         /// would park visually around beat 2.5 while audio is still on
-        /// beat 1. The timeline must skip whole-note rests so a chord
+        /// beat 1. The timeline must skip measure rests so a chord
         /// onset on another staff wins the cursor-frame slot at tick 0.
+        ///
+        /// The rest is spelled `.measure` — the value BOTH the mscx
+        /// (`<durationType>measure</durationType>`) and MusicXML
+        /// (`<rest measure="yes"/>`) decoders produce, and the one
+        /// `LayoutEngine+Placement` centers. A typed `.whole` or
+        /// `.fraction(4/4)` rest is a different thing: the engraver puts
+        /// it on its start beat, so it is a valid cursor anchor and is
+        /// deliberately NOT skipped (see `typedWholeRestAnchorsAtItsOnset`).
         @Test("Whole-measure rest on staff 0 does not win the cursor at its tick")
         func wholeRestSkippedInPending() {
-            let restWhole = Chord(
-                duration: .fraction(Fraction(numerator: 4, denominator: 4)),
-                notes: [],
-            )
+            let restWhole = Chord(duration: .measure, notes: [])
             let quarter = Chord(
                 duration: .quarter,
                 notes: [Note(pitch: 60, tpc: 14)],
@@ -340,6 +345,61 @@
                 elementIndex: 0,
             )
             #expect(timeline.frame(forCursor: .item(.rest(restID)))?.tick == 0)
+        }
+
+        /// The same skip must hold in a bar SHORTER than a whole note.
+        /// The skip used to be written `restTicks >= 4 * division`, a tick
+        /// threshold standing in for "is this rest centered?" — true only in
+        /// common time. In a 2/4 bar a measure rest is 960 ticks, slipped
+        /// through, and parked the cursor at the centered rest glyph while
+        /// audio was on beat 1.
+        @Test("Measure rest in a 2/4 bar is skipped too, not just in 4/4")
+        func measureRestSkippedInShortBar() {
+            let quarter = Chord(duration: .quarter, notes: [Note(pitch: 60, tpc: 14)])
+            let twoFour = TimeSignature(numerator: 2, denominator: 4)
+            let staff0 = Staff(measures: [Measure(voices: [Voice(elements: [
+                .timeSignature(twoFour), .chord(Chord(duration: .measure, notes: [])),
+            ])])])
+            let staff1 = Staff(measures: [Measure(voices: [Voice(elements: [
+                .timeSignature(twoFour), .chord(quarter), .chord(quarter),
+            ])])])
+            let instrument = Instrument(id: "i", articulations: [InstrumentArticulation()])
+            let score = Score(division: 480, parts: [
+                Part(id: "P0", instrument: instrument, staves: [staff0]),
+                Part(id: "P1", instrument: instrument, staves: [staff1]),
+            ])
+            let timeline = PlaybackTimeline(score: score)
+
+            let cursor0 = timeline.frame(atTick: 0)?.cursor
+            if case let .item(.note(id)) = cursor0 {
+                #expect(id.staff.partIndex == 1)
+            } else {
+                Issue.record("Expected .item(.note) on staff 1 at tick 0, got \(cursor0.debugDescription)")
+            }
+        }
+
+        /// A TYPED whole rest is not a measure rest: `LayoutEngine+Placement`
+        /// puts it on its start beat (only `.measure` is centered), so it is
+        /// a correct cursor anchor and must NOT be skipped. Pins the boundary
+        /// of the skip so it can't drift back to a tick-count test.
+        @Test("A typed whole rest anchors the cursor at its own onset")
+        func typedWholeRestAnchorsAtItsOnset() {
+            let staff = Staff(measures: [Measure(voices: [Voice(elements: [
+                .chord(Chord(duration: .whole, notes: [])),
+            ])])])
+            let score = Score(division: 480, parts: [Part(
+                id: "P0",
+                instrument: Instrument(id: "i", articulations: [InstrumentArticulation()]),
+                staves: [staff],
+            )])
+            let timeline = PlaybackTimeline(score: score)
+
+            let cursor0 = timeline.frame(atTick: 0)?.cursor
+            if case let .item(.rest(id)) = cursor0 {
+                #expect(id.measureIndex == 0)
+            } else {
+                Issue.record("Expected .item(.rest) at tick 0, got \(cursor0.debugDescription)")
+            }
         }
 
         /// 6/8 → step = division / 2 (eighth ticks), 6 beats per measure.

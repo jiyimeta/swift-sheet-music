@@ -222,17 +222,26 @@ extension LayoutDocument {
                             voiceIndex: voiceIdx,
                             elementIndex: elemIdx,
                         )
-                        // Skip whole-note rests: they're centered in
+                        // Skip MEASURE rests: they're centered in
                         // the measure, not at their tick column
                         // (`LayoutEngine+Placement.swift`'s
-                        // `isWholeRest` branch), so their X would
+                        // `isMeasureRest` branch), so their X would
                         // anchor the cursor mid-bar instead of at
                         // tick 0. Mirrors the same skip done in
                         // `PlaybackTimeline`'s pending build.
+                        //
+                        // Keyed on the DURATION CASE, not on the tick
+                        // count: a measure rest spans 4·division ticks
+                        // only in common time, so the old
+                        // `restTicks >= 4 * division` test let every
+                        // SHORT bar's centered rest through — a 2/4
+                        // empty bar anchored tick 0 at its center and
+                        // the cursor ran backwards to the real beat-2
+                        // column. A typed `.whole` rest is not skipped:
+                        // it sits on its start beat and anchors fine.
                         let restTicks = rest.duration.resolved(in: measureDuration)
                             .ticks(division: division)
-                        let isWholeNoteRest = restTicks >= 4 * division
-                        if !isWholeNoteRest, ticksToX[t] == nil,
+                        if !el.isMeasureRest, ticksToX[t] == nil,
                            let x = itemX(.rest(rid), in: layoutMeasure)
                         {
                             ticksToX[t] = x
