@@ -57,6 +57,22 @@ public protocol FontMetricsProvider: Sendable {
         text: String, font: LayoutFont,
     ) -> CGFloat
     func inkBounds(text: String, font: LayoutFont) -> InkBounds
+    /// Extra vertical space the face asks for BETWEEN consecutive lines,
+    /// on top of `ascent + descent`. Only multi-line text consults it —
+    /// see `LayoutElementShape.textRect`.
+    func leading(font: LayoutFont) -> CGFloat
+}
+
+extension FontMetricsProvider {
+    /// Providers that have no notion of line gap (the stub, and
+    /// Android's `SMuFLMetricsTable`-backed provider) stack lines at
+    /// `ascent + descent`. Their multi-line boxes come out one leading
+    /// per line tighter than Apple's — the same "Android text metrics
+    /// out of scope" boundary documented on
+    /// `LayoutElementShape.smuflRunRect`.
+    public func leading(font _: LayoutFont) -> CGFloat {
+        0
+    }
 }
 
 /// Global injection point. Apple hosts trigger

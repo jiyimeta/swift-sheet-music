@@ -31,6 +31,17 @@ public struct AppleFontMetricsProvider: FontMetricsProvider {
         }
     }
 
+    /// Edwin asks for 0.2 em of line gap — ≈0.7 sp at the staff-text
+    /// size, enough that dropping it would put a multi-line
+    /// annotation's skyline box a visible fraction of a staff space
+    /// away from where `ScoreLayerBuilder+Helpers.textPath` stacks the
+    /// lines. Bravura reports 0.
+    public func leading(font: LayoutFont) -> CGFloat {
+        Lock.shared.with {
+            CTFontGetLeading(ctFont(for: font))
+        }
+    }
+
     public func glyphPathBoundingBox(
         font: LayoutFont, codepoint: UInt16,
     ) -> CGRect? {
