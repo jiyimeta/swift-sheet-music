@@ -19,28 +19,49 @@ enum TextAnchorConvention {
 
 extension LayoutElementShape {
     /// Ink rect of `text` typeset in `font`, positioned per `anchor`.
+    ///
+    /// `text` may carry literal newlines — MuseScore writes multi-line
+    /// `<StaffText>` payloads that way, and
+    /// `ScoreLayerBuilder+Helpers.textPath` stacks them, drawing line
+    /// *i* one `lineHeight` below line *i-1*. Handing the raw string to
+    /// `typographicWidth` would lay every line out on one `CTLine`, so
+    /// the box would come out as wide as the concatenation and only one
+    /// line tall. Measure per line instead: width is the widest line,
+    /// height covers the whole stack.
     static func textRect(
         text: String, font: LayoutFont,
         origin: CGPoint, anchor: TextAnchorConvention,
     ) -> CGRect {
         let provider = FontMetrics.provider
-        let width = provider.typographicWidth(text: text, font: font)
-        let height = provider.ascent(font: font)
-            + provider.descent(font: font)
+        let lines = text.components(separatedBy: "\n")
+        let width = lines.reduce(CGFloat.zero) {
+            max($0, provider.typographicWidth(text: $1, font: font))
+        }
+        let ascent = provider.ascent(font: font)
+        let descent = provider.descent(font: font)
+        let firstLineHeight = ascent + descent
+        // Extra stack below line 0's box. Zero for single-line text, so
+        // every rect below reduces to the pre-multi-line geometry.
+        let extraLines = CGFloat(lines.count - 1)
+            * (firstLineHeight + provider.leading(font: font))
+        let height = firstLineHeight + extraLines
         switch anchor {
         case .leadingCenter:
             return CGRect(
-                x: origin.x, y: origin.y - height / 2,
+                x: origin.x, y: origin.y - firstLineHeight / 2,
                 width: width, height: height,
             )
         case .bottomLeading:
+            // Origin is the bottom of the FIRST line; the rest of the
+            // stack hangs below it.
             return CGRect(
-                x: origin.x, y: origin.y - height,
+                x: origin.x, y: origin.y - firstLineHeight,
                 width: width, height: height,
             )
         case .center:
             return CGRect(
-                x: origin.x - width / 2, y: origin.y - height / 2,
+                x: origin.x - width / 2,
+                y: origin.y - firstLineHeight / 2,
                 width: width, height: height,
             )
         }

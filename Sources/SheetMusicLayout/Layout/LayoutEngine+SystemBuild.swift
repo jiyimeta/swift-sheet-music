@@ -437,6 +437,18 @@ extension LayoutEngine {
                 var perStaff: [[LayoutElement]] = untranslated.map {
                     $0.perStaffElements[staffIdx] ?? []
                 }
+                // Horizontal first: an annotation that overflows the
+                // system's right edge is pulled back inside before the
+                // vertical pass measures anything, so the stack it
+                // computes reflects the X the renderer will actually
+                // draw at.
+                HorizontalClampPass.run(
+                    measures: &perStaff,
+                    xOffsets: xOffsets,
+                    systemLeftX: xOffsets.first ?? 0,
+                    systemRightX: xCursor,
+                    metrics: metrics,
+                )
                 SkylineAutoplacePass.run(
                     measures: &perStaff,
                     xOffsets: xOffsets,

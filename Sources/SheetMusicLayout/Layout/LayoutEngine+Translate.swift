@@ -227,4 +227,36 @@ extension LayoutEngine {
             return element
         }
     }
+
+    /// Shift an annotation's origin horizontally, for
+    /// `HorizontalClampPass` pulling text back inside the system.
+    ///
+    /// Deliberately narrow: only the kinds the clamp pass is allowed to
+    /// move are handled, and everything else passes through untouched.
+    /// A general `dx` counterpart to `translate(element:dy:)` would have
+    /// to answer what "move a chord sideways" means for its beams,
+    /// ties and tick columns — questions no caller has.
+    static func translateX(
+        element: LayoutElement, dx: CGFloat,
+    ) -> LayoutElement {
+        func shift(_ p: CGPoint) -> CGPoint {
+            CGPoint(x: p.x + dx, y: p.y)
+        }
+        switch element {
+        case let .staffText(text, p, color, isSystem):
+            return .staffText(
+                text: text, origin: shift(p),
+                color: color, isSystemText: isSystem,
+            )
+        case let .textMark(k, t, p):
+            return .textMark(kind: k, text: t, origin: shift(p))
+        case let .rehearsalMark(text, p, frame, color):
+            return .rehearsalMark(
+                text: text, origin: shift(p),
+                frame: frame, color: color,
+            )
+        default:
+            return element
+        }
+    }
 }
