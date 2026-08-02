@@ -7,7 +7,37 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-08-02
+
+### Added
+
+- `FontMetricsProvider.leading(font:)` reports the extra vertical space a
+  face asks for between consecutive lines, on top of `ascent + descent`.
+  Only multi-line text consults it. The requirement ships with a default
+  of 0, so existing conformers — the stub and Android's
+  `SMuFLMetricsTable`-backed provider — keep compiling unchanged;
+  `AppleFontMetricsProvider` returns `CTFontGetLeading`.
+
 ### Fixed
+
+- Annotation text no longer runs past the end of a system. Nothing in the
+  layout had ever moved an element horizontally: placement put a
+  `<StaffText>` at its tick column plus the author's `<offset>` without
+  consulting its width, so a text anchored near the final barline
+  overflowed the page and the host clipped it. The new
+  `HorizontalClampPass` pulls `.staffText` / `.systemText` / `.tempo` /
+  `.rehearsalMark` back inside the system's bounds, shifting only as far
+  as the overflow demands, and runs before the vertical pass so X is
+  final when collisions are measured. Lyrics and `.harmony` are out of
+  scope. Text that already fits is untouched.
+
+- Multi-line annotations are measured line by line.
+  `LayoutElementShape.textRect` handed a multi-line payload straight to
+  `typographicWidth`, which laid every line out on one `CTLine`: the box
+  came out as wide as the concatenation and one line tall, while the
+  renderers stack the lines. The width is now the widest line and the
+  height the whole stack, which also corrects the skyline's vertical box
+  for those annotations.
 
 - Seeking no longer flattens the mixer on the injected-backend path.
   `PlaybackEngine.seek(to:)` — and therefore `skip(by:)`, which every
@@ -460,7 +490,8 @@ First public release.
   SDK, plus Kotlin AAR modules for JNI bridging and FluidSynth + Oboe
   playback.
 
-[Unreleased]: https://github.com/jiyimeta/swift-sheet-music/compare/1.6.0...HEAD
+[Unreleased]: https://github.com/jiyimeta/swift-sheet-music/compare/1.7.0...HEAD
+[1.7.0]: https://github.com/jiyimeta/swift-sheet-music/compare/1.6.0...1.7.0
 [1.6.0]: https://github.com/jiyimeta/swift-sheet-music/compare/1.5.1...1.6.0
 [1.5.1]: https://github.com/jiyimeta/swift-sheet-music/compare/1.5.0...1.5.1
 [1.5.0]: https://github.com/jiyimeta/swift-sheet-music/compare/1.4.0...1.5.0
