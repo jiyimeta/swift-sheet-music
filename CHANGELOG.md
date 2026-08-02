@@ -7,6 +7,20 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Fixed
+
+- Seeking no longer flattens the mixer on the injected-backend path.
+  `PlaybackEngine.seek(to:)` — and therefore `skip(by:)`, which every
+  seek bar, lock-screen scrubber, and ±N-second button routes through —
+  repositioned the transport without re-asserting the mixer. A backend
+  seek resets the synth's channels to their GM defaults, and the tick-0
+  CC 7 / programChange that would otherwise be chased back are stripped
+  for mixer-managed channels precisely so the mixer stays the sole
+  authority, so the user's per-staff volume, mute, solo, and program
+  silently reverted on every seek until the next `play()` re-applied
+  them. Every other backend-seek site already re-asserted; this one is
+  now consistent with them.
+
 ## [1.6.0] - 2026-07-29
 
 ### Added

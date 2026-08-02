@@ -1475,6 +1475,16 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
                 return
             }
             backend.seek(toTick: tick)
+            // Re-assert the mixer for the same reason the pre-roll branch above, the loop wrap in
+            // `backendTickCursor`, and every backend `play` do: a transport reposition resets the
+            // synth's channels to GM defaults (SwiftySynth's `MidiFileSequencer.seek` calls
+            // `Synthesizer.reset()`), and the tick-0 CC 7 / programChange that would otherwise be
+            // chased back are STRIPPED for mixer-managed channels in `postProcessForMIDISynth` —
+            // precisely so the mixer stays the sole authority. Without this the user's balance
+            // (and each staff's program) silently reverts to CC 7 = 100 / program 0 on every seek:
+            // the host's seek bar, the lock-screen scrubber, and the ±10 s skip all land here.
+            reapplyMixerPrograms()
+            applyMixerState()
             currentCursor = timeline.frame(atTick: tick)?.cursor
             return
         }
