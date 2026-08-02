@@ -21,6 +21,15 @@ and this project adheres to
   them. Every other backend-seek site already re-asserted; this one is
   now consistent with them.
 
+- `SwiftySynthBackend` no longer drops the whole-score tuning on a seek.
+  `MidiFileSequencer.seek` resets the synthesizer before it chases, just
+  as `sequencer.play` does in `loadSequence`, so the RPN pair carrying
+  the A4 calibration and the transpose was wiped with nothing in the SMF
+  to restore it — a lock-screen skip or a loop wrap quietly returned
+  playback to concert pitch. `setTuning` is contracted to persist across
+  transport operations; the backend now re-asserts it after a seek, the
+  same way `loadSequence` already did.
+
 ## [1.6.0] - 2026-07-29
 
 ### Added

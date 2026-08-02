@@ -369,6 +369,14 @@ public final class SwiftySynthBackend: SynthBackend {
             shared.sequencer?.seek(to: .seconds(seconds))
             shared.metronomeSequencer?.seek(to: .seconds(seconds))
         }
+        // `MidiFileSequencer.seek` resets the synthesizer before chasing — same as `sequencer.play`
+        // in `loadSequence` — so the persisted tuning is gone and only the SMF's own chased events
+        // survive. `setTuning` is contracted to persist across transport operations (the RPN pair
+        // has nothing in the SMF to restore it), so re-assert it here; otherwise a lock-screen skip
+        // or a loop wrap silently drops the user's A4 calibration and transpose back to concert
+        // pitch. Rate is re-sent alongside for symmetry — the sequencer keeps its `speed`, so that
+        // half is a no-op.
+        applyRateAndTuning()
     }
 
     public var currentPositionSeconds: TimeInterval {
