@@ -1,8 +1,19 @@
 #if !os(Android)
     import CoreGraphics
+    import CoreText
     import SheetMusicCore
     @testable import SheetMusicLayout
     import Testing
+
+    /// Whether the host has Edwin installed. The package does not bundle it — a host registers it
+    /// via `SheetMusicFonts.register(urls:)` — and `CTFontCreateWithName` answers an unregistered
+    /// family with a silent system-font fallback rather than nil. Any assertion about *Edwin's own*
+    /// metrics is therefore only meaningful where the family actually resolves; on a bare CI runner
+    /// it would be asserting against Helvetica.
+    var edwinFontIsInstalled: Bool {
+        let ct = CTFontCreateWithName("Edwin" as CFString, 12, nil)
+        return (CTFontCopyFamilyName(ct) as String) == "Edwin"
+    }
 
     /// `HorizontalClampPass` — annotation text is pulled back inside the
     /// system instead of running off the page and being clipped by the
@@ -240,9 +251,15 @@
         }
 
         /// Edwin asks for a non-zero line gap, so a provider that
-        /// ignored `leading` would stack the lines too tightly.
+        /// ignored `leading` would stack the lines too tightly. Skipped
+        /// where Edwin isn't installed (CI runners): CoreText answers an
+        /// unregistered family with the system font, whose leading is 0,
+        /// so the assertion would be about Helvetica rather than about
+        /// `AppleFontMetricsProvider`. The rest of this suite derives its
+        /// expectations from the provider itself and runs everywhere.
         @available(macOS 15.0, iOS 16.0, *)
-        @Test func appleProviderReportsEdwinsLeading() {
+        @Test(.enabled(if: edwinFontIsInstalled))
+        func appleProviderReportsEdwinsLeading() {
             #expect(FontMetrics.provider.leading(font: font) > 0)
         }
 
