@@ -22,6 +22,30 @@ enum EditingFixtures {
         return Score(division: 480, parts: [part])
     }
 
+    /// One part, one staff, one measure that is a single full-measure
+    /// rest in `numerator`/`denominator`. The staff's only voice has 2
+    /// elements:
+    ///   [0] timeSignature
+    ///   [1] rest(.measure)
+    ///
+    /// This is what an empty bar looks like everywhere it is produced —
+    /// what a parsed score carries, and what the editor writes back when
+    /// a delete empties a bar.
+    static func fullMeasureRest(
+        numerator: Int = 4, denominator: Int = 4,
+    ) -> Score {
+        let voice = Voice(elements: [
+            .timeSignature(TimeSignature(
+                numerator: numerator, denominator: denominator,
+            )),
+            .rest(duration: .measure),
+        ])
+        let measure = Measure(voices: [voice])
+        let staff = Staff(measures: [measure])
+        let part = Part(id: "1", instrument: Instrument(id: "x"), staves: [staff])
+        return Score(division: 480, parts: [part])
+    }
+
     /// Same shape as `fourQuarterRests` but element index 1 is a
     /// quarter chord on C4 (pitch 60, tpc 14) instead of a rest.
     static func chordAtIndex1() -> Score {
