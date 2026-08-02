@@ -7,6 +7,39 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [1.8.0] - 2026-08-02
+
+### Added
+
+- `Score.effectiveMeasureDuration(at:measureIndex:)` resolves what a
+  `.measure` duration means in one measure on one staff. It reads that
+  staff's own measure list, because `actualLength` — unlike the time
+  signature — is per-measure and can differ between staves, and falls
+  back to 4/4 for an out-of-range staff or measure. It walks the whole
+  list, so a loop should keep using `effectiveMeasureDurations()` and an
+  index.
+
+### Fixed
+
+- A PDF containing a tuplet exports an `.mscz` that can be reopened. The
+  importer recognized the tuplet and baked the ratio into each member's
+  duration, but emitted no `Tuplet` span. The MSCX encoder un-scales a
+  member through its enclosing tuplet, so a member with none around it
+  fell through to `<durationType>measure</durationType>`, which the Chord
+  decoder refuses. Both scaling sites now record the ratio and voice
+  assembly groups consecutive same-ratio members into a span — which also
+  gets the bracket and number engraved. The breakage went unseen until
+  imported PDFs started being written to disk as scores.
+
+- Writing a note into an empty bar no longer produces a chord spelled
+  `.measure`. `InputNote` built the new chord with the full-measure
+  rest's own duration, and `.measure` is a rest-only spelling: layout
+  resolved it against the bar and drew the note correctly, so the score
+  looked right while `MSCXEncoder` trapped on save — a crash landing far
+  from the edit that caused it. The bar's actual length is resolved on
+  the way in instead; the inverse still restores the `.measure` rest as
+  it was spelled, so undo leaves the empty bar exactly as it found it.
+
 ## [1.7.0] - 2026-08-02
 
 ### Added
@@ -490,7 +523,8 @@ First public release.
   SDK, plus Kotlin AAR modules for JNI bridging and FluidSynth + Oboe
   playback.
 
-[Unreleased]: https://github.com/jiyimeta/swift-sheet-music/compare/1.7.0...HEAD
+[Unreleased]: https://github.com/jiyimeta/swift-sheet-music/compare/1.8.0...HEAD
+[1.8.0]: https://github.com/jiyimeta/swift-sheet-music/compare/1.7.0...1.8.0
 [1.7.0]: https://github.com/jiyimeta/swift-sheet-music/compare/1.6.0...1.7.0
 [1.6.0]: https://github.com/jiyimeta/swift-sheet-music/compare/1.5.1...1.6.0
 [1.5.1]: https://github.com/jiyimeta/swift-sheet-music/compare/1.5.0...1.5.1
