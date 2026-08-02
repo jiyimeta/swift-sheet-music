@@ -59,4 +59,29 @@ extension Score {
         return parts[partIndex].staves[staffIndex].measures
             .effectiveMeasureDurations()
     }
+
+    /// Effective duration of one measure on one staff — the value a
+    /// `.measure` duration there resolves to.
+    ///
+    /// Falls back to 4/4 for an out-of-range staff or measure, matching
+    /// the default the table above uses before any time signature has
+    /// appeared. Reads the measure's OWN staff rather than part 0 /
+    /// staff 0, because `actualLength` (unlike the time signature) is
+    /// per-measure and so can differ between staves.
+    ///
+    /// This walks the staff's whole measure list, so call it once per
+    /// edit — not once per measure of a loop. A loop wants
+    /// `effectiveMeasureDurations()` and an index.
+    public func effectiveMeasureDuration(
+        at staff: StaffAddress, measureIndex: Int,
+    ) -> Fraction {
+        let durations = effectiveMeasureDurations(
+            partIndex: staff.partIndex,
+            staffIndex: staff.staffIndexInPart,
+        )
+        guard durations.indices.contains(measureIndex) else {
+            return Fraction(numerator: 4, denominator: 4)
+        }
+        return durations[measureIndex]
+    }
 }
