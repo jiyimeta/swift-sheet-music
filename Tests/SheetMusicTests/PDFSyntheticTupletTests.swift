@@ -1,6 +1,7 @@
 #if !os(Android)
     import CoreGraphics
     import Foundation
+    import SheetMusic
     @testable import SheetMusicCore
     import SheetMusicLayoutApple
     @testable import SheetMusicPDF
@@ -313,6 +314,44 @@
             #expect(durations.contains(Self.fraction(1, 6)))
             #expect(durations.contains(Self.fraction(1, 12)))
             #expect(durations.contains(.half))
+        }
+
+        /// Every scaled member sits inside a `Tuplet` span.
+        ///
+        /// Baking the ratio into the duration and stopping there leaves the score unexportable: the MSCX encoder
+        /// un-scales a member through its enclosing tuplet, and one with no tuplet around it is written as
+        /// `<durationType>measure</durationType>`, which the Chord decoder refuses. Covered end-to-end by
+        /// `anImportedTupletSurvivesAnMSCZRoundTrip`; asserted structurally here so a regression names its cause.
+        @Test(.enabled(if: Self.bravuraAvailable))
+        func everyScaledMemberIsInsideATuplet() throws {
+            let score = try Self.parse(Self.fixture(), named: "synthetic-tuplet-spans.pdf")
+            var scaledMembers = 0
+            for voice in score.parts.flatMap(\.staves).flatMap(\.measures).flatMap(\.voices) {
+                for (index, element) in voice.elements.enumerated() {
+                    guard case let .chord(chord) = element,
+                          case .fraction = chord.duration
+                    else { continue }
+                    scaledMembers += 1
+                    #expect(voice.tuplets.contains { $0.startIndex <= index && index <= $0.endIndex })
+                }
+            }
+            #expect(scaledMembers > 0)
+        }
+
+        /// The defect this file grew for: a PDF with a triplet exported to `.mscz` could not be read back, so any app
+        /// that converts an imported PDF into a score wrote a file it could never reopen.
+        @Test(.enabled(if: Self.bravuraAvailable))
+        func anImportedTupletSurvivesAnMSCZRoundTrip() throws {
+            let score = try Self.parse(Self.fixture(), named: "synthetic-tuplet-roundtrip.pdf")
+            let url = FileManager.default.temporaryDirectory
+                .appendingPathComponent("synthetic-tuplet-roundtrip.mscz")
+            defer { try? FileManager.default.removeItem(at: url) }
+
+            try SheetMusic.exportMSCZ(score, to: url)
+            let reloaded = try SheetMusic.loadScore(msczData: Data(contentsOf: url))
+
+            let durations = Self.chords(of: reloaded).map(\.duration)
+            #expect(durations.count(where: { $0 == Self.fraction(1, 24) }) == 3)
         }
 
         /// The bracket path in particular: a triplet quarter + eighth cannot be

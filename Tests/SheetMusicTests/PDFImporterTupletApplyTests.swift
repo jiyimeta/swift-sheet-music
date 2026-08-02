@@ -272,7 +272,7 @@
                 Self.note(.fraction(Fraction(numerator: 1, denominator: 4)), x: 110),
             ]
             elements[0].noteheadIsFilled = false
-            elements[1].inTuplet = true
+            elements[1].tupletRatio = (normal: 2, actual: 3)
             elements[1].noteheadIsFilled = false
             elements[1].lowConfidenceDuration = true
             let out = PDFImporter.reconcileMeasureDurations(

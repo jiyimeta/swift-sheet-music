@@ -142,7 +142,7 @@ extension PDFImporter {
                 numerator: f.numerator * scale.normal,
                 denominator: f.denominator * scale.actual,
             ))
-            elements[idx].inTuplet = true
+            elements[idx].tupletRatio = scale
             elements[idx].lowConfidenceDuration = false
             claimed.insert(idx)
         }

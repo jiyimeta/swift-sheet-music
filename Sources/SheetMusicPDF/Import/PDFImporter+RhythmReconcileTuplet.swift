@@ -148,6 +148,7 @@ extension PDFImporter {
             )
             for idx in run {
                 elements[idx].chord.duration = .fraction(scaled)
+                elements[idx].tupletRatio = (normal: spec.normal, actual: spec.actual)
                 elements[idx].lowConfidenceDuration = false
             }
             return true
