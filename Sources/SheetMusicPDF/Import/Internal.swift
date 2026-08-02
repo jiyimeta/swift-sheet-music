@@ -268,7 +268,17 @@ struct RhythmElement {
     /// reconciliation pass must treat it as a fixed point and never pick it
     /// as its single-note repair target. Without this, reconciliation
     /// "repairs" a freshly-scaled 1/6 straight back out again.
-    var inTuplet = false
+    ///
+    /// The ratio itself is carried alongside so voice assembly can emit a real `Tuplet`. Without it the scaled
+    /// `.fraction` duration is the ONLY trace a tuplet was recognized, and the MSCX encoder — which un-scales a
+    /// member through its enclosing `Tuplet` — has nothing to un-scale through: it falls back to
+    /// `<durationType>measure</durationType>`, which the Chord decoder rejects, so the exported file cannot be
+    /// reopened. Anything that scales a duration MUST record the ratio here.
+    var tupletRatio: (normal: Int, actual: Int)?
+
+    var inTuplet: Bool {
+        tupletRatio != nil
+    }
 
     /// Per-note rects (PDF page coords, y-up), aligned 1:1 with
     /// `chord.notes` in deduped survivor order. Populated only on the

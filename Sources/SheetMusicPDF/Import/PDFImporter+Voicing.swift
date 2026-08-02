@@ -50,6 +50,7 @@ extension PDFImporter {
         }
         return ordered.map { bucket -> Voice in
             var elems: [VoiceElement] = []
+            var ratios: [(normal: Int, actual: Int)?] = []
             var occupied: Set<RoundedX> = []
             for (_, u) in bucket.sorted(by: { $0.position < $1.position }) {
                 let key = RoundedX(u.x)
@@ -57,10 +58,43 @@ extension PDFImporter {
                     emitVoice3Warning(diagnostics, location: location)
                 }
                 elems.append(.chord(u.chord))
+                ratios.append(u.tupletRatio)
                 occupied.insert(key)
             }
-            return Voice(elements: elems)
+            return Voice(elements: elems, tuplets: tuplets(from: ratios))
         }
+    }
+
+    /// Groups consecutive same-ratio members into `Tuplet` spans.
+    ///
+    /// A scaled duration alone is not enough: the MSCX encoder un-scales a member through its enclosing `Tuplet`, and
+    /// a member with no tuplet around it falls back to `<durationType>measure</durationType>` — a form the Chord
+    /// decoder rejects, so an exported score containing one cannot be reopened. Emitting the span also lets the layout
+    /// engine draw the bracket and number the engraving shows.
+    private static func tuplets(from ratios: [(normal: Int, actual: Int)?]) -> [Tuplet] {
+        var out: [Tuplet] = []
+        var index = 0
+        while index < ratios.count {
+            guard let ratio = ratios[index] else {
+                index += 1
+                continue
+            }
+            var end = index
+            while end + 1 < ratios.count,
+                  let next = ratios[end + 1],
+                  next == ratio
+            {
+                end += 1
+            }
+            out.append(Tuplet(
+                normalNotes: ratio.normal,
+                actualNotes: ratio.actual,
+                startIndex: index,
+                endIndex: end,
+            ))
+            index = end + 1
+        }
+        return out
     }
 
     /// Pure permutation `assignVoices` applies, exposed so the geometry
