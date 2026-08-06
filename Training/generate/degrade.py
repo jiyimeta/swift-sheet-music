@@ -7,10 +7,17 @@ this module: a stage is a pure function
         -> (image: np.ndarray[uint8, (H, W)], homography: np.ndarray[(3, 3)] | None)
 
 Geometric stages (those that move pixels around: resample, rotate, ...)
-return their 3x3 pixel-space homography -- the forward map from the
-CLEAN raster's pixel coordinates to THIS stage's output pixel
-coordinates. Photometric stages (blur, noise, threshold, jpeg, ...) only
-change pixel VALUES, never positions, and must return `None`.
+return their 3x3 pixel-space homography -- the forward map from THIS
+STAGE'S OWN input pixel coordinates to its own output pixel coordinates
+(that input may already be post-resample, post-rotate, etc. -- e.g.
+`stage_rotate` centers its rotation on whatever `img.shape` it is
+actually handed, not the original clean raster's shape). Photometric
+stages (blur, noise, threshold, jpeg, ...) only change pixel VALUES,
+never positions, and must return `None`. It is `apply_chain`, documented
+below, that composes these per-stage matrices into the clean-raster ->
+final map -- a future phone-stage author should read THIS map (a
+stage's own input -> output), not assume any single stage already knows
+about the whole chain.
 
 `apply_chain` composes every stage's homography, in stage order, into one
 3x3 matrix mapping the original clean-raster pixel to the final degraded
@@ -94,12 +101,16 @@ def stage_rotate(img: np.ndarray, rng: np.random.Generator, p: dict):
 
 def stage_erode_dilate(img: np.ndarray, rng: np.random.Generator, p: dict):
     """Randomly thins or thickens ink (toner spread / scanner threshold
-    artifacts); a purely local intensity operation, no geometric shift."""
+    artifacts); a purely local intensity operation, no geometric shift.
+    `elem_size` is the square structuring element's side length in
+    pixels (default 2, matching the profile's recorded default)."""
+    elem = p.get("elem_size", 2)
+    size = (elem, elem)
     r = rng.random()
     if r < p.get("p_erode", 0.3):
-        return ndimage.grey_erosion(img, size=(2, 2)).astype(np.uint8), None
+        return ndimage.grey_erosion(img, size=size).astype(np.uint8), None
     if r < p.get("p_erode", 0.3) + p.get("p_dilate", 0.3):
-        return ndimage.grey_dilation(img, size=(2, 2)).astype(np.uint8), None
+        return ndimage.grey_dilation(img, size=size).astype(np.uint8), None
     return img, None
 
 
@@ -144,10 +155,12 @@ def stage_bleed_through(img: np.ndarray, rng: np.random.Generator, p: dict):
 
 
 def stage_threshold(img: np.ndarray, rng: np.random.Generator, p: dict):
-    """Occasional re-binarization, as some scanner drivers do by default."""
+    """Occasional re-binarization, as some scanner drivers do by default.
+    `thresh_lo`/`thresh_hi` bound the uniform draw for the binarization
+    cut (defaults 120/200, matching the profile's recorded defaults)."""
     if rng.random() >= p.get("p", 0.3):
         return img, None
-    thresh = rng.uniform(120, 200)
+    thresh = rng.uniform(p.get("thresh_lo", 120), p.get("thresh_hi", 200))
     return np.where(img > thresh, 255, 0).astype(np.uint8), None
 
 

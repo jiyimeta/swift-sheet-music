@@ -23,6 +23,7 @@ max_deg = 2.0
 name = "erode_dilate"
 p_erode = 0.3
 p_dilate = 0.3
+elem_size = 2
 
 [[stage]]
 name = "gaussian_blur"
@@ -51,6 +52,8 @@ max_marks = 6
 [[stage]]
 name = "threshold"
 p = 0.3
+thresh_lo = 120
+thresh_hi = 200
 
 [[stage]]
 name = "jpeg_roundtrip"

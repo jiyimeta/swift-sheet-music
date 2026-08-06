@@ -223,3 +223,59 @@ def test_freeze_eval_page_is_byte_identical_across_regenerations(tmp_path):
     bytes_b = (out_b / "page_0.png").read_bytes()
     assert hashlib.sha256(bytes_a).digest() == hashlib.sha256(bytes_b).digest()
     assert (out_a / "page_0.labels.json").read_text() == (out_b / "page_0.labels.json").read_text()
+
+
+def test_threshold_stage_reads_profile_supplied_cut():
+    """Regression: `stage_threshold`'s binarization bounds must come from
+    the profile, like every other stage's parameters -- not be a value
+    baked into the function. `p=1.0` forces the stage to always fire, so
+    the effect of `thresh_lo`/`thresh_hi` is checked deterministically,
+    not merely that the keys are accepted without error."""
+    img = np.array([[100, 150]], dtype=np.uint8)
+
+    # Default range (120, 200): a pixel valued 100 can never exceed the
+    # draw (draw is always >= 120), so it MUST binarize to 0.
+    out_default, _ = degrade.STAGES["threshold"](img, np.random.default_rng(0), {"p": 1.0})
+    assert out_default[0, 0] == 0
+
+    # Profile-supplied cut of exactly 50 (thresh_lo == thresh_hi pins the
+    # draw): both 100 and 150 exceed it, so both MUST binarize to 255 --
+    # the opposite of the default-range outcome above. This can only
+    # happen if the override actually reached rng.uniform(...), not just
+    # parsed without error.
+    out_override, _ = degrade.STAGES["threshold"](
+        img, np.random.default_rng(0), {"p": 1.0, "thresh_lo": 50, "thresh_hi": 50})
+    assert out_override[0, 0] == 255
+    assert out_override[0, 1] == 255
+
+
+def test_erode_dilate_stage_reads_profile_supplied_element_size():
+    """Regression: `stage_erode_dilate`'s structuring element must come
+    from the profile too. `p_erode=1.0, p_dilate=0.0` forces the erosion
+    branch deterministically, so a larger `elem_size` must spread the
+    single dark pixel further than the default 2x2 element does --
+    proving the override changed the actual filter, not just that the
+    key parsed."""
+    img = np.full((20, 20), 255, dtype=np.uint8)
+    img[10, 10] = 0
+
+    out_default, h_default = degrade.STAGES["erode_dilate"](
+        img, np.random.default_rng(0), {"p_erode": 1.0, "p_dilate": 0.0})
+    out_bigger, h_bigger = degrade.STAGES["erode_dilate"](
+        img, np.random.default_rng(0), {"p_erode": 1.0, "p_dilate": 0.0, "elem_size": 6})
+
+    assert h_default is None and h_bigger is None
+    default_dark_pixels = int(np.sum(out_default < 255))
+    bigger_dark_pixels = int(np.sum(out_bigger < 255))
+    assert bigger_dark_pixels > default_dark_pixels
+
+
+def test_scanner_profile_pins_the_preserved_defaults():
+    """The new `elem_size` / `thresh_lo` / `thresh_hi` keys added to
+    scanner.toml must equal the values that used to be hardcoded, so
+    previously-recorded seeds against this profile still reproduce the
+    same output (the property P3c-G1's byte-identity gate depends on)."""
+    profile = dict(degrade.load_profile(PROFILE))
+    assert profile["erode_dilate"]["elem_size"] == 2
+    assert profile["threshold"]["thresh_lo"] == 120
+    assert profile["threshold"]["thresh_hi"] == 200
