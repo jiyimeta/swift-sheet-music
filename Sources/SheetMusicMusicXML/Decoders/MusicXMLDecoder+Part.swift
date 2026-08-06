@@ -15,11 +15,11 @@ extension Part {
         scorePart: XMLTreeNode,
         partId: String,
         staffCount: Int,
-    ) throws -> (Part, MusicXMLDrumTable) {
+    ) throws -> (Part, MusicXMLDrumTable, [String: Instrument]) {
         let name = scorePart.first("part-name")?.text
         let abbrev = scorePart.first("part-abbreviation")?.text
         let drumTable = MusicXMLDrumTable.build(scorePart: scorePart)
-        let instrument = decodeInstrument(
+        let (instrument, instrumentByID) = decodeInstrument(
             scorePart: scorePart, name: name, abbrev: abbrev,
             useDrumset: drumTable.isDrumset,
         )
@@ -39,7 +39,7 @@ extension Part {
             instrument: instrument,
             staves: staves,
         )
-        return (part, drumTable)
+        return (part, drumTable, instrumentByID)
     }
 
     /// MusicXML nests instrument metadata in `<score-instrument>` and
@@ -48,12 +48,21 @@ extension Part {
     /// defaulted. `ScoreSemanticComparison` normalizes both sides accordingly.
     /// `<score-instrument><instrument-name>` wins over `<part-name>` for
     /// `trackName` — MuseScore uses the more-specific instrument name.
+    ///
+    /// Also builds `byID`: every `<score-instrument>` in the `<score-part>`
+    /// merged with its matching `<midi-instrument>` (joined by shared
+    /// `id`), keyed by that same `id` — the string
+    /// `<note><instrument id="…">` and MusicXML 4.0's
+    /// `<sound><instrument-change id="…">` both reference. `primary` keeps
+    /// the original single-instrument behavior verbatim (first
+    /// `<score-instrument>`, default channel) so `ScoreSemanticComparison`
+    /// and existing MusicXML tests are unaffected.
     private static func decodeInstrument(
         scorePart: XMLTreeNode,
         name: String?,
         abbrev: String?,
         useDrumset: Bool,
-    ) -> Instrument {
+    ) -> (primary: Instrument, byID: [String: Instrument]) {
         let scoreInstr = scorePart.first("score-instrument")
         let instrumentSound = scoreInstr?.first("instrument-sound")?.text
         let instrumentName = scoreInstr?.first("instrument-name")?.text
@@ -62,7 +71,7 @@ extension Part {
             ?? scorePart.attributes["id"]
             ?? ""
         let trackName = instrumentName ?? name
-        return Instrument(
+        let primary = Instrument(
             id: id,
             longName: name,
             shortName: abbrev,
@@ -70,5 +79,57 @@ extension Part {
             channels: [InstrumentChannel()],
             useDrumset: useDrumset,
         )
+        let byID = decodeInstrumentTable(
+            scorePart: scorePart, partLongName: name, abbrev: abbrev, useDrumset: useDrumset,
+        )
+        return (primary, byID)
+    }
+
+    private static func decodeInstrumentTable(
+        scorePart: XMLTreeNode,
+        partLongName: String?,
+        abbrev: String?,
+        useDrumset: Bool,
+    ) -> [String: Instrument] {
+        let midiInstruments = scorePart.all("midi-instrument")
+        var table: [String: Instrument] = [:]
+        for scoreInstrNode in scorePart.all("score-instrument") {
+            guard let scoreInstrID = scoreInstrNode.attributes["id"] else { continue }
+            let instrumentSound = scoreInstrNode.first("instrument-sound")?.text
+            let instrumentName = scoreInstrNode.first("instrument-name")?.text
+            let midiNode = midiInstruments.first { $0.attributes["id"] == scoreInstrID }
+            table[scoreInstrID] = Instrument(
+                id: instrumentSound ?? scoreInstrID,
+                longName: instrumentName ?? partLongName,
+                shortName: abbrev,
+                trackName: instrumentName ?? partLongName,
+                channels: [decodeChannel(midiNode)],
+                useDrumset: useDrumset,
+            )
+        }
+        return table
+    }
+
+    /// `<midi-instrument>` unit conversions vs. `InstrumentChannel`:
+    /// `<midi-program>` is 1-based MusicXML → 0-based `program`;
+    /// `<midi-channel>` is 1-based → 0-based `midiChannel`; `<volume>` is a
+    /// 0-100 percentage → MIDI CC 7's 0-127; `<pan>` is -90…90 degrees →
+    /// 0-127 with 64 as center.
+    private static func decodeChannel(_ midiInstrument: XMLTreeNode?) -> InstrumentChannel {
+        var channel = InstrumentChannel()
+        guard let node = midiInstrument else { return channel }
+        if let text = node.first("midi-program")?.text, let program = Int(text) {
+            channel.program = max(0, program - 1)
+        }
+        if let text = node.first("midi-channel")?.text, let midiChannel = Int(text) {
+            channel.midiChannel = max(0, midiChannel - 1)
+        }
+        if let text = node.first("volume")?.text, let percent = Double(text) {
+            channel.volume = min(127, max(0, Int((percent / 100.0 * 127.0).rounded())))
+        }
+        if let text = node.first("pan")?.text, let degrees = Double(text) {
+            channel.pan = min(127, max(0, Int(((degrees + 90.0) / 180.0 * 127.0).rounded())))
+        }
+        return channel
     }
 }
