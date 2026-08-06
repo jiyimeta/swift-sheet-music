@@ -4,7 +4,6 @@
     @testable import SheetMusicCore
     @testable import SheetMusicLayout
     @testable import SheetMusicMSCX
-    @testable import SheetMusicUI
     import Testing
 
     @Suite("ScoreHitTester — clef")

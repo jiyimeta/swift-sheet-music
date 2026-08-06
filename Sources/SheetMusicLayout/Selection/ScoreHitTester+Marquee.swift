@@ -1,6 +1,7 @@
-import CoreGraphics
+#if canImport(CoreGraphics)
+    import CoreGraphics
+#endif
 import SheetMusicCore
-import SheetMusicLayout
 
 @available(macOS 15.0, *)
 extension ScoreHitTester {

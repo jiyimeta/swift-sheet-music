@@ -85,6 +85,27 @@
         public var height: CGFloat {
             size.height
         }
+
+        /// Whether `point` falls within the rect, edges included — matches `CGRect.contains(_:)`'s documented
+        /// behavior that a point on the boundary counts as contained.
+        public func contains(_ point: CGPoint) -> Bool {
+            point.x >= minX && point.x <= maxX && point.y >= minY && point.y <= maxY
+        }
+
+        /// Whether the two rects share any area. A merely-touching pair (shared edge, zero-width/height overlap)
+        /// does not intersect — mirrors `CGRect.intersects(_:)`, which requires a non-degenerate intersection.
+        public func intersects(_ other: CGRect) -> Bool {
+            let ix0 = max(minX, other.minX)
+            let iy0 = max(minY, other.minY)
+            let ix1 = min(maxX, other.maxX)
+            let iy1 = min(maxY, other.maxY)
+            return ix1 > ix0 && iy1 > iy0
+        }
+
+        /// A copy of the rect translated by `(dx, dy)`, matching `CGRect.offsetBy(dx:dy:)`.
+        public func offsetBy(dx: CGFloat, dy: CGFloat) -> CGRect {
+            CGRect(x: origin.x + dx, y: origin.y + dy, width: size.width, height: size.height)
+        }
     }
 
 #endif
