@@ -23,12 +23,24 @@ cross-checked against this repo's own MSCX encoder/decoder and against
   `actualNotes`) and `MSCXEncoder+Tuplet.swift` (`<baseNote>` is
   REQUIRED — MuseScore 3 leaves `_baseLen` invalid without it and
   SIGFPEs on open). A real MuseScore file also writes a `<Number>`
-  child for the visible "3"/"5"/"7", but `SheetMusicUI/Rendering/
-  TupletRenderer.swift` derives that number purely from the `Tuplet`
-  model's `actualNotes` field (never from parsed XML text) and our
-  decoder ignores unknown `<Tuplet>` children — so `<Number>` is
-  UNCONFIRMED-and-omitted here rather than invented, since it has no
-  effect on what our own render pipeline draws.
+  child for the visible "3"/"5"/"7". These `.mscx` sources are rendered
+  to PDF by real MuseScore Studio (`mscore` CLI — see
+  `docs/superpowers/specs/2026-08-06-omr-raster-foundation-design.md`
+  §6, "source .mscx → mscore CLI → PDF"), not by this package's own
+  renderer, so what matters is what `mscore` itself does with an absent
+  `<Number>` — checked read-only (never vendored/copied) against a
+  local MuseScore checkout: `engraving/rw/read400/tread.cpp`'s
+  `TRead::read(Tuplet*, …)` initializes its local `Text* number` to
+  `nullptr` and only constructs one inside the `tag == "Number"`
+  branch, so an absent `<Number>` leaves `Tuplet::number()` null after
+  load. `engraving/rendering/score/tupletlayout.cpp`'s
+  `TupletLayout::createNumber` (called during layout, not read) then
+  lazily creates that `Text` from `item->ratio().numerator()` — the
+  `actualNotes` value — whenever `numberType() != NO_TEXT`, and
+  `TupletNumberType`'s in-class default (`engraving/dom/tuplet.h`) is
+  `SHOW_NUMBER`. So `mscore` draws the correct bracket numeral from the
+  ratio alone; `<Number>` is omitted here as confirmed-unnecessary, not
+  invented.
 - A grace note is a *separate* `<Chord>` immediately before the note it
   decorates, carrying a bare `<acciaccatura/>` child anywhere among its
   children (order-independent — `Chord.graceType(in:)` just scans for a
@@ -273,6 +285,12 @@ def texture_sources(seed: int, count: int) -> list[tuple[str, str]]:
                 measures=[_drum_measure(rng, m == 0) for m in range(n_measures)]))
         text = mscx_document(parts)
         if kind == "drums":
+            # Unscoped replace: correct only because "drums" always
+            # produces exactly one PartSpec / one <StaffType>, so there
+            # is exactly one 'group="pitched"' in `text` to flip. If a
+            # future kind ever mixes a drum staff with pitched staves
+            # in the same document, this would need to target the
+            # specific staff block instead of a global replace.
             text = text.replace('group="pitched"', 'group="percussion"')
         # Multi-voice: append a second voice to the first measure of some
         # multi-part sources. Two tied-together half notes exactly fill
