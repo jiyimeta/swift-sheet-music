@@ -65,6 +65,36 @@ def test_verify_detects_missing_label_file(tmp_path):
     assert problems and "missing" in problems[0]
 
 
+def test_verify_reports_a_malformed_manifest_instead_of_raising(tmp_path):
+    """The malformed-manifest guard (whole-branch review, Minor 3: the
+    one branch of `verify_manifest` nothing covered). Its caller is a
+    reporting path -- `finalize`'s `P3c-G1-selfcheck` line -- so a
+    truncated `manifest.json` must come back as a named problem, not as
+    a `JSONDecodeError` out of the middle of finalize."""
+    _fixture_dataset(tmp_path)
+    manifest.write_manifest(tmp_path, manifest.build_manifest(
+        tmp_path, dataset_seed=11, engines={}, renderer="r",
+        generator_commit="c", quarantined=[]))
+    path = tmp_path / "manifest.json"
+    path.write_text(path.read_text()[:40])  # truncated mid-object
+
+    problems = manifest.verify_manifest(tmp_path)
+    assert len(problems) == 1
+    assert problems[0].startswith("manifest unreadable:")
+
+
+def test_verify_reports_an_absent_manifest_instead_of_raising(tmp_path):
+    """The other half of the same guard: no `manifest.json` at all (a
+    root that was never finalized) is a problem, not an OSError, and is
+    distinguishable from "every label went missing"."""
+    _fixture_dataset(tmp_path)
+    assert not (tmp_path / "manifest.json").exists()
+
+    problems = manifest.verify_manifest(tmp_path)
+    assert len(problems) == 1
+    assert problems[0].startswith("manifest unreadable:")
+
+
 def test_compare_datasets_reports_byte_identity(tmp_path):
     a = tmp_path / "a"
     _fixture_dataset(a)

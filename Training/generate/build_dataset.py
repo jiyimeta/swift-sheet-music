@@ -528,6 +528,20 @@ def finalize_dataset(root: Path, seed: int, class_floor: int = CLASS_FLOOR,
     }
     manifest.write_manifest(root, doc)
 
+    # Self-check, P3c-G1's local half: re-read the manifest just written
+    # and re-hash every label it lists. Two-root byte identity
+    # (`compare`) is only meaningful if each manifest actually describes
+    # the dataset next to it, and that is exactly what this asserts --
+    # at the one moment it can still be asserted cheaply, before anyone
+    # copies the root anywhere. It catches a label file that changed
+    # under `finalize` (a `swift test` still writing into the root is the
+    # realistic one) and a manifest that did not survive being written.
+    problems = manifest.verify_manifest(root)
+    for problem in problems:
+        print(f"[verify] {problem}")
+    print(f"[gate][SUMMARY] P3c-G1-selfcheck labels={len(doc['label_sha256'])} "
+          f"problems={len(problems)} pass={'Y' if not problems else 'N'}")
+
     print(f"[finalize][SUMMARY] pages={doc['page_count']} "
           f"renders={exported} quarantined={len(quarantined)}")
     for line in below_floor:

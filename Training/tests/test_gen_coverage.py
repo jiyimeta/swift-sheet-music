@@ -56,12 +56,44 @@ def test_rare_duration_and_accidental_coverage():
 
 
 def test_common_and_cut_time_symbols_are_covered():
-    # MuseScore's TimeSigType ordinal on <TimeSig><subtype>: 1 = common
-    # time "C", 2 = alla breve/cut time "cut-C" (see gen_coverage's
-    # module docstring for the upstream cross-check).
-    joined = "\n".join(t for _, t in gen_coverage.coverage_sources(seed=42))
-    assert "<subtype>1</subtype>" in joined
-    assert "<subtype>2</subtype>" in joined
+    """MuseScore's TimeSigType ordinal on `<TimeSig><subtype>`: 1 =
+    common time "C", 2 = alla breve / cut time "cut-C" (see
+    gen_coverage's module docstring for the upstream cross-check).
+
+    Walks `TimeSig` elements rather than grepping for
+    `"<subtype>1</subtype>"`: `<subtype>` is a numeric element on Hairpin,
+    Jump, Marker and BarLine too, so an unanchored substring check passes
+    on a completely unrelated element and would keep passing if the
+    common/cut meters were dropped outright (whole-branch review, Minor
+    1 -- the same shape `test_cross_barline_ties_carry_measures_and_correct_sign`
+    below already uses).
+    """
+    sources = dict(gen_coverage.coverage_sources(seed=42))
+    root = ET.fromstring(sources["cov_timesigs"])
+    sigs = root.findall(".//TimeSig")
+    assert sigs
+
+    by_subtype = {}
+    for sig in sigs:
+        subtype = sig.find("subtype")
+        # A NORMAL (numeric) time signature omits <subtype> entirely.
+        key = None if subtype is None else int(subtype.text)
+        by_subtype.setdefault(key, []).append(sig)
+
+    assert set(by_subtype) == {None, 1, 2}
+    # Common time is 4/4, cut time is 2/2 -- the glyph must agree with
+    # the meter it stands for, or MuseScore draws "C" over 3/4.
+    common = by_subtype[1]
+    cut = by_subtype[2]
+    assert len(common) == 1
+    assert len(cut) == 1
+    assert (common[0].find("sigN").text, common[0].find("sigD").text) == ("4", "4")
+    assert (cut[0].find("sigN").text, cut[0].find("sigD").text) == ("2", "2")
+    # `<subtype>` is written BEFORE sigN/sigD, matching MuseScore's own
+    # writer (TWrite::write(const TimeSig*, ...)); the reader is
+    # order-sensitive, so this is load-bearing, not cosmetic.
+    for sig in common + cut:
+        assert [child.tag for child in sig][:3] == ["subtype", "sigN", "sigD"]
 
 
 def test_cross_barline_ties_carry_measures_and_correct_sign():

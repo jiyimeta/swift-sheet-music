@@ -118,8 +118,18 @@
                 return String(format: "unknown%04X", cp)
             default:
                 // Unreachable while detectorTable covers every remaining
-                // case; a new SMuFLSemantic case added upstream lands here
-                // and the exhaustive round-trip test catches it.
+                // case. A new SMuFLSemantic case added upstream lands
+                // here — and NO test catches that statically:
+                // `roundTripsEveryDetectorClass` iterates
+                // `detectorVocabulary` (this table's own class names),
+                // so it is exhaustive over the vocabulary, never over
+                // `SMuFLSemantic`. The real detection channel is at
+                // runtime, on a dataset: such a glyph is exported as
+                // class `unknown0000`, which the label-export harness
+                // counts into `tier1Missing` (see `OMRLabelExport`'s
+                // `write`). A nonzero `tier1Missing` whose class is
+                // exactly `unknown0000` means VOCABULARY DRIFT — come
+                // back to this table, not to the classifier.
                 return "unknown0000"
             }
         }

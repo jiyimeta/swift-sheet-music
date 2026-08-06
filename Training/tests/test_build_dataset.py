@@ -323,6 +323,70 @@ def test_finalize_builds_manifest(tmp_path):
     assert on_disk == summary
 
 
+def _summary_fields(line: str) -> dict:
+    """`[gate][SUMMARY] P3c-G1-selfcheck labels=1 problems=0 pass=Y` ->
+    `{"labels": "1", "problems": "0", "pass": "Y"}`. Parsing the line
+    into fields keeps these assertions off substring matching."""
+    return dict(token.split("=", 1) for token in line.split() if "=" in token)
+
+
+def test_finalize_self_checks_the_manifest_it_just_wrote(tmp_path, capsys):
+    """Whole-branch review, Minor 3: `manifest.verify_manifest` had no
+    caller anywhere in `generate/` and no subcommand -- it could not be
+    run at all. `finalize` is its natural home: two-root byte identity
+    (`compare`, P3c-G1) only means something if each manifest actually
+    describes the dataset next to it, and this is the moment that is
+    still cheap to assert."""
+    _generate(tmp_path, texture_count=0)
+    first = sorted(p for p in tmp_path.iterdir() if p.is_dir())[0]
+    _write_labels(first, 0, [_glyph("noteheadBlack", 6, 5, 7)],
+                  {"noteheadBlack": 1})
+    doc = build_dataset.finalize_dataset(tmp_path, seed=3,
+                                         version_probe=lambda _b: "")
+
+    lines = [line for line in capsys.readouterr().out.splitlines()
+             if "P3c-G1-selfcheck" in line]
+    assert len(lines) == 1
+    fields = _summary_fields(lines[0])
+    assert fields["labels"] == "1" == str(len(doc["label_sha256"]))
+    assert fields["problems"] == "0"
+    assert fields["pass"] == "Y"
+
+
+def test_finalize_self_check_fails_when_the_manifest_did_not_survive(
+        tmp_path, capsys, monkeypatch):
+    """The self-check must be a real read-back, not a formatting
+    flourish: a `manifest.json` that is truncated on the way to disk is
+    reported as a problem and flips the line to `pass=N`. Exercises the
+    malformed-manifest guard through the wiring, and would fail against
+    any implementation that prints the line without calling
+    `verify_manifest`."""
+    _generate(tmp_path, texture_count=0)
+    first = sorted(p for p in tmp_path.iterdir() if p.is_dir())[0]
+    _write_labels(first, 0, [_glyph("noteheadBlack", 6, 5, 7)],
+                  {"noteheadBlack": 1})
+
+    real_write = build_dataset.manifest.write_manifest
+
+    def truncating_write(root, doc):
+        path = Path(real_write(root, doc))
+        path.write_text(path.read_text()[:40])
+        return path
+
+    monkeypatch.setattr(build_dataset.manifest, "write_manifest",
+                        truncating_write)
+    build_dataset.finalize_dataset(tmp_path, seed=3, version_probe=lambda _b: "")
+
+    out = capsys.readouterr().out.splitlines()
+    gate = [line for line in out if "P3c-G1-selfcheck" in line]
+    assert len(gate) == 1
+    fields = _summary_fields(gate[0])
+    assert fields["problems"] == "1"
+    assert fields["pass"] == "N"
+    assert [line for line in out
+            if line.startswith("[verify] manifest unreadable:")]
+
+
 def test_finalize_records_only_engines_the_dataset_actually_used(tmp_path):
     _generate(tmp_path, texture_count=0)
     probed = []

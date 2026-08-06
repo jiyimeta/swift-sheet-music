@@ -97,7 +97,14 @@ def verify_manifest(root: Path) -> list[str]:
     caller/log reader can tell the two failure modes apart, and iterates
     `sorted(...)` so the returned problem list has a deterministic order
     independent of the manifest's own (already sorted-on-write) dict
-    order."""
+    order.
+
+    Called by `build_dataset.finalize_dataset` immediately after writing
+    the manifest (the `P3c-G1-selfcheck` line): two-root byte identity
+    only means something if each manifest describes the dataset sitting
+    next to it. An unreadable or malformed manifest is itself a problem
+    rather than an exception -- the caller is a reporting path, and a
+    truncated `manifest.json` must be named, not raised through."""
     root = Path(root)
     manifest_path = root / "manifest.json"
     try:
