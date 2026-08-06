@@ -361,9 +361,14 @@ object SheetMusicJNI {
 
     /**
      * Relays one edit intent into the mirror session behind [scoreHandle]. Returns `false` when
-     * no session is open, the bytes don't decode, or the engine refused the edit — in every case
-     * the mirror's score is untouched, which is what the authoritative side did too, so the two
-     * stay in step.
+     * no session is open, the bytes don't decode, or the engine refused the edit.
+     *
+     * Treat `false` here as an anomaly, not a benign no-op: the authoritative side only ever emits
+     * an intent it has already applied, so a refused edit produces no intent and nothing is
+     * relayed in the first place. Every intent that reaches this call was already accepted
+     * upstream, so `false` can only mean no session is open, the bytes were corrupted in transit,
+     * the handle was released mid-edit, or the mirror has already diverged from the authoritative
+     * copy. All four call for a resync now, not a log line and a shrug.
      */
     fun nativeApplyEditIntent(scoreHandle: Long, intentBytes: ByteArray): Boolean {
         val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA

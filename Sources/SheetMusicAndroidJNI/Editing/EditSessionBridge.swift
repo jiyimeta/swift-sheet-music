@@ -54,7 +54,15 @@ public func nativeBeginEditSession(scoreHandle: Int64) -> Bool {
 }
 
 /// Applies one relayed intent. Returns `false` when there is no session, the bytes don't decode, or the engine
-/// refuses the edit — all three leave the score untouched, which is exactly what the authoritative side did too.
+/// refuses the edit.
+///
+/// Unlike a direct `ScoreEditSession.apply`, `false` here is always an anomaly, never a benign no-op. The
+/// authoritative side only ever emits an intent it has already applied successfully — a refusal there produces no
+/// intent, so nothing gets relayed and this function is never even called for it. Every intent that does reach here
+/// was already accepted upstream, which means a `false` return can only mean one of: no session is open, the bytes
+/// were corrupted in transit, the handle was released mid-edit, or the two images have already diverged. All four
+/// call for a resync, not a shrug — a caller that logs this and moves on is the failure mode this comment exists to
+/// head off.
 public func nativeApplyEditIntent(scoreHandle: Int64, intentBytes: Data) -> Bool {
     withLock {
         guard let session = editSessions[scoreHandle] else { return false }

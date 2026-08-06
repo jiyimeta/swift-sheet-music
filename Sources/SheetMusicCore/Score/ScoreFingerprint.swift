@@ -6,9 +6,26 @@ import Foundation
 /// Deliberately not built on `Hashable` / `Hasher`: those are seeded per process, so two images would disagree about
 /// identical scores. FNV-1a is fixed by its constants and gives the same answer everywhere.
 ///
-/// Scope is the mutable musical content — element kind, timing, pitch, spelling, ties, tuplet ratios. Engraving
-/// trivia the edit commands never touch is out, which keeps the walk cheap. A difference this walk cannot see is a
-/// missed detection, never a false alarm.
+/// Scope is the mutable musical content — element kind, timing, pitch, spelling, ties, tuplet ratios. Everything
+/// else is out, which keeps the walk cheap, but "engraving trivia" undersells how much that actually excludes —
+/// spelled out here so the next person adding an intent knows exactly what this walk is blind to, rather than
+/// discovering it by omission:
+///
+/// - Not covered on `Chord`: `arpeggio`, `lyrics`, `graceNotesBefore`/`graceNotesAfter`, `articulations`,
+///   `tremolo`, `chordLines`, `elementProperties`, `stemVisible`, `beamVisible`.
+/// - Not covered on `Note`: `accidentalBracket`, `accidentalRole`, `glissando`, `headType`, `parentheses`,
+///   `isSmall`, `play`, `visible`.
+/// - Not covered at all: every `Measure` property (`startRepeat`, `endRepeatCount`, `measureRepeatCount`,
+///   `markers`, `jumps`, `lineBreak`, `pageBreak`, `sectionBreak`, `actualLength`, `irregular`),
+///   `Staff.defaultClefType`, and `Score.systemMeasures`.
+/// - The walk's own shape: it emits a flat sequence of staff blocks with no part/staff-count delimiter, so two
+///   scores whose staves are grouped into parts differently — but which total the same number of staves — hash
+///   identically.
+///
+/// None of the above is reachable by any `EditIntent` this package accepts today, so the walk's contract still
+/// holds: a difference it cannot see is a missed detection, never a false alarm. But that contract is only as good
+/// as this list — the next edit command that touches one of these fields must add it here, not assume it already
+/// is.
 extension Score {
     public var stableFingerprint: Int64 {
         var hash = FNV1a()

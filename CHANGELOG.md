@@ -9,12 +9,42 @@ and this project adheres to
 
 ### Added
 
-- `SheetMusicEngine.version` and `SheetMusicEngine.versionStamp` provide a build identity. On Android
-  two separately linked images of the engine coexist in one process — the host app's and its library's —
-  and a mismatch (a stale `.so`) would previously cause silent score divergence. The host now compares
-  the app's compiled-in stamp against the one it reads from the library over JNI before opening an edit
-  session, and refuses to open one on a mismatch: stale binaries are now a locked feature and a log
-  line, not a corrupted score.
+- `EditIntent` and `ScoreEditSession` let a host relay a scalar edit — a
+  note write, a duration change, a delete, or several bundled into one
+  undo step — to a second copy of the score, so an Android host can keep
+  a mirror session in step with its own authoritative one.
+  `Score.stableFingerprint` is a deterministic 64-bit digest of the
+  mutable musical content, for confirming two copies agree.
+- `ScoreEditSession.lastRefusalReason` reports why the last `apply` call
+  returned `false` — the only diagnostic available when a mirror session
+  and its authoritative counterpart disagree.
+- Seven JNI entry points expose an edit session to Android:
+  `nativeBeginEditSession`, `nativeApplyEditIntent`, `nativeEditUndo`,
+  `nativeEditRedo`, `nativeEndEditSession`, `nativeScoreFingerprint`, and
+  `nativeEngineVersionStamp`.
+- `HandleTable.replace` swaps the value behind an existing handle and
+  reports whether the write landed, so a handle released mid-edit is
+  told apart from one that isn't.
+- `SheetMusicEngine.version` and `SheetMusicEngine.versionStamp` provide
+  a build identity. On Android two separately linked images of the
+  engine coexist in one process — the host app's and its library's —
+  and a mismatch (a stale `.so`) can cause silent score divergence.
+  `versionStamp` lets a host compare its own compiled-in stamp against
+  the one it reads from the library over JNI before opening an edit
+  session, so it can refuse to open one on a mismatch instead of risking
+  a corrupted score. No host does this comparison yet; that is
+  downstream work this library only makes possible.
+
+### Changed
+
+- `ScoreEditor` is no longer `@MainActor`. **Source-breaking:** a
+  `@MainActor final class` is implicitly `Sendable`, and `ScoreEditor` no
+  longer is, so a consumer storing one in a `Sendable` type, or
+  capturing it in a `@Sendable` closure or a detached `Task`, will now
+  fail to compile. The Android JNI process pumps no main run loop, so a
+  main-actor hop from an entry point would be scheduled and never
+  resumed; the editor has to be drivable synchronously from whatever
+  thread calls in.
 
 ## [1.8.0] - 2026-08-02
 
