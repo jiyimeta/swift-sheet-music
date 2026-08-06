@@ -12,6 +12,7 @@ android {
     defaultConfig {
         minSdk = 28
         consumerProguardFiles("proguard-consumer.pro")
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk {
             abiFilters += listOf("arm64-v8a", "x86_64")
         }
@@ -61,6 +62,9 @@ dependencies {
     // (SheetMusicAudioAndroid, Examples/Android) see the classes
     // on their compile classpath.
     api("io.github.jiyimeta:wirelet-runtime:0.1.0-alpha.2")
+
+    androidTestImplementation("androidx.test.ext:junit:1.1.5")
+    androidTestImplementation("androidx.test:runner:1.5.2")
 }
 
 val packageRoot: File = rootProject.projectDir.resolve("..").canonicalFile
