@@ -1890,10 +1890,24 @@ extension LayoutEngine {
                     style: s.isSystemText ? .systemText : .staffText,
                 )
                 if s.visible { out.append(element) } else { invisibleOut.append(element) }
-            case .instrumentChange:
-                // Engraved by the instrument-change layout task; no
-                // element is emitted yet.
-                break
+            case let .instrumentChange(ic):
+                guard ic.visible || options.showsInvisibleElements else { break }
+                // MuseScore's `instrumentChangePosAbove` is (0, -2 sp)
+                // from the staff top (styledef.cpp:1622) — one spatium
+                // higher than staff text, so the instruction clears a
+                // "pizz."-style directive at the same tick.
+                let element = LayoutElement.staffText(
+                    text: ic.text,
+                    origin: CGPoint(
+                        x: xAtTick
+                            + CGFloat(ic.offsetX) * metrics.sp,
+                        y: staffMidY - metrics.sp * 4
+                            + CGFloat(ic.offsetY) * metrics.sp,
+                    ),
+                    color: ic.color,
+                    style: .instrumentChange,
+                )
+                if ic.visible { out.append(element) } else { invisibleOut.append(element) }
             case let .rehearsalMark(rm):
                 guard rm.visible || options.showsInvisibleElements else { break }
                 let originX = metrics.sp * 0.5

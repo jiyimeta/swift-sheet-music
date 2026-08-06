@@ -7,6 +7,10 @@
 
     @Suite("InstrumentChange layout")
     struct InstrumentChangeLayoutTests {
+        /// Eager Apple FontMetricsProvider install — required by any test
+        /// that hits `LayoutEngine.layout(...)` directly. See TestSupport.
+        private let _installApple = TestSupport.installApple
+
         @Test("instrumentChange is Edwin 10pt bold, unframed")
         func styleDefaults() {
             let defaults = TextStyleType.instrumentChange.museScoreDefault
@@ -52,6 +56,62 @@
             }
             #expect(style == .instrumentChange)
             #expect(origin.y == 12)
+        }
+
+        @Test("a visible change emits one instrumentChange-styled text")
+        func emitsElement() throws {
+            let url = try #require(
+                Bundle.module.url(
+                    forResource: "instrument-change", withExtension: "mscx",
+                ),
+            )
+            let data = try Data(contentsOf: url)
+            let score = try MSCXParser.parse(data)
+            let document = LayoutEngine.layout(
+                score: score, options: ScoreViewOptions(), availableWidth: 800,
+            )
+            let texts = document.systems
+                .flatMap(\.measures)
+                .flatMap(\.elements)
+                .compactMap { element -> (String, TextStyleType)? in
+                    guard case let .staffText(text, _, _, style) = element
+                    else { return nil }
+                    return (text, style)
+                }
+            #expect(texts.contains { $0.0 == "to Accordion" && $0.1 == .instrumentChange })
+        }
+
+        @Test("an invisible change is not drawn by default")
+        func invisibleChangeIsNotDrawnByDefault() throws {
+            let url = try #require(
+                Bundle.module.url(
+                    forResource: "instrument-change", withExtension: "mscx",
+                ),
+            )
+            var score = try MSCXParser.parse(Data(contentsOf: url))
+            // Flip the fixture's single change to invisible.
+            for measureIndex in score.systemMeasures.indices {
+                for elementIndex in score.systemMeasures[measureIndex].elements.indices {
+                    guard case var .instrumentChange(change) =
+                        score.systemMeasures[measureIndex].elements[elementIndex].element
+                    else { continue }
+                    change.visible = false
+                    score.systemMeasures[measureIndex].elements[elementIndex].element =
+                        .instrumentChange(change)
+                }
+            }
+            let document = LayoutEngine.layout(
+                score: score, options: ScoreViewOptions(), availableWidth: 800,
+            )
+            let drawn = document.systems
+                .flatMap(\.measures)
+                .flatMap(\.elements)
+                .contains { element in
+                    guard case let .staffText(text, _, _, _) = element
+                    else { return false }
+                    return text == "to Accordion"
+                }
+            #expect(drawn == false)
         }
     }
 #endif
