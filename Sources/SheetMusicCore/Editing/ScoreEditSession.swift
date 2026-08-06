@@ -145,14 +145,31 @@ public final class ScoreEditSession {
             if let plan = CrossBarInputPlanner.plan(.rest, duration: duration, at: location, in: score) {
                 return CompositeEditCommand(commands: plan.commands, location: plan.head)
             }
-            return SetRestDuration(at: location, duration: duration)
+            // A rest that fills its bar from beat one is spelled `.measure`, not the literal length — the same
+            // promotion Folino's `restDuration(_:at:)` applies before this same fallback. `SetRestDuration` writes
+            // whatever it's handed without judging that, so the fallback has to do the judging itself.
+            return SetRestDuration(
+                at: location, duration: RestDurationPromotion.promoted(duration, at: location, in: score),
+            )
         case let .setChordDuration(location, duration):
             return SetChordDuration(at: location, duration: duration)
         case let .delete(location):
             // A delete that empties its bar leaves ONE measure rest, not a hole — the same rule the write side
-            // spells as `.measure` rather than `.whole`.
+            // spells as `.measure` rather than `.whole`. `ReplaceVoiceElements.affectedLocation` always reports
+            // element 0 (usually the clef or time signature the rest lands after, not the rest itself), so the
+            // collapse's own `restElementIndex` is threaded through explicitly rather than trusted to the command's
+            // own report — otherwise `lastAffectedLocation` would name the wrong element after every bar-emptying
+            // delete, exactly as `FullMeasureRestCollapse.Plan.restElementIndex`'s doc comment warns.
             if let plan = FullMeasureRestCollapse.plan(deleting: location, in: score) {
-                return plan.command
+                return CompositeEditCommand(
+                    commands: [plan.command],
+                    location: VoiceElementID(
+                        staff: location.staff,
+                        measureIndex: location.measureIndex,
+                        voiceIndex: location.voiceIndex,
+                        elementIndex: plan.restElementIndex,
+                    ),
+                )
             }
             return DeleteVoiceElement(at: location)
         case let .composite(intents):

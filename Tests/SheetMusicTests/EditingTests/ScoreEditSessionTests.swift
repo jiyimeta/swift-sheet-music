@@ -144,4 +144,44 @@ struct ScoreEditSessionTests {
         #expect(rest.notes.isEmpty)
         #expect(rest.duration == .measure)
     }
+
+    /// The rest the collapse writes is not always at element index 0 — a leading time signature stays put and the
+    /// rest lands after it. `ReplaceVoiceElements.affectedLocation` always reports element 0, which is exactly why
+    /// `FullMeasureRestCollapse.Plan` hands back `restElementIndex` separately: `lastAffectedLocation` has to be
+    /// built from that, not trusted to the underlying command's own report.
+    @Test func `a bar-emptying delete lands the selection on the new rest, not element 0`() {
+        var score = EditingFixtures.fourQuarterRests()
+        let slot = VoiceElementID(EditingFixtures.restID(element: 1))
+        score[slot] = .chord(Chord(duration: .quarter, notes: [Note(pitch: 60, tpc: 14)]))
+        let session = ScoreEditSession(score: score)
+        #expect(session.apply(.delete(at: slot)))
+        #expect(session.lastAffectedLocation == VoiceElementID(
+            staff: Self.staff, measureIndex: 0, voiceIndex: 0, elementIndex: 1,
+        ))
+        let elements = session.score.parts[0].staves[0].measures[0].voices[0].elements
+        #expect(elements.count == 2) // the leading time signature, then one measure rest
+        guard case let .chord(rest) = elements[1] else { Issue.record("expected a rest"); return }
+        #expect(rest.notes.isEmpty)
+        #expect(rest.duration == .measure)
+    }
+
+    /// A rest re-timed to fill its bar from beat one is spelled `.measure`, mirroring the delete-side collapse from
+    /// the other direction: there a bar EMPTIES into one, here a bar is FILLED with one.
+    @Test func `setRestDuration promotes a bar-filling rest to the measure spelling`() {
+        let session = ScoreEditSession(score: EditingFixtures.fourQuarterRests())
+        let target = VoiceElementID(EditingFixtures.restID(element: 1))
+        #expect(session.apply(.setRestDuration(at: target, duration: .whole)))
+        guard case let .chord(rest) = session.score[target] else { Issue.record("expected a rest"); return }
+        #expect(rest.duration == .measure)
+    }
+
+    /// A rest re-timed to less than its bar keeps the literal duration it was asked for — the promotion is only for
+    /// the length that actually fills the bar.
+    @Test func `setRestDuration keeps a partial-bar rest as the literal duration`() {
+        let session = ScoreEditSession(score: EditingFixtures.fourQuarterRests())
+        let target = VoiceElementID(EditingFixtures.restID(element: 1))
+        #expect(session.apply(.setRestDuration(at: target, duration: .half)))
+        guard case let .chord(rest) = session.score[target] else { Issue.record("expected a rest"); return }
+        #expect(rest.duration == .half)
+    }
 }
