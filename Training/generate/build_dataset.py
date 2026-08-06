@@ -61,7 +61,7 @@ import numpy as np  # noqa: E402  (must follow the bootstrap above)
 
 from generate import (coco_export, degrade, export_pdf,  # noqa: E402
                       gen_coverage, gen_texture, manifest, pdf_fonts,
-                      rasterize, style_matrix, vocabulary)
+                      rasterize, style_matrix, validate_mscx, vocabulary)
 
 SCHEMA = 1
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -102,6 +102,19 @@ class DatasetExists(RuntimeError):
 
 class DuplicateSourceID(RuntimeError):
     """Two sources claimed one id; one would have silently replaced the other."""
+
+
+class InvalidGeneratedSource(RuntimeError):
+    """A source this repo generated has a measure that does not sum to
+    its meter. Raised instead of quarantined ON PURPOSE: it is a bug in
+    the generator, it is deterministic from the seed, and both outcomes
+    are expensive to discover later -- an overfull bar aborts MuseScore
+    and loses the source in every face at once, and an underfull one is
+    padded silently and poisons the ground truth. Failing before the
+    first export costs one second; a quarantine line in a multi-hour run
+    is read as data noise. `--extra-sources` scores are NOT checked this
+    way: those are the owner's own files, so a defect in one is data to
+    quarantine, not a bug to fix here."""
 
 
 # ---------------------------------------------------------------------
@@ -151,7 +164,36 @@ def collect_sources(seed: int, texture_count: int,
             raise DuplicateSourceID(
                 f"{source_id}: {seen[source_id]} and {source['origin']}")
         seen[source_id] = source["origin"]
+    _reject_invalid_generated_sources(out)
     return sorted(out, key=lambda s: s["source_id"])
+
+
+def _reject_invalid_generated_sources(sources: list[dict]) -> None:
+    """Fail the run if any source WE generated has a measure that does
+    not sum to its meter. See `InvalidGeneratedSource` for why this is
+    fatal rather than a quarantine, and `validate_mscx` for the two
+    measured failures that motivated it.
+
+    A source listed in `gen_coverage.UNDECODABLE_DURATION_SOURCES` is
+    allowed its `unknown-duration` problems and nothing else: those are
+    a deliberate, documented gap in this package's `NoteDuration`, not a
+    generator defect, and a measure-length error in such a source still
+    fails here.
+    """
+    failures: list[str] = []
+    for source in sources:
+        if source["kind"] not in ("coverage", "texture"):
+            continue
+        source_id = source["source_id"]
+        allow_unknown = source_id in gen_coverage.UNDECODABLE_DURATION_SOURCES
+        for problem in validate_mscx.measure_problems(source["payload"]):
+            if allow_unknown and problem.kind == "unknown-duration":
+                continue
+            failures.append(f"{source_id} {problem}")
+    if failures:
+        raise InvalidGeneratedSource(
+            f"{len(failures)} bad measure(s) in generated sources:\n  "
+            + "\n  ".join(failures))
 
 
 # ---------------------------------------------------------------------
@@ -1057,6 +1099,15 @@ def main(argv=None) -> int:
             # exit 2 like any other usage error rather than printing a
             # stack trace.
             parser.error(str(error))
+        except InvalidGeneratedSource as error:
+            # NOT a usage error: the operator did nothing wrong, a
+            # generator in this repo did. Reported as a fatal line
+            # rather than a traceback because the message (which bar of
+            # which source, and by how much) is the whole diagnosis --
+            # and exiting 1 rather than 2 keeps `parser.error`'s exit 2
+            # meaning "you invoked this wrongly".
+            print(f"[generate][FATAL] {error}", file=sys.stderr)
+            return 1
         return 0
     if args.cmd == "finalize":
         finalize_dataset(Path(args.root), args.seed,

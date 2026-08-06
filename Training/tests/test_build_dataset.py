@@ -14,7 +14,7 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from generate import build_dataset, rasterize
+from generate import build_dataset, gen_coverage, rasterize
 from generate.export_pdf import ExportOutcome
 from tests.pdf_builder import music_pdf
 
@@ -285,6 +285,58 @@ def test_duplicate_extra_source_ids_are_rejected(tmp_path):
     with pytest.raises(build_dataset.DuplicateSourceID):
         build_dataset.collect_sources(seed=3, texture_count=0,
                                       extra_sources=[a, b])
+
+
+def test_a_generated_source_with_a_bad_measure_fails_before_any_export(
+        tmp_path, monkeypatch):
+    """An overfull bar aborts MuseScore and loses the source in every
+    face at once; an underfull one is padded silently and poisons the
+    ground truth. Both are deterministic from the seed, so the run must
+    stop at collection rather than spend hours discovering it."""
+    overfull = gen_coverage.mscx_document([gen_coverage.PartSpec(
+        name="Bad", measures=["\n".join(
+            [gen_coverage.time_sig(4, 4)]
+            + [gen_coverage.chord(60, 14) for _ in range(6)])])])
+    monkeypatch.setattr(build_dataset.gen_coverage, "coverage_sources",
+                        lambda seed: [("cov_bad", overfull)])
+    with pytest.raises(build_dataset.InvalidGeneratedSource) as raised:
+        build_dataset.collect_sources(seed=3, texture_count=0)
+    assert "cov_bad" in str(raised.value)
+    assert "OVER" in str(raised.value)
+
+
+def test_an_extra_source_with_a_bad_measure_is_not_a_fatal_error(tmp_path):
+    """`--extra-sources` scores are the owner's own files. A defect in
+    one is data to quarantine downstream, not a bug to fail the run
+    over -- only sources this repo generated are held to the gate."""
+    directory = tmp_path / "mine"
+    directory.mkdir()
+    (directory / "song.mscx").write_text(gen_coverage.mscx_document([
+        gen_coverage.PartSpec(name="Mine", measures=["\n".join(
+            [gen_coverage.time_sig(4, 4)]
+            + [gen_coverage.chord(60, 14) for _ in range(9)])])]))
+    sources = build_dataset.collect_sources(seed=3, texture_count=0,
+                                            extra_sources=[directory])
+    assert "ext_song" in [s["source_id"] for s in sources]
+
+
+def test_the_documented_undecodable_source_is_exempt_only_for_that_reason(
+        tmp_path, monkeypatch):
+    """`cov_doublewhole` is allowed the `breve` bar that this package's
+    `NoteDuration` cannot decode — the exemption does not extend to its
+    other bars, which are still held to the meter."""
+    text = gen_coverage.mscx_document([gen_coverage.PartSpec(
+        name="Bad", measures=[
+            "\n".join([gen_coverage.time_sig(4, 2),
+                       gen_coverage.chord(60, 14, duration="breve")]),
+            "\n".join([gen_coverage.rest("whole")]),   # 4/2 needs two
+        ])])
+    monkeypatch.setattr(build_dataset.gen_coverage, "coverage_sources",
+                        lambda seed: [("cov_doublewhole", text)])
+    with pytest.raises(build_dataset.InvalidGeneratedSource) as raised:
+        build_dataset.collect_sources(seed=3, texture_count=0)
+    assert "unknown durationType" not in str(raised.value)
+    assert "m2" in str(raised.value) and "UNDER" in str(raised.value)
 
 
 # --------------------------------------------------------------------

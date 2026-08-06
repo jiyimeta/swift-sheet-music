@@ -105,6 +105,33 @@ into a root that already holds renders (`--allow-existing` overrides):
 regenerating over one would leave the previous run's `*.labels.json` in
 place for `finalize` to hash as if this run had produced them.
 
+### Measure-length validation (`generate/validate_mscx.py`)
+
+Before the first export, `generate` sums every voice of every measure
+of every source **this repo generated** and compares it against the
+meter in force. A mismatch aborts the run with
+`[generate][FATAL] … bad measure(s) …`, naming each bar and both sums.
+`--extra-sources` scores are exempt: those are the owner's own files,
+so a defect in one is data to quarantine downstream, not a bug here.
+
+This is not a stylistic check. Both failure directions were measured on
+the first real pilot run:
+
+- **Overfull** — MuseScore 4 aborts during layout (`libc++abi: … mutex
+  lock failed: Invalid argument`) and writes no PDF, so the source is
+  lost in *every* face at once. `cov_durations` shipped a 4/4 bar
+  holding 6 quarters and took all 8 of its faces down with it.
+- **Underfull** — MuseScore pads the bar **silently**. The render looks
+  right, the labels describe what was drawn, and the ground truth
+  parsed back out of `source.mscx` describes something shorter, with
+  nothing anywhere reporting it. `cov_timesigs` filled its 7/8 and 9/8
+  bars with quarter notes.
+
+Grace chords are not charged to the bar, tuplet members are scaled by
+`normalNotes/actualNotes`, and a `<Measure len="a/b">` attribute
+overrides the meter — all three mirroring this repo's own
+`MSCXDecoder+Voice.swift` rather than a reading of the schema.
+
 `generate` never rasterizes a PDF that failed its completeness check.
 `export_pdf` judges success only by `ExportOutcome.ok` (MuseScore can
 leave a torn PDF on disk, and a successful export can exit non-zero or
@@ -330,10 +357,20 @@ where they first become visible on real MuseScore output.
    4/4 or 2/2. MuseScore still *renders* the C / cut-C glyph, so the
    seam-level label is correct. **A time-signature divergence in
    `OMR_SCORE_EVAL` output on those sources is this, not an OMR error.**
-4. **Lyrics are attached per note, with no melisma**, though the parent
+4. **`cov_doublewhole` prints `FAIL-THREW … malformedScore` under
+   `OMR_SCORE_EVAL`, and that is expected.** `noteheadDoubleWhole` is in
+   the frozen class vocabulary, so the dataset has to draw a breve — but
+   `breve` is absent from this package's `NoteDuration(mscxName:)`, so
+   `MSCXDecoder+Chord.swift` throws on it and that one `source.mscx`
+   cannot serve as score-level ground truth. It is isolated into a
+   source of its own precisely so the loss stops there; its seam-level
+   labels come from the PDF and are unaffected. Adding `breve`/`long` to
+   `NoteDuration` would fix it, but that is a `Sources/` change and this
+   branch deliberately makes none.
+5. **Lyrics are attached per note, with no melisma**, though the parent
    design describes melismatic attachment. A coverage gap in the
    generators, not a defect in anything under test.
-5. **Score-level metrics score `staves.first` only**, so the lower staff
+6. **Score-level metrics score `staves.first` only**, so the lower staff
    of a grand-staff part is unscored. Grand-staff renders therefore
    report on roughly half their content.
 
