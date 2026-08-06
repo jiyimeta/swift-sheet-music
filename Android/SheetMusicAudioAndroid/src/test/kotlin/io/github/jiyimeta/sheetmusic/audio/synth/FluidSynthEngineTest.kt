@@ -129,7 +129,7 @@ class FluidSynthEngineTest {
 
         setupStaves(engine, 3)
 
-        assertEquals(3, engine.staffCount)
+        assertEquals(3, engine.channelCount)
         // Single synth — factory called exactly once.
         assertEquals(1, createCount)
     }
@@ -269,7 +269,7 @@ class FluidSynthEngineTest {
 
         engine.teardown()
 
-        assertEquals(0, engine.staffCount)
+        assertEquals(0, engine.channelCount)
         assertEquals(0L, engine.synthHandle)
         assertTrue("driver should be closed", synth.calls.contains("close"))
     }
@@ -289,7 +289,7 @@ class FluidSynthEngineTest {
         // Second setup should close the first synth.
         setupStaves(engine, 2)
         assertTrue("first synth should be closed on re-setup", firstSynth.calls.contains("close"))
-        assertEquals(2, engine.staffCount)
+        assertEquals(2, engine.channelCount)
     }
 
     // ── Bug 1: drum channel routing ─────────────────────────────────────────

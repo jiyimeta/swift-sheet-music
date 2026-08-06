@@ -170,6 +170,49 @@
                     $0.channel == accordionChannel && $0.program == accordionProgram
                 })
             }
+
+            /// The headline Apple feature of Task 12: `midiChannel(forStaff:
+            /// atTick:)` must audition the instrument ACTIVE AT THE CURSOR,
+            /// not the part's opening (ordinal-0) instrument. Drives a real
+            /// `PlaybackEngine` through `prepare(score:)` (which populates
+            /// `staffChannelSwitches` inside `prepareSynth`) and looks up
+            /// BOTH expected channels from the `LiveChannelPlan` itself —
+            /// never hardcoded — so this survives a change in
+            /// channel-allocation order.
+            ///
+            /// `instrument-change.mscx` is 4/4 at division 480 (1920
+            /// ticks/measure) with whole notes; the `<InstrumentChange>`
+            /// sits at the head of measure index 2 — absolute tick 3840.
+            @Test("midiChannel(forStaff:atTick:) tracks the instrument active at the cursor")
+            func midiChannelAtTickTracksInstrumentChange() throws {
+                let score = try InstrumentChangeMixerTests.fixtureScore()
+                let plan = LiveChannelPlan.build(score: score)
+                let piano = try #require(plan.strips.first { $0.instrument.id == "piano" })
+                let accordion = try #require(plan.strips.first { $0.instrument.id == "accordion" })
+                // Sanity on the fixture: the two strips must actually be on
+                // different channels, or every assertion below would pass
+                // for the wrong reason.
+                #expect(accordion.liveChannel != piano.liveChannel)
+                let pianoChannel = UInt8(clamping: piano.liveChannel)
+                let accordionChannel = UInt8(clamping: accordion.liveChannel)
+
+                let engine = PlaybackEngine(soundfontResolver: NullResolver(), backend: RecordingBackend())
+                try engine.prepare(score: score)
+
+                let flatStaffIndex = 0
+                // Tick 0 and any tick before the change (measures 0–1,
+                // ticks [0, 3840)) resolve to the part's OWN (ordinal-0)
+                // channel.
+                #expect(engine.midiChannel(forStaff: flatStaffIndex, atTick: 0) == pianoChannel)
+                #expect(engine.midiChannel(forStaff: flatStaffIndex, atTick: 3839) == pianoChannel)
+                // Exactly ON the change: the comparison is INCLUSIVE, so
+                // this must already resolve to the NEW instrument, not the
+                // old one — this is the assertion an `entry.tick <= tick`
+                // → `entry.tick < tick` mutation flips.
+                #expect(engine.midiChannel(forStaff: flatStaffIndex, atTick: 3840) == accordionChannel)
+                // Comfortably after the change.
+                #expect(engine.midiChannel(forStaff: flatStaffIndex, atTick: 4000) == accordionChannel)
+            }
         }
     }
 

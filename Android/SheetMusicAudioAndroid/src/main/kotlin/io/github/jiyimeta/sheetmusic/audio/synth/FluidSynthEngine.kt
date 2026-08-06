@@ -12,7 +12,7 @@ import io.github.jiyimeta.sheetmusic.audio.model.StaffParams
  * (e.g. a 2-strip score where one strip is the drum channel 9) rather than a
  * dense `0 until count` range. Every method here therefore gates on whether
  * [staffLoadParams] has an entry for the given channel, not on `channel <
- * staffCount` — that bound was only ever correct for the dense case.
+ * channelCount` — that bound was only ever correct for the dense case.
  * Parameters are still named `staffIndex` for source compatibility, but the
  * value passed is a raw MIDI channel number (`0...15`), not necessarily this
  * staff's own array position (maximum 16 channels, matching the MIDI limit).
@@ -39,7 +39,7 @@ internal class FluidSynthEngine(
     private data class StaffLoadParams(val effectiveBank: Int, val isDrums: Boolean)
 
     private var synth: SynthDriver? = null
-    private var staffCountValue: Int = 0
+    private var channelCountValue: Int = 0
 
     /** sfid returned by [SynthDriver.loadSoundFont] at last [setupStaves]; -1 if none loaded. */
     private var loadedSfid: Int = -1
@@ -47,7 +47,14 @@ internal class FluidSynthEngine(
     /** Per-channel load parameters populated by [setupStaves]; null for unassigned channels. */
     private val staffLoadParams: Array<StaffLoadParams?> = arrayOfNulls(16)
 
-    val staffCount: Int get() = staffCountValue
+    /**
+     * Number of CHANNELS configured by the last [setupStaves] — one per
+     * live-channel-plan strip, NOT one per staff (despite the name
+     * `setupStaves` and this property's historical `staffCount` name from
+     * before the live-channel-plan re-key; kept as `channelCount` now so
+     * that mismatch can't be missed again).
+     */
+    val channelCount: Int get() = channelCountValue
 
     /** Native fluid_synth_t handle, or 0L if no synth is loaded. */
     val synthHandle: Long get() = synth?.nativeHandle ?: 0L
@@ -91,7 +98,7 @@ internal class FluidSynthEngine(
         sampleRate: Int = 48_000,
     ) {
         teardown()
-        require(params.size <= 16) { "Single-synth backend supports at most 16 staves" }
+        require(params.size <= 16) { "Single-synth backend supports at most 16 channels" }
         if (params.isEmpty()) return
 
         val driver = synthFactory(sampleRate)
@@ -135,7 +142,7 @@ internal class FluidSynthEngine(
         }
 
         synth = driver
-        staffCountValue = params.size
+        channelCountValue = params.size
     }
 
     /**
@@ -195,7 +202,8 @@ internal class FluidSynthEngine(
      * only needs to supply the new GM program number (0–127).
      * Out-of-range [program] values are clamped to [0, 127].
      * No-ops if [setupStaves] has not been called, if the sfid is invalid, or if
-     * [staffIndex] is outside [0, staffCount).
+     * [staffIndex] is a channel this instance never configured (see the
+     * class doc on why that is not the same as "outside `[0, channelCount)`").
      */
     fun setStaffProgram(staffIndex: Int, program: Int) {
         val params = staffLoadParams.getOrNull(staffIndex) ?: return
@@ -217,7 +225,7 @@ internal class FluidSynthEngine(
     fun setMasterTuning(cents: Double) {
         val s = synth ?: return
         val rpn = MasterTuning.rpnControlChanges(cents)
-        // Iterate CONFIGURED channels, not `0 until staffCountValue` — with
+        // Iterate CONFIGURED channels, not `0 until channelCountValue` — with
         // live-channel-keyed setup the configured channel numbers may be
         // sparse (e.g. a drum strip on channel 9 while only 2 strips exist).
         for (ch in staffLoadParams.indices) {
@@ -259,7 +267,7 @@ internal class FluidSynthEngine(
     fun teardown() {
         synth?.close()
         synth = null
-        staffCountValue = 0
+        channelCountValue = 0
         loadedSfid = -1
         staffLoadParams.fill(null)
         for (i in 0 until 16) {

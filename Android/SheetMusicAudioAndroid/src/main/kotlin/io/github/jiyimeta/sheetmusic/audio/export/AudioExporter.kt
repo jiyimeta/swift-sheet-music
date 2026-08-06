@@ -154,11 +154,18 @@ internal class AudioExporter(
             val bankByChannel = strips.associate {
                 it.liveChannel to (if (it.isDrums) 128 else it.bankLSB.toInt())
             }
+            // MixerChannel.program is null whenever the host never overrode
+            // the score's authored program (it defaults to null — pinned by
+            // MixerChannelTest.mixerChannelDefaultsProgramToNull). Falling
+            // back to a bare `0` there would export every un-touched strip
+            // as GM piano instead of its own authored program; fall back to
+            // the STRIP's own program instead, keyed the same way as bank.
+            val programByChannel = strips.associate { it.liveChannel to it.program.toInt() }
             for (chan in snapshot.mixerChannels) {
                 if (chan.isDrums) synth.setChannelType(chan.liveChannel, isDrum = true)
                 val effectiveBank = bankByChannel[chan.liveChannel]
                     ?: if (chan.isDrums) 128 else 0
-                val program = chan.program ?: 0
+                val program = chan.program ?: programByChannel[chan.liveChannel] ?: 0
                 synth.programSelect(sfid, chan.liveChannel, effectiveBank, program.coerceIn(0, 127))
             }
             val soloed = snapshot.mixerChannels.any { it.isSoloed }

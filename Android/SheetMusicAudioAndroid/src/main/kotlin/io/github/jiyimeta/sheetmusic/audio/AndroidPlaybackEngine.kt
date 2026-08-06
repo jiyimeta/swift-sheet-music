@@ -398,6 +398,15 @@ class AndroidPlaybackEngine internal constructor(
             // Android mirror of Apple's `LiveChannelPlan`.
             val decodedStrips = decodeInstrumentParams(scoreHandle)
             val strips = stripsOrFallback(decodedStrips, staves)
+            // `strips.size` — NOT `staves.size` — is what actually gets
+            // handed to `FluidSynthEngine.setupStaves` below (one entry
+            // per live channel, not per staff), so it is the quantity that
+            // must stay within the single-synth 16-channel limit.
+            // `FluidSynthEngine.setupStaves` has its own `require(...)` for
+            // this, but that throws a raw `IllegalArgumentException`
+            // instead of this method's documented `TooManyStaves` — check
+            // here first so the typed exception wins.
+            if (strips.size > 16) throw AudioBackendException.TooManyStaves(strips.size)
             // Per-staff live channel for `playPreview`: the staff's PART's
             // primary (ordinal-0) strip. Only meaningful when the real
             // `instrumentParams` bridge populated `strips` with genuine
