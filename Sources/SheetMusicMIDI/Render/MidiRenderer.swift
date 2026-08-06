@@ -40,8 +40,8 @@ public enum MidiRenderer {
         let plan = RepeatUnwinder.plan(navigation: navigation)
         for (partIndex, part) in score.parts.enumerated() {
             let channels = channelAssignments[partIndex]
-            let primaryChannel = channels.first?.channel ?? partIndex
-            let port = part.instrument.channel.midiPort ?? 0
+            let primaryChannel = channels
+                .first { $0.instrumentOrdinal == 0 }?.channel ?? partIndex
             for (s, staff) in part.staves.enumerated() {
                 let address = StaffAddress(
                     partIndex: partIndex,
@@ -56,7 +56,6 @@ public enum MidiRenderer {
                     plan: plan,
                     primaryChannel: primaryChannel,
                     channels: channels,
-                    port: port,
                     isFirstTrack: trackIndex == 0,
                     isTopOfPart: s == 0,
                     division: score.division,
@@ -87,10 +86,21 @@ public enum MidiRenderer {
         }
     }
 
-    /// One MIDI channel allocated to a particular `<Channel>` flavour of a part.
+    /// One MIDI channel allocated to a particular `<Channel>` flavour of
+    /// one instrument in force somewhere in a part.
     struct ChannelAssignment {
         var channel: Int
+        /// Declared `<midiPort>` (0 when absent). Part of the channel's
+        /// identity — see `MidiChannelKey`.
+        var port: Int
         var flavour: InstrumentChannel
+        /// Index into `Score.instrumentTimeline(forPart:)`: 0 = the
+        /// tick-0 instrument, 1... = one per change instance.
+        var instrumentOrdinal: Int
+
+        var key: MidiChannelKey {
+            MidiChannelKey(port: port, channel: channel)
+        }
     }
 
     private static func renderTrack(
@@ -99,7 +109,6 @@ public enum MidiRenderer {
         plan: [PlaybackEntry],
         primaryChannel: Int,
         channels: [ChannelAssignment],
-        port: Int,
         isFirstTrack: Bool,
         isTopOfPart: Bool,
         division: Int,
@@ -110,7 +119,6 @@ public enum MidiRenderer {
             staff: staff,
             part: part,
             channels: channels,
-            port: port,
             isFirstTrack: isFirstTrack,
             isTopOfPart: isTopOfPart,
         )

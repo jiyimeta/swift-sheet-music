@@ -6,7 +6,6 @@ extension MidiRenderer {
         staff: Staff,
         part: Part,
         channels: [ChannelAssignment],
-        port: Int,
         isFirstTrack: Bool,
         isTopOfPart: Bool,
     ) -> [TimedMidiEvent] {
@@ -67,8 +66,10 @@ extension MidiRenderer {
                 cc(93, flavour.chorus)
             }
 
-            if (0 ... 127).contains(port) {
-                events.append(TimedMidiEvent(tick: 0, event: .meta(.portChange(port: port))))
+            if (0 ... 127).contains(assignment.port) {
+                events.append(TimedMidiEvent(
+                    tick: 0, event: .meta(.portChange(port: assignment.port)),
+                ))
             }
         }
         return events
