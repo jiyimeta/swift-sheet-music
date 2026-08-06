@@ -154,62 +154,83 @@
     /// (judgment call 3 in the plan header).
     @Suite(.enabled(if: ProcessInfo.processInfo.environment["OMR_ORACLE_REPLAY"] == "1"))
     struct OMROracleReplayGate {
+        /// One render directory's outcome. Not `private`, and factored out
+        /// of the `@Test` loop below, so Task 9's `OMRHarnessWiringTests`
+        /// can drive the labels-discovery → walk → replay → compare
+        /// wiring directly against a synthetic fixture, without needing
+        /// `OMR_DATA_ROOT`. Mechanical extraction: the printed output and
+        /// counting in `oracleReplayMatchesDirectImportForEveryRender`
+        /// below is unchanged, only re-expressed as a switch over this.
+        enum RenderOutcome {
+            case skippedNoLabels
+            case exact
+            case inexact(diff: String)
+            case failed(String)
+        }
+
+        @MainActor
+        static func evaluateOneRender(dir: String) -> RenderOutcome {
+            do {
+                let labelPaths = try OMRHarnessDirectoryWalk.labelFiles(in: dir)
+                guard !labelPaths.isEmpty else { return .skippedNoLabels }
+                let renderData = try Data(contentsOf: URL(fileURLWithPath: "\(dir)/render.json"))
+                let render = try JSONSerialization.jsonObject(with: renderData) as? [String: Any]
+                let pdfName = render?["pdf"] as? String ?? "score.pdf"
+                let pdfData = try Data(contentsOf: URL(fileURLWithPath: "\(dir)/\(pdfName)"))
+                let document = try PDFImporter.openDocument(pdfData)
+                let walk = try PDFImporter.walkDocument(
+                    document, anchorMusicGlyphsToPUARange: true,
+                )
+                let scoreB = try PDFImporter.buildScore(
+                    pageCount: document.pageCount, walked: walk.content,
+                    pageSizes: walk.pageSizes, documentAttributes: nil,
+                    options: .init(),
+                )
+                let pages = try labelPaths.map {
+                    try OMRLabelSchema.decode(
+                        Data(contentsOf: URL(fileURLWithPath: "\(dir)/\($0)")),
+                    )
+                }
+                let replay = try OMROracleFrontEnd.replay(pages: pages)
+                let scoreC = try PDFImporter.buildScore(
+                    pageCount: replay.pageCount, walked: replay.walked,
+                    pageSizes: replay.pageSizes, documentAttributes: nil,
+                    options: .init(),
+                )
+                if scoreC == scoreB {
+                    return .exact
+                }
+                return .inexact(diff: OMROracleReplaySupport.byteDiff(scoreB, scoreC))
+            } catch {
+                return .failed("\(error)")
+            }
+        }
+
         @MainActor
         @Test func oracleReplayMatchesDirectImportForEveryRender() throws {
             guard let root = ProcessInfo.processInfo.environment["OMR_DATA_ROOT"] else {
                 Issue.record("OMR_ORACLE_REPLAY=1 but OMR_DATA_ROOT is unset")
                 return
             }
-            let fm = FileManager.default
-            let renderDirs = try (fm.contentsOfDirectory(atPath: root)).sorted()
-                .map { "\(root)/\($0)" }
-                .filter { fm.fileExists(atPath: "\($0)/render.json") }
+            let renderDirs = try OMRHarnessDirectoryWalk.renderDirectories(root: root)
             var exact = 0
             var total = 0
             for dir in renderDirs {
                 let renderID = (dir as NSString).lastPathComponent
                 let tag = "[\(renderID)]"
-                let labelPaths = try (fm.contentsOfDirectory(atPath: dir))
-                    .filter { $0.hasSuffix(".labels.json") }.sorted()
-                guard !labelPaths.isEmpty else {
+                switch Self.evaluateOneRender(dir: dir) {
+                case .skippedNoLabels:
                     print("\(tag)[SUMMARY] SKIP-NO-LABELS")
-                    continue
-                }
-                do {
-                    let renderData = try Data(contentsOf: URL(fileURLWithPath: "\(dir)/render.json"))
-                    let render = try JSONSerialization.jsonObject(with: renderData) as? [String: Any]
-                    let pdfName = render?["pdf"] as? String ?? "score.pdf"
-                    let pdfData = try Data(contentsOf: URL(fileURLWithPath: "\(dir)/\(pdfName)"))
-                    let document = try PDFImporter.openDocument(pdfData)
-                    let walk = try PDFImporter.walkDocument(
-                        document, anchorMusicGlyphsToPUARange: true,
-                    )
-                    let scoreB = try PDFImporter.buildScore(
-                        pageCount: document.pageCount, walked: walk.content,
-                        pageSizes: walk.pageSizes, documentAttributes: nil,
-                        options: .init(),
-                    )
-                    let pages = try labelPaths.map {
-                        try OMRLabelSchema.decode(
-                            Data(contentsOf: URL(fileURLWithPath: "\(dir)/\($0)")),
-                        )
-                    }
-                    let replay = try OMROracleFrontEnd.replay(pages: pages)
-                    let scoreC = try PDFImporter.buildScore(
-                        pageCount: replay.pageCount, walked: replay.walked,
-                        pageSizes: replay.pageSizes, documentAttributes: nil,
-                        options: .init(),
-                    )
+                case .exact:
                     total += 1
-                    if scoreC == scoreB {
-                        exact += 1
-                        print("\(tag)[SUMMARY] exact=Y")
-                    } else {
-                        print("\(tag)[SUMMARY] exact=N")
-                        print("\(tag)[diff] \(OMROracleReplaySupport.byteDiff(scoreB, scoreC))")
-                    }
-                } catch {
-                    print("\(tag)[SUMMARY] FAIL-THREW \(error)")
+                    exact += 1
+                    print("\(tag)[SUMMARY] exact=Y")
+                case let .inexact(diff):
+                    total += 1
+                    print("\(tag)[SUMMARY] exact=N")
+                    print("\(tag)[diff] \(diff)")
+                case let .failed(message):
+                    print("\(tag)[SUMMARY] FAIL-THREW \(message)")
                 }
             }
             print("[gate][SUMMARY] P0-G1 exact=\(exact)/\(total)")

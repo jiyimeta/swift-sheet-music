@@ -142,10 +142,7 @@
                 Issue.record("OMR_SEAM_EVAL=1 but OMR_DATA_ROOT is unset")
                 return
             }
-            let fm = FileManager.default
-            let renderDirs = try (fm.contentsOfDirectory(atPath: root)).sorted()
-                .map { "\(root)/\($0)" }
-                .filter { fm.fileExists(atPath: "\($0)/render.json") }
+            let renderDirs = try OMRHarnessDirectoryWalk.renderDirectories(root: root)
             var aggregate: [String: OMRSeamMetrics.ClassCounts] = [:]
             for dir in renderDirs {
                 try evaluate(dir: dir, aggregate: &aggregate)
@@ -167,12 +164,14 @@
         /// per-page geometry rows printed, per-class counts folded into
         /// `aggregate`. Split out of the @Test body to stay under the
         /// 60-line function-body cap.
-        private func evaluate(
+        ///
+        /// Not `private`: Task 9's `OMRHarnessWiringTests` drives this
+        /// directly against a synthetic fixture (including a directory
+        /// with no `.labels.json`, which must no-op rather than throw).
+        func evaluate(
             dir: String, aggregate: inout [String: OMRSeamMetrics.ClassCounts],
         ) throws {
-            let fm = FileManager.default
-            let labelPaths = try (fm.contentsOfDirectory(atPath: dir))
-                .filter { $0.hasSuffix(".labels.json") }.sorted()
+            let labelPaths = try OMRHarnessDirectoryWalk.labelFiles(in: dir)
             for name in labelPaths {
                 let page = try OMRLabelSchema.decode(
                     Data(contentsOf: URL(fileURLWithPath: "\(dir)/\(name)")),

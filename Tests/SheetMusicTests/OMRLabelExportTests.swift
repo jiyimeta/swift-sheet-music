@@ -239,11 +239,7 @@
                 Issue.record("OMR_LABEL_EXPORT=1 but OMR_DATA_ROOT is unset")
                 return
             }
-            let fm = FileManager.default
-            let renderDirs = try fm.contentsOfDirectory(atPath: root)
-                .sorted()
-                .map { "\(root)/\($0)" }
-                .filter { fm.fileExists(atPath: "\($0)/render.json") }
+            let renderDirs = try OMRHarnessDirectoryWalk.renderDirectories(root: root)
             print("[export] \(renderDirs.count) render dirs under \(root)")
             for dir in renderDirs {
                 exportOneRender(dir: dir)
@@ -254,8 +250,13 @@
         /// dpi; the labels land beside them. Prints one `[SUMMARY]` line per
         /// directory and never throws — a bad directory must not abort the
         /// batch.
+        ///
+        /// Not `private`: Task 9's `OMRHarnessWiringTests` drives this
+        /// directly against a synthetic fixture to exercise the
+        /// discovery → export → write/quarantine wiring without needing
+        /// `OMR_DATA_ROOT`.
         @MainActor
-        private func exportOneRender(dir: String) {
+        func exportOneRender(dir: String) {
             let tag = "[\((dir as NSString).lastPathComponent)]"
             do {
                 let renderData = try Data(contentsOf: URL(fileURLWithPath: "\(dir)/render.json"))

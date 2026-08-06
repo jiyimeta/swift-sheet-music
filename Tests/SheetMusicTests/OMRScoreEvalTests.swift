@@ -30,56 +30,80 @@
     /// explosions zero out pitch — ALWAYS read measuresA/measuresB first.
     @Suite(.enabled(if: ProcessInfo.processInfo.environment["OMR_SCORE_EVAL"] == "1"))
     struct OMRScoreEvalHarness {
+        /// One render directory's outcome. Not `private`, and factored
+        /// out of the `@Test` loop below, so Task 9's
+        /// `OMRHarnessWiringTests` can drive the source.mscx /
+        /// .labels.json discovery → parse → replay → metrics wiring
+        /// directly against a synthetic fixture, without needing
+        /// `OMR_DATA_ROOT`. Mechanical extraction: the printed output in
+        /// `oracleReplayAgainstSourceMscx` below is unchanged, only
+        /// re-expressed as a switch over this.
+        enum RenderOutcome {
+            case skippedNoSourceOrLabels
+            case processed(summary: String, diverge: String?)
+            case failed(String)
+        }
+
+        @MainActor
+        static func evaluateOneRender(dir: String, tag: String) -> RenderOutcome {
+            let fm = FileManager.default
+            do {
+                let labelPaths = try OMRHarnessDirectoryWalk.labelFiles(in: dir)
+                guard fm.fileExists(atPath: "\(dir)/source.mscx"), !labelPaths.isEmpty else {
+                    return .skippedNoSourceOrLabels
+                }
+                let scoreA = try MSCXParser.parse(
+                    contentsOf: URL(fileURLWithPath: "\(dir)/source.mscx"),
+                )
+                let pages = try labelPaths.map {
+                    try OMRLabelSchema.decode(
+                        Data(contentsOf: URL(fileURLWithPath: "\(dir)/\($0)")),
+                    )
+                }
+                let replay = try OMROracleFrontEnd.replay(pages: pages)
+                let scoreC = try PDFImporter.buildScore(
+                    pageCount: replay.pageCount, walked: replay.walked,
+                    pageSizes: replay.pageSizes, documentAttributes: nil,
+                    options: .init(),
+                )
+                let recovered = !scoreC.parts.isEmpty
+                    && ScoreSemanticMetrics.contentTotals(scoreC).notes > 0
+                let aligned = ScoreSemanticMetrics.alignNotefulParts(
+                    scoreA: scoreA, scoreB: scoreC,
+                )
+                let summary = ScoreSemanticMetrics.summaryRow(
+                    tag: tag, scoreA: scoreA, scoreB: scoreC,
+                    pdfRecovered: recovered, aligned: aligned, hiddenLoss: 0,
+                )
+                let diverge = ScoreSemanticMetrics.firstDivergenceReport(
+                    scoreA: aligned.scoreA, scoreB: aligned.scoreB, window: 2,
+                )
+                return .processed(summary: summary, diverge: diverge)
+            } catch {
+                return .failed("\(error)")
+            }
+        }
+
         @MainActor
         @Test func oracleReplayAgainstSourceMscx() throws {
             guard let root = ProcessInfo.processInfo.environment["OMR_DATA_ROOT"] else {
                 Issue.record("OMR_SCORE_EVAL=1 but OMR_DATA_ROOT is unset")
                 return
             }
-            let fm = FileManager.default
-            let renderDirs = try (fm.contentsOfDirectory(atPath: root)).sorted()
-                .map { "\(root)/\($0)" }
-                .filter { fm.fileExists(atPath: "\($0)/render.json") }
+            let renderDirs = try OMRHarnessDirectoryWalk.renderDirectories(root: root)
             for dir in renderDirs {
                 let renderID = (dir as NSString).lastPathComponent
                 let tag = "[\(renderID)]"
-                let labelPaths = try (fm.contentsOfDirectory(atPath: dir))
-                    .filter { $0.hasSuffix(".labels.json") }.sorted()
-                guard fm.fileExists(atPath: "\(dir)/source.mscx"), !labelPaths.isEmpty else {
+                switch Self.evaluateOneRender(dir: dir, tag: tag) {
+                case .skippedNoSourceOrLabels:
                     print("\(tag)[SUMMARY] SKIP-NO-SOURCE-OR-LABELS")
-                    continue
-                }
-                do {
-                    let scoreA = try MSCXParser.parse(
-                        contentsOf: URL(fileURLWithPath: "\(dir)/source.mscx"),
-                    )
-                    let pages = try labelPaths.map {
-                        try OMRLabelSchema.decode(
-                            Data(contentsOf: URL(fileURLWithPath: "\(dir)/\($0)")),
-                        )
-                    }
-                    let replay = try OMROracleFrontEnd.replay(pages: pages)
-                    let scoreC = try PDFImporter.buildScore(
-                        pageCount: replay.pageCount, walked: replay.walked,
-                        pageSizes: replay.pageSizes, documentAttributes: nil,
-                        options: .init(),
-                    )
-                    let recovered = !scoreC.parts.isEmpty
-                        && ScoreSemanticMetrics.contentTotals(scoreC).notes > 0
-                    let aligned = ScoreSemanticMetrics.alignNotefulParts(
-                        scoreA: scoreA, scoreB: scoreC,
-                    )
-                    print(ScoreSemanticMetrics.summaryRow(
-                        tag: tag, scoreA: scoreA, scoreB: scoreC,
-                        pdfRecovered: recovered, aligned: aligned, hiddenLoss: 0,
-                    ))
-                    if let diverge = ScoreSemanticMetrics.firstDivergenceReport(
-                        scoreA: aligned.scoreA, scoreB: aligned.scoreB, window: 2,
-                    ) {
+                case let .processed(summary, diverge):
+                    print(summary)
+                    if let diverge {
                         print("\(tag)[diverge] \(diverge)")
                     }
-                } catch {
-                    print("\(tag)[SUMMARY] FAIL-THREW \(error)")
+                case let .failed(message):
+                    print("\(tag)[SUMMARY] FAIL-THREW \(message)")
                 }
             }
         }
