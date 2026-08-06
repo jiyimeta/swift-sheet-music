@@ -63,10 +63,21 @@ private struct MasterLevelSection: View {
                     .buttonStyle(.borderless)
                     .font(.caption)
             }
+            // Crest = how far the peak sits above the RMS. A wide crest is
+            // why a mix can peak near the ceiling and still sound quiet:
+            // there is no gain left to add, but little of the signal is
+            // near the top.
+            HStack(spacing: 8) {
+                Text("RMS \(Self.dB(meter.rmsHold))")
+                    .font(.caption.monospacedDigit())
+                Text("Crest \(Self.crest(peak: meter.peakHold, rms: meter.rmsHold))")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
         }
         .onAppear {
-            engine.startLevelMonitoring { [meter] peak in
-                Task { @MainActor in meter.report(peak) }
+            engine.startLevelMonitoring { [meter] level in
+                Task { @MainActor in meter.report(level) }
             }
         }
         .onDisappear {
@@ -79,22 +90,33 @@ private struct MasterLevelSection: View {
         guard amplitude > 0 else { return "-∞ dB" }
         return String(format: "%+.1f dB", 20 * log10(amplitude))
     }
+
+    /// Peak-to-RMS distance in dB.
+    private static func crest(peak: Float, rms: Float) -> String {
+        guard peak > 0, rms > 0 else { return "— dB" }
+        return String(format: "%.1f dB", 20 * log10(peak / rms))
+    }
 }
 
-/// Peak + peak-hold, updated from the engine's metering tap.
+/// Peak / RMS with holds, updated from the engine's metering tap. Both
+/// hold their maximum so a single pass over the loudest passage is
+/// enough to read the numbers off.
 @MainActor
 @Observable
 private final class LevelMeter {
     private(set) var peak: Float = 0
     private(set) var peakHold: Float = 0
+    private(set) var rmsHold: Float = 0
 
-    func report(_ value: Float) {
-        peak = value
-        peakHold = max(peakHold, value)
+    func report(_ level: MixLevel) {
+        peak = level.peak
+        peakHold = max(peakHold, level.peak)
+        rmsHold = max(rmsHold, level.rms)
     }
 
     func resetHold() {
         peakHold = 0
+        rmsHold = 0
     }
 }
 

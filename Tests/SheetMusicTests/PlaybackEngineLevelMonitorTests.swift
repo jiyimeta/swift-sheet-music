@@ -19,13 +19,13 @@
             @Test("peak is the largest sample magnitude in the buffer")
             func peakFindsLargestMagnitude() throws {
                 let buffer = try makeBuffer([[0.1, 0.7, 0.25]])
-                #expect(PlaybackEngine.peakAmplitude(in: buffer) == 0.7)
+                #expect(PlaybackEngine.level(in: buffer).peak == 0.7)
             }
 
             @Test("peak uses magnitude, so a negative trough counts")
             func peakUsesMagnitude() throws {
                 let buffer = try makeBuffer([[0.1, -0.9, 0.25]])
-                #expect(PlaybackEngine.peakAmplitude(in: buffer) == 0.9)
+                #expect(PlaybackEngine.level(in: buffer).peak == 0.9)
             }
 
             /// The mix is stereo by the time it reaches `sumMixer`, and a
@@ -33,13 +33,15 @@
             @Test("peak spans every channel")
             func peakSpansChannels() throws {
                 let buffer = try makeBuffer([[0.1, 0.2], [0.3, 0.8]])
-                #expect(PlaybackEngine.peakAmplitude(in: buffer) == 0.8)
+                #expect(PlaybackEngine.level(in: buffer).peak == 0.8)
             }
 
-            @Test("silence peaks at zero")
+            @Test("silence reads zero on both meters")
             func silenceIsZero() throws {
                 let buffer = try makeBuffer([[0, 0, 0]])
-                #expect(PlaybackEngine.peakAmplitude(in: buffer) == 0)
+                let level = PlaybackEngine.level(in: buffer)
+                #expect(level.peak == 0)
+                #expect(level.rms == 0)
             }
 
             /// Overshoot must be reported as-is rather than clamped: the
@@ -48,7 +50,43 @@
             @Test("peak reports overshoot past full scale")
             func reportsOvershoot() throws {
                 let buffer = try makeBuffer([[0.5, 1.8]])
-                #expect(PlaybackEngine.peakAmplitude(in: buffer) == 1.8)
+                #expect(PlaybackEngine.level(in: buffer).peak == 1.8)
+            }
+
+            /// A steady signal has no crest at all, so its RMS is its own
+            /// amplitude — the simplest anchor for the arithmetic.
+            @Test("a steady signal's RMS equals its amplitude")
+            func rmsOfSteadySignal() throws {
+                let buffer = try makeBuffer([[0.5, 0.5, 0.5, 0.5]])
+                #expect(PlaybackEngine.level(in: buffer).rms.isApproximately(0.5))
+            }
+
+            /// RMS squares before averaging, so the sign drops out — a
+            /// square wave is as loud as the DC signal of the same height.
+            @Test("RMS squares away the sign")
+            func rmsIgnoresSign() throws {
+                let buffer = try makeBuffer([[0.5, -0.5, 0.5, -0.5]])
+                #expect(PlaybackEngine.level(in: buffer).rms.isApproximately(0.5))
+            }
+
+            /// One full-scale sample in four is mean-square 0.25, RMS 0.5 —
+            /// half the peak. This is the crest factor the meter exists to
+            /// expose: a mix can peak near full scale and still be quiet.
+            @Test("RMS falls below peak for a spiky signal")
+            func rmsFallsBelowPeak() throws {
+                let buffer = try makeBuffer([[1, 0, 0, 0]])
+                let level = PlaybackEngine.level(in: buffer)
+                #expect(level.peak == 1)
+                #expect(level.rms.isApproximately(0.5))
+            }
+
+            /// Channels are pooled by mean square, not averaged after the
+            /// square root — a signal in one channel of a stereo pair reads
+            /// 0.707, not 0.5.
+            @Test("RMS pools channels by mean square")
+            func rmsPoolsChannels() throws {
+                let buffer = try makeBuffer([[0, 0], [1, 1]])
+                #expect(PlaybackEngine.level(in: buffer).rms.isApproximately(0.7071068))
             }
 
             /// AVFoundation calls the tap from its own realtime-messenger
@@ -60,14 +98,15 @@
             /// this test invokes it off the main actor too.
             @Test("the tap block runs off the main actor")
             func tapBlockRunsOffTheMainActor() async throws {
-                let buffer = try makeBuffer([[0.25, -0.4]])
-                let received = PeakBox()
+                let buffer = try makeBuffer([[0.4, -0.4]])
+                let received = LevelBox()
                 let block = PlaybackEngine.makeTapBlock { received.store($0) }
                 let time = AVAudioTime(sampleTime: 0, atRate: 44100)
 
                 await Task.detached { block(buffer, time) }.value
 
-                #expect(received.value == 0.4)
+                #expect(received.value?.peak == 0.4)
+                #expect(received.value?.rms.isApproximately(0.4) == true)
             }
 
             @Test("monitoring is off until started")
@@ -135,21 +174,29 @@
         return buffer
     }
 
-    /// Carries a peak from the tap's thread back to the test.
-    private final class PeakBox: @unchecked Sendable {
+    /// Carries a level reading from the tap's thread back to the test.
+    private final class LevelBox: @unchecked Sendable {
         private let lock = NSLock()
-        private var stored: Float?
+        private var stored: MixLevel?
 
-        func store(_ peak: Float) {
+        func store(_ level: MixLevel) {
             lock.lock()
             defer { lock.unlock() }
-            stored = peak
+            stored = level
         }
 
-        var value: Float? {
+        var value: MixLevel? {
             lock.lock()
             defer { lock.unlock() }
             return stored
+        }
+    }
+
+    extension Float {
+        /// Float RMS goes through a square root, so exact equality is the
+        /// wrong assertion for anything but zero.
+        fileprivate func isApproximately(_ other: Float) -> Bool {
+            abs(self - other) < 1e-5
         }
     }
 
