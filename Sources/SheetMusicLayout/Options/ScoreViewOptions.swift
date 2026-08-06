@@ -58,6 +58,50 @@ public enum MultiMeasureRestPolicy: Sendable, Equatable {
     case collapse(minimumMeasures: Int)
 }
 
+/// How often a measure-number label is engraved above the staff.
+///
+/// MuseScore splits this across three style values —
+/// `Sid::measureNumberSystem` (label every system head),
+/// `Sid::measureNumberInterval` (label every N-th measure) and
+/// `Sid::showMeasureNumberOne`. This enum folds the first two into one
+/// choice because they are mutually exclusive in the UI, and drops the
+/// third: measure 1 always starts a system, so it is covered by the
+/// system-head rule either way.
+///
+/// Irregular measures (an anacrusis) never carry a label under any
+/// policy — `Score.displayedMeasureNumber(at:)` returns `nil` for them.
+public enum MeasureNumberPolicy: Sendable, Equatable {
+    /// Default — one label above the first measure of every system,
+    /// which is the convention for printed parts and what this engine
+    /// did before the policy existed.
+    case systemStart
+
+    /// A label above every measure whose displayed number is a multiple
+    /// of `every`, **in addition to** every system head. Keeping the
+    /// system heads means turning the interval up never takes away a
+    /// label the reader could already see. Values < 1 are treated as 1.
+    ///
+    /// `.interval(every: 1)` labels every measure; use `.everyMeasure`.
+    case interval(every: Int)
+
+    /// A label above every measure.
+    public static let everyMeasure = MeasureNumberPolicy.interval(every: 1)
+
+    /// Whether the measure at `displayedNumber` carries a label.
+    ///
+    /// `isSystemStart` wins under every policy, so the caller does not
+    /// have to special-case the head of a system.
+    public func drawsLabel(displayedNumber: Int, isSystemStart: Bool) -> Bool {
+        if isSystemStart { return true }
+        switch self {
+        case .systemStart:
+            return false
+        case let .interval(every):
+            return displayedNumber.isMultiple(of: max(1, every))
+        }
+    }
+}
+
 /// Tunable knobs for `ScoreView`. v1 intentionally keeps this small —
 /// layout is driven by the view's available width and these values.
 public struct ScoreViewOptions: Sendable, Equatable {
@@ -126,6 +170,9 @@ public struct ScoreViewOptions: Sendable, Equatable {
     ///
     /// Default: `false` (print behavior).
     public var showsInvisibleElements: Bool
+    /// How often a measure-number label is engraved. Default
+    /// `.systemStart` matches behavior from before this option existed.
+    public var measureNumbers: MeasureNumberPolicy
 
     public init(
         staffSize: CGFloat = 28,
@@ -138,6 +185,7 @@ public struct ScoreViewOptions: Sendable, Equatable {
         smallNoteMag: CGFloat = 0.7,
         multiMeasureRest: MultiMeasureRestPolicy = .disabled,
         showsInvisibleElements: Bool = false,
+        measureNumbers: MeasureNumberPolicy = .systemStart,
     ) {
         self.staffSize = staffSize
         self.systemGap = systemGap
@@ -149,5 +197,6 @@ public struct ScoreViewOptions: Sendable, Equatable {
         self.smallNoteMag = smallNoteMag
         self.multiMeasureRest = multiMeasureRest
         self.showsInvisibleElements = showsInvisibleElements
+        self.measureNumbers = measureNumbers
     }
 }

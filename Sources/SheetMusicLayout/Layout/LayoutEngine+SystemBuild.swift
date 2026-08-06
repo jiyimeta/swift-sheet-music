@@ -298,19 +298,32 @@ extension LayoutEngine {
                     perStaffInvisible[staffIdx] = invisibleEls
                 }
             }
-            // Measure number at every system head — TOP STAFF ONLY.
-            // Engraving convention places a single number above the
-            // topmost staff at the start of each system. Irregular
+            // Measure number — TOP STAFF ONLY. Engraving convention
+            // places a single number above the topmost staff; how often
+            // is `options.measureNumbers` (every system head by default,
+            // optionally every N-th measure on top of that). Irregular
             // measures (anacrusis) suppress the label.
+            //
+            // The origin is measure-local, so an interval label lands
+            // just left of its own leading barline exactly the way a
+            // system-head label lands left of the system's.
             //
             // Emitted HERE rather than in pass 2 so the element sits in
             // the per-staff buffer the skyline autoplace pass operates
             // on. Staff-local Y: the staff top is at `sp * 2`, so
             // `sp * 2 - sp * 1.5` reproduces pass 2's
             // `staffOrigins[0].y - sp * 1.5` after translation.
-            if untranslated.isEmpty, !staves.isEmpty,
+            //
+            // Appended AFTER the per-measure placement cache is written
+            // above, so a cached `StaffPlacement` never carries a label
+            // and toggling the policy cannot serve a stale one.
+            if !staves.isEmpty,
                let displayed = context.score.displayedMeasureNumber(
                    at: measureIdx,
+               ),
+               context.options.measureNumbers.drawsLabel(
+                   displayedNumber: displayed,
+                   isSystemStart: untranslated.isEmpty,
                )
             {
                 perStaff[0, default: []].append(.measureNumber(
