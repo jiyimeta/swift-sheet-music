@@ -27,11 +27,15 @@ public final class HandleTable<Value>: @unchecked Sendable {
         queue.sync { _ = storage.removeValue(forKey: handle) }
     }
 
-    /// Swaps the value behind an existing handle. A no-op for an unknown handle — the caller has already checked.
-    public func replace(_ handle: Int64, with value: Value) {
+    /// Swaps the value behind an existing handle. A no-op that returns `false` for an unknown handle — e.g. one
+    /// released concurrently with the call that produced `value` — so a caller that only checked "does this handle
+    /// exist" earlier still finds out the write didn't land.
+    @discardableResult
+    public func replace(_ handle: Int64, with value: Value) -> Bool {
         queue.sync {
-            guard storage[handle] != nil else { return }
+            guard storage[handle] != nil else { return false }
             storage[handle] = value
+            return true
         }
     }
 }
