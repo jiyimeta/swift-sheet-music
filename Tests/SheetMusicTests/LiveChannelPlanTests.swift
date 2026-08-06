@@ -147,4 +147,63 @@ struct LiveChannelPlanTests {
         ))
         #expect(plan.strips[0].liveChannel == 9)
     }
+
+    @Test("remap rewrites channels per the active port")
+    func remapHonoursPort() {
+        var midi = MidiFile(division: 480, format: 1, tracks: [MidiTrack(events: [
+            TimedMidiEvent(tick: 0, event: .meta(.portChange(port: 0))),
+            TimedMidiEvent(tick: 0, event: .programChange(channel: 3, program: 0)),
+            TimedMidiEvent(tick: 0, event: .meta(.portChange(port: 1))),
+            TimedMidiEvent(tick: 10, event: .noteOn(channel: 3, pitch: 60, velocity: 90)),
+        ])])
+        let plan = LiveChannelPlan(
+            strips: [],
+            remap: [
+                MidiChannelKey(port: 0, channel: 3): 0,
+                MidiChannelKey(port: 1, channel: 3): 1,
+            ],
+            ordinalByTimelineIndex: [],
+        )
+        MidiChannelRemap.apply(midi: &midi, plan: plan)
+        let programs = midi.tracks[0].events.compactMap { event -> Int? in
+            guard case let .programChange(channel, _) = event.event else { return nil }
+            return channel
+        }
+        let notes = midi.tracks[0].events.compactMap { event -> Int? in
+            guard case let .noteOn(channel, _, _) = event.event else { return nil }
+            return channel
+        }
+        #expect(programs == [0])
+        #expect(notes == [1])
+    }
+
+    @Test("portChange metas are dropped — a live synth has one port")
+    func portChangeMetasDropped() {
+        var midi = MidiFile(division: 480, format: 1, tracks: [MidiTrack(events: [
+            TimedMidiEvent(tick: 0, event: .meta(.portChange(port: 1))),
+            TimedMidiEvent(tick: 0, event: .noteOn(channel: 0, pitch: 60, velocity: 90)),
+        ])])
+        MidiChannelRemap.apply(midi: &midi, plan: LiveChannelPlan(
+            strips: [], remap: [:], ordinalByTimelineIndex: [],
+        ))
+        #expect(!midi.tracks[0].events.contains { event in
+            if case .meta(.portChange) = event.event { return true }
+            return false
+        })
+    }
+
+    @Test("an unmapped channel passes through unchanged")
+    func unmappedPassesThrough() {
+        var midi = MidiFile(division: 480, format: 1, tracks: [MidiTrack(events: [
+            TimedMidiEvent(tick: 0, event: .noteOn(channel: 7, pitch: 60, velocity: 90)),
+        ])])
+        MidiChannelRemap.apply(midi: &midi, plan: LiveChannelPlan(
+            strips: [], remap: [:], ordinalByTimelineIndex: [],
+        ))
+        guard case let .noteOn(channel, _, _) = midi.tracks[0].events[0].event else {
+            Issue.record("expected noteOn")
+            return
+        }
+        #expect(channel == 7)
+    }
 }

@@ -3,7 +3,7 @@
     @testable import SheetMusicAndroidJNI
     @testable import SheetMusicAudioCore
     import SheetMusicCore
-    import SheetMusicMIDI
+    @testable import SheetMusicMIDI
     import Testing
 
     // MARK: - Fixture helper
@@ -17,10 +17,21 @@
         return try ScoreBridge.loadScore(bytes: bytes)
     }
 
-    // MARK: - T14: relabelChannelsToTrackIndex + renderMidi
+    // MARK: - T14/Task 10: MidiChannelRemap (plan-driven) + renderMidi
+    //
+    // `AudioMidiBridge.relabelChannelsToTrackIndex` — which force-rewrote
+    // every channel to `trackIdx & 0x0F` — is deleted (Task 10). Channel
+    // assignment on Android is now driven by `LiveChannelPlan` /
+    // `MidiChannelRemap`, the same plan-driven mapping the SMF export path
+    // never touches. These tests exercise `MidiChannelRemap.apply`
+    // directly (it lives in `SheetMusicMIDI`) with the same event-type and
+    // field-preservation coverage the deleted helper's tests had.
 
     struct AudioMidiBridgeRenderMidiTests {
-        @Test func relabelChannelsToTrackIndex() {
+        @Test func remapAppliesPlanPerSourceChannel() {
+            // Two tracks, each on a different source channel at port 0 —
+            // the live plan maps each independently, unlike the deleted
+            // helper's trackIdx-keyed scheme.
             var midi = MidiFile(division: 480, tracks: [
                 MidiTrack(events: [
                     TimedMidiEvent(
@@ -31,26 +42,32 @@
                 MidiTrack(events: [
                     TimedMidiEvent(
                         tick: 0,
-                        event: .noteOn(channel: 0, pitch: 62, velocity: 96),
+                        event: .noteOn(channel: 1, pitch: 62, velocity: 96),
                     ),
                 ]),
             ])
-            AudioMidiBridge.relabelChannelsToTrackIndex(&midi)
-            // Track 0 events stay on channel 0
+            let plan = LiveChannelPlan(
+                strips: [],
+                remap: [
+                    MidiChannelKey(port: 0, channel: 0): 0,
+                    MidiChannelKey(port: 0, channel: 1): 5,
+                ],
+                ordinalByTimelineIndex: [],
+            )
+            MidiChannelRemap.apply(midi: &midi, plan: plan)
             if case let .noteOn(ch, _, _) = midi.tracks[0].events[0].event {
                 #expect(ch == 0)
             } else {
                 Issue.record("Expected noteOn in track 0")
             }
-            // Track 1 events are relabeled to channel 1
             if case let .noteOn(ch, _, _) = midi.tracks[1].events[0].event {
-                #expect(ch == 1)
+                #expect(ch == 5)
             } else {
                 Issue.record("Expected noteOn in track 1")
             }
         }
 
-        @Test func relabelChannelBearingEvents() {
+        @Test func remapChannelBearingEvents() {
             var midi = MidiFile(division: 480, tracks: [
                 MidiTrack(events: [
                     TimedMidiEvent(tick: 0, event: .noteOn(channel: 5, pitch: 60, velocity: 80)),
@@ -62,7 +79,12 @@
                     TimedMidiEvent(tick: 5, event: .endOfTrack),
                 ]),
             ])
-            AudioMidiBridge.relabelChannelsToTrackIndex(&midi)
+            let plan = LiveChannelPlan(
+                strips: [],
+                remap: [MidiChannelKey(port: 0, channel: 5): 0],
+                ordinalByTimelineIndex: [],
+            )
+            MidiChannelRemap.apply(midi: &midi, plan: plan)
             let events = midi.tracks[0].events
             if case let .noteOn(ch, _, _) = events[0].event { #expect(ch == 0) }
             if case let .noteOff(ch, _, _) = events[1].event { #expect(ch == 0) }
@@ -73,7 +95,7 @@
             #expect(events[5].event == .endOfTrack)
         }
 
-        @Test func relabelPreservesOtherFields() {
+        @Test func remapPreservesOtherFields() {
             var midi = MidiFile(division: 480, tracks: [
                 MidiTrack(events: [
                     TimedMidiEvent(tick: 0, event: .noteOn(channel: 0, pitch: 64, velocity: 72)),
@@ -82,12 +104,19 @@
                     TimedMidiEvent(tick: 0, event: .noteOff(channel: 0, pitch: 55, velocity: 10)),
                 ]),
             ])
-            AudioMidiBridge.relabelChannelsToTrackIndex(&midi)
-            if case let .noteOn(_, pitch, velocity) = midi.tracks[0].events[0].event {
+            let plan = LiveChannelPlan(
+                strips: [],
+                remap: [MidiChannelKey(port: 0, channel: 0): 3],
+                ordinalByTimelineIndex: [],
+            )
+            MidiChannelRemap.apply(midi: &midi, plan: plan)
+            if case let .noteOn(ch, pitch, velocity) = midi.tracks[0].events[0].event {
+                #expect(ch == 3)
                 #expect(pitch == 64)
                 #expect(velocity == 72)
             }
-            if case let .noteOff(_, pitch, velocity) = midi.tracks[1].events[0].event {
+            if case let .noteOff(ch, pitch, velocity) = midi.tracks[1].events[0].event {
+                #expect(ch == 3)
                 #expect(pitch == 55)
                 #expect(velocity == 10)
             }
@@ -106,16 +135,22 @@
             #expect(totalEvents > 0)
         }
 
-        @Test func renderMidiChannelsRelabeled() throws {
+        @Test func renderMidiChannelsFollowLiveChannelPlan() throws {
             let score = try loadFixtureScore()
+            let plan = LiveChannelPlan.build(score: score)
             let data = try AudioMidiBridge.renderMidi(score: score)
             let midi = try MidiReader.read(data)
-            // Each track's note-on events should have channel == trackIndex & 0x0F
-            for (trackIdx, track) in midi.tracks.enumerated() {
-                let expectedChannel = trackIdx & 0x0F
+            // Every note-on channel in the rendered SMF must be one the
+            // live plan actually owns — the old trackIdx & 0x0F scheme is
+            // gone, and no portChange meta should have survived either
+            // (a live synth has one port).
+            for track in midi.tracks {
                 for event in track.events {
                     if case let .noteOn(ch, _, _) = event.event {
-                        #expect(ch == expectedChannel)
+                        #expect(plan.managedChannels.contains(ch))
+                    }
+                    if case .meta(.portChange) = event.event {
+                        Issue.record("portChange meta should have been dropped")
                     }
                 }
             }
