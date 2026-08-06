@@ -621,7 +621,7 @@ class AndroidPlaybackEngineTest {
     @Test
     fun `setStaffMuted marks channel effectiveMute`() = runTest {
         val engine = preparedEngine(staffCount = 2)
-        engine.setStaffMuted(0, true)
+        engine.setStaffMuted(0, 0, true)
         assertTrue(engine.mixerChannels.value[0].effectiveMute)
         assertTrue(engine.mixerChannels.value[0].isMuted)
     }
@@ -629,14 +629,14 @@ class AndroidPlaybackEngineTest {
     @Test
     fun `setStaffMuted does not affect other channels`() = runTest {
         val engine = preparedEngine(staffCount = 2)
-        engine.setStaffMuted(0, true)
+        engine.setStaffMuted(0, 0, true)
         assertEquals(false, engine.mixerChannels.value[1].effectiveMute)
     }
 
     @Test
     fun `setStaffSoloed makes non-soloed staves effectively muted`() = runTest {
         val engine = preparedEngine(staffCount = 2)
-        engine.setStaffSoloed(0, true)
+        engine.setStaffSoloed(0, 0, true)
         assertEquals(false, engine.mixerChannels.value[0].effectiveMute)
         assertEquals(true, engine.mixerChannels.value[1].effectiveMute)
     }
@@ -644,8 +644,8 @@ class AndroidPlaybackEngineTest {
     @Test
     fun `mute wins over solo on same staff`() = runTest {
         val engine = preparedEngine(staffCount = 2)
-        engine.setStaffSoloed(0, true)
-        engine.setStaffMuted(0, true)
+        engine.setStaffSoloed(0, 0, true)
+        engine.setStaffMuted(0, 0, true)
         // Staff 0 is both muted AND soloed — mute wins.
         assertTrue(engine.mixerChannels.value[0].effectiveMute)
     }
@@ -661,7 +661,7 @@ class AndroidPlaybackEngineTest {
     @Test
     fun `setStaffVolume updates channel volume`() = runTest {
         val engine = preparedEngine(staffCount = 2)
-        engine.setStaffVolume(1, 0.3f)
+        engine.setStaffVolume(1, 0, 0.3f)
         assertEquals(0.3f, engine.mixerChannels.value[1].volume, 0.001f)
     }
 
@@ -675,9 +675,9 @@ class AndroidPlaybackEngineTest {
         staffSynth.calls.clear()
 
         // Mute then unmute staff 0.
-        engine.setStaffMuted(0, true)
+        engine.setStaffMuted(0, 0, true)
         staffSynth.calls.clear()
-        engine.setStaffMuted(0, false)
+        engine.setStaffMuted(0, 0, false)
 
         // Unmute should NOT write CC7=127 (the slider default).
         assertFalse(
@@ -693,12 +693,12 @@ class AndroidPlaybackEngineTest {
         val staffSynth = synths.first()
 
         // User moves slider to 0.5 → CC7 = 63
-        engine.setStaffVolume(0, 0.5f)
+        engine.setStaffVolume(0, 0, 0.5f)
         staffSynth.calls.clear()
 
-        engine.setStaffMuted(0, true)
+        engine.setStaffMuted(0, 0, true)
         staffSynth.calls.clear()
-        engine.setStaffMuted(0, false)
+        engine.setStaffMuted(0, 0, false)
 
         assertTrue(
             "unmute after slider set to 0.5 should restore CC7=63",
@@ -715,10 +715,10 @@ class AndroidPlaybackEngineTest {
         staffSynth.calls.clear()
 
         // Solo staff 1 — staff 0 becomes effectively muted, then un-solo — staff 0 unmuted.
-        engine.setStaffSoloed(1, true)
+        engine.setStaffSoloed(1, 0, true)
         val ccAfterSolo = staffSynth.calls.filter { it.startsWith("cc(0,7,") }
         staffSynth.calls.clear()
-        engine.setStaffSoloed(1, false)
+        engine.setStaffSoloed(1, 0, false)
         val ccAfterUnSolo = staffSynth.calls.filter { it.startsWith("cc(0,7,") }
 
         // Staff 0 must not receive CC7=127 when un-soloing staff 1.
@@ -1324,7 +1324,7 @@ class AndroidPlaybackEngineTest {
         val staffSynth = synthDrivers.first()
         staffSynth.calls.clear()
 
-        engine.setStaffProgram(0, 40)  // violin
+        engine.setStaffProgram(0, 0, 40)  // violin
 
         assertEquals(40, engine.mixerChannels.value[0].program)
         // The setStaffProgram path calls programSelect on the synth.

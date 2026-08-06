@@ -95,6 +95,11 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// as `mixerChannels`, so every strip — not just each staff's
     /// tick-0 primary — can be addressed directly.
     private var instrumentMIDIChannels: [MixerChannel.Kind: UInt8] = [:]
+    /// Per-flat-staff channel switches, ascending by tick. Precomputed
+    /// in `prepareSynth(score:)` because the engine does not retain the
+    /// prepared `Score`. Empty for a staff whose part never changes
+    /// instrument.
+    private var staffChannelSwitches: [Int: [(tick: Int, channel: UInt8)]] = [:]
 
     /// Master output stage. The score synth feeds `scoreGainMixer`,
     /// whose `outputVolume` is the user's master gain (`0...3`). Its
@@ -404,6 +409,26 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         staffMIDIChannels[idx]
     }
 
+    /// The live MIDI channel `flatStaffIndex` sounds on at `tick`.
+    ///
+    /// A tap preview at the cursor must audition the instrument active
+    /// THERE, not the part's opening instrument — otherwise tapping a
+    /// note after an instrument change sounds the wrong timbre.
+    /// Falls back to the staff's tick-0 channel when the part has no
+    /// instrument changes.
+    public func midiChannel(
+        forStaff flatStaffIndex: Int, atTick tick: Int,
+    ) -> UInt8? {
+        guard let switches = staffChannelSwitches[flatStaffIndex],
+              !switches.isEmpty
+        else { return midiChannel(forStaff: flatStaffIndex) }
+        var result = midiChannel(forStaff: flatStaffIndex)
+        for entry in switches {
+            if entry.tick <= tick { result = entry.channel } else { break }
+        }
+        return result
+    }
+
     /// Live MIDI channel for a mixer strip identity. `nil` before the
     /// first `prepare(score:)`, or for a `Kind` not in the prepared
     /// score's plan.
@@ -621,6 +646,7 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         staffIsDrum.removeAll()
         liveChannelPlan = nil
         instrumentMIDIChannels.removeAll()
+        staffChannelSwitches.removeAll()
 
         #if os(iOS) || os(tvOS) || os(watchOS)
             let session = AVAudioSession.sharedInstance()
@@ -777,6 +803,43 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         let channels: [Int] = score.allStaves.map { entry in
             plan.strip(partIndex: entry.address.partIndex, ordinal: 0)?
                 .liveChannel ?? 0
+        }
+
+        // Measure tick bases for the switch table. Deliberately the
+        // plain duration sum, NOT `MidiRenderer.measureTicks` (which
+        // also budgets breath pauses): a tap preview is a UI affordance,
+        // and the one-bar imprecision after a breath-pause-bearing
+        // measure is inaudible. Playback routing correctness comes from
+        // the renderer, which uses its own bases.
+        var bases: [Int] = []
+        var acc = 0
+        for duration in score.effectiveMeasureDurations() {
+            bases.append(acc)
+            acc += duration.ticks(division: score.division)
+        }
+        staffChannelSwitches = [:]
+        for (idx, entry) in score.allStaves.enumerated() {
+            let partIndex = entry.address.partIndex
+            let timeline = score.instrumentTimeline(forPart: partIndex)
+            guard timeline.count > 1 else { continue }
+            staffChannelSwitches[idx] = timeline.enumerated()
+                .compactMap { timelineIndex, point in
+                    guard bases.indices.contains(point.measureIndex),
+                          let ordinal = plan.dedupedOrdinal(
+                              partIndex: partIndex,
+                              timelineIndex: timelineIndex,
+                          ),
+                          let strip = plan.strip(
+                              partIndex: partIndex, ordinal: ordinal,
+                          )
+                    else { return nil }
+                    return (
+                        bases[point.measureIndex]
+                            + point.position.ticks(division: score.division),
+                        UInt8(clamping: strip.liveChannel),
+                    )
+                }
+                .sorted { $0.0 < $1.0 }
         }
 
         // SwiftySynth path: one persistent source node + SoundFont reload, no
@@ -986,7 +1049,8 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         let flatIdx = score.allStaves.firstIndex(where: {
             $0.address == noteID.staff
         }) ?? -1
-        guard let midiChannel = staffMIDIChannels[flatIdx] else { return }
+        let tick = absoluteTick(of: noteID, in: score)
+        guard let midiChannel = midiChannel(forStaff: flatIdx, atTick: tick) else { return }
         if backend != nil {
             // Re-assert EVERY strip's program + volume on the backend synth
             // before the note-on: a prior playback's sequencer resets the
@@ -1085,10 +1149,14 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// Resumes a host-parked graph and re-parks it on the matching note-off when
     /// not playing. Intended for use only while stopped/paused (the caller gates
     /// this); the held note shares the staff's sequencer channel, so it is not
-    /// meant to overlap live playback.
-    public func previewNoteOn(pitch: UInt8, onStaff flatStaffIndex: Int, velocity: UInt8 = 96) {
+    /// meant to overlap live playback. `atTick` auditions the instrument active
+    /// at the cursor (see `midiChannel(forStaff:atTick:)`); it defaults to `0`
+    /// (the part's opening instrument) so existing callers keep compiling.
+    public func previewNoteOn(
+        pitch: UInt8, onStaff flatStaffIndex: Int, velocity: UInt8 = 96, atTick tick: Int = 0,
+    ) {
         guard state != .exporting else { return }
-        guard let midiChannel = staffMIDIChannels[flatStaffIndex] else { return }
+        guard let midiChannel = midiChannel(forStaff: flatStaffIndex, atTick: tick) else { return }
         // Resolve the AU instrument (AUMIDISynth path only) BEFORE any side
         // effect below, so an invalid staff index bails out cleanly instead of
         // leaving the engine resumed and the prior preview cut with no note
@@ -1166,6 +1234,21 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
               noteID.noteIndexInChord < chord.notes.count
         else { return nil }
         return UInt8(clamping: chord.notes[noteID.noteIndexInChord].pitch)
+    }
+
+    /// Absolute tick of `noteID` within `score`, on the same plain
+    /// (non-breath-budgeted) measure tick bases used to build
+    /// `staffChannelSwitches` — see `prepareSynth(score:)`. `0` when
+    /// the id doesn't resolve to a measure index.
+    private func absoluteTick(of noteID: NoteID, in score: Score) -> Int {
+        let inMeasure = score.resolveTickInMeasure(for: .note(noteID)) ?? 0
+        let durations = score.effectiveMeasureDurations()
+        guard durations.indices.contains(noteID.measureIndex) else { return inMeasure }
+        var base = 0
+        for i in 0 ..< noteID.measureIndex {
+            base += durations[i].ticks(division: score.division)
+        }
+        return base + inMeasure
     }
 
     // MARK: - Full playback
@@ -2401,6 +2484,7 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         staffIsDrum.removeAll()
         liveChannelPlan = nil
         instrumentMIDIChannels.removeAll()
+        staffChannelSwitches.removeAll()
         metronome.teardown()
     }
 }

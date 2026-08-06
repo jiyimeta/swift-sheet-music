@@ -5,12 +5,21 @@ import io.github.jiyimeta.sheetmusic.audio.SoundfontResolver
 import io.github.jiyimeta.sheetmusic.audio.model.StaffParams
 
 /**
- * Single [SynthDriver] owner. Channels 0..N-1 are assigned 1:1 to staves
- * (maximum 16 staves, matching the MIDI channel limit).
+ * Single [SynthDriver] owner. Historically channels 0..N-1 were assigned 1:1
+ * to staves; since the live-channel-plan mixer (per-(part × instrument) strip
+ * dedup — see `AndroidPlaybackEngine.prepare`), [setupStaves] is called with
+ * one entry PER STRIP, keyed on its LIVE MIDI channel — which may be sparse
+ * (e.g. a 2-strip score where one strip is the drum channel 9) rather than a
+ * dense `0 until count` range. Every method here therefore gates on whether
+ * [staffLoadParams] has an entry for the given channel, not on `channel <
+ * staffCount` — that bound was only ever correct for the dense case.
+ * Parameters are still named `staffIndex` for source compatibility, but the
+ * value passed is a raw MIDI channel number (`0...15`), not necessarily this
+ * staff's own array position (maximum 16 channels, matching the MIDI limit).
  *
- * Per-staff volume / mute / solo is implemented via MIDI CC7 (channel volume)
- * on the shared synth, so the fluid_player's default channel routing drives
- * playback directly — no playback-callback shim required.
+ * Per-channel volume / mute / solo is implemented via MIDI CC7 (channel
+ * volume) on the shared synth, so the fluid_player's default channel routing
+ * drives playback directly — no playback-callback shim required.
  *
  * Inject [synthFactory] to supply a fake [SynthDriver] in unit tests —
  * production code leaves this at the default which creates a
@@ -136,7 +145,7 @@ internal class FluidSynthEngine(
      * is still stored and will be applied by [unmuteChannel].
      */
     fun setChannelVolume(staffIndex: Int, volume: Float) {
-        if (staffIndex !in 0 until staffCountValue) return
+        if (staffLoadParams.getOrNull(staffIndex) == null) return
         val cc = (volume.coerceIn(0f, 1f) * 127).toInt()
         rememberedCC7[staffIndex] = cc
         if (!channelMuted[staffIndex]) {
@@ -153,7 +162,7 @@ internal class FluidSynthEngine(
      * value captured at the first mute.
      */
     fun muteChannel(staffIndex: Int) {
-        if (staffIndex !in 0 until staffCountValue) return
+        if (staffLoadParams.getOrNull(staffIndex) == null) return
         // Capture the current live CC7 (may have been updated by SMF events or
         // user slider) before we zero it.
         if (!channelMuted[staffIndex]) {
@@ -174,7 +183,7 @@ internal class FluidSynthEngine(
      * the SMF had previously written a different CC7.
      */
     fun unmuteChannel(staffIndex: Int) {
-        if (staffIndex !in 0 until staffCountValue) return
+        if (staffLoadParams.getOrNull(staffIndex) == null) return
         channelMuted[staffIndex] = false
         synth?.cc(channel = staffIndex, controller = 7, value = rememberedCC7[staffIndex])
     }
@@ -189,8 +198,7 @@ internal class FluidSynthEngine(
      * [staffIndex] is outside [0, staffCount).
      */
     fun setStaffProgram(staffIndex: Int, program: Int) {
-        if (staffIndex !in 0 until staffCountValue) return
-        val params = staffLoadParams[staffIndex] ?: return
+        val params = staffLoadParams.getOrNull(staffIndex) ?: return
         if (loadedSfid < 0) return
         val s = synth ?: return
         val clamped = program.coerceIn(0, 127)
@@ -209,8 +217,12 @@ internal class FluidSynthEngine(
     fun setMasterTuning(cents: Double) {
         val s = synth ?: return
         val rpn = MasterTuning.rpnControlChanges(cents)
-        for (ch in 0 until staffCountValue) {
-            if (staffLoadParams[ch]?.isDrums == true) continue
+        // Iterate CONFIGURED channels, not `0 until staffCountValue` — with
+        // live-channel-keyed setup the configured channel numbers may be
+        // sparse (e.g. a drum strip on channel 9 while only 2 strips exist).
+        for (ch in staffLoadParams.indices) {
+            val params = staffLoadParams[ch] ?: continue
+            if (params.isDrums) continue
             for (cc in rpn) s.cc(ch, cc.controller, cc.value)
         }
     }
@@ -225,9 +237,9 @@ internal class FluidSynthEngine(
         synth?.noteOff(staffIndex, pitch)
     }
 
-    /** Sends allNotesOff to every staff channel. */
+    /** Sends allNotesOff to every configured channel (may be sparse — see class doc). */
     fun allNotesOff() {
-        for (ch in 0 until staffCountValue) synth?.allNotesOff(ch)
+        for (ch in staffLoadParams.indices) if (staffLoadParams[ch] != null) synth?.allNotesOff(ch)
     }
 
     /**

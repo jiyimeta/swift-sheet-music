@@ -1,5 +1,6 @@
 #if !os(Android)
     import Foundation
+    @testable import SheetMusicAndroidJNI
     @testable import SheetMusicAudioApple
     @testable import SheetMusicAudioCore
     @testable import SheetMusicCore
@@ -64,6 +65,56 @@
             #expect(plan.managedChannels.count == 2)
             let channels = plan.strips.map(\.liveChannel)
             #expect(Set(channels).count == channels.count)
+        }
+
+        @Test("instrument params expose one entry per deduped strip")
+        func instrumentParamsPerStrip() throws {
+            let score = try Self.fixtureScore()
+            let data = AudioMidiBridge.instrumentParams(score: score)
+            let params = try InstrumentParamsCodec.decodeArray(data)
+            #expect(params.count == 2)
+            #expect(params[0].partIndex == 0 && params[0].ordinal == 0)
+            #expect(params[0].program == 0)
+            #expect(params[1].partIndex == 0 && params[1].ordinal == 1)
+            #expect(params[1].program == 21)
+            #expect(params[1].liveChannel != params[0].liveChannel)
+            #expect(params[1].displayName.contains("Accordion"))
+        }
+
+        @Test("instrument params round-trip through the codec")
+        func codecRoundTrip() throws {
+            let original = [InstrumentParams(
+                partIndex: 1, ordinal: 2, liveChannel: 5,
+                bankLSB: 0, program: 21, isDrums: false,
+                displayName: "S (Accordion)", channelVolume: 100,
+            )]
+            let decoded = try InstrumentParamsCodec.decodeArray(
+                InstrumentParamsCodec.encodeArray(original),
+            )
+            #expect(decoded == original)
+        }
+
+        /// Regression guard for the Kotlin decoder: pins the exact bytes
+        /// `InstrumentParamsCodec.encodeArray` produces for the fixture
+        /// score, committed at
+        /// `Tests/SheetMusicTests/Resources/Golden/Audio/instrumentParams-v1.bin`
+        /// and mirrored by a Kotlin decode test
+        /// (`InstrumentParamsCodecTest.kt`) asserting the SAME fixture
+        /// bytes decode to the SAME field values on both platforms. This
+        /// is the regression guard the spec asked for — see "Deviations"
+        /// in the Task 12 report for why it lands here instead of on a
+        /// TextStyle enum field (there is none).
+        @Test("instrument params golden bytes match the committed fixture")
+        func instrumentParamsGoldenMatches() throws {
+            let score = try Self.fixtureScore()
+            let encoded = AudioMidiBridge.instrumentParams(score: score)
+            let goldenDir = URL(fileURLWithPath: #filePath)
+                .deletingLastPathComponent() // SheetMusicTests
+                .appendingPathComponent("Resources/Golden/Audio")
+            let committed = try Data(
+                contentsOf: goldenDir.appendingPathComponent("instrumentParams-v1.bin"),
+            )
+            #expect(encoded == committed)
         }
     }
 
