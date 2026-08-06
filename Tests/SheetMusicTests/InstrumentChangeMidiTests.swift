@@ -159,6 +159,70 @@ struct InstrumentChangeMidiTests {
         #expect(noteOns.contains { $0 == (62, 5) })
     }
 
+    @Test("a tie chain spanning a change sounds entirely on the head's channel")
+    func tieChainSpanningChangeStaysOnHeadChannel() throws {
+        // A whole note tied into a half note; the change lands exactly
+        // at the tail chord's onset — the tick-resolved channel for
+        // the tail element ALONE would be the new instrument.
+        let head = Measure(voices: [Voice(elements: [
+            .chord(Chord(duration: .whole, notes: [Note(pitch: 60, tpc: 14, tieForward: 1)])),
+        ])])
+        let tail = Measure(voices: [Voice(elements: [
+            .chord(Chord(duration: .half, notes: [Note(pitch: 60, tpc: 14, tieBack: 1)])),
+        ])])
+        let accordion = Instrument(
+            id: "accordion",
+            channels: [InstrumentChannel(program: 21, midiChannel: 5)],
+        )
+        let score = Score(
+            division: 480,
+            parts: [Part(
+                id: "P1",
+                instrument: Instrument(id: "piano", channels: [InstrumentChannel()]),
+                staves: [Staff(measures: [head, tail])],
+            )],
+            systemMeasures: [
+                SystemMeasure(),
+                SystemMeasure(elements: [PositionedSystemElement(
+                    position: .start,
+                    element: .instrumentChange(
+                        InstrumentChange(text: "to Accordion", instrument: accordion),
+                    ),
+                    originalStaff: StaffAddress(partIndex: 0, staffIndexInPart: 0),
+                )]),
+            ],
+        )
+        let midi = try MidiRenderer.render(score: score)
+        let noteOns = midi.tracks.flatMap(\.events).compactMap { event -> (tick: Int, channel: Int)? in
+            guard case let .noteOn(channel, pitch, velocity) = event.event,
+                  pitch == 60, velocity > 0 else { return nil }
+            return (event.tick, channel)
+        }
+        let noteOffs = midi.tracks.flatMap(\.events).compactMap { event -> (tick: Int, channel: Int)? in
+            guard case let .noteOff(channel, pitch, _) = event.event, pitch == 60
+            else { return nil }
+            return (event.tick, channel)
+        }
+        #expect(noteOns.count == 1)
+        #expect(noteOffs.count == 1)
+        // The pair must actually span the tied duration — a mismatched
+        // note-off channel makes `resolveUnisonOverlap`'s (channel,
+        // pitch)-keyed pairing silently drop the real note-off and
+        // close the note-on at its own onset instead, which would
+        // ALSO leave onTick == offTick == 0 and could otherwise
+        // masquerade as "both on channel 0". Asserting the real tied
+        // span (whole note into a half note: onset 0, release at
+        // 1920 + 960 - 1) rules that degenerate case out.
+        #expect(noteOns.first?.tick == 0)
+        #expect(noteOffs.first?.tick == 2879)
+        // Both halves of the tied pair sound on the OLD (piano) channel —
+        // the one in force at the tie's head — not the new accordion
+        // channel that takes over exactly at the tail's onset.
+        #expect(noteOns.first?.channel == 0)
+        #expect(noteOffs.first?.channel == 0)
+        #expect(noteOns.first?.channel == noteOffs.first?.channel)
+    }
+
     @Test("a score with no changes renders exactly as before")
     func noChangeScoreIsUnaffected() throws {
         let url = try #require(
