@@ -17,6 +17,22 @@
         return try ScoreBridge.loadScore(bytes: bytes)
     }
 
+    /// One part, tick-0 piano (program 0, no declared channel — takes 0),
+    /// mid-score `<InstrumentChange>` to accordion (program 21, declares
+    /// `<midiChannel>5</midiChannel>`). Piano and accordion have
+    /// different `InstrumentChannel` values, so `LiveChannelPlan.build`
+    /// does NOT collapse them — it draws two distinct live channels via
+    /// `takeLiveChannel()`, giving a remap that is provably not the
+    /// identity map (see `renderMidiChannelsFollowLiveChannelPlan`).
+    private func loadInstrumentChangeFixtureScore() throws -> Score {
+        let url = try #require(Bundle.module.url(
+            forResource: "instrument-change",
+            withExtension: "mscx",
+        ))
+        let bytes = try Data(contentsOf: url)
+        return try ScoreBridge.loadScore(bytes: bytes)
+    }
+
     // MARK: - T14/Task 10: MidiChannelRemap (plan-driven) + renderMidi
     //
     // `AudioMidiBridge.relabelChannelsToTrackIndex` — which force-rewrote
@@ -136,24 +152,44 @@
         }
 
         @Test func renderMidiChannelsFollowLiveChannelPlan() throws {
-            let score = try loadFixtureScore()
+            // `midi01` alone can't prove the remap actually rewrites
+            // anything: its single instrument's pre-remap channel and
+            // its `takeLiveChannel()` draw land on the same number (0),
+            // so a broken remap that left every channel untouched would
+            // pass a membership check against it just as well as a
+            // correct one. Use the instrument-change fixture instead,
+            // where the accordion's declared channel (5) and its live
+            // channel (1, verified below) differ — a genuine,
+            // non-identity mapping the test can hold the implementation
+            // to.
+            let score = try loadInstrumentChangeFixtureScore()
             let plan = LiveChannelPlan.build(score: score)
+            // Verified by construction (see fixture doc comment) and by
+            // running this test: the plan draws live channel 0 for the
+            // tick-0 piano and live channel 1 for the accordion — NOT 5,
+            // the accordion's declared/rendered channel.
+            #expect(Set(plan.strips.map(\.liveChannel)) == [0, 1])
             let data = try AudioMidiBridge.renderMidi(score: score)
             let midi = try MidiReader.read(data)
-            // Every note-on channel in the rendered SMF must be one the
-            // live plan actually owns — the old trackIdx & 0x0F scheme is
-            // gone, and no portChange meta should have survived either
-            // (a live synth has one port).
+            var noteChannels: Set<Int> = []
             for track in midi.tracks {
                 for event in track.events {
                     if case let .noteOn(ch, _, _) = event.event {
-                        #expect(plan.managedChannels.contains(ch))
+                        noteChannels.insert(ch)
                     }
                     if case .meta(.portChange) = event.event {
                         Issue.record("portChange meta should have been dropped")
                     }
                 }
             }
+            // Exact set equality — not membership — so a remap that
+            // silently left channels untouched (identity) would be
+            // caught: the untouched set would be {0, 5}, not {0, 1}.
+            #expect(noteChannels == Set(plan.strips.map(\.liveChannel)))
+            // The accordion's rendered/declared channel (5) must NOT
+            // survive into the live SMF — its live channel is 1. This
+            // is the assertion a channel-remap-turned-no-op would fail.
+            #expect(!noteChannels.contains(5))
         }
     }
 
