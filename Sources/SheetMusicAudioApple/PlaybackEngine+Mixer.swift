@@ -47,12 +47,19 @@ extension PlaybackEngine {
     /// Rebuild the channel array from `score`'s LIVE channel plan — one
     /// strip per (part × distinct instrument), plus the metronome.
     /// Existing volume / mute / solo state is dropped — a new score is
-    /// a new mix. Called from `prepare(score:)`. Initial slider values
-    /// come from MSCX `<controller ctrl="7" value="N"/>`, stored on
-    /// each strip's `InstrumentChannel.volume` (0...127). MuseScore's
-    /// default is 100/127.
+    /// a new mix. Called from `prepare(score:)`, right after
+    /// `prepareSynth(score:)` has stored an identical plan in
+    /// `liveChannelPlan` — reused here rather than rebuilt, so there is
+    /// only ONE `LiveChannelPlan.build` per prepare (same reasoning as
+    /// the `staffChannels` single-source-of-truth this task closed:
+    /// `assignChannels` + a full `systemMeasures` walk per part is not
+    /// something worth paying for twice). Falls back to a fresh build
+    /// if ever called before a plan exists. Initial slider values come
+    /// from MSCX `<controller ctrl="7" value="N"/>`, stored on each
+    /// strip's `InstrumentChannel.volume` (0...127). MuseScore's default
+    /// is 100/127.
     func rebuildMixerChannels(for score: Score) {
-        let plan = LiveChannelPlan.build(score: score)
+        let plan = liveChannelPlan ?? LiveChannelPlan.build(score: score)
         var channels: [MixerChannel] = []
         channels.reserveCapacity(plan.strips.count + 1)
         for strip in plan.strips {
@@ -60,7 +67,7 @@ extension PlaybackEngine {
                 id: .instrument(
                     partIndex: strip.partIndex, ordinal: strip.ordinal,
                 ),
-                name: stripName(for: strip, in: score),
+                name: stripName(for: strip, in: score, plan: plan),
                 volume: Float(max(0, min(127, strip.instrument.channel.volume))) / 127,
                 program: strip.instrument.useDrumset
                     ? nil
@@ -74,12 +81,33 @@ extension PlaybackEngine {
         replaceMixerChannels(channels)
     }
 
-    /// "S (Piano)" / "S (Accordion)" — the part's display name plus the
-    /// instrument, so a part with instrument changes reads unambiguously.
-    /// A part with a single instrument keeps the bare part name.
+    /// "Guitar" / "Guitar (Banjo)" — the part's display name, plus the
+    /// instrument in parens ONLY when that reads as a genuinely distinct
+    /// second (or later) instrument. Two guards keep this from
+    /// stuttering:
+    ///
+    /// - **Suppress a duplicate.** `score.staffDisplayName(at:)` (what
+    ///   `partName` is) resolves to the PART's tick-0 instrument's own
+    ///   `longName` first. The strip AT ordinal 0 is by construction
+    ///   that same tick-0 instrument, so its `instrumentName` always
+    ///   equals `partName` — for `instrument-change.mscx`
+    ///   (`<longName>Piano</longName>` then `<longName>Accordion</longName>`)
+    ///   that would otherwise render "Piano (Piano)". Comparing the two
+    ///   strings and dropping the suffix when they match fixes this for
+    ///   any strip, not just ordinal 0, in case two DIFFERENT instrument
+    ///   objects happen to share a name.
+    /// - **Gate on the DEDUPED strip count for this part**
+    ///   (`plan.strips`, filtered to `strip.partIndex`), not
+    ///   `score.instrumentTimeline(forPart:).count`. A part whose two
+    ///   timeline entries collapse onto ONE live channel (identical
+    ///   `InstrumentChannel` flavour — see `LiveChannelPlan`'s dedup
+    ///   rule) has exactly one STRIP even though it has two TIMELINE
+    ///   entries; counting the timeline would show a suffix for a part
+    ///   that the mixer never actually splits into two strips.
+    ///
     /// Instrument name falls back longName → trackName → id.
     private func stripName(
-        for strip: LiveChannelPlan.Strip, in score: Score,
+        for strip: LiveChannelPlan.Strip, in score: Score, plan: LiveChannelPlan,
     ) -> String {
         let address = StaffAddress(
             partIndex: strip.partIndex, staffIndexInPart: 0,
@@ -88,8 +116,12 @@ extension PlaybackEngine {
         let instrumentName = strip.instrument.longName
             ?? strip.instrument.trackName
             ?? strip.instrument.id
-        let distinct = score.instrumentTimeline(forPart: strip.partIndex).count
-        guard distinct > 1, !instrumentName.isEmpty else { return partName }
+        let distinctStripsForPart = plan.strips
+            .count { $0.partIndex == strip.partIndex }
+        guard distinctStripsForPart > 1,
+              !instrumentName.isEmpty,
+              instrumentName != partName
+        else { return partName }
         return "\(partName) (\(instrumentName))"
     }
 
