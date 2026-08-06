@@ -56,12 +56,17 @@ class ExportOutcome:
 def _run_supervised(cmd: list[str], timeout_s: float):
     """Real subprocess runner: own process group, hard kill on timeout.
     This is the production implementation of the injected `run` seam
-    (`export_pdf`'s default when no `run` is passed) and is deliberately
-    NOT exercised by the test suite -- doing so would require a real
-    `mscore` binary. Every supervision branch it feeds into
-    (timeout-but-complete, non-zero-exit-but-complete, incomplete,
-    retry, quarantine-worthy failure) is instead tested against a fake
-    `run` callable in `Training/tests/test_export_pdf.py`.
+    (`export_pdf`'s default when no `run` is passed). It supervises an
+    arbitrary argv, so it IS exercised directly by the test suite --
+    against `sleep` and a tiny stand-in script, never `mscore` -- to
+    prove the timeout/kill machinery itself (own process group fully
+    reaped, `ProcessLookupError` race swallowed, a write-then-hang
+    argv's complete output surviving the kill) without requiring a real
+    MuseScore install. The higher-level supervision branches built on
+    top of it (timeout-but-complete, non-zero-exit-but-complete,
+    incomplete, retry, quarantine-worthy failure) are separately tested
+    against a fake `run` callable, so `export_pdf`'s own tests don't
+    need real subprocesses at all.
 
     `start_new_session=True` puts the child in its own process group so
     a timeout kill (`os.killpg(..., SIGKILL)`) reaches any grandchildren
@@ -79,24 +84,38 @@ def _run_supervised(cmd: list[str], timeout_s: float):
         # (the MS4 "writes then hangs" shape) -- that is judged later by
         # pdf_is_complete, not here. This branch's only job is to make
         # sure nothing is left running.
-        os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+        try:
+            os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+        except ProcessLookupError:
+            # Race: the child exited on its own between TimeoutExpired
+            # firing and this line running, so there is nothing left to
+            # kill. Must not propagate -- an uncaught exception here
+            # would crash the whole batch driver instead of falling
+            # through to the completeness check below, which is exactly
+            # what should happen when the process is already gone.
+            pass
         proc.wait()
         return SimpleNamespace(returncode=None, timed_out=True)
 
 
 def pdf_is_complete(path: Path) -> bool:
-    """A PDF counts as complete iff it has a trailing `%%EOF` within the
-    last 1024 bytes AND pypdfium2 can open it and report >= 1 page. The
-    trailer check alone would accept a file whose xref table points past
-    the end of a torn write; the page-count read alone would accept a
-    zero-page but otherwise well-formed document. Both together is this
-    module's whole completeness contract -- exit codes and timeouts are
-    explicitly NOT part of it (see module + ExportOutcome docstrings)."""
+    """A PDF counts as complete iff its LAST non-whitespace bytes (within
+    the final 1024 of the file) are `%%EOF`, AND pypdfium2 can open it
+    and report >= 1 page. Anchoring to the actual tail (not just "%%EOF
+    appears somewhere in the last 1024 bytes") matters because a torn
+    append could otherwise leave a stale `%%EOF` from an earlier
+    revision inside that window while the true tail is corrupt garbage;
+    a plain substring search would miss that. The page-count read alone
+    would separately accept a zero-page but otherwise well-formed
+    document. Both together is this module's whole completeness
+    contract -- exit codes and timeouts are explicitly NOT part of it
+    (see module + ExportOutcome docstrings)."""
     try:
         data = Path(path).read_bytes()
     except OSError:
         return False
-    if b"%%EOF" not in data[-1024:]:
+    tail = data[-1024:].rstrip(b" \t\r\n\x00")
+    if not tail.endswith(b"%%EOF"):
         return False
     try:
         doc = pdfium.PdfDocument(str(path))
@@ -107,25 +126,38 @@ def pdf_is_complete(path: Path) -> bool:
         return False
 
 
-def mscore_version(mscore_bin: str, run=None) -> str:
+def mscore_version(mscore_bin: str, run_capture=None) -> str:
     """Best-effort `mscore --version` string, for recording engine
-    identity alongside a rendered batch. Distinct call shape from
-    `export_pdf`'s `run` (which supervises a file-producing invocation
-    and returns `(returncode, timed_out)`): this one captures text
-    output, so its injected `run` is `Callable[[list[str]],
-    SimpleNamespace(stdout, stderr)]`. The default (`run=None`) path
-    invokes a real subprocess and is not exercised by the test suite for
-    the same reason `_run_supervised` isn't: it would require a real
-    `mscore` binary. Either stream may carry the version string
-    depending on the build, so both are checked."""
-    if run is None:
-        completed = subprocess.run(
-            [mscore_bin, "--version"], capture_output=True, text=True,
-            timeout=60,
-        )
+    identity alongside a rendered batch. Deliberately NOT named `run`
+    like `export_pdf`'s injection parameter below -- the two have
+    incompatible callable shapes (this one captures stdout/stderr text,
+    `export_pdf`'s supervises a file-producing invocation and returns
+    `(returncode, timed_out)`), and sharing a name invited exactly the
+    kind of mix-up a distinct name removes: `run_capture` is
+    `Callable[[list[str]], SimpleNamespace(stdout, stderr)]`.
+
+    "Best-effort" per this docstring means exactly that: a missing
+    binary or a hung invocation returns "" rather than raising, so a
+    caller iterating a batch never crashes on a version probe alone --
+    only the real (`run_capture=None`) subprocess path can hit either of
+    those, so only it needs the guard. The default path is not exercised
+    by the test suite for the same reason `_run_supervised`'s isn't: no
+    real `mscore` binary is required to test either the injected branch
+    or the missing-binary / timeout guards (an intentionally-nonexistent
+    path, and a monkeypatched `subprocess.run`, cover those). Either
+    stream may carry the version string depending on the build, so both
+    are checked."""
+    if run_capture is None:
+        try:
+            completed = subprocess.run(
+                [mscore_bin, "--version"], capture_output=True, text=True,
+                timeout=60,
+            )
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            return ""
         result = SimpleNamespace(stdout=completed.stdout, stderr=completed.stderr)
     else:
-        result = run([mscore_bin, "--version"])
+        result = run_capture([mscore_bin, "--version"])
     return (result.stdout or result.stderr or "").strip()
 
 
