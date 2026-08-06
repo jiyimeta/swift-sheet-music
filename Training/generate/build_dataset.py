@@ -266,11 +266,35 @@ def _render_dirs(root: Path) -> list[Path]:
                   if p.is_dir() and (p / "render.json").exists())
 
 
+def _quarantine_record(entry: dict, reason: str) -> dict:
+    """One `quarantine.json` row. Same key set whatever the cause, so
+    P3c-G2's denominator arithmetic and the face gate's
+    `_expected_faces` read every row the same way; the export-specific
+    fields are simply absent for a failure that never reached MuseScore.
+    """
+    return {
+        "render_id": entry["render_id"],
+        "source_id": entry["source_id"],
+        "engine": entry["engine"],
+        "face": entry["face"],
+        "reason": reason,
+        "exit_code": None,
+        "timed_out": False,
+        "retried": False,
+    }
+
+
 def _write_source(render_dir: Path, source: dict, variant) -> Path:
     """Style-rewrite one source into its render directory. `.mscz` goes
     through `apply_style_mscz` (unzip / edit inner `.mscx` / re-zip)
     because `mscore -S style.mss` is silently ignored for headless PDF
-    export -- see `style_matrix`'s module docstring."""
+    export -- see `style_matrix`'s module docstring.
+
+    Propagates `style_matrix.MissingStyleBlock`: a source with no
+    `<Style>` element to rewrite cannot carry the requested face, and
+    exporting it anyway would put a default-face render into the dataset
+    under a `render.json` claiming otherwise. `generate_dataset`
+    quarantines it instead, naming the source's origin."""
     if source["kind"] == "extra_mscz":
         path = render_dir / "source.mscz"
         path.write_bytes(style_matrix.apply_style_mscz(source["payload"], variant))
@@ -295,16 +319,12 @@ def _export_and_rasterize(entry: dict, render_dir: Path, source_path: Path,
     pdf_path = render_dir / "score.pdf"
     outcome = exporter(_mscore_bin(entry["engine"]), source_path, pdf_path)
     if not outcome.ok:
-        return False, {
-            "render_id": entry["render_id"],
-            "source_id": entry["source_id"],
-            "engine": entry["engine"],
-            "face": entry["face"],
-            "reason": outcome.reason or "export reported ok=False",
-            "exit_code": outcome.exit_code,
-            "timed_out": outcome.timed_out,
-            "retried": outcome.retried,
-        }
+        record = _quarantine_record(
+            entry, outcome.reason or "export reported ok=False")
+        record["exit_code"] = outcome.exit_code
+        record["timed_out"] = outcome.timed_out
+        record["retried"] = outcome.retried
+        return False, record
     rasterizer(pdf_path, render_dir, entry["dpi"])
     return True, None
 
@@ -369,7 +389,19 @@ def generate_dataset(root: Path, seed: int, engines: list[str], per_face: int,
         variant = variants[entry["engine"]][entry["variant_index"]]
         render_dir = root / entry["render_id"]
         render_dir.mkdir(parents=True, exist_ok=True)
-        source_path = _write_source(render_dir, source, variant)
+        try:
+            source_path = _write_source(render_dir, source, variant)
+        except style_matrix.MissingStyleBlock as error:
+            # The face could not be applied, so this render would carry a
+            # `render.json` naming a face it was not drawn in. Quarantine
+            # instead, naming the source's ORIGIN (a path, for
+            # --extra-sources) so the operator knows which file to fix.
+            record = _quarantine_record(
+                entry, f"style-not-applied: {error} "
+                       f"(source {source['source_id']} from {source['origin']})")
+            print(f"[generate][WARN] {record['render_id']}: {record['reason']}")
+            quarantined.append(record)
+            continue
         ok, record = _export_and_rasterize(
             entry, render_dir, source_path, exporter, rasterizer)
         if not ok:

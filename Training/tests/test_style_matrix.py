@@ -2,6 +2,8 @@ import io
 import xml.etree.ElementTree as ET
 import zipfile
 
+import pytest
+
 from generate import gen_coverage, style_matrix
 
 
@@ -92,6 +94,73 @@ def test_apply_style_preserves_unrelated_existing_style_settings():
     style = ET.fromstring(out).find("Score/Style")
     assert style.find("pagePrintableWidth").text == "7.4826"
     assert style.find("musicalSymbolFont").text == "Petaluma"
+
+
+# --- A source with no <Style> block --------------------------------------
+#
+# Whole-branch review, Important 3. `apply_style_mscx` used to `return
+# text` unchanged when its regex found no `<Style>` block. The
+# generators' own sources always carry one, but `--extra-sources` takes
+# arbitrary user-authored scores -- which the runbook's step 1 tells the
+# operator to pass. Such a score renders in MuseScore's default face
+# while `dataset_plan.json` and `render.json` both record the REQUESTED
+# face: metadata corruption on the one axis the whole dataset exists to
+# vary, with no message anywhere. It also misdirects the face gate,
+# whose `_face_font_check` is strict (`matched == checked`), so one bad
+# source flips a whole face to `font-mismatch`.
+#
+# Note also what these tests are NOT: the file's determinism and
+# idempotence tests are all of the form `f(f(x)) == f(x)` or
+# `f(x) == f(x)`, which the identity function satisfies -- so a regex
+# regression that stopped matching `<Style>` would leave them green.
+# (`test_apply_style_rewrites_the_embedded_style_element` above does
+# catch that, but nothing covered the no-block INPUT at all.)
+
+def test_apply_style_raises_when_the_document_has_no_style_block():
+    text = _sample_mscx().replace(
+        "<Style>\n      <Spatium>1.76389</Spatium>\n    </Style>\n", "")
+    assert "<Style>" not in text
+    v = style_matrix.StyleVariant(face="Petaluma", spatium=1.8,
+                                  page_w_in=8.27, page_h_in=11.69, engine="ms4")
+    with pytest.raises(style_matrix.MissingStyleBlock):
+        style_matrix.apply_style_mscx(text, v)
+
+
+def test_apply_style_mscz_raises_when_no_inner_score_carries_a_style_block():
+    stripped = _sample_mscx().replace(
+        "<Style>\n      <Spatium>1.76389</Spatium>\n    </Style>\n", "")
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("score.mscx", stripped)
+    v = style_matrix.StyleVariant(face="Petaluma", spatium=1.8,
+                                  page_w_in=8.27, page_h_in=11.69, engine="ms4")
+    with pytest.raises(style_matrix.MissingStyleBlock):
+        style_matrix.apply_style_mscz(buf.getvalue(), v)
+
+
+def test_apply_style_mscz_styles_the_scores_that_have_one_and_keeps_the_rest():
+    """A real `.mscz` can hold several inner `.mscx` (excerpts / parts).
+    Only the ones carrying a `<Style>` block are rewritten; the others
+    are passed through verbatim rather than raising, because the face
+    HAS been applied to the score that gets exported. Raising is reserved
+    for the case where the style reached nothing at all."""
+    styled = _sample_mscx()
+    stripped = styled.replace(
+        "<Style>\n      <Spatium>1.76389</Spatium>\n    </Style>\n", "")
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("score.mscx", styled)
+        z.writestr("Excerpts/part.mscx", stripped)
+    v = style_matrix.StyleVariant(face="Petaluma", spatium=1.8,
+                                  page_w_in=8.27, page_h_in=11.69, engine="ms4")
+
+    out = style_matrix.apply_style_mscz(buf.getvalue(), v)
+    with zipfile.ZipFile(io.BytesIO(out)) as z:
+        main = z.read("score.mscx").decode()
+        part = z.read("Excerpts/part.mscx").decode()
+    assert ET.fromstring(main).find(
+        "Score/Style/musicalSymbolFont").text == "Petaluma"
+    assert part == stripped
 
 
 def test_apply_style_mscz_roundtrips_the_container():

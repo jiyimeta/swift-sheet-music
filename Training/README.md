@@ -131,6 +131,15 @@ never a tracked path, and never a copyrighted corpus):
         --root $R --seed $SEED --engines ms4 --per-face 2 --textures 100 \
         --extra-sources ~/Desktop/free_score
 
+An `--extra-sources` score that carries no `<Style>` element cannot be
+given a face — style is applied by rewriting that element, since
+`mscore -S style.mss` is silently ignored on headless export. Such a
+source is **quarantined** rather than exported in MuseScore's default
+face under a `render.json` claiming the requested one; `generate` prints
+`[generate][WARN] … style-not-applied: … (source … from <path>)` and the
+same reason lands in `quarantine.json`. Fix or drop the named file — one
+of them is enough to flip its whole face to `font-mismatch` on P3c-G4.
+
 **2. Label export** (Swift; forced Tier 1). This is the phase boundary:
 
     OMR_DATA_ROOT=$R OMR_LABEL_EXPORT=1 swift test 2>&1 \

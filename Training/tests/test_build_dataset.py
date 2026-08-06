@@ -224,6 +224,57 @@ def test_extra_sources_are_carried_with_provenance(tmp_path):
     assert "<musicalSymbolFont>" in inner
 
 
+def test_an_extra_source_with_no_style_block_is_quarantined_by_name(tmp_path):
+    """Whole-branch review, Important 3. `--extra-sources` accepts
+    arbitrary user-authored scores (the runbook's step 1 tells the
+    operator to pass exactly that), and one with no `<Style>` element
+    used to be style-rewritten into a silent no-op: exported in
+    MuseScore's DEFAULT face while `dataset_plan.json` and `render.json`
+    both recorded the face that was requested.
+
+    Now it never reaches the exporter. Asserts the whole record, and
+    that the reason names the offending file, because "it was
+    quarantined somehow" would also be satisfied by an unrelated
+    failure."""
+    extra = tmp_path / "extra"
+    extra.mkdir()
+    from generate import gen_coverage
+    styleless = gen_coverage.coverage_sources(1)[0][1].replace(
+        "<Style>\n      <Spatium>1.76389</Spatium>\n    </Style>\n", "")
+    assert "<Style>" not in styleless
+    (extra / "no_style.mscx").write_text(styleless)
+
+    root = tmp_path / "ds"
+    exporter = _ExporterSpy()
+    summary = build_dataset.generate_dataset(
+        root, seed=3, engines=["ms4"], per_face=1, texture_count=0,
+        extra_sources=[extra], exporter=exporter,
+        rasterizer=_RasterizerSpy())
+
+    offending = [q for q in summary["quarantined"]
+                 if q["source_id"] == "ext_no_style"]
+    assert offending, "the styleless source must be quarantined"
+    for record in offending:
+        assert record["reason"].startswith("style-not-applied:")
+        assert str(extra / "no_style.mscx") in record["reason"]
+        assert record["engine"] == "ms4"
+        assert record["face"].startswith("ms4/")
+        assert set(record) == {"render_id", "source_id", "engine", "face",
+                               "reason", "exit_code", "timed_out", "retried"}
+        # Never exported, so no render.json can claim a face for it, and
+        # no styled source was left behind either.
+        assert not (root / record["render_id"] / "render.json").exists()
+        assert not (root / record["render_id"] / "source.mscx").exists()
+    # It never reached MuseScore at all: the exporter ran once per
+    # render that survived `_write_source`, not once per planned render.
+    assert len(exporter.calls) == summary["exported"]
+    assert len(exporter.calls) == summary["driven"] - len(offending)
+    assert all(q["source_id"] == "ext_no_style" for q in summary["quarantined"])
+    # The rest of the dataset still built.
+    assert summary["exported"] > 0
+    assert summary["driven"] == summary["exported"] + len(summary["quarantined"])
+
+
 def test_duplicate_extra_source_ids_are_rejected(tmp_path):
     """Two directories each holding `song.mscx` would silently collapse
     into one source (last write wins) if ids were not checked."""

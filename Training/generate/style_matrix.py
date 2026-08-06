@@ -180,6 +180,30 @@ _OWNED_TAGS = ("Spatium", "musicalSymbolFont",
 _STYLE_BLOCK_RE = re.compile(r"<Style>(.*?)</Style>", re.DOTALL)
 
 
+class MissingStyleBlock(ValueError):
+    """No `<Style>` element to rewrite, so the requested face was NOT
+    applied to this source.
+
+    Raised rather than returning the text untouched (the old behavior).
+    A silent no-op is the worst available outcome here: the score
+    renders in MuseScore's default face while `dataset_plan.json` and
+    `render.json` both record the face that was ASKED for, which is
+    metadata corruption on the exact axis this dataset exists to vary --
+    and it is invisible, because nothing downstream can read a font name
+    out of a label file. It also misdirects gate P3c-G4: `_face_font_check`
+    is strict (`matched == checked`), so one such source flips the whole
+    face to `font-mismatch` and points the operator at a face that was
+    applied correctly everywhere else.
+
+    The generators' own sources always carry a `<Style>`; the reachable
+    case is `--extra-sources`, which accepts arbitrary user-authored
+    `.mscx` / `.mscz` (the runbook's step 1 tells the operator to pass
+    exactly that). `build_dataset._write_source` catches this and
+    quarantines the render, naming the offending source's origin so the
+    operator can act on it.
+    """
+
+
 @dataclass(frozen=True)
 class StyleVariant:
     face: str
@@ -272,10 +296,16 @@ def apply_style_mscx(text: str, v: StyleVariant) -> str:
     verbatim (own line, own indentation), so this is safe to run on a
     real MuseScore-authored score (via `apply_style_mscz`) that carries
     many settings this module never varies.
+
+    Raises `MissingStyleBlock` when the document has no `<Style>`
+    element at all -- see that exception's docstring for why silence was
+    the wrong answer.
     """
     match = _STYLE_BLOCK_RE.search(text)
     if match is None:
-        return text
+        raise MissingStyleBlock(
+            "no <Style> element to rewrite, so face "
+            f"{v.face!r} was not applied")
     lines = _other_style_lines(match.group(1))
     lines.append(_style_block_children(v).rstrip("\n"))
     new_inner = "\n" + "\n".join(lines) + "\n    "
@@ -286,15 +316,34 @@ def apply_style_mscz(data: bytes, v: StyleVariant) -> bytes:
     """Unzip, rewrite every inner `*.mscx` via `apply_style_mscx`,
     re-zip deterministically (fixed timestamp, sorted names,
     `ZIP_DEFLATED`) so the same (data, v) always produces identical
-    bytes."""
+    bytes.
+
+    Per-member tolerance, whole-container strictness: a real `.mscz`
+    can hold several inner `.mscx` (excerpts / parts), and one of them
+    lacking a `<Style>` block does not mean the face went unapplied --
+    the score that gets exported to PDF carries the style. So a member
+    that raises `MissingStyleBlock` is passed through verbatim, and the
+    exception is re-raised only if NO member was rewritten, which is the
+    genuine "this face reached nothing" case.
+    """
     src = zipfile.ZipFile(io.BytesIO(data))
     out_buf = io.BytesIO()
+    styled = 0
     with zipfile.ZipFile(out_buf, "w", compression=zipfile.ZIP_DEFLATED) as out:
         for name in sorted(src.namelist()):
             payload = src.read(name)
             if name.endswith(".mscx"):
-                payload = apply_style_mscx(payload.decode("utf-8"), v).encode("utf-8")
+                try:
+                    payload = apply_style_mscx(
+                        payload.decode("utf-8"), v).encode("utf-8")
+                    styled += 1
+                except MissingStyleBlock:
+                    pass  # keep this member as-is; see docstring
             info = zipfile.ZipInfo(name, date_time=(1980, 1, 1, 0, 0, 0))
             info.compress_type = zipfile.ZIP_DEFLATED
             out.writestr(info, payload)
+    if not styled:
+        raise MissingStyleBlock(
+            "no inner .mscx carried a <Style> element, so face "
+            f"{v.face!r} was not applied to any score in this .mscz")
     return out_buf.getvalue()
