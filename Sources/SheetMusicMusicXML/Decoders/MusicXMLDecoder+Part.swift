@@ -53,10 +53,20 @@ extension Part {
     /// merged with its matching `<midi-instrument>` (joined by shared
     /// `id`), keyed by that same `id` — the string
     /// `<note><instrument id="…">` and MusicXML 4.0's
-    /// `<sound><instrument-change id="…">` both reference. `primary` keeps
-    /// the original single-instrument behavior verbatim (first
-    /// `<score-instrument>`, default channel) so `ScoreSemanticComparison`
-    /// and existing MusicXML tests are unaffected.
+    /// `<sound><instrument-change id="…">` both reference.
+    ///
+    /// `primary` — the tick-0 / timeline-index-0 instrument — takes its
+    /// CHANNELS from that same table, so one `<score-instrument>` is
+    /// never decoded two different ways. It used to seed hard
+    /// `InstrumentChannel()` defaults instead, which meant a non-piano
+    /// part played GM program 0 until its first change, and a part that
+    /// changed away and back produced two mixer strips for one
+    /// instrument (the live dedup keys on exactly the fields the
+    /// defaults were wrong about).
+    ///
+    /// `primary`'s IDENTITY — `id`, `longName`, `shortName`, `trackName`
+    /// — is untouched: `ScoreSemanticComparison` and the MusicXML import
+    /// tests pin those to the part-level values, not the table's.
     private static func decodeInstrument(
         scorePart: XMLTreeNode,
         name: String?,
@@ -71,16 +81,22 @@ extension Part {
             ?? scorePart.attributes["id"]
             ?? ""
         let trackName = instrumentName ?? name
+        let byID = decodeInstrumentTable(
+            scorePart: scorePart, partLongName: name, abbrev: abbrev, useDrumset: useDrumset,
+        )
+        // The first `<score-instrument>` is the one in force at tick 0.
+        // Falls back to the defaults when the part declares none, or
+        // declares one without an `id` attribute (which the table skips).
+        let channels = scoreInstr?.attributes["id"]
+            .flatMap { byID[$0]?.channels }
+            ?? [InstrumentChannel()]
         let primary = Instrument(
             id: id,
             longName: name,
             shortName: abbrev,
             trackName: trackName,
-            channels: [InstrumentChannel()],
+            channels: channels,
             useDrumset: useDrumset,
-        )
-        let byID = decodeInstrumentTable(
-            scorePart: scorePart, partLongName: name, abbrev: abbrev, useDrumset: useDrumset,
         )
         return (primary, byID)
     }

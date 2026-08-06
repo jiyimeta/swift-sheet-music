@@ -1,5 +1,6 @@
 import Foundation
 @testable import SheetMusicCore
+@testable import SheetMusicMIDI
 @testable import SheetMusicMusicXML
 import SheetMusicXMLTools
 import Testing
@@ -86,6 +87,105 @@ struct InstrumentChangeMusicXMLTests {
         // instruments carry the fixture's <pan>0</pan>.
         #expect(piano.channel.pan == 64)
         #expect(accordion.channel.pan == 64)
+    }
+
+    /// A violin part that changes to flute in bar 2 and back in bar 3.
+    ///
+    /// The committed `instrument-change.musicxml` cannot exercise the
+    /// change-back case, and its numbers are the defaults anyway:
+    /// `<midi-program>1</midi-program>` converts to 0 and
+    /// `<volume>78.7402</volume>` to 100. This part is a violin at a
+    /// non-default volume, so the two decodings of one
+    /// `<score-instrument>` cannot coincide.
+    private static let violinFluteViolin = """
+    <?xml version="1.0" encoding="UTF-8"?>
+    <score-partwise version="4.0">
+      <part-list>
+        <score-part id="P1">
+          <part-name>Violin</part-name>
+          <score-instrument id="P1-I1">
+            <instrument-name>Violin</instrument-name>
+          </score-instrument>
+          <score-instrument id="P1-I2">
+            <instrument-name>Flute</instrument-name>
+          </score-instrument>
+          <midi-instrument id="P1-I1">
+            <midi-channel>1</midi-channel>
+            <midi-program>41</midi-program>
+            <volume>50</volume>
+            <pan>0</pan>
+          </midi-instrument>
+          <midi-instrument id="P1-I2">
+            <midi-channel>2</midi-channel>
+            <midi-program>74</midi-program>
+            <volume>50</volume>
+            <pan>0</pan>
+          </midi-instrument>
+        </score-part>
+      </part-list>
+      <part id="P1">
+        <measure number="1">
+          <attributes>
+            <divisions>1</divisions>
+            <time><beats>4</beats><beat-type>4</beat-type></time>
+          </attributes>
+          <note>
+            <pitch><step>C</step><octave>4</octave></pitch>
+            <duration>4</duration>
+            <instrument id="P1-I1"/>
+            <voice>1</voice>
+            <type>whole</type>
+          </note>
+        </measure>
+        <measure number="2">
+          <note>
+            <pitch><step>D</step><octave>4</octave></pitch>
+            <duration>4</duration>
+            <instrument id="P1-I2"/>
+            <voice>1</voice>
+            <type>whole</type>
+          </note>
+        </measure>
+        <measure number="3">
+          <note>
+            <pitch><step>E</step><octave>4</octave></pitch>
+            <duration>4</duration>
+            <instrument id="P1-I1"/>
+            <voice>1</voice>
+            <type>whole</type>
+          </note>
+        </measure>
+      </part>
+    </score-partwise>
+    """
+
+    /// The tick-0 instrument and the per-id table used to decode the SAME
+    /// `<score-instrument>` two different ways: the timeline seed took
+    /// hard `InstrumentChannel()` defaults while the table took the real
+    /// `<midi-instrument>` values. The live dedup keys on exactly those
+    /// values, so a part that changed away and back showed two strips
+    /// both labelled the same instrument, and played GM program 0 until
+    /// the first change.
+    @Test("an instrument that returns after a change collapses onto its own strip")
+    func changingBackReusesTheOpeningStrip() throws {
+        let score = try MusicXMLParser.parse(Data(Self.violinFluteViolin.utf8))
+        let timeline = score.instrumentTimeline(forPart: 0)
+        #expect(timeline.count == 3)
+        // <midi-program> is 1-based → 0-based. The OPENING point must
+        // carry the violin's real patch, not the defaulted GM piano.
+        #expect(timeline[0].instrument.channel.program == 40)
+        #expect(timeline[1].instrument.channel.program == 73)
+        #expect(timeline[2].instrument.channel.program == 40)
+        // <volume>50</volume> → 64, not the 100 default.
+        #expect(timeline[0].instrument.channel.volume == 64)
+
+        // Three timeline points, but only two distinct sounds: the two
+        // violin points collapse onto one mixer strip.
+        let plan = LiveChannelPlan.build(score: score)
+        #expect(plan.strips.count == 2)
+        #expect(plan.dedupedOrdinal(partIndex: 0, timelineIndex: 0) == 0)
+        #expect(plan.dedupedOrdinal(partIndex: 0, timelineIndex: 1) == 1)
+        #expect(plan.dedupedOrdinal(partIndex: 0, timelineIndex: 2) == 0)
     }
 
     @Test("originalStaff is stamped so the change is part-scoped")
