@@ -11,6 +11,17 @@
 // Only the fields and initializers actually used by Layout are
 // included. Do not add helpers pre-emptively — if a new CG API is
 // referenced in Layout code, surface it here at that point.
+//
+// WARNING for anyone consuming these types from outside this file's own module scope (Android bridge code,
+// tests, or a future Task 8-10 draw program): `Foundation` on Android (swift-corelibs-foundation) ships its
+// own complete `CGFloat`/`CGPoint`/`CGSize`/`CGRect` — including its own `intersects`/`contains`/`offsetBy` —
+// as a Codable/Hashable-friendly value-type shim, entirely independent of the ones declared below. A file
+// that does `import Foundation` alongside `import SheetMusicLayout` and then references `CGRect`/`CGPoint`/
+// `CGFloat` unqualified silently resolves to *Foundation's* type, not this one — with no ambiguity error from
+// the compiler. Files inside this module are unaffected (a local declaration always wins over an imported one
+// within the same module), but any external consumer that needs both modules must either avoid `import
+// Foundation` in that file, or fully qualify (`SheetMusicLayout.CGRect`) to be sure which implementation is
+// running. `Tests/SheetMusicTests/Layout/CGRectNegativeSizeTests.swift` documents the empirical proof.
 
 #if !canImport(CoreGraphics)
 
@@ -54,28 +65,35 @@
         }
 
         public static let zero = CGRect()
+
+        /// `minX`/`maxX`/`minY`/`maxY` are normalized — the min/max of the two edges, not just `origin` and
+        /// `origin + size` in that order — exactly like `CGRectGetMinX`/`MaxX`/`MinY`/`MaxY` on a rect with
+        /// possibly-negative width/height. Every reader of this stub (this file's own `contains`/`intersects`,
+        /// and any Layout code that reads these accessors directly) goes through them, so this is the one place
+        /// that needs to know a rect can be built un-standardized; nothing downstream has to re-derive it. This
+        /// is the property that keeps Android's geometry answering the same way CoreGraphics does on iOS.
         public var minX: CGFloat {
-            origin.x
+            min(origin.x, origin.x + size.width)
         }
 
         public var maxX: CGFloat {
-            origin.x + size.width
+            max(origin.x, origin.x + size.width)
         }
 
         public var minY: CGFloat {
-            origin.y
+            min(origin.y, origin.y + size.height)
         }
 
         public var maxY: CGFloat {
-            origin.y + size.height
+            max(origin.y, origin.y + size.height)
         }
 
         public var midX: CGFloat {
-            origin.x + size.width / 2
+            (minX + maxX) / 2
         }
 
         public var midY: CGFloat {
-            origin.y + size.height / 2
+            (minY + maxY) / 2
         }
 
         public var width: CGFloat {
@@ -87,7 +105,8 @@
         }
 
         /// Whether `point` falls within the rect, edges included — matches `CGRect.contains(_:)`'s documented
-        /// behavior that a point on the boundary counts as contained.
+        /// behavior that a point on the boundary counts as contained. Reads the normalized `minX`/`maxX`/
+        /// `minY`/`maxY` above, so this answers correctly even for a rect built with negative width/height.
         public func contains(_ point: CGPoint) -> Bool {
             point.x >= minX && point.x <= maxX && point.y >= minY && point.y <= maxY
         }
