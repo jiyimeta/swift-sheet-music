@@ -1873,7 +1873,7 @@ extension LayoutEngine {
                             + CGFloat(st.offsetY) * metrics.sp,
                     ),
                     color: st.color,
-                    isSystemText: st.isSystemText,
+                    style: st.styleType,
                 )
                 if st.visible { out.append(element) } else { invisibleOut.append(element) }
             case let .swing(s):
@@ -1887,7 +1887,7 @@ extension LayoutEngine {
                             + CGFloat(s.offsetY) * metrics.sp,
                     ),
                     color: s.color,
-                    isSystemText: s.isSystemText,
+                    style: s.isSystemText ? .systemText : .staffText,
                 )
                 if s.visible { out.append(element) } else { invisibleOut.append(element) }
             case .instrumentChange:

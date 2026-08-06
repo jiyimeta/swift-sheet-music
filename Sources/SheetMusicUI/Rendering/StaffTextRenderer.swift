@@ -12,24 +12,24 @@ enum StaffTextRenderer {
         text: String,
         origin: CGPoint,
         color: ScoreColor?,
-        isSystemText: Bool = false,
+        style: TextStyleType = .staffText,
         properties: TextProperties = TextProperties(),
         metrics: StaffMetrics,
     ) {
         guard !text.isEmpty else { return }
         let swiftUIColor: Color = color.map(swiftUIColor(_:))
             ?? .primary
-        let style = ResolvedTextStyle.resolve(
-            isSystemText ? .systemText : .staffText,
+        let resolved = ResolvedTextStyle.resolve(
+            style,
             overrides: properties,
             metrics: metrics,
         )
-        let resolved = context.resolve(
+        let resolvedText = context.resolve(
             Text(text)
                 .foregroundColor(swiftUIColor)
-                .font(style.font),
+                .font(resolved.font),
         )
-        context.draw(resolved, at: origin, anchor: .bottomLeading)
+        context.draw(resolvedText, at: origin, anchor: .bottomLeading)
     }
 
     private static func swiftUIColor(_ color: ScoreColor) -> Color {
