@@ -350,4 +350,51 @@ object SheetMusicJNI {
     fun nativeReleasePdfGeometry(handle: Long) {
         SwiftJavaJNI.nativeReleasePdfGeometry(handle)
     }
+
+    /**
+     * Opens a mirror edit session over the score behind [scoreHandle]. Returns `false` for an
+     * unknown handle. Idempotent: opening twice replaces the session, which is what a host
+     * restarting a session wants.
+     */
+    fun nativeBeginEditSession(scoreHandle: Long): Boolean =
+        SwiftJavaJNI.nativeBeginEditSession(scoreHandle)
+
+    /**
+     * Relays one edit intent into the mirror session behind [scoreHandle]. Returns `false` when
+     * no session is open, the bytes don't decode, or the engine refused the edit — in every case
+     * the mirror's score is untouched, which is what the authoritative side did too, so the two
+     * stay in step.
+     */
+    fun nativeApplyEditIntent(scoreHandle: Long, intentBytes: ByteArray): Boolean {
+        val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
+        return SwiftJavaJNI.nativeApplyEditIntent(scoreHandle, SwiftData.fromByteArray(intentBytes, arena))
+    }
+
+    /** Undoes the session's last applied intent. Returns `false` when there is no session or nothing to undo. */
+    fun nativeEditUndo(scoreHandle: Long): Boolean =
+        SwiftJavaJNI.nativeEditUndo(scoreHandle)
+
+    /** Redoes the session's last undone intent. Returns `false` when there is no session or nothing to redo. */
+    fun nativeEditRedo(scoreHandle: Long): Boolean =
+        SwiftJavaJNI.nativeEditRedo(scoreHandle)
+
+    /**
+     * Drops the session behind [scoreHandle]. The score keeps whatever the session last wrote —
+     * ending a session is not a revert. A no-op for a handle with no session.
+     */
+    fun nativeEndEditSession(scoreHandle: Long) {
+        SwiftJavaJNI.nativeEndEditSession(scoreHandle)
+    }
+
+    /**
+     * The digest the host compares against its own copy of [scoreHandle]. `0` for an unknown
+     * handle — a value no real score produces often enough to matter, and the host treats
+     * "unknown handle" as a mismatch anyway.
+     */
+    fun nativeScoreFingerprint(scoreHandle: Long): Long =
+        SwiftJavaJNI.nativeScoreFingerprint(scoreHandle)
+
+    /** This image's build identity. A host compares it with its own before opening a session. */
+    fun nativeEngineVersionStamp(): Long =
+        SwiftJavaJNI.nativeEngineVersionStamp()
 }
