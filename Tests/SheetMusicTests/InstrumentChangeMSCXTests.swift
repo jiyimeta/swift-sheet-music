@@ -141,17 +141,3 @@ struct InstrumentChangeMSCXTests {
         #expect(node.first("text")?.text == "x")
     }
 }
-
-extension Score {
-    /// Returns a copy with `source` overridden — used in round-trip
-    /// equality checks since `source` is loader-set metadata (which
-    /// version of the file format we read), not score content.
-    ///
-    /// Duplicated from `MSCXRoundTripTests.swift`, whose own copy is
-    /// `fileprivate` and therefore not visible here.
-    fileprivate func withSource(_ source: ScoreSource) -> Score {
-        var copy = self
-        copy.source = source
-        return copy
-    }
-}
