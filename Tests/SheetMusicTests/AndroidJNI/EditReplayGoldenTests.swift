@@ -84,9 +84,11 @@
                     stepBytes.append(nil)
                     #expect(nativeEditUndo(scoreHandle: handle))
                 case .redo:
-                    // `EditReplayScript.standard` never emits this case — see its doc comment on why "redo" is
-                    // represented as undo-then-reapply instead. Recorded as a failure rather than silently treated
-                    // as either an apply or an undo, since the device-side harness has no asset convention for it.
+                    // Defensive only — unreachable from the current script. `EditReplayScript.standard` never emits
+                    // this case; see its doc comment on why "redo" is represented as undo-then-reapply instead. The
+                    // real `nativeEditRedo` bridge function is covered separately, on the host, by
+                    // `EditSessionBridgeTests`. Recorded as a failure rather than silently treated as either an
+                    // apply or an undo, since the device-side harness has no asset convention for it.
                     Issue.record("EditReplayStep.redo has no wire representation this harness can commit")
                 }
                 fingerprints.append(nativeScoreFingerprint(scoreHandle: handle))

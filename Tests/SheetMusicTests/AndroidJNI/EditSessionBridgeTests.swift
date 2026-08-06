@@ -49,6 +49,60 @@ struct EditSessionBridgeTests {
         nativeEndEditSession(scoreHandle: handle)
     }
 
+    /// `nativeEditRedo` (`EditSessionBridge.swift`) had no call site anywhere in this repo, host or device, until
+    /// this test — `EditReplayScript.standard` represents "redo" as undo-then-reapply (see its doc comment) rather
+    /// than calling the real bridge function, precisely so the device-side asset convention never had to grow a
+    /// third case. `ScoreEditSession.redo()` itself is covered by `ScoreEditorTests` / `ScoreEditSessionTests`, but
+    /// the bridge function wrapping it — including its `false`-return paths below — was not.
+    @Test("redo through the bridge reapplies the undone edit")
+    func redoReapplies() throws {
+        let handle = try Self.loadedHandle()
+        defer { nativeReleaseScore(handle: handle) }
+        #expect(nativeBeginEditSession(scoreHandle: handle))
+        let intent = EditIntent.setChordDuration(at: Self.chordSlot, duration: .eighth)
+        #expect(nativeApplyEditIntent(scoreHandle: handle, intentBytes: EditIntentCodec.encode(intent)))
+        let afterApply = nativeScoreFingerprint(scoreHandle: handle)
+        #expect(nativeEditUndo(scoreHandle: handle))
+        #expect(nativeScoreFingerprint(scoreHandle: handle) != afterApply)
+        #expect(nativeEditRedo(scoreHandle: handle))
+        #expect(nativeScoreFingerprint(scoreHandle: handle) == afterApply)
+        nativeEndEditSession(scoreHandle: handle)
+    }
+
+    @Test("redoing with nothing to redo reports false")
+    func redoWithNothingToRedo() throws {
+        let handle = try Self.loadedHandle()
+        defer { nativeReleaseScore(handle: handle) }
+        #expect(nativeBeginEditSession(scoreHandle: handle))
+        #expect(nativeEditRedo(scoreHandle: handle) == false)
+        nativeEndEditSession(scoreHandle: handle)
+    }
+
+    @Test("redoing without a session reports false")
+    func redoWithoutSession() throws {
+        let handle = try Self.loadedHandle()
+        defer { nativeReleaseScore(handle: handle) }
+        #expect(nativeEditRedo(scoreHandle: handle) == false)
+    }
+
+    @Test("redoing after the score handle is released reports false")
+    func redoAfterReleaseReportsFalse() throws {
+        let handle = try Self.loadedHandle()
+        #expect(nativeBeginEditSession(scoreHandle: handle))
+        let intent = EditIntent.setChordDuration(at: Self.chordSlot, duration: .eighth)
+        #expect(nativeApplyEditIntent(scoreHandle: handle, intentBytes: EditIntentCodec.encode(intent)))
+        #expect(nativeEditUndo(scoreHandle: handle))
+        // Mirrors `applyAfterReleaseReportsFalse` — a host that releases the score handle without first calling
+        // `nativeEndEditSession` must not let a subsequent redo report success for a mutation with nowhere to land.
+        nativeReleaseScore(handle: handle)
+        #expect(nativeEditRedo(scoreHandle: handle) == false)
+    }
+
+    @Test("redoing an unknown handle is refused rather than crashing")
+    func redoUnknownHandleIsRefused() {
+        #expect(nativeEditRedo(scoreHandle: 999_999) == false)
+    }
+
     @Test("applying without a session reports false")
     func applyWithoutSession() throws {
         let handle = try Self.loadedHandle()
