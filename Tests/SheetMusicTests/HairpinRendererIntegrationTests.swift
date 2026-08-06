@@ -36,7 +36,7 @@ struct HairpinRendererIntegrationTests {
         )
         let (events, _, _) = try MidiRenderer.renderVoice(
             voiceIndex: 0, staff: staff, part: part,
-            route: MidiRenderer.PartChannelRoute(defaultChannel: 0, switches: []),
+            route: MidiRenderer.PartChannelRoute(defaultChannel: 0, defaultPort: 0, switches: []),
             division: 480,
             plan: MidiRenderer.playbackPlan(for: staff.measures, division: 480),
         )

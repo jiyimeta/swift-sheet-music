@@ -60,7 +60,7 @@ extension MidiRenderer {
 
         // Instrument-change channel switches, flattened against THIS
         // staff's measure bases so the two walkers cannot disagree.
-        let channelSwitches = route.channelsByOriginalTick(
+        let channelSwitches = route.routeByOriginalTick(
             measureBases: originalMeasureBase, division: division,
         )
         /// Channel in force at `originalTick`. Linear scan: a part has

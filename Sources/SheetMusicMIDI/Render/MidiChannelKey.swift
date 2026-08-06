@@ -26,11 +26,28 @@ public struct MidiChannelKey: Sendable, Hashable {
 /// `plan.managedChannels`. SwiftySynth, FluidSynth, the `SynthBackend`
 /// protocol and track topology are all untouched.
 public enum MidiChannelRemap {
+    /// A sounding note's identity in the RENDERED stream, used to pair a
+    /// release with the live channel its strike was routed to.
+    private struct OpenNote: Hashable {
+        let channel: Int
+        let pitch: Int
+    }
+
     public static func apply(midi: inout MidiFile, plan: LiveChannelPlan) {
         for trackIdx in midi.tracks.indices {
             // Port is positional within a track: the last `portChange`
             // seen governs the events that follow it.
             var port = 0
+            // Live channel each still-sounding `(renderedChannel, pitch)`
+            // was struck on. A note sustaining across an instrument
+            // change — a tie, most obviously — is rendered on the OLD
+            // instrument's channel but releases at a tick where the NEW
+            // instrument's port is already in force, so keying the
+            // release off the positional port alone would send it to a
+            // different live channel and leave the note stuck. Stacked
+            // per key because the same pitch can legitimately re-strike
+            // before its predecessor's release.
+            var openNotes: [OpenNote: [Int]] = [:]
             var out: [TimedMidiEvent] = []
             out.reserveCapacity(midi.tracks[trackIdx].events.count)
             for event in midi.tracks[trackIdx].events {
@@ -44,15 +61,34 @@ public enum MidiChannelRemap {
                     plan.remap[MidiChannelKey(port: port, channel: channel)]
                         ?? channel
                 }
+                func strike(_ channel: Int, _ pitch: Int) -> Int {
+                    let live = live(channel)
+                    openNotes[OpenNote(channel: channel, pitch: pitch), default: []]
+                        .append(live)
+                    return live
+                }
+                func release(_ channel: Int, _ pitch: Int) -> Int {
+                    let key = OpenNote(channel: channel, pitch: pitch)
+                    guard var stack = openNotes[key], !stack.isEmpty else {
+                        return live(channel)
+                    }
+                    let live = stack.removeFirst()
+                    openNotes[key] = stack
+                    return live
+                }
                 let remapped: MidiEvent
                 switch event.event {
+                case let .noteOn(channel, pitch, velocity) where velocity > 0:
+                    remapped = .noteOn(
+                        channel: strike(channel, pitch), pitch: pitch, velocity: velocity,
+                    )
                 case let .noteOn(channel, pitch, velocity):
                     remapped = .noteOn(
-                        channel: live(channel), pitch: pitch, velocity: velocity,
+                        channel: release(channel, pitch), pitch: pitch, velocity: velocity,
                     )
                 case let .noteOff(channel, pitch, velocity):
                     remapped = .noteOff(
-                        channel: live(channel), pitch: pitch, velocity: velocity,
+                        channel: release(channel, pitch), pitch: pitch, velocity: velocity,
                     )
                 case let .controlChange(channel, controller, value):
                     remapped = .controlChange(

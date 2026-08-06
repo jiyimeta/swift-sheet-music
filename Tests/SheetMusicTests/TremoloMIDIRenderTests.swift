@@ -83,7 +83,7 @@ struct TremoloVoiceRenderTests {
             voiceIndex: 0,
             staff: staff,
             part: Self.makePart(staff: staff),
-            route: MidiRenderer.PartChannelRoute(defaultChannel: 0, switches: []),
+            route: MidiRenderer.PartChannelRoute(defaultChannel: 0, defaultPort: 0, switches: []),
             division: 480,
             plan: MidiRenderer.playbackPlan(for: staff.measures, division: 480),
         )
@@ -114,7 +114,7 @@ struct TremoloVoiceRenderTests {
             voiceIndex: 0,
             staff: staff,
             part: Self.makePart(staff: staff),
-            route: MidiRenderer.PartChannelRoute(defaultChannel: 0, switches: []),
+            route: MidiRenderer.PartChannelRoute(defaultChannel: 0, defaultPort: 0, switches: []),
             division: 480,
             plan: MidiRenderer.playbackPlan(for: staff.measures, division: 480),
         )
