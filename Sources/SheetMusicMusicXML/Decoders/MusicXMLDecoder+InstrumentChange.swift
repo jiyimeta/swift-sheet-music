@@ -66,16 +66,24 @@ enum MusicXMLInstrumentChangeDecoder {
             nil
         }
 
-        guard let targetID = candidateID, targetID != previousID,
-              let instrument = instrumentByID[targetID]
-        else {
+        guard let targetID = candidateID, targetID != previousID else {
             return ([], lastNoteID)
         }
 
+        // `targetID` may not resolve — a malformed export can reference an
+        // id no `<score-instrument>` declares. `InstrumentChange.instrument`
+        // is `Instrument?` precisely for this: still engrave the
+        // instruction text (the reader should see it even though the file
+        // is malformed), but contribute no `instrumentTimeline` point —
+        // `nil` there is read as "no change" by
+        // `Score.instrumentTimeline(forPart:)`, so playback/channel
+        // allocation stay unaffected. Falls back to the bare id string as
+        // a last resort so `text` is never empty.
+        let instrument = instrumentByID[targetID]
         let text = directionWordsText(in: measureNode)
-            ?? instrument.longName
-            ?? instrument.trackName
-            ?? ""
+            ?? instrument?.longName
+            ?? instrument?.trackName
+            ?? targetID
         let change = InstrumentChange(text: text, instrument: instrument)
         let element = PositionedSystemElement(
             position: .start,
