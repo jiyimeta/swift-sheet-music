@@ -104,21 +104,54 @@
             size.height
         }
 
-        /// Whether `point` falls within the rect, edges included — matches `CGRect.contains(_:)`'s documented
-        /// behavior that a point on the boundary counts as contained. Reads the normalized `minX`/`maxX`/
-        /// `minY`/`maxY` above, so this answers correctly even for a rect built with negative width/height.
+        /// Whether `point` falls within the rect — min-inclusive, max-**exclusive** on both axes, matching
+        /// `CGRectContainsPoint`: `point.x >= minX && point.x < maxX && point.y >= minY && point.y < maxY` on the
+        /// standardized rect. A point on the right or bottom edge is therefore *not* contained, and this is also
+        /// what makes an empty rect (zero width or height, so `minX == maxX` or `minY == maxY`) correctly contain
+        /// nothing — no separate empty-rect check is needed, the strict `<` already can't be satisfied. Getting
+        /// this wrong is reachable, not theoretical: a marquee that's tapped instead of dragged is exactly a
+        /// zero-size rect, and this is the boundary a hit test asks about on every touch.
         public func contains(_ point: CGPoint) -> Bool {
-            point.x >= minX && point.x <= maxX && point.y >= minY && point.y <= maxY
+            point.x >= minX && point.x < maxX && point.y >= minY && point.y < maxY
         }
 
-        /// Whether the two rects share any area. A merely-touching pair (shared edge, zero-width/height overlap)
-        /// does not intersect — mirrors `CGRect.intersects(_:)`, which requires a non-degenerate intersection.
+        /// Whether the two rects overlap, matching real `CGRect.intersects(_:)` — which turns out to have edge
+        /// behavior too irregular to fall out of one inequality. Two normal (non-degenerate) rects that merely
+        /// share an edge do **not** intersect: `CGRect(x: 60, width: 40).intersects(CGRect(x: 20, width: 40))` is
+        /// `false` on real iOS. But a degenerate (zero-width or zero-height) rect touching a normal rect's *min*
+        /// edge, or lying strictly inside it, *does* intersect — while touching its *max* edge does not; this
+        /// mirrors `contains(_:)`'s min-inclusive/max-exclusive rule applied to the degenerate rect's single
+        /// coordinate. Two degenerate rects intersect only when their coordinates coincide exactly. None of this
+        /// is documented — it was reverse-engineered by probing real `CGRect` on macOS with dozens of cases
+        /// (normal/normal, normal/degenerate in each edge position, degenerate/degenerate, reversed operands,
+        /// mixed per-axis combinations); see `Tests/SheetMusicTests/Layout/CGRectNegativeSizeTests.swift`, which
+        /// runs the same assertions against the real thing. Computed per axis via `axisOverlaps`, then ANDed.
         public func intersects(_ other: CGRect) -> Bool {
-            let ix0 = max(minX, other.minX)
-            let iy0 = max(minY, other.minY)
-            let ix1 = min(maxX, other.maxX)
-            let iy1 = min(maxY, other.maxY)
-            return ix1 > ix0 && iy1 > iy0
+            Self.axisOverlaps(minX, maxX, other.minX, other.maxX)
+                && Self.axisOverlaps(minY, maxY, other.minY, other.maxY)
+        }
+
+        /// One axis of `intersects(_:)`. `minA == maxA` (equivalently `minB == maxB`) means that operand is
+        /// degenerate on this axis — a single coordinate rather than a span.
+        private static func axisOverlaps(
+            _ minA: CGFloat, _ maxA: CGFloat, _ minB: CGFloat, _ maxB: CGFloat,
+        ) -> Bool {
+            let degenerateA = minA == maxA
+            let degenerateB = minB == maxB
+            if !degenerateA, !degenerateB {
+                // Both are spans: overlap requires each to extend past the other's start — a shared edge alone
+                // (`maxA == minB`) does not count.
+                return maxA > minB && maxB > minA
+            } else if degenerateA, degenerateB {
+                // Both are single coordinates: overlap only when they coincide exactly.
+                return minA == minB
+            } else if degenerateA {
+                // A is a single coordinate, B is a span: contains-style membership — B's min edge counts, B's
+                // max edge does not.
+                return minB <= minA && minA < maxB
+            } else {
+                return minA <= minB && minB < maxA
+            }
         }
 
         /// A copy of the rect translated by `(dx, dy)`, matching `CGRect.offsetBy(dx:dy:)`.
