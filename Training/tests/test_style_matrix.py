@@ -122,6 +122,24 @@ def test_apply_style_mscz_is_deterministic():
     assert style_matrix.apply_style_mscz(data, v) == style_matrix.apply_style_mscz(data, v)
 
 
+def test_apply_style_mscz_is_idempotent():
+    # apply_style_mscx is independently proven idempotent
+    # (test_apply_style_is_idempotent_and_deterministic); this proves the
+    # composition -- unzip -> apply -> rezip -- doesn't reintroduce
+    # nondeterminism (zip metadata, member ordering) on a second pass.
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("META-INF/container.xml",
+                   '<?xml version="1.0"?><container><rootfiles>'
+                   '<rootfile full-path="score.mscx"/></rootfiles></container>')
+        z.writestr("score.mscx", _sample_mscx())
+    v = style_matrix.StyleVariant(face="Bravura", spatium=1.76389,
+                                  page_w_in=8.27, page_h_in=11.69, engine="ms4")
+    once = style_matrix.apply_style_mscz(buf.getvalue(), v)
+    twice = style_matrix.apply_style_mscz(once, v)
+    assert once == twice
+
+
 def test_variants_are_deterministic_and_engine_scoped():
     a = style_matrix.style_variants(seed=1, engine="ms4", per_face=2)
     assert a == style_matrix.style_variants(seed=1, engine="ms4", per_face=2)

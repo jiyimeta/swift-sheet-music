@@ -70,8 +70,13 @@ silently wrong for two:
   `<musicalSymbolFont>Emmentaler</musicalSymbolFont>`.
   `EngravingFontsProvider::fontByName` (engravingfontsprovider.cpp)
   matches only the registered name case-insensitively; `"MScore"`
-  itself matches nothing and silently falls back to the default font
-  (Leland) instead of rendering MScore glyphs. This *is* the Emmentaler
+  itself matches nothing and silently falls back to the engine's
+  fallback font instead of rendering MScore glyphs --
+  `engravingmodule.cpp:224` sets that fallback to `"Bravura"`
+  (`setFallbackFont("Bravura")`); "Leland" is a different mechanism
+  entirely, the *style default* a brand-new score starts with
+  (`styledef.cpp:590`), not what an unmatched lookup falls back to.
+  This *is* the Emmentaler
   alias the task's hard facts warn about -- but the direction of the
   fix is the opposite of what a literal-substring read suggests: the
   face *label* everywhere in this module (FACES, face_id, the manifest)
@@ -164,10 +169,12 @@ _SYMBOL_FONT_XML_VALUE = {
     "Gootville": "Gonville",
 }
 
-# The five <Style> children this module owns. Spatium is matched
-# case-insensitively on removal (a source might already carry either
-# case) but always written back capitalized -- see module docstring.
-_OWNED_TAGS = ("Spatium", "spatium", "musicalSymbolFont",
+# The five <Style> children this module owns. Only used to build
+# _OWNED_TAGS_LOWER below (case-insensitive match, so a pre-existing
+# lowercase "spatium" is matched via "Spatium".lower() without needing
+# its own tuple entry) -- Spatium is always written back capitalized,
+# see module docstring.
+_OWNED_TAGS = ("Spatium", "musicalSymbolFont",
                "musicalTextFont", "pageWidth", "pageHeight")
 
 _STYLE_BLOCK_RE = re.compile(r"<Style>(.*?)</Style>", re.DOTALL)
