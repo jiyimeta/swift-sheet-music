@@ -39,6 +39,12 @@ extension Score {
     /// `originalStaff.partIndex` and ignores `staffIndexInPart`. A
     /// change whose `instrument` is nil (text-only placeholder)
     /// contributes no point.
+    ///
+    /// Preserves each measure's element order rather than re-sorting by
+    /// `position` — this assumes callers supply position-sorted
+    /// `SystemMeasure.elements`, as both the MSCX and MusicXML decoders
+    /// do. A hand-built `Score` with out-of-position elements in a
+    /// single measure will come back with a mis-ordered timeline.
     public func instrumentTimeline(
         forPart partIndex: Int,
     ) -> [InstrumentChangePoint] {

@@ -112,4 +112,47 @@ struct InstrumentChangeModelTests {
     func outOfRangePart() {
         #expect(twoPartScore().instrumentTimeline(forPart: 9).isEmpty)
     }
+
+    @Test("two changes in the same measure preserve document order")
+    func twoChangesInOneMeasurePreserveOrder() {
+        let piano = Instrument(id: "piano", channels: [InstrumentChannel(program: 0)])
+        let accordion = Instrument(id: "accordion", channels: [InstrumentChannel(program: 21)])
+        let secondPiano = Instrument(id: "piano", channels: [InstrumentChannel(program: 0)])
+        let bar = Measure(voices: [Voice(elements: [])])
+        let staff = Staff(measures: [bar, bar])
+        let score = Score(
+            division: 480,
+            parts: [Part(id: "P1", instrument: piano, staves: [staff])],
+            systemMeasures: [
+                SystemMeasure(),
+                SystemMeasure(elements: [
+                    // Appended in sorted order, per the decoders' guarantee.
+                    PositionedSystemElement(
+                        position: MeasurePosition(offset: Fraction(numerator: 1, denominator: 4)),
+                        element: .instrumentChange(
+                            InstrumentChange(text: "to Accordion", instrument: accordion),
+                        ),
+                        originalStaff: StaffAddress(partIndex: 0, staffIndexInPart: 0),
+                    ),
+                    PositionedSystemElement(
+                        position: MeasurePosition(offset: Fraction(numerator: 3, denominator: 4)),
+                        element: .instrumentChange(
+                            InstrumentChange(text: "to Piano", instrument: secondPiano),
+                        ),
+                        originalStaff: StaffAddress(partIndex: 0, staffIndexInPart: 0),
+                    ),
+                ]),
+            ],
+        )
+        let timeline = score.instrumentTimeline(forPart: 0)
+        #expect(timeline.count == 3)
+        #expect(timeline[0].measureIndex == 0)
+        #expect(timeline[0].instrument.id == "piano")
+        #expect(timeline[1].measureIndex == 1)
+        #expect(timeline[1].position.offset == Fraction(numerator: 1, denominator: 4))
+        #expect(timeline[1].instrument.id == "accordion")
+        #expect(timeline[2].measureIndex == 1)
+        #expect(timeline[2].position.offset == Fraction(numerator: 3, denominator: 4))
+        #expect(timeline[2].instrument.id == "piano")
+    }
 }
