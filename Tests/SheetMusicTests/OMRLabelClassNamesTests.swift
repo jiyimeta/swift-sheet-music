@@ -50,5 +50,17 @@
             #expect(OMRLabelClassNames.semantic(forClassName: "") == nil)
             #expect(OMRLabelClassNames.semantic(forClassName: "notAClass") == nil)
         }
+
+        @Test func restOtherIsDeliberatelyNotInvertible() {
+            // .fraction / .measure both collapse to "restOther"; the
+            // duration parameters are gone, so there is no unique
+            // semantic to return. This must stay nil — never a
+            // fabricated duration (see the type doc comment).
+            #expect(OMRLabelClassNames.className(for: .rest(.fraction(
+                Fraction(numerator: 1, denominator: 12),
+            ))) == "restOther")
+            #expect(OMRLabelClassNames.className(for: .rest(.measure)) == "restOther")
+            #expect(OMRLabelClassNames.semantic(forClassName: "restOther") == nil)
+        }
     }
 #endif

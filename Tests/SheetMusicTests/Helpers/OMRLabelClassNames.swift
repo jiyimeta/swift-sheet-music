@@ -5,9 +5,20 @@
 
     /// Stable string names for `SMuFLSemantic` cases — the label-format
     /// class vocabulary (spec §7.1). The DETECTOR vocabulary is the 64
-    /// concrete classes below; `stem` / `staff5Lines` / `unknownXXXX` /
-    /// the never-engraved rest fallbacks are representable (so the label
-    /// format is lossless over any `WalkedContent`) but excluded from it.
+    /// concrete classes below; `stem` / `staff5Lines` / `unknownXXXX` are
+    /// also representable but excluded from the detector vocabulary.
+    ///
+    /// `className(for:)` is TOTAL: every `SMuFLSemantic` value maps to a
+    /// name. `semantic(forClassName:)` round-trips every name that
+    /// `className(for:)` can produce, with exactly one deliberate
+    /// exception: `restOther`, the shared fallback for `.rest(.fraction)`
+    /// and `.rest(.measure)`. That name discards the duration's
+    /// parameters, so the reverse direction cannot reconstruct which rest
+    /// it was and `semantic(forClassName: "restOther")` returns `nil` on
+    /// purpose — do not turn this into a fabricated duration. Gate P0-G1
+    /// (Task 6) needs the oracle replay to compare `Score` values
+    /// exactly; a silent wrong-but-plausible duration would corrupt that
+    /// gate, while `nil` fails loudly as intended.
     ///
     /// ORDER IS FROZEN: `Training/generate/vocabulary.py` mirrors this
     /// list 1:1 and COCO category ids are positions in it. Append-only.
@@ -89,7 +100,9 @@
 
         /// Total: every `SMuFLSemantic` value has a name. Non-detector
         /// cases get reserved names so a label file can carry ANY walked
-        /// glyph (losslessness for the oracle, gate P0-G1).
+        /// glyph. `restOther` is the one name that intentionally does NOT
+        /// round-trip back through `semantic(forClassName:)` — see the
+        /// type doc comment.
         static func className(for semantic: SMuFLSemantic) -> String {
             if let name = nameBySemantic[semantic] { return name }
             switch semantic {
@@ -97,7 +110,10 @@
             case .staff5Lines: return "staff5Lines"
             case .rest(.oneTwentyEighth): return "rest128th"
             case .rest(.twoFiftySixth): return "rest256th"
-            case .rest: return "restOther" // .fraction / .measure — never a glyph
+            // .fraction / .measure — the duration parameters are not
+            // recoverable from this name; semantic(forClassName:) returns
+            // nil for "restOther" by design, not by omission.
+            case .rest: return "restOther"
             case let .unknown(cp):
                 return String(format: "unknown%04X", cp)
             default:
@@ -108,6 +124,8 @@
             }
         }
 
+        /// `"restOther"` deliberately returns `nil` — it has no unique
+        /// inverse, see the type doc comment.
         static func semantic(forClassName name: String) -> SMuFLSemantic? {
             if let s = semanticByName[name] { return s }
             switch name {
