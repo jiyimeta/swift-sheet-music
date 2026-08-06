@@ -7,6 +7,15 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- `SheetMusicEngine.version` and `SheetMusicEngine.versionStamp` provide a build identity. On Android
+  two separately linked images of the engine coexist in one process — the host app's and its library's —
+  and a mismatch (a stale `.so`) would previously cause silent score divergence. The host now compares
+  the app's compiled-in stamp against the one it reads from the library over JNI before opening an edit
+  session, and refuses to open one on a mismatch: stale binaries are now a locked feature and a log
+  line, not a corrupted score.
+
 ## [1.8.0] - 2026-08-02
 
 ### Added
