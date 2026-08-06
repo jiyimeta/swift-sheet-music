@@ -36,9 +36,9 @@ and this project adheres to
   `StaffStepPitch`, `ElementNavigator` (`TiePlanner` depends on its `nextTimedElement`/`previousTimedElement`, so
   it moved too), and `RestDurationPromotion` (a rest write that exactly fills its bar from beat one is promoted to
   the `.measure` spelling, matching the rest key's own behavior).
-- Seven new `EditIntent` cases and their `EditIntentWire` discriminators (5…11, appended after the four SP0
+- Seven new `EditIntent` cases and their `EditIntentWire` discriminators (5…11, appended after the five SP0
   cases): `.setNotePitch`, `.setAccidental`, `.addNoteToChord`, `.removeNoteFromChord`, `.setTie`,
-  `.createTuplet`, `.removeTuplet`. Together with the four SP0 cases (`.inputNote`, `.setRestDuration`,
+  `.createTuplet`, `.removeTuplet`. Together with the five SP0 cases (`.inputNote`, `.setRestDuration`,
   `.setChordDuration`, `.delete`, `.composite`), every edit `ScoreEditSession` can plan is now reachable from a
   relayed intent.
 - A new Android-gated `SheetMusicEditWire` library product carries every wire codec Folino's own `FolinoEditorJNI`
@@ -53,9 +53,9 @@ and this project adheres to
   `LayoutDocument` including one built on Android. `LayoutDocument.editingCaretRect(for:in:minimumWidth:)`
   answers the companion question, the rect an edit caret or selection outline should draw for one score item,
   narrowed to that item's own staff band.
-- `LayoutBridge.buildCommands(layout:tint:)` re-derives a cached layout's draw program with a selection's
-  notehead/accidental (not the whole chord), rest glyph, or tuplet marking recolored — without relaying out. A
-  `nil` tint reproduces the untinted bytes exactly.
+- `nativeEncodeDrawProgram` re-derives a cached layout's draw program with a selection's notehead/accidental
+  (not the whole chord), rest glyph, or tuplet marking recolored — without relaying out. An empty selection
+  reproduces the untinted bytes exactly.
 - Three new JNI entry points complete the editing surface Android needs: `nativeEditingHitTest`,
   `nativeEditingCaretFrame`, and `nativeEncodeDrawProgram` (re-tints a cached draw program from a selection,
   reproducing `nativeComputeLayout`'s page assembly exactly in every layout mode — vertical, horizontal, and

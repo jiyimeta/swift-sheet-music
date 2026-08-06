@@ -17,7 +17,9 @@ public enum EditIntent: Sendable, Equatable {
     case delete(at: VoiceElementID)
     /// Several intents as one undo step.
     indirect case composite([EditIntent])
-    /// Appended in SP1. The five above are wire indices 0…4 and must keep them.
+
+    // Appended after the five cases above, which are wire indices 0…4 and must keep them.
+
     /// Retune one note within a chord. `accidental` is the glyph to display, or `nil` to suppress it.
     case setNotePitch(at: NoteID, pitch: Int, tpc: Int, accidental: Accidental?)
     /// Apply (or clear, when `accidental` is `nil`) an explicit accidental on a note, preserving its diatonic

@@ -5,9 +5,10 @@ import SheetMusicCore
 
 // MARK: - Hit testing
 
-/// Task 8: the editing hit-test policy that sits on top of `ScoreHitTester`'s raw ladder — which targets are
+/// The editing hit-test policy that sits on top of `ScoreHitTester`'s raw ladder — which targets are
 /// selectable, how much slop a fingertip gets, and when a near miss should be rescued versus treated as a tap on
-/// empty paper. Moved from Folino's `EditorViewModel+HitTest.swift` in 1.10.0 so iOS and Android run one policy.
+/// empty paper. Moved into this library in 1.10.0 so iOS and Android run one policy instead of each platform
+/// reimplementing it.
 @available(macOS 15.0, *)
 extension LayoutDocument {
     /// A tap in document coordinates resolved to the item it selects, or `nil` for "nothing" — which is what a tap

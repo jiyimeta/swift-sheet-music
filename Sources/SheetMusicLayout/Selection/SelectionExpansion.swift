@@ -58,8 +58,9 @@ public enum SelectionExpansion {
         case let .single(id):
             // Tuplet selection expands to the set of member IDs
             // (every note/rest the bracket spans) so the existing
-            // per-element coloring path lights them up; the
-            // bracket itself stays default-colored.
+            // per-element coloring path lights them up, in addition
+            // to the bracket/number itself — `expand` keeps the
+            // tuplet's own ID in the result for exactly that.
             return expand(id, in: score)
         case let .range(anchor, target):
             return Set(score.items(inRangeFrom: anchor, to: target))

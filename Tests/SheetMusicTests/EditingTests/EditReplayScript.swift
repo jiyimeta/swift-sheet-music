@@ -43,6 +43,17 @@ enum EditReplayStep {
 ///   which collapses the whole bar to a single measure rest. The shrink doesn't move element 1 itself, so the
 ///   delete that follows still finds the chord it expects.
 ///
+/// ## Identical fingerprints are not redundant steps
+///
+/// Step 3 (`setAccidental`, a genuine no-op glyph clear) and step 4 (`addNoteToChord` +
+/// `removeNoteFromChord` bundled as one `composite`, which nets back to the chord it started from) both
+/// correctly leave the fingerprint unchanged from the step before them — three consecutive identical values
+/// in `goldens.txt`. That is NOT a sign these steps could be dropped: the fingerprint only ever proves the
+/// two mirrored scores still agree, not that the step under test actually ran. What distinguishes a step
+/// that legitimately changed nothing from one that silently failed is `EditSessionReplayTest.kt` asserting
+/// each `nativeApplyEditIntent` call returned `true` — drop that boolean assertion and a future edit here
+/// that starts refusing silently would still pass on fingerprints alone.
+///
 /// ## Undo / redo
 ///
 /// The device-side harness (`EditSessionReplayTest.kt`) tells an edit step from an undo step by asset presence —

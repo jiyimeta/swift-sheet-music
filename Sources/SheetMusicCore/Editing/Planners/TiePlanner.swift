@@ -1,7 +1,8 @@
 import Foundation
 
 /// Finds the tie partner: the next chord (voice order, may cross the barline via `ElementNavigator`) containing a
-/// note at the same pitch. Returns that note's `NoteID`, or `nil` (→ tie button dimmed, spec §5.4).
+/// note at the same pitch. Returns that note's `NoteID`, or `nil` when there is no such note — a caller uses `nil`
+/// to decide that tying is unavailable from the source note.
 public enum TiePlanner {
     public static func tieTarget(for noteID: NoteID, in score: Score) -> NoteID? {
         guard let source = score[noteID] else { return nil }

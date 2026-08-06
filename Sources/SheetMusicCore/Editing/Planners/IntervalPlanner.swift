@@ -1,14 +1,13 @@
 import Foundation
 
-/// Interval kind for the iPad chord-build shortcuts (spec §5.4): tap +3rd or +8ve to add a note above the
-/// selected chord tone.
-public enum EditorInterval: Sendable {
+/// A diatonic interval above a selected chord tone: a third or an octave.
+public enum DiatonicInterval: Sendable {
     case third
     case octave
 }
 
-/// Client-side pitch/tpc computation for the iPad interval shortcuts (spec §5.4): the engine has no interval
-/// command, so the client computes the added note and issues `AddNoteToChord`.
+/// Client-side pitch/tpc computation for adding a note a diatonic interval above an existing chord tone: the
+/// engine has no interval command, so the client computes the added note and issues `AddNoteToChord`.
 public enum IntervalPlanner {
     /// Diatonic third above `note`, spelled in key (letter + 2 staff steps via `StaffStepPitch.diatonicShift`).
     /// `nil` past MIDI 127.

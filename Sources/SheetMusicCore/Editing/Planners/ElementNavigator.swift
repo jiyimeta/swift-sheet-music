@@ -1,7 +1,7 @@
 import Foundation
 
-/// Voice-order walking for caret auto-advance (spec §11-5: advance after pitch-key input, not after
-/// drag).
+/// Voice-order walking for caret auto-advance: the caret should step forward after a pitch-key input, but not
+/// after a drag.
 public enum ElementNavigator {
     /// The next chord/rest slot after `location` in the same voice, skipping non-timed elements
     /// (clef / key sig / time sig / barline / …), continuing into the next measure's same voice.
@@ -32,8 +32,8 @@ public enum ElementNavigator {
     }
 
     /// The mirror of `nextTimedElement(after:)`, walking backwards through the same voice and into the previous
-    /// measure. Drives the pad's ← key (spec §5: step the selection along the voice without aiming a tap). `nil` at
-    /// the start of the staff.
+    /// measure. Used to step the selection backward along the voice without re-aiming a tap. `nil` at the start of
+    /// the staff.
     public static func previousTimedElement(before location: VoiceElementID, in score: Score) -> VoiceElementID? {
         guard let staff = score[location.staff] else { return nil }
         var measureIndex = location.measureIndex

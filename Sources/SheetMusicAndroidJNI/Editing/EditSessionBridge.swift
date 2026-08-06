@@ -32,6 +32,13 @@ import SheetMusicEditWire
 /// architecture (every other bridge file writes `LayoutDocumentCache` the same unlocked way) and out of scope here;
 /// this comment exists so a future reader doesn't assume this lock buys more than it does.
 ///
+/// This race gained a new, sharper consumer in 1.10.0: `nativeEditingHitTest` (`EditGeometryBridge.swift`) reads
+/// that same stale-or-fresh cached layout and returns a `ScoreItemID` derived from its geometry, which a host feeds
+/// straight into the next edit intent. Before, a stale cache only meant a cursor drawn against the wrong (old)
+/// layout — cosmetic, self-correcting on the next frame. Now a stale cache can hand back an ID that doesn't
+/// address what the host actually tapped, and that ID gets edited. Whoever picks up this deferral needs to know
+/// the consequence has moved from "wrong place drawn" to "wrong element edited."
+///
 /// `publish` reports back whether the write actually landed (see `HandleTable.replace`), so a handle released out
 /// from under an in-flight edit — e.g. by a concurrent `nativeReleaseScore` — makes the apply/undo/redo call return
 /// `false` instead of claiming success for a mutation that has nowhere to land.
