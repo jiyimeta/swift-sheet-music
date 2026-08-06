@@ -64,6 +64,31 @@
             )
         }
 
+        /// One voice: a G clef followed by a single high note (several diatonic steps above the staff's top line) —
+        /// built to probe the on-staff gate, which needs a selectable item that sits *above* the staff band but
+        /// still close enough to fall inside a slop box centered just outside that band.
+        private func sampleWithNoteAboveStaff() -> Score {
+            let measure = Measure(voices: [
+                Voice(elements: [
+                    .clef(Clef(concertClefType: "G")),
+                    .chord(Chord(duration: .whole, notes: [Note(pitch: 84, tpc: 14)])),
+                ]),
+            ])
+            return Score(
+                division: 480,
+                parts: [Part(
+                    id: "P1",
+                    instrument: Instrument(id: "piano", longName: "Piano"),
+                    staves: [Staff(
+                        staffType: "stdNormal",
+                        group: "pitched",
+                        defaultClefType: "G",
+                        measures: [measure],
+                    )],
+                )],
+            )
+        }
+
         private func layout(_ score: Score, staffSize: CGFloat = 28) -> LayoutDocument {
             var options = ScoreViewOptions()
             options.staffSize = staffSize
@@ -181,7 +206,7 @@
             var stemPoint: CGPoint?
             var expectedFirstNote: NoteID?
             for el in measure.elements {
-                guard case let .chord(notes, _, stem, stemOrigin, _, _, isBeamed, _, _, _, _) = el,
+                guard case let .chord(notes, _, stem, _, _, _, isBeamed, _, _, _, _) = el,
                       !isBeamed, let first = notes.first
                 else { continue }
                 let ys = notes.map(\.origin.y)
@@ -197,7 +222,6 @@
                     x = base.x + first.origin.x - stemXOffset
                     y = base.y + maxY + sp * 1.75
                 }
-                _ = stemOrigin
                 stemPoint = CGPoint(x: x, y: y)
                 expectedFirstNote = first.noteID
                 break
@@ -249,6 +273,55 @@
             #expect(tester.itemIDs(in: slop).isEmpty, "expected no item within the slop box of the clef probe point")
 
             #expect(doc.editingHitTest(at: point, activeVoice: 0) == nil)
+        }
+
+        /// The gate this test exercises has no other coverage: every other test either taps well inside a staff
+        /// band, or so far outside (the page-margin test) that the slop box is empty anyway — so a mutant that
+        /// deletes `guard isOnStaff(point) else { return nil }`, leaving the near-miss rescue unconditional, passes
+        /// every other test in this file unchanged. This is the one built to fail on that mutant: the note above
+        /// the staff sits *inside* the probe's slop box (so the rescue has something to return), but the probe
+        /// itself sits just outside the on-staff band (so the gate must be the thing that refuses it). With the
+        /// gate: `nil`. Without it: the note above the staff.
+        @Test("A tap just outside the staff band, even with a note inside its slop box, returns nil")
+        func offStaffGateRefusesEvenWhenSlopBoxIsNotEmpty() throws {
+            guard #available(macOS 15.0, *) else { return }
+            let doc = layout(sampleWithNoteAboveStaff())
+            let tester = ScoreHitTester(document: doc)
+            let system = try #require(doc.systems.first)
+            let measure = try #require(system.measures.first)
+            let base = CGPoint(x: system.origin.x + measure.origin.x, y: system.origin.y + measure.origin.y)
+            let staffTop = system.origin.y + system.staffOrigins[0].y
+
+            var noteID: NoteID?
+            var noteAnchor: CGPoint?
+            for el in measure.elements {
+                guard case let .chord(notes, _, stem, _, _, _, _, _, _, _, _) = el, let n = notes.first
+                else { continue }
+                let mirrorDx = n.mirrorDx(stem: stem, sp: system.sp)
+                noteID = n.noteID
+                noteAnchor = CGPoint(x: base.x + n.origin.x + mirrorDx, y: base.y + n.origin.y)
+            }
+            let id = try #require(noteID)
+            let anchor = try #require(noteAnchor)
+            // The note must actually sit above the staff for this probe to mean anything.
+            #expect(anchor.y < staffTop)
+
+            // One point past the gate's own boundary — the tightest honest "outside" — directly above the note so
+            // the slop box below still centers on it horizontally.
+            let probe = CGPoint(x: anchor.x, y: staffTop - LayoutDocument.editingSlopHalfExtent - 1)
+
+            // The probe itself must miss the raw ladder — this has to be a near-miss case, not an on-target hit.
+            #expect(tester.hitTest(at: probe) == nil)
+
+            let slop = CGRect(
+                x: probe.x - LayoutDocument.editingSlopHalfExtent, y: probe.y - LayoutDocument.editingSlopHalfExtent,
+                width: LayoutDocument.editingSlopHalfExtent * 2, height: LayoutDocument.editingSlopHalfExtent * 2,
+            )
+            // The rescue has something to find — so a `nil` result below can only be the on-staff gate at work, not
+            // an empty slop box.
+            #expect(tester.itemIDs(in: slop).contains(.note(id)))
+
+            #expect(doc.editingHitTest(at: probe, activeVoice: 0) == nil)
         }
     }
 #endif
