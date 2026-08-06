@@ -4,10 +4,10 @@
     @testable import SheetMusicCore
     import Testing
 
-    /// The host half of SP0's acceptance test: eight edit-intent steps, run through the same JNI entry points a
+    /// The host half of SP0's acceptance test: ten edit-intent steps, run through the same JNI entry points a
     /// device calls, with the resulting wire bytes and fingerprints committed as instrumented-test assets under
     /// `Android/SheetMusicAndroid/src/androidTest/assets/editReplay/`. `EditSessionReplayTest.kt` reads those assets
-    /// back and replays them on-device via `nativeApplyEditIntent` / `nativeEditUndo`, asserting the same nine
+    /// back and replays them on-device via `nativeApplyEditIntent` / `nativeEditUndo`, asserting the same eleven
     /// fingerprints this test computes.
     ///
     /// Kotlin never builds an intent here, because it never does in production either: the host's Swift core is
@@ -23,8 +23,16 @@
     /// measure starts completely full (four quarters = one 4/4 bar), so lengthening any slot would consume a
     /// neighbor's ticks, and shortening any slot but the last would insert a new rest between two slots this test
     /// also addresses by fixed index (`DurationChangeAlgorithm`) — either would shift the very indices later steps
-    /// rely on. Shortening the last slot only appends a trailing rest at a new, otherwise-untouched index (6), which
-    /// the final step then writes into.
+    /// rely on. Shortening the last slot only appends a trailing rest at a new, otherwise-untouched index (6).
+    ///
+    /// Steps 7 and 8 (0-indexed) repeat that same last-slot-only trick twice more, each time shortening the rest the
+    /// previous step just appended and letting the remainder spill into a fresh trailing index — never touching
+    /// indices 2-5, which every earlier step still addresses by fixed position. That covers the two shapes the
+    /// original eight steps missed: `.setRestDuration` (step 7 — never exercised before) and `.inputNote` with a
+    /// non-`nil` duration (step 8's composite, the only path that writes a populated `NoteDurationWire` instead of
+    /// the `hasDuration == 0` placeholder). Step 8's `SetRestDuration` sub-command is a genuine shortening (sixteenth
+    /// to thirty-second), not the wire-round-trip's degenerate same-duration case, so it actually exercises
+    /// `DurationChangeAlgorithm`'s shortening branch rather than the `srcTicks == dstTicks` early return.
     ///
     /// ## Record vs. verify
     ///
@@ -50,7 +58,7 @@
             VoiceElementID(rest(measure, element))
         }
 
-        /// The eight steps, in order. `nil` means undo — see `replayMatchesCommittedAssets`. This array is the
+        /// The ten steps, in order. `nil` means undo — see `replayMatchesCommittedAssets`. This array is the
         /// single source of truth for both the wire bytes this test writes/verifies under `editReplay/` and the
         /// fingerprints in `goldens.txt`; `EditSessionReplayTest.kt` never re-derives an intent, it only replays
         /// what this array produced.
@@ -65,6 +73,11 @@
             ]),
             nil,
             .setChordDuration(at: slot(0, 5), duration: .eighth),
+            // Steps 7-8: `.setRestDuration` (never exercised above) and `.inputNote` with a non-nil duration (the
+            // only path that writes a populated `NoteDurationWire`) — see this type's doc comment for why these
+            // land here, at the tail, rather than disturbing the fixed indices 2-5 rely on.
+            .setRestDuration(at: slot(0, 6), duration: .sixteenth),
+            .inputNote(at: rest(0, 7), pitch: 72, tpc: 14, duration: .thirtySecond),
             .inputNote(at: rest(0, 6), pitch: 69, tpc: 21, duration: nil),
         ]
 
@@ -105,7 +118,7 @@
             nativeEndEditSession(scoreHandle: handle)
             print("fingerprints: " + fingerprints.map(String.init).joined(separator: ", "))
 
-            #expect(fingerprints.count == 9)
+            #expect(fingerprints.count == 11)
             #expect(Set(fingerprints).count >= 5)
 
             if ProcessInfo.processInfo.environment["SM_EDIT_REPLAY_RECORD"] == "1" {

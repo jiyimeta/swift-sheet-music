@@ -26,6 +26,11 @@ import org.junit.runner.RunWith
  */
 @RunWith(AndroidJUnit4::class)
 class EditSessionReplayTest {
+    companion object {
+        /** Must track `EditReplayGoldenTests.steps.count` on the host exactly — see the assertion below. */
+        private const val EXPECTED_STEP_COUNT = 10
+    }
+
     @Test
     fun replayMatchesHostGoldens() {
         val context = InstrumentationRegistry.getInstrumentation().context
@@ -33,7 +38,14 @@ class EditSessionReplayTest {
 
         val goldensText = context.assets.open("editReplay/goldens.txt").bufferedReader().use { it.readText() }
         val expected = goldensText.trim().split("\n").map { it.trim().toLong() }
-        val stepCount = expected.size - 1
+        // Asserted explicitly rather than derived from `expected.size`, so a goldens.txt truncated by a bad record
+        // run shrinks this test's expectations silently instead of failing it outright.
+        assertEquals(
+            "goldens.txt should hold one fingerprint per step plus the initial one",
+            EXPECTED_STEP_COUNT + 1,
+            expected.size,
+        )
+        val stepCount = EXPECTED_STEP_COUNT
 
         val bytes = context.assets.open("editReplay/midi01.mscx").use { it.readBytes() }
         val handle = SheetMusicJNI.nativeLoadScore(bytes)
