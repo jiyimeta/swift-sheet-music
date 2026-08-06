@@ -269,10 +269,6 @@ extension PlaybackEngine {
         /// Separate percussion unit (GM channel 9), built only when the score has a drum part — mirrors the live
         /// engine's lazy percussion unit so a drumless export doesn't load the SoundFont twice. `nil` ⇒ no drums.
         let percussion: AVAudioUnitMIDIInstrument?
-        /// Flat staff index → that staff's part's ORDINAL-0 (tick-0) live
-        /// channel. Used only for per-track routing (see `staffIsDrum`
-        /// below) — mixer dispatch goes through `instrumentMIDIChannels`.
-        let staffChannels: [Int: UInt8]
         /// Flat staff index → is-drum, for per-track routing.
         let staffIsDrum: [Int: Bool]
         /// Live MIDI channel per mixer strip identity — one entry per
@@ -319,15 +315,11 @@ extension PlaybackEngine {
             percussion = p
         }
 
-        // Per-track routing still addresses a STAFF (each staff's
-        // ordinal-0 / tick-0 live channel) — see `staffChannels` above.
-        var staffChannels: [Int: UInt8] = [:]
+        // Per-track routing picks the melodic or the percussion unit per
+        // staff; the CHANNEL each event rides on is already baked into
+        // the rendered SMF by `MidiChannelRemap`.
         var staffIsDrum: [Int: Bool] = [:]
         for (idx, entry) in score.allStaves.enumerated() {
-            let liveChannel = plan.strip(
-                partIndex: entry.address.partIndex, ordinal: 0,
-            )?.liveChannel ?? 0
-            staffChannels[idx] = UInt8(clamping: liveChannel)
             staffIsDrum[idx] = score.part(at: entry.address)?
                 .instrument.useDrumset == true
         }
@@ -374,7 +366,7 @@ extension PlaybackEngine {
 
         return ScoreSynth(
             melodic: melodic, percussion: percussion,
-            staffChannels: staffChannels, staffIsDrum: staffIsDrum,
+            staffIsDrum: staffIsDrum,
             instrumentMIDIChannels: instrumentMIDIChannels,
         )
     }

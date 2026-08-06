@@ -14,8 +14,10 @@ import Foundation
 public struct InstrumentChange: Sendable, Equatable {
     /// The instrument taking over from here. `nil` for a text-only
     /// placeholder whose nested `<Instrument>` was unusable — the
-    /// instruction still engraves, but playback is unaffected. The
-    /// decoder emits a `ScoreDiagnostic` in that case.
+    /// instruction still engraves, but playback is unaffected. The MSCX
+    /// decoder emits a `ScoreDiagnostic` in that case; the MusicXML
+    /// importer cannot, since `ScoreDiagnostic` / `parseWithDiagnostics`
+    /// are MSCX-only.
     public var instrument: Instrument?
     /// Engraved instruction text, e.g. "アコーディオン に".
     public var text: String

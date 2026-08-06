@@ -9,11 +9,21 @@ import SheetMusicCore
 /// them — but only where the collapse is inaudible.
 ///
 /// **Dedup rule.** Within a part, two instruments collapse onto one live
-/// channel iff their primary `InstrumentChannel` values are WHOLLY equal
-/// (program, bank, volume, pan, reverb, chorus). Keying on the whole
-/// value — not the instrument name — makes merged instances audibly
-/// identical by construction, and an instance the author tweaked in
-/// MuseScore's mixer keeps its own channel because its value differs.
+/// channel iff their primary `InstrumentChannel`s are equal on the six
+/// SOUNDING fields: `program`, `bank`, `volume`, `pan`, `reverb`,
+/// `chorus`. Three fields are deliberately EXCLUDED from the key:
+///
+/// - `name` — a MuseScore mixer UI label ("normal", "pizzicato") with
+///   no audible effect.
+/// - `midiChannel` / `midiPort` — the rendered SMF's routing address.
+///   MuseScore allocates a FRESH channel for every change instance, so
+///   two instances of one instrument differ here BY DESIGN; keying on
+///   them would collapse nothing, which is the whole premise of this
+///   pass.
+///
+/// Keying on sound alone makes merged instances audibly identical by
+/// construction, and an instance the author tweaked in MuseScore's
+/// mixer keeps its own channel because a sounding field differs.
 ///
 /// Dedup is **within-part only**: collapsing across parts would destroy
 /// per-part mixer independence.

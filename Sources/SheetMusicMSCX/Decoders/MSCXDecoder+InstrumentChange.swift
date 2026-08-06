@@ -11,11 +11,15 @@ extension InstrumentChange {
     /// `<visible>`, font overrides).
     ///
     /// Error policy (see CLAUDE.md's three-way MSCX decoder policy):
-    /// a nested `<Instrument>` that is itself malformed throws from
-    /// `Instrument.decode` — structural. A change with NO nested
-    /// `<Instrument>` at all is an embellishment failure: the
-    /// instrument is dropped, the text kept, and a `ScoreDiagnostic`
-    /// emitted. Offsets / colour / fonts fall back silently.
+    /// a change with NO nested `<Instrument>` at all is an embellishment
+    /// failure — the instrument is dropped, the text kept, and a
+    /// `ScoreDiagnostic` emitted. Offsets / colour / fonts fall back
+    /// silently. The nested `<Instrument>` itself is decoded through
+    /// `Instrument.decode`, which is where a structural failure would
+    /// surface; the `try` here is what propagates it. As of today
+    /// neither `Instrument.decode` nor `InstrumentChannel.decode`
+    /// throws — every field they read has a permissive fallback — so
+    /// this path is a contract, not observed behavior.
     static func decode(_ node: XMLTreeNode) throws -> InstrumentChange {
         let instrument: Instrument?
         if let instrumentNode = node.first("Instrument") {
