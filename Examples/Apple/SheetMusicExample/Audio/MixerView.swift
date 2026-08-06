@@ -23,10 +23,78 @@ struct MixerView: View {
             }
             .padding(.bottom, 6)
 
+            MasterLevelSection(engine: engine)
+                .padding(.bottom, 6)
+
             ForEach(engine.mixerChannels) { channel in
                 MixerStrip(channel: channel, engine: engine)
             }
         }
+    }
+}
+
+/// Master gain + peak meter. The meter reads `sumMixer` (post gain,
+/// pre limiter), so "Hold" is the highest level the mix actually
+/// reached before any limiting — which is what tells you how much
+/// headroom is left below 0 dBFS. Play the loudest passage with every
+/// staff sounding, then read Hold.
+private struct MasterLevelSection: View {
+    let engine: PlaybackEngine
+
+    @State private var gain: Float = 1.0
+    @State private var meter = LevelMeter()
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(String(format: "Master gain %.2f× (%@)", gain, Self.dB(gain)))
+                .font(.caption)
+            Slider(value: $gain, in: 0 ... 4)
+                .onChange(of: gain) { _, value in
+                    engine.setMasterGain(value)
+                }
+
+            HStack(spacing: 8) {
+                Text("Peak \(Self.dB(meter.peak))")
+                    .font(.caption.monospacedDigit())
+                Text("Hold \(Self.dB(meter.peakHold))")
+                    .font(.caption.monospacedDigit().bold())
+                    .foregroundStyle(meter.peakHold > 1 ? Color.red : .primary)
+                Button("Reset") { meter.resetHold() }
+                    .buttonStyle(.borderless)
+                    .font(.caption)
+            }
+        }
+        .onAppear {
+            engine.startLevelMonitoring { [meter] peak in
+                Task { @MainActor in meter.report(peak) }
+            }
+        }
+        .onDisappear {
+            engine.stopLevelMonitoring()
+        }
+    }
+
+    /// Linear amplitude → dBFS. `1.0` is 0 dBFS; silence reads `-∞`.
+    private static func dB(_ amplitude: Float) -> String {
+        guard amplitude > 0 else { return "-∞ dB" }
+        return String(format: "%+.1f dB", 20 * log10(amplitude))
+    }
+}
+
+/// Peak + peak-hold, updated from the engine's metering tap.
+@MainActor
+@Observable
+private final class LevelMeter {
+    private(set) var peak: Float = 0
+    private(set) var peakHold: Float = 0
+
+    func report(_ value: Float) {
+        peak = value
+        peakHold = max(peakHold, value)
+    }
+
+    func resetHold() {
+        peakHold = 0
     }
 }
 

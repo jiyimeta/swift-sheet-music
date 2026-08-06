@@ -82,7 +82,7 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     private var staffIsDrum: [Int: Bool] = [:]
 
     /// Master output stage. The score synth feeds `scoreGainMixer`,
-    /// whose `outputVolume` is the user's master gain (`0...3`). Its
+    /// whose `outputVolume` is the user's master gain (`0...`). Its
     /// output is summed with the metronome at `sumMixer`, brick-walled
     /// by `limiter`, then routed into `mainMixerNode`. Built once in
     /// `init` and reused across every `prepare(score:)`, so `masterGain`
@@ -93,10 +93,15 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     let limiter = PlaybackEngine.makePeakLimiter()
 
     /// Linear amplitude multiplier applied to the full mix, post
-    /// per-channel mixing. `1.0` = unity. Clamped to `0...3` by
-    /// `setMasterGain`. Setter is module-internal so the `+Master`
-    /// extension (a different file) can mirror the clamped value here.
+    /// per-channel mixing. `1.0` = unity. Floored at `0` by
+    /// `setMasterGain`; no ceiling. Setter is module-internal so the
+    /// `+Master` extension (a different file) can mirror the value here.
     public internal(set) var masterGain: Float = 1.0 // swiftlint:disable:this inclusive_language
+
+    /// `true` while a peak-level tap is installed on `sumMixer`. Setter is
+    /// module-internal so the `+Metering` extension (a different file) can
+    /// mirror the tap's lifecycle here.
+    public internal(set) var isLevelMonitoring = false
 
     /// Current A4-calibration offset in cents (0 = A4 440 Hz). Stored so it survives
     /// synth rebuilds in `prepareSynth`, like `masterGain`.
