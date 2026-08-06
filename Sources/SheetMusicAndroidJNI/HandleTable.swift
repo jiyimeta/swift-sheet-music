@@ -26,4 +26,12 @@ public final class HandleTable<Value>: @unchecked Sendable {
     public func release(_ handle: Int64) {
         queue.sync { _ = storage.removeValue(forKey: handle) }
     }
+
+    /// Swaps the value behind an existing handle. A no-op for an unknown handle — the caller has already checked.
+    public func replace(_ handle: Int64, with value: Value) {
+        queue.sync {
+            guard storage[handle] != nil else { return }
+            storage[handle] = value
+        }
+    }
 }
