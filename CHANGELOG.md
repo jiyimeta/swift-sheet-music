@@ -7,6 +7,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [1.9.0] - 2026-08-06
+
 ### Added
 
 - `ScoreViewOptions.measureNumbers` chooses how often a measure-number
