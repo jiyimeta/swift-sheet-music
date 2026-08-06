@@ -155,6 +155,42 @@ enum EditingFixtures {
         return score
     }
 
+    /// The replay fixture: three 4/4 measures under D major (F# and C#), on one staff, seeded with a mix of quarter
+    /// rests and two chords so the script can reach every shape SP1 added — accidental repairs need a key signature
+    /// AND a second note in the bar; the cross-bar planner needs a bar boundary to overrun; the collapse path needs
+    /// a bar it can empty.
+    ///
+    /// Built from `twoMeasuresOfQuarterRests(key: 2)` (measure 0 keeps the key/time signature at elements 0/1, then
+    /// four quarter rests at 2...5; measure 1 is four quarter rests at 0...3) plus a third measure of four more
+    /// quarter rests, with two of those eleven rests overwritten as chords:
+    /// - measure 0, element 2: C4 natural (pitch 60, tpc 14) — the "second note in the bar" the accidental-repair
+    ///   steps need. It sits BEFORE the slot the script writes into (element 3), so writing there changes what
+    ///   accidental state is already in force by the time the script's note is reached, and — since this seed's own
+    ///   glyph was never computed by a repair pass (fixture construction doesn't run one) — the first edit that
+    ///   touches this measure also fixes this note's glyph as a side effect, worth noting rather than fixing here.
+    /// - measure 2, element 1: D4 (pitch 62, tpc 16) — the sole note in an otherwise fully-rested bar, so deleting
+    ///   it empties the measure and exercises `FullMeasureRestCollapse`.
+    ///
+    /// Programmatic rather than a hand-written .mscx: the shape is reviewable in one screen and cannot drift from a
+    /// file nobody reads. The DEVICE loads the MSCX encoding of this, recorded by `EditReplayGoldenTests`, so both
+    /// sides start from identical bytes rather than from this builder and a file that agree only by inspection.
+    static func replayFixture() -> Score {
+        var score = twoMeasuresOfQuarterRests(key: 2)
+        score.parts[0].staves[0].measures.append(Measure(voices: [
+            Voice(elements: [
+                .rest(duration: .quarter),
+                .rest(duration: .quarter),
+                .rest(duration: .quarter),
+                .rest(duration: .quarter),
+            ]),
+        ]))
+        score[VoiceElementID(staff: staff0, measureIndex: 0, voiceIndex: 0, elementIndex: 2)] =
+            .chord(Chord(duration: .quarter, notes: [Note(pitch: 60, tpc: 14)]))
+        score[VoiceElementID(staff: staff0, measureIndex: 2, voiceIndex: 0, elementIndex: 1)] =
+            .chord(Chord(duration: .quarter, notes: [Note(pitch: 62, tpc: 16)]))
+        return score
+    }
+
     static func restID(measure: Int = 0, element: Int) -> RestID {
         RestID(staff: staff0, measureIndex: measure, voiceIndex: 0, elementIndex: element)
     }
