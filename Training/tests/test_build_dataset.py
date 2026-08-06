@@ -5,6 +5,7 @@ seam, so every test here runs against `tmp_path` alone.
 """
 
 import json
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -15,6 +16,7 @@ from PIL import Image
 
 from generate import build_dataset, rasterize
 from generate.export_pdf import ExportOutcome
+from tests.pdf_builder import music_pdf
 
 
 class _ExporterSpy:
@@ -312,6 +314,51 @@ def test_export_success_gate_fails_below_the_threshold(tmp_path):
     assert gates["P3c-G2"]["pass"] is False
 
 
+def test_generate_records_the_plan_it_drove(tmp_path):
+    """`dataset_plan.json` is what makes the two later phases able to
+    tell "this render never happened" from "this render never existed"."""
+    summary, _ = _generate(tmp_path, texture_count=0)
+    plan = json.loads((tmp_path / "dataset_plan.json").read_text())
+    assert plan["planned_renders"] == summary["driven"]
+    assert plan["seed"] == 3
+    assert plan["engines"] == ["ms4"]
+    assert plan["expected_faces"] == sorted(
+        f"ms4/{face}" for face in build_dataset.style_matrix.FACES["ms4"])
+    # No machine-specific path is recorded here; provenance lives per
+    # render, and this file is compared across hosts.
+    assert plan["extra_source_ids"] == []
+
+
+def test_export_gate_uses_the_planned_denominator_not_what_survived(tmp_path):
+    """An interrupted `generate` leaves renders that were neither
+    exported nor quarantined. Recomputing the denominator from disk
+    counts only the survivors, so a run that died a third of the way
+    through reports a perfect export rate."""
+    _generate(tmp_path, texture_count=0)
+    planned = json.loads(
+        (tmp_path / "dataset_plan.json").read_text())["planned_renders"]
+    dirs = sorted(p for p in tmp_path.iterdir() if p.is_dir())
+    for stale in dirs[: len(dirs) // 2]:
+        shutil.rmtree(stale)
+    gates = build_dataset.finalize_dataset(
+        tmp_path, seed=3, version_probe=lambda _b: "")["gates"]
+    assert gates["P3c-G2"]["driven"] == planned
+    assert gates["P3c-G2"]["exported"] == len(dirs) - len(dirs) // 2
+    assert gates["P3c-G2"]["missing"] == len(dirs) // 2
+    assert gates["P3c-G2"]["pass"] is False
+
+
+def test_export_gate_falls_back_to_disk_when_no_plan_was_written(tmp_path):
+    _generate(tmp_path, texture_count=0)
+    (tmp_path / "dataset_plan.json").unlink()
+    gates = build_dataset.finalize_dataset(
+        tmp_path, seed=3, version_probe=lambda _b: "")["gates"]
+    dirs = [p for p in tmp_path.iterdir() if p.is_dir()]
+    assert gates["P3c-G2"]["driven"] == len(dirs)
+    assert gates["P3c-G2"]["denominator"] == "disk"
+    assert gates["P3c-G2"]["pass"] is True
+
+
 # --------------------------------------------------------------------
 # P3c-G4 -- face applied
 # --------------------------------------------------------------------
@@ -478,6 +525,141 @@ def test_face_gate_reports_a_face_with_no_labels(tmp_path):
     assert by_face["ms4/Petaluma"]["renders"] == 0
     assert by_face["ms4/Petaluma"]["reason"] == "no-labels"
     assert by_face["ms4/Petaluma"]["applied"] is False
+
+
+def test_face_gate_reports_an_expected_face_that_never_rendered(tmp_path):
+    """A face whose every render was QUARANTINED -- a font MuseScore
+    refuses, an export that crashes only on that face -- is precisely
+    what this gate exists to catch, and it is absent from the render
+    directories. Deriving the face list from what happens to be on disk
+    would score it out of existence and pass."""
+    _face_render(tmp_path, "cov_ties_ms4_Bravura_v0", "ms4/Bravura", 1.75, 1.00)
+    _face_render(tmp_path, "cov_ties_ms4_MuseJazz_v1", "ms4/MuseJazz", 1.90, 1.22)
+    (tmp_path / "dataset_plan.json").write_text(json.dumps({
+        "schema": 1, "seed": 3, "engines": ["ms4"], "per_face": 1,
+        "expected_faces": ["ms4/Bravura", "ms4/MuseJazz", "ms4/Petaluma"],
+        "planned_renders": 3,
+    }, indent=2, sort_keys=True) + "\n")
+    report = build_dataset.faces_report(tmp_path)
+    by_face = {r["face"]: r for r in report["faces"]}
+    assert set(by_face) == {"ms4/Bravura", "ms4/MuseJazz", "ms4/Petaluma"}
+    assert by_face["ms4/Petaluma"]["renders"] == 0
+    assert by_face["ms4/Petaluma"]["reason"] == "no-renders"
+    assert by_face["ms4/Petaluma"]["confirmed"] is False
+    assert report["unconfirmed"] == ["ms4/Petaluma"]
+
+
+def test_face_gate_expects_quarantined_faces_when_no_plan_was_written(tmp_path):
+    """Cheap fallback for a dataset with no `dataset_plan.json`:
+    `quarantine.json` records the face of every failed render."""
+    _face_render(tmp_path, "cov_ties_ms4_Bravura_v0", "ms4/Bravura", 1.75, 1.00)
+    _face_render(tmp_path, "cov_ties_ms4_MuseJazz_v1", "ms4/MuseJazz", 1.90, 1.22)
+    (tmp_path / "quarantine.json").write_text(json.dumps([
+        {"render_id": "cov_ties_ms4_Petaluma_v2", "source_id": "cov_ties",
+         "engine": "ms4", "face": "ms4/Petaluma", "reason": "boom"},
+    ], indent=2, sort_keys=True) + "\n")
+    report = build_dataset.faces_report(tmp_path)
+    by_face = {r["face"]: r for r in report["faces"]}
+    assert by_face["ms4/Petaluma"]["reason"] == "no-renders"
+    assert report["unconfirmed"] == ["ms4/Petaluma"]
+
+
+def test_face_gate_reads_the_embedded_music_font_name(tmp_path):
+    """The positive signal: what font did the renderer actually embed."""
+    for render_id, face, scale, embedded in [
+        ("cov_ties_ms4_Bravura_v0", "ms4/Bravura", 1.00, "ABCDEF+Bravura"),
+        ("cov_ties_ms4_Petaluma_v1", "ms4/Petaluma", 1.22, "GHIJKL+Petaluma"),
+    ]:
+        _face_render(tmp_path, render_id, face, 1.75, scale)
+        music_pdf(tmp_path / render_id / "score.pdf", embedded)
+    report = build_dataset.faces_report(tmp_path)
+    by_face = {r["face"]: r for r in report["faces"]}
+    assert by_face["ms4/Petaluma"]["font_ok"] is True
+    assert by_face["ms4/Petaluma"]["font_names"] == ["Petaluma"]
+    assert by_face["ms4/Petaluma"]["applied"] is True
+    assert by_face["ms4/Petaluma"]["confirmed"] is True
+    assert report["unconfirmed"] == []
+
+
+def test_face_gate_font_check_catches_a_fallback_the_geometry_missed(tmp_path):
+    """THE REASON THIS SIGNAL EXISTS. The deferred questions ask "is
+    this Petaluma?", and a distinctness gate can only answer "is this
+    different from the faces I compared against". Here the geometry is
+    distinct enough to pass, yet the PDF embeds Bravura -- the face
+    silently fell back, and only the font name says so."""
+    _face_render(tmp_path, "cov_ties_ms3_Bravura_v0", "ms3/Bravura", 1.75, 1.00)
+    music_pdf(tmp_path / "cov_ties_ms3_Bravura_v0" / "score.pdf",
+              "ABCDEF+Bravura")
+    _face_render(tmp_path, "cov_ties_ms3_Petaluma_v1", "ms3/Petaluma", 1.75, 1.22)
+    music_pdf(tmp_path / "cov_ties_ms3_Petaluma_v1" / "score.pdf",
+              "GHIJKL+Bravura")
+    report = build_dataset.faces_report(tmp_path)
+    by_face = {r["face"]: r for r in report["faces"]}
+    assert by_face["ms3/Petaluma"]["applied"] is True      # geometry says fine
+    assert by_face["ms3/Petaluma"]["font_ok"] is False     # the font says no
+    assert by_face["ms3/Petaluma"]["confirmed"] is False   # verdict: no
+    assert by_face["ms3/Petaluma"]["font_names"] == ["Bravura"]
+    assert "font" in by_face["ms3/Petaluma"]["reason"]
+    assert report["unconfirmed"] == ["ms3/Petaluma"]
+
+
+def test_face_gate_accepts_the_two_renamed_faces_under_either_spelling(tmp_path):
+    """MuseScore registers two faces under a lookup name that differs
+    from the label (MScore/Emmentaler, Gootville/Gonville), so the
+    embedded font may carry either -- both must count as a match, or the
+    gate would report a correct render as a fallback."""
+    _face_render(tmp_path, "cov_ties_ms4_MScore_v0", "ms4/MScore", 1.75, 1.00)
+    music_pdf(tmp_path / "cov_ties_ms4_MScore_v0" / "score.pdf",
+              "ABCDEF+Emmentaler")
+    _face_render(tmp_path, "cov_ties_ms4_Gootville_v1", "ms4/Gootville", 1.75, 1.22)
+    music_pdf(tmp_path / "cov_ties_ms4_Gootville_v1" / "score.pdf",
+              "GHIJKL+Gonville")
+    report = build_dataset.faces_report(tmp_path)
+    by_face = {r["face"]: r for r in report["faces"]}
+    assert by_face["ms4/MScore"]["font_ok"] is True
+    assert by_face["ms4/Gootville"]["font_ok"] is True
+    assert report["unconfirmed"] == []
+
+
+def test_face_gate_falls_back_to_geometry_when_no_pdf_is_readable(tmp_path):
+    """No `score.pdf` (or an unreadable one) must not fail a face: the
+    geometry gate still applies, and the row says the font evidence was
+    unavailable rather than pretending it was checked."""
+    _face_render(tmp_path, "cov_ties_ms4_Bravura_v0", "ms4/Bravura", 1.75, 1.00)
+    _face_render(tmp_path, "cov_ties_ms4_Leland_v1", "ms4/Leland", 1.75, 1.09)
+    report = build_dataset.faces_report(tmp_path)
+    by_face = {r["face"]: r for r in report["faces"]}
+    assert by_face["ms4/Leland"]["font_ok"] is None
+    assert by_face["ms4/Leland"]["font_names"] == []
+    assert by_face["ms4/Leland"]["confirmed"] is True
+    assert "font-unavailable" in by_face["ms4/Leland"]["reason"]
+
+
+def test_pin_page_holds_page_size_fixed_without_disturbing_spatium(tmp_path):
+    """`style_variants` draws page size AND spatium per variant, so two
+    faces normally differ in page size too -- different line breaking,
+    a different per-page glyph mix, a shifted per-class median even for
+    identical outlines. The probe pins the page so the face is the only
+    variable; it must not perturb the spatium draw, or the probe would
+    stop being comparable to a normal run."""
+    pinned = build_dataset.plan_renders(seed=3, engines=["ms4"], per_face=2,
+                                        texture_count=0, pin_page=True)
+    loose = build_dataset.plan_renders(seed=3, engines=["ms4"], per_face=2,
+                                       texture_count=0)
+    assert {(r["page_w_in"], r["page_h_in"]) for r in pinned} == {
+        build_dataset.PROBE_PAGE_IN}
+    assert len({(r["page_w_in"], r["page_h_in"]) for r in loose}) > 1
+    assert [r["spatium"] for r in pinned] == [r["spatium"] for r in loose]
+    assert len({r["spatium"] for r in pinned}) > 1
+
+
+def test_pinned_page_size_reaches_the_written_render_json(tmp_path):
+    _generate(tmp_path, texture_count=0, pin_page=True)
+    sizes = set()
+    for render_json in sorted(tmp_path.glob("*/render.json")):
+        style = json.loads(render_json.read_text())["style"]
+        sizes.add((style["page_w_in"], style["page_h_in"]))
+    assert sizes == {build_dataset.PROBE_PAGE_IN}
 
 
 def test_probe_faces_overrides_the_matrix_without_editing_style_matrix(tmp_path):
@@ -647,6 +829,18 @@ def test_cli_rejects_a_bad_engine_or_probe_face_as_a_usage_error(tmp_path):
     assert bad_probe.returncode == 2
     assert "Traceback" not in bad_probe.stderr
     assert list(tmp_path.iterdir()) == []
+
+
+def test_cli_reports_an_already_populated_root_as_a_usage_error(tmp_path):
+    """The single most likely operator mistake -- rerunning `generate`
+    into the same root -- must read as a usage error like any other,
+    not as a crash. It also must not reach MuseScore: the check fires
+    before the first export."""
+    _generate(tmp_path, texture_count=0)
+    again = _cli("generate", "--root", str(tmp_path), "--seed", "3")
+    assert again.returncode == 2
+    assert "Traceback" not in again.stderr
+    assert "--allow-existing" in again.stderr
 
 
 def test_cli_coco_writes_a_detection_json(tmp_path):

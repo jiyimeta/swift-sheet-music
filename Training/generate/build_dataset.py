@@ -40,6 +40,7 @@ output lives outside the repo, so recording it there is the point).
 """
 
 import argparse
+import dataclasses
 import json
 import subprocess
 import sys
@@ -59,12 +60,21 @@ if __package__ in (None, ""):  # pragma: no cover - exercised via subprocess
 import numpy as np  # noqa: E402  (must follow the bootstrap above)
 
 from generate import (coco_export, degrade, export_pdf,  # noqa: E402
-                      gen_coverage, gen_texture, manifest, rasterize,
-                      style_matrix, vocabulary)
+                      gen_coverage, gen_texture, manifest, pdf_fonts,
+                      rasterize, style_matrix, vocabulary)
 
 SCHEMA = 1
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_PROFILE = Path(__file__).resolve().parent / "profiles" / "scanner.toml"
+
+#: Page size (inches) `--pin-page` holds fixed: A4, matching MuseScore's
+#: own `styledef.cpp` pageWidth/pageHeight default (210/25.4, 297/25.4).
+#: A face probe pins this so the FACE is the only variable between the
+#: renders being compared -- `style_variants` otherwise draws page size
+#: per variant, and a different page means different line breaking, a
+#: different per-page glyph mix, and a shifted per-class median even for
+#: identical outlines.
+PROBE_PAGE_IN = (8.27, 11.69)
 
 #: Gate P3c-G2: export success must clear this fraction of driven sources.
 EXPORT_SUCCESS_FLOOR = 0.99
@@ -76,6 +86,14 @@ CLASS_FLOOR = 1000
 FACE_TOL = 0.01
 #: Below this many shared classes, two fingerprints are not comparable.
 MIN_SHARED_CLASSES = 3
+#: Face label -> other names its embedded font program may carry.
+#: MuseScore registers two faces under a lookup name that differs from
+#: the label (see `style_matrix`'s module docstring:
+#: `addMusicFont("Emmentaler", FontDataKey(u"MScore"), ...)` and
+#: `addMusicFont("Gonville", FontDataKey(u"Gootville"), ...)`), so the
+#: embedded font can be named either way. Both count as a match --
+#: rejecting one spelling would report a CORRECT render as a fallback.
+FACE_FONT_ALIASES = {"MScore": ("Emmentaler",), "Gootville": ("Gonville",)}
 
 
 class DatasetExists(RuntimeError):
@@ -167,11 +185,26 @@ def _face_override(overrides: dict[str, list[str]] | None):
 
 
 def _variants_by_engine(seed: int, engines: list[str], per_face: int,
-                        face_overrides=None) -> dict[str, list]:
+                        face_overrides=None,
+                        pin_page: bool = False) -> dict[str, list]:
+    """`style_variants` per engine, optionally with every variant's page
+    size replaced by `PROBE_PAGE_IN`.
+
+    The pin is applied AFTER sampling, never by suppressing the draw, so
+    the spatium sequence is bit-for-bit what an unpinned run of the same
+    seed produces -- a pinned probe stays comparable to a normal run
+    instead of becoming its own incomparable universe.
+    """
     with _face_override(face_overrides):
-        return {engine: style_matrix.style_variants(
+        variants = {engine: style_matrix.style_variants(
             seed=seed, engine=engine, per_face=per_face)
             for engine in sorted(engines)}
+    if not pin_page:
+        return variants
+    width, height = PROBE_PAGE_IN
+    return {engine: [dataclasses.replace(v, page_w_in=width, page_h_in=height)
+                     for v in group]
+            for engine, group in variants.items()}
 
 
 def _render_id(source_id: str, engine: str, variant, index: int) -> str:
@@ -180,7 +213,7 @@ def _render_id(source_id: str, engine: str, variant, index: int) -> str:
 
 def plan_renders(seed: int, engines: list[str], per_face: int,
                  texture_count: int, extra_source_ids=None,
-                 face_overrides=None) -> list[dict]:
+                 face_overrides=None, pin_page: bool = False) -> list[dict]:
     """The full render plan, sorted by `render_id`: the cross product of
     (engine x style variant x source), with each render's rasterization
     dpi already drawn from `rasterize.DPI_GRID`.
@@ -195,7 +228,8 @@ def plan_renders(seed: int, engines: list[str], per_face: int,
     source_ids = sorted(
         [s["source_id"] for s in collect_sources(seed, texture_count)]
         + list(extra_source_ids or []))
-    variants = _variants_by_engine(seed, engines, per_face, face_overrides)
+    variants = _variants_by_engine(seed, engines, per_face, face_overrides,
+                                   pin_page=pin_page)
     rng = np.random.default_rng(seed)
     plan = []
     for engine in sorted(engines):
@@ -278,7 +312,8 @@ def _export_and_rasterize(entry: dict, render_dir: Path, source_path: Path,
 def generate_dataset(root: Path, seed: int, engines: list[str], per_face: int,
                      texture_count: int, extra_sources: list[Path],
                      exporter=None, rasterizer=None, face_overrides=None,
-                     allow_existing: bool = False) -> dict:
+                     allow_existing: bool = False,
+                     pin_page: bool = False) -> dict:
     """Phase 1: write every render directory, export, rasterize, and
     record the failures in `quarantine.json`.
 
@@ -303,8 +338,29 @@ def generate_dataset(root: Path, seed: int, engines: list[str], per_face: int,
                  if s["kind"].startswith("extra_")]
     plan = plan_renders(seed, engines, per_face, texture_count,
                         extra_source_ids=extra_ids,
-                        face_overrides=face_overrides)
-    variants = _variants_by_engine(seed, engines, per_face, face_overrides)
+                        face_overrides=face_overrides, pin_page=pin_page)
+    variants = _variants_by_engine(seed, engines, per_face, face_overrides,
+                                   pin_page=pin_page)
+
+    # Written BEFORE the first export, so an interrupted run still leaves
+    # the record of what it set out to do. Two later phases depend on it:
+    # P3c-G2's denominator (renders that never happened are neither
+    # exported nor quarantined, so a disk-derived denominator would count
+    # only survivors and score an aborted run as perfect), and P3c-G4's
+    # expected face set (a face whose every render was quarantined leaves
+    # no directory behind, and must still be reported).
+    # No filesystem path is recorded here: this file is read across
+    # hosts, and per-source provenance lives in each `render.json`.
+    (root / "dataset_plan.json").write_text(json.dumps({
+        "schema": SCHEMA, "seed": seed, "engines": sorted(engines),
+        "per_face": per_face, "textures": texture_count,
+        "extra_source_ids": sorted(extra_ids),
+        "face_overrides": {e: list(f) for e, f in (face_overrides or {}).items()},
+        "pin_page": pin_page,
+        "planned_renders": len(plan),
+        "expected_faces": sorted({style_matrix.face_id(v)
+                                  for group in variants.values() for v in group}),
+    }, indent=2, sort_keys=True) + "\n")
 
     quarantined: list[dict] = []
     exported = 0
@@ -366,6 +422,18 @@ def _git_commit() -> str:
     return done.stdout.strip() or "unknown"
 
 
+def _read_plan(root: Path) -> dict:
+    """`dataset_plan.json` if this root has one, else `{}`. A dataset
+    built before the plan file existed, or by hand, still finalizes --
+    the callers each state what they fall back to."""
+    path = Path(root) / "dataset_plan.json"
+    try:
+        plan = json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return plan if isinstance(plan, dict) else {}
+
+
 def _engines_used(root: Path) -> list[str]:
     used = set()
     for render_dir in _render_dirs(root):
@@ -402,10 +470,22 @@ def finalize_dataset(root: Path, seed: int, class_floor: int = CLASS_FLOOR,
 
     below_floor = manifest.coverage_report(doc)
     exported = len(doc["renders"])
-    driven = exported + len(quarantined)
+    # The denominator is what `generate` SET OUT to drive, not what
+    # survived on disk: an interrupted run leaves renders that were
+    # neither exported nor quarantined, and counting only the survivors
+    # would report a run that died a third of the way through as a
+    # perfect 100% export rate.
+    planned = _read_plan(root).get("planned_renders")
+    if isinstance(planned, int) and planned > 0:
+        driven, denominator = planned, "plan"
+    else:
+        driven, denominator = exported + len(quarantined), "disk"
     success_rate = exported / driven if driven else 0.0
     doc["gates"] = {
         "P3c-G2": {"driven": driven, "exported": exported,
+                   "quarantined": len(quarantined),
+                   "missing": max(driven - exported - len(quarantined), 0),
+                   "denominator": denominator,
                    "success_rate": success_rate,
                    "floor": EXPORT_SUCCESS_FLOOR,
                    "pass": bool(driven) and success_rate >= EXPORT_SUCCESS_FLOOR},
@@ -422,7 +502,9 @@ def finalize_dataset(root: Path, seed: int, class_floor: int = CLASS_FLOOR,
         print(f"[coverage-below-floor] {line}")
     gate2, gate3 = doc["gates"]["P3c-G2"], doc["gates"]["P3c-G3"]
     print(f"[gate][SUMMARY] P3c-G2 export_success={success_rate:.4f} "
-          f"({exported}/{driven}) floor={EXPORT_SUCCESS_FLOOR} "
+          f"({exported}/{driven}) denominator={denominator} "
+          f"quarantined={len(quarantined)} missing={gate2['missing']} "
+          f"floor={EXPORT_SUCCESS_FLOOR} "
           f"pass={'Y' if gate2['pass'] else 'N'}")
     print(f"[gate][SUMMARY] P3c-G3 below_floor={len(below_floor)}/"
           f"{len(vocabulary.CLASS_NAMES)} floor={class_floor} "
@@ -527,22 +609,95 @@ def _face_distance(a: dict[str, dict], b: dict[str, dict]) -> float | None:
     return float(np.median(diffs)) if diffs else None
 
 
-def faces_report(root: Path, tol: float = FACE_TOL) -> dict:
-    """Gate P3c-G4. For every face in the dataset, report whether its
-    glyph geometry is distinguishable from every other face of the same
-    engine (`applied`). Faces are compared only WITHIN an engine: an MS3
-    face matching an MS4 face says nothing about either one's fallback,
-    since the outlines a face resolves to are a property of the engine
-    binary.
+def _face_font_check(render_dirs: list[Path],
+                     face: str) -> tuple[bool | None, list[str], int, int]:
+    """Read the music font each render actually embedded and compare it
+    to the face that was requested. Returns
+    `(ok, names, matched, checked)`; `ok` is None when no render yielded
+    any music font at all (no `score.pdf`, or an unreadable one), which
+    is "no evidence", not "wrong".
+
+    Strict on purpose: `ok` is True only when EVERY render that could be
+    read matched. One render in a face silently falling back is exactly
+    the defect this looks for.
+    """
+    label = face.split("/", 1)[1] if "/" in face else face
+    accepted = {pdf_fonts.normalize_font_name(name)
+                for name in (label, *FACE_FONT_ALIASES.get(label, ()))}
+    names: set[str] = set()
+    matched = checked = 0
+    for render_dir in render_dirs:
+        music = pdf_fonts.font_usage(render_dir / "score.pdf")["music"]
+        if not music:
+            continue
+        checked += 1
+        names |= {pdf_fonts.strip_subset_tag(name) for name in music}
+        if any(pdf_fonts.normalize_font_name(name) in accepted for name in music):
+            matched += 1
+    if checked == 0:
+        return None, [], 0, 0
+    return matched == checked, sorted(names), matched, checked
+
+
+def _expected_faces(root: Path, seen, quarantined: list[dict],
+                    expected=None) -> list[str]:
+    """The faces the run was SUPPOSED to produce.
+
+    Deriving this from the render directories that exist would score a
+    face out of existence exactly when it matters: a face whose every
+    render was quarantined -- a font MuseScore refuses, an export that
+    crashes only on that face -- leaves no directory behind, and is the
+    single most likely outcome of the MS3 probe, where an unsupported
+    face is the hypothesis under test. Preference order: an explicit
+    argument, then `dataset_plan.json` (the complete matrix, including
+    `--probe-faces`), then what is on disk unioned with the faces named
+    in `quarantine.json`.
+    """
+    if expected is not None:
+        return sorted(set(expected))
+    planned = _read_plan(root).get("expected_faces")
+    if planned:
+        return sorted(set(planned))
+    return sorted(set(seen) | {entry.get("face", "") for entry in quarantined
+                               if entry.get("face")})
+
+
+def faces_report(root: Path, tol: float = FACE_TOL, expected_faces=None) -> dict:
+    """Gate P3c-G4, over TWO independent signals per face.
+
+    1. `applied` -- geometry. Is this face distinguishable from every
+       other face of the same engine? Compared only within an engine (an
+       MS3 face matching an MS4 face says nothing about either one's
+       fallback, since the outlines a face resolves to are a property of
+       the engine binary), and per source, so content is held fixed.
+    2. `font_ok` -- the name of the music font the renderer actually
+       embedded, read straight out of the PDF (`pdf_fonts`). This is the
+       POSITIVE signal: geometry can only say "different from what I
+       compared against", while the deferred decisions ask "is this
+       Petaluma?".
+
+    `confirmed` is the verdict, and it needs BOTH: a face passes only if
+    the geometry separates it AND the embedded font does not contradict
+    it. When no font evidence exists at all, `confirmed` falls back to
+    `applied` and the row says `font-unavailable` rather than pretending
+    the check ran.
 
     `self_spread` is how much a face's own renders OF ONE SOURCE differ
     from each other after normalization -- variants of one source differ
-    only in spatium and page size, so this is the residual left by the
-    spatium normalization itself, and a face only counts as applied when
-    it out-distances both `tol` and that residual.
+    only in spatium (and page size, unless the run pinned it), so this
+    is the residual left by the spatium normalization itself, and a face
+    only counts as applied when it out-distances both `tol` and that
+    residual. NOTE that at `per_face=1` there is one render per face per
+    source, so `self_spread` is identically 0 and the whole geometry
+    verdict rests on `tol` -- which is why the runbook's face probe uses
+    `--per-face 2` or more, and pins the page size.
     """
     root = Path(root)
+    quarantine_path = root / "quarantine.json"
+    quarantined = (json.loads(quarantine_path.read_text())
+                   if quarantine_path.exists() else [])
     samples: dict[str, dict[str, list[dict]]] = {}
+    dirs_by_face: dict[str, list[Path]] = {}
     for render_dir in _render_dirs(root):
         doc = json.loads((render_dir / "render.json").read_text())
         face = doc.get("face", "")
@@ -552,6 +707,7 @@ def faces_report(root: Path, tol: float = FACE_TOL) -> dict:
         source_id = doc.get("provenance", {}).get("source_id", "")
         spatium = float(doc.get("style", {}).get("spatium", 0)) or 1.0
         by_source = samples.setdefault(face, {})
+        dirs_by_face.setdefault(face, []).append(render_dir)
         fingerprint = _render_fingerprint(render_dir, spatium)
         if fingerprint:
             by_source.setdefault(source_id, []).append(fingerprint)
@@ -562,15 +718,24 @@ def faces_report(root: Path, tol: float = FACE_TOL) -> dict:
         for face, by_source in samples.items()
     }
     rows = []
-    for face in sorted(samples):
-        by_source = samples[face]
-        aggregate = aggregates[face]
+    for face in _expected_faces(root, samples, quarantined, expected_faces):
+        by_source = samples.get(face, {})
+        aggregate = aggregates.get(face, {})
         classes = sorted({cls for fp in aggregate.values() for cls in fp})
+        font_ok, font_names, font_matched, font_checked = _face_font_check(
+            dirs_by_face.get(face, []), face)
         row = {"face": face,
                "renders": sum(len(fps) for fps in by_source.values()),
                "classes": len(classes), "self_spread": 0.0,
                "nearest": None, "nearest_diff": None,
-               "applied": False, "reason": ""}
+               "applied": False, "confirmed": False,
+               "font_ok": font_ok, "font_names": font_names,
+               "font_matched": font_matched, "font_checked": font_checked,
+               "reason": ""}
+        if not dirs_by_face.get(face):
+            row["reason"] = "no-renders"
+            rows.append(row)
+            continue
         if not classes:
             row["reason"] = "no-labels"
             rows.append(row)
@@ -601,20 +766,52 @@ def faces_report(root: Path, tol: float = FACE_TOL) -> dict:
             row["reason"] = f"within-own-spread:{nearest}"
         else:
             row["applied"] = True
+        _apply_font_verdict(row)
         rows.append(row)
     return {"tol": tol, "faces": rows,
-            "unconfirmed": [r["face"] for r in rows if not r["applied"]]}
+            "unconfirmed": [r["face"] for r in rows if not r["confirmed"]]}
+
+
+def _apply_font_verdict(row: dict) -> None:
+    """Combine the two signals into `confirmed`.
+
+    BOTH must hold: the geometry has to separate the face AND the
+    embedded font must not contradict it. That is what closes the hole
+    the geometry alone leaves -- at `per_face=1`, or with a tolerance
+    that turns out too loose for the real normalization residual, a
+    fallback can read `applied=Y`, and then the font name is the only
+    thing that says otherwise.
+
+    `reason` is only written when the geometry left it EMPTY, so a
+    structural reason (`collides-with:`, `no-comparison-face`) is never
+    overwritten by font commentary.
+    """
+    if row["font_ok"] is None:
+        row["confirmed"] = row["applied"]
+        if not row["reason"]:
+            row["reason"] = "font-unavailable"
+        return
+    row["confirmed"] = row["applied"] and row["font_ok"]
+    if not row["font_ok"] and not row["reason"]:
+        row["reason"] = "font-mismatch:" + (",".join(row["font_names"]) or "?")
 
 
 def print_faces_report(report: dict) -> int:
     for row in report["faces"]:
         diff = "-" if row["nearest_diff"] is None else f"{row['nearest_diff']:.4f}"
+        font = {True: "Y", False: "N", None: "-"}[row["font_ok"]]
         print(f"[faces][SUMMARY] face={row['face']} renders={row['renders']} "
               f"classes={row['classes']} self_spread={row['self_spread']:.4f} "
               f"nearest={row['nearest'] or '-'} nearest_diff={diff} "
               f"applied={'Y' if row['applied'] else 'N'} "
+              f"font={font} "
+              f"font_names={','.join(row['font_names']) or '-'} "
+              f"({row['font_matched']}/{row['font_checked']}) "
+              f"confirmed={'Y' if row['confirmed'] else 'N'} "
               f"reason={row['reason'] or '-'}")
     total = len(report["faces"])
+    # Named `applied=` for continuity with the existing summary line;
+    # it counts fully CONFIRMED faces (geometry and font together).
     applied = total - len(report["unconfirmed"])
     print(f"[gate][SUMMARY] P3c-G4 applied={applied}/{total} "
           f"pass={'Y' if applied == total and total else 'N'}")
@@ -743,6 +940,8 @@ def _build_parser() -> argparse.ArgumentParser:
     gen.add_argument("--extra-sources", nargs="*", default=[])
     gen.add_argument("--probe-faces", nargs="*", default=[],
                      metavar="ENGINE=Face,Face")
+    gen.add_argument("--pin-page", action="store_true",
+                     help="hold page size at A4 across variants (face probes)")
     gen.add_argument("--allow-existing", action="store_true")
 
     fin = sub.add_parser("finalize", help="phase 3: manifest + P3c-G2/G3")
@@ -781,12 +980,19 @@ def main(argv=None) -> int:
             overrides = parse_face_overrides(args.probe_faces)
         except ValueError as error:
             parser.error(str(error))  # exits 2, no traceback
-        generate_dataset(
-            Path(args.root), args.seed, engines,
-            args.per_face, args.textures,
-            [Path(p) for p in args.extra_sources],
-            face_overrides=overrides,
-            allow_existing=args.allow_existing)
+        try:
+            generate_dataset(
+                Path(args.root), args.seed, engines,
+                args.per_face, args.textures,
+                [Path(p) for p in args.extra_sources],
+                face_overrides=overrides, pin_page=args.pin_page,
+                allow_existing=args.allow_existing)
+        except (DatasetExists, DuplicateSourceID) as error:
+            # Operator mistakes (rerunning into a populated root; two
+            # source directories claiming one id), not crashes -- they
+            # exit 2 like any other usage error rather than printing a
+            # stack trace.
+            parser.error(str(error))
         return 0
     if args.cmd == "finalize":
         finalize_dataset(Path(args.root), args.seed,
