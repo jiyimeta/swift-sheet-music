@@ -39,24 +39,32 @@ import SheetMusicLayout
 /// into `LayoutDocument.editingHitTest(at:activeVoice:)` — see that method's doc comment for the hit-test
 /// policy (ladder, slop rescue, on-staff gate, voice preference).
 ///
-/// `optionsBytes` is a `LayoutOptionsWire` payload — the exact same blob `nativeComputeLayout` /
-/// `nativeNearestCursor` already receive. Only `hiddenStaffAddresses` is read here; the other fields are
-/// ignored, and re-addressing the hit past them reuses `Score.engineCursorForFilteredTap` (wrapping the item in
-/// a throwaway `ScoreCursor.item` and unwrapping the result) rather than writing a second implementation of
+/// `optionsBytes` is a `LayoutOptionsWire` payload, kept for JNI signature parity with `nativeComputeLayout` /
+/// `nativeNearestCursor` — **reserved and ignored**: the hidden-staff set used for re-addressing comes from
+/// `LayoutDocumentCache.entry(for:).hiddenStaves` instead, the set the cached document was actually laid out
+/// from. Decoding it out of this parameter would let a caller pass a hidden-staff set that doesn't match what
+/// produced `entry.document` — the exact "re-read must replay what compute actually used" defect this bridge's
+/// two siblings (`nativeEditingCaretFrame`, `nativeEncodeDrawProgram`) were already careful to avoid, and whose
+/// consequence here is worse than theirs: this entry point's answer is a `ScoreItemID` fed straight into an
+/// edit intent, so a mismatched set would silently edit the wrong staff rather than merely mis-render one.
+/// Re-addressing the hit past `entry.hiddenStaves` reuses `Score.engineCursorForFilteredTap` (wrapping the item
+/// in a throwaway `ScoreCursor.item` and unwrapping the result) rather than writing a second implementation of
 /// that rule.
 ///
-/// Returns an empty `Data` when the score handle is unknown, the layout document is not cached, the options
-/// blob fails to decode, or the tap hit no selectable item. On a hit, returns the `ScoreItemIDCodec` encoding
-/// of the item — full-score-addressed for `.note`/`.rest`, per `engineCursorForFilteredTap`'s own switch.
+/// Returns an empty `Data` when the score handle is unknown, the layout document is not cached, or the tap hit
+/// no selectable item. On a hit, returns the `ScoreItemIDCodec` encoding of the item — full-score-addressed for
+/// `.note`/`.rest`, per `engineCursorForFilteredTap`'s own switch.
 ///
 /// **Exception**: a `.tuplet` hit is returned with its **filtered** staff address unchanged.
 /// `engineCursorForFilteredTap` (`Score+FilteredTapCursor.swift`) passes `.tuplet` (and `.clef`, which
 /// `editingHitTest` never returns) through its switch without re-addressing — a pre-existing gap in that
 /// shared helper, not something introduced here. With a hidden staff ahead of a tuplet's own staff in the
 /// same part, a caller that feeds this straight into an edit intent targeting `TupletID.staff` would hit the
-/// wrong staff. Every OTHER caller in this file is unaffected: `nativeEditingCaretFrame` and
-/// `nativeEncodeDrawProgram` translate back into filtered addressing before use, so a `.tuplet` id that never
-/// left filtered addressing in the first place round-trips through them correctly regardless.
+/// wrong staff. `nativeEditingCaretFrame` and `nativeEncodeDrawProgram` both special-case `.tuplet` ids and
+/// skip re-addressing them for exactly this reason: the id never left filtered addressing, so translating it
+/// again would test it against `hiddenStaves` (a set of full-score addresses) before that pass-through switch
+/// gets a chance to apply, and a filtered address can coincide numerically with an unrelated hidden full-score
+/// address.
 ///
 /// Not `@available`-annotated: the swift-java jextract `@_cdecl` wrapper that calls this is generated without
 /// one, so the entry point must compile at the package's macOS 14 / iOS 17 baseline. The macOS 15 requirement
@@ -70,27 +78,20 @@ public func nativeEditingHitTest(
     optionsBytes: Data,
 ) -> Data {
     guard let score = scoreTable.value(for: scoreHandle),
-          let document = LayoutDocumentCache.value(for: scoreHandle)
+          let entry = LayoutDocumentCache.entry(for: scoreHandle)
     else { return Data() }
-
-    let hiddenStaves: Set<StaffAddress>
-    do {
-        hiddenStaves = try LayoutOptionsCodec.decode(optionsBytes).hiddenStaffAddresses
-    } catch {
-        return Data()
-    }
 
     // mm → document points (inverse of the frame bridges' `pt * 25.4 / 72.0`).
     let mmToPt = 72.0 / 25.4
     let point = CGPoint(x: CGFloat(xMm * mmToPt), y: CGFloat(yMm * mmToPt))
 
     guard #available(macOS 15.0, iOS 16.0, *) else { return Data() }
-    guard let filteredItem = document.editingHitTest(at: point, activeVoice: Int(activeVoice)) else {
+    guard let filteredItem = entry.document.editingHitTest(at: point, activeVoice: Int(activeVoice)) else {
         return Data()
     }
 
     guard case let .item(fullItem) = score.engineCursorForFilteredTap(
-        .item(filteredItem), hiddenStaves: hiddenStaves,
+        .item(filteredItem), hiddenStaves: entry.hiddenStaves,
     ) else {
         // Unreachable in practice: `engineCursorForFilteredTap` always returns `.item` for an `.item` input
         // (it only ever substitutes a `.beat` cursor for playback-cursor translation, which is a different
@@ -132,14 +133,25 @@ public func nativeEditingCaretFrame(
         return Data()
     }
 
-    guard case let .item(filteredItem) = score.translateCursorForHiddenStaves(
-        .item(item), hiddenStaves: entry.hiddenStaves,
-    ) else {
-        // A `.beat` fallback means `item`'s staff is hidden — there is no laid-out frame for it to caret
-        // against (a host cannot have selected it in the first place, since `nativeEditingHitTest` only ever
-        // hits items the filtered document actually renders). Refuse rather than resolve against the wrong
-        // staff.
-        return Data()
+    let filteredItem: ScoreItemID
+    if case .tuplet = item {
+        // `.tuplet` ids never leave filtered addressing (`Score+FilteredTapCursor.swift` passes them through
+        // both directions unchanged), so they must not be handed to `translateCursorForHiddenStaves` — its
+        // first check tests the id's staff against `hiddenStaves`, a set of FULL-score addresses, and a
+        // filtered address can coincide with one by pure numeric accident (e.g. a later staff renumbers down
+        // to the same index an earlier hidden staff occupied), which would wrongly discard the id here.
+        filteredItem = item
+    } else {
+        guard case let .item(translated) = score.translateCursorForHiddenStaves(
+            .item(item), hiddenStaves: entry.hiddenStaves,
+        ) else {
+            // A `.beat` fallback means `item`'s staff is hidden — there is no laid-out frame for it to caret
+            // against (a host cannot have selected it in the first place, since `nativeEditingHitTest` only
+            // ever hits items the filtered document actually renders). Refuse rather than resolve against the
+            // wrong staff.
+            return Data()
+        }
+        filteredItem = translated
     }
 
     let mmToPt = 72.0 / 25.4
@@ -204,9 +216,19 @@ public func nativeEncodeDrawProgram(
 
     var expandedIDs: Set<ScoreItemID> = []
     for id in decoded.ids {
-        guard case let .item(filtered) = score.translateCursorForHiddenStaves(
-            .item(id), hiddenStaves: entry.hiddenStaves,
-        ) else { continue }
+        let filtered: ScoreItemID
+        if case .tuplet = id {
+            // See the matching comment in `nativeEditingCaretFrame`: a `.tuplet` id is already
+            // filtered-addressed and must skip `translateCursorForHiddenStaves` entirely, or a filtered
+            // address that numerically coincides with an unrelated FULL-score hidden-staff address gets
+            // dropped as if it belonged to a hidden staff.
+            filtered = id
+        } else {
+            guard case let .item(translated) = score.translateCursorForHiddenStaves(
+                .item(id), hiddenStaves: entry.hiddenStaves,
+            ) else { continue }
+            filtered = translated
+        }
         expandedIDs.formUnion(SelectionExpansion.expand(filtered, in: entry.filteredScore))
     }
 

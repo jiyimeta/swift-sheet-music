@@ -172,6 +172,47 @@
             staff: staff0, measureIndex: 0, voiceIndex: 0, startElementIndex: 1,
         )
 
+        /// Mirror of `tripletOnHiddenStaffScore()`: staff 0 (to be hidden) carries a plain note, staff 1
+        /// (visible) carries the triplet. Used to prove a tuplet on a VISIBLE staff still tints/carets when a
+        /// DIFFERENT, earlier staff is hidden — the filtered document renumbers staff 1 down to filtered index
+        /// 0, which collides numerically with the hidden set's full-score `(0, 0)` entry and must not be
+        /// mistaken for it.
+        private static func tripletOnVisibleStaffScore() -> Score {
+            let hiddenVoice = Voice(elements: [
+                .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+                .chord(Chord(duration: .quarter, notes: [Note(pitch: 48, tpc: 14)])),
+                .rest(duration: .quarter), .rest(duration: .quarter), .rest(duration: .quarter),
+            ])
+            let third = NoteDuration.fraction(Fraction(numerator: 1, denominator: 12))
+            let visibleVoice = Voice(
+                elements: [
+                    .timeSignature(TimeSignature(numerator: 4, denominator: 4)),
+                    .chord(Chord(duration: third, notes: [Note(pitch: 60, tpc: 14)])),
+                    .chord(Chord(duration: third, notes: [Note(pitch: 62, tpc: 16)])),
+                    .chord(Chord(duration: third, notes: [Note(pitch: 64, tpc: 18)])),
+                    .rest(duration: .quarter), .rest(duration: .quarter), .rest(duration: .quarter),
+                ],
+                tuplets: [Tuplet(normalNotes: 2, actualNotes: 3, startIndex: 1, endIndex: 3)],
+            )
+            return Score(
+                division: 480,
+                parts: [Part(
+                    id: "1", instrument: Instrument(id: "x"),
+                    staves: [
+                        Staff(measures: [Measure(voices: [hiddenVoice])]),
+                        Staff(measures: [Measure(voices: [visibleVoice])]),
+                    ],
+                )],
+            )
+        }
+
+        /// Filtered-addressed: staff 1 becomes filtered staff index 0 once staff 0 is hidden, so this is `staff0`
+        /// numerically — the same value `hiddenTripletID` uses, but this time it denotes the surviving,
+        /// VISIBLE staff rather than the hidden one.
+        private static let visibleTripletID = TupletID(
+            staff: staff0, measureIndex: 0, voiceIndex: 0, startElementIndex: 1,
+        )
+
         private static func verticalOptionsBytes() -> Data {
             LayoutOptionsWire.verticalDefault.encodeToData()
         }
@@ -212,21 +253,7 @@
             #expect(!layoutBytes.isEmpty)
 
             let document = try #require(LayoutDocumentCache.value(for: handle))
-            let system = try #require(document.systems.first)
-            let measure = try #require(system.measures.first)
-            let base = CGPoint(x: system.origin.x + measure.origin.x, y: system.origin.y + measure.origin.y)
-
-            var anchor: CGPoint?
-            for element in measure.elements {
-                guard case let .chord(notes, _, stem, _, _, _, _, _, _, _, _) = element, let note = notes.first
-                else { continue }
-                anchor = CGPoint(
-                    x: base.x + note.origin.x + note.mirrorDx(stem: stem, sp: system.sp),
-                    y: base.y + note.origin.y,
-                )
-                break
-            }
-            let tapPoint = try #require(anchor)
+            let tapPoint = try #require(Self.noteAnchor(in: document))
 
             let result = nativeEditingHitTest(
                 scoreHandle: handle,
@@ -275,17 +302,85 @@
             #expect(result.isEmpty)
         }
 
-        @Test("nativeEditingHitTest with undecodable options bytes returns empty Data")
-        func hitTestGarbageOptions() {
+        /// `optionsBytes` is reserved/ignored (Fix 2): the hidden-staves set now comes from
+        /// `LayoutDocumentCache.entry(for:).hiddenStaves`, not from decoding this parameter. Undecodable bytes
+        /// therefore no longer fail the call — proven here by a real, successful hit against the SAME known
+        /// notehead `hitTestFindsNotehead` above uses, with garbage `optionsBytes`. Before Fix 2 this threw
+        /// inside `LayoutOptionsCodec.decode` and returned empty `Data`; the notehead was never reached.
+        @Test("nativeEditingHitTest with undecodable options bytes still hits, because they're no longer read")
+        @available(macOS 15.0, iOS 16.0, *)
+        func hitTestIgnoresGarbageOptionsBytes() throws {
             let handle = scoreTable.insert(Self.noteScore())
             defer { scoreTable.release(handle); LayoutDocumentCache.release(handle) }
             _ = nativeComputeLayout(
                 scoreHandle: handle, pageWidthMM: 210, pageHeightMM: 297, optionsBlob: Self.verticalOptionsBytes(),
             )
+            let document = try #require(LayoutDocumentCache.value(for: handle))
+            let tapPoint = try #require(Self.noteAnchor(in: document))
+
             let result = nativeEditingHitTest(
-                scoreHandle: handle, xMm: 0, yMm: 0, activeVoice: 0, optionsBytes: Data([0xFF]),
+                scoreHandle: handle,
+                xMm: Double(tapPoint.x) * Self.ptToMM,
+                yMm: Double(tapPoint.y) * Self.ptToMM,
+                activeVoice: 0,
+                optionsBytes: Data([0xFF]),
             )
-            #expect(result.isEmpty)
+            let decoded = try ScoreItemIDCodec.decode(result)
+            #expect(decoded == .note(Self.noteScoreNoteID))
+        }
+
+        /// The real regression coverage for Fix 2: proves `nativeEditingHitTest` re-addresses using the CACHED
+        /// entry's `hiddenStaves` (the set the layout was actually computed from), not whatever `optionsBytes`
+        /// the caller happens to pass on this call. `twoStaffScore()` is laid out with staff 0 hidden
+        /// (`hiddenStaff0OptionsBytes()`), so the filtered document has one staff — formerly staff 1's content,
+        /// the same fixture `caretFrameTranslatesPastHiddenStaff` uses. This call then passes a DIFFERENT,
+        /// stale `optionsBytes` blob with an EMPTY hidden-staves set (`verticalOptionsBytes()`) — simulating a
+        /// caller whose options snapshot doesn't match what produced the cached layout.
+        ///
+        /// Before Fix 2: `hiddenStaves` was decoded from this call's `optionsBytes`, so `engineCursorForFilteredTap`
+        /// saw an EMPTY hidden set and returned the tap's FILTERED address unchanged — `staff0`, wrong staff, fed
+        /// straight into an edit intent it was never meant for. After Fix 2: `hiddenStaves` comes from
+        /// `entry.hiddenStaves` regardless of what this call's `optionsBytes` says, correctly re-addressing to
+        /// full-score `staff1`.
+        @Test("nativeEditingHitTest re-addresses using the cache's hidden staves, not a mismatched caller blob")
+        @available(macOS 15.0, iOS 16.0, *)
+        func hitTestUsesCachedHiddenStavesNotCallerOptions() throws {
+            let handle = scoreTable.insert(Self.twoStaffScore())
+            defer { scoreTable.release(handle); LayoutDocumentCache.release(handle) }
+            _ = nativeComputeLayout(
+                scoreHandle: handle, pageWidthMM: 210, pageHeightMM: 297,
+                optionsBlob: Self.hiddenStaff0OptionsBytes(),
+            )
+            let document = try #require(LayoutDocumentCache.value(for: handle))
+            let tapPoint = try #require(Self.noteAnchor(in: document))
+
+            // Deliberately mismatched: this call's own `optionsBytes` claims no staff is hidden, unlike what
+            // `nativeComputeLayout` was actually called with above.
+            let result = nativeEditingHitTest(
+                scoreHandle: handle,
+                xMm: Double(tapPoint.x) * Self.ptToMM,
+                yMm: Double(tapPoint.y) * Self.ptToMM,
+                activeVoice: 0,
+                optionsBytes: Self.verticalOptionsBytes(),
+            )
+            let decoded = try ScoreItemIDCodec.decode(result)
+            #expect(decoded == .note(Self.twoStaffStaff1NoteID))
+        }
+
+        /// Shared by `hitTestFindsNotehead` and the cache-authoritative regression tests below: the first
+        /// chord's notehead anchor point (document coords) in `document`'s first system/measure.
+        private static func noteAnchor(in document: LayoutDocument) -> CGPoint? {
+            guard let system = document.systems.first, let measure = system.measures.first else { return nil }
+            let base = CGPoint(x: system.origin.x + measure.origin.x, y: system.origin.y + measure.origin.y)
+            for element in measure.elements {
+                guard case let .chord(notes, _, stem, _, _, _, _, _, _, _, _) = element, let note = notes.first
+                else { continue }
+                return CGPoint(
+                    x: base.x + note.origin.x + note.mirrorDx(stem: stem, sp: system.sp),
+                    y: base.y + note.origin.y,
+                )
+            }
+            return nil
         }
     }
 
@@ -367,6 +462,32 @@
             let wire = try EditCaretFrameCodec.decode(result)
             #expect(wire.heightMm > 0)
             #expect(wire.widthMm > 0)
+        }
+
+        /// Pins `nativeEditingCaretFrame`'s behavior for a `.tuplet` id on a VISIBLE staff when a DIFFERENT,
+        /// earlier staff is hidden — the same addressing collision the draw-program mirror test above
+        /// (`encodeDrawProgramTintsTupletOnVisibleStaffPastHiddenStaff`) exercises.
+        ///
+        /// Unlike that mirror test, this one can't observe a red→green transition from the addressing fix: a
+        /// `.tuplet` id NEVER resolves to a caret rect, hidden staff or not — `CursorFrame.itemX` returns `nil`
+        /// for `.tuplet` unconditionally ("Playback cursor never positions on a tuplet bracket... these are
+        /// display-only selection targets, not tick anchors"), so `editingCaretRect` is `nil` and this bridge
+        /// returns empty `Data` on BOTH the buggy and the fixed `translateCursorForHiddenStaves` path. This test
+        /// exists to pin that the fix doesn't change that (no crash, no accidental resolution against the wrong
+        /// element) — the real regression coverage for this bug is the draw-program mirror test above, whose
+        /// tint DOES flip from absent to present across the fix.
+        @Test("nativeEditingCaretFrame still returns empty Data for a tuplet id, hidden-staff collision or not")
+        func caretFrameStillEmptyForTupletOnVisibleStaffPastHiddenStaff() {
+            let handle = scoreTable.insert(Self.tripletOnVisibleStaffScore())
+            defer { scoreTable.release(handle); LayoutDocumentCache.release(handle) }
+            _ = nativeComputeLayout(
+                scoreHandle: handle, pageWidthMM: 210, pageHeightMM: 297,
+                optionsBlob: Self.hiddenStaff0OptionsBytes(),
+            )
+
+            let itemBytes = ScoreItemIDCodec.encode(.tuplet(Self.visibleTripletID))
+            let result = nativeEditingCaretFrame(scoreHandle: handle, itemBytes: itemBytes, minimumWidthMm: 0)
+            #expect(result.isEmpty)
         }
 
         @Test("nativeEditingCaretFrame with an unknown handle returns empty Data")
@@ -613,6 +734,35 @@
                 return false
             }
             #expect(brackets.isEmpty)
+        }
+
+        /// Mirror of `encodeDrawProgramDropsHiddenStaffSelection` above: the true-positive this bug needs. The
+        /// triplet here lives on the VISIBLE staff (`tripletOnVisibleStaffScore()`'s staff 1), with a
+        /// DIFFERENT, earlier staff (0) hidden. `visibleTripletID`'s filtered address is numerically `staff0`
+        /// (staff 1 renumbers down to filtered index 0), which is also what the hidden set carries for the
+        /// actually-hidden staff 0 — so a `.tuplet` id that gets re-translated by
+        /// `translateCursorForHiddenStaves` (instead of passed through, as `.tuplet` ids from a real hit test
+        /// already are) is wrongly treated as hidden and silently dropped. Asserting 4 brackets (not just 1)
+        /// proves both that the tuplet itself tints AND that `SelectionExpansion` still ran to tint its three
+        /// member notes.
+        @Test("nativeEncodeDrawProgram tints a tuplet selection on a visible staff when an earlier staff is hidden")
+        func encodeDrawProgramTintsTupletOnVisibleStaffPastHiddenStaff() throws {
+            let handle = scoreTable.insert(Self.tripletOnVisibleStaffScore())
+            defer { scoreTable.release(handle); LayoutDocumentCache.release(handle) }
+            _ = nativeComputeLayout(
+                scoreHandle: handle, pageWidthMM: 210, pageHeightMM: 297,
+                optionsBlob: Self.hiddenStaff0OptionsBytes(),
+            )
+
+            let selectionBytes = SelectionTintCodec.encode(argb: Self.tintArgb, ids: [.tuplet(Self.visibleTripletID)])
+            let result = nativeEncodeDrawProgram(scoreHandle: handle, selectionBytes: selectionBytes)
+            let pages = try DrawProgramCodec.decode(result)
+
+            let brackets = pages.flatMap(\.commands).filter {
+                if case let .setColor(a) = $0 { return a == Self.tintArgb }
+                return false
+            }
+            #expect(brackets.count == 4)
         }
     }
 

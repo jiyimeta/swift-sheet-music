@@ -406,12 +406,15 @@ object SheetMusicJNI {
     /**
      * Editing hit-test at a tap ([xMm], [yMm], document/mm) within the cached (filtered) layout of
      * [scoreHandle], preferring [activeVoice] within the tap's slop box when the raw hit belongs to a
-     * different voice. [optionsBytes] is the SAME `LayoutOptionsWire` blob passed to [nativeComputeLayout]
-     * (only its hidden-staves set is read, to re-address the hit against the full score).
+     * different voice. [optionsBytes] is kept for signature parity with [nativeComputeLayout] but is
+     * **reserved and ignored**: the hidden-staves set used to re-address the hit against the full score comes
+     * from the cache entry the layout was actually computed from, not from this parameter — a caller passing
+     * a set that doesn't match what produced the cached layout must not be able to re-address against a
+     * mismatched staff set.
      *
      * Returns a `ScoreItemID` wire payload, re-addressed against the full (unfiltered) score so it can be
      * fed straight into an edit intent — or an empty array when the handle is unknown, the layout is not
-     * cached, the options blob fails to decode, or the tap hit no selectable item.
+     * cached, or the tap hit no selectable item.
      *
      * Exception: a tuplet hit keeps its FILTERED staff address (a pre-existing gap in the shared Swift
      * `engineCursorForFilteredTap` re-addressing helper, not specific to this call) — building a tuplet edit
