@@ -91,6 +91,59 @@
             #expect(doc.editingCaretRect(for: item, in: score) == nil)
         }
 
+        /// The brief's *other* nil cause: an item that "names a staff/measure this document doesn't contain."
+        /// `missingMeasureReturnsNil` above covers the measure half by tripping `staffBand`'s system lookup, which
+        /// makes `cursorFrame` refuse too (no system contains that measure). This test covers the staff half — and
+        /// that guard, `LayoutSystem.flatIndex(for:)`, can't be tripped through `LayoutEngine` output: within one
+        /// `buildSystem` call `elements` and `staffAddresses` are both built from the same `allStaves` list
+        /// (`LayoutEngine+SystemBuild.swift:20-21`, element tagging at `:256`, `staffOrigins` at `:592-604`, and
+        /// `staffAddresses: allStaves.map(\.address)` at `:920`), and this engine has no per-system staff-subsetting
+        /// feature — so every staff `cursorFrame` can find a laid-out element for is, by construction, already in
+        /// that system's `staffAddresses`.
+        ///
+        /// `LayoutSystem`'s own initializer doesn't enforce that invariant, though — `elements`, `staffOrigins` and
+        /// `staffAddresses` are three independent arrays with no cross-check between them. So this test hand-builds
+        /// a `LayoutSystem` where a rest's `RestID.staff` is real in `elements` but missing from `staffAddresses`: a
+        /// legal value of the type that `LayoutEngine` just never happens to produce today. It exists to test THAT
+        /// type-level invariant, not anything `LayoutEngine` itself can be driven to emit.
+        ///
+        /// The guard earns its keep despite being unreachable through `LayoutEngine` today: hiding an instrument's
+        /// empty staff on a per-system basis is a real MuseScore convention this engine hasn't implemented yet, and
+        /// the day it is, a desynced `LayoutSystem` becomes a live possibility rather than a hypothetical one — at
+        /// which point this guard is what stops the caret from silently drawing on the wrong staff.
+        @Test("A staff real in elements but absent from a hand-built system's staffAddresses returns nil")
+        func staffAbsentFromDesyncedSystemReturnsNil() {
+            let presentStaff = StaffAddress(partIndex: 0, staffIndexInPart: 0)
+            let absentStaff = StaffAddress(partIndex: 0, staffIndexInPart: 1) // real in `elements`, missing below
+
+            let restID = RestID(staff: absentStaff, measureIndex: 0, voiceIndex: 0, elementIndex: 0)
+            let measure = LayoutMeasure(
+                measureIndex: 0, origin: .zero, width: 100,
+                elements: [.rest(
+                    duration: .quarter, origin: CGPoint(x: 10, y: 0), voiceIndex: 0,
+                    restID: restID, hasLegerLine: false,
+                )],
+            )
+            let system = LayoutSystem(
+                origin: .zero, size: CGSize(width: 100, height: 100), measures: [measure],
+                staffOrigins: [CGPoint(x: 0, y: 0)], // only ONE staff's origin
+                staffAddresses: [presentStaff], // `absentStaff` is missing even though its rest is in `elements`
+                partLabels: [], spanners: [], sp: 7,
+            )
+            let doc = LayoutDocument(
+                size: CGSize(width: 100, height: 100), systems: [system], metrics: StaffMetrics(staffSize: 28),
+            )
+            let item = ScoreItemID.rest(restID)
+            let score = Score(division: 480, parts: [])
+
+            // Precondition: cursorFrame must resolve on its own (exact RestID match against `elements`, independent
+            // of `staffAddresses`) — otherwise a nil below would just be missingMeasureReturnsNil's guard firing
+            // under a different name, not this one.
+            #expect(doc.cursorFrame(for: .item(item), in: score) != nil)
+
+            #expect(doc.editingCaretRect(for: item, in: score) == nil)
+        }
+
         @Test("minimumWidth floors the returned rect's width when it exceeds the frame's own width")
         func minimumWidthFloorsNarrowFrame() throws {
             let score = singleVoiceSample()
