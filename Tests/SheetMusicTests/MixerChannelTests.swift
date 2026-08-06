@@ -29,7 +29,7 @@
                 let engine = PlaybackEngine(soundfontResolver: NullResolver())
                 try engine.prepare(score: score)
                 let drumChannel = try #require(
-                    engine.mixerChannels.first { $0.id == .staff(0) },
+                    engine.mixerChannels.first { $0.id == .instrument(partIndex: 0, ordinal: 0) },
                 )
                 #expect(drumChannel.program == nil)
             }
@@ -50,7 +50,7 @@
                 let engine = PlaybackEngine(soundfontResolver: NullResolver())
                 try engine.prepare(score: score)
                 let strip = try #require(
-                    engine.mixerChannels.first { $0.id == .staff(0) },
+                    engine.mixerChannels.first { $0.id == .instrument(partIndex: 0, ordinal: 0) },
                 )
                 #expect(strip.program == 80)
             }

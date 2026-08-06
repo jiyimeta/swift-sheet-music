@@ -10,9 +10,13 @@ import SheetMusicMIDI
 /// `AVAudioUnitMIDIInstrument` (AUMIDISynth) units: one for all
 /// pitched channels and one for GM channel 9 (percussion).
 ///
-/// Every staff in `prepare(score:)` is addressed by the MIDI channel
-/// the renderer assigns it (`MidiRenderer.staffChannels(score:)`).
-/// The full General MIDI SoundFont returned by `SoundfontResolver`
+/// Every staff in `prepare(score:)` is addressed by its part's live,
+/// deduped MIDI channel (`LiveChannelPlan.build(score:)`) — the mixer
+/// itself is keyed one strip per (part × distinct instrument), not
+/// per staff, so a part that changes instrument mid-score gets one
+/// strip per instrument instead of the score's rendered per-instance
+/// channel count. The full General MIDI SoundFont returned by
+/// `SoundfontResolver`
 /// is loaded once into each unit, and every (channel, program)
 /// combination is pre-loaded into the AU's preset cache so runtime
 /// program changes from the mixer hit the cache instead of triggering
@@ -73,13 +77,24 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         [melodicSynth, percussionSynth].compactMap(\.self)
     }
 
-    /// Renderer-assigned MIDI channel per flat staff index. Used to
-    /// address each staff's notes / mixer state on the shared synth.
+    /// Renderer-assigned MIDI channel per flat staff index — that
+    /// staff's part's ORDINAL-0 (tick-0) instrument channel. Used to
+    /// address each staff's notes / cursor preview on the shared synth.
     private var staffMIDIChannels: [Int: UInt8] = [:]
     /// Drum-staff flag per flat staff index, cached so the mixer can
     /// decide whether to expose a GM-program picker (drum-kit parts
     /// hide it because the program slot is ignored on MIDI channel 9).
     private var staffIsDrum: [Int: Bool] = [:]
+    /// The live single-port channel layout for the prepared score —
+    /// one strip per (part × distinct instrument), collapsing the
+    /// MuseScore-exact multi-port SMF onto the 16 channels a single
+    /// synth has. Rebuilt in `prepareSynth(score:)`; `nil` before the
+    /// first prepare.
+    private(set) var liveChannelPlan: LiveChannelPlan?
+    /// Live MIDI channel per mixer strip identity. Keyed the same way
+    /// as `mixerChannels`, so every strip — not just each staff's
+    /// tick-0 primary — can be addressed directly.
+    private var instrumentMIDIChannels: [MixerChannel.Kind: UInt8] = [:]
 
     /// Master output stage. The score synth feeds `scoreGainMixer`,
     /// whose `outputVolume` is the user's master gain (`0...3`). Its
@@ -389,6 +404,13 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         staffMIDIChannels[idx]
     }
 
+    /// Live MIDI channel for a mixer strip identity. `nil` before the
+    /// first `prepare(score:)`, or for a `Kind` not in the prepared
+    /// score's plan.
+    func midiChannel(forChannel id: MixerChannel.Kind) -> UInt8? {
+        instrumentMIDIChannels[id]
+    }
+
     func isDrumStaff(_ idx: Int) -> Bool {
         staffIsDrum[idx] ?? false
     }
@@ -432,9 +454,9 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     func reapplyMixerPrograms() {
         if let backend {
             for channel in mixerChannels {
-                guard case let .staff(idx) = channel.id,
+                guard case .instrument = channel.id,
                       let program = channel.program,
-                      let midiCh = staffMIDIChannels[idx],
+                      let midiCh = instrumentMIDIChannels[channel.id],
                       midiCh != 9
                 else { continue }
                 backend.setProgram(channel: midiCh, program: program)
@@ -443,9 +465,9 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         }
         guard let melodicSynth else { return }
         for channel in mixerChannels {
-            guard case let .staff(idx) = channel.id,
+            guard case .instrument = channel.id,
                   let program = channel.program,
-                  let midiCh = staffMIDIChannels[idx],
+                  let midiCh = instrumentMIDIChannels[channel.id],
                   midiCh != 9
             else { continue }
             // Same dance as `loadProgram`: preload to populate the
@@ -498,15 +520,25 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// No-op if the engine isn't prepared, or for drum staves (the
     /// program byte is ignored on MIDI channel 9).
     func loadProgram(forStaff idx: Int, program: UInt8) {
+        guard let midiCh = staffMIDIChannels[idx], midiCh != 9 else { return }
+        loadProgram(onMIDIChannel: midiCh, program: program)
+    }
+
+    /// Sibling of `loadProgram(forStaff:)`, keyed by mixer strip
+    /// identity instead of staff — the mixer addresses a (part ×
+    /// instrument) strip, which for a multi-instrument part is not the
+    /// same thing as any one staff.
+    func loadProgram(forChannel id: MixerChannel.Kind, program: UInt8) {
+        guard let midiCh = instrumentMIDIChannels[id], midiCh != 9 else { return }
+        loadProgram(onMIDIChannel: midiCh, program: program)
+    }
+
+    private func loadProgram(onMIDIChannel midiCh: UInt8, program: UInt8) {
         if let backend {
-            guard let midiCh = staffMIDIChannels[idx], midiCh != 9 else { return }
             backend.setProgram(channel: midiCh, program: program)
             return
         }
-        guard let melodicSynth,
-              let midiCh = staffMIDIChannels[idx],
-              midiCh != 9
-        else { return }
+        guard let melodicSynth else { return }
         MIDISynthBuilder.preloadPreset(
             into: melodicSynth,
             bankMSB: 0, bankLSB: 0, program: program,
@@ -587,6 +619,8 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         percussionSynth = nil
         staffMIDIChannels.removeAll()
         staffIsDrum.removeAll()
+        liveChannelPlan = nil
+        instrumentMIDIChannels.removeAll()
 
         #if os(iOS) || os(tvOS) || os(watchOS)
             let session = AVAudioSession.sharedInstance()
@@ -724,7 +758,26 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
     /// current calibration + transpose.
     private func prepareSynth(score: Score) throws { // swiftlint:disable:this function_body_length
         let url = resolver.defaultGMSoundfontURL
-        let channels = MidiRenderer.staffChannels(score: score)
+        let plan = LiveChannelPlan.build(score: score)
+        liveChannelPlan = plan
+        instrumentMIDIChannels = Dictionary(
+            uniqueKeysWithValues: plan.strips.map { strip in
+                (
+                    MixerChannel.Kind.instrument(
+                        partIndex: strip.partIndex, ordinal: strip.ordinal,
+                    ),
+                    UInt8(clamping: strip.liveChannel),
+                )
+            },
+        )
+        // Each staff's tick-0 channel is its part's ordinal-0 strip —
+        // the LIVE (deduped, single-port) channel, not the rendered
+        // SMF's per-instance channel, so cursor / preview addressing
+        // stays in sync with what `MidiChannelRemap` puts on the wire.
+        let channels: [Int] = score.allStaves.map { entry in
+            plan.strip(partIndex: entry.address.partIndex, ordinal: 0)?
+                .liveChannel ?? 0
+        }
 
         // SwiftySynth path: one persistent source node + SoundFont reload, no
         // per-channel AU units. Populate the same staff→channel / drum maps the
@@ -935,11 +988,14 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         }) ?? -1
         guard let midiChannel = staffMIDIChannels[flatIdx] else { return }
         if backend != nil {
-            // Re-assert this staff's program + volume on the backend synth before the
-            // note-on: a prior playback's sequencer resets the synth's channel state
-            // to GM defaults, so without this the audition sounds on program 0 (piano)
-            // at the default volume. See `reassertBackendChannelState`.
-            reassertBackendChannelState(forStaff: flatIdx)
+            // Re-assert EVERY strip's program + volume on the backend synth
+            // before the note-on: a prior playback's sequencer resets the
+            // synth's channel state to GM defaults, so without this the
+            // audition sounds on program 0 (piano) at the default volume —
+            // and re-asserting only this staff's channel would leave every
+            // OTHER instrument channel stuck at those GM defaults until its
+            // own preview happened to fire. See `reassertBackendChannelState`.
+            reassertBackendChannelState()
             backendPlayPreview(
                 pitch: pitch, channel: midiChannel,
                 isDrum: isDrumStaff(flatIdx),
@@ -1062,9 +1118,10 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         }
 
         if let backend {
-            // Re-assert program + volume first — a prior playback reset the synth's
-            // channel state to GM defaults (see `reassertBackendChannelState`).
-            reassertBackendChannelState(forStaff: flatStaffIndex)
+            // Re-assert EVERY strip's program + volume first — a prior
+            // playback reset the synth's channel state to GM defaults (see
+            // `reassertBackendChannelState`).
+            reassertBackendChannelState()
             backend.startNote(channel: midiChannel, pitch: pitch, velocity: velocity)
         } else if let instrument {
             instrument.startNote(pitch, withVelocity: velocity, onChannel: midiChannel)
@@ -1898,11 +1955,14 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         MidiSynthPostProcess.apply(midi: &midi, mixerManagedChannels: mixerManagedChannels)
     }
 
-    /// MIDI channels whose volume / program the live mixer owns (each staff's
-    /// primary channel). Passed to `MidiSynthPostProcess` so those channels'
-    /// tick-0 program / CC 7 are stripped and the mixer stays the sole authority.
+    /// MIDI channels whose volume / program the live mixer owns — every
+    /// deduped (part × instrument) strip's live channel, not just each
+    /// staff's primary. Passed to `MidiSynthPostProcess` so those
+    /// channels' tick-0 program / CC 7 are stripped and the mixer stays
+    /// the sole authority. Falls back to the staff-primary set before
+    /// the first `prepare(score:)` builds a plan.
     private var mixerManagedChannels: Set<Int> {
-        Set(staffMIDIChannels.values.map(Int.init))
+        liveChannelPlan?.managedChannels ?? Set(staffMIDIChannels.values.map(Int.init))
     }
 
     /// `MidiRenderer.render(score:)` behind a one-entry cache keyed by score.
@@ -1914,7 +1974,17 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         if let cached = renderedMidiCache, cached.score == score {
             return cached.midi
         }
-        let midi = try MidiRenderer.render(score: score)
+        var midi = try MidiRenderer.render(score: score)
+        // Collapse the MuseScore-exact multi-port SMF onto the live
+        // engine's single-port channel set BEFORE anything downstream
+        // (sequencer load, `postProcessForMIDISynth`'s tick-0 stripping)
+        // sees it — see `MidiChannelRemap`. `liveChannelPlan` is built
+        // in `prepareSynth`, which always runs before this is first
+        // called from a play / seek path; a `nil` plan (unprepared
+        // engine) leaves the raw rendered channels untouched.
+        if let liveChannelPlan {
+            MidiChannelRemap.apply(midi: &midi, plan: liveChannelPlan)
+        }
         renderedMidiCache = (score, midi)
         return midi
     }
@@ -2329,6 +2399,8 @@ public final class PlaybackEngine { // swiftlint:disable:this type_body_length
         percussionSynth = nil
         staffMIDIChannels.removeAll()
         staffIsDrum.removeAll()
+        liveChannelPlan = nil
+        instrumentMIDIChannels.removeAll()
         metronome.teardown()
     }
 }

@@ -2,6 +2,7 @@ import AVFoundation
 import Foundation
 import SheetMusicAudioCore
 import SheetMusicCore
+import SheetMusicMIDI
 
 extension PlaybackEngine {
     /// Set a channel's slider value. Linear gain in `0.0...1.0`.
@@ -22,14 +23,14 @@ extension PlaybackEngine {
         mutate(channel: id) { $0.isSoloed = soloed }
     }
 
-    /// Swap the GM program (sound) on a staff channel. No-op for
+    /// Swap the GM program (sound) on an instrument strip. No-op for
     /// the metronome, whose patch is fixed (Hi/Low Wood Block on
     /// the percussion bank).
     public func setProgram(
         forChannel id: MixerChannel.Kind, to program: UInt8,
     ) {
-        guard case let .staff(idx) = id else { return }
-        loadProgram(forStaff: idx, program: program)
+        guard case .instrument = id else { return }
+        loadProgram(forChannel: id, program: program)
         mutate(channel: id) { $0.program = program }
     }
 
@@ -43,21 +44,27 @@ extension PlaybackEngine {
         applyMixerState()
     }
 
-    /// Rebuild the channel array from `score`'s parts. Existing
-    /// volume / mute / solo state is dropped — a new score is a
-    /// new mix. Called from `prepare(score:)`. Initial slider
-    /// values come from MSCX `<controller ctrl="7" value="N"/>`,
-    /// stored on each part's first `InstrumentChannel.volume`
-    /// (0...127). MuseScore's default is 100/127.
+    /// Rebuild the channel array from `score`'s LIVE channel plan — one
+    /// strip per (part × distinct instrument), plus the metronome.
+    /// Existing volume / mute / solo state is dropped — a new score is
+    /// a new mix. Called from `prepare(score:)`. Initial slider values
+    /// come from MSCX `<controller ctrl="7" value="N"/>`, stored on
+    /// each strip's `InstrumentChannel.volume` (0...127). MuseScore's
+    /// default is 100/127.
     func rebuildMixerChannels(for score: Score) {
+        let plan = LiveChannelPlan.build(score: score)
         var channels: [MixerChannel] = []
-        channels.reserveCapacity(score.totalStaffCount + 1)
-        for (idx, entry) in score.allStaves.enumerated() {
+        channels.reserveCapacity(plan.strips.count + 1)
+        for strip in plan.strips {
             channels.append(MixerChannel(
-                id: .staff(idx),
-                name: staffName(at: entry.address, in: score),
-                volume: initialStaffVolume(at: entry.address, in: score),
-                program: initialStaffProgram(at: entry.address, in: score),
+                id: .instrument(
+                    partIndex: strip.partIndex, ordinal: strip.ordinal,
+                ),
+                name: stripName(for: strip, in: score),
+                volume: Float(max(0, min(127, strip.instrument.channel.volume))) / 127,
+                program: strip.instrument.useDrumset
+                    ? nil
+                    : UInt8(clamping: strip.instrument.channel.program),
             ))
         }
         channels.append(MixerChannel(
@@ -67,35 +74,29 @@ extension PlaybackEngine {
         replaceMixerChannels(channels)
     }
 
-    /// CC7 (Channel Volume) from the part's first channel, mapped
-    /// from MIDI's 0...127 range to the mixer's 0...1. Falls back
-    /// to MuseScore's default of 100/127 ≈ 0.787 when the part is
-    /// missing or has no channel.
-    private func initialStaffVolume(
-        at address: StaffAddress, in score: Score,
-    ) -> Float {
-        let cc7: Int = score.part(at: address)?.instrument.channel.volume ?? 100
-        return Float(max(0, min(127, cc7))) / 127
-    }
-
-    /// GM program from the part's first channel — what the score's
-    /// `<program value="…"/>` chose. Returns nil for drum-kit parts
-    /// (`useDrumset == true`): drums play on MIDI channel 10 where
-    /// the program byte is ignored, so showing a GM-program picker
-    /// for them would advertise a misleading patch name. Also nil
-    /// when the part is missing entirely.
-    private func initialStaffProgram(
-        at address: StaffAddress, in score: Score,
-    ) -> UInt8? {
-        guard let part = score.part(at: address) else { return nil }
-        if part.instrument.useDrumset { return nil }
-        return UInt8(clamping: part.instrument.channel.program)
+    /// "S (Piano)" / "S (Accordion)" — the part's display name plus the
+    /// instrument, so a part with instrument changes reads unambiguously.
+    /// A part with a single instrument keeps the bare part name.
+    /// Instrument name falls back longName → trackName → id.
+    private func stripName(
+        for strip: LiveChannelPlan.Strip, in score: Score,
+    ) -> String {
+        let address = StaffAddress(
+            partIndex: strip.partIndex, staffIndexInPart: 0,
+        )
+        let partName = score.staffDisplayName(at: address)
+        let instrumentName = strip.instrument.longName
+            ?? strip.instrument.trackName
+            ?? strip.instrument.id
+        let distinct = score.instrumentTimeline(forPart: strip.partIndex).count
+        guard distinct > 1, !instrumentName.isEmpty else { return partName }
+        return "\(partName) (\(instrumentName))"
     }
 
     /// Push the current mixer state into the live audio graph. Mute /
-    /// volume are sent as CC 7 (Channel Volume) on each staff's
+    /// volume are sent as CC 7 (Channel Volume) on each strip's
     /// renderer-assigned MIDI channel of its owning synth unit (melodic
-    /// or percussion, depending on the staff). This is the *sole*
+    /// or percussion, depending on the instrument). This is the *sole*
     /// authority on those channels' volume: the SMF's competing tick-0
     /// CC 7 is stripped for mixer-managed channels in
     /// `PlaybackEngine.postProcessForMIDISynth`, so a seek / loop-wrap
@@ -110,8 +111,8 @@ extension PlaybackEngine {
                 || (anySoloed && !channel.isSoloed)
             let gain: Float = effectivelyMuted ? 0 : channel.volume
             switch channel.id {
-            case let .staff(i):
-                applyStaffGain(at: i, gain: gain)
+            case .instrument:
+                applyInstrumentGain(forChannel: channel.id, gain: gain)
             case .metronome:
                 setMetronomeEnabled(!effectivelyMuted)
                 setMetronomeVolume(channel.volume)
@@ -119,47 +120,50 @@ extension PlaybackEngine {
         }
     }
 
-    /// Re-assert a single staff channel's mixer program + volume on the injected
-    /// backend synth, for use immediately before a tap / hold preview's note-on.
-    /// Playback streams the SMF's programChange plus the mixer's CC 7 through the
-    /// sequencer, but a preview drives the synth directly — and a prior playback's
-    /// sequencer resets the synth's channels back to GM defaults, so without this a
-    /// post-playback audition would sound on program 0 (piano) at the default
-    /// volume. No-op unless a backend is injected (the AU path resolves per-staff
-    /// instruments itself and needs no direct re-assert).
-    func reassertBackendChannelState(forStaff staffIdx: Int) {
-        guard let backend,
-              let midiCh = midiChannel(forStaff: staffIdx),
-              let mixerCh = mixerChannels.first(where: { $0.id == .staff(staffIdx) })
-        else { return }
-        if let program = mixerCh.program, midiCh != 9 {
-            backend.setProgram(channel: midiCh, program: program)
-        }
+    /// Re-assert EVERY mixer-managed instrument channel's program +
+    /// volume on the injected backend synth, for use immediately before
+    /// a tap / hold preview's note-on. Playback streams the SMF's
+    /// programChange plus the mixer's CC 7 through the sequencer, but a
+    /// preview drives the synth directly — and a prior playback's
+    /// sequencer resets EVERY channel back to GM defaults, so without
+    /// this a post-playback audition on any strip other than the one
+    /// last played would sound on program 0 (piano) at the default
+    /// volume: with every program living at tick 0 in the rendered SMF,
+    /// re-asserting only the about-to-sound channel would leave every
+    /// OTHER deduped instrument channel silently stuck at those
+    /// defaults. No-op unless a backend is injected (the AU path
+    /// resolves per-staff instruments itself and needs no direct
+    /// re-assert).
+    func reassertBackendChannelState() {
+        guard let backend else { return }
         let anySoloed = mixerChannels.contains(where: \.isSoloed)
-        let effectivelyMuted = mixerCh.isMuted || (anySoloed && !mixerCh.isSoloed)
-        let gain: Float = effectivelyMuted ? 0 : mixerCh.volume
-        backend.sendVolume(
-            channel: midiCh, cc7: UInt8(clamping: Int((gain * 127).rounded())),
-        )
+        for channel in mixerChannels {
+            guard case .instrument = channel.id,
+                  let midiCh = midiChannel(forChannel: channel.id)
+            else { continue }
+            if let program = channel.program, midiCh != 9 {
+                backend.setProgram(channel: midiCh, program: program)
+            }
+            let effectivelyMuted = channel.isMuted
+                || (anySoloed && !channel.isSoloed)
+            let gain: Float = effectivelyMuted ? 0 : channel.volume
+            backend.sendVolume(
+                channel: midiCh, cc7: UInt8(clamping: Int((gain * 127).rounded())),
+            )
+        }
     }
 
-    private func applyStaffGain(at staffIdx: Int, gain: Float) {
-        guard let midiCh = midiChannel(forStaff: staffIdx) else { return }
+    private func applyInstrumentGain(forChannel id: MixerChannel.Kind, gain: Float) {
+        guard let midiCh = midiChannel(forChannel: id) else { return }
         let cc7 = UInt8(clamping: Int((gain * 127).rounded()))
         if let backend {
             backend.sendVolume(channel: midiCh, cc7: cc7)
             return
         }
-        guard let unit = synth(forStaff: staffIdx) else { return }
+        let unit = midiCh == 9 ? percussionSynth : melodicSynth
+        guard let unit else { return }
         MIDISynthBuilder.sendControlChange(
             into: unit, controller: 7, value: cc7, onChannel: midiCh,
         )
-    }
-
-    /// Best-effort staff label: prefers the instrument's long name, then the
-    /// part's track name, falling back to "Staff N". Delegates to the shared
-    /// `Score.staffDisplayName(at:)` so iOS and Android stay identical.
-    private func staffName(at address: StaffAddress, in score: Score) -> String {
-        score.staffDisplayName(at: address)
     }
 }

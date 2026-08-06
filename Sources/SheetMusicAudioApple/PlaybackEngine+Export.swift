@@ -146,6 +146,11 @@ extension PlaybackEngine {
     ) throws -> ExportPipeline {
         let engine = AVAudioEngine()
         let resolver = snapshot.resolver
+        // Same LIVE single-port collapse the playback engine uses — one
+        // strip per (part × distinct instrument) — so the offline
+        // export addresses the same channels the mixer snapshot was
+        // keyed against.
+        let plan = LiveChannelPlan.build(score: score)
 
         // Gain-limiter output chain — mirrors the live engine's master
         // chain (PlaybackEngine.buildMasterChain). Rebuilt here so
@@ -156,7 +161,7 @@ extension PlaybackEngine {
 
         // 1. Build the score synth (routed through the master stage).
         let exportSynth = buildScoreSynth(
-            score: score, snapshot: snapshot, resolver: resolver,
+            score: score, plan: plan, snapshot: snapshot, resolver: resolver,
             engine: engine, output: scoreGainMixer,
         )
         let soloedExists = snapshot.mixerChannels.contains { $0.isSoloed }
@@ -175,6 +180,13 @@ extension PlaybackEngine {
         //    track) and load into a fresh sequencer bound to the
         //    fresh engine.
         var midi = try MidiRenderer.render(score: score)
+        // Collapse the MuseScore-exact multi-port SMF onto the same
+        // live single-port channel set `exportSynth` was built against
+        // — BEFORE `postProcessForMIDISynth` below, which strips tick-0
+        // events keyed on those live channel numbers. See
+        // `PlaybackEngine.cachedRender` for the identical live-playback
+        // ordering.
+        MidiChannelRemap.apply(midi: &midi, plan: plan)
         if metronomeSampler != nil {
             // This controller is used only to generate the metronome
             // MIDI track; `prepare(soundfontURL:)` is never called on it,
@@ -195,7 +207,7 @@ extension PlaybackEngine {
         // see `PlaybackEngine.postProcessForMIDISynth` for rationale.
         postProcessForMIDISynth(
             midi: &midi,
-            mixerManagedChannels: Set(exportSynth.staffChannels.values.map(Int.init)),
+            mixerManagedChannels: plan.managedChannels,
         )
         let bytes = try MidiWriter.write(midi)
         let sequencer = AVAudioSequencer(audioEngine: engine)
@@ -257,13 +269,21 @@ extension PlaybackEngine {
         /// Separate percussion unit (GM channel 9), built only when the score has a drum part — mirrors the live
         /// engine's lazy percussion unit so a drumless export doesn't load the SoundFont twice. `nil` ⇒ no drums.
         let percussion: AVAudioUnitMIDIInstrument?
+        /// Flat staff index → that staff's part's ORDINAL-0 (tick-0) live
+        /// channel. Used only for per-track routing (see `staffIsDrum`
+        /// below) — mixer dispatch goes through `instrumentMIDIChannels`.
         let staffChannels: [Int: UInt8]
-        /// Flat staff index → is-drum, for per-track routing + mixer dispatch.
+        /// Flat staff index → is-drum, for per-track routing.
         let staffIsDrum: [Int: Bool]
+        /// Live MIDI channel per mixer strip identity — one entry per
+        /// (part × distinct instrument), mirroring
+        /// `PlaybackEngine.instrumentMIDIChannels`.
+        let instrumentMIDIChannels: [MixerChannel.Kind: UInt8]
     }
 
     private static func buildScoreSynth( // swiftlint:disable:this function_body_length
         score: Score,
+        plan: LiveChannelPlan,
         snapshot: ExportEngineSnapshot,
         resolver: SoundfontResolver,
         engine: AVAudioEngine,
@@ -299,38 +319,48 @@ extension PlaybackEngine {
             percussion = p
         }
 
-        // The SMF's tick-0 programChange events on each track set up
-        // every channel's preset; pre-engine sendProgramChange is only
-        // needed for mixer overrides that should win on the primary
-        // channel of each staff.
-        let perStaffChan = MidiRenderer.staffChannels(score: score)
+        // Per-track routing still addresses a STAFF (each staff's
+        // ordinal-0 / tick-0 live channel) — see `staffChannels` above.
         var staffChannels: [Int: UInt8] = [:]
         var staffIsDrum: [Int: Bool] = [:]
         for (idx, entry) in score.allStaves.enumerated() {
-            let midiCh = UInt8(
-                clamping: idx < perStaffChan.count
-                    ? perStaffChan[idx] : 0,
-            )
-            staffChannels[idx] = midiCh
+            let liveChannel = plan.strip(
+                partIndex: entry.address.partIndex, ordinal: 0,
+            )?.liveChannel ?? 0
+            staffChannels[idx] = UInt8(clamping: liveChannel)
             staffIsDrum[idx] = score.part(at: entry.address)?
                 .instrument.useDrumset == true
-            if midiCh != 9,
-               let chan = snapshot.mixerChannels.first(
-                   where: { $0.id == .staff(idx) },
-               ), let p = chan.program
-            {
-                // See PlaybackEngine.loadProgram — preload to load
-                // the preset, then plain PC to select.
-                MIDISynthBuilder.preloadPreset(
-                    into: melodic,
-                    bankMSB: 0, bankLSB: 0, program: p,
-                    onChannel: midiCh,
-                )
-                let pcStatus = UInt32(0xC0) | UInt32(midiCh & 0x0F)
-                _ = MusicDeviceMIDIEvent(
-                    melodic.audioUnit, pcStatus, UInt32(p), 0, 0,
-                )
-            }
+        }
+
+        // The SMF's tick-0 programChange events on each strip's channel
+        // set up every channel's preset; pre-engine sendProgramChange is
+        // only needed for mixer overrides. Cover EVERY deduped strip —
+        // not just each staff's primary — so a part with an instrument
+        // change doesn't leave its secondary instrument on program 0
+        // (piano) for a range export that starts after that instrument's
+        // own embedded programChange.
+        var instrumentMIDIChannels: [MixerChannel.Kind: UInt8] = [:]
+        for strip in plan.strips {
+            let id = MixerChannel.Kind.instrument(
+                partIndex: strip.partIndex, ordinal: strip.ordinal,
+            )
+            let midiCh = UInt8(clamping: strip.liveChannel)
+            instrumentMIDIChannels[id] = midiCh
+            guard midiCh != 9,
+                  let chan = snapshot.mixerChannels.first(where: { $0.id == id }),
+                  let p = chan.program
+            else { continue }
+            // See PlaybackEngine.loadProgram — preload to load
+            // the preset, then plain PC to select.
+            MIDISynthBuilder.preloadPreset(
+                into: melodic,
+                bankMSB: 0, bankLSB: 0, program: p,
+                onChannel: midiCh,
+            )
+            let pcStatus = UInt32(0xC0) | UInt32(midiCh & 0x0F)
+            _ = MusicDeviceMIDIEvent(
+                melodic.audioUnit, pcStatus, UInt32(p), 0, 0,
+            )
         }
         // Reproduce the live engine's transpose + master A4 tuning on the offline synths:
         // melodic = calibration + transpose (semitones→cents), percussion = calibration only.
@@ -345,6 +375,7 @@ extension PlaybackEngine {
         return ScoreSynth(
             melodic: melodic, percussion: percussion,
             staffChannels: staffChannels, staffIsDrum: staffIsDrum,
+            instrumentMIDIChannels: instrumentMIDIChannels,
         )
     }
 
@@ -368,19 +399,21 @@ extension PlaybackEngine {
     }
 
     /// Push the mixer snapshot's volume / mute / solo onto the export
-    /// synth's per-channel CC 7 state. Effective audibility mirrors
-    /// the live mixer rules: if any channel is soloed, only soloed
-    /// channels are audible; otherwise muted channels are silenced.
+    /// synth's per-strip CC 7 state — every deduped (part × instrument)
+    /// channel, not just each staff's primary. Effective audibility
+    /// mirrors the live mixer rules: if any channel is soloed, only
+    /// soloed channels are audible; otherwise muted channels are
+    /// silenced.
     private static func applyMixerSnapshot(
         scoreSynth: ScoreSynth,
         channels: [MixerChannel],
         soloedExists: Bool,
     ) {
         for chan in channels {
-            guard case let .staff(idx) = chan.id,
-                  let midiCh = scoreSynth.staffChannels[idx]
+            guard case .instrument = chan.id,
+                  let midiCh = scoreSynth.instrumentMIDIChannels[chan.id]
             else { continue }
-            let unit = scoreSynth.staffIsDrum[idx] == true
+            let unit = midiCh == 9
                 ? (scoreSynth.percussion ?? scoreSynth.melodic) : scoreSynth.melodic
             let audible = soloedExists ? chan.isSoloed : !chan.isMuted
             let gain = audible ? chan.volume : 0

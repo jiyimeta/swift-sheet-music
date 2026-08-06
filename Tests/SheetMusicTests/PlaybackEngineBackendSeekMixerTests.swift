@@ -128,8 +128,8 @@
                 let score = makeTwoStaffScore()
                 let engine = try makeEngine(backend, score)
                 engine.play(in: score)
-                engine.setVolume(forChannel: .staff(0), to: 0.25)
-                engine.setVolume(forChannel: .staff(1), to: 1.0)
+                engine.setVolume(forChannel: .instrument(partIndex: 0, ordinal: 0), to: 0.25)
+                engine.setVolume(forChannel: .instrument(partIndex: 1, ordinal: 0), to: 1.0)
                 backend.clearRecordings()
 
                 engine.skip(by: -engine.totalTimeSeconds / 4)
@@ -147,7 +147,7 @@
                 let engine = try makeEngine(backend, score)
                 engine.play(in: score)
                 engine.pause()
-                engine.setVolume(forChannel: .staff(0), to: 0.25)
+                engine.setVolume(forChannel: .instrument(partIndex: 0, ordinal: 0), to: 0.25)
                 backend.clearRecordings()
 
                 engine.skip(by: engine.totalTimeSeconds / 4)
@@ -163,7 +163,7 @@
                 let score = makeTwoStaffScore()
                 let engine = try makeEngine(backend, score)
                 engine.play(in: score)
-                engine.setMuted(forChannel: .staff(0), to: true)
+                engine.setMuted(forChannel: .instrument(partIndex: 0, ordinal: 0), to: true)
                 backend.clearRecordings()
 
                 engine.skip(by: engine.totalTimeSeconds / 2)
