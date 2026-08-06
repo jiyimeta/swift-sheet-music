@@ -121,7 +121,7 @@ extension Voice {
         let sortedSys = Self.sortedSystemElements(systemElements)
         var sysIdx = Self.emitSystemElementsAtCursor(
             sortedSys, from: 0,
-            cursor: state.voiceTotal, into: &state.children,
+            cursor: state.voiceTotal, into: &state.children, options: options,
         )
         let plan = IterationPlan(
             startsByIndex: startsByIndex,
@@ -144,12 +144,12 @@ extension Voice {
             )
             sysIdx = Self.emitSystemElementsAtCursor(
                 sortedSys, from: sysIdx,
-                cursor: state.voiceTotal, into: &state.children,
+                cursor: state.voiceTotal, into: &state.children, options: options,
             )
         }
         sysIdx = Self.flushRemainingSystemElements(
             sortedSys, from: sysIdx,
-            cursor: &state.voiceTotal, into: &state.children,
+            cursor: &state.voiceTotal, into: &state.children, options: options,
         )
         return (
             XMLTreeNode(name: "voice", children: state.children),
@@ -250,13 +250,16 @@ extension Voice {
     /// Encode a lifted `SystemElement` to its MSCX node. Mirrors the
     /// dispatch in `encode(element:…)` for what used to be voice
     /// element cases — the actual per-type encoders are unchanged.
-    static func encodeSystem(_ element: SystemElement) -> XMLTreeNode {
+    static func encodeSystem(
+        _ element: SystemElement,
+        options: MSCXEncoderOptions = .init(),
+    ) -> XMLTreeNode {
         switch element {
         case let .tempo(tempo): return tempo.encode()
         case let .rehearsalMark(rehearsalMark): return rehearsalMark.encode()
         case let .staffText(staffText): return staffText.encode()
         case let .swing(swing): return swing.encode()
-        case let .instrumentChange(change): return change.encode()
+        case let .instrumentChange(change): return change.encode(options: options)
         }
     }
 

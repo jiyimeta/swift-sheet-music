@@ -89,4 +89,69 @@ struct InstrumentChangeMSCXTests {
             $0.code == "mscx.instrumentChange.missingInstrument"
         })
     }
+
+    @Test("parse → encode → parse preserves Score equality")
+    func roundTripsThroughEncoder() throws {
+        let original = try MSCXParser.parse(Self.fixture())
+        let encoded = try MSCXEncoder.encode(original)
+        let roundTripped = try MSCXParser.parse(encoded)
+        #expect(roundTripped.withSource(.unknown) == original.withSource(.unknown))
+    }
+
+    @Test("the encoded subtree carries instrument, init and text")
+    func encodedSubtreeShape() {
+        var change = InstrumentChange(
+            text: "to Accordion",
+            instrument: Instrument(
+                id: "accordion",
+                longName: "Accordion",
+                channels: [InstrumentChannel(program: 21, midiChannel: 5)],
+            ),
+            offsetY: -2,
+            isUserInitialized: true,
+        )
+        change.visible = true
+        let node = change.encode()
+        #expect(node.name == "InstrumentChange")
+        // MuseScore's own order: Instrument, init, then TextBase props.
+        // `prefix` yields an ArraySlice, which has no `==` against an
+        // Array — wrap it before comparing.
+        #expect(Array(node.children.map(\.name).prefix(2)) == ["Instrument", "init"])
+        #expect(node.first("Instrument")?.attributes["id"] == "accordion")
+        #expect(node.first("init")?.text == "1")
+        #expect(node.first("text")?.text == "to Accordion")
+        #expect(node.first("offset")?.attributes["y"] == "-2")
+    }
+
+    @Test("a false init emits no <init> element")
+    func initOmittedWhenFalse() {
+        let node = InstrumentChange(text: "x").encode()
+        // XMLTreeNode.first(_:) is a custom child lookup, not
+        // Sequence.first(where:), so SwiftLint's
+        // contains_over_first_not_nil rule fires as a false positive.
+        // swiftlint:disable:next contains_over_first_not_nil
+        #expect(node.first("init") == nil)
+    }
+
+    @Test("a text-only change encodes without an <Instrument>")
+    func textOnlyEncodes() {
+        let node = InstrumentChange(text: "x").encode()
+        // swiftlint:disable:next contains_over_first_not_nil
+        #expect(node.first("Instrument") == nil)
+        #expect(node.first("text")?.text == "x")
+    }
+}
+
+extension Score {
+    /// Returns a copy with `source` overridden — used in round-trip
+    /// equality checks since `source` is loader-set metadata (which
+    /// version of the file format we read), not score content.
+    ///
+    /// Duplicated from `MSCXRoundTripTests.swift`, whose own copy is
+    /// `fileprivate` and therefore not visible here.
+    fileprivate func withSource(_ source: ScoreSource) -> Score {
+        var copy = self
+        copy.source = source
+        return copy
+    }
 }
