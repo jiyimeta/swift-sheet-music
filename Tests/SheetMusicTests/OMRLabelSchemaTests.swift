@@ -61,6 +61,18 @@
             )
         }
 
+        /// Otherwise-empty labels, for isolating one stream's comparator
+        /// without going through `pageLabels`/`WalkedContent`.
+        static func emptyLabels() -> OMRPageLabels {
+            OMRPageLabels(
+                schema: 1,
+                page: .init(index: 0, widthPt: 1, heightPt: 1),
+                image: .init(file: "x.png", dpi: 300, labelTransform: [1, 0, 0, 0, 1, 0, 0, 0, 1]),
+                glyphs: [], paths: [], beams: [], curves: [], texts: [],
+                census: .init(glyphsByClass: [:], texts: 0),
+            )
+        }
+
         @Test func encodeDecodeRoundTripIsExact() throws {
             let labels = OMRLabelSchema.pageLabels(
                 walked: Self.sampleContent(), pageIndex: 0,
@@ -129,6 +141,27 @@
             #expect(labels.beams[0].rectPt == [100, 440, 160, 445])
         }
 
+        @Test func quadlessBeamStaysInThePathStreamAsPlainBeamKind() {
+            // The degenerate case documented on pathLabels: a `.beam`-kind
+            // PathSegment with no fitted BeamQuad is NOT split into the
+            // beam stream — it stays a plain "beam"-kind Path.
+            let quadlessBeam = PathSegment(
+                kind: .beam,
+                rect: CGRect(x: 100, y: 440, width: 60, height: 5),
+                lineWidth: 0.4, pageIndex: 0, quad: nil,
+            )
+            let walked = WalkedContent(glyphs: [], texts: [], paths: [quadlessBeam], curves: [])
+            let labels = OMRLabelSchema.pageLabels(
+                walked: walked, pageIndex: 0,
+                pageSize: CGSize(width: 595, height: 842), dpi: 300,
+                imageFile: "page_0.png", inkBBox: { _ in nil },
+            )
+            #expect(labels.beams.isEmpty)
+            #expect(labels.paths.count == 1)
+            #expect(labels.paths[0].kind == "beam")
+            #expect(labels.paths[0].rectPt == [100, 440, 160, 445])
+        }
+
         @Test func snakeCaseKeysOnTheWire() throws {
             // NB: pageIndex must match sampleContent()'s tagged pageIndex
             // (0) — pageLabels filters walked.* by pageIndex, and this
@@ -145,6 +178,99 @@
             #expect(text.contains("\"class\""))
             #expect(text.contains("\"font_size_pt\""))
             #expect(!text.contains("renderedSizePt")) // no camelCase leaks
+        }
+
+        // MARK: - Tie-break totality (canonicallySorted must never fall
+        // back to input order for two distinct elements).
+
+        @Test func glyphTieBreakOrdersByRemainingFieldsDeterministically() throws {
+            // Same originPt, className, bboxPt — differ only in advancePt,
+            // a field the primary key + bbox comparison never touch.
+            let base = OMRPageLabels.Glyph(
+                className: "noteheadBlack", bboxPt: [0, 0, 1, 1],
+                originPt: [10, 20], advancePt: 1, renderedSizePt: 1, fontSizePt: 1,
+            )
+            var lo = base
+            lo.advancePt = 1
+            var hi = base
+            hi.advancePt = 2
+            var forward = Self.emptyLabels()
+            forward.glyphs = [lo, hi]
+            var reversed = Self.emptyLabels()
+            reversed.glyphs = [hi, lo]
+            #expect(OMRLabelSchema.canonicallySorted(forward).glyphs.map(\.advancePt) == [1, 2])
+            #expect(OMRLabelSchema.canonicallySorted(reversed).glyphs.map(\.advancePt) == [1, 2])
+            let dataForward = try OMRLabelSchema.encodeCanonical(forward)
+            let dataReversed = try OMRLabelSchema.encodeCanonical(reversed)
+            #expect(dataForward == dataReversed)
+        }
+
+        @Test func beamTieBreakOrdersByRemainingFieldsDeterministically() throws {
+            // Same x0/x1/topSlope/topIntercept AND rectPt/lineWidthPt/
+            // botSlope — differ only in botIntercept, the last field the
+            // old comparator never consulted.
+            let base = OMRPageLabels.Beam(
+                rectPt: [100, 440, 160, 445], lineWidthPt: 0,
+                x0: 100, x1: 160, topSlope: 0.05, topIntercept: 440.5,
+                botSlope: 0.05, botIntercept: 438.5,
+            )
+            var lo = base
+            lo.botIntercept = 438.5
+            var hi = base
+            hi.botIntercept = 439.0
+            var forward = Self.emptyLabels()
+            forward.beams = [lo, hi]
+            var reversed = Self.emptyLabels()
+            reversed.beams = [hi, lo]
+            #expect(OMRLabelSchema.canonicallySorted(forward).beams.map(\.botIntercept) == [438.5, 439.0])
+            #expect(OMRLabelSchema.canonicallySorted(reversed).beams.map(\.botIntercept) == [438.5, 439.0])
+            let dataForward = try OMRLabelSchema.encodeCanonical(forward)
+            let dataReversed = try OMRLabelSchema.encodeCanonical(reversed)
+            #expect(dataForward == dataReversed)
+        }
+
+        @Test func curveTieBreakOrdersByBBoxDeterministically() throws {
+            // Same leftPt/rightPt (the entire primary key) — differ only
+            // in the last bboxPt component, previously never consulted.
+            let base = OMRPageLabels.Curve(
+                bboxPt: [100, 395, 150, 399],
+                leftPt: [100, 396], rightPt: [150, 396],
+            )
+            var lo = base
+            lo.bboxPt = [100, 395, 150, 399]
+            var hi = base
+            hi.bboxPt = [100, 395, 150, 400]
+            var forward = Self.emptyLabels()
+            forward.curves = [lo, hi]
+            var reversed = Self.emptyLabels()
+            reversed.curves = [hi, lo]
+            #expect(OMRLabelSchema.canonicallySorted(forward).curves.map(\.bboxPt) == [lo.bboxPt, hi.bboxPt])
+            #expect(OMRLabelSchema.canonicallySorted(reversed).curves.map(\.bboxPt) == [lo.bboxPt, hi.bboxPt])
+            let dataForward = try OMRLabelSchema.encodeCanonical(forward)
+            let dataReversed = try OMRLabelSchema.encodeCanonical(reversed)
+            #expect(dataForward == dataReversed)
+        }
+
+        @Test func textTieBreakOrdersByRemainingFieldsDeterministically() throws {
+            // Same originPt/text/fontName — differ only in fontSizeTf, a
+            // field the old comparator never consulted.
+            let base = OMRPageLabels.Text(
+                text: "la", fontName: "Edwin", fontSizeTf: 40,
+                renderedSizePt: 9.5, originPt: [100, 380],
+            )
+            var lo = base
+            lo.fontSizeTf = 40
+            var hi = base
+            hi.fontSizeTf = 89
+            var forward = Self.emptyLabels()
+            forward.texts = [lo, hi]
+            var reversed = Self.emptyLabels()
+            reversed.texts = [hi, lo]
+            #expect(OMRLabelSchema.canonicallySorted(forward).texts.map(\.fontSizeTf) == [40, 89])
+            #expect(OMRLabelSchema.canonicallySorted(reversed).texts.map(\.fontSizeTf) == [40, 89])
+            let dataForward = try OMRLabelSchema.encodeCanonical(forward)
+            let dataReversed = try OMRLabelSchema.encodeCanonical(reversed)
+            #expect(dataForward == dataReversed)
         }
     }
 #endif

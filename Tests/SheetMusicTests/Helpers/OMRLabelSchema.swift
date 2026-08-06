@@ -23,41 +23,81 @@
             return try encoder.encode(canonicallySorted(labels))
         }
 
-        /// Total orders per stream (spec §9): top-down (y DESC), then
-        /// left-right (x ASC), then discriminators — reproducible export,
-        /// clean dataset diffs.
+        /// Genuinely TOTAL order per stream (spec §9): every field of the
+        /// element type participates, so two distinct elements never tie —
+        /// the codec is self-sufficient for byte-identical re-encoding
+        /// (P3c-G1) and never leans on `WalkedContent`'s own build order.
+        /// Each comparator is a fixed lexicographic key: the leading
+        /// components are the geometric primary order (top-down / y DESC,
+        /// then left-right / x ASC, then a natural discriminator such as
+        /// `className` or `kind`); any field not already covered by that
+        /// primary key is appended, in a fixed field-declaration-ish order,
+        /// as a final tie-breaker stage. The primary keys are unchanged
+        /// from the original design — only the tie-breaker stages are new.
         static func canonicallySorted(_ labels: OMRPageLabels) -> OMRPageLabels {
             var out = labels
-            // NB: Swift synthesizes tuple `<` only up to 6 elements, so
-            // the glyph key (7 components incl. the 4 bbox values) is
-            // compared in two stages.
+            // NB: Swift synthesizes tuple `<` only up to 6 elements, so a
+            // key touching more fields than that is compared in stages:
+            // `if primary != primary { return primary < primary }`, then
+            // fall through to the next stage.
             out.glyphs.sort { a, b in
+                // Primary: originPt (y DESC, x ASC), className.
                 let ka = (-a.originPt[1], a.originPt[0], a.className)
                 let kb = (-b.originPt[1], b.originPt[0], b.className)
                 if ka != kb { return ka < kb }
+                // Tie-break 1: bboxPt (nil sorts before any bbox, via count).
                 let ba = a.bboxPt ?? []
                 let bb = b.bboxPt ?? []
                 if ba.count != bb.count { return ba.count < bb.count }
                 for (x, y) in zip(ba, bb) where x != y {
                     return x < y
                 }
-                return false
+                // Tie-break 2: the remaining scalar fields.
+                let ta = (a.advancePt, a.renderedSizePt, a.fontSizePt)
+                let tb = (b.advancePt, b.renderedSizePt, b.fontSizePt)
+                return ta < tb
             }
+            // Already total: kind + all 4 rectPt components + lineWidthPt
+            // is every field `Path` has.
             out.paths.sort {
                 (-$0.rectPt[1], $0.rectPt[0], $0.kind, $0.rectPt[2], $0.rectPt[3], $0.lineWidthPt)
                     < (-$1.rectPt[1], $1.rectPt[0], $1.kind, $1.rectPt[2], $1.rectPt[3], $1.lineWidthPt)
             }
-            out.beams.sort {
-                ($0.x0, -$0.topIntercept, $0.x1, $0.topSlope)
-                    < ($1.x0, -$1.topIntercept, $1.x1, $1.topSlope)
+            out.beams.sort { a, b in
+                // Primary: x0, topIntercept DESC, x1, topSlope.
+                let ka = (a.x0, -a.topIntercept, a.x1, a.topSlope)
+                let kb = (b.x0, -b.topIntercept, b.x1, b.topSlope)
+                if ka != kb { return ka < kb }
+                // Tie-break 1: rectPt (all 4 components).
+                let ra = (a.rectPt[0], a.rectPt[1], a.rectPt[2], a.rectPt[3])
+                let rb = (b.rectPt[0], b.rectPt[1], b.rectPt[2], b.rectPt[3])
+                if ra != rb { return ra < rb }
+                // Tie-break 2: the remaining scalar fields.
+                let ta = (a.lineWidthPt, a.botSlope, a.botIntercept)
+                let tb = (b.lineWidthPt, b.botSlope, b.botIntercept)
+                return ta < tb
             }
-            out.curves.sort {
-                (-$0.leftPt[1], $0.leftPt[0], $0.rightPt[0], $0.rightPt[1])
-                    < (-$1.leftPt[1], $1.leftPt[0], $1.rightPt[0], $1.rightPt[1])
+            out.curves.sort { a, b in
+                // Primary: leftPt (y DESC, x ASC), rightPt (x ASC, y ASC) —
+                // already every component of both points.
+                let ka = (-a.leftPt[1], a.leftPt[0], a.rightPt[0], a.rightPt[1])
+                let kb = (-b.leftPt[1], b.leftPt[0], b.rightPt[0], b.rightPt[1])
+                if ka != kb { return ka < kb }
+                // Tie-break: bboxPt (all 4 components) — the one field the
+                // primary key doesn't already pin down.
+                let ba = (a.bboxPt[0], a.bboxPt[1], a.bboxPt[2], a.bboxPt[3])
+                let bb = (b.bboxPt[0], b.bboxPt[1], b.bboxPt[2], b.bboxPt[3])
+                return ba < bb
             }
-            out.texts.sort {
-                (-$0.originPt[1], $0.originPt[0], $0.text, $0.fontName)
-                    < (-$1.originPt[1], $1.originPt[0], $1.text, $1.fontName)
+            out.texts.sort { a, b in
+                // Primary: originPt (y DESC, x ASC), text, fontName.
+                let ka = (-a.originPt[1], a.originPt[0], a.text, a.fontName)
+                let kb = (-b.originPt[1], b.originPt[0], b.text, b.fontName)
+                if ka != kb { return ka < kb }
+                // Tie-break: the remaining scalar fields.
+                let ta = (a.fontSizeTf, a.renderedSizePt)
+                let tb = (b.fontSizeTf, b.renderedSizePt)
+                return ta < tb
             }
             return out
         }
