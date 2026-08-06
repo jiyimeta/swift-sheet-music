@@ -26,7 +26,15 @@ extension PDFImporter {
         case 0xE080 ... 0xE089: return .timeSignatureDigit(Int(cp - 0xE080))
         case 0xE08A: return .timeSignatureCommon
         case 0xE08B: return .timeSignatureCutTime
-        case 0xE0A1: return .noteheadDoubleWhole
+        // U+E0A0 is the plain double whole; U+E0A1 is
+        // `noteheadDoubleWholeSquare`. Only E0A1 used to be listed, so every
+        // breve was silently dropped from every import, in every font — this
+        // package's own SMuFLCodepoints+Noteheads.swift:159-160 has the pair
+        // right. Both map to the same semantic on purpose: they are the same
+        // duration and this importer's Note model carries no head shape,
+        // which is the same treatment the shape-note cases below get.
+        case 0xE0A0: return .noteheadDoubleWhole
+        case 0xE0A1: return .noteheadDoubleWhole // noteheadDoubleWholeSquare
         case 0xE0A2: return .noteheadWhole
         case 0xE0A3: return .noteheadHalf
         case 0xE0A4: return .noteheadBlack
