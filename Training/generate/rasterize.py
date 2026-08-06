@@ -33,8 +33,17 @@ that doesn't correspond to any point inside the PDF page -- e.g. an
 expected and does not break the mapping's invertibility; it only means
 a page-space point can map to a pixel row in [0, 1) rather than exactly
 0 at the very top edge.
+
+Which size to trust, for any consumer of this module: if a rendered
+image already exists, READ ITS ACTUAL `.size` -- never recompute it.
+`page_size_px` below exists only for the other case, predicting a
+page's pixel size WITHOUT rendering it (e.g. writing a manifest's
+width/height fields from a PDF's page-box points before or without
+calling `rasterize_pdf`); it reproduces pdfium's exact ceiling rule, but
+a real render is still the ground truth if one is available.
 """
 
+import math
 from pathlib import Path
 
 import pypdfium2 as pdfium
@@ -47,6 +56,20 @@ DPI_NOMINAL = 300
 def renderer_version() -> str:
     """Renderer identity string recorded into the manifest (Task 17)."""
     return f"pypdfium2 {pdfium_version.V_PYPDFIUM2}"
+
+
+def page_size_px(width_pt: float, height_pt: float, dpi: int) -> tuple[int, int]:
+    """Predict a page's rendered pixel size WITHOUT rendering it, using
+    the exact rounding rule `PdfPage.render` applies internally
+    (`math.ceil(size_pt * scale)`, `scale = dpi / 72`, same operand
+    order -- see the module docstring for why operand order matters at
+    fractional pixel sizes). Prefer reading a rendered image's actual
+    `.size` whenever one exists; use this only when predicting ahead of
+    or instead of a render (e.g. a manifest writer that has page-box
+    points but no PNG in hand).
+    """
+    scale = dpi / 72
+    return math.ceil(width_pt * scale), math.ceil(height_pt * scale)
 
 
 def rasterize_pdf(pdf_path: Path, out_dir: Path, dpi: int) -> list[Path]:
@@ -79,5 +102,9 @@ def rasterize_pdf(pdf_path: Path, out_dir: Path, dpi: int) -> list[Path]:
     finally:
         doc.close()
 
+    # Already sorted by construction (the loop above appends in
+    # ascending `index` order); sort explicitly anyway so the numeric,
+    # not-lexicographic order is guaranteed even if the loop above is
+    # ever refactored to iterate out of order.
     pages.sort(key=lambda pair: pair[0])
     return [path for _, path in pages]

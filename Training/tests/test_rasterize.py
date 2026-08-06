@@ -16,17 +16,32 @@ def _make_pdf(path: Path, pages: int = 2, size: tuple[float, float] = (595, 842)
     doc.close()
 
 
-def _expected_pixels(size_pt: float, dpi: int) -> int:
-    """Mirrors pypdfium2's own `PdfPage.render` pixel-size computation
-    (`math.ceil(self.get_width() * scale)`, `scale = dpi / 72`) so the
-    test asserts against the SAME formula the renderer actually applies,
-    not an assumption about what "dpi" ought to mean. Reproducing the
-    exact expression (not e.g. `round`) matters: at some page-size/dpi
-    combinations `size_pt * (dpi / 72)` lands a hair above an exact
-    integer due to float imprecision (e.g. 792pt @ 300dpi computes as
-    3300.0000000000005, not 3300.0), so `ceil` -- not `round` -- pushes
-    that case to 3301, which is what pdfium actually renders."""
-    return math.ceil(size_pt * (dpi / 72))
+def test_page_size_px_matches_pdfium_ceil_formula_exactly(tmp_path):
+    """`page_size_px` must reproduce the SAME formula pypdfium2's own
+    `PdfPage.render` applies internally
+    (`math.ceil(self.get_width() * scale)`, `scale = dpi / 72`), not an
+    assumption about what "dpi" ought to mean. Verified against a real
+    render (not just against itself) across a non-square page and every
+    dpi in the grid, none of which divides 72 evenly."""
+    width_pt, height_pt = 595, 842
+    pdf = tmp_path / "s.pdf"
+    _make_pdf(pdf, pages=1, size=(width_pt, height_pt))
+    for dpi in rasterize.DPI_GRID:
+        out = rasterize.rasterize_pdf(pdf, tmp_path / f"dpi{dpi}", dpi=dpi)
+        img = Image.open(out[0])
+        assert img.size == rasterize.page_size_px(width_pt, height_pt, dpi)
+
+
+def test_page_size_px_ceils_not_rounds_at_an_exact_ratio():
+    """Regression for the specific float-imprecision anomaly that first
+    surfaced this rounding rule: 792pt at 300dpi has an EXACT ratio of
+    3300.0, but `792.0 * (300 / 72)` evaluates in IEEE-754 double as
+    3300.0000000000005 (one ULP high, since 300/72 isn't exactly
+    representable) -- so pdfium (and this helper) render 3301px wide,
+    not 3300. A naive `round()` would get this wrong; only `ceil` with
+    the SAME operand order (`pt * (dpi / 72)`, not `pt * dpi / 72`)
+    reproduces it."""
+    assert rasterize.page_size_px(792, 612, 300) == (3301, 2550)
 
 
 def test_rasterizes_every_page_grayscale_at_requested_dpi(tmp_path):
@@ -39,23 +54,6 @@ def test_rasterizes_every_page_grayscale_at_requested_dpi(tmp_path):
     # 595pt at 300dpi = 595/72*300 ≈ 2479 px (±1 for rounding).
     assert abs(img.width - round(595 / 72 * 300)) <= 1
     assert abs(img.height - round(842 / 72 * 300)) <= 1
-
-
-def test_pixel_dimensions_match_pdfium_ceil_formula_exactly(tmp_path):
-    """Stronger than the ±1 smoke check above: exact equality against
-    the formula pypdfium2 itself uses (see `_expected_pixels`), across
-    a non-square page and a dpi where the arithmetic does not come out
-    even at every one of the three grid points."""
-    width_pt, height_pt = 595, 842
-    pdf = tmp_path / "s.pdf"
-    _make_pdf(pdf, pages=1, size=(width_pt, height_pt))
-    for dpi in rasterize.DPI_GRID:
-        out = rasterize.rasterize_pdf(pdf, tmp_path / f"dpi{dpi}", dpi=dpi)
-        img = Image.open(out[0])
-        assert img.size == (
-            _expected_pixels(width_pt, dpi),
-            _expected_pixels(height_pt, dpi),
-        )
 
 
 def test_pixel_to_page_round_trip_on_non_square_page_at_uneven_dpi(tmp_path):
