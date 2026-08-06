@@ -2,6 +2,7 @@
     import Foundation
     @testable import SheetMusicAndroidJNI
     @testable import SheetMusicCore
+    import SheetMusicEditWire
     import Testing
 
     /// The host half of SP0's acceptance test: ten edit-intent steps, run through the same JNI entry points a

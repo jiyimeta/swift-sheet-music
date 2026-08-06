@@ -1,7 +1,7 @@
 #if !os(Android)
     import Foundation
-    @testable import SheetMusicAndroidJNI
     import SheetMusicCore
+    import SheetMusicEditWire
     import Testing
     import Wirelet
 

@@ -1,5 +1,6 @@
 import Foundation
 import SheetMusicCore
+import SheetMusicEditWire
 
 /// Edit-session JNI bridge. A host that is editing keeps the authoritative score in its own image and relays each
 /// applied intent here, so the score behind this handle stays byte-identical and only the layout has to be recomputed

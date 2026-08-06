@@ -1,6 +1,7 @@
 import Foundation
 @testable import SheetMusicAndroidJNI
 @testable import SheetMusicCore
+import SheetMusicEditWire
 import Testing
 
 /// Drives the JNI entry points as plain Swift functions on the host — the same code the device calls, minus the

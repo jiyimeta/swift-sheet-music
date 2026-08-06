@@ -1,6 +1,7 @@
 import Foundation
 import SheetMusicAudioCore
 import SheetMusicCore
+import SheetMusicEditWire
 import Wirelet
 
 /// Codec for `AudioExportRange` — Kotlin → Swift direction. The encoder

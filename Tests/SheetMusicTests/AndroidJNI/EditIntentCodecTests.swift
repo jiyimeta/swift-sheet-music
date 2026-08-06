@@ -1,6 +1,6 @@
 import Foundation
-@testable import SheetMusicAndroidJNI
 @testable import SheetMusicCore
+import SheetMusicEditWire
 import Testing
 import Wirelet
 

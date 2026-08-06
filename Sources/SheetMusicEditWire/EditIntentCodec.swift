@@ -16,11 +16,9 @@ import Wirelet
 /// every field is a `tag` varint (`fieldNumber << 3 | wireType`) followed by its payload; signed integers are
 /// zig-zag varints; nested structs, arrays, and choice enums are length-delimited (`varint(byteCount)` + that many
 /// payload bytes), so they are self-delimiting and **not** fixed-width — every byte count below varies with the
-/// actual field values, unlike the fixed-width tables in `ScoreItemIDCodec.swift` / `PathIDCodecs.swift` (those
-/// predate the current varint/TLV macro expansion and no longer match the bytes those macros emit; verified against
-/// this package's own golden fixtures under `Tests/SheetMusicTests/Resources/Golden/Audio/`). Field tags are
-/// assigned 1, 2, 3, … in declaration order; case indices for a `@WireFormatChoice` enum are 0, 1, 2, … in
-/// declaration order.
+/// actual field values, exactly like `ScoreItemIDCodec.swift` / `PathIDCodecs.swift`'s own tag-and-varint doc
+/// comments describe for those sibling wire types. Field tags are assigned 1, 2, 3, … in declaration order; case
+/// indices for a `@WireFormatChoice` enum are 0, 1, 2, … in declaration order.
 ///
 /// **Unlike proto3, Wirelet has no default-skipping.** `WireFormatMacro.swift` emits `guard let _<field> else {
 /// throw WireFormatError.unknownTag(...) }` for every non-optional stored property, and `WireFormatChoiceMacro.swift`
@@ -70,9 +68,8 @@ import Wirelet
 ///
 /// `delete` reuses `VoiceElementIDWire` directly as its payload — no wrapper struct.
 ///
-/// `RestIDWire` and `VoiceElementIDWire` (`Sources/SheetMusicAndroidJNI/Audio/PathIDCodecs.swift`) share this field
-/// layout — inlined here rather than cross-referenced, because that file's own doc comment is one of the stale
-/// fixed-width descriptions called out above and no longer matches these tags:
+/// `RestIDWire` and `VoiceElementIDWire` (`Sources/SheetMusicEditWire/PathIDCodecs.swift`) share this field
+/// layout — inlined here for convenience rather than only cross-referenced:
 /// ```
 /// tag 1: staff         StaffAddressWire, see layout below
 /// tag 2: measureIndex  i32, zig-zag varint
@@ -80,9 +77,9 @@ import Wirelet
 /// tag 4: elementIndex  i32, zig-zag varint
 /// ```
 ///
-/// `StaffAddressWire` (`Sources/SheetMusicAndroidJNI/Audio/StaffAddressCodec.swift` — same staleness caveat as
-/// above; that file's comment claims a fixed 8-byte payload, but the canonical `(partIndex: 0, staffIndexInPart:
-/// 0)` value encodes to 5 bytes total once the varint length prefix and two 1-byte zig-zag zeros are counted):
+/// `StaffAddressWire` (`Sources/SheetMusicEditWire/StaffAddressCodec.swift`; the canonical `(partIndex: 0,
+/// staffIndexInPart: 0)` value encodes to 5 bytes total once the varint length prefix and two 1-byte zig-zag
+/// zeros are counted):
 /// ```
 /// tag 1: partIndex          i32, zig-zag varint
 /// tag 2: staffIndexInPart   i32, zig-zag varint
@@ -111,8 +108,8 @@ import Wirelet
 /// This numbering is deliberately identical to `Score.stableFingerprint`'s duration walk (`ScoreFingerprint.swift`)
 /// so the two never disagree about what a number means.
 ///
-/// `NoteIDWire` (`Sources/SheetMusicAndroidJNI/Audio/PathIDCodecs.swift` — same staleness caveat as
-/// `RestIDWire`/`VoiceElementIDWire` above):
+/// `NoteIDWire` (`Sources/SheetMusicEditWire/PathIDCodecs.swift` — same layout as `RestIDWire`/`VoiceElementIDWire`
+/// above, plus one field):
 /// ```
 /// tag 1: staff             StaffAddressWire, see layout above
 /// tag 2: measureIndex      i32, zig-zag varint
@@ -194,12 +191,12 @@ private let maxCompositeIntentDepth = 8
 /// `NoteDuration` as a discriminator plus an optional fraction. `.fraction` is the only case with a payload, so the
 /// two numerator/denominator fields are zero for every other case.
 @WireFormat
-struct NoteDurationWire {
-    var kind: UInt8
-    var numerator: Int32
-    var denominator: Int32
+public struct NoteDurationWire {
+    public var kind: UInt8
+    public var numerator: Int32
+    public var denominator: Int32
 
-    init(from value: NoteDuration) {
+    public init(from value: NoteDuration) {
         switch value {
         case .whole:
             kind = 1
@@ -255,7 +252,7 @@ struct NoteDurationWire {
     /// enforces `denominator > 0` with a `precondition` — a trap, not a throw — so a malformed wire payload with
     /// `denominator == 0` would otherwise kill the process on a path this codec's own tests advertise as returning
     /// `false`, not crashing.
-    func decoded() throws -> NoteDuration {
+    public func decoded() throws -> NoteDuration {
         switch kind {
         case 1: return .whole
         case 2: return .half
@@ -278,7 +275,7 @@ struct NoteDurationWire {
 }
 
 @WireFormatChoice
-enum EditIntentWire {
+public enum EditIntentWire {
     case inputNote(InputNoteIntentWire)
     case setRestDuration(SlotDurationIntentWire)
     case setChordDuration(SlotDurationIntentWire)
@@ -293,7 +290,7 @@ enum EditIntentWire {
     case createTuplet(CreateTupletIntentWire)
     case removeTuplet(VoiceElementIDWire)
 
-    init(from intent: EditIntent) {
+    public init(from intent: EditIntent) {
         switch intent {
         case let .inputNote(location, pitch, tpc, duration):
             self = .inputNote(InputNoteIntentWire(location: location, pitch: pitch, tpc: tpc, duration: duration))
@@ -336,7 +333,7 @@ enum EditIntentWire {
     /// `depth` counts how many `composite` levels enclose this node — 0 at the top of a decode. Only the
     /// `.composite` branch advances it; every other case is a leaf and ignores it. See `CompositeIntentWire.decoded`
     /// for the bound this enforces.
-    func decoded(depth: Int = 0) throws -> EditIntent {
+    public func decoded(depth: Int = 0) throws -> EditIntent {
         switch self {
         case let .inputNote(wire):
             let decoded = try wire.decoded()
@@ -384,15 +381,15 @@ enum EditIntentWire {
 }
 
 @WireFormat
-struct InputNoteIntentWire {
-    var location: RestIDWire
-    var pitch: Int32
-    var tpc: Int32
+public struct InputNoteIntentWire {
+    public var location: RestIDWire
+    public var pitch: Int32
+    public var tpc: Int32
     /// 0 = keep the slot's length, 1 = retime it to `duration`.
-    var hasDuration: UInt8
-    var duration: NoteDurationWire
+    public var hasDuration: UInt8
+    public var duration: NoteDurationWire
 
-    init(location: RestID, pitch: Int, tpc: Int, duration: NoteDuration?) {
+    public init(location: RestID, pitch: Int, tpc: Int, duration: NoteDuration?) {
         self.location = RestIDWire(from: location)
         self.pitch = Int32(pitch)
         self.tpc = Int32(tpc)
@@ -405,7 +402,7 @@ struct InputNoteIntentWire {
         }
     }
 
-    func decoded() throws -> (at: RestID, pitch: Int, tpc: Int, duration: NoteDuration?) {
+    public func decoded() throws -> (at: RestID, pitch: Int, tpc: Int, duration: NoteDuration?) {
         try (
             at: location.decoded(),
             pitch: Int(pitch),
@@ -416,32 +413,32 @@ struct InputNoteIntentWire {
 }
 
 @WireFormat
-struct SlotDurationIntentWire {
-    var location: VoiceElementIDWire
-    var duration: NoteDurationWire
+public struct SlotDurationIntentWire {
+    public var location: VoiceElementIDWire
+    public var duration: NoteDurationWire
 
-    init(location: VoiceElementID, duration: NoteDuration) {
+    public init(location: VoiceElementID, duration: NoteDuration) {
         self.location = VoiceElementIDWire(from: location)
         self.duration = NoteDurationWire(from: duration)
     }
 
-    func decoded() throws -> (at: VoiceElementID, duration: NoteDuration) {
+    public func decoded() throws -> (at: VoiceElementID, duration: NoteDuration) {
         try (at: location.decoded(), duration: duration.decoded())
     }
 }
 
 @WireFormat
-struct CompositeIntentWire {
-    var members: [EditIntentWire]
+public struct CompositeIntentWire {
+    public var members: [EditIntentWire]
 
-    init(from intents: [EditIntent]) {
+    public init(from intents: [EditIntent]) {
         members = intents.map(EditIntentWire.init(from:))
     }
 
     /// Refuses to decode past `maxCompositeIntentDepth` levels of nesting rather than recursing arbitrarily deep —
     /// a malformed payload with thousands of nested `composite` members would otherwise overflow the stack instead
     /// of failing cleanly. `depth` is this composite's own nesting level; each member is one level deeper.
-    func decoded(depth: Int) throws -> [EditIntent] {
+    public func decoded(depth: Int) throws -> [EditIntent] {
         guard depth < maxCompositeIntentDepth else {
             throw WireFormatError.unknownChoiceDiscriminator(UInt32(depth))
         }
@@ -454,12 +451,12 @@ struct CompositeIntentWire {
 /// inserts a case. A spelling the reader does not know throws rather than decoding as "no accidental" — a silent
 /// nil would put a different glyph on the mirror than the authoritative score carries.
 @WireFormat
-struct AccidentalWire {
+public struct AccidentalWire {
     /// 0 = no accidental (`nil`), 1 = `raw` names one.
-    var present: UInt8
-    var raw: String
+    public var present: UInt8
+    public var raw: String
 
-    init(from value: Accidental?) {
+    public init(from value: Accidental?) {
         if let value {
             present = 1
             raw = value.rawValue
@@ -469,7 +466,7 @@ struct AccidentalWire {
         }
     }
 
-    func decoded() throws -> Accidental? {
+    public func decoded() throws -> Accidental? {
         guard present != 0 else { return nil }
         guard let accidental = Accidental(rawValue: raw) else {
             throw WireFormatError.unknownChoiceDiscriminator(0)
@@ -481,11 +478,11 @@ struct AccidentalWire {
 /// A signed tie index, or its absence. `Int?` has no wire form of its own here, and `-1` is not safe as a sentinel
 /// because `SetTie` treats the value as opaque.
 @WireFormat
-struct OptionalIndexWire {
-    var present: UInt8
-    var value: Int32
+public struct OptionalIndexWire {
+    public var present: UInt8
+    public var value: Int32
 
-    init(from value: Int?) {
+    public init(from value: Int?) {
         if let value {
             present = 1
             self.value = Int32(value)
@@ -495,26 +492,26 @@ struct OptionalIndexWire {
         }
     }
 
-    func decoded() -> Int? {
+    public func decoded() -> Int? {
         present != 0 ? Int(value) : nil
     }
 }
 
 @WireFormat
-struct PitchWriteIntentWire {
-    var location: NoteIDWire
-    var pitch: Int32
-    var tpc: Int32
-    var accidental: AccidentalWire
+public struct PitchWriteIntentWire {
+    public var location: NoteIDWire
+    public var pitch: Int32
+    public var tpc: Int32
+    public var accidental: AccidentalWire
 
-    init(location: NoteID, pitch: Int, tpc: Int, accidental: Accidental?) {
+    public init(location: NoteID, pitch: Int, tpc: Int, accidental: Accidental?) {
         self.location = NoteIDWire(from: location)
         self.pitch = Int32(pitch)
         self.tpc = Int32(tpc)
         self.accidental = AccidentalWire(from: accidental)
     }
 
-    func decoded() throws -> (location: NoteID, pitch: Int, tpc: Int, accidental: Accidental?) {
+    public func decoded() throws -> (location: NoteID, pitch: Int, tpc: Int, accidental: Accidental?) {
         try (
             location: location.decoded(),
             pitch: Int(pitch),
@@ -525,20 +522,20 @@ struct PitchWriteIntentWire {
 }
 
 @WireFormat
-struct AddNoteIntentWire {
-    var location: VoiceElementIDWire
-    var pitch: Int32
-    var tpc: Int32
-    var accidental: AccidentalWire
+public struct AddNoteIntentWire {
+    public var location: VoiceElementIDWire
+    public var pitch: Int32
+    public var tpc: Int32
+    public var accidental: AccidentalWire
 
-    init(location: VoiceElementID, pitch: Int, tpc: Int, accidental: Accidental?) {
+    public init(location: VoiceElementID, pitch: Int, tpc: Int, accidental: Accidental?) {
         self.location = VoiceElementIDWire(from: location)
         self.pitch = Int32(pitch)
         self.tpc = Int32(tpc)
         self.accidental = AccidentalWire(from: accidental)
     }
 
-    func decoded() throws -> (location: VoiceElementID, pitch: Int, tpc: Int, accidental: Accidental?) {
+    public func decoded() throws -> (location: VoiceElementID, pitch: Int, tpc: Int, accidental: Accidental?) {
         try (
             location: location.decoded(),
             pitch: Int(pitch),
@@ -549,35 +546,35 @@ struct AddNoteIntentWire {
 }
 
 @WireFormat
-struct SetAccidentalIntentWire {
-    var location: NoteIDWire
-    var accidental: AccidentalWire
+public struct SetAccidentalIntentWire {
+    public var location: NoteIDWire
+    public var accidental: AccidentalWire
 
-    init(location: NoteID, accidental: Accidental?) {
+    public init(location: NoteID, accidental: Accidental?) {
         self.location = NoteIDWire(from: location)
         self.accidental = AccidentalWire(from: accidental)
     }
 
-    func decoded() throws -> (location: NoteID, accidental: Accidental?) {
+    public func decoded() throws -> (location: NoteID, accidental: Accidental?) {
         try (location: location.decoded(), accidental: accidental.decoded())
     }
 }
 
 @WireFormat
-struct SetTieIntentWire {
-    var source: NoteIDWire
-    var target: NoteIDWire
-    var sourceTieForward: OptionalIndexWire
-    var targetTieBack: OptionalIndexWire
+public struct SetTieIntentWire {
+    public var source: NoteIDWire
+    public var target: NoteIDWire
+    public var sourceTieForward: OptionalIndexWire
+    public var targetTieBack: OptionalIndexWire
 
-    init(source: NoteID, target: NoteID, sourceTieForward: Int?, targetTieBack: Int?) {
+    public init(source: NoteID, target: NoteID, sourceTieForward: Int?, targetTieBack: Int?) {
         self.source = NoteIDWire(from: source)
         self.target = NoteIDWire(from: target)
         self.sourceTieForward = OptionalIndexWire(from: sourceTieForward)
         self.targetTieBack = OptionalIndexWire(from: targetTieBack)
     }
 
-    func decoded() -> (source: NoteID, target: NoteID, sourceTieForward: Int?, targetTieBack: Int?) {
+    public func decoded() -> (source: NoteID, target: NoteID, sourceTieForward: Int?, targetTieBack: Int?) {
         (
             source: source.decoded(),
             target: target.decoded(),
@@ -588,18 +585,18 @@ struct SetTieIntentWire {
 }
 
 @WireFormat
-struct CreateTupletIntentWire {
-    var location: VoiceElementIDWire
-    var actualNotes: Int32
-    var normalNotes: Int32
+public struct CreateTupletIntentWire {
+    public var location: VoiceElementIDWire
+    public var actualNotes: Int32
+    public var normalNotes: Int32
 
-    init(location: VoiceElementID, actualNotes: Int, normalNotes: Int) {
+    public init(location: VoiceElementID, actualNotes: Int, normalNotes: Int) {
         self.location = VoiceElementIDWire(from: location)
         self.actualNotes = Int32(actualNotes)
         self.normalNotes = Int32(normalNotes)
     }
 
-    func decoded() -> (location: VoiceElementID, actualNotes: Int, normalNotes: Int) {
+    public func decoded() -> (location: VoiceElementID, actualNotes: Int, normalNotes: Int) {
         (location: location.decoded(), actualNotes: Int(actualNotes), normalNotes: Int(normalNotes))
     }
 }
