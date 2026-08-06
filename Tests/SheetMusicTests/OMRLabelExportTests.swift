@@ -1,7 +1,9 @@
 #if !os(Android)
     import CoreGraphics
+    import CoreText
     import Foundation
     @testable import SheetMusicCore
+    import SheetMusicLayoutApple
     @testable import SheetMusicPDF
     import Testing
 
@@ -75,10 +77,16 @@
         }
 
         /// End-to-end smoke on a CoreGraphics fixture: such a PDF takes the
-        /// SIMPLE-FONT path, where the dual walk cannot pair — export must
-        /// REJECT it with a problem, not crash and not emit half labels.
+        /// SIMPLE-FONT path, so it cannot be labeled — export must REJECT
+        /// it with a problem, not crash and not emit half labels.
+        ///
+        /// NAMED FOR WHAT IT ACTUALLY ASSERTS: this fixture is rejected
+        /// because NO music glyph is promoted, not because the two walks
+        /// disagree on count. The count-mismatch branch of `pairCodepoints`
+        /// is covered only by the unit test above — do not read this test
+        /// as covering it.
         @MainActor
-        @Test func fixturePDFIsRejectedAsUnpairable() throws {
+        @Test func fixturePDFIsRejectedBecauseNoMusicGlyphIsPromoted() throws {
             let data = try PDFFixtureBuilder.build(
                 glyphs: [PDFFixtureBuilder.GlyphPlacement(
                     unicodeScalar: #require(UnicodeScalar(0xE0A4)),
@@ -120,6 +128,102 @@
             let resolver = OMRLabelExport.OutlineResolver(document: document)
             #expect(resolver.emBox(pageIndex: 0, codepoint: 0xE0A4) == nil)
             #expect(resolver.emBox(pageIndex: 0, codepoint: 0xE0A4) == nil)
+        }
+
+        /// Not `private`: it is read from the `.enabled(if:)` trait below.
+        static var bravuraAvailable: Bool {
+            guard #available(macOS 15.0, *) else { return false }
+            return BravuraFont.register
+        }
+
+        /// Both faces, exactly as `PDFSyntheticFontProgramTests` builds
+        /// them — that file already proves this fixture carries a real
+        /// Bravura CFF subset program.
+        @MainActor
+        private static func twoFaceFixture() -> Data {
+            PDFFixtureBuilder.build(glyphs: [
+                PDFFixtureBuilder.GlyphPlacement(
+                    unicodeScalar: "\u{E0A4}", // noteheadBlack
+                    fontName: "Bravura", fontSize: 32,
+                    origin: CGPoint(x: 100, y: 700),
+                ),
+                PDFFixtureBuilder.GlyphPlacement(
+                    unicodeScalar: "a", fontName: "Helvetica",
+                    fontSize: 12, origin: CGPoint(x: 100, y: 650),
+                ),
+            ])
+        }
+
+        /// THE POSITIVE PATH. `PDFFixtureBuilder` cannot write a
+        /// Type0/Identity-H PDF, but the delicate half of the chain does not
+        /// need one: real embedded program → `makeCTFont` → CID-as-glyph-ID
+        /// → `CTFontCreatePathForGlyph` → `boundingBoxOfPath` → `inkBBox`.
+        /// Driven here with a SYNTHETIC `/ToUnicode` CMap over the real
+        /// Bravura CFF subset the fixture embeds, so a stub `emBox` returning
+        /// nil could not pass.
+        ///
+        /// Gated with `.enabled(if:)` rather than the house
+        /// `guard bravuraAvailable else { return }`, so a host without
+        /// Bravura reports this as SKIPPED instead of as a green test that
+        /// asserted nothing — the one outcome that would defeat its purpose.
+        @MainActor
+        @Test(.enabled(if: OMRLabelExportUnitTests.bravuraAvailable))
+        func recoversARealInkBBoxFromAnEmbeddedProgram() throws {
+            let document = try PDFImporter.openDocument(Self.twoFaceFixture())
+            let cgPage = try #require(document.page(at: 0)?.pageRef)
+            let fonts = PDFImporter.extractEmbeddedFonts(cgPage: cgPage)
+            // Subset-embedded faces are renamed "ABCDEF+Bravura"; match the
+            // suffix after any "+". Only one resource matches, so `first` is
+            // deterministic despite the dictionary.
+            let resource = try #require(fonts.first { entry in
+                (
+                    entry.value.baseFont.split(separator: "+").last.map(String.init)
+                        ?? entry.value.baseFont
+                ) == "Bravura"
+            })
+            let program = try #require(resource.value.program)
+            let font = try #require(makeCTFont(program: program))
+            let glyphCount = CTFontGetGlyphCount(font)
+            // Lowest glyph ID with a real outline — ascending, deterministic.
+            let inked = try #require((1 ..< glyphCount).first { glyph in
+                guard let path = CTFontCreatePathForGlyph(font, CGGlyph(glyph), nil)
+                else { return false }
+                return !path.isEmpty
+            })
+            // Synthetic Identity-H CMap: that glyph ID AS the CID, mapped to
+            // a PUA scalar. A second scalar points past the end of the subset
+            // — no outline — to pin the guard that turns that into nil.
+            let cmap = try PDFImporter.ToUnicodeCMap(table: [
+                UInt32(inked): [#require(Unicode.Scalar(0xE0A4))],
+                UInt32(glyphCount) + 500: [#require(Unicode.Scalar(0xE0A5))],
+            ])
+            let index = OMRLabelExport.buildIndex(cmaps: [resource.key: cmap], fonts: fonts)
+            #expect(index[0xE0A4]?.glyphID == CGGlyph(inked))
+            #expect(index[0xE0A5] != nil) // indexed, but has no outline
+
+            let resolver = OMRLabelExport.OutlineResolver(preseeded: [0: index])
+            let em = try #require(resolver.emBox(pageIndex: 0, codepoint: 0xE0A4))
+            // An outline read at CTFont size 1000 is em-scaled — hundreds of
+            // units, not ~10. This is what couples `makeCTFont`'s `size: 1000`
+            // default to `inkBBox`'s /1000 divisor: if either drifted, these
+            // bounds fail rather than silently scaling every label's bbox.
+            #expect(em.width > 50)
+            #expect(em.height > 50)
+            #expect(em.width < 3000)
+            #expect(em.height < 3000)
+            #expect(resolver.emBox(pageIndex: 0, codepoint: 0xE0A5) == nil)
+            #expect(resolver.emBox(pageIndex: 7, codepoint: 0xE0A4) == nil)
+
+            let ink = OMRLabelExport.inkBBox(
+                outlineAt1000: em, origin: CGPoint(x: 100, y: 700), renderedSize: 32,
+            )
+            // Page-space, at the drawn origin, no bigger than ~2 em at 32 pt.
+            #expect(ink.width > 0)
+            #expect(ink.height > 0)
+            #expect(ink.width < 64)
+            #expect(ink.height < 64)
+            #expect(abs(ink.midX - 100) < 64)
+            #expect(abs(ink.midY - 700) < 64)
         }
     }
 
@@ -182,6 +286,13 @@
         /// both failure modes visible: `bboxMissing` (no outline reachable)
         /// and `tier1Missing` (a PUA glyph Tier 1 could not name, carried
         /// as an `unknownXXXX` class rather than guessed).
+        ///
+        /// One caveat on `tier1Missing`: `OMRLabelClassNames.className(for:)`
+        /// also answers `"unknown0000"` from its `default:` branch for a
+        /// `SMuFLSemantic` case added upstream and not yet in the detector
+        /// table. That is VOCABULARY DRIFT, not a Tier-1 miss — a nonzero
+        /// count whose class is exactly `unknown0000` should send you to
+        /// Task 1's table, not to the classifier.
         private func write(_ pages: [OMRPageLabels], to dir: String, tag: String) throws {
             var glyphTotal = 0
             var bboxMissing = 0

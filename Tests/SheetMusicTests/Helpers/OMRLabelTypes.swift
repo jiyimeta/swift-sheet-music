@@ -59,6 +59,31 @@
                 case renderedSizePt = "rendered_size_pt"
                 case fontSizePt = "font_size_pt"
             }
+
+            /// Hand-written ONLY to write `bbox_pt` as an explicit `null`
+            /// when no outline was resolvable. The synthesized encoding uses
+            /// `encodeIfPresent`, which OMITS the key — and the consumer
+            /// named in the plan is Python, where `label["bbox_pt"]` then
+            /// raises `KeyError` instead of yielding `None`. An unrecoverable
+            /// bbox is a fact this format states, not one the reader infers
+            /// from an absence.
+            ///
+            /// Decoding is left synthesized (`decodeIfPresent`), so an
+            /// explicit `null` AND an absent key both still decode to nil —
+            /// label files written before this change keep reading.
+            ///
+            /// Every other key keeps its synthesized behavior; `.sortedKeys`
+            /// fixes the on-the-wire order regardless of the sequence here,
+            /// so canonical bytes are unaffected (gate P3c-G1).
+            func encode(to encoder: any Encoder) throws {
+                var container = encoder.container(keyedBy: CodingKeys.self)
+                try container.encode(className, forKey: .className)
+                try container.encode(bboxPt, forKey: .bboxPt)
+                try container.encode(originPt, forKey: .originPt)
+                try container.encode(advancePt, forKey: .advancePt)
+                try container.encode(renderedSizePt, forKey: .renderedSizePt)
+                try container.encode(fontSizePt, forKey: .fontSizePt)
+            }
         }
 
         struct Path: Codable, Equatable {

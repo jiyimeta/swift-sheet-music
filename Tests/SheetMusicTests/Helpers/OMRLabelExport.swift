@@ -130,64 +130,6 @@
             return out
         }
 
-        /// Positional pairing: the anchored dual walk emits the same
-        /// glyph SET in the same order, so zip is exact. nil on any
-        /// count mismatch (simple-font path, foreign producer).
-        nonisolated static func pairCodepoints(
-            truth: [ClassifiedGlyph], probe: [ClassifiedGlyph],
-        ) -> [(glyph: ClassifiedGlyph, codepoint: UInt32?)]? {
-            guard truth.count == probe.count else { return nil }
-            return zip(truth, probe).map { truthGlyph, probeGlyph in
-                if case let .unknown(codepoint) = probeGlyph.semantic {
-                    return (truthGlyph, codepoint)
-                }
-                return (truthGlyph, nil)
-            }
-        }
-
-        /// Invert per-font /ToUnicode CMaps into scalar → (resource, CID).
-        /// Resources are visited in SORTED name order (determinism); first
-        /// mapping wins. Only SMuFL-PUA scalars are indexed. For
-        /// Identity-H fonts the CID is the glyph ID.
-        ///
-        /// KNOWN LIMITATION: if two resources on one page map the SAME PUA
-        /// scalar to different outlines, `ClassifiedGlyph` carries no font
-        /// resource, so the right one cannot be chosen — the sorted-first
-        /// resource wins deterministically. MuseScore emits one music-font
-        /// subset per page, so this has not been observed; it would show
-        /// up as an implausible bbox, not as a wrong class.
-        nonisolated static func invertCMaps(
-            _ cmaps: [String: PDFImporter.ToUnicodeCMap],
-        ) -> [UInt32: (resource: String, cid: UInt32)] {
-            var out: [UInt32: (resource: String, cid: UInt32)] = [:]
-            for resource in cmaps.keys.sorted() {
-                guard let cmap = cmaps[resource], !cmap.isEmpty else { continue }
-                for cid in UInt32(0) ... 0xFFFF {
-                    guard let scalar = cmap.firstScalar(cid: cid) else { continue }
-                    let value = scalar.value
-                    guard (0xE000 ... 0xF8FF).contains(value), out[value] == nil
-                    else { continue }
-                    out[value] = (resource, cid)
-                }
-            }
-            return out
-        }
-
-        /// Page-space ink bbox: the glyph outline's bounding box at
-        /// CTFont size 1000, scaled by renderedSize/1000 about the
-        /// glyph's text origin (both spaces are y-up).
-        nonisolated static func inkBBox(
-            outlineAt1000: CGRect, origin: CGPoint, renderedSize: CGFloat,
-        ) -> CGRect {
-            let scale = renderedSize / 1000
-            return CGRect(
-                x: origin.x + outlineAt1000.minX * scale,
-                y: origin.y + outlineAt1000.minY * scale,
-                width: outlineAt1000.width * scale,
-                height: outlineAt1000.height * scale,
-            )
-        }
-
         /// Per-page PUA-codepoint → glyph-outline lookup, built lazily and
         /// cached (a page's outlines repeat thousands of times).
         ///
@@ -198,7 +140,7 @@
         /// `null` `bbox_pt` — counted and printed by the batch harness as
         /// `bboxMissing`. There is deliberately no fabricated fallback box.
         final class OutlineResolver {
-            private let document: PDFDocument
+            private let document: PDFDocument?
             private var indexByPage: [Int: [UInt32: OutlineRef]] = [:]
             private var emBoxCache: [Int: [UInt32: CGRect?]] = [:]
 
@@ -209,6 +151,17 @@
 
             init(document: PDFDocument) {
                 self.document = document
+            }
+
+            /// TEST SEAM. Preseed the per-page index so the outline half of
+            /// the chain — CID-as-glyph-ID → `CTFontCreatePathForGlyph` →
+            /// `boundingBoxOfPath`, plus the empty-path guard and the cache
+            /// — is exercisable against a REAL embedded font program without
+            /// a Type0/Identity-H PDF, which `PDFFixtureBuilder` cannot
+            /// write. Pages absent from the seed resolve to an empty index.
+            init(preseeded indexByPage: [Int: [UInt32: OutlineRef]]) {
+                document = nil
+                self.indexByPage = indexByPage
             }
 
             /// Outline bbox at CTFont size 1000, or nil when unreachable.
@@ -228,29 +181,50 @@
             private func index(pageIndex: Int) -> [UInt32: OutlineRef] {
                 if let cached = indexByPage[pageIndex] { return cached }
                 var index: [UInt32: OutlineRef] = [:]
-                if let cgPage = document.page(at: pageIndex)?.pageRef {
-                    let fonts = PDFImporter.extractEmbeddedFonts(cgPage: cgPage)
-                    let inverted = invertCMaps(PDFImporter.extractFontCMaps(cgPage: cgPage))
-                    var fontByResource: [String: CTFont] = [:]
-                    // Sorted scalars: the result is order-independent, but
-                    // sorting removes any doubt about hash-order effects.
-                    for scalar in inverted.keys.sorted() {
-                        guard let ref = inverted[scalar] else { continue }
-                        if fontByResource[ref.resource] == nil,
-                           let program = fonts[ref.resource]?.program,
-                           let ctFont = makeCTFont(program: program)
-                        {
-                            fontByResource[ref.resource] = ctFont
-                        }
-                        guard let ctFont = fontByResource[ref.resource] else { continue }
-                        index[scalar] = OutlineRef(
-                            font: ctFont, glyphID: CGGlyph(truncatingIfNeeded: ref.cid),
-                        )
-                    }
+                if let document, let cgPage = document.page(at: pageIndex)?.pageRef {
+                    index = OMRLabelExport.buildIndex(
+                        cmaps: PDFImporter.extractFontCMaps(cgPage: cgPage),
+                        fonts: PDFImporter.extractEmbeddedFonts(cgPage: cgPage),
+                    )
                 }
                 indexByPage[pageIndex] = index
                 return index
             }
+        }
+
+        /// PUA scalar → (`CTFont`, glyph ID) for ONE page's font resources.
+        /// Split out of `OutlineResolver` so it can be driven from a
+        /// synthetic CMap over a real embedded program (see the seam on
+        /// `init(preseeded:)`).
+        ///
+        /// For Identity-H fonts the CID **is** the glyph ID, which is why
+        /// the CID goes straight into `CGGlyph` — a subset font does not
+        /// keep a usable Unicode cmap, so `CTFontGetGlyphsForCharacters`
+        /// must not be used here (measured fact, recorded in
+        /// `GlyphClassifier.swift`).
+        nonisolated static func buildIndex(
+            cmaps: [String: PDFImporter.ToUnicodeCMap],
+            fonts: [String: PDFImporter.EmbeddedFont],
+        ) -> [UInt32: OutlineResolver.OutlineRef] {
+            var index: [UInt32: OutlineResolver.OutlineRef] = [:]
+            let inverted = invertCMaps(cmaps)
+            var fontByResource: [String: CTFont] = [:]
+            // Sorted scalars: the result is order-independent, but sorting
+            // removes any doubt about hash-order effects.
+            for scalar in inverted.keys.sorted() {
+                guard let ref = inverted[scalar] else { continue }
+                if fontByResource[ref.resource] == nil,
+                   let program = fonts[ref.resource]?.program,
+                   let ctFont = makeCTFont(program: program)
+                {
+                    fontByResource[ref.resource] = ctFont
+                }
+                guard let ctFont = fontByResource[ref.resource] else { continue }
+                index[scalar] = OutlineResolver.OutlineRef(
+                    font: ctFont, glyphID: CGGlyph(truncatingIfNeeded: ref.cid),
+                )
+            }
+            return index
         }
     }
 #endif

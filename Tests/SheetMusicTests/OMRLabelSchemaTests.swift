@@ -90,6 +90,57 @@
             #expect(data == data2)
         }
 
+        /// An unrecoverable ink bbox must be an EXPLICIT `null` on the wire,
+        /// not an omitted key: the plan's consumer is Python, where
+        /// `label["bbox_pt"]` raises `KeyError` on an absent key instead of
+        /// yielding `None`. The synthesized `encodeIfPresent` would omit it,
+        /// so `Glyph` hand-writes `encode(to:)`.
+        @Test func missingBBoxIsWrittenAsAnExplicitNull() throws {
+            var labels = Self.emptyLabels()
+            labels.glyphs = [OMRPageLabels.Glyph(
+                className: "noteheadBlack", bboxPt: nil,
+                originPt: [10, 20], advancePt: 1, renderedSizePt: 1, fontSizePt: 1,
+            )]
+            let data = try OMRLabelSchema.encodeCanonical(labels)
+            let root = try #require(
+                JSONSerialization.jsonObject(with: data) as? [String: Any],
+            )
+            let glyph = try #require((root["glyphs"] as? [[String: Any]])?.first)
+            // Present AND null — an absent key would fail the first check.
+            #expect(glyph.keys.contains("bbox_pt"))
+            #expect(glyph["bbox_pt"] is NSNull)
+        }
+
+        /// The explicit null must not cost byte stability (gate P3c-G1):
+        /// encode → decode → encode is byte-identical, and a nil bbox still
+        /// decodes back to nil.
+        @Test func missingBBoxSurvivesEncodeDecodeEncodeByteIdentically() throws {
+            var labels = Self.emptyLabels()
+            labels.glyphs = [OMRPageLabels.Glyph(
+                className: "noteheadBlack", bboxPt: nil,
+                originPt: [10, 20], advancePt: 1, renderedSizePt: 1, fontSizePt: 1,
+            )]
+            let data = try OMRLabelSchema.encodeCanonical(labels)
+            let decoded = try OMRLabelSchema.decode(data)
+            #expect(decoded.glyphs.first?.bboxPt == nil)
+            #expect(decoded == OMRLabelSchema.canonicallySorted(labels))
+            #expect(try OMRLabelSchema.encodeCanonical(decoded) == data)
+        }
+
+        /// Backward compatibility: a label file written BEFORE the explicit
+        /// null (key simply absent) must still decode, to nil.
+        @Test func anAbsentBBoxKeyStillDecodes() throws {
+            let json = """
+            {"class":"noteheadBlack","origin_pt":[10,20],"advance_pt":1,
+             "rendered_size_pt":1,"font_size_pt":1}
+            """
+            let glyph = try JSONDecoder().decode(
+                OMRPageLabels.Glyph.self, from: #require(json.data(using: .utf8)),
+            )
+            #expect(glyph.bboxPt == nil)
+            #expect(glyph.className == "noteheadBlack")
+        }
+
         @Test func doublesSurviveExactly() throws {
             // A value with no short decimal representation.
             let ugly = 400.0 + 1.0 / 3.0
