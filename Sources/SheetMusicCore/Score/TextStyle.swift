@@ -22,6 +22,9 @@ public enum TextStyleType: String, Sendable, CaseIterable {
     case rehearsalMark
     case staffText
     case systemText
+    /// Mid-score instrument-change instruction ("アコーディオン に").
+    /// C++: `mu::engraving::TextStyleType::INSTRUMENT_CHANGE`.
+    case instrumentChange
     case pedal
     case chordSymbolA
     case chordSymbolB
@@ -128,6 +131,12 @@ extension TextStyleType {
         case .staffText, .systemText:
             return TextStyleDefaults(
                 face: "Edwin", size: 10, style: [],
+            )
+        // Sid::instrumentChangeFontFace = "Edwin", size 10, bold
+        // (styledef.cpp:1613-1617).
+        case .instrumentChange:
+            return TextStyleDefaults(
+                face: "Edwin", size: 10, style: [.bold],
             )
         case .pedal:
             return TextStyleDefaults(

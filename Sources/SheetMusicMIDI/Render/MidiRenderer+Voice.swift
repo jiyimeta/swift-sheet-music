@@ -142,9 +142,11 @@ extension MidiRenderer {
                                 event: .meta(.marker(rm.text)),
                             ))
                         }
-                    case .staffText, .swing:
-                        // Staff text doesn't render to MIDI; swing
-                        // state is pre-collected into `swingMap`.
+                    case .staffText, .swing, .instrumentChange:
+                        // Staff text doesn't render to MIDI; swing state
+                        // is pre-collected into `swingMap`; instrument
+                        // changes are resolved into the channel routing
+                        // before the walk (see `partChannelChanges`).
                         break
                     }
                 }

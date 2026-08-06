@@ -1890,6 +1890,10 @@ extension LayoutEngine {
                     isSystemText: s.isSystemText,
                 )
                 if s.visible { out.append(element) } else { invisibleOut.append(element) }
+            case .instrumentChange:
+                // Engraved by the instrument-change layout task; no
+                // element is emitted yet.
+                break
             case let .rehearsalMark(rm):
                 guard rm.visible || options.showsInvisibleElements else { break }
                 let originX = metrics.sp * 0.5

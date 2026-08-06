@@ -256,6 +256,7 @@ extension Voice {
         case let .rehearsalMark(rehearsalMark): return rehearsalMark.encode()
         case let .staffText(staffText): return staffText.encode()
         case let .swing(swing): return swing.encode()
+        case let .instrumentChange(change): return change.encode()
         }
     }
 
