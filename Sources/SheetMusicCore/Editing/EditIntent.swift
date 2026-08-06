@@ -17,4 +17,20 @@ public enum EditIntent: Sendable, Equatable {
     case delete(at: VoiceElementID)
     /// Several intents as one undo step.
     indirect case composite([EditIntent])
+    /// Appended in SP1. The five above are wire indices 0…4 and must keep them.
+    /// Retune one note within a chord. `accidental` is the glyph to display, or `nil` to suppress it.
+    case setNotePitch(at: NoteID, pitch: Int, tpc: Int, accidental: Accidental?)
+    /// Apply (or clear, when `accidental` is `nil`) an explicit accidental on a note, preserving its diatonic
+    /// letter.
+    case setAccidental(at: NoteID, accidental: Accidental?)
+    /// Append a note to an existing chord.
+    case addNoteToChord(at: VoiceElementID, pitch: Int, tpc: Int, accidental: Accidental?)
+    /// Drop one note from a chord. Removing the last note collapses the chord to a rest.
+    case removeNoteFromChord(at: NoteID)
+    /// Tie two adjacent notes, or remove a tie when both `sourceTieForward` and `targetTieBack` are `nil`.
+    case setTie(from: NoteID, to: NoteID, sourceTieForward: Int?, targetTieBack: Int?)
+    /// Convert the chord or rest at `at` into a tuplet of `actualNotes` members in the time of `normalNotes`.
+    case createTuplet(at: VoiceElementID, actualNotes: Int, normalNotes: Int)
+    /// Collapse the tuplet containing `at` back into a single chord or rest of the same tick span.
+    case removeTuplet(at: VoiceElementID)
 }

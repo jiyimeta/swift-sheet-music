@@ -182,7 +182,53 @@ public final class ScoreEditSession {
             guard let first = commands.first else { return nil }
             guard commands.count > 1 else { return first }
             return CompositeEditCommand(commands: commands, location: first.affectedLocation)
+        case .setNotePitch, .setAccidental, .addNoteToChord, .removeNoteFromChord, .setTie, .createTuplet,
+             .removeTuplet:
+            // These seven note-editing intents each map straight onto their `EditCommand`, with no cross-bar or
+            // collapse planning involved — unlike `.inputNote` / `.setRestDuration` / `.delete` above, which route
+            // through planners. Factored into `directNoteEditCommand` to keep this switch under SwiftLint's line
+            // budget, not because they belong to a different subsystem.
+            return try directNoteEditCommand(for: intent)
         }
+    }
+
+    /// The seven intents that map directly onto an `EditCommand` with no planning step. Reached only via
+    /// `command(for:in:depth:)`'s combined case above, so the `if case` chain below never needs to handle the five
+    /// intents that function keeps for itself — an exhaustive `switch` here would have to fake-handle those too.
+    private static func directNoteEditCommand(for intent: EditIntent) throws -> (any EditCommand)? {
+        if case let .setNotePitch(location, pitch, tpc, accidental) = intent {
+            return SetNotePitch(at: location, pitch: pitch, tpc: tpc, accidental: accidental)
+        }
+        if case let .setAccidental(location, accidental) = intent {
+            return SetAccidental(at: location, accidental: accidental)
+        }
+        if case let .addNoteToChord(location, pitch, tpc, accidental) = intent {
+            return AddNoteToChord(at: location, pitch: pitch, tpc: tpc, accidental: accidental)
+        }
+        if case let .removeNoteFromChord(location) = intent {
+            return RemoveNoteFromChord(at: location)
+        }
+        if case let .setTie(source, target, sourceTieForward, targetTieBack) = intent {
+            return SetTie(
+                from: source, to: target,
+                sourceTieForward: sourceTieForward, targetTieBack: targetTieBack,
+            )
+        }
+        if case let .createTuplet(location, actualNotes, normalNotes) = intent {
+            // `CreateTuplet.init` enforces these with preconditions — traps, not throws. A relayed intent is
+            // attacker-shaped data as far as this function is concerned, so the check has to happen here, before
+            // construction, rather than letting the trap take the whole process down.
+            guard actualNotes > 1, normalNotes > 0 else {
+                throw SheetMusicError.invalidEdit(
+                    reason: "createTuplet: ratio \(actualNotes):\(normalNotes) is not a tuplet",
+                )
+            }
+            return CreateTuplet(at: location, actualNotes: actualNotes, normalNotes: normalNotes)
+        }
+        if case let .removeTuplet(location) = intent {
+            return RemoveTuplet(at: location)
+        }
+        return nil
     }
 
     /// Whether `slot` sits inside a tuplet in `score`.

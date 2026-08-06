@@ -184,4 +184,97 @@ struct ScoreEditSessionTests {
         guard case let .chord(rest) = session.score[target] else { Issue.record("expected a rest"); return }
         #expect(rest.duration == .half)
     }
+
+    // MARK: - SP1: the remaining intents
+
+    /// A malformed tuplet ratio must be REFUSED, not trapped. CreateTuplet's init preconditions are traps, so a
+    /// wire payload carrying 0 would kill the process on a path this API advertises as returning false.
+    @Test func `a degenerate tuplet ratio is refused, not trapped`() {
+        let session = ScoreEditSession(score: EditingFixtures.fourQuarterRests())
+        let slot = VoiceElementID(EditingFixtures.restID(element: 1))
+        #expect(!session.apply(.createTuplet(at: slot, actualNotes: 1, normalNotes: 2)))
+        #expect(!session.apply(.createTuplet(at: slot, actualNotes: 3, normalNotes: 0)))
+        #expect(session.lastRefusalReason != nil)
+    }
+
+    @Test func `a pitch change lands and undoes`() throws {
+        let session = ScoreEditSession(score: EditingFixtures.chordAtIndex1())
+        let note = EditingFixtures.noteID(element: 1)
+        let before = session.score.stableFingerprint
+        #expect(session.apply(.setNotePitch(at: note, pitch: 62, tpc: 16, accidental: nil)))
+        #expect(try #require(session.score[note]).pitch == 62)
+        #expect(session.undo())
+        #expect(session.score.stableFingerprint == before)
+    }
+
+    /// Flipping a bar's first C# to C natural leaves the bar's second C# reading natural unless the engine repairs
+    /// it — carried forward from Task 2, which deferred it here because it needs `.setNotePitch`. This is the only
+    /// test in the branch that reaches `renotatingAccidentals`'s `!repairs.isEmpty` path: the second note's stored
+    /// accidental is asserted directly (not just the fingerprint) so a passing run is proof the repair actually
+    /// landed, not a coincidental fingerprint change from the pitch edit alone. The repairs ride the same undo step,
+    /// so ONE undo puts both notes back.
+    @Test func `accidental repairs ride the same undo step`() throws {
+        var score = EditingFixtures.twoMeasuresOfQuarterRests(key: 2)
+        let first = VoiceElementID(EditingFixtures.restID(element: 2))
+        let second = VoiceElementID(EditingFixtures.restID(element: 3))
+        score[first] = .chord(Chord(duration: .quarter, notes: [Note(pitch: 73, tpc: 21)]))
+        score[second] = .chord(Chord(duration: .quarter, notes: [Note(pitch: 73, tpc: 21)]))
+        let session = ScoreEditSession(score: score)
+        let before = session.score.stableFingerprint
+        let secondNote = EditingFixtures.noteID(element: 3)
+        #expect(try #require(session.score[secondNote]).accidental == nil) // sharp is implied by the key, unwritten
+        #expect(session.apply(.setNotePitch(
+            at: EditingFixtures.noteID(element: 2), pitch: 72, tpc: 14, accidental: .natural,
+        )))
+        // The repair: the second C# now carries an explicit sharp, so it still reads as sharp even though the first
+        // note's new natural would otherwise leave that reading in force for the rest of the bar.
+        #expect(try #require(session.score[secondNote]).accidental == .sharp)
+        #expect(session.score.stableFingerprint != before)
+        #expect(session.undo())
+        #expect(session.score.stableFingerprint == before)
+    }
+
+    @Test func `setAccidental respells the note`() throws {
+        let session = ScoreEditSession(score: EditingFixtures.chordAtIndex1())
+        let note = EditingFixtures.noteID(element: 1)
+        #expect(session.apply(.setAccidental(at: note, accidental: .sharp)))
+        let written = try #require(session.score[note])
+        #expect(written.pitch == 61)
+        #expect(written.accidental == .sharp)
+    }
+
+    @Test func `addNoteToChord grows the chord`() {
+        let session = ScoreEditSession(score: EditingFixtures.twoNoteChordAtIndex1())
+        let slot = VoiceElementID(EditingFixtures.restID(element: 1))
+        #expect(session.apply(.addNoteToChord(at: slot, pitch: 67, tpc: 15, accidental: nil)))
+        guard case let .chord(chord) = session.score[slot] else { Issue.record("expected a chord"); return }
+        #expect(chord.notes.count == 3)
+    }
+
+    @Test func `removeNoteFromChord shrinks the chord`() {
+        let session = ScoreEditSession(score: EditingFixtures.twoNoteChordAtIndex1())
+        let slot = VoiceElementID(EditingFixtures.restID(element: 1))
+        let note = EditingFixtures.noteID(element: 1, noteIndex: 1)
+        #expect(session.apply(.removeNoteFromChord(at: note)))
+        guard case let .chord(chord) = session.score[slot] else { Issue.record("expected a chord"); return }
+        #expect(chord.notes.count == 1)
+    }
+
+    @Test func `setTie ties two notes`() throws {
+        let session = ScoreEditSession(score: EditingFixtures.twoConsecutiveC4Chords())
+        let source = EditingFixtures.noteID(element: 1)
+        let target = EditingFixtures.noteID(element: 2)
+        #expect(session.apply(.setTie(from: source, to: target, sourceTieForward: 1, targetTieBack: 1)))
+        #expect(try #require(session.score[source]).tieForward == 1)
+    }
+
+    @Test func `removeTuplet collapses the tuplet back to a single element`() throws {
+        var score = EditingFixtures.fourQuarterRests()
+        let tupletTarget = VoiceElementID(staff: Self.staff, measureIndex: 0, voiceIndex: 0, elementIndex: 2)
+        _ = try CreateTuplet(at: tupletTarget, actualNotes: 3, normalNotes: 2).apply(to: &score)
+        let session = ScoreEditSession(score: score)
+        #expect(!session.score.parts[0].staves[0].measures[0].voices[0].tuplets.isEmpty)
+        #expect(session.apply(.removeTuplet(at: tupletTarget)))
+        #expect(session.score.parts[0].staves[0].measures[0].voices[0].tuplets.isEmpty)
+    }
 }

@@ -2,6 +2,7 @@ import Foundation
 @testable import SheetMusicAndroidJNI
 @testable import SheetMusicCore
 import Testing
+import Wirelet
 
 @Suite("EditIntentCodec")
 struct EditIntentCodecTests {
@@ -94,5 +95,58 @@ struct EditIntentCodecTests {
         #expect(throws: (any Error).self) {
             try EditIntentCodec.decode(bytes)
         }
+    }
+
+    @Test func `every new intent round-trips`() throws {
+        let staff = StaffAddress(partIndex: 1, staffIndexInPart: 1)
+        let note = NoteID(staff: staff, measureIndex: 2, voiceIndex: 1, elementIndex: 3, noteIndexInChord: 1)
+        // Distinct from `note` (different `elementIndex`) so `.setTie`'s round trip can actually catch a
+        // `source`/`target` field transposition in `SetTieIntentWire` — round-tripping the same `NoteID` on both
+        // sides would pass just as well with the two tags swapped.
+        let otherNote = NoteID(staff: staff, measureIndex: 2, voiceIndex: 1, elementIndex: 4, noteIndexInChord: 0)
+        let slot = VoiceElementID(staff: staff, measureIndex: 2, voiceIndex: 1, elementIndex: 3)
+        let intents: [EditIntent] = [
+            .setNotePitch(at: note, pitch: 61, tpc: 21, accidental: .sharp),
+            .setAccidental(at: note, accidental: nil),
+            .addNoteToChord(at: slot, pitch: 64, tpc: 18, accidental: .natural),
+            .removeNoteFromChord(at: note),
+            .setTie(from: note, to: otherNote, sourceTieForward: 7, targetTieBack: nil),
+            .createTuplet(at: slot, actualNotes: 3, normalNotes: 2),
+            .removeTuplet(at: slot),
+        ]
+        for intent in intents {
+            #expect(try EditIntentCodec.decode(EditIntentCodec.encode(intent)) == intent)
+        }
+    }
+
+    /// An accidental spelling this build does not know must fail the decode, not decode as "no accidental" —
+    /// a silent nil would put a different glyph on the mirror than the authoritative score carries.
+    ///
+    /// Every `Accidental` raw value is pure ASCII, so `^= 0xFF` would always land in `0x80...0xFF` — an orphan
+    /// UTF-8 continuation byte, never valid UTF-8 — and the wire layer's own `invalidUTF8` would fire before
+    /// `AccidentalWire.decoded()` ever runs, which would leave the accidental-refusal path itself unexercised.
+    /// `^= 0x01` instead flips one bit of one ASCII letter, landing on another printable ASCII letter (this byte
+    /// is `"accidentalSharp"`'s second-to-last `'r'`, which becomes `'s'`, so the encoded string becomes
+    /// `"accidentalShasp"` — verified by printing the mutated bytes while writing this test) — still valid UTF-8,
+    /// but a spelling `Accidental(rawValue:)` does not recognize, so the throw actually comes from
+    /// `AccidentalWire.decoded()`'s own guard, not the wire decoder's UTF-8 check. Asserting the specific error
+    /// (not just "throws") is what keeps that distinction visible: a future regression back to
+    /// `invalidUTF8`-only coverage would go silently green under `(any Error).self`.
+    @Test func `an unknown accidental spelling is refused`() throws {
+        var bytes = EditIntentCodec.encode(.setAccidental(
+            at: NoteID(
+                staff: StaffAddress(partIndex: 0, staffIndexInPart: 0),
+                measureIndex: 0,
+                voiceIndex: 0,
+                elementIndex: 0,
+                noteIndexInChord: 0,
+            ),
+            accidental: .sharp,
+        ))
+        // Corrupt one ASCII byte of the accidental's raw-value string payload: the last byte before the frame's
+        // final byte (the length-delimited `raw` field is the last thing this wire struct encodes).
+        let index = try #require(bytes.indices.last.map { max(bytes.startIndex, $0 - 1) })
+        bytes[index] ^= 0x01
+        #expect(throws: WireFormatError.unknownChoiceDiscriminator(0)) { try EditIntentCodec.decode(bytes) }
     }
 }

@@ -1,3 +1,4 @@
+// swiftlint:disable file_length
 import Foundation
 import SheetMusicCore
 import Wirelet
@@ -37,7 +38,16 @@ import Wirelet
 /// 2 = setChordDuration(SlotDurationIntentWire)
 /// 3 = delete(VoiceElementIDWire)
 /// 4 = composite(CompositeIntentWire)
+/// 5 = setNotePitch(PitchWriteIntentWire)
+/// 6 = setAccidental(SetAccidentalIntentWire)
+/// 7 = addNoteToChord(AddNoteIntentWire)
+/// 8 = removeNoteFromChord(NoteIDWire)
+/// 9 = setTie(SetTieIntentWire)
+/// 10 = createTuplet(CreateTupletIntentWire)
+/// 11 = removeTuplet(VoiceElementIDWire)
 /// ```
+///
+/// Cases 5…11 were appended in SP1; 0…4 predate them and must keep their indices and byte layout.
 ///
 /// `InputNoteIntentWire` fields, in tag order:
 /// ```
@@ -100,6 +110,72 @@ import Wirelet
 /// ```
 /// This numbering is deliberately identical to `Score.stableFingerprint`'s duration walk (`ScoreFingerprint.swift`)
 /// so the two never disagree about what a number means.
+///
+/// `NoteIDWire` (`Sources/SheetMusicAndroidJNI/Audio/PathIDCodecs.swift` — same staleness caveat as
+/// `RestIDWire`/`VoiceElementIDWire` above):
+/// ```
+/// tag 1: staff             StaffAddressWire, see layout above
+/// tag 2: measureIndex      i32, zig-zag varint
+/// tag 3: voiceIndex        i32, zig-zag varint
+/// tag 4: elementIndex      i32, zig-zag varint
+/// tag 5: noteIndexInChord  i32, zig-zag varint
+/// ```
+///
+/// `AccidentalWire` — `Accidental?` as its raw-value string rather than a case index, because `Accidental`'s case
+/// order is not this codec's to control:
+/// ```
+/// tag 1: present  u8, varint — 0 = no accidental (nil), 1 = raw names one
+/// tag 2: raw      string — the `Accidental` raw value (e.g. "accidentalSharp"); "" when present == 0. A spelling
+///                 the reader does not recognize throws rather than decoding as "no accidental".
+/// ```
+///
+/// `OptionalIndexWire` — an `Int?` tie index; `.setTie`'s two forward/back links each carry one:
+/// ```
+/// tag 1: present  u8, varint — 0 = nil, 1 = value holds it
+/// tag 2: value    i32, zig-zag varint — 0 when present == 0
+/// ```
+///
+/// `PitchWriteIntentWire` (`setNotePitch`'s payload):
+/// ```
+/// tag 1: location    NoteIDWire, see layout above
+/// tag 2: pitch       i32, zig-zag varint
+/// tag 3: tpc         i32, zig-zag varint
+/// tag 4: accidental  AccidentalWire, see layout above
+/// ```
+///
+/// `SetAccidentalIntentWire` (`setAccidental`'s payload):
+/// ```
+/// tag 1: location    NoteIDWire, see layout above
+/// tag 2: accidental  AccidentalWire, see layout above
+/// ```
+///
+/// `AddNoteIntentWire` (`addNoteToChord`'s payload):
+/// ```
+/// tag 1: location    VoiceElementIDWire, see layout above
+/// tag 2: pitch       i32, zig-zag varint
+/// tag 3: tpc         i32, zig-zag varint
+/// tag 4: accidental  AccidentalWire, see layout above
+/// ```
+///
+/// `removeNoteFromChord` reuses `NoteIDWire` directly as its payload — no wrapper struct, the same pattern `delete`
+/// uses for `VoiceElementIDWire`.
+///
+/// `SetTieIntentWire` (`setTie`'s payload):
+/// ```
+/// tag 1: source            NoteIDWire, see layout above
+/// tag 2: target            NoteIDWire, see layout above
+/// tag 3: sourceTieForward  OptionalIndexWire, see layout above
+/// tag 4: targetTieBack     OptionalIndexWire, see layout above
+/// ```
+///
+/// `CreateTupletIntentWire` (`createTuplet`'s payload):
+/// ```
+/// tag 1: location     VoiceElementIDWire, see layout above
+/// tag 2: actualNotes  i32, zig-zag varint
+/// tag 3: normalNotes  i32, zig-zag varint
+/// ```
+///
+/// `removeTuplet` reuses `VoiceElementIDWire` directly as its payload — no wrapper struct, same pattern as `delete`.
 public enum EditIntentCodec {
     public static func encode(_ intent: EditIntent) -> Data {
         EditIntentWire(from: intent).encodeToData()
@@ -208,6 +284,14 @@ enum EditIntentWire {
     case setChordDuration(SlotDurationIntentWire)
     case delete(VoiceElementIDWire)
     case composite(CompositeIntentWire)
+    // Appended in SP1 — indices 5…11. Never renumber 0…4.
+    case setNotePitch(PitchWriteIntentWire)
+    case setAccidental(SetAccidentalIntentWire)
+    case addNoteToChord(AddNoteIntentWire)
+    case removeNoteFromChord(NoteIDWire)
+    case setTie(SetTieIntentWire)
+    case createTuplet(CreateTupletIntentWire)
+    case removeTuplet(VoiceElementIDWire)
 
     init(from intent: EditIntent) {
         switch intent {
@@ -221,6 +305,31 @@ enum EditIntentWire {
             self = .delete(VoiceElementIDWire(from: location))
         case let .composite(intents):
             self = .composite(CompositeIntentWire(from: intents))
+        case let .setNotePitch(location, pitch, tpc, accidental):
+            self = .setNotePitch(
+                PitchWriteIntentWire(location: location, pitch: pitch, tpc: tpc, accidental: accidental),
+            )
+        case let .setAccidental(location, accidental):
+            self = .setAccidental(SetAccidentalIntentWire(location: location, accidental: accidental))
+        case let .addNoteToChord(location, pitch, tpc, accidental):
+            self = .addNoteToChord(
+                AddNoteIntentWire(location: location, pitch: pitch, tpc: tpc, accidental: accidental),
+            )
+        case let .removeNoteFromChord(location):
+            self = .removeNoteFromChord(NoteIDWire(from: location))
+        case let .setTie(source, target, sourceTieForward, targetTieBack):
+            self = .setTie(
+                SetTieIntentWire(
+                    source: source, target: target,
+                    sourceTieForward: sourceTieForward, targetTieBack: targetTieBack,
+                ),
+            )
+        case let .createTuplet(location, actualNotes, normalNotes):
+            self = .createTuplet(
+                CreateTupletIntentWire(location: location, actualNotes: actualNotes, normalNotes: normalNotes),
+            )
+        case let .removeTuplet(location):
+            self = .removeTuplet(VoiceElementIDWire(from: location))
         }
     }
 
@@ -242,6 +351,34 @@ enum EditIntentWire {
             return .delete(at: wire.decoded())
         case let .composite(wire):
             return try .composite(wire.decoded(depth: depth))
+        case let .setNotePitch(wire):
+            let decoded = try wire.decoded()
+            return .setNotePitch(
+                at: decoded.location, pitch: decoded.pitch, tpc: decoded.tpc, accidental: decoded.accidental,
+            )
+        case let .setAccidental(wire):
+            let decoded = try wire.decoded()
+            return .setAccidental(at: decoded.location, accidental: decoded.accidental)
+        case let .addNoteToChord(wire):
+            let decoded = try wire.decoded()
+            return .addNoteToChord(
+                at: decoded.location, pitch: decoded.pitch, tpc: decoded.tpc, accidental: decoded.accidental,
+            )
+        case let .removeNoteFromChord(wire):
+            return .removeNoteFromChord(at: wire.decoded())
+        case let .setTie(wire):
+            let decoded = wire.decoded()
+            return .setTie(
+                from: decoded.source, to: decoded.target,
+                sourceTieForward: decoded.sourceTieForward, targetTieBack: decoded.targetTieBack,
+            )
+        case let .createTuplet(wire):
+            let decoded = wire.decoded()
+            return .createTuplet(
+                at: decoded.location, actualNotes: decoded.actualNotes, normalNotes: decoded.normalNotes,
+            )
+        case let .removeTuplet(wire):
+            return .removeTuplet(at: wire.decoded())
         }
     }
 }
@@ -309,5 +446,160 @@ struct CompositeIntentWire {
             throw WireFormatError.unknownChoiceDiscriminator(UInt32(depth))
         }
         return try members.map { try $0.decoded(depth: depth + 1) }
+    }
+}
+
+/// `Accidental` as its raw-value string. Variable length, and deliberately not an index: `Accidental`'s cases are
+/// declared in a source order this codec does not control, so an index would silently re-point the day someone
+/// inserts a case. A spelling the reader does not know throws rather than decoding as "no accidental" — a silent
+/// nil would put a different glyph on the mirror than the authoritative score carries.
+@WireFormat
+struct AccidentalWire {
+    /// 0 = no accidental (`nil`), 1 = `raw` names one.
+    var present: UInt8
+    var raw: String
+
+    init(from value: Accidental?) {
+        if let value {
+            present = 1
+            raw = value.rawValue
+        } else {
+            present = 0
+            raw = ""
+        }
+    }
+
+    func decoded() throws -> Accidental? {
+        guard present != 0 else { return nil }
+        guard let accidental = Accidental(rawValue: raw) else {
+            throw WireFormatError.unknownChoiceDiscriminator(0)
+        }
+        return accidental
+    }
+}
+
+/// A signed tie index, or its absence. `Int?` has no wire form of its own here, and `-1` is not safe as a sentinel
+/// because `SetTie` treats the value as opaque.
+@WireFormat
+struct OptionalIndexWire {
+    var present: UInt8
+    var value: Int32
+
+    init(from value: Int?) {
+        if let value {
+            present = 1
+            self.value = Int32(value)
+        } else {
+            present = 0
+            self.value = 0
+        }
+    }
+
+    func decoded() -> Int? {
+        present != 0 ? Int(value) : nil
+    }
+}
+
+@WireFormat
+struct PitchWriteIntentWire {
+    var location: NoteIDWire
+    var pitch: Int32
+    var tpc: Int32
+    var accidental: AccidentalWire
+
+    init(location: NoteID, pitch: Int, tpc: Int, accidental: Accidental?) {
+        self.location = NoteIDWire(from: location)
+        self.pitch = Int32(pitch)
+        self.tpc = Int32(tpc)
+        self.accidental = AccidentalWire(from: accidental)
+    }
+
+    func decoded() throws -> (location: NoteID, pitch: Int, tpc: Int, accidental: Accidental?) {
+        try (
+            location: location.decoded(),
+            pitch: Int(pitch),
+            tpc: Int(tpc),
+            accidental: accidental.decoded(),
+        )
+    }
+}
+
+@WireFormat
+struct AddNoteIntentWire {
+    var location: VoiceElementIDWire
+    var pitch: Int32
+    var tpc: Int32
+    var accidental: AccidentalWire
+
+    init(location: VoiceElementID, pitch: Int, tpc: Int, accidental: Accidental?) {
+        self.location = VoiceElementIDWire(from: location)
+        self.pitch = Int32(pitch)
+        self.tpc = Int32(tpc)
+        self.accidental = AccidentalWire(from: accidental)
+    }
+
+    func decoded() throws -> (location: VoiceElementID, pitch: Int, tpc: Int, accidental: Accidental?) {
+        try (
+            location: location.decoded(),
+            pitch: Int(pitch),
+            tpc: Int(tpc),
+            accidental: accidental.decoded(),
+        )
+    }
+}
+
+@WireFormat
+struct SetAccidentalIntentWire {
+    var location: NoteIDWire
+    var accidental: AccidentalWire
+
+    init(location: NoteID, accidental: Accidental?) {
+        self.location = NoteIDWire(from: location)
+        self.accidental = AccidentalWire(from: accidental)
+    }
+
+    func decoded() throws -> (location: NoteID, accidental: Accidental?) {
+        try (location: location.decoded(), accidental: accidental.decoded())
+    }
+}
+
+@WireFormat
+struct SetTieIntentWire {
+    var source: NoteIDWire
+    var target: NoteIDWire
+    var sourceTieForward: OptionalIndexWire
+    var targetTieBack: OptionalIndexWire
+
+    init(source: NoteID, target: NoteID, sourceTieForward: Int?, targetTieBack: Int?) {
+        self.source = NoteIDWire(from: source)
+        self.target = NoteIDWire(from: target)
+        self.sourceTieForward = OptionalIndexWire(from: sourceTieForward)
+        self.targetTieBack = OptionalIndexWire(from: targetTieBack)
+    }
+
+    func decoded() -> (source: NoteID, target: NoteID, sourceTieForward: Int?, targetTieBack: Int?) {
+        (
+            source: source.decoded(),
+            target: target.decoded(),
+            sourceTieForward: sourceTieForward.decoded(),
+            targetTieBack: targetTieBack.decoded(),
+        )
+    }
+}
+
+@WireFormat
+struct CreateTupletIntentWire {
+    var location: VoiceElementIDWire
+    var actualNotes: Int32
+    var normalNotes: Int32
+
+    init(location: VoiceElementID, actualNotes: Int, normalNotes: Int) {
+        self.location = VoiceElementIDWire(from: location)
+        self.actualNotes = Int32(actualNotes)
+        self.normalNotes = Int32(normalNotes)
+    }
+
+    func decoded() -> (location: VoiceElementID, actualNotes: Int, normalNotes: Int) {
+        (location: location.decoded(), actualNotes: Int(actualNotes), normalNotes: Int(normalNotes))
     }
 }
