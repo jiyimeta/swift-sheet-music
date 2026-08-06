@@ -42,6 +42,7 @@ private struct MasterLevelSection: View {
     let engine: PlaybackEngine
 
     @State private var gain: Float = 1.0
+    @State private var stage: MasterOutputStage = .none
     @State private var meter = LevelMeter()
 
     var body: some View {
@@ -52,6 +53,18 @@ private struct MasterLevelSection: View {
                 .onChange(of: gain) { _, value in
                     engine.setMasterGain(value)
                 }
+
+            Picker("Output stage", selection: $stage) {
+                Text("None").tag(MasterOutputStage.none)
+                Text("Soft clip").tag(MasterOutputStage.softClip)
+                Text("Peak limiter").tag(MasterOutputStage.peakLimiter)
+            }
+            .pickerStyle(.segmented)
+            .font(.caption)
+            .onChange(of: stage) { _, value in
+                engine.setMasterOutputStage(value)
+                meter.resetHold()
+            }
 
             HStack(spacing: 8) {
                 Text("Peak \(Self.dB(meter.peak))")

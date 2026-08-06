@@ -147,11 +147,13 @@ extension PlaybackEngine {
         let engine = AVAudioEngine()
         let resolver = snapshot.resolver
 
-        // Gain-limiter output chain — mirrors the live engine's master
-        // chain (PlaybackEngine.buildMasterChain). Rebuilt here so
-        // exported files reflect the chosen master gain.
+        // Master output chain — mirrors the live engine's
+        // (PlaybackEngine.buildMasterChain). Rebuilt here so exported
+        // files reflect the chosen master gain and shaping stage.
         let (scoreGainMixer, sumMixer) = buildOutputChain(
-            engine: engine, gain: snapshot.masterGain,
+            engine: engine,
+            gain: snapshot.masterGain,
+            stage: snapshot.masterOutputStage,
         )
 
         // 1. Build the score synth (routed through the master stage).
@@ -229,24 +231,31 @@ extension PlaybackEngine {
         )
     }
 
-    /// Attach the gain-limiter output chain
-    /// (scoreGainMixer → sumMixer → PeakLimiter → mainMixerNode) to
-    /// `engine` and seed `scoreGainMixer.outputVolume` with `gain`.
-    /// Returns `(scoreGainMixer, sumMixer)` so callers can route the
-    /// score synth and metronome sampler through the same chain.
+    /// Attach the master output chain
+    /// (scoreGainMixer → sumMixer → softClip → PeakLimiter →
+    /// mainMixerNode) to `engine`, seed `scoreGainMixer.outputVolume`
+    /// with `gain`, and bypass whichever shaping nodes `stage` does not
+    /// select. Returns `(scoreGainMixer, sumMixer)` so callers can route
+    /// the score synth and metronome sampler through the same chain.
     /// Mirrors `PlaybackEngine.buildMasterChain` from `+Master.swift`.
     private static func buildOutputChain(
         engine: AVAudioEngine,
         gain: Float,
+        stage: MasterOutputStage,
     ) -> (scoreGainMixer: AVAudioMixerNode, sumMixer: AVAudioMixerNode) {
         let scoreGainMixer = AVAudioMixerNode()
         let sumMixer = AVAudioMixerNode()
+        let softClip = SoftClipAudioUnit.makeNode()
         let limiter = makePeakLimiter()
+        softClip.bypass = stage != .softClip
+        limiter.bypass = stage != .peakLimiter
         engine.attach(scoreGainMixer)
         engine.attach(sumMixer)
+        engine.attach(softClip)
         engine.attach(limiter)
         engine.connect(scoreGainMixer, to: sumMixer, format: nil)
-        engine.connect(sumMixer, to: limiter, format: nil)
+        engine.connect(sumMixer, to: softClip, format: nil)
+        engine.connect(softClip, to: limiter, format: nil)
         engine.connect(limiter, to: engine.mainMixerNode, format: nil)
         scoreGainMixer.outputVolume = gain
         return (scoreGainMixer, sumMixer)
