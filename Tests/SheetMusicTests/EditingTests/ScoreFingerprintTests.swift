@@ -113,6 +113,25 @@ struct ScoreFingerprintTests {
         #expect(withC.stableFingerprint != withD.stableFingerprint)
     }
 
+    @Test("a trailing grace note's own pitch moves the fingerprint, not just its count")
+    func graceNoteAfterContentMovesFingerprint() {
+        var withC = EditingFixtures.chordAtIndex1()
+        var withD = EditingFixtures.chordAtIndex1()
+        let slot = VoiceElementID(EditingFixtures.restID(element: 1))
+        guard case var .chord(chordC) = withC[slot], case var .chord(chordD) = withD[slot] else {
+            Issue.record("expected a chord"); return
+        }
+        chordC.graceNotesAfter = [GraceChord(graceType: .grace16after, duration: .sixteenth, notes: [
+            Note(pitch: 60, tpc: 14),
+        ])]
+        chordD.graceNotesAfter = [GraceChord(graceType: .grace16after, duration: .sixteenth, notes: [
+            Note(pitch: 62, tpc: 16),
+        ])]
+        withC[slot] = .chord(chordC)
+        withD[slot] = .chord(chordD)
+        #expect(withC.stableFingerprint != withD.stableFingerprint)
+    }
+
     @Test("a tremolo moves the fingerprint")
     func tremoloMovesFingerprint() {
         var score = EditingFixtures.chordAtIndex1()

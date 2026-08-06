@@ -184,13 +184,17 @@ private struct FNV1a {
         combine(note.visible)
     }
 
-    /// `Arpeggio.subtype`'s documented values are `0...5`; `-1` is a safe `nil` sentinel by the same reasoning as
-    /// `combine(_ accidental:)`.
+    /// `Arpeggio.subtype` is a plain `Int` (not an enum), so — unlike `combine(_ accidental:)`'s raw-value string
+    /// or `combine(_ tremolo:)`'s raw-value enum — no type guarantees its range; a value-encoded sentinel like
+    /// `-1` could alias a malformed-but-real `subtype`. Feed an explicit 0/1 presence byte instead: the `nil`
+    /// case is then the single byte `0` and nothing else, which no non-nil case (always `1` followed by more
+    /// bytes) can ever produce.
     mutating func combine(_ arpeggio: Arpeggio?) {
         guard let arpeggio else {
-            combine(-1)
+            combine(0)
             return
         }
+        combine(1)
         combine(arpeggio.subtype)
         combine(arpeggio.timeStretch)
         combine(arpeggio.userLen1)
