@@ -58,7 +58,7 @@
             #expect(origin.y == 12)
         }
 
-        @Test("a visible change emits one instrumentChange-styled text")
+        @Test("a visible change is one spatium above where a staff text on the same staff would land")
         func emitsElement() throws {
             let url = try #require(
                 Bundle.module.url(
@@ -66,19 +66,57 @@
                 ),
             )
             let data = try Data(contentsOf: url)
-            let score = try MSCXParser.parse(data)
+            var score = try MSCXParser.parse(data)
+            let anchorStaff = score.systemMeasures[2].elements
+                .first { positioned in
+                    if case .instrumentChange = positioned.element { return true }
+                    return false
+                }?.originalStaff
+            // Add a "pizz."-style staff text on the SAME staff but at a
+            // DIFFERENT tick (measure 0's downbeat, vs. the fixture's
+            // instrument change on measure 2) so its bounding box never
+            // overlaps the instrument change's in X — same-kind text
+            // items that DO overlap get pushed apart by the skyline
+            // autoplace pass (`AutoplaceRules.shouldIgnoreEachOther`:
+            // same-kind text collides), which would corrupt a same-tick
+            // comparison. Staying on the same staff keeps both elements
+            // under the identical per-staff Y translate applied when
+            // they're lifted into system space, so their DIFFERENCE below
+            // is exact regardless of that (unrelated) transform.
+            score.systemMeasures[0].elements.append(
+                PositionedSystemElement(
+                    position: .start,
+                    element: .staffText(StaffText(text: "pizz.")),
+                    originalStaff: anchorStaff,
+                ),
+            )
             let document = LayoutEngine.layout(
                 score: score, options: ScoreViewOptions(), availableWidth: 800,
             )
             let texts = document.systems
                 .flatMap(\.measures)
                 .flatMap(\.elements)
-                .compactMap { element -> (String, TextStyleType)? in
-                    guard case let .staffText(text, _, _, style) = element
+                .compactMap { element -> (text: String, origin: CGPoint, style: TextStyleType)? in
+                    guard case let .staffText(text, origin, _, style) = element
                     else { return nil }
-                    return (text, style)
+                    return (text, origin, style)
                 }
-            #expect(texts.contains { $0.0 == "to Accordion" && $0.1 == .instrumentChange })
+            #expect(texts.contains { $0.text == "to Accordion" && $0.style == .instrumentChange })
+            let change = try #require(
+                texts.first { $0.text == "to Accordion" && $0.style == .instrumentChange },
+            )
+            let pizz = try #require(texts.first { $0.text == "pizz." && $0.style == .staffText })
+            // MuseScore's `instrumentChangePosAbove` is (0, -2.0) spatium
+            // from the staff top (styledef.cpp:1622) — one spatium HIGHER
+            // than the `-3 sp` used for plain staff text — so the
+            // instruction clears a "pizz."-style directive anchored at
+            // the same tick. This pins that exact one-spatium gap against
+            // the SAME `StaffMetrics` this layout call produced, rather
+            // than a hardcoded literal, so it survives a future change to
+            // the base staff size. A regression that silently reverts the
+            // `- 4` back to staff text's `- 3` collapses this gap to
+            // zero and fails this line.
+            #expect(pizz.origin.y - change.origin.y == document.metrics.sp)
         }
 
         @Test("an invisible change is not drawn by default")
