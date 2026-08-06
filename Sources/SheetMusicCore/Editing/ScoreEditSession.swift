@@ -32,18 +32,49 @@ public final class ScoreEditSession {
         editor.canRedo
     }
 
-    /// Applies `intent` as one undo step. Returns `false` — leaving the score untouched, by the engine's contract —
-    /// when the intent names nothing the score can act on. A refused intent is not an error: the caller simply has
-    /// nothing to relay, so a mirror session stays in step by doing nothing too.
+    /// Why the most recent `apply` call returned `false`, or `nil` before the first call and after the most recent
+    /// one succeeded. This is the only diagnostic available when a mirror session and its authoritative counterpart
+    /// disagree about whether an edit landed — see `EditSessionBridge.nativeApplyEditIntent`'s doc comment on
+    /// Android for why a refusal there is always worth investigating, never a benign no-op.
+    public private(set) var lastRefusalReason: String?
+
+    /// Applies `intent` as one undo step. Returns `false` when the intent names nothing the score can act on, or
+    /// when a sub-command refuses partway through a composite. In the latter case `CompositeEditCommand` rolls back
+    /// what it already applied via each sub-command's inverse — but that rollback runs with `try?`, so it is
+    /// best-effort, not a guarantee backed by the engine: a rollback failure is swallowed rather than surfaced. A
+    /// refused intent is not itself an error: the caller simply has nothing to relay, so a mirror session stays in
+    /// step by doing nothing too.
     @discardableResult
     public func apply(_ intent: EditIntent) -> Bool {
-        guard let command = Self.command(for: intent, in: editor.score) else { return false }
+        let command: (any EditCommand)?
+        do {
+            command = try Self.command(for: intent, in: editor.score, depth: 0)
+        } catch {
+            lastRefusalReason = Self.reason(for: error)
+            return false
+        }
+        guard let command else {
+            lastRefusalReason = "intent resolved to nothing to apply"
+            return false
+        }
         do {
             try editor.apply(command)
         } catch {
+            lastRefusalReason = Self.reason(for: error)
             return false
         }
+        lastRefusalReason = nil
         return true
+    }
+
+    /// Unwraps `SheetMusicError.invalidEdit`'s `reason` directly rather than the error's generic description, so
+    /// callers get the same message an `EditCommand` conformer authored, not `Optional(invalidEdit(reason:))`-shaped
+    /// noise.
+    private static func reason(for error: Error) -> String {
+        guard case let SheetMusicError.invalidEdit(reason) = error else {
+            return String(describing: error)
+        }
+        return reason
     }
 
     public func undo() -> Bool {
@@ -58,9 +89,15 @@ public final class ScoreEditSession {
         return true
     }
 
+    /// Real composites bundle at most two atomic edits (a range op wrapping two sub-commands). This is a bound on
+    /// how deep a nested `.composite` may recurse before `command(for:in:depth:)` refuses it outright, so a
+    /// malformed or pathological intent tree can't be planned into a stack overflow instead of a clean refusal —
+    /// the same limit `CompositeIntentWire.decoded` enforces on the wire side of this same recursion.
+    private static let maxCompositeIntentDepth = 8
+
     /// Plans an intent against `score`. `nil` when the intent has nothing to do — an empty composite, or a composite
-    /// whose members all planned to nothing.
-    private static func command(for intent: EditIntent, in score: Score) -> (any EditCommand)? {
+    /// whose members all planned to nothing. Throws when a nested `.composite` exceeds `maxCompositeIntentDepth`.
+    private static func command(for intent: EditIntent, in score: Score, depth: Int) throws -> (any EditCommand)? {
         switch intent {
         case let .inputNote(location, pitch, tpc, duration):
             let write = InputNote(at: location, pitch: pitch, tpc: tpc)
@@ -81,7 +118,12 @@ public final class ScoreEditSession {
         case let .delete(location):
             return DeleteVoiceElement(at: location)
         case let .composite(intents):
-            let commands = intents.compactMap { command(for: $0, in: score) }
+            guard depth < maxCompositeIntentDepth else {
+                throw SheetMusicError.invalidEdit(
+                    reason: "composite nesting exceeds depth limit (\(maxCompositeIntentDepth))",
+                )
+            }
+            let commands = try intents.compactMap { try command(for: $0, in: score, depth: depth + 1) }
             guard let first = commands.first else { return nil }
             guard commands.count > 1 else { return first }
             return CompositeEditCommand(commands: commands, location: first.affectedLocation)

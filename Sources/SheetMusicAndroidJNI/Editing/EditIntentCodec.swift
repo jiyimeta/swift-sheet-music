@@ -110,6 +110,11 @@ public enum EditIntentCodec {
     }
 }
 
+/// Real composites bundle at most two atomic edits (a range op wrapping two sub-commands). Anything nesting deeper
+/// than this is either a bug on the writing side or a malformed payload, and refusing it is far cheaper than
+/// discovering the hard way — via a stack overflow — that `CompositeIntentWire.members` has no built-in bound.
+private let maxCompositeIntentDepth = 8
+
 /// `NoteDuration` as a discriminator plus an optional fraction. `.fraction` is the only case with a payload, so the
 /// two numerator/denominator fields are zero for every other case.
 @WireFormat
@@ -169,6 +174,11 @@ struct NoteDurationWire {
 
     /// Throws `WireFormatError.unknownChoiceDiscriminator` for a `kind` outside `1...11` — a duration that a
     /// newer writer understands and an older reader does not must not silently decode as some other duration.
+    ///
+    /// Also throws that same error for a non-positive `denominator` on a `kind == 11` payload. `Fraction.init`
+    /// enforces `denominator > 0` with a `precondition` — a trap, not a throw — so a malformed wire payload with
+    /// `denominator == 0` would otherwise kill the process on a path this codec's own tests advertise as returning
+    /// `false`, not crashing.
     func decoded() throws -> NoteDuration {
         switch kind {
         case 1: return .whole
@@ -181,7 +191,11 @@ struct NoteDurationWire {
         case 8: return .oneTwentyEighth
         case 9: return .twoFiftySixth
         case 10: return .measure
-        case 11: return .fraction(Fraction(numerator: Int(numerator), denominator: Int(denominator)))
+        case 11:
+            guard denominator > 0 else {
+                throw WireFormatError.unknownChoiceDiscriminator(UInt32(bitPattern: denominator))
+            }
+            return .fraction(Fraction(numerator: Int(numerator), denominator: Int(denominator)))
         default: throw WireFormatError.unknownChoiceDiscriminator(UInt32(kind))
         }
     }
@@ -210,7 +224,10 @@ enum EditIntentWire {
         }
     }
 
-    func decoded() throws -> EditIntent {
+    /// `depth` counts how many `composite` levels enclose this node — 0 at the top of a decode. Only the
+    /// `.composite` branch advances it; every other case is a leaf and ignores it. See `CompositeIntentWire.decoded`
+    /// for the bound this enforces.
+    func decoded(depth: Int = 0) throws -> EditIntent {
         switch self {
         case let .inputNote(wire):
             let decoded = try wire.decoded()
@@ -224,7 +241,7 @@ enum EditIntentWire {
         case let .delete(wire):
             return .delete(at: wire.decoded())
         case let .composite(wire):
-            return try .composite(wire.decoded())
+            return try .composite(wire.decoded(depth: depth))
         }
     }
 }
@@ -284,7 +301,13 @@ struct CompositeIntentWire {
         members = intents.map(EditIntentWire.init(from:))
     }
 
-    func decoded() throws -> [EditIntent] {
-        try members.map { try $0.decoded() }
+    /// Refuses to decode past `maxCompositeIntentDepth` levels of nesting rather than recursing arbitrarily deep —
+    /// a malformed payload with thousands of nested `composite` members would otherwise overflow the stack instead
+    /// of failing cleanly. `depth` is this composite's own nesting level; each member is one level deeper.
+    func decoded(depth: Int) throws -> [EditIntent] {
+        guard depth < maxCompositeIntentDepth else {
+            throw WireFormatError.unknownChoiceDiscriminator(UInt32(depth))
+        }
+        return try members.map { try $0.decoded(depth: depth + 1) }
     }
 }

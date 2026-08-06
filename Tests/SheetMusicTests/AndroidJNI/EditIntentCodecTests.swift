@@ -46,4 +46,53 @@ struct EditIntentCodecTests {
             try EditIntentCodec.decode(Data([0xFF, 0xFF, 0xFF]))
         }
     }
+
+    /// `Fraction.init(numerator:denominator:)` traps on a non-positive denominator — a `precondition`, not a throw
+    /// — so a structurally valid TLV payload carrying `kind == 11` (`.fraction`) with `denominator == 0` must never
+    /// reach it. This builds exactly that payload by hand-mutating an otherwise-valid wire struct (the public
+    /// `EditIntent` API can't construct a malformed `Fraction` to begin with) and encodes it to real bytes, so the
+    /// assertion below exercises the actual decode path a corrupted or hostile payload would hit.
+    @Test("a fraction duration with a zero denominator is refused, not a crash")
+    func fractionDurationWithZeroDenominatorThrows() {
+        var durationWire = NoteDurationWire(from: .whole)
+        durationWire.kind = 11
+        durationWire.denominator = 0
+        var slotWire = SlotDurationIntentWire(location: Self.slot, duration: .quarter)
+        slotWire.duration = durationWire
+        let bytes = EditIntentWire.setRestDuration(slotWire).encodeToData()
+        #expect(throws: (any Error).self) {
+            try EditIntentCodec.decode(bytes)
+        }
+    }
+
+    /// The forward-compatibility guard: a `kind` outside `1...11` is what stops a newer writer's duration from
+    /// silently decoding as a *different* duration in an older reader — the exact risk a frozen tag creates. Was
+    /// unexercised before this test.
+    @Test("an out-of-range duration kind throws rather than decoding as some other duration")
+    func outOfRangeDurationKindThrows() {
+        var durationWire = NoteDurationWire(from: .whole)
+        durationWire.kind = 200
+        var slotWire = SlotDurationIntentWire(location: Self.slot, duration: .quarter)
+        slotWire.duration = durationWire
+        let bytes = EditIntentWire.setRestDuration(slotWire).encodeToData()
+        #expect(throws: (any Error).self) {
+            try EditIntentCodec.decode(bytes)
+        }
+    }
+
+    /// `CompositeIntentWire.members` recurses with no depth bound of its own; a malformed payload nesting far past
+    /// what a real composite ever does (production nests at most 2 deep) must be refused, not overflow the stack
+    /// unwinding the decode. 20 levels is nowhere near a real stack limit to *build* — this is checking the
+    /// decoder's own policy limit fires well before that, not working around a crash that already happened.
+    @Test("a composite nested past the depth limit throws instead of overflowing the stack")
+    func deeplyNestedCompositeThrows() {
+        var intent = EditIntent.delete(at: Self.slot)
+        for _ in 0 ..< 20 {
+            intent = .composite([intent])
+        }
+        let bytes = EditIntentCodec.encode(intent)
+        #expect(throws: (any Error).self) {
+            try EditIntentCodec.decode(bytes)
+        }
+    }
 }

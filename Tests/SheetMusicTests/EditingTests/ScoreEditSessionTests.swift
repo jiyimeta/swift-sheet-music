@@ -41,6 +41,31 @@ struct ScoreEditSessionTests {
         #expect(session.canUndo == false)
     }
 
+    @Test("a refusal's reason is captured, and a later success clears it")
+    func lastRefusalReasonTracksApplyOutcome() {
+        let session = ScoreEditSession(score: EditingFixtures.fourQuarterRests())
+        #expect(session.lastRefusalReason == nil)
+        let outOfRange = VoiceElementID(staff: Self.staff, measureIndex: 99, voiceIndex: 0, elementIndex: 0)
+        #expect(session.apply(.delete(at: outOfRange)) == false)
+        #expect(session.lastRefusalReason?.contains("DeleteVoiceElement") == true)
+        #expect(session.apply(.inputNote(at: Self.restAt1, pitch: 60, tpc: 14, duration: nil)))
+        #expect(session.lastRefusalReason == nil)
+    }
+
+    /// Mirrors `EditIntentCodecTests.deeplyNestedCompositeThrows` at the domain layer rather than the wire layer:
+    /// `command(for:in:depth:)` recurses on `.composite` with no bound of its own, and a malformed or pathological
+    /// intent tree — however it got constructed — must be refused before it can overflow the stack.
+    @Test("a composite nested past the depth limit is refused, not stack-overflowed")
+    func deeplyNestedCompositeIsRefused() {
+        let session = ScoreEditSession(score: EditingFixtures.fourQuarterRests())
+        var intent = EditIntent.delete(at: Self.slotAt1)
+        for _ in 0 ..< 20 {
+            intent = .composite([intent])
+        }
+        #expect(session.apply(intent) == false)
+        #expect(session.lastRefusalReason?.contains("depth limit") == true)
+    }
+
     @Test("composite applies as one undo step")
     func compositeIsOneStep() {
         let session = ScoreEditSession(score: EditingFixtures.fourQuarterRests())
