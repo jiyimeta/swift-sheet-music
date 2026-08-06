@@ -46,6 +46,22 @@ and this project adheres to
   resumed; the editor has to be drivable synchronously from whatever
   thread calls in.
 
+## [1.9.0] - 2026-08-06
+
+### Added
+
+- `ScoreViewOptions.measureNumbers` chooses how often a measure-number
+  label is engraved. The default `.systemStart` is what the engine did
+  before — one label above the first measure of each system.
+  `.interval(every:)` adds a label to every N-th measure, and
+  `.everyMeasure` is `.interval(every: 1)`. System heads keep their
+  label under every policy, so widening the interval never removes a
+  number the reader could already see, and an anacrusis stays unlabeled
+  because the exclusion lives in `Score.displayedMeasureNumber(at:)`.
+  MuseScore spells this as `Sid::measureNumberSystem` +
+  `Sid::measureNumberInterval`; the label still rides on the top staff
+  only. `render-previews` reads it from `SM_MEASURE_NUMBERS`.
+
 ## [1.8.0] - 2026-08-02
 
 ### Added
