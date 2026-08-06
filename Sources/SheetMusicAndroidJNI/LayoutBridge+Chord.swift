@@ -32,6 +32,9 @@ extension LayoutBridge {
         // When false, per-note-invisible noteheads are dropped; when true
         // they are drawn in MuseScore's invisibleColor() = #808080.
         showsInvisible: Bool,
+        // Selection re-encode — see `LayoutBridge.buildCommands(layout:tint:)`'s doc comment. Resolved
+        // per-note against `LayoutChordNote.noteID` in `emitNoteGlyphs`.
+        tint: (argb: UInt32, ids: Set<ScoreItemID>)?,
         into out: inout [DrawCommand],
     ) {
         let glyphSize = ctx.glyphSize * mag
@@ -52,7 +55,7 @@ extension LayoutBridge {
             stem: stem,
             glyphSize: glyphSize, metrics: ctx, mag: mag,
             measureOriginX: mox, measureOriginY: moy,
-            honorColor: true, into: &out,
+            honorColor: true, tint: tint, into: &out,
         )
         if !invisibleNotes.isEmpty {
             out.append(.setColor(argb: LayoutBridge.invisibleARGB))
@@ -61,7 +64,7 @@ extension LayoutBridge {
                 stem: stem,
                 glyphSize: glyphSize, metrics: ctx, mag: mag,
                 measureOriginX: mox, measureOriginY: moy,
-                honorColor: false, into: &out,
+                honorColor: false, tint: tint, resetArgb: LayoutBridge.invisibleARGB, into: &out,
             )
             out.append(.setColor(argb: LayoutBridge.blackARGB))
         }
@@ -136,6 +139,15 @@ extension LayoutBridge {
     /// dots wrapped in a `setColor` / reset-to-black pair — matching the
     /// Apple `ScoreLayerBuilder` per-note `headColor`. Uncolored notes
     /// paint in the ambient color.
+    ///
+    /// A selected note (`.note(note.noteID)` in `tint.ids`) overrides all of that: its whole visual footprint —
+    /// notehead, parenthesis glyphs, accidental, augmentation dots — is bracketed in `tint.argb` instead,
+    /// regardless of any author color, mirroring the granularity decision `ScoreLayerBuilder+Chord.swift`
+    /// makes (a chord where only one notehead is selected tints that notehead alone, not the whole chord; see
+    /// `LayoutBridge.tintColor(for:tint:)`'s doc comment for why this file does not re-derive that rule).
+    /// `resetArgb` is the color to restore afterward — `blackARGB` normally, or `invisibleARGB` when this call
+    /// is the per-note-invisible pass inside an ambient gray group, so tinting one invisible note doesn't leave
+    /// its still-invisible neighbors painting in black.
     static func emitNoteGlyphs( // swiftlint:disable:this function_body_length
         _ notes: [LayoutChordNote],
         baseDuration baseDur: NoteDuration,
@@ -147,12 +159,15 @@ extension LayoutBridge {
         measureOriginX mox: Double,
         measureOriginY moy: Double,
         honorColor: Bool,
+        tint: (argb: UInt32, ids: Set<ScoreItemID>)?,
+        resetArgb: UInt32 = LayoutBridge.blackARGB,
         into out: inout [DrawCommand],
     ) {
         for note in notes {
-            let argb = honorColor
-                ? note.color.flatMap(LayoutBridge.argb(from:))
-                : nil
+            let selectedArgb = LayoutBridge.tintColor(for: .note(note.noteID), tint: tint)
+            let argb = selectedArgb ?? (
+                honorColor ? note.color.flatMap(LayoutBridge.argb(from:)) : nil
+            )
             if let argb { out.append(.setColor(argb: argb)) }
             emitCenterAnchoredGlyph(
                 codepoint: NoteheadGlyph.codepoint(
@@ -288,7 +303,7 @@ extension LayoutBridge {
                     into: &out,
                 )
             }
-            if argb != nil { out.append(.setColor(argb: LayoutBridge.blackARGB)) }
+            if argb != nil { out.append(.setColor(argb: resetArgb)) }
         }
     }
 

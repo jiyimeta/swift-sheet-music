@@ -64,7 +64,15 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
     // MARK: - Command builder
 
     // swiftlint:disable:next function_body_length
-    static func buildCommands(layout: LayoutDocument) -> [DrawCommand] {
+    static func buildCommands(
+        layout: LayoutDocument,
+        // Selection re-encode: `nil` (the default) reproduces today's output byte-for-byte — every
+        // `tintColor(for:tint:)` lookup below short-circuits to `nil` and no `.setColor` bracket is emitted
+        // that wasn't already. Non-nil brackets the draw commands for every `ScoreItemID` in `ids` with
+        // `.setColor(argb: argb)` … `.setColor(argb: blackARGB)`. `ids` is expected to already be expanded
+        // (see `LayoutBridge+Selection.swift`'s doc comment) — this function does no expansion of its own.
+        tint: (argb: UInt32, ids: Set<ScoreItemID>)? = nil,
+    ) -> [DrawCommand] {
         var out: [DrawCommand] = []
         let metrics = layout.metrics
         let context = MetricsContext(
@@ -123,6 +131,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                         measureOriginY: moy,
                         metrics: context,
                         showsInvisible: system.showsInvisibleElements,
+                        tint: tint,
                         into: &out,
                     )
                 }
@@ -139,6 +148,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                         measureOriginY: moy,
                         metrics: context,
                         showsInvisible: system.showsInvisibleElements,
+                        tint: tint,
                         into: &out,
                     )
                 }
@@ -157,6 +167,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                     measureOriginY: sysOriginY,
                     metrics: context,
                     showsInvisible: system.showsInvisibleElements,
+                    tint: tint,
                     into: &out,
                 )
             }
@@ -180,6 +191,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                 systemOriginX: sysOriginX,
                 systemOriginY: sysOriginY,
                 metrics: context,
+                tint: tint,
                 into: &out,
             )
         }
@@ -201,6 +213,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
         systemOriginX sysOriginX: Double,
         systemOriginY sysOriginY: Double,
         metrics context: MetricsContext,
+        tint: (argb: UInt32, ids: Set<ScoreItemID>)?,
         into out: inout [DrawCommand],
     ) {
         let hasInvisible = system.measures.contains { !$0.invisibleElements.isEmpty }
@@ -217,6 +230,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                     measureOriginY: moy,
                     metrics: context,
                     showsInvisible: true,
+                    tint: tint,
                     into: &out,
                 )
             }
@@ -228,6 +242,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                 measureOriginY: sysOriginY,
                 metrics: context,
                 showsInvisible: true,
+                tint: tint,
                 into: &out,
             )
         }
@@ -264,6 +279,9 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
         // (the caller has already set the ambient color for the invisible
         // pass); when false they are dropped. Only chord/graceChord consult it.
         showsInvisible: Bool,
+        // Selection re-encode — see `buildCommands(layout:tint:)`'s doc comment. Threaded down so
+        // chord/graceChord/rest/tupletLabel can bracket their own draw commands with `.setColor`.
+        tint: (argb: UInt32, ids: Set<ScoreItemID>)?,
         into out: inout [DrawCommand],
     ) {
         let sp = ctx.sp
@@ -312,7 +330,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                 isBeamed: isBeamed, stemExtension: Double(stemExtension),
                 mag: Double(mag),
                 measureOriginX: mox, measureOriginY: moy,
-                metrics: ctx, showsInvisible: showsInvisible, into: &out,
+                metrics: ctx, showsInvisible: showsInvisible, tint: tint, into: &out,
             )
 
         case let .graceChord(notes, duration, stem, stemOrigin, _, hasSlash, mag, _):
@@ -322,7 +340,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                 isBeamed: false, stemExtension: 0,
                 mag: Double(mag),
                 measureOriginX: mox, measureOriginY: moy,
-                metrics: ctx, showsInvisible: showsInvisible, into: &out,
+                metrics: ctx, showsInvisible: showsInvisible, tint: tint, into: &out,
             )
             // Acciaccatura slash across the (reduced) grace stem.
             if hasSlash {
@@ -333,7 +351,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                 )
             }
 
-        case let .rest(duration, origin, _, _, hasLegerLine):
+        case let .rest(duration, origin, _, restID, hasLegerLine):
             // Split base duration + dot count, mirroring `encodeChord` and
             // iOS `ScoreCanvas`. `RestGlyph.codepoint` only understands base
             // durations; passing a dotted `.fraction(...)` straight through
@@ -341,6 +359,11 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
             // augmentation dots separately. iOS uses `onStaffLine: true` for
             // all rest dots, so match that.
             let (baseDur, dotCount) = DurationInterpretation.split(duration)
+            // Selection tint brackets the rest glyph + its augmentation dots — the whole rest's visual
+            // footprint, mirroring the per-note bracket below (see `emitNoteGlyphs`'s doc comment for why
+            // the bracket spans the note's full footprint rather than just the notehead layer Apple attaches).
+            let restArgb = LayoutBridge.tintColor(for: .rest(restID), tint: tint)
+            if let restArgb { out.append(.setColor(argb: restArgb)) }
             emitCenterAnchoredGlyph(
                 codepoint: RestGlyph.codepoint(
                     duration: baseDur, hasLegerLine: hasLegerLine,
@@ -360,6 +383,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                     into: &out,
                 )
             }
+            if restArgb != nil { out.append(.setColor(argb: LayoutBridge.blackARGB)) }
 
         case let .barLine(_, origin):
             // Barline origin sits at the staff middle; strokes extend
@@ -597,7 +621,12 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
             out.append(.lineTo(x: tx, y: ty))
             out.append(.stroke(width: sp * 0.13 * ptToMM))
 
-        case let .tupletLabel(fromOrigin, toOrigin, text, hasBracket, isAbove, _):
+        case let .tupletLabel(fromOrigin, toOrigin, text, hasBracket, isAbove, tid):
+            // The whole tuplet marking (number + bracket hooks/segments) is one visual unit under a single
+            // `.tuplet(tid)` ID — matches Apple's `ScoreLayerBuilder.drawTuplet`, which attaches every one of
+            // those layers to the same ID (see `ScoreLayerBuilder+Misc.swift`'s `drawTuplet`).
+            let tupletArgb = tid.flatMap { LayoutBridge.tintColor(for: .tuplet($0), tint: tint) }
+            if let tupletArgb { out.append(.setColor(argb: tupletArgb)) }
             encodeTupletBracket(
                 fromX: mox + Double(fromOrigin.x),
                 fromY: moy + Double(fromOrigin.y),
@@ -609,6 +638,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                 sp: sp,
                 into: &out,
             )
+            if tupletArgb != nil { out.append(.setColor(argb: LayoutBridge.blackARGB)) }
 
         case let .harmony(lh):
             encodeHarmony(
