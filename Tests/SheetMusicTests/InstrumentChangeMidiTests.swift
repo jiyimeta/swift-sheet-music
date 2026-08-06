@@ -91,4 +91,85 @@ struct InstrumentChangeMidiTests {
         }
         #expect(late.isEmpty)
     }
+
+    @Test("notes before the change carry channel 0, after it channel 5")
+    func notesRouteByTick() throws {
+        let midi = try MidiRenderer.render(score: Self.fixtureScore())
+        let noteOns = midi.tracks.flatMap(\.events).compactMap { event -> (tick: Int, channel: Int, pitch: Int)? in
+            guard case let .noteOn(channel, pitch, velocity) = event.event,
+                  velocity > 0
+            else { return nil }
+            return (event.tick, channel, pitch)
+        }.sorted { $0.tick < $1.tick }
+        #expect(noteOns.count == 4)
+        // Measures 0-1 (pitches 60, 62) on the piano channel.
+        #expect(noteOns[0].pitch == 60 && noteOns[0].channel == 0)
+        #expect(noteOns[1].pitch == 62 && noteOns[1].channel == 0)
+        // Measures 2-3 (pitches 64, 65) on the accordion channel.
+        #expect(noteOns[2].pitch == 64 && noteOns[2].channel == 5)
+        #expect(noteOns[3].pitch == 65 && noteOns[3].channel == 5)
+    }
+
+    @Test("note-offs follow their note-ons onto the same channel")
+    func noteOffsMatch() throws {
+        let midi = try MidiRenderer.render(score: Self.fixtureScore())
+        let offs = midi.tracks.flatMap(\.events).compactMap { event -> (pitch: Int, channel: Int)? in
+            guard case let .noteOff(channel, pitch, _) = event.event
+            else { return nil }
+            return (pitch, channel)
+        }
+        #expect(offs.contains { $0 == (64, 5) })
+        #expect(offs.contains { $0 == (60, 0) })
+    }
+
+    @Test("a change mid-measure switches at that position, not the bar line")
+    func midMeasureChange() throws {
+        // Two half notes in one bar; the change sits on beat 3.
+        let half = NoteDuration.fraction(Fraction(numerator: 1, denominator: 2))
+        let bar = Measure(voices: [Voice(elements: [
+            .chord(Chord(duration: half, notes: [Note(pitch: 60, tpc: 14)])),
+            .chord(Chord(duration: half, notes: [Note(pitch: 62, tpc: 16)])),
+        ])])
+        let accordion = Instrument(
+            id: "accordion",
+            channels: [InstrumentChannel(program: 21, midiChannel: 5)],
+        )
+        let score = Score(
+            division: 480,
+            parts: [Part(
+                id: "P1",
+                instrument: Instrument(id: "piano", channels: [InstrumentChannel()]),
+                staves: [Staff(measures: [bar])],
+            )],
+            systemMeasures: [SystemMeasure(elements: [PositionedSystemElement(
+                position: MeasurePosition(offset: Fraction(numerator: 1, denominator: 2)),
+                element: .instrumentChange(
+                    InstrumentChange(text: "to Accordion", instrument: accordion),
+                ),
+                originalStaff: StaffAddress(partIndex: 0, staffIndexInPart: 0),
+            )])],
+        )
+        let midi = try MidiRenderer.render(score: score)
+        let noteOns = midi.tracks.flatMap(\.events).compactMap { event -> (pitch: Int, channel: Int)? in
+            guard case let .noteOn(channel, pitch, velocity) = event.event,
+                  velocity > 0 else { return nil }
+            return (pitch, channel)
+        }
+        #expect(noteOns.contains { $0 == (60, 0) })
+        #expect(noteOns.contains { $0 == (62, 5) })
+    }
+
+    @Test("a score with no changes renders exactly as before")
+    func noChangeScoreIsUnaffected() throws {
+        let url = try #require(
+            Bundle.module.url(forResource: "midi01", withExtension: "mscx"),
+        )
+        let score = try MSCXParser.parse(Data(contentsOf: url))
+        let midi = try MidiRenderer.render(score: score)
+        let channels = Set(midi.tracks.flatMap(\.events).compactMap { event -> Int? in
+            guard case let .noteOn(channel, _, _) = event.event else { return nil }
+            return channel
+        })
+        #expect(channels == [0])
+    }
 }

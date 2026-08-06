@@ -76,7 +76,7 @@ extension MidiRenderer {
 
     /// Per-flat-staff MIDI channel, in the same enumeration order as
     /// `Score.allStaves`. Matches the channel each staff's track will
-    /// route to in the rendered SMF (see `renderTrack`'s `primaryChannel`).
+    /// route to in the rendered SMF (see `PartChannelRoute.defaultChannel`).
     /// Multi-staff parts (e.g. piano grand staff) share the same channel
     /// across staves — that's a per-part property, not per-staff.
     ///

@@ -40,8 +40,9 @@ public enum MidiRenderer {
         let plan = RepeatUnwinder.plan(navigation: navigation)
         for (partIndex, part) in score.parts.enumerated() {
             let channels = channelAssignments[partIndex]
-            let primaryChannel = channels
-                .first { $0.instrumentOrdinal == 0 }?.channel ?? partIndex
+            let route = PartChannelRoute.build(
+                score: score, partIndex: partIndex, assignments: channels,
+            )
             for (s, staff) in part.staves.enumerated() {
                 let address = StaffAddress(
                     partIndex: partIndex,
@@ -54,7 +55,7 @@ public enum MidiRenderer {
                     staff: staff,
                     part: part,
                     plan: plan,
-                    primaryChannel: primaryChannel,
+                    route: route,
                     channels: channels,
                     isFirstTrack: trackIndex == 0,
                     isTopOfPart: s == 0,
@@ -103,11 +104,79 @@ public enum MidiRenderer {
         }
     }
 
+    /// Ordered channel switches for one part, expressed in the SAME
+    /// measure-relative space `Score.instrumentTimeline` returns.
+    ///
+    /// Kept measure-relative until the last moment: the absolute tick is
+    /// resolved against the STAFF'S OWN `measureBases`, so this walker
+    /// cannot drift from the voice walker that consumes it (breath
+    /// pauses count toward a bar's budget in `measureTicks`, and a
+    /// second independent derivation would disagree).
+    struct PartChannelRoute {
+        let defaultChannel: Int
+        /// Sorted by `measureIndex` then `position`.
+        let switches: [Switch]
+
+        /// One instrument-change channel switch, measure-relative.
+        struct Switch {
+            let measureIndex: Int
+            let position: MeasurePosition
+            let channel: Int
+        }
+
+        /// Build from the part's timeline plus its channel assignments.
+        /// Assignment `ordinal` indexes the timeline one-to-one, and the
+        /// FIRST flavour of each instrument is the sounding one (the
+        /// later flavours are pizz / tremolo variants nothing selects yet).
+        static func build(
+            score: Score, partIndex: Int, assignments: [ChannelAssignment],
+        ) -> PartChannelRoute {
+            let timeline = score.instrumentTimeline(forPart: partIndex)
+            var channelByOrdinal: [Int: Int] = [:]
+            for assignment in assignments
+                where channelByOrdinal[assignment.instrumentOrdinal] == nil
+            {
+                channelByOrdinal[assignment.instrumentOrdinal] = assignment.channel
+            }
+            var switches: [Switch] = []
+            for (ordinal, point) in timeline.enumerated() where ordinal > 0 {
+                guard let channel = channelByOrdinal[ordinal] else { continue }
+                switches.append(Switch(
+                    measureIndex: point.measureIndex,
+                    position: point.position,
+                    channel: channel,
+                ))
+            }
+            return PartChannelRoute(
+                defaultChannel: channelByOrdinal[0] ?? partIndex,
+                switches: switches,
+            )
+        }
+
+        /// Flatten to `(originalTick, channel)` pairs against a staff's
+        /// own measure bases, sorted ascending. Switches whose measure
+        /// index is out of range for a ragged staff are dropped.
+        func channelsByOriginalTick(
+            measureBases: [Int], division: Int,
+        ) -> [(tick: Int, channel: Int)] {
+            switches.compactMap { entry in
+                guard measureBases.indices.contains(entry.measureIndex)
+                else { return nil }
+                return (
+                    measureBases[entry.measureIndex]
+                        + entry.position.ticks(division: division),
+                    entry.channel,
+                )
+            }
+            .sorted { $0.tick < $1.tick }
+        }
+    }
+
     private static func renderTrack(
         staff: Staff,
         part: Part,
         plan: [PlaybackEntry],
-        primaryChannel: Int,
+        route: PartChannelRoute,
         channels: [ChannelAssignment],
         isFirstTrack: Bool,
         isTopOfPart: Bool,
@@ -169,7 +238,7 @@ public enum MidiRenderer {
                 voiceIndex: voiceIndex,
                 staff: staff,
                 part: part,
-                channel: primaryChannel,
+                route: route,
                 division: division,
                 plan: plan,
                 swingMap: swingMap,

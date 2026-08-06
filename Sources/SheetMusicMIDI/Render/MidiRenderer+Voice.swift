@@ -13,7 +13,7 @@ extension MidiRenderer {
         voiceIndex: Int,
         staff: Staff,
         part: Part,
-        channel: Int,
+        route: PartChannelRoute,
         division: Int,
         plan: [PlaybackEntry],
         swingMap: SwingMap = .empty,
@@ -56,6 +56,22 @@ extension MidiRenderer {
                     measureDuration: mDuration,
                 )
             }
+        }
+
+        // Instrument-change channel switches, flattened against THIS
+        // staff's measure bases so the two walkers cannot disagree.
+        let channelSwitches = route.channelsByOriginalTick(
+            measureBases: originalMeasureBase, division: division,
+        )
+        /// Channel in force at `originalTick`. Linear scan: a part has
+        /// at most a handful of changes, and the loop below queries it
+        /// once per voice element.
+        func channel(atOriginalTick tick: Int) -> Int {
+            var result = route.defaultChannel
+            for entry in channelSwitches {
+                if entry.tick <= tick { result = entry.channel } else { break }
+            }
+            return result
         }
 
         // The unrolled `plan` is computed ONCE, score-globally, from
@@ -145,8 +161,10 @@ extension MidiRenderer {
                     case .staffText, .swing, .instrumentChange:
                         // Staff text doesn't render to MIDI; swing state
                         // is pre-collected into `swingMap`; instrument
-                        // changes are resolved into the channel routing
-                        // before the walk (see `partChannelChanges`).
+                        // changes are resolved into `channelSwitches`
+                        // before the walk — deliberately NOT emitted as
+                        // a mid-stream program change (MuseScore puts
+                        // every header at tick 0, exportmidi.cpp:247).
                         break
                     }
                 }
@@ -161,6 +179,9 @@ extension MidiRenderer {
             // follower.
             var consumedByTremolo: Set<Int> = []
             for (elementIndex, element) in effectiveVoice.elements.enumerated() {
+                let channel = channel(
+                    atOriginalTick: localTick + originalTickDelta,
+                )
                 if case let .keySignature(k) = element { currentKey = k.concertKey }
                 if consumedByTremolo.contains(elementIndex) {
                     consumedByTremolo.remove(elementIndex)
