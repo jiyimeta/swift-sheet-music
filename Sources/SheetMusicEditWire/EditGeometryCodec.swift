@@ -34,3 +34,35 @@ struct SelectionTintWire {
     var argb: UInt32
     var items: [ScoreItemIDWire]
 }
+
+/// Codec for the editing caret's bounding rect — millimetres throughout, since this wire type only ever
+/// carries a value already converted at the JNI boundary (`nativeEditingCaretFrame`); unlike
+/// `CursorFrameCodec` (unit-agnostic, used for both pt-space host calls and mm-space JNI calls), there is no
+/// non-JNI caller for this one.
+///
+/// Wire layout (Wirelet's TLV scheme — see `EditIntentCodec.swift`'s doc comment for the tag-and-varint format
+/// this describes):
+/// ```
+/// varint(payloadLength) + payload, where payload is:
+/// tag 1: xMm       f64, varint
+/// tag 2: yMm       f64, varint
+/// tag 3: widthMm   f64, varint
+/// tag 4: heightMm  f64, varint
+/// ```
+public enum EditCaretFrameCodec {
+    public static func encode(xMm: Double, yMm: Double, widthMm: Double, heightMm: Double) -> Data {
+        EditCaretFrameWire(xMm: xMm, yMm: yMm, widthMm: widthMm, heightMm: heightMm).encodeToData()
+    }
+
+    public static func decode(_ data: Data) throws -> EditCaretFrameWire {
+        try EditCaretFrameWire(decoding: data)
+    }
+}
+
+@WireFormat
+public struct EditCaretFrameWire: Equatable {
+    public var xMm: Double
+    public var yMm: Double
+    public var widthMm: Double
+    public var heightMm: Double
+}

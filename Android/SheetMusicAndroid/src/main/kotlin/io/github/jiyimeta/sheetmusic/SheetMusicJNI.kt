@@ -402,4 +402,79 @@ object SheetMusicJNI {
     /** This image's build identity. A host compares it with its own before opening a session. */
     fun nativeEngineVersionStamp(): Long =
         SwiftJavaJNI.nativeEngineVersionStamp()
+
+    /**
+     * Editing hit-test at a tap ([xMm], [yMm], document/mm) within the cached (filtered) layout of
+     * [scoreHandle], preferring [activeVoice] within the tap's slop box when the raw hit belongs to a
+     * different voice. [optionsBytes] is the SAME `LayoutOptionsWire` blob passed to [nativeComputeLayout]
+     * (only its hidden-staves set is read, to re-address the hit against the full score).
+     *
+     * Returns a `ScoreItemID` wire payload, re-addressed against the full (unfiltered) score so it can be
+     * fed straight into an edit intent — or an empty array when the handle is unknown, the layout is not
+     * cached, the options blob fails to decode, or the tap hit no selectable item.
+     */
+    fun nativeEditingHitTest(
+        scoreHandle: Long,
+        xMm: Double,
+        yMm: Double,
+        activeVoice: Int,
+        optionsBytes: ByteArray,
+    ): ByteArray {
+        val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
+        return SwiftJavaJNI.nativeEditingHitTest(
+            scoreHandle,
+            xMm,
+            yMm,
+            activeVoice,
+            SwiftData.fromByteArray(optionsBytes, arena),
+            arena,
+        ).toByteArray()
+    }
+
+    /**
+     * Insertion-caret rect (document/mm) for [itemBytes] (a `ScoreItemID` wire payload, full-score
+     * addressed — the same value [nativeEditingHitTest] returns) within the cached layout of
+     * [scoreHandle], narrowed to the item's own staff band. [minimumWidthMm] floors a zero-width frame;
+     * pass 0 for no floor.
+     *
+     * Returns an `EditCaretFrameWire` payload (`xMm`/`yMm`/`widthMm`/`heightMm`), or an empty array when
+     * the handle is unknown, the layout is not cached, the item bytes fail to decode, or the item doesn't
+     * resolve to a laid-out frame (e.g. a stale ID right after an edit reflows the document).
+     */
+    fun nativeEditingCaretFrame(
+        scoreHandle: Long,
+        itemBytes: ByteArray,
+        minimumWidthMm: Double,
+    ): ByteArray {
+        val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
+        return SwiftJavaJNI.nativeEditingCaretFrame(
+            scoreHandle,
+            SwiftData.fromByteArray(itemBytes, arena),
+            minimumWidthMm,
+            arena,
+        ).toByteArray()
+    }
+
+    /**
+     * Re-encodes the ALREADY-CACHED layout of [scoreHandle] as a draw-program payload with
+     * [selectionBytes] (a `SelectionTintCodec` payload: packed ARGB color + full-score-addressed
+     * `ScoreItemID`s) tinted — a tuplet selection is expanded to every member note/rest its bracket spans.
+     * Never relays out: an empty cache (no prior [nativeComputeLayout] call for this handle) returns an
+     * empty array, so call [nativeComputeLayout] first. Same wire format [nativeComputeLayout] returns; an
+     * empty selection reproduces its bytes exactly for a `.horizontal`-mode layout. A `.vertical`- or
+     * `.page`-mode layout's page geometry is not recoverable from the cache alone, so this call's reported
+     * page dimensions may differ from [nativeComputeLayout]'s original for those two modes — keep the
+     * previously-established canvas size and treat only the draw commands as authoritative there.
+     */
+    fun nativeEncodeDrawProgram(
+        scoreHandle: Long,
+        selectionBytes: ByteArray,
+    ): ByteArray {
+        val arena = SwiftMemoryManagement.DEFAULT_SWIFT_JAVA_AUTO_ARENA
+        return SwiftJavaJNI.nativeEncodeDrawProgram(
+            scoreHandle,
+            SwiftData.fromByteArray(selectionBytes, arena),
+            arena,
+        ).toByteArray()
+    }
 }
