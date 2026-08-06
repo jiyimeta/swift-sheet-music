@@ -140,4 +140,12 @@ struct InstrumentChangeMSCXTests {
         #expect(node.first("Instrument") == nil)
         #expect(node.first("text")?.text == "x")
     }
+
+    @Test("the fixture's timeline is piano then accordion at measure 2")
+    func fixtureTimeline() throws {
+        let score = try MSCXParser.parse(Self.fixture())
+        let timeline = score.instrumentTimeline(forPart: 0)
+        #expect(timeline.map(\.instrument.id) == ["piano", "accordion"])
+        #expect(timeline[1].measureIndex == 2)
+    }
 }
