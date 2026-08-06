@@ -48,6 +48,18 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
+#: Sources that deliberately use a `<durationType>` this package's own
+#: `NoteDuration(mscxName:)` cannot decode, and therefore cannot serve
+#: as score-level ground truth (`MSCXDecoder+Chord.swift` throws
+#: `malformedScore`). Kept because the glyph they draw is in the frozen
+#: class vocabulary and the seam-level labels come from the PDF, not
+#: from the source. Each one is isolated into a source of its own so the
+#: loss never spreads to unrelated content -- see `cov_doublewhole`.
+#: `validate_mscx`'s generator regression test exempts exactly these,
+#: and only for `unknown-duration` problems: a measure-length error in
+#: one still fails.
+UNDECODABLE_DURATION_SOURCES = frozenset({"cov_doublewhole"})
+
 
 @dataclass
 class PartSpec:
@@ -269,33 +281,65 @@ def coverage_sources(seed: int) -> list[tuple[str, str]]:
     sources.append(("cov_accidentals",
                     mscx_document([PartSpec(name="Accidentals", measures=acc_measures)])))
 
-    # 3. Durations: breve/whole down to 64th, plus dots and rests.
+    # 3. Durations: whole down to 64th, plus dots and every rest shape.
+    #
+    # EVERY BAR HERE SUMS EXACTLY TO ITS METER, and `validate_mscx`
+    # enforces it. An overfull bar is not a cosmetic defect: MuseScore 4
+    # aborts during layout and writes no PDF, so the source is lost in
+    # every face at once (measured -- a 4/4 bar holding 6 quarters cost
+    # all 8 faces of the first pilot run). The 64th/32nd bar below is
+    # split from its half-rest tail for exactly that reason; the tail
+    # keeps `restHalf` covered in a bar of its own.
     dur_measures = [
-        "\n".join([time_sig(4, 2), chord(60, 14, duration="breve")]),
         "\n".join([time_sig(4, 4), chord(60, 14, duration="whole")]),
         "\n".join([chord(60, 14, duration="half", dots=1),
                    chord(62, 16, duration="quarter")]),
         "\n".join([chord(60, 14, duration="quarter", dots=2),
                    chord(62, 16, duration="16th"), rest("quarter"), rest("quarter")]),
-        "\n".join([chord(60, 14, duration="64th")] * 8
-                  + [rest("64th")] * 8
-                  + [chord(62, 16, duration="32nd")] * 4
-                  + [rest("32nd")] * 4
+        "\n".join([chord(60, 14, duration="64th")] * 8      # 1/2
+                  + [rest("64th")] * 8                      # 1/2
+                  + [chord(62, 16, duration="32nd")] * 4    # 1/2
+                  + [rest("32nd")] * 4                      # 1/2
                   + [rest("eighth"), rest("16th"), rest("16th"),
-                     rest("quarter"), rest("half")]),
+                     rest("quarter")]),                     # 2/4  -> 4/4
+        "\n".join([rest("half"), rest("half")]),
         "\n".join([rest("whole")]),
     ]
     sources.append(("cov_durations",
                     mscx_document([PartSpec(name="Durations", measures=dur_measures)])))
 
+    # 3b. The double whole (breve), isolated into its own source.
+    #
+    # `noteheadDoubleWhole` is in the frozen class vocabulary, so the
+    # dataset has to draw one -- but `breve` is NOT in this package's
+    # `NoteDuration(mscxName:)`, so `MSCXDecoder+Chord.swift` throws
+    # `malformedScore` on it and `source.mscx` cannot serve as
+    # score-level ground truth. Keeping it in `cov_durations` would have
+    # cost the score-level signal of every other duration in that file;
+    # here the loss is confined to one small source, which prints a
+    # single `FAIL-THREW` line under OMR_SCORE_EVAL. The seam-level
+    # labels, which is where the class is actually needed, are read from
+    # the PDF and are unaffected.
+    sources.append(("cov_doublewhole", mscx_document([PartSpec(
+        name="Double whole",
+        measures=["\n".join([time_sig(4, 2), chord(60, 14, duration="breve")]),
+                  "\n".join([rest("whole"), rest("whole")])],
+    )])))
+
     # 4. Time signatures: digits 0-9 via changing meters (10/4 covers 0
     # and 1), plus common (subtype=1, "C") and cut (subtype=2, "cut-C")
     # time symbol glyphs (timeSigCommon / timeSigCutTime).
+    #
+    # The bar is filled with `n` notes of the meter's own denominator,
+    # so it sums to exactly n/d for every meter in the list. The earlier
+    # `max(2, n // 2)` quarters underfilled the odd eighth meters (7/8
+    # got 3/4, 9/8 got 4/4); MuseScore pads a short bar SILENTLY, so
+    # nothing failed -- the renders just disagreed with the ground truth
+    # parsed back out of `source.mscx`. `validate_mscx` now catches it.
     ts_measures = []
     for n, d in [(2, 4), (3, 4), (5, 4), (6, 8), (7, 8), (9, 8), (10, 4), (12, 8)]:
-        beats = n if d == 4 else max(2, n // 2)
-        dur = "quarter" if d == 4 else "quarter"
-        body = [time_sig(n, d)] + [chord(60, 14, duration=dur) for _ in range(beats)]
+        dur = "quarter" if d == 4 else "eighth"
+        body = [time_sig(n, d)] + [chord(60, 14, duration=dur) for _ in range(n)]
         ts_measures.append("\n".join(body))
     ts_measures.append("\n".join(
         [time_sig(4, 4, subtype=1)] + [chord(60, 14) for _ in range(4)]))
