@@ -1,3 +1,4 @@
+// swiftlint:disable file_length
 import Foundation
 import SheetMusicCore
 import SheetMusicLayout
@@ -9,7 +10,10 @@ import SheetMusicLayout
 
 /// Chord (noteheads + stem + flag + augmentation dots) emitters.
 /// Split out of LayoutBridge+Engraving.swift only to stay under the
-/// per-file length cap; helpers remain internal.
+/// per-file length cap; helpers remain internal. Grew past the cap again
+/// once the selected-note branch (Task 10 review Finding 1) needed its own
+/// notehead/parentheses/accidental helpers alongside the pre-existing
+/// unselected path — see the `file_length` disable below.
 extension LayoutBridge {
     // Linear chord-emit orchestration (noteheads, accidentals, dots, stem,
     // flag); a few lines over the body-length budget after adding accidentals.
@@ -140,14 +144,23 @@ extension LayoutBridge {
     /// Apple `ScoreLayerBuilder` per-note `headColor`. Uncolored notes
     /// paint in the ambient color.
     ///
-    /// A selected note (`.note(note.noteID)` in `tint.ids`) overrides all of that: its whole visual footprint —
-    /// notehead, parenthesis glyphs, accidental, augmentation dots — is bracketed in `tint.argb` instead,
-    /// regardless of any author color, mirroring the granularity decision `ScoreLayerBuilder+Chord.swift`
-    /// makes (a chord where only one notehead is selected tints that notehead alone, not the whole chord; see
-    /// `LayoutBridge.tintColor(for:tint:)`'s doc comment for why this file does not re-derive that rule).
-    /// `resetArgb` is the color to restore afterward — `blackARGB` normally, or `invisibleARGB` when this call
-    /// is the per-note-invisible pass inside an ambient gray group, so tinting one invisible note doesn't leave
-    /// its still-invisible neighbors painting in black.
+    /// A selected note (`.note(note.noteID)` in `tint.ids`) is handled by a separate branch below —
+    /// **only the notehead and accidental glyphs take the tint**, never the parentheses or augmentation dots.
+    /// This is not a simplification; it is `ScoreLayerBuilder+Chord.swift`'s own mechanism: `applySelection`
+    /// recolors exactly the `CAShapeLayer`s a build pass `context.attach`ed to the item's ID, and `drawChord`
+    /// attaches only the notehead glyph and (if present) the accidental glyph to `.note(n.noteID)` —
+    /// `drawNoteheadParentheses` and `drawDots` are drawn into the same parent layer but attach nothing (see
+    /// `ScoreLayerBuilder+Chord.swift:112-143`). A selected dotted/parenthesized note therefore keeps its dots
+    /// and parentheses at the author color (or plain ink) on Apple, and this encoder must reproduce that, not
+    /// improve on it. `resetArgb` is the color to restore after a bracket — `blackARGB` normally, or
+    /// `invisibleARGB` when this call is the per-note-invisible pass inside an ambient gray group, so tinting
+    /// one invisible note doesn't leave its still-invisible neighbors painting in black.
+    ///
+    /// When `tint` is `nil` (or this particular note isn't selected), execution never enters that branch —
+    /// the loop falls through to the original, single-bracket-per-note code path unchanged from before this
+    /// selection feature existed, keyed off `honorColor`/author color alone. That is what makes `tint: nil`
+    /// byte-for-byte identical to the pre-selection encoder: the new branch is dead code on that path, not
+    /// merely equivalent code.
     static func emitNoteGlyphs( // swiftlint:disable:this function_body_length
         _ notes: [LayoutChordNote],
         baseDuration baseDur: NoteDuration,
@@ -165,133 +178,35 @@ extension LayoutBridge {
     ) {
         for note in notes {
             let selectedArgb = LayoutBridge.tintColor(for: .note(note.noteID), tint: tint)
-            let argb = selectedArgb ?? (
-                honorColor ? note.color.flatMap(LayoutBridge.argb(from:)) : nil
-            )
-            if let argb { out.append(.setColor(argb: argb)) }
-            emitCenterAnchoredGlyph(
-                codepoint: NoteheadGlyph.codepoint(
-                    duration: baseDur, headType: note.headType, stemUp: stem == .up,
-                ),
-                cxPt: mox + Double(note.origin.x),
-                cyPt: moy + Double(note.origin.y),
-                sizePt: glyphSize,
-                into: &out,
-            )
-            // Round parentheses around the notehead. Shares glyph + offset
-            // helpers with the Apple paths so all three renderers agree.
-            let (leftParenCp, rightParenCp) = NoteheadParenthesisGlyph.glyphs(
-                for: note.parentheses,
-            )
-            if leftParenCp != nil || rightParenCp != nil {
-                let parenFont = LayoutFont(
-                    face: SMuFLFamily.bravura,
-                    pointSize: CGFloat(glyphSize),
+            let authorArgb = honorColor ? note.color.flatMap(LayoutBridge.argb(from:)) : nil
+
+            if let selectedArgb {
+                emitSelectedNoteGlyphs(
+                    note, baseDuration: baseDur, dotCount: dotCount, stem: stem, glyphSize: glyphSize,
+                    metrics: ctx, mag: mag, measureOriginX: mox, measureOriginY: moy,
+                    selectedArgb: selectedArgb, authorArgb: authorArgb, resetArgb: resetArgb, into: &out,
                 )
-                let noteheadCenterX = mox + Double(note.origin.x)
-                let noteheadCenterY = moy + Double(note.origin.y)
-                if let leftParenCp, let lSc = UnicodeScalar(leftParenCp) {
-                    let adv = Double(FontMetrics.provider.typographicWidth(
-                        text: String(lSc), font: parenFont,
-                    ))
-                    let cx = Double(NoteheadParenthesisPlacement.leftParenCenterX(
-                        noteheadCenterX: CGFloat(noteheadCenterX),
-                        parenAdvance: CGFloat(adv),
-                        sp: CGFloat(ctx.sp * mag),
-                    ))
-                    emitCenterAnchoredGlyph(
-                        codepoint: leftParenCp,
-                        cxPt: cx, cyPt: noteheadCenterY,
-                        sizePt: glyphSize, into: &out,
-                    )
-                }
-                if let rightParenCp, let rSc = UnicodeScalar(rightParenCp) {
-                    let adv = Double(FontMetrics.provider.typographicWidth(
-                        text: String(rSc), font: parenFont,
-                    ))
-                    let cx = Double(NoteheadParenthesisPlacement.rightParenCenterX(
-                        noteheadCenterX: CGFloat(noteheadCenterX),
-                        parenAdvance: CGFloat(adv),
-                        sp: CGFloat(ctx.sp * mag),
-                    ))
-                    emitCenterAnchoredGlyph(
-                        codepoint: rightParenCp,
-                        cxPt: cx, cyPt: noteheadCenterY,
-                        sizePt: glyphSize, into: &out,
-                    )
-                }
+                continue
             }
-            // Accidental + optional bracket enclosure: measured-width placement
-            // via `AccidentalPlacement.leftEdgeX` so iOS and Android agree on
-            // the offset. Glyph table is shared via `AccidentalGlyph`.
-            if let accidental = note.accidental {
-                let accCp = AccidentalGlyph.codepoint(accidental)
-                guard let accSc = UnicodeScalar(accCp) else { continue }
-                let glyphFont = LayoutFont(
-                    face: SMuFLFamily.bravura,
-                    pointSize: CGFloat(glyphSize),
-                )
-                let accAdv = Double(FontMetrics.provider.typographicWidth(
-                    text: String(accSc), font: glyphFont,
-                ))
-                var leftBracketAdv: Double = 0
-                var rightBracketAdv: Double = 0
-                var leftBracketCp: UInt32?
-                var rightBracketCp: UInt32?
-                if let (lCp, rCp) = AccidentalGlyph.enclosure(note.accidentalBracket),
-                   let lSc = UnicodeScalar(lCp), let rSc = UnicodeScalar(rCp)
-                {
-                    leftBracketCp = lCp
-                    rightBracketCp = rCp
-                    leftBracketAdv = Double(FontMetrics.provider.typographicWidth(
-                        text: String(lSc), font: glyphFont,
-                    ))
-                    rightBracketAdv = Double(FontMetrics.provider.typographicWidth(
-                        text: String(rSc), font: glyphFont,
-                    ))
-                }
-                let totalAdv = leftBracketAdv + accAdv + rightBracketAdv
-                // Notehead left edge = center - half-advance. Source the
-                // half-advance from `StemGeometry.attachDx` (Bravura
-                // noteheadBlack half-width) so this matches the Apple
-                // render paths exactly even if `attachDx` is retuned. The
-                // `sp * mag` argument mirrors Apple's `metrics.sp` (already
-                // mag-scaled) — `attachDx` is linear in `sp`, so this equals
-                // `attachDx(sp: ctx.sp) * mag`.
-                let noteheadHalfAdv = Double(StemGeometry.attachDx(
-                    sp: CGFloat(ctx.sp * mag),
-                ))
-                let noteheadLeftX = mox + Double(note.origin.x) - noteheadHalfAdv
-                let leftEdgeX = Double(AccidentalPlacement.leftEdgeX(
-                    noteheadLeftX: CGFloat(noteheadLeftX),
-                    advanceWidth: CGFloat(totalAdv),
-                    sp: CGFloat(ctx.sp * mag),
-                ))
-                if let lCp = leftBracketCp {
-                    emitCenterAnchoredGlyph(
-                        codepoint: lCp,
-                        cxPt: leftEdgeX + leftBracketAdv / 2,
-                        cyPt: moy + Double(note.origin.y),
-                        sizePt: glyphSize,
-                        into: &out,
-                    )
-                }
-                emitCenterAnchoredGlyph(
-                    codepoint: accCp,
-                    cxPt: leftEdgeX + leftBracketAdv + accAdv / 2,
-                    cyPt: moy + Double(note.origin.y),
-                    sizePt: glyphSize,
-                    into: &out,
-                )
-                if let rCp = rightBracketCp {
-                    emitCenterAnchoredGlyph(
-                        codepoint: rCp,
-                        cxPt: leftEdgeX + leftBracketAdv + accAdv + rightBracketAdv / 2,
-                        cyPt: moy + Double(note.origin.y),
-                        sizePt: glyphSize,
-                        into: &out,
-                    )
-                }
+
+            // Not selected — unchanged from before the selection feature: the note's whole visual footprint
+            // (notehead, parentheses, accidental, dots) shares one `setColor` / reset bracket keyed off the
+            // author color alone.
+            let argb = authorArgb
+            if let argb { out.append(.setColor(argb: argb)) }
+            emitNoteheadGlyph(
+                note, baseDuration: baseDur, stem: stem, glyphSize: glyphSize,
+                measureOriginX: mox, measureOriginY: moy, into: &out,
+            )
+            emitNoteheadParenthesisGlyphs(
+                note, glyphSize: glyphSize, metrics: ctx, mag: mag,
+                measureOriginX: mox, measureOriginY: moy, into: &out,
+            )
+            if note.accidental != nil {
+                guard emitNoteAccidentalGlyphs(
+                    note, glyphSize: glyphSize, metrics: ctx, mag: mag,
+                    measureOriginX: mox, measureOriginY: moy, into: &out,
+                ) else { continue }
             }
             if dotCount > 0 {
                 emitAugmentationDots(
@@ -305,6 +220,225 @@ extension LayoutBridge {
             }
             if argb != nil { out.append(.setColor(argb: resetArgb)) }
         }
+    }
+
+    // The selected-note branch of `emitNoteGlyphs`'s per-note loop: notehead + accidental bracketed in
+    // `selectedArgb`, parentheses + dots bracketed in `authorArgb` (or left at the ambient color when the
+    // note has no author color) — see `emitNoteGlyphs`'s doc comment for why this specific split mirrors
+    // `ScoreLayerBuilder+Chord.swift`'s `context.attach` set.
+    // swiftlint:disable:next function_parameter_count
+    private static func emitSelectedNoteGlyphs(
+        _ note: LayoutChordNote,
+        baseDuration baseDur: NoteDuration,
+        dotCount: Int,
+        stem: StemDirection,
+        glyphSize: Double,
+        metrics ctx: MetricsContext,
+        mag: Double,
+        measureOriginX mox: Double,
+        measureOriginY moy: Double,
+        selectedArgb: UInt32,
+        authorArgb: UInt32?,
+        resetArgb: UInt32,
+        into out: inout [DrawCommand],
+    ) {
+        out.append(.setColor(argb: selectedArgb))
+        emitNoteheadGlyph(
+            note, baseDuration: baseDur, stem: stem, glyphSize: glyphSize,
+            measureOriginX: mox, measureOriginY: moy, into: &out,
+        )
+        out.append(.setColor(argb: resetArgb))
+
+        if let authorArgb { out.append(.setColor(argb: authorArgb)) }
+        emitNoteheadParenthesisGlyphs(
+            note, glyphSize: glyphSize, metrics: ctx, mag: mag,
+            measureOriginX: mox, measureOriginY: moy, into: &out,
+        )
+        if authorArgb != nil { out.append(.setColor(argb: resetArgb)) }
+
+        var accidentalOK = true
+        if note.accidental != nil {
+            out.append(.setColor(argb: selectedArgb))
+            accidentalOK = emitNoteAccidentalGlyphs(
+                note, glyphSize: glyphSize, metrics: ctx, mag: mag,
+                measureOriginX: mox, measureOriginY: moy, into: &out,
+            )
+            out.append(.setColor(argb: resetArgb))
+        }
+        guard accidentalOK else { return }
+
+        if dotCount > 0 {
+            if let authorArgb { out.append(.setColor(argb: authorArgb)) }
+            emitAugmentationDots(
+                anchorX: mox + Double(note.origin.x),
+                anchorY: moy + Double(note.origin.y),
+                count: dotCount,
+                onStaffLine: note.step.isMultiple(of: 2),
+                sp: ctx.sp,
+                into: &out,
+            )
+            if authorArgb != nil { out.append(.setColor(argb: resetArgb)) }
+        }
+    }
+
+    /// Emit one note's notehead glyph, centered at the note's own origin.
+    private static func emitNoteheadGlyph(
+        _ note: LayoutChordNote,
+        baseDuration baseDur: NoteDuration,
+        stem: StemDirection,
+        glyphSize: Double,
+        measureOriginX mox: Double,
+        measureOriginY moy: Double,
+        into out: inout [DrawCommand],
+    ) {
+        emitCenterAnchoredGlyph(
+            codepoint: NoteheadGlyph.codepoint(
+                duration: baseDur, headType: note.headType, stemUp: stem == .up,
+            ),
+            cxPt: mox + Double(note.origin.x),
+            cyPt: moy + Double(note.origin.y),
+            sizePt: glyphSize,
+            into: &out,
+        )
+    }
+
+    /// Round parentheses around one note's notehead. Shares glyph + offset helpers with the Apple paths so
+    /// all three renderers agree. No-op when `note.parentheses == .none`.
+    private static func emitNoteheadParenthesisGlyphs(
+        _ note: LayoutChordNote,
+        glyphSize: Double,
+        metrics ctx: MetricsContext,
+        mag: Double,
+        measureOriginX mox: Double,
+        measureOriginY moy: Double,
+        into out: inout [DrawCommand],
+    ) {
+        let (leftParenCp, rightParenCp) = NoteheadParenthesisGlyph.glyphs(for: note.parentheses)
+        guard leftParenCp != nil || rightParenCp != nil else { return }
+        let parenFont = LayoutFont(face: SMuFLFamily.bravura, pointSize: CGFloat(glyphSize))
+        let noteheadCenterX = mox + Double(note.origin.x)
+        let noteheadCenterY = moy + Double(note.origin.y)
+        if let leftParenCp, let lSc = UnicodeScalar(leftParenCp) {
+            let adv = Double(FontMetrics.provider.typographicWidth(
+                text: String(lSc), font: parenFont,
+            ))
+            let cx = Double(NoteheadParenthesisPlacement.leftParenCenterX(
+                noteheadCenterX: CGFloat(noteheadCenterX),
+                parenAdvance: CGFloat(adv),
+                sp: CGFloat(ctx.sp * mag),
+            ))
+            emitCenterAnchoredGlyph(
+                codepoint: leftParenCp,
+                cxPt: cx, cyPt: noteheadCenterY,
+                sizePt: glyphSize, into: &out,
+            )
+        }
+        if let rightParenCp, let rSc = UnicodeScalar(rightParenCp) {
+            let adv = Double(FontMetrics.provider.typographicWidth(
+                text: String(rSc), font: parenFont,
+            ))
+            let cx = Double(NoteheadParenthesisPlacement.rightParenCenterX(
+                noteheadCenterX: CGFloat(noteheadCenterX),
+                parenAdvance: CGFloat(adv),
+                sp: CGFloat(ctx.sp * mag),
+            ))
+            emitCenterAnchoredGlyph(
+                codepoint: rightParenCp,
+                cxPt: cx, cyPt: noteheadCenterY,
+                sizePt: glyphSize, into: &out,
+            )
+        }
+    }
+
+    /// Emit one note's accidental glyph + optional bracket enclosure, if it has one. Measured-width placement
+    /// via `AccidentalPlacement.leftEdgeX` so iOS and Android agree on the offset; glyph table shared via
+    /// `AccidentalGlyph`.
+    ///
+    /// Returns `true` when there was nothing to emit (`note.accidental == nil`) or emission succeeded, `false`
+    /// when the accidental's codepoint is somehow not a valid Unicode scalar — a defensive guard that mirrors
+    /// what the original, pre-extraction code did on that failure (`continue` past the rest of the note's
+    /// emission, including its augmentation dots). In practice `AccidentalGlyph.codepoint` only ever returns
+    /// valid SMuFL Private Use Area codepoints, so this branch is not known to be reachable; the guard is kept
+    /// for the same reason the original carried it.
+    @discardableResult
+    private static func emitNoteAccidentalGlyphs( // swiftlint:disable:this function_body_length
+        _ note: LayoutChordNote,
+        glyphSize: Double,
+        metrics ctx: MetricsContext,
+        mag: Double,
+        measureOriginX mox: Double,
+        measureOriginY moy: Double,
+        into out: inout [DrawCommand],
+    ) -> Bool {
+        guard let accidental = note.accidental else { return true }
+        let accCp = AccidentalGlyph.codepoint(accidental)
+        guard let accSc = UnicodeScalar(accCp) else { return false }
+        let glyphFont = LayoutFont(
+            face: SMuFLFamily.bravura,
+            pointSize: CGFloat(glyphSize),
+        )
+        let accAdv = Double(FontMetrics.provider.typographicWidth(
+            text: String(accSc), font: glyphFont,
+        ))
+        var leftBracketAdv: Double = 0
+        var rightBracketAdv: Double = 0
+        var leftBracketCp: UInt32?
+        var rightBracketCp: UInt32?
+        if let (lCp, rCp) = AccidentalGlyph.enclosure(note.accidentalBracket),
+           let lSc = UnicodeScalar(lCp), let rSc = UnicodeScalar(rCp)
+        {
+            leftBracketCp = lCp
+            rightBracketCp = rCp
+            leftBracketAdv = Double(FontMetrics.provider.typographicWidth(
+                text: String(lSc), font: glyphFont,
+            ))
+            rightBracketAdv = Double(FontMetrics.provider.typographicWidth(
+                text: String(rSc), font: glyphFont,
+            ))
+        }
+        let totalAdv = leftBracketAdv + accAdv + rightBracketAdv
+        // Notehead left edge = center - half-advance. Source the
+        // half-advance from `StemGeometry.attachDx` (Bravura
+        // noteheadBlack half-width) so this matches the Apple
+        // render paths exactly even if `attachDx` is retuned. The
+        // `sp * mag` argument mirrors Apple's `metrics.sp` (already
+        // mag-scaled) — `attachDx` is linear in `sp`, so this equals
+        // `attachDx(sp: ctx.sp) * mag`.
+        let noteheadHalfAdv = Double(StemGeometry.attachDx(
+            sp: CGFloat(ctx.sp * mag),
+        ))
+        let noteheadLeftX = mox + Double(note.origin.x) - noteheadHalfAdv
+        let leftEdgeX = Double(AccidentalPlacement.leftEdgeX(
+            noteheadLeftX: CGFloat(noteheadLeftX),
+            advanceWidth: CGFloat(totalAdv),
+            sp: CGFloat(ctx.sp * mag),
+        ))
+        if let lCp = leftBracketCp {
+            emitCenterAnchoredGlyph(
+                codepoint: lCp,
+                cxPt: leftEdgeX + leftBracketAdv / 2,
+                cyPt: moy + Double(note.origin.y),
+                sizePt: glyphSize,
+                into: &out,
+            )
+        }
+        emitCenterAnchoredGlyph(
+            codepoint: accCp,
+            cxPt: leftEdgeX + leftBracketAdv + accAdv / 2,
+            cyPt: moy + Double(note.origin.y),
+            sizePt: glyphSize,
+            into: &out,
+        )
+        if let rCp = rightBracketCp {
+            emitCenterAnchoredGlyph(
+                codepoint: rCp,
+                cxPt: leftEdgeX + leftBracketAdv + accAdv + rightBracketAdv / 2,
+                cyPt: moy + Double(note.origin.y),
+                sizePt: glyphSize,
+                into: &out,
+            )
+        }
+        return true
     }
 
     /// Emit `count` filled-disc augmentation dots after a notehead /

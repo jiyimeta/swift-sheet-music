@@ -359,9 +359,10 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
             // augmentation dots separately. iOS uses `onStaffLine: true` for
             // all rest dots, so match that.
             let (baseDur, dotCount) = DurationInterpretation.split(duration)
-            // Selection tint brackets the rest glyph + its augmentation dots — the whole rest's visual
-            // footprint, mirroring the per-note bracket below (see `emitNoteGlyphs`'s doc comment for why
-            // the bracket spans the note's full footprint rather than just the notehead layer Apple attaches).
+            // Selection tint brackets the rest glyph only, never its augmentation dots — mirrors Apple's
+            // `drawRest` (`ScoreLayerBuilder+Notation.swift`), which returns only the glyph layer for
+            // `+Element.swift` to `context.attach` to `.rest(rid)`; `drawRest`'s own `drawDots` call is a
+            // sibling that attaches nothing, so a selected rest's dots stay at the ambient color on Apple too.
             let restArgb = LayoutBridge.tintColor(for: .rest(restID), tint: tint)
             if let restArgb { out.append(.setColor(argb: restArgb)) }
             emitCenterAnchoredGlyph(
@@ -373,6 +374,7 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                 sizePt: glyphSize,
                 into: &out,
             )
+            if restArgb != nil { out.append(.setColor(argb: LayoutBridge.blackARGB)) }
             if dotCount > 0 {
                 emitAugmentationDots(
                     anchorX: mox + Double(origin.x),
@@ -383,7 +385,6 @@ public enum LayoutBridge { // swiftlint:disable:this type_body_length
                     into: &out,
                 )
             }
-            if restArgb != nil { out.append(.setColor(argb: LayoutBridge.blackARGB)) }
 
         case let .barLine(_, origin):
             // Barline origin sits at the staff middle; strokes extend
