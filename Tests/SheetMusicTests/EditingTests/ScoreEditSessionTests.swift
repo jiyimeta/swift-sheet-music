@@ -118,4 +118,30 @@ struct ScoreEditSessionTests {
         #expect(session.undo())
         #expect(session.canUndo == false) // one step, even though the plan considered two commands
     }
+
+    /// A half note armed on the last quarter of a 4/4 bar. Without the cross-bar interception the composite's
+    /// SetRestDuration is refused and takes the note write down with it, so nothing appears at all.
+    @Test func `an overrunning duration still writes the note`() throws {
+        let session = ScoreEditSession(score: EditingFixtures.twoMeasuresOfQuarterRests())
+        let target = EditingFixtures.restID(element: 4)
+        #expect(session.apply(.inputNote(at: target, pitch: 60, tpc: 14, duration: .half)))
+        let written = try #require(session.score[VoiceElementID(target)])
+        guard case let .chord(chord) = written else { Issue.record("expected a chord"); return }
+        #expect(!chord.notes.isEmpty)
+    }
+
+    /// Deleting the only element of a bar leaves ONE measure rest, not an empty bar.
+    @Test func `a delete that empties a bar collapses to a measure rest`() {
+        var score = EditingFixtures.twoMeasuresOfQuarterRests()
+        let slot = VoiceElementID(EditingFixtures.restID(measure: 1, element: 0))
+        score[slot] = .chord(Chord(duration: .whole, notes: [Note(pitch: 60, tpc: 14)]))
+        score.parts[0].staves[0].measures[1].voices[0].elements.removeSubrange(1...)
+        let session = ScoreEditSession(score: score)
+        #expect(session.apply(.delete(at: slot)))
+        let elements = session.score.parts[0].staves[0].measures[1].voices[0].elements
+        #expect(elements.count == 1)
+        guard case let .chord(rest) = elements[0] else { Issue.record("expected a rest"); return }
+        #expect(rest.notes.isEmpty)
+        #expect(rest.duration == .measure)
+    }
 }

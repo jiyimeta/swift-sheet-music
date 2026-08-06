@@ -46,25 +46,43 @@ public final class ScoreEditSession {
     /// step by doing nothing too.
     @discardableResult
     public func apply(_ intent: EditIntent) -> Bool {
-        let command: (any EditCommand)?
+        let planned: (any EditCommand)?
         do {
-            command = try Self.command(for: intent, in: editor.score, depth: 0)
+            planned = try Self.command(for: intent, in: editor.score, depth: 0)
         } catch {
             lastRefusalReason = Self.reason(for: error)
             return false
         }
-        guard let command else {
+        guard let planned else {
             lastRefusalReason = "intent resolved to nothing to apply"
             return false
         }
         do {
-            try editor.apply(command)
+            try editor.apply(Self.renotatingAccidentals(planned, from: editor.score))
         } catch {
             lastRefusalReason = Self.reason(for: error)
             return false
         }
         lastRefusalReason = nil
         return true
+    }
+
+    /// `command` with the accidental-glyph repairs its own edit makes necessary bundled onto it, as one undo step —
+    /// or `command` untouched when it needs none (the common case) or when the engine would refuse it anyway.
+    ///
+    /// A stored glyph is only true relative to what precedes it in the bar, so any edit that changes a pitch, adds a
+    /// note, or removes one can leave a LATER note in that bar saying the wrong thing. MuseScore re-runs its
+    /// accidental state over the measure after every such edit; `MeasureAccidentals` is that pass, and this is where
+    /// it hangs. Both images run it, from the same scalars, which is why the repairs never have to cross the wire.
+    ///
+    /// The repairs are planned against the POST-edit score, so the command is applied to a throwaway copy first.
+    /// That copy is also what tells us a refused edit needs no repairs at all.
+    private static func renotatingAccidentals(_ command: any EditCommand, from score: Score) -> any EditCommand {
+        var preview = score
+        guard (try? command.apply(to: &preview)) != nil else { return command }
+        let repairs = MeasureAccidentals.renotationCommands(in: preview, changedFrom: score)
+        guard !repairs.isEmpty else { return command }
+        return CompositeEditCommand(commands: [command] + repairs, location: command.affectedLocation)
     }
 
     /// Unwraps `SheetMusicError.invalidEdit`'s `reason` directly rather than the error's generic description, so
@@ -107,15 +125,35 @@ public final class ScoreEditSession {
             // with it — the second and later notes of a triplet simply never appear. Inside a tuplet the note is
             // written at whatever length the slot already has.
             guard !isInTuplet(slot, in: score) else { return write }
+            // The armed length may overrun the barline. Ask the cross-bar planner FIRST: SetRestDuration refuses
+            // for four reasons besides tuplets, and every one of those refusals would take the note write with it.
+            // iOS only escapes the common case because this interception runs before the composite is built.
+            if let plan = CrossBarInputPlanner.plan(
+                .chord(Chord(duration: duration, notes: [Note(pitch: pitch, tpc: tpc)])),
+                duration: duration, at: slot, in: score,
+            ) {
+                return CompositeEditCommand(commands: plan.commands, location: plan.head)
+            }
             return CompositeEditCommand(
                 commands: [SetRestDuration(at: slot, duration: duration), write],
                 location: slot,
             )
         case let .setRestDuration(location, duration):
+            // The rest key has the same cross-bar hole the note key does — mirrors Folino's
+            // `EditorViewModel+Input.swift`'s `writeRest(over:in:)`, which asks the same planner before falling back
+            // to a plain retime.
+            if let plan = CrossBarInputPlanner.plan(.rest, duration: duration, at: location, in: score) {
+                return CompositeEditCommand(commands: plan.commands, location: plan.head)
+            }
             return SetRestDuration(at: location, duration: duration)
         case let .setChordDuration(location, duration):
             return SetChordDuration(at: location, duration: duration)
         case let .delete(location):
+            // A delete that empties its bar leaves ONE measure rest, not a hole — the same rule the write side
+            // spells as `.measure` rather than `.whole`.
+            if let plan = FullMeasureRestCollapse.plan(deleting: location, in: score) {
+                return plan.command
+            }
             return DeleteVoiceElement(at: location)
         case let .composite(intents):
             guard depth < maxCompositeIntentDepth else {
