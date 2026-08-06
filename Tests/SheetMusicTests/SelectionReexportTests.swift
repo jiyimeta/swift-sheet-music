@@ -3,12 +3,16 @@
     import SheetMusicUI
     import Testing
 
-    /// Guards `Sources/SheetMusicUI/SelectionReexport.swift`: a consumer that imports only `SheetMusicUI` — never
-    /// `SheetMusicLayout` directly, exactly Folino's shape until SP2's cutover — must still see `ScoreHitTester`,
-    /// its `itemIDs(in:)` marquee extension member (declared in a *different* file, `ScoreHitTester+Marquee.swift`,
-    /// than the `struct` itself), `ScoreHitTarget`, `ScoreSelection`, and `SelectionExpansion`. Compiling this file
-    /// *is* the assertion: if any of those stopped resolving through the re-export, this suite would fail to
-    /// build, not just fail an assertion. Deliberately does not `import SheetMusicLayout` anywhere in this file.
+    /// `SheetMusicUI.swift`'s whole-module `@_exported import SheetMusicLayout` is what surfaces the selection
+    /// model and hit-test ladder — which moved down into `SheetMusicLayout` in 1.10.0 — to a consumer that
+    /// imports only `SheetMusicUI`, never `SheetMusicLayout` directly. That is exactly Folino's shape until
+    /// SP2's cutover, so this suite proves the path stays open: it must still see `ScoreHitTester`, its
+    /// `itemIDs(in:)` marquee extension member (declared in a *different* file, `ScoreHitTester+Marquee.swift`,
+    /// than the `struct` itself — proving a same-module extension on a re-exported type rides along with a
+    /// whole-module re-export, not just the type itself), `ScoreHitTarget`, `ScoreSelection`, and
+    /// `SelectionExpansion`. Compiling this file *is* the assertion: if any of those stopped resolving through
+    /// `SheetMusicUI`, this suite would fail to build, not just fail an assertion. Deliberately does not
+    /// `import SheetMusicLayout` anywhere in this file.
     @Suite("SheetMusicUI re-exports the relocated selection API")
     struct SelectionReexportTests {
         private let _installApple = TestSupport.installApple
