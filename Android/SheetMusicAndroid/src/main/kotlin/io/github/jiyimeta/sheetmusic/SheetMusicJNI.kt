@@ -412,6 +412,11 @@ object SheetMusicJNI {
      * Returns a `ScoreItemID` wire payload, re-addressed against the full (unfiltered) score so it can be
      * fed straight into an edit intent — or an empty array when the handle is unknown, the layout is not
      * cached, the options blob fails to decode, or the tap hit no selectable item.
+     *
+     * Exception: a tuplet hit keeps its FILTERED staff address (a pre-existing gap in the shared Swift
+     * `engineCursorForFilteredTap` re-addressing helper, not specific to this call) — building a tuplet edit
+     * intent from this handle with a hidden staff ahead of it in the same part would target the wrong staff.
+     * Note/rest hits are unaffected.
      */
     fun nativeEditingHitTest(
         scoreHandle: Long,
@@ -460,11 +465,11 @@ object SheetMusicJNI {
      * [selectionBytes] (a `SelectionTintCodec` payload: packed ARGB color + full-score-addressed
      * `ScoreItemID`s) tinted — a tuplet selection is expanded to every member note/rest its bracket spans.
      * Never relays out: an empty cache (no prior [nativeComputeLayout] call for this handle) returns an
-     * empty array, so call [nativeComputeLayout] first. Same wire format [nativeComputeLayout] returns; an
-     * empty selection reproduces its bytes exactly for a `.horizontal`-mode layout. A `.vertical`- or
-     * `.page`-mode layout's page geometry is not recoverable from the cache alone, so this call's reported
-     * page dimensions may differ from [nativeComputeLayout]'s original for those two modes — keep the
-     * previously-established canvas size and treat only the draw commands as authoritative there.
+     * empty array, so call [nativeComputeLayout] first. Same wire format [nativeComputeLayout] returns, and
+     * reproduces its page count and per-page dimensions exactly in every layout mode (the cache carries the
+     * `LayoutOptionsWire` and page size [nativeComputeLayout] was called with, so `.vertical`'s viewport
+     * width and `.page`'s multi-page split are replayed, not approximated) — an empty selection reproduces
+     * [nativeComputeLayout]'s bytes exactly.
      */
     fun nativeEncodeDrawProgram(
         scoreHandle: Long,

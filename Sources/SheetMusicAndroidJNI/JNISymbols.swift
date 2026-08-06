@@ -131,6 +131,9 @@ public func nativeComputeLayout(
         document: result.document,
         filteredScore: result.filteredScore,
         hiddenStaves: optionsWire.hiddenStaffAddresses,
+        options: optionsWire,
+        pageWidthMM: pageWidthMM,
+        pageHeightMM: pageHeightMM,
     )
     return result.encoded
 }

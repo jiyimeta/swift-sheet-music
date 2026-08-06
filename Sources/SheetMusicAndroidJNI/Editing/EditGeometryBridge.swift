@@ -47,7 +47,16 @@ import SheetMusicLayout
 ///
 /// Returns an empty `Data` when the score handle is unknown, the layout document is not cached, the options
 /// blob fails to decode, or the tap hit no selectable item. On a hit, returns the `ScoreItemIDCodec` encoding
-/// of the (full-score-addressed) item.
+/// of the item — full-score-addressed for `.note`/`.rest`, per `engineCursorForFilteredTap`'s own switch.
+///
+/// **Exception**: a `.tuplet` hit is returned with its **filtered** staff address unchanged.
+/// `engineCursorForFilteredTap` (`Score+FilteredTapCursor.swift`) passes `.tuplet` (and `.clef`, which
+/// `editingHitTest` never returns) through its switch without re-addressing — a pre-existing gap in that
+/// shared helper, not something introduced here. With a hidden staff ahead of a tuplet's own staff in the
+/// same part, a caller that feeds this straight into an edit intent targeting `TupletID.staff` would hit the
+/// wrong staff. Every OTHER caller in this file is unaffected: `nativeEditingCaretFrame` and
+/// `nativeEncodeDrawProgram` translate back into filtered addressing before use, so a `.tuplet` id that never
+/// left filtered addressing in the first place round-trips through them correctly regardless.
 ///
 /// Not `@available`-annotated: the swift-java jextract `@_cdecl` wrapper that calls this is generated without
 /// one, so the entry point must compile at the package's macOS 14 / iOS 17 baseline. The macOS 15 requirement
@@ -165,16 +174,16 @@ public func nativeEditingCaretFrame(
 /// must call `SelectionExpansion` before handing IDs to the encoder, or a tuplet selection would tint only its
 /// bracket.
 ///
-/// Always emits exactly one page, sized to the cached document's own extent (`document.size`, point →
-/// millimetre converted) — the same formula `nativeComputeLayout`'s `.horizontal` layout mode uses for its
-/// page dimensions (both derive from the same `LayoutDocument.size`), so a `.horizontal`-mode layout's
-/// untinted re-encode reproduces `nativeComputeLayout`'s bytes exactly. A `.vertical`-mode layout's page is
-/// the caller's *viewport* width rather than the document's own (typically narrower) content extent, and
-/// `.page`-mode splits the document into several fixed-size pages — neither width is recoverable from the
-/// cached document alone, so this entry point's reported page geometry will not match `nativeComputeLayout`'s
-/// original header for those two modes, even though `commands` remains correct for the full document. A host
-/// in `.vertical`/`.page` mode should keep its own previously-established canvas dimensions and treat only
-/// `commands` as authoritative when consuming this entry point's output.
+/// Reproduces `nativeComputeLayout`'s own page assembly exactly, mode for mode: `LayoutDocumentCache.Entry`
+/// carries the `LayoutOptionsWire` and `pageWidthMM`/`pageHeightMM` `nativeComputeLayout` was called with
+/// (`JNISymbols.swift`), so `LayoutBridge.encodePages(document:options:pageWidthMM:pageHeightMM:tint:)` — the
+/// same function `computeWithDocument` itself calls with `tint: nil` — can rebuild the identical page count
+/// and per-page dimensions this handle's layout was last computed with, just with `tint` applied. An empty
+/// selection therefore reproduces `nativeComputeLayout`'s bytes exactly in **every** layout mode, not only
+/// the one (`.horizontal`) whose page size happens to be recoverable from `document.size` alone. `.page`
+/// mode's multi-page split, in particular, re-derives from `document.systems` via `LayoutPaginator` — a
+/// geometry-only cut, not a second `LayoutEngine.layout` pass — so it is real re-encode work, not a
+/// relayout.
 ///
 /// Returns an empty `Data` when the score handle is unknown, the layout is not cached, or `selectionBytes`
 /// fails to decode.
@@ -205,11 +214,10 @@ public func nativeEncodeDrawProgram(
         ? nil
         : (argb: decoded.argb, ids: expandedIDs)
 
-    let ptToMM = 25.4 / 72.0
-    let page = EncodablePage(
-        widthMM: Double(entry.document.size.width) * ptToMM,
-        heightMM: Double(entry.document.size.height) * ptToMM,
-        commands: LayoutBridge.buildCommands(layout: entry.document, tint: tint),
+    let pages = LayoutBridge.encodePages(
+        document: entry.document, options: entry.options,
+        pageWidthMM: entry.pageWidthMM, pageHeightMM: entry.pageHeightMM,
+        tint: tint,
     )
-    return DrawProgramCodec.encode(pages: [page])
+    return DrawProgramCodec.encode(pages: pages)
 }

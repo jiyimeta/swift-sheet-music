@@ -44,10 +44,10 @@ struct SelectionTintWire {
 /// this describes):
 /// ```
 /// varint(payloadLength) + payload, where payload is:
-/// tag 1: xMm       f64, varint
-/// tag 2: yMm       f64, varint
-/// tag 3: widthMm   f64, varint
-/// tag 4: heightMm  f64, varint
+/// tag 1: xMm       f64, fixed64
+/// tag 2: yMm       f64, fixed64
+/// tag 3: widthMm   f64, fixed64
+/// tag 4: heightMm  f64, fixed64
 /// ```
 public enum EditCaretFrameCodec {
     public static func encode(xMm: Double, yMm: Double, widthMm: Double, heightMm: Double) -> Data {
