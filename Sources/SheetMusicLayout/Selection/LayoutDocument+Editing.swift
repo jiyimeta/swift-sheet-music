@@ -3,6 +3,8 @@
 #endif
 import SheetMusicCore
 
+// MARK: - Hit testing
+
 /// Task 8: the editing hit-test policy that sits on top of `ScoreHitTester`'s raw ladder — which targets are
 /// selectable, how much slop a fingertip gets, and when a near miss should be rescued versus treated as a tap on
 /// empty paper. Moved from Folino's `EditorViewModel+HitTest.swift` in 1.10.0 so iOS and Android run one policy.
@@ -95,5 +97,38 @@ extension LayoutDocument {
         case .clef:
             nil
         }
+    }
+}
+
+// MARK: - Caret geometry
+
+extension LayoutDocument {
+    /// The insertion caret's column: the engine's cursor frame for `item`, narrowed to `item`'s own staff band —
+    /// one `sp` above the staff top to one `sp` below its bottom. Narrowed, unlike the playback head, because
+    /// editing happens in one staff at a time.
+    ///
+    /// `nil` when the item doesn't resolve to a laid-out frame (a stale ID right after an edit reflows the
+    /// document) or names a staff/measure this document doesn't contain.
+    ///
+    /// `minimumWidth` is the floor a zero-width frame is widened to: 2 for the caret, 1 for the selection anchor
+    /// the callout is positioned from — the only difference between the two call sites in Folino's overlay.
+    public func editingCaretRect(
+        for item: ScoreItemID, in score: Score, minimumWidth: CGFloat = 2,
+    ) -> CGRect? {
+        guard let frame = cursorFrame(for: .item(item), in: score),
+              let band = staffBand(for: item.staff, measureIndex: item.measureIndex)
+        else { return nil }
+        return CGRect(x: frame.minX, y: band.top, width: max(frame.width, minimumWidth), height: band.height)
+    }
+
+    /// Vertical band (document coords) spanning `staff`'s five lines, one `sp` clear on each side, within the
+    /// `LayoutSystem` that contains `measureIndex`. `nil` when the staff/measure can't be located.
+    private func staffBand(for staff: StaffAddress, measureIndex: Int) -> (top: CGFloat, height: CGFloat)? {
+        guard let system = systems.first(where: { candidate in
+            candidate.measures.contains { $0.measureIndex == measureIndex }
+        }), let flatIndex = system.flatIndex(for: staff) else { return nil }
+        let sp = metrics.sp
+        let staffTop = system.origin.y + system.staffOrigins[flatIndex].y
+        return (top: staffTop - sp, height: 6 * sp)
     }
 }
