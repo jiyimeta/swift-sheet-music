@@ -145,6 +145,65 @@
             let replay = try OMROracleFrontEnd.replay(pages: [reparsed])
             #expect(replay.walked.paths == content.paths)
         }
+
+        /// Whole-branch review, Important 1: the gate's closing line used
+        /// to read `exact=\(exact)/\(total)` where `total` counted ONLY
+        /// the renders that reached `.exact` or `.inexact`. A sweep where
+        /// label export had been skipped, or where every PDF failed to
+        /// open, printed `exact=0/0` — "both numbers equal", which is the
+        /// pass criterion the runbook states — and passed vacuously.
+        /// Partial failures shrank the denominator instead of showing as
+        /// misses. `Tally` is the fix: every visited directory counts, so
+        /// a skip or a throw can only ever make `exact < total`, and an
+        /// empty sweep is a failure rather than a perfect score.
+        @Test func gateTallyCountsEveryOutcomeAndCannotPassVacuously() {
+            let empty = OMROracleReplayGate.Tally()
+            #expect(empty.total == 0)
+            #expect(empty.passes == false) // total == 0 is a FAILURE, not 0/0
+            #expect(
+                OMROracleReplayGate.summaryLine(empty)
+                    == "[gate][SUMMARY] P0-G1 exact=0/0 inexact=0 skipped=0 failed=0 pass=N",
+            )
+
+            var mixed = OMROracleReplayGate.Tally()
+            mixed.record(.exact)
+            mixed.record(.exact)
+            mixed.record(.skippedNoLabels)
+            mixed.record(.failed("could not open score.pdf"))
+            mixed.record(.inexact(diff: "line 12"))
+            #expect(mixed == OMROracleReplayGate.Tally(
+                exact: 2, inexact: 1, skippedNoLabels: 1, failed: 1,
+            ))
+            // The denominator counts all five, so the two skipped/failed
+            // renders are visible as misses instead of vanishing.
+            #expect(mixed.total == 5)
+            #expect(mixed.passes == false)
+            #expect(
+                OMROracleReplayGate.summaryLine(mixed)
+                    == "[gate][SUMMARY] P0-G1 exact=2/5 inexact=1 skipped=1 failed=1 pass=N",
+            )
+
+            // A skip alone is enough to fail — it is the exact shape that
+            // used to print `exact=0/0 pass`.
+            var skippedOnly = OMROracleReplayGate.Tally()
+            skippedOnly.record(.skippedNoLabels)
+            #expect(skippedOnly.total == 1)
+            #expect(skippedOnly.passes == false)
+            #expect(
+                OMROracleReplayGate.summaryLine(skippedOnly)
+                    == "[gate][SUMMARY] P0-G1 exact=0/1 inexact=0 skipped=1 failed=0 pass=N",
+            )
+
+            var allExact = OMROracleReplayGate.Tally()
+            allExact.record(.exact)
+            allExact.record(.exact)
+            #expect(allExact.total == 2)
+            #expect(allExact.passes)
+            #expect(
+                OMROracleReplayGate.summaryLine(allExact)
+                    == "[gate][SUMMARY] P0-G1 exact=2/2 inexact=0 skipped=0 failed=0 pass=Y",
+            )
+        }
     }
 
     /// Gate P0-G1 (spec §4.4): oracle replay == direct vector import,
@@ -182,6 +241,55 @@
             case exact
             case inexact(diff: String)
             case failed(String)
+        }
+
+        /// The sweep's running tally, and the sole source of the closing
+        /// `[gate][SUMMARY]` line.
+        ///
+        /// Whole-branch review, Important 1: `total` counts EVERY render
+        /// directory the sweep visited, including the ones that were
+        /// skipped for want of labels and the ones that threw. It used to
+        /// count only `.exact` + `.inexact`, which made the runbook's
+        /// stated criterion ("`exact=N/N`, both numbers equal") vacuously
+        /// satisfiable — a run where label export had never happened, or
+        /// where every PDF failed to open, printed `exact=0/0` and read
+        /// as a pass, and any partial failure shrank the denominator
+        /// instead of showing up as a miss. This is the gate that
+        /// certifies the label format lossless, so a false pass here is
+        /// the most expensive failure mode in the branch.
+        ///
+        /// `passes` therefore also treats an empty sweep as a FAILURE
+        /// (`total > 0 &&`), mirroring the Python side's
+        /// `print_faces_report`, whose exit code is
+        /// `0 if total and not report["unconfirmed"] else 1`.
+        struct Tally: Equatable {
+            var exact = 0
+            var inexact = 0
+            var skippedNoLabels = 0
+            var failed = 0
+
+            var total: Int {
+                exact + inexact + skippedNoLabels + failed
+            }
+
+            var passes: Bool {
+                total > 0 && exact == total
+            }
+
+            mutating func record(_ outcome: RenderOutcome) {
+                switch outcome {
+                case .exact: exact += 1
+                case .inexact: inexact += 1
+                case .skippedNoLabels: skippedNoLabels += 1
+                case .failed: failed += 1
+                }
+            }
+        }
+
+        static func summaryLine(_ tally: Tally) -> String {
+            "[gate][SUMMARY] P0-G1 exact=\(tally.exact)/\(tally.total) "
+                + "inexact=\(tally.inexact) skipped=\(tally.skippedNoLabels) "
+                + "failed=\(tally.failed) pass=\(tally.passes ? "Y" : "N")"
         }
 
         @MainActor
@@ -229,27 +337,38 @@
                 return
             }
             let renderDirs = try OMRHarnessDirectoryWalk.renderDirectories(root: root)
-            var exact = 0
-            var total = 0
+            var tally = Tally()
             for dir in renderDirs {
                 let renderID = (dir as NSString).lastPathComponent
                 let tag = "[\(renderID)]"
-                switch Self.evaluateOneRender(dir: dir) {
+                let outcome = Self.evaluateOneRender(dir: dir)
+                tally.record(outcome)
+                switch outcome {
                 case .skippedNoLabels:
                     print("\(tag)[SUMMARY] SKIP-NO-LABELS")
                 case .exact:
-                    total += 1
-                    exact += 1
                     print("\(tag)[SUMMARY] exact=Y")
                 case let .inexact(diff):
-                    total += 1
                     print("\(tag)[SUMMARY] exact=N")
                     print("\(tag)[diff] \(diff)")
                 case let .failed(message):
                     print("\(tag)[SUMMARY] FAIL-THREW \(message)")
                 }
             }
-            print("[gate][SUMMARY] P0-G1 exact=\(exact)/\(total)")
+            print(Self.summaryLine(tally))
+            // The printed line is no longer the only signal: a sweep that
+            // skipped, threw, or found nothing at all now fails the test
+            // outright, so an operator who reads only `swift test`'s
+            // verdict cannot mistake a vacuous `exact=0/0` for a pass.
+            if !tally.passes {
+                Issue.record(Comment(
+                    rawValue:
+                    "P0-G1 FAILED — \(Self.summaryLine(tally)). "
+                        + "A skipped or failed render counts as a miss; "
+                        + "`total == 0` means the sweep found no render "
+                        + "directory under OMR_DATA_ROOT at all.",
+                ))
+            }
         }
     }
 #endif
