@@ -29,10 +29,27 @@ extension PlaybackEngine {
         // `installTap` traps if the bus is already tapped, so re-arming
         // has to remove the previous tap rather than stack onto it.
         stopLevelMonitoring()
-        sumMixer.installTap(onBus: 0, bufferSize: 1024, format: nil) { buffer, _ in
-            handler(PlaybackEngine.peakAmplitude(in: buffer))
-        }
+        sumMixer.installTap(
+            onBus: 0, bufferSize: 1024, format: nil,
+            block: Self.makeTapBlock(handler),
+        )
         isLevelMonitoring = true
+    }
+
+    /// Build the tap block that feeds `handler`.
+    ///
+    /// `nonisolated` is load-bearing, not decoration. `AVAudioNodeTapBlock`
+    /// is not `@Sendable`, so a closure literal written inside this
+    /// `@MainActor` class's isolation *inherits* that isolation — and
+    /// AVFoundation calls the tap from its own realtime-messenger queue.
+    /// The result is an actor-executor assertion (EXC_BREAKPOINT) the
+    /// instant audio starts flowing, the same trap `previewGeneration`
+    /// documents for `DispatchWorkItem`. Building the block from a
+    /// `nonisolated` context leaves it no isolation to inherit.
+    nonisolated static func makeTapBlock(
+        _ handler: @escaping @Sendable (Float) -> Void,
+    ) -> AVAudioNodeTapBlock {
+        { buffer, _ in handler(peakAmplitude(in: buffer)) }
     }
 
     /// Remove the peak-level tap. No-op when not monitoring.

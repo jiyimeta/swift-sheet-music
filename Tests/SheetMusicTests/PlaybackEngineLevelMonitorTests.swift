@@ -51,6 +51,25 @@
                 #expect(PlaybackEngine.peakAmplitude(in: buffer) == 1.8)
             }
 
+            /// AVFoundation calls the tap from its own realtime-messenger
+            /// queue, never the main actor. A tap block that inherited
+            /// `PlaybackEngine`'s `@MainActor` isolation traps with
+            /// EXC_BREAKPOINT the moment audio starts flowing — the same
+            /// actor-executor assertion `previewGeneration` exists to dodge.
+            /// Building the block off the main actor is the whole point, so
+            /// this test invokes it off the main actor too.
+            @Test("the tap block runs off the main actor")
+            func tapBlockRunsOffTheMainActor() async throws {
+                let buffer = try makeBuffer([[0.25, -0.4]])
+                let received = PeakBox()
+                let block = PlaybackEngine.makeTapBlock { received.store($0) }
+                let time = AVAudioTime(sampleTime: 0, atRate: 44100)
+
+                await Task.detached { block(buffer, time) }.value
+
+                #expect(received.value == 0.4)
+            }
+
             @Test("monitoring is off until started")
             func offByDefault() {
                 let engine = PlaybackEngine(soundfontResolver: NullMeterResolver())
@@ -114,6 +133,24 @@
             }
         }
         return buffer
+    }
+
+    /// Carries a peak from the tap's thread back to the test.
+    private final class PeakBox: @unchecked Sendable {
+        private let lock = NSLock()
+        private var stored: Float?
+
+        func store(_ peak: Float) {
+            lock.lock()
+            defer { lock.unlock() }
+            stored = peak
+        }
+
+        var value: Float? {
+            lock.lock()
+            defer { lock.unlock() }
+            return stored
+        }
     }
 
     private struct NullMeterResolver: SoundfontResolver {
