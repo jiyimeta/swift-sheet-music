@@ -97,7 +97,10 @@ A directory is a render only once it owns a `render.json`, and
 `render.json` is written **last** — after a successful export and a
 successful rasterization. A render that failed anywhere is therefore
 invisible to the manifest, to `coco`, and to every Swift harness, rather
-than half-consumed. For the same reason, `generate` refuses to write
+than half-consumed. `freeze` writes `frozen.json` instead (also last),
+for the same reason and with one extra: naming its marker differently is
+what keeps a second `freeze` from re-degrading its own output. `coco`
+recognizes both markers; nothing else recognizes `frozen.json`. For the same reason, `generate` refuses to write
 into a root that already holds renders (`--allow-existing` overrides):
 regenerating over one would leave the previous run's `*.labels.json` in
 place for `finalize` to hash as if this run had produced them.
@@ -161,6 +164,20 @@ every page once, with a recorded seed, into `$R/eval_frozen/`:
 authoritative — COCO cannot carry paths, curves, origins, or advances):
 
     Training/.venv/bin/python Training/generate/build_dataset.py coco --root $R
+
+The frozen eval set is a **separate** export — `$R/eval_frozen/` is not
+walked as part of `$R` (it holds no `render.json`, by design):
+
+    Training/.venv/bin/python Training/generate/build_dataset.py coco \
+        --root $R/eval_frozen --out $R/coco-eval.json
+
+Each frozen page's boxes are put through that page's `label_transform`,
+so they land on the degraded raster. `images[].width` / `.height` are
+the degraded PNG's real size; the y-flip is anchored to the **clean**
+raster's size, recorded per page as `image.source_size_px` — those are
+two different rasters and the homography maps between them. Read
+`[coco][SUMMARY] … images=N`: a `[coco][WARN]` line means the root
+yielded nothing, which is nearly always the wrong `--root`.
 
 ### P3c-G4 in detail — and the two open questions it settles
 

@@ -762,6 +762,47 @@ def test_freeze_does_not_recurse_into_its_own_output(tmp_path):
     _write_labels(render, 0, [], {})
     assert build_dataset.freeze_dataset(tmp_path, seed=3)["pages"] == 1
     assert build_dataset.freeze_dataset(tmp_path, seed=3)["pages"] == 1
+    # The marker `freeze` writes must NOT be `render.json` -- that is the
+    # single fact keeping a second freeze off its own output.
+    assert not (tmp_path / "eval_frozen" / "r0" / "render.json").exists()
+    assert (tmp_path / "eval_frozen" / "r0" / "frozen.json").exists()
+
+
+def test_frozen_eval_set_is_reachable_by_the_coco_export(tmp_path):
+    """Whole-branch review, Important 2. `freeze` writes no `render.json`
+    (see above), and `coco_export` used to require one -- so
+    `coco --root $R` skipped `eval_frozen` and `coco --root $R/eval_frozen`
+    emitted an empty file without a word. The frozen eval set (spec §6.5)
+    therefore had NO path to the only detector-consumable format. Driven
+    end to end through the real `freeze_dataset` -> `labels_to_coco`
+    chain, not against a hand-written frozen directory."""
+    render = tmp_path / "r0"
+    render.mkdir()
+    (render / "render.json").write_text(json.dumps(
+        {"schema": 1, "render_id": "r0", "pdf": "score.pdf", "dpi": 300},
+        indent=2, sort_keys=True) + "\n")
+    rng = np.random.default_rng(0)
+    Image.fromarray(rng.integers(0, 256, size=(64, 48), dtype=np.uint8)).save(
+        render / "page_0.png")
+    _write_labels(render, 0, [_glyph("noteheadBlack", 6, 5, 7)],
+                  {"noteheadBlack": 1})
+
+    build_dataset.freeze_dataset(tmp_path, seed=3)
+    frozen_root = tmp_path / "eval_frozen"
+
+    coco = build_dataset.coco_export.labels_to_coco(frozen_root)
+    assert [i["file_name"] for i in coco["images"]] == ["r0/page_0.png"]
+    assert len(coco["annotations"]) == 1
+
+    # `images[]` reports the DEGRADED raster actually on disk...
+    degraded = Image.open(frozen_root / "r0" / "page_0.png")
+    assert (coco["images"][0]["width"], coco["images"][0]["height"]) == degraded.size
+    # ...while the y-flip was anchored to the CLEAN raster, which the
+    # scanner profile resampled away from the degraded one.
+    frozen_labels = json.loads(
+        (frozen_root / "r0" / "page_0.labels.json").read_text())
+    assert frozen_labels["image"]["source_size_px"] == [48, 64]
+    assert degraded.size != (48, 64)
 
 
 # --------------------------------------------------------------------
@@ -854,3 +895,16 @@ def test_cli_coco_writes_a_detection_json(tmp_path):
     assert len(doc["annotations"]) == 1
     assert doc["annotations"][0]["category_id"] == (
         build_dataset.vocabulary.CLASS_NAMES.index("noteheadBlack") + 1)
+    assert "[coco][WARN]" not in done.stdout
+
+
+def test_cli_coco_warns_when_a_root_yields_no_images(tmp_path):
+    """An empty export is nearly always a wrong `--root`, and it used to
+    be indistinguishable from a good one -- `write_coco` reported the
+    output path and nothing else. Still exit 0: `coco` is a convenience
+    export, not a gate."""
+    done = _cli("coco", "--root", str(tmp_path))
+    assert done.returncode == 0, done.stderr
+    assert "[coco][WARN]" in done.stdout
+    doc = json.loads((tmp_path / "coco.json").read_text())
+    assert doc["images"] == []

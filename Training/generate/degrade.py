@@ -286,9 +286,20 @@ def freeze_eval_page(png_path: Path, labels_path: Path, out_dir: Path,
                      profile: list[tuple[str, dict]], rng: np.random.Generator) -> None:
     """Frozen eval set (spec §6.5): degrade one clean page and write it
     plus its label file into `out_dir`. The label file is a copy of
-    `labels_path`'s JSON with EXACTLY two fields rewritten --
-    `image.file` (the degraded PNG's name) and `image.label_transform`
-    (the composed homography from `apply_chain`, flattened row-major).
+    `labels_path`'s JSON with EXACTLY three fields rewritten --
+    `image.file` (the degraded PNG's name), `image.label_transform`
+    (the composed homography from `apply_chain`, flattened row-major),
+    and `image.source_size_px` (the CLEAN raster's actual `(width,
+    height)` in pixels, read off `png_path` itself).
+
+    `source_size_px` exists because `label_transform` maps clean-raster
+    pixels to degraded pixels: a consumer that converts the untouched
+    y-up point coordinates into pixels before applying it has to flip
+    about the CLEAN height, and after degradation that height is not
+    recoverable from the degraded PNG (see `coco_export`, which used to
+    get this wrong). Recording the clean size here makes it ground truth
+    rather than a re-derivation.
+
     Every other field is byte-for-byte the original decoded/re-encoded
     JSON. Unlike training-time degradation (applied fresh every epoch
     from the clean raster, unlimited variation), this is meant to be run
@@ -305,5 +316,7 @@ def freeze_eval_page(png_path: Path, labels_path: Path, out_dir: Path,
     labels = json.loads(Path(labels_path).read_text())
     labels["image"]["file"] = out_png.name
     labels["image"]["label_transform"] = [float(v) for v in h.reshape(-1)]
+    # (width, height) of the CLEAN raster -- `img` is (rows, cols).
+    labels["image"]["source_size_px"] = [int(img.shape[1]), int(img.shape[0])]
     (out_dir / Path(labels_path).name).write_text(
         json.dumps(labels, indent=2, sort_keys=True) + "\n")

@@ -835,6 +835,16 @@ def freeze_dataset(root: Path, seed: int, profile_path: Path = DEFAULT_PROFILE,
     in the walk. The output is not re-walked on a second run: it carries
     labels but no `render.json`, and `_render_dirs` keys off exactly
     that.
+
+    Each frozen render directory does get a `frozen.json` marker,
+    written LAST for the same reason `render.json` is (a half-finished
+    freeze stays invisible). It is what makes the frozen set reachable
+    by `coco --root <root>/eval_frozen`: `coco_export` recognizes it
+    alongside `render.json`, whereas keying only off `render.json` --
+    which this function must not write -- left spec 6.5's eval set with
+    no path to the only detector-consumable format. It is deliberately
+    NOT named `render.json`, so `_render_dirs` (and therefore a second
+    `freeze`) still cannot see it.
     """
     root = Path(root)
     out_root = root / out_name
@@ -848,10 +858,18 @@ def freeze_dataset(root: Path, seed: int, profile_path: Path = DEFAULT_PROFILE,
                 pages.append((render_dir.name, png, label_path))
     child_seeds = np.random.default_rng(seed + 1).integers(
         0, 2 ** 32, size=len(pages))
+    frozen_pages: dict[str, int] = {}
     for index, (render_id, png, label_path) in enumerate(pages):
         degrade.freeze_eval_page(
             png, label_path, out_root / render_id, profile,
             np.random.default_rng(int(child_seeds[index])))
+        frozen_pages[render_id] = frozen_pages.get(render_id, 0) + 1
+    for render_id in sorted(frozen_pages):
+        (out_root / render_id / "frozen.json").write_text(json.dumps({
+            "schema": SCHEMA, "render_id": render_id, "seed": seed,
+            "profile": Path(profile_path).name,
+            "pages": frozen_pages[render_id],
+        }, indent=2, sort_keys=True) + "\n")
     print(f"[freeze][SUMMARY] pages={len(pages)} out={out_root} "
           f"profile={profile_path}")
     return {"pages": len(pages), "out": str(out_root),
@@ -1017,7 +1035,20 @@ def main(argv=None) -> int:
     if args.cmd == "coco":
         root = Path(args.root)
         out = Path(args.out) if args.out else root / "coco.json"
-        print(f"[coco][SUMMARY] out={coco_export.write_coco(root, out)}")
+        doc = coco_export.labels_to_coco(root)
+        written = coco_export.dump_coco(doc, out)
+        print(f"[coco][SUMMARY] out={written} images={len(doc['images'])} "
+              f"annotations={len(doc['annotations'])}")
+        # An empty export is almost always a wrong --root rather than an
+        # empty dataset, and it used to be indistinguishable from a good
+        # one. Warn instead of exiting nonzero: `coco` is a convenience
+        # export, not a gate (only `compare` and `faces` return 1), and a
+        # root that genuinely holds no labels yet is not an error.
+        if not doc["images"]:
+            print(f"[coco][WARN] no labeled pages under {root} — a render "
+                  "directory is exported only if it owns render.json "
+                  "(training) or frozen.json (eval_frozen). Check --root, "
+                  "and that phase 2 (label export) has run")
         return 0
     problems = manifest.compare_datasets(Path(args.root_a), Path(args.root_b))
     for problem in problems:

@@ -186,8 +186,8 @@ def test_new_geometric_stage_composes_through_unmodified_machinery(tmp_path, mon
     assert np.allclose(got, [11.0, 4.0, 1.0])
 
 
-def test_freeze_eval_page_rewrites_only_transform_and_file(tmp_path):
-    _page(tmp_path)  # writes page_0.png into tmp_path via rasterize_pdf
+def test_freeze_eval_page_rewrites_only_transform_file_and_source_size(tmp_path):
+    clean = _page(tmp_path)  # writes page_0.png into tmp_path via rasterize_pdf
     png = tmp_path / "page_0.png"
     labels = tmp_path / "page_0.labels.json"
     labels.write_text(json.dumps(_labels_json(), indent=2, sort_keys=True))
@@ -198,10 +198,24 @@ def test_freeze_eval_page_rewrites_only_transform_and_file(tmp_path):
     frozen = json.loads((out_dir / "page_0.labels.json").read_text())
     assert frozen["image"]["label_transform"] != [1, 0, 0, 0, 1, 0, 0, 0, 1]
     assert (out_dir / frozen["image"]["file"]).exists()
-    # Everything except image.file / image.label_transform is untouched.
+
+    # `source_size_px` is the CLEAN raster's (width, height): the space
+    # `label_transform` maps FROM. A consumer flipping y-up points into
+    # pixels before applying the homography must anchor to this height,
+    # which is unrecoverable from the degraded PNG -- hence recording it.
+    # `clean` is (rows, cols) = (height, width).
+    assert frozen["image"]["source_size_px"] == [clean.shape[1], clean.shape[0]]
+    degraded = Image.open(out_dir / frozen["image"]["file"])
+    assert degraded.size != tuple(frozen["image"]["source_size_px"]), (
+        "the scanner profile resamples, so the degraded raster must differ "
+        "from the clean one -- otherwise this test proves nothing")
+
+    # Everything except those three image fields is untouched.
     original = json.loads(labels.read_text())
-    original["image"].pop("file"); original["image"].pop("label_transform")
-    frozen["image"].pop("file"); frozen["image"].pop("label_transform")
+    for key in ("file", "label_transform"):
+        original["image"].pop(key)
+        frozen["image"].pop(key)
+    frozen["image"].pop("source_size_px")
     assert original == frozen
 
 
