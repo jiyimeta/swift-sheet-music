@@ -17,6 +17,11 @@ tmp/
 # locally for the maintainer's reference; not part of the public tree.
 # Durable design decisions are distilled into ARCHITECTURE.md.
 docs/superpowers/
+
+# Subagent-driven-development scratch: per-plan ledgers, task briefs,
+# implementer reports and review packages. Git history is the record.
+.superpowers/
+
 Examples/Apple/build/
 
 # SoundFont samples for the example app — distributed via GitHub
