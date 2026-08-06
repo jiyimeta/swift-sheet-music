@@ -12,12 +12,14 @@
     /// built and torn down per test) so they run always-on and need
     /// neither `OMR_DATA_ROOT` nor a real dataset.
     ///
-    /// Each harness's per-directory step was extracted to a non-private
-    /// (or `static`) function purely so it is directly callable here —
-    /// see the doc comments on `exportOneRender`, `evaluateOneRender`
-    /// (×2), and `evaluate` in the respective harness files. None of
-    /// that changed any harness's printed output, `[SUMMARY]` format, or
-    /// env gating.
+    /// Each harness's per-directory step was extracted to a `static`
+    /// `evaluateOneRender`-style function returning a `RenderOutcome` (or,
+    /// for seam-eval, a non-private `evaluate` returning a page count) —
+    /// see the doc comments in the respective harness files, including
+    /// the one deliberate behavior change (label-listing failures no
+    /// longer abort the whole sweep — Task 9 review, finding 1). None of
+    /// this changed any harness's printed `[SUMMARY]` lines or env
+    /// gating.
     struct OMRHarnessWiringTests {
         @MainActor
         @Test func directoryWalkFindsOnlyRenderDirsInSortedOrder() throws {
@@ -36,16 +38,22 @@
         /// which produces labels rather than consuming them. The fixture
         /// PDF carries staff lines only — zero music glyphs — so the
         /// dual-walk pairing in `OMRLabelExport.export` is empty and the
-        /// harness must take its QUARANTINE branch: found, read, walked,
-        /// rejected, no file written. That is the concrete, non-tautological
-        /// signal that this branch — not the write branch — actually ran.
+        /// harness must take its QUARANTINE branch.
+        ///
+        /// Asserts the returned `RenderOutcome` BY VALUE (Task 9 review,
+        /// finding 2) — checking only "no label file appeared" cannot
+        /// distinguish QUARANTINE from `.badRenderJSON`, `.failed`, or a
+        /// literal do-nothing stub, all of which satisfy that check
+        /// identically.
         @MainActor
         @Test func labelExportHarnessProcessesAWellFormedDirAndQuarantinesIt() throws {
             let layout = try OMRHarnessFixture.makeLayout()
             defer { OMRHarnessFixture.cleanup(layout) }
+            switch OMRLabelExportHarness.evaluateOneRender(dir: layout.missingLabelsDir) {
+            case .quarantined: break
+            case let outcome: Issue.record("expected .quarantined, got \(outcome)")
+            }
             let labelsPath = "\(layout.missingLabelsDir)/page_0.labels.json"
-            #expect(!FileManager.default.fileExists(atPath: labelsPath))
-            OMRLabelExportHarness().exportOneRender(dir: layout.missingLabelsDir)
             #expect(!FileManager.default.fileExists(atPath: labelsPath))
         }
 
@@ -72,20 +80,35 @@
         }
 
         /// Drives the real discovery → decode → metrics chain for a
-        /// well-formed directory (must not throw) and for one with no
-        /// `.labels.json` (must no-op, not throw or crash).
+        /// well-formed directory and for one with no `.labels.json`.
+        ///
+        /// Asserts the RETURNED PAGE COUNT, not just `aggregate` (Task 9
+        /// review, finding 3): the fixture's well-formed page carries no
+        /// music glyphs, so `aggregate` stays empty whether or not the
+        /// directory was genuinely processed — a traversal bug that
+        /// always found zero label files would pass an `aggregate`-only
+        /// check for BOTH directories identically. The page count is the
+        /// differential signal: `> 0` for well-formed (one page really
+        /// was read and decoded), `== 0` for missing-labels (nothing to
+        /// read, not a crash).
         @MainActor
         @Test func seamEvalHarnessProcessesWellFormedDirAndNoOpsWithoutLabels() throws {
             let layout = try OMRHarnessFixture.makeLayout()
             defer { OMRHarnessFixture.cleanup(layout) }
             var aggregate: [String: OMRSeamMetrics.ClassCounts] = [:]
-            try OMRSeamEvalHarness().evaluate(dir: layout.wellFormedDir, aggregate: &aggregate)
+            let wellFormedCount = try OMRSeamEvalHarness().evaluate(
+                dir: layout.wellFormedDir, aggregate: &aggregate,
+            )
+            #expect(wellFormedCount > 0)
             // The fixture carries no music glyphs, so there is nothing to
             // aggregate — this is really asserting that reading, decoding,
             // and running every metric function against the label file
             // completed without throwing.
             #expect(aggregate.isEmpty)
-            try OMRSeamEvalHarness().evaluate(dir: layout.missingLabelsDir, aggregate: &aggregate)
+            let missingCount = try OMRSeamEvalHarness().evaluate(
+                dir: layout.missingLabelsDir, aggregate: &aggregate,
+            )
+            #expect(missingCount == 0)
             #expect(aggregate.isEmpty)
         }
 

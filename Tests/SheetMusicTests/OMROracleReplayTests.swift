@@ -158,9 +158,25 @@
         /// of the `@Test` loop below, so Task 9's `OMRHarnessWiringTests`
         /// can drive the labels-discovery → walk → replay → compare
         /// wiring directly against a synthetic fixture, without needing
-        /// `OMR_DATA_ROOT`. Mechanical extraction: the printed output and
-        /// counting in `oracleReplayMatchesDirectImportForEveryRender`
-        /// below is unchanged, only re-expressed as a switch over this.
+        /// `OMR_DATA_ROOT`. The printed `[SUMMARY]` lines and the
+        /// `exact`/`total` counting in
+        /// `oracleReplayMatchesDirectImportForEveryRender` below are
+        /// unchanged for every directory that reaches a summary line —
+        /// only re-expressed as a switch over this.
+        ///
+        /// ONE DELIBERATE BEHAVIOR CHANGE (Task 9 review, finding 1): the
+        /// `.labels.json` listing (`OMRHarnessDirectoryWalk.labelFiles`)
+        /// used to sit OUTSIDE the original `do { … } catch { … }`, so a
+        /// listing failure (e.g. a directory removed mid-sweep) threw out
+        /// of the `for dir in renderDirs` loop and failed the whole
+        /// `@Test`, aborting the batch with no per-directory line and no
+        /// final `[gate][SUMMARY]` line. Here it is INSIDE the do-block,
+        /// so that failure is caught, returned as `.failed`, printed as a
+        /// per-directory `FAIL-THREW` line, and the sweep continues —
+        /// matching how every other failure in this function (and every
+        /// other harness) already behaves. This is an improvement, kept
+        /// intentionally: a dataset sweep must not let one bad directory
+        /// abort the whole gate.
         enum RenderOutcome {
             case skippedNoLabels
             case exact

@@ -233,6 +233,20 @@
     /// is a recorded Issue (the caller asked for a run and gave no data).
     @Suite(.enabled(if: ProcessInfo.processInfo.environment["OMR_LABEL_EXPORT"] == "1"))
     struct OMRLabelExportHarness {
+        /// One render directory's outcome. Not `private`, and factored out
+        /// of the `@Test` loop below, so Task 9's `OMRHarnessWiringTests`
+        /// can assert the SPECIFIC branch a directory took — by value, not
+        /// by the side effect of "no file appeared", which every non-write
+        /// branch (`.badRenderJSON`, `.quarantined`, `.failed`, and a
+        /// literal do-nothing stub) satisfies identically (Task 9 review,
+        /// finding 2). The printed `[SUMMARY]` lines below are unchanged.
+        enum RenderOutcome {
+            case badRenderJSON
+            case quarantined([String])
+            case wrote(pages: Int, glyphs: Int, bboxMissing: Int, tier1Missing: Int)
+            case failed(String)
+        }
+
         @MainActor
         @Test func exportLabelsForEveryRender() throws {
             guard let root = ProcessInfo.processInfo.environment["OMR_DATA_ROOT"] else {
@@ -242,22 +256,29 @@
             let renderDirs = try OMRHarnessDirectoryWalk.renderDirectories(root: root)
             print("[export] \(renderDirs.count) render dirs under \(root)")
             for dir in renderDirs {
-                exportOneRender(dir: dir)
+                let tag = "[\((dir as NSString).lastPathComponent)]"
+                switch Self.evaluateOneRender(dir: dir) {
+                case .badRenderJSON:
+                    print("\(tag)[SUMMARY] FAIL-BAD-RENDER-JSON")
+                case let .quarantined(problems):
+                    print("\(tag)[SUMMARY] QUARANTINE " + problems.joined(separator: " | "))
+                case let .wrote(pages, glyphs, bboxMissing, tier1Missing):
+                    print(
+                        "\(tag)[SUMMARY] pages=\(pages) glyphs=\(glyphs) "
+                            + "bboxMissing=\(bboxMissing) tier1Missing=\(tier1Missing)",
+                    )
+                case let .failed(message):
+                    print("\(tag)[SUMMARY] FAIL-THREW \(message)")
+                }
             }
         }
 
         /// One render directory: `render.json` names the PDF and the raster
-        /// dpi; the labels land beside them. Prints one `[SUMMARY]` line per
-        /// directory and never throws — a bad directory must not abort the
-        /// batch.
-        ///
-        /// Not `private`: Task 9's `OMRHarnessWiringTests` drives this
-        /// directly against a synthetic fixture to exercise the
-        /// discovery → export → write/quarantine wiring without needing
-        /// `OMR_DATA_ROOT`.
+        /// dpi; the labels land beside them (via `write`, which performs
+        /// the same file-write side effect the original inline version
+        /// did). Never throws — a bad directory must not abort the batch.
         @MainActor
-        func exportOneRender(dir: String) {
-            let tag = "[\((dir as NSString).lastPathComponent)]"
+        static func evaluateOneRender(dir: String) -> RenderOutcome {
             do {
                 let renderData = try Data(contentsOf: URL(fileURLWithPath: "\(dir)/render.json"))
                 guard let render = try JSONSerialization
@@ -265,28 +286,24 @@
                     let pdfName = render["pdf"] as? String,
                     let dpi = render["dpi"] as? Int
                 else {
-                    print("\(tag)[SUMMARY] FAIL-BAD-RENDER-JSON")
-                    return
+                    return .badRenderJSON
                 }
                 let pdfData = try Data(contentsOf: URL(fileURLWithPath: "\(dir)/\(pdfName)"))
                 let result = try OMRLabelExport.export(pdfData: pdfData, dpi: dpi)
                 if !result.problems.isEmpty {
-                    print(
-                        "\(tag)[SUMMARY] QUARANTINE "
-                            + result.problems.joined(separator: " | "),
-                    )
-                    return
+                    return .quarantined(result.problems)
                 }
-                try write(result.pages, to: dir, tag: tag)
+                return try write(result.pages, to: dir)
             } catch {
-                print("\(tag)[SUMMARY] FAIL-THREW \(error)")
+                return .failed("\(error)")
             }
         }
 
-        /// Write the canonical label files and print the census that makes
-        /// both failure modes visible: `bboxMissing` (no outline reachable)
-        /// and `tier1Missing` (a PUA glyph Tier 1 could not name, carried
-        /// as an `unknownXXXX` class rather than guessed).
+        /// Writes the canonical label files and returns the same census
+        /// the original `[SUMMARY]` line reported: `bboxMissing` (no
+        /// outline reachable) and `tier1Missing` (a PUA glyph Tier 1
+        /// could not name, carried as an `unknownXXXX` class rather than
+        /// guessed).
         ///
         /// One caveat on `tier1Missing`: `OMRLabelClassNames.className(for:)`
         /// also answers `"unknown0000"` from its `default:` branch for a
@@ -294,7 +311,7 @@
         /// table. That is VOCABULARY DRIFT, not a Tier-1 miss — a nonzero
         /// count whose class is exactly `unknown0000` should send you to
         /// Task 1's table, not to the classifier.
-        private func write(_ pages: [OMRPageLabels], to dir: String, tag: String) throws {
+        private static func write(_ pages: [OMRPageLabels], to dir: String) throws -> RenderOutcome {
             var glyphTotal = 0
             var bboxMissing = 0
             var tier1Missing = 0
@@ -307,9 +324,9 @@
                 let out = URL(fileURLWithPath: "\(dir)/page_\(page.page.index).labels.json")
                 try OMRLabelSchema.encodeCanonical(page).write(to: out)
             }
-            print(
-                "\(tag)[SUMMARY] pages=\(pages.count) glyphs=\(glyphTotal) "
-                    + "bboxMissing=\(bboxMissing) tier1Missing=\(tier1Missing)",
+            return .wrote(
+                pages: pages.count, glyphs: glyphTotal,
+                bboxMissing: bboxMissing, tier1Missing: tier1Missing,
             )
         }
     }

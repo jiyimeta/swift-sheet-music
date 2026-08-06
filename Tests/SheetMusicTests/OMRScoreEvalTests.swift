@@ -35,9 +35,23 @@
         /// `OMRHarnessWiringTests` can drive the source.mscx /
         /// .labels.json discovery → parse → replay → metrics wiring
         /// directly against a synthetic fixture, without needing
-        /// `OMR_DATA_ROOT`. Mechanical extraction: the printed output in
-        /// `oracleReplayAgainstSourceMscx` below is unchanged, only
-        /// re-expressed as a switch over this.
+        /// `OMR_DATA_ROOT`. The printed lines in
+        /// `oracleReplayAgainstSourceMscx` below are unchanged for every
+        /// directory that reaches a summary line — only re-expressed as
+        /// a switch over this.
+        ///
+        /// ONE DELIBERATE BEHAVIOR CHANGE (Task 9 review, finding 1): the
+        /// `.labels.json` listing (`OMRHarnessDirectoryWalk.labelFiles`)
+        /// used to sit OUTSIDE the original `do { … } catch { … }`, so a
+        /// listing failure threw out of the `for dir in renderDirs` loop
+        /// and failed the whole `@Test`, aborting the batch with no
+        /// per-directory line. Here it is INSIDE the do-block, so that
+        /// failure is caught, returned as `.failed`, printed as a
+        /// per-directory `FAIL-THREW` line, and the sweep continues —
+        /// matching `source.mscx`/labels/replay failures already handled
+        /// a few lines below, and matching the other three harnesses.
+        /// Kept intentionally: a dataset sweep must not let one bad
+        /// directory abort the whole gate.
         enum RenderOutcome {
             case skippedNoSourceOrLabels
             case processed(summary: String, diverge: String?)

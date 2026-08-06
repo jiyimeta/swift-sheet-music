@@ -91,6 +91,15 @@
             let fm = FileManager.default
             let root = fm.temporaryDirectory
                 .appendingPathComponent("omr-harness-fixture-\(UUID().uuidString)")
+            // Task 9 review, minor finding: on any throw below, this
+            // directory would otherwise leak — the caller only receives
+            // (and therefore only `cleanup(_:)`s) a `Layout` on success.
+            // `succeeded` flips to `true` only right before the `return`,
+            // so this `defer` removes `root` on every throwing exit and
+            // is a no-op on the success path (the caller owns cleanup
+            // from there).
+            var succeeded = false
+            defer { if !succeeded { try? fm.removeItem(at: root) } }
             let wellFormed = root.appendingPathComponent("aaa_well_formed")
             let missingLabels = root.appendingPathComponent("bbb_missing_labels")
             let missingSource = root.appendingPathComponent("ccc_missing_source")
@@ -121,6 +130,7 @@
 
             try write(Data("not a render dir".utf8), "README.txt", in: notARender)
 
+            succeeded = true
             return Layout(
                 root: root.path, wellFormedDir: wellFormed.path,
                 missingLabelsDir: missingLabels.path,

@@ -168,9 +168,19 @@
         /// Not `private`: Task 9's `OMRHarnessWiringTests` drives this
         /// directly against a synthetic fixture (including a directory
         /// with no `.labels.json`, which must no-op rather than throw).
+        ///
+        /// Returns the number of `.labels.json` pages processed (Task 9
+        /// review, finding 3). `aggregate` alone cannot distinguish
+        /// "genuinely processed, zero glyphs" from "silently skipped" —
+        /// the fixture's glyph-less well-formed directory yields an empty
+        /// `aggregate` in BOTH cases, so a bug in the traversal that
+        /// always found zero label files would pass an `aggregate`-only
+        /// assertion for either directory. `@discardableResult` because
+        /// the harness's own `@Test` loop below doesn't need the count.
+        @discardableResult
         func evaluate(
             dir: String, aggregate: inout [String: OMRSeamMetrics.ClassCounts],
-        ) throws {
+        ) throws -> Int {
             let labelPaths = try OMRHarnessDirectoryWalk.labelFiles(in: dir)
             for name in labelPaths {
                 let page = try OMRLabelSchema.decode(
@@ -209,6 +219,7 @@
                         + "texts=\(page.census.texts)",
                 )
             }
+            return labelPaths.count
         }
     }
 #endif
