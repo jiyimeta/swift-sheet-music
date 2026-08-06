@@ -11,15 +11,22 @@ import Wirelet
 ///
 /// ## Wire layout
 ///
-/// Wirelet's TLV scheme (`Sources/Wirelet/WireFormat.swift` in `swift-wirelet`) is protobuf-style: every field is a
-/// `tag` varint (`fieldNumber << 3 | wireType`) followed by its payload; signed integers are zig-zag varints;
-/// nested structs, arrays, and choice enums are length-delimited (`varint(byteCount)` + that many payload bytes),
-/// so they are self-delimiting and **not** fixed-width — every byte count below varies with the actual field
-/// values, unlike the fixed-width tables in `ScoreItemIDCodec.swift` / `PathIDCodecs.swift` (those predate the
-/// current varint/TLV macro expansion and no longer match the bytes those macros emit; verified against this
-/// package's own golden fixtures under `Tests/SheetMusicTests/Resources/Golden/Audio/`). Field tags are assigned
-/// 1, 2, 3, … in declaration order; case indices for a `@WireFormatChoice` enum are 0, 1, 2, … in declaration
-/// order.
+/// Wirelet's TLV scheme (`Sources/Wirelet/WireFormat.swift` in `swift-wirelet`) resembles protobuf's wire format —
+/// every field is a `tag` varint (`fieldNumber << 3 | wireType`) followed by its payload; signed integers are
+/// zig-zag varints; nested structs, arrays, and choice enums are length-delimited (`varint(byteCount)` + that many
+/// payload bytes), so they are self-delimiting and **not** fixed-width — every byte count below varies with the
+/// actual field values, unlike the fixed-width tables in `ScoreItemIDCodec.swift` / `PathIDCodecs.swift` (those
+/// predate the current varint/TLV macro expansion and no longer match the bytes those macros emit; verified against
+/// this package's own golden fixtures under `Tests/SheetMusicTests/Resources/Golden/Audio/`). Field tags are
+/// assigned 1, 2, 3, … in declaration order; case indices for a `@WireFormatChoice` enum are 0, 1, 2, … in
+/// declaration order.
+///
+/// **Unlike proto3, Wirelet has no default-skipping.** `WireFormatMacro.swift` emits `guard let _<field> else {
+/// throw WireFormatError.unknownTag(...) }` for every non-optional stored property, and `WireFormatChoiceMacro.swift`
+/// does the same for every case payload — there is no "omit a zero-valued scalar" shortcut. Every tag listed below
+/// must be written on encode, including zero-valued ones (a committed golden fixture emits literal `08 00` / `10 00`
+/// / `20 00` triples for exactly this reason), or decoding throws `unknownTag`. The one exception the macro allows
+/// is an `Optional<T>` (`T?`) stored property, which this codec declares none of — every field below is mandatory.
 ///
 /// `EditIntentWire` top-level bytes: `varint(payloadLength)` + payload, where payload is `varint(caseIndex)`
 /// followed — for every case here, since none is payload-less — by `tag(1, lengthDelimited) +
@@ -34,21 +41,42 @@ import Wirelet
 ///
 /// `InputNoteIntentWire` fields, in tag order:
 /// ```
-/// tag 1: location     RestIDWire (see PathIDCodecs.swift)
+/// tag 1: location     RestIDWire, see layout below
 /// tag 2: pitch        i32, zig-zag varint
 /// tag 3: tpc          i32, zig-zag varint
 /// tag 4: hasDuration  u8, varint — 0 = keep the slot's length, 1 = retime it to `duration`
-/// tag 5: duration     NoteDurationWire — present but ignored by the decoder when hasDuration == 0
+/// tag 5: duration     NoteDurationWire — present but ignored by the decoder when hasDuration == 0; the encoder
+///                     always writes `kind = 1` (whole) with `numerator = denominator = 0` in that case, so a
+///                     byte-for-byte parity check between platforms should expect that exact placeholder, not a
+///                     zeroed-out discriminator
 /// ```
 ///
 /// `SlotDurationIntentWire` fields (shared by `setRestDuration` and `setChordDuration` — the discriminator case
 /// index is what tells the two apart, not anything in this struct):
 /// ```
-/// tag 1: location  VoiceElementIDWire (see PathIDCodecs.swift)
+/// tag 1: location  VoiceElementIDWire, see layout below
 /// tag 2: duration  NoteDurationWire
 /// ```
 ///
 /// `delete` reuses `VoiceElementIDWire` directly as its payload — no wrapper struct.
+///
+/// `RestIDWire` and `VoiceElementIDWire` (`Sources/SheetMusicAndroidJNI/Audio/PathIDCodecs.swift`) share this field
+/// layout — inlined here rather than cross-referenced, because that file's own doc comment is one of the stale
+/// fixed-width descriptions called out above and no longer matches these tags:
+/// ```
+/// tag 1: staff         StaffAddressWire, see layout below
+/// tag 2: measureIndex  i32, zig-zag varint
+/// tag 3: voiceIndex    i32, zig-zag varint
+/// tag 4: elementIndex  i32, zig-zag varint
+/// ```
+///
+/// `StaffAddressWire` (`Sources/SheetMusicAndroidJNI/Audio/StaffAddressCodec.swift` — same staleness caveat as
+/// above; that file's comment claims a fixed 8-byte payload, but the canonical `(partIndex: 0, staffIndexInPart:
+/// 0)` value encodes to 5 bytes total once the varint length prefix and two 1-byte zig-zag zeros are counted):
+/// ```
+/// tag 1: partIndex          i32, zig-zag varint
+/// tag 2: staffIndexInPart   i32, zig-zag varint
+/// ```
 ///
 /// `CompositeIntentWire`:
 /// ```
