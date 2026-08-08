@@ -1,4 +1,6 @@
+import re
 import xml.etree.ElementTree as ET
+from pathlib import Path
 
 from generate import gen_coverage
 
@@ -32,7 +34,48 @@ def test_all_twelve_clefs_are_covered():
             if staff.find("defaultClef") is None:
                 clefs.add("G")
     assert clefs >= {"G", "G8va", "G8vb", "G15ma", "G15mb",
-                     "F", "F8va", "F8vb", "F15ma", "F15mb", "C", "PERC"}
+                     "F", "F8va", "F8vb", "F15ma", "F15mb", "C3", "PERC"}
+
+
+def test_every_generated_clef_token_is_one_musescore_recognizes():
+    """A `<defaultClef>` MuseScore does not recognize is resolved SILENTLY
+    to the treble default — no error, no warning, just a G clef where an
+    alto clef was asked for. Measured on the first pilot: the family
+    emitted a bare `"C"`, every one of its renders came back carrying
+    `clefG`, and the `clefC` detector class finished with 0 instances.
+
+    Enumerating the accepted tokens by hand would just re-encode the same
+    guess, so read them out of this repo's own reader instead —
+    `NotatedClef.init(rawType:)`, whose `default:` branch is exactly the
+    silent collapse being guarded against. Same drift-detection shape as
+    `test_vocabulary`'s check against `OMRLabelClassNames.swift`.
+
+    The reader is a PROXY for MuseScore, not MuseScore, so a mismatch
+    means one of the two is wrong and the pilot's class census says
+    which. `KNOWN_READER_GAPS` below records a case where the reader was
+    the wrong one: MuseScore does engrave F-clef 15ma / 15mb (the pilot
+    counted 32 `clefF15ma` and 32 `clefF15mb` instances, which a silent
+    treble fallback could not have produced), but `NotatedClef` has no
+    `bass15ma` / `bass15mb` case at all, so a score carrying one reads
+    back as treble and every pitch on that staff is wrong. Tracked
+    separately; it is an engraving-model gap, not a generator defect.
+    """
+    KNOWN_READER_GAPS = {"F15ma", "F15mb"}
+    repo_root = Path(__file__).resolve().parents[2]
+    swift = (repo_root / "Sources" / "SheetMusicCore" / "Score"
+             / "NotatedClef.swift").read_text()
+    body = swift.split("init(rawType:")[1].split("default:")[0]
+    accepted = set(re.findall(r'"([^"]+)"', body))
+    # The parse must have found something, or the assertion below is vacuous.
+    assert {"G", "F", "C3", "PERC"} <= accepted, sorted(accepted)
+    unknown = set(gen_coverage._CLEFS) - accepted - KNOWN_READER_GAPS
+    assert not unknown, sorted(unknown)
+    # And the recorded gaps must still BE gaps — once the reader learns
+    # them, this list has to shrink rather than quietly excuse nothing.
+    assert KNOWN_READER_GAPS.isdisjoint(accepted), (
+        "NotatedClef now accepts "
+        f"{sorted(KNOWN_READER_GAPS & accepted)} — drop it from "
+        "KNOWN_READER_GAPS")
 
 
 def test_ties_are_generated():

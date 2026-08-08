@@ -243,8 +243,18 @@ def fermata() -> str:
     )
 
 
+#: MuseScore `ClefType` tokens for `<defaultClef>`.
+#:
+#: "C3" (alto), NOT a bare "C". MuseScore has no such token — the C clefs
+#: are named by the staff line they sit on, `C1`…`C5` — and an
+#: unrecognized token is resolved SILENTLY to the treble default. Measured
+#: on the first pilot: `cov_clef_c`'s renders came back carrying `clefG`,
+#: and `clefC` finished the run with 0 instances while every other clef
+#: class had its expected count. This repo's own
+#: `Sources/SheetMusicCore/Score/NotatedClef.swift:42,67` spells the pair
+#: `"C3"` / `"C4"` (alto / tenor); there is no bare "C" there either.
 _CLEFS = ["G", "G8va", "G8vb", "G15ma", "G15mb",
-          "F", "F8va", "F8vb", "F15ma", "F15mb", "C", "PERC"]
+          "F", "F8va", "F8vb", "F15ma", "F15mb", "C3", "PERC"]
 
 
 def coverage_sources(seed: int) -> list[tuple[str, str]]:
@@ -268,15 +278,29 @@ def coverage_sources(seed: int) -> list[tuple[str, str]]:
         ))
 
     # 2. Accidentals incl. doubles (MuseScore SMuFL-style subtype names).
+    #
+    # THE `<tpc>` HAS TO REQUIRE THE ACCIDENTAL. MuseScore does not draw
+    # an `<Accidental>` just because the XML carries one — it engraves
+    # what the note's spelling needs, and drops a redundant or
+    # contradictory mark SILENTLY. Measured on the first pilot: this
+    # family shipped `accidentalDoubleSharp` on tpc 16 (a plain D) and
+    # `accidentalNatural` on tpc 14 (a plain C in C major), and both
+    # finished the run with **0 instances** while sharp / flat /
+    # double-flat — whose tpcs did need a mark — came through fine.
+    #
+    # tpc is the line of fifths with C = 14, so: C# = 21, C## = 28.
+    # A natural is only required to CANCEL an earlier accidental, so the
+    # natural bar sharpens the same pitch class first, in the same bar.
     acc_measures = ["\n".join([
         time_sig(4, 4),
-        chord(61, 21, accidental="accidentalSharp"),
-        chord(62, 16, accidental="accidentalDoubleSharp"),
-        chord(63, 9, accidental="accidentalFlat"),
-        chord(62, 2, accidental="accidentalDoubleFlat"),
+        chord(61, 21, accidental="accidentalSharp"),        # C#
+        chord(62, 28, accidental="accidentalDoubleSharp"),  # C##
+        chord(63, 9, accidental="accidentalFlat"),          # Db
+        chord(62, 2, accidental="accidentalDoubleFlat"),    # Dbb
     ])] + ["\n".join([
-        chord(60, 14, accidental="accidentalNatural"),
-        chord(60, 14), chord(60, 14), chord(60, 14),
+        chord(61, 21, accidental="accidentalSharp"),        # C# …
+        chord(60, 14, accidental="accidentalNatural"),      # … cancelled
+        chord(60, 14), chord(60, 14),
     ])]
     sources.append(("cov_accidentals",
                     mscx_document([PartSpec(name="Accidentals", measures=acc_measures)])))
