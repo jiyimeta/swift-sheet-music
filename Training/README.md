@@ -280,12 +280,28 @@ its exit code are over `confirmed`. Reading the columns:
   the faces named in `quarantine.json`), never from the directories that
   happen to exist, so such a face cannot be scored out of existence.
 
-**Open question: should `FACES["ms3"]` include Petaluma? Leland?**
-Evidence says MuseScore 3.6.2 almost certainly offers Petaluma, but
-adding it on that basis alone would be strictly worse than omitting it —
-renders labeled `petaluma` and drawn in Bravura are poison for a
-font-diversity dataset. Settle it by measuring, with no source edit
-(`--probe-faces` overrides the matrix for one run and restores it):
+**SETTLED 2026-08-07: `FACES["ms3"]` now includes both Petaluma and
+Leland.** The probe below was run against MuseScore 3.6.2 and gate
+P3c-G4 returned `applied=4/4 pass=Y`, both signals agreeing for both
+candidates:
+
+    face=ms3/Petaluma renders=36 self_spread=0.0033 nearest=ms3/Bravura \
+        nearest_diff=0.4892 applied=Y font=Y \
+        font_names=Petaluma,PetalumaText confirmed=Y
+    face=ms3/Leland   renders=36 self_spread=0.0014 nearest=ms3/Bravura \
+        nearest_diff=0.0556 applied=Y font=Y \
+        font_names=Bravura-Text,Leland confirmed=Y
+
+Leland's `Bravura-Text` is its TEXT font falling back, which the
+PUA-codepoint split correctly declines to count — the symbol font is
+Leland. "MS3 predates Leland", the assumption the face list used to
+encode, was simply wrong: Leland shipped in MuseScore 3.6. The MS3 arm
+also exported 144 of 144 sources with zero quarantines, which is the
+native-MS3-opens-our-schema check below, discharged.
+
+The procedure is kept because it is how any future face candidate gets
+decided, and because `--probe-faces` overrides the matrix for one run
+without editing the source:
 
     P=~/Datasets/sheet-music-omr/ms3-face-probe
     Training/.venv/bin/python Training/generate/build_dataset.py generate \
@@ -312,26 +328,23 @@ either:
 
 Bravura must also stay in the face list: it is the fallback, and
 therefore the reference every candidate is measured against. Then read
-the `face=ms3/Petaluma` line, **`font=` first**:
+the candidate's line, **`font=` first**:
 
-- `font=Y … confirmed=Y` → MS3 embedded Petaluma itself. **Add
-  `"Petaluma"` to `FACES["ms3"]`** in `generate/style_matrix.py`.
+- `font=Y … confirmed=Y` → the engine embedded the requested face
+  itself. **Add it to `FACES[<engine>]`** in `generate/style_matrix.py`.
 - `font=N font_names=Bravura` → it fell back, whatever the geometry
-  column says. **Leave `FACES["ms3"]` alone.**
-- `reason=no-renders` → MS3 refused the face outright and every render
-  was quarantined. **Leave `FACES["ms3"]` alone**, and read
+  column says. **Leave the face list alone.**
+- `reason=no-renders` → the engine refused the face outright and every
+  render was quarantined. **Leave the face list alone**, and read
   `quarantine.json` for the reason.
 - `font=-` (no PDF readable) → the probe did not actually test anything;
   fix that before reading the geometry column, because on its own it can
   return `applied=Y` for a fallback.
 
-The `face=ms3/Leland …` line answers the Leland question the same way.
-(MS3 predates Leland, so a fallback or a quarantine is the expected
-outcome there — which is why the probe is worth running rather than
-assuming either answer.) While the probe dataset exists, also hand-open
-one of its generated `.mscx` files in native MuseScore 3: this repo's
-MS3 reader is stricter than MS4's compat reader, and only native MS3
-proves the generated schema opens.
+A probe run also discharges the native-engine schema check: if the arm
+exports without quarantines, that engine opened every generated source.
+This repo's MS3 reader is stricter than MS4's compat reader, so an MS3
+arm is the only thing that proves the MS3 schema we emit is real.
 
 ### What to watch for during the pilot
 

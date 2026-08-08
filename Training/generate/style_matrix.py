@@ -148,9 +148,26 @@ FACES = {
     # blob) -- see module docstring.
     "ms4": ["Bravura", "Leland", "Gootville", "MuseJazz", "Petaluma",
             "MScore", "Finale Maestro", "Finale Broadway"],
-    # MS3 predates Leland and the Finale-branded faces. "Emmentaler" is
-    # deliberately absent -- see module docstring's hard-fact-#2 note.
-    "ms3": ["MScore", "Bravura", "Gootville", "MuseJazz"],
+    # Petaluma and Leland were held back until the pilot could MEASURE
+    # whether MuseScore 3 applies them, because a render labelled
+    # "petaluma" and silently drawn in the Bravura fallback is poison for
+    # a font-diversity dataset. Settled 2026-08-07 by the runbook's probe
+    # (`--engines ms3 --per-face 2 --pin-page --probe-faces ...`) against
+    # MuseScore 3.6.2: gate P3c-G4 returned `applied=4/4 pass=Y` with both
+    # signals agreeing for both candidates --
+    #   face=ms3/Petaluma  self_spread=0.0033 nearest=ms3/Bravura
+    #                      nearest_diff=0.4892 font_names=Petaluma,PetalumaText
+    #   face=ms3/Leland    self_spread=0.0014 nearest=ms3/Bravura
+    #                      nearest_diff=0.0556 font_names=Bravura-Text,Leland
+    # The embedded SYMBOL font is the requested face in both; Leland's
+    # `Bravura-Text` is its TEXT font falling back, which the gate's
+    # PUA-codepoint split correctly declines to count. (Leland shipped in
+    # MuseScore 3.6, so "MS3 predates Leland" -- the assumption this list
+    # used to encode -- was simply wrong.) The Finale-branded faces remain
+    # absent: they were never probed. "Emmentaler" is deliberately absent
+    # too -- see the module docstring's hard-fact-#2 note.
+    "ms3": ["MScore", "Bravura", "Gootville", "MuseJazz", "Petaluma",
+            "Leland"],
 }
 
 # A4 (mm/INCH, matching styledef.cpp's own pageWidth/pageHeight default:
