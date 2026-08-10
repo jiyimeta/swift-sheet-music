@@ -224,7 +224,7 @@ of them is enough to flip its whole face to `font-mismatch` on P3c-G4.
 
 | Gate | Command | Pass looks like |
 |---|---|---|
-| **P0-G1** oracle replay is exact | `OMR_DATA_ROOT=$R OMR_ORACLE_REPLAY=1 swift test 2>&1 \| grep '\[SUMMARY\]'` | every render prints `exact=Y`; the closing line reads `[gate][SUMMARY] P0-G1 exact=N/N inexact=0 skipped=0 failed=0 pass=Y` **and `N > 0`**. Read `pass=`, not the two numbers: the denominator counts every render directory visited, so a skip (label export never ran for it) or a throw (unopenable PDF) is a miss, and an empty sweep is `exact=0/0 … pass=N`, never a pass. `swift test` itself fails when `pass=N`. **Currently FAILING at scale — see "OPEN: P0-G1 fails at scale" below before reading a run's output** |
+| **P0-G1** oracle replay is exact | `OMR_DATA_ROOT=$R OMR_ORACLE_REPLAY=1 swift test 2>&1 \| grep '\[SUMMARY\]'` | every render prints `exact=Y`; the closing line reads `[gate][SUMMARY] P0-G1 exact=N/N inexact=0 skipped=0 failed=0 pass=Y` **and `N > 0`**. Read `pass=`, not the two numbers: the denominator counts every render directory visited, so a skip (label export never ran for it) or a throw (unopenable PDF) is a miss, and an empty sweep is `exact=0/0 … pass=N`, never a pass. `swift test` itself fails when `pass=N`. Measured `2208/2208 pass=Y` on v2 (2026-08-11), after the order-invariance fix — see "RESOLVED: P0-G1 failed at scale" below |
 | **P0-G2** run twice, byte-identical | rerun any harness command into `…-run2.txt` and `diff` it against run 1; for the label export also `find $R -name '*.labels.json' \| sort \| xargs shasum -a 256` after each run and `diff` those | empty `diff` both times |
 | **P0-G3** back-end ceiling measured | `OMR_DATA_ROOT=$R OMR_SCORE_EVAL=1 swift test 2>&1 \| grep '\[SUMMARY\]' > ceiling.tsv` and `OMR_DATA_ROOT=$R OMR_SEAM_EVAL=1 swift test 2>&1 \| grep '\[SUMMARY\]' > seam.tsv` | not a threshold — the recorded rows **are** the ceiling. Read `measuresA` / `measuresB` before any percentage (see blind spots below) |
 | **P0-G4** vector path untouched | **maintainer step, run in the MAIN checkout, not in this worktree** — the untracked spike harnesses and the copyrighted corpus live there. Curated 6 + real corpus must stay byte-identical | expected trivially (this work changed nothing under `Sources/`); still run it |
@@ -258,13 +258,25 @@ two different rasters and the homography maps between them. Read
 `[coco][SUMMARY] … images=N`: a `[coco][WARN]` line means the root
 yielded nothing, which is nearly always the wrong `--root`.
 
-### OPEN: P0-G1 fails at scale — `buildScore` is not order-invariant
+### RESOLVED: P0-G1 failed at scale — `buildScore` was not order-invariant
 
-**This is the program's central open defect. Read it before trusting any
-raster result.** Measured 2026-08-11 on the 2208-render v2 dataset, the
-first time the gate has been run at scale:
+Measured 2026-08-11 on the 2208-render v2 dataset, the first time the
+gate had been run at scale, and fixed the same day by canonicalizing the
+four `WalkedContent` streams once inside `buildScore`
+(`Sources/SheetMusicPDF/Import/PDFImporter+Canonical.swift`):
 
-    [gate][SUMMARY] P0-G1 exact=1574/2208 inexact=634 skipped=0 failed=0 pass=N
+    before: [gate][SUMMARY] P0-G1 exact=1574/2208 inexact=634 pass=N
+    after:  [gate][SUMMARY] P0-G1 exact=2208/2208 inexact=0   pass=Y
+
+**Still owed: P0-G4 must be re-blessed.** Where a real PDF's
+content-stream order disagreed with canonical order at a consequential
+tie, the decode now resolves it the other way — narrowly, but really.
+That is a maintainer step in the MAIN checkout, where the corpus and its
+harness live. The rest of this section is kept because it is the
+diagnosis, and because the same failure mode will come back the moment a
+new pass reads a stream in arrival order.
+
+The original finding:
 
 The failures are the *texture* sources and a few of the owner's real
 scores; every one of the 28 coverage sources replays exactly. The two
@@ -300,6 +312,26 @@ contain none of the recently-classified ink — no `dynamic`,
 `articulation`, `ornament`, `dalSegno`, `daCapo`, `repeatBarlineDots` or
 `fermata`, and no `unknown*` at all, across 1944 pages — so the
 classifier change is provably a no-op for them.
+
+**Why the fix is one sort and not thirty comparator repairs.** Most of
+the order-dependent decisions are not sorts at all — they are first-min
+scans, greedy loops that consume candidates in arrival order, and
+"break at the first content glyph" scans in the clef / key / time
+readers, none of which a comparator change reaches. And two comparators
+sort on an epsilon band (`|Δy| > ε ? y : x`), a relation that is not
+transitive and therefore not a strict weak ordering at all, which no
+extra key repairs. One sort at the boundary reaches every one of them,
+because each array a pass sees is an order-preserving `filter` of one of
+the four streams.
+
+**Keeping it fixed.** `PDFImporterStreamOrderInvarianceTests` shuffles
+all four streams with a seeded generator and asserts `Score` equality,
+in milliseconds. Note its fixture is built to CONTAIN a consequential
+tie — two noteheads at one x plus a dot straddling `applyDots`'
+`dy < 4` window — because the first version of that test passed before
+the fix, which is exactly the vacuous shape the older reverse-order
+check in `OMROracleReplayUnitTests` had all along. A new order-invariance
+test that passes immediately is a test that is not testing anything.
 
 ### P3c-G3 in detail — the floor, and the two classes exempt from it
 
