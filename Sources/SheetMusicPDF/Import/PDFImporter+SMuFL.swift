@@ -9,6 +9,12 @@ extension PDFImporter {
         case 0xE000: return .brace
         case 0xE003: return .staff5Lines
         case 0xE043: return .repeatBarlineDots
+        // The two jump words SMuFL draws as glyphs. There is no `fine`
+        // and no `toCoda` glyph in the specification — only `coda`
+        // U+E048 and `codaSquare` U+E049 — so those two markers are
+        // recovered from the text stream instead (PDFImporter+Structure).
+        case 0xE045: return .dalSegno
+        case 0xE046: return .daCapo
         case 0xE047: return .segno
         case 0xE048: return .coda
         case 0xE050: return .clefG
@@ -23,7 +29,6 @@ extension PDFImporter {
         case 0xE065: return .clefF8va // fClef8va — bass one octave up
         case 0xE066: return .clefF15ma // fClef15ma — bass two octaves up
         case 0xE069: return .clefPercussion
-        case 0xE080 ... 0xE089: return .timeSignatureDigit(Int(cp - 0xE080))
         case 0xE08A: return .timeSignatureCommon
         case 0xE08B: return .timeSignatureCutTime
         // U+E0A0 is the plain double whole; U+E0A1 is
@@ -78,7 +83,49 @@ extension PDFImporter {
         case 0xE4E7: return .rest(.sixteenth)
         case 0xE4E8: return .rest(.thirtySecond)
         case 0xE4E9: return .rest(.sixtyFourth)
-        case 0xE4C0: return .fermata
+        default:
+            return rangeSemantic(codepoint: cp)
+        }
+    }
+
+    /// The cases SMuFL defines as RANGES rather than as single glyphs.
+    ///
+    /// Split out of `smuflSemantic` only because that switch outgrew the
+    /// function-length limit; the two are one table read in order, and a
+    /// codepoint reaching here has already missed every point case above
+    /// — so no range can shadow a more specific mapping, whatever order
+    /// the cases are written in.
+    ///
+    /// A blanket range claim is safe in the STANDARD range and would not
+    /// be in U+F400–F8FF, where a codepoint means whatever the font says
+    /// it means. That is why the optional-range notehead aliases live in
+    /// their own evidence-gated table (`PDFImporter+SMuFLOptionalRange`)
+    /// instead of in here.
+    private static func rangeSemantic(codepoint cp: UInt32) -> SMuFLSemantic {
+        switch cp {
+        case 0xE080 ... 0xE089: return .timeSignatureDigit(Int(cp - 0xE080))
+        // The whole fermata family, not just `fermataAbove`. SMuFL's
+        // "Holds and pauses" range is U+E4C0–U+E4DF, but only its
+        // contiguous prefix U+E4C0–U+E4CD is fermatas (…Above/…Below in
+        // pairs, through the Henze variants); U+E4CE onward is breath
+        // marks and caesuras, which are not fermatas and have no
+        // semantic here. Endpoints read out of SMuFL's own
+        // `glyphnames.json` / `ranges.json`, not inferred. Mapping only
+        // U+E4C0 left `fermataBelow` — engraved under any bottom staff —
+        // falling through to `.unknown`.
+        case 0xE4C0 ... 0xE4CD: return .fermata
+        // Coarse buckets. The importer models none of these three, and
+        // classifying them is precisely so their ink is ACCOUNTED FOR
+        // rather than left to be mistaken for a neighbouring class —
+        // nothing downstream switches on them, exactly as with `.segno`
+        // and `.coda`. The ornament bucket is two adjacent SMuFL ranges
+        // (commonOrnaments U+E560–E56F, otherBaroqueOrnaments
+        // U+E570–E58F) that happen to abut.
+        case 0xE4A0 ... 0xE4BF, // articulation
+             0xED40 ... 0xED4F: // articulationSupplement
+            return .articulation
+        case 0xE520 ... 0xE54F: return .dynamic
+        case 0xE560 ... 0xE58F: return .ornament
         default:
             return .unknown(cp)
         }
