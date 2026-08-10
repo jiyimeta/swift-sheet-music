@@ -53,7 +53,7 @@ Substitute `Training/.venv/bin/python` for `python`.
 
 | Subcommand | Arguments | Does |
 |---|---|---|
-| `generate` | `--root --seed [--engines ms4] [--per-face 1] [--textures 20] [--extra-sources DIR...] [--probe-faces ENGINE=Face,Face] [--pin-page] [--allow-existing]` | Phase 1: sources → styled score → PDF → raster |
+| `generate` | `--root --seed [--engines ms4] [--per-face 1] [--textures 20] [--extra-sources DIR...] [--probe-faces ENGINE=Face,Face] [--pin-page] [--allow-existing] [--resume]` | Phase 1: sources → styled score → PDF → raster |
 | `finalize` | `--root --seed [--class-floor 1000]` | Phase 3: writes `manifest.json`, scores P3c-G2 / P3c-G3 |
 | `status` | `--root` | Which phase the dataset is in, and the exact next command |
 | `faces` | `--root [--tol 0.01]` | Gate P3c-G4 |
@@ -82,6 +82,15 @@ legal resting state — `status` names it, and every Swift harness skips a
 render directory that has no labels rather than failing. Run
 `build_dataset.py status --root R` at any point to see which phase you
 are in and what to run next.
+
+An interrupted `generate` can be continued with `--resume`, which skips
+every plan entry whose render directory already holds a `render.json`
+and prints `resumed=N` next to `exported=`. It is sound because the plan
+is a pure function of the seed, so the entry being skipped is the entry
+the interrupted run executed — pass the **same arguments**, above all
+the same `--seed`, or the plan is a different plan. A directory holding
+labels is never skipped: that is the stale-label hazard below wearing a
+different hat, so such a render is regenerated instead.
 
 `dataset_plan.json` is written **before the first export**, so an
 interrupted run still records what it set out to do. Two later gates
