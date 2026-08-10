@@ -29,6 +29,19 @@ final class PDFPageState {
     /// The CMap selected by the most recent `Tf` (nil for fonts without a
     /// usable `/ToUnicode`, e.g. the ASCII test fixtures).
     var activeCMap: PDFImporter.ToUnicodeCMap?
+    /// Whether the font selected by the most recent `Tf` has shown, in its
+    /// own CMap, that it speaks standard SMuFL — the per-font gate on
+    /// Tier 1b's optional-range notehead table. Cached here rather than
+    /// recomputed per glyph: `Tf` changes far less often than glyphs are
+    /// shown. See `ToUnicodeCMap.mapsRecognizedStandardSMuFLCodepoints`.
+    var activeCMapHasStandardSMuFLEvidence = false
+    /// TESTING ONLY. Threaded from
+    /// `PDFImportOptions.disableSMuFLCodepointTier` so Tier 1b is
+    /// suppressed together with Tier 1. The Tier-4 ablation measures shape
+    /// matching against the codepoint tier's known-correct answer; if the
+    /// alias table kept answering while Tier 1 was off, the ablation would
+    /// silently be measuring something else.
+    var disableSMuFLCodepointTier = false
     /// Per-page registry of simple-font TEXT decoders keyed by font RESOURCE
     /// NAME, filled by the front-end alongside `fontCMaps`. A font that
     /// declares neither `/Differences` nor a modeled base encoding has no
