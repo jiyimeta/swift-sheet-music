@@ -39,14 +39,19 @@ extension ScoreLayerBuilder {
                 open: kind == .hairpinOpen,
                 metrics: metrics, height: height, into: parent,
             )
+        case let .hairpinLine(crescendo):
+            drawHairpinLine(
+                from: from, to: to, crescendo: crescendo,
+                metrics: metrics, height: height, into: parent,
+            )
         case .pedal:
             drawPedal(
                 from: from, to: to,
                 metrics: metrics, height: height, into: parent,
             )
-        case .ottava:
+        case let .ottava(subtype):
             drawOttava(
-                from: from, to: to,
+                from: from, to: to, subtype: subtype,
                 metrics: metrics, height: height, into: parent,
             )
         case .textLine:
@@ -138,6 +143,33 @@ extension ScoreLayerBuilder {
         ))
     }
 
+    private static func drawHairpinLine(
+        from: CGPoint, to: CGPoint, crescendo: Bool,
+        metrics: StaffMetrics, height: CGFloat,
+        into parent: CALayer,
+    ) {
+        let parts = SpannerGeometry.hairpinLine(
+            from: from, to: to, crescendo: crescendo, sp: metrics.sp,
+        )
+        if let layer = textLayer(
+            text: parts.label, at: parts.labelOrigin,
+            size: metrics.sp * parts.labelSizeSp, italic: true,
+            anchor: CGPoint(x: 0, y: 0.5),
+            height: height,
+        ) {
+            parent.addSublayer(layer)
+        }
+        guard parts.lineEnd.x > parts.lineStart.x else { return }
+        let p = CGMutablePath()
+        p.move(to: parts.lineStart)
+        p.addLine(to: parts.lineEnd)
+        parent.addSublayer(strokeLayer(
+            path: p, height: height,
+            lineWidth: metrics.sp * parts.lineThicknessSp,
+            dashPattern: parts.dashPattern.map { NSNumber(value: Double($0)) },
+        ))
+    }
+
     private static func drawPedal(
         from: CGPoint, to: CGPoint,
         metrics: StaffMetrics, height: CGFloat,
@@ -171,11 +203,12 @@ extension ScoreLayerBuilder {
 
     private static func drawOttava(
         from: CGPoint, to: CGPoint,
+        subtype: Spanner.OttavaPayload.Subtype,
         metrics: StaffMetrics, height: CGFloat,
         into parent: CALayer,
     ) {
         let parts = SpannerGeometry.ottava(
-            from: from, to: to, sp: metrics.sp,
+            from: from, to: to, sp: metrics.sp, subtype: subtype,
         )
         if let layer = textLayer(
             text: parts.label, at: parts.labelOrigin,

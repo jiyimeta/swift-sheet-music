@@ -374,6 +374,8 @@ extension LayoutElementShape {
         switch kind {
         case .hairpinOpen, .hairpinClose:
             thickness = sp * 1.4
+        case .hairpinLine:
+            thickness = sp * SpannerGeometry.hairpinLineLabelSizeSp
         case .volta:
             thickness = sp * SpannerGeometry.voltaLabelSizeSp
         case .ottava:

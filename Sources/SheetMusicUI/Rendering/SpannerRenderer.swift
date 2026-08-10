@@ -30,14 +30,19 @@ enum SpannerRenderer {
                 context: &context, from: from, to: to,
                 open: kind == .hairpinOpen, metrics: metrics,
             )
+        case let .hairpinLine(crescendo):
+            drawHairpinLine(
+                context: &context, from: from, to: to,
+                crescendo: crescendo, metrics: metrics,
+            )
         case .pedal:
             drawPedal(
                 context: &context, from: from, to: to, metrics: metrics,
             )
-        case .ottava:
+        case let .ottava(subtype):
             drawOttava(
                 context: &context, from: from, to: to,
-                metrics: metrics,
+                subtype: subtype, metrics: metrics,
             )
         case .textLine:
             drawTextLine(
@@ -122,6 +127,30 @@ enum SpannerRenderer {
         )
     }
 
+    private static func drawHairpinLine(
+        context: inout GraphicsContext, from: CGPoint, to: CGPoint,
+        crescendo: Bool, metrics: StaffMetrics,
+    ) {
+        let parts = SpannerGeometry.hairpinLine(
+            from: from, to: to, crescendo: crescendo, sp: metrics.sp,
+        )
+        context.drawExpressionText(
+            parts.label, at: parts.labelOrigin,
+            size: metrics.sp * parts.labelSizeSp, italic: true,
+        )
+        guard parts.lineEnd.x > parts.lineStart.x else { return }
+        var p = Path()
+        p.move(to: parts.lineStart)
+        p.addLine(to: parts.lineEnd)
+        context.stroke(
+            p, with: .color(.primary),
+            style: StrokeStyle(
+                lineWidth: metrics.sp * parts.lineThicknessSp,
+                dash: parts.dashPattern,
+            ),
+        )
+    }
+
     private static func drawPedal(
         context: inout GraphicsContext, from: CGPoint, to: CGPoint,
         metrics: StaffMetrics,
@@ -147,10 +176,11 @@ enum SpannerRenderer {
 
     private static func drawOttava(
         context: inout GraphicsContext, from: CGPoint, to: CGPoint,
+        subtype: Spanner.OttavaPayload.Subtype,
         metrics: StaffMetrics,
     ) {
         let parts = SpannerGeometry.ottava(
-            from: from, to: to, sp: metrics.sp,
+            from: from, to: to, sp: metrics.sp, subtype: subtype,
         )
         context.drawExpressionText(
             parts.label, at: parts.labelOrigin,

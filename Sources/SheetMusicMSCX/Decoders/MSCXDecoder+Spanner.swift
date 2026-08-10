@@ -22,21 +22,7 @@ extension Spanner {
 
         var hairpin: Spanner.HairpinPayload?
         if kind == .hairpin, let hp = node.first("HairPin") {
-            let subtypeRaw = Int(hp.first("subtype")?.text ?? "0") ?? 0
-            let subtype = Spanner.HairpinPayload.Subtype(rawValue: subtypeRaw) ?? .crescendo
-
-            let veloChangeText = hp.first("veloChange")?.text
-            let veloChangeRaw = veloChangeText.flatMap(Int.init)
-            let veloChange = veloChangeRaw == 0 ? nil : veloChangeRaw
-
-            let methodRaw = hp.first("veloChangeMethod")?.text ?? ""
-            let method = Spanner.HairpinPayload.VeloChangeMethod(rawValue: methodRaw) ?? .normal
-
-            hairpin = Spanner.HairpinPayload(
-                subtype: subtype,
-                veloChange: veloChange,
-                veloChangeMethod: method,
-            )
+            hairpin = decodeHairpin(hp)
         }
 
         var ottava: Spanner.OttavaPayload?
@@ -71,6 +57,38 @@ extension Spanner {
             hairpin: hairpin,
             ottava: ottava,
             vibrato: vibrato,
+        )
+    }
+
+    /// Decode a `<HairPin>` payload. The `<subtype>` is MuseScore's
+    /// `HairpinType` (`hairpin.h:32`): 0 cresc wedge, 1 dim wedge,
+    /// 2 cresc line, 3 dim line.
+    private static func decodeHairpin(
+        _ hp: XMLTreeNode,
+    ) -> Spanner.HairpinPayload {
+        let subtypeRaw = Int(hp.first("subtype")?.text ?? "0") ?? 0
+        let subtype: Spanner.HairpinPayload.Subtype
+        if let known = Spanner.HairpinPayload.Subtype(rawValue: subtypeRaw) {
+            subtype = known
+        } else {
+            // Embellishment-tier policy: the score still loads, but a
+            // hairpin silently flipped to crescendo is exactly the
+            // failure this diagnostic exists to surface.
+            mscxDecoderWarn(
+                code: "mscx.hairpin.unknownSubtype",
+                message: "Unknown HairPin subtype \(subtypeRaw); defaulting to crescendo",
+            )
+            subtype = .crescendo
+        }
+
+        let veloChangeText = hp.first("veloChange")?.text
+        let veloChangeRaw = veloChangeText.flatMap(Int.init)
+        let methodRaw = hp.first("veloChangeMethod")?.text ?? ""
+
+        return Spanner.HairpinPayload(
+            subtype: subtype,
+            veloChange: veloChangeRaw == 0 ? nil : veloChangeRaw,
+            veloChangeMethod: .init(rawValue: methodRaw) ?? .normal,
         )
     }
 

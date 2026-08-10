@@ -28,6 +28,13 @@ extension LayoutEngine {
         /// `<Spanner type="…">` attribute is the literal string
         /// `HairPin` for both directions, so `rawType` cannot carry it.
         let hairpinSubtype: Spanner.HairpinPayload.Subtype?
+        /// Ottava transposition. Meaningful only when
+        /// `kind == .ottava`. Same story as `hairpinSubtype`:
+        /// `<Spanner type="…">` is the literal string `Ottava` for
+        /// every variant, and the 8va / 8vb / 15ma / … distinction —
+        /// which drives both the label and above/below placement —
+        /// lives in `<Ottava><subtype>`.
+        let ottavaSubtype: Spanner.OttavaPayload.Subtype?
     }
 
     /// Per-staff set of measure indices covered by a visible
@@ -114,6 +121,7 @@ extension LayoutEngine {
                                 voltaEndings: sp.voltaEndings,
                                 vibratoType: sp.vibrato?.type,
                                 hairpinSubtype: sp.hairpin?.subtype,
+                                ottavaSubtype: sp.ottava?.subtype,
                             ))
                         }
                         switch el {
@@ -175,8 +183,9 @@ extension LayoutEngine {
             guard let (endSys, endLocal) = measureLocation[endGlobal]
             else { continue }
 
-            let belowStaff = isBelowStaff(kind: anchor.kind)
+            let belowStaff = isBelowStaff(anchor: anchor)
             let kind = layoutKind(anchor: anchor)
+            let label = layoutLabel(anchor: anchor)
 
             if startSys == endSys {
                 let system = systems[startSys]
@@ -220,7 +229,7 @@ extension LayoutEngine {
                     toOrigin: CGPoint(x: toX, y: y),
                     continuesLeft: false,
                     continuesRight: false,
-                    text: anchor.rawType,
+                    text: label,
                 ))
             } else {
                 let startSystem = systems[startSys]
@@ -255,7 +264,7 @@ extension LayoutEngine {
                     toOrigin: CGPoint(x: toXStart, y: yStart),
                     continuesLeft: false,
                     continuesRight: true,
-                    text: anchor.rawType,
+                    text: label,
                 ))
                 if endSys > startSys + 1 {
                     for mid in (startSys + 1) ..< endSys {
@@ -285,7 +294,7 @@ extension LayoutEngine {
                             ),
                             continuesLeft: true,
                             continuesRight: true,
-                            text: anchor.rawType,
+                            text: label,
                         ))
                     }
                 }
@@ -321,7 +330,7 @@ extension LayoutEngine {
                     toOrigin: CGPoint(x: toXEnd, y: yEnd),
                     continuesLeft: true,
                     continuesRight: false,
-                    text: anchor.rawType,
+                    text: label,
                 ))
             }
         }
@@ -489,6 +498,18 @@ extension LayoutEngine {
         case .hairpin, .pedal: true
         case .volta, .slur, .ottava, .textLine, .glissando, .vibrato, .other: false
         }
+    }
+
+    /// Placement for a concrete anchor. Identical to
+    /// `isBelowStaff(kind:)` except for ottavas, whose side depends on
+    /// the subtype: MuseScore's style defaults put `8va` / `15ma` /
+    /// `22ma` ABOVE and `8vb` / `15mb` / `22mb` BELOW
+    /// (`styledef.cpp:638-643`, `ottava8V*Placement`).
+    static func isBelowStaff(anchor: SpannerAnchor) -> Bool {
+        if anchor.kind == .ottava {
+            return (anchor.ottavaSubtype ?? .eightVA).semitones < 0
+        }
+        return isBelowStaff(kind: anchor.kind)
     }
 
     /// Y baseline for a spanner segment. Above-staff spanners (slur,
@@ -727,13 +748,17 @@ extension LayoutEngine {
         case .slur: return .slur
         case .volta: return .volta(endings: anchor.voltaEndings)
         case .hairpin:
-            // Direction lives in the decoded `<HairPin><subtype>`
-            // payload (0 = crescendo, 1 = decrescendo). MuseScore
-            // writes `type="HairPin"` for both, so the raw string is
-            // only a fallback for importers that name the direction
-            // in the type itself.
+            // Direction and wedge-vs-line form both live in the
+            // decoded `<HairPin><subtype>` payload (MuseScore
+            // `HairpinType`: 0 cresc wedge, 1 dim wedge, 2 cresc line,
+            // 3 dim line). MuseScore writes `type="HairPin"` for all
+            // four, so the raw string is only a fallback for importers
+            // that name the direction in the type itself.
             if let subtype = anchor.hairpinSubtype {
-                return subtype == .decrescendo ? .hairpinClose : .hairpinOpen
+                if subtype.isLineType {
+                    return .hairpinLine(crescendo: subtype.isCrescendo)
+                }
+                return subtype.isCrescendo ? .hairpinOpen : .hairpinClose
             }
             let raw = anchor.rawType.lowercased()
             if raw.contains("decr") || raw.contains("dim") {
@@ -741,10 +766,26 @@ extension LayoutEngine {
             }
             return .hairpinOpen
         case .pedal: return .pedal
-        case .ottava: return .ottava(raw: anchor.rawType)
+        case .ottava:
+            return .ottava(subtype: anchor.ottavaSubtype ?? .eightVA)
         case .textLine: return .textLine
         case .vibrato: return .vibrato(anchor.vibratoType ?? .guitarVibrato)
         case .glissando, .other: return .textLine
         }
+    }
+
+    /// Label drawn at the segment's left edge, or `""` when we have no
+    /// authored text for this spanner.
+    ///
+    /// This used to pass `anchor.rawType` straight through, which
+    /// printed MuseScore's internal element name onto the score — a
+    /// `<Spanner type="Trill">` engraved the literal word "Trill".
+    /// Kinds whose label is derived from their own payload (volta,
+    /// ottava, hairpin line) get it from `SpannerGeometry` instead, so
+    /// nothing needs a caller-supplied string today. The parameter
+    /// stays plumbed for the authored `<beginText>` of a real
+    /// `<Spanner type="TextLine">`, which the decoder does not read yet.
+    static func layoutLabel(anchor _: SpannerAnchor) -> String {
+        ""
     }
 }

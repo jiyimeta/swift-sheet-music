@@ -127,6 +127,44 @@ public enum SpannerGeometry {
         )
     }
 
+    // MARK: - Hairpin line ("cresc." / "dim.")
+
+    public struct HairpinLineParts: Sendable, Equatable {
+        public let label: String
+        /// Origin at vertical-center, leading-edge.
+        public let labelOrigin: CGPoint
+        public let labelSizeSp: CGFloat
+        public let lineStart: CGPoint
+        public let lineEnd: CGPoint
+        public let lineThicknessSp: CGFloat
+        public let dashPattern: [CGFloat]
+    }
+
+    /// Label point size for a hairpin line's "cresc." / "dim." text.
+    public static let hairpinLineLabelSizeSp: CGFloat = 2.2
+
+    /// MuseScore renders `CRESC_LINE` / `DIM_LINE` as begin text plus a
+    /// dashed continuation line, not as a wedge.
+    ///
+    /// C++: begin text comes from `Sid::hairpinCrescText` / `
+    /// Sid::hairpinDecrescText` — "cresc." / "dim."
+    /// (`styledef.cpp:304-305`, selected in `hairpin.cpp:717-724`);
+    /// the line style from `Sid::hairpinLineLineStyle` = DASHED
+    /// (`styledef.cpp:311`).
+    public static func hairpinLine(
+        from: CGPoint, to: CGPoint, crescendo: Bool, sp: CGFloat,
+    ) -> HairpinLineParts {
+        HairpinLineParts(
+            label: crescendo ? "cresc." : "dim.",
+            labelOrigin: from,
+            labelSizeSp: hairpinLineLabelSizeSp,
+            lineStart: CGPoint(x: from.x + sp * 4, y: from.y),
+            lineEnd: to,
+            lineThicknessSp: lineThicknessSp,
+            dashPattern: [3, 3],
+        )
+    }
+
     // MARK: - Pedal
 
     public struct PedalGlyphs: Sendable, Equatable {
@@ -159,14 +197,19 @@ public enum SpannerGeometry {
         public let dashPattern: [CGFloat]
     }
 
+    /// `subtype` selects the label, mirroring MuseScore's
+    /// `ottavaDefault[]` name column (`ottava.h:67-74`).
+    ///
+    /// Remaining divergence from MuseScore: it renders the label as
+    /// SMuFL glyphs (`<sym>ottavaAlta</sym>` …) and, with the default
+    /// `ottavaNumbersOnly = true`, shows the bare number ("8"). We
+    /// still draw italic text.
     public static func ottava(
         from: CGPoint, to: CGPoint, sp: CGFloat,
+        subtype: Spanner.OttavaPayload.Subtype,
     ) -> OttavaParts {
-        // v1 always labels "8va"; distinguishing 8vb would need the
-        // raw type string threaded through. Good enough for "the
-        // marking is visible".
         OttavaParts(
-            label: "8va",
+            label: subtype.rawValue,
             labelOrigin: from,
             labelSizeSp: ottavaLabelSizeSp,
             lineStart: CGPoint(x: from.x + sp * 3, y: from.y),

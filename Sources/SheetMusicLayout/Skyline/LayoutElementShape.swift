@@ -58,7 +58,7 @@ public enum LayoutElementShape {
             switch spannerKind {
             case .slur, .vibrato: nil
             case .volta: .volta
-            case .hairpinOpen, .hairpinClose: .hairpin
+            case .hairpinOpen, .hairpinClose, .hairpinLine: .hairpin
             case .pedal: .pedal
             case .ottava: .ottava
             case .textLine: .textLine

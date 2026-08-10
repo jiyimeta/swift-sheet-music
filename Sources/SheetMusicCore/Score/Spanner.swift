@@ -88,9 +88,28 @@ public struct Spanner: Sendable, Equatable {
     /// Meaningful only when `kind == .hairpin`. Nil for other kinds.
     /// C++: `mu::engraving::Hairpin`.
     public struct HairpinPayload: Sendable, Equatable {
+        /// C++: `mu::engraving::HairpinType` (`hairpin.h:32`). The two
+        /// `*Line` members print MuseScore's "cresc." / "dim." text
+        /// with a dashed continuation line instead of a wedge, but
+        /// they drive playback exactly like the wedge forms.
         public enum Subtype: Int, Sendable {
             case crescendo = 0
             case decrescendo = 1
+            case crescLine = 2
+            case dimLine = 3
+
+            /// C++: `Hairpin::isCrescendo` (`hairpin.h:141-144`).
+            /// Playback and wedge direction must both branch on this,
+            /// never on `== .crescendo`.
+            public var isCrescendo: Bool {
+                self == .crescendo || self == .crescLine
+            }
+
+            /// C++: `Hairpin::isLineType` (`hairpin.h:156-159`).
+            /// True for the two text-line forms.
+            public var isLineType: Bool {
+                self == .crescLine || self == .dimLine
+            }
         }
 
         /// Linear / ease curve. v1 implements `.normal` (linear) only;

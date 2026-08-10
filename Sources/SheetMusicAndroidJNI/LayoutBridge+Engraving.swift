@@ -517,6 +517,32 @@ extension LayoutBridge {
                 lineWidth: stroke, into: &out,
             )
 
+        case let .hairpinLine(crescendo):
+            let parts = SpannerGeometry.hairpinLine(
+                from: from, to: to,
+                crescendo: crescendo, sp: CGFloat(sp),
+            )
+            encodeNotationText(
+                text: parts.label, role: .jump,
+                originX: Double(parts.labelOrigin.x),
+                originY: Double(parts.labelOrigin.y),
+                sp: sp, into: &out,
+            )
+            if parts.lineEnd.x > parts.lineStart.x {
+                let onMM = Double(parts.dashPattern.first ?? 3) * ptToMMScale
+                let offMM = Double(
+                    parts.dashPattern.count > 1
+                        ? parts.dashPattern[1]
+                        : (parts.dashPattern.first ?? 3),
+                ) * ptToMMScale
+                out.append(.setDash(onMM: onMM, offMM: offMM))
+                emitSegment(
+                    from: parts.lineStart, to: parts.lineEnd,
+                    lineWidth: line, into: &out,
+                )
+                out.append(.setDash(onMM: 0, offMM: 0))
+            }
+
         case .pedal:
             let parts = SpannerGeometry.pedal(from: from, to: to)
             // Canvas.drawText anchors at baseline-leading. Apple uses
@@ -547,9 +573,9 @@ extension LayoutBridge {
                 fontId: .smufl,
             ))
 
-        case .ottava:
+        case let .ottava(subtype):
             let parts = SpannerGeometry.ottava(
-                from: from, to: to, sp: CGFloat(sp),
+                from: from, to: to, sp: CGFloat(sp), subtype: subtype,
             )
             encodeNotationText(
                 text: parts.label, role: .jump,
