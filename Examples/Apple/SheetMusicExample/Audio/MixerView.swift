@@ -23,10 +23,113 @@ struct MixerView: View {
             }
             .padding(.bottom, 6)
 
+            MasterLevelSection(engine: engine)
+                .padding(.bottom, 6)
+
             ForEach(engine.mixerChannels) { channel in
                 MixerStrip(channel: channel, engine: engine)
             }
         }
+    }
+}
+
+/// Master gain + peak meter. The meter reads `sumMixer` (post gain,
+/// pre limiter), so "Hold" is the highest level the mix actually
+/// reached before any limiting — which is what tells you how much
+/// headroom is left below 0 dBFS. Play the loudest passage with every
+/// staff sounding, then read Hold.
+private struct MasterLevelSection: View {
+    let engine: PlaybackEngine
+
+    @State private var gain: Float = 1.0
+    @State private var stage: MasterOutputStage = .none
+    @State private var meter = LevelMeter()
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(String(format: "Master gain %.2f× (%@)", gain, Self.dB(gain)))
+                .font(.caption)
+            Slider(value: $gain, in: 0 ... 4)
+                .onChange(of: gain) { _, value in
+                    engine.setMasterGain(value)
+                }
+
+            Picker("Output stage", selection: $stage) {
+                Text("None").tag(MasterOutputStage.none)
+                Text("Soft clip").tag(MasterOutputStage.softClip)
+                Text("Peak limiter").tag(MasterOutputStage.peakLimiter)
+            }
+            .pickerStyle(.segmented)
+            .font(.caption)
+            .onChange(of: stage) { _, value in
+                engine.setMasterOutputStage(value)
+                meter.resetHold()
+            }
+
+            HStack(spacing: 8) {
+                Text("Peak \(Self.dB(meter.peak))")
+                    .font(.caption.monospacedDigit())
+                Text("Hold \(Self.dB(meter.peakHold))")
+                    .font(.caption.monospacedDigit().bold())
+                    .foregroundStyle(meter.peakHold > 1 ? Color.red : .primary)
+                Button("Reset") { meter.resetHold() }
+                    .buttonStyle(.borderless)
+                    .font(.caption)
+            }
+            // Crest = how far the peak sits above the RMS. A wide crest is
+            // why a mix can peak near the ceiling and still sound quiet:
+            // there is no gain left to add, but little of the signal is
+            // near the top.
+            HStack(spacing: 8) {
+                Text("RMS \(Self.dB(meter.rmsHold))")
+                    .font(.caption.monospacedDigit())
+                Text("Crest \(Self.crest(peak: meter.peakHold, rms: meter.rmsHold))")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .onAppear {
+            engine.startLevelMonitoring { [meter] level in
+                Task { @MainActor in meter.report(level) }
+            }
+        }
+        .onDisappear {
+            engine.stopLevelMonitoring()
+        }
+    }
+
+    /// Linear amplitude → dBFS. `1.0` is 0 dBFS; silence reads `-∞`.
+    private static func dB(_ amplitude: Float) -> String {
+        guard amplitude > 0 else { return "-∞ dB" }
+        return String(format: "%+.1f dB", 20 * log10(amplitude))
+    }
+
+    /// Peak-to-RMS distance in dB.
+    private static func crest(peak: Float, rms: Float) -> String {
+        guard peak > 0, rms > 0 else { return "— dB" }
+        return String(format: "%.1f dB", 20 * log10(peak / rms))
+    }
+}
+
+/// Peak / RMS with holds, updated from the engine's metering tap. Both
+/// hold their maximum so a single pass over the loudest passage is
+/// enough to read the numbers off.
+@MainActor
+@Observable
+private final class LevelMeter {
+    private(set) var peak: Float = 0
+    private(set) var peakHold: Float = 0
+    private(set) var rmsHold: Float = 0
+
+    func report(_ level: MixLevel) {
+        peak = level.peak
+        peakHold = max(peakHold, level.peak)
+        rmsHold = max(rmsHold, level.rms)
+    }
+
+    func resetHold() {
+        peakHold = 0
+        rmsHold = 0
     }
 }
 
