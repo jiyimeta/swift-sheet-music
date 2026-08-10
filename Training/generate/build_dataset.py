@@ -374,7 +374,7 @@ def _export_and_rasterize(entry: dict, render_dir: Path, source_path: Path,
 def generate_dataset(root: Path, seed: int, engines: list[str], per_face: int,
                      texture_count: int, extra_sources: list[Path],
                      exporter=None, rasterizer=None, face_overrides=None,
-                     allow_existing: bool = False,
+                     allow_existing: bool = False, resume: bool = False,
                      pin_page: bool = False) -> dict:
     """Phase 1: write every render directory, export, rasterize, and
     record the failures in `quarantine.json`.
@@ -382,10 +382,30 @@ def generate_dataset(root: Path, seed: int, engines: list[str], per_face: int,
     `exporter` / `rasterizer` are the injected MuseScore and pdfium
     seams (defaults are the real ones), which is what lets the whole
     orchestration be tested without either installed.
+
+    `resume` continues an interrupted run: a plan entry whose render
+    directory already holds a `render.json` and NO labels is skipped.
+    A full run is an hour of MuseScore, and losing it to a killed shell
+    once is enough. The two conditions are both load-bearing:
+
+    - `render.json` is written LAST, after a successful export and a
+      successful rasterization, so its presence means that render
+      finished — a half-written directory has none and is redone.
+    - the no-labels check keeps `resume` from becoming the hazard
+      `DatasetExists` exists to prevent. Skipping a LABELED render would
+      leave the previous classifier's labels in place for `finalize` to
+      hash as if this run had produced them; refusing to skip it means
+      the operator sees the work happen rather than inheriting a mixture
+      silently.
+
+    Resume is only sound because the plan is a pure function of the seed
+    (see `plan_renders`): the entry being skipped is the same entry the
+    interrupted run executed.
     """
     exporter = exporter or export_pdf.export_pdf
     rasterizer = rasterizer or rasterize.rasterize_pdf
     root = Path(root)
+    allow_existing = allow_existing or resume
     if not allow_existing and _render_dirs(root):
         raise DatasetExists(
             f"{root} already holds render directories. Generating over them "
@@ -426,10 +446,16 @@ def generate_dataset(root: Path, seed: int, engines: list[str], per_face: int,
 
     quarantined: list[dict] = []
     exported = 0
+    resumed = 0
     for entry in plan:
         source = sources[entry["source_id"]]
         variant = variants[entry["engine"]][entry["variant_index"]]
         render_dir = root / entry["render_id"]
+        if (resume and (render_dir / "render.json").is_file()
+                and not any(render_dir.glob("page_*.labels.json"))):
+            exported += 1
+            resumed += 1
+            continue
         render_dir.mkdir(parents=True, exist_ok=True)
         try:
             source_path = _write_source(render_dir, source, variant)
@@ -471,8 +497,12 @@ def generate_dataset(root: Path, seed: int, engines: list[str], per_face: int,
 
     (root / "quarantine.json").write_text(
         json.dumps(quarantined, indent=2, sort_keys=True) + "\n")
-    print(f"[generate][SUMMARY] driven={len(plan)} exported={exported} "
-          f"quarantined={len(quarantined)} root={root}")
+    # `resumed` is counted inside `exported` — they are renders the
+    # dataset has — but printed separately so a resumed run cannot be
+    # mistaken for a run that did all of that work.
+    resumed_note = f" resumed={resumed}" if resumed else ""
+    print(f"[generate][SUMMARY] driven={len(plan)} exported={exported}"
+          f"{resumed_note} quarantined={len(quarantined)} root={root}")
     print("[generate] next (phase 2, from the repo root):")
     print(f"  OMR_DATA_ROOT={root} OMR_LABEL_EXPORT=1 swift test")
     return {"root": str(root), "driven": len(plan), "exported": exported,
@@ -1063,6 +1093,10 @@ def _build_parser() -> argparse.ArgumentParser:
     gen.add_argument("--pin-page", action="store_true",
                      help="hold page size at A4 across variants (face probes)")
     gen.add_argument("--allow-existing", action="store_true")
+    gen.add_argument(
+        "--resume", action="store_true",
+        help="continue an interrupted run: skip plan entries whose render "
+             "directory already holds a render.json and no labels")
 
     fin = sub.add_parser("finalize", help="phase 3: manifest + P3c-G2/G3")
     fin.add_argument("--root", required=True)
@@ -1106,7 +1140,7 @@ def main(argv=None) -> int:
                 args.per_face, args.textures,
                 [Path(p) for p in args.extra_sources],
                 face_overrides=overrides, pin_page=args.pin_page,
-                allow_existing=args.allow_existing)
+                allow_existing=args.allow_existing, resume=args.resume)
         except (DatasetExists, DuplicateSourceID) as error:
             # Operator mistakes (rerunning into a populated root; two
             # source directories claiming one id), not crashes -- they

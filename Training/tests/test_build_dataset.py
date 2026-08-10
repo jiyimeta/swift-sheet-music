@@ -181,6 +181,57 @@ def test_generate_refuses_a_root_that_already_holds_renders(tmp_path):
     assert summary["exported"] > 0
 
 
+def test_resume_skips_finished_renders_and_redoes_the_rest(tmp_path):
+    """A full run is an hour of MuseScore; losing it to a killed shell
+    should not mean redoing the part that already succeeded.
+
+    `render.json` is written LAST, so its presence marks a render that
+    finished. Everything else — including a directory left half-written
+    when the process died — is redone, which is what this asserts by
+    deleting one marker and watching exactly that render be exported
+    again.
+    """
+    _generate(tmp_path, texture_count=0)
+    finished = sorted(p for p in tmp_path.iterdir()
+                      if (p / "render.json").is_file())
+    assert len(finished) > 1
+    (finished[0] / "render.json").unlink()
+
+    exporter = _ExporterSpy()
+    summary, _ = _generate(tmp_path, texture_count=0, resume=True,
+                           exporter=exporter)
+    # Only the render whose marker was removed went back through
+    # MuseScore; the rest were counted without being redone.
+    assert len(exporter.calls) == 1
+    assert summary["exported"] == len(finished)
+    assert (finished[0] / "render.json").is_file()
+
+
+def test_resume_refuses_to_skip_a_render_that_already_has_labels(tmp_path):
+    """The hazard `DatasetExists` guards against, in resume's clothing:
+    skipping a LABELED render would leave a previous classifier's labels
+    for `finalize` to hash as if this run had produced them. So a
+    labelled directory is NOT skipped — it is regenerated, and the
+    operator sees the work happen instead of inheriting a mixture.
+    """
+    _generate(tmp_path, texture_count=0)
+    finished = sorted(p for p in tmp_path.iterdir()
+                      if (p / "render.json").is_file())
+    (finished[0] / "page_0.labels.json").write_text("{}")
+
+    exporter = _ExporterSpy()
+    _generate(tmp_path, texture_count=0, resume=True, exporter=exporter)
+    assert len(exporter.calls) == 1
+
+
+def test_resume_implies_allow_existing(tmp_path):
+    """Otherwise every resume would need two flags, and forgetting the
+    second one raises `DatasetExists` — the least useful moment for it."""
+    _generate(tmp_path, texture_count=0)
+    summary, _ = _generate(tmp_path, texture_count=0, resume=True)
+    assert summary["exported"] > 0
+
+
 def test_extra_sources_are_carried_with_provenance(tmp_path):
     import zipfile
 
