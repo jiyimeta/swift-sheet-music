@@ -8,8 +8,25 @@ import SheetMusicLayoutApple
 /// Reference descriptors for Tier 4 nearest-neighbor classification, rendered
 /// from the bundled Bravura (SIL OFL) reference font.
 ///
-/// Built from the SAME codepoint list `PDFImporter.smuflSemantic` recognizes,
-/// so the exemplar set and the label set cannot drift apart.
+/// Built from the same codepoint list `PDFImporter.smuflSemantic` recognizes,
+/// so the exemplar set and the label set cannot drift apart — with one
+/// deliberate exclusion.
+///
+/// THE COARSE BUCKETS ARE EXEMPLAR-LESS ON PURPOSE. `smuflSemantic` maps whole
+/// ranges to `.dynamic` (U+E520–E54F), `.articulation` (U+E4A0–E4BF,
+/// U+ED40–ED4F) and `.ornament` (U+E560–E58F), and none of them appears below.
+/// Two reasons, either sufficient:
+///
+/// - Tier 4 answers ONE semantic per exemplar; a range has no single shape to
+///   stand for it, so "the" dynamic exemplar would be an arbitrary pick.
+/// - Dynamics are italic letterforms (p, f, m…). The music-font gate's whole
+///   margin comes from text letterforms landing far from every exemplar
+///   (`GlyphClassifier`'s measured spread: text faces ≤27% inside the bound,
+///   music faces 72–88%). Adding letter-shaped exemplars attacks that margin
+///   directly and would require re-measuring the gate's constants.
+///
+/// The same holds for `.dalSegno` / `.daCapo` (U+E045/E046), which are also
+/// letterform glyphs ("D.S." / "D.C.").
 enum BravuraExemplars {
     static let all: [(semantic: SMuFLSemantic, descriptor: ShapeDescriptor)] = build()
 
