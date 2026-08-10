@@ -156,6 +156,40 @@ def test_matches_swift_detector_table():
     )
 
 
+def _parse_swift_unreachable_names(text: str) -> list[str]:
+    """Class names whose `detectorTable` row carries an `// UNREACHABLE`
+    marker. Read from the marker rather than from a second Swift list,
+    because a second list is a thing that can drift from the first one
+    silently -- the marker sits ON the row it describes."""
+    start = text.find("static let detectorTable:")
+    end = text.find("static let detectorVocabulary:")
+    if start == -1 or end == -1 or end <= start:
+        pytest.fail("Could not locate the detectorTable array literal.")
+    return re.findall(r'\(\s*"([^"]+)"\s*,[^\n]*//\s*UNREACHABLE',
+                      text[start:end])
+
+
+def test_unreachable_classes_mirror_the_swift_markers():
+    """`vocabulary.UNREACHABLE` and the Swift `// UNREACHABLE` row
+    markers are the same claim written twice; drift between them means
+    the gate exempts a class the label side still believes is drawable,
+    or the reverse.
+
+    Also pins the invariant that makes the exemption safe at all: an
+    unreachable class is still IN the frozen list. The list is
+    append-only because COCO category ids are positions in it, so the
+    answer to "this class can never be drawn" is never to delete it.
+    """
+    swift = _parse_swift_unreachable_names(
+        _swift_source_path().read_text(encoding="utf-8"))
+    assert sorted(swift) == sorted(vocabulary.UNREACHABLE), {
+        "swift": sorted(swift), "python": sorted(vocabulary.UNREACHABLE)}
+    assert swift, "marker parse found nothing -- the Swift layout changed"
+    for name, reason in vocabulary.UNREACHABLE.items():
+        assert name in vocabulary.CLASS_NAMES
+        assert reason.strip()
+
+
 # --- Parser unit tests, against synthetic Swift-like text -----------------
 #
 # These exercise `_parse_detector_table_names_from_source` directly rather

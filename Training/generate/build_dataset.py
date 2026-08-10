@@ -563,9 +563,17 @@ def finalize_dataset(root: Path, seed: int, class_floor: int = CLASS_FLOOR,
                    "success_rate": success_rate,
                    "floor": EXPORT_SUCCESS_FLOOR,
                    "pass": bool(driven) and success_rate >= EXPORT_SUCCESS_FLOOR},
+        # `eligible` is deliberately recorded next to `classes`: the two
+        # differ by exactly the classes nothing can draw, and a reader
+        # who sees `below_floor=14/62` against a 64-class vocabulary must
+        # be able to find out where the other two went without reading
+        # this source. `unreachable` names them.
         "P3c-G3": {"class_floor": class_floor,
                    "classes": len(vocabulary.CLASS_NAMES),
+                   "eligible": len(vocabulary.CLASS_NAMES) - len(vocabulary.UNREACHABLE),
+                   "unreachable": sorted(vocabulary.UNREACHABLE),
                    "below_floor": len(below_floor),
+                   "below_floor_classes": manifest.coverage_shortfalls(doc),
                    "pass": not below_floor},
     }
     manifest.write_manifest(root, doc)
@@ -588,6 +596,11 @@ def finalize_dataset(root: Path, seed: int, class_floor: int = CLASS_FLOOR,
           f"renders={exported} quarantined={len(quarantined)}")
     for line in below_floor:
         print(f"[coverage-below-floor] {line}")
+    # A distinct tag and NO `n/floor` fraction, so an exempt class cannot
+    # be misread as a near-miss or as a class that passed.
+    for cls in sorted(vocabulary.UNREACHABLE):
+        print(f"[coverage-unreachable] {cls} EXEMPT "
+              f"({vocabulary.UNREACHABLE[cls]}; see vocabulary.UNREACHABLE)")
     gate2, gate3 = doc["gates"]["P3c-G2"], doc["gates"]["P3c-G3"]
     print(f"[gate][SUMMARY] P3c-G2 export_success={success_rate:.4f} "
           f"({exported}/{driven}) denominator={denominator} "
@@ -595,7 +608,8 @@ def finalize_dataset(root: Path, seed: int, class_floor: int = CLASS_FLOOR,
           f"floor={EXPORT_SUCCESS_FLOOR} "
           f"pass={'Y' if gate2['pass'] else 'N'}")
     print(f"[gate][SUMMARY] P3c-G3 below_floor={len(below_floor)}/"
-          f"{len(vocabulary.CLASS_NAMES)} floor={class_floor} "
+          f"{gate3['eligible']} unreachable={len(gate3['unreachable'])} "
+          f"classes={gate3['classes']} floor={class_floor} "
           f"pass={'Y' if gate3['pass'] else 'N'}")
     return doc
 

@@ -49,6 +49,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from generate import vocabulary
 from generate.mscx_builder import (PartSpec, StaffSpec, chord, clef_change,
                                    dynamic, end_repeat, fermata, jump,
                                    layout_break, marker, measure_rest,
@@ -69,24 +70,13 @@ CLASS_FLOOR = 1000
 #: system, and for the handful of classes that arrive one-per-bar.
 PER_RENDER_TARGET = 70
 
-#: Detector classes no generator can produce, with the reason. Both are
-#: in the FROZEN vocabulary (append-only -- they cannot be removed), and
-#: both are drawn by MuseScore as TEXT, not as a glyph: SMuFL has no
-#: `fine` and no `toCoda` glyph at all. Checked against MuseScore's own
-#: bundled `fonts/smufl/glyphnames.json`, where the only matching entries
-#: are `coda` (U+E048) and `codaSquare` (U+E049). This repo already
-#: recovers both markers from the TEXT stream instead
-#: (`PDFImporter+Structure.swift:239-241` maps the strings "Fine" and
-#: "To Coda"), which is why the score-level path has them and the
-#: seam-level glyph path never can.
-#:
-#: `finalize` reads this set so gate P3c-G3 reports them as `unreachable`
-#: rather than counting them as shortfalls -- a permanently red gate
-#: teaches a reader to ignore the gate.
-UNREACHABLE_DETECTOR_CLASSES = {
-    "fine": "no SMuFL glyph; MuseScore draws the word (text stream)",
-    "toCoda": "no SMuFL glyph; MuseScore draws the words (text stream)",
-}
+#: Detector classes no generator can produce, with the reason. Declared
+#: next to the frozen class list itself (`vocabulary.UNREACHABLE`) rather
+#: than here, because the gate that honours the exemption reads it from
+#: there and the two must not be able to disagree. Re-exported so the
+#: coverage families and their tests can name it without importing the
+#: vocabulary module for one symbol.
+UNREACHABLE_DETECTOR_CLASSES = vocabulary.UNREACHABLE
 
 #: Sources that deliberately use a `<durationType>` this package's own
 #: `NoteDuration(mscxName:)` cannot decode, and therefore cannot serve

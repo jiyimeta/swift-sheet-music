@@ -166,15 +166,29 @@ def compare_datasets(a: Path, b: Path) -> list[str]:
     return problems
 
 
-def coverage_report(manifest: dict) -> list[str]:
-    """Classes below the per-class floor (gate P3c-G3), sorted by class
-    name. `class_counts` was seeded with every vocabulary class at 0 in
+def coverage_shortfalls(manifest: dict) -> list[str]:
+    """Class names below the per-class floor (gate P3c-G3), sorted, and
+    EXCLUDING the classes nothing can draw.
+
+    `class_counts` was seeded with every vocabulary class at 0 in
     `build_manifest`, so a class with zero instances anywhere in the
-    dataset appears here explicitly (`"clefG 0/1000"`) rather than being
-    silently absent because no label ever mentioned it."""
+    dataset appears here explicitly rather than being silently absent
+    because no label ever mentioned it -- which is the whole point, and
+    is also why the exemption has to be subtracted deliberately instead
+    of being allowed to look like a shortfall forever. See
+    `vocabulary.UNREACHABLE` for what is exempt and why.
+    """
     floor = manifest["class_floor"]
-    return [
-        f"{cls} {n}/{floor}"
-        for cls, n in sorted(manifest["class_counts"].items())
-        if n < floor
-    ]
+    return sorted(
+        cls for cls, n in manifest["class_counts"].items()
+        if n < floor and cls not in vocabulary.UNREACHABLE
+    )
+
+
+def coverage_report(manifest: dict) -> list[str]:
+    """`coverage_shortfalls` rendered as `"<class> <n>/<floor>"` lines,
+    the form `finalize` prints."""
+    floor = manifest["class_floor"]
+    counts = manifest["class_counts"]
+    return [f"{cls} {counts[cls]}/{floor}"
+            for cls in coverage_shortfalls(manifest)]

@@ -22,6 +22,19 @@
     ///
     /// ORDER IS FROZEN: `Training/generate/vocabulary.py` mirrors this
     /// list 1:1 and COCO category ids are positions in it. Append-only.
+    ///
+    /// Two rows are marked `// UNREACHABLE`, and the marker is load-
+    /// bearing — `Training/tests/test_vocabulary.py` parses it and
+    /// asserts it against `vocabulary.UNREACHABLE`. `fine` and `toCoda`
+    /// have no SMuFL glyph at all (the specification has only `coda`
+    /// U+E048 and `codaSquare` U+E049); MuseScore engraves both markers
+    /// as WORDS, so they arrive in the text stream, and `TextGlyph`
+    /// carries no ink box by design. Nothing can ever emit a detector
+    /// box for them. They stay in the list because it is append-only,
+    /// and gate P3c-G3 subtracts them from its denominator rather than
+    /// reporting a shortfall no run can ever fix. `PDFImporter+Structure`
+    /// does recover both markers — from that text stream — so the
+    /// score-level path has them and only the seam-level path cannot.
     enum OMRLabelClassNames {
         /// (className, semantic) — one row per detector class.
         static let detectorTable: [(className: String, semantic: SMuFLSemantic)] = [
@@ -83,8 +96,8 @@
             ("coda", .coda),
             ("dalSegno", .dalSegno),
             ("daCapo", .daCapo),
-            ("fine", .fine),
-            ("toCoda", .toCoda),
+            ("fine", .fine), // UNREACHABLE: no SMuFL glyph, drawn as text
+            ("toCoda", .toCoda), // UNREACHABLE: no SMuFL glyph, drawn as text
             ("fermata", .fermata),
             ("dynamic", .dynamic),
             ("articulation", .articulation),

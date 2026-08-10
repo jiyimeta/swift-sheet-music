@@ -32,3 +32,29 @@ CLASS_NAMES = [
 ]
 
 RESERVED = ["stem", "staff5Lines", "rest128th", "rest256th", "restOther"]
+
+#: Detector classes NOTHING can ever draw, with the reason. They are in
+#: CLASS_NAMES and stay there: the list is frozen and append-only because
+#: COCO category ids are positions in it, so a class cannot be removed
+#: once shipped even after it turns out to be undrawable.
+#:
+#: Both are the same finding. SMuFL has no `fine` and no `toCoda` glyph —
+#: MuseScore's own bundled `fonts/smufl/glyphnames.json` contains only
+#: `coda` (U+E048) and `codaSquare` (U+E049) — and MuseScore engraves
+#: both markers as WORDS. Words go to the PDF's text stream, and
+#: `TextGlyph` carries no ink box by explicit design, so a text run
+#: cannot yield a detector box at all. This repo does recover both
+#: markers, from that text stream
+#: (`PDFImporter+Structure.swift:239-241` maps the strings "Fine" and
+#: "To Coda"), which is why the SCORE-level path has them and the
+#: seam-level glyph path never can.
+#:
+#: Gate P3c-G3 subtracts these from its denominator and reports them on
+#: their own `[coverage-unreachable]` line rather than counting them as
+#: shortfalls. A gate that can never go green teaches its reader to stop
+#: reading it; the exemption is recorded here, next to the frozen list
+#: itself, so it cannot grow quietly.
+UNREACHABLE = {
+    "fine": "no SMuFL glyph; MuseScore draws the word (text stream)",
+    "toCoda": "no SMuFL glyph; MuseScore draws the words (text stream)",
+}

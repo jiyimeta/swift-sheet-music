@@ -467,9 +467,60 @@ def test_finalize_scores_the_export_and_coverage_gates(tmp_path):
     assert gates["P3c-G2"]["success_rate"] == 1.0
     assert gates["P3c-G2"]["pass"] is True
     # Only one class cleared the floor of 2, so the coverage gate fails.
+    # The denominator is the ELIGIBLE classes: the two nothing can draw
+    # are exempt, so they are neither shortfalls nor silent passes.
+    vocab = build_dataset.vocabulary
     assert gates["P3c-G3"]["pass"] is False
-    assert gates["P3c-G3"]["below_floor"] == len(
-        build_dataset.vocabulary.CLASS_NAMES) - 1
+    assert gates["P3c-G3"]["classes"] == len(vocab.CLASS_NAMES)
+    assert gates["P3c-G3"]["eligible"] == len(vocab.CLASS_NAMES) - len(vocab.UNREACHABLE)
+    assert gates["P3c-G3"]["unreachable"] == sorted(vocab.UNREACHABLE)
+    assert gates["P3c-G3"]["below_floor"] == gates["P3c-G3"]["eligible"] - 1
+    assert set(gates["P3c-G3"]["below_floor_classes"]).isdisjoint(vocab.UNREACHABLE)
+
+
+def test_unreachable_classes_are_exempt_from_the_floor_but_still_reported(
+    tmp_path, capsys,
+):
+    """`fine` / `toCoda` have no SMuFL glyph, so they sit at zero in
+    every dataset that will ever be built. Counting them as shortfalls
+    makes P3c-G3 permanently red, and a gate that can never go green
+    teaches its reader to skip it -- but dropping them from the OUTPUT
+    would hide a real fact about the vocabulary. So: out of the pass
+    computation, into a line of their own, with the reason attached.
+
+    Pinned in both directions. The exempt classes must never appear as
+    shortfalls even at a floor they cannot meet, and the eligible count
+    must shrink by exactly as many as are exempt -- so a third name
+    added to `UNREACHABLE` shows up in the gate arithmetic instead of
+    quietly widening the exemption.
+    """
+    _generate(tmp_path, texture_count=0)
+    dirs = sorted(p for p in tmp_path.iterdir() if p.is_dir())
+    # Give every ELIGIBLE class enough instances to clear the floor, and
+    # the exempt ones none -- the state every real run is in.
+    vocab = build_dataset.vocabulary
+    census = {cls: 5 for cls in vocab.CLASS_NAMES if cls not in vocab.UNREACHABLE}
+    _write_labels(dirs[0], 0, [], census)
+    for directory in dirs[1:]:
+        _write_labels(directory, 0, [], census)
+    gate = build_dataset.finalize_dataset(
+        tmp_path, seed=3, class_floor=2, version_probe=lambda _b: "",
+    )["gates"]["P3c-G3"]
+
+    assert gate["below_floor"] == 0
+    assert gate["below_floor_classes"] == []
+    assert gate["pass"] is True
+    assert gate["eligible"] == len(vocab.CLASS_NAMES) - len(vocab.UNREACHABLE)
+
+    out = capsys.readouterr().out
+    for cls, reason in vocab.UNREACHABLE.items():
+        # A distinct tag and NO `n/floor` fraction: an exempt class must
+        # not read as a near-miss.
+        assert f"[coverage-unreachable] {cls} EXEMPT" in out
+        assert reason in out
+        assert f"[coverage-below-floor] {cls} " not in out
+    assert f"unreachable={len(vocab.UNREACHABLE)}" in out
+    assert f"below_floor=0/{gate['eligible']}" in out
 
 
 def test_export_success_gate_fails_below_the_threshold(tmp_path):

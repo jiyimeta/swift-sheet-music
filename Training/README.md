@@ -187,7 +187,7 @@ of them is enough to flip its whole face to `font-mismatch` on P3c-G4.
 | **P0-G4** vector path untouched | **maintainer step, run in the MAIN checkout, not in this worktree** — the untracked spike harnesses and the copyrighted corpus live there. Curated 6 + real corpus must stay byte-identical | expected trivially (this work changed nothing under `Sources/`); still run it |
 | **P3c-G1** same seed ⇒ byte-identical | generate a second root with the **same seed**, run steps 2–3 over it, then `Training/.venv/bin/python Training/generate/build_dataset.py compare $R ${R}b` | `[compare][SUMMARY] identical=Y` (exit 0). Labels + manifest only; images are excluded by design. Each `finalize` also prints `[gate][SUMMARY] P3c-G1-selfcheck … pass=Y` — it re-reads the manifest it just wrote and re-hashes every label listed, so a `pass=N` there means comparing the two roots is meaningless until it is fixed (`[verify]` lines name what) |
 | **P3c-G2** export success ≥ 99% | read `finalize`'s output (or `manifest.json` → `gates.P3c-G2`) | `[gate][SUMMARY] P3c-G2 export_success=… denominator=plan … missing=0 pass=Y`. `missing>0` means renders the plan drove that are neither exported nor quarantined — an interrupted `generate`, so rerun it before believing anything else |
-| **P3c-G3** per-class coverage floor | same run; every shortfall prints a `[coverage-below-floor] <class> n/floor` line | `[gate][SUMMARY] P3c-G3 below_floor=0/64 pass=Y`. A first pilot will not pass this — the report tells you which classes to generate more of |
+| **P3c-G3** per-class coverage floor | same run; every shortfall prints a `[coverage-below-floor] <class> n/floor` line | `[gate][SUMMARY] P3c-G3 below_floor=0/62 unreachable=2 classes=64 floor=1000 pass=Y`. A first pilot will not pass this — the report tells you which classes to generate more of. **Read the denominator**: it is the *eligible* classes, two fewer than the vocabulary — see below |
 | **P3c-G4** face actually applied | `Training/.venv/bin/python Training/generate/build_dataset.py faces --root $R` | `[gate][SUMMARY] P3c-G4 applied=N/N pass=Y` (exit 0). The count is over `confirmed=`, i.e. geometry **and** embedded font name together — see below |
 
 **Frozen eval set** (spec §6.5), after the manifest exists — degrades
@@ -214,6 +214,50 @@ raster's size, recorded per page as `image.source_size_px` — those are
 two different rasters and the homography maps between them. Read
 `[coco][SUMMARY] … images=N`: a `[coco][WARN]` line means the root
 yielded nothing, which is nearly always the wrong `--root`.
+
+### P3c-G3 in detail — the floor, and the two classes exempt from it
+
+The floor is per class, over the whole dataset. A source is rendered
+once per face per `--per-face` variant, so at the standard
+`--engines ms4 --per-face 2` that is **16 renders**, and a class needs
+**63 instances per render** to clear 1000. `gen_coverage` sizes every
+family against `PER_RENDER_TARGET = 70` and
+`test_every_coverage_class_clears_the_per_render_target` fails if one
+slips under — so a shortfall in this gate now means the ink did not
+reach the page, not that the source never asked for it.
+
+**Two classes are exempt and always will be.** `fine` and `toCoda` have
+no SMuFL glyph: the specification has only `coda` (U+E048) and
+`codaSquare` (U+E049), and MuseScore engraves both markers as words.
+Words land in the PDF's text stream, which carries no ink boxes, so no
+detector box can ever exist for them. They stay in the class list
+because it is frozen and append-only (COCO category ids are positions in
+it). The gate therefore subtracts them from its denominator and prints
+them on a line of their own:
+
+    [coverage-unreachable] fine EXEMPT (no SMuFL glyph; MuseScore draws
+        the word (text stream); see vocabulary.UNREACHABLE)
+
+Deliberately no `n/floor` fraction on that line — an exempt class must
+not read as a near-miss. The manifest records `eligible`, `unreachable`
+and `below_floor_classes` next to `classes`, so the shrunken denominator
+is self-explaining. The exemption list lives in
+`generate/vocabulary.py` beside the frozen list, is mirrored by an
+`// UNREACHABLE` marker on the matching `detectorTable` rows in
+`OMRLabelClassNames.swift`, and `test_vocabulary` fails if the two
+disagree — the list cannot grow quietly.
+
+### Do not mix label exports from different classifier versions
+
+`finalize` hashes whatever `*.labels.json` it finds. A glyph classified
+as `unknownE522` by one build and as `dynamic` by the next is the *same
+ink under two names*: the per-class counts split, the COCO export drops
+the `unknown…` half (its category lookup only knows vocabulary names),
+and the per-class geometry fingerprints P3c-G4 compares are keyed on the
+class name. So whenever `PDFImporter.smuflSemantic` changes, **re-export
+labels for every render that will be finalized together** — or generate
+into a fresh root. Grafting new renders onto an older run's labels is
+the failure this warns about, and nothing detects it.
 
 ### P3c-G4 in detail — and the two open questions it settles
 
