@@ -224,7 +224,7 @@ of them is enough to flip its whole face to `font-mismatch` on P3c-G4.
 
 | Gate | Command | Pass looks like |
 |---|---|---|
-| **P0-G1** oracle replay is exact | `OMR_DATA_ROOT=$R OMR_ORACLE_REPLAY=1 swift test 2>&1 \| grep '\[SUMMARY\]'` | every render prints `exact=Y`; the closing line reads `[gate][SUMMARY] P0-G1 exact=N/N inexact=0 skipped=0 failed=0 pass=Y` **and `N > 0`**. Read `pass=`, not the two numbers: the denominator counts every render directory visited, so a skip (label export never ran for it) or a throw (unopenable PDF) is a miss, and an empty sweep is `exact=0/0 … pass=N`, never a pass. `swift test` itself fails when `pass=N` |
+| **P0-G1** oracle replay is exact | `OMR_DATA_ROOT=$R OMR_ORACLE_REPLAY=1 swift test 2>&1 \| grep '\[SUMMARY\]'` | every render prints `exact=Y`; the closing line reads `[gate][SUMMARY] P0-G1 exact=N/N inexact=0 skipped=0 failed=0 pass=Y` **and `N > 0`**. Read `pass=`, not the two numbers: the denominator counts every render directory visited, so a skip (label export never ran for it) or a throw (unopenable PDF) is a miss, and an empty sweep is `exact=0/0 … pass=N`, never a pass. `swift test` itself fails when `pass=N`. **Currently FAILING at scale — see "OPEN: P0-G1 fails at scale" below before reading a run's output** |
 | **P0-G2** run twice, byte-identical | rerun any harness command into `…-run2.txt` and `diff` it against run 1; for the label export also `find $R -name '*.labels.json' \| sort \| xargs shasum -a 256` after each run and `diff` those | empty `diff` both times |
 | **P0-G3** back-end ceiling measured | `OMR_DATA_ROOT=$R OMR_SCORE_EVAL=1 swift test 2>&1 \| grep '\[SUMMARY\]' > ceiling.tsv` and `OMR_DATA_ROOT=$R OMR_SEAM_EVAL=1 swift test 2>&1 \| grep '\[SUMMARY\]' > seam.tsv` | not a threshold — the recorded rows **are** the ceiling. Read `measuresA` / `measuresB` before any percentage (see blind spots below) |
 | **P0-G4** vector path untouched | **maintainer step, run in the MAIN checkout, not in this worktree** — the untracked spike harnesses and the copyrighted corpus live there. Curated 6 + real corpus must stay byte-identical | expected trivially (this work changed nothing under `Sources/`); still run it |
@@ -257,6 +257,49 @@ raster's size, recorded per page as `image.source_size_px` — those are
 two different rasters and the homography maps between them. Read
 `[coco][SUMMARY] … images=N`: a `[coco][WARN]` line means the root
 yielded nothing, which is nearly always the wrong `--root`.
+
+### OPEN: P0-G1 fails at scale — `buildScore` is not order-invariant
+
+**This is the program's central open defect. Read it before trusting any
+raster result.** Measured 2026-08-11 on the 2208-render v2 dataset, the
+first time the gate has been run at scale:
+
+    [gate][SUMMARY] P0-G1 exact=1574/2208 inexact=634 skipped=0 failed=0 pass=N
+
+The failures are the *texture* sources and a few of the owner's real
+scores; every one of the 28 coverage sources replays exactly. The two
+walks differ only in the ORDER of the glyph / path / text streams — a
+label file is position-sorted, a direct walk is content-stream order —
+so 634 renders decode to a different `Score` depending on the order
+their input arrives in. First-divergence classification: durationType
+366, pitch 172, dots 58, Chord-vs-Rest 14, Note-vs-Lyrics 11,
+Accidental 6, and a tail.
+
+**Why it matters more than a failing gate.** A raster detector cannot
+reproduce content-stream order — it finds glyphs on a page. The raster
+program's entire premise is that the same `buildScore` back-end turns
+detector output into a `Score`, which requires that output to be a
+function of the CONTENT, not of the arrival order. P0-G1 exists to
+detect exactly this, and it did.
+
+**Mechanism, confirmed.** `PDFImporter+Rhythm.swift:25-27` sorts a
+measure's glyphs by `origin.x` alone. That is a single key, so it is not
+a total order — a chord's stacked noteheads, a notehead and its
+accidental, a notehead and its augmentation dot all share an x — and
+Swift's `sorted(by:)` is not a stable sort. The relative order of
+equal-x glyphs after the sort is therefore a function of the order they
+went in. About thirty comparators of the same shape exist across
+`Sources/SheetMusicPDF/Import/`; `+Rhythm.swift:247` is the one that is
+already a total order, having been fixed for an earlier instance of this
+same bug, and its doc comment is the precedent for how to choose a
+tiebreak (in particular: **not** geometric y, which is not a total order
+either).
+
+**Not a regression from the coverage round.** The texture renders
+contain none of the recently-classified ink — no `dynamic`,
+`articulation`, `ornament`, `dalSegno`, `daCapo`, `repeatBarlineDots` or
+`fermata`, and no `unknown*` at all, across 1944 pages — so the
+classifier change is provably a no-op for them.
 
 ### P3c-G3 in detail — the floor, and the two classes exempt from it
 
