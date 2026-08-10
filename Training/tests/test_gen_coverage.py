@@ -476,6 +476,56 @@ def test_short_notes_are_kept_off_beams_two_independent_ways():
         assert len(durations) == 1
 
 
+def test_every_note_is_spelled_consistently_with_its_pitch():
+    """`<pitch>` is the sound and `<tpc>` is the SPELLING, and MuseScore
+    engraves the spelling. A chord written as `chord(61, 14)` therefore
+    puts a C on the page while `source.mscx` — the score-level ground
+    truth — says C-sharp: a permanent, systematic disagreement that reads
+    as an OMR error in the eval. Measured: `cov_dynamics`,
+    `cov_articulations` and `cov_ornaments` all sat at `pitch%=25%`
+    purely from this, and the clef families were worse.
+
+    Every note must therefore agree with its own spelling. The
+    accidental family is the deliberate exception: it exists to draw
+    sharps and double-flats, so its notes are chromatic ON PURPOSE and
+    say so by carrying an `<Accidental>`.
+    """
+    from generate.mscx_builder import TPC_BY_PITCH_CLASS
+    #: tpc -> the single pitch class it spells, for the naturals plus the
+    #: chromatic spellings the accidental family uses. tpc is the line of
+    #: fifths (C=14), so a sharp is +7 and a flat is -7.
+    pitch_class_of_tpc = {tpc: pc for pc, tpc in TPC_BY_PITCH_CLASS.items()}
+    for tpc, pc in list(pitch_class_of_tpc.items()):
+        pitch_class_of_tpc[tpc + 7] = (pc + 1) % 12    # sharp
+        pitch_class_of_tpc[tpc + 14] = (pc + 2) % 12   # double sharp
+        pitch_class_of_tpc[tpc - 7] = (pc - 1) % 12    # flat
+        pitch_class_of_tpc[tpc - 14] = (pc - 2) % 12   # double flat
+
+    checked = 0
+    for source_id, root in _roots().items():
+        for note in root.iter("Note"):
+            pitch = int(note.findtext("pitch"))
+            tpc = int(note.findtext("tpc"))
+            assert tpc in pitch_class_of_tpc, (source_id, tpc)
+            assert pitch_class_of_tpc[tpc] == pitch % 12, (
+                source_id, pitch, tpc)
+            accidental = note.findtext("Accidental/subtype")
+            if tpc in TPC_BY_PITCH_CLASS.values():
+                # A natural spelling needs no mark, and the only one it
+                # may legitimately ask for is a CANCELLING natural.
+                assert accidental in (None, "accidentalNatural"), (
+                    source_id, pitch, tpc, accidental)
+            else:
+                # A chromatic spelling that asks for nothing is the
+                # silent-decline trap in the other direction: MuseScore
+                # draws the alteration from the tpc anyway, so the page
+                # and the source agree — but the accidental CLASS then
+                # depends on inference nobody wrote down.
+                assert accidental is not None, (source_id, pitch, tpc)
+            checked += 1
+    assert checked > 1000, checked
+
+
 def test_every_clef_change_writes_both_clef_types():
     """Writing only `<concertClefType>` engraves a TREBLE CLEF for every
     token, silently. `Clef::clefType()` returns the concert clef only in

@@ -53,7 +53,8 @@ from generate import vocabulary
 from generate.mscx_builder import (PartSpec, StaffSpec, bar_of_rests, chord,
                                    clef_change, dynamic, end_repeat, fermata,
                                    jump, layout_break, marker, measure_rest,
-                                   mscx_document, rest, start_repeat, time_sig)
+                                   mscx_document, natural_chord, natural_pitch,
+                                   rest, start_repeat, time_sig, tpc_for)
 
 #: Renders each source receives under the runbook's standard invocation
 #: (`--engines ms4 --per-face 2`): 8 ms4 faces x 2 style variants. Read
@@ -199,7 +200,7 @@ def _clef_family(rng) -> list[tuple[str, str]]:
         for i in range(systems * 2):
             pitches = base + rng.integers(-5, 6, size=4)
             body = [time_sig(4, 4)] if i == 0 else []
-            body += [chord(int(p), 14) for p in pitches]
+            body += [natural_chord(int(p)) for p in pitches]
             bars.append(_Bar("\n".join(body),
                              layout_break() if i % 2 == 1 else ""))
         out.append((source_id, _single_staff(f"Clef {clef}", bars, clef=clef)))
@@ -225,7 +226,7 @@ def _clef_changes_source(rng) -> tuple[str, str]:
         body = [time_sig(4, 4)] if not bars else []
         for _ in range(4):
             body.append(clef_change(tokens[(step + 1) % len(tokens)]))
-            body.append(chord(int(60 + rng.integers(-4, 5)), 14))
+            body.append(natural_chord(int(60 + rng.integers(-4, 5))))
             step += 1
         bars.append(_Bar("\n".join(body)))
     return "cov_clef_changes", _single_staff("Clef changes", bars)
@@ -413,9 +414,10 @@ def _flags_source() -> tuple[str, str]:
                 body = [time_sig(4, 4)] if first else []
                 first = False
                 for i in range(per_bar):
-                    pitch = 60 if stem == "up" else 76
-                    body.append(chord(pitch + (i % 3), 14, duration=duration,
-                                      stem=stem, no_beam=True))
+                    base = 60 if stem == "up" else 76
+                    body.append(natural_chord(base + 2 * (i % 3),
+                                              duration=duration,
+                                              stem=stem, no_beam=True))
                     body.append(rest(duration))
                 bars.append(_Bar("\n".join(body)))
     return "cov_flags", _single_staff("Flags", bars)
@@ -560,7 +562,7 @@ def _dynamics_source() -> tuple[str, str]:
         body = list(first)
         for j in range(4):
             body.append(dynamic(_DYNAMICS[(i * 4 + j) % len(_DYNAMICS)]))
-            body.append(chord(60 + j, 14))
+            body.append(natural_chord(60 + 2 * j))
         bars.append(_Bar("\n".join(body)))
     return "cov_dynamics", _single_staff("Dynamics", bars)
 
@@ -574,8 +576,9 @@ def _articulation_source(source_id: str, name: str,
         first = [time_sig(4, 4)] if i == 0 else []
         body = list(first)
         for j in range(4):
-            body.append(chord(60 + j, 14,
-                              articulations=(symbols[(i * 4 + j) % len(symbols)],)))
+            body.append(natural_chord(
+                60 + 2 * j,
+                articulations=(symbols[(i * 4 + j) % len(symbols)],)))
         bars.append(_Bar("\n".join(body)))
     return source_id, _single_staff(name, bars)
 
@@ -596,17 +599,22 @@ def _ties_source(rng) -> tuple[str, str]:
     """
     bars = []
     for _ in range(4):
-        p = int(60 + rng.integers(-4, 5))
+        # A tie chain is one pitch throughout, so the spelling is drawn
+        # once and reused rather than going through `natural_chord` per
+        # note -- a tie between two different spellings of the same
+        # sound is not what this family means to draw.
+        p = natural_pitch(int(60 + rng.integers(-4, 5)))
+        tpc = tpc_for(p)
         bars.append(_Bar("\n".join(
             ([time_sig(4, 4)] if not bars else [])
-            + [chord(p, 14, duration="half"),
-               chord(p, 14, duration="half", tie="start",
+            + [chord(p, tpc, duration="half"),
+               chord(p, tpc, duration="half", tie="start",
                      tie_fraction="-2/4", tie_measures=1)])))
         bars.append(_Bar("\n".join(
-            [chord(p, 14, duration="half", tie="stop",
+            [chord(p, tpc, duration="half", tie="stop",
                    tie_fraction="2/4", tie_measures=-1),
-             chord(p, 14, duration="quarter", tie="start", tie_fraction="1/4"),
-             chord(p, 14, duration="quarter", tie="stop", tie_fraction="-1/4")])))
+             chord(p, tpc, duration="quarter", tie="start", tie_fraction="1/4"),
+             chord(p, tpc, duration="quarter", tie="stop", tie_fraction="-1/4")])))
     return "cov_ties", _single_staff("Ties", bars)
 
 

@@ -87,10 +87,14 @@ set by construction.
 
 import numpy as np
 
-from generate.gen_coverage import PartSpec, chord, mscx_document, rest, time_sig
+from generate.mscx_builder import (TPC_BY_PITCH_CLASS, PartSpec, chord,
+                                   mscx_document, rest, time_sig)
 
 _MAJOR = [0, 2, 4, 5, 7, 9, 11]
-_TPC_BY_PITCH_CLASS = {0: 14, 2: 16, 4: 18, 5: 13, 7: 15, 9: 17, 11: 19}
+#: Kept as a module-local alias: the table is shared with the coverage
+#: generator (`mscx_builder.TPC_BY_PITCH_CLASS`) so the two cannot spell
+#: the same pitch differently.
+_TPC_BY_PITCH_CLASS = TPC_BY_PITCH_CLASS
 _SYLLABLES = ["la", "sun", "day", "light", "moon", "riv", "er", "sky",
               "gold", "en", "morn", "ing", "wind", "song", "heart", "home"]
 _DUR_TICKS = {"whole": 16, "half": 8, "quarter": 4, "eighth": 2, "16th": 1}

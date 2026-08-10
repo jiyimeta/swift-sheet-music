@@ -283,6 +283,51 @@ def chord(pitch: int, tpc: int, duration: str = "quarter", dots: int = 0,
     )
 
 
+#: Pitch class -> tonal pitch class, for the seven NATURAL notes. `tpc`
+#: is the line of fifths with C = 14 (`Sources/SheetMusicCore/Score/`'s
+#: own spelling), so F = 13 and B = 19.
+TPC_BY_PITCH_CLASS = {0: 14, 2: 16, 4: 18, 5: 13, 7: 15, 9: 17, 11: 19}
+
+
+def tpc_for(pitch: int) -> int:
+    """Tonal pitch class of a NATURAL pitch. Raises on a chromatic one
+    rather than picking a spelling, because the caller has to decide
+    whether it wants a sharp or a flat — and because the usual reason to
+    land here is the mistake below."""
+    try:
+        return TPC_BY_PITCH_CLASS[pitch % 12]
+    except KeyError:
+        raise ValueError(
+            f"pitch {pitch} is chromatic; spell it explicitly with "
+            "chord(pitch, tpc, accidental=…)") from None
+
+
+def natural_pitch(pitch: int) -> int:
+    """`pitch` if it is a natural note, else the natural below it."""
+    while pitch % 12 not in TPC_BY_PITCH_CLASS:
+        pitch -= 1
+    return pitch
+
+
+def natural_chord(pitch: int, **kwargs) -> str:
+    """A chord on the nearest NATURAL pitch, spelled consistently.
+
+    Exists because `chord(pitch, 14)` with a varying pitch is a trap
+    every generator family fell into: `<pitch>` is the sound and `<tpc>`
+    is the spelling, and MuseScore engraves the SPELLING. Pass a pitch of
+    61 with tpc 14 and the ground truth in `source.mscx` says C-sharp
+    while the page says C -- a permanent, systematic disagreement that
+    shows up as a low `pitch%` in the score-level eval and looks exactly
+    like an OMR error. Measured: three coverage families sat at 25%
+    purely from this.
+
+    A chromatic pitch rounds DOWN to the natural below, which keeps a
+    rising run monotonic.
+    """
+    natural = natural_pitch(pitch)
+    return chord(natural, tpc_for(natural), **kwargs)
+
+
 def rest(duration: str = "quarter") -> str:
     return (
         "          <Rest>\n"
