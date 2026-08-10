@@ -272,7 +272,23 @@ four `WalkedContent` streams once inside `buildScore`
 content-stream order disagreed with canonical order at a consequential
 tie, the decode now resolves it the other way — narrowly, but really.
 That is a maintainer step in the MAIN checkout, where the corpus and its
-harness live. The rest of this section is kept because it is the
+harness live.
+
+How much movement to expect, measured rather than guessed: the whole
+`OMR_SCORE_EVAL` sweep was run over v2 twice, once with the pre-fix
+importer and once with the canonicalizer, and **all 2192 `[SUMMARY]`
+rows are byte-identical** — 2032 scorable renders across 8 faces, 3 dpi
+and both generator families, with every note / rest count and every
+`pitch%` / `dur%` unchanged. So on MuseScore output the DIRECT walk's
+decode did not move at all; what moved was the replay walk, into
+agreement with it. That is evidence, not proof: those rows are derived
+metrics, not `Score` bytes, and the corpus contains engravers other than
+MuseScore. Expect the re-bless to be small, and treat a large diff as a
+signal to investigate rather than to bless.
+
+    Training/.venv/bin/python — the aggregator used above is throwaway;
+    the reproducible form is `OMR_DATA_ROOT=$R OMR_SCORE_EVAL=1 swift
+    test 2>&1 | grep '\[SUMMARY\]' | sort` into two files and `diff`. The rest of this section is kept because it is the
 diagnosis, and because the same failure mode will come back the moment a
 new pass reads a stream in arrival order.
 
