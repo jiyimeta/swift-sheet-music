@@ -91,6 +91,16 @@ extension PDFImporter {
         case 0xE4E7: return .rest(.sixteenth)
         case 0xE4E8: return .rest(.thirtySecond)
         case 0xE4E9: return .rest(.sixtyFourth)
+        // The leger-line whole and half rests. A whole or half rest is
+        // hung from a staff line, so a rest placed outside the staff
+        // needs its own leger line and SMuFL gives that a separate
+        // glyph. It is the SAME rest — same duration, same class — and
+        // leaving it unmapped dropped the rest from the import
+        // entirely. Found in the owner's own scores during the coverage
+        // round; the generated sources never place a rest off-staff, so
+        // no synthetic dataset would have shown it.
+        case 0xE4F4: return .rest(.whole)
+        case 0xE4F5: return .rest(.half)
         default:
             return rangeSemantic(codepoint: cp)
         }

@@ -99,6 +99,28 @@
         /// U+E049), so those two detector classes are recovered from the
         /// TEXT stream instead — see `PDFImporter+Structure`'s marker
         /// text mapping.
+        /// A rest sitting outside the staff is the same rest.
+        ///
+        /// Whole and half rests hang from a staff line, so one placed
+        /// above or below the staff carries its own leger line — SMuFL
+        /// gives that its own glyph (`restWholeLegerLine` U+E4F4,
+        /// `restHalfLegerLine` U+E4F5, right after the plain rests and
+        /// the H-bar family). Same duration, same class. Leaving them
+        /// unmapped dropped the rest from the import entirely.
+        ///
+        /// Measured on the owner's own scores during the coverage round.
+        /// No synthetic source would have caught it: the generators
+        /// never place a rest off-staff.
+        @Test func classifiesLegerLineRestsAsTheirPlainDurations() {
+            #expect(PDFImporter.smuflSemantic(codepoint: 0xE4F4) == .rest(.whole))
+            #expect(PDFImporter.smuflSemantic(codepoint: 0xE4F5) == .rest(.half))
+            // U+E4F3 is the DOUBLE-whole leger-line rest, and this
+            // package's NoteDuration has no breve — mapping it would
+            // need a duration that does not exist, so it stays unknown
+            // rather than being rounded to a whole rest.
+            #expect(PDFImporter.smuflSemantic(codepoint: 0xE4F3) == .unknown(0xE4F3))
+        }
+
         /// Both spellings of a repeat barline's dots.
         ///
         /// SMuFL has `repeatDots` U+E043 — the pair as one glyph — and
