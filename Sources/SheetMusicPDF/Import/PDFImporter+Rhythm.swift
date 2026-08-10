@@ -203,13 +203,64 @@ extension PDFImporter {
         )
     }
 
+    /// Order a chord's noteheads by ASCENDING PITCH before they are turned
+    /// into notes, so the chord's contents do not depend on the order the
+    /// glyphs happened to arrive in.
+    ///
+    /// WHY IT MATTERS. Content-stream order carries no musical convention:
+    /// measured on one real MuseScore PDF, the same document emitted
+    /// `[64, 67, 71]`, `[71, 67]` and `[76, 69, 72]`. Worse, it was the only
+    /// input ordering `buildScore` was sensitive to at all, so an identical
+    /// glyph multiset in a different order produced a different `Score`. A
+    /// raster front-end emits glyphs in scan order and can never reproduce a
+    /// PDF's content-stream order, so leaving this in place would have made
+    /// vector and raster imports of the same page permanently unequal.
+    ///
+    /// WHY ASCENDING. MuseScore keeps a chord's notes sorted that way itself
+    /// (`Chord::add`, `engraving/dom/chord.cpp` — "use pitch instead, and
+    /// line as a second sort criteria"), and this package's MSCX decoder
+    /// preserves document order, so a `Score` parsed from a real MuseScore
+    /// file already ascends. This makes the importer agree with the parser
+    /// rather than inventing a third convention.
+    ///
+    /// WHY PITCH AND NOT GEOMETRY. Sorting by the notehead's y would be the
+    /// obvious geometric key and is WRONG twice over. It is not a total
+    /// order — an F natural and an F sharp share a staff line, so they share
+    /// a y — and it would reorder two noteheads of the SAME pitch, which
+    /// silently changes which one survives `seenPitches` below and therefore
+    /// which one's tie marks the chord keeps. Sorting by `(pitch, original
+    /// position)` leaves same-pitch noteheads in content-stream order, so the
+    /// dedup survivor is provably the one it has always been.
+    ///
+    /// Noteheads with no decoded pitch are dropped here rather than sorted;
+    /// the loop below skipped them anyway.
+    private static func chordNoteOrder(
+        clusterIndices: [Int],
+        glyphs: [ClassifiedGlyph],
+        pitchByGlyph: [ClassifiedGlyph: DecodedPitch],
+    ) -> [Int] {
+        clusterIndices.enumerated()
+            .compactMap { position, idx -> (idx: Int, pitch: Int, position: Int)? in
+                guard let dp = pitchByGlyph[glyphs[idx]] else { return nil }
+                return (idx, dp.midi, position)
+            }
+            .sorted { ($0.pitch, $0.position) < ($1.pitch, $1.position) }
+            .map(\.idx)
+    }
+
     /// Build a chord's deduped notes and their geometry rects in LOCKSTEP,
     /// applying the same pitch-dedup `ChordNotes.init` would — first
-    /// occurrence of a pitch wins, order preserved. This keeps `noteRects[k]`
-    /// aligned with the final `chord.notes[k]` (i.e. `noteIndexInChord`),
-    /// which follows the deduped survivor order, NOT raw `clusterIndices`. A
-    /// notehead identified as a tie endpoint stamps `tieForward` (earlier
-    /// note) and / or `tieBack` (later note).
+    /// occurrence of a pitch wins. This keeps `noteRects[k]` aligned with the
+    /// final `chord.notes[k]` (i.e. `noteIndexInChord`), which follows the
+    /// deduped survivor order, NOT raw `clusterIndices`. A notehead
+    /// identified as a tie endpoint stamps `tieForward` (earlier note) and /
+    /// or `tieBack` (later note).
+    ///
+    /// The noteheads are put in ascending-pitch order first — see
+    /// `chordNoteOrder`. Sorting BEFORE the loop rather than sorting `notes`
+    /// afterwards is what keeps the lockstep free: `noteRects` follows along
+    /// with no index remapping, so the geometry side-car's
+    /// `noteIndexInChord` stays correct by construction.
     private static func buildChordNotes(
         clusterIndices: [Int],
         glyphs: [ClassifiedGlyph],
@@ -220,7 +271,11 @@ extension PDFImporter {
         var notes: [Note] = []
         var noteRects: [PDFElementRect] = []
         var seenPitches = Set<Int>()
-        for idx in clusterIndices {
+        let ordered = chordNoteOrder(
+            clusterIndices: clusterIndices, glyphs: glyphs,
+            pitchByGlyph: pitchByGlyph,
+        )
+        for idx in ordered {
             guard let dp = pitchByGlyph[glyphs[idx]] else { continue }
             let id = NoteheadID(glyphs[idx].geometry)
             let note = Note(

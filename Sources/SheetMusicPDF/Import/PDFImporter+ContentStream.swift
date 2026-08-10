@@ -51,6 +51,7 @@ extension PDFImporter {
                 else { continue }
                 let state = PDFPageState(pageIndex: pageIndex)
                 state.anchorMusicToPUARange = anchorMusicToPUARange
+                state.disableSMuFLCodepointTier = disableSMuFLCodepointTier
                 walkPage(cgPage: cgPage, state: state)
                 glyphs.append(contentsOf: state.glyphs)
                 texts.append(contentsOf: state.texts)
