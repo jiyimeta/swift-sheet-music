@@ -529,12 +529,16 @@ def _grandstaff_source() -> tuple[str, str]:
     parts_count, systems, bars_per_system = 3, 24, 2
     total_bars = systems * bars_per_system
 
-    def staff_bars(clef: str, treble: bool) -> tuple[list[str], list[str]]:
+    def staff_bars(voiced: bool) -> tuple[list[str], list[str]]:
+        """`voiced` staves carry notes, the others a measure rest. The
+        break lands on every staff's copy of the bar, which is what makes
+        the system count the same for all of them."""
         bodies, siblings = [], []
         for i in range(total_bars):
             first = [time_sig(4, 4)] if i == 0 else []
-            body = first + ([chord(60, 14), chord(62, 16), chord(64, 18, duration="half")]
-                            if treble else [measure_rest(4, 4)])
+            body = first + ([chord(60, 14), chord(62, 16),
+                             chord(64, 18, duration="half")]
+                            if voiced else [measure_rest(4, 4)])
             bodies.append("\n".join(body))
             siblings.append(layout_break()
                             if (i + 1) % bars_per_system == 0 else "")
@@ -542,8 +546,8 @@ def _grandstaff_source() -> tuple[str, str]:
 
     parts = []
     for p in range(parts_count):
-        top_bodies, top_siblings = staff_bars("G", treble=True)
-        bottom_bodies, bottom_siblings = staff_bars("F", treble=False)
+        top_bodies, top_siblings = staff_bars(voiced=True)
+        bottom_bodies, bottom_siblings = staff_bars(voiced=False)
         parts.append(PartSpec(
             name=f"Grand {p + 1}", clef="G",
             measures=top_bodies, measure_siblings=top_siblings,
