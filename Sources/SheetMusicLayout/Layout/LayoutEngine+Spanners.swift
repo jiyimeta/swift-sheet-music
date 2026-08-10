@@ -23,6 +23,11 @@ extension LayoutEngine {
         let voltaEndings: [Int]
         /// Vibrato subtype. Meaningful only when `kind == .vibrato`.
         let vibratoType: VibratoType?
+        /// Hairpin direction. Meaningful only when `kind == .hairpin`.
+        /// MuseScore keeps this in `<HairPin><subtype>` — the
+        /// `<Spanner type="…">` attribute is the literal string
+        /// `HairPin` for both directions, so `rawType` cannot carry it.
+        let hairpinSubtype: Spanner.HairpinPayload.Subtype?
     }
 
     /// Per-staff set of measure indices covered by a visible
@@ -108,6 +113,7 @@ extension LayoutEngine {
                                 endTick: endTick,
                                 voltaEndings: sp.voltaEndings,
                                 vibratoType: sp.vibrato?.type,
+                                hairpinSubtype: sp.hairpin?.subtype,
                             ))
                         }
                         switch el {
@@ -721,6 +727,14 @@ extension LayoutEngine {
         case .slur: return .slur
         case .volta: return .volta(endings: anchor.voltaEndings)
         case .hairpin:
+            // Direction lives in the decoded `<HairPin><subtype>`
+            // payload (0 = crescendo, 1 = decrescendo). MuseScore
+            // writes `type="HairPin"` for both, so the raw string is
+            // only a fallback for importers that name the direction
+            // in the type itself.
+            if let subtype = anchor.hairpinSubtype {
+                return subtype == .decrescendo ? .hairpinClose : .hairpinOpen
+            }
             let raw = anchor.rawType.lowercased()
             if raw.contains("decr") || raw.contains("dim") {
                 return .hairpinClose
