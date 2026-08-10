@@ -35,6 +35,11 @@ extension LayoutEngine {
         /// which drives both the label and above/below placement —
         /// lives in `<Ottava><subtype>`.
         let ottavaSubtype: Spanner.OttavaPayload.Subtype?
+        /// Authored `<beginText>`, when the source overrode the style
+        /// default for this spanner's left-hand label.
+        let beginText: String?
+        /// Trill subtype. Meaningful only when `kind == .trill`.
+        let trillType: TrillType?
     }
 
     /// Per-staff set of measure indices covered by a visible
@@ -122,6 +127,8 @@ extension LayoutEngine {
                                 vibratoType: sp.vibrato?.type,
                                 hairpinSubtype: sp.hairpin?.subtype,
                                 ottavaSubtype: sp.ottava?.subtype,
+                                beginText: sp.beginText,
+                                trillType: sp.trill?.type,
                             ))
                         }
                         switch el {
@@ -184,7 +191,10 @@ extension LayoutEngine {
             else { continue }
 
             let belowStaff = isBelowStaff(anchor: anchor)
-            let kind = layoutKind(anchor: anchor)
+            let kind = layoutKind(
+                anchor: anchor,
+                ottavaNumbersOnly: score.style.ottavaNumbersOnly,
+            )
             let label = layoutLabel(anchor: anchor)
 
             if startSys == endSys {
@@ -495,8 +505,12 @@ extension LayoutEngine {
 
     static func isBelowStaff(kind: Spanner.Kind) -> Bool {
         switch kind {
-        case .hairpin, .pedal: true
-        case .volta, .slur, .ottava, .textLine, .glissando, .vibrato, .other: false
+        // MuseScore style defaults: `palmMutePlacement` /
+        // `letRingPlacement` = BELOW (`styledef.cpp:1884,1936`),
+        // `trillPlacement` = ABOVE (`styledef.cpp:348`).
+        case .hairpin, .pedal, .palmMute, .letRing: true
+        case .volta, .slur, .ottava, .textLine, .glissando, .vibrato,
+             .trill, .other: false
         }
     }
 
@@ -743,6 +757,7 @@ extension LayoutEngine {
 
     static func layoutKind(
         anchor: SpannerAnchor,
+        ottavaNumbersOnly: Bool = true,
     ) -> LayoutElement.SpannerKind {
         switch anchor.kind {
         case .slur: return .slur
@@ -767,25 +782,42 @@ extension LayoutEngine {
             return .hairpinOpen
         case .pedal: return .pedal
         case .ottava:
-            return .ottava(subtype: anchor.ottavaSubtype ?? .eightVA)
+            return .ottava(
+                subtype: anchor.ottavaSubtype ?? .eightVA,
+                numbersOnly: ottavaNumbersOnly,
+            )
         case .textLine: return .textLine
         case .vibrato: return .vibrato(anchor.vibratoType ?? .guitarVibrato)
+        case .trill: return .trill(anchor.trillType ?? .trill)
+        case .palmMute: return .palmMute
+        case .letRing: return .letRing
         case .glissando, .other: return .textLine
         }
     }
 
-    /// Label drawn at the segment's left edge, or `""` when we have no
-    /// authored text for this spanner.
+    /// Label drawn at the segment's left edge, or `""` when this
+    /// spanner has none.
     ///
     /// This used to pass `anchor.rawType` straight through, which
     /// printed MuseScore's internal element name onto the score — a
     /// `<Spanner type="Trill">` engraved the literal word "Trill".
     /// Kinds whose label is derived from their own payload (volta,
-    /// ottava, hairpin line) get it from `SpannerGeometry` instead, so
-    /// nothing needs a caller-supplied string today. The parameter
-    /// stays plumbed for the authored `<beginText>` of a real
-    /// `<Spanner type="TextLine">`, which the decoder does not read yet.
-    static func layoutLabel(anchor _: SpannerAnchor) -> String {
-        ""
+    /// ottava, hairpin line) build it in `SpannerGeometry`; the
+    /// line-shaped kinds take the authored `<beginText>` when the
+    /// source overrode the style default, and otherwise fall back to
+    /// MuseScore's own default text for that kind.
+    static func layoutLabel(anchor: SpannerAnchor) -> String {
+        switch anchor.kind {
+        case .textLine, .glissando, .other:
+            return anchor.beginText ?? ""
+        // `Sid::palmMuteText` / `Sid::letRingText`
+        // (`styledef.cpp:1943,1891`).
+        case .palmMute:
+            return anchor.beginText ?? "P.M."
+        case .letRing:
+            return anchor.beginText ?? "let ring"
+        case .hairpin, .volta, .slur, .pedal, .ottava, .vibrato, .trill:
+            return ""
+        }
     }
 }

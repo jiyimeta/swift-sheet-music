@@ -188,35 +188,89 @@ public enum SpannerGeometry {
     // MARK: - Ottava
 
     public struct OttavaParts: Sendable, Equatable {
+        /// SMuFL codepoint of the label glyph.
+        public let labelCodepoint: UInt32
+        /// Plain-text spelling of the same label. Kept for hit-testing
+        /// / accessibility and for back-ends without the music font.
         public let label: String
         public let labelOrigin: CGPoint
-        public let labelSizeSp: CGFloat
         public let lineStart: CGPoint
         public let lineEnd: CGPoint
         public let lineThicknessSp: CGFloat
         public let dashPattern: [CGFloat]
     }
 
-    /// `subtype` selects the label, mirroring MuseScore's
-    /// `ottavaDefault[]` name column (`ottava.h:67-74`).
-    ///
-    /// Remaining divergence from MuseScore: it renders the label as
-    /// SMuFL glyphs (`<sym>ottavaAlta</sym>` …) and, with the default
-    /// `ottavaNumbersOnly = true`, shows the bare number ("8"). We
-    /// still draw italic text.
+    /// `subtype` selects the label glyph, mirroring MuseScore's
+    /// `Sid::ottava*Text` style rows (`styledef.cpp:645-668`): the full
+    /// `ottavaAlta` / `quindicesimaBassa` / … forms, or the bare
+    /// `ottava` / `quindicesima` / `ventiduesima` number glyphs when
+    /// `numbersOnly` is on (MuseScore's default —
+    /// `Sid::ottavaNumbersOnly`, `styledef.cpp:679`). The alta / bassa
+    /// distinction then rides on the line's placement.
     public static func ottava(
         from: CGPoint, to: CGPoint, sp: CGFloat,
         subtype: Spanner.OttavaPayload.Subtype,
+        numbersOnly: Bool = false,
     ) -> OttavaParts {
-        OttavaParts(
-            label: subtype.rawValue,
+        let codepoint = ottavaCodepoint(
+            subtype: subtype, numbersOnly: numbersOnly,
+        )
+        return OttavaParts(
+            labelCodepoint: codepoint,
+            label: numbersOnly
+                ? ottavaNumberText(subtype: subtype)
+                : subtype.rawValue,
             labelOrigin: from,
-            labelSizeSp: ottavaLabelSizeSp,
             lineStart: CGPoint(x: from.x + sp * 3, y: from.y),
             lineEnd: to,
             lineThicknessSp: lineThicknessSp,
             dashPattern: [3, 3],
         )
+    }
+
+    /// SMuFL glyph for an octave-line label.
+    public static func ottavaCodepoint(
+        subtype: Spanner.OttavaPayload.Subtype, numbersOnly: Bool,
+    ) -> UInt32 {
+        switch subtype {
+        case .eightVA:
+            return numbersOnly
+                ? SMuFLCodepoint.ottava : SMuFLCodepoint.ottavaAlta
+        case .eightVB:
+            return numbersOnly
+                ? SMuFLCodepoint.ottava : SMuFLCodepoint.ottavaBassa
+        case .fifteenMA:
+            return numbersOnly
+                ? SMuFLCodepoint.quindicesima
+                : SMuFLCodepoint.quindicesimaAlta
+        case .fifteenMB:
+            return numbersOnly
+                ? SMuFLCodepoint.quindicesima
+                : SMuFLCodepoint.quindicesimaBassa
+        case .twentyTwoMA:
+            return numbersOnly
+                ? SMuFLCodepoint.ventiduesima
+                : SMuFLCodepoint.ventiduesimaAlta
+        case .twentyTwoMB:
+            return numbersOnly
+                ? SMuFLCodepoint.ventiduesima
+                : SMuFLCodepoint.ventiduesimaBassa
+        // An unrecognized subtype falls back to 8va, matching
+        // `OttavaPayload.Subtype.semitones`.
+        case .other:
+            return numbersOnly
+                ? SMuFLCodepoint.ottava : SMuFLCodepoint.ottavaAlta
+        }
+    }
+
+    private static func ottavaNumberText(
+        subtype: Spanner.OttavaPayload.Subtype,
+    ) -> String {
+        switch subtype {
+        case .fifteenMA, .fifteenMB: "15"
+        case .twentyTwoMA, .twentyTwoMB: "22"
+        case .eightVA, .eightVB, .other: "8"
+        }
     }
 
     // MARK: - Vibrato
@@ -277,18 +331,29 @@ public enum SpannerGeometry {
         public let lineStart: CGPoint
         public let lineEnd: CGPoint
         public let lineThicknessSp: CGFloat
+        /// Empty for a solid line. MuseScore dashes the palm-mute and
+        /// let-ring lines (`palmMuteLineStyle` / `letRingLineStyle` =
+        /// DASHED, `styledef.cpp:1888,1940`).
+        public let dashPattern: [CGFloat]
     }
 
     public static func textLine(
         from: CGPoint, to: CGPoint, text: String, sp: CGFloat,
+        dashed: Bool = false,
     ) -> TextLineParts {
-        TextLineParts(
+        // A label needs clearance before the line starts, or the line
+        // strikes through the text.
+        let lineStartX = text.isEmpty
+            ? from.x
+            : from.x + sp * CGFloat(text.count) * 0.9
+        return TextLineParts(
             label: text,
             labelOrigin: from,
             labelSizeSp: textLineLabelSizeSp,
-            lineStart: from,
+            lineStart: CGPoint(x: min(lineStartX, to.x), y: from.y),
             lineEnd: to,
             lineThicknessSp: lineThicknessSp,
+            dashPattern: dashed ? [3, 3] : [],
         )
     }
 }

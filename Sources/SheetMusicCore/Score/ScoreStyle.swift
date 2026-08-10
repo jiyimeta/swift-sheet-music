@@ -36,6 +36,13 @@ public struct ScoreStyle: Sendable, Equatable {
     public var subtitleAlign: TextAlign?
     public var composerAlign: TextAlign?
     public var lyricistAlign: TextAlign?
+    /// When true (MuseScore's default) an octave line is labelled with
+    /// the bare number — "8", "15", "22" — instead of the full
+    /// "8va" / "15ma" / "22mb" form; the alta / bassa distinction is
+    /// carried by the line's placement above or below the staff.
+    /// MSCX field `<ottavaNumbersOnly>`.
+    /// C++: `Sid::ottavaNumbersOnly` (`styledef.cpp:679`).
+    public var ottavaNumbersOnly: Bool
 
     public init(
         spatium: Double,
@@ -47,6 +54,7 @@ public struct ScoreStyle: Sendable, Equatable {
         subtitleAlign: TextAlign? = nil,
         composerAlign: TextAlign? = nil,
         lyricistAlign: TextAlign? = nil,
+        ottavaNumbersOnly: Bool = true,
     ) {
         self.spatium = spatium
         self.pageLayout = pageLayout
@@ -57,6 +65,7 @@ public struct ScoreStyle: Sendable, Equatable {
         self.subtitleAlign = subtitleAlign
         self.composerAlign = composerAlign
         self.lyricistAlign = lyricistAlign
+        self.ottavaNumbersOnly = ottavaNumbersOnly
     }
 
     /// MuseScore's documented defaults: 1.75 mm spatium, A4 paper

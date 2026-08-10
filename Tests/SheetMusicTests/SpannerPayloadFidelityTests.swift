@@ -129,26 +129,73 @@
                 let (segs, _) = try Self.segments(Self.spanner(
                     "Ottava", "<Ottava><subtype>\(raw)</subtype></Ottava>",
                 ))
-                #expect(segs.first?.kind == .ottava(subtype: expected))
+                #expect(
+                    segs.first?.kind
+                        == .ottava(subtype: expected, numbersOnly: true),
+                )
             }
         }
 
         @Test("ottava label matches its subtype")
         func ottavaLabel() {
             guard #available(macOS 15.0, *) else { return }
+            // `Sid::ottava*Text` (`styledef.cpp:645-655`).
             for (subtype, expected) in [
-                (Spanner.OttavaPayload.Subtype.eightVA, "8va"),
-                (.eightVB, "8vb"),
-                (.fifteenMA, "15ma"),
-                (.fifteenMB, "15mb"),
-                (.twentyTwoMA, "22ma"),
-                (.twentyTwoMB, "22mb"),
+                (Spanner.OttavaPayload.Subtype.eightVA, SMuFLCodepoint.ottavaAlta),
+                (.eightVB, SMuFLCodepoint.ottavaBassa),
+                (.fifteenMA, SMuFLCodepoint.quindicesimaAlta),
+                (.fifteenMB, SMuFLCodepoint.quindicesimaBassa),
+                (.twentyTwoMA, SMuFLCodepoint.ventiduesimaAlta),
+                (.twentyTwoMB, SMuFLCodepoint.ventiduesimaBassa),
             ] {
                 #expect(SpannerGeometry.ottava(
                     from: .zero, to: CGPoint(x: 100, y: 0),
                     sp: 7, subtype: subtype,
-                ).label == expected)
+                ).labelCodepoint == expected)
             }
+        }
+
+        @Test("numbersOnly collapses the label to the bare number glyph")
+        func ottavaNumbersOnly() {
+            guard #available(macOS 15.0, *) else { return }
+            // `Sid::ottava*noText` (`styledef.cpp:658-668`) — the alta
+            // / bassa distinction moves to the line's placement.
+            for (subtype, expected) in [
+                (Spanner.OttavaPayload.Subtype.eightVA, SMuFLCodepoint.ottava),
+                (.eightVB, SMuFLCodepoint.ottava),
+                (.fifteenMA, SMuFLCodepoint.quindicesima),
+                (.fifteenMB, SMuFLCodepoint.quindicesima),
+                (.twentyTwoMA, SMuFLCodepoint.ventiduesima),
+                (.twentyTwoMB, SMuFLCodepoint.ventiduesima),
+            ] {
+                let parts = SpannerGeometry.ottava(
+                    from: .zero, to: CGPoint(x: 100, y: 0),
+                    sp: 7, subtype: subtype, numbersOnly: true,
+                )
+                #expect(parts.labelCodepoint == expected)
+            }
+        }
+
+        @Test("a score that turns ottavaNumbersOnly off gets the full label")
+        func ottavaNumbersOnlyStyleIsHonored() throws {
+            guard #available(macOS 15.0, *) else { return }
+            var score = try MSCXParser.parse(Data(Self.mscx(Self.spanner(
+                "Ottava", "<Ottava><subtype>8vb</subtype></Ottava>",
+            )).utf8))
+            score.style.ottavaNumbersOnly = false
+            let doc = LayoutEngine.layout(
+                score: score, options: .init(), availableWidth: 800,
+            )
+            let kinds = doc.systems.flatMap(\.spanners).compactMap { el in
+                if case let .spannerSegment(kind, _, _, _, _, _) = el {
+                    return kind
+                }
+                return LayoutElement.SpannerKind?.none
+            }
+            #expect(
+                kinds.first
+                    == .ottava(subtype: .eightVB, numbersOnly: false),
+            )
         }
 
         @Test("bassa ottavas sit below the staff, alta ottavas above")
@@ -177,15 +224,128 @@
         func unmappedSpannerHasNoLabel() throws {
             guard #available(macOS 15.0, *) else { return }
             for (type, payload) in [
-                ("Trill", "<Trill><subtype>trill</subtype></Trill>"),
-                ("PalmMute", "<PalmMute/>"),
-                ("LetRing", "<LetRing/>"),
+                ("Rasgueado", "<Rasgueado/>"),
+                ("HarmonicMark", "<HarmonicMark/>"),
             ] {
                 let (segs, _) = try Self.segments(
                     Self.spanner(type, payload),
                 )
                 #expect(segs.first?.text.isEmpty == true)
             }
+        }
+
+        // MARK: - Trill / palm mute / let ring
+
+        @Test("trill subtypes reach layout")
+        func trillSubtypes() throws {
+            guard #available(macOS 15.0, *) else { return }
+            for (raw, expected) in [
+                ("trill", TrillType.trill),
+                ("upprall", .upprall),
+                ("downprall", .downprall),
+                ("prallprall", .prallprall),
+            ] {
+                let (segs, _) = try Self.segments(Self.spanner(
+                    "Trill", "<Trill><subtype>\(raw)</subtype></Trill>",
+                ))
+                #expect(segs.first?.kind == .trill(expected))
+                // The sigil is a glyph, never a text label.
+                #expect(segs.first?.text.isEmpty == true)
+            }
+        }
+
+        @Test("a trill line is built from MuseScore's own glyph pair")
+        func trillGlyphs() {
+            guard #available(macOS 15.0, *) else { return }
+            // C++ `tlayout.cpp:6313-6328`.
+            let trill = SpannerGeometry.trillSymbols(type: .trill)
+            #expect(trill.start == SMuFLCodepoint.ornamentTrill)
+            #expect(trill.fill == SMuFLCodepoint.wiggleTrill)
+            #expect(trill.end == nil)
+            // A continuation segment drops the sigil.
+            #expect(SpannerGeometry.trillSymbols(
+                type: .trill, continuesLeft: true,
+            ).start == SMuFLCodepoint.wiggleTrill)
+            let upprall = SpannerGeometry.trillSymbols(type: .upprall)
+            #expect(
+                upprall.start
+                    == SMuFLCodepoint.ornamentBottomLeftConcaveStroke,
+            )
+            #expect(
+                upprall.end
+                    == SMuFLCodepoint.ornamentZigZagLineWithRightEnd,
+            )
+        }
+
+        @Test("the trill glyph run keeps the sigil, fills, and end cap")
+        func trillGlyphRunShape() {
+            guard #available(macOS 15.0, *) else { return }
+            let symbols = SpannerGeometry.trillSymbols(type: .upprall)
+            let run = SpannerGeometry.trillGlyphRun(
+                from: .zero, to: CGPoint(x: 100, y: 0),
+                symbols: symbols,
+                startAdvance: 10, fillAdvance: 10, endAdvance: 10,
+            )
+            // lrint((100 − 10 − 10) / 10) = 8 fills, plus sigil and cap.
+            #expect(run.count == 10)
+            #expect(run.first?.codepoint == symbols.start)
+            #expect(run.last?.codepoint == symbols.end)
+            #expect(run[1].origin.x == 10)
+        }
+
+        @Test("palm mute and let ring get MuseScore's default text")
+        func palmMuteAndLetRingText() throws {
+            guard #available(macOS 15.0, *) else { return }
+            // `Sid::palmMuteText` / `Sid::letRingText`.
+            let pm = try Self.segments(Self.spanner("PalmMute", "<PalmMute/>"))
+            #expect(pm.segments.first?.kind == .palmMute)
+            #expect(pm.segments.first?.text == "P.M.")
+            let lr = try Self.segments(Self.spanner("LetRing", "<LetRing/>"))
+            #expect(lr.segments.first?.kind == .letRing)
+            #expect(lr.segments.first?.text == "let ring")
+        }
+
+        @Test("an authored beginText overrides the style default")
+        func beginTextOverridesDefault() throws {
+            guard #available(macOS 15.0, *) else { return }
+            let (segs, _) = try Self.segments(Self.spanner(
+                "PalmMute", "<PalmMute><beginText>p.m.</beginText></PalmMute>",
+            ))
+            #expect(segs.first?.text == "p.m.")
+        }
+
+        @Test("a TextLine prints its authored beginText")
+        func textLineUsesBeginText() throws {
+            guard #available(macOS 15.0, *) else { return }
+            let (segs, _) = try Self.segments(Self.spanner(
+                "TextLine", "<TextLine><beginText>rit.</beginText></TextLine>",
+            ))
+            #expect(segs.first?.kind == .textLine)
+            #expect(segs.first?.text == "rit.")
+        }
+
+        @Test("palm mute and let ring sit below the staff, trill above")
+        func linePlacement() throws {
+            guard #available(macOS 15.0, *) else { return }
+            func firstY(_ type: String, _ payload: String) throws
+                -> (y: CGFloat, staffTop: CGFloat, height: CGFloat)
+            {
+                let (segs, doc) = try Self.segments(
+                    Self.spanner(type, payload),
+                )
+                let staffTop = doc.systems.first?.staffOrigins.first?.y ?? 0
+                return (
+                    segs.first?.from.y ?? 0, staffTop, doc.metrics.staffHeight,
+                )
+            }
+            for (type, payload) in [
+                ("PalmMute", "<PalmMute/>"), ("LetRing", "<LetRing/>"),
+            ] {
+                let below = try firstY(type, payload)
+                #expect(below.y > below.staffTop + below.height)
+            }
+            let trill = try firstY("Trill", "<Trill/>")
+            #expect(trill.y < trill.staffTop)
         }
     }
 #endif

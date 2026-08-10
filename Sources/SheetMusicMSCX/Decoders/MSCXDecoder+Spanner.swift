@@ -47,6 +47,11 @@ extension Spanner {
             }
         }
 
+        var trill: Spanner.TrillPayload?
+        if kind == .trill, let tr = node.first("Trill") {
+            trill = decodeTrill(tr)
+        }
+
         return Spanner(
             kind: kind,
             rawType: raw,
@@ -54,10 +59,44 @@ extension Spanner {
             nextFractionsOffset: nextFractions,
             voltaEndings: voltaEndings,
             visible: decodeVisible(node),
+            beginText: decodeBeginText(node),
             hairpin: hairpin,
             ottava: ottava,
             vibrato: vibrato,
+            trill: trill,
         )
+    }
+
+    /// `<beginText>` lives on the subtype payload child, not on the
+    /// `<Spanner>` wrapper, and MuseScore writes it on any
+    /// `TextLineBase` subclass — so scan every payload child rather
+    /// than special-casing `<TextLine>`. `next` / `prev` are location
+    /// records and never carry one.
+    private static func decodeBeginText(_ node: XMLTreeNode) -> String? {
+        for child in node.children
+            where child.name != "next" && child.name != "prev"
+        {
+            if let text = child.first("beginText")?.text, !text.isEmpty {
+                return text
+            }
+        }
+        return nil
+    }
+
+    /// Decode a `<Trill>` payload. MuseScore omits `<subtype>` for the
+    /// default trill line, so an absent element means `.trill`.
+    private static func decodeTrill(
+        _ tr: XMLTreeNode,
+    ) -> Spanner.TrillPayload {
+        let subtypeText = tr.first("subtype")?.text ?? "trill"
+        guard let trillType = TrillType(rawValue: subtypeText) else {
+            mscxDecoderWarn(
+                code: "mscx.trill.unknownSubtype",
+                message: "Unknown Trill subtype '\(subtypeText)'; defaulting to trill",
+            )
+            return Spanner.TrillPayload(type: .trill)
+        }
+        return Spanner.TrillPayload(type: trillType)
     }
 
     /// Decode a `<HairPin>` payload. The `<subtype>` is MuseScore's

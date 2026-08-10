@@ -35,14 +35,19 @@ extension Spanner {
     /// kinds are emitted as empty placeholders, since the only fields
     /// the decoder recovers from them are positional.
     private func payloadElement(options: MSCXEncoderOptions = .init()) -> XMLTreeNode {
+        // `<beginText>` is a TextLineBase property and rides on the
+        // payload child for every line-shaped spanner.
+        let beginTextNode: [XMLTreeNode] = beginText.map {
+            [XMLTreeNode(name: "beginText", text: $0)]
+        } ?? []
         if kind == .volta, !voltaEndings.isEmpty {
             let endingsText = voltaEndings.map(String.init).joined(separator: ", ")
-            return XMLTreeNode(name: rawType, children: [
+            return XMLTreeNode(name: rawType, children: beginTextNode + [
                 XMLTreeNode(name: "endings", text: endingsText),
             ])
         }
         if kind == .hairpin, let hairpin {
-            var children: [XMLTreeNode] = [
+            var children: [XMLTreeNode] = beginTextNode + [
                 XMLTreeNode(name: "subtype", text: String(hairpin.subtype.rawValue)),
             ]
             if let velo = hairpin.veloChange {
@@ -57,11 +62,11 @@ extension Spanner {
             return XMLTreeNode(name: rawType, children: children)
         }
         if kind == .ottava, let ottava {
-            return XMLTreeNode(name: rawType, children: [
+            return XMLTreeNode(name: rawType, children: beginTextNode + [
                 XMLTreeNode(name: "subtype", text: ottava.subtype.rawValue),
             ])
         }
-        return XMLTreeNode(name: rawType)
+        return XMLTreeNode(name: rawType, children: beginTextNode)
     }
 
     /// `<next><location>…</location></next>`. Returns nil when both

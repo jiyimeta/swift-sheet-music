@@ -16,9 +16,22 @@ extension LayoutElement {
         /// text-and-dashed-line form ("cresc." / "dim."), not a wedge.
         case hairpinLine(crescendo: Bool)
         case pedal
-        /// The subtype drives both the label and above/below placement.
-        case ottava(subtype: Spanner.OttavaPayload.Subtype)
+        /// The subtype drives both the label and above/below
+        /// placement; `numbersOnly` carries the score's
+        /// `Sid::ottavaNumbersOnly` style so the renderer picks the
+        /// bare-number glyph without needing the score.
+        case ottava(
+            subtype: Spanner.OttavaPayload.Subtype,
+            numbersOnly: Bool,
+        )
         case textLine
         case vibrato(VibratoType)
+        /// A `tr` / zig-zag ornament line. The subtype selects the
+        /// SMuFL sigil and repeating body.
+        case trill(TrillType)
+        /// "P.M." over a dashed line, below the staff.
+        case palmMute
+        /// "let ring" over a dashed line, below the staff.
+        case letRing
     }
 }

@@ -380,11 +380,11 @@ extension LayoutElementShape {
             thickness = sp * SpannerGeometry.voltaLabelSizeSp
         case .ottava:
             thickness = sp * SpannerGeometry.ottavaLabelSizeSp
-        case .textLine:
+        case .textLine, .palmMute, .letRing:
             thickness = sp * SpannerGeometry.textLineLabelSizeSp
         case .pedal:
             thickness = sp * 1.5
-        case .slur, .vibrato:
+        case .slur, .vibrato, .trill:
             thickness = sp
         }
         return spanRect(from, to, thickness: thickness)

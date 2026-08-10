@@ -49,14 +49,20 @@ extension ScoreLayerBuilder {
                 from: from, to: to,
                 metrics: metrics, height: height, into: parent,
             )
-        case let .ottava(subtype):
+        case let .ottava(subtype, numbersOnly):
             drawOttava(
                 from: from, to: to, subtype: subtype,
+                numbersOnly: numbersOnly,
                 metrics: metrics, height: height, into: parent,
             )
         case .textLine:
             drawTextLine(
-                from: from, to: to, text: text,
+                from: from, to: to, text: text, dashed: false,
+                metrics: metrics, height: height, into: parent,
+            )
+        case .palmMute, .letRing:
+            drawTextLine(
+                from: from, to: to, text: text, dashed: true,
                 metrics: metrics, height: height, into: parent,
             )
         case let .vibrato(type):
@@ -64,6 +70,49 @@ extension ScoreLayerBuilder {
                 from: from, to: to, type: type,
                 metrics: metrics, height: height, into: parent,
             )
+        case let .trill(type):
+            drawTrill(
+                from: from, to: to, type: type,
+                continuesLeft: continuesLeft,
+                metrics: metrics, height: height, into: parent,
+            )
+        }
+    }
+
+    private static func drawTrill(
+        from: CGPoint, to: CGPoint, type: TrillType,
+        continuesLeft: Bool,
+        metrics: StaffMetrics, height: CGFloat,
+        into parent: CALayer,
+    ) {
+        let symbols = SpannerGeometry.trillSymbols(
+            type: type, continuesLeft: continuesLeft,
+        )
+        let font = LayoutFont(
+            face: SMuFLFamily.bravura, pointSize: metrics.glyphFontSize,
+        )
+        func advance(_ codepoint: UInt32) -> CGFloat {
+            guard let scalar = UnicodeScalar(codepoint) else { return 0 }
+            return FontMetrics.provider.typographicWidth(
+                text: String(Character(scalar)), font: font,
+            )
+        }
+        let run = SpannerGeometry.trillGlyphRun(
+            from: from, to: to, symbols: symbols,
+            startAdvance: advance(symbols.start),
+            fillAdvance: advance(symbols.fill),
+            endAdvance: symbols.end.map(advance) ?? 0,
+        )
+        for (codepoint, origin) in run {
+            guard let scalar = UnicodeScalar(codepoint),
+                  let layer = glyphLayer(
+                      Character(scalar), at: origin,
+                      size: metrics.glyphFontSize,
+                      anchor: CGPoint(x: 0, y: 0.5),
+                      height: height,
+                  )
+            else { continue }
+            parent.addSublayer(layer)
         }
     }
 
@@ -204,18 +253,22 @@ extension ScoreLayerBuilder {
     private static func drawOttava(
         from: CGPoint, to: CGPoint,
         subtype: Spanner.OttavaPayload.Subtype,
+        numbersOnly: Bool,
         metrics: StaffMetrics, height: CGFloat,
         into parent: CALayer,
     ) {
         let parts = SpannerGeometry.ottava(
             from: from, to: to, sp: metrics.sp, subtype: subtype,
+            numbersOnly: numbersOnly,
         )
-        if let layer = textLayer(
-            text: parts.label, at: parts.labelOrigin,
-            size: metrics.sp * parts.labelSizeSp, italic: true,
-            anchor: CGPoint(x: 0, y: 0.5),
-            height: height,
-        ) {
+        if let scalar = UnicodeScalar(parts.labelCodepoint),
+           let layer = glyphLayer(
+               Character(scalar), at: parts.labelOrigin,
+               size: metrics.glyphFontSize,
+               anchor: CGPoint(x: 0, y: 0.5),
+               height: height,
+           )
+        {
             parent.addSublayer(layer)
         }
         let p = CGMutablePath()
@@ -261,12 +314,13 @@ extension ScoreLayerBuilder {
     }
 
     private static func drawTextLine(
-        from: CGPoint, to: CGPoint, text: String,
+        from: CGPoint, to: CGPoint, text: String, dashed: Bool,
         metrics: StaffMetrics, height: CGFloat,
         into parent: CALayer,
     ) {
         let parts = SpannerGeometry.textLine(
             from: from, to: to, text: text, sp: metrics.sp,
+            dashed: dashed,
         )
         if !parts.label.isEmpty,
            let layer = textLayer(
@@ -278,96 +332,16 @@ extension ScoreLayerBuilder {
         {
             parent.addSublayer(layer)
         }
+        guard parts.lineEnd.x > parts.lineStart.x else { return }
         let p = CGMutablePath()
         p.move(to: parts.lineStart)
         p.addLine(to: parts.lineEnd)
         parent.addSublayer(strokeLayer(
             path: p, height: height,
             lineWidth: metrics.sp * parts.lineThicknessSp,
+            dashPattern: parts.dashPattern.isEmpty
+                ? nil
+                : parts.dashPattern.map { NSNumber(value: Double($0)) },
         ))
-    }
-
-    // MARK: - Tie arc
-
-    static func drawTieArc(
-        from: CGPoint, to: CGPoint, above: Bool,
-        metrics: StaffMetrics, height: CGFloat,
-        into parent: CALayer,
-    ) {
-        let headClearance = metrics.sp * 0.6
-        let vertSign: CGFloat = above ? -1 : 1
-        let startPt = CGPoint(
-            x: from.x,
-            y: from.y + headClearance * vertSign,
-        )
-        let endPt = CGPoint(
-            x: to.x,
-            y: to.y + headClearance * vertSign,
-        )
-
-        let minShoulder = metrics.sp * 0.3
-        let maxShoulder = metrics.sp * 2.0
-        let tieLen = abs(endPt.x - startPt.x)
-        let tieLenSp = max(tieLen / metrics.sp, 1.0)
-        let shoulderH: CGFloat = {
-            let raw = minShoulder
-                + metrics.sp * 0.3 * sqrt(tieLenSp - 1)
-            return min(max(raw, minShoulder), maxShoulder)
-        }()
-        let midThickness = metrics.sp * 0.15
-
-        let dx = endPt.x - startPt.x
-        let dy = endPt.y - startPt.y
-        let ctrl1 = CGPoint(
-            x: startPt.x + dx * 0.2,
-            y: startPt.y + dy * 0.2 + shoulderH * vertSign,
-        )
-        let ctrl2 = CGPoint(
-            x: startPt.x + dx * 0.8,
-            y: startPt.y + dy * 0.8 + shoulderH * vertSign,
-        )
-        let thickDy = midThickness * vertSign * -1
-
-        let path = CGMutablePath()
-        path.move(to: startPt)
-        path.addCurve(
-            to: endPt,
-            control1: CGPoint(x: ctrl1.x, y: ctrl1.y - thickDy),
-            control2: CGPoint(x: ctrl2.x, y: ctrl2.y - thickDy),
-        )
-        path.addCurve(
-            to: startPt,
-            control1: CGPoint(x: ctrl2.x, y: ctrl2.y + thickDy),
-            control2: CGPoint(x: ctrl1.x, y: ctrl1.y + thickDy),
-        )
-        path.closeSubpath()
-        parent.addSublayer(fillLayer(
-            path: path, height: height,
-        ))
-    }
-
-    // MARK: - Tremolo bars
-
-    /// CALayer companion to `TremoloRenderer.draw`. Same geometry,
-    /// rendered as stroked `CAShapeLayer`s instead of GraphicsContext
-    /// paths.
-    static func drawTremoloBars(
-        anchor: TremoloAnchor, barCount: Int,
-        metrics: StaffMetrics, height: CGFloat,
-        into parent: CALayer,
-    ) {
-        let bars = TremoloGeometry.bars(
-            anchor: anchor, barCount: barCount, sp: metrics.sp,
-        )
-        guard !bars.isEmpty else { return }
-        let thickness = TremoloGeometry.barThickness(sp: metrics.sp)
-        for bar in bars {
-            let path = CGMutablePath()
-            path.move(to: bar.from)
-            path.addLine(to: bar.to)
-            parent.addSublayer(strokeLayer(
-                path: path, height: height, lineWidth: thickness,
-            ))
-        }
     }
 }

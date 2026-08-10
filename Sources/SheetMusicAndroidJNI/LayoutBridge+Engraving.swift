@@ -573,16 +573,21 @@ extension LayoutBridge {
                 fontId: .smufl,
             ))
 
-        case let .ottava(subtype):
+        case let .ottava(subtype, numbersOnly):
             let parts = SpannerGeometry.ottava(
                 from: from, to: to, sp: CGFloat(sp), subtype: subtype,
+                numbersOnly: numbersOnly,
             )
-            encodeNotationText(
-                text: parts.label, role: .jump,
-                originX: Double(parts.labelOrigin.x),
-                originY: Double(parts.labelOrigin.y),
-                sp: sp, into: &out,
-            )
+            out.append(.glyph(
+                codepoint: parts.labelCodepoint,
+                x: Double(parts.labelOrigin.x) * ptToMMScale,
+                y: (
+                    Double(parts.labelOrigin.y)
+                        + glyphBaselineShift(glyphSize: glyphSize),
+                ) * ptToMMScale,
+                size: glyphSize * ptToMMScale,
+                fontId: .smufl,
+            ))
             // Dashed line — mirror Apple's `StrokeStyle(dash:)`. The
             // pattern is in layout points (Apple applies it un-scaled),
             // so convert to mm like every other coordinate. Bracket the
@@ -600,9 +605,10 @@ extension LayoutBridge {
             )
             out.append(.setDash(onMM: 0, offMM: 0))
 
-        case .textLine:
+        case .textLine, .palmMute, .letRing:
             let parts = SpannerGeometry.textLine(
                 from: from, to: to, text: text, sp: CGFloat(sp),
+                dashed: kind != .textLine,
             )
             if !parts.label.isEmpty {
                 encodeNotationText(
@@ -612,10 +618,53 @@ extension LayoutBridge {
                     sp: sp, into: &out,
                 )
             }
-            emitSegment(
-                from: parts.lineStart, to: parts.lineEnd,
-                lineWidth: line, into: &out,
+            if parts.lineEnd.x > parts.lineStart.x {
+                if !parts.dashPattern.isEmpty {
+                    let onMM = Double(parts.dashPattern[0]) * ptToMMScale
+                    let offMM = Double(
+                        parts.dashPattern.count > 1
+                            ? parts.dashPattern[1]
+                            : parts.dashPattern[0],
+                    ) * ptToMMScale
+                    out.append(.setDash(onMM: onMM, offMM: offMM))
+                }
+                emitSegment(
+                    from: parts.lineStart, to: parts.lineEnd,
+                    lineWidth: line, into: &out,
+                )
+                if !parts.dashPattern.isEmpty {
+                    out.append(.setDash(onMM: 0, offMM: 0))
+                }
+            }
+
+        case let .trill(type):
+            let symbols = SpannerGeometry.trillSymbols(
+                type: type, continuesLeft: continuesLeft,
             )
+            let trillFont = LayoutFont(
+                face: SMuFLFamily.bravura, pointSize: CGFloat(glyphSize),
+            )
+            func trillAdvance(_ codepoint: UInt32) -> CGFloat {
+                guard let scalar = UnicodeScalar(codepoint) else { return 0 }
+                return FontMetrics.provider.typographicWidth(
+                    text: String(Character(scalar)), font: trillFont,
+                )
+            }
+            let dy = glyphBaselineShift(glyphSize: glyphSize)
+            for (codepoint, origin) in SpannerGeometry.trillGlyphRun(
+                from: from, to: to, symbols: symbols,
+                startAdvance: trillAdvance(symbols.start),
+                fillAdvance: trillAdvance(symbols.fill),
+                endAdvance: symbols.end.map(trillAdvance) ?? 0,
+            ) {
+                out.append(.glyph(
+                    codepoint: codepoint,
+                    x: Double(origin.x) * ptToMMScale,
+                    y: (Double(origin.y) + dy) * ptToMMScale,
+                    size: glyphSize * ptToMMScale,
+                    fontId: .smufl,
+                ))
+            }
 
         case let .vibrato(type):
             let codepoint = SpannerGeometry.vibratoCodepoint(type: type)
@@ -643,6 +692,18 @@ extension LayoutBridge {
                 ))
             }
         }
+    }
+
+    /// Canvas.drawText anchors a glyph at its baseline; Apple anchors
+    /// at `(0, 0.5)` (vertical center). Shift by the glyph's half
+    /// height so both back-ends land on the same pixel row.
+    private static func glyphBaselineShift(glyphSize: Double) -> Double {
+        let font = LayoutFont(
+            face: SMuFLFamily.bravura, pointSize: CGFloat(glyphSize),
+        )
+        let ascent = Double(FontMetrics.provider.ascent(font: font))
+        let descent = Double(FontMetrics.provider.descent(font: font))
+        return (ascent - descent) / 2
     }
 
     private static func emitPolyline(
