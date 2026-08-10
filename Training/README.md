@@ -148,8 +148,42 @@ are marked; on a bare checkout everything else still runs, and
 
 Pick a root once and reuse it:
 
-    R=~/Datasets/sheet-music-omr/v1
-    SEED=20260806
+    R=~/Datasets/sheet-music-omr/v2
+    SEED=20260811
+
+### Probe first — the class census is the only check that catches a
+### silent decline
+
+A full run is an hour of MuseScore and most of a gigabyte, and the bugs
+that matter here are invisible to every test that does not involve real
+MuseScore. Before changing generator content, run the coverage families
+alone, one face, no textures:
+
+    P=~/Datasets/sheet-music-omr/probe
+    Training/.venv/bin/python Training/generate/build_dataset.py generate \
+        --root $P --seed $SEED --engines ms4 --per-face 1 --textures 0 \
+        --pin-page --probe-faces "ms4=Bravura"
+    OMR_DATA_ROOT=$P OMR_LABEL_EXPORT=1 swift test
+    Training/.venv/bin/python Training/generate/build_dataset.py finalize \
+        --root $P --seed $SEED --class-floor 70
+
+That is ~30 renders and a couple of minutes. Read two things:
+
+- **`tier1Missing` per render.** Anything nonzero is ink MuseScore drew
+  that no detector class covers. Find the codepoint by grepping the
+  render's `page_*.labels.json` for `unknown` — the name carries it
+  (`unknownE044`).
+- **the `[coverage-below-floor]` list against `--class-floor 70`.** With
+  `--textures 0` the only classes that may legitimately miss are the
+  ones the texture generator supplies (see `_TEXTURE_SUPPLIED` in
+  `Training/tests/test_gen_coverage.py`). Anything else missing is a
+  family that asked for ink and did not get it.
+
+Five silent declines have been caught this way, all of which passed
+every XML-level test: an invalid `<defaultClef>` token, a redundant
+`<Accidental>`, an unmatched `<musicalSymbolFont>`, a `<Clef>` written
+without `<transposingClefType>`, and a percussion clef change on a
+pitched staff. "The XML says so" has never once been sufficient.
 
 **1. Generate** (needs MuseScore; add the owner's originals at run time —
 never a tracked path, and never a copyrighted corpus):
