@@ -257,14 +257,29 @@ def _count_articulation(roots, names):
 
 
 def _count_clef(roots, token):
-    """A clef reaches the page from a mid-score `<Clef>` change; the
-    per-clef `<defaultClef>` sources add a couple more per render, which
-    this deliberately does NOT count -- their yield is a function of the
-    system count, i.e. of the page size the face variant drew, and a
-    floor must not depend on that."""
+    """Clefs reaching the page from mid-score `<Clef>` changes. The
+    per-clef `<defaultClef>` sources add a few more per render, which
+    this deliberately does NOT count -- an unpinned system count is a
+    function of the page size the face variant drew, and a floor must
+    not depend on that.
+
+    `PERC` is the exception and is counted the other way round, by
+    `_count_system_start_clefs`: MuseScore hides a mid-score change to a
+    percussion clef on a pitched staff, so the only percussion clefs on
+    the page are system starts, and those ARE pinned -- that source
+    forces its line breaks."""
     return sum(1 for root in roots.values()
                for clef in root.iter("Clef")
                if clef.findtext("concertClefType") == token)
+
+
+def _count_system_start_clefs(roots, source_id):
+    """Systems in one source, i.e. how many times its `<defaultClef>` is
+    engraved. Pinned by the source's own `<LayoutBreak>` elements, one
+    system each."""
+    staff = roots[source_id].find("Score/Staff")
+    return sum(1 for br in staff.iter("LayoutBreak")
+               if br.findtext("subtype") == "line")
 
 
 def _timesig_digits(roots):
@@ -352,10 +367,12 @@ _DENSITY = {
     "ornament": lambda r: _count_articulation(r, set(gen_coverage._ORNAMENTS)),
 }
 _DENSITY.update({
-    f"clef{token.replace('C3', 'C').replace('PERC', 'Percussion')}":
+    f"clef{token.replace('C3', 'C')}":
         (lambda t: (lambda r: _count_clef(r, t)))(token)
-    for token in gen_coverage._CLEFS
+    for token in gen_coverage._CLEF_CHANGE_TOKENS
 })
+_DENSITY["clefPercussion"] = lambda r: _count_system_start_clefs(
+    r, gen_coverage._SYSTEM_START_CLEF_SOURCE)
 _DENSITY.update({
     f"timeSig{d}": (lambda d: (lambda r: _timesig_digits(r)[d]))(str(d))
     for d in range(10)
@@ -457,6 +474,90 @@ def test_short_notes_are_kept_off_beams_two_independent_ways():
         assert tags == ["Chord", "Rest"] * (len(tags) // 2)
         durations = {el.findtext("durationType") for el in elements}
         assert len(durations) == 1
+
+
+def test_every_clef_change_writes_both_clef_types():
+    """Writing only `<concertClefType>` engraves a TREBLE CLEF for every
+    token, silently. `Clef::clefType()` returns the concert clef only in
+    concert-pitch mode and the transposing clef otherwise (upstream
+    `dom/clef.cpp:209-216`), a score is not in concert pitch by default,
+    and the transposing clef defaults to `ClefType::G` when the element
+    is absent (`rw/read400/tread.cpp:2568-2571`).
+
+    Measured, not reasoned: a probe run of `cov_clef_changes` with the
+    concert element alone came back carrying 840 extra `clefG` and two
+    each of the other eleven clef classes.
+
+    The two tokens must also AGREE — these are non-transposing parts, so
+    a mismatch would engrave one clef and mean another.
+    """
+    roots = _roots()
+    seen = set()
+    for root in roots.values():
+        for clef in root.iter("Clef"):
+            concert = clef.findtext("concertClefType")
+            transposing = clef.findtext("transposingClefType")
+            assert concert is not None
+            assert transposing == concert, (concert, transposing)
+            seen.add(concert)
+    assert seen == set(gen_coverage._CLEF_CHANGE_TOKENS), sorted(seen)
+
+
+def test_no_mid_score_change_asks_for_a_clef_musescore_will_hide():
+    """A clef change whose `ClefInfo::staffGroup` disagrees with the
+    staff's is hidden outright past tick 0 — `show = false`,
+    `symId = noSym`, and a debug log no headless export prints
+    (upstream `rendering/score/tlayout.cpp:1657-1674`). On a pitched
+    staff that is exactly the percussion clef, which is why it is out of
+    the rotation and drawn from system starts instead.
+
+    Both directions, so the exclusion cannot rot: `PERC` must stay out of
+    the change tokens, and must stay in `_CLEFS` — the `<defaultClef>`
+    path does engrave it, and dropping it there would lose the class.
+    """
+    assert "PERC" in gen_coverage._CLEFS
+    assert "PERC" not in gen_coverage._CLEF_CHANGE_TOKENS
+    assert set(gen_coverage._CLEF_CHANGE_TOKENS) == set(gen_coverage._CLEFS) - {"PERC"}
+    sources = dict(gen_coverage.coverage_sources(seed=42))
+    assert gen_coverage._SYSTEM_START_CLEF_SOURCE in sources
+    assert _count_system_start_clefs(
+        _roots(), gen_coverage._SYSTEM_START_CLEF_SOURCE
+    ) >= gen_coverage.PER_RENDER_TARGET
+
+
+def test_no_bar_is_left_to_be_filled_with_a_double_whole_rest():
+    """A full-measure rest in a bar LONGER than a whole note comes back
+    as `restDoubleWhole` (U+E4E2) — a glyph with no detector class, and a
+    duration this package's `NoteDuration` cannot decode. Measured: every
+    10/4 bar of an earlier probe produced `unknownE4E2`, 70 in one
+    render.
+
+    So a long bar is filled with explicit rests instead, and the fill has
+    to close exactly — `validate_mscx` would catch an underfull bar, but
+    only after the generator had already been trusted.
+    """
+    from fractions import Fraction
+
+    from generate import mscx_builder
+    for n, d in [(2, 4), (4, 4), (2, 2), (5, 4), (9, 8), (10, 4), (12, 8)]:
+        body = mscx_builder.bar_of_rests(n, d)
+        bar = ET.fromstring(f"<voice>{body}</voice>")
+        if Fraction(n, d) <= 1:
+            assert [el.findtext("durationType") for el in bar] == ["measure"]
+            continue
+        total = sum((dict(mscx_builder._REST_DENOMINATIONS)[el.findtext("durationType")]
+                     for el in bar), Fraction(0))
+        assert total == Fraction(n, d), (n, d, total)
+        assert "measure" not in [el.findtext("durationType") for el in bar]
+
+    # And the family that needs it actually uses it.
+    root = _roots()["cov_timesigs"]
+    for measure in root.iter("Measure"):
+        sig = measure.find("voice/TimeSig")
+        n, d = int(sig.findtext("sigN")), int(sig.findtext("sigD"))
+        durations = [el.findtext("durationType")
+                     for el in measure.find("voice") if el.tag == "Rest"]
+        assert ("measure" in durations) == (Fraction(n, d) <= 1), (n, d, durations)
 
 
 def test_grand_staff_part_carries_a_brace_and_a_spanning_barline():

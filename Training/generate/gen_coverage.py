@@ -50,9 +50,9 @@ from dataclasses import dataclass
 import numpy as np
 
 from generate import vocabulary
-from generate.mscx_builder import (PartSpec, StaffSpec, chord, clef_change,
-                                   dynamic, end_repeat, fermata, jump,
-                                   layout_break, marker, measure_rest,
+from generate.mscx_builder import (PartSpec, StaffSpec, bar_of_rests, chord,
+                                   clef_change, dynamic, end_repeat, fermata,
+                                   jump, layout_break, marker, measure_rest,
                                    mscx_document, rest, start_repeat, time_sig)
 
 #: Renders each source receives under the runbook's standard invocation
@@ -103,6 +103,29 @@ UNDECODABLE_DURATION_SOURCES = frozenset({"cov_doublewhole"})
 #: `"C3"` / `"C4"` (alto / tenor); there is no bare "C" there either.
 _CLEFS = ["G", "G8va", "G8vb", "G15ma", "G15mb",
           "F", "F8va", "F8vb", "F15ma", "F15mb", "C3", "PERC"]
+
+#: Clefs a mid-score `<Clef>` change can actually engrave on a pitched
+#: staff. `PERC` cannot, and is dropped SILENTLY -- measured: a probe
+#: rotating all twelve through `cov_clef_changes` produced 72 of every
+#: other clef class and 2 `clefPercussion` (its `<defaultClef>` source's
+#: system starts, a different code path).
+#:
+#: Upstream says why. A clef whose `ClefInfo::staffGroup` disagrees with
+#: the staff's group is hidden outright at any tick past 0 --
+#: `rendering/score/tlayout.cpp:1657-1674` sets `show = false`,
+#: `symId = noSym`, and logs a debug line no headless export ever shows.
+#: The staff group here is STANDARD because the part has no drumset
+#: (`tlayout.cpp:1652-1654`), and the percussion clef's is PERCUSSION.
+#: At tick 0 the same branch takes its `else`, which is why
+#: `<defaultClef>PERC` works and a change does not.
+#:
+#: So `clefPercussion` volume comes from system starts instead -- see
+#: `_clef_family`, which gives that one source forced line breaks.
+_CLEF_CHANGE_TOKENS = [clef for clef in _CLEFS if clef != "PERC"]
+
+#: Source id whose clef arrives once per system rather than once per
+#: `<Clef>` element, for the reason above.
+_SYSTEM_START_CLEF_SOURCE = "cov_clef_perc"
 
 #: One rotation covers every time-signature digit plus the two symbol
 #: meters. `(n, d, subtype)`; subtype 1 = common "C", 2 = cut "cut-C".
@@ -155,23 +178,31 @@ def _single_staff(name: str, bars: list[_Bar], clef: str = "G") -> str:
 
 
 def _clef_family(rng) -> list[tuple[str, str]]:
-    """One source per clef: eight bars of quarter notes under a
-    `<defaultClef>`. Low yield by construction (a clef is engraved once
-    per system), and kept for that reason -- it is the only family that
-    exercises the `<defaultClef>` read path, which is where the silent
-    fallback documented on `_CLEFS` bit. The VOLUME comes from
-    `cov_clef_changes`."""
+    """One source per clef, under a `<defaultClef>`. The only family that
+    exercises that read path -- which is where the silent clef-token
+    fallback documented on `_CLEFS` bit -- so it is kept even though a
+    system-start clef is a low-yield way to draw one.
+
+    The percussion source is the exception and is sized for volume:
+    `PERC` is the one clef a mid-score change cannot engrave (see
+    `_CLEF_CHANGE_TOKENS`), so `cov_clef_changes` cannot carry it and
+    this source has to. `<LayoutBreak>` every second bar pins the system
+    count, and a clef is engraved at every system start.
+    """
     out = []
     for clef in _CLEFS:
         base = 60 if clef.startswith("G") else 48 if clef.startswith("F") else 55
+        source_id = f"cov_clef_{clef.lower()}"
+        systems = (PER_RENDER_TARGET
+                   if source_id == _SYSTEM_START_CLEF_SOURCE else 4)
         bars = []
-        for i in range(8):
+        for i in range(systems * 2):
             pitches = base + rng.integers(-5, 6, size=4)
             body = [time_sig(4, 4)] if i == 0 else []
             body += [chord(int(p), 14) for p in pitches]
-            bars.append(_Bar("\n".join(body)))
-        out.append((f"cov_clef_{clef.lower()}",
-                    _single_staff(f"Clef {clef}", bars, clef=clef)))
+            bars.append(_Bar("\n".join(body),
+                             layout_break() if i % 2 == 1 else ""))
+        out.append((source_id, _single_staff(f"Clef {clef}", bars, clef=clef)))
     return out
 
 
@@ -179,17 +210,21 @@ def _clef_changes_source(rng) -> tuple[str, str]:
     """Volume for all twelve clef classes: four `<Clef>` changes per bar,
     rotating so no change is a no-op.
 
-    12 clefs x PER_RENDER_TARGET = 840 clef glyphs, 4 per bar = 210 bars.
+    11 clefs x PER_RENDER_TARGET clef glyphs, 4 per bar. `PERC` is not in
+    the rotation because a mid-score change to it is hidden outright on a
+    pitched staff -- see `_CLEF_CHANGE_TOKENS`.
+
     The rotation starts one past the staff default (`G`) so the very
     first change is not dropped as "already that clef".
     """
+    tokens = _CLEF_CHANGE_TOKENS
     bars = []
     step = 0
-    total = len(_CLEFS) * PER_RENDER_TARGET
+    total = len(tokens) * PER_RENDER_TARGET
     while step < total:
         body = [time_sig(4, 4)] if not bars else []
         for _ in range(4):
-            body.append(clef_change(_CLEFS[(step + 1) % len(_CLEFS)]))
+            body.append(clef_change(tokens[(step + 1) % len(tokens)]))
             body.append(chord(int(60 + rng.integers(-4, 5)), 14))
             step += 1
         bars.append(_Bar("\n".join(body)))
@@ -401,12 +436,17 @@ def _timesigs_source() -> tuple[str, str]:
     glyph wide, and draws the whole-rest glyph, so this family doubles as
     `restWhole` volume. Multimeasure rests cannot form here because every
     bar changes meter.
+
+    `bar_of_rests` rather than `measure_rest` directly: a bar longer than
+    a whole note comes back as `restDoubleWhole`, which has no detector
+    class. Measured -- the 10/4 bar of an earlier probe produced 70
+    glyphs labelled `unknownE4E2`.
     """
     bars = []
     for _ in range(PER_RENDER_TARGET):
         for n, d, subtype in _METER_ROTATION:
             bars.append(_Bar("\n".join([time_sig(n, d, subtype=subtype),
-                                        measure_rest(n, d)])))
+                                        bar_of_rests(n, d)])))
     return "cov_timesigs", _single_staff("Meters", bars)
 
 
@@ -452,11 +492,13 @@ def _navigation_source() -> tuple[str, str]:
 
 
 def _repeats_source() -> tuple[str, str]:
-    """`repeatBarlineDots` -- the dot pair either side of a repeat
-    barline (SMuFL `repeatDots`, U+E043).
+    """`repeatBarlineDots` -- the dots either side of a repeat barline.
 
     A start-repeat bar and an end-repeat bar per iteration, so each
-    iteration engraves two dot groups.
+    iteration engraves two dot groups. The XML count below is a LOWER
+    bound on the class count, not an estimate of it: MuseScore draws each
+    group as two separate `repeatDot` (U+E044) glyphs rather than one
+    `repeatDots` (U+E043), so the render carries twice what this counts.
     """
     bars = []
     for i in range(PER_RENDER_TARGET // 2):

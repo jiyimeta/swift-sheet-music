@@ -69,6 +69,7 @@ reader, and the MS3 arm of the face matrix reads it natively.
 """
 
 from dataclasses import dataclass, field
+from fractions import Fraction
 
 
 @dataclass
@@ -307,8 +308,74 @@ def measure_rest(n: int, d: int) -> str:
     )
 
 
+#: Rest `<durationType>` tokens in descending length, whole note down.
+#: `breve` is deliberately absent: this package's `NoteDuration` cannot
+#: decode it, and the glyph it draws (`restDoubleWhole`, U+E4E2) is not
+#: in the detector vocabulary.
+_REST_DENOMINATIONS = [
+    ("whole", Fraction(1)), ("half", Fraction(1, 2)),
+    ("quarter", Fraction(1, 4)), ("eighth", Fraction(1, 8)),
+    ("16th", Fraction(1, 16)), ("32nd", Fraction(1, 32)),
+    ("64th", Fraction(1, 64)),
+]
+
+
+def bar_of_rests(n: int, d: int) -> str:
+    """A bar of `n/d` filled entirely with rests.
+
+    A measure rest where that is safe, and explicit rests where it is
+    not. MuseScore draws a full-measure rest with the WHOLE-rest glyph
+    for an ordinary bar, but reaches for `restDoubleWhole` (U+E4E2) once
+    the bar is long enough -- measured on a probe run, where every 10/4
+    bar came back as 70 glyphs labelled `unknownE4E2`. That glyph has no
+    detector class (the vocabulary starts at `restWhole`) and this
+    package's `NoteDuration` has no `breve`, so it is unlabeled ink in
+    an otherwise fully-labeled page.
+
+    The exact threshold upstream is somewhere above 3/2 (a 12/8 bar came
+    back as a whole rest) and at or below 5/2. Rather than pin a number
+    the measurement does not establish, anything LONGER THAN A WHOLE
+    NOTE is filled explicitly -- conservative, and it costs only a
+    slightly wider bar.
+
+    The greedy fill is exact for any dyadic meter: denominations are
+    powers of two down to a 64th, so the remainder always closes.
+    """
+    total = Fraction(n, d)
+    if total <= 1:
+        return measure_rest(n, d)
+    out = []
+    remaining = total
+    for token, length in _REST_DENOMINATIONS:
+        while remaining >= length:
+            out.append(rest(token))
+            remaining -= length
+    if remaining:
+        raise ValueError(f"{n}/{d} does not close on rests: {remaining} left")
+    return "\n".join(out)
+
+
 def clef_change(clef: str) -> str:
     """Mid-score clef change, inside `<voice>` (harmony-basic.mscx:23).
+
+    BOTH clef types have to be written, and writing only
+    `<concertClefType>` engraves a TREBLE CLEF -- silently, for every
+    token. Measured: a probe source rotating through all twelve clefs
+    with `<concertClefType>` alone came back with 840 extra `clefG`
+    instances and two each of the other eleven classes (the two being
+    the `<defaultClef>` system starts, which are a different code path).
+
+    Why: `Clef::clefType()` returns the CONCERT clef only when the score
+    is in concert-pitch mode and the transposing clef otherwise
+    (upstream `dom/clef.cpp:209-216`), and a score is not in concert
+    pitch by default. `<transposingClefType>` is read separately
+    (`rw/read400/tread.cpp:2568-2571`) and defaults to `ClefType::G`
+    when absent. So the element we were omitting is exactly the one
+    being drawn.
+
+    The two are written with the SAME token, which is correct for a
+    non-transposing instrument: concert and written pitch coincide, so
+    the clef does not change between the two views.
 
     The first clef of a bar engraves full size, later ones cue size --
     both are the same detector class, and the size mix is deliberate
@@ -317,6 +384,7 @@ def clef_change(clef: str) -> str:
     return (
         "          <Clef>\n"
         f"            <concertClefType>{clef}</concertClefType>\n"
+        f"            <transposingClefType>{clef}</transposingClefType>\n"
         "          </Clef>"
     )
 

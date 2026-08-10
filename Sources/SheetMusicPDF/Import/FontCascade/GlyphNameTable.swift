@@ -84,7 +84,10 @@ enum GlyphNameTable {
         "timesigcommon": .timeSignatureCommon,
         "timesigcutcommon": .timeSignatureCutTime,
         "staff5lines": .staff5Lines,
-        "repeatdots": .repeatBarlineDots,
+        // `repeatdots` is the pair as one glyph, `repeatdot` a single
+        // dot — MuseScore engraves a repeat barline as two of the
+        // latter, so a name-tier font that spells them out needs both.
+        "repeatdots": .repeatBarlineDots, "repeatdot": .repeatBarlineDots,
         "segno": .segno, "coda": .coda,
         "fermataabove": .fermata, "fermatabelow": .fermata,
         // Legacy PostScript names (Maestro / Petrucci / Opus / Sonata family).
