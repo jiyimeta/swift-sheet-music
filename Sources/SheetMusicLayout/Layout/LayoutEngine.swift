@@ -188,6 +188,7 @@ public enum LayoutEngine {
             measures: system.measures,
             staffOrigins: system.staffOrigins,
             staffAddresses: system.staffAddresses,
+            staffGeometries: system.staffGeometries,
             partLabels: system.partLabels,
             brackets: system.brackets,
             spanners: system.spanners,

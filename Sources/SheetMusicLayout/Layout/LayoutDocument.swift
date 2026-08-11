@@ -39,6 +39,7 @@ extension LayoutDocument {
                 measures: sys.measures,
                 staffOrigins: sys.staffOrigins,
                 staffAddresses: sys.staffAddresses,
+                staffGeometries: sys.staffGeometries,
                 partLabels: sys.partLabels,
                 brackets: sys.brackets,
                 spanners: sys.spanners,

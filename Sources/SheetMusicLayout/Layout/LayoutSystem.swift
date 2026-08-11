@@ -15,6 +15,10 @@ public struct LayoutSystem: Sendable, Equatable {
     /// display order. Enables `StaffAddress → flat-index` conversion
     /// without re-visiting the originating `Score`.
     public let staffAddresses: [StaffAddress]
+    /// Per-staff line geometry, parallel to `staffOrigins`. Empty means
+    /// "every staff is standard five-line" — kept defaultable so the
+    /// initializer stays source-compatible.
+    public let staffGeometries: [StaffLineGeometry]
     /// Part labels at the left edge of this system (empty on continuation
     /// systems per MuseScore convention).
     public let partLabels: [LayoutPartLabel]
@@ -56,6 +60,7 @@ public struct LayoutSystem: Sendable, Equatable {
         measures: [LayoutMeasure],
         staffOrigins: [CGPoint],
         staffAddresses: [StaffAddress] = [],
+        staffGeometries: [StaffLineGeometry] = [],
         partLabels: [LayoutPartLabel],
         brackets: [LayoutBracket] = [],
         spanners: [LayoutElement],
@@ -68,6 +73,7 @@ public struct LayoutSystem: Sendable, Equatable {
         self.measures = measures
         self.staffOrigins = staffOrigins
         self.staffAddresses = staffAddresses
+        self.staffGeometries = staffGeometries
         self.partLabels = partLabels
         self.brackets = brackets
         self.spanners = spanners
@@ -85,6 +91,14 @@ public struct LayoutSystem: Sendable, Equatable {
     /// Returns `nil` when the address is not present in this system.
     public func flatIndex(for address: StaffAddress) -> Int? {
         staffAddresses.firstIndex(of: address)
+    }
+
+    /// Line geometry for the staff at `index` in `staffOrigins`.
+    /// Falls back to a standard five-line staff.
+    public func geometry(atFlatIndex index: Int) -> StaffLineGeometry {
+        staffGeometries.indices.contains(index)
+            ? staffGeometries[index]
+            : .standard
     }
 
     /// Subtype + system-local origin X of the rightmost barline in the

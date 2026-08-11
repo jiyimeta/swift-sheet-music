@@ -42,6 +42,15 @@ extension LayoutEngine {
         let metrics = context.metrics
         let allStaves = context.score.allStaves
         let staves = allStaves.map(\.staff)
+        // Per-staff line geometry, parallel to `staves` (and therefore
+        // to `staffOrigins`). `metrics.staffHeight` remains the
+        // five-line REFERENCE height that step→Y placement is expressed
+        // in; these carry each staff's own DRAWN height, which is what
+        // the vertical stack below must advance by.
+        let staffGeometries = staves.map {
+            StaffLineGeometry(lineCount: $0.lineCount)
+        }
+        let staffHeights = staffGeometries.map { $0.height(sp: metrics.sp) }
         // Bracket gutter inputs: max column index +1, plus the largest
         // brace `staffCount` so tall braces (`braceLarge` /
         // `braceLarger`, whose glyph width balloons with `magx`) don't
@@ -464,8 +473,12 @@ extension LayoutEngine {
         )
 
         do {
-            let staffMidYLocal = metrics.sp * 2 + metrics.staffHeight / 2
             for staffIdx in 0 ..< staves.count {
+                // The staff's OWN vertical center: placement puts the
+                // top line at `sp * 2`, so the center of a staff that
+                // draws `n` lines sits half its own height below that.
+                let staffMidYLocal = metrics.sp * 2
+                    + staffHeights[staffIdx] / 2
                 var perStaff: [[LayoutElement]] = untranslated.map {
                     $0.perStaffElements[staffIdx] ?? []
                 }
@@ -507,9 +520,15 @@ extension LayoutEngine {
         // `placeMeasureElements`); the bottom is at `sp * 6` for
         // a 5-line staff. Anything outside that range pushes the
         // adjacent staff away so they don't overlap.
+        //
+        // The bottom is per-staff: a staff that draws fewer lines
+        // occupies a shorter band, so ink that a five-line staff would
+        // have contained now counts as south overflow and correctly
+        // widens the gap below it.
         let staffTopLocal: CGFloat = metrics.sp * 2
-        let staffBottomLocal: CGFloat = staffTopLocal
-            + metrics.staffHeight
+        let staffBottomLocals: [CGFloat] = staffHeights.map {
+            staffTopLocal + $0
+        }
         var staffMinY = Array(
             repeating: CGFloat.infinity, count: staves.count,
         )
@@ -594,7 +613,7 @@ extension LayoutEngine {
                 + CGFloat(maxLyricsVerses) * metrics.sp * 1.7
                 : 0
             let southExtent: CGFloat = staffMaxY[idx].isFinite
-                ? max(0, staffMaxY[idx] - staffBottomLocal)
+                ? max(0, staffMaxY[idx] - staffBottomLocals[idx])
                 : 0
             // Clearance constant stays smaller than MuseScore's
             // raw `lyricsMinBottomDistance = 1.5 sp` because our
@@ -617,7 +636,10 @@ extension LayoutEngine {
                 x: partLabelWidth, y: currentY,
             ))
             if idx < staves.count - 1 {
-                currentY += metrics.staffHeight
+                // Advance past the staff just placed, by ITS drawn
+                // height — a 1-line staff leaves the next staff 4 sp
+                // higher than a 5-line one would.
+                currentY += staffHeights[idx]
                     + staffBottomPads[idx] + minGap
             }
         }
@@ -641,8 +663,10 @@ extension LayoutEngine {
                         staffOrigins.count - 1,
                     )
                     let topY = staffOrigins[originFlat].y
+                    // Bottom edge of the LAST spanned staff, by its
+                    // own drawn height.
                     let bottomY = staffOrigins[endFlat].y
-                        + metrics.staffHeight
+                        + staffHeights[endFlat]
                     brackets.append(LayoutBracket(
                         type: bi.type,
                         topY: topY,
@@ -678,7 +702,11 @@ extension LayoutEngine {
                 $0.address.partIndex == partIdx
             }) else { return nil }
             let topY = staffOrigins[firstFlat].y
-            let bottomY = staffOrigins[lastFlat].y + metrics.staffHeight
+            // Bottom edge of the part's last staff, by its own drawn
+            // height, so a multi-staff label stays centered on the
+            // ink it labels.
+            let bottomY = staffOrigins[lastFlat].y
+                + staffHeights[lastFlat]
             let centerY = (topY + bottomY) / 2
             // Right-edge X for the trailing-anchored label glyphs.
             // Sits one `sp` left of the staff plus one extra `sp`
@@ -759,7 +787,7 @@ extension LayoutEngine {
                 for staffIdx in staves.indices {
                     guard staffIdx < staffOrigins.count else { continue }
                     let staffY = staffOrigins[staffIdx].y
-                    let staffCenterY = staffY + metrics.staffHeight / 2
+                    let staffCenterY = staffY + staffHeights[staffIdx] / 2
                     elements.append(.multiMeasureRest(
                         count: runLen,
                         origin: CGPoint(x: um.width / 2, y: staffCenterY),
@@ -895,7 +923,9 @@ extension LayoutEngine {
             // top staff to match engraving convention.
             if let m = um.staff0Measure {
                 let staffTopY = staffOrigins[0].y
-                let staffBottomY = staffTopY + metrics.staffHeight
+                // Jump text hangs below staff 0, so it follows staff
+                // 0's own drawn height.
+                let staffBottomY = staffTopY + (staffHeights.first ?? 0)
                 for marker in m.markers {
                     let labelText = marker.text.isEmpty
                         ? marker.label : marker.text
@@ -949,7 +979,7 @@ extension LayoutEngine {
 
         // Baseline height: last staff's bottom + bottomPad.
         let lastStaffBottom = (staffOrigins.last?.y ?? topPad)
-            + metrics.staffHeight
+            + (staffHeights.last ?? metrics.staffHeight)
         let baselineHeight = lastStaffBottom + bottomPad
 
         // Extend to fit the actual bounding box of emitted elements so
@@ -1014,6 +1044,7 @@ extension LayoutEngine {
             measures: adjustedMeasures,
             staffOrigins: adjustedStaffOrigins,
             staffAddresses: allStaves.map(\.address),
+            staffGeometries: staffGeometries,
             partLabels: adjustedLabels,
             brackets: adjustedBrackets,
             spanners: adjustedSpanners,
